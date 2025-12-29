@@ -2,3 +2,6 @@ project_id = "uhyogifgmutfmbyhzzyo"
 
 [functions.aura-agent]
 verify_jwt = false
+
+[functions.aura-tts]
+verify_jwt = false
