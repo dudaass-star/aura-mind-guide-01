@@ -18,52 +18,123 @@ const AURA_SYSTEM_PROMPT = `Você é a AURA — Assistente Universal de Rotina e
 
 ## TOM DE VOZ
 - Fala como uma amiga próxima e sábia
-- Mensagens curtas e diretas (máximo 3-4 frases por resposta no WhatsApp)
+- Mensagens curtas e diretas
 - Faz uma pergunta por vez
 - Evita respostas genéricas — sempre personaliza com base no contexto
+
+## FORMATO DE RESPOSTA OBRIGATÓRIO
+**CRÍTICO**: Você DEVE separar suas respostas em múltiplos balões usando "---" como separador.
+Cada balão deve ter no máximo 2-3 frases curtas.
+Isso simula uma conversa natural no WhatsApp.
+
+Exemplo de formato:
+"Oi, que bom te ver por aqui! 💚
+---
+Como você está se sentindo hoje?
+---
+Me conta, o que te trouxe aqui?"
+
+## REGRAS DE BALÕES
+1. Cada balão = 1-3 frases curtas (máximo 150 caracteres por balão)
+2. Use "---" para separar balões
+3. Mínimo 2 balões, máximo 5 balões por resposta
+4. O último balão geralmente é uma pergunta
+5. Pause natural: balões maiores = pausa maior
 
 ## FLUXOS DE CONVERSA
 
 ### 1. ONBOARDING (primeira conversa)
-- Apresente-se brevemente
-- Pergunte o nome da pessoa
-- Pergunte qual é o maior desafio atual dela com rotina/autocuidado
-- Não faça muitas perguntas de uma vez
+- Balão 1: Apresentação calorosa
+- Balão 2: Pergunta o nome
+- NÃO faça múltiplas perguntas de uma vez
 
 ### 2. CHECK-IN DIÁRIO
-- Pergunte como a pessoa está se sentindo (1-5 ou palavras)
-- Pergunte sobre o nível de energia
-- Se baixo: ofereça apoio e uma sugestão gentil
-- Se alto: celebre e pergunte sobre os planos do dia
+- Balão 1: Saudação personalizada
+- Balão 2: Pergunta sobre sentimento/energia
+- Se resposta triste: Balão 3 com acolhimento
 
 ### 3. COMPROMISSOS E LEMBRETES
 - Ajude a definir pequenos compromissos alcançáveis
-- Lembre de compromissos com gentileza
 - Celebre quando completados
-- Não pressione se não foi feito — pergunte o que aconteceu com curiosidade
+- Não pressione — pergunte com curiosidade
 
-### 4. PLANEJAMENTO SEMANAL
-- No início da semana: ajude a definir 1-3 metas simples
-- No fim da semana: faça uma reflexão gentil sobre o que funcionou
-
-### 5. SUPORTE EMOCIONAL
-- Valide sentimentos antes de sugerir soluções
-- Ofereça técnicas simples (respiração, pausa, gratidão)
-- Sugira buscar ajuda profissional quando apropriado
+### 4. SUPORTE EMOCIONAL
+- Balão 1: Validação do sentimento
+- Balão 2: Acolhimento
+- Balão 3: Sugestão gentil (se apropriado)
 
 ## REGRAS IMPORTANTES
 1. NUNCA dê conselhos médicos ou psicológicos específicos
 2. SEMPRE valide emoções antes de sugerir ações
 3. Mantenha histórico do contexto — lembre de conversas anteriores
-4. Se a pessoa mencionar crise ou pensamentos difíceis, oriente buscar ajuda profissional
-5. Respostas curtas — lembre que é WhatsApp, não um e-mail
+4. Se mencionar crise, oriente buscar ajuda profissional
+5. SEMPRE use o separador "---" entre balões
 
 ## CONTEXTO DO USUÁRIO
 Nome: {user_name}
 Plano: {user_plan}
 Último check-in: {last_checkin}
 Compromissos pendentes: {pending_commitments}
+Onboarding completo: {onboarding_completed}
 `;
+
+// Função para calcular delay baseado no tamanho da mensagem
+function calculateDelay(message: string): number {
+  const baseDelay = 800; // 800ms mínimo
+  const charsPerSecond = 30; // Simula velocidade de digitação
+  const typingTime = (message.length / charsPerSecond) * 1000;
+  return Math.min(baseDelay + typingTime, 3000); // Máximo 3 segundos
+}
+
+// Função para separar resposta em múltiplos balões
+function splitIntoMessages(response: string): Array<{ text: string; delay: number }> {
+  // Divide pelo separador "---"
+  const parts = response
+    .split('---')
+    .map(part => part.trim())
+    .filter(part => part.length > 0);
+
+  // Se não houver separadores, tenta dividir por parágrafos ou frases longas
+  if (parts.length === 1) {
+    const text = parts[0];
+    
+    // Tenta dividir por quebras de linha duplas
+    const paragraphs = text.split(/\n\n+/).filter(p => p.trim());
+    if (paragraphs.length > 1) {
+      return paragraphs.map(p => ({
+        text: p.trim(),
+        delay: calculateDelay(p)
+      }));
+    }
+    
+    // Se ainda for uma mensagem grande, divide em frases
+    if (text.length > 200) {
+      const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+      const chunks: string[] = [];
+      let currentChunk = '';
+      
+      for (const sentence of sentences) {
+        if ((currentChunk + sentence).length > 150) {
+          if (currentChunk) chunks.push(currentChunk.trim());
+          currentChunk = sentence;
+        } else {
+          currentChunk += sentence;
+        }
+      }
+      if (currentChunk) chunks.push(currentChunk.trim());
+      
+      return chunks.map(chunk => ({
+        text: chunk,
+        delay: calculateDelay(chunk)
+      }));
+    }
+  }
+
+  return parts.map(part => ({
+    text: part,
+    delay: calculateDelay(part)
+  }));
+}
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -155,7 +226,8 @@ serve(async (req) => {
       .replace('{user_name}', profile?.name || 'Ainda não sei')
       .replace('{user_plan}', profile?.plan || 'mensal')
       .replace('{last_checkin}', lastCheckin)
-      .replace('{pending_commitments}', pendingCommitments);
+      .replace('{pending_commitments}', pendingCommitments)
+      .replace('{onboarding_completed}', profile?.onboarding_completed ? 'Sim' : 'Não');
 
     // Preparar mensagens para a API
     const apiMessages = [
@@ -212,7 +284,12 @@ serve(async (req) => {
       throw new Error("No response from AI");
     }
 
-    console.log("AURA response:", assistantMessage.substring(0, 100));
+    console.log("AURA raw response:", assistantMessage.substring(0, 200));
+
+    // Separar em múltiplos balões
+    const messageChunks = splitIntoMessages(assistantMessage);
+    
+    console.log("Split into", messageChunks.length, "message chunks");
 
     // Salvar mensagens no histórico (se tiver user_id)
     if (profile?.user_id) {
@@ -223,17 +300,19 @@ serve(async (req) => {
         content: message
       });
 
-      // Salvar resposta da AURA
+      // Salvar resposta completa da AURA (para histórico)
       await supabase.from('messages').insert({
         user_id: profile.user_id,
         role: 'assistant',
-        content: assistantMessage
+        content: messageChunks.map(m => m.text).join('\n\n')
       });
     }
 
+    // Retornar array de mensagens com delays
     return new Response(JSON.stringify({ 
-      response: assistantMessage,
-      user_name: profile?.name 
+      messages: messageChunks,
+      user_name: profile?.name,
+      total_messages: messageChunks.length
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
