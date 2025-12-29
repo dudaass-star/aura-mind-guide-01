@@ -9,16 +9,16 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg hover:shadow-xl",
+        default: "bg-primary text-primary-foreground hover:bg-primary/90 shadow-soft",
         destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
         outline: "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
         secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
         ghost: "hover:bg-accent hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
-        gold: "bg-gradient-to-r from-primary to-[hsl(35,50%,65%)] text-primary-foreground font-semibold shadow-lg hover:shadow-[0_0_40px_hsl(43,60%,55%,0.4)] hover:scale-[1.02] active:scale-[0.98]",
-        teal: "bg-accent text-accent-foreground font-semibold shadow-lg hover:bg-accent/80 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]",
-        glass: "bg-secondary/50 backdrop-blur-sm border border-border/50 text-foreground hover:bg-secondary/70 hover:border-primary/30",
-        whatsapp: "bg-[#25D366] text-white font-semibold shadow-lg hover:bg-[#20BD5A] hover:shadow-xl hover:scale-[1.02] active:scale-[0.98]",
+        sage: "bg-primary text-primary-foreground font-semibold shadow-soft hover:shadow-glow hover:scale-[1.02] active:scale-[0.98]",
+        lavender: "bg-accent text-foreground font-semibold hover:bg-accent/80 hover:scale-[1.02] active:scale-[0.98]",
+        glass: "bg-secondary/60 backdrop-blur-sm text-foreground border border-border hover:bg-secondary/80 hover:border-primary/30",
+        whatsapp: "bg-[#25D366] text-white font-semibold shadow-soft hover:bg-[#128C7E] hover:scale-[1.02] active:scale-[0.98]",
       },
       size: {
         default: "h-10 px-4 py-2",

@@ -7,10 +7,10 @@ const Footer = () => {
         <div className="flex flex-col md:flex-row justify-between items-center gap-6">
           {/* Logo */}
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-primary/15 flex items-center justify-center">
               <span className="text-primary font-display font-bold text-lg">A</span>
             </div>
-            <span className="font-display text-xl font-semibold text-foreground">
+            <span className="font-display text-xl font-bold text-foreground">
               AURA
             </span>
           </div>
@@ -18,7 +18,7 @@ const Footer = () => {
           {/* Links */}
           <nav className="flex flex-wrap justify-center gap-6 text-sm text-muted-foreground">
             <Link to="/termos" className="hover:text-foreground transition-colors">
-              Termos de Uso
+              Termos
             </Link>
             <Link to="/privacidade" className="hover:text-foreground transition-colors">
               Privacidade
@@ -30,7 +30,7 @@ const Footer = () => {
 
           {/* Copyright */}
           <p className="text-sm text-muted-foreground">
-            © {new Date().getFullYear()} AURA. Todos os direitos reservados.
+            © {new Date().getFullYear()} AURA
           </p>
         </div>
       </div>

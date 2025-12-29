@@ -1,74 +1,64 @@
 import { Button } from "@/components/ui/button";
-import { MessageCircle, Sparkles } from "lucide-react";
+import { Check } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const Hero = () => {
   return (
-    <section className="relative min-h-screen flex items-center justify-center overflow-hidden bg-gradient-hero">
-      {/* Ambient glow effects */}
-      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-glow rounded-full blur-3xl opacity-60 animate-pulse-soft" />
-      <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-glow rounded-full blur-3xl opacity-40 animate-pulse-soft delay-200" />
-      
-      {/* Subtle grid pattern */}
-      <div 
-        className="absolute inset-0 opacity-[0.02]"
-        style={{
-          backgroundImage: `linear-gradient(hsl(var(--primary) / 0.3) 1px, transparent 1px),
-                           linear-gradient(90deg, hsl(var(--primary) / 0.3) 1px, transparent 1px)`,
-          backgroundSize: '60px 60px'
-        }}
-      />
+    <section className="relative min-h-screen flex items-center justify-center overflow-hidden bg-gradient-hero pt-20">
+      {/* Subtle decorative elements */}
+      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-sage-soft rounded-full blur-3xl opacity-60 animate-pulse-soft" />
+      <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-lavender-soft rounded-full blur-3xl opacity-50 animate-pulse-soft delay-200" />
+      <div className="absolute top-1/3 right-1/3 w-64 h-64 bg-blush-soft rounded-full blur-3xl opacity-40 animate-pulse-soft delay-300" />
 
       <div className="container mx-auto px-4 relative z-10">
         <div className="max-w-4xl mx-auto text-center">
-          {/* Badge */}
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-secondary/50 border border-border/50 backdrop-blur-sm mb-8 animate-fade-up opacity-0">
-            <Sparkles className="w-4 h-4 text-primary" />
-            <span className="text-sm text-muted-foreground">Estoicismo + Logoterapia via WhatsApp</span>
-          </div>
-
           {/* Main headline */}
-          <h1 className="font-display text-5xl md:text-7xl lg:text-8xl font-semibold leading-[0.95] mb-6 animate-fade-up opacity-0 delay-100">
-            <span className="text-foreground">Sua mentora</span>
+          <h1 className="font-display text-4xl md:text-5xl lg:text-6xl font-bold leading-tight mb-6 animate-fade-up opacity-0">
+            <span className="text-foreground">Acompanhamento emocional no WhatsApp</span>
             <br />
-            <span className="text-gradient-gold">emocional</span>
-            <br />
-            <span className="text-foreground">no WhatsApp</span>
+            <span className="text-gradient-sage">— por uma fração do custo da terapia.</span>
           </h1>
 
           {/* Subheadline */}
-          <p className="font-body text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-10 leading-relaxed animate-fade-up opacity-0 delay-200">
-            A AURA te ajuda a ter clareza mental, controle emocional e direção na vida — 
-            tudo através de conversas profundas no WhatsApp.
+          <p className="font-body text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto mb-8 leading-relaxed animate-fade-up opacity-0 delay-100">
+            A AURA te ajuda a recuperar clareza mental, controle emocional e direção prática — 
+            com conversas profundas no WhatsApp, memória do seu histórico e micro-ações simples pra sua vida real.
           </p>
 
-          {/* CTA buttons */}
-          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center animate-fade-up opacity-0 delay-300">
+          {/* Trust badges */}
+          <div className="flex flex-wrap justify-center gap-4 md:gap-6 text-sm text-foreground mb-10 animate-fade-up opacity-0 delay-200">
+            <div className="flex items-center gap-2 bg-sage-soft/60 px-4 py-2 rounded-full">
+              <Check className="w-4 h-4 text-primary" />
+              <span>5 conversas grátis</span>
+            </div>
+            <div className="flex items-center gap-2 bg-lavender-soft/60 px-4 py-2 rounded-full">
+              <Check className="w-4 h-4 text-accent" />
+              <span>24/7</span>
+            </div>
+            <div className="flex items-center gap-2 bg-sky-soft/60 px-4 py-2 rounded-full">
+              <Check className="w-4 h-4 text-sky" />
+              <span>Texto e áudio</span>
+            </div>
+            <div className="flex items-center gap-2 bg-blush-soft/60 px-4 py-2 rounded-full">
+              <Check className="w-4 h-4 text-blush" />
+              <span>Memória de longo prazo</span>
+            </div>
+            <div className="flex items-center gap-2 bg-sage-soft/60 px-4 py-2 rounded-full">
+              <Check className="w-4 h-4 text-primary" />
+              <span>Sem julgamento</span>
+            </div>
+          </div>
+
+          {/* CTA */}
+          <div className="flex flex-col items-center gap-4 animate-fade-up opacity-0 delay-300">
             <Link to="/checkout">
-              <Button variant="gold" size="xl" className="min-w-[200px]">
+              <Button variant="sage" size="xl" className="min-w-[220px]">
                 Começar agora
               </Button>
             </Link>
-            <Button variant="glass" size="xl" className="min-w-[200px]">
-              <MessageCircle className="w-5 h-5" />
-              5 conversas grátis
-            </Button>
-          </div>
-
-          {/* Trust badges */}
-          <div className="mt-12 flex flex-wrap justify-center gap-8 text-sm text-muted-foreground animate-fade-up opacity-0 delay-400">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-teal" />
-              <span>Responde 24/7</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-primary" />
-              <span>Memória de longo prazo</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-teal" />
-              <span>Sem julgamento</span>
-            </div>
+            <p className="text-sm text-muted-foreground">
+              Teste grátis com 5 conversas. Se fizer sentido, você continua.
+            </p>
           </div>
         </div>
       </div>
