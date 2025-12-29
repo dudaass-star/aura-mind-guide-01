@@ -14,8 +14,8 @@ export default {
     },
     extend: {
       fontFamily: {
-        display: ['Cormorant Garamond', 'serif'],
-        body: ['Inter', 'sans-serif'],
+        display: ['Libre Baskerville', 'serif'],
+        body: ['Nunito', 'sans-serif'],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -51,21 +51,27 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
-        gold: {
-          DEFAULT: "hsl(var(--gold))",
-          soft: "hsl(var(--gold-soft))",
+        sage: {
+          DEFAULT: "hsl(var(--sage))",
+          light: "hsl(var(--sage-light))",
+          soft: "hsl(var(--sage-soft))",
         },
-        navy: {
-          deep: "hsl(var(--navy-deep))",
-          light: "hsl(var(--navy-light))",
+        lavender: {
+          DEFAULT: "hsl(var(--lavender))",
+          light: "hsl(var(--lavender-light))",
+          soft: "hsl(var(--lavender-soft))",
         },
-        teal: {
-          DEFAULT: "hsl(var(--teal))",
-          soft: "hsl(var(--teal-soft))",
+        blush: {
+          DEFAULT: "hsl(var(--blush))",
+          soft: "hsl(var(--blush-soft))",
+        },
+        sky: {
+          DEFAULT: "hsl(var(--sky))",
+          soft: "hsl(var(--sky-soft))",
         },
         cream: {
           DEFAULT: "hsl(var(--cream))",
-          muted: "hsl(var(--cream-muted))",
+          warm: "hsl(var(--cream-warm))",
         },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",

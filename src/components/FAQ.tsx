@@ -7,39 +7,39 @@ import {
 
 const faqs = [
   {
-    question: "A AURA substitui terapia?",
+    question: "A AURA substitui terapia com psicólogo?",
     answer:
-      "Não. A AURA é uma mentora de alta performance emocional, não uma psicóloga. Ela te ajuda com clareza mental, direção e consistência no dia a dia. Para questões clínicas graves, sempre recomendamos acompanhamento profissional.",
+      "AURA é acompanhamento emocional e direção prática. Muita gente usa como complemento entre sessões. Se você faz terapia, a AURA ajuda a manter clareza e consistência no dia a dia.",
   },
   {
     question: "Como funciona o teste grátis?",
     answer:
-      "Você ganha 5 conversas grátis para experimentar a AURA. Cada mensagem que gera uma resposta conta como 1 conversa. O onboarding inicial não consome créditos.",
+      "Você ganha 5 conversas grátis. Quando acabar, você escolhe um plano pra continuar.",
   },
   {
-    question: "Meus dados ficam seguros?",
+    question: "Quais temas a AURA atende?",
     answer:
-      "Sim. Suas conversas são criptografadas e armazenadas de forma segura. Não compartilhamos seus dados com terceiros. Você pode pedir a exclusão a qualquer momento.",
-  },
-  {
-    question: "Posso cancelar quando quiser?",
-    answer:
-      "Claro. No plano mensal, você pode cancelar a qualquer momento e não será cobrado no próximo mês. No plano anual, não há reembolso, mas você mantém acesso até o fim do período.",
-  },
-  {
-    question: "Como a AURA lembra das coisas?",
-    answer:
-      "A AURA mantém um 'dossiê' sobre você: seus problemas, vitórias, padrões de comportamento e objetivos. Quanto mais você conversa, mais ela te conhece e mais precisa fica.",
+      "Trabalho, relacionamento, autoestima, família, decisões difíceis, hábitos, foco, ansiedade, tristeza, propósito… Você traz o tema. AURA conduz.",
   },
   {
     question: "Posso enviar áudio?",
     answer:
-      "Sim! Você pode enviar áudio e a AURA vai transcrever e responder. Para receber respostas em áudio, basta pedir ou mandar um áudio primeiro. Há uma quota diária de áudios (2 no mensal, 3 no anual).",
+      "Sim. Você pode mandar áudio e também receber respostas em áudio.",
   },
   {
-    question: "Qual a diferença pro ChatGPT?",
+    question: "Posso cancelar quando quiser?",
     answer:
-      "O ChatGPT não lembra de você entre conversas. A AURA foi treinada especificamente para mentoria emocional com Estoicismo e Logoterapia, mantém memória contínua, faz check-ins diários e acompanha seu progresso.",
+      "No plano mensal, sim — você cancela quando quiser.",
+  },
+  {
+    question: "Meus dados ficam seguros?",
+    answer:
+      "Seus dados são usados para a AURA lembrar do seu histórico e melhorar o acompanhamento. Temos políticas de privacidade em conformidade com a LGPD.",
+  },
+  {
+    question: "Qual a diferença para um chatbot comum?",
+    answer:
+      "AURA foi desenhada pra acompanhamento contínuo: memória do seu caso + direção prática + check-in + review semanal.",
   },
 ];
 
@@ -48,12 +48,9 @@ const FAQ = () => {
     <section id="faq" className="py-24 bg-background">
       <div className="container mx-auto px-4">
         <div className="text-center mb-16">
-          <h2 className="font-display text-4xl md:text-5xl font-semibold text-foreground mb-4">
-            Perguntas <span className="text-gradient-gold">frequentes</span>
+          <h2 className="font-display text-3xl md:text-4xl lg:text-5xl font-bold text-foreground mb-4">
+            Perguntas <span className="text-gradient-sage">frequentes</span>
           </h2>
-          <p className="text-muted-foreground text-lg max-w-xl mx-auto">
-            Tire suas dúvidas antes de começar.
-          </p>
         </div>
 
         <div className="max-w-3xl mx-auto">
@@ -62,9 +59,9 @@ const FAQ = () => {
               <AccordionItem
                 key={index}
                 value={`item-${index}`}
-                className="bg-secondary/30 rounded-xl border border-border/50 px-6 data-[state=open]:bg-secondary/50 transition-colors duration-300"
+                className="bg-card rounded-2xl border border-border/50 px-6 data-[state=open]:bg-sage-soft/20 transition-colors duration-300"
               >
-                <AccordionTrigger className="text-left font-display text-lg font-medium text-foreground hover:text-primary py-5 hover:no-underline">
+                <AccordionTrigger className="text-left font-display text-lg font-semibold text-foreground hover:text-primary py-5 hover:no-underline">
                   {faq.question}
                 </AccordionTrigger>
                 <AccordionContent className="text-muted-foreground pb-5 leading-relaxed">
