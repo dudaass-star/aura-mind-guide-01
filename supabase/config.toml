@@ -1,1 +1,4 @@
 project_id = "uhyogifgmutfmbyhzzyo"
+
+[functions.aura-agent]
+verify_jwt = false
