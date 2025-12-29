@@ -1,13 +1,40 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { Helmet } from "react-helmet-async";
+import Header from "@/components/Header";
+import Hero from "@/components/Hero";
+import HowItWorks from "@/components/HowItWorks";
+import Benefits from "@/components/Benefits";
+import Pricing from "@/components/Pricing";
+import FAQ from "@/components/FAQ";
+import Footer from "@/components/Footer";
 
 const Index = () => {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
+    <>
+      <Helmet>
+        <title>AURA - Sua Mentora Emocional no WhatsApp</title>
+        <meta
+          name="description"
+          content="AURA é sua mentora emocional baseada em Estoicismo e Logoterapia. Tenha clareza mental, controle emocional e direção na vida através de conversas no WhatsApp."
+        />
+        <meta
+          name="keywords"
+          content="mentora emocional, estoicismo, logoterapia, saúde mental, WhatsApp, ansiedade, autoconhecimento"
+        />
+        <link rel="canonical" href="https://aura.app" />
+      </Helmet>
+
+      <div className="min-h-screen bg-background">
+        <Header />
+        <main>
+          <Hero />
+          <HowItWorks />
+          <Benefits />
+          <Pricing />
+          <FAQ />
+        </main>
+        <Footer />
       </div>
-    </div>
+    </>
   );
 };
 
