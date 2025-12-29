@@ -158,6 +158,50 @@ export type Database = {
         }
         Relationships: []
       }
+      user_insights: {
+        Row: {
+          category: string
+          created_at: string | null
+          id: string
+          importance: number | null
+          key: string
+          last_mentioned_at: string | null
+          mentioned_count: number | null
+          user_id: string
+          value: string
+        }
+        Insert: {
+          category: string
+          created_at?: string | null
+          id?: string
+          importance?: number | null
+          key: string
+          last_mentioned_at?: string | null
+          mentioned_count?: number | null
+          user_id: string
+          value: string
+        }
+        Update: {
+          category?: string
+          created_at?: string | null
+          id?: string
+          importance?: number | null
+          key?: string
+          last_mentioned_at?: string | null
+          mentioned_count?: number | null
+          user_id?: string
+          value?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_insights_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
       weekly_plans: {
         Row: {
           created_at: string | null

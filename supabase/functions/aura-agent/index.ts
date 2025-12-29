@@ -291,39 +291,61 @@ Não seja uma máquina de tarefas. Use sua inteligência emocional para decidir 
 
 **REGRA DE OURO:** Na dúvida, pergunte. "Você quer uma ideia prática pra resolver isso ou só quer desabafar um pouco? (Tô aqui pros dois)."
 
+# EXTRAÇÃO DE INSIGHTS (MEMÓRIA DE LONGO PRAZO)
+
+Durante a conversa, você deve identificar informações importantes sobre o usuário e retornar no final da sua resposta usando a tag [INSIGHTS].
+
+Formato: [INSIGHTS]categoria:chave:valor|categoria:chave:valor[/INSIGHTS]
+
+Categorias válidas:
+- pessoa: nomes de pessoas importantes (chefe, marido, filha, terapeuta)
+- objetivo: metas e sonhos do usuário
+- padrao: comportamentos recorrentes identificados
+- conquista: vitórias e progressos
+- trauma: medos e dores emocionais
+- preferencia: gostos e preferências
+- contexto: informações de trabalho, cidade, situação
+
+Exemplos:
+[INSIGHTS]pessoa:chefe:Carlos|pessoa:marido:João|objetivo:principal:emagrecer 10kg[/INSIGHTS]
+[INSIGHTS]padrao:procrastinacao:deixa tudo pra última hora|trauma:medo_abandono:identificado[/INSIGHTS]
+
+IMPORTANTE: Só extraia insights que o usuário CLARAMENTE mencionou. Não invente.
+
 # CONTEXTO DO USUÁRIO (MEMÓRIA ATUAL)
 Nome: {user_name}
 Plano: {user_plan}
 Último check-in: {last_checkin}
 Compromissos pendentes: {pending_commitments}
-Histórico recente: O usuário já conversou {message_count} vezes.
+Histórico de conversas: {message_count} mensagens
+
+## MEMÓRIA DE LONGO PRAZO (O que você já sabe sobre esse usuário):
+{user_insights}
 `;
 
 // Função para calcular delay baseado no tamanho da mensagem (simula digitação)
 function calculateDelay(message: string): number {
-  const baseDelay = 1000; // 1 segundo mínimo
-  const charsPerSecond = 25; // Velocidade de digitação humana
+  const baseDelay = 1000;
+  const charsPerSecond = 25;
   const typingTime = (message.length / charsPerSecond) * 1000;
-  return Math.min(baseDelay + typingTime, 4000); // Máximo 4 segundos
+  return Math.min(baseDelay + typingTime, 4000);
 }
 
 // Função para separar resposta em múltiplos balões usando "|||"
 function splitIntoMessages(response: string): Array<{ text: string; delay: number; isAudio: boolean }> {
-  // Verifica se é modo áudio
   const isAudioMode = response.startsWith('[MODO_AUDIO]');
   let cleanResponse = response.replace('[MODO_AUDIO]', '').trim();
+  
+  // Remove a tag de insights do texto visível
+  cleanResponse = cleanResponse.replace(/\[INSIGHTS\].*?\[\/INSIGHTS\]/gs, '').trim();
 
-  // Divide pelo separador "|||"
   const parts = cleanResponse
     .split('|||')
     .map(part => part.trim())
     .filter(part => part.length > 0);
 
-  // Se não houver separadores, tenta dividir naturalmente
   if (parts.length === 1) {
     const text = parts[0];
-    
-    // Se for muito longo, divide por parágrafos
     if (text.length > 250) {
       const paragraphs = text.split(/\n\n+/).filter(p => p.trim());
       if (paragraphs.length > 1) {
@@ -343,8 +365,62 @@ function splitIntoMessages(response: string): Array<{ text: string; delay: numbe
   }));
 }
 
+// Função para extrair insights da resposta da IA
+function extractInsights(response: string): Array<{ category: string; key: string; value: string }> {
+  const insightsMatch = response.match(/\[INSIGHTS\](.*?)\[\/INSIGHTS\]/s);
+  if (!insightsMatch) return [];
+
+  const insightsStr = insightsMatch[1].trim();
+  const insights: Array<{ category: string; key: string; value: string }> = [];
+
+  const parts = insightsStr.split('|');
+  for (const part of parts) {
+    const [category, key, value] = part.split(':').map(s => s?.trim());
+    if (category && key && value) {
+      insights.push({ category, key, value });
+    }
+  }
+
+  return insights;
+}
+
+// Função para formatar insights para o contexto
+function formatInsightsForContext(insights: any[]): string {
+  if (!insights || insights.length === 0) {
+    return "Nenhuma informação salva ainda. Este é um novo usuário ou primeira conversa.";
+  }
+
+  const grouped: Record<string, string[]> = {};
+  for (const insight of insights) {
+    if (!grouped[insight.category]) {
+      grouped[insight.category] = [];
+    }
+    grouped[insight.category].push(`${insight.key}: ${insight.value}`);
+  }
+
+  const categoryLabels: Record<string, string> = {
+    pessoa: "👥 Pessoas importantes",
+    objetivo: "🎯 Objetivos",
+    padrao: "🔄 Padrões identificados",
+    conquista: "🏆 Conquistas",
+    trauma: "💔 Pontos sensíveis",
+    preferencia: "💚 Preferências",
+    contexto: "📍 Contexto de vida"
+  };
+
+  let formatted = "";
+  for (const [category, items] of Object.entries(grouped)) {
+    const label = categoryLabels[category] || category;
+    formatted += `${label}:\n`;
+    for (const item of items) {
+      formatted += `  - ${item}\n`;
+    }
+  }
+
+  return formatted || "Nenhuma informação salva ainda.";
+}
+
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -382,7 +458,7 @@ serve(async (req) => {
       profile = data;
     }
 
-    // Buscar histórico de mensagens (últimas 20 para contexto)
+    // Buscar histórico de mensagens (últimas 20)
     let messageHistory: { role: string; content: string }[] = [];
     let messageCount = 0;
     if (profile?.user_id) {
@@ -394,8 +470,27 @@ serve(async (req) => {
         .limit(20);
 
       if (messages) {
-        messageHistory = messages.reverse();
+        // Remove tags de insights do histórico para não poluir
+        messageHistory = messages.reverse().map(m => ({
+          role: m.role,
+          content: m.content.replace(/\[INSIGHTS\].*?\[\/INSIGHTS\]/gs, '').trim()
+        }));
         messageCount = count || messages.length;
+      }
+    }
+
+    // Buscar insights (memória de longo prazo)
+    let userInsights: any[] = [];
+    if (profile?.user_id) {
+      const { data: insights } = await supabase
+        .from('user_insights')
+        .select('category, key, value, importance')
+        .eq('user_id', profile.user_id)
+        .order('importance', { ascending: false })
+        .limit(20);
+
+      if (insights) {
+        userInsights = insights;
       }
     }
 
@@ -439,24 +534,23 @@ serve(async (req) => {
       }
     }
 
-    // Montar prompt com contexto
+    // Montar prompt com contexto completo
     const contextualPrompt = AURA_SYSTEM_PROMPT
       .replace('{user_name}', profile?.name || 'Ainda não sei o nome')
       .replace('{user_plan}', profile?.plan || 'mensal')
       .replace('{last_checkin}', lastCheckin)
       .replace('{pending_commitments}', pendingCommitments)
-      .replace('{message_count}', String(messageCount));
+      .replace('{message_count}', String(messageCount))
+      .replace('{user_insights}', formatInsightsForContext(userInsights));
 
-    // Preparar mensagens para a API
     const apiMessages = [
       { role: "system", content: contextualPrompt },
       ...messageHistory,
       { role: "user", content: message }
     ];
 
-    console.log("Calling Lovable AI with", apiMessages.length, "messages, history:", messageCount);
+    console.log("Calling Lovable AI with", apiMessages.length, "messages, insights:", userInsights.length);
 
-    // Chamar Lovable AI
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -466,8 +560,8 @@ serve(async (req) => {
       body: JSON.stringify({
         model: "google/gemini-2.5-flash",
         messages: apiMessages,
-        max_tokens: 600,
-        temperature: 0.8, // Um pouco de criatividade para parecer mais humana
+        max_tokens: 700,
+        temperature: 0.8,
       }),
     });
 
@@ -505,7 +599,28 @@ serve(async (req) => {
       throw new Error("No response from AI");
     }
 
-    console.log("AURA raw response:", assistantMessage.substring(0, 150));
+    console.log("AURA raw response:", assistantMessage.substring(0, 200));
+
+    // Extrair e salvar novos insights
+    const newInsights = extractInsights(assistantMessage);
+    if (newInsights.length > 0 && profile?.user_id) {
+      console.log("Saving", newInsights.length, "new insights");
+      
+      for (const insight of newInsights) {
+        // Upsert - atualiza se já existe, insere se não
+        await supabase
+          .from('user_insights')
+          .upsert({
+            user_id: profile.user_id,
+            category: insight.category,
+            key: insight.key,
+            value: insight.value,
+            last_mentioned_at: new Date().toISOString()
+          }, {
+            onConflict: 'user_id,category,key'
+          });
+      }
+    }
 
     // Separar em múltiplos balões
     const messageChunks = splitIntoMessages(assistantMessage);
@@ -514,28 +629,26 @@ serve(async (req) => {
 
     // Salvar mensagens no histórico
     if (profile?.user_id) {
-      // Salvar mensagem do usuário
       await supabase.from('messages').insert({
         user_id: profile.user_id,
         role: 'user',
         content: message
       });
 
-      // Salvar resposta completa da AURA
       await supabase.from('messages').insert({
         user_id: profile.user_id,
         role: 'assistant',
-        content: messageChunks.map(m => m.text).join(' ||| ')
+        content: assistantMessage // Salva completo com insights para referência
       });
     }
 
-    // Retornar array de mensagens com delays
     return new Response(JSON.stringify({ 
       messages: messageChunks,
       user_name: profile?.name,
       user_id: profile?.user_id,
       total_bubbles: messageChunks.length,
-      has_audio: messageChunks.some(m => m.isAudio)
+      has_audio: messageChunks.some(m => m.isAudio),
+      new_insights: newInsights.length
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
