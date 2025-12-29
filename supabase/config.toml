@@ -5,3 +5,18 @@ verify_jwt = false
 
 [functions.aura-tts]
 verify_jwt = false
+
+[functions.webhook-zapi]
+verify_jwt = false
+
+[functions.send-zapi-message]
+verify_jwt = false
+
+[functions.scheduled-checkin]
+verify_jwt = false
+
+[functions.scheduled-followup]
+verify_jwt = false
+
+[functions.weekly-report]
+verify_jwt = false
