@@ -254,7 +254,7 @@ const Checkout = () => {
               {/* Submit */}
               <Button
                 type="submit"
-                variant="gold"
+                variant="sage"
                 size="xl"
                 className="w-full"
                 disabled={isLoading}
