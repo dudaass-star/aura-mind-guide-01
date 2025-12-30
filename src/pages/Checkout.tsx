@@ -7,6 +7,7 @@ import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ArrowLeft, CreditCard, QrCode, Check, Shield, Lock } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 const Checkout = () => {
   const location = useLocation();
@@ -61,11 +62,34 @@ const Checkout = () => {
 
     setIsLoading(true);
     
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      const { data, error } = await supabase.functions.invoke('create-checkout', {
+        body: {
+          plan: selectedPlan,
+          name: name.trim(),
+          phone: phone,
+          paymentMethod: paymentMethod,
+        },
+      });
+
+      if (error) {
+        throw new Error(error.message || 'Erro ao processar pagamento');
+      }
+
+      if (data?.url) {
+        // Store user info in localStorage for thank you page
+        localStorage.setItem('aura_checkout', JSON.stringify({ name, phone, plan: selectedPlan }));
+        // Redirect to Stripe Checkout
+        window.location.href = data.url;
+      } else {
+        throw new Error('URL de checkout não recebida');
+      }
+    } catch (error) {
+      console.error('Checkout error:', error);
+      toast.error(error instanceof Error ? error.message : 'Erro ao processar pagamento. Tente novamente.');
+    } finally {
       setIsLoading(false);
-      navigate("/obrigado", { state: { name, phone, plan: selectedPlan, paymentMethod } });
-    }, 1500);
+    }
   };
 
   return (
