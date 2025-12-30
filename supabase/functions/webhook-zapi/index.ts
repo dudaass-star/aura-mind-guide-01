@@ -96,6 +96,16 @@ Deno.serve(async (req) => {
         await new Promise(resolve => setTimeout(resolve, msg.delay));
       }
 
+      // The agent returns 'text' field, not 'content'
+      const messageText = msg.text || msg.content || '';
+      
+      if (!messageText) {
+        console.log('⏭️ Skipping empty message');
+        continue;
+      }
+
+      console.log(`📤 Sending message: ${messageText.substring(0, 50)}...`);
+
       const sendResponse = await fetch(
         `https://api.z-api.io/instances/${zapiInstanceId}/token/${zapiToken}/send-text`,
         {
@@ -103,7 +113,7 @@ Deno.serve(async (req) => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             phone: cleanPhone,
-            message: msg.content,
+            message: messageText,
           }),
         }
       );
