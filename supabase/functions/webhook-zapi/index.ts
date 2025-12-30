@@ -64,48 +64,45 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Log all headers for debugging
-    const allHeaders: Record<string, string> = {};
-    req.headers.forEach((value, key) => {
-      // Mask token values for security but show structure
-      if (key.toLowerCase().includes('token') || key.toLowerCase().includes('auth')) {
-        allHeaders[key] = value.substring(0, 8) + '***';
-      } else {
-        allHeaders[key] = value.substring(0, 50);
-      }
+    // Webhook auth handling (clean + explicit):
+    // - `z-api-token` should match `ZAPI_TOKEN` (instance token)
+    // - `client-token` / `Client-Token` should match `ZAPI_CLIENT_TOKEN` (client token)
+    const receivedZapiToken = req.headers.get('z-api-token') || req.headers.get('Z-Api-Token');
+    const receivedClientToken = req.headers.get('client-token') || req.headers.get('Client-Token');
+
+    const expectedWebhookToken = Deno.env.get('ZAPI_TOKEN');
+    const expectedClientToken = Deno.env.get('ZAPI_CLIENT_TOKEN');
+
+    const usingZapiTokenHeader = !!receivedZapiToken;
+    const receivedToken = receivedZapiToken ?? receivedClientToken;
+    const expectedToken = usingZapiTokenHeader ? expectedWebhookToken : expectedClientToken;
+
+    const mask = (v: string | null | undefined) => (v ? v.substring(0, 8) + '***' : 'NULL');
+
+    console.log('🔐 Webhook auth:', {
+      origin: req.headers.get('origin'),
+      usingHeader: usingZapiTokenHeader ? 'z-api-token' : 'client-token',
+      expected: mask(expectedToken),
+      received: mask(receivedToken),
+      match: !!receivedToken && !!expectedToken && receivedToken === expectedToken,
     });
-    console.log('📋 Request headers:', JSON.stringify(allHeaders, null, 2));
-    
-    // Validate webhook authentication - verify the request comes from Z-API
-    // Z-API sends the token in different headers depending on configuration
-    const expectedToken = Deno.env.get('ZAPI_CLIENT_TOKEN');
-    const receivedToken = req.headers.get('client-token') || 
-                          req.headers.get('Client-Token') || 
-                          req.headers.get('z-api-token') ||
-                          req.headers.get('Z-Api-Token');
-    
-    console.log('🔑 Expected token (first 8 chars):', expectedToken?.substring(0, 8) + '***');
-    console.log('🔑 Received token (first 8 chars):', receivedToken ? receivedToken.substring(0, 8) + '***' : 'NULL');
-    console.log('🔑 Token match:', receivedToken === expectedToken);
-    
+
     if (!expectedToken) {
-      console.error('❌ ZAPI_CLIENT_TOKEN not configured');
+      console.error('❌ Missing expected token (server configuration)');
       return new Response(JSON.stringify({ error: 'Server configuration error' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-    
+
     if (!receivedToken || receivedToken !== expectedToken) {
       console.warn('🚫 Unauthorized webhook request - invalid or missing token');
-      console.warn('🔍 Debug: receivedToken exists:', !!receivedToken);
-      console.warn('🔍 Debug: tokens match:', receivedToken === expectedToken);
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-    
+
     const payload = await req.json();
     console.log('📩 Z-API Webhook received (authenticated):', JSON.stringify(payload, null, 2));
 
