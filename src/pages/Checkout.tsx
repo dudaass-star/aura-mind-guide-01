@@ -82,26 +82,8 @@ const Checkout = () => {
         // Store user info in localStorage for thank you page
         localStorage.setItem('aura_checkout', JSON.stringify({ name, phone, plan: selectedPlan }));
 
-        // Stripe Checkout may not render inside embedded previews (iframes).
-        // In that case, show a button the user can click to open the checkout in a new tab.
-        let isEmbedded = false;
-        try {
-          isEmbedded = window.self !== window.top;
-        } catch {
-          isEmbedded = true;
-        }
-
-        if (isEmbedded) {
-          toast("Pagamento pronto", {
-            description: "Clique em 'Abrir pagamento' para continuar em uma nova aba.",
-            action: {
-              label: "Abrir pagamento",
-              onClick: () => window.open(checkoutUrl, "_blank", "noopener,noreferrer"),
-            },
-          });
-        } else {
-          window.location.href = checkoutUrl;
-        }
+        // Redirect to Stripe Checkout
+        window.location.href = checkoutUrl;
       } else {
         throw new Error('URL de checkout não recebida');
       }
