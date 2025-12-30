@@ -312,6 +312,36 @@ Exemplos:
 
 IMPORTANTE: Só extraia insights que o usuário CLARAMENTE mencionou. Não invente.
 
+# CONTROLE DE FLUXO DA CONVERSA (MUITO IMPORTANTE)
+
+Você DEVE analisar se sua resposta ESPERA uma resposta do usuário ou não.
+
+## QUANDO MARCAR COMO PENDENTE [AGUARDANDO_RESPOSTA]:
+Use esta tag quando sua mensagem:
+- Faz uma PERGUNTA direta ao usuário
+- Propõe um exercício/tarefa e pede retorno
+- Pede uma reflexão e quer saber o resultado
+- Deixa algo em aberto que precisa de resposta
+
+Exemplo: "Como você se sentiu fazendo isso? [AGUARDANDO_RESPOSTA]"
+
+## QUANDO MARCAR COMO CONCLUÍDA [CONVERSA_CONCLUIDA]:
+Use esta tag quando:
+- Você deu uma orientação final e não precisa de resposta
+- O usuário agradeceu e você respondeu o agradecimento
+- A conversa chegou a uma conclusão natural
+- Você fez uma afirmação/validação que encerra o tópico
+- O usuário disse "ok", "entendi", "valeu", "obrigado" e você só precisa confirmar
+
+Exemplo: "Fico feliz que tenha ajudado! Qualquer coisa, tô aqui. 💜 [CONVERSA_CONCLUIDA]"
+
+## REGRAS:
+1. SEMPRE inclua uma dessas tags no final da sua resposta
+2. Se você fez uma pergunta, use [AGUARDANDO_RESPOSTA]
+3. Se você não precisa de resposta, use [CONVERSA_CONCLUIDA]
+4. NÃO force perguntas só para manter a conversa - se o assunto acabou, deixe acabar
+5. É melhor encerrar naturalmente do que ficar fazendo perguntas forçadas
+
 # CONTEXTO DO USUÁRIO (MEMÓRIA ATUAL)
 Nome: {user_name}
 Plano: {user_plan}
@@ -336,8 +366,10 @@ function splitIntoMessages(response: string): Array<{ text: string; delay: numbe
   const isAudioMode = response.startsWith('[MODO_AUDIO]');
   let cleanResponse = response.replace('[MODO_AUDIO]', '').trim();
   
-  // Remove a tag de insights do texto visível
+  // Remove tags de controle do texto visível
   cleanResponse = cleanResponse.replace(/\[INSIGHTS\].*?\[\/INSIGHTS\]/gs, '').trim();
+  cleanResponse = cleanResponse.replace(/\[AGUARDANDO_RESPOSTA\]/g, '').trim();
+  cleanResponse = cleanResponse.replace(/\[CONVERSA_CONCLUIDA\]/g, '').trim();
 
   const parts = cleanResponse
     .split('|||')
@@ -622,10 +654,14 @@ serve(async (req) => {
       }
     }
 
+    // Detectar status da conversa
+    const isConversationComplete = assistantMessage.includes('[CONVERSA_CONCLUIDA]');
+    const isAwaitingResponse = assistantMessage.includes('[AGUARDANDO_RESPOSTA]');
+
     // Separar em múltiplos balões
     const messageChunks = splitIntoMessages(assistantMessage);
     
-    console.log("Split into", messageChunks.length, "bubbles");
+    console.log("Split into", messageChunks.length, "bubbles, awaiting:", isAwaitingResponse, "complete:", isConversationComplete);
 
     // Salvar mensagens no histórico
     if (profile?.user_id) {
@@ -648,7 +684,8 @@ serve(async (req) => {
       user_id: profile?.user_id,
       total_bubbles: messageChunks.length,
       has_audio: messageChunks.some(m => m.isAudio),
-      new_insights: newInsights.length
+      new_insights: newInsights.length,
+      conversation_status: isConversationComplete ? 'complete' : (isAwaitingResponse ? 'awaiting' : 'neutral')
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
