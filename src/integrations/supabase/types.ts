@@ -90,6 +90,47 @@ export type Database = {
           },
         ]
       }
+      conversation_followups: {
+        Row: {
+          conversation_context: string | null
+          created_at: string
+          followup_count: number
+          id: string
+          last_followup_at: string | null
+          last_user_message_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          conversation_context?: string | null
+          created_at?: string
+          followup_count?: number
+          id?: string
+          last_followup_at?: string | null
+          last_user_message_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          conversation_context?: string | null
+          created_at?: string
+          followup_count?: number
+          id?: string
+          last_followup_at?: string | null
+          last_user_message_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_user"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           content: string
