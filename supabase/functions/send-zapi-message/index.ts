@@ -105,6 +105,18 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Validate service role authentication (internal function only)
+    const authHeader = req.headers.get('Authorization');
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    
+    if (!authHeader || !authHeader.includes(supabaseServiceKey!)) {
+      console.warn('🚫 Unauthorized request to send-zapi-message');
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const { phone, message, user_id, isAudio = false } = await req.json();
     console.log(`📤 Sending ${isAudio ? 'audio' : 'text'} message to ${phone}`);
 
@@ -139,8 +151,7 @@ Deno.serve(async (req) => {
     // Save message to history
     if (user_id) {
       const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-      const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-      const supabase = createClient(supabaseUrl, supabaseServiceKey);
+      const supabase = createClient(supabaseUrl, supabaseServiceKey!);
 
       await supabase.from('messages').insert({
         user_id: user_id,
@@ -155,8 +166,8 @@ Deno.serve(async (req) => {
 
   } catch (error: unknown) {
     console.error('❌ Send error:', error);
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    return new Response(JSON.stringify({ error: message }), {
+    // Return generic error message, log full details server-side
+    return new Response(JSON.stringify({ error: 'Failed to send message' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
