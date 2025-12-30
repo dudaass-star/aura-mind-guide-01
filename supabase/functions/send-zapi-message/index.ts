@@ -73,12 +73,16 @@ async function sendAudioMessage(phone: string, audioBase64: string): Promise<any
 async function sendTextMessage(phone: string, message: string): Promise<any> {
   const zapiInstanceId = Deno.env.get('ZAPI_INSTANCE_ID')!;
   const zapiToken = Deno.env.get('ZAPI_TOKEN')!;
+  const zapiClientToken = Deno.env.get('ZAPI_CLIENT_TOKEN')!;
 
   const response = await fetch(
     `https://api.z-api.io/instances/${zapiInstanceId}/token/${zapiToken}/send-text`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Client-Token': zapiClientToken,
+      },
       body: JSON.stringify({
         phone: phone,
         message: message,
