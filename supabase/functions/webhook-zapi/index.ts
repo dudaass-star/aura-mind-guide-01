@@ -19,6 +19,7 @@ Deno.serve(async (req) => {
     const phone = payload.phone || payload.from;
     const message = payload.text?.message || payload.body || '';
     const isFromMe = payload.fromMe || payload.isFromMe || false;
+    const messageId = payload.messageId;
 
     // Ignore messages sent by the bot itself
     if (isFromMe) {
@@ -36,15 +37,31 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Initialize Supabase client early for deduplication check
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Check if we already processed this messageId (deduplication)
+    if (messageId) {
+      const { data: existingMsg } = await supabase
+        .from('messages')
+        .select('id')
+        .eq('id', messageId)
+        .single();
+
+      if (existingMsg) {
+        console.log(`⏭️ Already processed messageId: ${messageId}`);
+        return new Response(JSON.stringify({ status: 'ignored', reason: 'duplicate' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
     // Clean phone number (remove @c.us suffix if present)
     const cleanPhone = phone.replace('@c.us', '').replace(/\D/g, '');
     console.log(`📱 Processing message from: ${cleanPhone}`);
     console.log(`💬 Message: ${message}`);
-
-    // Initialize Supabase client
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Find user by phone
     const { data: profile, error: profileError } = await supabase
