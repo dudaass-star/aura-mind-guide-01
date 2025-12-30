@@ -60,11 +60,6 @@ const Checkout = () => {
       return;
     }
 
-    // Stripe Checkout can show a blank screen inside embedded previews (iframes).
-    // Also, most browsers block popups opened after an async await.
-    // So we open a placeholder tab synchronously, then navigate it after we receive the URL.
-    const popup = window.open("", "_blank", "noopener,noreferrer");
-
     setIsLoading(true);
 
     try {
@@ -87,25 +82,30 @@ const Checkout = () => {
         // Store user info in localStorage for thank you page
         localStorage.setItem('aura_checkout', JSON.stringify({ name, phone, plan: selectedPlan }));
 
-        if (popup) {
-          popup.location.href = checkoutUrl;
-          popup.focus();
+        // Stripe Checkout may not render inside embedded previews (iframes).
+        // In that case, show a button the user can click to open the checkout in a new tab.
+        let isEmbedded = false;
+        try {
+          isEmbedded = window.self !== window.top;
+        } catch {
+          isEmbedded = true;
+        }
+
+        if (isEmbedded) {
+          toast("Pagamento pronto", {
+            description: "Clique em 'Abrir pagamento' para continuar em uma nova aba.",
+            action: {
+              label: "Abrir pagamento",
+              onClick: () => window.open(checkoutUrl, "_blank", "noopener,noreferrer"),
+            },
+          });
         } else {
-          toast.error(
-            "Não foi possível abrir o pagamento em uma nova aba (bloqueador de pop-ups). Clique em 'Abrir pagamento'.",
-            {
-              action: {
-                label: "Abrir pagamento",
-                onClick: () => window.open(checkoutUrl, "_blank", "noopener,noreferrer"),
-              },
-            }
-          );
+          window.location.href = checkoutUrl;
         }
       } else {
         throw new Error('URL de checkout não recebida');
       }
     } catch (error) {
-      if (popup) popup.close();
       console.error('Checkout error:', error);
       toast.error(error instanceof Error ? error.message : 'Erro ao processar pagamento. Tente novamente.');
     } finally {
