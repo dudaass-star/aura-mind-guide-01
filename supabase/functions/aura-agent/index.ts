@@ -365,12 +365,12 @@ Histórico de conversas: {message_count} mensagens
 {user_insights}
 `;
 
-// Função para calcular delay baseado no tamanho da mensagem (simula digitação)
+// Função para calcular delay baseado no tamanho da mensagem (simula digitação humana)
 function calculateDelay(message: string): number {
-  const baseDelay = 1000;
-  const charsPerSecond = 25;
+  const baseDelay = 3000; // 3 segundos de base - mais natural
+  const charsPerSecond = 18; // Digitação mais lenta, como uma pessoa real
   const typingTime = (message.length / charsPerSecond) * 1000;
-  return Math.min(baseDelay + typingTime, 4000);
+  return Math.min(baseDelay + typingTime, 8000); // Máximo 8 segundos
 }
 
 // Função para separar resposta em múltiplos balões usando "|||"
