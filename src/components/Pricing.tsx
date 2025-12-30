@@ -23,6 +23,7 @@ const plans = [
   {
     name: "Anual",
     price: "239,90",
+    originalPrice: "334,80",
     period: "/ano",
     priceMonthly: "19,99",
     description: "Melhor custo-benefício. Ideal pra quem quer consistência.",
@@ -81,6 +82,11 @@ const Pricing = () => {
                   {plan.description}
                 </p>
                 <div className="flex items-baseline justify-center gap-1">
+                  {plan.originalPrice && (
+                    <span className="text-lg text-muted-foreground line-through mr-2">
+                      R$ {plan.originalPrice}
+                    </span>
+                  )}
                   <span className="text-sm text-muted-foreground">R$</span>
                   <span className="font-display text-5xl font-bold text-foreground">
                     {plan.price}
