@@ -378,10 +378,10 @@ function splitIntoMessages(response: string): Array<{ text: string; delay: numbe
   const isAudioMode = response.startsWith('[MODO_AUDIO]');
   let cleanResponse = response.replace('[MODO_AUDIO]', '').trim();
   
-  // Remove tags de controle do texto visível
-  cleanResponse = cleanResponse.replace(/\[INSIGHTS\].*?\[\/INSIGHTS\]/gs, '').trim();
-  cleanResponse = cleanResponse.replace(/\[AGUARDANDO_RESPOSTA\]/g, '').trim();
-  cleanResponse = cleanResponse.replace(/\[CONVERSA_CONCLUIDA\]/g, '').trim();
+  // Remove tags de controle do texto visível (case insensitive para pegar variações)
+  cleanResponse = cleanResponse.replace(/\[INSIGHTS\].*?\[\/INSIGHTS\]/gis, '').trim();
+  cleanResponse = cleanResponse.replace(/\[AGUARDANDO_RESPOSTA\]/gi, '').trim();
+  cleanResponse = cleanResponse.replace(/\[CONVERSA_CONCLUIDA\]/gi, '').trim();
 
   const parts = cleanResponse
     .split('|||')

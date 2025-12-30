@@ -135,7 +135,15 @@ Deno.serve(async (req) => {
       }
 
       // The agent returns 'text' field, not 'content'
-      const messageText = msg.text || msg.content || '';
+      let messageText = msg.text || msg.content || '';
+      
+      // Remove any internal tags that might have leaked through
+      messageText = messageText
+        .replace(/\[AGUARDANDO_RESPOSTA\]/gi, '')
+        .replace(/\[CONVERSA_CONCLUIDA\]/gi, '')
+        .replace(/\[MODO_AUDIO\]/gi, '')
+        .replace(/\[INSIGHTS\].*?\[\/INSIGHTS\]/gis, '')
+        .trim();
       
       if (!messageText) {
         console.log('⏭️ Skipping empty message');
