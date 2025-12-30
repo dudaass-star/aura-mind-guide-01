@@ -64,8 +64,28 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Validate webhook authentication - verify the request comes from Z-API
+    const expectedToken = Deno.env.get('ZAPI_CLIENT_TOKEN');
+    const receivedToken = req.headers.get('client-token') || req.headers.get('Client-Token');
+    
+    if (!expectedToken) {
+      console.error('❌ ZAPI_CLIENT_TOKEN not configured');
+      return new Response(JSON.stringify({ error: 'Server configuration error' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    
+    if (!receivedToken || receivedToken !== expectedToken) {
+      console.warn('🚫 Unauthorized webhook request - invalid or missing token');
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    
     const payload = await req.json();
-    console.log('📩 Z-API Webhook received:', JSON.stringify(payload, null, 2));
+    console.log('📩 Z-API Webhook received (authenticated):', JSON.stringify(payload, null, 2));
 
     // Extract message data from Z-API payload
     const phone = payload.phone || payload.from;
