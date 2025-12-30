@@ -5,16 +5,79 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+async function analyzeWeekConversations(
+  messages: any[],
+  userName: string
+): Promise<string> {
+  const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
+  
+  if (!lovableApiKey || messages.length === 0) {
+    return '';
+  }
+
+  // Prepare conversation summary for analysis
+  const conversationSummary = messages
+    .slice(-50) // Last 50 messages max
+    .map(m => `${m.role === 'user' ? userName : 'Aura'}: ${m.content}`)
+    .join('\n');
+
+  try {
+    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${lovableApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash',
+        messages: [
+          {
+            role: 'system',
+            content: `Você é a Aura, uma coach de vida empática. Analise as conversas da semana e gere um parágrafo curto (máximo 3 frases) sobre:
+- Os principais temas/questões trabalhados
+- A evolução ou progresso percebido
+- Um insight ou observação importante
+
+Seja específica sobre o que foi discutido. Use linguagem acolhedora e direta. Não use bullet points, escreva em texto corrido.`
+          },
+          {
+            role: 'user',
+            content: `Analise as conversas desta semana com ${userName}:\n\n${conversationSummary}`
+          }
+        ],
+      }),
+    });
+
+    if (!response.ok) {
+      console.error('AI analysis error:', await response.text());
+      return '';
+    }
+
+    const data = await response.json();
+    return data.choices?.[0]?.message?.content || '';
+  } catch (error) {
+    console.error('Error analyzing conversations:', error);
+    return '';
+  }
+}
+
 function generateWeeklyReport(
   profile: any,
   checkins: any[],
   completedCommitments: any[],
   pendingCommitments: any[],
-  insights: any[]
+  insights: any[],
+  evolutionAnalysis: string
 ): string {
   const name = profile.name?.split(' ')[0] || 'você';
   
   let report = `📊 *Seu Relatório Semanal, ${name}!*\n\n`;
+
+  // Evolution analysis (AI-generated)
+  if (evolutionAnalysis) {
+    report += `*🌱 Sua Evolução*\n`;
+    report += `${evolutionAnalysis}\n\n`;
+  }
 
   // Mood & Energy summary
   if (checkins.length > 0) {
@@ -62,8 +125,8 @@ function generateWeeklyReport(
   }
 
   // Closing message
-  if (completedCommitments.length > 0 && checkins.length > 0) {
-    report += `🌟 *Você teve uma semana produtiva!* Continue assim, ${name}. Estou orgulhosa de você!`;
+  if (evolutionAnalysis || completedCommitments.length > 0) {
+    report += `🌟 *Você está evoluindo!* Continue assim, ${name}. Estou orgulhosa de você!`;
   } else if (checkins.length > 0) {
     report += `💪 *Boa semana!* Vamos juntos na próxima também. Conte comigo!`;
   } else {
@@ -111,6 +174,14 @@ Deno.serve(async (req) => {
 
     for (const profile of profiles || []) {
       try {
+        // Get week's messages for AI analysis
+        const { data: weekMessages } = await supabase
+          .from('messages')
+          .select('*')
+          .eq('user_id', profile.user_id)
+          .gte('created_at', weekStart.toISOString())
+          .order('created_at', { ascending: true });
+
         // Get week's check-ins
         const { data: checkins } = await supabase
           .from('checkins')
@@ -141,13 +212,27 @@ Deno.serve(async (req) => {
           .order('mentioned_count', { ascending: false })
           .limit(5);
 
+        // Analyze conversations with AI
+        const userName = profile.name?.split(' ')[0] || 'usuário';
+        console.log(`🧠 Analyzing ${weekMessages?.length || 0} messages for ${userName}...`);
+        
+        const evolutionAnalysis = await analyzeWeekConversations(
+          weekMessages || [],
+          userName
+        );
+        
+        if (evolutionAnalysis) {
+          console.log(`✅ Evolution analysis generated for ${userName}`);
+        }
+
         // Generate report
         const report = generateWeeklyReport(
           profile,
           checkins || [],
           completedCommitments || [],
           pendingCommitments || [],
-          insights || []
+          insights || [],
+          evolutionAnalysis
         );
 
         // Send via Z-API
@@ -182,7 +267,7 @@ Deno.serve(async (req) => {
           await supabase.from('weekly_plans').upsert({
             user_id: profile.user_id,
             week_start: weekStart.toISOString().split('T')[0],
-            reflections: `Relatório enviado em ${now.toISOString()}`,
+            reflections: evolutionAnalysis || `Relatório enviado em ${now.toISOString()}`,
           }, {
             onConflict: 'user_id,week_start'
           });
