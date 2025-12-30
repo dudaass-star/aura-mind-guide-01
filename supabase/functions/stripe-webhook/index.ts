@@ -165,6 +165,94 @@ Me diz: como você está hoje?`;
       }
     }
 
+    // Process customer.subscription.deleted
+    if (event.type === 'customer.subscription.deleted') {
+      const subscription = event.data.object as Stripe.Subscription;
+      console.log('🔴 Subscription deleted:', subscription.id);
+
+      const customerId = subscription.customer as string;
+      
+      try {
+        // Get customer details from Stripe
+        const stripe = new Stripe(stripeSecretKey, { apiVersion: '2023-10-16' });
+        const customer = await stripe.customers.retrieve(customerId);
+        
+        if (customer.deleted) {
+          console.log('⚠️ Customer was deleted, skipping farewell message');
+          return new Response(JSON.stringify({ received: true }), {
+            status: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        const customerPhone = customer.metadata?.phone;
+        const customerName = customer.name || 'Cliente';
+
+        if (!customerPhone) {
+          console.error('❌ No phone number found for customer');
+          return new Response(JSON.stringify({ received: true }), {
+            status: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        console.log(`👤 Sending farewell to: ${customerName}, Phone: ${customerPhone}`);
+
+        // Mensagem de despedida
+        const farewellMessage = `Oi, ${customerName}. 💜
+
+Sua assinatura AURA foi encerrada.
+
+Agradeço por ter me permitido fazer parte da sua jornada. Espero ter ajudado de alguma forma.
+
+Lembre-se: o caminho do autoconhecimento não para. Se precisar de mim, estarei aqui.
+
+Cuide-se. 🌟`;
+
+        // Send farewell message via Z-API
+        const response = await fetch(`${supabaseUrl}/functions/v1/send-zapi-message`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseServiceKey}`,
+          },
+          body: JSON.stringify({
+            phone: customerPhone,
+            message: farewellMessage,
+            isAudio: false,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('❌ Failed to send farewell message:', errorText);
+        } else {
+          console.log('✅ Farewell message sent successfully!');
+        }
+
+        // Update profile status in database
+        const supabase = createClient(supabaseUrl, supabaseServiceKey);
+        const cleanPhone = customerPhone.replace(/\D/g, '');
+
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update({
+            status: 'canceled',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('phone', cleanPhone);
+
+        if (updateError) {
+          console.error('❌ Error updating profile status:', updateError);
+        } else {
+          console.log('✅ Profile status updated to canceled');
+        }
+
+      } catch (customerError) {
+        console.error('❌ Error processing subscription deletion:', customerError);
+      }
+    }
+
     return new Response(JSON.stringify({ received: true }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
