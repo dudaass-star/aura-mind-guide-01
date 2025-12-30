@@ -81,20 +81,6 @@ Deno.serve(async (req) => {
 
     console.log(`👤 Found user: ${profile.name} (${profile.user_id})`);
 
-    // Update conversation follow-up tracking: user responded, reset counter
-    const now = new Date().toISOString();
-    await supabase
-      .from('conversation_followups')
-      .upsert({
-        user_id: profile.user_id,
-        last_user_message_at: now,
-        followup_count: 0,  // Reset follow-up counter when user responds
-        conversation_context: message.substring(0, 200),  // Save context for follow-up
-      }, {
-        onConflict: 'user_id',
-      });
-    console.log('📍 Updated conversation follow-up tracking');
-
     // Call the aura-agent function to process the message
     const agentResponse = await fetch(`${supabaseUrl}/functions/v1/aura-agent`, {
       method: 'POST',
@@ -117,6 +103,26 @@ Deno.serve(async (req) => {
 
     const agentData = await agentResponse.json();
     console.log('🤖 Agent response:', JSON.stringify(agentData, null, 2));
+
+    // Update conversation follow-up tracking based on conversation status
+    const now = new Date().toISOString();
+    const conversationStatus = agentData.conversation_status || 'neutral';
+    
+    // Only enable follow-ups if AURA is awaiting a response
+    // If conversation is complete or neutral, don't send follow-ups
+    const shouldEnableFollowup = conversationStatus === 'awaiting';
+    
+    await supabase
+      .from('conversation_followups')
+      .upsert({
+        user_id: profile.user_id,
+        last_user_message_at: shouldEnableFollowup ? now : null, // null = no follow-up needed
+        followup_count: 0,  // Reset follow-up counter when user responds
+        conversation_context: shouldEnableFollowup ? message.substring(0, 200) : null,
+      }, {
+        onConflict: 'user_id',
+      });
+    console.log(`📍 Updated conversation tracking - status: ${conversationStatus}, followup enabled: ${shouldEnableFollowup}`);
 
     // Send response messages via Z-API
     const zapiInstanceId = Deno.env.get('ZAPI_INSTANCE_ID')!;

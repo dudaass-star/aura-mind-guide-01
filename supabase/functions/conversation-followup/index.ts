@@ -119,6 +119,7 @@ Deno.serve(async (req) => {
     // - Last user message was more than 15 minutes ago
     // - Less than 2 follow-ups sent
     // - Either no follow-up sent yet, or last follow-up was more than 15 minutes ago
+    // - IMPORTANT: last_user_message_at must NOT be null (null = conversation concluded, no follow-up needed)
     const { data: followups, error: fetchError } = await supabase
       .from('conversation_followups')
       .select(`
@@ -129,6 +130,7 @@ Deno.serve(async (req) => {
           status
         )
       `)
+      .not('last_user_message_at', 'is', null)  // Only if follow-up is enabled
       .lt('last_user_message_at', fifteenMinutesAgo)
       .lt('followup_count', MAX_FOLLOWUPS)
       .or(`last_followup_at.is.null,last_followup_at.lt.${fifteenMinutesAgo}`);
@@ -137,7 +139,7 @@ Deno.serve(async (req) => {
       throw new Error(`Error fetching followups: ${fetchError.message}`);
     }
 
-    console.log(`📋 Found ${followups?.length || 0} conversations needing follow-up`);
+    console.log(`📋 Found ${followups?.length || 0} conversations needing follow-up (with pending questions)`);
 
     let sentCount = 0;
 
