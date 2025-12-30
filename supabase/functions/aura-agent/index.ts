@@ -101,21 +101,28 @@ Exemplo:
 
 # REGRA TÉCNICA DE ÁUDIO (PARA VOZ)
 
-VOCÊ PODE E DEVE ENVIAR MENSAGENS DE ÁUDIO! Você tem uma voz linda e calorosa.
+VOCÊ TEM VOZ! Você pode e DEVE enviar mensagens de áudio quando apropriado. Você tem uma voz feminina linda e calorosa.
 
-Quando usar áudio:
-- Quando o usuário PEDIR para ouvir sua voz ou um áudio
+QUANDO USAR ÁUDIO (obrigatório nestes casos):
+- Quando o usuário PEDIR para ouvir sua voz ou um áudio - SEMPRE ATENDA!
 - Em momentos de crise emocional profunda
 - Quando precisar de um tom mais acolhedor e íntimo
-- Quando a conexão emocional for mais importante que a informação
 
-Para enviar áudio, inicie sua resposta com a tag [MODO_AUDIO].
-Exemplo: [MODO_AUDIO] Ei, eu tô aqui contigo, tá? Respira fundo comigo... 💜
+COMO ENVIAR ÁUDIO:
+Inicie sua resposta APENAS com a tag [MODO_AUDIO] seguida do texto que será convertido em voz.
+Exemplo: [MODO_AUDIO] Oi, eu tô aqui com você, tá? Respira fundo...
 
-IMPORTANTE: Quando usar [MODO_AUDIO], escreva como se estivesse FALANDO, não escrevendo. 
-- Use frases curtas e naturais
-- Evite emojis demais (1 no máximo)
-- Mantenha a mensagem breve (ideal: 1-2 parágrafos)
+REGRAS CRÍTICAS PARA ÁUDIO:
+1. Quando usar [MODO_AUDIO], sua resposta deve ser APENAS o áudio, NADA MAIS
+2. NÃO explique que você está enviando áudio
+3. NÃO diga que você não pode enviar áudio (você PODE!)
+4. NÃO mande mensagens de texto junto com o áudio
+5. Escreva como se estivesse FALANDO - frases curtas e naturais
+6. Evite emojis (máximo 1)
+7. Mantenha a mensagem breve (1-2 frases curtas)
+
+ERRADO: "Vou te mandar um áudio! [MODO_AUDIO] Oi tudo bem..."
+CERTO: [MODO_AUDIO] Oi, tudo bem por aqui sim...
 
 # RACIOCÍNIO INTERNO (A LÓGICA POR TRÁS DO PAPO)
 
@@ -397,6 +404,19 @@ function splitIntoMessages(response: string): Array<{ text: string; delay: numbe
   cleanResponse = cleanResponse.replace(/\[AGUARDANDO_RESPOSTA\]/gi, '').trim();
   cleanResponse = cleanResponse.replace(/\[CONVERSA_CONCLUIDA\]/gi, '').trim();
 
+  // IMPORTANTE: Se é modo áudio, retorna APENAS a primeira mensagem como áudio
+  // Isso evita que mensagens de texto sejam enviadas junto com o áudio
+  if (isAudioMode) {
+    // Pega apenas o texto até o primeiro "|||" ou parágrafo
+    const audioText = cleanResponse.split('|||')[0].split(/\n\n+/)[0].trim();
+    console.log('🎙️ Audio mode detected, returning single audio message');
+    return [{
+      text: audioText,
+      delay: 0,
+      isAudio: true
+    }];
+  }
+
   const parts = cleanResponse
     .split('|||')
     .map(part => part.trim())
@@ -407,19 +427,19 @@ function splitIntoMessages(response: string): Array<{ text: string; delay: numbe
     if (text.length > 250) {
       const paragraphs = text.split(/\n\n+/).filter(p => p.trim());
       if (paragraphs.length > 1) {
-        return paragraphs.map((p, i) => ({
+        return paragraphs.map((p) => ({
           text: p.trim(),
           delay: calculateDelay(p),
-          isAudio: isAudioMode && i === 0
+          isAudio: false
         }));
       }
     }
   }
 
-  return parts.map((part, index) => ({
+  return parts.map((part) => ({
     text: part,
     delay: calculateDelay(part),
-    isAudio: isAudioMode && index === 0
+    isAudio: false
   }));
 }
 
