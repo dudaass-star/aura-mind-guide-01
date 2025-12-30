@@ -159,7 +159,7 @@ const Testimonials = () => {
               ))}
             </div>
             <span className="text-sm text-muted-foreground ml-2">
-              +500 pessoas já transformaram suas vidas com a Aura
+              +5.000 pessoas já transformaram suas vidas com a Aura
             </span>
           </div>
         </div>
