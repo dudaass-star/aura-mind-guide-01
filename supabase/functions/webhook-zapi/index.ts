@@ -249,11 +249,12 @@ Deno.serve(async (req) => {
     // Send response messages via Z-API
     const zapiInstanceId = Deno.env.get('ZAPI_INSTANCE_ID')!;
     const zapiToken = Deno.env.get('ZAPI_TOKEN')!;
+    const zapiClientToken = Deno.env.get('ZAPI_CLIENT_TOKEN')!;
 
     for (const msg of agentData.messages || []) {
       // Add delay between messages for natural feel
       if (msg.delay) {
-        await new Promise(resolve => setTimeout(resolve, msg.delay));
+        await new Promise(resolve => setTimeout(resolve, Math.min(msg.delay, 3000)));
       }
 
       // The agent returns 'text' field, not 'content'
@@ -272,9 +273,64 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      console.log(`📤 Sending message: ${messageText.substring(0, 50)}...`);
+      // Check if this message should be sent as audio
+      if (msg.isAudio) {
+        console.log(`🎙️ Generating audio for: ${messageText.substring(0, 50)}...`);
+        
+        try {
+          // Generate audio via TTS
+          const ttsResponse = await fetch(`${supabaseUrl}/functions/v1/aura-tts`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${supabaseServiceKey}`,
+            },
+            body: JSON.stringify({ text: messageText, voice: 'shimmer' }),
+          });
 
-      const zapiClientToken = Deno.env.get('ZAPI_CLIENT_TOKEN')!;
+          if (ttsResponse.ok) {
+            const ttsData = await ttsResponse.json();
+            
+            if (ttsData.audioContent) {
+              // Send audio via Z-API
+              console.log('🔊 Sending audio message...');
+              const audioResponse = await fetch(
+                `https://api.z-api.io/instances/${zapiInstanceId}/token/${zapiToken}/send-audio`,
+                {
+                  method: 'POST',
+                  headers: { 
+                    'Content-Type': 'application/json',
+                    'Client-Token': zapiClientToken,
+                  },
+                  body: JSON.stringify({
+                    phone: cleanPhone,
+                    audio: `data:audio/mpeg;base64,${ttsData.audioContent}`,
+                    waveform: true,  // Para aparecer como mensagem de voz
+                  }),
+                }
+              );
+
+              if (audioResponse.ok) {
+                console.log('✅ Audio message sent successfully');
+                continue; // Skip text send
+              } else {
+                console.error('❌ Z-API audio error:', await audioResponse.text());
+                // Fall through to send as text
+              }
+            }
+          } else {
+            console.error('❌ TTS error:', await ttsResponse.text());
+          }
+        } catch (audioError) {
+          console.error('❌ Audio generation failed:', audioError);
+        }
+        
+        // Fallback to text if audio fails
+        console.log('⚠️ Falling back to text message');
+      }
+
+      // Send as text message
+      console.log(`📤 Sending text: ${messageText.substring(0, 50)}...`);
       
       const sendResponse = await fetch(
         `https://api.z-api.io/instances/${zapiInstanceId}/token/${zapiToken}/send-text`,
@@ -295,7 +351,7 @@ Deno.serve(async (req) => {
         const sendError = await sendResponse.text();
         console.error('❌ Z-API send error:', sendError);
       } else {
-        console.log('✅ Message sent successfully');
+        console.log('✅ Text message sent successfully');
       }
     }
 
