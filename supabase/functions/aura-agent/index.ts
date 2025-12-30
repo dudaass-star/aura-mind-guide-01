@@ -119,10 +119,12 @@ REGRAS CRÍTICAS PARA ÁUDIO:
 4. NÃO mande mensagens de texto junto com o áudio
 5. Escreva como se estivesse FALANDO - frases curtas e naturais
 6. Evite emojis (máximo 1)
-7. Mantenha a mensagem breve (1-2 frases curtas)
+7. NÃO use "|||": fale tudo no mesmo áudio, com pausas naturais usando "..."
+8. Se o usuário pedir uma explicação (ex: "como você pode me ajudar"), dê 2-3 exemplos concretos e só então faça 1 pergunta curta
+9. Tamanho: até 4-6 frases curtas (aprox. 300-450 caracteres). Se precisar, quebre em no máximo 2 áudios.
 
 ERRADO: "Vou te mandar um áudio! [MODO_AUDIO] Oi tudo bem..."
-CERTO: [MODO_AUDIO] Oi, tudo bem por aqui sim...
+CERTO: [MODO_AUDIO] Oi! Posso te ajudar a organizar sua semana, acompanhar seu humor/energia e te lembrar dos seus compromissos. O que você mais quer melhorar agora?
 
 # RACIOCÍNIO INTERNO (A LÓGICA POR TRÁS DO PAPO)
 
@@ -404,17 +406,91 @@ function splitIntoMessages(response: string): Array<{ text: string; delay: numbe
   cleanResponse = cleanResponse.replace(/\[AGUARDANDO_RESPOSTA\]/gi, '').trim();
   cleanResponse = cleanResponse.replace(/\[CONVERSA_CONCLUIDA\]/gi, '').trim();
 
-  // IMPORTANTE: Se é modo áudio, retorna APENAS a primeira mensagem como áudio
-  // Isso evita que mensagens de texto sejam enviadas junto com o áudio
+  // MODO ÁUDIO: transforma a resposta inteira em 1+ mensagens de voz (sem texto)
+  // - remove "|||" (para não virar leitura literal)
+  // - quebra em chunks curtos para não estourar o limite do TTS
   if (isAudioMode) {
-    // Pega apenas o texto até o primeiro "|||" ou parágrafo
-    const audioText = cleanResponse.split('|||')[0].split(/\n\n+/)[0].trim();
-    console.log('🎙️ Audio mode detected, returning single audio message');
-    return [{
-      text: audioText,
-      delay: 0,
-      isAudio: true
-    }];
+    const normalized = cleanResponse
+      .replace(/\s*\|\|\|\s*/g, ' ... ')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+
+    const maxLen = 420;
+
+    // Split simples por fim de frase / quebra de parágrafo
+    const units: string[] = [];
+    let buf = '';
+    let consecutiveNewlines = 0;
+
+    for (let i = 0; i < normalized.length; i++) {
+      const ch = normalized[i];
+      buf += ch;
+
+      if (ch === '\n') {
+        consecutiveNewlines++;
+      } else {
+        consecutiveNewlines = 0;
+      }
+
+      const isSentenceEnd = ch === '.' || ch === '!' || ch === '?';
+      const isParagraphBreak = consecutiveNewlines >= 2;
+
+      if (isSentenceEnd || isParagraphBreak) {
+        const unit = buf.replace(/\n+/g, ' ').trim();
+        if (unit) units.push(unit);
+        buf = '';
+        consecutiveNewlines = 0;
+      }
+    }
+
+    const tail = buf.replace(/\n+/g, ' ').trim();
+    if (tail) units.push(tail);
+
+    // Junta unidades em chunks <= maxLen
+    const chunks: string[] = [];
+    let current = '';
+
+    const pushCurrent = () => {
+      const c = current.trim();
+      if (c) chunks.push(c);
+      current = '';
+    };
+
+    for (const unit of (units.length ? units : [normalized])) {
+      if (!current) {
+        current = unit;
+        continue;
+      }
+
+      if ((current + ' ' + unit).length <= maxLen) {
+        current = `${current} ${unit}`.trim();
+      } else {
+        pushCurrent();
+        current = unit;
+      }
+    }
+    pushCurrent();
+
+    // Se ainda houver algum chunk gigantesco, faz split bruto
+    const safeChunks: string[] = [];
+    for (const c of chunks.length ? chunks : [normalized]) {
+      if (c.length <= maxLen) {
+        safeChunks.push(c);
+        continue;
+      }
+      for (let i = 0; i < c.length; i += maxLen) {
+        const part = c.slice(i, i + maxLen).trim();
+        if (part) safeChunks.push(part);
+      }
+    }
+
+    console.log('🎙️ Audio mode detected, returning', safeChunks.length, 'audio chunk(s)');
+
+    return safeChunks.map((text, index) => ({
+      text,
+      delay: index === 0 ? 0 : 700,
+      isAudio: true,
+    }));
   }
 
   const parts = cleanResponse
