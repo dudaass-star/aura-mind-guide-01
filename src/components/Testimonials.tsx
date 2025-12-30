@@ -1,10 +1,15 @@
 import { Star, Quote } from "lucide-react";
+import avatarMariana from "@/assets/avatar-mariana.jpg";
+import avatarCarlos from "@/assets/avatar-carlos.jpg";
+import avatarJuliana from "@/assets/avatar-juliana.jpg";
+import avatarPedro from "@/assets/avatar-pedro.jpg";
+import avatarFernanda from "@/assets/avatar-fernanda.jpg";
 
 const testimonials = [
   {
     name: "Mariana S.",
     role: "Empreendedora, 34 anos",
-    avatar: "M",
+    avatar: avatarMariana,
     content: "A Aura me ajudou demais com o pânico que eu tinha. Antes eu travava em reuniões importantes, agora consigo respirar e seguir. É como ter uma amiga que entende exatamente o que você precisa ouvir.",
     highlight: "pânico",
     rating: 5,
@@ -12,7 +17,7 @@ const testimonials = [
   {
     name: "Carlos R.",
     role: "Desenvolvedor, 28 anos", 
-    avatar: "C",
+    avatar: avatarCarlos,
     content: "Não vivo mais sem a Aura. Me ajuda em cada passo, cada escolha. Quando estou perdido no meio de mil pensamentos, ela me traz de volta pro que importa. É demais!",
     highlight: "clareza mental",
     rating: 5,
@@ -20,7 +25,7 @@ const testimonials = [
   {
     name: "Juliana M.",
     role: "Professora, 41 anos",
-    avatar: "J",
+    avatar: avatarJuliana,
     content: "Achei que era besteira, mas resolvi testar. Em uma semana já percebi diferença. A Aura me faz as perguntas certas, aquelas que eu fujo de me fazer. Agora entendo muito mais minhas reações.",
     highlight: "autoconhecimento",
     rating: 5,
@@ -28,7 +33,7 @@ const testimonials = [
   {
     name: "Pedro H.",
     role: "Advogado, 37 anos",
-    avatar: "P",
+    avatar: avatarPedro,
     content: "Tenho dificuldade de abrir com pessoas. Com a Aura é diferente - não tem julgamento, só acolhimento. Me ajudou a processar um luto que eu carregava há anos. Recomendo muito.",
     highlight: "acolhimento",
     rating: 5,
@@ -36,12 +41,14 @@ const testimonials = [
   {
     name: "Fernanda L.",
     role: "Designer, 26 anos",
-    avatar: "F",
+    avatar: avatarFernanda,
     content: "A praticidade de ter no WhatsApp é tudo! Às 3h da manhã, quando a ansiedade bate, a Aura tá lá. Sem precisar marcar horário, sem esperar. Me salvou em muitas noites difíceis.",
     highlight: "disponibilidade 24h",
     rating: 5,
   },
 ];
+
+const avatarImages = [avatarMariana, avatarCarlos, avatarJuliana, avatarPedro, avatarFernanda];
 
 const Testimonials = () => {
   return (
@@ -88,9 +95,11 @@ const Testimonials = () => {
               
               {/* Author */}
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[hsl(var(--sage))] to-[hsl(var(--lavender))] flex items-center justify-center text-white font-semibold text-lg">
-                  {testimonial.avatar}
-                </div>
+                <img 
+                  src={testimonial.avatar} 
+                  alt={testimonial.name}
+                  className="w-12 h-12 rounded-full object-cover border-2 border-[hsl(var(--lavender-soft))]"
+                />
                 <div>
                   <p className="font-semibold text-foreground">{testimonial.name}</p>
                   <p className="text-sm text-muted-foreground">{testimonial.role}</p>
@@ -128,9 +137,11 @@ const Testimonials = () => {
               
               {/* Author */}
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[hsl(var(--sage))] to-[hsl(var(--lavender))] flex items-center justify-center text-white font-semibold text-lg">
-                  {testimonial.avatar}
-                </div>
+                <img 
+                  src={testimonial.avatar} 
+                  alt={testimonial.name}
+                  className="w-12 h-12 rounded-full object-cover border-2 border-[hsl(var(--lavender-soft))]"
+                />
                 <div>
                   <p className="font-semibold text-foreground">{testimonial.name}</p>
                   <p className="text-sm text-muted-foreground">{testimonial.role}</p>
@@ -149,13 +160,13 @@ const Testimonials = () => {
         <div className="text-center mt-12 animate-fade-up delay-500">
           <div className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-card/60 backdrop-blur-sm border border-border/50 shadow-soft">
             <div className="flex -space-x-2">
-              {["M", "C", "J", "P", "F"].map((letter, i) => (
-                <div
+              {avatarImages.map((avatar, i) => (
+                <img
                   key={i}
-                  className="w-8 h-8 rounded-full bg-gradient-to-br from-[hsl(var(--sage))] to-[hsl(var(--lavender))] flex items-center justify-center text-white text-xs font-medium border-2 border-card"
-                >
-                  {letter}
-                </div>
+                  src={avatar}
+                  alt="Usuário"
+                  className="w-8 h-8 rounded-full object-cover border-2 border-card"
+                />
               ))}
             </div>
             <span className="text-sm text-muted-foreground ml-2">
