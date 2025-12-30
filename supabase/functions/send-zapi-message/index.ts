@@ -53,7 +53,9 @@ async function sendAudioMessage(phone: string, audioBase64: string): Promise<any
       },
       body: JSON.stringify({
         phone: phone,
-        audio: `data:audio/mp3;base64,${audioBase64}`,
+        audio: `data:audio/mpeg;base64,${audioBase64}`,
+        waveform: true,  // Para aparecer como mensagem de voz
+        viewOnce: false,
       }),
     }
   );
