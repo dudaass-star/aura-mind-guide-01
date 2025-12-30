@@ -60,8 +60,13 @@ const Checkout = () => {
       return;
     }
 
+    // Stripe Checkout can show a blank screen inside embedded previews (iframes).
+    // Also, most browsers block popups opened after an async await.
+    // So we open a placeholder tab synchronously, then navigate it after we receive the URL.
+    const popup = window.open("", "_blank", "noopener,noreferrer");
+
     setIsLoading(true);
-    
+
     try {
       const { data, error } = await supabase.functions.invoke('create-checkout', {
         body: {
@@ -77,14 +82,30 @@ const Checkout = () => {
       }
 
       if (data?.url) {
+        const checkoutUrl = data.url as string;
+
         // Store user info in localStorage for thank you page
         localStorage.setItem('aura_checkout', JSON.stringify({ name, phone, plan: selectedPlan }));
-        // Redirect to Stripe Checkout
-        window.location.href = data.url;
+
+        if (popup) {
+          popup.location.href = checkoutUrl;
+          popup.focus();
+        } else {
+          toast.error(
+            "Não foi possível abrir o pagamento em uma nova aba (bloqueador de pop-ups). Clique em 'Abrir pagamento'.",
+            {
+              action: {
+                label: "Abrir pagamento",
+                onClick: () => window.open(checkoutUrl, "_blank", "noopener,noreferrer"),
+              },
+            }
+          );
+        }
       } else {
         throw new Error('URL de checkout não recebida');
       }
     } catch (error) {
+      if (popup) popup.close();
       console.error('Checkout error:', error);
       toast.error(error instanceof Error ? error.message : 'Erro ao processar pagamento. Tente novamente.');
     } finally {
