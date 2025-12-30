@@ -82,8 +82,12 @@ const Checkout = () => {
         // Store user info in localStorage for thank you page
         localStorage.setItem('aura_checkout', JSON.stringify({ name, phone, plan: selectedPlan }));
 
-        // Redirect to Stripe Checkout
-        window.location.href = checkoutUrl;
+        // Redirect to Stripe Checkout - use top.location for iframe support
+        if (window.top) {
+          window.top.location.href = checkoutUrl;
+        } else {
+          window.location.href = checkoutUrl;
+        }
       } else {
         throw new Error('URL de checkout não recebida');
       }
