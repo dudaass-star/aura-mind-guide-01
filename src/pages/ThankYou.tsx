@@ -1,13 +1,35 @@
 import { Helmet } from "react-helmet-async";
 import { Button } from "@/components/ui/button";
-import { useLocation, Link } from "react-router-dom";
+import { useLocation, Link, useSearchParams } from "react-router-dom";
 import { CheckCircle, MessageCircle, Sparkles } from "lucide-react";
+import { useEffect, useState } from "react";
 
 const ThankYou = () => {
   const location = useLocation();
-  const { name, plan } = location.state || { name: "", plan: "anual" };
+  const [searchParams] = useSearchParams();
+  const [userData, setUserData] = useState({ name: "", plan: "anual" });
 
-  const firstName = name?.split(" ")[0] || "você";
+  useEffect(() => {
+    // Try to get data from location state first, then localStorage
+    if (location.state?.name) {
+      setUserData({ name: location.state.name, plan: location.state.plan || "anual" });
+    } else {
+      // Get from localStorage (set during checkout)
+      const stored = localStorage.getItem('aura_checkout');
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          setUserData({ name: parsed.name || "", plan: parsed.plan || "anual" });
+          // Clear after reading
+          localStorage.removeItem('aura_checkout');
+        } catch (e) {
+          console.error('Error parsing checkout data:', e);
+        }
+      }
+    }
+  }, [location.state]);
+
+  const firstName = userData.name?.split(" ")[0] || "você";
 
   const whatsappNumber = "5511999999999"; // Replace with actual number
   const whatsappMessage = encodeURIComponent(
@@ -43,7 +65,7 @@ const ThankYou = () => {
               Parabéns, {firstName}!
             </h1>
             <p className="text-lg text-muted-foreground mb-8 leading-relaxed">
-              Sua assinatura do plano <span className="text-primary font-medium">{plan}</span> foi confirmada.
+              Sua assinatura do plano <span className="text-primary font-medium">{userData.plan}</span> foi confirmada.
               <br />
               Agora é só começar sua conversa com a AURA.
             </p>

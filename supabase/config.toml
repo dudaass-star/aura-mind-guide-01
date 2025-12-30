@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.conversation-followup]
 verify_jwt = false
+
+[functions.create-checkout]
+verify_jwt = false
