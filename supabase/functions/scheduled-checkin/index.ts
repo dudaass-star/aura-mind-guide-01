@@ -95,11 +95,15 @@ Deno.serve(async (req) => {
         const message = getCheckinMessage(profile, lastCheckin, pendingCommitments || []);
 
         // Send via Z-API
+        const zapiClientToken = Deno.env.get('ZAPI_CLIENT_TOKEN')!;
         const sendResponse = await fetch(
           `https://api.z-api.io/instances/${zapiInstanceId}/token/${zapiToken}/send-text`,
           {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+              'Content-Type': 'application/json',
+              'Client-Token': zapiClientToken,
+            },
             body: JSON.stringify({
               phone: profile.phone,
               message: message,
