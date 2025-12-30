@@ -14,6 +14,18 @@ serve(async (req) => {
   }
 
   try {
+    // Validate service role authentication (internal function only)
+    const authHeader = req.headers.get('Authorization');
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    
+    if (!authHeader || !authHeader.includes(supabaseServiceKey!)) {
+      console.warn('🚫 Unauthorized request to aura-tts');
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
     
     if (!OPENAI_API_KEY) {
@@ -72,8 +84,9 @@ serve(async (req) => {
 
   } catch (error) {
     console.error("Error in aura-tts:", error);
+    // Return generic error message, log full details server-side
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Erro ao gerar áudio' }),
+      JSON.stringify({ error: 'Failed to generate audio' }),
       {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

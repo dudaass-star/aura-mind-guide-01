@@ -223,8 +223,8 @@ Deno.serve(async (req) => {
 
   } catch (error: unknown) {
     console.error('❌ Conversation follow-up error:', error);
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    return new Response(JSON.stringify({ error: message }), {
+    // Return generic error message, log full details server-side
+    return new Response(JSON.stringify({ error: 'Unable to process follow-ups' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

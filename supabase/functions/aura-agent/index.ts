@@ -684,6 +684,17 @@ serve(async (req) => {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
+    // Validate service role authentication (internal function only)
+    const authHeader = req.headers.get('Authorization');
+    
+    if (!authHeader || !authHeader.includes(SUPABASE_SERVICE_ROLE_KEY!)) {
+      console.warn('🚫 Unauthorized request to aura-agent');
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
