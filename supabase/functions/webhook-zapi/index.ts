@@ -44,18 +44,19 @@ Deno.serve(async (req) => {
 
     // Check if we already processed this messageId (deduplication)
     if (messageId) {
-      const { data: existingMsg } = await supabase
-        .from('messages')
-        .select('id')
-        .eq('id', messageId)
-        .single();
+      // Try to insert into dedup table - will fail if already exists (PRIMARY KEY)
+      const { error: dedupError } = await supabase
+        .from('zapi_message_dedup')
+        .insert({ message_id: messageId, phone: phone });
 
-      if (existingMsg) {
+      if (dedupError) {
+        // If insert fails, it means we already processed this message
         console.log(`⏭️ Already processed messageId: ${messageId}`);
         return new Response(JSON.stringify({ status: 'ignored', reason: 'duplicate' }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
+      console.log(`✅ New message registered: ${messageId}`);
     }
 
     // Clean phone number (remove @c.us suffix if present)
