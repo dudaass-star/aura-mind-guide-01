@@ -77,8 +77,12 @@ Deno.serve(async (req) => {
     console.log('📋 Request headers:', JSON.stringify(allHeaders, null, 2));
     
     // Validate webhook authentication - verify the request comes from Z-API
+    // Z-API sends the token in different headers depending on configuration
     const expectedToken = Deno.env.get('ZAPI_CLIENT_TOKEN');
-    const receivedToken = req.headers.get('client-token') || req.headers.get('Client-Token');
+    const receivedToken = req.headers.get('client-token') || 
+                          req.headers.get('Client-Token') || 
+                          req.headers.get('z-api-token') ||
+                          req.headers.get('Z-Api-Token');
     
     console.log('🔑 Expected token (first 8 chars):', expectedToken?.substring(0, 8) + '***');
     console.log('🔑 Received token (first 8 chars):', receivedToken ? receivedToken.substring(0, 8) + '***' : 'NULL');
