@@ -68,7 +68,17 @@ Deno.serve(async (req) => {
         });
       }
 
-      console.log(`👤 Customer: ${customerName}, Phone: ${customerPhone}`);
+      // Validate phone format: 10-15 digits (E.164 standard)
+      const cleanPhoneForValidation = customerPhone.replace(/\D/g, '');
+      if (!/^[0-9]{10,15}$/.test(cleanPhoneForValidation)) {
+        console.error('❌ Invalid phone format in session');
+        return new Response(JSON.stringify({ received: true }), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      console.log(`👤 Customer: ${customerName}, Phone validated`);
 
       // Mensagem de boas-vindas personalizada
       const welcomeMessage = `Oi, ${customerName}! 🌟 Que bom te receber por aqui.
@@ -161,9 +171,9 @@ Me diz: como você está hoje?`;
     });
 
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    // Log full error server-side but return generic message to client
     console.error('❌ Webhook error:', error);
-    return new Response(JSON.stringify({ error: errorMessage }), {
+    return new Response(JSON.stringify({ error: 'Webhook processing failed' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

@@ -42,8 +42,17 @@ serve(async (req) => {
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
 
-    // Format phone for metadata
+    // Clean and validate phone number
     const phoneClean = phone.replace(/\D/g, "");
+    
+    // Validate phone: 10-15 digits (E.164 standard, Brazil: 10-13 with country code)
+    if (!/^[0-9]{10,15}$/.test(phoneClean)) {
+      logStep("Invalid phone format", { phoneLength: phoneClean.length });
+      return new Response(JSON.stringify({ error: "Número de telefone inválido" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400,
+      });
+    }
 
     // Always create or find a customer first (required for Stripe Accounts V2)
     let customerId: string;
@@ -116,9 +125,16 @@ serve(async (req) => {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     logStep("ERROR", { message: errorMessage });
-    return new Response(JSON.stringify({ error: errorMessage }), {
+    
+    // Return user-friendly message for validation errors, generic for internal errors
+    const isValidationError = errorMessage.includes("Invalid plan") || 
+                              errorMessage.includes("Name and phone");
+    
+    return new Response(JSON.stringify({ 
+      error: isValidationError ? errorMessage : "Erro ao processar pagamento. Tente novamente." 
+    }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 500,
+      status: isValidationError ? 400 : 500,
     });
   }
 });

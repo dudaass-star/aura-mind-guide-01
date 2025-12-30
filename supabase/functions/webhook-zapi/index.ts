@@ -175,10 +175,20 @@ Deno.serve(async (req) => {
       console.log(`✅ New message registered: ${messageId}`);
     }
 
-    // Clean phone number (remove @c.us suffix if present)
-    const cleanPhone = phone.replace('@c.us', '').replace(/\D/g, '');
-    console.log(`📱 Processing message from: ${cleanPhone}`);
-    console.log(`💬 Message: ${message}`);
+    // Clean and validate phone number (remove @c.us suffix if present)
+    const rawPhone = phone.replace('@c.us', '').replace(/\D/g, '');
+    
+    // Validate phone: 10-15 digits (E.164 standard)
+    if (!/^[0-9]{10,15}$/.test(rawPhone)) {
+      console.warn('⚠️ Invalid phone format:', rawPhone.substring(0, 4) + '***');
+      return new Response(JSON.stringify({ status: 'ignored', reason: 'invalid_phone' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    
+    const cleanPhone = rawPhone;
+    console.log(`📱 Processing message from: ${cleanPhone.substring(0, 4)}***`);
+    console.log(`💬 Message length: ${message.length} chars`);
     console.log(`🎤 Is audio message: ${isAudioMessage}`);
 
     // Find user by phone
@@ -384,9 +394,9 @@ Deno.serve(async (req) => {
     });
 
   } catch (error: unknown) {
+    // Log full error server-side but return generic message to client
     console.error('❌ Webhook error:', error);
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    return new Response(JSON.stringify({ error: message }), {
+    return new Response(JSON.stringify({ error: 'An error occurred processing the request' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
