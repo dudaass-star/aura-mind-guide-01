@@ -24,6 +24,7 @@ const plans = [
     name: "Anual",
     price: "239,90",
     originalPrice: "334,80",
+    discountPercent: "-28%",
     period: "/ano",
     priceMonthly: "19,99",
     description: "Melhor custo-benefício. Ideal pra quem quer consistência.",
@@ -81,17 +82,26 @@ const Pricing = () => {
                 <p className="text-muted-foreground text-sm mb-4">
                   {plan.description}
                 </p>
-                <div className="flex items-baseline justify-center gap-1">
+                <div className="flex flex-col items-center gap-2">
                   {plan.originalPrice && (
-                    <span className="text-lg text-muted-foreground line-through mr-2">
-                      R$ {plan.originalPrice}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg text-muted-foreground line-through">
+                        R$ {plan.originalPrice}
+                      </span>
+                      {plan.discountPercent && (
+                        <span className="px-2 py-0.5 rounded-full bg-[hsl(var(--accent))] text-white text-xs font-bold animate-pulse">
+                          {plan.discountPercent}
+                        </span>
+                      )}
+                    </div>
                   )}
-                  <span className="text-sm text-muted-foreground">R$</span>
-                  <span className="font-display text-5xl font-bold text-foreground">
-                    {plan.price}
-                  </span>
-                  <span className="text-muted-foreground">{plan.period}</span>
+                  <div className="flex items-baseline justify-center gap-1">
+                    <span className="text-sm text-muted-foreground">R$</span>
+                    <span className="font-display text-5xl font-bold text-foreground">
+                      {plan.price}
+                    </span>
+                    <span className="text-muted-foreground">{plan.period}</span>
+                  </div>
                 </div>
                 {plan.priceMonthly && (
                   <p className="text-sm text-primary font-semibold mt-2">
