@@ -45,21 +45,33 @@ serve(async (req) => {
     // Format phone for metadata
     const phoneClean = phone.replace(/\D/g, "");
 
+    // Always create or find a customer first (required for Stripe Accounts V2)
+    let customerId: string;
+    
     // Check if customer already exists with this phone
     const customers = await stripe.customers.search({
       query: `metadata['phone']:'${phoneClean}'`,
       limit: 1,
     });
 
-    let customerId: string | undefined;
     if (customers.data.length > 0) {
       customerId = customers.data[0].id;
       logStep("Found existing customer", { customerId });
+    } else {
+      // Create a new customer
+      const newCustomer = await stripe.customers.create({
+        name: name,
+        metadata: {
+          phone: phoneClean,
+        },
+      });
+      customerId = newCustomer.id;
+      logStep("Created new customer", { customerId });
     }
 
     const origin = req.headers.get("origin") || "https://aura.lovable.app";
 
-    // Create checkout session
+    // Create checkout session - customer is always set now
     const sessionConfig: Stripe.Checkout.SessionCreateParams = {
       customer: customerId,
       line_items: [
@@ -84,12 +96,6 @@ serve(async (req) => {
         },
       },
     };
-
-    // If no existing customer, set customer creation data
-    if (!customerId) {
-      sessionConfig.customer_creation = "always";
-      sessionConfig.customer_email = undefined; // Will be collected at checkout
-    }
 
     // Add payment method types based on selection
     if (plan === "anual" && paymentMethod === "pix") {
