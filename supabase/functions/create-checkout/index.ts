@@ -7,10 +7,10 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Price IDs from Stripe
+// Price IDs from Stripe Sandbox
 const PRICES = {
-  mensal: "price_1Sk430QU15XnZ7Vv4kJnpnJQ", // R$ 27,90/mês
-  anual: "price_1Sk43qQU15XnZ7VvW1LOB94d",  // R$ 239,90/ano
+  mensal: "price_1Sk4TLHMRAbm8MiTReXnLSYS", // R$ 27,90/mês
+  anual: "price_1Sk4UUHMRAbm8MiTutvfLImh",  // R$ 239,90/ano
 };
 
 const logStep = (step: string, details?: any) => {
