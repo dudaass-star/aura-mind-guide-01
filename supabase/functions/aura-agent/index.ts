@@ -433,9 +433,72 @@ function calculateDelay(message: string): number {
   return Math.min(baseDelay + typingTime, 8000); // Máximo 8 segundos
 }
 
+// ========== CONTROLE DETERMINÍSTICO DE ÁUDIO ==========
+
+// Detecta se o usuário quer texto (não áudio)
+function userWantsText(message: string): boolean {
+  const lowerMsg = message.toLowerCase();
+  const textPhrases = [
+    'prefiro texto', 'pode escrever', 'volta pro texto', 'volte para texto',
+    'sem áudio', 'sem audio', 'para de áudio', 'para de audio',
+    'não precisa de áudio', 'nao precisa de audio', 'só texto', 'so texto',
+    'escreve', 'digita', 'por escrito'
+  ];
+  return textPhrases.some(phrase => lowerMsg.includes(phrase));
+}
+
+// Detecta se o usuário pediu áudio explicitamente
+function userWantsAudio(message: string): boolean {
+  const lowerMsg = message.toLowerCase();
+  const audioPhrases = [
+    'manda um áudio', 'manda um audio', 'me manda áudio', 'me manda audio',
+    'em áudio', 'em audio', 'mensagem de voz', 'quero ouvir sua voz',
+    'quero ouvir você', 'fala comigo', 'manda voz', 'grava um áudio',
+    'grava um audio', 'áudio por favor', 'audio por favor', 'um áudio',
+    'um audio', 'sua voz'
+  ];
+  return audioPhrases.some(phrase => lowerMsg.includes(phrase));
+}
+
+// Detecta crise emocional (gatilho para áudio automático)
+function isCrisis(message: string): boolean {
+  const lowerMsg = message.toLowerCase();
+  const crisisPhrases = [
+    'pânico', 'panico', 'ataque de pânico', 'ataque de panico',
+    'não consigo respirar', 'nao consigo respirar', 'to desesperada', 'to desesperado',
+    'tô desesperada', 'tô desesperado', 'to tremendo', 'tô tremendo',
+    'to chorando muito', 'tô chorando muito', 'não aguento mais', 'nao aguento mais',
+    'não consigo parar de chorar', 'nao consigo parar de chorar',
+    'crise de ansiedade', 'crise de pânico', 'crise de panico',
+    'quero morrer', 'me matar', 'suicídio', 'suicidio', 'acabar com tudo'
+  ];
+  return crisisPhrases.some(phrase => lowerMsg.includes(phrase));
+}
+
+// Remove tags de controle do histórico para evitar "contaminação"
+function sanitizeMessageHistory(messages: { role: string; content: string }[]): { role: string; content: string }[] {
+  return messages.map(m => ({
+    role: m.role,
+    content: m.content
+      .replace(/\[MODO_AUDIO\]/gi, '')
+      .replace(/\[INSIGHTS\].*?\[\/INSIGHTS\]/gis, '')
+      .replace(/\[AGUARDANDO_RESPOSTA\]/gi, '')
+      .replace(/\[CONVERSA_CONCLUIDA\]/gi, '')
+      .trim()
+  }));
+}
+
 // Função para separar resposta em múltiplos balões usando "|||"
-function splitIntoMessages(response: string): Array<{ text: string; delay: number; isAudio: boolean }> {
-  const isAudioMode = response.startsWith('[MODO_AUDIO]');
+// AGORA RECEBE allowAudioThisTurn para controle determinístico
+function splitIntoMessages(response: string, allowAudioThisTurn: boolean): Array<{ text: string; delay: number; isAudio: boolean }> {
+  const wantsAudioByTag = response.trimStart().startsWith('[MODO_AUDIO]');
+  
+  // Se a IA marcou [MODO_AUDIO] mas não é permitido neste turno, ignora a tag
+  const isAudioMode = wantsAudioByTag && allowAudioThisTurn;
+  
+  if (wantsAudioByTag && !allowAudioThisTurn) {
+    console.log('⚠️ Audio tag received but NOT allowed this turn - converting to text');
+  }
   let cleanResponse = response.replace('[MODO_AUDIO]', '').trim();
   
   // Remove tags de controle do texto visível (case insensitive para pegar variações)
@@ -661,11 +724,8 @@ serve(async (req) => {
         .limit(20);
 
       if (messages) {
-        // Remove tags de insights do histórico para não poluir
-        messageHistory = messages.reverse().map(m => ({
-          role: m.role,
-          content: m.content.replace(/\[INSIGHTS\].*?\[\/INSIGHTS\]/gs, '').trim()
-        }));
+        // Sanitiza o histórico removendo TODAS as tags de controle para evitar "contaminação"
+        messageHistory = sanitizeMessageHistory(messages.reverse());
         messageCount = count || messages.length;
       }
     }
@@ -817,8 +877,24 @@ serve(async (req) => {
     const isConversationComplete = assistantMessage.includes('[CONVERSA_CONCLUIDA]');
     const isAwaitingResponse = assistantMessage.includes('[AGUARDANDO_RESPOSTA]');
 
-    // Separar em múltiplos balões
-    const messageChunks = splitIntoMessages(assistantMessage);
+    // ========== CONTROLE DETERMINÍSTICO DE ÁUDIO ==========
+    // Determinar se áudio é permitido NESTE TURNO baseado na mensagem do usuário
+    const wantsText = userWantsText(message);
+    const wantsAudio = userWantsAudio(message);
+    const crisis = isCrisis(message);
+    
+    const allowAudioThisTurn = !wantsText && (wantsAudio || crisis);
+    
+    console.log("🎙️ Audio control:", { 
+      wantsText, 
+      wantsAudio, 
+      crisis, 
+      allowAudioThisTurn,
+      aiWantsAudio: assistantMessage.trimStart().startsWith('[MODO_AUDIO]')
+    });
+
+    // Separar em múltiplos balões (passa o controle de áudio)
+    const messageChunks = splitIntoMessages(assistantMessage, allowAudioThisTurn);
     
     console.log("Split into", messageChunks.length, "bubbles, awaiting:", isAwaitingResponse, "complete:", isConversationComplete);
 
