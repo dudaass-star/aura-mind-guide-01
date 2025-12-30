@@ -1,4 +1,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  sendTextMessage,
+  sendAudioMessage,
+  cleanPhoneNumber,
+} from "../_shared/zapi-client.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -35,70 +40,6 @@ async function generateAudio(text: string): Promise<string | null> {
   }
 }
 
-// Função para enviar áudio via Z-API
-async function sendAudioMessage(phone: string, audioBase64: string): Promise<any> {
-  const zapiInstanceId = Deno.env.get('ZAPI_INSTANCE_ID')!;
-  const zapiToken = Deno.env.get('ZAPI_TOKEN')!;
-  const zapiClientToken = Deno.env.get('ZAPI_CLIENT_TOKEN')!;
-
-  console.log('🔊 Sending audio message to', phone);
-
-  const response = await fetch(
-    `https://api.z-api.io/instances/${zapiInstanceId}/token/${zapiToken}/send-audio`,
-    {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Client-Token': zapiClientToken,
-      },
-      body: JSON.stringify({
-        phone: phone,
-        audio: `data:audio/mpeg;base64,${audioBase64}`,
-        waveform: true,  // Para aparecer como mensagem de voz
-        viewOnce: false,
-      }),
-    }
-  );
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('❌ Z-API audio error:', errorText);
-    throw new Error(`Z-API audio error: ${errorText}`);
-  }
-
-  return await response.json();
-}
-
-// Função para enviar texto via Z-API
-async function sendTextMessage(phone: string, message: string): Promise<any> {
-  const zapiInstanceId = Deno.env.get('ZAPI_INSTANCE_ID')!;
-  const zapiToken = Deno.env.get('ZAPI_TOKEN')!;
-  const zapiClientToken = Deno.env.get('ZAPI_CLIENT_TOKEN')!;
-
-  const response = await fetch(
-    `https://api.z-api.io/instances/${zapiInstanceId}/token/${zapiToken}/send-text`,
-    {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Client-Token': zapiClientToken,
-      },
-      body: JSON.stringify({
-        phone: phone,
-        message: message,
-      }),
-    }
-  );
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('❌ Z-API text error:', errorText);
-    throw new Error(`Z-API text error: ${errorText}`);
-  }
-
-  return await response.json();
-}
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -124,9 +65,9 @@ Deno.serve(async (req) => {
       throw new Error('Phone and message are required');
     }
 
-    // Clean phone number
-    const cleanPhone = phone.replace(/\D/g, '');
+    const cleanPhone = cleanPhoneNumber(phone);
     let result;
+    let sentType: 'audio' | 'text' = 'text';
 
     if (isAudio) {
       // Gerar áudio via TTS
@@ -134,18 +75,31 @@ Deno.serve(async (req) => {
       
       if (audioBase64) {
         // Enviar como áudio
-        result = await sendAudioMessage(cleanPhone, audioBase64);
-        console.log('✅ Audio message sent:', result);
+        const audioResult = await sendAudioMessage(cleanPhone, audioBase64);
+        if (audioResult.success) {
+          result = audioResult.response;
+          sentType = 'audio';
+          console.log('✅ Audio message sent');
+        } else {
+          // Fallback para texto se falhar
+          console.log('⚠️ Audio send failed, falling back to text');
+          const textResult = await sendTextMessage(cleanPhone, message);
+          result = textResult.response;
+        }
       } else {
         // Fallback para texto se falhar a geração de áudio
         console.log('⚠️ Audio generation failed, falling back to text');
-        result = await sendTextMessage(cleanPhone, message);
-        console.log('✅ Text message sent (fallback):', result);
+        const textResult = await sendTextMessage(cleanPhone, message);
+        result = textResult.response;
       }
     } else {
       // Enviar como texto
-      result = await sendTextMessage(cleanPhone, message);
-      console.log('✅ Text message sent:', result);
+      const textResult = await sendTextMessage(cleanPhone, message);
+      if (!textResult.success) {
+        throw new Error(textResult.error || 'Failed to send text message');
+      }
+      result = textResult.response;
+      console.log('✅ Text message sent');
     }
 
     // Save message to history
@@ -160,13 +114,12 @@ Deno.serve(async (req) => {
       });
     }
 
-    return new Response(JSON.stringify({ status: 'sent', zapiResponse: result, type: isAudio ? 'audio' : 'text' }), {
+    return new Response(JSON.stringify({ status: 'sent', zapiResponse: result, type: sentType }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
   } catch (error: unknown) {
     console.error('❌ Send error:', error);
-    // Return generic error message, log full details server-side
     return new Response(JSON.stringify({ error: 'Failed to send message' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
