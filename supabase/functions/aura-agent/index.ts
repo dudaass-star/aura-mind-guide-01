@@ -926,9 +926,9 @@ serve(async (req) => {
     });
 
   } catch (error) {
+    // Log full error server-side but don't expose to client
     console.error("Error in aura-agent:", error);
     return new Response(JSON.stringify({ 
-      error: error instanceof Error ? error.message : "Erro interno",
       messages: [{ text: "Desculpa, tive um probleminha aqui. Pode repetir?", delay: 0, isAudio: false }]
     }), {
       status: 500,
