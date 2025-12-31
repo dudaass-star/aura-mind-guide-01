@@ -593,25 +593,69 @@ function splitIntoMessages(response: string, allowAudioThisTurn: boolean): Array
     }));
   }
 
+  // Log para debug
+  console.log('📝 splitIntoMessages input (first 200 chars):', cleanResponse.substring(0, 200));
+  console.log('📝 Has ||| delimiter:', cleanResponse.includes('|||'));
+  console.log('📝 Has paragraph breaks:', cleanResponse.includes('\n\n'));
+
+  // PRIMEIRO: divide por ||| se existir
   const parts = cleanResponse
     .split('|||')
     .map(part => part.trim())
     .filter(part => part.length > 0);
 
+  console.log('📝 After ||| split:', parts.length, 'parts');
+
+  // Se NÃO tinha |||, tenta dividir por parágrafos
   if (parts.length === 1) {
     const text = parts[0];
-    if (text.length > 250) {
-      const paragraphs = text.split(/\n\n+/).filter(p => p.trim());
-      if (paragraphs.length > 1) {
-        return paragraphs.map((p) => ({
-          text: p.trim(),
-          delay: calculateDelay(p),
-          isAudio: false
-        }));
+    
+    // Divide por parágrafos (2+ quebras de linha) se tiver múltiplos
+    const paragraphs = text.split(/\n\n+/).filter(p => p.trim());
+    console.log('📝 After paragraph split:', paragraphs.length, 'paragraphs');
+    
+    if (paragraphs.length > 1) {
+      console.log('✅ Splitting by paragraphs into', paragraphs.length, 'bubbles');
+      return paragraphs.map((p) => ({
+        text: p.trim(),
+        delay: calculateDelay(p),
+        isAudio: false
+      }));
+    }
+    
+    // Se ainda for uma única mensagem grande (>200 chars), tenta dividir por sentenças
+    if (text.length > 200) {
+      // Divide em sentenças mas mantém grupos de 2-3 sentenças juntas
+      const sentences = text.split(/(?<=[.!?])\s+/).filter(s => s.trim());
+      if (sentences.length >= 3) {
+        const chunks: string[] = [];
+        let current = '';
+        
+        for (const sentence of sentences) {
+          if (!current) {
+            current = sentence;
+          } else if ((current + ' ' + sentence).length < 150) {
+            current = current + ' ' + sentence;
+          } else {
+            chunks.push(current);
+            current = sentence;
+          }
+        }
+        if (current) chunks.push(current);
+        
+        if (chunks.length > 1) {
+          console.log('✅ Splitting by sentences into', chunks.length, 'bubbles');
+          return chunks.map((chunk) => ({
+            text: chunk.trim(),
+            delay: calculateDelay(chunk),
+            isAudio: false
+          }));
+        }
       }
     }
   }
 
+  console.log('✅ Returning', parts.length, 'bubble(s) from ||| split');
   return parts.map((part) => ({
     text: part,
     delay: calculateDelay(part),
