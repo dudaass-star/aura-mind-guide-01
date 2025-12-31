@@ -290,10 +290,14 @@ Deno.serve(async (req) => {
     // ========================================================================
     // SEND RESPONSE MESSAGES
     // ========================================================================
-    for (const msg of agentData.messages || []) {
-      // Add delay between messages for natural feel
-      if (msg.delay) {
-        await new Promise(resolve => setTimeout(resolve, Math.min(msg.delay, 3000)));
+    for (let i = 0; i < (agentData.messages || []).length; i++) {
+      const msg = agentData.messages[i];
+      
+      // Add delay between messages for natural feel (skip delay for first message)
+      if (i > 0 && msg.delay) {
+        const actualDelay = Math.min(msg.delay, 6000); // Cap at 6 seconds max
+        console.log(`⏱️ Waiting ${actualDelay}ms before next message...`);
+        await new Promise(resolve => setTimeout(resolve, actualDelay));
       }
 
       let responseText = msg.text || msg.content || '';
