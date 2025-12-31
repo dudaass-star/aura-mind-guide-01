@@ -54,7 +54,7 @@ async function generateContextualFollowup(
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              model: 'google/gemini-2.5-flash',
+              model: 'openai/gpt-5-mini',
               messages: [
                 {
                   role: 'system',
@@ -71,7 +71,7 @@ Faça referência sutil ao contexto da conversa.`
                   content: `Contexto da última conversa: "${context?.substring(0, 200)}"\n\nGere a mensagem de follow-up:`
                 }
               ],
-              max_tokens: 100,
+              max_completion_tokens: 100,
             }),
           });
 
