@@ -29,7 +29,7 @@ async function analyzeWeekConversations(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'openai/gpt-5-mini',
+        model: 'google/gemini-2.5-pro',
         messages: [
           {
             role: 'system',
@@ -45,6 +45,8 @@ Seja específica sobre o que foi discutido. Use linguagem acolhedora e direta. N
             content: `Analise as conversas desta semana com ${userName}:\n\n${conversationSummary}`
           }
         ],
+        max_tokens: 200,
+        temperature: 0.8,
       }),
     });
 
