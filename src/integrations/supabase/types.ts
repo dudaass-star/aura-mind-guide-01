@@ -266,6 +266,7 @@ export type Database = {
       }
       sessions: {
         Row: {
+          audio_sent_count: number | null
           commitments: Json | null
           created_at: string
           duration_minutes: number
@@ -283,6 +284,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          audio_sent_count?: number | null
           commitments?: Json | null
           created_at?: string
           duration_minutes?: number
@@ -300,6 +302,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          audio_sent_count?: number | null
           commitments?: Json | null
           created_at?: string
           duration_minutes?: number
