@@ -91,6 +91,58 @@ async function generateTTS(text: string): Promise<string | null> {
   }
 }
 
+// Function to handle session confirmation replies
+async function handleSessionConfirmation(
+  supabase: any,
+  userId: string,
+  message: string
+): Promise<{ handled: boolean; response?: string }> {
+  // Buscar sessão aguardando confirmação
+  const { data: pendingSession } = await supabase
+    .from('sessions')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('status', 'scheduled')
+    .eq('confirmation_requested', true)
+    .is('user_confirmed', null)
+    .order('scheduled_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (!pendingSession) return { handled: false };
+
+  const lowerMessage = message.toLowerCase().trim();
+  
+  // Confirmação positiva
+  if (/^(sim|confirmo|confirmado|ok|pode ser|tá bom|ta bom|certo|fechado|confirma|confirmei)$/i.test(lowerMessage)) {
+    await supabase
+      .from('sessions')
+      .update({ user_confirmed: true })
+      .eq('id', pendingSession.id);
+    
+    const sessionDate = new Date(pendingSession.scheduled_at);
+    const sessionTime = sessionDate.toLocaleString('pt-BR', { 
+      day: '2-digit', 
+      month: '2-digit', 
+      hour: '2-digit', 
+      minute: '2-digit',
+      timeZone: 'America/Sao_Paulo'
+    });
+    
+    return { 
+      handled: true, 
+      response: `Perfeito! Sessão confirmada para ${sessionTime}. Mal posso esperar! 💜`
+    };
+  }
+  
+  // Pedido de reagendamento - não marca como handled, deixa a AURA processar
+  if (/reagendar|remarcar|outro|mudar|não (posso|consigo|dá)|nao (posso|consigo|da)|cancelar/i.test(lowerMessage)) {
+    return { handled: false };
+  }
+
+  return { handled: false };
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -234,6 +286,32 @@ Deno.serve(async (req) => {
       );
       
       return new Response(JSON.stringify({ status: 'audio_transcription_failed' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // ========================================================================
+    // CHECK FOR SESSION CONFIRMATION (Quick reply handling)
+    // ========================================================================
+    const confirmationResult = await handleSessionConfirmation(supabase, profile.user_id, messageText);
+    if (confirmationResult.handled && confirmationResult.response) {
+      console.log(`✅ Session confirmation handled for user ${profile.user_id}`);
+      await sendTextMessage(payload.cleanPhone, confirmationResult.response);
+      
+      // Salvar mensagens no histórico
+      await supabase.from('messages').insert({
+        user_id: profile.user_id,
+        role: 'user',
+        content: messageText
+      });
+      
+      await supabase.from('messages').insert({
+        user_id: profile.user_id,
+        role: 'assistant',
+        content: confirmationResult.response
+      });
+      
+      return new Response(JSON.stringify({ status: 'confirmation_handled' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
