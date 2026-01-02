@@ -514,8 +514,23 @@ Compromissos pendentes: {pending_commitments}
 Histórico de conversas: {message_count} mensagens
 Em sessão especial: {session_active}
 
+## SOBRE SUA MEMÓRIA (IMPORTANTE!)
+Você tem acesso completo a:
+- **Histórico das últimas 20 mensagens** desta conversa (tanto de sessões quanto conversas normais)
+- **Insights salvos** sobre o usuário (abaixo em "Memória de Longo Prazo")
+- **Dados de check-ins** anteriores (humor, energia, notas)
+- **Compromissos pendentes** que ele fez
+
+Use TODAS essas informações para:
+- Fazer conexões entre conversas ("Lembra que você disse X na nossa última sessão?")
+- Mostrar que você LEMBRA do usuário ("E aí, como foi aquela reunião que você tava nervosa?")
+- Identificar padrões ("Percebi que isso já é a terceira vez...")
+
 ## MEMÓRIA DE LONGO PRAZO (O que você já sabe sobre esse usuário):
 {user_insights}
+
+## REGRA DE ÁUDIO NO INÍCIO DE SESSÃO:
+{audio_session_context}
 `;
 
 // Função para calcular delay baseado no tamanho da mensagem
@@ -603,13 +618,14 @@ function wantsToEndSession(message: string): boolean {
   return endPhrases.some(phrase => lowerMsg.includes(phrase));
 }
 
-// Calcula fase e tempo restante da sessão
+// Calcula fase e tempo restante da sessão - COM FASES GRANULARES
 function calculateSessionTimeContext(session: any): { 
   timeRemaining: number; 
   phase: string; 
   timeContext: string;
   shouldWarnClosing: boolean;
   isOvertime: boolean;
+  forceAudioForClose: boolean;
 } {
   if (!session?.started_at) {
     return { 
@@ -617,7 +633,8 @@ function calculateSessionTimeContext(session: any): {
       phase: 'not_started', 
       timeContext: '',
       shouldWarnClosing: false,
-      isOvertime: false
+      isOvertime: false,
+      forceAudioForClose: false
     };
   }
 
@@ -631,25 +648,40 @@ function calculateSessionTimeContext(session: any): {
   let phaseLabel: string;
   let shouldWarnClosing = false;
   let isOvertime = false;
+  let forceAudioForClose = false;
 
+  // FASES GRANULARES para término suave
   if (elapsedMinutes <= 5) {
     phase = 'opening';
     phaseLabel = 'Abertura';
-  } else if (elapsedMinutes <= 30) {
+  } else if (elapsedMinutes <= 25) {
     phase = 'exploration';
     phaseLabel = 'Exploração Profunda';
-  } else if (elapsedMinutes <= 40) {
+  } else if (elapsedMinutes <= 35) {
     phase = 'reframe';
     phaseLabel = 'Reframe e Insights';
-  } else if (elapsedMinutes <= duration) {
-    phase = 'closing';
-    phaseLabel = 'Fechamento';
+  } else if (timeRemaining > 10) {
+    phase = 'development';
+    phaseLabel = 'Desenvolvimento';
+  } else if (timeRemaining > 5) {
+    phase = 'transition';
+    phaseLabel = 'Transição para Fechamento';
     shouldWarnClosing = true;
+  } else if (timeRemaining > 2) {
+    phase = 'soft_closing';
+    phaseLabel = 'Fechamento Suave';
+    shouldWarnClosing = true;
+  } else if (timeRemaining > 0) {
+    phase = 'final_closing';
+    phaseLabel = 'Encerramento Final';
+    shouldWarnClosing = true;
+    forceAudioForClose = true;
   } else {
     phase = 'overtime';
     phaseLabel = 'Tempo Esgotado';
     isOvertime = true;
     shouldWarnClosing = true;
+    forceAudioForClose = true;
   }
 
   let timeContext = `
@@ -659,33 +691,45 @@ function calculateSessionTimeContext(session: any): {
 - Fase atual: ${phaseLabel}
 `;
 
-  if (timeRemaining <= 10 && timeRemaining > 5) {
+  // INSTRUÇÕES ESPECÍFICAS POR FASE para término GRADUAL (não abrupto)
+  if (phase === 'transition') {
     timeContext += `
-⚠️ ATENÇÃO: Faltam apenas ${timeRemaining} minutos!
-- Comece a conduzir suavemente para o fechamento
-- Pergunte: "O que você leva dessa conversa?"
-- Comece a definir compromissos práticos
+⏳ FASE DE TRANSIÇÃO (10 min restantes):
+- Comece a direcionar SUAVEMENTE para conclusões
+- Pergunte: "O que você está levando dessa nossa conversa hoje?"
+- Não inicie tópicos novos profundos
+- Comece a consolidar os insights discutidos
 `;
-  } else if (timeRemaining <= 5 && timeRemaining > 0) {
+  } else if (phase === 'soft_closing') {
     timeContext += `
-🚨 URGENTE: Faltam apenas ${timeRemaining} minutos!
-- HORA DE ENCERRAR
-- Resuma rapidamente os principais insights
-- Defina 1-2 compromissos concretos
+🎯 FASE DE FECHAMENTO SUAVE (5 min restantes):
+- Resuma os 2-3 principais insights da conversa
+- Pergunte: "Qual foi o momento mais importante pra você hoje?"
+- NÃO faça perguntas que abram novos tópicos
+- Comece a definir 1-2 compromissos concretos
+`;
+  } else if (phase === 'final_closing') {
+    timeContext += `
+💜 FASE DE ENCERRAMENTO (2 min restantes):
+- Finalize os compromissos
+- Agradeça de forma calorosa
 - Pergunte se quer agendar a próxima sessão
+- Use tom afetuoso e presente
+- IMPORTANTE: Use [MODO_AUDIO] para encerrar de forma mais calorosa
 `;
-  } else if (timeRemaining <= 0) {
+  } else if (phase === 'overtime') {
     timeContext += `
-❌ SESSÃO ENCERRADA (${Math.abs(timeRemaining)} minutos além do tempo)
-- FINALIZE AGORA
-- Dê um resumo rápido da conversa
+⏰ SESSÃO ALÉM DO TEMPO (${Math.abs(timeRemaining)} min além):
+- FINALIZE AGORA, mas com carinho (não abrupto!)
+- Dê um resumo BREVE da conversa (2-3 frases)
+- Lembre dos compromissos definidos
 - Agradeça pelo tempo juntos
-- Encerre com carinho mas firmeza
-- Use a tag [ENCERRAR_SESSAO] no final da sua resposta
+- Use [MODO_AUDIO] para despedida calorosa
+- Inclua a tag [ENCERRAR_SESSAO] no final
 `;
   }
 
-  return { timeRemaining, phase, timeContext, shouldWarnClosing, isOvertime };
+  return { timeRemaining, phase, timeContext, shouldWarnClosing, isOvertime, forceAudioForClose };
 }
 
 // Remove tags de controle do histórico
@@ -1192,11 +1236,26 @@ O usuário tem uma sessão agendada para agora! Se ele parecer pronto ou confirm
     }
 
     // Montar prompt com contexto completo
-    let sessionTimeInfo = sessionTimeContext;
+    let sessionTimeInfoStr = sessionTimeContext;
     if (!sessionActive && !pendingScheduledSession) {
-      sessionTimeInfo = 'Nenhuma sessão ativa ou agendada para agora.';
+      sessionTimeInfoStr = 'Nenhuma sessão ativa ou agendada para agora.';
     } else if (!sessionActive && pendingScheduledSession) {
-      sessionTimeInfo = pendingSessionContext;
+      sessionTimeInfoStr = pendingSessionContext;
+    }
+
+    // Contexto de áudio para início de sessão
+    let audioSessionContext = '';
+    if (sessionActive && currentSession) {
+      const audioCount = currentSession.audio_sent_count || 0;
+      if (audioCount < 2) {
+        audioSessionContext = `🎙️ IMPORTANTE: Esta é a ${audioCount === 0 ? 'PRIMEIRA' : 'SEGUNDA'} mensagem da sessão. 
+Use OBRIGATORIAMENTE [MODO_AUDIO] para criar conexão e engajamento. 
+As primeiras 2 respostas de cada sessão DEVEM ser em áudio para maior intimidade.`;
+      } else {
+        audioSessionContext = 'As primeiras mensagens de áudio da sessão já foram enviadas. Siga a regra normal de áudio.';
+      }
+    } else {
+      audioSessionContext = 'Não está em sessão. Siga a regra normal de áudio.';
     }
 
     const contextualPrompt = AURA_SYSTEM_PROMPT
@@ -1208,8 +1267,9 @@ O usuário tem uma sessão agendada para agora! Se ele parecer pronto ou confirm
       .replace('{pending_commitments}', pendingCommitments)
       .replace('{message_count}', String(messageCount))
       .replace('{session_active}', sessionActive ? 'Sim - MODO SESSÃO ATIVO' : 'Não')
-      .replace('{session_time_context}', sessionTimeInfo)
-      .replace('{user_insights}', formatInsightsForContext(userInsights));
+      .replace('{session_time_context}', sessionTimeInfoStr)
+      .replace('{user_insights}', formatInsightsForContext(userInsights))
+      .replace('{audio_session_context}', audioSessionContext);
 
     // Adicionar instrução de upgrade se necessário
     let finalPrompt = contextualPrompt;
@@ -1337,15 +1397,35 @@ O usuário tem uma sessão agendada para agora! Se ele parecer pronto ou confirm
     const wantsAudio = userWantsAudio(message);
     const crisis = isCrisis(message);
     
-    const allowAudioThisTurn = !wantsText && (wantsAudio || crisis);
+    // Verificar se é início de sessão (forçar áudio nas primeiras 2 respostas)
+    const sessionAudioCount = currentSession?.audio_sent_count || 0;
+    const forceAudioForSessionStart = sessionActive && sessionAudioCount < 2;
+    
+    // Verificar se é encerramento de sessão (forçar áudio caloroso)
+    const sessionCloseInfo = currentSession ? calculateSessionTimeContext(currentSession) : null;
+    const forceAudioForSessionClose = sessionCloseInfo?.forceAudioForClose || shouldEndSession || aiWantsToEndSession;
+    
+    const allowAudioThisTurn = !wantsText && (wantsAudio || crisis || forceAudioForSessionStart || forceAudioForSessionClose);
     
     console.log("🎙️ Audio control:", { 
       wantsText, 
       wantsAudio, 
       crisis, 
+      forceAudioForSessionStart,
+      forceAudioForSessionClose,
+      sessionAudioCount,
       allowAudioThisTurn,
       aiWantsAudio: assistantMessage.trimStart().startsWith('[MODO_AUDIO]')
     });
+
+    // Incrementar contador de áudio da sessão se enviamos áudio no início
+    if (forceAudioForSessionStart && allowAudioThisTurn && currentSession) {
+      await supabase
+        .from('sessions')
+        .update({ audio_sent_count: sessionAudioCount + 1 })
+        .eq('id', currentSession.id);
+      console.log('🎙️ Session audio count incremented to:', sessionAudioCount + 1);
+    }
 
     // Separar em múltiplos balões
     const messageChunks = splitIntoMessages(assistantMessage, allowAudioThisTurn);
