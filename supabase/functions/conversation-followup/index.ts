@@ -194,19 +194,9 @@ Deno.serve(async (req) => {
     const zapiClientToken = Deno.env.get('ZAPI_CLIENT_TOKEN')!;
 
     // Buscar conversas que precisam de follow-up
-    // Juntando com profiles para saber o plano e se tem sessão ativa
     const { data: followups, error: fetchError } = await supabase
       .from('conversation_followups')
-      .select(`
-        *,
-        profiles!fk_user (
-          name,
-          phone,
-          status,
-          plan,
-          current_session_id
-        )
-      `)
+      .select('*')
       .not('last_user_message_at', 'is', null);
 
     if (fetchError) {
@@ -220,7 +210,17 @@ Deno.serve(async (req) => {
 
     for (const followup of followups || []) {
       try {
-        const profile = followup.profiles;
+        // Buscar profile separadamente (evita relação FK inexistente)
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('name, phone, status, plan, current_session_id')
+          .eq('user_id', followup.user_id)
+          .maybeSingle();
+        
+        if (profileError) {
+          console.error(`⚠️ Error fetching profile for ${followup.user_id}:`, profileError);
+          continue;
+        }
         
         // Skip if no phone or user is not active
         if (!profile?.phone || profile?.status !== 'active') {
