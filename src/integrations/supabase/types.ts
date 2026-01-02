@@ -268,55 +268,67 @@ export type Database = {
         Row: {
           audio_sent_count: number | null
           commitments: Json | null
+          confirmation_requested: boolean | null
           created_at: string
           duration_minutes: number
           ended_at: string | null
           focus_topic: string | null
           id: string
           key_insights: Json | null
+          post_session_sent: boolean | null
           reminder_15m_sent: boolean | null
           reminder_1h_sent: boolean | null
+          reminder_24h_sent: boolean | null
           scheduled_at: string
           session_summary: string | null
           session_type: Database["public"]["Enums"]["session_type"]
           started_at: string | null
           status: Database["public"]["Enums"]["session_status"]
+          user_confirmed: boolean | null
           user_id: string
         }
         Insert: {
           audio_sent_count?: number | null
           commitments?: Json | null
+          confirmation_requested?: boolean | null
           created_at?: string
           duration_minutes?: number
           ended_at?: string | null
           focus_topic?: string | null
           id?: string
           key_insights?: Json | null
+          post_session_sent?: boolean | null
           reminder_15m_sent?: boolean | null
           reminder_1h_sent?: boolean | null
+          reminder_24h_sent?: boolean | null
           scheduled_at: string
           session_summary?: string | null
           session_type?: Database["public"]["Enums"]["session_type"]
           started_at?: string | null
           status?: Database["public"]["Enums"]["session_status"]
+          user_confirmed?: boolean | null
           user_id: string
         }
         Update: {
           audio_sent_count?: number | null
           commitments?: Json | null
+          confirmation_requested?: boolean | null
           created_at?: string
           duration_minutes?: number
           ended_at?: string | null
           focus_topic?: string | null
           id?: string
           key_insights?: Json | null
+          post_session_sent?: boolean | null
           reminder_15m_sent?: boolean | null
           reminder_1h_sent?: boolean | null
+          reminder_24h_sent?: boolean | null
           scheduled_at?: string
           session_summary?: string | null
           session_type?: Database["public"]["Enums"]["session_type"]
           started_at?: string | null
           status?: Database["public"]["Enums"]["session_status"]
+          user_confirmed?: boolean | null
           user_id?: string
         }
         Relationships: []

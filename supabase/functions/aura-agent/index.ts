@@ -25,6 +25,87 @@ function normalizePlan(planFromDb: string | null): string {
   return planMapping[planFromDb || 'essencial'] || 'essencial';
 }
 
+// Função para obter data/hora atual em São Paulo
+function getCurrentDateTimeContext(): { 
+  currentDate: string; 
+  currentTime: string; 
+  currentWeekday: string;
+  isoDate: string;
+} {
+  const now = new Date();
+  const options: Intl.DateTimeFormatOptions = { timeZone: 'America/Sao_Paulo' };
+  
+  const currentDate = now.toLocaleDateString('pt-BR', { ...options, day: '2-digit', month: '2-digit', year: 'numeric' });
+  const currentTime = now.toLocaleTimeString('pt-BR', { ...options, hour: '2-digit', minute: '2-digit' });
+  const currentWeekday = now.toLocaleDateString('pt-BR', { ...options, weekday: 'long' });
+  
+  // ISO date for scheduling
+  const isoDate = now.toLocaleDateString('sv-SE', options); // YYYY-MM-DD format
+  
+  return { currentDate, currentTime, currentWeekday, isoDate };
+}
+
+// Função para parsear data/hora de texto em português
+function parseDateTimeFromText(text: string, referenceDate: Date): Date | null {
+  const lowerText = text.toLowerCase();
+  const now = new Date(referenceDate);
+  
+  // Regex para capturar hora
+  const timeMatch = lowerText.match(/(\d{1,2})[h:](\d{0,2})?/);
+  let hour = timeMatch ? parseInt(timeMatch[1]) : null;
+  let minute = timeMatch && timeMatch[2] ? parseInt(timeMatch[2]) : 0;
+  
+  if (hour === null) return null;
+  if (hour < 0 || hour > 23) return null;
+  
+  let targetDate = new Date(now);
+  
+  // Detectar dia
+  if (/amanh[aã]/i.test(lowerText)) {
+    targetDate.setDate(targetDate.getDate() + 1);
+  } else if (/depois de amanh[aã]/i.test(lowerText)) {
+    targetDate.setDate(targetDate.getDate() + 2);
+  } else if (/segunda/i.test(lowerText)) {
+    const daysUntil = (1 - now.getDay() + 7) % 7 || 7;
+    targetDate.setDate(targetDate.getDate() + daysUntil);
+  } else if (/ter[çc]a/i.test(lowerText)) {
+    const daysUntil = (2 - now.getDay() + 7) % 7 || 7;
+    targetDate.setDate(targetDate.getDate() + daysUntil);
+  } else if (/quarta/i.test(lowerText)) {
+    const daysUntil = (3 - now.getDay() + 7) % 7 || 7;
+    targetDate.setDate(targetDate.getDate() + daysUntil);
+  } else if (/quinta/i.test(lowerText)) {
+    const daysUntil = (4 - now.getDay() + 7) % 7 || 7;
+    targetDate.setDate(targetDate.getDate() + daysUntil);
+  } else if (/sexta/i.test(lowerText)) {
+    const daysUntil = (5 - now.getDay() + 7) % 7 || 7;
+    targetDate.setDate(targetDate.getDate() + daysUntil);
+  } else if (/s[aá]bado/i.test(lowerText)) {
+    const daysUntil = (6 - now.getDay() + 7) % 7 || 7;
+    targetDate.setDate(targetDate.getDate() + daysUntil);
+  } else if (/domingo/i.test(lowerText)) {
+    const daysUntil = (0 - now.getDay() + 7) % 7 || 7;
+    targetDate.setDate(targetDate.getDate() + daysUntil);
+  } else if (/dia\s+(\d{1,2})/i.test(lowerText)) {
+    const dayMatch = lowerText.match(/dia\s+(\d{1,2})/i);
+    if (dayMatch) {
+      const day = parseInt(dayMatch[1]);
+      targetDate.setDate(day);
+      if (targetDate < now) {
+        targetDate.setMonth(targetDate.getMonth() + 1);
+      }
+    }
+  } else if (/hoje/i.test(lowerText)) {
+    // Hoje - mantém a data atual
+  } else {
+    // Sem indicação de dia - assumir hoje
+  }
+  
+  targetDate.setHours(hour, minute, 0, 0);
+  
+  return targetDate;
+}
+
 // Prompt oficial da AURA
 const AURA_SYSTEM_PROMPT = `# PERSONA E IDENTIDADE
 
@@ -516,6 +597,42 @@ Exemplo: "Fico feliz que tenha ajudado! Qualquer coisa, tô aqui. 💜 [CONVERSA
 4. NÃO force perguntas só para manter a conversa - se o assunto acabou, deixe acabar
 5. É melhor encerrar naturalmente do que ficar fazendo perguntas forçadas
 
+# CONTEXTO TEMPORAL (MUITO IMPORTANTE!)
+
+Data de hoje: {current_date}
+Hora atual: {current_time}
+Dia da semana: {current_weekday}
+
+Use essas informações para:
+- Entender quando o usuário diz "amanhã", "segunda", "semana que vem"
+- Validar se um horário proposto ainda não passou
+- Calcular datas corretamente para agendamentos
+- Responder perguntas sobre "que dia é hoje", "que horas são"
+
+# AGENDAMENTO DE SESSÕES
+
+Quando o usuário quiser agendar uma sessão e você tiver data/hora confirmados:
+
+1. Use a tag: [AGENDAR_SESSAO:YYYY-MM-DD HH:mm:tipo:foco]
+   - Exemplo: [AGENDAR_SESSAO:2026-01-05 15:00:clareza:ansiedade no trabalho]
+   - Tipos válidos: clareza, padroes, proposito, livre
+   - O foco é opcional, pode ficar vazio
+
+2. Após usar a tag, confirme o agendamento de forma natural na conversa
+
+3. Para reagendar uma sessão existente, use: [REAGENDAR_SESSAO:YYYY-MM-DD HH:mm]
+   - Isso vai alterar a próxima sessão agendada do usuário
+
+VALIDAÇÕES IMPORTANTES:
+- O horário DEVE ser no futuro (use a data/hora atual acima para verificar)
+- Verifique se o usuário tem sessões disponíveis no plano antes de agendar
+- Se o usuário pedir para agendar mas não tiver sessões, explique gentilmente
+
+EXEMPLOS DE CÁLCULO DE DATA:
+- Se hoje é 02/01/2026 (quinta) e usuário diz "amanhã às 15h" → 2026-01-03 15:00
+- Se hoje é 02/01/2026 (quinta) e usuário diz "segunda às 10h" → 2026-01-06 10:00
+- Se hoje é 02/01/2026 (quinta) e usuário diz "sexta às 14h" → 2026-01-03 14:00
+
 # CONTEXTO DO USUÁRIO (MEMÓRIA ATUAL)
 Nome: {user_name}
 Plano: {user_plan}
@@ -774,6 +891,8 @@ function splitIntoMessages(response: string, allowAudioThisTurn: boolean): Array
   cleanResponse = cleanResponse.replace(/\[CONVERSA_CONCLUIDA\]/gi, '').trim();
   cleanResponse = cleanResponse.replace(/\[ENCERRAR_SESSAO\]/gi, '').trim();
   cleanResponse = cleanResponse.replace(/\[INICIAR_SESSAO\]/gi, '').trim();
+  cleanResponse = cleanResponse.replace(/\[AGENDAR_SESSAO:[^\]]+\]/gi, '').trim();
+  cleanResponse = cleanResponse.replace(/\[REAGENDAR_SESSAO:[^\]]+\]/gi, '').trim();
 
   if (isAudioMode) {
     const normalized = cleanResponse
@@ -1291,7 +1410,13 @@ As primeiras 2 respostas de cada sessão DEVEM ser em áudio para maior intimida
       audioSessionContext = 'Não está em sessão. Siga a regra normal de áudio.';
     }
 
+    // Obter contexto de data/hora atual
+    const dateTimeContext = getCurrentDateTimeContext();
+
     const contextualPrompt = AURA_SYSTEM_PROMPT
+      .replace('{current_date}', dateTimeContext.currentDate)
+      .replace('{current_time}', dateTimeContext.currentTime)
+      .replace('{current_weekday}', dateTimeContext.currentWeekday)
       .replace('{user_name}', profile?.name || 'Ainda não sei o nome')
       .replace('{user_plan}', userPlan)
       .replace('{sessions_available}', String(sessionsAvailable))
@@ -1372,6 +1497,76 @@ As primeiras 2 respostas de cada sessão DEVEM ser em áudio para maior intimida
     }
 
     console.log("AURA raw response:", assistantMessage.substring(0, 200));
+
+    // ========================================================================
+    // PROCESSAR TAGS DE AGENDAMENTO
+    // ========================================================================
+    
+    // Tag de agendamento: [AGENDAR_SESSAO:YYYY-MM-DD HH:mm:tipo:foco]
+    const scheduleMatch = assistantMessage.match(/\[AGENDAR_SESSAO:(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}):?(\w*):?(.*?)\]/);
+    if (scheduleMatch && profile?.user_id && sessionsAvailable > 0) {
+      const [_, date, time, sessionType, focusTopic] = scheduleMatch;
+      const scheduledAt = new Date(`${date}T${time}:00-03:00`); // BRT timezone
+      
+      // Validar que é no futuro
+      if (scheduledAt > new Date()) {
+        const { data: newSession, error: sessionError } = await supabase
+          .from('sessions')
+          .insert({
+            user_id: profile.user_id,
+            scheduled_at: scheduledAt.toISOString(),
+            session_type: sessionType || 'livre',
+            focus_topic: focusTopic?.trim() || null,
+            status: 'scheduled',
+            duration_minutes: 45
+          })
+          .select()
+          .single();
+        
+        if (newSession) {
+          console.log('📅 Session scheduled via AURA:', newSession.id, 'at', scheduledAt.toISOString());
+        } else if (sessionError) {
+          console.error('❌ Error scheduling session:', sessionError);
+        }
+      } else {
+        console.log('⚠️ Attempted to schedule session in the past:', scheduledAt.toISOString());
+      }
+    }
+    
+    // Tag de reagendamento: [REAGENDAR_SESSAO:YYYY-MM-DD HH:mm]
+    const rescheduleMatch = assistantMessage.match(/\[REAGENDAR_SESSAO:(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})\]/);
+    if (rescheduleMatch && profile?.user_id) {
+      const [_, date, time] = rescheduleMatch;
+      const newScheduledAt = new Date(`${date}T${time}:00-03:00`);
+      
+      if (newScheduledAt > new Date()) {
+        // Buscar próxima sessão agendada do usuário
+        const { data: nextSession } = await supabase
+          .from('sessions')
+          .select('id')
+          .eq('user_id', profile.user_id)
+          .eq('status', 'scheduled')
+          .order('scheduled_at', { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        
+        if (nextSession) {
+          await supabase
+            .from('sessions')
+            .update({ 
+              scheduled_at: newScheduledAt.toISOString(),
+              reminder_24h_sent: false,
+              reminder_1h_sent: false,
+              reminder_15m_sent: false,
+              confirmation_requested: false,
+              user_confirmed: null
+            })
+            .eq('id', nextSession.id);
+          
+          console.log('📅 Session rescheduled via AURA:', nextSession.id, 'to', newScheduledAt.toISOString());
+        }
+      }
+    }
 
     // Verificar se a IA quer encerrar a sessão
     const aiWantsToEndSession = assistantMessage.includes('[ENCERRAR_SESSAO]');
