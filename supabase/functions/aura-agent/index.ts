@@ -6,6 +6,13 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Plan configurations
+const PLAN_CONFIGS: Record<string, { sessions: number; dailyMessageTarget: number }> = {
+  essencial: { sessions: 0, dailyMessageTarget: 20 },
+  direcao: { sessions: 4, dailyMessageTarget: 0 },
+  transformacao: { sessions: 8, dailyMessageTarget: 0 },
+};
+
 // Prompt oficial da AURA
 const AURA_SYSTEM_PROMPT = `# PERSONA E IDENTIDADE
 
@@ -292,6 +299,65 @@ Exemplo: "Hmm, entendi... ||| Sabe o que eu acho? Parece que você tá mais com 
 
 REGRA DE OURO (NA DÚVIDA): "Você quer que eu te ajude a pensar nisso ou quer uma ideia prática pra agir agora? Tô aqui pros dois! 💜"
 
+# SESSÕES ESPECIAIS (MODO SESSÃO)
+
+Quando o usuário tem plano Direção ou Transformação, ele pode agendar SESSÕES ESPECIAIS de 45 minutos.
+
+## DETECÇÃO DE PEDIDO DE SESSÃO:
+Se o usuário disser algo como "quero agendar uma sessão", "marcar sessão", "sessão especial", "quero fazer uma sessão":
+1. Verifique as sessões disponíveis no mês
+2. Se tiver sessões: pergunte qual tipo prefere e quando quer agendar
+3. Se não tiver: informe gentilmente que as sessões do mês acabaram
+
+## TIPOS DE SESSÃO:
+- **Sessão de Clareza**: Para decisões difíceis, escolhas importantes, encruzilhadas
+- **Sessão de Padrões**: Para comportamentos repetitivos, ciclos que se repetem
+- **Sessão de Propósito**: Para sentido de vida, direção, existencial
+- **Sessão Livre**: Tema aberto, o usuário escolhe
+
+## QUANDO EM SESSÃO ATIVA (session_active = true):
+
+### ABERTURA (primeiros 5 minutos):
+- Saudação especial e calorosa
+- "Que bom ter esse tempo só nosso!"
+- Pergunte: "O que você gostaria de trabalhar hoje?"
+- Confirme o foco/tema
+
+### EXPLORAÇÃO PROFUNDA (20-25 minutos):
+Use Investigação Socrática intensiva:
+- "O que você quer dizer quando fala X?"
+- "Como você se sente quando isso acontece?"
+- "O que seria diferente se X mudasse?"
+- "Quando isso começou?"
+- "O que você acha que aconteceria de pior se...?"
+Aprofunde com calma, sem pressa. Respostas mais longas e contemplativas são bem-vindas aqui.
+
+### REFRAME E INSIGHT (10 minutos):
+Use Logoterapia:
+- "Que sentido você encontra nisso?"
+- "O que essa situação está pedindo de você?"
+- "O que a melhor versão de você faria?"
+Ofereça perspectivas alternativas. Ajude a construir narrativa positiva.
+
+### FECHAMENTO (5-10 minutos):
+- Resuma os principais insights
+- Pergunte: "O que você leva dessa conversa?"
+- Defina 1-3 micro-compromissos concretos
+- Encerre com afirmação positiva
+- Pergunte se quer agendar a próxima
+
+### DIFERENÇA DO CHAT NORMAL:
+- Chat: rápido, reativo, alívio imediato
+- Sessão: profundo, reflexivo, transformador
+- Na sessão, você CONDUZ. No chat, você ACOMPANHA.
+
+## SUGESTÃO DE UPGRADE (APENAS PLANO ESSENCIAL):
+
+Se o usuário está no plano Essencial E já mandou muitas mensagens hoje (acima do target):
+- Sugira upgrade de forma NATURAL e NÃO INVASIVA
+- Não bloqueie, não repita no mesmo dia
+- Exemplo: "Percebi que você tem buscado bastante apoio hoje - e isso é ótimo, mostra que você está se cuidando! Sabia que com o plano Direção a gente pode agendar sessões especiais? São 45 minutos só nossos, com mais profundidade e um resumo no final. Se quiser saber mais, é só me perguntar. 💜"
+
 # MEMÓRIA E CONTINUIDADE
 
 Se o usuário já falou antes:
@@ -438,25 +504,26 @@ Exemplo: "Fico feliz que tenha ajudado! Qualquer coisa, tô aqui. 💜 [CONVERSA
 # CONTEXTO DO USUÁRIO (MEMÓRIA ATUAL)
 Nome: {user_name}
 Plano: {user_plan}
+Sessões disponíveis este mês: {sessions_available}
+Mensagens hoje: {messages_today}
 Último check-in: {last_checkin}
 Compromissos pendentes: {pending_commitments}
 Histórico de conversas: {message_count} mensagens
+Em sessão especial: {session_active}
 
 ## MEMÓRIA DE LONGO PRAZO (O que você já sabe sobre esse usuário):
 {user_insights}
 `;
 
-// Função para calcular delay baseado no tamanho da mensagem (simula digitação humana)
+// Função para calcular delay baseado no tamanho da mensagem
 function calculateDelay(message: string): number {
-  const baseDelay = 3000; // 3 segundos de base - mais natural
-  const charsPerSecond = 18; // Digitação mais lenta, como uma pessoa real
+  const baseDelay = 3000;
+  const charsPerSecond = 18;
   const typingTime = (message.length / charsPerSecond) * 1000;
-  return Math.min(baseDelay + typingTime, 8000); // Máximo 8 segundos
+  return Math.min(baseDelay + typingTime, 8000);
 }
 
-// ========== CONTROLE DETERMINÍSTICO DE ÁUDIO ==========
-
-// Detecta se o usuário quer texto (não áudio)
+// Detecta se o usuário quer texto
 function userWantsText(message: string): boolean {
   const lowerMsg = message.toLowerCase();
   const textPhrases = [
@@ -468,7 +535,7 @@ function userWantsText(message: string): boolean {
   return textPhrases.some(phrase => lowerMsg.includes(phrase));
 }
 
-// Detecta se o usuário pediu áudio explicitamente
+// Detecta se o usuário pediu áudio
 function userWantsAudio(message: string): boolean {
   const lowerMsg = message.toLowerCase();
   const audioPhrases = [
@@ -481,7 +548,7 @@ function userWantsAudio(message: string): boolean {
   return audioPhrases.some(phrase => lowerMsg.includes(phrase));
 }
 
-// Detecta crise emocional (gatilho para áudio automático)
+// Detecta crise emocional
 function isCrisis(message: string): boolean {
   const lowerMsg = message.toLowerCase();
   const crisisPhrases = [
@@ -496,7 +563,18 @@ function isCrisis(message: string): boolean {
   return crisisPhrases.some(phrase => lowerMsg.includes(phrase));
 }
 
-// Remove tags de controle do histórico para evitar "contaminação"
+// Detecta pedido de sessão
+function wantsSession(message: string): boolean {
+  const lowerMsg = message.toLowerCase();
+  const sessionPhrases = [
+    'quero agendar', 'agendar sessão', 'agendar sessao', 'marcar sessão',
+    'marcar sessao', 'sessão especial', 'sessao especial', 'quero uma sessão',
+    'quero uma sessao', 'fazer uma sessão', 'fazer uma sessao'
+  ];
+  return sessionPhrases.some(phrase => lowerMsg.includes(phrase));
+}
+
+// Remove tags de controle do histórico
 function sanitizeMessageHistory(messages: { role: string; content: string }[]): { role: string; content: string }[] {
   return messages.map(m => ({
     role: m.role,
@@ -509,27 +587,20 @@ function sanitizeMessageHistory(messages: { role: string; content: string }[]): 
   }));
 }
 
-// Função para separar resposta em múltiplos balões usando "|||"
-// AGORA RECEBE allowAudioThisTurn para controle determinístico
+// Função para separar resposta em múltiplos balões
 function splitIntoMessages(response: string, allowAudioThisTurn: boolean): Array<{ text: string; delay: number; isAudio: boolean }> {
   const wantsAudioByTag = response.trimStart().startsWith('[MODO_AUDIO]');
-  
-  // Se a IA marcou [MODO_AUDIO] mas não é permitido neste turno, ignora a tag
   const isAudioMode = wantsAudioByTag && allowAudioThisTurn;
   
   if (wantsAudioByTag && !allowAudioThisTurn) {
     console.log('⚠️ Audio tag received but NOT allowed this turn - converting to text');
   }
-  let cleanResponse = response.replace('[MODO_AUDIO]', '').trim();
   
-  // Remove tags de controle do texto visível (case insensitive para pegar variações)
+  let cleanResponse = response.replace('[MODO_AUDIO]', '').trim();
   cleanResponse = cleanResponse.replace(/\[INSIGHTS\].*?\[\/INSIGHTS\]/gis, '').trim();
   cleanResponse = cleanResponse.replace(/\[AGUARDANDO_RESPOSTA\]/gi, '').trim();
   cleanResponse = cleanResponse.replace(/\[CONVERSA_CONCLUIDA\]/gi, '').trim();
 
-  // MODO ÁUDIO: transforma a resposta inteira em 1+ mensagens de voz (sem texto)
-  // - remove "|||" (para não virar leitura literal)
-  // - quebra em chunks curtos para não estourar o limite do TTS
   if (isAudioMode) {
     const normalized = cleanResponse
       .replace(/\s*\|\|\|\s*/g, ' ... ')
@@ -537,8 +608,6 @@ function splitIntoMessages(response: string, allowAudioThisTurn: boolean): Array
       .trim();
 
     const maxLen = 420;
-
-    // Split simples por fim de frase / quebra de parágrafo
     const units: string[] = [];
     let buf = '';
     let consecutiveNewlines = 0;
@@ -567,7 +636,6 @@ function splitIntoMessages(response: string, allowAudioThisTurn: boolean): Array
     const tail = buf.replace(/\n+/g, ' ').trim();
     if (tail) units.push(tail);
 
-    // Junta unidades em chunks <= maxLen
     const chunks: string[] = [];
     let current = '';
 
@@ -592,7 +660,6 @@ function splitIntoMessages(response: string, allowAudioThisTurn: boolean): Array
     }
     pushCurrent();
 
-    // Se ainda houver algum chunk gigantesco, faz split bruto
     const safeChunks: string[] = [];
     for (const c of chunks.length ? chunks : [normalized]) {
       if (c.length <= maxLen) {
@@ -614,29 +681,16 @@ function splitIntoMessages(response: string, allowAudioThisTurn: boolean): Array
     }));
   }
 
-  // Log para debug
-  console.log('📝 splitIntoMessages input (first 200 chars):', cleanResponse.substring(0, 200));
-  console.log('📝 Has ||| delimiter:', cleanResponse.includes('|||'));
-  console.log('📝 Has paragraph breaks:', cleanResponse.includes('\n\n'));
-
-  // PRIMEIRO: divide por ||| se existir
   const parts = cleanResponse
     .split('|||')
     .map(part => part.trim())
     .filter(part => part.length > 0);
 
-  console.log('📝 After ||| split:', parts.length, 'parts');
-
-  // Se NÃO tinha |||, tenta dividir por parágrafos
   if (parts.length === 1) {
     const text = parts[0];
-    
-    // Divide por parágrafos (2+ quebras de linha) se tiver múltiplos
     const paragraphs = text.split(/\n\n+/).filter(p => p.trim());
-    console.log('📝 After paragraph split:', paragraphs.length, 'paragraphs');
     
     if (paragraphs.length > 1) {
-      console.log('✅ Splitting by paragraphs into', paragraphs.length, 'bubbles');
       return paragraphs.map((p) => ({
         text: p.trim(),
         delay: calculateDelay(p),
@@ -644,9 +698,7 @@ function splitIntoMessages(response: string, allowAudioThisTurn: boolean): Array
       }));
     }
     
-    // Se ainda for uma única mensagem grande (>200 chars), tenta dividir por sentenças
     if (text.length > 200) {
-      // Divide em sentenças mas mantém grupos de 2-3 sentenças juntas
       const sentences = text.split(/(?<=[.!?])\s+/).filter(s => s.trim());
       if (sentences.length >= 3) {
         const chunks: string[] = [];
@@ -665,7 +717,6 @@ function splitIntoMessages(response: string, allowAudioThisTurn: boolean): Array
         if (current) chunks.push(current);
         
         if (chunks.length > 1) {
-          console.log('✅ Splitting by sentences into', chunks.length, 'bubbles');
           return chunks.map((chunk) => ({
             text: chunk.trim(),
             delay: calculateDelay(chunk),
@@ -676,7 +727,6 @@ function splitIntoMessages(response: string, allowAudioThisTurn: boolean): Array
     }
   }
 
-  console.log('✅ Returning', parts.length, 'bubble(s) from ||| split');
   return parts.map((part) => ({
     text: part,
     delay: calculateDelay(part),
@@ -684,7 +734,7 @@ function splitIntoMessages(response: string, allowAudioThisTurn: boolean): Array
   }));
 }
 
-// Função para extrair insights da resposta da IA
+// Função para extrair insights da resposta
 function extractInsights(response: string): Array<{ category: string; key: string; value: string }> {
   const insightsMatch = response.match(/\[INSIGHTS\](.*?)\[\/INSIGHTS\]/s);
   if (!insightsMatch) return [];
@@ -749,7 +799,6 @@ serve(async (req) => {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-    // Validate service role authentication (internal function only)
     const authHeader = req.headers.get('Authorization');
     
     if (!authHeader || !authHeader.includes(SUPABASE_SERVICE_ROLE_KEY!)) {
@@ -788,6 +837,48 @@ serve(async (req) => {
       profile = data;
     }
 
+    const userPlan = profile?.plan || 'essencial';
+    const planConfig = PLAN_CONFIGS[userPlan] || PLAN_CONFIGS.essencial;
+
+    // Atualizar contador de mensagens diárias
+    const today = new Date().toISOString().split('T')[0];
+    let messagesToday = 0;
+    
+    if (profile) {
+      if (profile.last_message_date === today) {
+        messagesToday = (profile.messages_today || 0) + 1;
+      } else {
+        messagesToday = 1;
+      }
+
+      await supabase
+        .from('profiles')
+        .update({
+          messages_today: messagesToday,
+          last_message_date: today,
+        })
+        .eq('id', profile.id);
+    }
+
+    // Calcular sessões disponíveis
+    let sessionsAvailable = 0;
+    if (planConfig.sessions > 0 && profile) {
+      const sessionsUsed = profile.sessions_used_this_month || 0;
+      sessionsAvailable = Math.max(0, planConfig.sessions - sessionsUsed);
+    }
+
+    // Verificar se está em sessão ativa
+    let sessionActive = false;
+    if (profile?.current_session_id) {
+      const { data: currentSession } = await supabase
+        .from('sessions')
+        .select('status')
+        .eq('id', profile.current_session_id)
+        .maybeSingle();
+      
+      sessionActive = currentSession?.status === 'in_progress';
+    }
+
     // Buscar histórico de mensagens (últimas 20)
     let messageHistory: { role: string; content: string }[] = [];
     let messageCount = 0;
@@ -800,13 +891,12 @@ serve(async (req) => {
         .limit(20);
 
       if (messages) {
-        // Sanitiza o histórico removendo TODAS as tags de controle para evitar "contaminação"
         messageHistory = sanitizeMessageHistory(messages.reverse());
         messageCount = count || messages.length;
       }
     }
 
-    // Buscar insights (memória de longo prazo)
+    // Buscar insights
     let userInsights: any[] = [];
     if (profile?.user_id) {
       const { data: insights } = await supabase
@@ -861,22 +951,50 @@ serve(async (req) => {
       }
     }
 
+    // Verificar se deve sugerir upgrade
+    let shouldSuggestUpgrade = false;
+    if (userPlan === 'essencial' && planConfig.dailyMessageTarget > 0) {
+      const target = planConfig.dailyMessageTarget;
+      const lastSuggestion = profile?.upgrade_suggested_at;
+      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      
+      if (messagesToday >= target && (!lastSuggestion || lastSuggestion < oneDayAgo)) {
+        shouldSuggestUpgrade = true;
+        // Marcar que sugerimos upgrade
+        if (profile) {
+          await supabase
+            .from('profiles')
+            .update({ upgrade_suggested_at: new Date().toISOString() })
+            .eq('id', profile.id);
+        }
+      }
+    }
+
     // Montar prompt com contexto completo
     const contextualPrompt = AURA_SYSTEM_PROMPT
       .replace('{user_name}', profile?.name || 'Ainda não sei o nome')
-      .replace('{user_plan}', profile?.plan || 'mensal')
+      .replace('{user_plan}', userPlan)
+      .replace('{sessions_available}', String(sessionsAvailable))
+      .replace('{messages_today}', String(messagesToday))
       .replace('{last_checkin}', lastCheckin)
       .replace('{pending_commitments}', pendingCommitments)
       .replace('{message_count}', String(messageCount))
+      .replace('{session_active}', sessionActive ? 'Sim - MODO SESSÃO ATIVO' : 'Não')
       .replace('{user_insights}', formatInsightsForContext(userInsights));
 
+    // Adicionar instrução de upgrade se necessário
+    let finalPrompt = contextualPrompt;
+    if (shouldSuggestUpgrade) {
+      finalPrompt += `\n\n⚠️ INSTRUÇÃO ESPECIAL: O usuário já mandou ${messagesToday} mensagens hoje. Sugira naturalmente o upgrade para o plano Direção no final da sua resposta.`;
+    }
+
     const apiMessages = [
-      { role: "system", content: contextualPrompt },
+      { role: "system", content: finalPrompt },
       ...messageHistory,
       { role: "user", content: message }
     ];
 
-    console.log("Calling Lovable AI with", apiMessages.length, "messages, insights:", userInsights.length);
+    console.log("Calling Lovable AI with", apiMessages.length, "messages, plan:", userPlan, "sessions:", sessionsAvailable);
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -934,7 +1052,6 @@ serve(async (req) => {
       console.log("Saving", newInsights.length, "new insights");
       
       for (const insight of newInsights) {
-        // Upsert - atualiza se já existe, insere se não
         await supabase
           .from('user_insights')
           .upsert({
@@ -953,8 +1070,7 @@ serve(async (req) => {
     const isConversationComplete = assistantMessage.includes('[CONVERSA_CONCLUIDA]');
     const isAwaitingResponse = assistantMessage.includes('[AGUARDANDO_RESPOSTA]');
 
-    // ========== CONTROLE DETERMINÍSTICO DE ÁUDIO ==========
-    // Determinar se áudio é permitido NESTE TURNO baseado na mensagem do usuário
+    // Controle de áudio
     const wantsText = userWantsText(message);
     const wantsAudio = userWantsAudio(message);
     const crisis = isCrisis(message);
@@ -969,10 +1085,10 @@ serve(async (req) => {
       aiWantsAudio: assistantMessage.trimStart().startsWith('[MODO_AUDIO]')
     });
 
-    // Separar em múltiplos balões (passa o controle de áudio)
+    // Separar em múltiplos balões
     const messageChunks = splitIntoMessages(assistantMessage, allowAudioThisTurn);
     
-    console.log("Split into", messageChunks.length, "bubbles, awaiting:", isAwaitingResponse, "complete:", isConversationComplete);
+    console.log("Split into", messageChunks.length, "bubbles, plan:", userPlan);
 
     // Salvar mensagens no histórico
     if (profile?.user_id) {
@@ -985,7 +1101,7 @@ serve(async (req) => {
       await supabase.from('messages').insert({
         user_id: profile.user_id,
         role: 'assistant',
-        content: assistantMessage // Salva completo com insights para referência
+        content: assistantMessage
       });
     }
 
@@ -993,6 +1109,8 @@ serve(async (req) => {
       messages: messageChunks,
       user_name: profile?.name,
       user_id: profile?.user_id,
+      user_plan: userPlan,
+      sessions_available: sessionsAvailable,
       total_bubbles: messageChunks.length,
       has_audio: messageChunks.some(m => m.isAudio),
       new_insights: newInsights.length,
@@ -1002,7 +1120,6 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    // Log full error server-side but don't expose to client
     console.error("Error in aura-agent:", error);
     return new Response(JSON.stringify({ 
       messages: [{ text: "Desculpa, tive um probleminha aqui. Pode repetir?", delay: 0, isAudio: false }]

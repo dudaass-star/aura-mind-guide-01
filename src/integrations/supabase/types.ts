@@ -163,38 +163,157 @@ export type Database = {
           },
         ]
       }
+      plan_configs: {
+        Row: {
+          created_at: string
+          daily_message_target: number
+          id: string
+          name: string
+          plan_id: string
+          price_monthly_cents: number
+          session_duration_minutes: number
+          sessions_per_month: number
+          stripe_price_id: string
+        }
+        Insert: {
+          created_at?: string
+          daily_message_target?: number
+          id?: string
+          name: string
+          plan_id: string
+          price_monthly_cents: number
+          session_duration_minutes?: number
+          sessions_per_month?: number
+          stripe_price_id: string
+        }
+        Update: {
+          created_at?: string
+          daily_message_target?: number
+          id?: string
+          name?: string
+          plan_id?: string
+          price_monthly_cents?: number
+          session_duration_minutes?: number
+          sessions_per_month?: number
+          stripe_price_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string | null
+          current_session_id: string | null
           id: string
+          last_message_date: string | null
+          messages_today: number | null
           name: string | null
           onboarding_completed: boolean | null
           phone: string | null
           plan: string | null
+          preferred_session_time: string | null
+          sessions_reset_date: string | null
+          sessions_used_this_month: number | null
           status: string | null
           updated_at: string | null
+          upgrade_suggested_at: string | null
           user_id: string
         }
         Insert: {
           created_at?: string | null
+          current_session_id?: string | null
           id?: string
+          last_message_date?: string | null
+          messages_today?: number | null
           name?: string | null
           onboarding_completed?: boolean | null
           phone?: string | null
           plan?: string | null
+          preferred_session_time?: string | null
+          sessions_reset_date?: string | null
+          sessions_used_this_month?: number | null
           status?: string | null
           updated_at?: string | null
+          upgrade_suggested_at?: string | null
           user_id: string
         }
         Update: {
           created_at?: string | null
+          current_session_id?: string | null
           id?: string
+          last_message_date?: string | null
+          messages_today?: number | null
           name?: string | null
           onboarding_completed?: boolean | null
           phone?: string | null
           plan?: string | null
+          preferred_session_time?: string | null
+          sessions_reset_date?: string | null
+          sessions_used_this_month?: number | null
           status?: string | null
           updated_at?: string | null
+          upgrade_suggested_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_current_session_id_fkey"
+            columns: ["current_session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sessions: {
+        Row: {
+          commitments: Json | null
+          created_at: string
+          duration_minutes: number
+          ended_at: string | null
+          focus_topic: string | null
+          id: string
+          key_insights: Json | null
+          reminder_15m_sent: boolean | null
+          reminder_1h_sent: boolean | null
+          scheduled_at: string
+          session_summary: string | null
+          session_type: Database["public"]["Enums"]["session_type"]
+          started_at: string | null
+          status: Database["public"]["Enums"]["session_status"]
+          user_id: string
+        }
+        Insert: {
+          commitments?: Json | null
+          created_at?: string
+          duration_minutes?: number
+          ended_at?: string | null
+          focus_topic?: string | null
+          id?: string
+          key_insights?: Json | null
+          reminder_15m_sent?: boolean | null
+          reminder_1h_sent?: boolean | null
+          scheduled_at: string
+          session_summary?: string | null
+          session_type?: Database["public"]["Enums"]["session_type"]
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["session_status"]
+          user_id: string
+        }
+        Update: {
+          commitments?: Json | null
+          created_at?: string
+          duration_minutes?: number
+          ended_at?: string | null
+          focus_topic?: string | null
+          id?: string
+          key_insights?: Json | null
+          reminder_15m_sent?: boolean | null
+          reminder_1h_sent?: boolean | null
+          scheduled_at?: string
+          session_summary?: string | null
+          session_type?: Database["public"]["Enums"]["session_type"]
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["session_status"]
           user_id?: string
         }
         Relationships: []
@@ -307,7 +426,13 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      session_status:
+        | "scheduled"
+        | "in_progress"
+        | "completed"
+        | "cancelled"
+        | "no_show"
+      session_type: "clareza" | "padroes" | "proposito" | "livre"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -434,6 +559,15 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      session_status: [
+        "scheduled",
+        "in_progress",
+        "completed",
+        "cancelled",
+        "no_show",
+      ],
+      session_type: ["clareza", "padroes", "proposito", "livre"],
+    },
   },
 } as const

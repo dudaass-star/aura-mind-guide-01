@@ -35,3 +35,6 @@ verify_jwt = false
 
 [functions.cancel-subscription]
 verify_jwt = false
+
+[functions.session-reminder]
+verify_jwt = false

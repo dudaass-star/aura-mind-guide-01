@@ -1,16 +1,16 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Price IDs from Stripe Sandbox
-const PRICES = {
-  mensal: "price_1Sk4TLHMRAbm8MiTReXnLSYS", // R$ 27,90/mês
-  anual: "price_1Sk4UUHMRAbm8MiTutvfLImh",  // R$ 239,90/ano
+// Price IDs from Stripe - New Plans
+const PRICES: Record<string, string> = {
+  essencial: "price_1SlEYjHMRAbm8MiTB689p4b6",     // R$ 29,90/mês
+  direcao: "price_1SlEb6HMRAbm8MiTz4H3EBDT",       // R$ 49,90/mês
+  transformacao: "price_1SlEcKHMRAbm8MiTLWgfYHAV", // R$ 79,90/mês
 };
 
 const logStep = (step: string, details?: any) => {
@@ -29,10 +29,10 @@ serve(async (req) => {
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
 
-    const { plan, name, phone, paymentMethod } = await req.json();
-    logStep("Request received", { plan, name, phone, paymentMethod });
+    const { plan, name, phone } = await req.json();
+    logStep("Request received", { plan, name, phone });
 
-    if (!plan || !PRICES[plan as keyof typeof PRICES]) {
+    if (!plan || !PRICES[plan]) {
       throw new Error("Invalid plan selected");
     }
 
@@ -54,7 +54,7 @@ serve(async (req) => {
       });
     }
 
-    // Always create or find a customer first (required for Stripe Accounts V2)
+    // Always create or find a customer first
     let customerId: string;
     
     // Check if customer already exists with this phone
@@ -80,12 +80,12 @@ serve(async (req) => {
 
     const origin = req.headers.get("origin") || "https://aura.lovable.app";
 
-    // Create checkout session - customer is always set now
+    // Create checkout session
     const sessionConfig: Stripe.Checkout.SessionCreateParams = {
       customer: customerId,
       line_items: [
         {
-          price: PRICES[plan as keyof typeof PRICES],
+          price: PRICES[plan],
           quantity: 1,
         },
       ],
@@ -105,16 +105,10 @@ serve(async (req) => {
           plan: plan,
         },
       },
+      payment_method_types: ["card"],
     };
 
-    // Add payment method types based on selection
-    if (plan === "anual" && paymentMethod === "pix") {
-      sessionConfig.payment_method_types = ["pix"];
-    } else {
-      sessionConfig.payment_method_types = ["card"];
-    }
-
-    logStep("Creating checkout session", { plan, paymentMethod });
+    logStep("Creating checkout session", { plan });
     const session = await stripe.checkout.sessions.create(sessionConfig);
     logStep("Checkout session created", { sessionId: session.id });
 
@@ -126,7 +120,6 @@ serve(async (req) => {
     const errorMessage = error instanceof Error ? error.message : String(error);
     logStep("ERROR", { message: errorMessage });
     
-    // Return user-friendly message for validation errors, generic for internal errors
     const isValidationError = errorMessage.includes("Invalid plan") || 
                               errorMessage.includes("Name and phone");
     
