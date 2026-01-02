@@ -351,6 +351,9 @@ Ofereça perspectivas alternativas. Ajude a construir narrativa positiva.
 - Sessão: profundo, reflexivo, transformador
 - Na sessão, você CONDUZ. No chat, você ACOMPANHA.
 
+## CONTROLE DE TEMPO DA SESSÃO:
+{session_time_context}
+
 ## SUGESTÃO DE UPGRADE (APENAS PLANO ESSENCIAL):
 
 Se o usuário está no plano Essencial E já mandou muitas mensagens hoje (acima do target):
@@ -574,6 +577,117 @@ function wantsSession(message: string): boolean {
   return sessionPhrases.some(phrase => lowerMsg.includes(phrase));
 }
 
+// Detecta pedido de iniciar sessão
+function wantsToStartSession(message: string): boolean {
+  const lowerMsg = message.toLowerCase();
+  const startPhrases = [
+    'vamos começar', 'vamos comecar', 'pode começar', 'pode comecar',
+    'começar a sessão', 'comecar a sessao', 'iniciar sessão', 'iniciar sessao',
+    'bora começar', 'bora comecar', 'pronta', 'pronto', 'to pronta', 'to pronto',
+    'tô pronta', 'tô pronto', 'sim, vamos', 'sim vamos', 'pode ser agora',
+    'agora é bom', 'agora e bom', 'estou pronta', 'estou pronto'
+  ];
+  return startPhrases.some(phrase => lowerMsg.includes(phrase));
+}
+
+// Detecta pedido de encerrar sessão
+function wantsToEndSession(message: string): boolean {
+  const lowerMsg = message.toLowerCase();
+  const endPhrases = [
+    'encerrar sessão', 'encerrar sessao', 'terminar sessão', 'terminar sessao',
+    'finalizar sessão', 'finalizar sessao', 'acabar sessão', 'acabar sessao',
+    'parar sessão', 'parar sessao', 'pode encerrar', 'pode terminar',
+    'terminar por aqui', 'encerrar por aqui', 'já chega', 'ja chega',
+    'por hoje é isso', 'por hoje e isso', 'vamos parar'
+  ];
+  return endPhrases.some(phrase => lowerMsg.includes(phrase));
+}
+
+// Calcula fase e tempo restante da sessão
+function calculateSessionTimeContext(session: any): { 
+  timeRemaining: number; 
+  phase: string; 
+  timeContext: string;
+  shouldWarnClosing: boolean;
+  isOvertime: boolean;
+} {
+  if (!session?.started_at) {
+    return { 
+      timeRemaining: 0, 
+      phase: 'not_started', 
+      timeContext: '',
+      shouldWarnClosing: false,
+      isOvertime: false
+    };
+  }
+
+  const startedAt = new Date(session.started_at);
+  const now = new Date();
+  const elapsedMinutes = Math.floor((now.getTime() - startedAt.getTime()) / 60000);
+  const duration = session.duration_minutes || 45;
+  const timeRemaining = duration - elapsedMinutes;
+
+  let phase: string;
+  let phaseLabel: string;
+  let shouldWarnClosing = false;
+  let isOvertime = false;
+
+  if (elapsedMinutes <= 5) {
+    phase = 'opening';
+    phaseLabel = 'Abertura';
+  } else if (elapsedMinutes <= 30) {
+    phase = 'exploration';
+    phaseLabel = 'Exploração Profunda';
+  } else if (elapsedMinutes <= 40) {
+    phase = 'reframe';
+    phaseLabel = 'Reframe e Insights';
+  } else if (elapsedMinutes <= duration) {
+    phase = 'closing';
+    phaseLabel = 'Fechamento';
+    shouldWarnClosing = true;
+  } else {
+    phase = 'overtime';
+    phaseLabel = 'Tempo Esgotado';
+    isOvertime = true;
+    shouldWarnClosing = true;
+  }
+
+  let timeContext = `
+📍 SESSÃO EM ANDAMENTO
+- Tempo decorrido: ${elapsedMinutes} minutos
+- Tempo restante: ${Math.max(0, timeRemaining)} minutos
+- Fase atual: ${phaseLabel}
+`;
+
+  if (timeRemaining <= 10 && timeRemaining > 5) {
+    timeContext += `
+⚠️ ATENÇÃO: Faltam apenas ${timeRemaining} minutos!
+- Comece a conduzir suavemente para o fechamento
+- Pergunte: "O que você leva dessa conversa?"
+- Comece a definir compromissos práticos
+`;
+  } else if (timeRemaining <= 5 && timeRemaining > 0) {
+    timeContext += `
+🚨 URGENTE: Faltam apenas ${timeRemaining} minutos!
+- HORA DE ENCERRAR
+- Resuma rapidamente os principais insights
+- Defina 1-2 compromissos concretos
+- Pergunte se quer agendar a próxima sessão
+`;
+  } else if (timeRemaining <= 0) {
+    timeContext += `
+❌ SESSÃO ENCERRADA (${Math.abs(timeRemaining)} minutos além do tempo)
+- FINALIZE AGORA
+- Dê um resumo rápido da conversa
+- Agradeça pelo tempo juntos
+- Encerre com carinho mas firmeza
+- Use a tag [ENCERRAR_SESSAO] no final da sua resposta
+`;
+  }
+
+  return { timeRemaining, phase, timeContext, shouldWarnClosing, isOvertime };
+}
+
 // Remove tags de controle do histórico
 function sanitizeMessageHistory(messages: { role: string; content: string }[]): { role: string; content: string }[] {
   return messages.map(m => ({
@@ -583,6 +697,8 @@ function sanitizeMessageHistory(messages: { role: string; content: string }[]): 
       .replace(/\[INSIGHTS\].*?\[\/INSIGHTS\]/gis, '')
       .replace(/\[AGUARDANDO_RESPOSTA\]/gi, '')
       .replace(/\[CONVERSA_CONCLUIDA\]/gi, '')
+      .replace(/\[ENCERRAR_SESSAO\]/gi, '')
+      .replace(/\[INICIAR_SESSAO\]/gi, '')
       .trim()
   }));
 }
@@ -600,6 +716,8 @@ function splitIntoMessages(response: string, allowAudioThisTurn: boolean): Array
   cleanResponse = cleanResponse.replace(/\[INSIGHTS\].*?\[\/INSIGHTS\]/gis, '').trim();
   cleanResponse = cleanResponse.replace(/\[AGUARDANDO_RESPOSTA\]/gi, '').trim();
   cleanResponse = cleanResponse.replace(/\[CONVERSA_CONCLUIDA\]/gi, '').trim();
+  cleanResponse = cleanResponse.replace(/\[ENCERRAR_SESSAO\]/gi, '').trim();
+  cleanResponse = cleanResponse.replace(/\[INICIAR_SESSAO\]/gi, '').trim();
 
   if (isAudioMode) {
     const normalized = cleanResponse
@@ -867,16 +985,104 @@ serve(async (req) => {
       sessionsAvailable = Math.max(0, planConfig.sessions - sessionsUsed);
     }
 
-    // Verificar se está em sessão ativa
-    let sessionActive = false;
-    if (profile?.current_session_id) {
-      const { data: currentSession } = await supabase
+    // Verificar sessões agendadas pendentes (dentro de +/- 15 minutos)
+    let pendingScheduledSession = null;
+    if (profile?.user_id) {
+      const now = new Date();
+      const fifteenMinAgo = new Date(now.getTime() - 15 * 60 * 1000);
+      const fifteenMinAhead = new Date(now.getTime() + 15 * 60 * 1000);
+
+      const { data: scheduledSessions } = await supabase
         .from('sessions')
-        .select('status')
+        .select('*')
+        .eq('user_id', profile.user_id)
+        .eq('status', 'scheduled')
+        .gte('scheduled_at', fifteenMinAgo.toISOString())
+        .lte('scheduled_at', fifteenMinAhead.toISOString())
+        .order('scheduled_at', { ascending: true })
+        .limit(1);
+
+      if (scheduledSessions && scheduledSessions.length > 0) {
+        pendingScheduledSession = scheduledSessions[0];
+        console.log('📅 Found pending scheduled session:', pendingScheduledSession.id);
+      }
+    }
+
+    // Verificar se está em sessão ativa e buscar dados completos
+    let sessionActive = false;
+    let currentSession = null;
+    let sessionTimeContext = '';
+    let shouldEndSession = false;
+    let shouldStartSession = false;
+
+    if (profile?.current_session_id) {
+      const { data: session } = await supabase
+        .from('sessions')
+        .select('*')
         .eq('id', profile.current_session_id)
         .maybeSingle();
       
-      sessionActive = currentSession?.status === 'in_progress';
+      if (session?.status === 'in_progress') {
+        sessionActive = true;
+        currentSession = session;
+        
+        // Calcular tempo e fase da sessão
+        const timeInfo = calculateSessionTimeContext(session);
+        sessionTimeContext = timeInfo.timeContext;
+        
+        console.log('⏱️ Session time:', {
+          timeRemaining: timeInfo.timeRemaining,
+          phase: timeInfo.phase,
+          isOvertime: timeInfo.isOvertime
+        });
+
+        // Verificar se usuário quer encerrar ou se está em overtime
+        if (wantsToEndSession(message) || timeInfo.isOvertime) {
+          shouldEndSession = true;
+        }
+      }
+    }
+
+    // Verificar se usuário quer iniciar sessão agendada
+    if (!sessionActive && pendingScheduledSession && wantsToStartSession(message)) {
+      shouldStartSession = true;
+      console.log('🚀 User wants to start scheduled session');
+    }
+
+    // Executar início de sessão
+    if (shouldStartSession && pendingScheduledSession && profile) {
+      const now = new Date().toISOString();
+      
+      // Atualizar sessão para in_progress
+      await supabase
+        .from('sessions')
+        .update({
+          status: 'in_progress',
+          started_at: now
+        })
+        .eq('id', pendingScheduledSession.id);
+
+      // Atualizar profile com current_session_id
+      await supabase
+        .from('profiles')
+        .update({
+          current_session_id: pendingScheduledSession.id
+        })
+        .eq('id', profile.id);
+
+      // Incrementar sessões usadas
+      await supabase
+        .from('profiles')
+        .update({
+          sessions_used_this_month: (profile.sessions_used_this_month || 0) + 1
+        })
+        .eq('id', profile.id);
+
+      sessionActive = true;
+      currentSession = { ...pendingScheduledSession, status: 'in_progress', started_at: now };
+      sessionTimeContext = calculateSessionTimeContext(currentSession).timeContext;
+      
+      console.log('✅ Session started:', pendingScheduledSession.id);
     }
 
     // Buscar histórico de mensagens (últimas 20)
@@ -970,7 +1176,29 @@ serve(async (req) => {
       }
     }
 
+    // Construir contexto de sessão pendente
+    let pendingSessionContext = '';
+    if (!sessionActive && pendingScheduledSession) {
+      const scheduledTime = new Date(pendingScheduledSession.scheduled_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      const sessionType = pendingScheduledSession.session_type || 'livre';
+      pendingSessionContext = `
+⏰ SESSÃO AGENDADA DETECTADA!
+- Horário: ${scheduledTime}
+- Tipo: ${sessionType}
+- Foco: ${pendingScheduledSession.focus_topic || 'A definir'}
+
+O usuário tem uma sessão agendada para agora! Se ele parecer pronto ou confirmar, inicie a sessão com uma saudação especial. Se ele mandar "vamos começar", "pode começar", "tô pronta/o", considere como confirmação para iniciar.
+`;
+    }
+
     // Montar prompt com contexto completo
+    let sessionTimeInfo = sessionTimeContext;
+    if (!sessionActive && !pendingScheduledSession) {
+      sessionTimeInfo = 'Nenhuma sessão ativa ou agendada para agora.';
+    } else if (!sessionActive && pendingScheduledSession) {
+      sessionTimeInfo = pendingSessionContext;
+    }
+
     const contextualPrompt = AURA_SYSTEM_PROMPT
       .replace('{user_name}', profile?.name || 'Ainda não sei o nome')
       .replace('{user_plan}', userPlan)
@@ -980,6 +1208,7 @@ serve(async (req) => {
       .replace('{pending_commitments}', pendingCommitments)
       .replace('{message_count}', String(messageCount))
       .replace('{session_active}', sessionActive ? 'Sim - MODO SESSÃO ATIVO' : 'Não')
+      .replace('{session_time_context}', sessionTimeInfo)
       .replace('{user_insights}', formatInsightsForContext(userInsights));
 
     // Adicionar instrução de upgrade se necessário
@@ -988,13 +1217,18 @@ serve(async (req) => {
       finalPrompt += `\n\n⚠️ INSTRUÇÃO ESPECIAL: O usuário já mandou ${messagesToday} mensagens hoje. Sugira naturalmente o upgrade para o plano Direção no final da sua resposta.`;
     }
 
+    // Adicionar instrução de encerramento se necessário
+    if (shouldEndSession) {
+      finalPrompt += `\n\n🔴 INSTRUÇÃO CRÍTICA: ENCERRE A SESSÃO AGORA. Faça um breve resumo dos principais pontos discutidos, agradeça pelo tempo juntos e inclua a tag [ENCERRAR_SESSAO] no final.`;
+    }
+
     const apiMessages = [
       { role: "system", content: finalPrompt },
       ...messageHistory,
       { role: "user", content: message }
     ];
 
-    console.log("Calling Lovable AI with", apiMessages.length, "messages, plan:", userPlan, "sessions:", sessionsAvailable);
+    console.log("Calling Lovable AI with", apiMessages.length, "messages, plan:", userPlan, "sessions:", sessionsAvailable, "sessionActive:", sessionActive);
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -1045,6 +1279,34 @@ serve(async (req) => {
     }
 
     console.log("AURA raw response:", assistantMessage.substring(0, 200));
+
+    // Verificar se a IA quer encerrar a sessão
+    const aiWantsToEndSession = assistantMessage.includes('[ENCERRAR_SESSAO]');
+
+    // Executar encerramento de sessão
+    if ((shouldEndSession || aiWantsToEndSession) && currentSession && profile) {
+      const now = new Date().toISOString();
+
+      // Atualizar sessão para completed
+      await supabase
+        .from('sessions')
+        .update({
+          status: 'completed',
+          ended_at: now,
+          session_summary: `Sessão encerrada. Última mensagem do usuário: ${message.substring(0, 200)}`
+        })
+        .eq('id', currentSession.id);
+
+      // Limpar current_session_id do profile
+      await supabase
+        .from('profiles')
+        .update({
+          current_session_id: null
+        })
+        .eq('id', profile.id);
+
+      console.log('✅ Session ended:', currentSession.id);
+    }
 
     // Extrair e salvar novos insights
     const newInsights = extractInsights(assistantMessage);
@@ -1114,7 +1376,10 @@ serve(async (req) => {
       total_bubbles: messageChunks.length,
       has_audio: messageChunks.some(m => m.isAudio),
       new_insights: newInsights.length,
-      conversation_status: isConversationComplete ? 'complete' : (isAwaitingResponse ? 'awaiting' : 'neutral')
+      conversation_status: isConversationComplete ? 'complete' : (isAwaitingResponse ? 'awaiting' : 'neutral'),
+      session_active: sessionActive && !aiWantsToEndSession,
+      session_started: shouldStartSession,
+      session_ended: shouldEndSession || aiWantsToEndSession
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
