@@ -1,5 +1,8 @@
 project_id = "uhyogifgmutfmbyhzzyo"
 
+[functions.admin-send-message]
+verify_jwt = false
+
 [functions.aura-agent]
 verify_jwt = false
 
