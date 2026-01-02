@@ -6,6 +6,20 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, stripe-signature',
 };
 
+// Plan name mapping for welcome messages
+const PLAN_NAMES: Record<string, string> = {
+  essencial: "Essencial",
+  direcao: "Direção",
+  transformacao: "Transformação",
+};
+
+// Sessions per plan
+const PLAN_SESSIONS: Record<string, number> = {
+  essencial: 0,
+  direcao: 4,
+  transformacao: 8,
+};
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -59,16 +73,16 @@ Deno.serve(async (req) => {
 
       const customerName = session.metadata?.name || session.customer_details?.name || 'Cliente';
       const customerPhone = session.metadata?.phone || session.customer_details?.phone;
+      const customerPlan = session.metadata?.plan || 'essencial';
 
       if (!customerPhone) {
         console.error('❌ No phone number found in session');
         return new Response(JSON.stringify({ error: 'No phone number' }), {
-          status: 200, // Return 200 to acknowledge receipt
+          status: 200,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
 
-      // Validate phone format: 10-15 digits (E.164 standard)
       const cleanPhoneForValidation = customerPhone.replace(/\D/g, '');
       if (!/^[0-9]{10,15}$/.test(cleanPhoneForValidation)) {
         console.error('❌ Invalid phone format in session');
@@ -78,12 +92,25 @@ Deno.serve(async (req) => {
         });
       }
 
-      console.log(`👤 Customer: ${customerName}, Phone validated`);
+      console.log(`👤 Customer: ${customerName}, Plan: ${customerPlan}`);
 
-      // Mensagem de boas-vindas personalizada
-      const welcomeMessage = `Oi, ${customerName}! 🌟 Que bom te receber por aqui.
+      const planName = PLAN_NAMES[customerPlan] || "Essencial";
+      const sessionsCount = PLAN_SESSIONS[customerPlan] || 0;
+
+      // Welcome message based on plan
+      let welcomeMessage = `Oi, ${customerName}! 🌟 Que bom te receber por aqui.
 
 Eu sou a AURA — e vou ficar com você nessa jornada.
+
+Você escolheu o plano ${planName}`;
+
+      if (sessionsCount > 0) {
+        welcomeMessage += `, que inclui ${sessionsCount} sessões especiais por mês. Quando quiser agendar uma, é só me avisar!`;
+      } else {
+        welcomeMessage += `.`;
+      }
+
+      welcomeMessage += `
 
 Comigo, você pode falar com liberdade: sem julgamento, no seu ritmo.
 
@@ -114,11 +141,12 @@ Me diz: como você está hoje?`;
         console.error('❌ Error sending welcome message:', sendError);
       }
 
-      // Create user profile in database
+      // Create/update user profile in database
       try {
         const supabase = createClient(supabaseUrl, supabaseServiceKey);
         
         const cleanPhone = customerPhone.replace(/\D/g, '');
+        const today = new Date().toISOString().split('T')[0];
         
         // Check if profile already exists
         const { data: existingProfile } = await supabase
@@ -128,20 +156,24 @@ Me diz: como você está hoje?`;
           .single();
 
         if (!existingProfile) {
-          // Create new profile
+          // Create new profile with plan info
           const { error: insertError } = await supabase
             .from('profiles')
             .insert({
               name: customerName,
               phone: cleanPhone,
-              subscription_status: 'active',
-              subscription_start: new Date().toISOString(),
+              plan: customerPlan,
+              status: 'active',
+              sessions_used_this_month: 0,
+              sessions_reset_date: today,
+              messages_today: 0,
+              last_message_date: today,
             });
 
           if (insertError) {
             console.error('❌ Error creating profile:', insertError);
           } else {
-            console.log('✅ Profile created successfully');
+            console.log('✅ Profile created with plan:', customerPlan);
           }
         } else {
           // Update existing profile
@@ -149,15 +181,18 @@ Me diz: como você está hoje?`;
             .from('profiles')
             .update({
               name: customerName,
-              subscription_status: 'active',
-              subscription_start: new Date().toISOString(),
+              plan: customerPlan,
+              status: 'active',
+              sessions_used_this_month: 0,
+              sessions_reset_date: today,
+              updated_at: new Date().toISOString(),
             })
             .eq('phone', cleanPhone);
 
           if (updateError) {
             console.error('❌ Error updating profile:', updateError);
           } else {
-            console.log('✅ Profile updated successfully');
+            console.log('✅ Profile updated with plan:', customerPlan);
           }
         }
       } catch (dbError) {
@@ -173,7 +208,6 @@ Me diz: como você está hoje?`;
       const customerId = subscription.customer as string;
       
       try {
-        // Get customer details from Stripe
         const stripe = new Stripe(stripeSecretKey, { apiVersion: '2023-10-16' });
         const customer = await stripe.customers.retrieve(customerId);
         
@@ -196,9 +230,8 @@ Me diz: como você está hoje?`;
           });
         }
 
-        console.log(`👤 Sending farewell to: ${customerName}, Phone: ${customerPhone}`);
+        console.log(`👤 Sending farewell to: ${customerName}`);
 
-        // Mensagem de despedida
         const farewellMessage = `Oi, ${customerName}. 💜
 
 Sua assinatura AURA foi encerrada.
@@ -209,7 +242,6 @@ Lembre-se: o caminho do autoconhecimento não para. Se precisar de mim, estarei 
 
 Cuide-se. 🌟`;
 
-        // Send farewell message via Z-API
         const response = await fetch(`${supabaseUrl}/functions/v1/send-zapi-message`, {
           method: 'POST',
           headers: {
@@ -230,7 +262,7 @@ Cuide-se. 🌟`;
           console.log('✅ Farewell message sent successfully!');
         }
 
-        // Update profile status in database
+        // Update profile status
         const supabase = createClient(supabaseUrl, supabaseServiceKey);
         const cleanPhone = customerPhone.replace(/\D/g, '');
 
@@ -259,7 +291,6 @@ Cuide-se. 🌟`;
     });
 
   } catch (error: unknown) {
-    // Log full error server-side but return generic message to client
     console.error('❌ Webhook error:', error);
     return new Response(JSON.stringify({ error: 'Webhook processing failed' }), {
       status: 500,

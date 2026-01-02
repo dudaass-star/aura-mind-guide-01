@@ -3,36 +3,59 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ArrowLeft, CreditCard, QrCode, Check, Shield, Lock } from "lucide-react";
+import { ArrowLeft, CreditCard, Check, Shield, Lock, MessageCircle, Calendar } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+
+type PlanId = "essencial" | "direcao" | "transformacao";
+
+interface PlanConfig {
+  name: string;
+  price: string;
+  priceValue: number;
+  period: string;
+  sessions: number;
+  highlights: string[];
+}
+
+const plans: Record<PlanId, PlanConfig> = {
+  essencial: {
+    name: "Essencial",
+    price: "29,90",
+    priceValue: 2990,
+    period: "mês",
+    sessions: 0,
+    highlights: ["Conversas ilimitadas 24/7", "Check-in diário", "Review semanal"],
+  },
+  direcao: {
+    name: "Direção",
+    price: "49,90",
+    priceValue: 4990,
+    period: "mês",
+    sessions: 4,
+    highlights: ["Tudo do Essencial", "4 Sessões Especiais/mês", "Resumo após cada sessão"],
+  },
+  transformacao: {
+    name: "Transformação",
+    price: "79,90",
+    priceValue: 7990,
+    period: "mês",
+    sessions: 8,
+    highlights: ["Tudo do Direção", "8 Sessões Especiais/mês", "Prioridade no agendamento"],
+  },
+};
 
 const Checkout = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const initialPlan = location.state?.plan || "anual";
+  const initialPlan = (location.state?.plan as PlanId) || "direcao";
   
-  const [selectedPlan, setSelectedPlan] = useState<"mensal" | "anual">(initialPlan);
-  const [paymentMethod, setPaymentMethod] = useState<"cartao" | "pix">("cartao");
+  const [selectedPlan, setSelectedPlan] = useState<PlanId>(initialPlan);
   const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-
-  const plans = {
-    mensal: {
-      price: "27,90",
-      period: "mês",
-      paymentMethods: ["cartao"],
-    },
-    anual: {
-      price: "239,90",
-      period: "ano",
-      priceMonthly: "19,99",
-      paymentMethods: ["cartao", "pix"],
-    },
-  };
 
   const currentPlan = plans[selectedPlan];
 
@@ -68,7 +91,6 @@ const Checkout = () => {
           plan: selectedPlan,
           name: name.trim(),
           phone: phone,
-          paymentMethod: paymentMethod,
         },
       });
 
@@ -82,7 +104,7 @@ const Checkout = () => {
         // Store user info in localStorage for thank you page
         localStorage.setItem('aura_checkout', JSON.stringify({ name, phone, plan: selectedPlan }));
 
-        // Redirect to Stripe Checkout - use top.location for iframe support
+        // Redirect to Stripe Checkout
         if (window.top) {
           window.top.location.href = checkoutUrl;
         } else {
@@ -125,7 +147,7 @@ const Checkout = () => {
                 Finalizar assinatura
               </h1>
               <p className="text-muted-foreground">
-                Escolha seu plano e método de pagamento
+                Escolha seu plano e comece sua jornada
               </p>
             </div>
 
@@ -138,98 +160,63 @@ const Checkout = () => {
                 
                 <RadioGroup
                   value={selectedPlan}
-                  onValueChange={(value) => {
-                    setSelectedPlan(value as "mensal" | "anual");
-                    if (value === "mensal") setPaymentMethod("cartao");
-                  }}
+                  onValueChange={(value) => setSelectedPlan(value as PlanId)}
                   className="space-y-3"
                 >
-                  {/* Monthly */}
-                  <label
-                    className={`flex items-center justify-between p-4 rounded-xl border cursor-pointer transition-all ${
-                      selectedPlan === "mensal"
-                        ? "border-primary bg-primary/5"
-                        : "border-border/50 hover:border-border"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <RadioGroupItem value="mensal" id="mensal" />
-                      <div>
-                        <p className="font-medium text-foreground">Mensal</p>
-                        <p className="text-sm text-muted-foreground">Somente cartão</p>
+                  {(Object.entries(plans) as [PlanId, PlanConfig][]).map(([id, plan]) => (
+                    <label
+                      key={id}
+                      className={`relative flex items-start justify-between p-4 rounded-xl border cursor-pointer transition-all ${
+                        selectedPlan === id
+                          ? "border-primary bg-primary/5"
+                          : "border-border/50 hover:border-border"
+                      }`}
+                    >
+                      {id === "direcao" && (
+                        <div className="absolute -top-2 left-4 px-2 py-0.5 bg-primary text-primary-foreground text-xs font-medium rounded">
+                          Mais popular
+                        </div>
+                      )}
+                      <div className="flex items-start gap-3">
+                        <RadioGroupItem value={id} id={id} className="mt-1" />
+                        <div>
+                          <p className="font-medium text-foreground">{plan.name}</p>
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {plan.sessions > 0 && (
+                              <span className="inline-flex items-center gap-1 text-xs bg-secondary/50 text-muted-foreground px-2 py-1 rounded">
+                                <Calendar className="w-3 h-3" />
+                                {plan.sessions} sessões/mês
+                              </span>
+                            )}
+                            <span className="inline-flex items-center gap-1 text-xs bg-secondary/50 text-muted-foreground px-2 py-1 rounded">
+                              <MessageCircle className="w-3 h-3" />
+                              Chat ilimitado
+                            </span>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                    <p className="font-display text-xl font-semibold text-foreground">
-                      R$ 27,90<span className="text-sm text-muted-foreground">/mês</span>
-                    </p>
-                  </label>
-
-                  {/* Annual */}
-                  <label
-                    className={`relative flex items-center justify-between p-4 rounded-xl border cursor-pointer transition-all ${
-                      selectedPlan === "anual"
-                        ? "border-primary bg-primary/5"
-                        : "border-border/50 hover:border-border"
-                    }`}
-                  >
-                    <div className="absolute -top-2 left-4 px-2 py-0.5 bg-teal text-accent-foreground text-xs font-medium rounded">
-                      Economia de R$ 95
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <RadioGroupItem value="anual" id="anual" />
-                      <div>
-                        <p className="font-medium text-foreground">Anual</p>
-                        <p className="text-sm text-muted-foreground">Cartão ou Pix</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-display text-xl font-semibold text-foreground">
-                        R$ 239,90<span className="text-sm text-muted-foreground">/ano</span>
+                      <p className="font-display text-xl font-semibold text-foreground whitespace-nowrap">
+                        R$ {plan.price}<span className="text-sm text-muted-foreground">/{plan.period}</span>
                       </p>
-                      <p className="text-sm text-primary">R$ 19,99/mês</p>
-                    </div>
-                  </label>
+                    </label>
+                  ))}
                 </RadioGroup>
               </div>
 
-              {/* Payment method (only for annual) */}
-              {selectedPlan === "anual" && (
-                <div className="bg-card rounded-2xl p-6 border border-border/50">
-                  <h2 className="font-display text-lg font-semibold text-foreground mb-4">
-                    Método de pagamento
-                  </h2>
-                  
-                  <RadioGroup
-                    value={paymentMethod}
-                    onValueChange={(value) => setPaymentMethod(value as "cartao" | "pix")}
-                    className="grid grid-cols-2 gap-3"
-                  >
-                    <label
-                      className={`flex flex-col items-center justify-center p-4 rounded-xl border cursor-pointer transition-all ${
-                        paymentMethod === "cartao"
-                          ? "border-primary bg-primary/5"
-                          : "border-border/50 hover:border-border"
-                      }`}
-                    >
-                      <RadioGroupItem value="cartao" id="cartao" className="sr-only" />
-                      <CreditCard className="w-6 h-6 text-primary mb-2" />
-                      <span className="text-sm font-medium text-foreground">Cartão</span>
-                    </label>
-
-                    <label
-                      className={`flex flex-col items-center justify-center p-4 rounded-xl border cursor-pointer transition-all ${
-                        paymentMethod === "pix"
-                          ? "border-primary bg-primary/5"
-                          : "border-border/50 hover:border-border"
-                      }`}
-                    >
-                      <RadioGroupItem value="pix" id="pix" className="sr-only" />
-                      <QrCode className="w-6 h-6 text-primary mb-2" />
-                      <span className="text-sm font-medium text-foreground">Pix</span>
-                    </label>
-                  </RadioGroup>
-                </div>
-              )}
+              {/* Plan highlights */}
+              <div className="bg-secondary/30 rounded-2xl p-6 border border-border/50">
+                <h3 className="font-medium text-foreground mb-3">
+                  O que está incluso no plano {currentPlan.name}:
+                </h3>
+                <ul className="space-y-2">
+                  {currentPlan.highlights.map((highlight, index) => (
+                    <li key={index} className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Check className="w-4 h-4 text-primary" />
+                      {highlight}
+                    </li>
+                  ))}
+                </ul>
+              </div>
 
               {/* User info */}
               <div className="bg-card rounded-2xl p-6 border border-border/50">
@@ -271,11 +258,11 @@ const Checkout = () => {
               {/* Summary */}
               <div className="bg-secondary/30 rounded-2xl p-6 border border-border/50">
                 <div className="flex justify-between items-center mb-4">
-                  <span className="text-muted-foreground">Plano {selectedPlan}</span>
+                  <span className="text-muted-foreground">Plano {currentPlan.name}</span>
                   <span className="font-semibold text-foreground">R$ {currentPlan.price}</span>
                 </div>
                 <div className="flex justify-between items-center pt-4 border-t border-border/50">
-                  <span className="font-medium text-foreground">Total</span>
+                  <span className="font-medium text-foreground">Total mensal</span>
                   <span className="font-display text-2xl font-semibold text-foreground">
                     R$ {currentPlan.price}
                   </span>
@@ -290,21 +277,22 @@ const Checkout = () => {
                 className="w-full"
                 disabled={isLoading}
               >
+                <CreditCard className="w-5 h-5 mr-2" />
                 {isLoading ? "Processando..." : "Continuar para pagamento"}
               </Button>
 
               {/* Trust badges */}
               <div className="flex flex-wrap justify-center gap-6 text-sm text-muted-foreground">
                 <div className="flex items-center gap-2">
-                  <Shield className="w-4 h-4 text-teal" />
+                  <Shield className="w-4 h-4 text-primary" />
                   <span>Pagamento seguro</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Lock className="w-4 h-4 text-teal" />
+                  <Lock className="w-4 h-4 text-primary" />
                   <span>Dados protegidos</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-teal" />
+                  <Check className="w-4 h-4 text-primary" />
                   <span>Cancele quando quiser</span>
                 </div>
               </div>

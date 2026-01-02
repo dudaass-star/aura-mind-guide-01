@@ -1,42 +1,58 @@
 import { Button } from "@/components/ui/button";
-import { Check, Sparkles } from "lucide-react";
+import { Check, Sparkles, MessageCircle, Calendar, FileText, Headphones } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const plans = [
   {
-    name: "Mensal",
-    price: "27,90",
+    id: "essencial",
+    name: "Essencial",
+    price: "29,90",
     period: "/mês",
-    description: "Pra quem quer começar agora.",
+    description: "Suporte emocional 24/7 pra quem quer começar.",
     features: [
-      "Conversas ilimitadas",
-      "Memória de longo prazo",
-      "Check-in diário",
-      "Review semanal",
-      "Respostas em texto e áudio",
+      { text: "Conversas ilimitadas 24/7", icon: MessageCircle },
+      { text: "Check-in diário de humor", icon: Check },
+      { text: "Review semanal", icon: FileText },
+      { text: "Respostas em texto e áudio", icon: Headphones },
+      { text: "Memória de longo prazo", icon: Check },
     ],
-    cta: "Assinar mensal",
+    cta: "Começar agora",
     popular: false,
     badge: null,
-    paymentNote: "Somente cartão de crédito (recorrência automática)",
   },
   {
-    name: "Anual",
-    price: "239,90",
-    originalPrice: "334,80",
-    discountPercent: "-28%",
-    period: "/ano",
-    priceMonthly: "19,99",
-    description: "Melhor custo-benefício. Ideal pra quem quer consistência.",
+    id: "direcao",
+    name: "Direção",
+    price: "49,90",
+    period: "/mês",
+    description: "Pra quem quer ir mais fundo com sessões guiadas.",
     features: [
-      "Tudo do plano mensal",
-      "Melhor custo-benefício",
-      "Ideal pra quem quer consistência",
+      { text: "Tudo do Essencial", icon: Check },
+      { text: "4 Sessões Especiais/mês (45min)", icon: Calendar },
+      { text: "Metodologia estruturada", icon: Check },
+      { text: "Resumo escrito após cada sessão", icon: FileText },
+      { text: "Acompanhamento de compromissos", icon: Check },
     ],
-    cta: "Assinar anual",
+    cta: "Escolher Direção",
     popular: true,
     badge: "Mais popular",
-    paymentNote: "Cartão ou Pix",
+  },
+  {
+    id: "transformacao",
+    name: "Transformação",
+    price: "79,90",
+    period: "/mês",
+    description: "Pra momentos de transição e mudança profunda.",
+    features: [
+      { text: "Tudo do Direção", icon: Check },
+      { text: "8 Sessões Especiais/mês", icon: Calendar },
+      { text: "Prioridade no agendamento", icon: Check },
+      { text: "Ideal para momentos de crise", icon: Check },
+      { text: "Suporte intensivo", icon: Check },
+    ],
+    cta: "Escolher Transformação",
+    popular: false,
+    badge: null,
   },
 ];
 
@@ -52,15 +68,18 @@ const Pricing = () => {
             Escolha seu plano.{" "}
             <span className="text-gradient-sage">Comece hoje.</span>
           </h2>
+          <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
+            Todos os planos incluem acesso ilimitado à AURA 24/7. Escolha o nível de profundidade que você precisa.
+          </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
           {plans.map((plan, index) => (
             <div
               key={index}
-              className={`relative rounded-3xl p-8 transition-all duration-300 ${
+              className={`relative rounded-3xl p-6 transition-all duration-300 flex flex-col ${
                 plan.popular
-                  ? "bg-sage-soft/40 border-2 border-primary/50 shadow-glow"
+                  ? "bg-sage-soft/40 border-2 border-primary/50 shadow-glow md:scale-105"
                   : "bg-background border border-border/50"
               }`}
             >
@@ -75,55 +94,36 @@ const Pricing = () => {
               )}
 
               {/* Plan header */}
-              <div className="text-center mb-8">
-                <h3 className="font-display text-2xl font-bold text-foreground mb-2">
+              <div className="text-center mb-6">
+                <h3 className="font-display text-xl font-bold text-foreground mb-2">
                   {plan.name}
                 </h3>
-                <p className="text-muted-foreground text-sm mb-4">
+                <p className="text-muted-foreground text-sm mb-4 min-h-[40px]">
                   {plan.description}
                 </p>
-                <div className="flex flex-col items-center gap-2">
-                  {plan.originalPrice && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg text-muted-foreground line-through">
-                        R$ {plan.originalPrice}
-                      </span>
-                      {plan.discountPercent && (
-                        <span className="px-2 py-0.5 rounded-full bg-[hsl(var(--accent))] text-white text-xs font-bold animate-pulse">
-                          {plan.discountPercent}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                  <div className="flex items-baseline justify-center gap-1">
-                    <span className="text-sm text-muted-foreground">R$</span>
-                    <span className="font-display text-5xl font-bold text-foreground">
-                      {plan.price}
-                    </span>
-                    <span className="text-muted-foreground">{plan.period}</span>
-                  </div>
+                <div className="flex items-baseline justify-center gap-1">
+                  <span className="text-sm text-muted-foreground">R$</span>
+                  <span className="font-display text-4xl font-bold text-foreground">
+                    {plan.price}
+                  </span>
+                  <span className="text-muted-foreground">{plan.period}</span>
                 </div>
-                {plan.priceMonthly && (
-                  <p className="text-sm text-primary font-semibold mt-2">
-                    Equivale a R$ {plan.priceMonthly}/mês
-                  </p>
-                )}
               </div>
 
               {/* Features */}
-              <ul className="space-y-4 mb-8">
+              <ul className="space-y-3 mb-6 flex-grow">
                 {plan.features.map((feature, featureIndex) => (
-                  <li key={featureIndex} className="flex items-center gap-3">
-                    <div className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center">
-                      <Check className="w-3 h-3 text-primary" />
+                  <li key={featureIndex} className="flex items-start gap-3">
+                    <div className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center mt-0.5">
+                      <feature.icon className="w-3 h-3 text-primary" />
                     </div>
-                    <span className="text-foreground">{feature}</span>
+                    <span className="text-foreground text-sm">{feature.text}</span>
                   </li>
                 ))}
               </ul>
 
               {/* CTA */}
-              <Link to="/checkout" state={{ plan: plan.name.toLowerCase() }}>
+              <Link to="/checkout" state={{ plan: plan.id }}>
                 <Button
                   variant={plan.popular ? "sage" : "glass"}
                   size="lg"
@@ -132,13 +132,38 @@ const Pricing = () => {
                   {plan.cta}
                 </Button>
               </Link>
-
-              {/* Payment note */}
-              <p className="text-center text-xs text-muted-foreground mt-4">
-                {plan.paymentNote}
-              </p>
             </div>
           ))}
+        </div>
+
+        {/* Sessions explanation */}
+        <div className="mt-16 max-w-3xl mx-auto text-center">
+          <h3 className="font-display text-xl font-semibold text-foreground mb-4">
+            O que são as Sessões Especiais?
+          </h3>
+          <p className="text-muted-foreground mb-6">
+            São encontros de 45 minutos só seus com a AURA, com metodologia estruturada baseada em 
+            Investigação Socrática e Logoterapia. Diferente do chat do dia a dia, as sessões 
+            são mais profundas, reflexivas e focadas em transformação real.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
+            <div className="bg-secondary/30 rounded-xl p-4">
+              <p className="font-semibold text-foreground mb-1">Sessão de Clareza</p>
+              <p className="text-muted-foreground">Decisões difíceis e escolhas importantes</p>
+            </div>
+            <div className="bg-secondary/30 rounded-xl p-4">
+              <p className="font-semibold text-foreground mb-1">Sessão de Padrões</p>
+              <p className="text-muted-foreground">Comportamentos que se repetem</p>
+            </div>
+            <div className="bg-secondary/30 rounded-xl p-4">
+              <p className="font-semibold text-foreground mb-1">Sessão de Propósito</p>
+              <p className="text-muted-foreground">Sentido e direção de vida</p>
+            </div>
+            <div className="bg-secondary/30 rounded-xl p-4">
+              <p className="font-semibold text-foreground mb-1">Sessão Livre</p>
+              <p className="text-muted-foreground">Tema aberto, você escolhe</p>
+            </div>
+          </div>
         </div>
       </div>
     </section>
