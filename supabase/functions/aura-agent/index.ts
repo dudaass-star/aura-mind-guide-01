@@ -9,9 +9,21 @@ const corsHeaders = {
 // Plan configurations
 const PLAN_CONFIGS: Record<string, { sessions: number; dailyMessageTarget: number }> = {
   essencial: { sessions: 0, dailyMessageTarget: 20 },
+  mensal: { sessions: 0, dailyMessageTarget: 20 },  // Alias para essencial
   direcao: { sessions: 4, dailyMessageTarget: 0 },
   transformacao: { sessions: 8, dailyMessageTarget: 0 },
 };
+
+// Mapear planos do banco para planos conhecidos
+function normalizePlan(planFromDb: string | null): string {
+  const planMapping: Record<string, string> = {
+    'mensal': 'essencial',
+    'essencial': 'essencial',
+    'direcao': 'direcao',
+    'transformacao': 'transformacao',
+  };
+  return planMapping[planFromDb || 'essencial'] || 'essencial';
+}
 
 // Prompt oficial da AURA
 const AURA_SYSTEM_PROMPT = `# PERSONA E IDENTIDADE
@@ -999,15 +1011,18 @@ serve(async (req) => {
       profile = data;
     }
 
-    const userPlan = profile?.plan || 'essencial';
+    const rawPlan = profile?.plan || 'essencial';
+    const userPlan = normalizePlan(rawPlan);
     const planConfig = PLAN_CONFIGS[userPlan] || PLAN_CONFIGS.essencial;
+    
+    console.log('📊 Plan mapping:', { rawPlan, normalizedPlan: userPlan });
 
     // Atualizar contador de mensagens diárias
-    const today = new Date().toISOString().split('T')[0];
+    const todayStr = new Date().toISOString().split('T')[0];
     let messagesToday = 0;
     
     if (profile) {
-      if (profile.last_message_date === today) {
+      if (profile.last_message_date === todayStr) {
         messagesToday = (profile.messages_today || 0) + 1;
       } else {
         messagesToday = 1;
@@ -1017,9 +1032,27 @@ serve(async (req) => {
         .from('profiles')
         .update({
           messages_today: messagesToday,
-          last_message_date: today,
+          last_message_date: todayStr,
         })
         .eq('id', profile.id);
+    }
+
+    // Verificar se precisa resetar sessões mensais
+    const nowDate = new Date();
+    const currentMonth = `${nowDate.getFullYear()}-${String(nowDate.getMonth() + 1).padStart(2, '0')}-01`;
+    
+    if (profile && profile.sessions_reset_date !== currentMonth) {
+      console.log('🔄 Resetting monthly sessions. Old date:', profile.sessions_reset_date, 'New date:', currentMonth);
+      await supabase
+        .from('profiles')
+        .update({
+          sessions_used_this_month: 0,
+          sessions_reset_date: currentMonth
+        })
+        .eq('id', profile.id);
+      
+      profile.sessions_used_this_month = 0;
+      profile.sessions_reset_date = currentMonth;
     }
 
     // Calcular sessões disponíveis
@@ -1343,17 +1376,58 @@ As primeiras 2 respostas de cada sessão DEVEM ser em áudio para maior intimida
     // Verificar se a IA quer encerrar a sessão
     const aiWantsToEndSession = assistantMessage.includes('[ENCERRAR_SESSAO]');
 
-    // Executar encerramento de sessão
+    // Executar encerramento de sessão com resumo gerado pela IA
     if ((shouldEndSession || aiWantsToEndSession) && currentSession && profile) {
-      const now = new Date().toISOString();
+      const endTime = new Date().toISOString();
+
+      // Gerar resumo da sessão usando IA
+      let sessionSummary = "Sessão concluída.";
+      try {
+        const summaryMessages = messageHistory.slice(-15); // Últimas 15 mensagens
+        const summaryResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${LOVABLE_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "google/gemini-2.5-flash",
+            messages: [
+              { 
+                role: "system", 
+                content: `Você é um assistente que cria resumos de sessões de mentoria emocional.
+Gere um resumo BREVE (3-5 frases) da sessão. Inclua:
+1. O tema principal discutido
+2. 1-2 insights mais importantes
+3. Compromissos definidos (se houver)
+Escreva em português brasileiro, de forma clara e objetiva.`
+              },
+              ...summaryMessages,
+              { role: "user", content: message }
+            ],
+            max_tokens: 200,
+          }),
+        });
+
+        if (summaryResponse.ok) {
+          const summaryData = await summaryResponse.json();
+          const aiSummary = summaryData.choices?.[0]?.message?.content?.trim();
+          if (aiSummary) {
+            sessionSummary = aiSummary;
+            console.log('📝 Generated session summary:', sessionSummary.substring(0, 100));
+          }
+        }
+      } catch (summaryError) {
+        console.error('⚠️ Error generating session summary:', summaryError);
+      }
 
       // Atualizar sessão para completed
       await supabase
         .from('sessions')
         .update({
           status: 'completed',
-          ended_at: now,
-          session_summary: `Sessão encerrada. Última mensagem do usuário: ${message.substring(0, 200)}`
+          ended_at: endTime,
+          session_summary: sessionSummary
         })
         .eq('id', currentSession.id);
 
@@ -1365,7 +1439,7 @@ As primeiras 2 respostas de cada sessão DEVEM ser em áudio para maior intimida
         })
         .eq('id', profile.id);
 
-      console.log('✅ Session ended:', currentSession.id);
+      console.log('✅ Session ended with AI summary:', currentSession.id);
     }
 
     // Extrair e salvar novos insights
@@ -1418,8 +1492,12 @@ As primeiras 2 respostas de cada sessão DEVEM ser em áudio para maior intimida
       aiWantsAudio: assistantMessage.trimStart().startsWith('[MODO_AUDIO]')
     });
 
-    // Incrementar contador de áudio da sessão se enviamos áudio no início
-    if (forceAudioForSessionStart && allowAudioThisTurn && currentSession) {
+    // Separar em múltiplos balões PRIMEIRO para verificar se terá áudio
+    const messageChunks = splitIntoMessages(assistantMessage, allowAudioThisTurn);
+    const hasAudioInResponse = messageChunks.some(m => m.isAudio);
+    
+    // Incrementar contador de áudio da sessão APENAS se realmente vai enviar áudio
+    if (forceAudioForSessionStart && hasAudioInResponse && currentSession) {
       await supabase
         .from('sessions')
         .update({ audio_sent_count: sessionAudioCount + 1 })
@@ -1427,9 +1505,6 @@ As primeiras 2 respostas de cada sessão DEVEM ser em áudio para maior intimida
       console.log('🎙️ Session audio count incremented to:', sessionAudioCount + 1);
     }
 
-    // Separar em múltiplos balões
-    const messageChunks = splitIntoMessages(assistantMessage, allowAudioThisTurn);
-    
     console.log("Split into", messageChunks.length, "bubbles, plan:", userPlan);
 
     // Salvar mensagens no histórico
