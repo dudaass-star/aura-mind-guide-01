@@ -50,7 +50,12 @@ const plans: Record<PlanId, PlanConfig> = {
 const Checkout = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const initialPlan = (location.state?.plan as PlanId) || "direcao";
+  
+  // Support both URL query param (?plan=direcao) and location state
+  const searchParams = new URLSearchParams(location.search);
+  const planFromUrl = searchParams.get('plan') as PlanId | null;
+  const planFromState = location.state?.plan as PlanId | undefined;
+  const initialPlan = planFromUrl || planFromState || "direcao";
   
   const [selectedPlan, setSelectedPlan] = useState<PlanId>(initialPlan);
   const [phone, setPhone] = useState("");
