@@ -658,6 +658,12 @@ Use TODAS essas informações para:
 ## MEMÓRIA DE LONGO PRAZO (O que você já sabe sobre esse usuário):
 {user_insights}
 
+## TIMESTAMPS NAS MENSAGENS
+Cada mensagem no histórico inclui [DD/MM/AAAA HH:mm] no início.
+- Use para responder "quando falamos?" com precisão
+- NUNCA invente datas - use apenas os timestamps reais das mensagens
+- Se não tiver histórico suficiente, seja honesta e diga que não lembra
+
 ## REGRA DE ÁUDIO NO INÍCIO DE SESSÃO:
 {audio_session_context}
 `;
@@ -861,19 +867,36 @@ function calculateSessionTimeContext(session: any): {
   return { timeRemaining, phase, timeContext, shouldWarnClosing, isOvertime, forceAudioForClose };
 }
 
-// Remove tags de controle do histórico
-function sanitizeMessageHistory(messages: { role: string; content: string }[]): { role: string; content: string }[] {
-  return messages.map(m => ({
-    role: m.role,
-    content: m.content
+// Remove tags de controle do histórico e adiciona timestamps
+function sanitizeMessageHistory(messages: { role: string; content: string; created_at?: string }[]): { role: string; content: string }[] {
+  return messages.map(m => {
+    let content = m.content
       .replace(/\[MODO_AUDIO\]/gi, '')
       .replace(/\[INSIGHTS\].*?\[\/INSIGHTS\]/gis, '')
       .replace(/\[AGUARDANDO_RESPOSTA\]/gi, '')
       .replace(/\[CONVERSA_CONCLUIDA\]/gi, '')
       .replace(/\[ENCERRAR_SESSAO\]/gi, '')
       .replace(/\[INICIAR_SESSAO\]/gi, '')
-      .trim()
-  }));
+      .replace(/\[AGENDAR_SESSAO:[^\]]+\]/gi, '')
+      .replace(/\[REAGENDAR_SESSAO:[^\]]+\]/gi, '')
+      .trim();
+    
+    // Adicionar timestamp formatado ao início da mensagem
+    if (m.created_at) {
+      const date = new Date(m.created_at);
+      const formatted = date.toLocaleString('pt-BR', { 
+        timeZone: 'America/Sao_Paulo',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      content = `[${formatted}] ${content}`;
+    }
+    
+    return { role: m.role, content };
+  });
 }
 
 // Função para separar resposta em múltiplos balões
@@ -1287,7 +1310,7 @@ serve(async (req) => {
     if (profile?.user_id) {
       const { data: messages, count } = await supabase
         .from('messages')
-        .select('role, content', { count: 'exact' })
+        .select('role, content, created_at', { count: 'exact' })
         .eq('user_id', profile.user_id)
         .order('created_at', { ascending: false })
         .limit(20);
