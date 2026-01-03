@@ -881,8 +881,8 @@ function sanitizeMessageHistory(messages: { role: string; content: string; creat
       .replace(/\[REAGENDAR_SESSAO:[^\]]+\]/gi, '')
       .trim();
     
-    // Adicionar timestamp formatado ao início da mensagem
-    if (m.created_at) {
+    // Adicionar timestamp APENAS para mensagens do usuário
+    if (m.created_at && m.role === 'user') {
       const date = new Date(m.created_at);
       const formatted = date.toLocaleString('pt-BR', { 
         timeZone: 'America/Sao_Paulo',
