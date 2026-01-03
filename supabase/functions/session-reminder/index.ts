@@ -229,17 +229,20 @@ Já estou aqui te esperando. Quando estiver pronta, é só me mandar uma mensage
 
     // ========================================================================
     // INICIAR SESSÃO NO HORÁRIO - Mensagem proativa
+    // Janela ampliada: -10 min (passado) a +3 min (futuro) para compensar delays do cron
     // ========================================================================
-    const threeMinutesAgo = new Date(now.getTime() - 3 * 60 * 1000);
+    const tenMinutesAgo = new Date(now.getTime() - 10 * 60 * 1000);
     const threeMinutesAhead = new Date(now.getTime() + 3 * 60 * 1000);
     let sessionStartsSent = 0;
+
+    console.log(`🔍 Buscando sessões para iniciar entre ${tenMinutesAgo.toISOString()} e ${threeMinutesAhead.toISOString()}`);
 
     const { data: sessionsToStart, error: errorStart } = await supabase
       .from('sessions')
       .select('id, user_id, session_type, focus_topic, scheduled_at')
       .eq('status', 'scheduled')
       .eq('session_start_notified', false)
-      .gte('scheduled_at', threeMinutesAgo.toISOString())
+      .gte('scheduled_at', tenMinutesAgo.toISOString())
       .lte('scheduled_at', threeMinutesAhead.toISOString())
       .is('started_at', null);
 
