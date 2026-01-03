@@ -228,6 +228,77 @@ Já estou aqui te esperando. Quando estiver pronta, é só me mandar uma mensage
     }
 
     // ========================================================================
+    // INICIAR SESSÃO NO HORÁRIO - Mensagem proativa
+    // ========================================================================
+    const threeMinutesAgo = new Date(now.getTime() - 3 * 60 * 1000);
+    const threeMinutesAhead = new Date(now.getTime() + 3 * 60 * 1000);
+    let sessionStartsSent = 0;
+
+    const { data: sessionsToStart, error: errorStart } = await supabase
+      .from('sessions')
+      .select('id, user_id, session_type, focus_topic, scheduled_at')
+      .eq('status', 'scheduled')
+      .eq('session_start_notified', false)
+      .gte('scheduled_at', threeMinutesAgo.toISOString())
+      .lte('scheduled_at', threeMinutesAhead.toISOString())
+      .is('started_at', null);
+
+    if (errorStart) {
+      console.error('❌ Error fetching sessions to start:', errorStart);
+    }
+
+    if (sessionsToStart && sessionsToStart.length > 0) {
+      console.log(`🚀 Found ${sessionsToStart.length} sessions to start`);
+      
+      for (const session of sessionsToStart) {
+        // Pular se já processamos nesta execução
+        if (sessions15m?.some(s => s.id === session.id) || 
+            sessions1h?.some(s => s.id === session.id) || 
+            sessions24h?.some(s => s.id === session.id)) {
+          continue;
+        }
+
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('name, phone')
+          .eq('user_id', session.user_id)
+          .maybeSingle();
+
+        if (!profile?.phone) {
+          console.log(`⚠️ No phone for session to start ${session.id}`);
+          continue;
+        }
+
+        const userName = profile.name || 'você';
+
+        const message = `Oi, ${userName}! Chegou a hora da nossa sessão especial! 💜
+
+Estou aqui prontinha pra te ouvir. Quando quiser começar, é só me mandar uma mensagem.
+
+Como você está se sentindo agora? ✨`;
+
+        try {
+          const cleanPhone = cleanPhoneNumber(profile.phone);
+          const result = await sendTextMessage(cleanPhone, message);
+
+          if (result.success) {
+            await supabase
+              .from('sessions')
+              .update({ session_start_notified: true })
+              .eq('id', session.id);
+            
+            sessionStartsSent++;
+            console.log(`✅ Session start message sent for session ${session.id}`);
+          } else {
+            console.error(`❌ Failed to send session start for ${session.id}:`, result.error);
+          }
+        } catch (sendError) {
+          console.error(`❌ Error sending session start for ${session.id}:`, sendError);
+        }
+      }
+    }
+
+    // ========================================================================
     // LEMBRETE PÓS-SESSÃO (30 minutos após término)
     // ========================================================================
     const { data: completedSessions, error: errorCompleted } = await supabase
@@ -318,13 +389,14 @@ Me conta durante a semana como está seu progresso! Estou aqui por você. ✨`;
       }
     }
 
-    console.log(`📊 Session reminders completed: ${reminders24hSent} 24h, ${reminders1hSent} 1h, ${reminders15mSent} 15m, ${postSessionSent} post-session`);
+    console.log(`📊 Session reminders completed: ${reminders24hSent} 24h, ${reminders1hSent} 1h, ${reminders15mSent} 15m, ${sessionStartsSent} starts, ${postSessionSent} post-session`);
 
     return new Response(JSON.stringify({ 
       success: true,
       reminders_24h_sent: reminders24hSent,
       reminders_1h_sent: reminders1hSent,
       reminders_15m_sent: reminders15mSent,
+      session_starts_sent: sessionStartsSent,
       post_session_sent: postSessionSent,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

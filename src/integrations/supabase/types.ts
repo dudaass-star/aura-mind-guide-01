@@ -280,6 +280,7 @@ export type Database = {
           reminder_1h_sent: boolean | null
           reminder_24h_sent: boolean | null
           scheduled_at: string
+          session_start_notified: boolean | null
           session_summary: string | null
           session_type: Database["public"]["Enums"]["session_type"]
           started_at: string | null
@@ -302,6 +303,7 @@ export type Database = {
           reminder_1h_sent?: boolean | null
           reminder_24h_sent?: boolean | null
           scheduled_at: string
+          session_start_notified?: boolean | null
           session_summary?: string | null
           session_type?: Database["public"]["Enums"]["session_type"]
           started_at?: string | null
@@ -324,6 +326,7 @@ export type Database = {
           reminder_1h_sent?: boolean | null
           reminder_24h_sent?: boolean | null
           scheduled_at?: string
+          session_start_notified?: boolean | null
           session_summary?: string | null
           session_type?: Database["public"]["Enums"]["session_type"]
           started_at?: string | null
