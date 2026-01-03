@@ -778,7 +778,7 @@ function wantsToStartSession(message: string): boolean {
   return startPhrases.some(phrase => lowerMsg.includes(phrase));
 }
 
-// Detecta pedido de encerrar sessão
+// Detecta pedido de encerrar sessão (EXPANDIDO para sinais implícitos)
 function wantsToEndSession(message: string): boolean {
   const lowerMsg = message.toLowerCase();
   const endPhrases = [
@@ -789,6 +789,37 @@ function wantsToEndSession(message: string): boolean {
     'por hoje é isso', 'por hoje e isso', 'vamos parar'
   ];
   return endPhrases.some(phrase => lowerMsg.includes(phrase));
+}
+
+// Detecta sinais IMPLÍCITOS de encerramento durante sessão
+function detectsImplicitSessionEnd(message: string, sessionActive: boolean): boolean {
+  if (!sessionActive) return false;
+  
+  const lowerMsg = message.toLowerCase().trim();
+  
+  // Sinais de satisfação/conclusão que indicam que a sessão pode acabar
+  const implicitEndSignals = [
+    // Agradecimentos
+    'obrigado', 'obrigada', 'muito obrigado', 'muito obrigada',
+    'valeu', 'agradeço', 'agradecer',
+    // Confirmações de conclusão
+    'combinado', 'combinamos', 'fechado', 'perfeito',
+    'ótimo', 'otimo', 'excelente', 'maravilha',
+    // Despedidas sutis
+    'até mais', 'ate mais', 'até logo', 'ate logo',
+    'tchau', 'bye', 'beijos', 'abraço', 'abracos',
+    // Indicações de satisfação final
+    'foi ótimo', 'foi otimo', 'foi muito bom', 'adorei',
+    'gostei muito', 'me ajudou muito', 'me ajudou demais'
+  ];
+  
+  // Verificar se a mensagem é curta (menos de 50 chars) e contém sinal implícito
+  // Mensagens longas provavelmente não são sinais de encerramento
+  if (lowerMsg.length < 50) {
+    return implicitEndSignals.some(signal => lowerMsg.includes(signal));
+  }
+  
+  return false;
 }
 
 // Calcula fase e tempo restante da sessão - COM FASES GRANULARES
@@ -857,15 +888,48 @@ function calculateSessionTimeContext(session: any): {
     forceAudioForClose = true;
   }
 
-  let timeContext = `
-📍 SESSÃO EM ANDAMENTO
+let timeContext = `
+📍 SESSÃO EM ANDAMENTO - MODO SESSÃO ATIVO
 - Tempo decorrido: ${elapsedMinutes} minutos
 - Tempo restante: ${Math.max(0, timeRemaining)} minutos
 - Fase atual: ${phaseLabel}
+
+🚨 VOCÊ ESTÁ EM MODO SESSÃO. Isso NÃO é um chat normal!
+Seu papel é CONDUZIR a sessão com profundidade, não apenas responder perguntas.
 `;
 
-  // INSTRUÇÕES ESPECÍFICAS POR FASE para término GRADUAL (não abrupto)
-  if (phase === 'transition') {
+  // INSTRUÇÕES ESPECÍFICAS POR FASE para condução estruturada
+  if (phase === 'opening') {
+    timeContext += `
+🟢 FASE DE ABERTURA (primeiros 5 min):
+- OBJETIVO: Criar conexão e definir o foco da sessão
+- USE áudio para criar intimidade (obrigatório nas primeiras 2 mensagens)
+- Pergunte: "O que te trouxe pra nossa sessão de hoje?"
+- Se o usuário já trouxe um tema, APROFUNDE: "Me conta mais sobre isso..."
+- NÃO pule para soluções ainda, apenas escute ativamente
+`;
+  } else if (phase === 'exploration') {
+    timeContext += `
+🔍 FASE DE EXPLORAÇÃO PROFUNDA (5-25 min):
+- OBJETIVO: Investigar a raiz do problema com perguntas socráticas
+- USE perguntas que façam o usuário REFLETIR:
+  • "Quando foi a primeira vez que você se sentiu assim?"
+  • "O que você acha que aconteceria de pior se..."
+  • "Isso é um fato ou é uma história que você conta pra si mesma?"
+- NÃO dê respostas prontas, faça o usuário ter INSIGHTS
+- CONDUZA a conversa, não deixe ela virar chat superficial
+- Se o usuário desviar, traga de volta: "Entendi, mas voltando ao que você disse sobre..."
+`;
+  } else if (phase === 'reframe') {
+    timeContext += `
+💡 FASE DE REFRAME E INSIGHTS (25-35 min):
+- OBJETIVO: Ajudar o usuário a ver a situação de forma diferente
+- Use técnicas de logoterapia: "Por que/por quem você está enfrentando isso?"
+- Ofereça NOVAS PERSPECTIVAS baseadas no que o usuário revelou
+- Comece a consolidar os aprendizados: "Então o que estou entendendo é..."
+- Pergunte: "O que você está levando dessa nossa conversa?"
+`;
+  } else if (phase === 'transition') {
     timeContext += `
 ⏳ FASE DE TRANSIÇÃO (10 min restantes):
 - Comece a direcionar SUAVEMENTE para conclusões
@@ -889,6 +953,7 @@ function calculateSessionTimeContext(session: any): {
 - Pergunte se quer agendar a próxima sessão
 - Use tom afetuoso e presente
 - IMPORTANTE: Use [MODO_AUDIO] para encerrar de forma mais calorosa
+- Inclua [ENCERRAR_SESSAO] quando finalizar
 `;
   } else if (phase === 'overtime') {
     timeContext += `
@@ -1418,9 +1483,13 @@ serve(async (req) => {
           isOvertime: timeInfo.isOvertime
         });
 
-        // Verificar se usuário quer encerrar ou se está em overtime
-        if (wantsToEndSession(message) || timeInfo.isOvertime) {
+        // Verificar se usuário quer encerrar ou se está em overtime ou encerramento implícito
+        const implicitEnd = detectsImplicitSessionEnd(message, true);
+        if (wantsToEndSession(message) || timeInfo.isOvertime || implicitEnd) {
           shouldEndSession = true;
+          if (implicitEnd) {
+            console.log('🔍 Implicit session end detected from message:', message.substring(0, 50));
+          }
         }
       }
     } else if (profile?.user_id) {
@@ -1456,8 +1525,12 @@ serve(async (req) => {
         console.log('✅ Orphan session linked and activated');
         
         // Verificar se usuário quer encerrar ou se está em overtime
-        if (wantsToEndSession(message) || timeInfo.isOvertime) {
+        const implicitEnd = detectsImplicitSessionEnd(message, true);
+        if (wantsToEndSession(message) || timeInfo.isOvertime || implicitEnd) {
           shouldEndSession = true;
+          if (implicitEnd) {
+            console.log('🔍 Implicit session end detected (orphan session) from message:', message.substring(0, 50));
+          }
         }
       } else {
         console.log('ℹ️ No orphan session found');
@@ -1699,7 +1772,20 @@ Se o usuário mencionar algo sobre "finalizar checkout" ou "upgrade", CONFIRME q
 
     // Adicionar instrução de encerramento se necessário
     if (shouldEndSession) {
-      finalPrompt += `\n\n🔴 INSTRUÇÃO CRÍTICA: ENCERRE A SESSÃO AGORA. Faça um breve resumo dos principais pontos discutidos, agradeça pelo tempo juntos e inclua a tag [ENCERRAR_SESSAO] no final.`;
+      const implicitEnd = detectsImplicitSessionEnd(message, sessionActive);
+      if (implicitEnd) {
+        finalPrompt += `\n\n🔴 ENCERRAMENTO IMPLÍCITO DETECTADO: O usuário deu sinais de satisfação/conclusão (ex: "combinado", "obrigado").
+INSTRUÇÃO: Faça um fechamento CALOROSO da sessão:
+1. Reconheça que vocês tiveram uma boa conversa
+2. Resuma os 2-3 principais insights/aprendizados
+3. Relembre qualquer compromisso que ele tenha feito
+4. Agradeça com carinho genuíno
+5. Pergunte se quer agendar a próxima sessão
+6. Use [MODO_AUDIO] para encerrar de forma mais íntima
+7. Inclua [ENCERRAR_SESSAO] no final da sua resposta`;
+      } else {
+        finalPrompt += `\n\n🔴 INSTRUÇÃO CRÍTICA: ENCERRE A SESSÃO AGORA. Faça um breve resumo dos principais pontos discutidos, agradeça pelo tempo juntos e inclua a tag [ENCERRAR_SESSAO] no final.`;
+      }
     }
 
     const apiMessages = [
@@ -1708,7 +1794,7 @@ Se o usuário mencionar algo sobre "finalizar checkout" ou "upgrade", CONFIRME q
       { role: "user", content: message }
     ];
 
-    console.log("Calling Lovable AI with", apiMessages.length, "messages, plan:", userPlan, "sessions:", sessionsAvailable, "sessionActive:", sessionActive);
+    console.log("Calling Lovable AI with", apiMessages.length, "messages, plan:", userPlan, "sessions:", sessionsAvailable, "sessionActive:", sessionActive, "shouldEndSession:", shouldEndSession, "phase:", currentSession ? calculateSessionTimeContext(currentSession).phase : 'none');
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
