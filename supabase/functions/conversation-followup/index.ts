@@ -231,30 +231,58 @@ Deno.serve(async (req) => {
         const userPlan = profile.plan || 'essencial';
         const isSessionActive = !!profile.current_session_id;
         
+        // LOG DETALHADO: Estado do usuário para decisão de timing
+        console.log(`🔍 User ${followup.user_id} state:`, {
+          plan: userPlan,
+          current_session_id: profile.current_session_id,
+          isSessionActive,
+          followup_count: followup.followup_count,
+          last_user_message_at: followup.last_user_message_at,
+          last_followup_at: followup.last_followup_at
+        });
+        
         // Configurações diferentes por situação
         let timeThresholdMinutes: number;
         let maxFollowups: number;
+        let timingReason: string;
         
         if (isSessionActive) {
           // DURANTE SESSÃO: mais urgente
           timeThresholdMinutes = 5;  // 5 minutos
           maxFollowups = 4;           // Até 4 tentativas
+          timingReason = 'IN_SESSION';
         } else if (userPlan !== 'essencial') {
           // PLANOS COM SESSÃO fora de sessão: moderado
           timeThresholdMinutes = 30; // 30 minutos
           maxFollowups = 3;          // Até 3 tentativas
+          timingReason = 'SESSION_PLAN_OUT_OF_SESSION';
         } else {
           // PLANO ESSENCIAL: padrão
           timeThresholdMinutes = 15; // 15 minutos
           maxFollowups = 2;          // Até 2 tentativas
+          timingReason = 'ESSENCIAL_PLAN';
         }
 
         const timeThreshold = timeThresholdMinutes * 60 * 1000;
         const lastUserMessageAt = new Date(followup.last_user_message_at).getTime();
         const lastFollowupAt = followup.last_followup_at ? new Date(followup.last_followup_at).getTime() : 0;
+        
+        const timeSinceLastUserMsg = Math.round((now - lastUserMessageAt) / 60000);
+        const timeSinceLastFollowup = lastFollowupAt > 0 ? Math.round((now - lastFollowupAt) / 60000) : null;
+
+        // LOG: Decisão de timing
+        console.log(`⏱️ Timing decision for ${followup.user_id}:`, {
+          timingReason,
+          timeThresholdMinutes,
+          maxFollowups,
+          timeSinceLastUserMsg_min: timeSinceLastUserMsg,
+          timeSinceLastFollowup_min: timeSinceLastFollowup,
+          threshold_met: timeSinceLastUserMsg >= timeThresholdMinutes
+        });
 
         // Verificar se passou tempo suficiente desde última mensagem do usuário
         if (now - lastUserMessageAt < timeThreshold) {
+          console.log(`⏭️ Skipping ${followup.user_id}: not enough time since last user msg (${timeSinceLastUserMsg}/${timeThresholdMinutes} min)`);
           continue;
         }
 
@@ -266,6 +294,7 @@ Deno.serve(async (req) => {
 
         // Verificar se passou tempo suficiente desde último follow-up
         if (lastFollowupAt > 0 && now - lastFollowupAt < timeThreshold) {
+          console.log(`⏭️ Skipping ${followup.user_id}: not enough time since last followup (${timeSinceLastFollowup}/${timeThresholdMinutes} min)`);
           continue;
         }
 
