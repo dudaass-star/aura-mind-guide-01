@@ -1384,12 +1384,25 @@ serve(async (req) => {
     let shouldEndSession = false;
     let shouldStartSession = false;
 
+    // LOG DETALHADO: Estado inicial de detecção de sessão
+    console.log('🔍 Session detection start:', {
+      profile_id: profile?.id,
+      current_session_id: profile?.current_session_id,
+      user_id: profile?.user_id
+    });
+
     if (profile?.current_session_id) {
       const { data: session } = await supabase
         .from('sessions')
         .select('*')
         .eq('id', profile.current_session_id)
         .maybeSingle();
+      
+      console.log('🔍 Session query result:', {
+        session_found: !!session,
+        session_status: session?.status,
+        session_id: session?.id
+      });
       
       if (session?.status === 'in_progress') {
         sessionActive = true;
@@ -1410,7 +1423,54 @@ serve(async (req) => {
           shouldEndSession = true;
         }
       }
+    } else if (profile?.user_id) {
+      // FALLBACK: Buscar sessão órfã in_progress mesmo sem current_session_id
+      console.log('⚠️ No current_session_id, checking for orphan active session...');
+      
+      const { data: orphanSession } = await supabase
+        .from('sessions')
+        .select('*')
+        .eq('user_id', profile.user_id)
+        .eq('status', 'in_progress')
+        .maybeSingle();
+      
+      if (orphanSession) {
+        console.log('🔧 Found orphan active session, auto-linking:', {
+          session_id: orphanSession.id,
+          started_at: orphanSession.started_at
+        });
+        
+        // Corrigir o profile com o current_session_id
+        await supabase
+          .from('profiles')
+          .update({ current_session_id: orphanSession.id })
+          .eq('id', profile.id);
+        
+        sessionActive = true;
+        currentSession = orphanSession;
+        
+        // Calcular tempo e fase da sessão
+        const timeInfo = calculateSessionTimeContext(orphanSession);
+        sessionTimeContext = timeInfo.timeContext;
+        
+        console.log('✅ Orphan session linked and activated');
+        
+        // Verificar se usuário quer encerrar ou se está em overtime
+        if (wantsToEndSession(message) || timeInfo.isOvertime) {
+          shouldEndSession = true;
+        }
+      } else {
+        console.log('ℹ️ No orphan session found');
+      }
     }
+
+    // LOG FINAL: Estado de sessão resolvido
+    console.log('✅ Session detection complete:', {
+      sessionActive,
+      currentSession_id: currentSession?.id,
+      shouldEndSession,
+      audio_sent_count: currentSession?.audio_sent_count
+    });
 
     // Verificar se usuário quer iniciar sessão agendada
     // NOVO: Auto-iniciar se tem sessão pendente dentro de 5 minutos do horário
