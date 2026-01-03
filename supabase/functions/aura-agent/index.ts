@@ -759,7 +759,7 @@ function wantsSession(message: string): boolean {
   return sessionPhrases.some(phrase => lowerMsg.includes(phrase));
 }
 
-// Detecta pedido de iniciar sessão
+// Detecta pedido de iniciar sessão - EXPANDIDO
 function wantsToStartSession(message: string): boolean {
   const lowerMsg = message.toLowerCase();
   const startPhrases = [
@@ -767,7 +767,13 @@ function wantsToStartSession(message: string): boolean {
     'começar a sessão', 'comecar a sessao', 'iniciar sessão', 'iniciar sessao',
     'bora começar', 'bora comecar', 'pronta', 'pronto', 'to pronta', 'to pronto',
     'tô pronta', 'tô pronto', 'sim, vamos', 'sim vamos', 'pode ser agora',
-    'agora é bom', 'agora e bom', 'estou pronta', 'estou pronto'
+    'agora é bom', 'agora e bom', 'estou pronta', 'estou pronto',
+    // Novas frases adicionadas
+    'pode iniciar', 'vamos la', 'vamos lá', 'bora la', 'bora lá',
+    'estou aqui', 'to aqui', 'tô aqui', 'ta na hora', 'tá na hora',
+    'está na hora', 'chegou a hora', 'é agora', 'e agora', 'iniciar',
+    'começar', 'comecar', 'iniciar agora', 'sim', 'bora', 'partiu',
+    'pode ser', 'vamos nessa', 'vem', 'manda ver', 'oi', 'ola', 'olá'
   ];
   return startPhrases.some(phrase => lowerMsg.includes(phrase));
 }
@@ -1407,9 +1413,21 @@ serve(async (req) => {
     }
 
     // Verificar se usuário quer iniciar sessão agendada
-    if (!sessionActive && pendingScheduledSession && wantsToStartSession(message)) {
-      shouldStartSession = true;
-      console.log('🚀 User wants to start scheduled session');
+    // NOVO: Auto-iniciar se tem sessão pendente dentro de 5 minutos do horário
+    if (!sessionActive && pendingScheduledSession) {
+      const scheduledTime = new Date(pendingScheduledSession.scheduled_at);
+      const now = new Date();
+      const diffMinutes = Math.abs(now.getTime() - scheduledTime.getTime()) / 60000;
+      
+      // Se está dentro de 5 minutos do horário agendado E usuário mandou qualquer mensagem
+      if (diffMinutes <= 5) {
+        shouldStartSession = true;
+        console.log('🚀 Auto-starting session - user messaged within 5min of scheduled time');
+      } else if (wantsToStartSession(message)) {
+        // Ou se o usuário explicitamente pediu para iniciar
+        shouldStartSession = true;
+        console.log('🚀 User explicitly wants to start scheduled session');
+      }
     }
 
     // Executar início de sessão

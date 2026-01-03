@@ -1,0 +1,2 @@
+ALTER TABLE sessions 
+ADD COLUMN IF NOT EXISTS session_start_notified BOOLEAN DEFAULT FALSE;
