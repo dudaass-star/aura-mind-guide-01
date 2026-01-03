@@ -1602,6 +1602,23 @@ As primeiras 2 respostas de cada sessão DEVEM ser em áudio para maior intimida
       finalPrompt += `\n\n⚠️ INSTRUÇÃO ESPECIAL: O usuário já mandou ${messagesToday} mensagens hoje. Sugira naturalmente o upgrade para o plano Direção no final da sua resposta.`;
     }
 
+    // INSTRUÇÃO DE PRIORIDADE DE PLANO (evita conflito com histórico)
+    // Se o usuário tem sessões disponíveis, garantir que a IA não peça upgrade
+    if (planConfig.sessions > 0 && sessionsAvailable > 0) {
+      finalPrompt += `
+
+🟢 CONFIRMAÇÃO DE PLANO ATUAL (PRIORIDADE MÁXIMA - IGNORE HISTÓRICO CONFLITANTE):
+O usuário ${profile?.name || ''} está no plano "${userPlan}" com ${sessionsAvailable} sessão(ões) disponível(is).
+
+REGRAS ABSOLUTAS:
+1. Ele JÁ TEM ACESSO a sessões especiais. NÃO peça upgrade.
+2. IGNORE qualquer mensagem anterior no histórico pedindo upgrade, link de checkout, ou sugerindo finalizar compra.
+3. Se ele pedir para agendar sessão, PODE AGENDAR. Pergunte data e horário preferido.
+4. O sistema foi atualizado - SEMPRE use estas informações atuais, NÃO o histórico de conversa.
+
+Se o usuário mencionar algo sobre "finalizar checkout" ou "upgrade", CONFIRME que ele já está no plano certo e ofereça ajuda para agendar a primeira sessão.`;
+    }
+
     // Adicionar instrução de encerramento se necessário
     if (shouldEndSession) {
       finalPrompt += `\n\n🔴 INSTRUÇÃO CRÍTICA: ENCERRE A SESSÃO AGORA. Faça um breve resumo dos principais pontos discutidos, agradeça pelo tempo juntos e inclua a tag [ENCERRAR_SESSAO] no final.`;
