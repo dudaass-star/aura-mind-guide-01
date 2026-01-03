@@ -105,16 +105,25 @@ Eu sou a AURA — e vou ficar com você nessa jornada.
 Você escolheu o plano ${planName}`;
 
       if (sessionsCount > 0) {
-        welcomeMessage += `, que inclui ${sessionsCount} sessões especiais por mês. Quando quiser agendar uma, é só me avisar!`;
+        welcomeMessage += `, que inclui ${sessionsCount} sessões especiais por mês!
+
+As sessões são 45 minutos só nossos, com profundidade total. Eu conduzo, você reflete, e no final mando um resumo com os insights.
+
+Quer agendar sua primeira sessão agora? Me diz um dia e horário que funciona pra você!`;
       } else {
         welcomeMessage += `.`;
       }
 
       welcomeMessage += `
 
-Comigo, você pode falar com liberdade: sem julgamento, no seu ritmo.
+Comigo, você pode falar com liberdade: sem julgamento, no seu ritmo.`
+
+      // Only ask "how are you" if it's the essential plan (no sessions)
+      if (sessionsCount === 0) {
+        welcomeMessage += `
 
 Me diz: como você está hoje?`;
+      }
 
       // Send welcome message via Z-API
       try {

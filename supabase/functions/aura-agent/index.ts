@@ -1137,6 +1137,39 @@ function formatInsightsForContext(insights: any[]): string {
   return formatted || "Nenhuma informação salva ainda.";
 }
 
+// Função para criar um link curto
+async function createShortLink(url: string, phone: string): Promise<string | null> {
+  const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
+  const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  
+  try {
+    const response = await fetch(
+      `${SUPABASE_URL}/functions/v1/create-short-link`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+        },
+        body: JSON.stringify({ url, phone })
+      }
+    );
+    
+    const data = await response.json();
+    
+    if (response.ok && data.shortUrl) {
+      console.log('✅ Short link created:', data.shortUrl);
+      return data.shortUrl;
+    } else {
+      console.error('❌ Failed to create short link:', data.error);
+      return null;
+    }
+  } catch (error) {
+    console.error('❌ Error creating short link:', error);
+    return null;
+  }
+}
+
 // Função para processar tags de upgrade e gerar links de checkout
 async function processUpgradeTags(
   content: string, 
@@ -1186,7 +1219,16 @@ async function processUpgradeTags(
       
       if (checkoutResponse.ok && checkoutData.url) {
         console.log('✅ Checkout URL generated:', checkoutData.url.substring(0, 50));
-        processedContent = processedContent.replace(match, checkoutData.url);
+        
+        // Criar link curto para o checkout
+        const shortUrl = await createShortLink(checkoutData.url, phone);
+        
+        if (shortUrl) {
+          processedContent = processedContent.replace(match, shortUrl);
+        } else {
+          // Fallback para URL completa se o encurtamento falhar
+          processedContent = processedContent.replace(match, checkoutData.url);
+        }
       } else {
         console.error('❌ Failed to generate checkout URL:', checkoutData.error);
         // Se falhar, remove a tag e adiciona mensagem genérica

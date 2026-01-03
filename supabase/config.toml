@@ -38,3 +38,9 @@ verify_jwt = false
 
 [functions.session-reminder]
 verify_jwt = false
+
+[functions.create-short-link]
+verify_jwt = false
+
+[functions.redirect-link]
+verify_jwt = false
