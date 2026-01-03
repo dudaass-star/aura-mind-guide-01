@@ -285,13 +285,34 @@ Como você está se sentindo agora? ✨`;
           const result = await sendTextMessage(cleanPhone, message);
 
           if (result.success) {
+            // Atualizar sessão para in_progress e marcar como notificado
             await supabase
               .from('sessions')
-              .update({ session_start_notified: true })
+              .update({ 
+                session_start_notified: true,
+                status: 'in_progress',
+                started_at: new Date().toISOString()
+              })
               .eq('id', session.id);
             
+            // Buscar profile atual para incrementar contador
+            const { data: currentProfile } = await supabase
+              .from('profiles')
+              .select('sessions_used_this_month')
+              .eq('user_id', session.user_id)
+              .single();
+            
+            // Atualizar profile para linkar com a sessão ativa (CRÍTICO para áudios funcionarem)
+            await supabase
+              .from('profiles')
+              .update({ 
+                current_session_id: session.id,
+                sessions_used_this_month: (currentProfile?.sessions_used_this_month || 0) + 1 
+              })
+              .eq('user_id', session.user_id);
+            
             sessionStartsSent++;
-            console.log(`✅ Session start message sent for session ${session.id}`);
+            console.log(`✅ Session started and profile updated for session ${session.id}`);
           } else {
             console.error(`❌ Failed to send session start for ${session.id}:`, result.error);
           }
