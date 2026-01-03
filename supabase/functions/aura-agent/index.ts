@@ -447,12 +447,44 @@ Ofereça perspectivas alternativas. Ajude a construir narrativa positiva.
 ## CONTROLE DE TEMPO DA SESSÃO:
 {session_time_context}
 
-## SUGESTÃO DE UPGRADE (APENAS PLANO ESSENCIAL):
+## FLUXO DE UPGRADE PARA SESSOES (USUARIOS DO PLANO ESSENCIAL)
 
-Se o usuário está no plano Essencial E já mandou muitas mensagens hoje (acima do target):
-- Sugira upgrade de forma NATURAL e NÃO INVASIVA
-- Não bloqueie, não repita no mesmo dia
-- Exemplo: "Percebi que você tem buscado bastante apoio hoje - e isso é ótimo, mostra que você está se cuidando! Sabia que com o plano Direção a gente pode agendar sessões especiais? São 45 minutos só nossos, com mais profundidade e um resumo no final. Se quiser saber mais, é só me perguntar. 💜"
+Quando um usuario do plano Essencial pedir para agendar uma sessao:
+
+1. **Seja transparente** (o plano Essencial NAO inclui sessoes):
+   "Aaah [nome], eu adoraria fazer uma sessao especial com voce! 💜 Mas preciso te contar: o plano Essencial e focado nas nossas conversas do dia a dia, sabe?"
+
+2. **Apresente o valor das sessoes:**
+   "As sessoes especiais sao 45 minutos so nossos, com profundidade total. Eu conduzo, voce reflete, e no final mando um resumo com os insights que surgiram."
+
+3. **Pergunte qual prefere e AGUARDE a resposta:**
+   "Se voce quiser ter acesso, tem duas opcoes:
+   - **Direcao**: R$49,90/mes - 4 sessoes especiais
+   - **Transformacao**: R$79,90/mes - 8 sessoes especiais
+   
+   Qual te interessa mais?"
+
+4. **Quando o usuario escolher, USE A TAG DE UPGRADE:**
+   - Se escolher Direcao: "Perfeito! Aqui esta o link pra voce fazer o upgrade: [UPGRADE:direcao]"
+   - Se escolher Transformacao: "Otimo! Aqui esta o link: [UPGRADE:transformacao]"
+
+5. **Finalize sem pressao:**
+   "E so clicar e pronto! Qualquer duvida, to aqui. 💜"
+
+**REGRAS IMPORTANTES:**
+- Use EXATAMENTE a tag [UPGRADE:direcao] ou [UPGRADE:transformacao]
+- O sistema vai substituir automaticamente pelo link real do Stripe
+- NUNCA invente links - use APENAS as tags acima
+- Se o usuario nao quiser fazer upgrade, tudo bem! Continue a conversa normalmente
+- NAO envie a tag de upgrade sem o usuario ter escolhido o plano
+
+## SUGESTAO PROATIVA DE UPGRADE (APENAS PLANO ESSENCIAL):
+
+Se o usuario esta no plano Essencial E ja mandou muitas mensagens hoje (acima do target):
+- Sugira upgrade de forma NATURAL e NAO INVASIVA
+- Nao bloqueie, nao repita no mesmo dia
+- Mencione os planos e pergunte se quer saber mais
+- SO use a tag [UPGRADE:plano] quando o usuario CONFIRMAR que quer fazer upgrade
 
 # MEMÓRIA E CONTINUIDADE
 
@@ -1105,6 +1137,76 @@ function formatInsightsForContext(insights: any[]): string {
   return formatted || "Nenhuma informação salva ainda.";
 }
 
+// Função para processar tags de upgrade e gerar links de checkout
+async function processUpgradeTags(
+  content: string, 
+  phone: string, 
+  name: string
+): Promise<string> {
+  const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
+  const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  
+  const upgradeRegex = /\[UPGRADE:(essencial|direcao|transformacao)\]/gi;
+  const matches = content.match(upgradeRegex);
+  
+  if (!matches) return content;
+  
+  console.log('🔗 Processing upgrade tags:', matches);
+  
+  let processedContent = content;
+  
+  for (const match of matches) {
+    const planMatch = match.match(/\[UPGRADE:(.*?)\]/i);
+    const plan = planMatch?.[1]?.toLowerCase();
+    if (!plan) continue;
+    
+    // Não faz sentido upgrade para essencial
+    if (plan === 'essencial') {
+      processedContent = processedContent.replace(match, '');
+      continue;
+    }
+    
+    try {
+      console.log('🔗 Generating checkout link for plan:', plan, 'phone:', phone);
+      
+      // Chamar create-checkout para gerar o link
+      const checkoutResponse = await fetch(
+        `${SUPABASE_URL}/functions/v1/create-checkout`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+          },
+          body: JSON.stringify({ plan, name, phone })
+        }
+      );
+      
+      const checkoutData = await checkoutResponse.json();
+      
+      if (checkoutResponse.ok && checkoutData.url) {
+        console.log('✅ Checkout URL generated:', checkoutData.url.substring(0, 50));
+        processedContent = processedContent.replace(match, checkoutData.url);
+      } else {
+        console.error('❌ Failed to generate checkout URL:', checkoutData.error);
+        // Se falhar, remove a tag e adiciona mensagem genérica
+        processedContent = processedContent.replace(
+          match, 
+          '(me avisa que você quer fazer o upgrade que eu te ajudo!)'
+        );
+      }
+    } catch (error) {
+      console.error('[AURA] Erro ao gerar link de upgrade:', error);
+      processedContent = processedContent.replace(
+        match, 
+        '(me avisa que você quer fazer o upgrade que eu te ajudo!)'
+      );
+    }
+  }
+  
+  return processedContent;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -1513,13 +1615,23 @@ As primeiras 2 respostas de cada sessão DEVEM ser em áudio para maior intimida
     }
 
     const data = await response.json();
-    const assistantMessage = data.choices?.[0]?.message?.content;
+    let assistantMessage = data.choices?.[0]?.message?.content;
 
     if (!assistantMessage) {
       throw new Error("No response from AI");
     }
 
     console.log("AURA raw response:", assistantMessage.substring(0, 200));
+
+    // ========================================================================
+    // PROCESSAR TAGS DE UPGRADE (gerar links de checkout)
+    // ========================================================================
+    const userPhone = profile?.phone || phone || '';
+    const userName = profile?.name || '';
+    
+    if (userPhone && assistantMessage.includes('[UPGRADE:')) {
+      assistantMessage = await processUpgradeTags(assistantMessage, userPhone, userName);
+    }
 
     // ========================================================================
     // PROCESSAR TAGS DE AGENDAMENTO
