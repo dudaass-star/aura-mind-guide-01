@@ -143,6 +143,74 @@ async function handleSessionConfirmation(
   return { handled: false };
 }
 
+// Function to handle session rating replies
+async function handleSessionRating(
+  supabase: any,
+  userId: string,
+  message: string
+): Promise<{ handled: boolean; response?: string }> {
+  const lowerMessage = message.toLowerCase().trim();
+  
+  // Verificar se é um número de 1 a 5
+  const ratingMatch = lowerMessage.match(/^([1-5])$/);
+  if (!ratingMatch) return { handled: false };
+  
+  const rating = parseInt(ratingMatch[1]);
+
+  // Buscar sessão que pediu rating recentemente (últimas 24h)
+  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  
+  const { data: ratedSession } = await supabase
+    .from('sessions')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('status', 'completed')
+    .eq('rating_requested', true)
+    .gte('ended_at', oneDayAgo)
+    .order('ended_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!ratedSession) return { handled: false };
+
+  // Verificar se já não existe rating para essa sessão
+  const { data: existingRating } = await supabase
+    .from('session_ratings')
+    .select('id')
+    .eq('session_id', ratedSession.id)
+    .maybeSingle();
+
+  if (existingRating) return { handled: false };
+
+  // Salvar rating
+  const { error: insertError } = await supabase
+    .from('session_ratings')
+    .insert({
+      session_id: ratedSession.id,
+      user_id: userId,
+      rating: rating
+    });
+
+  if (insertError) {
+    console.error('❌ Error saving session rating:', insertError);
+    return { handled: false };
+  }
+
+  // Gerar resposta baseada no rating
+  let response: string;
+  if (rating >= 4) {
+    response = `Que bom que você gostou! 💜 Fico muito feliz em saber. Obrigada pelo feedback!`;
+  } else if (rating === 3) {
+    response = `Obrigada pelo feedback! 💜 Vou me esforçar pra melhorar cada vez mais.`;
+  } else {
+    response = `Obrigada por me contar. 💜 Me desculpa se não foi tão bom quanto você esperava. Vou trabalhar pra melhorar!`;
+  }
+
+  console.log(`✅ Session rating saved: ${rating} stars for session ${ratedSession.id}`);
+
+  return { handled: true, response };
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -286,6 +354,32 @@ Deno.serve(async (req) => {
       );
       
       return new Response(JSON.stringify({ status: 'audio_transcription_failed' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // ========================================================================
+    // CHECK FOR SESSION RATING (Quick reply handling)
+    // ========================================================================
+    const ratingResult = await handleSessionRating(supabase, profile.user_id, messageText);
+    if (ratingResult.handled && ratingResult.response) {
+      console.log(`✅ Session rating handled for user ${profile.user_id}`);
+      await sendTextMessage(payload.cleanPhone, ratingResult.response);
+      
+      // Salvar mensagens no histórico
+      await supabase.from('messages').insert({
+        user_id: profile.user_id,
+        role: 'user',
+        content: messageText
+      });
+      
+      await supabase.from('messages').insert({
+        user_id: profile.user_id,
+        role: 'assistant',
+        content: ratingResult.response
+      });
+      
+      return new Response(JSON.stringify({ status: 'rating_handled' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
