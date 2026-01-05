@@ -629,6 +629,33 @@ Exemplo: "Fico feliz que tenha ajudado! Qualquer coisa, tô aqui. 💜 [CONVERSA
 4. NÃO force perguntas só para manter a conversa - se o assunto acabou, deixe acabar
 5. É melhor encerrar naturalmente do que ficar fazendo perguntas forçadas
 
+# DETECÇÃO DE TEMA RESOLVIDO
+
+Se durante a conversa o usuário disser algo como:
+- "Isso não me incomoda mais"
+- "Agora tá mais tranquilo"
+- "Já consegui resolver"
+- "Não preciso mais falar disso"
+- "Isso já passou"
+- "Superei isso"
+
+AÇÃO:
+1. Celebre: "Que maravilha! Isso é uma conquista real! 💜"
+2. Valide: "Você trabalhou nisso e evoluiu"
+3. Use a tag: [TEMA_RESOLVIDO:nome_do_tema]
+4. Transição: "Agora que isso tá mais leve... tem alguma outra coisa que você quer trazer?"
+
+# ENCERRAMENTO COM GANCHO (IMPORTANTE!)
+
+Ao FINALIZAR uma sessão, SEMPRE crie antecipação para a próxima:
+
+1. **Plante uma semente**: "Na próxima sessão, quero aprofundar naquilo que você disse sobre X"
+2. **Crie expectativa**: "Tô curiosa pra saber como vai ser essa semana pra você"
+3. **Proponha micro-experimento**: "Até a próxima, tenta observar quando isso acontece"
+4. **Personalize**: Use algo que ele disse para mostrar que você lembra
+
+Isso aumenta a taxa de retorno e engajamento do usuário.
+
 # CONTEXTO TEMPORAL (MUITO IMPORTANTE!)
 
 Data de hoje: {current_date}
@@ -982,6 +1009,13 @@ function sanitizeMessageHistory(messages: { role: string; content: string; creat
       .replace(/\[INICIAR_SESSAO\]/gi, '')
       .replace(/\[AGENDAR_SESSAO:[^\]]+\]/gi, '')
       .replace(/\[REAGENDAR_SESSAO:[^\]]+\]/gi, '')
+      .replace(/\[TEMA_NOVO:[^\]]+\]/gi, '')
+      .replace(/\[TEMA_RESOLVIDO:[^\]]+\]/gi, '')
+      .replace(/\[TEMA_PROGREDINDO:[^\]]+\]/gi, '')
+      .replace(/\[TEMA_ESTAGNADO:[^\]]+\]/gi, '')
+      .replace(/\[COMPROMISSO_CUMPRIDO:[^\]]+\]/gi, '')
+      .replace(/\[COMPROMISSO_ABANDONADO:[^\]]+\]/gi, '')
+      .replace(/\[COMPROMISSO_RENEGOCIADO:[^\]]+\]/gi, '')
       .trim();
     
     // Adicionar timestamp APENAS para mensagens do usuário
@@ -1019,6 +1053,13 @@ function splitIntoMessages(response: string, allowAudioThisTurn: boolean): Array
   cleanResponse = cleanResponse.replace(/\[INICIAR_SESSAO\]/gi, '').trim();
   cleanResponse = cleanResponse.replace(/\[AGENDAR_SESSAO:[^\]]+\]/gi, '').trim();
   cleanResponse = cleanResponse.replace(/\[REAGENDAR_SESSAO:[^\]]+\]/gi, '').trim();
+  cleanResponse = cleanResponse.replace(/\[TEMA_NOVO:[^\]]+\]/gi, '').trim();
+  cleanResponse = cleanResponse.replace(/\[TEMA_RESOLVIDO:[^\]]+\]/gi, '').trim();
+  cleanResponse = cleanResponse.replace(/\[TEMA_PROGREDINDO:[^\]]+\]/gi, '').trim();
+  cleanResponse = cleanResponse.replace(/\[TEMA_ESTAGNADO:[^\]]+\]/gi, '').trim();
+  cleanResponse = cleanResponse.replace(/\[COMPROMISSO_CUMPRIDO:[^\]]+\]/gi, '').trim();
+  cleanResponse = cleanResponse.replace(/\[COMPROMISSO_ABANDONADO:[^\]]+\]/gi, '').trim();
+  cleanResponse = cleanResponse.replace(/\[COMPROMISSO_RENEGOCIADO:[^\]]+\]/gi, '').trim();
 
   if (isAudioMode) {
     const normalized = cleanResponse
@@ -1250,6 +1291,136 @@ function formatPreviousSessionsContext(sessions: any[]): string {
 `;
 
   return context;
+}
+
+// Função para formatar tracking de temas para o prompt
+function formatThemeTrackingContext(themes: any[]): string {
+  if (!themes || themes.length === 0) return '';
+
+  let context = '\n\n## 🎯 TRACKING DE TEMAS DO USUÁRIO:\n';
+  
+  const statusEmoji: Record<string, string> = {
+    'active': '🔴 ATIVO',
+    'progressing': '🟡 PROGREDINDO',
+    'resolved': '🟢 RESOLVIDO',
+    'recurring': '🔁 RECORRENTE'
+  };
+
+  for (const theme of themes) {
+    const daysSince = Math.floor((Date.now() - new Date(theme.last_mentioned_at).getTime()) / (1000 * 60 * 60 * 24));
+    const status = statusEmoji[theme.status] || theme.status;
+    
+    context += `- ${status}: ${theme.theme_name} (${theme.session_count} sessão(ões), última há ${daysSince} dia(s))\n`;
+  }
+
+  context += `
+📋 REGRAS DE EVOLUÇÃO DE TEMAS:
+
+1. Se tema está ATIVO há mais de 3 sessões sem progresso:
+   - Confronte gentilmente: "Já falamos disso algumas vezes... O que está travando?"
+   - Use tag: [TEMA_ESTAGNADO:nome_do_tema]
+
+2. Se usuário relata MELHORA em tema ativo:
+   - Celebre: "Que demais! Você evoluiu muito nisso!"
+   - Pergunte: "Sente que podemos fechar esse capítulo ou quer continuar?"
+   - Se for pra fechar, use tag: [TEMA_PROGREDINDO:nome_do_tema]
+
+3. Se tema foi RESOLVIDO:
+   - Mencione brevemente como vitória
+   - Proponha: "Agora que isso tá mais tranquilo, o que mais quer trabalhar?"
+   - Não reabra temas resolvidos a menos que o usuário traga
+
+4. Se é tema NOVO:
+   - Investigue profundamente antes de dar direção
+   - Conecte com temas anteriores se houver relação
+   - Use tag: [TEMA_NOVO:nome_do_tema]
+
+5. Se tema está RECORRENTE (voltou após resolvido):
+   - "Percebi que esse tema voltou... vamos olhar de um ângulo diferente?"
+`;
+
+  return context;
+}
+
+// Função para formatar compromissos pendentes para cobrança
+function formatPendingCommitmentsForFollowup(commitments: any[]): string {
+  if (!commitments || commitments.length === 0) return '';
+
+  const now = new Date();
+  let context = '\n\n## 📌 COMPROMISSOS PENDENTES (COBRAR!):\n';
+  
+  for (const c of commitments) {
+    const createdAt = new Date(c.created_at);
+    const daysSince = Math.floor((now.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24));
+    const followUpCount = c.follow_up_count || 0;
+    
+    let urgency = '';
+    if (daysSince > 7 && followUpCount === 0) {
+      urgency = '⚠️ COBRAR!';
+    } else if (daysSince > 3) {
+      urgency = '👀 Verificar';
+    }
+    
+    context += `- "${c.title}" (há ${daysSince} dias) ${urgency}\n`;
+    if (c.description) {
+      context += `  Contexto: ${c.description}\n`;
+    }
+  }
+
+  context += `
+📋 REGRAS DE COBRANÇA:
+
+1. Na ABERTURA da sessão, pergunte sobre 1-2 compromissos importantes:
+   - "E aí, como foi com aquilo que você ia tentar fazer?"
+   - "Lembra que você combinou de X? Rolou?"
+
+2. Se CUMPRIDO: CELEBRE efusivamente!
+   - "Arrasou! Que orgulho de você! 💜"
+   - Use tag: [COMPROMISSO_CUMPRIDO:titulo]
+
+3. Se NÃO CUMPRIDO: Explore o porquê SEM julgamento
+   - "Tudo bem! Me conta o que aconteceu..."
+   - "O que te impediu?"
+
+4. Se ABANDONADO: Renegocie ou feche
+   - "Tá sentindo que isso não faz mais sentido?"
+   - Se for abandonar, use tag: [COMPROMISSO_ABANDONADO:titulo]
+
+5. Se quer RENEGOCIAR:
+   - "Vamos ajustar pra algo mais realista?"
+   - Use tag: [COMPROMISSO_RENEGOCIADO:titulo_antigo:titulo_novo]
+`;
+
+  return context;
+}
+
+// Função para verificar se é hora de retrospectiva
+function shouldOfferRetrospective(completedSessionsCount: number): { shouldOffer: boolean; context: string } {
+  // A cada 4 sessões completadas
+  if (completedSessionsCount > 0 && completedSessionsCount % 4 === 0) {
+    return {
+      shouldOffer: true,
+      context: `
+🎯 HORA DA RETROSPECTIVA!
+O usuário completou ${completedSessionsCount} sessões. 
+Ofereça uma mini-retrospectiva no início desta sessão:
+
+"[Nome], olha só... já fizemos ${completedSessionsCount} sessões juntas! 
+Deixa eu te lembrar por onde passamos..."
+
+ESTRUTURA DA RETROSPECTIVA:
+1. Liste os principais temas trabalhados
+2. Destaque as maiores conquistas e evoluções
+3. Mencione insights importantes que surgiram
+4. Pergunte: "O que você sente olhando pra tudo isso?"
+5. Pergunte: "O que você quer trabalhar daqui pra frente?"
+
+Essa é uma oportunidade de celebrar o progresso e reorientar o trabalho.
+`
+    };
+  }
+  
+  return { shouldOffer: false, context: '' };
 }
 
 // Função para extrair key_insights da conversa
@@ -1886,18 +2057,36 @@ REGRAS GERAIS DO ONBOARDING:
       }
     }
 
-    // Buscar compromissos pendentes
+    // Buscar temas ativos do usuário para tracking
+    let userThemes: any[] = [];
+    if (profile?.user_id) {
+      const { data: themes } = await supabase
+        .from('session_themes')
+        .select('*')
+        .eq('user_id', profile.user_id)
+        .order('last_mentioned_at', { ascending: false })
+        .limit(10);
+      
+      if (themes) {
+        userThemes = themes;
+        console.log('🎯 Found', themes.length, 'tracked themes for user');
+      }
+    }
+
+    // Buscar compromissos pendentes com mais detalhes para cobrança ativa
     let pendingCommitments = "Nenhum";
+    let pendingCommitmentsDetailed: any[] = [];
     if (profile?.user_id) {
       const { data: commitments } = await supabase
         .from('commitments')
-        .select('title, due_date')
+        .select('*')
         .eq('user_id', profile.user_id)
         .eq('completed', false)
-        .order('due_date', { ascending: true })
+        .order('created_at', { ascending: false })
         .limit(5);
 
       if (commitments && commitments.length > 0) {
+        pendingCommitmentsDetailed = commitments;
         pendingCommitments = commitments.map(c => {
           if (c.due_date) {
             const date = new Date(c.due_date).toLocaleDateString('pt-BR');
@@ -1905,6 +2094,25 @@ REGRAS GERAIS DO ONBOARDING:
           }
           return c.title;
         }).join(", ");
+        console.log('📌 Found', commitments.length, 'pending commitments for active follow-up');
+      }
+    }
+
+    // Verificar se é hora de retrospectiva
+    let retrospectiveContext = '';
+    let completedSessionsCount = 0;
+    if (profile?.user_id && sessionActive) {
+      const { count } = await supabase
+        .from('sessions')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', profile.user_id)
+        .eq('status', 'completed');
+      
+      completedSessionsCount = count || 0;
+      const retroCheck = shouldOfferRetrospective(completedSessionsCount);
+      if (retroCheck.shouldOffer) {
+        retrospectiveContext = retroCheck.context;
+        console.log('🎯 Retrospective triggered at', completedSessionsCount, 'sessions');
       }
     }
 
@@ -2055,6 +2263,21 @@ As primeiras 2 respostas de cada sessão DEVEM ser em áudio para maior intimida
    - Se o usuário demonstra progresso, celebre: "Que legal! O que mais você quer trabalhar agora?"
    - Se está estagnado, seja honesta: "Percebi que voltamos a esse assunto. O que está te impedindo de avançar?"
 `;
+      }
+      
+      // Adicionar tracking de temas
+      if (userThemes.length > 0) {
+        continuityContext += formatThemeTrackingContext(userThemes);
+      }
+      
+      // Adicionar cobrança de compromissos
+      if (pendingCommitmentsDetailed.length > 0) {
+        continuityContext += formatPendingCommitmentsForFollowup(pendingCommitmentsDetailed);
+      }
+      
+      // Adicionar contexto de retrospectiva se aplicável
+      if (retrospectiveContext) {
+        continuityContext += `\n${retrospectiveContext}`;
       }
     }
 
@@ -2236,6 +2459,150 @@ INSTRUÇÃO: Faça um fechamento CALOROSO da sessão:
         }
       }
     }
+
+    // ========================================================================
+    // PROCESSAR TAGS DE TRACKING DE TEMAS
+    // ========================================================================
+    
+    const themeNewMatches = assistantMessage.matchAll(/\[TEMA_NOVO:([^\]]+)\]/gi);
+    const themeResolvedMatches = assistantMessage.matchAll(/\[TEMA_RESOLVIDO:([^\]]+)\]/gi);
+    const themeProgressingMatches = assistantMessage.matchAll(/\[TEMA_PROGREDINDO:([^\]]+)\]/gi);
+    const themeStagnatedMatches = assistantMessage.matchAll(/\[TEMA_ESTAGNADO:([^\]]+)\]/gi);
+    
+    if (profile?.user_id) {
+      // Processar temas novos
+      for (const match of themeNewMatches) {
+        const themeName = match[1].trim();
+        console.log('🎯 New theme detected:', themeName);
+        
+        await supabase
+          .from('session_themes')
+          .upsert({
+            user_id: profile.user_id,
+            theme_name: themeName,
+            status: 'active',
+            last_mentioned_at: new Date().toISOString(),
+            session_count: 1
+          }, {
+            onConflict: 'user_id,theme_name'
+          });
+      }
+      
+      // Processar temas resolvidos
+      for (const match of themeResolvedMatches) {
+        const themeName = match[1].trim();
+        console.log('✅ Theme resolved:', themeName);
+        
+        await supabase
+          .from('session_themes')
+          .update({ 
+            status: 'resolved',
+            last_mentioned_at: new Date().toISOString()
+          })
+          .eq('user_id', profile.user_id)
+          .ilike('theme_name', `%${themeName}%`);
+      }
+      
+      // Processar temas em progresso
+      for (const match of themeProgressingMatches) {
+        const themeName = match[1].trim();
+        console.log('🟡 Theme progressing:', themeName);
+        
+        await supabase
+          .from('session_themes')
+          .update({ 
+            status: 'progressing',
+            last_mentioned_at: new Date().toISOString()
+          })
+          .eq('user_id', profile.user_id)
+          .ilike('theme_name', `%${themeName}%`);
+      }
+      
+      // Processar temas estagnados (para análise futura)
+      for (const match of themeStagnatedMatches) {
+        const themeName = match[1].trim();
+        console.log('🔴 Theme stagnated:', themeName);
+      }
+    }
+    
+    // Limpar tags de tema da resposta
+    assistantMessage = assistantMessage.replace(/\[TEMA_NOVO:[^\]]+\]/gi, '');
+    assistantMessage = assistantMessage.replace(/\[TEMA_RESOLVIDO:[^\]]+\]/gi, '');
+    assistantMessage = assistantMessage.replace(/\[TEMA_PROGREDINDO:[^\]]+\]/gi, '');
+    assistantMessage = assistantMessage.replace(/\[TEMA_ESTAGNADO:[^\]]+\]/gi, '');
+
+    // ========================================================================
+    // PROCESSAR TAGS DE COMPROMISSOS
+    // ========================================================================
+    
+    const commitmentCompletedMatches = assistantMessage.matchAll(/\[COMPROMISSO_CUMPRIDO:([^\]]+)\]/gi);
+    const commitmentAbandonedMatches = assistantMessage.matchAll(/\[COMPROMISSO_ABANDONADO:([^\]]+)\]/gi);
+    const commitmentRenegotiatedMatches = assistantMessage.matchAll(/\[COMPROMISSO_RENEGOCIADO:([^\]:]+):([^\]]+)\]/gi);
+    
+    if (profile?.user_id) {
+      // Processar compromissos cumpridos
+      for (const match of commitmentCompletedMatches) {
+        const title = match[1].trim();
+        console.log('✅ Commitment completed:', title);
+        
+        await supabase
+          .from('commitments')
+          .update({ 
+            completed: true,
+            commitment_status: 'completed'
+          })
+          .eq('user_id', profile.user_id)
+          .ilike('title', `%${title}%`);
+      }
+      
+      // Processar compromissos abandonados
+      for (const match of commitmentAbandonedMatches) {
+        const title = match[1].trim();
+        console.log('❌ Commitment abandoned:', title);
+        
+        await supabase
+          .from('commitments')
+          .update({ 
+            completed: true,  // Marca como "resolvido" para não aparecer mais
+            commitment_status: 'abandoned'
+          })
+          .eq('user_id', profile.user_id)
+          .ilike('title', `%${title}%`);
+      }
+      
+      // Processar compromissos renegociados
+      for (const match of commitmentRenegotiatedMatches) {
+        const oldTitle = match[1].trim();
+        const newTitle = match[2].trim();
+        console.log('🔄 Commitment renegotiated:', oldTitle, '->', newTitle);
+        
+        // Marcar antigo como renegociado
+        await supabase
+          .from('commitments')
+          .update({ 
+            completed: true,
+            commitment_status: 'renegotiated'
+          })
+          .eq('user_id', profile.user_id)
+          .ilike('title', `%${oldTitle}%`);
+        
+        // Criar novo compromisso
+        await supabase
+          .from('commitments')
+          .insert({
+            user_id: profile.user_id,
+            title: newTitle,
+            completed: false,
+            commitment_status: 'pending',
+            session_id: currentSession?.id
+          });
+      }
+    }
+    
+    // Limpar tags de compromisso da resposta
+    assistantMessage = assistantMessage.replace(/\[COMPROMISSO_CUMPRIDO:[^\]]+\]/gi, '');
+    assistantMessage = assistantMessage.replace(/\[COMPROMISSO_ABANDONADO:[^\]]+\]/gi, '');
+    assistantMessage = assistantMessage.replace(/\[COMPROMISSO_RENEGOCIADO:[^\]]+\]/gi, '');
 
     // Verificar se a IA quer encerrar a sessão
     const aiWantsToEndSession = assistantMessage.includes('[ENCERRAR_SESSAO]');
