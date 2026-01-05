@@ -3,7 +3,7 @@ import { Helmet } from "react-helmet-async";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertTriangle, CheckCircle, Loader2, ArrowLeft } from "lucide-react";
+import { AlertTriangle, CheckCircle, Loader2, ArrowLeft, Pause, XCircle } from "lucide-react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -11,18 +11,28 @@ import { toast } from "sonner";
 interface SubscriptionInfo {
   id: string;
   plan: string;
-  endDate: string;
-  endDateFormatted: string;
+  endDate?: string;
+  endDateFormatted?: string;
   amount?: string;
+  resumesAt?: string;
+  resumesAtFormatted?: string;
 }
 
-type Status = "idle" | "checking" | "found" | "canceling" | "canceled" | "already_canceling" | "error";
+interface CancellationReason {
+  id: string;
+  label: string;
+}
+
+type Status = "idle" | "checking" | "found" | "selecting_reason" | "canceling" | "pausing" | "canceled" | "paused" | "already_canceling" | "already_paused" | "error";
 
 const CancelSubscription = () => {
   const [phone, setPhone] = useState("");
   const [status, setStatus] = useState<Status>("idle");
   const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
   const [message, setMessage] = useState("");
+  const [reasons, setReasons] = useState<CancellationReason[]>([]);
+  const [selectedReason, setSelectedReason] = useState<string>("");
+  const [reasonDetail, setReasonDetail] = useState<string>("");
 
   const formatPhone = (value: string) => {
     const digits = value.replace(/\D/g, "");
@@ -55,10 +65,15 @@ const CancelSubscription = () => {
 
       if (data.success && data.status === "active") {
         setSubscription(data.subscription);
+        setReasons(data.reasons || []);
         setStatus("found");
       } else if (data.success && data.status === "canceling") {
         setSubscription(data.subscription);
         setStatus("already_canceling");
+        setMessage(data.message);
+      } else if (data.success && data.status === "paused") {
+        setSubscription(data.subscription);
+        setStatus("already_paused");
         setMessage(data.message);
       } else {
         setStatus("error");
@@ -71,13 +86,53 @@ const CancelSubscription = () => {
     }
   };
 
+  const goToReasonSelection = () => {
+    setStatus("selecting_reason");
+  };
+
+  const pauseSubscription = async () => {
+    const digits = phone.replace(/\D/g, "");
+    setStatus("pausing");
+
+    try {
+      const { data, error } = await supabase.functions.invoke("cancel-subscription", {
+        body: { 
+          phone: digits, 
+          action: "pause",
+          reason: selectedReason,
+          reason_detail: reasonDetail || null,
+        },
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        setStatus("paused");
+        setMessage(data.message);
+        setSubscription(data.subscription);
+      } else {
+        setStatus("error");
+        setMessage(data.message || "Erro ao pausar assinatura");
+      }
+    } catch (error) {
+      console.error("Error pausing subscription:", error);
+      setStatus("error");
+      setMessage("Erro ao pausar assinatura. Tente novamente.");
+    }
+  };
+
   const cancelSubscription = async () => {
     const digits = phone.replace(/\D/g, "");
     setStatus("canceling");
 
     try {
       const { data, error } = await supabase.functions.invoke("cancel-subscription", {
-        body: { phone: digits, action: "cancel" },
+        body: { 
+          phone: digits, 
+          action: "cancel",
+          reason: selectedReason,
+          reason_detail: reasonDetail || null,
+        },
       });
 
       if (error) throw error;
@@ -102,6 +157,8 @@ const CancelSubscription = () => {
     setSubscription(null);
     setMessage("");
     setPhone("");
+    setSelectedReason("");
+    setReasonDetail("");
   };
 
   return (
@@ -131,9 +188,12 @@ const CancelSubscription = () => {
                 {status === "idle" && "Informe seu telefone para verificar sua assinatura"}
                 {status === "checking" && "Verificando sua assinatura..."}
                 {status === "found" && "Assinatura encontrada"}
-                {status === "canceling" && "Processando cancelamento..."}
+                {status === "selecting_reason" && "Por que você quer cancelar?"}
+                {(status === "canceling" || status === "pausing") && "Processando..."}
                 {status === "canceled" && "Assinatura cancelada"}
+                {status === "paused" && "Assinatura pausada"}
                 {status === "already_canceling" && "Cancelamento já solicitado"}
+                {status === "already_paused" && "Assinatura pausada"}
                 {status === "error" && "Ops!"}
               </CardDescription>
             </CardHeader>
@@ -162,16 +222,18 @@ const CancelSubscription = () => {
               )}
 
               {/* Loading state */}
-              {(status === "checking" || status === "canceling") && (
+              {(status === "checking" || status === "canceling" || status === "pausing") && (
                 <div className="flex flex-col items-center py-8">
                   <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
                   <p className="text-muted-foreground">
-                    {status === "checking" ? "Buscando sua assinatura..." : "Processando cancelamento..."}
+                    {status === "checking" && "Buscando sua assinatura..."}
+                    {status === "canceling" && "Processando cancelamento..."}
+                    {status === "pausing" && "Pausando assinatura..."}
                   </p>
                 </div>
               )}
 
-              {/* Subscription found - confirmation step */}
+              {/* Subscription found - show info */}
               {status === "found" && subscription && (
                 <div className="space-y-6">
                   <div className="bg-muted/50 rounded-lg p-4 space-y-3">
@@ -205,10 +267,121 @@ const CancelSubscription = () => {
                     <Button variant="outline" onClick={resetForm} className="flex-1">
                       Voltar
                     </Button>
-                    <Button variant="destructive" onClick={cancelSubscription} className="flex-1">
-                      Confirmar Cancelamento
+                    <Button variant="destructive" onClick={goToReasonSelection} className="flex-1">
+                      Continuar
                     </Button>
                   </div>
+                </div>
+              )}
+
+              {/* Reason selection step */}
+              {status === "selecting_reason" && (
+                <div className="space-y-6">
+                  <p className="text-sm text-muted-foreground text-center">
+                    Seu feedback é muito importante pra gente melhorar! 💜
+                  </p>
+
+                  <div className="space-y-2">
+                    {reasons.map((reason) => (
+                      <button
+                        key={reason.id}
+                        onClick={() => setSelectedReason(reason.id)}
+                        className={`w-full p-3 rounded-lg border text-left transition-colors ${
+                          selectedReason === reason.id
+                            ? "border-primary bg-primary/10 text-foreground"
+                            : "border-border hover:border-primary/50 text-muted-foreground"
+                        }`}
+                      >
+                        {reason.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {selectedReason === "other" && (
+                    <Input
+                      placeholder="Conte-nos mais..."
+                      value={reasonDetail}
+                      onChange={(e) => setReasonDetail(e.target.value)}
+                    />
+                  )}
+
+                  {selectedReason && (
+                    <div className="space-y-3">
+                      <div className="bg-primary/10 border border-primary/20 rounded-lg p-4">
+                        <div className="flex items-start gap-3">
+                          <Pause className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+                          <div className="text-sm">
+                            <p className="font-medium text-primary mb-1">Que tal uma pausa?</p>
+                            <p className="text-muted-foreground">
+                              Você pode pausar sua assinatura por 30 dias sem perder nenhum benefício. Quando voltar, é só continuar de onde parou!
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex gap-3">
+                        <Button variant="outline" onClick={() => setStatus("found")} className="flex-1">
+                          Voltar
+                        </Button>
+                        <Button onClick={pauseSubscription} className="flex-1">
+                          <Pause className="w-4 h-4 mr-2" />
+                          Pausar 30 dias
+                        </Button>
+                      </div>
+
+                      <Button 
+                        variant="ghost" 
+                        onClick={cancelSubscription} 
+                        className="w-full text-destructive hover:text-destructive hover:bg-destructive/10"
+                      >
+                        <XCircle className="w-4 h-4 mr-2" />
+                        Cancelar mesmo assim
+                      </Button>
+                    </div>
+                  )}
+
+                  {!selectedReason && (
+                    <Button variant="outline" onClick={() => setStatus("found")} className="w-full">
+                      Voltar
+                    </Button>
+                  )}
+                </div>
+              )}
+
+              {/* Paused state */}
+              {status === "paused" && (
+                <div className="space-y-6">
+                  <div className="flex flex-col items-center py-4">
+                    <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                      <Pause className="w-8 h-8 text-primary" />
+                    </div>
+                    <p className="text-center text-muted-foreground">{message}</p>
+                  </div>
+                  <div className="bg-primary/10 border border-primary/20 rounded-lg p-4 text-center text-sm">
+                    <p className="text-muted-foreground">
+                      Você receberá uma notificação antes da assinatura ser reativada.
+                    </p>
+                  </div>
+                  <Button onClick={resetForm} variant="outline" className="w-full">
+                    Voltar ao Início
+                  </Button>
+                </div>
+              )}
+
+              {/* Already paused */}
+              {status === "already_paused" && subscription && (
+                <div className="space-y-6">
+                  <div className="bg-primary/10 border border-primary/20 rounded-lg p-4 flex gap-3">
+                    <Pause className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+                    <div className="text-sm">
+                      <p className="text-muted-foreground">
+                        {message || `Sua assinatura será reativada em ${subscription.resumesAtFormatted}.`}
+                      </p>
+                    </div>
+                  </div>
+                  <Button onClick={resetForm} className="w-full">
+                    Voltar ao Início
+                  </Button>
                 </div>
               )}
 

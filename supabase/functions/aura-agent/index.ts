@@ -704,7 +704,7 @@ Em sessão especial: {session_active}
 
 ## SOBRE SUA MEMÓRIA (IMPORTANTE!)
 Você tem acesso completo a:
-- **Histórico das últimas 20 mensagens** desta conversa (tanto de sessões quanto conversas normais)
+- **Histórico das últimas 40 mensagens** desta conversa (tanto de sessões quanto conversas normais)
 - **Insights salvos** sobre o usuário (abaixo em "Memória de Longo Prazo")
 - **Dados de check-ins** anteriores (humor, energia, notas)
 - **Compromissos pendentes** que ele fez
@@ -1885,7 +1885,7 @@ serve(async (req) => {
         .select('role, content, created_at', { count: 'exact' })
         .eq('user_id', profile.user_id)
         .order('created_at', { ascending: false })
-        .limit(20);
+        .limit(40);
 
       if (messages) {
         messageHistory = sanitizeMessageHistory(messages.reverse());

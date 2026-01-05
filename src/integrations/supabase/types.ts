@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      cancellation_feedback: {
+        Row: {
+          action_taken: string
+          created_at: string
+          id: string
+          pause_until: string | null
+          phone: string
+          reason: string
+          reason_detail: string | null
+          user_id: string | null
+        }
+        Insert: {
+          action_taken: string
+          created_at?: string
+          id?: string
+          pause_until?: string | null
+          phone: string
+          reason: string
+          reason_detail?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          action_taken?: string
+          created_at?: string
+          id?: string
+          pause_until?: string | null
+          phone?: string
+          reason?: string
+          reason_detail?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       checkins: {
         Row: {
           created_at: string | null
@@ -222,6 +255,7 @@ export type Database = {
           expectations: string | null
           id: string
           last_message_date: string | null
+          last_reactivation_sent: string | null
           main_challenges: string[] | null
           messages_today: number | null
           name: string | null
@@ -244,6 +278,7 @@ export type Database = {
           expectations?: string | null
           id?: string
           last_message_date?: string | null
+          last_reactivation_sent?: string | null
           main_challenges?: string[] | null
           messages_today?: number | null
           name?: string | null
@@ -266,6 +301,7 @@ export type Database = {
           expectations?: string | null
           id?: string
           last_message_date?: string | null
+          last_reactivation_sent?: string | null
           main_challenges?: string[] | null
           messages_today?: number | null
           name?: string | null
@@ -286,6 +322,38 @@ export type Database = {
           {
             foreignKeyName: "profiles_current_session_id_fkey"
             columns: ["current_session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      session_ratings: {
+        Row: {
+          created_at: string
+          id: string
+          rating: number
+          session_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          rating: number
+          session_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          rating?: number
+          session_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_ratings_session_id_fkey"
+            columns: ["session_id"]
             isOneToOne: false
             referencedRelation: "sessions"
             referencedColumns: ["id"]
@@ -340,6 +408,7 @@ export type Database = {
           id: string
           key_insights: Json | null
           post_session_sent: boolean | null
+          rating_requested: boolean | null
           reminder_15m_sent: boolean | null
           reminder_1h_sent: boolean | null
           reminder_24h_sent: boolean | null
@@ -363,6 +432,7 @@ export type Database = {
           id?: string
           key_insights?: Json | null
           post_session_sent?: boolean | null
+          rating_requested?: boolean | null
           reminder_15m_sent?: boolean | null
           reminder_1h_sent?: boolean | null
           reminder_24h_sent?: boolean | null
@@ -386,6 +456,7 @@ export type Database = {
           id?: string
           key_insights?: Json | null
           post_session_sent?: boolean | null
+          rating_requested?: boolean | null
           reminder_15m_sent?: boolean | null
           reminder_1h_sent?: boolean | null
           reminder_24h_sent?: boolean | null

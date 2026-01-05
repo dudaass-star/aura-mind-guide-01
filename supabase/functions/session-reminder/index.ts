@@ -404,6 +404,23 @@ Me conta durante a semana como está seu progresso! Estou aqui por você. ✨`;
             
             postSessionSent++;
             console.log(`✅ Post-session summary sent for session ${session.id}`);
+
+            // Enviar pesquisa de satisfação após 2 segundos
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            const ratingMessage = `De 1 a 5, como você avalia nossa sessão de hoje? 🌟
+
+(Me responde só o número que eu entendo! 😊)`;
+
+            const ratingResult = await sendTextMessage(cleanPhone, ratingMessage);
+            
+            if (ratingResult.success) {
+              await supabase
+                .from('sessions')
+                .update({ rating_requested: true })
+                .eq('id', session.id);
+              console.log(`✅ Rating request sent for session ${session.id}`);
+            }
           } else {
             console.error(`❌ Failed to send post-session summary for session ${session.id}:`, result.error);
           }
