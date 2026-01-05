@@ -203,17 +203,21 @@ export type Database = {
         Row: {
           created_at: string | null
           current_session_id: string | null
+          expectations: string | null
           id: string
           last_message_date: string | null
+          main_challenges: string[] | null
           messages_today: number | null
           name: string | null
           onboarding_completed: boolean | null
           phone: string | null
           plan: string | null
           preferred_session_time: string | null
+          preferred_support_style: string | null
           sessions_reset_date: string | null
           sessions_used_this_month: number | null
           status: string | null
+          therapy_experience: string | null
           updated_at: string | null
           upgrade_suggested_at: string | null
           user_id: string
@@ -221,17 +225,21 @@ export type Database = {
         Insert: {
           created_at?: string | null
           current_session_id?: string | null
+          expectations?: string | null
           id?: string
           last_message_date?: string | null
+          main_challenges?: string[] | null
           messages_today?: number | null
           name?: string | null
           onboarding_completed?: boolean | null
           phone?: string | null
           plan?: string | null
           preferred_session_time?: string | null
+          preferred_support_style?: string | null
           sessions_reset_date?: string | null
           sessions_used_this_month?: number | null
           status?: string | null
+          therapy_experience?: string | null
           updated_at?: string | null
           upgrade_suggested_at?: string | null
           user_id: string
@@ -239,17 +247,21 @@ export type Database = {
         Update: {
           created_at?: string | null
           current_session_id?: string | null
+          expectations?: string | null
           id?: string
           last_message_date?: string | null
+          main_challenges?: string[] | null
           messages_today?: number | null
           name?: string | null
           onboarding_completed?: boolean | null
           phone?: string | null
           plan?: string | null
           preferred_session_time?: string | null
+          preferred_support_style?: string | null
           sessions_reset_date?: string | null
           sessions_used_this_month?: number | null
           status?: string | null
+          therapy_experience?: string | null
           updated_at?: string | null
           upgrade_suggested_at?: string | null
           user_id?: string

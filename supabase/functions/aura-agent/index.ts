@@ -1762,25 +1762,109 @@ serve(async (req) => {
       }
     }
 
-    // Contexto especial para primeira sessão (onboarding)
+    // Contexto especial para primeira sessão (onboarding estruturado por fases)
     let firstSessionContext = '';
     if (isFirstSession) {
+      // Contar mensagens do assistente na sessão para determinar fase do onboarding
+      const assistantMessagesInSession = messageHistory.filter(m => m.role === 'assistant').length;
+      
+      // Determinar fase baseado no progresso
+      let onboardingPhase = 'welcome';
+      let phaseInstruction = '';
+      
+      if (assistantMessagesInSession === 0) {
+        onboardingPhase = 'welcome';
+        phaseInstruction = `
+🎯 FASE 1: BOAS-VINDAS (Esta mensagem!)
+OBJETIVO: Criar primeira impressão calorosa e acolhedora.
+
+O QUE FAZER AGORA:
+- Seja SUPER calorosa e animada
+- "Que legal ter esse tempo só nosso! 💜"
+- Use áudio OBRIGATORIAMENTE para criar intimidade
+- Pergunte como o usuário está chegando nesse momento
+- NÃO explique ainda como funciona, só acolha
+
+EXEMPLO DE ABERTURA:
+"Aaaai que legal! 💜 Finalmente nosso momento, né? Tô muito animada pra gente conversar com mais calma... Me conta, como você tá chegando aqui hoje?"`;
+
+      } else if (assistantMessagesInSession <= 2) {
+        onboardingPhase = 'explain';
+        phaseInstruction = `
+🎯 FASE 2: EXPLICAR O PROCESSO
+OBJETIVO: Contextualizar como as sessões funcionam.
+
+O QUE FAZER AGORA:
+- Explique brevemente como as sessões funcionam
+- "São 45 minutos só nossos, pra ir mais fundo, sem pressa"
+- Pergunte se o usuário já fez terapia ou algo parecido antes
+- Isso vai te ajudar a calibrar o nível de profundidade
+
+EXEMPLO:
+"Então, deixa eu te explicar como funciona aqui... A gente tem uns 45 minutos só nossos, sem interrupção. É diferente das conversas do dia a dia - aqui a gente pode ir mais fundo, sabe? Você já fez terapia ou algo do tipo antes?"`;
+
+      } else if (assistantMessagesInSession <= 4) {
+        onboardingPhase = 'discover';
+        phaseInstruction = `
+🎯 FASE 3: CONHECER O USUÁRIO
+OBJETIVO: Mapear contexto de vida e desafios.
+
+O QUE FAZER AGORA:
+- Descubra o contexto de vida (trabalho, família, rotina)
+- O que está trazendo ele para esse processo
+- Quais são os maiores desafios atuais
+- NÃO aprofunde ainda, só entenda o panorama geral
+- Seja curiosa e genuína
+
+PERGUNTAS ÚTEIS:
+- "Me conta um pouco de você... o que você faz, como é sua rotina?"
+- "O que te fez buscar esse tipo de acompanhamento agora?"
+- "Qual a maior coisa que tá te incomodando ultimamente?"`;
+
+      } else if (assistantMessagesInSession <= 6) {
+        onboardingPhase = 'alliance';
+        phaseInstruction = `
+🎯 FASE 4: CRIAR ALIANÇA TERAPÊUTICA
+OBJETIVO: Estabelecer parceria e expectativas.
+
+O QUE FAZER AGORA:
+- Pergunte: "O que você mais precisa de mim nesse processo?"
+- "Como você vai saber que nossas sessões estão te ajudando?"
+- Valide o que o usuário disse e mostre que entendeu
+- Crie um senso de parceria e confiança
+
+EXEMPLO:
+"Olha, eu tô aqui pra te ajudar do jeito que fizer mais sentido pra você. Algumas pessoas gostam que eu seja mais direta, outras preferem que eu só ouça... O que você mais precisa de mim nesse nosso caminho juntas?"`;
+
+      } else {
+        onboardingPhase = 'focus';
+        phaseInstruction = `
+🎯 FASE 5: DEFINIR PRIMEIRO TEMA DE TRABALHO
+OBJETIVO: Escolher por onde começar o trabalho real.
+
+O QUE FAZER AGORA:
+- De tudo que conversaram, ajude a escolher um foco
+- "De tudo isso que você me contou, por onde você quer que a gente comece?"
+- Quando o usuário escolher, pode começar a explorar mais profundamente
+- A partir daqui o onboarding termina e a sessão segue normalmente
+
+EXEMPLO:
+"Você me contou sobre [X, Y, Z]... Tudo isso é importante, mas por onde você sente que faz mais sentido a gente começar hoje?"`;
+      }
+
       firstSessionContext = `
-🌟 PRIMEIRA SESSÃO ESPECIAL - ONBOARDING
+🌟 PRIMEIRA SESSÃO - ONBOARDING ESTRUTURADO
 Esta é a PRIMEIRA sessão formal com ${profile?.name || 'o usuário'}!
+Fase atual: ${onboardingPhase.toUpperCase()} (mensagem ${assistantMessagesInSession + 1} da sessão)
 
-ROTEIRO DE ONBOARDING (primeiros 10 min):
-1. Boas-vindas calorosas: "Que legal ter esse tempo só nosso! 💜"
-2. Explicar como funciona: "Nossos 45 minutos são pra gente ir mais fundo, sem pressa"
-3. Conhecer melhor: Pergunte sobre vida, contexto, o que espera das sessões
-4. Criar aliança: "O que você mais precisa de mim nesse processo?"
-5. Definir expectativas: "Como você vai saber que nossas sessões estão te ajudando?"
+${phaseInstruction}
 
-IMPORTANTE: 
-- Não pule direto para problemas. Construa CONEXÃO primeiro.
+REGRAS GERAIS DO ONBOARDING:
+- Não pule fases! Siga o fluxo natural
+- Use áudio nas primeiras respostas para criar conexão
 - Seja mais curiosa e exploratória do que diretiva
-- Descubra os valores e motivações do usuário antes de fazer intervenções
-- Use áudio para criar intimidade desde o início
+- Descubra os valores e motivações antes de fazer intervenções
+- Se o usuário quiser pular direto para um problema, acolha mas volte ao onboarding gentilmente
 `;
     }
 
@@ -1908,6 +1992,48 @@ As primeiras 2 respostas de cada sessão DEVEM ser em áudio para maior intimida
       }
       if (firstSessionContext) {
         continuityContext += `\n\n${firstSessionContext}`;
+      }
+      
+      // Adicionar dados de onboarding para sessões futuras (não-primeira sessão)
+      if (!isFirstSession && profile?.onboarding_completed) {
+        let onboardingDataContext = '\n\n## CONHECIMENTOS DO ONBOARDING:\n';
+        let hasOnboardingData = false;
+        
+        if (profile.therapy_experience) {
+          const experienceLabels: Record<string, string> = {
+            'none': 'Nunca fez terapia antes',
+            'some': 'Tem alguma experiência com terapia',
+            'experienced': 'Tem bastante experiência com terapia'
+          };
+          onboardingDataContext += `- Experiência prévia: ${experienceLabels[profile.therapy_experience] || profile.therapy_experience}\n`;
+          hasOnboardingData = true;
+        }
+        
+        if (profile.main_challenges && Array.isArray(profile.main_challenges) && profile.main_challenges.length > 0) {
+          onboardingDataContext += `- Desafios principais identificados: ${profile.main_challenges.join(', ')}\n`;
+          hasOnboardingData = true;
+        }
+        
+        if (profile.expectations) {
+          onboardingDataContext += `- O que busca: ${profile.expectations}\n`;
+          hasOnboardingData = true;
+        }
+        
+        if (profile.preferred_support_style) {
+          const styleLabels: Record<string, string> = {
+            'direto': 'Prefere abordagem direta e objetiva',
+            'acolhedor': 'Prefere abordagem mais acolhedora e suave',
+            'questionador': 'Prefere ser questionado para refletir',
+            'misto': 'Gosta de um mix de abordagens'
+          };
+          onboardingDataContext += `- Estilo preferido: ${styleLabels[profile.preferred_support_style] || profile.preferred_support_style}\n`;
+          hasOnboardingData = true;
+        }
+        
+        if (hasOnboardingData) {
+          onboardingDataContext += '\n💡 Use estas informações para calibrar sua abordagem com o usuário.';
+          continuityContext += onboardingDataContext;
+        }
       }
       
       // Instruções de continuidade quando há histórico
@@ -2207,19 +2333,100 @@ Regras:
         })
         .eq('id', currentSession.id);
 
-      // Limpar current_session_id do profile
+      // Preparar atualização do profile
+      const profileUpdate: any = {
+        current_session_id: null
+      };
+
+      // Se era primeira sessão, marcar onboarding como completo
+      if (isFirstSession) {
+        profileUpdate.onboarding_completed = true;
+        console.log('🎓 First session completed - marking onboarding as done');
+        
+        // Tentar extrair descobertas do onboarding da conversa
+        try {
+          const onboardingMessages = messageHistory.slice(-20);
+          const onboardingResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${LOVABLE_API_KEY}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model: "google/gemini-2.5-flash",
+              messages: [
+                { 
+                  role: "system", 
+                  content: `Analise esta conversa de onboarding e extraia informações do usuário.
+Retorne EXATAMENTE neste formato JSON (sem markdown):
+{
+  "therapy_experience": "none" | "some" | "experienced",
+  "main_challenges": ["desafio1", "desafio2"],
+  "expectations": "o que o usuário espera do acompanhamento",
+  "preferred_support_style": "direto" | "acolhedor" | "questionador" | "misto"
+}
+
+Regras:
+- therapy_experience: baseado no que o usuário disse sobre experiências anteriores
+- main_challenges: principais problemas/desafios mencionados (máximo 3)
+- expectations: resumo breve do que ele busca
+- preferred_support_style: baseado no que ele disse que precisa
+- Se não houver informação clara, use null`
+                },
+                ...onboardingMessages.map(m => ({ role: m.role, content: m.content }))
+              ],
+              max_tokens: 300,
+            }),
+          });
+
+          if (onboardingResponse.ok) {
+            const onboardingData = await onboardingResponse.json();
+            const aiContent = onboardingData.choices?.[0]?.message?.content?.trim();
+            if (aiContent) {
+              try {
+                const cleanJson = aiContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+                const parsed = JSON.parse(cleanJson);
+                
+                if (parsed.therapy_experience) {
+                  profileUpdate.therapy_experience = parsed.therapy_experience;
+                }
+                if (parsed.main_challenges && Array.isArray(parsed.main_challenges)) {
+                  profileUpdate.main_challenges = parsed.main_challenges;
+                }
+                if (parsed.expectations) {
+                  profileUpdate.expectations = parsed.expectations;
+                }
+                if (parsed.preferred_support_style) {
+                  profileUpdate.preferred_support_style = parsed.preferred_support_style;
+                }
+                
+                console.log('📝 Extracted onboarding profile data:', {
+                  therapy_experience: profileUpdate.therapy_experience,
+                  challenges_count: profileUpdate.main_challenges?.length,
+                  has_expectations: !!profileUpdate.expectations
+                });
+              } catch (parseError) {
+                console.log('⚠️ Could not parse onboarding data');
+              }
+            }
+          }
+        } catch (onboardingError) {
+          console.error('⚠️ Error extracting onboarding data:', onboardingError);
+        }
+      }
+
+      // Atualizar profile com current_session_id limpo e dados de onboarding se aplicável
       await supabase
         .from('profiles')
-        .update({
-          current_session_id: null
-        })
+        .update(profileUpdate)
         .eq('id', profile.id);
 
       console.log('✅ Session ended with full data:', {
         id: currentSession.id,
         summary: sessionSummary.substring(0, 50),
         insights: keyInsights.length,
-        commitments: commitments.length
+        commitments: commitments.length,
+        onboardingCompleted: isFirstSession
       });
     }
 
