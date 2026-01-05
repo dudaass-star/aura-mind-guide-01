@@ -1208,6 +1208,112 @@ function formatInsightsForContext(insights: any[]): string {
   return formatted || "Nenhuma informação salva ainda.";
 }
 
+// Função para formatar contexto de sessões anteriores
+function formatPreviousSessionsContext(sessions: any[]): string {
+  if (!sessions || sessions.length === 0) return '';
+
+  let context = '\n📚 HISTÓRICO DE SESSÕES ANTERIORES:\n';
+  
+  sessions.forEach((session, index) => {
+    const date = new Date(session.ended_at).toLocaleDateString('pt-BR');
+    const num = sessions.length - index;
+    
+    context += `\n--- Sessão ${num} (${date}) ---\n`;
+    
+    if (session.focus_topic) {
+      context += `• Tema: ${session.focus_topic}\n`;
+    }
+    
+    if (session.session_summary) {
+      context += `• Resumo: ${session.session_summary}\n`;
+    }
+    
+    if (session.key_insights && Array.isArray(session.key_insights) && session.key_insights.length > 0) {
+      context += `• Aprendizados: ${session.key_insights.join('; ')}\n`;
+    }
+    
+    if (session.commitments && Array.isArray(session.commitments) && session.commitments.length > 0) {
+      const commitmentsList = session.commitments
+        .map((c: any) => typeof c === 'string' ? c : c.title || c)
+        .join(', ');
+      context += `• Compromissos feitos: ${commitmentsList}\n`;
+    }
+  });
+
+  context += `
+💡 USE ESTE HISTÓRICO PARA:
+- Dar continuidade aos temas importantes
+- Cobrar compromissos anteriores gentilmente
+- Celebrar progressos desde a última sessão
+- Conectar insights antigos com a situação atual
+- Na ABERTURA da sessão, mencione algo da sessão anterior
+`;
+
+  return context;
+}
+
+// Função para extrair key_insights da conversa
+function extractKeyInsightsFromConversation(messageHistory: any[], finalMessage: string): string[] {
+  const insights: string[] = [];
+  
+  // Combinar mensagens recentes com a mensagem final
+  const allContent = messageHistory
+    .slice(-10)
+    .map(m => m.content)
+    .join(' ') + ' ' + finalMessage;
+  
+  // Padrões que indicam insights/aprendizados
+  const insightPatterns = [
+    /perceb[ei].*que\s+(.{10,80})/gi,
+    /entend[ei].*que\s+(.{10,80})/gi,
+    /aprend[ei].*que\s+(.{10,80})/gi,
+    /o importante é\s+(.{10,80})/gi,
+    /a verdade é que\s+(.{10,80})/gi,
+    /agora sei que\s+(.{10,80})/gi,
+  ];
+  
+  for (const pattern of insightPatterns) {
+    const matches = allContent.matchAll(pattern);
+    for (const match of matches) {
+      if (match[1] && match[1].length > 10) {
+        const insight = match[1].replace(/[.!?,;:]+$/, '').trim();
+        if (insight && !insights.includes(insight) && insights.length < 5) {
+          insights.push(insight);
+        }
+      }
+    }
+  }
+  
+  return insights;
+}
+
+// Função para extrair compromissos da conversa
+function extractCommitmentsFromConversation(finalMessage: string): any[] {
+  const commitments: any[] = [];
+  
+  // Padrões que indicam compromissos
+  const commitmentPatterns = [
+    /vou\s+(.{10,60})/gi,
+    /prometo\s+(.{10,60})/gi,
+    /combinei de\s+(.{10,60})/gi,
+    /me comprometo a\s+(.{10,60})/gi,
+  ];
+  
+  for (const pattern of commitmentPatterns) {
+    const matches = finalMessage.matchAll(pattern);
+    for (const match of matches) {
+      if (match[1] && match[1].length > 10) {
+        const title = match[1].replace(/[.!?,;:]+$/, '').trim();
+        if (title && commitments.length < 3) {
+          commitments.push({ title });
+        }
+      }
+    }
+  }
+  
+  return commitments;
+}
+
 // Função para criar um link curto
 async function createShortLink(url: string, phone: string): Promise<string | null> {
   const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
@@ -1631,6 +1737,53 @@ serve(async (req) => {
       }
     }
 
+    // Buscar últimas 3 sessões completadas para contexto de continuidade
+    let previousSessionsContext = '';
+    let isFirstSession = false;
+    if (profile?.user_id) {
+      const { data: completedSessions, count: completedCount } = await supabase
+        .from('sessions')
+        .select('session_summary, key_insights, focus_topic, ended_at, commitments', { count: 'exact' })
+        .eq('user_id', profile.user_id)
+        .eq('status', 'completed')
+        .not('session_summary', 'is', null)
+        .order('ended_at', { ascending: false })
+        .limit(3);
+
+      if (completedSessions && completedSessions.length > 0) {
+        previousSessionsContext = formatPreviousSessionsContext(completedSessions);
+        console.log('📚 Found', completedSessions.length, 'previous sessions for context');
+      }
+      
+      // Verificar se é primeira sessão (nenhuma completada ainda)
+      isFirstSession = sessionActive && (completedCount === 0 || completedCount === null);
+      if (isFirstSession) {
+        console.log('🌟 First session detected for user');
+      }
+    }
+
+    // Contexto especial para primeira sessão (onboarding)
+    let firstSessionContext = '';
+    if (isFirstSession) {
+      firstSessionContext = `
+🌟 PRIMEIRA SESSÃO ESPECIAL - ONBOARDING
+Esta é a PRIMEIRA sessão formal com ${profile?.name || 'o usuário'}!
+
+ROTEIRO DE ONBOARDING (primeiros 10 min):
+1. Boas-vindas calorosas: "Que legal ter esse tempo só nosso! 💜"
+2. Explicar como funciona: "Nossos 45 minutos são pra gente ir mais fundo, sem pressa"
+3. Conhecer melhor: Pergunte sobre vida, contexto, o que espera das sessões
+4. Criar aliança: "O que você mais precisa de mim nesse processo?"
+5. Definir expectativas: "Como você vai saber que nossas sessões estão te ajudando?"
+
+IMPORTANTE: 
+- Não pule direto para problemas. Construa CONEXÃO primeiro.
+- Seja mais curiosa e exploratória do que diretiva
+- Descubra os valores e motivações do usuário antes de fazer intervenções
+- Use áudio para criar intimidade desde o início
+`;
+    }
+
     // Buscar último check-in
     let lastCheckin = "Nenhum registrado";
     if (profile?.user_id) {
@@ -1747,8 +1900,40 @@ As primeiras 2 respostas de cada sessão DEVEM ser em áudio para maior intimida
       .replace('{user_insights}', formatInsightsForContext(userInsights))
       .replace('{audio_session_context}', audioSessionContext);
 
+    // Adicionar contexto de sessões anteriores e primeira sessão
+    let continuityContext = '';
+    if (sessionActive) {
+      if (previousSessionsContext) {
+        continuityContext += `\n\n# CONTINUIDADE ENTRE SESSÕES\n${previousSessionsContext}`;
+      }
+      if (firstSessionContext) {
+        continuityContext += `\n\n${firstSessionContext}`;
+      }
+      
+      // Instruções de continuidade quando há histórico
+      if (previousSessionsContext) {
+        continuityContext += `
+
+## REGRAS DE CONTINUIDADE (OBRIGATÓRIAS):
+1. Na ABERTURA da sessão, SEMPRE mencione algo da sessão anterior:
+   - "Na nossa última conversa você tinha falado sobre X... como está isso?"
+   - "Lembro que você ia tentar fazer Y... conseguiu?"
+   - "Da última vez você estava lidando com Z... evoluiu?"
+
+2. Se o usuário mencionar um tema que já foi trabalhado:
+   - Reconheça o padrão: "Esse tema já apareceu antes, né? Vamos ver o que está diferente agora"
+   - Não repita as mesmas perguntas de sessões anteriores
+   - Aprofunde de forma diferente
+
+3. Para evoluir um tema:
+   - Se o usuário demonstra progresso, celebre: "Que legal! O que mais você quer trabalhar agora?"
+   - Se está estagnado, seja honesta: "Percebi que voltamos a esse assunto. O que está te impedindo de avançar?"
+`;
+      }
+    }
+
     // Adicionar instrução de upgrade se necessário
-    let finalPrompt = contextualPrompt;
+    let finalPrompt = contextualPrompt + continuityContext;
     if (shouldSuggestUpgrade) {
       finalPrompt += `\n\n⚠️ INSTRUÇÃO ESPECIAL: O usuário já mandou ${messagesToday} mensagens hoje. Sugira naturalmente o upgrade para o plano Direção no final da sua resposta.`;
     }
@@ -1929,12 +2114,15 @@ INSTRUÇÃO: Faça um fechamento CALOROSO da sessão:
     // Verificar se a IA quer encerrar a sessão
     const aiWantsToEndSession = assistantMessage.includes('[ENCERRAR_SESSAO]');
 
-    // Executar encerramento de sessão com resumo gerado pela IA
+    // Executar encerramento de sessão com resumo, insights e compromissos
     if ((shouldEndSession || aiWantsToEndSession) && currentSession && profile) {
       const endTime = new Date().toISOString();
 
       // Gerar resumo da sessão usando IA
       let sessionSummary = "Sessão concluída.";
+      let keyInsights: string[] = [];
+      let commitments: any[] = [];
+      
       try {
         const summaryMessages = messageHistory.slice(-15); // Últimas 15 mensagens
         const summaryResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -1948,39 +2136,74 @@ INSTRUÇÃO: Faça um fechamento CALOROSO da sessão:
             messages: [
               { 
                 role: "system", 
-                content: `Você é um assistente que cria resumos de sessões de mentoria emocional.
-Gere um resumo BREVE (3-5 frases) da sessão. Inclua:
-1. O tema principal discutido
-2. 1-2 insights mais importantes
-3. Compromissos definidos (se houver)
-Escreva em português brasileiro, de forma clara e objetiva.`
+                content: `Você é um assistente que analisa sessões de mentoria emocional.
+Retorne EXATAMENTE neste formato JSON (sem markdown, apenas o JSON):
+{
+  "summary": "Resumo de 2-3 frases sobre o tema principal discutido",
+  "insights": ["insight 1", "insight 2", "insight 3"],
+  "commitments": ["compromisso 1", "compromisso 2"]
+}
+
+Regras:
+- summary: resumo BREVE do tema central e conclusão
+- insights: 2-4 aprendizados/percepções importantes do usuário
+- commitments: ações que o usuário se comprometeu a fazer (se houver)
+- Se não houver insights ou compromissos claros, deixe array vazio
+- Escreva em português brasileiro, de forma clara e objetiva`
               },
               ...summaryMessages,
-              { role: "user", content: message }
+              { role: "user", content: message },
+              { role: "assistant", content: assistantMessage }
             ],
-            max_tokens: 200,
+            max_tokens: 400,
           }),
         });
 
         if (summaryResponse.ok) {
           const summaryData = await summaryResponse.json();
-          const aiSummary = summaryData.choices?.[0]?.message?.content?.trim();
-          if (aiSummary) {
-            sessionSummary = aiSummary;
-            console.log('📝 Generated session summary:', sessionSummary.substring(0, 100));
+          const aiResponse = summaryData.choices?.[0]?.message?.content?.trim();
+          if (aiResponse) {
+            try {
+              // Limpar possíveis markdown code blocks
+              const cleanJson = aiResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+              const parsed = JSON.parse(cleanJson);
+              
+              sessionSummary = parsed.summary || sessionSummary;
+              keyInsights = Array.isArray(parsed.insights) ? parsed.insights : [];
+              commitments = Array.isArray(parsed.commitments) 
+                ? parsed.commitments.map((c: string) => ({ title: c }))
+                : [];
+              
+              console.log('📝 Extracted session data:', {
+                summary: sessionSummary.substring(0, 50),
+                insightsCount: keyInsights.length,
+                commitmentsCount: commitments.length
+              });
+            } catch (parseError) {
+              console.log('⚠️ Could not parse AI summary as JSON, using raw text');
+              sessionSummary = aiResponse.substring(0, 500);
+              // Fallback: extrair insights e compromissos manualmente
+              keyInsights = extractKeyInsightsFromConversation(messageHistory, assistantMessage);
+              commitments = extractCommitmentsFromConversation(assistantMessage);
+            }
           }
         }
       } catch (summaryError) {
         console.error('⚠️ Error generating session summary:', summaryError);
+        // Fallback: extrair manualmente
+        keyInsights = extractKeyInsightsFromConversation(messageHistory, assistantMessage);
+        commitments = extractCommitmentsFromConversation(assistantMessage);
       }
 
-      // Atualizar sessão para completed
+      // Atualizar sessão para completed com todos os dados
       await supabase
         .from('sessions')
         .update({
           status: 'completed',
           ended_at: endTime,
-          session_summary: sessionSummary
+          session_summary: sessionSummary,
+          key_insights: keyInsights,
+          commitments: commitments
         })
         .eq('id', currentSession.id);
 
@@ -1992,7 +2215,12 @@ Escreva em português brasileiro, de forma clara e objetiva.`
         })
         .eq('id', profile.id);
 
-      console.log('✅ Session ended with AI summary:', currentSession.id);
+      console.log('✅ Session ended with full data:', {
+        id: currentSession.id,
+        summary: sessionSummary.substring(0, 50),
+        insights: keyInsights.length,
+        commitments: commitments.length
+      });
     }
 
     // Extrair e salvar novos insights
