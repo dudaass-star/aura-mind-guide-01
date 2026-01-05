@@ -51,36 +51,52 @@ export type Database = {
       }
       commitments: {
         Row: {
+          commitment_status: string | null
           completed: boolean | null
           created_at: string | null
           description: string | null
           due_date: string | null
+          follow_up_count: number | null
           id: string
           reminder_sent: boolean | null
+          session_id: string | null
           title: string
           user_id: string
         }
         Insert: {
+          commitment_status?: string | null
           completed?: boolean | null
           created_at?: string | null
           description?: string | null
           due_date?: string | null
+          follow_up_count?: number | null
           id?: string
           reminder_sent?: boolean | null
+          session_id?: string | null
           title: string
           user_id: string
         }
         Update: {
+          commitment_status?: string | null
           completed?: boolean | null
           created_at?: string | null
           description?: string | null
           due_date?: string | null
+          follow_up_count?: number | null
           id?: string
           reminder_sent?: boolean | null
+          session_id?: string | null
           title?: string
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "commitments_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "commitments_user_id_fkey"
             columns: ["user_id"]
@@ -275,6 +291,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      session_themes: {
+        Row: {
+          created_at: string
+          first_mentioned_at: string
+          id: string
+          last_mentioned_at: string
+          resolution_notes: string | null
+          session_count: number
+          status: string
+          theme_name: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          first_mentioned_at?: string
+          id?: string
+          last_mentioned_at?: string
+          resolution_notes?: string | null
+          session_count?: number
+          status?: string
+          theme_name: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          first_mentioned_at?: string
+          id?: string
+          last_mentioned_at?: string
+          resolution_notes?: string | null
+          session_count?: number
+          status?: string
+          theme_name?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       sessions: {
         Row: {
