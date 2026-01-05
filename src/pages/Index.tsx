@@ -1,29 +1,30 @@
 import { Helmet } from "react-helmet-async";
 import Header from "@/components/Header";
 import Hero from "@/components/Hero";
-import Economy from "@/components/Economy";
 import Problem from "@/components/Problem";
+import ForWho from "@/components/ForWho";
 import HowItWorks from "@/components/HowItWorks";
+import Demo from "@/components/Demo";
 import Benefits from "@/components/Benefits";
-import Comparison from "@/components/Comparison";
 import Testimonials from "@/components/Testimonials";
 import Pricing from "@/components/Pricing";
-import FinalCTA from "@/components/FinalCTA";
+import Comparison from "@/components/Comparison";
 import FAQ from "@/components/FAQ";
+import FinalCTA from "@/components/FinalCTA";
 import Footer from "@/components/Footer";
 
 const Index = () => {
   return (
     <>
       <Helmet>
-        <title>AURA - Acompanhamento Emocional no WhatsApp</title>
+        <title>AURA - Acompanhamento Emocional Acessível no WhatsApp</title>
         <meta
           name="description"
-          content="AURA te ajuda a recuperar clareza mental, controle emocional e direção prática através de conversas no WhatsApp. 5 conversas grátis."
+          content="Acompanhamento emocional profundo por menos de R$2/dia. Suporte 24/7 no WhatsApp com memória de longo prazo, sessões estruturadas e metodologia. Comece grátis."
         />
         <meta
           name="keywords"
-          content="acompanhamento emocional, saúde mental, WhatsApp, ansiedade, autoconhecimento, clareza mental"
+          content="acompanhamento emocional, saúde mental acessível, WhatsApp, ansiedade, autoconhecimento, clareza mental, terapia acessível, suporte emocional"
         />
         <link rel="canonical" href="https://aura.app" />
       </Helmet>
@@ -32,15 +33,16 @@ const Index = () => {
         <Header />
         <main>
           <Hero />
-          <Economy />
           <Problem />
+          <ForWho />
           <HowItWorks />
+          <Demo />
           <Benefits />
-          <Comparison />
           <Testimonials />
           <Pricing />
-          <FinalCTA />
+          <Comparison />
           <FAQ />
+          <FinalCTA />
         </main>
         <Footer />
       </div>
