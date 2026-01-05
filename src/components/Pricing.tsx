@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Check, Sparkles, MessageCircle, Calendar, FileText, Headphones } from "lucide-react";
+import { Check, Sparkles, MessageCircle, Calendar, FileText, Headphones, Shield, Zap } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const plans = [
@@ -7,6 +7,7 @@ const plans = [
     id: "essencial",
     name: "Essencial",
     price: "29,90",
+    dailyPrice: "~R$1/dia",
     period: "/mês",
     description: "Suporte emocional 24/7 pra quem quer começar.",
     features: [
@@ -16,6 +17,7 @@ const plans = [
       { text: "Respostas em texto e áudio", icon: Headphones },
       { text: "Memória de longo prazo", icon: Check },
     ],
+    sessions: "—",
     cta: "Começar agora",
     popular: false,
     badge: null,
@@ -24,6 +26,7 @@ const plans = [
     id: "direcao",
     name: "Direção",
     price: "49,90",
+    dailyPrice: "~R$1,70/dia",
     period: "/mês",
     description: "Pra quem quer ir mais fundo com sessões guiadas.",
     features: [
@@ -31,25 +34,28 @@ const plans = [
       { text: "4 Sessões Especiais/mês (45min)", icon: Calendar },
       { text: "Metodologia estruturada", icon: Check },
       { text: "Resumo escrito após cada sessão", icon: FileText },
-      { text: "Acompanhamento de compromissos", icon: Check },
+      { text: "Retrospectiva a cada 4 sessões", icon: Check },
     ],
+    sessions: "4/mês",
     cta: "Escolher Direção",
     popular: true,
-    badge: "Mais popular",
+    badge: "Mais escolhido",
   },
   {
     id: "transformacao",
     name: "Transformação",
     price: "79,90",
+    dailyPrice: "~R$2,70/dia",
     period: "/mês",
     description: "Pra momentos de transição e mudança profunda.",
     features: [
       { text: "Tudo do Direção", icon: Check },
       { text: "8 Sessões Especiais/mês", icon: Calendar },
-      { text: "Prioridade no agendamento", icon: Check },
+      { text: "Prioridade no agendamento", icon: Zap },
       { text: "Ideal para momentos de crise", icon: Check },
       { text: "Suporte intensivo", icon: Check },
     ],
+    sessions: "8/mês",
     cta: "Escolher Transformação",
     popular: false,
     badge: null,
@@ -63,14 +69,22 @@ const Pricing = () => {
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-sage-soft rounded-full blur-3xl opacity-40" />
 
       <div className="container mx-auto px-4 relative z-10">
-        <div className="text-center mb-16">
+        <div className="text-center mb-12">
           <h2 className="font-display text-3xl md:text-4xl lg:text-5xl font-bold text-foreground mb-4">
-            Escolha seu plano.{" "}
-            <span className="text-gradient-sage">Comece hoje.</span>
+            Escolha o que faz sentido{" "}
+            <span className="text-gradient-sage">pra você</span>
           </h2>
-          <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-            Todos os planos incluem acesso ilimitado à AURA 24/7. Escolha o nível de profundidade que você precisa.
+          <p className="text-muted-foreground text-lg max-w-2xl mx-auto mb-6">
+            Todos os planos incluem acesso ilimitado à AURA 24/7.
           </p>
+          
+          {/* Guarantee badge */}
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-sage-soft/60 border border-primary/20">
+            <Shield className="w-5 h-5 text-primary" />
+            <span className="text-sm font-medium text-foreground">
+              Garantia de 7 dias — não gostou, devolvemos
+            </span>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
@@ -108,6 +122,9 @@ const Pricing = () => {
                   </span>
                   <span className="text-muted-foreground">{plan.period}</span>
                 </div>
+                <p className="text-xs text-primary font-medium mt-1">
+                  {plan.dailyPrice}
+                </p>
               </div>
 
               {/* Features */}
@@ -134,6 +151,13 @@ const Pricing = () => {
               </Link>
             </div>
           ))}
+        </div>
+
+        {/* Trust badges */}
+        <div className="flex flex-wrap justify-center gap-4 mt-10 text-sm text-muted-foreground">
+          <span>✓ 5 conversas grátis pra começar</span>
+          <span>✓ Cancela ou pausa quando quiser</span>
+          <span>✓ Sem fidelidade</span>
         </div>
 
         {/* Sessions explanation */}

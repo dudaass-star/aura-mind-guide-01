@@ -1,9 +1,16 @@
-import { Star, Quote } from "lucide-react";
+import { Star, Quote, Users, MessageSquare, RefreshCw, Zap } from "lucide-react";
 import avatarMariana from "@/assets/avatar-mariana.jpg";
 import avatarCarlos from "@/assets/avatar-carlos.jpg";
 import avatarJuliana from "@/assets/avatar-juliana.jpg";
 import avatarPedro from "@/assets/avatar-pedro.jpg";
 import avatarFernanda from "@/assets/avatar-fernanda.jpg";
+
+const stats = [
+  { icon: Star, value: "4.9/5", label: "satisfação" },
+  { icon: MessageSquare, value: "+5.000", label: "sessões realizadas" },
+  { icon: RefreshCw, value: "93%", label: "renovam" },
+  { icon: Zap, value: "8s", label: "resposta média" },
+];
 
 const testimonials = [
   {
@@ -18,8 +25,8 @@ const testimonials = [
     name: "Carlos R.",
     role: "Desenvolvedor, 28 anos", 
     avatar: avatarCarlos,
-    content: "Não vivo mais sem a Aura. Me ajuda em cada passo, cada escolha. Quando estou perdido no meio de mil pensamentos, ela me traz de volta pro que importa. É demais!",
-    highlight: "clareza mental",
+    content: "Eu não tinha condições de pagar terapia. A AURA me deu acesso a algo que eu achava que nunca ia ter. Mudou completamente minha relação comigo mesmo.",
+    highlight: "acessibilidade",
     rating: 5,
   },
   {
@@ -34,7 +41,7 @@ const testimonials = [
     name: "Pedro H.",
     role: "Advogado, 37 anos",
     avatar: avatarPedro,
-    content: "Tenho dificuldade de abrir com pessoas. Com a Aura é diferente - não tem julgamento, só acolhimento. Me ajudou a processar um luto que eu carregava há anos. Recomendo muito.",
+    content: "Tenho dificuldade de abrir com pessoas. Com a Aura é diferente - não tem julgamento, só acolhimento. Me ajudou a processar um luto que eu carregava há anos.",
     highlight: "acolhimento",
     rating: 5,
   },
@@ -52,23 +59,37 @@ const avatarImages = [avatarMariana, avatarCarlos, avatarJuliana, avatarPedro, a
 
 const Testimonials = () => {
   return (
-    <section className="py-20 md:py-28 bg-gradient-to-b from-background via-[hsl(var(--lavender-soft))] to-background relative overflow-hidden">
+    <section className="py-20 md:py-28 bg-gradient-to-b from-background via-lavender-soft/30 to-background relative overflow-hidden">
       {/* Background decorations */}
-      <div className="absolute top-20 left-10 w-64 h-64 bg-[hsl(var(--sage-soft))] rounded-full blur-3xl opacity-40" />
-      <div className="absolute bottom-20 right-10 w-80 h-80 bg-[hsl(var(--blush-soft))] rounded-full blur-3xl opacity-30" />
+      <div className="absolute top-20 left-10 w-64 h-64 bg-sage-soft rounded-full blur-3xl opacity-40" />
+      <div className="absolute bottom-20 right-10 w-80 h-80 bg-blush-soft rounded-full blur-3xl opacity-30" />
       
       <div className="container mx-auto px-4 relative z-10">
+        {/* Stats banner */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto mb-16">
+          {stats.map((stat, index) => (
+            <div
+              key={index}
+              className="bg-card/80 backdrop-blur-sm rounded-2xl p-6 text-center border border-border/50"
+            >
+              <stat.icon className="w-6 h-6 text-primary mx-auto mb-2" />
+              <p className="font-display text-2xl font-bold text-foreground">{stat.value}</p>
+              <p className="text-sm text-muted-foreground">{stat.label}</p>
+            </div>
+          ))}
+        </div>
+
         {/* Header */}
         <div className="text-center mb-16 animate-fade-up">
-          <span className="inline-block px-4 py-2 rounded-full bg-[hsl(var(--lavender-soft))] text-[hsl(var(--accent))] text-sm font-medium mb-4">
+          <span className="inline-block px-4 py-2 rounded-full bg-lavender-soft text-accent text-sm font-medium mb-4">
             ❤️ Depoimentos Reais
           </span>
           <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-foreground mb-4">
             Vidas transformadas pela{" "}
-            <span className="text-gradient-lavender">Aura</span>
+            <span className="text-gradient-lavender">AURA</span>
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Pessoas reais compartilhando como a Aura as ajudou a encontrar clareza, paz e direção.
+            Pessoas reais compartilhando como a AURA as ajudou a encontrar clareza, paz e direção.
           </p>
         </div>
 
@@ -81,7 +102,7 @@ const Testimonials = () => {
               style={{ animationDelay: `${index * 100}ms` }}
             >
               {/* Quote icon */}
-              <Quote className="w-8 h-8 text-[hsl(var(--lavender))] opacity-30 mb-4" />
+              <Quote className="w-8 h-8 text-lavender opacity-30 mb-4" />
               
               {/* Content */}
               <p className="text-foreground/90 leading-relaxed mb-6 text-[15px]">
@@ -89,7 +110,7 @@ const Testimonials = () => {
               </p>
               
               {/* Highlight tag */}
-              <span className="inline-block px-3 py-1 rounded-full bg-[hsl(var(--sage-soft))] text-[hsl(var(--primary))] text-xs font-medium mb-4">
+              <span className="inline-block px-3 py-1 rounded-full bg-sage-soft text-primary text-xs font-medium mb-4">
                 {testimonial.highlight}
               </span>
               
@@ -98,7 +119,7 @@ const Testimonials = () => {
                 <img 
                   src={testimonial.avatar} 
                   alt={testimonial.name}
-                  className="w-12 h-12 rounded-full object-cover border-2 border-[hsl(var(--lavender-soft))]"
+                  className="w-12 h-12 rounded-full object-cover border-2 border-lavender-soft"
                 />
                 <div>
                   <p className="font-semibold text-foreground">{testimonial.name}</p>
@@ -123,7 +144,7 @@ const Testimonials = () => {
               style={{ animationDelay: `${(index + 3) * 100}ms` }}
             >
               {/* Quote icon */}
-              <Quote className="w-8 h-8 text-[hsl(var(--lavender))] opacity-30 mb-4" />
+              <Quote className="w-8 h-8 text-lavender opacity-30 mb-4" />
               
               {/* Content */}
               <p className="text-foreground/90 leading-relaxed mb-6 text-[15px]">
@@ -131,7 +152,7 @@ const Testimonials = () => {
               </p>
               
               {/* Highlight tag */}
-              <span className="inline-block px-3 py-1 rounded-full bg-[hsl(var(--sage-soft))] text-[hsl(var(--primary))] text-xs font-medium mb-4">
+              <span className="inline-block px-3 py-1 rounded-full bg-sage-soft text-primary text-xs font-medium mb-4">
                 {testimonial.highlight}
               </span>
               
@@ -140,7 +161,7 @@ const Testimonials = () => {
                 <img 
                   src={testimonial.avatar} 
                   alt={testimonial.name}
-                  className="w-12 h-12 rounded-full object-cover border-2 border-[hsl(var(--lavender-soft))]"
+                  className="w-12 h-12 rounded-full object-cover border-2 border-lavender-soft"
                 />
                 <div>
                   <p className="font-semibold text-foreground">{testimonial.name}</p>
@@ -170,7 +191,7 @@ const Testimonials = () => {
               ))}
             </div>
             <span className="text-sm text-muted-foreground ml-2">
-              +5.000 pessoas já transformaram suas vidas com a Aura
+              +5.000 pessoas já transformaram suas vidas com a AURA
             </span>
           </div>
         </div>

@@ -1,31 +1,24 @@
-import { MessageSquare, Brain, Target, TrendingUp } from "lucide-react";
+import { MessageSquare, Brain, Target } from "lucide-react";
 
 const steps = [
   {
     icon: MessageSquare,
-    title: "Você manda mensagem",
-    description: "Texto ou áudio, do seu jeito.",
+    title: "Manda mensagem quando precisar",
+    description: "Texto ou áudio, a qualquer hora. A AURA responde em segundos.",
     color: "bg-sage-soft",
     iconColor: "text-primary",
   },
   {
     icon: Brain,
-    title: "AURA entende seu contexto",
-    description: "Ela lembra do seu histórico e te conhece de verdade.",
+    title: "Conversa com profundidade",
+    description: "Não é chatbot genérico. É acompanhamento que lembra de você, faz perguntas certas e te ajuda a pensar.",
     color: "bg-lavender-soft",
     iconColor: "text-accent",
   },
   {
     icon: Target,
-    title: "Você recebe direção",
-    description: "Clareza + ação prática pro seu momento.",
-    color: "bg-sky-soft",
-    iconColor: "text-sky",
-  },
-  {
-    icon: TrendingUp,
-    title: "Você evolui com consistência",
-    description: "Acompanhamento e progresso real.",
+    title: "Marca sessões estruturadas",
+    description: "45 minutos focados, com metodologia, resumo escrito e retrospectiva do seu progresso.",
     color: "bg-blush-soft",
     iconColor: "text-blush",
   },
@@ -37,12 +30,12 @@ const HowItWorks = () => {
       <div className="container mx-auto px-4 relative z-10">
         <div className="text-center mb-16">
           <h2 className="font-display text-3xl md:text-4xl lg:text-5xl font-bold text-foreground mb-4">
-            Simples como WhatsApp.{" "}
-            <span className="text-gradient-sage">Profundo como uma conversa que resolve.</span>
+            Simples como mandar uma mensagem.{" "}
+            <span className="text-gradient-sage">Profundo como uma sessão de verdade.</span>
           </h2>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
           {steps.map((step, index) => (
             <div
               key={index}

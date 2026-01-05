@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Check } from "lucide-react";
+import { Star, Clock, Brain, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const Hero = () => {
@@ -14,50 +14,46 @@ const Hero = () => {
         <div className="max-w-4xl mx-auto text-center">
           {/* Main headline */}
           <h1 className="font-display text-4xl md:text-5xl lg:text-6xl font-bold leading-tight mb-6 animate-fade-up opacity-0">
-            <span className="text-foreground">Acompanhamento emocional no WhatsApp</span>
+            <span className="text-foreground">Você não deveria ter que escolher</span>
             <br />
-            <span className="text-gradient-sage">— por uma fração do custo da terapia.</span>
+            <span className="text-gradient-sage">entre saúde mental e pagar as contas.</span>
           </h1>
 
           {/* Subheadline */}
           <p className="font-body text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto mb-8 leading-relaxed animate-fade-up opacity-0 delay-100">
-            A AURA te ajuda a recuperar clareza mental, controle emocional e direção prática — 
-            com conversas profundas no WhatsApp, memória do seu histórico e micro-ações simples pra sua vida real.
+            A AURA te dá acompanhamento emocional profundo, com memória do seu histórico, 
+            sessões estruturadas e suporte 24/7 — por menos de <span className="text-foreground font-semibold">R$2 por dia</span>.
           </p>
 
-          {/* Trust badges */}
+          {/* Trust badges - redesigned */}
           <div className="flex flex-wrap justify-center gap-4 md:gap-6 text-sm text-foreground mb-10 animate-fade-up opacity-0 delay-200">
+            <div className="flex items-center gap-2 bg-amber-100/80 px-4 py-2 rounded-full border border-amber-200/50">
+              <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
+              <span className="font-medium">4.9/5 de satisfação</span>
+            </div>
             <div className="flex items-center gap-2 bg-sage-soft/60 px-4 py-2 rounded-full">
-              <Check className="w-4 h-4 text-primary" />
-              <span>5 conversas grátis</span>
+              <Clock className="w-4 h-4 text-primary" />
+              <span>Resposta em segundos</span>
             </div>
             <div className="flex items-center gap-2 bg-lavender-soft/60 px-4 py-2 rounded-full">
-              <Check className="w-4 h-4 text-accent" />
-              <span>24/7</span>
-            </div>
-            <div className="flex items-center gap-2 bg-sky-soft/60 px-4 py-2 rounded-full">
-              <Check className="w-4 h-4 text-sky" />
-              <span>Texto e áudio</span>
-            </div>
-            <div className="flex items-center gap-2 bg-blush-soft/60 px-4 py-2 rounded-full">
-              <Check className="w-4 h-4 text-blush" />
+              <Brain className="w-4 h-4 text-accent" />
               <span>Memória de longo prazo</span>
             </div>
-            <div className="flex items-center gap-2 bg-sage-soft/60 px-4 py-2 rounded-full">
-              <Check className="w-4 h-4 text-primary" />
-              <span>Sem julgamento</span>
+            <div className="flex items-center gap-2 bg-blush-soft/60 px-4 py-2 rounded-full">
+              <Sparkles className="w-4 h-4 text-blush" />
+              <span>Sessões com metodologia</span>
             </div>
           </div>
 
           {/* CTA */}
           <div className="flex flex-col items-center gap-4 animate-fade-up opacity-0 delay-300">
             <Link to="/checkout">
-              <Button variant="sage" size="xl" className="min-w-[220px]">
-                Começar agora
+              <Button variant="sage" size="xl" className="min-w-[280px]">
+                Começar com 5 conversas grátis
               </Button>
             </Link>
             <p className="text-sm text-muted-foreground">
-              Teste grátis com 5 conversas. Se fizer sentido, você continua.
+              Sem cartão de crédito. Sem compromisso.
             </p>
           </div>
         </div>

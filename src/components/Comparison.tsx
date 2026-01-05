@@ -1,5 +1,38 @@
 import { Check, X } from "lucide-react";
 
+const comparisonData = [
+  {
+    aspect: "Custo mensal",
+    traditional: "R$600 - R$1.200",
+    aura: "R$29,90 - R$79,90",
+  },
+  {
+    aspect: "Disponibilidade",
+    traditional: "1h por semana",
+    aura: "24/7, quando precisar",
+  },
+  {
+    aspect: "Espera inicial",
+    traditional: "1-4 semanas",
+    aura: "Imediato",
+  },
+  {
+    aspect: "Memória entre sessões",
+    traditional: "Depende do profissional",
+    aura: "Automática e completa",
+  },
+  {
+    aspect: "Resumo escrito",
+    traditional: "Raro",
+    aura: "Após cada sessão",
+  },
+  {
+    aspect: "Resposta em crise",
+    traditional: "Precisa agendar",
+    aura: "Em segundos",
+  },
+];
+
 const Comparison = () => {
   return (
     <section className="py-24 bg-background relative overflow-hidden">
@@ -8,59 +41,61 @@ const Comparison = () => {
       <div className="container mx-auto px-4 relative z-10">
         <div className="text-center mb-16">
           <h2 className="font-display text-3xl md:text-4xl lg:text-5xl font-bold text-foreground mb-4">
-            AURA vs terapia tradicional{" "}
-            <span className="text-gradient-lavender">(na prática do dia a dia)</span>
+            Comparando com{" "}
+            <span className="text-gradient-lavender">terapia tradicional</span>
           </h2>
+          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+            Transparência total sobre o que você está escolhendo.
+          </p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-5xl mx-auto">
-          {/* Terapia tradicional */}
-          <div className="bg-card rounded-3xl p-8 border border-border/50">
-            <h3 className="font-display text-2xl font-bold text-foreground mb-6 text-center">
-              Terapia tradicional
-            </h3>
-            <ul className="space-y-4">
-              {[
-                "1 hora por semana",
-                "Depende de agenda",
-                "R$600/mês (1x/semana) ou R$1.200/mês (2x/semana)",
-                "No restante do tempo, você se vira como dá",
-              ].map((item, index) => (
-                <li key={index} className="flex items-start gap-3">
-                  <div className="flex-shrink-0 w-6 h-6 rounded-full bg-muted flex items-center justify-center mt-0.5">
-                    <X className="w-4 h-4 text-muted-foreground" />
-                  </div>
-                  <span className="text-muted-foreground">{item}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
+        {/* Comparison table */}
+        <div className="max-w-4xl mx-auto">
+          <div className="bg-card rounded-3xl border border-border/50 overflow-hidden shadow-card">
+            {/* Header */}
+            <div className="grid grid-cols-3 bg-muted/50">
+              <div className="p-4 md:p-6">
+                <span className="text-sm font-medium text-muted-foreground">Aspecto</span>
+              </div>
+              <div className="p-4 md:p-6 text-center border-l border-border/30">
+                <span className="text-sm font-medium text-muted-foreground">Terapia Tradicional</span>
+              </div>
+              <div className="p-4 md:p-6 text-center border-l border-border/30 bg-sage-soft/30">
+                <span className="text-sm font-medium text-primary">AURA</span>
+              </div>
+            </div>
 
-          {/* AURA */}
-          <div className="bg-sage-soft/30 rounded-3xl p-8 border-2 border-primary/30 shadow-glow">
-            <h3 className="font-display text-2xl font-bold text-foreground mb-6 text-center">
-              AURA
-            </h3>
-            <ul className="space-y-4">
-              {[
-                "Acompanhamento no WhatsApp quando você precisa",
-                "Sem agenda e sem espera",
-                "Memória do seu histórico (continuidade real)",
-                "R$27,90/mês ou R$239,90/ano",
-              ].map((item, index) => (
-                <li key={index} className="flex items-start gap-3">
-                  <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center mt-0.5">
-                    <Check className="w-4 h-4 text-primary" />
+            {/* Rows */}
+            {comparisonData.map((row, index) => (
+              <div
+                key={index}
+                className={`grid grid-cols-3 ${
+                  index !== comparisonData.length - 1 ? "border-b border-border/30" : ""
+                }`}
+              >
+                <div className="p-4 md:p-6 flex items-center">
+                  <span className="text-sm text-foreground font-medium">{row.aspect}</span>
+                </div>
+                <div className="p-4 md:p-6 flex items-center justify-center border-l border-border/30">
+                  <div className="flex items-center gap-2">
+                    <X className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                    <span className="text-sm text-muted-foreground">{row.traditional}</span>
                   </div>
-                  <span className="text-foreground font-medium">{item}</span>
-                </li>
-              ))}
-            </ul>
+                </div>
+                <div className="p-4 md:p-6 flex items-center justify-center border-l border-border/30 bg-sage-soft/10">
+                  <div className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-primary flex-shrink-0" />
+                    <span className="text-sm text-foreground font-medium">{row.aura}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 
         <p className="text-center text-sm text-muted-foreground mt-8 max-w-2xl mx-auto">
-          AURA é acompanhamento emocional e direção prática — não é atendimento psicológico profissional.
+          ⚠️ AURA é acompanhamento emocional e direção prática — não substitui atendimento psicológico profissional. 
+          Se você está em crise severa, procure ajuda especializada.
         </p>
       </div>
     </section>
