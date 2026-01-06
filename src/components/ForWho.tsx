@@ -7,7 +7,7 @@ const profiles = [{
   iconColor: "text-primary"
 }, {
   icon: Heart,
-  title: "Você que guarda tudo pra si",
+  title: "Guarda tudo para si",
   description: "Não consegue falar com ninguém, engole as emoções, sente que ninguém entende.",
   color: "bg-lavender-soft",
   iconColor: "text-accent"
