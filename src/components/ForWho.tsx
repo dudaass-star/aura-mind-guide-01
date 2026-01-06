@@ -25,7 +25,7 @@ const profiles = [{
   iconColor: "text-sky"
 }, {
   icon: Compass,
-  title: "Você que precisa de direção",
+  title: "Precisa de direção",
   description: "Sabe que algo está errado mas não sabe por onde começar a mudar.",
   color: "bg-sage-soft",
   iconColor: "text-primary"
