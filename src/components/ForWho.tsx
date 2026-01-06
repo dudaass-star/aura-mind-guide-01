@@ -1,46 +1,37 @@
 import { Brain, Heart, Route, CalendarCheck, Compass } from "lucide-react";
-
-const profiles = [
-  {
-    icon: Brain,
-    title: "Você que pensa demais",
-    description: "Fica ruminando decisões, pensamentos em loop, dificuldade de desligar a mente.",
-    color: "bg-sage-soft",
-    iconColor: "text-primary",
-  },
-  {
-    icon: Heart,
-    title: "Você que guarda tudo pra si",
-    description: "Não consegue falar com ninguém, engole as emoções, sente que ninguém entende.",
-    color: "bg-lavender-soft",
-    iconColor: "text-accent",
-  },
-  {
-    icon: Route,
-    title: "Você que está em transição",
-    description: "Mudança de emprego, término, luto, nova fase da vida que exige clareza.",
-    color: "bg-blush-soft",
-    iconColor: "text-blush",
-  },
-  {
-    icon: CalendarCheck,
-    title: "Você que quer consistência",
-    description: "Já tentou várias coisas mas não consegue manter o hábito de cuidar de si.",
-    color: "bg-sky-soft",
-    iconColor: "text-sky",
-  },
-  {
-    icon: Compass,
-    title: "Você que precisa de direção",
-    description: "Sabe que algo está errado mas não sabe por onde começar a mudar.",
-    color: "bg-sage-soft",
-    iconColor: "text-primary",
-  },
-];
-
+const profiles = [{
+  icon: Brain,
+  title: "Você que pensa demais",
+  description: "Fica ruminando decisões, pensamentos em loop, dificuldade de desligar a mente.",
+  color: "bg-sage-soft",
+  iconColor: "text-primary"
+}, {
+  icon: Heart,
+  title: "Você que guarda tudo pra si",
+  description: "Não consegue falar com ninguém, engole as emoções, sente que ninguém entende.",
+  color: "bg-lavender-soft",
+  iconColor: "text-accent"
+}, {
+  icon: Route,
+  title: "Você que está em transição",
+  description: "Mudança de emprego, término, luto, nova fase da vida que exige clareza.",
+  color: "bg-blush-soft",
+  iconColor: "text-blush"
+}, {
+  icon: CalendarCheck,
+  title: "Você que quer consistência",
+  description: "Já tentou várias coisas mas não consegue manter o hábito de cuidar de si.",
+  color: "bg-sky-soft",
+  iconColor: "text-sky"
+}, {
+  icon: Compass,
+  title: "Você que precisa de direção",
+  description: "Sabe que algo está errado mas não sabe por onde começar a mudar.",
+  color: "bg-sage-soft",
+  iconColor: "text-primary"
+}];
 const ForWho = () => {
-  return (
-    <section className="py-24 bg-card relative overflow-hidden">
+  return <section className="py-24 bg-card relative overflow-hidden">
       {/* Background decoration */}
       <div className="absolute top-0 right-0 w-1/2 h-full bg-lavender-soft/20 rounded-l-[200px] opacity-50" />
       
@@ -50,17 +41,11 @@ const ForWho = () => {
             A AURA foi criada pra{" "}
             <span className="text-gradient-lavender">você que...</span>
           </h2>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Se você se identificou com algum desses perfis, a AURA pode te ajudar.
-          </p>
+          
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
-          {profiles.slice(0, 3).map((profile, index) => (
-            <div
-              key={index}
-              className="group p-8 rounded-3xl bg-background border border-border/50 hover:shadow-card hover:border-primary/20 transition-all duration-500"
-            >
+          {profiles.slice(0, 3).map((profile, index) => <div key={index} className="group p-8 rounded-3xl bg-background border border-border/50 hover:shadow-card hover:border-primary/20 transition-all duration-500">
               <div className={`w-16 h-16 rounded-2xl ${profile.color} flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300`}>
                 <profile.icon className={`w-8 h-8 ${profile.iconColor}`} />
               </div>
@@ -70,17 +55,12 @@ const ForWho = () => {
               <p className="text-muted-foreground leading-relaxed">
                 {profile.description}
               </p>
-            </div>
-          ))}
+            </div>)}
         </div>
 
         {/* Second row - 2 cards centered */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto mt-6">
-          {profiles.slice(3, 5).map((profile, index) => (
-            <div
-              key={index + 3}
-              className="group p-8 rounded-3xl bg-background border border-border/50 hover:shadow-card hover:border-primary/20 transition-all duration-500"
-            >
+          {profiles.slice(3, 5).map((profile, index) => <div key={index + 3} className="group p-8 rounded-3xl bg-background border border-border/50 hover:shadow-card hover:border-primary/20 transition-all duration-500">
               <div className={`w-16 h-16 rounded-2xl ${profile.color} flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300`}>
                 <profile.icon className={`w-8 h-8 ${profile.iconColor}`} />
               </div>
@@ -90,12 +70,9 @@ const ForWho = () => {
               <p className="text-muted-foreground leading-relaxed">
                 {profile.description}
               </p>
-            </div>
-          ))}
+            </div>)}
         </div>
       </div>
-    </section>
-  );
+    </section>;
 };
-
 export default ForWho;
