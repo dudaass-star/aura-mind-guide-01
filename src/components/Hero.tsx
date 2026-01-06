@@ -1,8 +1,32 @@
 import { Button } from "@/components/ui/button";
-import { Star, Clock, Brain, Sparkles } from "lucide-react";
+import { Star, Clock, Brain, Volume2, VolumeX, RotateCcw } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useRef, useState } from "react";
 
 const Hero = () => {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [isMuted, setIsMuted] = useState(true);
+  const [hasEnded, setHasEnded] = useState(false);
+
+  const toggleMute = () => {
+    if (videoRef.current) {
+      videoRef.current.muted = !videoRef.current.muted;
+      setIsMuted(!isMuted);
+    }
+  };
+
+  const replayVideo = () => {
+    if (videoRef.current) {
+      videoRef.current.currentTime = 0;
+      videoRef.current.play();
+      setHasEnded(false);
+    }
+  };
+
+  const handleVideoEnd = () => {
+    setHasEnded(true);
+  };
+
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden bg-gradient-hero pt-20">
       {/* Subtle decorative elements */}
@@ -12,38 +36,62 @@ const Hero = () => {
 
       <div className="container mx-auto px-4 relative z-10">
         <div className="max-w-4xl mx-auto text-center">
-          {/* Main headline */}
-          <h1 className="font-display text-4xl md:text-5xl lg:text-6xl font-bold leading-tight mb-6 animate-fade-up opacity-0">
-            <span className="text-foreground">Você não deveria ter que escolher</span>
-            <br />
-            <span className="text-gradient-sage">entre saúde mental e pagar as contas.</span>
+          {/* Video Container */}
+          <div className="relative mb-8 animate-fade-up opacity-0">
+            <div className="relative inline-block">
+              {/* Video with rounded styling */}
+              <div className="relative w-64 h-64 md:w-80 md:h-80 mx-auto rounded-full overflow-hidden shadow-2xl ring-4 ring-white/20">
+                <video
+                  ref={videoRef}
+                  className="w-full h-full object-cover"
+                  autoPlay
+                  muted
+                  playsInline
+                  onEnded={handleVideoEnd}
+                >
+                  <source src="/videos/aura-intro.mp4" type="video/mp4" />
+                </video>
+                
+                {/* Video Controls Overlay */}
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
+                  <button
+                    onClick={toggleMute}
+                    className="p-2 bg-black/40 hover:bg-black/60 rounded-full backdrop-blur-sm transition-colors"
+                    aria-label={isMuted ? "Ativar som" : "Mutar"}
+                  >
+                    {isMuted ? (
+                      <VolumeX className="w-5 h-5 text-white" />
+                    ) : (
+                      <Volume2 className="w-5 h-5 text-white" />
+                    )}
+                  </button>
+                  
+                  {hasEnded && (
+                    <button
+                      onClick={replayVideo}
+                      className="p-2 bg-black/40 hover:bg-black/60 rounded-full backdrop-blur-sm transition-colors"
+                      aria-label="Repetir vídeo"
+                    >
+                      <RotateCcw className="w-5 h-5 text-white" />
+                    </button>
+                  )}
+                </div>
+              </div>
+              
+              {/* Decorative ring animation */}
+              <div className="absolute inset-0 w-64 h-64 md:w-80 md:h-80 mx-auto rounded-full border-2 border-primary/20 animate-pulse-soft" />
+            </div>
+          </div>
+
+          {/* Simplified headline */}
+          <h1 className="font-display text-2xl md:text-3xl lg:text-4xl font-bold leading-tight mb-4 animate-fade-up opacity-0 delay-100">
+            <span className="text-gradient-sage">Acompanhamento emocional acessível.</span>
           </h1>
 
           {/* Subheadline */}
-          <p className="font-body text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto mb-8 leading-relaxed animate-fade-up opacity-0 delay-100">
-            A AURA te dá acompanhamento emocional profundo, com memória do seu histórico, 
-            sessões estruturadas e suporte 24/7 — por menos de <span className="text-foreground font-semibold">R$2 por dia</span>.
+          <p className="font-body text-base md:text-lg text-muted-foreground max-w-2xl mx-auto mb-8 leading-relaxed animate-fade-up opacity-0 delay-200">
+            Sessões estruturadas, memória do seu histórico e suporte 24/7 — por menos de <span className="text-foreground font-semibold">R$2 por dia</span>.
           </p>
-
-          {/* Trust badges - redesigned */}
-          <div className="flex flex-wrap justify-center gap-4 md:gap-6 text-sm text-foreground mb-10 animate-fade-up opacity-0 delay-200">
-            <div className="flex items-center gap-2 bg-amber-100/80 px-4 py-2 rounded-full border border-amber-200/50">
-              <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
-              <span className="font-medium">4.9/5 de satisfação</span>
-            </div>
-            <div className="flex items-center gap-2 bg-sage-soft/60 px-4 py-2 rounded-full">
-              <Clock className="w-4 h-4 text-primary" />
-              <span>Resposta em segundos</span>
-            </div>
-            <div className="flex items-center gap-2 bg-lavender-soft/60 px-4 py-2 rounded-full">
-              <Brain className="w-4 h-4 text-accent" />
-              <span>Memória de longo prazo</span>
-            </div>
-            <div className="flex items-center gap-2 bg-blush-soft/60 px-4 py-2 rounded-full">
-              <Sparkles className="w-4 h-4 text-blush" />
-              <span>Sessões com metodologia</span>
-            </div>
-          </div>
 
           {/* CTA */}
           <div className="flex flex-col items-center gap-4 animate-fade-up opacity-0 delay-300">
@@ -56,13 +104,22 @@ const Hero = () => {
               Sem cartão de crédito. Sem compromisso.
             </p>
           </div>
-        </div>
-      </div>
 
-      {/* Scroll indicator */}
-      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 animate-float">
-        <div className="w-6 h-10 rounded-full border-2 border-border flex items-start justify-center p-2">
-          <div className="w-1 h-2 bg-primary rounded-full animate-pulse" />
+          {/* Trust badges - more subtle */}
+          <div className="flex flex-wrap justify-center gap-4 md:gap-6 text-sm text-muted-foreground mt-10 animate-fade-up opacity-0 delay-400">
+            <div className="flex items-center gap-2">
+              <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
+              <span>4.9/5</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 text-primary" />
+              <span>24/7</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Brain className="w-4 h-4 text-accent" />
+              <span>Memória de longo prazo</span>
+            </div>
+          </div>
         </div>
       </div>
     </section>
