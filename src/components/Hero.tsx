@@ -39,11 +39,11 @@ const Hero = () => {
           {/* Video Container */}
           <div className="relative mb-8 animate-fade-up opacity-0">
             <div className="relative inline-block">
-              {/* Video with rounded styling */}
-              <div className="relative w-64 h-64 md:w-80 md:h-80 mx-auto rounded-full overflow-hidden shadow-2xl ring-4 ring-white/20">
+              {/* Video with rounded styling - aspect ratio preserved */}
+              <div className="relative w-72 md:w-96 mx-auto rounded-2xl overflow-hidden shadow-2xl ring-4 ring-white/20">
                 <video
                   ref={videoRef}
-                  className="w-full h-full object-cover"
+                  className="w-full h-auto"
                   autoPlay
                   muted
                   playsInline
@@ -51,35 +51,32 @@ const Hero = () => {
                 >
                   <source src="/videos/aura-intro.mp4" type="video/mp4" />
                 </video>
-                
-                {/* Video Controls Overlay */}
-                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
-                  <button
-                    onClick={toggleMute}
-                    className="p-2 bg-black/40 hover:bg-black/60 rounded-full backdrop-blur-sm transition-colors"
-                    aria-label={isMuted ? "Ativar som" : "Mutar"}
-                  >
-                    {isMuted ? (
-                      <VolumeX className="w-5 h-5 text-white" />
-                    ) : (
-                      <Volume2 className="w-5 h-5 text-white" />
-                    )}
-                  </button>
-                  
-                  {hasEnded && (
-                    <button
-                      onClick={replayVideo}
-                      className="p-2 bg-black/40 hover:bg-black/60 rounded-full backdrop-blur-sm transition-colors"
-                      aria-label="Repetir vídeo"
-                    >
-                      <RotateCcw className="w-5 h-5 text-white" />
-                    </button>
-                  )}
-                </div>
               </div>
               
-              {/* Decorative ring animation */}
-              <div className="absolute inset-0 w-64 h-64 md:w-80 md:h-80 mx-auto rounded-full border-2 border-primary/20 animate-pulse-soft" />
+              {/* Video Controls - outside video container */}
+              <div className="flex justify-center gap-3 mt-4">
+                <button
+                  onClick={toggleMute}
+                  className="p-3 bg-primary/10 hover:bg-primary/20 rounded-full transition-colors z-10"
+                  aria-label={isMuted ? "Ativar som" : "Mutar"}
+                >
+                  {isMuted ? (
+                    <VolumeX className="w-5 h-5 text-primary" />
+                  ) : (
+                    <Volume2 className="w-5 h-5 text-primary" />
+                  )}
+                </button>
+                
+                {hasEnded && (
+                  <button
+                    onClick={replayVideo}
+                    className="p-3 bg-primary/10 hover:bg-primary/20 rounded-full transition-colors z-10"
+                    aria-label="Repetir vídeo"
+                  >
+                    <RotateCcw className="w-5 h-5 text-primary" />
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
