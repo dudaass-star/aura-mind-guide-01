@@ -1,7 +1,7 @@
 import { Brain, Heart, Route, CalendarCheck, Compass } from "lucide-react";
 const profiles = [{
   icon: Brain,
-  title: "Você que pensa demais",
+  title: "Pensa demais",
   description: "Fica ruminando decisões, pensamentos em loop, dificuldade de desligar a mente.",
   color: "bg-sage-soft",
   iconColor: "text-primary"
