@@ -13,13 +13,13 @@ const profiles = [{
   iconColor: "text-accent"
 }, {
   icon: Route,
-  title: "Você que está em transição",
+  title: "Está em transição",
   description: "Mudança de emprego, término, luto, nova fase da vida que exige clareza.",
   color: "bg-blush-soft",
   iconColor: "text-blush"
 }, {
   icon: CalendarCheck,
-  title: "Você que quer consistência",
+  title: "Quer consistência",
   description: "Já tentou várias coisas mas não consegue manter o hábito de cuidar de si.",
   color: "bg-sky-soft",
   iconColor: "text-sky"
