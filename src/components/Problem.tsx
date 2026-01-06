@@ -3,7 +3,7 @@ import { Clock, Wallet, Calendar, HelpCircle } from "lucide-react";
 const painPoints = [
   {
     icon: Calendar,
-    text: "Fila de espera de semanas",
+    text: "Dificuldade de horários",
   },
   {
     icon: Wallet,
