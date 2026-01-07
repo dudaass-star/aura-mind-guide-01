@@ -13,7 +13,7 @@ const Header = () => {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <Link to="/" className="flex items-center">
-            <img src={logoOlaAura} alt="Olá AURA" className="h-10 md:h-12" />
+            <img src={logoOlaAura} alt="Olá AURA" className="h-8 w-auto" />
           </Link>
 
           {/* Desktop nav */}
