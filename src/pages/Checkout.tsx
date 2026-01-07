@@ -3,19 +3,21 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { useState, useEffect } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { Link, useLocation } from "react-router-dom";
 import { ArrowLeft, CreditCard, Check, Shield, Lock, MessageCircle, Calendar } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
 type PlanId = "essencial" | "direcao" | "transformacao";
+type BillingPeriod = "monthly" | "yearly";
 
 interface PlanConfig {
   name: string;
-  price: string;
-  priceValue: number;
-  period: string;
+  monthlyPrice: string;
+  yearlyPrice: string;
+  yearlyMonthlyEquivalent: string;
+  yearlyDiscount: number;
   sessions: number;
   highlights: string[];
 }
@@ -23,25 +25,28 @@ interface PlanConfig {
 const plans: Record<PlanId, PlanConfig> = {
   essencial: {
     name: "Essencial",
-    price: "29,90",
-    priceValue: 2990,
-    period: "mês",
+    monthlyPrice: "29,90",
+    yearlyPrice: "269,10",
+    yearlyMonthlyEquivalent: "22,43",
+    yearlyDiscount: 25,
     sessions: 0,
     highlights: ["Conversas ilimitadas 24/7", "Check-in diário", "Review semanal"],
   },
   direcao: {
     name: "Direção",
-    price: "49,90",
-    priceValue: 4990,
-    period: "mês",
+    monthlyPrice: "49,90",
+    yearlyPrice: "419,16",
+    yearlyMonthlyEquivalent: "34,93",
+    yearlyDiscount: 30,
     sessions: 4,
     highlights: ["Tudo do Essencial", "4 Sessões Especiais/mês", "Resumo após cada sessão"],
   },
   transformacao: {
     name: "Transformação",
-    price: "79,90",
-    priceValue: 7990,
-    period: "mês",
+    monthlyPrice: "79,90",
+    yearlyPrice: "671,16",
+    yearlyMonthlyEquivalent: "55,93",
+    yearlyDiscount: 30,
     sessions: 8,
     highlights: ["Tudo do Direção", "8 Sessões Especiais/mês", "Prioridade no agendamento"],
   },
@@ -49,20 +54,26 @@ const plans: Record<PlanId, PlanConfig> = {
 
 const Checkout = () => {
   const location = useLocation();
-  const navigate = useNavigate();
   
   // Support both URL query param (?plan=direcao) and location state
   const searchParams = new URLSearchParams(location.search);
   const planFromUrl = searchParams.get('plan') as PlanId | null;
+  const billingFromUrl = searchParams.get('billing') as BillingPeriod | null;
   const planFromState = location.state?.plan as PlanId | undefined;
+  const billingFromState = location.state?.billing as BillingPeriod | undefined;
+  
   const initialPlan = planFromUrl || planFromState || "direcao";
+  const initialBilling = billingFromUrl || billingFromState || "monthly";
   
   const [selectedPlan, setSelectedPlan] = useState<PlanId>(initialPlan);
+  const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>(initialBilling);
   const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
   const currentPlan = plans[selectedPlan];
+  const currentPrice = billingPeriod === "monthly" ? currentPlan.monthlyPrice : currentPlan.yearlyPrice;
+  const periodLabel = billingPeriod === "monthly" ? "mês" : "ano";
 
   const formatPhone = (value: string) => {
     const numbers = value.replace(/\D/g, "");
@@ -94,6 +105,7 @@ const Checkout = () => {
       const { data, error } = await supabase.functions.invoke('create-checkout', {
         body: {
           plan: selectedPlan,
+          billing: billingPeriod,
           name: name.trim(),
           phone: phone,
         },
@@ -107,7 +119,7 @@ const Checkout = () => {
         const checkoutUrl = data.url as string;
 
         // Store user info in localStorage for thank you page
-        localStorage.setItem('aura_checkout', JSON.stringify({ name, phone, plan: selectedPlan }));
+        localStorage.setItem('aura_checkout', JSON.stringify({ name, phone, plan: selectedPlan, billing: billingPeriod }));
 
         // Redirect to Stripe Checkout
         if (window.top) {
@@ -157,6 +169,44 @@ const Checkout = () => {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-8">
+              {/* Billing period toggle */}
+              <div className="bg-card rounded-2xl p-6 border border-border/50">
+                <h2 className="font-display text-lg font-semibold text-foreground mb-4">
+                  Período de cobrança
+                </h2>
+                <div className="flex items-center justify-center gap-3 p-1 bg-secondary/50 rounded-full">
+                  <button
+                    type="button"
+                    onClick={() => setBillingPeriod("monthly")}
+                    className={`flex-1 px-4 py-2.5 rounded-full text-sm font-medium transition-all ${
+                      billingPeriod === "monthly"
+                        ? "bg-primary text-primary-foreground shadow-md"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    Mensal
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBillingPeriod("yearly")}
+                    className={`flex-1 px-4 py-2.5 rounded-full text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+                      billingPeriod === "yearly"
+                        ? "bg-primary text-primary-foreground shadow-md"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    Anual
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${
+                      billingPeriod === "yearly" 
+                        ? "bg-primary-foreground/20 text-primary-foreground" 
+                        : "bg-green-500/20 text-green-600"
+                    }`}>
+                      -{currentPlan.yearlyDiscount}%
+                    </span>
+                  </button>
+                </div>
+              </div>
+
               {/* Plan selection */}
               <div className="bg-card rounded-2xl p-6 border border-border/50">
                 <h2 className="font-display text-lg font-semibold text-foreground mb-4">
@@ -168,43 +218,58 @@ const Checkout = () => {
                   onValueChange={(value) => setSelectedPlan(value as PlanId)}
                   className="space-y-3"
                 >
-                  {(Object.entries(plans) as [PlanId, PlanConfig][]).map(([id, plan]) => (
-                    <label
-                      key={id}
-                      className={`relative flex items-start justify-between p-4 rounded-xl border cursor-pointer transition-all ${
-                        selectedPlan === id
-                          ? "border-primary bg-primary/5"
-                          : "border-border/50 hover:border-border"
-                      }`}
-                    >
-                      {id === "direcao" && (
-                        <div className="absolute -top-2 left-4 px-2 py-0.5 bg-primary text-primary-foreground text-xs font-medium rounded">
-                          Mais popular
-                        </div>
-                      )}
-                      <div className="flex items-start gap-3">
-                        <RadioGroupItem value={id} id={id} className="mt-1" />
-                        <div>
-                          <p className="font-medium text-foreground">{plan.name}</p>
-                          <div className="flex flex-wrap gap-2 mt-2">
-                            {plan.sessions > 0 && (
+                  {(Object.entries(plans) as [PlanId, PlanConfig][]).map(([id, plan]) => {
+                    const price = billingPeriod === "monthly" ? plan.monthlyPrice : plan.yearlyPrice;
+                    const period = billingPeriod === "monthly" ? "mês" : "ano";
+                    
+                    return (
+                      <label
+                        key={id}
+                        className={`relative flex items-start justify-between p-4 rounded-xl border cursor-pointer transition-all ${
+                          selectedPlan === id
+                            ? "border-primary bg-primary/5"
+                            : "border-border/50 hover:border-border"
+                        }`}
+                      >
+                        {id === "direcao" && (
+                          <div className="absolute -top-2 left-4 px-2 py-0.5 bg-primary text-primary-foreground text-xs font-medium rounded">
+                            Mais popular
+                          </div>
+                        )}
+                        {billingPeriod === "yearly" && (
+                          <div className="absolute -top-2 right-4 px-2 py-0.5 bg-green-500 text-white text-xs font-medium rounded">
+                            -{plan.yearlyDiscount}%
+                          </div>
+                        )}
+                        <div className="flex items-start gap-3">
+                          <RadioGroupItem value={id} id={id} className="mt-1" />
+                          <div>
+                            <p className="font-medium text-foreground">{plan.name}</p>
+                            <div className="flex flex-wrap gap-2 mt-2">
+                              {plan.sessions > 0 && (
+                                <span className="inline-flex items-center gap-1 text-xs bg-secondary/50 text-muted-foreground px-2 py-1 rounded">
+                                  <Calendar className="w-3 h-3" />
+                                  {plan.sessions} sessões/mês
+                                </span>
+                              )}
                               <span className="inline-flex items-center gap-1 text-xs bg-secondary/50 text-muted-foreground px-2 py-1 rounded">
-                                <Calendar className="w-3 h-3" />
-                                {plan.sessions} sessões/mês
+                                <MessageCircle className="w-3 h-3" />
+                                Chat ilimitado
                               </span>
+                            </div>
+                            {billingPeriod === "yearly" && (
+                              <p className="text-xs text-muted-foreground mt-2">
+                                equivale a R${plan.yearlyMonthlyEquivalent}/mês
+                              </p>
                             )}
-                            <span className="inline-flex items-center gap-1 text-xs bg-secondary/50 text-muted-foreground px-2 py-1 rounded">
-                              <MessageCircle className="w-3 h-3" />
-                              Chat ilimitado
-                            </span>
                           </div>
                         </div>
-                      </div>
-                      <p className="font-display text-xl font-semibold text-foreground whitespace-nowrap">
-                        R$ {plan.price}<span className="text-sm text-muted-foreground">/{plan.period}</span>
-                      </p>
-                    </label>
-                  ))}
+                        <p className="font-display text-xl font-semibold text-foreground whitespace-nowrap">
+                          R$ {price}<span className="text-sm text-muted-foreground">/{period}</span>
+                        </p>
+                      </label>
+                    );
+                  })}
                 </RadioGroup>
               </div>
 
@@ -263,13 +328,21 @@ const Checkout = () => {
               {/* Summary */}
               <div className="bg-secondary/30 rounded-2xl p-6 border border-border/50">
                 <div className="flex justify-between items-center mb-4">
-                  <span className="text-muted-foreground">Plano {currentPlan.name}</span>
-                  <span className="font-semibold text-foreground">R$ {currentPlan.price}</span>
+                  <span className="text-muted-foreground">Plano {currentPlan.name} ({billingPeriod === "monthly" ? "mensal" : "anual"})</span>
+                  <span className="font-semibold text-foreground">R$ {currentPrice}</span>
                 </div>
+                {billingPeriod === "yearly" && (
+                  <div className="flex justify-between items-center mb-4 text-sm">
+                    <span className="text-green-600">Economia de {currentPlan.yearlyDiscount}%</span>
+                    <span className="text-green-600 font-medium">
+                      equivale a R${currentPlan.yearlyMonthlyEquivalent}/mês
+                    </span>
+                  </div>
+                )}
                 <div className="flex justify-between items-center pt-4 border-t border-border/50">
-                  <span className="font-medium text-foreground">Total mensal</span>
+                  <span className="font-medium text-foreground">Total {billingPeriod === "monthly" ? "mensal" : "anual"}</span>
                   <span className="font-display text-2xl font-semibold text-foreground">
-                    R$ {currentPlan.price}
+                    R$ {currentPrice}
                   </span>
                 </div>
               </div>

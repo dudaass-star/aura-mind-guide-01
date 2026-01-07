@@ -6,11 +6,20 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Price IDs from Stripe - New Plans
-const PRICES: Record<string, string> = {
-  essencial: "price_1SlEYjHMRAbm8MiTB689p4b6",     // R$ 29,90/mês
-  direcao: "price_1SlEb6HMRAbm8MiTz4H3EBDT",       // R$ 49,90/mês
-  transformacao: "price_1SlEcKHMRAbm8MiTLWgfYHAV", // R$ 79,90/mês
+// Price IDs from Stripe
+const PRICES: Record<string, { monthly: string; yearly: string }> = {
+  essencial: {
+    monthly: "price_1SlEYjHMRAbm8MiTB689p4b6",  // R$ 29,90/mês
+    yearly: "price_1Sn2oPHMRAbm8MiTh68EoqzT",   // R$ 269,10/ano (25% off)
+  },
+  direcao: {
+    monthly: "price_1SlEb6HMRAbm8MiTz4H3EBDT",  // R$ 49,90/mês
+    yearly: "price_1Sn2pAHMRAbm8MiTaVR3LOsm",   // R$ 419,16/ano (30% off)
+  },
+  transformacao: {
+    monthly: "price_1SlEcKHMRAbm8MiTLWgfYHAV",  // R$ 79,90/mês
+    yearly: "price_1Sn2psHMRAbm8MiTV25S7DCi",   // R$ 671,16/ano (30% off)
+  },
 };
 
 const logStep = (step: string, details?: any) => {
@@ -29,8 +38,8 @@ serve(async (req) => {
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
 
-    const { plan, name, phone } = await req.json();
-    logStep("Request received", { plan, name, phone });
+    const { plan, billing = "monthly", name, phone } = await req.json();
+    logStep("Request received", { plan, billing, name, phone });
 
     if (!plan || !PRICES[plan]) {
       throw new Error("Invalid plan selected");
@@ -38,6 +47,14 @@ serve(async (req) => {
 
     if (!name || !phone) {
       throw new Error("Name and phone are required");
+    }
+
+    // Validate billing period
+    const billingPeriod = billing === "yearly" ? "yearly" : "monthly";
+    const priceId = PRICES[plan][billingPeriod];
+
+    if (!priceId) {
+      throw new Error("Invalid billing period");
     }
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
@@ -85,7 +102,7 @@ serve(async (req) => {
       customer: customerId,
       line_items: [
         {
-          price: PRICES[plan],
+          price: priceId,
           quantity: 1,
         },
       ],
@@ -97,18 +114,20 @@ serve(async (req) => {
         phone: phoneClean,
         name: name,
         plan: plan,
+        billing: billingPeriod,
       },
       subscription_data: {
         metadata: {
           phone: phoneClean,
           name: name,
           plan: plan,
+          billing: billingPeriod,
         },
       },
       payment_method_types: ["card"],
     };
 
-    logStep("Creating checkout session", { plan });
+    logStep("Creating checkout session", { plan, billing: billingPeriod, priceId });
     const session = await stripe.checkout.sessions.create(sessionConfig);
     logStep("Checkout session created", { sessionId: session.id });
 
@@ -121,7 +140,8 @@ serve(async (req) => {
     logStep("ERROR", { message: errorMessage });
     
     const isValidationError = errorMessage.includes("Invalid plan") || 
-                              errorMessage.includes("Name and phone");
+                              errorMessage.includes("Name and phone") ||
+                              errorMessage.includes("Invalid billing");
     
     return new Response(JSON.stringify({ 
       error: isValidationError ? errorMessage : "Erro ao processar pagamento. Tente novamente." 
