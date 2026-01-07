@@ -1,10 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
-import { Shield, Heart } from "lucide-react";
-
+import { Heart } from "lucide-react";
 const FinalCTA = () => {
-  return (
-    <section className="py-24 bg-gradient-to-b from-lavender-soft/30 via-sage-soft/20 to-background relative overflow-hidden">
+  return <section className="py-24 bg-gradient-to-b from-lavender-soft/30 via-sage-soft/20 to-background relative overflow-hidden">
       <div className="absolute top-0 right-0 w-1/2 h-full bg-sage-soft/30 rounded-l-[100px] opacity-50" />
       
       <div className="container mx-auto px-4 relative z-10">
@@ -28,17 +26,12 @@ const FinalCTA = () => {
 
           {/* Trust badges */}
           <div className="flex flex-wrap justify-center gap-4 text-sm text-muted-foreground">
-            <div className="flex items-center gap-2">
-              <Shield className="w-4 h-4 text-primary" />
-              <span>Garantia de 7 dias</span>
-            </div>
-            <span>•</span>
-            <span>+5.000 pessoas já começaram</span>
+            
+            
+            <span className="text-xl text-lavender font-bold">+5.000 pessoas já começaram</span>
           </div>
         </div>
       </div>
-    </section>
-  );
+    </section>;
 };
-
 export default FinalCTA;
