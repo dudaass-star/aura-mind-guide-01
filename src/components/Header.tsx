@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { Menu, X } from "lucide-react";
 import { useState } from "react";
+import logoOlaAura from "@/assets/logo-ola-aura.png";
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -11,13 +12,8 @@ const Header = () => {
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-xl bg-primary/15 flex items-center justify-center">
-              <span className="text-primary font-display font-bold text-xl">A</span>
-            </div>
-            <span className="font-display text-xl font-bold text-foreground">
-              AURA
-            </span>
+          <Link to="/" className="flex items-center">
+            <img src={logoOlaAura} alt="Olá AURA" className="h-8" />
           </Link>
 
           {/* Desktop nav */}
