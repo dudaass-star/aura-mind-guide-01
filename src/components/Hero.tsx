@@ -41,12 +41,14 @@ const Hero = () => {
             <div className="relative inline-block">
               {/* Video with rounded styling - aspect ratio preserved */}
               <div className="relative w-72 md:w-96 mx-auto rounded-2xl overflow-hidden shadow-2xl ring-4 ring-white/20">
-                <video
+              <video
                   ref={videoRef}
                   className="w-full h-auto"
                   autoPlay
                   muted
                   playsInline
+                  poster="/images/aura-poster.jpg"
+                  preload="metadata"
                   onEnded={handleVideoEnd}
                 >
                   <source src="/videos/aura-intro.mp4" type="video/mp4" />
