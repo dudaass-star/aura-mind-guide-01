@@ -7,6 +7,11 @@ const Hero = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isMuted, setIsMuted] = useState(true);
   const [hasEnded, setHasEnded] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const handleVideoReady = () => {
+    setIsLoading(false);
+  };
 
   const toggleMute = () => {
     if (videoRef.current) {
@@ -41,18 +46,27 @@ const Hero = () => {
             <div className="relative inline-block">
               {/* Video with rounded styling - aspect ratio preserved */}
               <div className="relative w-72 md:w-96 mx-auto rounded-2xl overflow-hidden shadow-2xl ring-4 ring-white/20">
+              {/* Loading overlay */}
+              {isLoading && (
+                <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-sage-soft via-lavender-soft to-blush-soft">
+                  <div className="relative">
+                    <div className="w-16 h-16 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
+                    <div className="absolute inset-0 w-16 h-16 rounded-full border-4 border-transparent border-b-accent/50 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }} />
+                  </div>
+                </div>
+              )}
               <video
-                  ref={videoRef}
-                  className="w-full h-auto"
-                  autoPlay
-                  muted
-                  playsInline
-                  poster="/images/aura-poster.jpg"
-                  preload="metadata"
-                  onEnded={handleVideoEnd}
-                >
-                  <source src="/videos/aura-intro.mp4" type="video/mp4" />
-                </video>
+                ref={videoRef}
+                className={`w-full h-auto transition-opacity duration-500 ${isLoading ? 'opacity-0' : 'opacity-100'}`}
+                autoPlay
+                muted
+                playsInline
+                preload="auto"
+                onCanPlay={handleVideoReady}
+                onEnded={handleVideoEnd}
+              >
+                <source src="/videos/aura-intro.mp4" type="video/mp4" />
+              </video>
               </div>
               
               {/* Video Controls - outside video container */}
