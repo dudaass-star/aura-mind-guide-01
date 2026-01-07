@@ -1,4 +1,5 @@
 import { Smartphone } from "lucide-react";
+import avatarAura from "@/assets/avatar-aura.jpg";
 
 const messages = [
   {
@@ -62,9 +63,11 @@ const Demo = () => {
               <div className="bg-card rounded-[2.5rem] overflow-hidden">
                 {/* Phone header */}
                 <div className="bg-primary/10 px-6 py-4 flex items-center gap-3 border-b border-border/30">
-                  <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-                    <span className="text-primary font-display font-bold text-lg">A</span>
-                  </div>
+                  <img 
+                    src={avatarAura} 
+                    alt="AURA" 
+                    className="w-10 h-10 rounded-full object-cover"
+                  />
                   <div className="flex-1">
                     <p className="font-semibold text-foreground text-sm">AURA</p>
                     <p className="text-xs text-muted-foreground">online agora</p>
