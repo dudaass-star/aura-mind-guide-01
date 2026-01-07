@@ -342,8 +342,47 @@ Deno.serve(async (req) => {
       });
     }
 
-    console.log(`👤 Found user: ${profile.name} (${profile.user_id})`);
+    console.log(`👤 Found user: ${profile.name} (${profile.user_id}), status: ${profile.status}`);
 
+    // ========================================================================
+    // TRIAL LIMIT CHECK
+    // ========================================================================
+    if (profile.status === 'trial') {
+      const trialCount = profile.trial_conversations_count || 0;
+      
+      // Se já passou do limite (6+ mensagens), bloquear
+      if (trialCount >= 5) {
+        console.log(`🚫 Trial limit reached for user ${profile.user_id}, count: ${trialCount}`);
+        
+        const limitMessage = `Oi, ${profile.name}! 💜
+
+Suas 5 conversas grátis acabaram.
+
+Foi muito bom te conhecer! Se você quiser continuar essa jornada comigo, escolha um plano:
+
+👉 https://olaaura.com.br/checkout
+
+Vou ficar esperando você voltar. 🤗`;
+        
+        await sendTextMessage(payload.cleanPhone, limitMessage);
+        
+        return new Response(JSON.stringify({ status: 'trial_limit_reached' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      // Incrementar contador de conversas do trial
+      const newCount = trialCount + 1;
+      await supabase
+        .from('profiles')
+        .update({ trial_conversations_count: newCount })
+        .eq('user_id', profile.user_id);
+      
+      console.log(`📊 Trial conversation ${newCount}/5 for user ${profile.user_id}`);
+      
+      // Passar info do trial para o agent
+      profile.trial_conversations_count = newCount;
+    }
     // ========================================================================
     // HANDLE FAILED AUDIO TRANSCRIPTION
     // ========================================================================
@@ -428,6 +467,7 @@ Deno.serve(async (req) => {
         user_id: profile.user_id,
         phone: payload.cleanPhone,
         is_audio_message: isAudioMessage,
+        trial_count: profile.status === 'trial' ? profile.trial_conversations_count : null,
       }),
     });
 

@@ -268,6 +268,8 @@ export type Database = {
           sessions_used_this_month: number | null
           status: string | null
           therapy_experience: string | null
+          trial_conversations_count: number
+          trial_started_at: string | null
           updated_at: string | null
           upgrade_suggested_at: string | null
           user_id: string
@@ -291,6 +293,8 @@ export type Database = {
           sessions_used_this_month?: number | null
           status?: string | null
           therapy_experience?: string | null
+          trial_conversations_count?: number
+          trial_started_at?: string | null
           updated_at?: string | null
           upgrade_suggested_at?: string | null
           user_id: string
@@ -314,6 +318,8 @@ export type Database = {
           sessions_used_this_month?: number | null
           status?: string | null
           therapy_experience?: string | null
+          trial_conversations_count?: number
+          trial_started_at?: string | null
           updated_at?: string | null
           upgrade_suggested_at?: string | null
           user_id?: string

@@ -10,6 +10,8 @@ import ThankYou from "./pages/ThankYou";
 import CancelSubscription from "./pages/CancelSubscription";
 import TermsOfService from "./pages/TermsOfService";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
+import StartTrial from "./pages/StartTrial";
+import TrialStarted from "./pages/TrialStarted";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -28,6 +30,8 @@ const App = () => (
             <Route path="/cancelar" element={<CancelSubscription />} />
             <Route path="/termos" element={<TermsOfService />} />
             <Route path="/privacidade" element={<PrivacyPolicy />} />
+            <Route path="/experimentar" element={<StartTrial />} />
+            <Route path="/trial-iniciado" element={<TrialStarted />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

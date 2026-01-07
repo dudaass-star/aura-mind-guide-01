@@ -18,9 +18,9 @@ const FinalCTA = () => {
             5 conversas grátis. Sem cartão. Sem compromisso.
           </p>
 
-          <Link to="/checkout">
+          <Link to="/experimentar">
             <Button variant="sage" size="xl" className="min-w-[280px] mb-6">
-              Começar agora
+              Experimentar Grátis
             </Button>
           </Link>
 

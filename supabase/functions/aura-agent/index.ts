@@ -1623,9 +1623,9 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
 
-    const { message, user_id, phone } = await req.json();
+    const { message, user_id, phone, trial_count } = await req.json();
 
-    console.log("AURA received:", { user_id, phone, message: message?.substring(0, 50) });
+    console.log("AURA received:", { user_id, phone, message: message?.substring(0, 50), trial_count });
 
     // Buscar perfil do usuário
     let profile = null;
@@ -2283,6 +2283,37 @@ As primeiras 2 respostas de cada sessão DEVEM ser em áudio para maior intimida
 
     // Adicionar instrução de upgrade se necessário
     let finalPrompt = contextualPrompt + continuityContext;
+    
+    // Contexto de TRIAL GRATUITO
+    if (trial_count !== null && trial_count !== undefined) {
+      const remaining = 5 - trial_count;
+      
+      if (trial_count === 4) {
+        // 4ª conversa - lembrete gentil
+        finalPrompt += `\n\n💫 CONTEXTO DE TRIAL (LEMBRETE GENTIL):
+Esta é a 4ª conversa do trial gratuito de ${profile?.name || 'o usuário'}.
+Ele ainda tem ${remaining} conversa(s) grátis.
+
+INSTRUÇÃO: No final NATURAL da sua resposta, mencione de forma gentil que restam poucas conversas grátis:
+- "Ei, só te avisando que nossa próxima conversa é a última do trial gratuito! Se você quiser continuar comigo depois, é só escolher um plano, tá? 💜"
+- NÃO seja invasiva, apenas um lembrete amigável
+- Continue a conversa normalmente, este aviso vem NO FINAL`;
+      } else if (trial_count === 5) {
+        // 5ª conversa - última, convite para assinar
+        finalPrompt += `\n\n💜 CONTEXTO DE TRIAL (ÚLTIMA CONVERSA):
+Esta é a ÚLTIMA conversa do trial gratuito de ${profile?.name || 'o usuário'}!
+
+INSTRUÇÃO: Ao final da sua resposta, faça um convite carinhoso para continuar:
+- Primeiro, responda normalmente o que ele disse
+- Depois, mencione que foi ótimo conhecê-lo(a)
+- Convide para continuar: "Se você quiser que a gente continue essa jornada juntas, escolhe um plano: 👉 https://olaaura.com.br/checkout"
+- Seja genuína, não comercial demais`;
+      } else if (trial_count <= 3) {
+        // Conversas 1-3: apenas informar internamente, sem mencionar
+        finalPrompt += `\n\n(Nota interna: Esta é a conversa ${trial_count}/5 do trial gratuito. Não precisa mencionar isso ao usuário ainda.)`;
+      }
+    }
+    
     if (shouldSuggestUpgrade) {
       finalPrompt += `\n\n⚠️ INSTRUÇÃO ESPECIAL: O usuário já mandou ${messagesToday} mensagens hoje. Sugira naturalmente o upgrade para o plano Direção no final da sua resposta.`;
     }
