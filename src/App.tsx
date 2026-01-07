@@ -8,6 +8,8 @@ import Index from "./pages/Index";
 import Checkout from "./pages/Checkout";
 import ThankYou from "./pages/ThankYou";
 import CancelSubscription from "./pages/CancelSubscription";
+import TermsOfService from "./pages/TermsOfService";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -24,6 +26,8 @@ const App = () => (
             <Route path="/checkout" element={<Checkout />} />
             <Route path="/obrigado" element={<ThankYou />} />
             <Route path="/cancelar" element={<CancelSubscription />} />
+            <Route path="/termos" element={<TermsOfService />} />
+            <Route path="/privacidade" element={<PrivacyPolicy />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
