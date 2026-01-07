@@ -92,13 +92,13 @@ const Hero = () => {
 
           {/* CTA */}
           <div className="flex flex-col items-center gap-4 animate-fade-up opacity-0 delay-300">
-            <Link to="/checkout">
+            <Link to="/experimentar">
               <Button variant="sage" size="xl" className="min-w-[280px]">
-                Começar com 5 conversas grátis
+                Começar Grátis
               </Button>
             </Link>
             <p className="text-sm text-muted-foreground">
-              Sem cartão de crédito. Sem compromisso.
+              5 conversas grátis. Sem cartão. Sem compromisso.
             </p>
           </div>
 
