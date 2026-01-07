@@ -1,12 +1,25 @@
 import { Button } from "@/components/ui/button";
-import { Check, Sparkles, MessageCircle, Calendar, FileText, Headphones, Shield, Zap } from "lucide-react";
+import { Check, Sparkles, MessageCircle, Calendar, FileText, Headphones, Zap } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useState } from "react";
+
+type BillingPeriod = "monthly" | "yearly";
+
 const plans = [{
   id: "essencial",
   name: "Essencial",
-  price: "29,90",
-  dailyPrice: "~R$1/dia",
-  period: "/mês",
+  monthlyPrice: "29,90",
+  yearlyPrice: "269,10",
+  yearlyMonthlyEquivalent: "22,43",
+  yearlyDiscount: 25,
+  dailyPrice: {
+    monthly: "~R$1/dia",
+    yearly: "~R$0,74/dia"
+  },
+  period: {
+    monthly: "/mês",
+    yearly: "/ano"
+  },
   description: "Suporte emocional 24/7 pra quem quer começar.",
   features: [{
     text: "Conversas ilimitadas 24/7",
@@ -31,9 +44,18 @@ const plans = [{
 }, {
   id: "direcao",
   name: "Direção",
-  price: "49,90",
-  dailyPrice: "~R$1,70/dia",
-  period: "/mês",
+  monthlyPrice: "49,90",
+  yearlyPrice: "419,16",
+  yearlyMonthlyEquivalent: "34,93",
+  yearlyDiscount: 30,
+  dailyPrice: {
+    monthly: "~R$1,70/dia",
+    yearly: "~R$1,15/dia"
+  },
+  period: {
+    monthly: "/mês",
+    yearly: "/ano"
+  },
   description: "Pra quem quer ir mais fundo com sessões guiadas.",
   features: [{
     text: "Tudo do Essencial",
@@ -58,9 +80,18 @@ const plans = [{
 }, {
   id: "transformacao",
   name: "Transformação",
-  price: "79,90",
-  dailyPrice: "~R$2,70/dia",
-  period: "/mês",
+  monthlyPrice: "79,90",
+  yearlyPrice: "671,16",
+  yearlyMonthlyEquivalent: "55,93",
+  yearlyDiscount: 30,
+  dailyPrice: {
+    monthly: "~R$2,70/dia",
+    yearly: "~R$1,84/dia"
+  },
+  period: {
+    monthly: "/mês",
+    yearly: "/ano"
+  },
   description: "Pra momentos de transição e mudança profunda.",
   features: [{
     text: "Tudo do Direção",
@@ -84,6 +115,8 @@ const plans = [{
   badge: null
 }];
 const Pricing = () => {
+  const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>("monthly");
+
   return <section id="precos" className="py-24 bg-card relative overflow-hidden">
       {/* Background glow */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-sage-soft rounded-full blur-3xl opacity-40" />
@@ -98,12 +131,45 @@ const Pricing = () => {
             Todos os planos incluem acesso ilimitado à AURA 24/7.
           </p>
           
-          {/* Guarantee badge */}
-          
+          {/* Billing period toggle */}
+          <div className="flex items-center justify-center gap-3">
+            <button
+              onClick={() => setBillingPeriod("monthly")}
+              className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all ${
+                billingPeriod === "monthly"
+                  ? "bg-primary text-primary-foreground shadow-md"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Mensal
+            </button>
+            <button
+              onClick={() => setBillingPeriod("yearly")}
+              className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all flex items-center gap-2 ${
+                billingPeriod === "yearly"
+                  ? "bg-primary text-primary-foreground shadow-md"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Anual
+              <span className={`text-xs px-2 py-0.5 rounded-full ${
+                billingPeriod === "yearly" 
+                  ? "bg-primary-foreground/20 text-primary-foreground" 
+                  : "bg-primary/20 text-primary"
+              }`}>
+                Economize até 30%
+              </span>
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
-          {plans.map((plan, index) => <div key={index} className={`relative rounded-3xl p-6 transition-all duration-300 flex flex-col ${plan.popular ? "bg-sage-soft/40 border-2 border-primary/50 shadow-glow md:scale-105" : "bg-background border border-border/50"}`}>
+          {plans.map((plan, index) => {
+            const price = billingPeriod === "monthly" ? plan.monthlyPrice : plan.yearlyPrice;
+            const period = plan.period[billingPeriod];
+            const dailyPrice = plan.dailyPrice[billingPeriod];
+            
+            return <div key={index} className={`relative rounded-3xl p-6 transition-all duration-300 flex flex-col ${plan.popular ? "bg-sage-soft/40 border-2 border-primary/50 shadow-glow md:scale-105" : "bg-background border border-border/50"}`}>
               {/* Popular badge */}
               {plan.badge && <div className="absolute -top-4 left-1/2 -translate-x-1/2">
                   <div className="flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-primary text-primary-foreground text-sm font-semibold">
@@ -111,6 +177,13 @@ const Pricing = () => {
                     {plan.badge}
                   </div>
                 </div>}
+
+              {/* Yearly discount badge */}
+              {billingPeriod === "yearly" && <div className="absolute -top-4 right-4">
+                <div className="px-3 py-1 rounded-full bg-green-500/90 text-white text-xs font-semibold">
+                  -{plan.yearlyDiscount}%
+                </div>
+              </div>}
 
               {/* Plan header */}
               <div className="text-center mb-6">
@@ -122,13 +195,18 @@ const Pricing = () => {
                 </p>
                 <div className="flex items-baseline justify-center gap-1">
                   <span className="text-sm text-muted-foreground">R$</span>
-                  <span className="font-display text-4xl font-bold text-foreground">
-                    {plan.price}
+                  <span className="font-display text-4xl font-bold text-foreground transition-all duration-300">
+                    {price}
                   </span>
-                  <span className="text-muted-foreground">{plan.period}</span>
+                  <span className="text-muted-foreground">{period}</span>
                 </div>
+                {billingPeriod === "yearly" && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    equivale a R${plan.yearlyMonthlyEquivalent}/mês
+                  </p>
+                )}
                 <p className="text-xs text-primary font-medium mt-1">
-                  {plan.dailyPrice}
+                  {dailyPrice}
                 </p>
               </div>
 
@@ -144,13 +222,15 @@ const Pricing = () => {
 
               {/* CTA */}
               <Link to="/checkout" state={{
-            plan: plan.id
-          }}>
+                plan: plan.id,
+                billing: billingPeriod
+              }}>
                 <Button variant={plan.popular ? "sage" : "glass"} size="lg" className="w-full">
                   {plan.cta}
                 </Button>
               </Link>
-            </div>)}
+            </div>
+          })}
         </div>
 
         {/* Trust badges */}
