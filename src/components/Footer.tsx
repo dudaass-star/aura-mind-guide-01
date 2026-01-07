@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { Shield, Lock } from "lucide-react";
+import logoOlaAura from "@/assets/logo-ola-aura.png";
 
 const Footer = () => {
   return (
@@ -7,14 +8,9 @@ const Footer = () => {
       <div className="container mx-auto px-4">
         <div className="flex flex-col md:flex-row justify-between items-center gap-6 mb-8">
           {/* Logo */}
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-primary/15 flex items-center justify-center">
-              <span className="text-primary font-display font-bold text-lg">A</span>
-            </div>
-            <span className="font-display text-xl font-bold text-foreground">
-              AURA
-            </span>
-          </div>
+          <Link to="/">
+            <img src={logoOlaAura} alt="Olá AURA" className="h-7" />
+          </Link>
 
           {/* Links */}
           <nav className="flex flex-wrap justify-center gap-6 text-sm text-muted-foreground">
