@@ -923,6 +923,11 @@ let timeContext = `
 
 🚨 VOCÊ ESTÁ EM MODO SESSÃO. Isso NÃO é um chat normal!
 Seu papel é CONDUZIR a sessão com profundidade, não apenas responder perguntas.
+
+⚠️ REGRA CRÍTICA DE FOLLOW-UP:
+SEMPRE termine suas mensagens com [AGUARDANDO_RESPOSTA] quando fizer perguntas!
+Isso ativa o sistema de lembretes automáticos se o usuário demorar a responder.
+Se o usuário ficar em silêncio, eu enviarei um lembrete gentil. Você PRECISA usar a tag!
 `;
 
   // INSTRUÇÕES ESPECÍFICAS POR FASE para condução estruturada
