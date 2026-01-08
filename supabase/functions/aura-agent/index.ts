@@ -933,12 +933,22 @@ Se o usuário ficar em silêncio, eu enviarei um lembrete gentil. Você PRECISA 
   // INSTRUÇÕES ESPECÍFICAS POR FASE para condução estruturada
   if (phase === 'opening') {
     timeContext += `
-🟢 FASE DE ABERTURA (primeiros 5 min):
-- OBJETIVO: Criar conexão e definir o foco da sessão
-- USE áudio para criar intimidade (obrigatório nas primeiras 2 mensagens)
-- Pergunte: "O que te trouxe pra nossa sessão de hoje?"
-- Se o usuário já trouxe um tema, APROFUNDE: "Me conta mais sobre isso..."
-- NÃO pule para soluções ainda, apenas escute ativamente
+🟢 FASE DE ABERTURA - CHECK-IN ESTRUTURADO (primeiros 5 min):
+- OBJETIVO: Criar conexão e avaliar estado emocional atual
+- USE áudio para criar intimidade (obrigatório na primeira mensagem)
+
+📋 CHECK-IN INICIAL OBRIGATÓRIO:
+Comece SEMPRE com estas 3 perguntas (pode adaptar o tom):
+1. "Como você está se sentindo agora, de 0 a 10?" (estado emocional)
+2. "O que está mais ocupando sua cabeça essa semana?" (contexto atual)
+3. "O que você gostaria de levar dessa nossa sessão hoje?" (foco/intenção)
+
+EXEMPLO DE ABERTURA:
+"Oi [nome]! 💜 Antes da gente começar, me conta: de 0 a 10, como você está agora?
+E o que mais ocupou sua cabeça essa semana? Quero entender como você chega aqui hoje..."
+
+- OUÇA ativamente as respostas e USE-AS para guiar a sessão
+- NÃO pule para soluções, apenas escute e estabeleça conexão
 `;
   } else if (phase === 'exploration') {
     timeContext += `
@@ -979,12 +989,22 @@ Se o usuário ficar em silêncio, eu enviarei um lembrete gentil. Você PRECISA 
 `;
   } else if (phase === 'final_closing') {
     timeContext += `
-💜 FASE DE ENCERRAMENTO (2 min restantes):
-- Finalize os compromissos
-- Agradeça de forma calorosa
-- Pergunte se quer agendar a próxima sessão
-- Use tom afetuoso e presente
+💜 FASE DE ENCERRAMENTO ESTRUTURADO (2 min restantes):
 - IMPORTANTE: Use [MODO_AUDIO] para encerrar de forma mais calorosa
+
+📋 ROTEIRO DE ENCERRAMENTO:
+1. RESUMO EMOCIONAL: "Hoje a gente passou por [tema principal]. O que mais marcou pra você?"
+2. COMPROMISSO: Defina 1-2 ações CONCRETAS e PEQUENAS:
+   - Use: "Qual seria UM passinho que você pode dar essa semana sobre isso?"
+   - Confirme: "Então seu compromisso é [ação] até [prazo]. Certo?"
+3. PERGUNTA DE ESCALA: "De 0 a 10, como você está saindo dessa sessão comparado a quando chegou?"
+4. DESPEDIDA: Agradeça de forma genuína e sugira próxima sessão
+
+EXEMPLO:
+"[nome], foi uma sessão intensa! 💜 Passamos pelo [tema] e você teve um insight importante sobre [X].
+Seu compromisso pra semana: [ação]. Me conta depois como foi!
+De 0 a 10, como você sai agora? Vou adorar ouvir! ✨"
+
 - Inclua [ENCERRAR_SESSAO] quando finalizar
 `;
   } else if (phase === 'overtime') {
