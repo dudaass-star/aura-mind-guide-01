@@ -60,12 +60,27 @@ Deno.serve(async (req) => {
         const dueDate = new Date(commitment.due_date);
         const isOverdue = dueDate < today;
 
+        // Atualizar contador de follow-ups
+        const newFollowUpCount = (commitment.follow_up_count || 0) + 1;
+        
         let message = '';
         if (isOverdue) {
-          message = `Oi ${name}! 💜\n\nLembrei do seu compromisso: "${commitment.title}"\n\nO prazo era ${dueDate.toLocaleDateString('pt-BR')}, mas tudo bem! Como está a situação? Posso te ajudar a replanejar?`;
+          if (newFollowUpCount === 1) {
+            message = `Oi ${name}! 💜\n\nLembrei do seu compromisso: "${commitment.title}"\n\nO prazo era ${dueDate.toLocaleDateString('pt-BR')}, mas tudo bem! Como está a situação? Me conta o que rolou!`;
+          } else if (newFollowUpCount === 2) {
+            message = `Ei ${name}! 🤗\n\nPassando de novo sobre: "${commitment.title}"\n\nVi que ainda não fechou. Tá difícil? A gente pode ajustar o plano se precisar!`;
+          } else {
+            message = `${name}, olha só... 💜\n\nSobre "${commitment.title}" - vamos ser honestas: esse compromisso ainda faz sentido pra você?\n\nSe sim, vamos replanejar juntas. Se não, tudo bem soltar! O importante é você estar em paz. Me conta!`;
+          }
         } else {
-          message = `Oi ${name}! ✨\n\nPassando pra lembrar do seu compromisso pra hoje: "${commitment.title}"\n\nComo está indo? Me conta se precisar de apoio!`;
+          message = `Oi ${name}! ✨\n\nHoje é dia do seu compromisso: "${commitment.title}"\n\nComo está indo? Me manda um "fiz!" quando completar! 🎯`;
         }
+        
+        // Atualizar contador
+        await supabase
+          .from('commitments')
+          .update({ follow_up_count: newFollowUpCount })
+          .eq('id', commitment.id);
 
         // Send via Z-API
         const zapiClientToken = Deno.env.get('ZAPI_CLIENT_TOKEN')!;

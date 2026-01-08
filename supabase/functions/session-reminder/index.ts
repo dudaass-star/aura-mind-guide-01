@@ -66,13 +66,50 @@ Deno.serve(async (req) => {
           timeZone: 'America/Sao_Paulo'
         });
 
+        // Buscar última sessão para continuidade
+        const { data: lastSession } = await supabase
+          .from('sessions')
+          .select('session_summary, key_insights, commitments')
+          .eq('user_id', session.user_id)
+          .eq('status', 'completed')
+          .order('ended_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        // Buscar compromissos pendentes
+        const { data: pendingCommitments } = await supabase
+          .from('commitments')
+          .select('title, commitment_status')
+          .eq('user_id', session.user_id)
+          .eq('completed', false)
+          .limit(3);
+
+        let previewSection = '';
+        
+        // Adicionar preview da sessão anterior se existir
+        if (lastSession?.session_summary) {
+          previewSection += `
+📝 *Na última sessão você trabalhou:*
+${lastSession.session_summary.substring(0, 150)}...
+`;
+        }
+        
+        // Adicionar compromissos pendentes se existirem
+        if (pendingCommitments && pendingCommitments.length > 0) {
+          previewSection += `
+🎯 *Compromissos que vamos revisar:*
+${pendingCommitments.map((c: any) => `• ${c.title}`).join('\n')}
+`;
+        }
+
         const message = `Oi, ${userName}! 💜
 
 Lembrete gentil: nossa sessão especial está marcada para amanhã às ${sessionTime}!
-
-📋 Prepare-se pensando em:
-• Como você está se sentindo hoje
-• O que gostaria de trabalhar na sessão
+${previewSection}
+📋 *Para você se preparar:*
+• Como você está se sentindo hoje?
+• O que gostaria de trabalhar na sessão?
+• Houve algo importante desde nosso último papo?
 
 Confirma que tá tudo certo? Me responde com "confirmo" ou me avisa se precisar reagendar! ✨`;
 
@@ -483,12 +520,14 @@ Me conta durante a semana como está seu progresso! Estou aqui por você. ✨`;
             postSessionSent++;
             console.log(`✅ Post-session summary sent for session ${session.id}`);
 
-            // Enviar pesquisa de satisfação após 2 segundos
+            // Enviar pesquisa de satisfação MELHORADA após 2 segundos
             await new Promise(resolve => setTimeout(resolve, 2000));
             
-            const ratingMessage = `De 1 a 5, como você avalia nossa sessão de hoje? 🌟
+            const ratingMessage = `Antes de terminar, me conta: 🌟
 
-(Me responde só o número que eu entendo! 😊)`;
+*De 0 a 10, como você se sente agora comparado a quando começamos a sessão?*
+
+(Só o número tá ótimo! E se quiser me dizer o que mais gostou ou o que posso melhorar, adoraria ouvir! 💜)`;
 
             const ratingResult = await sendTextMessage(cleanPhone, ratingMessage);
             
@@ -498,6 +537,26 @@ Me conta durante a semana como está seu progresso! Estou aqui por você. ✨`;
                 .update({ rating_requested: true })
                 .eq('id', session.id);
               console.log(`✅ Rating request sent for session ${session.id}`);
+              
+              // Agendar follow-up de 24h para compromissos
+              const commitments = session.commitments || [];
+              if (Array.isArray(commitments) && commitments.length > 0) {
+                const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+                
+                for (const commitment of commitments) {
+                  const title = typeof commitment === 'string' ? commitment : commitment.title || JSON.stringify(commitment);
+                  
+                  // Criar commitment na tabela para follow-up
+                  await supabase.from('commitments').insert({
+                    user_id: session.user_id,
+                    session_id: session.id,
+                    title: title,
+                    due_date: tomorrow.toISOString(),
+                    commitment_status: 'pending'
+                  });
+                }
+                console.log(`✅ Created ${commitments.length} commitment follow-ups for session ${session.id}`);
+              }
             }
           } else {
             console.error(`❌ Failed to send post-session summary for session ${session.id}:`, result.error);
