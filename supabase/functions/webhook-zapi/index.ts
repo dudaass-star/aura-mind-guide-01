@@ -485,19 +485,23 @@ Vou ficar esperando você voltar. 🤗`;
     // ========================================================================
     const now = new Date().toISOString();
     const conversationStatus = agentData.conversation_status || 'neutral';
-    const shouldEnableFollowup = conversationStatus === 'awaiting';
+    const isSessionActive = agentData.session_active === true;
+    
+    // CRÍTICO: Ativar follow-up SEMPRE durante sessões ativas, independente da tag
+    // Isso garante que a AURA seja proativa durante sessões, mesmo se esquecer da tag
+    const shouldEnableFollowup = conversationStatus === 'awaiting' || isSessionActive;
     
     await supabase
       .from('conversation_followups')
       .upsert({
         user_id: profile.user_id,
         last_user_message_at: shouldEnableFollowup ? now : null,
-        followup_count: 0,
+        followup_count: shouldEnableFollowup ? 0 : null, // Reset só se ativando
         conversation_context: shouldEnableFollowup ? messageText.substring(0, 200) : null,
       }, {
         onConflict: 'user_id',
       });
-    console.log(`📍 Conversation tracking updated - status: ${conversationStatus}, followup: ${shouldEnableFollowup}`);
+    console.log(`📍 Conversation tracking updated - status: ${conversationStatus}, sessionActive: ${isSessionActive}, followup: ${shouldEnableFollowup}`);
 
     // ========================================================================
     // SEND RESPONSE MESSAGES

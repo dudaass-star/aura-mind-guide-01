@@ -231,13 +231,37 @@ Deno.serve(async (req) => {
         const userPlan = profile.plan || 'essencial';
         const isSessionActive = !!profile.current_session_id;
         
+        // FALLBACK: Se last_user_message_at for null mas há sessão ativa, buscar última mensagem
+        let effectiveLastUserMessageAt = followup.last_user_message_at;
+        if (!effectiveLastUserMessageAt && isSessionActive) {
+          const { data: lastMsg } = await supabase
+            .from('messages')
+            .select('created_at')
+            .eq('user_id', followup.user_id)
+            .eq('role', 'user')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          
+          if (lastMsg) {
+            effectiveLastUserMessageAt = lastMsg.created_at;
+            console.log(`🔄 Fallback: Using last message time for ${followup.user_id}: ${effectiveLastUserMessageAt}`);
+          }
+        }
+        
+        // Se ainda não temos timestamp, pular
+        if (!effectiveLastUserMessageAt) {
+          console.log(`⏭️ Skipping user ${followup.user_id}: no last_user_message_at available`);
+          continue;
+        }
+        
         // LOG DETALHADO: Estado do usuário para decisão de timing
         console.log(`🔍 User ${followup.user_id} state:`, {
           plan: userPlan,
           current_session_id: profile.current_session_id,
           isSessionActive,
           followup_count: followup.followup_count,
-          last_user_message_at: followup.last_user_message_at,
+          last_user_message_at: effectiveLastUserMessageAt,
           last_followup_at: followup.last_followup_at
         });
         
@@ -264,7 +288,7 @@ Deno.serve(async (req) => {
         }
 
         const timeThreshold = timeThresholdMinutes * 60 * 1000;
-        const lastUserMessageAt = new Date(followup.last_user_message_at).getTime();
+        const lastUserMessageAt = new Date(effectiveLastUserMessageAt).getTime();
         const lastFollowupAt = followup.last_followup_at ? new Date(followup.last_followup_at).getTime() : 0;
         
         const timeSinceLastUserMsg = Math.round((now - lastUserMessageAt) / 60000);

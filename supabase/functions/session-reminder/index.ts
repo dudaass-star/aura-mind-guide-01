@@ -323,6 +323,84 @@ Como você está se sentindo agora? ✨`;
     }
 
     // ========================================================================
+    // DETECTAR E FECHAR SESSÕES ABANDONADAS (30 min após fim previsto)
+    // ========================================================================
+    let abandonedSessionsClosed = 0;
+    
+    // Buscar sessões in_progress que deveriam ter terminado há mais de 30 minutos
+    const { data: abandonedSessions, error: errorAbandoned } = await supabase
+      .from('sessions')
+      .select('id, user_id, scheduled_at, duration_minutes, started_at')
+      .eq('status', 'in_progress')
+      .lt('started_at', thirtyMinutesAgo.toISOString()); // Começou há mais de 30 min
+    
+    if (errorAbandoned) {
+      console.error('❌ Error fetching abandoned sessions:', errorAbandoned);
+    }
+    
+    if (abandonedSessions && abandonedSessions.length > 0) {
+      for (const session of abandonedSessions) {
+        // Calcular quando a sessão deveria ter terminado
+        const startedAt = new Date(session.started_at);
+        const expectedEndTime = new Date(startedAt.getTime() + (session.duration_minutes || 45) * 60 * 1000);
+        const gracePeriodEnd = new Date(expectedEndTime.getTime() + 30 * 60 * 1000); // +30 min de tolerância
+        
+        // Se ainda está dentro do período de graça, pular
+        if (now < gracePeriodEnd) {
+          console.log(`⏭️ Session ${session.id} still within grace period`);
+          continue;
+        }
+        
+        console.log(`🔒 Closing abandoned session ${session.id} - should have ended at ${expectedEndTime.toISOString()}`);
+        
+        // Buscar profile para notificação
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('name, phone')
+          .eq('user_id', session.user_id)
+          .maybeSingle();
+        
+        // Marcar sessão como no_show (não compareceu/abandonou)
+        await supabase
+          .from('sessions')
+          .update({ 
+            status: 'no_show',
+            ended_at: now.toISOString(),
+            session_summary: 'Sessão encerrada automaticamente por inatividade.'
+          })
+          .eq('id', session.id);
+        
+        // Limpar current_session_id do profile
+        await supabase
+          .from('profiles')
+          .update({ current_session_id: null })
+          .eq('user_id', session.user_id);
+        
+        // Enviar mensagem de fechamento se tiver telefone
+        if (profile?.phone) {
+          const userName = profile.name || 'você';
+          const message = `Oi, ${userName}! 💜
+
+Percebi que nossa sessão ficou em silêncio por um tempo...
+
+Tudo bem, a vida acontece! Quando você puder e quiser continuar, é só me chamar. Estou sempre aqui por você. ✨
+
+Se quiser remarcar uma nova sessão, é só me dizer!`;
+          
+          try {
+            const cleanPhone = cleanPhoneNumber(profile.phone);
+            await sendTextMessage(cleanPhone, message);
+            console.log(`✅ Abandonment message sent for session ${session.id}`);
+          } catch (sendError) {
+            console.error(`❌ Error sending abandonment message for session ${session.id}:`, sendError);
+          }
+        }
+        
+        abandonedSessionsClosed++;
+      }
+    }
+
+    // ========================================================================
     // LEMBRETE PÓS-SESSÃO (30 minutos após término)
     // ========================================================================
     const { data: completedSessions, error: errorCompleted } = await supabase
@@ -430,7 +508,7 @@ Me conta durante a semana como está seu progresso! Estou aqui por você. ✨`;
       }
     }
 
-    console.log(`📊 Session reminders completed: ${reminders24hSent} 24h, ${reminders1hSent} 1h, ${reminders15mSent} 15m, ${sessionStartsSent} starts, ${postSessionSent} post-session`);
+    console.log(`📊 Session reminders completed: ${reminders24hSent} 24h, ${reminders1hSent} 1h, ${reminders15mSent} 15m, ${sessionStartsSent} starts, ${postSessionSent} post-session, ${abandonedSessionsClosed} abandoned closed`);
 
     return new Response(JSON.stringify({ 
       success: true,
@@ -439,6 +517,7 @@ Me conta durante a semana como está seu progresso! Estou aqui por você. ✨`;
       reminders_15m_sent: reminders15mSent,
       session_starts_sent: sessionStartsSent,
       post_session_sent: postSessionSent,
+      abandoned_sessions_closed: abandonedSessionsClosed,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
