@@ -107,9 +107,11 @@ Você escolheu o plano ${planName}`;
       if (sessionsCount > 0) {
         welcomeMessage += `, que inclui ${sessionsCount} sessões especiais por mês!
 
-As sessões são 45 minutos só nossos, com profundidade total. Eu conduzo, você reflete, e no final mando um resumo com os insights.
+São 45 minutos só nossos, com profundidade total. Eu conduzo, você reflete, e no final mando um resumo com os insights.
 
-Quer agendar sua primeira sessão agora? Me diz um dia e horário que funciona pra você!`;
+Pra gente já deixar sua agenda do mês organizada: quais dias da semana e horário funcionam melhor pra você?
+
+Por exemplo: "segundas e quintas às 19h" ou "quartas às 20h"`;
       } else {
         welcomeMessage += `.`;
       }
@@ -177,12 +179,13 @@ Me diz: como você está hoje?`;
               sessions_reset_date: today,
               messages_today: 0,
               last_message_date: today,
+              needs_schedule_setup: sessionsCount > 0, // Trigger schedule setup flow
             });
 
           if (insertError) {
             console.error('❌ Error creating profile:', insertError);
           } else {
-            console.log('✅ Profile created with plan:', customerPlan);
+            console.log('✅ Profile created with plan:', customerPlan, 'needs_schedule_setup:', sessionsCount > 0);
           }
         } else {
           // Update existing profile
@@ -195,6 +198,7 @@ Me diz: como você está hoje?`;
               sessions_used_this_month: 0,
               sessions_reset_date: today,
               updated_at: new Date().toISOString(),
+              needs_schedule_setup: sessionsCount > 0, // Trigger schedule setup flow
             })
             .eq('phone', cleanPhone);
 

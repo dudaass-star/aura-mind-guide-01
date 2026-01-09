@@ -2460,6 +2460,61 @@ REGRAS ABSOLUTAS:
 Se o usuário mencionar algo sobre "finalizar checkout" ou "upgrade", CONFIRME que ele já está no plano certo e ofereça ajuda para agendar a primeira sessão.`;
     }
 
+    // ========================================================================
+    // CONTEXTO DE CONFIGURAÇÃO DE AGENDA MENSAL
+    // ========================================================================
+    if (profile?.needs_schedule_setup && planConfig.sessions > 0) {
+      const sessionsCount = planConfig.sessions;
+      finalPrompt += `
+
+# 📅 CONFIGURAÇÃO DE AGENDA DO MÊS (ATIVO!)
+
+O usuário precisa configurar suas ${sessionsCount} sessões do mês.
+
+## SEU OBJETIVO:
+1. Perguntar quais dias da semana funcionam (ex: segundas, quintas)
+2. Perguntar qual horário prefere (ex: 19h, 20h)
+3. Calcular as próximas ${sessionsCount} datas baseado nas preferências
+4. Propor a agenda completa e pedir confirmação
+5. QUANDO O USUÁRIO CONFIRMAR, use a tag [CRIAR_AGENDA:...]
+
+## COMO CALCULAR AS DATAS:
+- Use a data de HOJE (${dateTimeContext.currentDate}) como referência
+- Para ${sessionsCount} sessões: distribua ${sessionsCount === 4 ? 'semanalmente (1 por semana)' : '2x por semana em dias alternados'}
+- Comece da próxima ocorrência do dia escolhido
+
+## EXEMPLO DE CONVERSA:
+
+Usuário: "Segundas às 19h"
+AURA: "Perfeito! Então suas ${sessionsCount} sessões ficam assim:
+- Segunda, 13/01 às 19h
+- Segunda, 20/01 às 19h
+- Segunda, 27/01 às 19h
+- Segunda, 03/02 às 19h
+
+Confirma pra mim? 💜"
+
+Usuário: "Sim!"
+AURA: "Pronto! Agenda confirmada! 💜 [CRIAR_AGENDA:2026-01-13 19:00,2026-01-20 19:00,2026-01-27 19:00,2026-02-03 19:00]
+
+Agora me conta: como você está hoje?"
+
+## REGRAS IMPORTANTES:
+- Só use [CRIAR_AGENDA:...] APÓS confirmação explícita ("sim", "ok", "pode ser", "confirmo")
+- Se o usuário quiser mudar algo, negocie naturalmente
+- Se o usuário pedir 2 dias diferentes (ex: segundas e quintas), alterne entre eles
+- Sempre mostre a lista formatada ANTES de pedir confirmação
+- Após criar a agenda, mude naturalmente de assunto
+
+## FORMATO DA TAG (CRÍTICO!):
+[CRIAR_AGENDA:YYYY-MM-DD HH:mm,YYYY-MM-DD HH:mm,YYYY-MM-DD HH:mm,...]
+
+Exemplo com 4 sessões:
+[CRIAR_AGENDA:2026-01-13 19:00,2026-01-20 19:00,2026-01-27 19:00,2026-02-03 19:00]
+`;
+      console.log('📅 Schedule setup context added for user with', sessionsCount, 'sessions');
+    }
+
     // Adicionar instrução de encerramento se necessário
     if (shouldEndSession) {
       const implicitEnd = detectsImplicitSessionEnd(message, sessionActive);
@@ -2615,6 +2670,74 @@ INSTRUÇÃO: Faça um fechamento CALOROSO da sessão:
         }
       }
     }
+
+    // ========================================================================
+    // PROCESSAR TAG DE CRIAÇÃO DE AGENDA MENSAL: [CRIAR_AGENDA:...]
+    // ========================================================================
+    const createScheduleMatch = assistantMessage.match(/\[CRIAR_AGENDA:([^\]]+)\]/);
+    if (createScheduleMatch && profile?.user_id) {
+      const datesString = createScheduleMatch[1];
+      const dateTimeList = datesString.split(',').map((dt: string) => dt.trim());
+      
+      let createdCount = 0;
+      let failedCount = 0;
+      
+      console.log('📅 Processing monthly schedule creation with', dateTimeList.length, 'dates');
+      
+      for (const dateTime of dateTimeList) {
+        const parts = dateTime.split(' ');
+        const date = parts[0];
+        const time = parts[1];
+        
+        if (!date || !time || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time)) {
+          console.error('❌ Invalid date-time format:', dateTime);
+          failedCount++;
+          continue;
+        }
+        
+        const scheduledAt = new Date(`${date}T${time}:00-03:00`); // BRT timezone
+        
+        if (scheduledAt > new Date()) {
+          const { error: sessionError } = await supabase
+            .from('sessions')
+            .insert({
+              user_id: profile.user_id,
+              scheduled_at: scheduledAt.toISOString(),
+              session_type: 'livre',
+              status: 'scheduled',
+              duration_minutes: 45
+            });
+          
+          if (!sessionError) {
+            createdCount++;
+            console.log(`📅 Monthly session created: ${scheduledAt.toISOString()}`);
+          } else {
+            console.error(`❌ Error creating session for ${dateTime}:`, sessionError);
+            failedCount++;
+          }
+        } else {
+          console.log(`⚠️ Skipping past date: ${scheduledAt.toISOString()}`);
+          failedCount++;
+        }
+      }
+      
+      // Mark schedule setup as complete if at least some sessions were created
+      if (createdCount > 0) {
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update({ needs_schedule_setup: false })
+          .eq('user_id', profile.user_id);
+        
+        if (updateError) {
+          console.error('❌ Error updating needs_schedule_setup:', updateError);
+        } else {
+          console.log(`✅ Monthly schedule created: ${createdCount} sessions, ${failedCount} failed. needs_schedule_setup set to false.`);
+        }
+      }
+    }
+    
+    // Clean up schedule creation tag from response
+    assistantMessage = assistantMessage.replace(/\[CRIAR_AGENDA:[^\]]+\]/gi, '');
 
     // ========================================================================
     // PROCESSAR TAGS DE TRACKING DE TEMAS

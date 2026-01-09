@@ -50,3 +50,6 @@ verify_jwt = false
 
 [functions.start-trial]
 verify_jwt = false
+
+[functions.monthly-schedule-renewal]
+verify_jwt = false

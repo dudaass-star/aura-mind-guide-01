@@ -259,6 +259,7 @@ export type Database = {
           main_challenges: string[] | null
           messages_today: number | null
           name: string | null
+          needs_schedule_setup: boolean | null
           onboarding_completed: boolean | null
           phone: string | null
           plan: string | null
@@ -284,6 +285,7 @@ export type Database = {
           main_challenges?: string[] | null
           messages_today?: number | null
           name?: string | null
+          needs_schedule_setup?: boolean | null
           onboarding_completed?: boolean | null
           phone?: string | null
           plan?: string | null
@@ -309,6 +311,7 @@ export type Database = {
           main_challenges?: string[] | null
           messages_today?: number | null
           name?: string | null
+          needs_schedule_setup?: boolean | null
           onboarding_completed?: boolean | null
           phone?: string | null
           plan?: string | null
