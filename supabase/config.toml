@@ -53,3 +53,6 @@ verify_jwt = false
 
 [functions.monthly-schedule-renewal]
 verify_jwt = false
+
+[functions.schedule-setup-reminder]
+verify_jwt = false
