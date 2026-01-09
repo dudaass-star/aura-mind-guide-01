@@ -177,6 +177,15 @@ Faça referência sutil ao contexto da conversa.`
   return messageSet[Math.floor(Math.random() * messageSet.length)];
 }
 
+// Função para obter hora atual em São Paulo de forma confiável
+function getSaoPauloHour(): number {
+  const now = new Date();
+  const saoPauloOffset = -3 * 60; // -180 minutos
+  const utcMinutes = now.getTimezoneOffset();
+  const saoPauloTime = new Date(now.getTime() + (utcMinutes + saoPauloOffset) * 60 * 1000);
+  return saoPauloTime.getHours();
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -184,6 +193,19 @@ Deno.serve(async (req) => {
 
   try {
     console.log('🔄 Starting conversation follow-up check...');
+
+    // ===== QUIET HOURS: Não enviar follow-ups entre 22h e 8h =====
+    const saoPauloHour = getSaoPauloHour();
+    if (saoPauloHour >= 22 || saoPauloHour < 8) {
+      console.log(`🌙 Quiet hours (${saoPauloHour}h São Paulo) - skipping all follow-ups`);
+      return new Response(JSON.stringify({
+        status: 'skipped',
+        reason: 'quiet_hours',
+        currentHour: saoPauloHour,
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
