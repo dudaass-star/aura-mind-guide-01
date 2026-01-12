@@ -65,74 +65,21 @@ Seja específica sobre o que foi discutido. Use linguagem acolhedora e direta. N
 
 function generateWeeklyReport(
   profile: any,
-  checkins: any[],
-  completedCommitments: any[],
-  pendingCommitments: any[],
-  insights: any[],
   evolutionAnalysis: string
 ): string {
   const name = profile.name?.split(' ')[0] || 'você';
   
   let report = `📊 *Seu Relatório Semanal, ${name}!*\n\n`;
 
-  // Evolution analysis (AI-generated)
+  // Evolution analysis (AI-generated) - ÚNICO CONTEÚDO PRINCIPAL
   if (evolutionAnalysis) {
-    report += `*🌱 Sua Evolução*\n`;
+    report += `🌱 *Sua Evolução*\n`;
     report += `${evolutionAnalysis}\n\n`;
-  }
-
-  // Mood & Energy summary
-  if (checkins.length > 0) {
-    const avgMood = checkins.reduce((sum, c) => sum + (c.mood || 0), 0) / checkins.length;
-    const avgEnergy = checkins.reduce((sum, c) => sum + (c.energy || 0), 0) / checkins.length;
-    
-    report += `*💜 Bem-estar*\n`;
-    report += `• Humor médio: ${avgMood.toFixed(1)}/10 ${avgMood >= 7 ? '😊' : avgMood >= 5 ? '😐' : '😔'}\n`;
-    report += `• Energia média: ${avgEnergy.toFixed(1)}/10 ${avgEnergy >= 7 ? '⚡' : avgEnergy >= 5 ? '🔋' : '🪫'}\n`;
-    report += `• Check-ins realizados: ${checkins.length}\n\n`;
+    report += `🌟 *Você está evoluindo!* Continue assim, ${name}. Estou orgulhosa de você! 💜`;
   } else {
-    report += `*💜 Bem-estar*\n`;
-    report += `Nenhum check-in registrado essa semana. Que tal começar amanhã?\n\n`;
-  }
-
-  // Commitments summary
-  report += `*🎯 Compromissos*\n`;
-  if (completedCommitments.length > 0) {
-    report += `✅ Concluídos: ${completedCommitments.length}\n`;
-    completedCommitments.slice(0, 3).forEach(c => {
-      report += `   • ${c.title}\n`;
-    });
-  }
-  if (pendingCommitments.length > 0) {
-    report += `⏳ Em andamento: ${pendingCommitments.length}\n`;
-    pendingCommitments.slice(0, 3).forEach(c => {
-      report += `   • ${c.title}\n`;
-    });
-  }
-  if (completedCommitments.length === 0 && pendingCommitments.length === 0) {
-    report += `Nenhum compromisso registrado essa semana.\n`;
-  }
-  report += `\n`;
-
-  // Key insights
-  if (insights.length > 0) {
-    report += `*💡 Observações*\n`;
-    const recentInsights = insights
-      .sort((a, b) => b.mentioned_count - a.mentioned_count)
-      .slice(0, 3);
-    recentInsights.forEach(i => {
-      report += `• ${i.key}: ${i.value}\n`;
-    });
-    report += `\n`;
-  }
-
-  // Closing message
-  if (evolutionAnalysis || completedCommitments.length > 0) {
-    report += `🌟 *Você está evoluindo!* Continue assim, ${name}. Estou orgulhosa de você!`;
-  } else if (checkins.length > 0) {
-    report += `💪 *Boa semana!* Vamos juntos na próxima também. Conte comigo!`;
-  } else {
-    report += `💜 *Nova semana, novas oportunidades!* Estou aqui pra te apoiar. Vamos conversar?`;
+    // Fallback se não houver análise
+    report += `💜 *Nova semana, novas oportunidades!*\n\n`;
+    report += `Estou aqui pra te apoiar sempre que precisar. Vamos conversar? 💜`;
   }
 
   return report;
@@ -184,36 +131,6 @@ Deno.serve(async (req) => {
           .gte('created_at', weekStart.toISOString())
           .order('created_at', { ascending: true });
 
-        // Get week's check-ins
-        const { data: checkins } = await supabase
-          .from('checkins')
-          .select('*')
-          .eq('user_id', profile.user_id)
-          .gte('created_at', weekStart.toISOString());
-
-        // Get completed commitments this week
-        const { data: completedCommitments } = await supabase
-          .from('commitments')
-          .select('*')
-          .eq('user_id', profile.user_id)
-          .eq('completed', true)
-          .gte('created_at', weekStart.toISOString());
-
-        // Get pending commitments
-        const { data: pendingCommitments } = await supabase
-          .from('commitments')
-          .select('*')
-          .eq('user_id', profile.user_id)
-          .eq('completed', false);
-
-        // Get user insights
-        const { data: insights } = await supabase
-          .from('user_insights')
-          .select('*')
-          .eq('user_id', profile.user_id)
-          .order('mentioned_count', { ascending: false })
-          .limit(5);
-
         // Analyze conversations with AI
         const userName = profile.name?.split(' ')[0] || 'usuário';
         console.log(`🧠 Analyzing ${weekMessages?.length || 0} messages for ${userName}...`);
@@ -228,14 +145,7 @@ Deno.serve(async (req) => {
         }
 
         // Generate report
-        const report = generateWeeklyReport(
-          profile,
-          checkins || [],
-          completedCommitments || [],
-          pendingCommitments || [],
-          insights || [],
-          evolutionAnalysis
-        );
+        const report = generateWeeklyReport(profile, evolutionAnalysis);
 
         // Send via Z-API
         const zapiClientToken = Deno.env.get('ZAPI_CLIENT_TOKEN')!;
