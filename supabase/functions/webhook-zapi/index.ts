@@ -482,26 +482,42 @@ Vou ficar esperando você voltar. 🤗`;
 
     // ========================================================================
     // UPDATE CONVERSATION TRACKING
+    // Agora salva informações mais ricas para follow-ups contextuais
     // ========================================================================
     const now = new Date().toISOString();
     const conversationStatus = agentData.conversation_status || 'neutral';
     const isSessionActive = agentData.session_active === true;
     
     // CRÍTICO: Ativar follow-up SEMPRE durante sessões ativas, independente da tag
-    // Isso garante que a AURA seja proativa durante sessões, mesmo se esquecer da tag
     const shouldEnableFollowup = conversationStatus === 'awaiting' || isSessionActive;
+    
+    // Não sobrescrever o contexto se já existir um tema bom
+    // O conversation-followup vai extrair o tema via IA se necessário
+    const { data: existingFollowup } = await supabase
+      .from('conversation_followups')
+      .select('conversation_context')
+      .eq('user_id', profile.user_id)
+      .maybeSingle();
+    
+    // Só atualizar contexto se não tiver um tema bom já salvo
+    const existingContext = existingFollowup?.conversation_context;
+    const hasGoodContext = existingContext && existingContext.length > 15 && 
+      !['ok', 'legal', 'beleza', 'sim', 'não'].includes(existingContext.toLowerCase());
     
     await supabase
       .from('conversation_followups')
       .upsert({
         user_id: profile.user_id,
         last_user_message_at: shouldEnableFollowup ? now : null,
-        followup_count: shouldEnableFollowup ? 0 : null, // Reset só se ativando
-        conversation_context: shouldEnableFollowup ? messageText.substring(0, 200) : null,
+        followup_count: shouldEnableFollowup ? 0 : (existingFollowup ? undefined : null), // Reset só se ativando
+        // Preservar contexto bom existente, senão usar a mensagem atual
+        conversation_context: shouldEnableFollowup 
+          ? (hasGoodContext ? existingContext : messageText.substring(0, 200))
+          : null,
       }, {
         onConflict: 'user_id',
       });
-    console.log(`📍 Conversation tracking updated - status: ${conversationStatus}, sessionActive: ${isSessionActive}, followup: ${shouldEnableFollowup}`);
+    console.log(`📍 Conversation tracking updated - status: ${conversationStatus}, sessionActive: ${isSessionActive}, followup: ${shouldEnableFollowup}, preservedContext: ${hasGoodContext}`);
 
     // ========================================================================
     // SEND RESPONSE MESSAGES

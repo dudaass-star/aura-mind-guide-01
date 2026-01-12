@@ -7,13 +7,11 @@ const corsHeaders = {
 
 // Mensagens de follow-up para plano ESSENCIAL (sem sessão)
 const FOLLOWUP_MESSAGES_ESSENCIAL = [
-  // Primeiro follow-up (após 15 min)
   [
     "Ei, ainda tá aí? 💜",
     "Oi, você sumiu... tá tudo bem?",
     "Ei, ainda por aqui? Me conta...",
   ],
-  // Segundo follow-up (após mais 15 min)
   [
     "Olha, se precisar conversar, tô aqui. Sem pressa. 💜",
     "Só passando pra dizer que continuo por aqui quando você quiser.",
@@ -23,25 +21,21 @@ const FOLLOWUP_MESSAGES_ESSENCIAL = [
 
 // Mensagens de follow-up DURANTE SESSÃO ATIVA (mais urgente)
 const FOLLOWUP_MESSAGES_SESSION_ACTIVE = [
-  // Primeiro follow-up (após 5 min)
   [
     "Ei, ainda tá aí? Estamos no meio da nossa sessão... 💜",
     "Oi, você sumiu! Tô te esperando aqui pra gente continuar...",
     "Ei, tá tudo bem? Nossa sessão ainda está rolando!",
   ],
-  // Segundo follow-up (após mais 5 min)
   [
     "Ainda tô aqui te esperando... se precisou de um momento, tudo bem! Me avisa quando voltar 💜",
     "Tô preocupada, você sumiu da nossa sessão. Aconteceu algo?",
     "Ei, se precisar de um tempinho é só me avisar! Tô aqui quando você voltar.",
   ],
-  // Terceiro follow-up (após mais 5 min)
   [
     "Olha, vou ficar por aqui mais um pouquinho. Se você precisou pausar, sem problemas! 💜",
     "Parece que você precisou sair... quando voltar, retomamos de onde paramos!",
     "Tô te esperando! Se não conseguir voltar agora, a gente pode remarcar, tá?",
   ],
-  // Quarto follow-up (após mais 5 min)
   [
     "Bom, vou considerar que você precisou sair. Quando puder, me conta o que houve! A sessão fica em aberto 💜",
     "Parece que teve um imprevisto. Tudo bem, a vida acontece! Me chama quando puder.",
@@ -49,21 +43,18 @@ const FOLLOWUP_MESSAGES_SESSION_ACTIVE = [
   ],
 ];
 
-// Mensagens de follow-up FORA DE SESSÃO para planos com sessão (puxar engajamento)
+// Mensagens de follow-up FORA DE SESSÃO para planos com sessão
 const FOLLOWUP_MESSAGES_SESSION_PLANS = [
-  // Primeiro follow-up (após 30 min)
   [
     "Ei, tô por aqui se precisar de algo! 💜",
     "Oi! Como você tá hoje?",
     "Ei, qualquer coisa, pode me chamar!",
   ],
-  // Segundo follow-up (após mais 30 min)
   [
     "Lembrei de você! Tá tudo bem por aí?",
     "Passando pra ver como você está... 💜",
     "Ei, se quiser conversar ou agendar nossa próxima sessão, tô aqui!",
   ],
-  // Terceiro follow-up (após mais 30 min)
   [
     "E aí, vamos marcar nossa próxima sessão? Tenho uns horários ótimos essa semana 💜",
     "Oi! Lembrei que a gente pode agendar uma sessão. Quer ver os horários disponíveis?",
@@ -71,13 +62,141 @@ const FOLLOWUP_MESSAGES_SESSION_PLANS = [
   ],
 ];
 
+// Frases que indicam fim natural de conversa
+const CLOSING_PHRASES = [
+  'vou tentar', 'vou aplicar', 'vou fazer', 'vou pensar',
+  'entendi', 'faz sentido', 'fez sentido', 'entendo',
+  'obrigado', 'obrigada', 'valeu', 'vlw', 'tmj',
+  'até mais', 'ate mais', 'até logo', 'ate logo',
+  'boa noite', 'boa tarde', 'bom dia',
+  'vou dormir', 'vou descansar', 'preciso ir',
+  'muito obrigado', 'muito obrigada',
+  'perfeito', 'show', 'massa', 'top',
+  'beijos', 'abraço', 'abraços', 'bjs',
+  'depois te conto', 'te conto depois',
+];
+
+// Função para detectar fim natural de conversa
+function isNaturalConversationEnd(lastUserMessage: string, lastAssistantMessage: string | null): boolean {
+  const lowerUserMsg = lastUserMessage.toLowerCase().trim();
+  
+  // Verifica se a mensagem do usuário contém frases de fechamento
+  const hasClosingPhrase = CLOSING_PHRASES.some(phrase => 
+    lowerUserMsg.includes(phrase)
+  );
+  
+  // Mensagens muito curtas de confirmação também indicam fechamento
+  const isShortConfirmation = /^(ok|legal|beleza|blz|show|top|massa|sim|tá|ta|entendi|certo|combinado|fechado|perfeito|ótimo|otimo)$/i.test(lowerUserMsg);
+  
+  // Se a AURA fez uma pergunta direta, NÃO considerar fim natural
+  if (lastAssistantMessage) {
+    const assistantAskedDirectQuestion = lastAssistantMessage.trim().endsWith('?') && 
+      !lastAssistantMessage.toLowerCase().includes('quer continuar') &&
+      !lastAssistantMessage.toLowerCase().includes('quer remarcar');
+    
+    // Se AURA perguntou e usuário deu resposta curta de confirmação, pode ser que ele está respondendo
+    if (assistantAskedDirectQuestion && isShortConfirmation) {
+      return false; // Não é fim, é resposta à pergunta
+    }
+  }
+  
+  // Se tem frase de fechamento clara, é fim natural
+  if (hasClosingPhrase) {
+    return true;
+  }
+  
+  // Mensagem curta de confirmação sem pergunta pendente = fim natural
+  if (isShortConfirmation && !lastAssistantMessage?.trim().endsWith('?')) {
+    return true;
+  }
+  
+  return false;
+}
+
+// Função para extrair tema da conversa usando IA
+async function extractConversationTheme(
+  supabase: any,
+  userId: string,
+  recentMessages: any[]
+): Promise<string | null> {
+  try {
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    if (!LOVABLE_API_KEY || recentMessages.length < 2) return null;
+    
+    // Formatar as últimas mensagens para análise
+    const conversationText = recentMessages
+      .slice(0, 10)
+      .reverse()
+      .map((m: any) => `${m.role === 'user' ? 'Usuário' : 'AURA'}: ${m.content.substring(0, 150)}`)
+      .join('\n');
+    
+    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash',
+        messages: [
+          {
+            role: 'system',
+            content: `Extraia o TEMA principal desta conversa em uma frase curta (máx 50 caracteres).
+Exemplos:
+- "Educação da filha Bella, 2 anos"
+- "Ansiedade no trabalho"
+- "Término de relacionamento"
+- "Procrastinação nos estudos"
+- "Conversa casual, sem tema profundo"
+
+Retorne APENAS o tema, sem explicações.`
+          },
+          {
+            role: 'user',
+            content: conversationText
+          }
+        ],
+        max_tokens: 60,
+      }),
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      const theme = data.choices?.[0]?.message?.content?.trim();
+      if (theme && theme.length <= 100) {
+        console.log('🎯 Extracted conversation theme:', theme);
+        return theme;
+      }
+    }
+  } catch (error) {
+    console.error('⚠️ Error extracting theme:', error);
+  }
+  return null;
+}
+
+// Função para calcular profundidade da conversa
+function calculateConversationDepth(messages: any[]): { depth: number; isDeep: boolean } {
+  const messageCount = messages.length;
+  const userMessages = messages.filter((m: any) => m.role === 'user');
+  const avgUserMsgLength = userMessages.length > 0 
+    ? userMessages.reduce((sum: number, m: any) => sum + m.content.length, 0) / userMessages.length
+    : 0;
+  
+  // Conversa profunda: muitas mensagens OU mensagens longas do usuário
+  const isDeep = messageCount >= 10 || avgUserMsgLength >= 100;
+  
+  return { depth: messageCount, isDeep };
+}
+
 async function generateContextualFollowup(
   supabase: any,
   userId: string,
   followupCount: number,
-  lastContext: string | null,
+  conversationTheme: string | null,
   isSessionActive: boolean,
-  userPlan: string
+  userPlan: string,
+  isNaturalEnd: boolean,
+  hoursAgo: number
 ): Promise<string> {
   // Get last few messages for context
   const { data: recentMessages } = await supabase
@@ -87,76 +206,77 @@ async function generateContextualFollowup(
     .order('created_at', { ascending: false })
     .limit(5);
 
-  // If we have context, use AI to generate contextual message
-  if (recentMessages && recentMessages.length > 0) {
-    const lastUserMessage = recentMessages.find((m: any) => m.role === 'user');
-    const lastAssistantMessage = recentMessages.find((m: any) => m.role === 'assistant');
-
-    if (lastUserMessage || lastAssistantMessage) {
-      try {
-        const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+  // Se temos tema da conversa, usar IA para gerar mensagem contextual
+  if (conversationTheme && conversationTheme !== 'Conversa casual, sem tema profundo') {
+    try {
+      const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+      
+      if (LOVABLE_API_KEY) {
+        let situationContext = '';
+        let tone = '';
         
-        if (LOVABLE_API_KEY) {
-          const context = lastUserMessage?.content || lastAssistantMessage?.content;
-          
-          // Contexto diferente baseado na situação
-          let situationContext = '';
-          let urgency = '';
-          
-          if (isSessionActive) {
-            situationContext = 'O usuário está NO MEIO de uma sessão especial e parou de responder.';
-            urgency = 'Seja gentil mas mostre que está esperando. A sessão está ativa!';
-          } else if (userPlan !== 'essencial') {
-            situationContext = 'O usuário tem um plano com sessões mas não está em sessão agora.';
-            urgency = followupCount < 2 
-              ? 'Seja gentil e mostre disponibilidade.' 
-              : 'Incentive gentilmente a agendar uma sessão.';
-          } else {
-            situationContext = 'O usuário está no plano básico.';
-            urgency = 'Seja gentil e deixe espaço.';
-          }
-          
-          const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              model: 'google/gemini-2.5-flash',
-              messages: [
-                {
-                  role: 'system',
-                  content: `Você é a AURA, uma mentora emocional gentil. 
-${situationContext}
-${urgency}
-Gere UMA mensagem curta (máximo 2 frases) para retomar contato.
-Use linguagem informal brasileira. 
-NÃO use emojis demais (máximo 1).
-Faça referência sutil ao contexto da conversa.`
-                },
-                {
-                  role: 'user',
-                  content: `Contexto da última conversa: "${context?.substring(0, 200)}"\n\nGere a mensagem de follow-up:`
-                }
-              ],
-              max_tokens: 100,
-              temperature: 0.8,
-            }),
-          });
+        if (isSessionActive) {
+          situationContext = 'O usuário está NO MEIO de uma sessão especial e parou de responder.';
+          tone = 'Seja gentil mas mostre que está esperando para continuar.';
+        } else if (isNaturalEnd) {
+          situationContext = 'A conversa anterior teve um fechamento natural. Agora você está retomando contato.';
+          tone = 'Seja gentil e faça referência ao tema sem ser invasiva. Mostre que lembrou.';
+        } else {
+          situationContext = 'O usuário parou de responder no meio da conversa.';
+          tone = 'Seja gentil e retome o assunto de forma natural.';
+        }
+        
+        const timeContext = hoursAgo >= 24 
+          ? 'Passou mais de um dia desde a última conversa.'
+          : hoursAgo >= 4 
+            ? 'Passaram algumas horas desde a última conversa.'
+            : 'Faz pouco tempo desde a última mensagem.';
+        
+        const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'google/gemini-2.5-flash',
+            messages: [
+              {
+                role: 'system',
+                content: `Você é a AURA, uma amiga próxima que entende de psicologia.
 
-          if (response.ok) {
-            const data = await response.json();
-            const aiMessage = data.choices?.[0]?.message?.content?.trim();
-            if (aiMessage) {
-              console.log('✨ Generated contextual follow-up:', aiMessage);
-              return aiMessage;
-            }
+TEMA DA CONVERSA ANTERIOR: "${conversationTheme}"
+${situationContext}
+${timeContext}
+${tone}
+
+Gere UMA mensagem curta (1-2 frases, máximo 100 caracteres) que:
+- Faça referência ESPECÍFICA ao tema (ex: se o tema era "filha Bella", pergunte sobre a Bella)
+- NÃO seja genérica como "tudo bem?" ou "como você está?"
+- Use linguagem informal brasileira
+- Use no máximo 1 emoji
+- Seja breve e natural`
+              },
+              {
+                role: 'user',
+                content: 'Gere a mensagem de follow-up:'
+              }
+            ],
+            max_tokens: 80,
+          }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const aiMessage = data.choices?.[0]?.message?.content?.trim();
+          if (aiMessage && aiMessage.length <= 200) {
+            console.log('✨ Generated contextual follow-up:', aiMessage);
+            return aiMessage;
           }
         }
-      } catch (error) {
-        console.error('⚠️ Error generating contextual message:', error);
       }
+    } catch (error) {
+      console.error('⚠️ Error generating contextual message:', error);
     }
   }
 
@@ -228,11 +348,12 @@ Deno.serve(async (req) => {
     console.log(`📋 Found ${followups?.length || 0} conversations to check`);
 
     let sentCount = 0;
+    let skippedNaturalEnd = 0;
     const now = Date.now();
 
     for (const followup of followups || []) {
       try {
-        // Buscar profile separadamente (evita relação FK inexistente)
+        // Buscar profile
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('name, phone, status, plan, current_session_id')
@@ -253,67 +374,103 @@ Deno.serve(async (req) => {
         const userPlan = profile.plan || 'essencial';
         const isSessionActive = !!profile.current_session_id;
         
-        // FALLBACK: Se last_user_message_at for null mas há sessão ativa, buscar última mensagem
+        // Buscar últimas mensagens para análise
+        const { data: recentMessages } = await supabase
+          .from('messages')
+          .select('content, role, created_at')
+          .eq('user_id', followup.user_id)
+          .order('created_at', { ascending: false })
+          .limit(15);
+        
+        const lastUserMessage = recentMessages?.find((m: any) => m.role === 'user');
+        const lastAssistantMessage = recentMessages?.find((m: any) => m.role === 'assistant');
+        
+        // FALLBACK: Se last_user_message_at for null, usar última mensagem do banco
         let effectiveLastUserMessageAt = followup.last_user_message_at;
-        if (!effectiveLastUserMessageAt && isSessionActive) {
-          const { data: lastMsg } = await supabase
-            .from('messages')
-            .select('created_at')
-            .eq('user_id', followup.user_id)
-            .eq('role', 'user')
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          
-          if (lastMsg) {
-            effectiveLastUserMessageAt = lastMsg.created_at;
-            console.log(`🔄 Fallback: Using last message time for ${followup.user_id}: ${effectiveLastUserMessageAt}`);
-          }
+        if (!effectiveLastUserMessageAt && lastUserMessage) {
+          effectiveLastUserMessageAt = lastUserMessage.created_at;
+          console.log(`🔄 Fallback: Using last message time for ${followup.user_id}`);
         }
         
-        // Se ainda não temos timestamp, pular
         if (!effectiveLastUserMessageAt) {
           console.log(`⏭️ Skipping user ${followup.user_id}: no last_user_message_at available`);
           continue;
         }
         
-        // LOG DETALHADO: Estado do usuário para decisão de timing
-        console.log(`🔍 User ${followup.user_id} state:`, {
+        // Calcular tempo desde última mensagem
+        const lastUserMessageAt = new Date(effectiveLastUserMessageAt).getTime();
+        const timeSinceLastUserMsg = (now - lastUserMessageAt) / 60000; // em minutos
+        const hoursAgo = timeSinceLastUserMsg / 60;
+        
+        // DETECTAR FIM NATURAL DE CONVERSA
+        const isNaturalEnd = lastUserMessage && lastAssistantMessage
+          ? isNaturalConversationEnd(lastUserMessage.content, lastAssistantMessage.content)
+          : false;
+        
+        // CALCULAR PROFUNDIDADE DA CONVERSA
+        const { depth: conversationDepth, isDeep } = calculateConversationDepth(recentMessages || []);
+        
+        // EXTRAIR TEMA DA CONVERSA (se não tiver salvo ou for muito genérico)
+        let conversationTheme = followup.conversation_context;
+        if (!conversationTheme || conversationTheme.length < 10 || 
+            ['ok', 'legal', 'beleza', 'sim', 'não'].includes(conversationTheme.toLowerCase())) {
+          conversationTheme = await extractConversationTheme(supabase, followup.user_id, recentMessages || []);
+          
+          // Salvar o tema extraído
+          if (conversationTheme) {
+            await supabase
+              .from('conversation_followups')
+              .update({ conversation_context: conversationTheme })
+              .eq('id', followup.id);
+          }
+        }
+        
+        // LOG DETALHADO
+        console.log(`🔍 User ${followup.user_id} analysis:`, {
           plan: userPlan,
-          current_session_id: profile.current_session_id,
           isSessionActive,
-          followup_count: followup.followup_count,
-          last_user_message_at: effectiveLastUserMessageAt,
-          last_followup_at: followup.last_followup_at
+          isNaturalEnd,
+          isDeep,
+          conversationDepth,
+          conversationTheme,
+          timeSinceLastUserMsg_min: Math.round(timeSinceLastUserMsg),
+          followup_count: followup.followup_count
         });
         
-        // Configurações diferentes por situação
+        // CONFIGURAÇÕES DE TIMING BASEADAS NA SITUAÇÃO
         let timeThresholdMinutes: number;
         let maxFollowups: number;
         let timingReason: string;
         
         if (isSessionActive) {
           // DURANTE SESSÃO: mais urgente
-          timeThresholdMinutes = 5;  // 5 minutos
-          maxFollowups = 4;           // Até 4 tentativas
+          timeThresholdMinutes = 5;
+          maxFollowups = 4;
           timingReason = 'IN_SESSION';
+        } else if (isNaturalEnd) {
+          // FIM NATURAL: respeitar o fechamento, esperar muito mais
+          timeThresholdMinutes = 360; // 6 horas
+          maxFollowups = 1;
+          timingReason = 'NATURAL_END';
+        } else if (isDeep) {
+          // CONVERSA PROFUNDA fora de sessão: mais tempo, menos follow-ups
+          timeThresholdMinutes = 240; // 4 horas
+          maxFollowups = 1;
+          timingReason = 'DEEP_CONVERSATION';
         } else if (userPlan !== 'essencial') {
           // PLANOS COM SESSÃO fora de sessão: moderado
-          timeThresholdMinutes = 30; // 30 minutos
-          maxFollowups = 3;          // Até 3 tentativas
+          timeThresholdMinutes = 60; // 1 hora
+          maxFollowups = 2;
           timingReason = 'SESSION_PLAN_OUT_OF_SESSION';
         } else {
           // PLANO ESSENCIAL: padrão
-          timeThresholdMinutes = 15; // 15 minutos
-          maxFollowups = 2;          // Até 2 tentativas
+          timeThresholdMinutes = 30; // 30 minutos
+          maxFollowups = 2;
           timingReason = 'ESSENCIAL_PLAN';
         }
 
         const timeThreshold = timeThresholdMinutes * 60 * 1000;
-        const lastUserMessageAt = new Date(effectiveLastUserMessageAt).getTime();
         const lastFollowupAt = followup.last_followup_at ? new Date(followup.last_followup_at).getTime() : 0;
-        
-        const timeSinceLastUserMsg = Math.round((now - lastUserMessageAt) / 60000);
         const timeSinceLastFollowup = lastFollowupAt > 0 ? Math.round((now - lastFollowupAt) / 60000) : null;
 
         // LOG: Decisão de timing
@@ -321,14 +478,14 @@ Deno.serve(async (req) => {
           timingReason,
           timeThresholdMinutes,
           maxFollowups,
-          timeSinceLastUserMsg_min: timeSinceLastUserMsg,
-          timeSinceLastFollowup_min: timeSinceLastFollowup,
+          timeSinceLastUserMsg_min: Math.round(timeSinceLastUserMsg),
           threshold_met: timeSinceLastUserMsg >= timeThresholdMinutes
         });
 
         // Verificar se passou tempo suficiente desde última mensagem do usuário
         if (now - lastUserMessageAt < timeThreshold) {
-          console.log(`⏭️ Skipping ${followup.user_id}: not enough time since last user msg (${timeSinceLastUserMsg}/${timeThresholdMinutes} min)`);
+          console.log(`⏭️ Skipping ${followup.user_id}: not enough time (${Math.round(timeSinceLastUserMsg)}/${timeThresholdMinutes} min) - ${timingReason}`);
+          if (isNaturalEnd) skippedNaturalEnd++;
           continue;
         }
 
@@ -340,7 +497,7 @@ Deno.serve(async (req) => {
 
         // Verificar se passou tempo suficiente desde último follow-up
         if (lastFollowupAt > 0 && now - lastFollowupAt < timeThreshold) {
-          console.log(`⏭️ Skipping ${followup.user_id}: not enough time since last followup (${timeSinceLastFollowup}/${timeThresholdMinutes} min)`);
+          console.log(`⏭️ Skipping ${followup.user_id}: not enough time since last followup`);
           continue;
         }
 
@@ -349,12 +506,14 @@ Deno.serve(async (req) => {
           supabase,
           followup.user_id,
           followup.followup_count,
-          followup.conversation_context,
+          conversationTheme,
           isSessionActive,
-          userPlan
+          userPlan,
+          isNaturalEnd,
+          hoursAgo
         );
 
-        console.log(`📤 Sending follow-up #${followup.followup_count + 1} to ${profile.phone} (plan: ${userPlan}, session: ${isSessionActive})`);
+        console.log(`📤 Sending follow-up #${followup.followup_count + 1} to ${profile.phone} (${timingReason})`);
 
         // Send via Z-API
         const sendResponse = await fetch(
@@ -382,6 +541,7 @@ Deno.serve(async (req) => {
             .update({
               followup_count: followup.followup_count + 1,
               last_followup_at: new Date().toISOString(),
+              conversation_context: conversationTheme || followup.conversation_context,
             })
             .eq('id', followup.id);
 
@@ -404,12 +564,13 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`📊 Follow-up complete: ${sentCount} messages sent`);
+    console.log(`📊 Follow-up complete: ${sentCount} sent, ${skippedNaturalEnd} skipped (natural end)`);
 
     return new Response(JSON.stringify({
       status: 'success',
       totalConversations: followups?.length || 0,
       followupsSent: sentCount,
+      skippedNaturalEnd,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
