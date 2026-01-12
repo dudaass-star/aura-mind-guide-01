@@ -265,8 +265,9 @@ Já estou aqui te esperando. Quando estiver pronta, é só me mandar uma mensage
     }
 
     // ========================================================================
-    // INICIAR SESSÃO NO HORÁRIO - Mensagem proativa
+    // INICIAR SESSÃO NO HORÁRIO - APENAS NOTIFICA, não marca como in_progress
     // Janela ampliada: -10 min (passado) a +3 min (futuro) para compensar delays do cron
+    // CORREÇÃO: Agora só marca session_start_notified=true, espera resposta do usuário
     // ========================================================================
     const tenMinutesAgo = new Date(now.getTime() - 10 * 60 * 1000);
     const threeMinutesAhead = new Date(now.getTime() + 3 * 60 * 1000);
@@ -288,7 +289,7 @@ Já estou aqui te esperando. Quando estiver pronta, é só me mandar uma mensage
     }
 
     if (sessionsToStart && sessionsToStart.length > 0) {
-      console.log(`🚀 Found ${sessionsToStart.length} sessions to start`);
+      console.log(`🚀 Found ${sessionsToStart.length} sessions to notify`);
       
       for (const session of sessionsToStart) {
         // Pular se já processamos nesta execução
@@ -315,52 +316,152 @@ Já estou aqui te esperando. Quando estiver pronta, é só me mandar uma mensage
 
 Estou aqui prontinha pra te ouvir. Quando quiser começar, é só me mandar uma mensagem.
 
-Como você está se sentindo agora? ✨`;
+Tô esperando você! ✨`;
 
         try {
           const cleanPhone = cleanPhoneNumber(profile.phone);
           const result = await sendTextMessage(cleanPhone, message);
 
           if (result.success) {
-            // Atualizar sessão para in_progress e marcar como notificado
+            // CORREÇÃO: APENAS marca como notificado, NÃO muda status para in_progress
+            // O aura-agent irá mudar para in_progress quando o usuário responder
             await supabase
               .from('sessions')
               .update({ 
-                session_start_notified: true,
-                status: 'in_progress',
-                started_at: new Date().toISOString()
+                session_start_notified: true
+                // REMOVIDO: status: 'in_progress' e started_at
               })
               .eq('id', session.id);
             
-            // Buscar profile atual para incrementar contador
-            const { data: currentProfile } = await supabase
-              .from('profiles')
-              .select('sessions_used_this_month')
-              .eq('user_id', session.user_id)
-              .single();
-            
-            // Atualizar profile para linkar com a sessão ativa (CRÍTICO para áudios funcionarem)
-            await supabase
-              .from('profiles')
-              .update({ 
-                current_session_id: session.id,
-                sessions_used_this_month: (currentProfile?.sessions_used_this_month || 0) + 1 
-              })
-              .eq('user_id', session.user_id);
+            // REMOVIDO: Não incrementar sessões nem linkar profile ainda
+            // Isso será feito pelo aura-agent quando o usuário realmente iniciar
             
             sessionStartsSent++;
-            console.log(`✅ Session started and profile updated for session ${session.id}`);
+            console.log(`✅ Session start notification sent for session ${session.id} - waiting for user response`);
           } else {
-            console.error(`❌ Failed to send session start for ${session.id}:`, result.error);
+            console.error(`❌ Failed to send session start notification for ${session.id}:`, result.error);
           }
         } catch (sendError) {
-          console.error(`❌ Error sending session start for ${session.id}:`, sendError);
+          console.error(`❌ Error sending session start notification for ${session.id}:`, sendError);
         }
       }
     }
 
     // ========================================================================
+    // LEMBRETE DE 10 MINUTOS - Para sessões notificadas mas não iniciadas
+    // ========================================================================
+    let reminder10mSent = 0;
+    
+    const { data: notifiedButNotStarted, error: errorNotStarted } = await supabase
+      .from('sessions')
+      .select('id, user_id, scheduled_at')
+      .eq('status', 'scheduled')
+      .eq('session_start_notified', true)
+      .is('started_at', null);
+    
+    if (errorNotStarted) {
+      console.error('❌ Error fetching notified but not started sessions:', errorNotStarted);
+    }
+    
+    if (notifiedButNotStarted && notifiedButNotStarted.length > 0) {
+      for (const session of notifiedButNotStarted) {
+        const scheduledTime = new Date(session.scheduled_at);
+        const minutesSinceScheduled = (now.getTime() - scheduledTime.getTime()) / 60000;
+        
+        // Se já passaram 10 minutos e sessão não iniciou, enviar lembrete gentil
+        // Mas só entre 10 e 15 minutos para não enviar duplicado
+        if (minutesSinceScheduled >= 10 && minutesSinceScheduled < 15) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('name, phone')
+            .eq('user_id', session.user_id)
+            .maybeSingle();
+          
+          if (!profile?.phone) continue;
+          
+          const userName = profile.name || 'você';
+          const reminderMessage = `Oi ${userName}! Ainda tô te esperando pra nossa sessão. 💜
+
+Tudo bem aí? É só me mandar uma mensagem quando quiser começar!`;
+          
+          try {
+            const cleanPhone = cleanPhoneNumber(profile.phone);
+            const result = await sendTextMessage(cleanPhone, reminderMessage);
+            
+            if (result.success) {
+              reminder10mSent++;
+              console.log(`✅ 10min reminder sent for waiting session ${session.id}`);
+            }
+          } catch (sendError) {
+            console.error(`❌ Error sending 10min reminder for session ${session.id}:`, sendError);
+          }
+        }
+      }
+    }
+
+    // ========================================================================
+    // DETECTAR SESSÕES NOTIFICADAS MAS NUNCA INICIADAS (missed - 30 min após notificação)
+    // ========================================================================
+    let missedSessionsClosed = 0;
+    
+    const { data: missedSessions, error: errorMissed } = await supabase
+      .from('sessions')
+      .select('id, user_id, scheduled_at')
+      .eq('status', 'scheduled')
+      .eq('session_start_notified', true)
+      .is('started_at', null)
+      .lt('scheduled_at', thirtyMinutesAgo.toISOString()); // Agendada há mais de 30 min
+    
+    if (errorMissed) {
+      console.error('❌ Error fetching missed sessions:', errorMissed);
+    }
+    
+    if (missedSessions && missedSessions.length > 0) {
+      for (const session of missedSessions) {
+        console.log(`📭 Session ${session.id} was notified but user never responded - marking as missed`);
+        
+        // Buscar profile para notificação
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('name, phone')
+          .eq('user_id', session.user_id)
+          .maybeSingle();
+        
+        // Marcar sessão como cancelled (não como no_show, pois usuário nunca iniciou)
+        await supabase
+          .from('sessions')
+          .update({ 
+            status: 'cancelled',
+            ended_at: now.toISOString(),
+            session_summary: 'Usuário não respondeu à notificação de início da sessão.'
+          })
+          .eq('id', session.id);
+        
+        // Enviar mensagem oferecendo reagendamento
+        if (profile?.phone) {
+          const userName = profile.name || 'você';
+          const message = `Oi ${userName}! 💜
+
+Parece que não conseguimos conectar pra sessão de hoje. Tudo bem, acontece!
+
+Quer remarcar pra outro horário? É só me dizer quando fica bom pra você. ✨`;
+          
+          try {
+            const cleanPhone = cleanPhoneNumber(profile.phone);
+            await sendTextMessage(cleanPhone, message);
+            console.log(`✅ Missed session message sent for session ${session.id}`);
+          } catch (sendError) {
+            console.error(`❌ Error sending missed session message for session ${session.id}:`, sendError);
+          }
+        }
+        
+        missedSessionsClosed++;
+      }
+    }
+
+    // ========================================================================
     // DETECTAR E FECHAR SESSÕES ABANDONADAS (30 min após fim previsto)
+    // CORREÇÃO: Diferenciar entre usuário que participou vs apenas recebeu abertura
     // ========================================================================
     let abandonedSessionsClosed = 0;
     
@@ -388,7 +489,13 @@ Como você está se sentindo agora? ✨`;
           continue;
         }
         
-        console.log(`🔒 Closing abandoned session ${session.id} - should have ended at ${expectedEndTime.toISOString()}`);
+        // NOVO: Contar mensagens do usuário DURANTE a sessão para diferenciar
+        const { count: userMsgsInSession } = await supabase
+          .from('messages')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', session.user_id)
+          .eq('role', 'user')
+          .gte('created_at', session.started_at);
         
         // Buscar profile para notificação
         const { data: profile } = await supabase
@@ -397,13 +504,42 @@ Como você está se sentindo agora? ✨`;
           .eq('user_id', session.user_id)
           .maybeSingle();
         
-        // Marcar sessão como no_show (não compareceu/abandonou)
+        const userName = profile?.name || 'você';
+        let statusToSet: string;
+        let summaryToSet: string;
+        let messageToSend: string;
+        
+        if ((userMsgsInSession || 0) <= 1) {
+          // Usuário respondeu apenas 1 mensagem ou menos - provavelmente não viu ou não pôde continuar
+          statusToSet = 'no_show';
+          summaryToSet = 'Usuário não participou ativamente da sessão após a abertura.';
+          messageToSend = `Oi ${userName}! 💜
+
+Parece que não conseguimos fazer nossa sessão hoje. Tudo bem, a vida acontece!
+
+Quer remarcar pra outro horário? É só me dizer quando fica bom pra você. ✨`;
+        } else {
+          // Usuário participou mas abandonou no meio
+          statusToSet = 'no_show';
+          summaryToSet = 'Sessão encerrada automaticamente - usuário parou de responder durante a sessão.';
+          messageToSend = `Oi ${userName}! 💜
+
+Nossa sessão ficou em silêncio por um tempo... Tudo bem aí?
+
+Quando puder e quiser continuar, é só me chamar. Estou sempre aqui por você! ✨
+
+Se quiser remarcar uma nova sessão, é só me dizer!`;
+        }
+        
+        console.log(`🔒 Closing session ${session.id} - user msgs: ${userMsgsInSession}, status: ${statusToSet}`);
+        
+        // Marcar sessão
         await supabase
           .from('sessions')
           .update({ 
-            status: 'no_show',
+            status: statusToSet,
             ended_at: now.toISOString(),
-            session_summary: 'Sessão encerrada automaticamente por inatividade.'
+            session_summary: summaryToSet
           })
           .eq('id', session.id);
         
@@ -415,21 +551,12 @@ Como você está se sentindo agora? ✨`;
         
         // Enviar mensagem de fechamento se tiver telefone
         if (profile?.phone) {
-          const userName = profile.name || 'você';
-          const message = `Oi, ${userName}! 💜
-
-Percebi que nossa sessão ficou em silêncio por um tempo...
-
-Tudo bem, a vida acontece! Quando você puder e quiser continuar, é só me chamar. Estou sempre aqui por você. ✨
-
-Se quiser remarcar uma nova sessão, é só me dizer!`;
-          
           try {
             const cleanPhone = cleanPhoneNumber(profile.phone);
-            await sendTextMessage(cleanPhone, message);
-            console.log(`✅ Abandonment message sent for session ${session.id}`);
+            await sendTextMessage(cleanPhone, messageToSend);
+            console.log(`✅ Closure message sent for session ${session.id}`);
           } catch (sendError) {
-            console.error(`❌ Error sending abandonment message for session ${session.id}:`, sendError);
+            console.error(`❌ Error sending closure message for session ${session.id}:`, sendError);
           }
         }
         
@@ -567,16 +694,18 @@ Me conta durante a semana como está seu progresso! Estou aqui por você. ✨`;
       }
     }
 
-    console.log(`📊 Session reminders completed: ${reminders24hSent} 24h, ${reminders1hSent} 1h, ${reminders15mSent} 15m, ${sessionStartsSent} starts, ${postSessionSent} post-session, ${abandonedSessionsClosed} abandoned closed`);
+    console.log(`📊 Session reminders completed: ${reminders24hSent} 24h, ${reminders1hSent} 1h, ${reminders15mSent} 15m, ${sessionStartsSent} starts, ${reminder10mSent} 10m reminders, ${missedSessionsClosed} missed, ${abandonedSessionsClosed} abandoned, ${postSessionSent} post-session`);
 
     return new Response(JSON.stringify({ 
       success: true,
       reminders_24h_sent: reminders24hSent,
       reminders_1h_sent: reminders1hSent,
       reminders_15m_sent: reminders15mSent,
+      reminders_10m_sent: reminder10mSent,
       session_starts_sent: sessionStartsSent,
-      post_session_sent: postSessionSent,
+      missed_sessions_closed: missedSessionsClosed,
       abandoned_sessions_closed: abandonedSessionsClosed,
+      post_session_sent: postSessionSent,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
