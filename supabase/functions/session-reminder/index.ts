@@ -312,11 +312,12 @@ Já estou aqui te esperando. Quando estiver pronta, é só me mandar uma mensage
 
         const userName = profile.name || 'você';
 
-        const message = `Oi, ${userName}! Chegou a hora da nossa sessão especial! 💜
+        // NOVA MENSAGEM: Pede confirmação explícita para iniciar
+        const message = `Oi, ${userName}! 💜 Chegou a hora da nossa sessão especial!
 
-Estou aqui prontinha pra te ouvir. Quando quiser começar, é só me mandar uma mensagem.
+Esse é nosso momento de 45 minutos pra gente ir mais fundo, diferente das conversas do dia a dia.
 
-Tô esperando você! ✨`;
+Você está pronta(o) pra começar? Me responde um "vamos" ou "bora" quando quiser iniciar! ✨`;
 
         try {
           const cleanPhone = cleanPhoneNumber(profile.phone);
@@ -324,20 +325,18 @@ Tô esperando você! ✨`;
 
           if (result.success) {
             // CORREÇÃO: APENAS marca como notificado, NÃO muda status para in_progress
-            // O aura-agent irá mudar para in_progress quando o usuário responder
+            // O aura-agent irá mudar para in_progress quando o usuário responder com confirmação
             await supabase
               .from('sessions')
               .update({ 
                 session_start_notified: true
                 // REMOVIDO: status: 'in_progress' e started_at
+                // Será feito pelo aura-agent quando usuário confirmar
               })
               .eq('id', session.id);
             
-            // REMOVIDO: Não incrementar sessões nem linkar profile ainda
-            // Isso será feito pelo aura-agent quando o usuário realmente iniciar
-            
             sessionStartsSent++;
-            console.log(`✅ Session start notification sent for session ${session.id} - waiting for user response`);
+            console.log(`✅ Session start confirmation request sent for session ${session.id} - waiting for explicit user confirmation`);
           } else {
             console.error(`❌ Failed to send session start notification for ${session.id}:`, result.error);
           }
@@ -380,9 +379,10 @@ Tô esperando você! ✨`;
           if (!profile?.phone) continue;
           
           const userName = profile.name || 'você';
-          const reminderMessage = `Oi ${userName}! Ainda tô te esperando pra nossa sessão. 💜
+          // MENSAGEM MAIS CLARA: Reforça que precisa de resposta para iniciar
+          const reminderMessage = `Oi ${userName}! 💜 Ainda tô te esperando pra nossa sessão especial.
 
-Tudo bem aí? É só me mandar uma mensagem quando quiser começar!`;
+Pra gente começar, me manda um "vamos" ou "bora" - ou me avisa se quer reagendar pra outro momento, tá? ✨`;
           
           try {
             const cleanPhone = cleanPhoneNumber(profile.phone);
