@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sendTextMessage, cleanPhoneNumber } from "../_shared/zapi-client.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -3187,6 +3188,63 @@ Regras:
         commitments: commitments.length,
         onboardingCompleted: isFirstSession
       });
+
+      // ========== ENVIO IMEDIATO DO RESUMO ==========
+      // Enviar resumo da sessão imediatamente para o cliente
+      if (profile.phone && sessionSummary) {
+        try {
+          const cleanPhone = cleanPhoneNumber(profile.phone);
+          const userName = profile.name?.split(' ')[0] || 'você';
+          
+          // Formatar compromissos
+          let commitmentsList = 'Nenhum compromisso definido';
+          if (Array.isArray(commitments) && commitments.length > 0) {
+            commitmentsList = commitments
+              .map((c: any, i: number) => `${i + 1}. ${typeof c === 'string' ? c : c.title || c.description || 'Compromisso'}`)
+              .join('\n');
+          }
+
+          // Formatar insights
+          let insightsList = '';
+          if (Array.isArray(keyInsights) && keyInsights.length > 0) {
+            insightsList = '\n\n💡 *Insights da sessão:*\n' + 
+              keyInsights.map((i: string) => `• ${i}`).join('\n');
+          }
+
+          const summaryMessage = `✨ *Resumo da nossa sessão* ✨
+
+${userName}, que bom que estivemos juntas! 💜
+
+📝 *O que trabalhamos:*
+${sessionSummary}
+${insightsList}
+
+🎯 *Seus compromissos:*
+${commitmentsList}
+
+Guarde esse resumo! Vou te lembrar dos compromissos nos próximos dias. 
+
+Estou aqui sempre que precisar! 💜`;
+
+          const sendResult = await sendTextMessage(cleanPhone, summaryMessage);
+          
+          if (sendResult.success) {
+            // Marcar como enviado para evitar duplicação pelo session-reminder
+            await supabase
+              .from('sessions')
+              .update({ post_session_sent: true })
+              .eq('id', currentSession.id);
+              
+            console.log('📨 Session summary sent immediately to client');
+          } else {
+            console.error('⚠️ Failed to send immediate summary:', sendResult.error);
+            // Se falhar, o session-reminder ainda pode enviar depois como fallback
+          }
+        } catch (sendError) {
+          console.error('⚠️ Error sending immediate session summary:', sendError);
+          // Se falhar, o session-reminder ainda pode enviar depois como fallback
+        }
+      }
     }
 
     // Extrair e salvar novos insights

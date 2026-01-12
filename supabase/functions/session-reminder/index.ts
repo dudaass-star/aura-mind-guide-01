@@ -565,15 +565,16 @@ Se quiser remarcar uma nova sessão, é só me dizer!`;
     }
 
     // ========================================================================
-    // LEMBRETE PÓS-SESSÃO (30 minutos após término)
+    // LEMBRETE PÓS-SESSÃO (fallback: 5 minutos após término se não foi enviado pelo aura-agent)
     // ========================================================================
+    const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
     const { data: completedSessions, error: errorCompleted } = await supabase
       .from('sessions')
       .select(`id, user_id, session_summary, commitments, key_insights, ended_at`)
       .eq('status', 'completed')
       .eq('post_session_sent', false)
       .not('session_summary', 'is', null)
-      .lte('ended_at', thirtyMinutesAgo.toISOString());
+      .lte('ended_at', fiveMinutesAgo.toISOString());
 
     if (errorCompleted) {
       console.error('❌ Error fetching completed sessions:', errorCompleted);
