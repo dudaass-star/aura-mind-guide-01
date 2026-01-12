@@ -1948,18 +1948,48 @@ serve(async (req) => {
     });
 
     // Verificar se usuário quer iniciar sessão agendada
-    // NOVO: Auto-iniciar se tem sessão pendente dentro de 5 minutos do horário
+    // CORREÇÃO: Não auto-iniciar se usuário pediu "me chame na hora"
+    // E iniciar automaticamente se session-reminder já notificou
     if (!sessionActive && pendingScheduledSession) {
       const scheduledTime = new Date(pendingScheduledSession.scheduled_at);
       const now = new Date();
       const diffMinutes = Math.abs(now.getTime() - scheduledTime.getTime()) / 60000;
       
-      // Se está dentro de 5 minutos do horário agendado E usuário mandou qualquer mensagem
-      if (diffMinutes <= 5) {
+      // Função para detectar se usuário quer esperar o horário agendado
+      const wantsToWaitForScheduledTime = (msg: string): boolean => {
+        const waitPhrases = [
+          'me chame na hora', 'me avise na hora', 'me lembre', 
+          'me chama na hora', 'me avisa na hora', 'ate la', 'até lá',
+          'ate mais tarde', 'até mais tarde', 'te vejo la', 'te vejo lá',
+          'combinado', 'fechado', 'beleza', 'ok, até', 'blz'
+        ];
+        const lowerMsg = msg.toLowerCase();
+        return waitPhrases.some(p => lowerMsg.includes(p));
+      };
+      
+      // CASO 1: Session-reminder já notificou E sessão ainda scheduled = qualquer mensagem inicia
+      if (pendingScheduledSession.session_start_notified && pendingScheduledSession.status === 'scheduled') {
         shouldStartSession = true;
-        console.log('🚀 Auto-starting session - user messaged within 5min of scheduled time');
-      } else if (wantsToStartSession(message)) {
-        // Ou se o usuário explicitamente pediu para iniciar
+        console.log('🚀 User responded to session start notification - starting session');
+      }
+      // CASO 2: Usuário disse "me chame na hora" - NÃO auto-iniciar
+      else if (wantsToWaitForScheduledTime(message)) {
+        shouldStartSession = false;
+        console.log('⏰ User wants to wait for scheduled time - NOT auto-starting');
+      }
+      // CASO 3: Está dentro de 5 minutos E não tem notificação pendente
+      else if (diffMinutes <= 5 && !pendingScheduledSession.session_start_notified) {
+        // Verificar se usuário NÃO está só confirmando agendamento
+        const isJustConfirming = /^(ok|legal|beleza|blz|combinado|fechado|perfeito|show|ótimo|otimo|ok,?\s+(ate|até))$/i.test(message.trim());
+        if (!isJustConfirming) {
+          shouldStartSession = true;
+          console.log('🚀 Auto-starting session - user messaged within 5min of scheduled time');
+        } else {
+          console.log('📋 User is just confirming schedule, not starting');
+        }
+      }
+      // CASO 4: Usuário explicitamente pediu para iniciar
+      else if (wantsToStartSession(message)) {
         shouldStartSession = true;
         console.log('🚀 User explicitly wants to start scheduled session');
       }
