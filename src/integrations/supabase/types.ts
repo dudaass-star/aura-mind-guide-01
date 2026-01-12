@@ -429,6 +429,7 @@ export type Database = {
           status: Database["public"]["Enums"]["session_status"]
           user_confirmed: boolean | null
           user_id: string
+          waiting_for_scheduled_time: boolean | null
         }
         Insert: {
           audio_sent_count?: number | null
@@ -453,6 +454,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["session_status"]
           user_confirmed?: boolean | null
           user_id: string
+          waiting_for_scheduled_time?: boolean | null
         }
         Update: {
           audio_sent_count?: number | null
@@ -477,6 +479,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["session_status"]
           user_confirmed?: boolean | null
           user_id?: string
+          waiting_for_scheduled_time?: boolean | null
         }
         Relationships: []
       }
