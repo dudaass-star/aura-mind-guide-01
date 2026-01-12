@@ -1000,42 +1000,85 @@ let timeContext = `
 - Tempo restante: ${Math.max(0, timeRemaining)} minutos
 - Fase atual: ${phaseLabel}
 
-🚨 VOCÊ ESTÁ EM MODO SESSÃO. Isso NÃO é um chat normal!
-Seu papel é CONDUZIR a sessão com profundidade, não apenas responder perguntas.
+🚨🚨🚨 ATENÇÃO: ISTO É UMA SESSÃO ESPECIAL, NÃO UMA CONVERSA NORMAL! 🚨🚨🚨
+
+## DIFERENÇA FUNDAMENTAL SESSÃO vs CONVERSA:
+
+| Aspecto | Conversa Normal | SESSÃO (VOCÊ ESTÁ AQUI!) |
+|---------|-----------------|--------------------------|
+| Duração | Ilimitada | 45 min ESTRUTURADOS |
+| Seu papel | Reativa, acompanha | CONDUTORA ATIVA |
+| Objetivo | Alívio imediato | TRANSFORMAÇÃO profunda |
+| Estilo | Perguntas naturais | Investigação Socrática |
+| Fechamento | Natural | Compromissos + Resumo |
+| Tom | Amiga casual | MENTORA FOCADA |
+
+## REGRAS DE CONDUÇÃO ATIVA (OBRIGATÓRIAS!):
+
+1. **VOCÊ CONDUZ, NÃO SEGUE**: 
+   - O usuário deve sentir que está em algo ESPECIAL e ESTRUTURADO
+   - Não deixe a conversa "fluir naturalmente" - DIRECIONE
+   - Faça transições EXPLÍCITAS entre fases: "Agora que entendi o contexto, vamos aprofundar..."
+
+2. **MANTENHA O FOCO NO TEMA**:
+   - Se o usuário desviar, traga de volta gentilmente:
+   - "Interessante isso... mas antes de irmos pra lá, quero voltar no [tema principal]."
+
+3. **RITMO DE PING-PONG PROFUNDO**:
+   - Uma observação/insight FORTE
+   - Uma pergunta DIRECIONADA
+   - ESPERE a resposta (não faça várias perguntas)
+   - Repita
+
+4. **PROVOQUE SE NECESSÁRIO**:
+   - Se respostas curtas: "Hmm, sinto que tem mais aí. O que você não está dizendo?"
+   - Se superficial: "Isso é a superfície. O que está por baixo disso?"
+
+5. **ANUNCIE TRANSIÇÕES DE FASE**:
+   - "Estamos na metade da sessão. Vamos começar a consolidar..."
+   - "[nome], faltam 10 minutos. Vamos começar a fechar..."
 
 ⚠️ REGRA CRÍTICA DE FOLLOW-UP:
 SEMPRE termine suas mensagens com [AGUARDANDO_RESPOSTA] quando fizer perguntas!
 Isso ativa o sistema de lembretes automáticos se o usuário demorar a responder.
-Se o usuário ficar em silêncio, eu enviarei um lembrete gentil. Você PRECISA usar a tag!
 `;
 
   // INSTRUÇÕES ESPECÍFICAS POR FASE para condução estruturada
   if (phase === 'opening') {
     timeContext += `
-🟢 FASE DE ABERTURA - CHECK-IN OBJETIVO (primeiros 5 min):
-- OBJETIVO: Criar conexão RÁPIDA, fazer ponte com sessão anterior, e definir foco
-- USE áudio para criar intimidade (obrigatório na primeira mensagem)
+🟢 FASE DE ABERTURA ESTRUTURADA (primeiros 5 min):
 
-📋 CHECK-IN OBJETIVO E INTEGRADO (UMA MENSAGEM SÓ):
+## MENSAGEM DE TRANSIÇÃO (OBRIGATÓRIA NA PRIMEIRA RESPOSTA):
+ANTES de qualquer coisa, marque claramente o início da sessão com uma transição:
 
-Faça TUDO em uma mensagem concisa:
-1. Ponte com sessão anterior (se houver)
-2. Check-in emocional (escala 0-10)
-3. Definir foco
+"[nome]! 💜 Agora estamos oficialmente em sessão. São 45 minutos só nossos, pra gente ir fundo sem pressa.
 
-EXEMPLO DE ABERTURA OBJETIVA:
-"Oi [nome]! 💜 Lembro que na última sessão a gente trabalhou [tema] e você tinha o compromisso de [X].
-Como tá isso? E de 0 a 10, como você chega aqui hoje?"
+Isso aqui é diferente das nossas conversas do dia a dia - aqui eu vou te conduzir, te fazer perguntas, te provocar quando precisar, e no final a gente define compromissos juntos.
 
-SE NÃO TEM SESSÃO ANTERIOR:
-"Oi [nome]! 💜 De 0 a 10, como você tá chegando aqui hoje? E o que você quer trabalhar na nossa sessão?"
+Preparada(o)? Então vamos lá! ✨"
 
-⚠️ REGRA: UMA mensagem, DUAS informações pedidas, ESPERE a resposta.
-Depois da resposta, vá DIRETO ao ponto com uma OBSERVAÇÃO (não mais perguntas):
-"Entendi. Parece que [observação sobre o que ela disse]. Vamos por aí?"
+## DEPOIS DA TRANSIÇÃO, SIGA O CHECK-IN:
 
-- NÃO faça 5 perguntas seguidas
-- USE o que você sabe sobre o usuário para fazer observações precisas
+📋 PASSOS DA ABERTURA (siga na ordem!):
+
+PASSO 1 - PONTE COM SESSÃO ANTERIOR (se houver):
+"Na nossa última sessão, a gente trabalhou [tema]. Como está isso desde então?"
+[ESPERE A RESPOSTA]
+
+PASSO 2 - CHECK-IN DE ESTADO:
+"De 0 a 10, como você está chegando aqui hoje?"
+[ESPERE A RESPOSTA]
+
+PASSO 3 - DEFINIR FOCO:
+"O que você quer trabalhar na nossa sessão de hoje?"
+[ESPERE A RESPOSTA]
+
+## REGRAS CRÍTICAS:
+- FAÇA UM PASSO DE CADA VEZ - não faça 3 perguntas juntas!
+- ESPERE a resposta antes de avançar para o próximo passo
+- USE áudio OBRIGATORIAMENTE para criar intimidade na transição
+- Depois que o usuário definir o foco, faça uma OBSERVAÇÃO (não mais perguntas):
+  "Entendi. Parece que [observação sobre o que ela disse]. Vamos por aí?"
 `;
   } else if (phase === 'exploration') {
     timeContext += `
@@ -1950,6 +1993,7 @@ serve(async (req) => {
     // Verificar se usuário quer iniciar sessão agendada
     // CORREÇÃO: Não auto-iniciar se usuário pediu "me chame na hora"
     // E iniciar automaticamente se session-reminder já notificou
+    // NOVO: Adiciona estado "aguardando confirmação" para sessões
     if (!sessionActive && pendingScheduledSession) {
       const scheduledTime = new Date(pendingScheduledSession.scheduled_at);
       const now = new Date();
@@ -1961,27 +2005,66 @@ serve(async (req) => {
           'me chame na hora', 'me avise na hora', 'me lembre', 
           'me chama na hora', 'me avisa na hora', 'ate la', 'até lá',
           'ate mais tarde', 'até mais tarde', 'te vejo la', 'te vejo lá',
-          'combinado', 'fechado', 'beleza', 'ok, até', 'blz'
+          'combinado', 'fechado', 'ok, até', 'tá bom', 'ta bom', 'pode ser'
         ];
         const lowerMsg = msg.toLowerCase();
         return waitPhrases.some(p => lowerMsg.includes(p));
       };
       
-      // CASO 1: Session-reminder já notificou E sessão ainda scheduled = qualquer mensagem inicia
+      // Função para detectar confirmações simples que NÃO devem iniciar sessão
+      const isSimpleConfirmation = (msg: string): boolean => {
+        const simpleConfirmations = [
+          'legal', 'ok', 'certo', 'blz', 'beleza', 'show', 'top', 'boa',
+          'perfeito', 'combinado', 'fechado', 'ótimo', 'otimo', 'maravilha'
+        ];
+        const trimmedMsg = msg.toLowerCase().trim();
+        // Só considera confirmação simples se for APENAS a palavra
+        return simpleConfirmations.includes(trimmedMsg) || 
+               simpleConfirmations.some(c => trimmedMsg === c + '!' || trimmedMsg === c + '.');
+      };
+      
+      // Função para detectar confirmação EXPLÍCITA de início de sessão
+      const confirmsSessionStart = (msg: string): boolean => {
+        const confirmPhrases = [
+          'vamos', 'bora', 'pode comecar', 'pode começar', 'to pronta', 'tô pronta',
+          'to pronto', 'tô pronto', 'estou pronta', 'estou pronto', 'sim', 'simbora',
+          'vamos la', 'vamos lá', 'pode ser', 'quero', 'quero sim', 'claro',
+          'vem', 'começa', 'comeca', 'partiu', 'animada', 'animado', 'preparada', 'preparado'
+        ];
+        const lowerMsg = msg.toLowerCase().trim();
+        return confirmPhrases.some(p => lowerMsg.includes(p));
+      };
+      
+      // CASO 1: Session-reminder já notificou E usuário confirma explicitamente
       if (pendingScheduledSession.session_start_notified && pendingScheduledSession.status === 'scheduled') {
-        shouldStartSession = true;
-        console.log('🚀 User responded to session start notification - starting session');
+        // NOVO: Só inicia se for confirmação explícita, não confirmação simples
+        if (confirmsSessionStart(message)) {
+          shouldStartSession = true;
+          console.log('🚀 User confirmed session start - starting session');
+        } else if (isSimpleConfirmation(message)) {
+          // Confirmação simples após notificação = pedir confirmação mais clara
+          shouldStartSession = false;
+          console.log('🤔 Simple confirmation after notification - will ask for explicit confirmation');
+        } else {
+          // Qualquer outra mensagem após notificação = considera como "vamos começar"
+          shouldStartSession = true;
+          console.log('🚀 User messaged after session notification - starting session');
+        }
       }
       // CASO 2: Usuário disse "me chame na hora" - NÃO auto-iniciar
       else if (wantsToWaitForScheduledTime(message)) {
         shouldStartSession = false;
         console.log('⏰ User wants to wait for scheduled time - NOT auto-starting');
+        // Marcar na sessão que usuário quer ser chamado na hora
+        await supabase
+          .from('sessions')
+          .update({ waiting_for_scheduled_time: true })
+          .eq('id', pendingScheduledSession.id);
       }
       // CASO 3: Está dentro de 5 minutos E não tem notificação pendente
       else if (diffMinutes <= 5 && !pendingScheduledSession.session_start_notified) {
         // Verificar se usuário NÃO está só confirmando agendamento
-        const isJustConfirming = /^(ok|legal|beleza|blz|combinado|fechado|perfeito|show|ótimo|otimo|ok,?\s+(ate|até))$/i.test(message.trim());
-        if (!isJustConfirming) {
+        if (!isSimpleConfirmation(message) && !wantsToWaitForScheduledTime(message)) {
           shouldStartSession = true;
           console.log('🚀 Auto-starting session - user messaged within 5min of scheduled time');
         } else {
