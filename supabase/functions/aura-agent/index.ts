@@ -3194,6 +3194,18 @@ Apenas o tema, nada mais.`
                           'procrastinacao': 'j3-procrastinacao',
                           'relacionamentos': 'j4-relacionamentos',
                           'relacionamento': 'j4-relacionamentos',
+                          'estresse': 'j5-estresse-trabalho',
+                          'trabalho': 'j5-estresse-trabalho',
+                          'burnout': 'j5-estresse-trabalho',
+                          'luto': 'j6-luto',
+                          'perda': 'j6-luto',
+                          'morte': 'j6-luto',
+                          'mudança': 'j7-medo-mudanca',
+                          'mudanca': 'j7-medo-mudanca',
+                          'medo': 'j7-medo-mudanca',
+                          'inteligência emocional': 'j8-inteligencia-emocional',
+                          'emoções': 'j8-inteligencia-emocional',
+                          'emocoes': 'j8-inteligencia-emocional',
                         };
                         
                         // Buscar jornada correspondente ou fallback
