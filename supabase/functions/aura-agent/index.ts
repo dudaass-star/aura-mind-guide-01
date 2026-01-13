@@ -789,10 +789,26 @@ Se o usuário escolher uma jornada específica (pelo nome ou número):
 2. IDs válidos: j1-ansiedade, j2-autoconfianca, j3-procrastinacao, j4-relacionamentos, j5-estresse-trabalho, j6-luto, j7-medo-mudanca, j8-inteligencia-emocional
 3. Confirme a troca de forma acolhedora
 
+QUANDO O USUÁRIO QUISER PAUSAR AS JORNADAS:
+Se o usuário disser algo como "pausar jornadas", "não quero mais episódios", "para de mandar conteúdo", 
+"cancela as jornadas", "desativa as jornadas", "não quero mais jornadas":
+1. Use a tag [PAUSAR_JORNADAS]
+2. Confirme de forma acolhedora que ele pode voltar quando quiser
+3. Exemplos de resposta:
+   - "Entendi! Vou pausar o envio dos episódios. Quando quiser voltar, é só me falar! 💜"
+   - "Sem problemas! Pausei as jornadas. Fico aqui quando precisar retomar 🌟"
+
+QUANDO O USUÁRIO QUISER RETOMAR AS JORNADAS:
+Se o usuário disser algo como "quero voltar a receber jornadas", "ativa as jornadas", "retoma os episódios":
+1. Use [LISTAR_JORNADAS] para mostrar opções disponíveis
+2. Pergunte qual jornada ele quer começar
+
 EXEMPLOS:
 - Usuário: "quero ver outras jornadas" → "Claro! Vou te mostrar... [LISTAR_JORNADAS]"
 - Usuário: "quero a de inteligência emocional" → "Boa escolha! Vou te colocar nessa jornada... [TROCAR_JORNADA:j8-inteligencia-emocional]"
 - Usuário: "prefiro a jornada 5" → "Perfeito! Trocando pra jornada sobre estresse no trabalho... [TROCAR_JORNADA:j5-estresse-trabalho]"
+- Usuário: "não quero mais episódios" → "Entendi! Pausei o envio. Quando quiser voltar, é só falar! 💜 [PAUSAR_JORNADAS]"
+- Usuário: "quero voltar a receber" → "Que bom que você quer voltar! 💜 Deixa eu te mostrar as jornadas... [LISTAR_JORNADAS]"
 
 # CONTEXTO DO USUÁRIO (MEMÓRIA ATUAL)
 Nome: {user_name}
@@ -1209,6 +1225,7 @@ function sanitizeMessageHistory(messages: { role: string; content: string; creat
       .replace(/\[COMPROMISSO_RENEGOCIADO:[^\]]+\]/gi, '')
       .replace(/\[LISTAR_JORNADAS\]/gi, '')
       .replace(/\[TROCAR_JORNADA:[^\]]+\]/gi, '')
+      .replace(/\[PAUSAR_JORNADAS\]/gi, '')
       .trim();
     
     // Adicionar timestamp APENAS para mensagens do usuário
@@ -1255,6 +1272,7 @@ function splitIntoMessages(response: string, allowAudioThisTurn: boolean): Array
   cleanResponse = cleanResponse.replace(/\[COMPROMISSO_RENEGOCIADO:[^\]]+\]/gi, '').trim();
   cleanResponse = cleanResponse.replace(/\[LISTAR_JORNADAS\]/gi, '').trim();
   cleanResponse = cleanResponse.replace(/\[TROCAR_JORNADA:[^\]]+\]/gi, '').trim();
+  cleanResponse = cleanResponse.replace(/\[PAUSAR_JORNADAS\]/gi, '').trim();
 
   if (isAudioMode) {
     const normalized = cleanResponse
@@ -3104,6 +3122,24 @@ INSTRUÇÃO: Faça um fechamento CALOROSO da sessão:
       
       // Limpar tag da resposta
       assistantMessage = assistantMessage.replace(/\[TROCAR_JORNADA:[^\]]+\]/gi, '');
+    }
+    
+    // Processar [PAUSAR_JORNADAS]
+    if (assistantMessage.includes('[PAUSAR_JORNADAS]') && profile?.user_id) {
+      console.log('⏸️ Pausing journeys for user');
+      
+      await supabase
+        .from('profiles')
+        .update({
+          current_journey_id: null,
+          current_episode: 0
+        })
+        .eq('user_id', profile.user_id);
+      
+      console.log('✅ Journeys paused - user will not receive periodic content');
+      
+      // Limpar tag da resposta
+      assistantMessage = assistantMessage.replace(/\[PAUSAR_JORNADAS\]/gi, '');
     }
 
     // Verificar se a IA quer encerrar a sessão
