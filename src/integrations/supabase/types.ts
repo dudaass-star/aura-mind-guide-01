@@ -216,30 +216,54 @@ export type Database = {
       journey_episodes: {
         Row: {
           content_prompt: string
+          context_prompt: string | null
+          core_truth: string | null
           created_at: string | null
           episode_number: number
           hook_text: string
+          hook_to_next: string | null
           id: string
           journey_id: string | null
+          manifesto_lines: string[] | null
+          progression_theme: string | null
+          stage_title: string | null
           title: string
+          tool_description: string | null
+          tool_prompt: string | null
         }
         Insert: {
           content_prompt: string
+          context_prompt?: string | null
+          core_truth?: string | null
           created_at?: string | null
           episode_number: number
           hook_text: string
+          hook_to_next?: string | null
           id?: string
           journey_id?: string | null
+          manifesto_lines?: string[] | null
+          progression_theme?: string | null
+          stage_title?: string | null
           title: string
+          tool_description?: string | null
+          tool_prompt?: string | null
         }
         Update: {
           content_prompt?: string
+          context_prompt?: string | null
+          core_truth?: string | null
           created_at?: string | null
           episode_number?: number
           hook_text?: string
+          hook_to_next?: string | null
           id?: string
           journey_id?: string | null
+          manifesto_lines?: string[] | null
+          progression_theme?: string | null
+          stage_title?: string | null
           title?: string
+          tool_description?: string | null
+          tool_prompt?: string | null
         }
         Relationships: [
           {

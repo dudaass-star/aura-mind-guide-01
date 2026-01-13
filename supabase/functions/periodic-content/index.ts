@@ -16,10 +16,9 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    console.log('🚀 Starting periodic content delivery');
+    console.log('🚀 Starting periodic content delivery (Manifesto System)');
 
     // Buscar usuários elegíveis
     // - status ativo ou trial
@@ -101,25 +100,25 @@ serve(async (req) => {
               ).join('\n');
             }
             
-            const completionMessage = `🎉 Parabéns, ${userName}! Você completou a jornada *${journey.title}*! 
+            const completionMessage = `🎉 ${userName}, você completou a jornada *${journey.title}*!
 
-Foram ${journey.total_episodes} episódios de muito aprendizado e autoconhecimento. Você deveria se orgulhar! 💜
+Foram ${journey.total_episodes} episódios. Cada manifesto que você leu em voz alta plantou uma semente. 💜
 
 Agora você pode escolher sua próxima jornada:
 
 ${journeyOptions}
 
-Ou se preferir, posso continuar automaticamente com *${journey.next_journey_id?.replace('j', 'Jornada ').replace('-', ': ')}*.
+Ou posso continuar com a próxima automaticamente.
 
-_Se preferir fazer uma pausa dos episódios, é só me dizer "pausar jornadas" 🌿_
+_Se preferir pausar, é só dizer "pausar jornadas" 🌿_
 
-Só me responder qual você quer! 🚀`;
+Qual vai ser?`;
 
             // Enviar mensagem de conclusão
             const cleanPhone = cleanPhoneNumber(user.phone);
             await sendTextMessage(cleanPhone, completionMessage);
             
-            // Atualizar para próxima jornada por padrão, mas o usuário pode mudar via chat
+            // Atualizar para próxima jornada por padrão
             await supabase
               .from('profiles')
               .update({
@@ -144,103 +143,33 @@ Só me responder qual você quer! 🚀`;
           continue;
         }
 
-        const journeyTitle = episode.content_journeys?.title || 'Jornada';
-        const totalEpisodes = episode.content_journeys?.total_episodes || 8;
-        const userName = user.name?.split(' ')[0] || 'você';
+        // Chamar a função de geração de manifesto
+        console.log(`📝 Calling generate-episode-manifesto for episode ${currentEpisode}`);
 
-        // Buscar contexto do usuário para personalização
-        const { data: recentMessages } = await supabase
-          .from('messages')
-          .select('content, role')
-          .eq('user_id', user.user_id)
-          .order('created_at', { ascending: false })
-          .limit(10);
+        const { data: manifestoResult, error: manifestoError } = await supabase.functions.invoke(
+          'generate-episode-manifesto',
+          {
+            body: {
+              user_id: user.user_id,
+              episode_id: episode.id
+            }
+          }
+        );
 
-        const userContext = recentMessages
-          ? recentMessages
-              .filter(m => m.role === 'user')
-              .map(m => m.content)
-              .join(' | ')
-              .substring(0, 500)
-          : '';
-
-        // Gerar conteúdo personalizado via IA
-        const contentPrompt = episode.content_prompt.replace('{user_context}', userContext);
-        
-        console.log(`📝 Generating content for episode ${currentEpisode}: ${episode.title}`);
-
-        const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${LOVABLE_API_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model: "google/gemini-2.5-flash",
-            messages: [
-              { 
-                role: "system", 
-                content: `Você é a AURA, uma amiga que entende muito de psicologia. 
-Seu tom é caloroso, direto e acolhedor. Use linguagem brasileira natural ("pra", "tá", "né").
-Use emojis com moderação (1-2 por parágrafo).
-Formate para WhatsApp: use *negrito* para destaques.
-Fale diretamente com ${userName}.
-Seja breve mas profunda - máximo 4 parágrafos curtos.`
-              },
-              { 
-                role: "user", 
-                content: `Gere o conteúdo para este episódio:
-
-Título: ${episode.title}
-Instruções: ${contentPrompt}
-
-Contexto adicional do usuário (use se relevante): ${userContext || 'Não há contexto adicional'}`
-              }
-            ],
-            max_tokens: 600,
-          }),
-        });
-
-        if (!aiResponse.ok) {
-          console.error(`❌ AI error for user ${user.id}:`, await aiResponse.text());
+        if (manifestoError || !manifestoResult?.success) {
+          console.error(`❌ Manifesto generation failed:`, manifestoError || manifestoResult?.error);
           errorCount++;
           continue;
         }
 
-        const aiData = await aiResponse.json();
-        const generatedContent = aiData.choices?.[0]?.message?.content?.trim();
-
-        if (!generatedContent) {
-          console.error(`❌ No content generated for user ${user.id}`);
-          errorCount++;
-          continue;
-        }
-
-        // Aviso de opt-out apenas no primeiro episódio de cada jornada
-        const optOutNotice = currentEpisode === 1 
-          ? "\n\n_Se preferir pausar os episódios, é só me dizer \"pausar jornadas\" 🌿_"
-          : "";
-
-        // Montar mensagem final com header e hook
-        const message = `Bom dia, ${userName}! 🌅
-
-📺 *Episódio ${currentEpisode} de ${totalEpisodes}: ${episode.title}*
-_Jornada: ${journeyTitle}_
-
-${generatedContent}
-
----
-
-${episode.hook_text}${optOutNotice}
-
-💜 Estou aqui se quiser conversar!`;
+        const message = manifestoResult.message;
 
         // Enviar via Z-API
         const cleanPhone = cleanPhoneNumber(user.phone);
         const sendResult = await sendTextMessage(cleanPhone, message);
 
         if (sendResult.success) {
-          console.log(`✅ Content sent to ${userName}`);
+          console.log(`✅ Manifesto sent to ${user.name?.split(' ')[0] || 'user'}`);
           
           // Atualizar profile
           await supabase
@@ -262,7 +191,7 @@ ${episode.hook_text}${optOutNotice}
 
           successCount++;
         } else {
-          console.error(`❌ Failed to send to ${userName}:`, sendResult.error);
+          console.error(`❌ Failed to send to ${user.name}:`, sendResult.error);
           errorCount++;
         }
 
