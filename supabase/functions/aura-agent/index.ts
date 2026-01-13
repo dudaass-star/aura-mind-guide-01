@@ -3152,6 +3152,71 @@ Regras:
                 }
                 if (parsed.main_challenges && Array.isArray(parsed.main_challenges)) {
                   profileUpdate.main_challenges = parsed.main_challenges;
+                  
+                  // Extrair primary_topic e atribuir jornada inicial
+                  try {
+                    const topicResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+                      method: "POST",
+                      headers: {
+                        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+                        "Content-Type": "application/json",
+                      },
+                      body: JSON.stringify({
+                        model: "google/gemini-2.5-flash",
+                        messages: [
+                          { 
+                            role: "system", 
+                            content: `Baseado nos desafios mencionados, identifique o TEMA PRINCIPAL.
+Responda com UMA palavra ou frase curta em português.
+Exemplos: "ansiedade", "autoestima", "relacionamentos", "procrastinação"
+Apenas o tema, nada mais.`
+                          },
+                          { role: "user", content: parsed.main_challenges.join(', ') }
+                        ],
+                        max_tokens: 50,
+                      }),
+                    });
+                    
+                    if (topicResponse.ok) {
+                      const topicData = await topicResponse.json();
+                      const topic = topicData.choices?.[0]?.message?.content?.trim()?.toLowerCase();
+                      if (topic && topic.length < 50) {
+                        profileUpdate.primary_topic = topic;
+                        console.log('🎯 Extracted primary_topic:', topic);
+                        
+                        // Mapear tema para jornada
+                        const topicToJourneyMap: Record<string, string> = {
+                          'ansiedade': 'j1-ansiedade',
+                          'autoestima': 'j2-autoconfianca',
+                          'autoconfiança': 'j2-autoconfianca',
+                          'confiança': 'j2-autoconfianca',
+                          'procrastinação': 'j3-procrastinacao',
+                          'procrastinacao': 'j3-procrastinacao',
+                          'relacionamentos': 'j4-relacionamentos',
+                          'relacionamento': 'j4-relacionamentos',
+                        };
+                        
+                        // Buscar jornada correspondente ou fallback
+                        let journeyId = topicToJourneyMap[topic];
+                        if (!journeyId) {
+                          // Procurar por match parcial
+                          for (const [key, value] of Object.entries(topicToJourneyMap)) {
+                            if (topic.includes(key) || key.includes(topic)) {
+                              journeyId = value;
+                              break;
+                            }
+                          }
+                        }
+                        journeyId = journeyId || 'j2-autoconfianca'; // Fallback
+                        
+                        profileUpdate.current_journey_id = journeyId;
+                        profileUpdate.current_episode = 0;
+                        console.log('📚 Assigned journey:', journeyId);
+                      }
+                    }
+                  } catch (topicError) {
+                    console.error('⚠️ Error extracting primary_topic:', topicError);
+                  }
                 }
                 if (parsed.expectations) {
                   profileUpdate.expectations = parsed.expectations;
@@ -3163,7 +3228,9 @@ Regras:
                 console.log('📝 Extracted onboarding profile data:', {
                   therapy_experience: profileUpdate.therapy_experience,
                   challenges_count: profileUpdate.main_challenges?.length,
-                  has_expectations: !!profileUpdate.expectations
+                  has_expectations: !!profileUpdate.expectations,
+                  primary_topic: profileUpdate.primary_topic,
+                  journey_id: profileUpdate.current_journey_id
                 });
               } catch (parseError) {
                 console.log('⚠️ Could not parse onboarding data');

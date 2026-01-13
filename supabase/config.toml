@@ -56,3 +56,6 @@ verify_jwt = false
 
 [functions.schedule-setup-reminder]
 verify_jwt = false
+
+[functions.periodic-content]
+verify_jwt = false
