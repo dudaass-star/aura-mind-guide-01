@@ -772,6 +772,28 @@ EXEMPLOS DE CÁLCULO DE DATA:
 - Se hoje é 02/01/2026 (quinta) e usuário diz "segunda às 10h" → 2026-01-06 10:00
 - Se hoje é 02/01/2026 (quinta) e usuário diz "sexta às 14h" → 2026-01-03 14:00
 
+# JORNADAS DE CONTEÚDO
+
+O usuário recebe conteúdos periódicos sobre temas de bem-estar (ansiedade, autoconfiança, etc).
+Jornada atual: {current_journey}
+Episódio atual: {current_episode}/{total_episodes}
+
+QUANDO O USUÁRIO PERGUNTAR SOBRE JORNADAS:
+Se o usuário disser algo como "quero ver outras jornadas", "tem outros temas?", "quero mudar de jornada", "quais jornadas tem?":
+1. Use a tag [LISTAR_JORNADAS] para mostrar as opções disponíveis
+2. Diga algo como: "Claro! Deixa eu te mostrar as jornadas disponíveis... [LISTAR_JORNADAS]"
+
+QUANDO O USUÁRIO ESCOLHER UMA JORNADA:
+Se o usuário escolher uma jornada específica (pelo nome ou número):
+1. Use a tag [TROCAR_JORNADA:id_da_jornada]
+2. IDs válidos: j1-ansiedade, j2-autoconfianca, j3-procrastinacao, j4-relacionamentos, j5-estresse-trabalho, j6-luto, j7-medo-mudanca, j8-inteligencia-emocional
+3. Confirme a troca de forma acolhedora
+
+EXEMPLOS:
+- Usuário: "quero ver outras jornadas" → "Claro! Vou te mostrar... [LISTAR_JORNADAS]"
+- Usuário: "quero a de inteligência emocional" → "Boa escolha! Vou te colocar nessa jornada... [TROCAR_JORNADA:j8-inteligencia-emocional]"
+- Usuário: "prefiro a jornada 5" → "Perfeito! Trocando pra jornada sobre estresse no trabalho... [TROCAR_JORNADA:j5-estresse-trabalho]"
+
 # CONTEXTO DO USUÁRIO (MEMÓRIA ATUAL)
 Nome: {user_name}
 Plano: {user_plan}
@@ -1185,6 +1207,8 @@ function sanitizeMessageHistory(messages: { role: string; content: string; creat
       .replace(/\[COMPROMISSO_CUMPRIDO:[^\]]+\]/gi, '')
       .replace(/\[COMPROMISSO_ABANDONADO:[^\]]+\]/gi, '')
       .replace(/\[COMPROMISSO_RENEGOCIADO:[^\]]+\]/gi, '')
+      .replace(/\[LISTAR_JORNADAS\]/gi, '')
+      .replace(/\[TROCAR_JORNADA:[^\]]+\]/gi, '')
       .trim();
     
     // Adicionar timestamp APENAS para mensagens do usuário
@@ -1229,6 +1253,8 @@ function splitIntoMessages(response: string, allowAudioThisTurn: boolean): Array
   cleanResponse = cleanResponse.replace(/\[COMPROMISSO_CUMPRIDO:[^\]]+\]/gi, '').trim();
   cleanResponse = cleanResponse.replace(/\[COMPROMISSO_ABANDONADO:[^\]]+\]/gi, '').trim();
   cleanResponse = cleanResponse.replace(/\[COMPROMISSO_RENEGOCIADO:[^\]]+\]/gi, '').trim();
+  cleanResponse = cleanResponse.replace(/\[LISTAR_JORNADAS\]/gi, '').trim();
+  cleanResponse = cleanResponse.replace(/\[TROCAR_JORNADA:[^\]]+\]/gi, '').trim();
 
   if (isAudioMode) {
     const normalized = cleanResponse
@@ -2415,6 +2441,25 @@ As primeiras 2 respostas de cada sessão DEVEM ser em áudio para maior intimida
     // Obter contexto de data/hora atual
     const dateTimeContext = getCurrentDateTimeContext();
 
+    // Buscar informações da jornada atual
+    let currentJourneyInfo = 'Nenhuma jornada ativa';
+    let currentEpisodeInfo = '0';
+    let totalEpisodesInfo = '0';
+    
+    if (profile?.current_journey_id) {
+      const { data: journey } = await supabase
+        .from('content_journeys')
+        .select('title, total_episodes')
+        .eq('id', profile.current_journey_id)
+        .single();
+      
+      if (journey) {
+        currentJourneyInfo = journey.title;
+        currentEpisodeInfo = String(profile.current_episode || 0);
+        totalEpisodesInfo = String(journey.total_episodes);
+      }
+    }
+
     const contextualPrompt = AURA_SYSTEM_PROMPT
       .replace('{current_date}', dateTimeContext.currentDate)
       .replace('{current_time}', dateTimeContext.currentTime)
@@ -2429,7 +2474,10 @@ As primeiras 2 respostas de cada sessão DEVEM ser em áudio para maior intimida
       .replace('{session_active}', sessionActive ? 'Sim - MODO SESSÃO ATIVO' : 'Não')
       .replace('{session_time_context}', sessionTimeInfoStr)
       .replace('{user_insights}', formatInsightsForContext(userInsights))
-      .replace('{audio_session_context}', audioSessionContext);
+      .replace('{audio_session_context}', audioSessionContext)
+      .replace('{current_journey}', currentJourneyInfo)
+      .replace('{current_episode}', currentEpisodeInfo)
+      .replace('{total_episodes}', totalEpisodesInfo);
 
     // Adicionar contexto de sessões anteriores e primeira sessão
     let continuityContext = '';
@@ -2996,6 +3044,67 @@ INSTRUÇÃO: Faça um fechamento CALOROSO da sessão:
     assistantMessage = assistantMessage.replace(/\[COMPROMISSO_CUMPRIDO:[^\]]+\]/gi, '');
     assistantMessage = assistantMessage.replace(/\[COMPROMISSO_ABANDONADO:[^\]]+\]/gi, '');
     assistantMessage = assistantMessage.replace(/\[COMPROMISSO_RENEGOCIADO:[^\]]+\]/gi, '');
+
+    // ========================================================================
+    // PROCESSAR TAGS DE JORNADA
+    // ========================================================================
+    
+    // Processar [LISTAR_JORNADAS]
+    if (assistantMessage.includes('[LISTAR_JORNADAS]') && profile?.user_id) {
+      console.log('📚 Listing available journeys');
+      
+      const { data: journeys } = await supabase
+        .from('content_journeys')
+        .select('id, title, description, topic')
+        .eq('is_active', true)
+        .order('id');
+      
+      if (journeys && journeys.length > 0) {
+        const journeyList = journeys.map((j, idx) => {
+          const isCurrentJourney = j.id === profile.current_journey_id;
+          const marker = isCurrentJourney ? ' ✅ (atual)' : '';
+          return `${idx + 1}. *${j.title}*${marker}\n   _${j.description}_`;
+        }).join('\n\n');
+        
+        const journeyMessage = `\n\n📚 *Jornadas Disponíveis:*\n\n${journeyList}\n\n_Qual te interessa? Só me falar!_ 💜`;
+        
+        assistantMessage = assistantMessage.replace(/\[LISTAR_JORNADAS\]/gi, journeyMessage);
+      } else {
+        assistantMessage = assistantMessage.replace(/\[LISTAR_JORNADAS\]/gi, '');
+      }
+    }
+    
+    // Processar [TROCAR_JORNADA:id]
+    const trocarJornadaMatch = assistantMessage.match(/\[TROCAR_JORNADA:([^\]]+)\]/i);
+    if (trocarJornadaMatch && profile?.user_id) {
+      const journeyId = trocarJornadaMatch[1].trim();
+      console.log('🔄 Switching journey to:', journeyId);
+      
+      // Verificar se a jornada existe
+      const { data: journey } = await supabase
+        .from('content_journeys')
+        .select('id, title')
+        .eq('id', journeyId)
+        .single();
+      
+      if (journey) {
+        // Atualizar profile com nova jornada (episódio 0 = próximo conteúdo será ep 1)
+        await supabase
+          .from('profiles')
+          .update({
+            current_journey_id: journeyId,
+            current_episode: 0
+          })
+          .eq('user_id', profile.user_id);
+        
+        console.log('✅ Journey switched to:', journey.title);
+      } else {
+        console.log('⚠️ Journey not found:', journeyId);
+      }
+      
+      // Limpar tag da resposta
+      assistantMessage = assistantMessage.replace(/\[TROCAR_JORNADA:[^\]]+\]/gi, '');
+    }
 
     // Verificar se a IA quer encerrar a sessão
     const aiWantsToEndSession = assistantMessage.includes('[ENCERRAR_SESSAO]');
