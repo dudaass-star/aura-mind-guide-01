@@ -81,17 +81,63 @@ serve(async (req) => {
             .single();
 
           if (journey && currentEpisode > journey.total_episodes) {
-            // Jornada completa! Iniciar próxima
-            console.log(`🎉 Journey completed! Moving to next: ${journey.next_journey_id}`);
+            // Jornada completa! Enviar mensagem de conclusão com opções
+            console.log(`🎉 Journey completed! Sending choice message`);
             
+            // Buscar todas as jornadas para mostrar opções
+            const { data: allJourneys } = await supabase
+              .from('content_journeys')
+              .select('id, title, description')
+              .eq('is_active', true)
+              .neq('id', user.current_journey_id)
+              .order('id');
+            
+            const userName = user.name?.split(' ')[0] || 'você';
+            
+            let journeyOptions = '';
+            if (allJourneys && allJourneys.length > 0) {
+              journeyOptions = allJourneys.map((j, idx) => 
+                `${idx + 1}. *${j.title}*`
+              ).join('\n');
+            }
+            
+            const completionMessage = `🎉 Parabéns, ${userName}! Você completou a jornada *${journey.title}*! 
+
+Foram ${journey.total_episodes} episódios de muito aprendizado e autoconhecimento. Você deveria se orgulhar! 💜
+
+Agora você pode escolher sua próxima jornada:
+
+${journeyOptions}
+
+Ou se preferir, posso continuar automaticamente com *${journey.next_journey_id?.replace('j', 'Jornada ').replace('-', ': ')}*.
+
+Só me responder qual você quer! 🚀`;
+
+            // Enviar mensagem de conclusão
+            const cleanPhone = cleanPhoneNumber(user.phone);
+            await sendTextMessage(cleanPhone, completionMessage);
+            
+            // Atualizar para próxima jornada por padrão, mas o usuário pode mudar via chat
             await supabase
               .from('profiles')
               .update({
                 current_journey_id: journey.next_journey_id,
                 current_episode: 0,
-                journeys_completed: (user.journeys_completed || 0) + 1
+                journeys_completed: (user.journeys_completed || 0) + 1,
+                last_content_sent_at: new Date().toISOString()
               })
               .eq('id', user.id);
+            
+            // Salvar mensagem no histórico
+            await supabase
+              .from('messages')
+              .insert({
+                user_id: user.user_id,
+                role: 'assistant',
+                content: completionMessage
+              });
+            
+            successCount++;
           }
           continue;
         }
