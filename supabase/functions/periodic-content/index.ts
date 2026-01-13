@@ -111,6 +111,8 @@ ${journeyOptions}
 
 Ou se preferir, posso continuar automaticamente com *${journey.next_journey_id?.replace('j', 'Jornada ').replace('-', ': ')}*.
 
+_Se preferir fazer uma pausa dos episódios, é só me dizer "pausar jornadas" 🌿_
+
 Só me responder qual você quer! 🚀`;
 
             // Enviar mensagem de conclusão
@@ -214,6 +216,11 @@ Contexto adicional do usuário (use se relevante): ${userContext || 'Não há co
           continue;
         }
 
+        // Aviso de opt-out apenas no primeiro episódio de cada jornada
+        const optOutNotice = currentEpisode === 1 
+          ? "\n\n_Se preferir pausar os episódios, é só me dizer \"pausar jornadas\" 🌿_"
+          : "";
+
         // Montar mensagem final com header e hook
         const message = `Bom dia, ${userName}! 🌅
 
@@ -224,7 +231,7 @@ ${generatedContent}
 
 ---
 
-${episode.hook_text}
+${episode.hook_text}${optOutNotice}
 
 💜 Estou aqui se quiser conversar!`;
 
