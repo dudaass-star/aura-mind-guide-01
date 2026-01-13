@@ -15,7 +15,7 @@ const FinalCTA = () => {
           </h2>
           
           <p className="font-body text-lg md:text-xl text-muted-foreground mb-8 leading-relaxed">
-            5 conversas grátis. Sem cartão. Sem compromisso.
+            5 conversas grátis + conteúdo semanal. Sem cartão. Sem compromisso.
           </p>
 
           <Link to="/experimentar">

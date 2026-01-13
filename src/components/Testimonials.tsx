@@ -41,8 +41,8 @@ const testimonials = [
     name: "Pedro H.",
     role: "Advogado, 37 anos",
     avatar: avatarPedro,
-    content: "Tenho dificuldade de abrir com pessoas. Com a Aura é diferente - não tem julgamento, só acolhimento. Me ajudou a processar um luto que eu carregava há anos.",
-    highlight: "acolhimento",
+    content: "Tenho dificuldade de abrir com pessoas. Com a Aura é diferente - não tem julgamento, só acolhimento. E os episódios semanais sobre ansiedade me ajudam a manter o foco no que importa.",
+    highlight: "acolhimento + jornadas",
     rating: 5,
   },
   {
