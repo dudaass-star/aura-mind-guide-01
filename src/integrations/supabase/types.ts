@@ -139,6 +139,39 @@ export type Database = {
           },
         ]
       }
+      content_journeys: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          next_journey_id: string | null
+          title: string
+          topic: string
+          total_episodes: number
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id: string
+          is_active?: boolean | null
+          next_journey_id?: string | null
+          title: string
+          topic: string
+          total_episodes?: number
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          next_journey_id?: string | null
+          title?: string
+          topic?: string
+          total_episodes?: number
+        }
+        Relationships: []
+      }
       conversation_followups: {
         Row: {
           conversation_context: string | null
@@ -177,6 +210,44 @@ export type Database = {
             isOneToOne: true
             referencedRelation: "profiles"
             referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      journey_episodes: {
+        Row: {
+          content_prompt: string
+          created_at: string | null
+          episode_number: number
+          hook_text: string
+          id: string
+          journey_id: string | null
+          title: string
+        }
+        Insert: {
+          content_prompt: string
+          created_at?: string | null
+          episode_number: number
+          hook_text: string
+          id?: string
+          journey_id?: string | null
+          title: string
+        }
+        Update: {
+          content_prompt?: string
+          created_at?: string | null
+          episode_number?: number
+          hook_text?: string
+          id?: string
+          journey_id?: string | null
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "journey_episodes_journey_id_fkey"
+            columns: ["journey_id"]
+            isOneToOne: false
+            referencedRelation: "content_journeys"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -251,9 +322,13 @@ export type Database = {
       profiles: {
         Row: {
           created_at: string | null
+          current_episode: number | null
+          current_journey_id: string | null
           current_session_id: string | null
           expectations: string | null
           id: string
+          journeys_completed: number | null
+          last_content_sent_at: string | null
           last_message_date: string | null
           last_reactivation_sent: string | null
           main_challenges: string[] | null
@@ -265,6 +340,7 @@ export type Database = {
           plan: string | null
           preferred_session_time: string | null
           preferred_support_style: string | null
+          primary_topic: string | null
           sessions_reset_date: string | null
           sessions_used_this_month: number | null
           status: string | null
@@ -277,9 +353,13 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          current_episode?: number | null
+          current_journey_id?: string | null
           current_session_id?: string | null
           expectations?: string | null
           id?: string
+          journeys_completed?: number | null
+          last_content_sent_at?: string | null
           last_message_date?: string | null
           last_reactivation_sent?: string | null
           main_challenges?: string[] | null
@@ -291,6 +371,7 @@ export type Database = {
           plan?: string | null
           preferred_session_time?: string | null
           preferred_support_style?: string | null
+          primary_topic?: string | null
           sessions_reset_date?: string | null
           sessions_used_this_month?: number | null
           status?: string | null
@@ -303,9 +384,13 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          current_episode?: number | null
+          current_journey_id?: string | null
           current_session_id?: string | null
           expectations?: string | null
           id?: string
+          journeys_completed?: number | null
+          last_content_sent_at?: string | null
           last_message_date?: string | null
           last_reactivation_sent?: string | null
           main_challenges?: string[] | null
@@ -317,6 +402,7 @@ export type Database = {
           plan?: string | null
           preferred_session_time?: string | null
           preferred_support_style?: string | null
+          primary_topic?: string | null
           sessions_reset_date?: string | null
           sessions_used_this_month?: number | null
           status?: string | null
@@ -328,6 +414,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "profiles_current_journey_id_fkey"
+            columns: ["current_journey_id"]
+            isOneToOne: false
+            referencedRelation: "content_journeys"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "profiles_current_session_id_fkey"
             columns: ["current_session_id"]
