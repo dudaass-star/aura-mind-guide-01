@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Check, Sparkles, MessageCircle, Calendar, FileText, Headphones, Zap } from "lucide-react";
+import { Check, Sparkles, MessageCircle, Calendar, FileText, Headphones, Zap, BookOpen } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useState } from "react";
 
@@ -36,6 +36,9 @@ const plans = [{
   }, {
     text: "Memória de longo prazo",
     icon: Check
+  }, {
+    text: "Conteúdo semanal personalizado",
+    icon: BookOpen
   }],
   sessions: "—",
   cta: "Começar agora",
@@ -69,6 +72,9 @@ const plans = [{
   }, {
     text: "Resumo escrito após cada sessão",
     icon: FileText
+  }, {
+    text: "Conteúdo semanal personalizado",
+    icon: BookOpen
   }, {
     text: "Retrospectiva a cada 4 sessões",
     icon: Check
@@ -108,6 +114,9 @@ const plans = [{
   }, {
     text: "Suporte intensivo",
     icon: Check
+  }, {
+    text: "Conteúdo semanal personalizado",
+    icon: BookOpen
   }],
   sessions: "8/mês",
   cta: "Escolher Transformação",

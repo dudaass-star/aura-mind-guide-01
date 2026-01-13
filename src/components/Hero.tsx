@@ -103,7 +103,7 @@ const Hero = () => {
 
           {/* Subheadline */}
           <p className="font-body text-base md:text-lg text-muted-foreground max-w-2xl mx-auto mb-8 leading-relaxed animate-fade-up opacity-0 delay-200">
-            Sessões estruturadas, memória do seu histórico e suporte 24/7 — por menos de <span className="text-foreground font-semibold">R$2 por dia</span>.
+            Sessões estruturadas, memória do seu histórico, conteúdo personalizado e suporte 24/7 — por menos de <span className="text-foreground font-semibold">R$2 por dia</span>.
           </p>
 
           {/* CTA */}

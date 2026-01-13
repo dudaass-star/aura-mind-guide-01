@@ -1,4 +1,4 @@
-import { Clock, Brain, Calendar, FileText, Heart, PauseCircle, TrendingUp, Mic } from "lucide-react";
+import { Clock, Brain, Calendar, FileText, Heart, PauseCircle, BookOpen, Mic } from "lucide-react";
 
 const benefits = [
   {
@@ -44,9 +44,9 @@ const benefits = [
     iconColor: "text-accent",
   },
   {
-    icon: TrendingUp,
-    title: "Retrospectiva de progresso",
-    description: "A cada 4 sessões, uma visão do seu crescimento.",
+    icon: BookOpen,
+    title: "Conteúdo no seu ritmo",
+    description: "Episódios semanais sobre ansiedade, autoconfiança e mais. Você escolhe o tema.",
     color: "bg-sky-soft",
     iconColor: "text-sky",
   },
