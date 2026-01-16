@@ -23,7 +23,7 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    console.log(`🎯 Generating manifesto for user ${user_id}, episode ${episode_id}`);
+    console.log(`🎯 Generating episode content for user ${user_id}, episode ${episode_id}`);
 
     // Buscar dados do usuário
     const { data: profile, error: profileError } = await supabase
@@ -49,6 +49,11 @@ serve(async (req) => {
       throw new Error(`Episode not found: ${episodeError?.message}`);
     }
 
+    const journeyTitle = episode.content_journeys?.title || 'Jornada';
+    const totalEpisodes = episode.content_journeys?.total_episodes || 8;
+    const stageTitle = episode.stage_title || episode.title;
+    const isLastEpisode = episode.episode_number === totalEpisodes;
+
     // Buscar últimas mensagens do usuário para contexto
     const { data: recentMessages } = await supabase
       .from('messages')
@@ -65,7 +70,7 @@ serve(async (req) => {
 
     console.log(`📝 Found ${recentMessages?.length || 0} recent messages for context`);
 
-    // Gerar abertura contextual via IA (APENAS se tiver context_prompt)
+    // Gerar abertura contextual via IA
     let contextualOpening = '';
     
     if (episode.context_prompt && userMessagesText) {
@@ -88,16 +93,15 @@ TAREFA: Escrever 2-3 linhas que conectem o que o usuário compartilhou recenteme
 
 REGRAS:
 - Máximo 3 linhas
-- Tom direto, sem rodeios, que bate forte
+- Tom direto, empático, que ressoa
 - Mencione algo específico que o usuário disse (parafraseando, sem citar diretamente)
 - Conecte com o tema do episódio
-- Termine com uma afirmação impactante
 - Use linguagem brasileira natural
 - NÃO use emojis
 
 INSTRUÇÃO ESPECÍFICA: ${episode.context_prompt}
 
-TEMA DO EPISÓDIO: ${episode.stage_title || episode.title}`
+TEMA DO EPISÓDIO: ${stageTitle}`
             },
             { 
               role: "user", 
@@ -121,29 +125,20 @@ ${userMessagesText}`
 
     // Fallback se não gerou abertura
     if (!contextualOpening) {
-      contextualOpening = episode.progression_theme || 
-        `Você está no episódio ${episode.episode_number}. Cada passo importa.`;
+      contextualOpening = `Este episódio foi pensado para você, ${userName}.`;
     }
 
-    // Montar manifestos formatados
-    const manifestoLines = episode.manifesto_lines || [];
-    const manifestoFormatted = manifestoLines.length > 0
-      ? manifestoLines.map((line: string) => `🔥 *${line}*`).join('\n')
-      : '🔥 *Eu estou aqui, e isso já é um passo.*';
+    // Montar mensagem do episódio
+    const essayContent = episode.essay_content || episode.content_prompt || '';
+    const hookToNext = episode.hook_to_next || '';
 
-    // Montar EP completo
-    const journeyTitle = episode.content_journeys?.title || 'Jornada';
-    const totalEpisodes = episode.content_journeys?.total_episodes || 8;
-    const stageTitle = episode.stage_title || episode.title || `Episódio ${episode.episode_number}`;
+    let message: string;
 
-    // Aviso de opt-out no primeiro episódio
-    const optOutNotice = episode.episode_number === 1 
-      ? "\n\n_Se preferir pausar os episódios, é só me dizer \"pausar jornadas\" 🌿_"
-      : "";
+    if (isLastEpisode) {
+      // Último episódio: inclui fechamento de jornada + hook para próxima
+      message = `Oi ${userName}. 💜
 
-    const message = `Oi ${userName}. 💜
-
-📍 *Episódio ${episode.episode_number} de ${totalEpisodes} — ${stageTitle}*
+📍 *EP ${episode.episode_number}/${totalEpisodes} — ${stageTitle}*
 _${journeyTitle}_
 
 ---
@@ -152,45 +147,62 @@ ${contextualOpening}
 
 ---
 
-*A Verdade deste episódio:*
-
-${episode.core_truth || 'Cada pequena decisão de seguir em frente é uma vitória silenciosa.'}
+${essayContent}
 
 ---
 
-*Seu manifesto de hoje:*
+✨ *${journeyTitle} — Concluída*
 
-Lê em voz alta se puder. Sério.
-
-${manifestoFormatted}
-
----
-
-*Sua ferramenta:*
-
-${episode.tool_prompt || 'Hoje, preste atenção em um momento onde você escolheu agir mesmo com medo. Celebre isso.'}
+Você caminhou ${totalEpisodes} episódios.
+Isso não é pouco. Isso é raro.
 
 ---
 
-*Próximo episódio:*
+💜 *Sua próxima jornada*
+${hookToNext}
 
-${episode.hook_to_next || 'No próximo episódio, vamos dar mais um passo juntos.'}
+Te espero. 💜`;
+    } else {
+      // Episódios 1-7: formato padrão com cliffhanger
+      const optOutNotice = episode.episode_number === 1 
+        ? "\n\n_Se preferir pausar os episódios, é só me dizer \"pausar jornadas\" 🌿_"
+        : "";
+
+      message = `Oi ${userName}. 💜
+
+📍 *EP ${episode.episode_number}/${totalEpisodes} — ${stageTitle}*
+_${journeyTitle}_
+
+---
+
+${contextualOpening}
+
+---
+
+${essayContent}
+
+---
+
+⏭️ *No próximo episódio...*
+${hookToNext}
 
 Te espero. 💜${optOutNotice}`;
+    }
 
-    console.log('✅ Manifesto message built successfully');
+    console.log('✅ Episode message built successfully');
 
     return new Response(JSON.stringify({ 
       success: true,
       message,
       episode_number: episode.episode_number,
-      stage_title: stageTitle
+      stage_title: stageTitle,
+      is_last_episode: isLastEpisode
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
   } catch (error) {
-    console.error('❌ Generate episode manifesto error:', error);
+    console.error('❌ Generate episode error:', error);
     return new Response(JSON.stringify({ 
       success: false, 
       error: error instanceof Error ? error.message : 'Unknown error' 
