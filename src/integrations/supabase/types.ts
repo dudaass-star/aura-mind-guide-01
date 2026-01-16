@@ -220,6 +220,7 @@ export type Database = {
           core_truth: string | null
           created_at: string | null
           episode_number: number
+          essay_content: string | null
           hook_text: string
           hook_to_next: string | null
           id: string
@@ -237,6 +238,7 @@ export type Database = {
           core_truth?: string | null
           created_at?: string | null
           episode_number: number
+          essay_content?: string | null
           hook_text: string
           hook_to_next?: string | null
           id?: string
@@ -254,6 +256,7 @@ export type Database = {
           core_truth?: string | null
           created_at?: string | null
           episode_number?: number
+          essay_content?: string | null
           hook_text?: string
           hook_to_next?: string | null
           id?: string
