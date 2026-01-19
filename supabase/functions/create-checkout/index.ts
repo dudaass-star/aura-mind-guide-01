@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
+import { getPhoneVariations } from "../_shared/zapi-client.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -74,14 +75,24 @@ serve(async (req) => {
     // Always create or find a customer first
     let customerId: string;
     
-    // Check if customer already exists with this phone
-    const customers = await stripe.customers.search({
-      query: `metadata['phone']:'${phoneClean}'`,
-      limit: 1,
-    });
+    // Buscar cliente com variações do telefone (com/sem 9)
+    const phoneVariations = getPhoneVariations(phoneClean);
+    logStep("Searching with phone variations", { phoneVariations });
+    
+    let existingCustomer = null;
+    for (const phoneVar of phoneVariations) {
+      const customers = await stripe.customers.search({
+        query: `metadata['phone']:'${phoneVar}'`,
+        limit: 1,
+      });
+      if (customers.data.length > 0) {
+        existingCustomer = customers.data[0];
+        break;
+      }
+    }
 
-    if (customers.data.length > 0) {
-      customerId = customers.data[0].id;
+    if (existingCustomer) {
+      customerId = existingCustomer.id;
       logStep("Found existing customer", { customerId });
     } else {
       // Create a new customer

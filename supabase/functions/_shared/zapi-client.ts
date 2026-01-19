@@ -61,6 +61,47 @@ export function isValidPhoneNumber(phone: string): boolean {
   return /^[0-9]{10,15}$/.test(clean);
 }
 
+/**
+ * Gera variações do telefone brasileiro para busca flexível
+ * Retorna array com formatos com e sem o 9 extra
+ * 
+ * Exemplos:
+ * - 5551996219341 (13 dígitos) -> ['5551996219341', '555196219341']
+ * - 555196219341 (12 dígitos) -> ['555196219341', '5551996219341']
+ */
+export function getPhoneVariations(phone: string): string[] {
+  let clean = cleanPhoneNumber(phone);
+  
+  // Adicionar 55 se não tiver
+  if (clean.length === 10 || clean.length === 11) {
+    clean = '55' + clean;
+  }
+  
+  const variations: string[] = [clean];
+  
+  // Se tem 13 dígitos (55 + DDD + 9 + 8 dígitos), criar versão sem o 9
+  if (clean.length === 13 && clean.startsWith('55')) {
+    const ddd = clean.substring(2, 4);
+    const rest = clean.substring(4); // 9 dígitos
+    if (rest.startsWith('9') && rest.length === 9) {
+      const without9 = '55' + ddd + rest.substring(1);
+      variations.push(without9);
+    }
+  }
+  
+  // Se tem 12 dígitos (55 + DDD + 8 dígitos), criar versão com o 9
+  if (clean.length === 12 && clean.startsWith('55')) {
+    const ddd = clean.substring(2, 4);
+    const rest = clean.substring(4); // 8 dígitos
+    if (rest.length === 8) {
+      const with9 = '55' + ddd + '9' + rest;
+      variations.push(with9);
+    }
+  }
+  
+  return variations;
+}
+
 // ============================================================================
 // MESSAGE SENDING
 // ============================================================================
