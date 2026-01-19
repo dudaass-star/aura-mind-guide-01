@@ -6,6 +6,7 @@ import {
   sendAudioMessage,
   cleanPhoneNumber,
   isValidPhoneNumber,
+  getPhoneVariations,
 } from "../_shared/zapi-client.ts";
 
 const corsHeaders = {
@@ -327,19 +328,32 @@ Deno.serve(async (req) => {
     }
 
     // ========================================================================
-    // USER LOOKUP
+    // USER LOOKUP (Busca flexível com variações de telefone)
     // ========================================================================
+    const phoneVariations = getPhoneVariations(payload.cleanPhone);
+    console.log(`🔍 Searching for phone variations: ${phoneVariations.join(', ')}`);
+    
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('*')
-      .eq('phone', payload.cleanPhone)
-      .single();
+      .in('phone', phoneVariations)
+      .maybeSingle();
 
     if (profileError || !profile) {
-      console.log('⚠️ User not found for phone:', payload.cleanPhone);
+      console.log('⚠️ User not found for phone variations:', phoneVariations.join(', '));
       return new Response(JSON.stringify({ status: 'user_not_found' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
+    }
+
+    // Auto-correção: atualizar telefone para o formato real do WhatsApp se diferente
+    if (profile.phone !== payload.cleanPhone) {
+      console.log(`📱 Auto-correcting phone: ${profile.phone} -> ${payload.cleanPhone}`);
+      await supabase
+        .from('profiles')
+        .update({ phone: payload.cleanPhone })
+        .eq('id', profile.id);
+      profile.phone = payload.cleanPhone; // Atualizar na memória também
     }
 
     console.log(`👤 Found user: ${profile.name} (${profile.user_id}), status: ${profile.status}`);
