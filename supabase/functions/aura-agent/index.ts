@@ -2777,7 +2777,7 @@ INSTRUÇÃO: Faça um fechamento CALOROSO da sessão:
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+          model: "google/gemini-3-flash-preview",
         messages: apiMessages,
         max_tokens: 700,
         temperature: 0.8,
@@ -3236,7 +3236,7 @@ INSTRUÇÃO: Faça um fechamento CALOROSO da sessão:
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: "google/gemini-2.5-flash",
+          model: "google/gemini-3-flash-preview",
             messages: [
               { 
                 role: "system", 
@@ -3331,7 +3331,7 @@ Regras:
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              model: "google/gemini-2.5-flash",
+          model: "google/gemini-3-flash-preview",
               messages: [
                 { 
                   role: "system", 
@@ -3380,7 +3380,7 @@ Regras:
                         "Content-Type": "application/json",
                       },
                       body: JSON.stringify({
-                        model: "google/gemini-2.5-flash",
+                        model: "google/gemini-3-flash-preview",
                         messages: [
                           { 
                             role: "system", 
