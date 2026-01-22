@@ -1271,6 +1271,11 @@ function splitIntoMessages(response: string, allowAudioThisTurn: boolean): Array
   }
   
   let cleanResponse = response.replace('[MODO_AUDIO]', '').trim();
+  
+  // Remover timestamps que a AURA gera erroneamente no início das respostas
+  // Ex: [22/01/2026, 12:15] - esses NÃO devem aparecer para os usuários
+  cleanResponse = cleanResponse.replace(/^\[\d{2}\/\d{2}\/\d{4},?\s*\d{2}:\d{2}\]\s*/g, '').trim();
+  
   cleanResponse = cleanResponse.replace(/\[INSIGHTS\].*?\[\/INSIGHTS\]/gis, '').trim();
   cleanResponse = cleanResponse.replace(/\[AGUARDANDO_RESPOSTA\]/gi, '').trim();
   cleanResponse = cleanResponse.replace(/\[CONVERSA_CONCLUIDA\]/gi, '').trim();
@@ -3559,10 +3564,15 @@ Estou aqui sempre que precisar! 💜`;
         content: message
       });
 
+      // Limpar timestamps redundantes antes de salvar no banco
+      const cleanAssistantMessage = assistantMessage
+        .replace(/^\[\d{2}\/\d{2}\/\d{4},?\s*\d{2}:\d{2}\]\s*/g, '')
+        .trim();
+      
       await supabase.from('messages').insert({
         user_id: profile.user_id,
         role: 'assistant',
-        content: assistantMessage
+        content: cleanAssistantMessage
       });
     }
 
