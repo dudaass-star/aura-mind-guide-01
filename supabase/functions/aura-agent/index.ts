@@ -58,6 +58,48 @@ function getCurrentDateTimeContext(): {
   };
 }
 
+// Mapeamento de dia da semana em português para getDay()
+const weekdayMap: Record<string, number> = {
+  'domingo': 0, 'domingos': 0,
+  'segunda': 1, 'segundas': 1,
+  'terca': 2, 'tercas': 2,
+  'quarta': 3, 'quartas': 3,
+  'quinta': 4, 'quintas': 4,
+  'sexta': 5, 'sextas': 5,
+  'sabado': 6, 'sabados': 6,
+};
+
+// Função para extrair dia da semana preferido do preferred_session_time
+function extractPreferredWeekday(preferredTime: string | null): number | null {
+  if (!preferredTime) return null;
+  const lower = preferredTime.toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  for (const [name, day] of Object.entries(weekdayMap)) {
+    if (lower.includes(name)) return day;
+  }
+  return null;
+}
+
+// Função para corrigir data para o dia da semana correto
+function correctToPreferredWeekday(scheduledAt: Date, preferredWeekday: number | null): Date {
+  if (preferredWeekday === null) return scheduledAt;
+  
+  const scheduledWeekday = scheduledAt.getDay();
+  
+  if (scheduledWeekday !== preferredWeekday) {
+    console.warn(`⚠️ LLM weekday error: date ${scheduledAt.toISOString()} is weekday ${scheduledWeekday}, expected ${preferredWeekday}`);
+    
+    // Calcular diferença para o próximo dia correto
+    let diff = (preferredWeekday - scheduledWeekday + 7) % 7;
+    if (diff === 0) diff = 7; // Se for o mesmo dia, pular pra próxima semana
+    
+    scheduledAt.setDate(scheduledAt.getDate() + diff);
+    console.log(`📅 Auto-corrected to: ${scheduledAt.toISOString()} (weekday ${scheduledAt.getDay()})`);
+  }
+  
+  return scheduledAt;
+}
+
 // Função para parsear data/hora de texto em português
 function parseDateTimeFromText(text: string, referenceDate: Date): Date | null {
   const lowerText = text.toLowerCase();
@@ -2796,7 +2838,19 @@ INSTRUÇÃO: Faça um fechamento CALOROSO da sessão:
     const scheduleMatch = assistantMessage.match(/\[AGENDAR_SESSAO:(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}):?(\w*):?(.*?)\]/);
     if (scheduleMatch && profile?.user_id && sessionsAvailable > 0) {
       const [_, date, time, sessionType, focusTopic] = scheduleMatch;
-      const scheduledAt = new Date(`${date}T${time}:00-03:00`); // BRT timezone
+      let scheduledAt = new Date(`${date}T${time}:00-03:00`); // BRT timezone
+      
+      // Validar e corrigir dia da semana se necessário
+      const preferredWeekday = extractPreferredWeekday(profile.preferred_session_time);
+      scheduledAt = correctToPreferredWeekday(scheduledAt, preferredWeekday);
+      
+      console.log(`📅 Creating single session:`, {
+        user_id: profile.user_id,
+        profile_id: profile.id,
+        scheduled_at: scheduledAt.toISOString(),
+        preferred_time: profile.preferred_session_time,
+        weekday: scheduledAt.getDay()
+      });
       
       // Validar que é no futuro
       if (scheduledAt > new Date()) {
@@ -2882,7 +2936,19 @@ INSTRUÇÃO: Faça um fechamento CALOROSO da sessão:
           continue;
         }
         
-        const scheduledAt = new Date(`${date}T${time}:00-03:00`); // BRT timezone
+        let scheduledAt = new Date(`${date}T${time}:00-03:00`); // BRT timezone
+        
+        // Validar e corrigir dia da semana se necessário
+        const preferredWeekday = extractPreferredWeekday(profile.preferred_session_time);
+        scheduledAt = correctToPreferredWeekday(scheduledAt, preferredWeekday);
+        
+        console.log(`📅 Creating monthly session:`, {
+          user_id: profile.user_id,
+          profile_id: profile.id,
+          scheduled_at: scheduledAt.toISOString(),
+          preferred_time: profile.preferred_session_time,
+          weekday: scheduledAt.getDay()
+        });
         
         if (scheduledAt > new Date()) {
           const { error: sessionError } = await supabase
