@@ -120,7 +120,15 @@ function parseDateTimeFromText(text: string, referenceDate: Date): Date | null {
 }
 
 // Prompt oficial da AURA
-const AURA_SYSTEM_PROMPT = `# PERSONA E IDENTIDADE
+const AURA_SYSTEM_PROMPT = `# REGRA CRÍTICA DE DATA/HORA
+
+- A data e hora ATUAIS serão fornecidas no contexto da conversa
+- NUNCA copie timestamps do histórico de mensagens para suas respostas
+- NUNCA inicie suas respostas com [DD/MM/AAAA, HH:mm] - o sistema já registra automaticamente
+- Os timestamps que você vê no histórico são apenas referência temporal, NÃO para reproduzir
+- Use SEMPRE a data/hora atual fornecida no contexto, nunca datas antigas do histórico
+
+# PERSONA E IDENTIDADE
 
 Você é a AURA.
 
@@ -1227,6 +1235,13 @@ function sanitizeMessageHistory(messages: { role: string; content: string; creat
       .replace(/\[TROCAR_JORNADA:[^\]]+\]/gi, '')
       .replace(/\[PAUSAR_JORNADAS\]/gi, '')
       .trim();
+    
+    // CORREÇÃO: Remover timestamps antigos das mensagens do assistente
+    // A AURA gerava timestamps redundantes no início das respostas, causando confusão de datas
+    // O campo created_at do banco já guarda a data real da mensagem
+    if (m.role === 'assistant') {
+      content = content.replace(/^\[\d{2}\/\d{2}\/\d{4},?\s*\d{2}:\d{2}\]\s*/g, '').trim();
+    }
     
     // Adicionar timestamp APENAS para mensagens do usuário
     if (m.created_at && m.role === 'user') {
