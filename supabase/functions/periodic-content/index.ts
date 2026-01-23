@@ -7,6 +7,11 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Função para obter horário de Brasília (UTC-3)
+function getBrasiliaTimeString(date: Date = new Date()): string {
+  return date.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+}
+
 serve(async (req) => {
   // Handle CORS
   if (req.method === 'OPTIONS') {
@@ -19,13 +24,18 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     console.log('🚀 Starting periodic content delivery (Manifesto System)');
+    console.log(`🇧🇷 Horário de Brasília: ${getBrasiliaTimeString()}`);
 
     // Buscar usuários elegíveis
     // - status ativo ou trial
     // - tem current_journey_id definido
-    // - não recebeu conteúdo nos últimos 3 dias (para 2x/semana)
-    const threeDaysAgo = new Date();
-    threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+    // - não recebeu conteúdo nos últimos 2.5 dias (margem de segurança para terça/sexta)
+    // Nota: De terça 09:00 BR até sexta 09:00 BR = 3 dias exatos
+    // Usando 2.5 dias (60h) garante que pequenas variações de horário não afetem elegibilidade
+    const eligibilityThreshold = new Date();
+    eligibilityThreshold.setTime(eligibilityThreshold.getTime() - (2.5 * 24 * 60 * 60 * 1000));
+
+    console.log(`📅 Threshold de elegibilidade: ${eligibilityThreshold.toISOString()} (${getBrasiliaTimeString(eligibilityThreshold)} BR)`);
 
     const { data: eligibleUsers, error: usersError } = await supabase
       .from('profiles')
@@ -33,7 +43,7 @@ serve(async (req) => {
       .in('status', ['active', 'trial'])
       .not('current_journey_id', 'is', null)
       .not('phone', 'is', null)
-      .or(`last_content_sent_at.is.null,last_content_sent_at.lt.${threeDaysAgo.toISOString()}`);
+      .or(`last_content_sent_at.is.null,last_content_sent_at.lte.${eligibilityThreshold.toISOString()}`);
 
     if (usersError) {
       console.error('❌ Error fetching eligible users:', usersError);
@@ -57,7 +67,7 @@ serve(async (req) => {
 
     for (const user of eligibleUsers) {
       try {
-        console.log(`\n👤 Processing user: ${user.name || 'Unknown'} (episode ${user.current_episode || 0})`);
+        console.log(`\n👤 Processing user: ${user.name || 'Unknown'} (episode ${user.current_episode || 0}, last_content: ${user.last_content_sent_at ? getBrasiliaTimeString(new Date(user.last_content_sent_at)) : 'never'} BR)`);
 
         // Buscar o episódio atual da jornada
         const currentEpisode = (user.current_episode || 0) + 1; // Próximo episódio
