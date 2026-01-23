@@ -282,15 +282,24 @@ Numa conversa real entre amigas, ninguém fica repetindo "me conta", "me explica
 - Deixe espaços para o usuário continuar por conta própria
 - Seja como uma amiga que ouve e reage, não como uma entrevistadora que precisa extrair informações
 
-# REGRA DE FORMATAÇÃO DE WHATSAPP
+# REGRA CRÍTICA DE FORMATAÇÃO DE WHATSAPP (USE SEMPRE!)
 
-Quando sua resposta tiver mais de uma ideia, separe-as com o símbolo "|||".
+Você DEVE separar suas ideias em balões curtos usando "|||".
 
-Exemplo:
+Cada balão deve ter NO MÁXIMO 80 caracteres (como uma pessoa real digitando).
 
-"Nossa, imagino como isso dói. ||| Mas você não tá sozinho nessa. ||| Vamos resolver?"
+Exemplos CORRETOS:
+"Oi! ||| Tudo bem com você? ||| Então, pensei no que você disse..."
+"Nossa, que situação difícil. ||| Mas calma, vamos pensar juntos. ||| O que mais te incomoda nisso?"
+"Hmm, entendi. ||| Isso faz sentido pra mim. ||| E como você se sentiu?"
+"Ei, tô aqui. ||| Respira fundo. ||| Me conta o que rolou."
 
-(Isso permitirá que o sistema de envio corte a mensagem em 3 balões separados).
+Exemplo ERRADO (textão sem separação):
+"Nossa, imagino como isso dói, mas você não tá sozinho nessa e vamos resolver juntos."
+
+REGRA: Se sua resposta tem mais de 80 caracteres, OBRIGATORIAMENTE use "|||" para dividir.
+
+(Isso permitirá que o sistema de envio corte a mensagem em vários balões separados, como numa conversa real de WhatsApp).
 
 # REGRA TÉCNICA DE ÁUDIO (PARA VOZ)
 
@@ -1155,6 +1164,15 @@ let timeContext = `
    - "Estamos na metade da sessão. Vamos começar a consolidar..."
    - "[nome], faltam 10 minutos. Vamos começar a fechar..."
 
+⚠️ REGRA CRÍTICA DE RITMO (MESMO EM SESSÃO!):
+Mantenha mensagens CURTAS (máx 80 caracteres por balão).
+Use "|||" entre cada ideia, mesmo durante sessões estruturadas.
+
+Exemplo de sessão com ritmo humano:
+"Entendi o que você tá sentindo. ||| Parece que isso vem de longe, né? ||| Me conta mais sobre quando começou."
+
+NUNCA envie textões longos - isso quebra a conexão e parece robô.
+
 ⚠️ REGRA CRÍTICA DE FOLLOW-UP:
 SEMPRE termine suas mensagens com [AGUARDANDO_RESPOSTA] quando fizer perguntas!
 Isso ativa o sistema de lembretes automáticos se o usuário demorar a responder.
@@ -1449,53 +1467,120 @@ function splitIntoMessages(response: string, allowAudioThisTurn: boolean): Array
     .map(part => part.trim())
     .filter(part => part.length > 0);
 
+  // Função auxiliar: quebrar texto longo por vírgulas se necessário
+  function splitByCommaIfNeeded(text: string, maxLen: number): string[] {
+    if (text.length <= maxLen) return [text];
+    
+    const commaParts = text.split(/,\s*/);
+    if (commaParts.length <= 1) return [text]; // Sem vírgulas, retorna original
+    
+    const result: string[] = [];
+    let current = '';
+    
+    for (const part of commaParts) {
+      if (!current) {
+        current = part;
+      } else if ((current + ', ' + part).length <= maxLen) {
+        current = current + ', ' + part;
+      } else {
+        if (current) result.push(current.trim());
+        current = part;
+      }
+    }
+    if (current) result.push(current.trim());
+    
+    return result;
+  }
+
+  // Função auxiliar: quebrar por sentenças e vírgulas combinadas
+  function splitIntoSmallChunks(text: string): string[] {
+    const maxChunkSize = 80; // Reduzido de 120 para 80 chars
+    
+    // Primeiro, tentar quebrar por sentenças
+    const sentences = text.split(/(?<=[.!?])\s+/).filter(s => s.trim());
+    const chunks: string[] = [];
+    let current = '';
+    
+    for (const sentence of sentences) {
+      // Se a sentença sozinha é muito longa, quebrar por vírgulas
+      if (sentence.length > maxChunkSize) {
+        if (current) {
+          chunks.push(current.trim());
+          current = '';
+        }
+        const commaSplits = splitByCommaIfNeeded(sentence, maxChunkSize);
+        chunks.push(...commaSplits);
+      } else if (!current) {
+        current = sentence;
+      } else if ((current + ' ' + sentence).length <= maxChunkSize) {
+        current = current + ' ' + sentence;
+      } else {
+        chunks.push(current.trim());
+        current = sentence;
+      }
+    }
+    if (current) chunks.push(current.trim());
+    
+    return chunks;
+  }
+
   if (parts.length === 1) {
     const text = parts[0];
     const paragraphs = text.split(/\n\n+/).filter(p => p.trim());
     
     if (paragraphs.length > 1) {
-      return paragraphs.map((p) => ({
-        text: p.trim(),
-        delay: calculateDelay(p),
+      // Processar cada parágrafo para garantir que fiquem curtos
+      const allChunks: string[] = [];
+      for (const p of paragraphs) {
+        if (p.length > 80) {
+          allChunks.push(...splitIntoSmallChunks(p));
+        } else {
+          allChunks.push(p.trim());
+        }
+      }
+      return allChunks.map((chunk) => ({
+        text: chunk,
+        delay: calculateDelay(chunk),
         isAudio: false
       }));
     }
     
-    // Threshold menor para criar bubbles mais curtos e naturais (era 200)
-    if (text.length > 150) {
-      const sentences = text.split(/(?<=[.!?])\s+/).filter(s => s.trim());
-      if (sentences.length >= 2) {  // Reduzido de 3 para 2
-        const chunks: string[] = [];
-        let current = '';
-        
-        for (const sentence of sentences) {
-          if (!current) {
-            current = sentence;
-          } else if ((current + ' ' + sentence).length < 120) {  // Reduzido de 150 para 120
-            current = current + ' ' + sentence;
-          } else {
-            chunks.push(current);
-            current = sentence;
-          }
-        }
-        if (current) chunks.push(current);
-        
-        if (chunks.length > 1) {
-          return chunks.map((chunk) => ({
-            text: chunk.trim(),
-            delay: calculateDelay(chunk),
-            isAudio: false
-          }));
-        }
+    // Threshold reduzido: ativar split mais cedo (era 150, agora 100)
+    if (text.length > 100) {
+      const chunks = splitIntoSmallChunks(text);
+      
+      if (chunks.length > 1) {
+        return chunks.map((chunk) => ({
+          text: chunk.trim(),
+          delay: calculateDelay(chunk),
+          isAudio: false
+        }));
       }
     }
   }
 
-  return parts.map((part) => ({
-    text: part,
-    delay: calculateDelay(part),
-    isAudio: false
-  }));
+  // Processar cada parte do split por ||| para garantir que fiquem curtas
+  const finalChunks: Array<{ text: string; delay: number; isAudio: boolean }> = [];
+  for (const part of parts) {
+    if (part.length > 100) {
+      const subChunks = splitIntoSmallChunks(part);
+      for (const chunk of subChunks) {
+        finalChunks.push({
+          text: chunk,
+          delay: calculateDelay(chunk),
+          isAudio: false
+        });
+      }
+    } else {
+      finalChunks.push({
+        text: part,
+        delay: calculateDelay(part),
+        isAudio: false
+      });
+    }
+  }
+
+  return finalChunks;
 }
 
 // Função para extrair insights da resposta
