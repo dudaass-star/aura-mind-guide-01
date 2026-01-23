@@ -464,6 +464,13 @@ Vou ficar esperando você voltar. 🤗`;
     }
 
     // ========================================================================
+    // DELAY INICIAL - Simula que AURA está "lendo" a mensagem
+    // ========================================================================
+    const initialDelay = 1500 + Math.random() * 2000; // 1.5-3.5 segundos
+    console.log(`⏳ Initial thinking delay: ${Math.round(initialDelay)}ms`);
+    await new Promise(resolve => setTimeout(resolve, initialDelay));
+
+    // ========================================================================
     // CALL AURA AGENT
     // ========================================================================
     console.log(`📱 Processing message from: ${payload.cleanPhone.substring(0, 4)}***`);
@@ -541,7 +548,8 @@ Vou ficar esperando você voltar. 🤗`;
       
       // Add delay between messages for natural feel (skip delay for first message)
       if (i > 0 && msg.delay) {
-        const actualDelay = Math.min(msg.delay, 6000); // Cap at 6 seconds max
+        // Delay entre bubbles já inclui randomização do aura-agent
+        const actualDelay = Math.min(msg.delay, 5000); // Cap at 5 seconds max
         console.log(`⏱️ Waiting ${actualDelay}ms before next message...`);
         await new Promise(resolve => setTimeout(resolve, actualDelay));
       }
@@ -576,9 +584,13 @@ Vou ficar esperando você voltar. 🤗`;
         }
       }
 
-      // Send as text message
-      console.log(`📤 Sending text: ${responseText.substring(0, 50)}...`);
-      await sendTextMessage(payload.cleanPhone, responseText);
+      // Calcular typing delay proporcional ao tamanho do bubble
+      // Mensagens curtas = 2-3s, mensagens longas = 6-8s
+      const typingSeconds = Math.min(Math.max(Math.ceil(responseText.length / 35), 2), 8);
+      
+      // Send as text message with typing indicator
+      console.log(`📤 Sending text (${responseText.length} chars, ${typingSeconds}s typing): ${responseText.substring(0, 50)}...`);
+      await sendTextMessage(payload.cleanPhone, responseText, typingSeconds);
     }
 
     return new Response(JSON.stringify({ 
