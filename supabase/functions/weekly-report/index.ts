@@ -5,6 +5,72 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+interface UserMetrics {
+  totalMessages: number;
+  weekMessages: number;
+  insightsCount: number;
+  sessionsCount: number;
+  journeyTitle: string | null;
+  currentEpisode: number;
+  journeysCompleted: number;
+}
+
+async function fetchUserMetrics(
+  supabase: any,
+  userId: string,
+  weekStart: Date,
+  currentJourneyId: string | null,
+  currentEpisode: number,
+  journeysCompleted: number
+): Promise<UserMetrics> {
+  // Fetch total messages count
+  const { count: totalMessages } = await supabase
+    .from('messages')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', userId);
+
+  // Fetch week messages count
+  const { count: weekMessages } = await supabase
+    .from('messages')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .gte('created_at', weekStart.toISOString());
+
+  // Fetch insights count
+  const { count: insightsCount } = await supabase
+    .from('user_insights')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', userId);
+
+  // Fetch completed sessions count
+  const { count: sessionsCount } = await supabase
+    .from('sessions')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('status', 'completed');
+
+  // Fetch journey title if user has one
+  let journeyTitle: string | null = null;
+  if (currentJourneyId) {
+    const { data: journey } = await supabase
+      .from('content_journeys')
+      .select('title')
+      .eq('id', currentJourneyId)
+      .maybeSingle();
+    journeyTitle = journey?.title || null;
+  }
+
+  return {
+    totalMessages: totalMessages || 0,
+    weekMessages: weekMessages || 0,
+    insightsCount: insightsCount || 0,
+    sessionsCount: sessionsCount || 0,
+    journeyTitle,
+    currentEpisode: currentEpisode || 0,
+    journeysCompleted: journeysCompleted || 0,
+  };
+}
+
 async function analyzeWeekConversations(
   messages: any[],
   userName: string
@@ -63,25 +129,65 @@ Seja específica sobre o que foi discutido. Use linguagem acolhedora e direta. N
   }
 }
 
+function generateProgressBar(current: number, total: number): string {
+  const filled = Math.min(Math.floor((current / total) * 8), 8);
+  const empty = 8 - filled;
+  return '▓'.repeat(filled) + '░'.repeat(empty);
+}
+
 function generateWeeklyReport(
   profile: any,
-  evolutionAnalysis: string
+  evolutionAnalysis: string,
+  metrics: UserMetrics
 ): string {
   const name = profile.name?.split(' ')[0] || 'você';
   
   let report = `📊 *Seu Relatório Semanal, ${name}!*\n\n`;
-
-  // Evolution analysis (AI-generated) - ÚNICO CONTEÚDO PRINCIPAL
+  report += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
+  
+  // Seção: Números
+  report += `📈 *Seus Números*\n`;
+  report += `💬 ${metrics.totalMessages} ${metrics.totalMessages === 1 ? 'mensagem' : 'mensagens'}`;
+  if (metrics.weekMessages > 0) {
+    report += ` (↑${metrics.weekMessages} esta semana)`;
+  }
+  report += `\n`;
+  
+  if (metrics.insightsCount > 0) {
+    report += `🧠 ${metrics.insightsCount} ${metrics.insightsCount === 1 ? 'insight salvo' : 'insights salvos'} sobre você\n`;
+  }
+  
+  if (metrics.sessionsCount > 0) {
+    report += `📅 ${metrics.sessionsCount} ${metrics.sessionsCount === 1 ? 'sessão completada' : 'sessões completadas'}\n`;
+  }
+  
+  report += `\n━━━━━━━━━━━━━━━━━━━━━\n\n`;
+  
+  // Seção: Jornada (se tiver)
+  if (metrics.journeyTitle) {
+    const progressBar = generateProgressBar(metrics.currentEpisode, 8);
+    const percent = Math.round((metrics.currentEpisode / 8) * 100);
+    
+    report += `🎯 *Sua Jornada: ${metrics.journeyTitle}*\n`;
+    report += `${progressBar} Episódio ${metrics.currentEpisode} de 8 (${percent}%)\n`;
+    
+    if (metrics.journeysCompleted > 0) {
+      report += `✅ ${metrics.journeysCompleted} ${metrics.journeysCompleted === 1 ? 'jornada desbloqueada' : 'jornadas desbloqueadas'}\n`;
+    }
+    
+    report += `\n━━━━━━━━━━━━━━━━━━━━━\n\n`;
+  }
+  
+  // Seção: Evolução (IA)
   if (evolutionAnalysis) {
     report += `🌱 *Sua Evolução*\n`;
     report += `${evolutionAnalysis}\n\n`;
-    report += `🌟 *Você está evoluindo!* Continue assim, ${name}. Estou orgulhosa de você! 💜`;
-  } else {
-    // Fallback se não houver análise
-    report += `💜 *Nova semana, novas oportunidades!*\n\n`;
-    report += `Estou aqui pra te apoiar sempre que precisar. Vamos conversar? 💜`;
+    report += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
   }
-
+  
+  // Fechamento
+  report += `✨ Continue assim, ${name}! Estou orgulhosa de você 💜`;
+  
   return report;
 }
 
@@ -99,6 +205,7 @@ Deno.serve(async (req) => {
 
     const zapiInstanceId = Deno.env.get('ZAPI_INSTANCE_ID')!;
     const zapiToken = Deno.env.get('ZAPI_TOKEN')!;
+    const zapiClientToken = Deno.env.get('ZAPI_CLIENT_TOKEN')!;
 
     // Calculate week range
     const now = new Date();
@@ -123,6 +230,21 @@ Deno.serve(async (req) => {
 
     for (const profile of profiles || []) {
       try {
+        const userName = profile.name?.split(' ')[0] || 'usuário';
+        
+        // Fetch user metrics
+        console.log(`📊 Fetching metrics for ${userName}...`);
+        const metrics = await fetchUserMetrics(
+          supabase,
+          profile.user_id,
+          weekStart,
+          profile.current_journey_id,
+          profile.current_episode,
+          profile.journeys_completed
+        );
+        
+        console.log(`📈 Metrics for ${userName}: ${metrics.totalMessages} msgs, ${metrics.insightsCount} insights, ${metrics.sessionsCount} sessions`);
+
         // Get week's messages for AI analysis
         const { data: weekMessages } = await supabase
           .from('messages')
@@ -132,7 +254,6 @@ Deno.serve(async (req) => {
           .order('created_at', { ascending: true });
 
         // Analyze conversations with AI
-        const userName = profile.name?.split(' ')[0] || 'usuário';
         console.log(`🧠 Analyzing ${weekMessages?.length || 0} messages for ${userName}...`);
         
         const evolutionAnalysis = await analyzeWeekConversations(
@@ -144,11 +265,10 @@ Deno.serve(async (req) => {
           console.log(`✅ Evolution analysis generated for ${userName}`);
         }
 
-        // Generate report
-        const report = generateWeeklyReport(profile, evolutionAnalysis);
+        // Generate report with metrics
+        const report = generateWeeklyReport(profile, evolutionAnalysis, metrics);
 
         // Send via Z-API
-        const zapiClientToken = Deno.env.get('ZAPI_CLIENT_TOKEN')!;
         const sendResponse = await fetch(
           `https://api.z-api.io/instances/${zapiInstanceId}/token/${zapiToken}/send-text`,
           {
