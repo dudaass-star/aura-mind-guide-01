@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      aura_response_state: {
+        Row: {
+          is_responding: boolean | null
+          last_user_message_id: string | null
+          pending_content: string | null
+          pending_context: string | null
+          response_started_at: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          is_responding?: boolean | null
+          last_user_message_id?: string | null
+          pending_content?: string | null
+          pending_context?: string | null
+          response_started_at?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          is_responding?: boolean | null
+          last_user_message_id?: string | null
+          pending_content?: string | null
+          pending_context?: string | null
+          response_started_at?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       cancellation_feedback: {
         Row: {
           action_taken: string

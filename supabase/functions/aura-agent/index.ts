@@ -2116,9 +2116,9 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
 
-    const { message, user_id, phone, trial_count } = await req.json();
+    const { message, user_id, phone, trial_count, pending_content, pending_context } = await req.json();
 
-    console.log("AURA received:", { user_id, phone, message: message?.substring(0, 50), trial_count });
+    console.log("AURA received:", { user_id, phone, message: message?.substring(0, 50), trial_count, hasPendingContent: !!pending_content });
 
     // Buscar perfil do usuário
     let profile = null;
@@ -2909,6 +2909,36 @@ INSTRUÇÃO: Ao final da sua resposta, faça um convite carinhoso para continuar
         // Conversas 1-3: apenas informar internamente, sem mencionar
         finalPrompt += `\n\n(Nota interna: Esta é a conversa ${trial_count}/5 do trial gratuito. Não precisa mencionar isso ao usuário ainda.)`;
       }
+    }
+    
+    // ========================================================================
+    // CONTEXTO DE INTERRUPÇÃO - Conteúdo pendente de resposta anterior
+    // ========================================================================
+    if (pending_content && pending_content.trim()) {
+      console.log(`📦 Processing pending content from interrupted response (${pending_content.length} chars)`);
+      
+      finalPrompt += `\n\n📦 CONTEXTO DE INTERRUPÇÃO:
+Você foi INTERROMPIDA no meio de uma resposta anterior. O usuário mandou uma mensagem nova enquanto você estava digitando.
+
+CONTEÚDO QUE VOCÊ IA ENVIAR (mas não enviou):
+"""
+${pending_content.substring(0, 1000)}
+"""
+
+CONTEXTO DA PERGUNTA ORIGINAL: "${pending_context || 'não disponível'}"
+
+INSTRUÇÃO:
+1. Leia a nova mensagem do usuário PRIMEIRO
+2. Se a nova mensagem pede algo DIFERENTE ou muda de assunto: DESCARTE o conteúdo pendente
+3. Se a nova mensagem COMPLEMENTA ou continua o mesmo tema: você pode INCORPORAR naturalmente o que ia dizer
+4. Se a nova mensagem é curta demais para avaliar (tipo "oi" ou "hmm"): pergunte se ele quer que você termine o raciocínio anterior
+5. NUNCA mencione diretamente que foi interrompida de forma robótica ("fui interrompida")
+6. Seja NATURAL - como uma amiga que para de falar quando a outra começa
+
+Exemplo natural:
+- Usuário interrompe com "espera, deixa eu te contar outra coisa" → Descarte e escute
+- Usuário interrompe com "sim!" → Incorpore o pendente naturalmente
+- Usuário interrompe com "mudando de assunto..." → Descarte completamente`;
     }
     
     if (shouldSuggestUpgrade) {
