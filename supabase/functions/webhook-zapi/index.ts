@@ -359,6 +359,40 @@ Deno.serve(async (req) => {
     console.log(`👤 Found user: ${profile.name} (${profile.user_id}), status: ${profile.status}`);
 
     // ========================================================================
+    // INTERRUPTION SYSTEM - Atualizar estado com ID da mensagem atual
+    // ========================================================================
+    const currentMessageId = payload.messageId || `msg_${Date.now()}`;
+    
+    await supabase
+      .from('aura_response_state')
+      .upsert({
+        user_id: profile.user_id,
+        last_user_message_id: currentMessageId,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'user_id' });
+    
+    // Verificar se AURA está no meio de uma resposta
+    const { data: responseState } = await supabase
+      .from('aura_response_state')
+      .select('*')
+      .eq('user_id', profile.user_id)
+      .maybeSingle();
+
+    if (responseState?.is_responding) {
+      console.log('⏸️ AURA está respondendo - aguardando interrupção ser processada...');
+      // Aguardar um pouco para o outro processo perceber a interrupção
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+    
+    // Buscar pending_content que pode ter sido salvo de uma interrupção anterior
+    const pendingContent = responseState?.pending_content || null;
+    const pendingContext = responseState?.pending_context || null;
+    
+    if (pendingContent) {
+      console.log(`📦 Found pending content from interrupted response: ${pendingContent.substring(0, 100)}...`);
+    }
+
+    // ========================================================================
     // TRIAL LIMIT CHECK
     // ========================================================================
     if (profile.status === 'trial') {
@@ -489,8 +523,18 @@ Vou ficar esperando você voltar. 🤗`;
         phone: payload.cleanPhone,
         is_audio_message: isAudioMessage,
         trial_count: profile.status === 'trial' ? profile.trial_conversations_count : null,
+        pending_content: pendingContent,
+        pending_context: pendingContext,
       }),
     });
+    
+    // Limpar pending_content após passar para o agent
+    if (pendingContent) {
+      await supabase
+        .from('aura_response_state')
+        .update({ pending_content: null, pending_context: null })
+        .eq('user_id', profile.user_id);
+    }
 
     if (!agentResponse.ok) {
       const errorText = await agentResponse.text();
@@ -541,10 +585,43 @@ Vou ficar esperando você voltar. 🤗`;
     console.log(`📍 Conversation tracking updated - status: ${conversationStatus}, sessionActive: ${isSessionActive}, followup: ${shouldEnableFollowup}, preservedContext: ${hasGoodContext}`);
 
     // ========================================================================
-    // SEND RESPONSE MESSAGES
+    // SEND RESPONSE MESSAGES (com verificação de interrupção)
     // ========================================================================
+    
+    // Marcar que AURA está respondendo
+    await supabase
+      .from('aura_response_state')
+      .upsert({
+        user_id: profile.user_id,
+        is_responding: true,
+        response_started_at: new Date().toISOString(),
+        last_user_message_id: currentMessageId
+      }, { onConflict: 'user_id' });
+    
+    let wasInterrupted = false;
+    let interruptedAtIndex = -1;
+    
     for (let i = 0; i < (agentData.messages || []).length; i++) {
       const msg = agentData.messages[i];
+      
+      // ⚠️ VERIFICAR INTERRUPÇÃO antes de cada bubble (exceto o primeiro)
+      if (i > 0) {
+        const { data: currentState } = await supabase
+          .from('aura_response_state')
+          .select('last_user_message_id')
+          .eq('user_id', profile.user_id)
+          .maybeSingle();
+        
+        // Se o usuário mandou nova mensagem, PARAR de enviar
+        if (currentState?.last_user_message_id !== currentMessageId) {
+          console.log(`🛑 INTERRUPÇÃO DETECTADA! Parando envio de ${agentData.messages.length - i} bubbles restantes.`);
+          console.log(`   Mensagem original: ${currentMessageId}`);
+          console.log(`   Nova mensagem: ${currentState?.last_user_message_id}`);
+          wasInterrupted = true;
+          interruptedAtIndex = i;
+          break; // Sai do loop imediatamente
+        }
+      }
       
       // Add delay between messages for natural feel (skip delay for first message)
       if (i > 0 && msg.delay) {
@@ -603,11 +680,43 @@ Vou ficar esperando você voltar. 🤗`;
       console.log(`📤 Sending text (${responseText.length} chars, ${typingSeconds}s typing): ${responseText.substring(0, 50)}...`);
       await sendTextMessage(payload.cleanPhone, responseText, typingSeconds);
     }
+    
+    // ========================================================================
+    // FINALIZAÇÃO - Salvar pending content se foi interrompido
+    // ========================================================================
+    if (wasInterrupted && interruptedAtIndex > 0) {
+      // Coletar bubbles que não foram enviados
+      const pendingMessages = agentData.messages
+        .slice(interruptedAtIndex)
+        .map((m: any) => m.text || m.content || '')
+        .filter((t: string) => t.trim())
+        .join('\n\n');
+      
+      if (pendingMessages) {
+        console.log(`📦 Salvando ${agentData.messages.length - interruptedAtIndex} bubbles pendentes para avaliação posterior`);
+        
+        await supabase
+          .from('aura_response_state')
+          .update({
+            is_responding: false,
+            pending_content: pendingMessages,
+            pending_context: messageText.substring(0, 200), // Contexto da pergunta original
+          })
+          .eq('user_id', profile.user_id);
+      }
+    } else {
+      // Marcar que AURA terminou de responder (sem interrupção)
+      await supabase
+        .from('aura_response_state')
+        .update({ is_responding: false })
+        .eq('user_id', profile.user_id);
+    }
 
     return new Response(JSON.stringify({ 
-      status: 'success', 
-      messagesCount: agentData.messages?.length || 0,
-      wasAudioMessage: isAudioMessage 
+      status: wasInterrupted ? 'interrupted' : 'success', 
+      messagesCount: wasInterrupted ? interruptedAtIndex : (agentData.messages?.length || 0),
+      wasAudioMessage: isAudioMessage,
+      wasInterrupted
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
