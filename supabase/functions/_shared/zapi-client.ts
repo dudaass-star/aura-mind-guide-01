@@ -120,13 +120,21 @@ export interface SendAudioResult {
 
 /**
  * Send a text message via Z-API
+ * @param delayTyping - Seconds to show "typing..." before sending (1-15)
  */
-export async function sendTextMessage(phone: string, message: string): Promise<SendTextResult> {
+export async function sendTextMessage(
+  phone: string, 
+  message: string,
+  delayTyping?: number
+): Promise<SendTextResult> {
   try {
     const config = getZapiConfig();
     const cleanPhone = cleanPhoneNumber(phone);
 
-    console.log(`📤 [Z-API] Sending text to ${cleanPhone.substring(0, 4)}***`);
+    // Calcular delay de typing proporcional ao tamanho se não especificado
+    const typingDelay = delayTyping ?? Math.min(Math.ceil(message.length / 40), 10);
+
+    console.log(`📤 [Z-API] Sending text to ${cleanPhone.substring(0, 4)}*** (typing: ${typingDelay}s)`);
 
     const response = await fetch(buildZapiUrl(config, 'send-text'), {
       method: 'POST',
@@ -134,6 +142,8 @@ export async function sendTextMessage(phone: string, message: string): Promise<S
       body: JSON.stringify({
         phone: cleanPhone,
         message: message,
+        // Z-API typing indicator: mostra "Digitando..." por X segundos antes de enviar
+        ...(typingDelay > 0 && { delayTyping: Math.min(Math.max(typingDelay, 1), 15) }),
       }),
     });
 

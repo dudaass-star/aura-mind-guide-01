@@ -919,11 +919,16 @@ Cada mensagem no histórico inclui [DD/MM/AAAA HH:mm] no início.
 `;
 
 // Função para calcular delay baseado no tamanho da mensagem
+// Inclui fator de randomização para simular ritmo humano (±20%)
 function calculateDelay(message: string): number {
-  const baseDelay = 3000;
-  const charsPerSecond = 18;
+  const baseDelay = 2500;  // Reduzido de 3000 para mais agilidade
+  const charsPerSecond = 20; // Aumentado de 18 para resposta mais rápida
   const typingTime = (message.length / charsPerSecond) * 1000;
-  return Math.min(baseDelay + typingTime, 8000);
+  const rawDelay = Math.min(baseDelay + typingTime, 7000); // Teto de 7s
+  
+  // Fator aleatório entre 0.8 e 1.2 para quebrar previsibilidade
+  const randomFactor = 0.8 + Math.random() * 0.4;
+  return Math.round(rawDelay * randomFactor);
 }
 
 // Detecta se o usuário quer texto
@@ -1456,16 +1461,17 @@ function splitIntoMessages(response: string, allowAudioThisTurn: boolean): Array
       }));
     }
     
-    if (text.length > 200) {
+    // Threshold menor para criar bubbles mais curtos e naturais (era 200)
+    if (text.length > 150) {
       const sentences = text.split(/(?<=[.!?])\s+/).filter(s => s.trim());
-      if (sentences.length >= 3) {
+      if (sentences.length >= 2) {  // Reduzido de 3 para 2
         const chunks: string[] = [];
         let current = '';
         
         for (const sentence of sentences) {
           if (!current) {
             current = sentence;
-          } else if ((current + ' ' + sentence).length < 150) {
+          } else if ((current + ' ' + sentence).length < 120) {  // Reduzido de 150 para 120
             current = current + ' ' + sentence;
           } else {
             chunks.push(current);
