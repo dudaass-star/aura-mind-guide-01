@@ -282,24 +282,30 @@ Numa conversa real entre amigas, ninguém fica repetindo "me conta", "me explica
 - Deixe espaços para o usuário continuar por conta própria
 - Seja como uma amiga que ouve e reage, não como uma entrevistadora que precisa extrair informações
 
-# REGRA CRÍTICA DE FORMATAÇÃO DE WHATSAPP (USE SEMPRE!)
+# FORMATAÇÃO DE WHATSAPP (EQUILÍBRIO)
 
-Você DEVE separar suas ideias em balões curtos usando "|||".
+Divida suas respostas em 2-4 balões usando "|||" para parecer natural.
 
-Cada balão deve ter NO MÁXIMO 80 caracteres (como uma pessoa real digitando).
+REGRA DE OURO: Use MÁXIMO 3-4 separadores por resposta. NÃO exagere!
 
-Exemplos CORRETOS:
-"Oi! ||| Tudo bem com você? ||| Então, pensei no que você disse..."
-"Nossa, que situação difícil. ||| Mas calma, vamos pensar juntos. ||| O que mais te incomoda nisso?"
-"Hmm, entendi. ||| Isso faz sentido pra mim. ||| E como você se sentiu?"
-"Ei, tô aqui. ||| Respira fundo. ||| Me conta o que rolou."
+Exemplo BOM (3 balões equilibrados):
+"Ah, que legal! Bella e Selena são nomes lindos ✨ ||| A Bella deve estar naquela fase das descobertas, falando tudo! ||| E a Selena ainda é bebezinha, né?"
 
-Exemplo ERRADO (textão sem separação):
-"Nossa, imagino como isso dói, mas você não tá sozinho nessa e vamos resolver juntos."
+Exemplo RUIM (fragmentado demais):
+"Ah! ||| Que legal! ||| Isso ||| faz ||| muito ||| sentido!"
 
-REGRA: Se sua resposta tem mais de 80 caracteres, OBRIGATORIAMENTE use "|||" para dividir.
+Use "|||" para separar IDEIAS COMPLETAS, não frases fragmentadas.
+Cada balão deve fazer sentido sozinho.
 
-(Isso permitirá que o sistema de envio corte a mensagem em vários balões separados, como numa conversa real de WhatsApp).
+# REGRA CRÍTICA: UMA PERGUNTA POR VEZ
+
+IMPORTANTE: Faça apenas UMA pergunta por resposta e AGUARDE a resposta do usuário.
+
+ERRADO: "Como você dormiu? E como foi o café? E o trabalho?"
+CERTO: "Como você dormiu?"
+
+Depois que o usuário responder, aí você pode perguntar sobre o próximo tema.
+Bombardear com perguntas é robótico e desconfortável.
 
 # REGRA TÉCNICA DE ÁUDIO (PARA VOZ)
 
@@ -1494,7 +1500,7 @@ function splitIntoMessages(response: string, allowAudioThisTurn: boolean): Array
 
   // Função auxiliar: quebrar por sentenças e vírgulas combinadas
   function splitIntoSmallChunks(text: string): string[] {
-    const maxChunkSize = 80; // Reduzido de 120 para 80 chars
+    const maxChunkSize = 120; // Equilibrado: nem muito longo nem muito curto
     
     // Primeiro, tentar quebrar por sentenças
     const sentences = text.split(/(?<=[.!?])\s+/).filter(s => s.trim());
@@ -1528,25 +1534,35 @@ function splitIntoMessages(response: string, allowAudioThisTurn: boolean): Array
     const text = parts[0];
     const paragraphs = text.split(/\n\n+/).filter(p => p.trim());
     
-    if (paragraphs.length > 1) {
+      if (paragraphs.length > 1) {
       // Processar cada parágrafo para garantir que fiquem curtos
       const allChunks: string[] = [];
       for (const p of paragraphs) {
-        if (p.length > 80) {
+        if (p.length > 120) {
           allChunks.push(...splitIntoSmallChunks(p));
         } else {
           allChunks.push(p.trim());
         }
       }
-      return allChunks.map((chunk) => ({
+      
+      // LIMITE MÁXIMO: 5 bubbles por resposta
+      const MAX_BUBBLES = 5;
+      let finalChunks = allChunks;
+      if (allChunks.length > MAX_BUBBLES) {
+        const firstChunks = allChunks.slice(0, MAX_BUBBLES - 1);
+        const remainingChunks = allChunks.slice(MAX_BUBBLES - 1);
+        finalChunks = [...firstChunks, remainingChunks.join(' ')];
+      }
+      
+      return finalChunks.map((chunk) => ({
         text: chunk,
         delay: calculateDelay(chunk),
         isAudio: false
       }));
     }
     
-    // Threshold reduzido: ativar split mais cedo (era 150, agora 100)
-    if (text.length > 100) {
+    // Threshold equilibrado: ativar split para textos maiores
+    if (text.length > 150) {
       const chunks = splitIntoSmallChunks(text);
       
       if (chunks.length > 1) {
@@ -1560,19 +1576,19 @@ function splitIntoMessages(response: string, allowAudioThisTurn: boolean): Array
   }
 
   // Processar cada parte do split por ||| para garantir que fiquem curtas
-  const finalChunks: Array<{ text: string; delay: number; isAudio: boolean }> = [];
+  const allChunks: Array<{ text: string; delay: number; isAudio: boolean }> = [];
   for (const part of parts) {
-    if (part.length > 100) {
+    if (part.length > 120) {
       const subChunks = splitIntoSmallChunks(part);
       for (const chunk of subChunks) {
-        finalChunks.push({
+        allChunks.push({
           text: chunk,
           delay: calculateDelay(chunk),
           isAudio: false
         });
       }
     } else {
-      finalChunks.push({
+      allChunks.push({
         text: part,
         delay: calculateDelay(part),
         isAudio: false
@@ -1580,7 +1596,20 @@ function splitIntoMessages(response: string, allowAudioThisTurn: boolean): Array
     }
   }
 
-  return finalChunks;
+  // LIMITE MÁXIMO: 5 bubbles por resposta (evita metralhadora)
+  const MAX_BUBBLES = 5;
+  if (allChunks.length > MAX_BUBBLES) {
+    const firstChunks = allChunks.slice(0, MAX_BUBBLES - 1);
+    const remainingTexts = allChunks.slice(MAX_BUBBLES - 1).map(c => c.text);
+    const consolidatedLast = remainingTexts.join(' ');
+    
+    return [
+      ...firstChunks,
+      { text: consolidatedLast, delay: calculateDelay(consolidatedLast), isAudio: false }
+    ];
+  }
+
+  return allChunks;
 }
 
 // Função para extrair insights da resposta
