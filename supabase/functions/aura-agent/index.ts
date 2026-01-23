@@ -695,26 +695,62 @@ Não seja uma máquina de tarefas. Use sua inteligência emocional.
 
 **REGRA DE OURO:** Na dúvida, pergunte de forma carinhosa: "Você quer uma ideia prática ou quer só desabafar? Tô aqui pros dois! 💜"
 
-# EXTRAÇÃO DE INSIGHTS (MEMÓRIA DE LONGO PRAZO)
+# MEMÓRIA DE LONGO PRAZO (INSIGHTS)
 
-Durante a conversa, você deve identificar informações importantes sobre o usuário e retornar no final da sua resposta usando a tag [INSIGHTS].
+Durante a conversa, identifique informações que você gostaria de lembrar na PRÓXIMA conversa.
+Use a tag [INSIGHTS] para salvar.
 
 Formato: [INSIGHTS]categoria:chave:valor|categoria:chave:valor[/INSIGHTS]
 
-Categorias válidas:
-- pessoa: nomes de pessoas importantes (chefe, marido, filha, terapeuta)
-- objetivo: metas e sonhos do usuário
-- padrao: comportamentos recorrentes identificados
-- conquista: vitórias e progressos
-- trauma: medos e dores emocionais
-- preferencia: gostos e preferências
-- contexto: informações de trabalho, cidade, situação
+## CATEGORIAS POR PRIORIDADE:
 
-Exemplos:
+### PRIORIDADE MÁXIMA - Identidade (NUNCA pode faltar!)
+
+| Categoria | Quando salvar | Exemplos |
+|-----------|---------------|----------|
+| pessoa | Nomes de QUALQUER pessoa mencionada | filha:Bella, marido:Pedro, chefe:Carlos, mãe:Ana, terapeuta:Julia, amigo:Lucas |
+| identidade | Dados básicos do usuário | profissao:engenheiro, idade:35, cidade:São Paulo, estado_civil:casado |
+
+**REGRA DE OURO PARA PESSOAS:**
+- Usuário disse "minha filha Bella" -> [INSIGHTS]pessoa:filha:Bella[/INSIGHTS]
+- Usuário disse "conversei com meu chefe Carlos" -> [INSIGHTS]pessoa:chefe:Carlos[/INSIGHTS]
+- Usuário disse "minha terapeuta me disse" -> PERGUNTE O NOME e salve!
+- Usuário disse "minhas filhas Maria e Bella" -> [INSIGHTS]pessoa:filha_1:Maria|pessoa:filha_2:Bella[/INSIGHTS]
+
+### PRIORIDADE ALTA - Contexto Emocional
+
+| Categoria | Quando salvar | Exemplos |
+|-----------|---------------|----------|
+| desafio | Problemas atuais que o usuário está enfrentando | ansiedade:trabalho, conflito:mãe, burnout:identificado |
+| trauma | Medos profundos e dores emocionais | medo_abandono:identificado, perda:pai, rejeição:infância |
+| saude | Informações de saúde física e mental | medicacao:nenhuma, terapia:6 meses, diagnostico:ansiedade |
+
+### PRIORIDADE MÉDIA - Evolução e Metas
+
+| Categoria | Quando salvar | Exemplos |
+|-----------|---------------|----------|
+| objetivo | Metas e sonhos do usuário | principal:mudar de emprego, longo_prazo:ter filhos |
+| conquista | Vitórias e progressos celebrados | terapia:completou 1 ano, meta:conseguiu promoção |
+| padrao | Comportamentos recorrentes identificados | procrastinacao:noturna, autocritica:excessiva |
+
+### PRIORIDADE NORMAL - Preferências
+
+| Categoria | Quando salvar | Exemplos |
+|-----------|---------------|----------|
+| preferencia | Gostos pessoais que humanizam a conversa | sorvete:Ben&Jerrys, hobby:leitura, musica:MPB |
+| rotina | Hábitos e horários | acorda:6h, exercicio:academia 3x, trabalho:remoto |
+| contexto | Outras informações de vida | trabalho:empresa X, situacao:em transição |
+
+## REGRAS IMPORTANTES:
+
+1. **Se o usuário mencionar um NOME PRÓPRIO de pessoa, SEMPRE salve!**
+2. **Se o usuário revelar algo sobre sua vida (profissão, cidade, estado civil), salve em identidade**
+3. **Prefira salvar demais do que esquecer algo importante**
+4. **Só extraia o que foi CLARAMENTE mencionado - não invente**
+
+Exemplos completos:
+[INSIGHTS]pessoa:filha:Bella|identidade:profissao:engenheiro|desafio:principal:ansiedade no trabalho[/INSIGHTS]
 [INSIGHTS]pessoa:chefe:Carlos|pessoa:marido:João|objetivo:principal:emagrecer 10kg[/INSIGHTS]
-[INSIGHTS]padrao:procrastinacao:deixa tudo pra última hora|trauma:medo_abandono:identificado[/INSIGHTS]
-
-IMPORTANTE: Só extraia insights que o usuário CLARAMENTE mencionou. Não invente.
 
 # CONTROLE DE FLUXO DA CONVERSA (MUITO IMPORTANTE)
 
@@ -1491,12 +1527,16 @@ function formatInsightsForContext(insights: any[]): string {
 
   const categoryLabels: Record<string, string> = {
     pessoa: "👥 Pessoas importantes",
+    identidade: "🪪 Sobre o usuário",
     objetivo: "🎯 Objetivos",
     padrao: "🔄 Padrões identificados",
     conquista: "🏆 Conquistas",
     trauma: "💔 Pontos sensíveis",
     preferencia: "💚 Preferências",
-    contexto: "📍 Contexto de vida"
+    contexto: "📍 Contexto de vida",
+    desafio: "⚡ Desafios atuais",
+    saude: "🏥 Saúde",
+    rotina: "⏰ Rotina"
   };
 
   let formatted = "";
@@ -2225,19 +2265,31 @@ serve(async (req) => {
       }
     }
 
-    // Buscar insights
+    // Buscar insights com priorização inteligente
     let userInsights: any[] = [];
     if (profile?.user_id) {
-      const { data: insights } = await supabase
+      // Primeiro: SEMPRE buscar pessoas e identidade (categorias críticas - nunca podem faltar)
+      const { data: criticalInsights } = await supabase
         .from('user_insights')
         .select('category, key, value, importance')
         .eq('user_id', profile.user_id)
+        .in('category', ['pessoa', 'identidade'])
         .order('importance', { ascending: false })
-        .limit(20);
+        .limit(15);
 
-      if (insights) {
-        userInsights = insights;
-      }
+      // Depois: buscar insights gerais por importância
+      const { data: generalInsights } = await supabase
+        .from('user_insights')
+        .select('category, key, value, importance')
+        .eq('user_id', profile.user_id)
+        .not('category', 'in', '("pessoa","identidade")')
+        .order('importance', { ascending: false })
+        .order('last_mentioned_at', { ascending: false })
+        .limit(35);
+
+      // Combinar: críticos primeiro + gerais depois (max 50 total)
+      userInsights = [...(criticalInsights || []), ...(generalInsights || [])];
+      console.log('🧠 Loaded insights:', { critical: criticalInsights?.length || 0, general: generalInsights?.length || 0, total: userInsights.length });
     }
 
     // Buscar últimas 3 sessões completadas para contexto de continuidade
@@ -3544,12 +3596,29 @@ Estou aqui sempre que precisar! 💜`;
       }
     }
 
-    // Extrair e salvar novos insights
+    // Extrair e salvar novos insights com importância automática por categoria
     const newInsights = extractInsights(assistantMessage);
     if (newInsights.length > 0 && profile?.user_id) {
       console.log("Saving", newInsights.length, "new insights");
       
+      // Mapeamento de importância por categoria
+      const categoryImportance: Record<string, number> = {
+        'pessoa': 10,      // Máxima - nunca pode faltar
+        'identidade': 10,  // Máxima - dados básicos do usuário
+        'desafio': 8,      // Alta - problemas atuais
+        'trauma': 8,       // Alta - dores emocionais
+        'saude': 8,        // Alta - informações de saúde
+        'objetivo': 6,     // Média-alta
+        'conquista': 6,    // Média-alta
+        'padrao': 5,       // Média
+        'preferencia': 4,  // Normal
+        'rotina': 4,       // Normal
+        'contexto': 5      // Média
+      };
+      
       for (const insight of newInsights) {
+        const importance = categoryImportance[insight.category] || 5;
+        
         await supabase
           .from('user_insights')
           .upsert({
@@ -3557,10 +3626,13 @@ Estou aqui sempre que precisar! 💜`;
             category: insight.category,
             key: insight.key,
             value: insight.value,
+            importance: importance,
             last_mentioned_at: new Date().toISOString()
           }, {
             onConflict: 'user_id,category,key'
           });
+        
+        console.log(`💾 Saved insight: ${insight.category}:${insight.key} (importance: ${importance})`);
       }
     }
 
