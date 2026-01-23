@@ -585,8 +585,19 @@ Vou ficar esperando você voltar. 🤗`;
       }
 
       // Calcular typing delay proporcional ao tamanho do bubble
-      // Mensagens curtas = 2-3s, mensagens longas = 6-8s
-      const typingSeconds = Math.min(Math.max(Math.ceil(responseText.length / 35), 2), 8);
+      // Bubbles curtos (< 50 chars) = 1-2s, médios = 2-4s, longos = 4-6s
+      // Mais natural: simula digitação real
+      let typingSeconds: number;
+      if (responseText.length < 50) {
+        // Mensagens curtas: 1-2 segundos (digitação rápida)
+        typingSeconds = Math.max(1, Math.ceil(responseText.length / 30));
+      } else if (responseText.length < 100) {
+        // Mensagens médias: 2-3 segundos
+        typingSeconds = Math.ceil(responseText.length / 40);
+      } else {
+        // Mensagens longas: 3-6 segundos
+        typingSeconds = Math.min(Math.ceil(responseText.length / 35), 6);
+      }
       
       // Send as text message with typing indicator
       console.log(`📤 Sending text (${responseText.length} chars, ${typingSeconds}s typing): ${responseText.substring(0, 50)}...`);
