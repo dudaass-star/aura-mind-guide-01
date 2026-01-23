@@ -612,11 +612,19 @@ Vou ficar esperando você voltar. 🤗`;
           .eq('user_id', profile.user_id)
           .maybeSingle();
         
-        // Se o usuário mandou nova mensagem, PARAR de enviar
-        if (currentState?.last_user_message_id !== currentMessageId) {
+        // CORREÇÃO: Só detectar interrupção se:
+        // 1. O estado existe no banco
+        // 2. O last_user_message_id existe e é diferente do atual
+        // Isso evita falsos positivos quando o registro é null/undefined
+        const hasNewMessage = currentState?.last_user_message_id && 
+                              currentState.last_user_message_id !== currentMessageId;
+        
+        console.log(`🔍 Interruption check [${i}/${agentData.messages.length}]: local=${currentMessageId}, db=${currentState?.last_user_message_id}, match=${!hasNewMessage}`);
+        
+        if (hasNewMessage) {
           console.log(`🛑 INTERRUPÇÃO DETECTADA! Parando envio de ${agentData.messages.length - i} bubbles restantes.`);
           console.log(`   Mensagem original: ${currentMessageId}`);
-          console.log(`   Nova mensagem: ${currentState?.last_user_message_id}`);
+          console.log(`   Nova mensagem: ${currentState.last_user_message_id}`);
           wasInterrupted = true;
           interruptedAtIndex = i;
           break; // Sai do loop imediatamente
