@@ -24,7 +24,7 @@ async function generateGeminiTTS(text: string, apiKey: string): Promise<Uint8Arr
     const fullPrompt = `${AURA_VOICE_CONFIG.stylePrompt}\n\nDiga o seguinte texto:\n\n${text}`;
     
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro-preview-tts:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-tts:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: {
