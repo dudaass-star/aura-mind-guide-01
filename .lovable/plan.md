@@ -1,160 +1,63 @@
 
 
-## Implementação do Google Cloud TTS com Service Account
+## Remover Fallback OpenAI do TTS para Manter Consistência de Voz
 
-### Credenciais Recebidas
+### Problema
+Quando o Google Cloud TTS falha (por exemplo, por filtro de segurança), o sistema atualmente usa OpenAI com a voz "shimmer" como fallback. Isso resulta em duas vozes diferentes na experiência do usuário, o que é confuso e quebra a identidade da AURA.
 
-A Service Account foi recebida com sucesso:
-- **Projeto**: gen-lang-client-0844533581
-- **Email**: vertex-express@gen-lang-client-0844533581.iam.gserviceaccount.com
+### Solução
+Remover o fallback para OpenAI dentro do `aura-tts` e deixar que os sistemas chamadores (`webhook-zapi` e `send-zapi-message`) usem seus próprios fallbacks para texto, que já estão implementados.
 
-### Passos da Implementação
-
-#### 1. Configurar Secret GCP_SERVICE_ACCOUNT
-Solicitar ao usuário que adicione o JSON completo da Service Account como um secret.
-
-#### 2. Atualizar Edge Function aura-tts
-
-**Arquivo**: `supabase/functions/aura-tts/index.ts`
-
-**Novas funcionalidades**:
-
-- **Importar biblioteca djwt** para geração de JWT
-```typescript
-import { create } from "https://deno.land/x/djwt@v3.0.2/mod.ts";
-```
-
-- **Função importPrivateKey()** - Converte PEM para CryptoKey
-```typescript
-async function importPrivateKey(pem: string): Promise<CryptoKey> {
-  const pemContents = pem
-    .replace("-----BEGIN PRIVATE KEY-----", "")
-    .replace("-----END PRIVATE KEY-----", "")
-    .replace(/\n/g, "");
-  
-  const binaryKey = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0));
-  
-  return await crypto.subtle.importKey(
-    "pkcs8",
-    binaryKey,
-    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
-    false,
-    ["sign"]
-  );
-}
-```
-
-- **Função getAccessToken()** - Gera JWT e troca por Access Token
-```typescript
-async function getAccessToken(serviceAccount: ServiceAccountCredentials): Promise<string> {
-  const now = Math.floor(Date.now() / 1000);
-  
-  const jwt = await create(
-    { alg: "RS256", typ: "JWT" },
-    {
-      iss: serviceAccount.client_email,
-      scope: "https://www.googleapis.com/auth/cloud-platform",
-      aud: "https://oauth2.googleapis.com/token",
-      iat: now,
-      exp: now + 3600,
-    },
-    await importPrivateKey(serviceAccount.private_key)
-  );
-
-  const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`,
-  });
-
-  const { access_token } = await tokenResponse.json();
-  return access_token;
-}
-```
-
-- **Função generateGoogleCloudTTS()** - Substitui generateGeminiTTS
-```typescript
-async function generateGoogleCloudTTS(
-  text: string, 
-  serviceAccount: ServiceAccountCredentials
-): Promise<Uint8Array | null> {
-  const accessToken = await getAccessToken(serviceAccount);
-  
-  const response = await fetch(
-    "https://texttospeech.googleapis.com/v1/text:synthesize",
-    {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-        "x-goog-user-project": serviceAccount.project_id,
-      },
-      body: JSON.stringify({
-        input: {
-          prompt: AURA_VOICE_CONFIG.stylePrompt,
-          text: text,
-        },
-        voice: {
-          languageCode: "pt-BR",
-          name: AURA_VOICE_CONFIG.voiceName,
-          modelName: "gemini-2.5-flash-tts",
-        },
-        audioConfig: {
-          audioEncoding: "MP3",
-          speakingRate: AURA_VOICE_CONFIG.speakingRate,
-        },
-      }),
-    }
-  );
-
-  const data = await response.json();
-  return decodeBase64(data.audioContent);
-}
-```
-
-#### 3. Atualizar Lógica Principal
-
-- Ler secret `GCP_SERVICE_ACCOUNT` como JSON
-- Usar `generateGoogleCloudTTS()` como método primário
-- Manter fallback para OpenAI TTS
-
----
-
-### Fluxo de Autenticação
+### Fluxo Atual vs. Proposto
 
 ```text
-Service Account JSON
-        |
-        v
-   Gerar JWT (RS256)
-        |
-        v
-   POST oauth2.googleapis.com/token
-        |
-        v
-   Access Token Bearer
-        |
-        v
-   Cloud TTS API
-   texttospeech.googleapis.com/v1/text:synthesize
+ATUAL:
+Google TTS falha → OpenAI TTS (voz diferente) → Envia áudio
+
+PROPOSTO:
+Google TTS falha → Retorna null → Sistema envia texto
 ```
 
----
+### Mudanças Necessárias
 
-### Pré-requisito
+**Arquivo: `supabase/functions/aura-tts/index.ts`**
 
-Antes de testar, verificar se a **Cloud Text-to-Speech API** está habilitada no projeto GCP:
-1. Acesse console.cloud.google.com
-2. Vá em APIs & Services > Library
-3. Pesquise "Cloud Text-to-Speech API"
-4. Verifique se está Enabled
+1. **Remover a função `generateOpenAITTS()`** (linhas ~155-180)
+   - Não será mais necessária
 
----
+2. **Remover o fallback para OpenAI** (linhas ~243-249)
+   - Atualmente: se Google Cloud falha, tenta OpenAI
+   - Novo: se Google Cloud falha, retorna resposta indicando falha
+
+3. **Manter sanitização e retry com reformulação** (conforme plano anterior)
+   - Primeira tentativa: texto sanitizado
+   - Segunda tentativa: texto reformulado
+   - Se ambas falharem: retorna `null` para o chamador
+
+4. **Atualizar resposta de erro**
+   - Retornar JSON com `{ audioContent: null, fallbackToText: true, reason: "safety_filter" }` 
+   - Isso permite que os chamadores saibam que devem enviar texto
+
+### Comportamento dos Chamadores (já implementado)
+
+Os sistemas que chamam `aura-tts` já têm fallback para texto:
+
+- **webhook-zapi** (linha 668-669): "Audio send failed, falling back to text"
+- **send-zapi-message** (linha 90-93): "Audio generation failed, falling back to text"
+
+Nenhuma mudança é necessária nesses arquivos - eles já tratam o caso de `audioContent` ser `null`.
 
 ### Resultado Esperado
 
-- Voz **Erinome** funcionando via Google Cloud TTS
-- Tom acolhedor, empático e calmo conforme configurado
-- Velocidade de fala em 1.20x
-- Fallback para OpenAI mantido caso Google Cloud falhe
+| Cenário | Antes | Depois |
+|---------|-------|--------|
+| Google TTS sucesso | Áudio (Erinome) | Áudio (Erinome) |
+| Google TTS falha | Áudio (shimmer) | Texto |
+
+### Benefícios
+
+- **Consistência total**: AURA sempre fala com a mesma voz (Erinome)
+- **Fallback natural**: Texto é menos disruptivo que voz diferente
+- **Código mais simples**: Remove dependência do OpenAI para TTS
+- **Menor latência**: Não tenta segundo provedor antes de falhar
 
