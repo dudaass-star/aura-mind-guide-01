@@ -131,7 +131,7 @@ async function attemptGoogleTTS(
           voice: {
             languageCode: "pt-BR",
             name: AURA_VOICE_CONFIG.voiceName,
-            modelName: "gemini-2.5-flash-tts",
+            modelName: "gemini-2.5-pro-tts",
           },
           audioConfig: {
             audioEncoding: "MP3",
