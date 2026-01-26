@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
+import { create } from "https://deno.land/x/djwt@v3.0.2/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -11,71 +12,135 @@ const corsHeaders = {
 const AURA_VOICE_CONFIG = {
   voiceName: "Erinome",
   speakingRate: 1.20,
-  // Instrução de estilo que será incluída no prompt
   stylePrompt: "O tom é acolhedor, empático e calmo, mas profissional e confiante. Nada robótico. Articulação clara, timbre suave, fala lenta e gentilmente, como uma terapeuta ou uma amiga próxima oferecendo apoio."
 };
 
-// Função para gerar áudio via Gemini API (generativelanguage.googleapis.com)
-async function generateGeminiTTS(text: string, apiKey: string): Promise<Uint8Array | null> {
+// Interface para as credenciais da Service Account
+interface ServiceAccountCredentials {
+  type: string;
+  project_id: string;
+  private_key_id: string;
+  private_key: string;
+  client_email: string;
+  client_id: string;
+  auth_uri: string;
+  token_uri: string;
+  auth_provider_x509_cert_url: string;
+  client_x509_cert_url: string;
+  universe_domain: string;
+}
+
+// Converte PEM para CryptoKey
+async function importPrivateKey(pem: string): Promise<CryptoKey> {
+  const pemContents = pem
+    .replace("-----BEGIN PRIVATE KEY-----", "")
+    .replace("-----END PRIVATE KEY-----", "")
+    .replace(/\n/g, "");
+  
+  const binaryKey = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0));
+  
+  return await crypto.subtle.importKey(
+    "pkcs8",
+    binaryKey,
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+}
+
+// Gera JWT e troca por Access Token
+async function getAccessToken(serviceAccount: ServiceAccountCredentials): Promise<string> {
+  const now = Math.floor(Date.now() / 1000);
+  
+  const jwt = await create(
+    { alg: "RS256", typ: "JWT" },
+    {
+      iss: serviceAccount.client_email,
+      scope: "https://www.googleapis.com/auth/cloud-platform",
+      aud: "https://oauth2.googleapis.com/token",
+      iat: now,
+      exp: now + 3600,
+    },
+    await importPrivateKey(serviceAccount.private_key)
+  );
+
+  const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`,
+  });
+
+  if (!tokenResponse.ok) {
+    const errorText = await tokenResponse.text();
+    console.error("OAuth2 token error:", tokenResponse.status, errorText);
+    throw new Error(`Failed to get access token: ${tokenResponse.status}`);
+  }
+
+  const tokenData = await tokenResponse.json();
+  return tokenData.access_token;
+}
+
+// Função para gerar áudio via Google Cloud TTS com Service Account
+async function generateGoogleCloudTTS(
+  text: string, 
+  serviceAccount: ServiceAccountCredentials
+): Promise<Uint8Array | null> {
   try {
-    console.log('🎙️ Attempting Gemini TTS with voice:', AURA_VOICE_CONFIG.voiceName);
+    console.log('🎙️ Attempting Google Cloud TTS with voice:', AURA_VOICE_CONFIG.voiceName);
     
-    // Combinar instrução de estilo com o texto
-    const fullPrompt = `${AURA_VOICE_CONFIG.stylePrompt}\n\nDiga o seguinte texto:\n\n${text}`;
+    const accessToken = await getAccessToken(serviceAccount);
     
     const response = await fetch(
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent',
+      "https://texttospeech.googleapis.com/v1/text:synthesize",
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': apiKey,
+          "Authorization": `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+          "x-goog-user-project": serviceAccount.project_id,
         },
         body: JSON.stringify({
-          contents: [{
-            parts: [{ text: fullPrompt }]
-          }],
-          generationConfig: {
-            response_modalities: ["AUDIO"],
-            speech_config: {
-              voice_config: {
-                prebuilt_voice_config: {
-                  voice_name: AURA_VOICE_CONFIG.voiceName
-                }
-              }
-            }
-          }
-        })
+          input: {
+            prompt: AURA_VOICE_CONFIG.stylePrompt,
+            text: text,
+          },
+          voice: {
+            languageCode: "pt-BR",
+            name: AURA_VOICE_CONFIG.voiceName,
+            modelName: "gemini-2.5-flash-tts",
+          },
+          audioConfig: {
+            audioEncoding: "MP3",
+            speakingRate: AURA_VOICE_CONFIG.speakingRate,
+          },
+        }),
       }
     );
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("Gemini TTS error:", response.status, errorText);
+      console.error("Google Cloud TTS error:", response.status, errorText);
       return null;
     }
 
     const data = await response.json();
     
-    // Extrair o áudio da resposta do Gemini
-    const audioData = data.candidates?.[0]?.content?.parts?.[0]?.inlineData;
-    
-    if (!audioData || !audioData.data) {
-      console.error("Gemini TTS: No audio data in response", JSON.stringify(data).substring(0, 500));
+    if (!data.audioContent) {
+      console.error("Google Cloud TTS: No audio content in response");
       return null;
     }
 
     // Decodificar base64 para bytes
-    const binaryString = atob(audioData.data);
+    const binaryString = atob(data.audioContent);
     const bytes = new Uint8Array(binaryString.length);
     for (let i = 0; i < binaryString.length; i++) {
       bytes[i] = binaryString.charCodeAt(i);
     }
     
-    console.log('✅ Gemini TTS success:', bytes.byteLength, 'bytes, mimeType:', audioData.mimeType);
+    console.log('✅ Google Cloud TTS success:', bytes.byteLength, 'bytes');
     return bytes;
   } catch (error) {
-    console.error("Gemini TTS exception:", error);
+    console.error("Google Cloud TTS exception:", error);
     return null;
   }
 }
@@ -134,10 +199,20 @@ serve(async (req) => {
       });
     }
 
-    const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
+    // Carregar credenciais da Service Account
+    const gcpServiceAccountJson = Deno.env.get('GCP_SERVICE_ACCOUNT');
     const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
     
-    if (!GEMINI_API_KEY && !OPENAI_API_KEY) {
+    let serviceAccount: ServiceAccountCredentials | null = null;
+    if (gcpServiceAccountJson) {
+      try {
+        serviceAccount = JSON.parse(gcpServiceAccountJson);
+      } catch (e) {
+        console.error("Failed to parse GCP_SERVICE_ACCOUNT:", e);
+      }
+    }
+    
+    if (!serviceAccount && !OPENAI_API_KEY) {
       throw new Error('No TTS API keys configured');
     }
 
@@ -149,30 +224,27 @@ serve(async (req) => {
 
     console.log("TTS request:", { textLength: text.length });
 
-    // Limite de caracteres: 2000 para Gemini, 500 para OpenAI fallback
-    const maxChars = GEMINI_API_KEY ? 2000 : 500;
+    // Limite de caracteres: 2000 para Google Cloud, 500 para OpenAI fallback
+    const maxChars = serviceAccount ? 2000 : 500;
     const truncatedText = text.length > maxChars ? text.substring(0, maxChars) + '...' : text;
 
     let audioBytes: Uint8Array | null = null;
     let provider = 'none';
-    let audioFormat = 'mp3';
 
-    // Tentar Gemini TTS primeiro
-    if (GEMINI_API_KEY) {
-      audioBytes = await generateGeminiTTS(truncatedText, GEMINI_API_KEY);
+    // Tentar Google Cloud TTS primeiro
+    if (serviceAccount) {
+      audioBytes = await generateGoogleCloudTTS(truncatedText, serviceAccount);
       if (audioBytes) {
-        provider = 'gemini';
-        // Gemini pode retornar diferentes formatos, verificar logs para o mimeType
+        provider = 'google-cloud';
       }
     }
 
-    // Fallback para OpenAI se Gemini falhar
+    // Fallback para OpenAI se Google Cloud falhar
     if (!audioBytes && OPENAI_API_KEY) {
       const fallbackText = text.length > 500 ? text.substring(0, 500) + '...' : text;
       audioBytes = await generateOpenAITTS(fallbackText, OPENAI_API_KEY);
       if (audioBytes) {
         provider = 'openai-fallback';
-        audioFormat = 'mp3';
       }
     }
 
@@ -186,14 +258,14 @@ serve(async (req) => {
     console.log("TTS generated:", { 
       audioSize: audioBytes.byteLength,
       provider: provider,
-      voice: provider === 'gemini' ? AURA_VOICE_CONFIG.voiceName : 'shimmer'
+      voice: provider === 'google-cloud' ? AURA_VOICE_CONFIG.voiceName : 'shimmer'
     });
 
     return new Response(
       JSON.stringify({ 
         audioContent: base64Audio,
-        format: audioFormat,
-        voice: provider === 'gemini' ? AURA_VOICE_CONFIG.voiceName : 'shimmer',
+        format: 'mp3',
+        voice: provider === 'google-cloud' ? AURA_VOICE_CONFIG.voiceName : 'shimmer',
         provider: provider
       }),
       {
@@ -203,7 +275,6 @@ serve(async (req) => {
 
   } catch (error) {
     console.error("Error in aura-tts:", error);
-    // Return generic error message, log full details server-side
     return new Response(
       JSON.stringify({ error: 'Failed to generate audio' }),
       {
