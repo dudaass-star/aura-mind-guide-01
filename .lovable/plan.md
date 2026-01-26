@@ -1,89 +1,51 @@
 
 
-## Migração para Google Cloud TTS com Service Account
+## Implementação do Google Cloud TTS com Service Account
 
-### Visão Geral
+### Credenciais Recebidas
 
-O Gemini TTS não aceita API Keys simples - requer autenticação OAuth2 via Service Account. Vamos migrar a função `aura-tts` para usar o endpoint correto do Google Cloud TTS com autenticação por token JWT.
+A Service Account foi recebida com sucesso:
+- **Projeto**: gen-lang-client-0844533581
+- **Email**: vertex-express@gen-lang-client-0844533581.iam.gserviceaccount.com
 
----
+### Passos da Implementação
 
-## Passos para Configuração no Google Cloud
+#### 1. Configurar Secret GCP_SERVICE_ACCOUNT
+Solicitar ao usuário que adicione o JSON completo da Service Account como um secret.
 
-### 1. Criar Service Account no GCP Console
+#### 2. Atualizar Edge Function aura-tts
 
-1. Acesse [console.cloud.google.com](https://console.cloud.google.com)
-2. Selecione ou crie um projeto
-3. Vá em **IAM & Admin > Service Accounts**
-4. Clique em **Create Service Account**
-5. Dê um nome (ex: `aura-tts-service`)
-6. Clique em **Create and Continue**
+**Arquivo**: `supabase/functions/aura-tts/index.ts`
 
-### 2. Habilitar a API de Text-to-Speech
+**Novas funcionalidades**:
 
-1. Vá em **APIs & Services > Library**
-2. Pesquise por **Cloud Text-to-Speech API**
-3. Clique em **Enable**
-
-### 3. Gerar Chave JSON
-
-1. Na página do Service Account criado, clique na aba **Keys**
-2. Clique em **Add Key > Create new key**
-3. Selecione **JSON** e baixe o arquivo
-4. O arquivo terá formato semelhante a:
-```json
-{
-  "type": "service_account",
-  "project_id": "seu-projeto",
-  "private_key_id": "...",
-  "private_key": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n",
-  "client_email": "aura-tts@seu-projeto.iam.gserviceaccount.com",
-  ...
-}
-```
-
-### 4. Configurar Secret no Lovable
-
-Você precisará adicionar um novo secret chamado `GCP_SERVICE_ACCOUNT` contendo o JSON completo da Service Account.
-
----
-
-## Mudanças Técnicas
-
-### Arquivo: `supabase/functions/aura-tts/index.ts`
-
-**Principais alterações:**
-
-1. **Novo endpoint**: Mudar de `generativelanguage.googleapis.com` para `texttospeech.googleapis.com/v1/text:synthesize`
-
-2. **Nova função de autenticação JWT**:
-   - Criar JWT assinado com a private key da Service Account
-   - Trocar JWT por Access Token no endpoint OAuth2 do Google
-   - Usar Access Token como Bearer no header Authorization
-
-3. **Nova estrutura de requisição**:
-```typescript
-{
-  "input": {
-    "prompt": "O tom é acolhedor, empático...", // estilo
-    "text": "Texto a ser falado"
-  },
-  "voice": {
-    "languageCode": "pt-BR",
-    "name": "Erinome",
-    "modelName": "gemini-2.5-flash-tts"
-  },
-  "audioConfig": {
-    "audioEncoding": "MP3",
-    "speakingRate": 1.20
-  }
-}
-```
-
-4. **Implementação de geração de JWT** usando a biblioteca `djwt` do Deno:
+- **Importar biblioteca djwt** para geração de JWT
 ```typescript
 import { create } from "https://deno.land/x/djwt@v3.0.2/mod.ts";
+```
 
+- **Função importPrivateKey()** - Converte PEM para CryptoKey
+```typescript
+async function importPrivateKey(pem: string): Promise<CryptoKey> {
+  const pemContents = pem
+    .replace("-----BEGIN PRIVATE KEY-----", "")
+    .replace("-----END PRIVATE KEY-----", "")
+    .replace(/\n/g, "");
+  
+  const binaryKey = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0));
+  
+  return await crypto.subtle.importKey(
+    "pkcs8",
+    binaryKey,
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+}
+```
+
+- **Função getAccessToken()** - Gera JWT e troca por Access Token
+```typescript
 async function getAccessToken(serviceAccount: ServiceAccountCredentials): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
   
@@ -99,7 +61,6 @@ async function getAccessToken(serviceAccount: ServiceAccountCredentials): Promis
     await importPrivateKey(serviceAccount.private_key)
   );
 
-  // Trocar JWT por access token
   const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -111,7 +72,7 @@ async function getAccessToken(serviceAccount: ServiceAccountCredentials): Promis
 }
 ```
 
-5. **Nova função `generateGoogleCloudTTS`** substituindo `generateGeminiTTS`:
+- **Função generateGoogleCloudTTS()** - Substitui generateGeminiTTS
 ```typescript
 async function generateGoogleCloudTTS(
   text: string, 
@@ -147,54 +108,53 @@ async function generateGoogleCloudTTS(
   );
 
   const data = await response.json();
-  // Decodificar base64 do audioContent
   return decodeBase64(data.audioContent);
 }
 ```
 
+#### 3. Atualizar Lógica Principal
+
+- Ler secret `GCP_SERVICE_ACCOUNT` como JSON
+- Usar `generateGoogleCloudTTS()` como método primário
+- Manter fallback para OpenAI TTS
+
 ---
 
-## Fluxo de Autenticação
+### Fluxo de Autenticação
 
 ```text
-+-------------------+     +------------------+     +-------------------+
-|  Service Account  | --> |   Gerar JWT      | --> |  OAuth2 Google    |
-|  (JSON Secret)    |     |   (djwt lib)     |     |  /token endpoint  |
-+-------------------+     +------------------+     +-------------------+
-                                                           |
-                                                           v
-                                                   +-------------------+
-                                                   |   Access Token    |
-                                                   +-------------------+
-                                                           |
-                                                           v
-                                                   +-------------------+
-                                                   | Cloud TTS API     |
-                                                   | Authorization:    |
-                                                   | Bearer <token>    |
-                                                   +-------------------+
+Service Account JSON
+        |
+        v
+   Gerar JWT (RS256)
+        |
+        v
+   POST oauth2.googleapis.com/token
+        |
+        v
+   Access Token Bearer
+        |
+        v
+   Cloud TTS API
+   texttospeech.googleapis.com/v1/text:synthesize
 ```
 
 ---
 
-## Resumo das Ações
+### Pré-requisito
 
-| Ação | Responsável |
-|------|-------------|
-| Criar Service Account no GCP Console | Você |
-| Habilitar Cloud Text-to-Speech API | Você |
-| Gerar e baixar chave JSON | Você |
-| Configurar secret `GCP_SERVICE_ACCOUNT` | Você (via Lovable) |
-| Atualizar código da edge function | Lovable |
-| Deploy e teste | Automático |
+Antes de testar, verificar se a **Cloud Text-to-Speech API** está habilitada no projeto GCP:
+1. Acesse console.cloud.google.com
+2. Vá em APIs & Services > Library
+3. Pesquise "Cloud Text-to-Speech API"
+4. Verifique se está Enabled
 
 ---
 
-## Resultado Esperado
+### Resultado Esperado
 
-Após a implementação:
-- Voz **Erinome** funcionando corretamente
-- Tom acolhedor e empático conforme configurado
+- Voz **Erinome** funcionando via Google Cloud TTS
+- Tom acolhedor, empático e calmo conforme configurado
 - Velocidade de fala em 1.20x
 - Fallback para OpenAI mantido caso Google Cloud falhe
 
