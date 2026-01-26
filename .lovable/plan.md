@@ -1,39 +1,58 @@
 
 
-## Atualizar Modelo do Google Cloud TTS para gemini-2.5-pro-tts
+## Cadastrar Letícia e Enviar Boas-Vindas
 
-### Problema Identificado
+### Contexto
+A usuária Letícia (555195986335) é uma das primeiras usuárias, mas seu registro não existe mais no banco de dados. Ela enviou uma mensagem e não recebeu resposta porque o sistema não a reconhece.
 
-O modelo atual configurado no TTS é `gemini-2.5-flash-tts`, mas o correto deveria ser `gemini-2.5-pro-tts` para melhor qualidade de voz.
+### Ações Necessárias
 
-### Mudança Necessária
+#### 1. Criar perfil no banco de dados
 
-**Arquivo:** `supabase/functions/aura-tts/index.ts`
+Inserir novo registro na tabela `profiles`:
 
-**Linha 115** - Alterar de:
-```typescript
-modelName: "gemini-2.5-flash-tts",
+```sql
+INSERT INTO profiles (
+  user_id,
+  name,
+  phone,
+  status,
+  plan,
+  onboarding_completed,
+  current_journey_id,
+  current_episode
+) VALUES (
+  gen_random_uuid(),
+  'Letícia',
+  '555195986335',
+  'active',
+  'essencial',
+  true,
+  'j1-ansiedade',
+  0
+);
 ```
 
-Para:
-```typescript
-modelName: "gemini-2.5-pro-tts",
+**Configuração:**
+- **Status:** `active` (usuária antiga, não trial)
+- **Plano:** `essencial` (plano padrão)
+- **Onboarding:** `true` (não precisa passar pelo onboarding)
+- **Jornada:** `j1-ansiedade` (jornada padrão)
+
+#### 2. Enviar mensagem de boas-vindas
+
+Após o cadastro, enviar mensagem via edge function `send-zapi-message`:
+
+```
+Oi, Letícia! 💜
+
+Desculpa a demora! Tive um probleminha técnico aqui, mas já está tudo certo.
+
+Estou aqui pra você. Me conta: como você está se sentindo hoje?
 ```
 
-### Configuração Final
-
-Após a mudança, a configuração completa da voz será:
-
-| Parâmetro | Valor |
-|-----------|-------|
-| **Modelo** | `gemini-2.5-pro-tts` |
-| **Voz** | `Erinome` |
-| **Velocidade** | `1.20` |
-| **Idioma** | `pt-BR` |
-| **Formato** | `MP3` |
-| **Style Prompt** | "O tom é acolhedor, empático e calmo, mas profissional e confiante..." |
-
-### Benefício
-
-O modelo Pro deve oferecer melhor qualidade de síntese de voz comparado ao Flash, especialmente para conteúdo emocional e nuances de entonação.
+### Resultado Esperado
+- Letícia será reconhecida pelo sistema
+- Ela receberá a mensagem de boas-vindas
+- Próximas mensagens dela serão processadas normalmente pela AURA
 
