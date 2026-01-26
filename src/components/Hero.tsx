@@ -67,31 +67,31 @@ const Hero = () => {
               >
                 <source src="/videos/aura-intro.mp4" type="video/mp4" />
               </video>
-              </div>
               
-              {/* Video Controls - outside video container */}
-              <div className="flex justify-center gap-3 mt-4">
+              {/* Video Controls - overlay inside video */}
+              <div className="absolute bottom-3 right-3 flex gap-2 rounded-full p-1 bg-black/40 backdrop-blur-sm z-20">
                 <button
                   onClick={toggleMute}
-                  className="p-3 bg-primary/10 hover:bg-primary/20 rounded-full transition-colors z-10"
+                  className="p-2 hover:bg-white/20 rounded-full transition-colors"
                   aria-label={isMuted ? "Ativar som" : "Mutar"}
                 >
                   {isMuted ? (
-                    <VolumeX className="w-5 h-5 text-primary" />
+                    <VolumeX className="w-4 h-4 text-white" />
                   ) : (
-                    <Volume2 className="w-5 h-5 text-primary" />
+                    <Volume2 className="w-4 h-4 text-white" />
                   )}
                 </button>
                 
                 {hasEnded && (
                   <button
                     onClick={replayVideo}
-                    className="p-3 bg-primary/10 hover:bg-primary/20 rounded-full transition-colors z-10"
+                    className="p-2 hover:bg-white/20 rounded-full transition-colors"
                     aria-label="Repetir vídeo"
                   >
-                    <RotateCcw className="w-5 h-5 text-primary" />
+                    <RotateCcw className="w-4 h-4 text-white" />
                   </button>
                 )}
+              </div>
               </div>
             </div>
           </div>
