@@ -1,28 +1,39 @@
-# Plano Concluído ✅
 
-## Remover Fallback OpenAI do TTS para Manter Consistência de Voz
 
-### Implementado
+## Atualizar Modelo do Google Cloud TTS para gemini-2.5-pro-tts
 
-1. ✅ Removida função `generateOpenAITTS()` 
-2. ✅ Adicionada função `sanitizeTextForTTS()` para limpar texto
-3. ✅ Adicionada função `reformulateForRetry()` para segunda tentativa
-4. ✅ Implementado retry com texto reformulado antes de falhar
-5. ✅ Atualizada resposta para retornar `{ audioContent: null, fallbackToText: true, reason: "..." }`
-6. ✅ Mantido status 200 mesmo em falhas para permitir parsing correto pelo chamador
+### Problema Identificado
 
-### Fluxo Implementado
+O modelo atual configurado no TTS é `gemini-2.5-flash-tts`, mas o correto deveria ser `gemini-2.5-pro-tts` para melhor qualidade de voz.
 
-```text
-Texto → Sanitização → Google TTS
-                         ↓ (falha)
-                    Reformulação → Google TTS (retry)
-                                       ↓ (falha)
-                                   Retorna null → Chamador envia texto
+### Mudança Necessária
+
+**Arquivo:** `supabase/functions/aura-tts/index.ts`
+
+**Linha 115** - Alterar de:
+```typescript
+modelName: "gemini-2.5-flash-tts",
 ```
 
-### Resultado
+Para:
+```typescript
+modelName: "gemini-2.5-pro-tts",
+```
 
-- AURA sempre fala com a voz Erinome (consistência total)
-- Se Google TTS falhar, mensagem é enviada como texto
-- Código mais simples sem dependência do OpenAI para TTS
+### Configuração Final
+
+Após a mudança, a configuração completa da voz será:
+
+| Parâmetro | Valor |
+|-----------|-------|
+| **Modelo** | `gemini-2.5-pro-tts` |
+| **Voz** | `Erinome` |
+| **Velocidade** | `1.20` |
+| **Idioma** | `pt-BR` |
+| **Formato** | `MP3` |
+| **Style Prompt** | "O tom é acolhedor, empático e calmo, mas profissional e confiante..." |
+
+### Benefício
+
+O modelo Pro deve oferecer melhor qualidade de síntese de voz comparado ao Flash, especialmente para conteúdo emocional e nuances de entonação.
+
