@@ -1,118 +1,66 @@
 
-# Plano: Migrar TTS da AURA para Gemini 2.5 Pro TTS
 
-## Visão Geral
+## Correção do Gemini TTS - Autenticação e Modelo
 
-Vamos migrar o sistema de Text-to-Speech da AURA de OpenAI para Google Gemini 2.5 Pro TTS, usando a voz **Erinome** com instruções de estilo personalizadas para criar uma experiência mais acolhedora e terapêutica.
+### Problema Identificado
 
-## Configurações da Nova Voz
+Após investigar a documentação oficial do Google Gemini API, encontrei **dois problemas** no código atual:
 
-| Parâmetro | Valor |
-|-----------|-------|
-| Modelo | `gemini-2.5-pro-tts` |
-| Voz | `Erinome` (feminina) |
-| Idioma | `pt-BR` |
-| Velocidade | `1.20` |
-| Instrução de Estilo | "O tom é acolhedor, empático e calmo, mas profissional e confiante. Nada robótico. Articulação clara, timbre suave, fala lenta e gentilmente, como uma terapeuta ou uma amiga próxima oferecendo apoio" |
+1. **Nome do modelo incorreto**: Estamos usando `gemini-2.5-flash-tts`, mas o modelo correto é `gemini-2.5-flash-preview-tts`
+2. **Método de autenticação incorreto**: A API key está sendo passada como parâmetro na URL (`?key=...`), mas deveria ser passada no **header** `x-goog-api-key`
 
-## Pré-requisito
-
-Você precisará configurar uma credencial do Google Cloud:
-
-1. Acesse o Google Cloud Console
-2. Habilite a API Text-to-Speech
-3. Crie uma API Key
-4. Adicione como secret `GOOGLE_CLOUD_API_KEY`
-
-## Mudanças Técnicas
-
-### 1. Atualizar `supabase/functions/aura-tts/index.ts`
-
-Substituir a chamada à API OpenAI pela API do Google Cloud TTS:
-
-**Antes (OpenAI):**
-```
-Endpoint: https://api.openai.com/v1/audio/speech
-Model: tts-1
-Voice: shimmer
-Speed: 1.0
+A documentação oficial do Google mostra o exemplo correto:
+```bash
+curl "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent" \
+  -H "x-goog-api-key: $GEMINI_API_KEY" \
+  -X POST \
+  -H "Content-Type: application/json"
 ```
 
-**Depois (Google Gemini):**
-```
-Endpoint: https://texttospeech.googleapis.com/v1/text:synthesize
-Model: gemini-2.5-pro-tts
-Voice: Erinome
-Speed: 1.20
-Style Prompt: (instrução personalizada)
-```
+### Solução
 
-**Estrutura da requisição Google:**
-```text
-POST https://texttospeech.googleapis.com/v1/text:synthesize?key={API_KEY}
+Atualizar a função `generateGeminiTTS` em `supabase/functions/aura-tts/index.ts` com as seguintes correções:
 
-{
-  "input": {
-    "text": "Mensagem da AURA",
-    "prompt": "O tom é acolhedor, empático e calmo..."
-  },
-  "voice": {
-    "languageCode": "pt-BR",
-    "name": "Erinome",
-    "modelName": "gemini-2.5-pro-tts"
-  },
-  "audioConfig": {
-    "audioEncoding": "MP3",
-    "speakingRate": 1.20
-  }
-}
+1. **Corrigir o nome do modelo** para `gemini-2.5-flash-preview-tts`
+2. **Mover a API key para o header** `x-goog-api-key` em vez do parâmetro URL
+3. Remover o `?key=...` da URL
+
+---
+
+## Detalhes Técnicos
+
+### Arquivo a modificar
+`supabase/functions/aura-tts/index.ts`
+
+### Mudanças específicas
+
+**Antes (linhas 26-32):**
+```typescript
+const response = await fetch(
+  `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-tts:generateContent?key=${apiKey}`,
+  {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
 ```
 
-### 2. Manter Fallback para OpenAI
+**Depois:**
+```typescript
+const response = await fetch(
+  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent',
+  {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-goog-api-key': apiKey,
+    },
+```
 
-Se o Google falhar, usar OpenAI como backup:
-- Primeiro tenta Google Gemini TTS
-- Se falhar, usa OpenAI tts-1 (shimmer)
+### Resultado Esperado
 
-### 3. Ajustar Limite de Caracteres
+Após essa correção, a voz **Erinome** será gerada corretamente pelo Gemini TTS com:
+- Tom acolhedor, empático e calmo
+- Articulação clara e timbre suave
+- Velocidade configurada em 1.20
 
-- **Limite atual:** 500 caracteres
-- **Limite Google:** 4.000 bytes (~4.000 caracteres)
-- Podemos aumentar o limite para 2.000 caracteres se necessário
-
-## Comparação de Custos
-
-| Provedor | Custo/1M chars | Estimativa Mensal* |
-|----------|----------------|-------------------|
-| OpenAI tts-1 (atual) | $15.00 | ~$7.50 |
-| Gemini 2.5 Pro TTS | ~$21.00 | ~$10.50 |
-
-*Baseado em ~500K caracteres/mês
-
-**Nota:** O custo é ~40% maior, mas a qualidade e personalização são superiores.
-
-## Etapas de Implementação
-
-1. **Configurar secret** - Adicionar `GOOGLE_CLOUD_API_KEY`
-
-2. **Atualizar `aura-tts`**
-   - Trocar endpoint para Google Cloud TTS
-   - Configurar voz Erinome com style prompt
-   - Velocidade 1.20
-   - Adicionar fallback para OpenAI
-
-3. **Testar**
-   - Gerar áudio de teste
-   - Validar qualidade da voz
-   - Confirmar envio via WhatsApp
-
-## Arquivos Afetados
-
-| Arquivo | Alteração |
-|---------|-----------|
-| `supabase/functions/aura-tts/index.ts` | Migrar de OpenAI para Google Gemini TTS |
-
-**Nenhuma alteração necessária em:**
-- `send-zapi-message/index.ts` (interface permanece igual)
-- `webhook-zapi/index.ts` (interface permanece igual)
-- `_shared/zapi-client.ts` (interface permanece igual)
