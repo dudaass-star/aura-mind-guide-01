@@ -1,58 +1,58 @@
 
 
-## Mover Controles do Vídeo para Dentro da Tela
+## Adicionar Usuário: Dais Palagi no Plano Direção
 
-### Mudança Visual
+### Dados do Usuário
+| Campo | Valor |
+|-------|-------|
+| Nome | Dais Palagi |
+| Telefone | 555199531705 |
+| Plano | direcao |
+| Status | active |
 
-**Antes:** Botões de volume e reiniciar aparecem abaixo do vídeo, centralizados.
+### Ação a Executar
 
-**Depois:** Botões ficam sobrepostos ao vídeo, posicionados no canto inferior direito (ou inferior esquerdo), com um fundo semi-transparente para garantir visibilidade.
+Vou inserir um novo registro na tabela `profiles` com os seguintes dados:
 
----
+- **user_id**: UUID gerado automaticamente
+- **name**: "Dais Palagi"
+- **phone**: "555199531705" (formato: 55 + DDD + número)
+- **plan**: "direcao"
+- **status**: "active"
+- **sessions_used_this_month**: 0
+- **sessions_reset_date**: primeiro dia do mês atual
 
-### Implementação
+### O que acontece depois
 
-#### Arquivo: `src/components/Hero.tsx`
+1. O usuário Dais Palagi terá acesso ao plano **Direção** com **4 sessões especiais por mês**
+2. A AURA enviará uma mensagem de boas-vindas automaticamente na primeira interação
+3. O sistema de agendamento de sessões ficará disponível
 
-1. **Mover os controles para dentro do container do vídeo**
-   - Retirar a `<div>` de controles de fora do container com `rounded-2xl`
-   - Colocar dentro, com posicionamento absoluto
+### Seção Técnica
 
-2. **Adicionar estilos de overlay**
-   - `absolute bottom-3 right-3` para posicionar no canto inferior direito
-   - Fundo com `bg-black/40 backdrop-blur-sm` para legibilidade
-   - Bordas arredondadas e padding compacto
-
-3. **Ajustar z-index**
-   - Garantir que os controles fiquem acima do vídeo e do loading overlay
-
----
-
-### Código Resultante (Estrutura)
-
-```text
-┌─────────────────────────────┐
-│                             │
-│         VÍDEO               │
-│                             │
-│                 ┌─────────┐ │
-│                 │ 🔇  🔄  │ │  ← Controles no canto
-│                 └─────────┘ │
-└─────────────────────────────┘
+```sql
+INSERT INTO public.profiles (
+  user_id,
+  name,
+  phone,
+  plan,
+  status,
+  sessions_used_this_month,
+  sessions_reset_date,
+  needs_schedule_setup,
+  created_at,
+  updated_at
+) VALUES (
+  gen_random_uuid(),
+  'Dais Palagi',
+  '555199531705',
+  'direcao',
+  'active',
+  0,
+  DATE_TRUNC('month', CURRENT_DATE),
+  true,
+  NOW(),
+  NOW()
+);
 ```
-
----
-
-### Detalhes Técnicos
-
-| Aspecto | Valor |
-|---------|-------|
-| Posição | `absolute bottom-3 right-3` |
-| Fundo | `bg-black/40 backdrop-blur-sm` |
-| Container | `flex gap-2 rounded-full p-1` |
-| Botões | Tamanho reduzido `p-2` com ícones `w-4 h-4` |
-| Cores | Ícones brancos para contraste (`text-white`) |
-| Hover | `hover:bg-white/20` |
-
-O botão de reiniciar só aparece quando o vídeo termina (comportamento mantido).
 
