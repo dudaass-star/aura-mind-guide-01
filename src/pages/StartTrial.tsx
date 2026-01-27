@@ -13,6 +13,7 @@ const StartTrial = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
@@ -32,11 +33,21 @@ const StartTrial = () => {
     e.preventDefault();
     
     const cleanPhone = phone.replace(/\D/g, "");
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     
     if (!name.trim()) {
       toast({
         title: "Nome é obrigatório",
         description: "Por favor, digite seu nome.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!emailRegex.test(email)) {
+      toast({
+        title: "Email inválido",
+        description: "Por favor, insira um email válido.",
         variant: "destructive",
       });
       return;
@@ -55,7 +66,7 @@ const StartTrial = () => {
 
     try {
       const { data, error } = await supabase.functions.invoke("start-trial", {
-        body: { name: name.trim(), phone: cleanPhone },
+        body: { name: name.trim(), email: email.trim(), phone: cleanPhone },
       });
 
       if (error) throw error;
@@ -152,6 +163,18 @@ const StartTrial = () => {
                     placeholder="Como posso te chamar?"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
+                    className="mt-1.5"
+                    disabled={isLoading}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="email" className="text-foreground">Seu email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="seu@email.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     className="mt-1.5"
                     disabled={isLoading}
                   />

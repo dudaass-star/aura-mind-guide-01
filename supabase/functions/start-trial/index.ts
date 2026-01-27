@@ -12,13 +12,22 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { name, phone } = await req.json();
+    const { name, email, phone } = await req.json();
 
-    console.log('📝 Starting trial for:', name, phone?.substring(0, 4) + '***');
+    console.log('📝 Starting trial for:', name, email, phone?.substring(0, 4) + '***');
 
     // Validação
     if (!name || !phone) {
       return new Response(JSON.stringify({ error: 'Nome e telefone são obrigatórios' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Validação de email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || !emailRegex.test(email)) {
+      return new Response(JSON.stringify({ error: 'Email inválido' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -73,6 +82,7 @@ Deno.serve(async (req) => {
       .insert({
         user_id: userId,
         name: name.trim(),
+        email: email.trim(),
         phone: formattedPhone,
         status: 'trial',
         trial_started_at: new Date().toISOString(),
