@@ -1,106 +1,135 @@
 
-## Mover Price IDs do Stripe para Secrets
 
-### Situação Atual
-Os Price IDs estão hardcoded no arquivo `create-checkout/index.ts`:
+## Checklist: Transição Stripe Sandbox → Produção
 
-```typescript
-const PRICES = {
-  essencial: {
-    monthly: "price_1SlEYjHMRAbm8MiTB689p4b6",  // Sandbox
-    yearly: "price_1Sn2oPHMRAbm8MiTh68EoqzT",
-  },
-  // ...
-};
-```
+### Pré-requisitos
 
-### Objetivo
-Mover esses IDs para variáveis de ambiente (secrets) para trocar facilmente entre sandbox e produção.
+- [ ] Conta Stripe ativada para pagamentos Live (verificação completa)
+- [ ] Secrets de Price IDs configurados no projeto (implementação atual)
+- [ ] Testes completos no ambiente Sandbox funcionando
 
-### Estrutura de Secrets Proposta
+---
 
-Criar 6 secrets no formato:
+### Parte 1: Configuração no Stripe Dashboard (Live Mode)
 
-| Secret Name | Descrição | Valor Sandbox |
-|-------------|-----------|---------------|
-| `STRIPE_PRICE_ESSENCIAL_MONTHLY` | Essencial mensal | `price_1SlEYjHMRAbm8MiTB689p4b6` |
-| `STRIPE_PRICE_ESSENCIAL_YEARLY` | Essencial anual | `price_1Sn2oPHMRAbm8MiTh68EoqzT` |
-| `STRIPE_PRICE_DIRECAO_MONTHLY` | Direção mensal | `price_1SlEb6HMRAbm8MiTz4H3EBDT` |
-| `STRIPE_PRICE_DIRECAO_YEARLY` | Direção anual | `price_1Sn2pAHMRAbm8MiTaVR3LOsm` |
-| `STRIPE_PRICE_TRANSFORMACAO_MONTHLY` | Transformação mensal | `price_1SlEcKHMRAbm8MiTLWgfYHAV` |
-| `STRIPE_PRICE_TRANSFORMACAO_YEARLY` | Transformação anual | `price_1Sn2psHMRAbm8MiTV25S7DCi` |
+#### 1.1 Criar Produtos e Preços
 
-### Alterações no Código
+Acessar **Stripe Dashboard** → Alternar para **Live Mode** (toggle no canto superior direito)
 
-#### Arquivo: `supabase/functions/create-checkout/index.ts`
+| Produto | Preço Mensal | Preço Anual |
+|---------|--------------|-------------|
+| Essencial | R$ 29,90/mês | R$ 269,10/ano (25% off) |
+| Direção | R$ 49,90/mês | R$ 419,16/ano (30% off) |
+| Transformação | R$ 79,90/mês | R$ 671,16/ano (30% off) |
 
-**Antes:**
-```typescript
-const PRICES: Record<string, { monthly: string; yearly: string }> = {
-  essencial: {
-    monthly: "price_1SlEYjHMRAbm8MiTB689p4b6",
-    yearly: "price_1Sn2oPHMRAbm8MiTh68EoqzT",
-  },
-  // ...
-};
-```
+**Passos:**
+1. Ir em **Products** → **Add product**
+2. Criar cada produto com nome e descrição
+3. Adicionar dois preços por produto (mensal e anual)
+4. **Anotar os 6 Price IDs gerados** (formato: `price_...`)
 
-**Depois:**
-```typescript
-const getPrices = (): Record<string, { monthly: string; yearly: string }> => ({
-  essencial: {
-    monthly: Deno.env.get("STRIPE_PRICE_ESSENCIAL_MONTHLY") || "",
-    yearly: Deno.env.get("STRIPE_PRICE_ESSENCIAL_YEARLY") || "",
-  },
-  direcao: {
-    monthly: Deno.env.get("STRIPE_PRICE_DIRECAO_MONTHLY") || "",
-    yearly: Deno.env.get("STRIPE_PRICE_DIRECAO_YEARLY") || "",
-  },
-  transformacao: {
-    monthly: Deno.env.get("STRIPE_PRICE_TRANSFORMACAO_MONTHLY") || "",
-    yearly: Deno.env.get("STRIPE_PRICE_TRANSFORMACAO_YEARLY") || "",
-  },
-});
-```
+#### 1.2 Configurar Webhook
 
-Adicionar validação:
-```typescript
-const PRICES = getPrices();
+1. Ir em **Developers** → **Webhooks**
+2. Clicar **Add endpoint**
+3. URL: `https://uhyogifgmutfmbyhzzyo.supabase.co/functions/v1/stripe-webhook`
+4. Selecionar eventos:
+   - `checkout.session.completed`
+   - `customer.subscription.deleted`
+   - `customer.subscription.resumed`
+5. Clicar **Add endpoint**
+6. **Copiar o Signing Secret** (`whsec_...`)
 
-if (!priceId) {
-  throw new Error("Price ID not configured for this plan");
-}
-```
+#### 1.3 Obter API Key de Produção
 
-### Fluxo para Trocar de Ambiente
+1. Ir em **Developers** → **API keys**
+2. **Copiar a Secret Key** (`sk_live_...`)
+
+---
+
+### Parte 2: Atualizar Secrets no Projeto
+
+Acessar o painel de secrets do projeto e atualizar:
+
+| Secret | Valor Atual (Sandbox) | Novo Valor (Produção) |
+|--------|----------------------|----------------------|
+| `STRIPE_SECRET_KEY` | `sk_test_...` | `sk_live_...` |
+| `STRIPE_WEBHOOK_SECRET` | `whsec_...` (test) | `whsec_...` (live) |
+| `STRIPE_PRICE_ESSENCIAL_MONTHLY` | `price_1SlEYj...` | Novo ID Live |
+| `STRIPE_PRICE_ESSENCIAL_YEARLY` | `price_1Sn2oP...` | Novo ID Live |
+| `STRIPE_PRICE_DIRECAO_MONTHLY` | `price_1SlEb6...` | Novo ID Live |
+| `STRIPE_PRICE_DIRECAO_YEARLY` | `price_1Sn2pA...` | Novo ID Live |
+| `STRIPE_PRICE_TRANSFORMACAO_MONTHLY` | `price_1SlEcK...` | Novo ID Live |
+| `STRIPE_PRICE_TRANSFORMACAO_YEARLY` | `price_1Sn2ps...` | Novo ID Live |
+
+**Total: 8 secrets para atualizar**
+
+---
+
+### Parte 3: Verificação Pós-Transição
+
+#### 3.1 Teste de Checkout
+- [ ] Acessar página de checkout
+- [ ] Selecionar um plano
+- [ ] Verificar se redireciona para Stripe Checkout (ambiente Live)
+- [ ] Usar cartão real (pequeno valor) OU cancelar antes de pagar
+
+#### 3.2 Teste de Webhook
+- [ ] Completar um pagamento real
+- [ ] Verificar logs da edge function `stripe-webhook`
+- [ ] Confirmar que o usuário foi criado/atualizado no banco
+
+#### 3.3 Teste de Cancelamento
+- [ ] Cancelar a assinatura no Stripe Dashboard
+- [ ] Verificar se webhook de cancelamento foi recebido
+- [ ] Confirmar atualização de status no banco
+
+---
+
+### Parte 4: Rollback (Se Necessário)
+
+Para voltar ao Sandbox, reverter os 8 secrets para os valores originais:
 
 ```text
-┌─────────────────────────────────────────────────────────────┐
-│                   TROCA DE AMBIENTE                         │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  SANDBOX → PRODUÇÃO:                                        │
-│  1. Atualizar STRIPE_SECRET_KEY → sk_live_...               │
-│  2. Atualizar STRIPE_WEBHOOK_SECRET → whsec_... (live)      │
-│  3. Atualizar os 6 STRIPE_PRICE_* → price_... (live)        │
-│                                                             │
-│  PRODUÇÃO → SANDBOX:                                        │
-│  1. Reverter STRIPE_SECRET_KEY → sk_test_...                │
-│  2. Reverter STRIPE_WEBHOOK_SECRET → whsec_... (test)       │
-│  3. Reverter os 6 STRIPE_PRICE_* → price_... (test)         │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+STRIPE_SECRET_KEY        → sk_test_...
+STRIPE_WEBHOOK_SECRET    → whsec_... (do sandbox)
+STRIPE_PRICE_*           → price_... (do sandbox)
 ```
 
-### Benefícios
-- Zero alteração de código para trocar ambientes
-- Mais seguro (IDs não ficam no repositório)
-- Fácil rollback entre sandbox e produção
-- Padrão consistente com STRIPE_SECRET_KEY
+---
 
-### Passos de Implementação
+### Diagrama de Fluxo
 
-1. **Solicitar os 6 secrets** usando a ferramenta de adicionar secrets
-2. **Modificar** `create-checkout/index.ts` para ler das variáveis de ambiente
-3. **Adicionar validação** para garantir que os Price IDs estão configurados
-4. **Testar** o checkout após as mudanças
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│                    TRANSIÇÃO PARA PRODUÇÃO                      │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  STRIPE DASHBOARD (Live Mode)                                   │
+│  ├── 1. Criar 3 produtos                                        │
+│  ├── 2. Criar 6 preços (2 por produto)                          │
+│  ├── 3. Configurar webhook com 3 eventos                        │
+│  └── 4. Copiar API Key e Webhook Secret                         │
+│                                                                 │
+│  PROJETO (Secrets)                                              │
+│  ├── 5. Atualizar STRIPE_SECRET_KEY                             │
+│  ├── 6. Atualizar STRIPE_WEBHOOK_SECRET                         │
+│  └── 7. Atualizar 6 STRIPE_PRICE_* IDs                          │
+│                                                                 │
+│  VERIFICAÇÃO                                                    │
+│  ├── 8. Testar checkout completo                                │
+│  ├── 9. Verificar logs de webhook                               │
+│  └── 10. Confirmar dados no banco                               │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### Notas Importantes
+
+1. **Nunca misture** chaves de teste com IDs de produção (ou vice-versa)
+2. **Webhook URL é a mesma** para sandbox e produção - apenas o secret muda
+3. **Mantenha uma cópia** dos valores de sandbox para rollback fácil
+4. **Teste com valor pequeno** antes de divulgar publicamente
+
