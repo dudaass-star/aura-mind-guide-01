@@ -1,46 +1,44 @@
 
 
-## Revisar Comunicação: Substituir "Amiga" por Termos que Transmitam Mais Valor
+## Simplificar Página ThankYou: Remover Botão de WhatsApp
 
-### Problema Identificado
+### Problema
+O botão "Abrir WhatsApp e começar" é desnecessário porque:
+- A AURA já envia mensagem de boas-vindas automaticamente via webhook
+- O botão usa um número placeholder que não funciona
+- Pode confundir o usuário sobre como iniciar
 
-A palavra "amiga" aparece em 3 lugares e pode passar uma mensagem de algo casual/informal, quando na verdade a AURA oferece:
-- Metodologia estruturada
-- Sessões com objetivos
-- Acompanhamento profissional
-- Memória de longo prazo
+### Solução
+Substituir o botão por uma mensagem informativa que explica o que vai acontecer.
 
-### Locais a Alterar
+### Alterações em `src/pages/ThankYou.tsx`
 
-| Arquivo | Texto Atual | Sugestão de Novo Texto |
-|---------|-------------|------------------------|
-| `StartTrial.tsx` (linha 135) | "5 conversas pra você conhecer sua nova amiga." | "5 conversas pra você sentir a diferença." |
-| `ThankYou.tsx` (linha 103) | "Converse como falaria com uma amiga — sem filtros" | "Converse com honestidade — sem filtros, sem julgamento" |
-| `Testimonials.tsx` (linha 20) | "É como ter uma amiga que entende..." | Manter (é depoimento de usuária, soa natural) |
+**Remover:**
+- Variáveis `whatsappNumber`, `whatsappMessage`, `whatsappUrl`
+- Botão com link para WhatsApp
+- Import do ícone `MessageCircle`
 
-### Por que essas alternativas?
+**Adicionar:**
+Substituir a área do CTA por uma mensagem como:
 
-**StartTrial.tsx:**
-- "Sentir a diferença" é mais orientado a resultado
-- Desperta curiosidade sobre o que muda
-- Não precisa "conhecer" — precisa experimentar o impacto
+```text
+📱 A AURA vai te mandar uma mensagem no WhatsApp em instantes.
+Fique de olho no seu celular!
+```
 
-**ThankYou.tsx:**
-- "Com honestidade" mantém o tom acolhedor
-- "Sem julgamento" reforça o diferencial da AURA
-- Remove a comparação com amiga
+### Resultado Visual Esperado
 
-**Testimonials.tsx:**
-- Depoimentos são falas reais de usuários
-- "Amiga" aqui é natural e autêntico
-- Manter para não parecer artificial
+**Antes:**
+- Botão verde "Abrir WhatsApp e começar"
+- Texto "A AURA já está esperando por você"
 
-### Resultado Esperado
+**Depois:**
+- Ícone de celular/mensagem
+- Texto informativo: "A AURA vai te mandar uma mensagem no WhatsApp em instantes"
+- Subtexto: "Fique de olho no seu celular!"
 
-A comunicação passa a focar em:
-- Resultado ("sentir a diferença")
-- Segurança emocional ("sem julgamento")
-- Profissionalismo implícito
-
-Sem perder o tom acolhedor e humano que é marca da AURA.
+### Benefícios
+- Remove código morto (número placeholder)
+- Alinha expectativa do usuário com o fluxo real
+- Experiência mais passiva e elegante — o usuário só espera
 
