@@ -100,7 +100,7 @@ const ThankYou = () => {
               </li>
               <li className="flex items-start gap-3">
                 <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-xs text-primary font-medium">2</span>
-                <span>Converse como falaria com uma amiga — sem filtros</span>
+                <span>Converse com honestidade — sem filtros, sem julgamento</span>
               </li>
               <li className="flex items-start gap-3">
                 <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-xs text-primary font-medium">3</span>
