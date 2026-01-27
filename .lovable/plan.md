@@ -1,44 +1,53 @@
 
+## Simplificar Página ThankYou
 
-## Simplificar Página ThankYou: Remover Botão de WhatsApp
-
-### Problema
-O botão "Abrir WhatsApp e começar" é desnecessário porque:
-- A AURA já envia mensagem de boas-vindas automaticamente via webhook
-- O botão usa um número placeholder que não funciona
-- Pode confundir o usuário sobre como iniciar
-
-### Solução
-Substituir o botão por uma mensagem informativa que explica o que vai acontecer.
+### Objetivo
+Remover o botão de WhatsApp com número placeholder e substituir por uma mensagem informativa, já que a AURA envia a mensagem de boas-vindas automaticamente após o checkout.
 
 ### Alterações em `src/pages/ThankYou.tsx`
 
-**Remover:**
-- Variáveis `whatsappNumber`, `whatsappMessage`, `whatsappUrl`
-- Botão com link para WhatsApp
-- Import do ícone `MessageCircle`
+#### 1. Remover imports e variáveis desnecessárias
+- Remover `MessageCircle` do import de lucide-react (linha 4)
+- Remover `Button` do import (linha 2) — não será mais usado
+- Remover variáveis `whatsappNumber`, `whatsappMessage`, `whatsappUrl` (linhas 34-38)
 
-**Adicionar:**
-Substituir a área do CTA por uma mensagem como:
-
-```text
-📱 A AURA vai te mandar uma mensagem no WhatsApp em instantes.
-Fique de olho no seu celular!
-```
-
-### Resultado Visual Esperado
+#### 2. Atualizar a seção CTA (linhas 74-86)
 
 **Antes:**
-- Botão verde "Abrir WhatsApp e começar"
-- Texto "A AURA já está esperando por você"
+```text
+Botão verde "Abrir WhatsApp e começar"
+Texto: "A AURA já está esperando por você"
+```
 
 **Depois:**
-- Ícone de celular/mensagem
-- Texto informativo: "A AURA vai te mandar uma mensagem no WhatsApp em instantes"
-- Subtexto: "Fique de olho no seu celular!"
+```text
+Ícone de smartphone com indicador
+Título: "📱 Fique de olho no seu celular!"
+Texto: "A AURA vai te mandar uma mensagem no WhatsApp em instantes para iniciar sua jornada."
+```
+
+#### 3. Adicionar novo ícone
+- Importar `Smartphone` de lucide-react para o visual do aviso
+
+### Código Final da Seção CTA
+
+```tsx
+{/* Aviso WhatsApp */}
+<div className="space-y-3 animate-fade-up delay-200 p-6 bg-teal/10 rounded-2xl border border-teal/20">
+  <div className="flex items-center justify-center gap-2">
+    <Smartphone className="w-6 h-6 text-teal" />
+    <span className="font-display text-lg font-semibold text-foreground">
+      Fique de olho no seu celular!
+    </span>
+  </div>
+  <p className="text-muted-foreground">
+    A AURA vai te mandar uma mensagem no WhatsApp em instantes para iniciar sua jornada.
+  </p>
+</div>
+```
 
 ### Benefícios
-- Remove código morto (número placeholder)
-- Alinha expectativa do usuário com o fluxo real
-- Experiência mais passiva e elegante — o usuário só espera
-
+- Remove código morto (número placeholder que não funciona)
+- Alinha a expectativa do usuário com o fluxo real automatizado
+- Visual mais informativo e elegante
+- Menos confusão sobre o que fazer após o checkout
