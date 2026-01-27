@@ -1,7 +1,6 @@
 import { Helmet } from "react-helmet-async";
-import { Button } from "@/components/ui/button";
 import { useLocation, Link, useSearchParams } from "react-router-dom";
-import { CheckCircle, MessageCircle, Sparkles } from "lucide-react";
+import { CheckCircle, Smartphone, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 
 const ThankYou = () => {
@@ -30,12 +29,6 @@ const ThankYou = () => {
   }, [location.state]);
 
   const firstName = userData.name?.split(" ")[0] || "você";
-
-  const whatsappNumber = "5511999999999"; // Replace with actual number
-  const whatsappMessage = encodeURIComponent(
-    `Oi, AURA! Acabei de assinar e quero começar minha jornada.`
-  );
-  const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${whatsappMessage}`;
 
   return (
     <>
@@ -71,17 +64,16 @@ const ThankYou = () => {
             </p>
           </div>
 
-          {/* CTA */}
-          <div className="space-y-4 animate-fade-up delay-200">
-            <a href={whatsappUrl} target="_blank" rel="noopener noreferrer">
-              <Button variant="whatsapp" size="xl" className="w-full">
-                <MessageCircle className="w-5 h-5" />
-                Abrir WhatsApp e começar
-              </Button>
-            </a>
-
-            <p className="text-sm text-muted-foreground">
-              A AURA já está esperando por você
+          {/* Aviso WhatsApp */}
+          <div className="space-y-3 animate-fade-up delay-200 p-6 bg-teal/10 rounded-2xl border border-teal/20">
+            <div className="flex items-center justify-center gap-2">
+              <Smartphone className="w-6 h-6 text-teal" />
+              <span className="font-display text-lg font-semibold text-foreground">
+                Fique de olho no seu celular!
+              </span>
+            </div>
+            <p className="text-muted-foreground text-center">
+              A AURA vai te mandar uma mensagem no WhatsApp em instantes para iniciar sua jornada.
             </p>
           </div>
 
