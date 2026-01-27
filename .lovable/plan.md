@@ -1,136 +1,106 @@
 
-## Adicionar Handler para `customer.subscription.resumed`
+## Mover Price IDs do Stripe para Secrets
 
-### Contexto
-Atualmente o webhook trata dois eventos:
-- `checkout.session.completed` → Boas-vindas ao novo assinante
-- `customer.subscription.deleted` → Despedida quando cancela
-
-**Falta:** Quando um usuário reativa uma assinatura pausada/cancelada, o sistema não detecta e o perfil permanece como `canceled`.
-
-### O que o evento `customer.subscription.resumed` faz?
-Este evento é disparado pelo Stripe quando:
-- Uma assinatura pausada é retomada
-- O usuário reativa após um período de inadimplência
-
-### Alterações em `supabase/functions/stripe-webhook/index.ts`
-
-#### Novo Handler (após linha 302, antes do return final)
+### Situação Atual
+Os Price IDs estão hardcoded no arquivo `create-checkout/index.ts`:
 
 ```typescript
-// Process customer.subscription.resumed
-if (event.type === 'customer.subscription.resumed') {
-  const subscription = event.data.object as Stripe.Subscription;
-  console.log('🟢 Subscription resumed:', subscription.id);
+const PRICES = {
+  essencial: {
+    monthly: "price_1SlEYjHMRAbm8MiTB689p4b6",  // Sandbox
+    yearly: "price_1Sn2oPHMRAbm8MiTh68EoqzT",
+  },
+  // ...
+};
+```
 
-  const customerId = subscription.customer as string;
-  
-  try {
-    const stripe = new Stripe(stripeSecretKey, { apiVersion: '2023-10-16' });
-    const customer = await stripe.customers.retrieve(customerId);
-    
-    if (customer.deleted) {
-      console.log('⚠️ Customer was deleted, skipping welcome back message');
-      return new Response(JSON.stringify({ received: true }), {
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
+### Objetivo
+Mover esses IDs para variáveis de ambiente (secrets) para trocar facilmente entre sandbox e produção.
 
-    const customerPhone = customer.metadata?.phone;
-    const customerName = customer.name || 'Cliente';
+### Estrutura de Secrets Proposta
 
-    if (!customerPhone) {
-      console.error('❌ No phone number found for customer');
-      return new Response(JSON.stringify({ received: true }), {
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
+Criar 6 secrets no formato:
 
-    console.log(`👤 Sending welcome back to: ${customerName}`);
+| Secret Name | Descrição | Valor Sandbox |
+|-------------|-----------|---------------|
+| `STRIPE_PRICE_ESSENCIAL_MONTHLY` | Essencial mensal | `price_1SlEYjHMRAbm8MiTB689p4b6` |
+| `STRIPE_PRICE_ESSENCIAL_YEARLY` | Essencial anual | `price_1Sn2oPHMRAbm8MiTh68EoqzT` |
+| `STRIPE_PRICE_DIRECAO_MONTHLY` | Direção mensal | `price_1SlEb6HMRAbm8MiTz4H3EBDT` |
+| `STRIPE_PRICE_DIRECAO_YEARLY` | Direção anual | `price_1Sn2pAHMRAbm8MiTaVR3LOsm` |
+| `STRIPE_PRICE_TRANSFORMACAO_MONTHLY` | Transformação mensal | `price_1SlEcKHMRAbm8MiTLWgfYHAV` |
+| `STRIPE_PRICE_TRANSFORMACAO_YEARLY` | Transformação anual | `price_1Sn2psHMRAbm8MiTV25S7DCi` |
 
-    // Mensagem de boas-vindas de volta
-    const welcomeBackMessage = `Oi, ${customerName}! 💜
+### Alterações no Código
 
-Que bom ter você de volta! 🌟
+#### Arquivo: `supabase/functions/create-checkout/index.ts`
 
-Sua assinatura AURA foi reativada e estou aqui, pronta para continuar nossa jornada juntas.
+**Antes:**
+```typescript
+const PRICES: Record<string, { monthly: string; yearly: string }> = {
+  essencial: {
+    monthly: "price_1SlEYjHMRAbm8MiTB689p4b6",
+    yearly: "price_1Sn2oPHMRAbm8MiTh68EoqzT",
+  },
+  // ...
+};
+```
 
-Me conta: como você está hoje?`;
+**Depois:**
+```typescript
+const getPrices = (): Record<string, { monthly: string; yearly: string }> => ({
+  essencial: {
+    monthly: Deno.env.get("STRIPE_PRICE_ESSENCIAL_MONTHLY") || "",
+    yearly: Deno.env.get("STRIPE_PRICE_ESSENCIAL_YEARLY") || "",
+  },
+  direcao: {
+    monthly: Deno.env.get("STRIPE_PRICE_DIRECAO_MONTHLY") || "",
+    yearly: Deno.env.get("STRIPE_PRICE_DIRECAO_YEARLY") || "",
+  },
+  transformacao: {
+    monthly: Deno.env.get("STRIPE_PRICE_TRANSFORMACAO_MONTHLY") || "",
+    yearly: Deno.env.get("STRIPE_PRICE_TRANSFORMACAO_YEARLY") || "",
+  },
+});
+```
 
-    // Enviar mensagem via Z-API
-    const response = await fetch(`${supabaseUrl}/functions/v1/send-zapi-message`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${supabaseServiceKey}`,
-      },
-      body: JSON.stringify({
-        phone: customerPhone,
-        message: welcomeBackMessage,
-        isAudio: false,
-      }),
-    });
+Adicionar validação:
+```typescript
+const PRICES = getPrices();
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ Failed to send welcome back message:', errorText);
-    } else {
-      console.log('✅ Welcome back message sent successfully!');
-    }
-
-    // Atualizar status do perfil para ativo
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    const cleanPhone = customerPhone.replace(/\D/g, '');
-
-    const { error: updateError } = await supabase
-      .from('profiles')
-      .update({
-        status: 'active',
-        updated_at: new Date().toISOString(),
-      })
-      .eq('phone', cleanPhone);
-
-    if (updateError) {
-      console.error('❌ Error updating profile status:', updateError);
-    } else {
-      console.log('✅ Profile status updated to active');
-    }
-
-  } catch (customerError) {
-    console.error('❌ Error processing subscription resumption:', customerError);
-  }
+if (!priceId) {
+  throw new Error("Price ID not configured for this plan");
 }
 ```
 
-### Fluxo Completo Após Implementação
+### Fluxo para Trocar de Ambiente
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
-│                    CICLO DE VIDA DA ASSINATURA              │
+│                   TROCA DE AMBIENTE                         │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
-│  checkout.session.completed                                 │
-│  └─> Status: active                                         │
-│  └─> Mensagem: "Oi! Que bom te receber..."                  │
+│  SANDBOX → PRODUÇÃO:                                        │
+│  1. Atualizar STRIPE_SECRET_KEY → sk_live_...               │
+│  2. Atualizar STRIPE_WEBHOOK_SECRET → whsec_... (live)      │
+│  3. Atualizar os 6 STRIPE_PRICE_* → price_... (live)        │
 │                                                             │
-│  customer.subscription.deleted                              │
-│  └─> Status: canceled                                       │
-│  └─> Mensagem: "Sua assinatura foi encerrada..."            │
-│                                                             │
-│  customer.subscription.resumed  ← NOVO                      │
-│  └─> Status: active                                         │
-│  └─> Mensagem: "Que bom ter você de volta!"                 │
+│  PRODUÇÃO → SANDBOX:                                        │
+│  1. Reverter STRIPE_SECRET_KEY → sk_test_...                │
+│  2. Reverter STRIPE_WEBHOOK_SECRET → whsec_... (test)       │
+│  3. Reverter os 6 STRIPE_PRICE_* → price_... (test)         │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ### Benefícios
-- Usuários que reativam voltam automaticamente ao status `active`
-- Mensagem personalizada de boas-vindas de volta
-- Continuidade da experiência sem intervenção manual
-- Consistência com os outros handlers já implementados
+- Zero alteração de código para trocar ambientes
+- Mais seguro (IDs não ficam no repositório)
+- Fácil rollback entre sandbox e produção
+- Padrão consistente com STRIPE_SECRET_KEY
 
-### Configuração no Stripe (Lembrete)
-Certificar que o webhook no painel do Stripe está configurado para enviar o evento `customer.subscription.resumed` para a URL do webhook.
+### Passos de Implementação
+
+1. **Solicitar os 6 secrets** usando a ferramenta de adicionar secrets
+2. **Modificar** `create-checkout/index.ts` para ler das variáveis de ambiente
+3. **Adicionar validação** para garantir que os Price IDs estão configurados
+4. **Testar** o checkout após as mudanças
