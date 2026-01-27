@@ -382,6 +382,7 @@ export type Database = {
           current_episode: number | null
           current_journey_id: string | null
           current_session_id: string | null
+          email: string | null
           expectations: string | null
           id: string
           journeys_completed: number | null
@@ -413,6 +414,7 @@ export type Database = {
           current_episode?: number | null
           current_journey_id?: string | null
           current_session_id?: string | null
+          email?: string | null
           expectations?: string | null
           id?: string
           journeys_completed?: number | null
@@ -444,6 +446,7 @@ export type Database = {
           current_episode?: number | null
           current_journey_id?: string | null
           current_session_id?: string | null
+          email?: string | null
           expectations?: string | null
           id?: string
           journeys_completed?: number | null

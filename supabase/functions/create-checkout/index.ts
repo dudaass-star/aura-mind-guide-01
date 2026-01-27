@@ -39,8 +39,8 @@ serve(async (req) => {
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
 
-    const { plan, billing = "monthly", name, phone } = await req.json();
-    logStep("Request received", { plan, billing, name, phone });
+    const { plan, billing = "monthly", name, email, phone } = await req.json();
+    logStep("Request received", { plan, billing, name, email, phone });
 
     if (!plan || !PRICES[plan]) {
       throw new Error("Invalid plan selected");
@@ -48,6 +48,12 @@ serve(async (req) => {
 
     if (!name || !phone) {
       throw new Error("Name and phone are required");
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || !emailRegex.test(email)) {
+      throw new Error("Valid email is required");
     }
 
     // Validate billing period
@@ -94,10 +100,17 @@ serve(async (req) => {
     if (existingCustomer) {
       customerId = existingCustomer.id;
       logStep("Found existing customer", { customerId });
+      
+      // Update existing customer with latest email if needed
+      await stripe.customers.update(customerId, {
+        email: email,
+        name: name,
+      });
     } else {
-      // Create a new customer
+      // Create a new customer with email
       const newCustomer = await stripe.customers.create({
         name: name,
+        email: email,
         metadata: {
           phone: phoneClean,
         },
@@ -124,6 +137,7 @@ serve(async (req) => {
       metadata: {
         phone: phoneClean,
         name: name,
+        email: email,
         plan: plan,
         billing: billingPeriod,
       },
@@ -131,6 +145,7 @@ serve(async (req) => {
         metadata: {
           phone: phoneClean,
           name: name,
+          email: email,
           plan: plan,
           billing: billingPeriod,
         },

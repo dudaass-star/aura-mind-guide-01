@@ -69,6 +69,7 @@ const Checkout = () => {
   const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>(initialBilling);
   const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
   const currentPlan = plans[selectedPlan];
@@ -93,6 +94,12 @@ const Checkout = () => {
       toast.error("Por favor, insira seu nome");
       return;
     }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email.trim() || !emailRegex.test(email)) {
+      toast.error("Por favor, insira um email válido");
+      return;
+    }
     
     if (phone.replace(/\D/g, "").length < 11) {
       toast.error("Por favor, insira um telefone válido");
@@ -107,6 +114,7 @@ const Checkout = () => {
           plan: selectedPlan,
           billing: billingPeriod,
           name: name.trim(),
+          email: email.trim(),
           phone: phone,
         },
       });
@@ -305,6 +313,21 @@ const Checkout = () => {
                       placeholder="Seu nome"
                       className="mt-1.5 bg-secondary/50 border-border/50"
                     />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="email" className="text-foreground">Email</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="seu@email.com"
+                      className="mt-1.5 bg-secondary/50 border-border/50"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1.5">
+                      Para recibos e comunicações importantes
+                    </p>
                   </div>
                   
                   <div>
