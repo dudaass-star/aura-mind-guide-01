@@ -73,6 +73,7 @@ Deno.serve(async (req) => {
 
       const customerName = session.metadata?.name || session.customer_details?.name || 'Cliente';
       const customerPhone = session.metadata?.phone || session.customer_details?.phone;
+      const customerEmail = session.metadata?.email || session.customer_details?.email;
       const customerPlan = session.metadata?.plan || 'essencial';
 
       if (!customerPhone) {
@@ -173,6 +174,7 @@ Me diz: como você está hoje?`;
             .insert({
               name: customerName,
               phone: cleanPhone,
+              email: customerEmail,
               plan: customerPlan,
               status: 'active',
               sessions_used_this_month: 0,
@@ -185,7 +187,7 @@ Me diz: como você está hoje?`;
           if (insertError) {
             console.error('❌ Error creating profile:', insertError);
           } else {
-            console.log('✅ Profile created with plan:', customerPlan, 'needs_schedule_setup:', sessionsCount > 0);
+            console.log('✅ Profile created with plan:', customerPlan, 'email:', customerEmail, 'needs_schedule_setup:', sessionsCount > 0);
           }
         } else {
           // Update existing profile
@@ -193,6 +195,7 @@ Me diz: como você está hoje?`;
             .from('profiles')
             .update({
               name: customerName,
+              email: customerEmail,
               plan: customerPlan,
               status: 'active',
               sessions_used_this_month: 0,
@@ -205,7 +208,7 @@ Me diz: como você está hoje?`;
           if (updateError) {
             console.error('❌ Error updating profile:', updateError);
           } else {
-            console.log('✅ Profile updated with plan:', customerPlan);
+            console.log('✅ Profile updated with plan:', customerPlan, 'email:', customerEmail);
           }
         }
       } catch (dbError) {
