@@ -1,53 +1,136 @@
 
-## Simplificar Página ThankYou
+## Adicionar Handler para `customer.subscription.resumed`
 
-### Objetivo
-Remover o botão de WhatsApp com número placeholder e substituir por uma mensagem informativa, já que a AURA envia a mensagem de boas-vindas automaticamente após o checkout.
+### Contexto
+Atualmente o webhook trata dois eventos:
+- `checkout.session.completed` → Boas-vindas ao novo assinante
+- `customer.subscription.deleted` → Despedida quando cancela
 
-### Alterações em `src/pages/ThankYou.tsx`
+**Falta:** Quando um usuário reativa uma assinatura pausada/cancelada, o sistema não detecta e o perfil permanece como `canceled`.
 
-#### 1. Remover imports e variáveis desnecessárias
-- Remover `MessageCircle` do import de lucide-react (linha 4)
-- Remover `Button` do import (linha 2) — não será mais usado
-- Remover variáveis `whatsappNumber`, `whatsappMessage`, `whatsappUrl` (linhas 34-38)
+### O que o evento `customer.subscription.resumed` faz?
+Este evento é disparado pelo Stripe quando:
+- Uma assinatura pausada é retomada
+- O usuário reativa após um período de inadimplência
 
-#### 2. Atualizar a seção CTA (linhas 74-86)
+### Alterações em `supabase/functions/stripe-webhook/index.ts`
 
-**Antes:**
-```text
-Botão verde "Abrir WhatsApp e começar"
-Texto: "A AURA já está esperando por você"
+#### Novo Handler (após linha 302, antes do return final)
+
+```typescript
+// Process customer.subscription.resumed
+if (event.type === 'customer.subscription.resumed') {
+  const subscription = event.data.object as Stripe.Subscription;
+  console.log('🟢 Subscription resumed:', subscription.id);
+
+  const customerId = subscription.customer as string;
+  
+  try {
+    const stripe = new Stripe(stripeSecretKey, { apiVersion: '2023-10-16' });
+    const customer = await stripe.customers.retrieve(customerId);
+    
+    if (customer.deleted) {
+      console.log('⚠️ Customer was deleted, skipping welcome back message');
+      return new Response(JSON.stringify({ received: true }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const customerPhone = customer.metadata?.phone;
+    const customerName = customer.name || 'Cliente';
+
+    if (!customerPhone) {
+      console.error('❌ No phone number found for customer');
+      return new Response(JSON.stringify({ received: true }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    console.log(`👤 Sending welcome back to: ${customerName}`);
+
+    // Mensagem de boas-vindas de volta
+    const welcomeBackMessage = `Oi, ${customerName}! 💜
+
+Que bom ter você de volta! 🌟
+
+Sua assinatura AURA foi reativada e estou aqui, pronta para continuar nossa jornada juntas.
+
+Me conta: como você está hoje?`;
+
+    // Enviar mensagem via Z-API
+    const response = await fetch(`${supabaseUrl}/functions/v1/send-zapi-message`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseServiceKey}`,
+      },
+      body: JSON.stringify({
+        phone: customerPhone,
+        message: welcomeBackMessage,
+        isAudio: false,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ Failed to send welcome back message:', errorText);
+    } else {
+      console.log('✅ Welcome back message sent successfully!');
+    }
+
+    // Atualizar status do perfil para ativo
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const cleanPhone = customerPhone.replace(/\D/g, '');
+
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({
+        status: 'active',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('phone', cleanPhone);
+
+    if (updateError) {
+      console.error('❌ Error updating profile status:', updateError);
+    } else {
+      console.log('✅ Profile status updated to active');
+    }
+
+  } catch (customerError) {
+    console.error('❌ Error processing subscription resumption:', customerError);
+  }
+}
 ```
 
-**Depois:**
+### Fluxo Completo Após Implementação
+
 ```text
-Ícone de smartphone com indicador
-Título: "📱 Fique de olho no seu celular!"
-Texto: "A AURA vai te mandar uma mensagem no WhatsApp em instantes para iniciar sua jornada."
-```
-
-#### 3. Adicionar novo ícone
-- Importar `Smartphone` de lucide-react para o visual do aviso
-
-### Código Final da Seção CTA
-
-```tsx
-{/* Aviso WhatsApp */}
-<div className="space-y-3 animate-fade-up delay-200 p-6 bg-teal/10 rounded-2xl border border-teal/20">
-  <div className="flex items-center justify-center gap-2">
-    <Smartphone className="w-6 h-6 text-teal" />
-    <span className="font-display text-lg font-semibold text-foreground">
-      Fique de olho no seu celular!
-    </span>
-  </div>
-  <p className="text-muted-foreground">
-    A AURA vai te mandar uma mensagem no WhatsApp em instantes para iniciar sua jornada.
-  </p>
-</div>
+┌─────────────────────────────────────────────────────────────┐
+│                    CICLO DE VIDA DA ASSINATURA              │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  checkout.session.completed                                 │
+│  └─> Status: active                                         │
+│  └─> Mensagem: "Oi! Que bom te receber..."                  │
+│                                                             │
+│  customer.subscription.deleted                              │
+│  └─> Status: canceled                                       │
+│  └─> Mensagem: "Sua assinatura foi encerrada..."            │
+│                                                             │
+│  customer.subscription.resumed  ← NOVO                      │
+│  └─> Status: active                                         │
+│  └─> Mensagem: "Que bom ter você de volta!"                 │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ### Benefícios
-- Remove código morto (número placeholder que não funciona)
-- Alinha a expectativa do usuário com o fluxo real automatizado
-- Visual mais informativo e elegante
-- Menos confusão sobre o que fazer após o checkout
+- Usuários que reativam voltam automaticamente ao status `active`
+- Mensagem personalizada de boas-vindas de volta
+- Continuidade da experiência sem intervenção manual
+- Consistência com os outros handlers já implementados
+
+### Configuração no Stripe (Lembrete)
+Certificar que o webhook no painel do Stripe está configurado para enviar o evento `customer.subscription.resumed` para a URL do webhook.
