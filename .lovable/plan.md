@@ -1,68 +1,53 @@
 
-## Adicionar Campo de Email no Checkout
+## Adicionar Campo de Email na Página de Trial
 
-### Por que é importante?
+### Situação Atual
+A página `/experimentar` (StartTrial.tsx) pede apenas:
+- Nome
+- WhatsApp
 
-1. **Stripe** - O email é o identificador principal de clientes no Stripe. Hoje criamos clientes sem email, o que dificulta buscas e comunicação
-2. **Recibos automáticos** - O Stripe pode enviar recibos automaticamente por email
-3. **Comunicação** - Newsletters, atualizações importantes, relatórios mensais
-4. **Recuperação** - Caso o usuário perca acesso ao WhatsApp
-5. **Profissionalismo** - Todo serviço de assinatura pede email
+### Por que adicionar email no trial também?
+
+1. **Consistência** - Se pedimos no checkout, faz sentido pedir no trial
+2. **Comunicação antecipada** - Podemos enviar emails mesmo antes de converter
+3. **Conversão** - Email para remarketing de usuários trial que não converteram
+4. **Dados completos** - Quando converter, já teremos o email cadastrado
 
 ### Alterações Necessárias
 
-#### 1. Banco de Dados
-Adicionar coluna `email` na tabela `profiles`:
+#### 1. Frontend (StartTrial.tsx)
 
-```sql
-ALTER TABLE profiles ADD COLUMN email TEXT;
-```
-
-#### 2. Página de Checkout (Frontend)
 Adicionar campo de email no formulário:
 - Novo state `email`
-- Input de email com validação
+- Input de email entre nome e WhatsApp
+- Validação de formato (regex)
 - Enviar email para a edge function
 
-#### 3. Edge Function create-checkout
+```text
++---------------------------+
+|        Seu nome           |
+|  [___________________]    |
+|                           |
+|        Seu email          |  ← NOVO
+|  [___________________]    |
+|                           |
+|        WhatsApp           |
+|  [___________________]    |
++---------------------------+
+```
+
+#### 2. Edge Function (start-trial)
+
 - Receber `email` no request
 - Validar formato do email
-- Incluir email ao criar cliente no Stripe (`email: email`)
-- Incluir email nos metadados
-
-#### 4. Edge Function stripe-webhook
-- Capturar email do session/customer
-- Salvar email no profile quando criar/atualizar
-
-### Resumo Visual das Mudanças
-
-```text
-+-------------------+     +------------------+     +----------------+
-|    Checkout.tsx   | --> | create-checkout  | --> |     Stripe     |
-|  + campo email    |     |  + param email   |     | customer.email |
-+-------------------+     +------------------+     +----------------+
-                                  |
-                                  v
-                          +------------------+
-                          | stripe-webhook   |
-                          | salva no profile |
-                          +------------------+
-                                  |
-                                  v
-                          +------------------+
-                          |     profiles     |
-                          |  + coluna email  |
-                          +------------------+
-```
+- Incluir email ao criar profile
 
 ### Arquivos a Modificar
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `profiles` (banco) | Adicionar coluna `email TEXT` |
-| `src/pages/Checkout.tsx` | Adicionar campo de email no formulário |
-| `supabase/functions/create-checkout/index.ts` | Receber e validar email, passar para Stripe |
-| `supabase/functions/stripe-webhook/index.ts` | Salvar email no profile |
+| `src/pages/StartTrial.tsx` | Adicionar campo de email no formulário |
+| `supabase/functions/start-trial/index.ts` | Receber email e salvar no profile |
 
 ### Detalhes Técnicos
 
@@ -70,30 +55,30 @@ Adicionar campo de email no formulário:
 ```typescript
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 if (!emailRegex.test(email)) {
-  toast.error("Por favor, insira um email válido");
+  toast({
+    title: "Email inválido",
+    description: "Por favor, insira um email válido.",
+    variant: "destructive",
+  });
   return;
 }
 ```
 
-**Stripe Customer Creation**:
+**Profile Insert (Edge Function)**:
 ```typescript
-const newCustomer = await stripe.customers.create({
-  name: name,
-  email: email,  // Novo!
-  metadata: {
-    phone: phoneClean,
-  },
-});
+const { data: profile, error: profileError } = await supabase
+  .from('profiles')
+  .insert({
+    user_id: userId,
+    name: name.trim(),
+    email: email.trim(),  // ← NOVO
+    phone: formattedPhone,
+    status: 'trial',
+    // ...
+  })
 ```
 
-**Profile Insert/Update**:
-```typescript
-// No stripe-webhook
-const customerEmail = session.customer_details?.email || session.metadata?.email;
-
-await supabase.from('profiles').upsert({
-  // ...outros campos
-  email: customerEmail,
-});
-```
-
+### Resultado Esperado
+- Usuários trial também informam email
+- Email salvo no banco desde o início
+- Facilita comunicação e conversão futura
