@@ -1,84 +1,46 @@
 
-## Adicionar Campo de Email na Página de Trial
 
-### Situação Atual
-A página `/experimentar` (StartTrial.tsx) pede apenas:
-- Nome
-- WhatsApp
+## Revisar Comunicação: Substituir "Amiga" por Termos que Transmitam Mais Valor
 
-### Por que adicionar email no trial também?
+### Problema Identificado
 
-1. **Consistência** - Se pedimos no checkout, faz sentido pedir no trial
-2. **Comunicação antecipada** - Podemos enviar emails mesmo antes de converter
-3. **Conversão** - Email para remarketing de usuários trial que não converteram
-4. **Dados completos** - Quando converter, já teremos o email cadastrado
+A palavra "amiga" aparece em 3 lugares e pode passar uma mensagem de algo casual/informal, quando na verdade a AURA oferece:
+- Metodologia estruturada
+- Sessões com objetivos
+- Acompanhamento profissional
+- Memória de longo prazo
 
-### Alterações Necessárias
+### Locais a Alterar
 
-#### 1. Frontend (StartTrial.tsx)
+| Arquivo | Texto Atual | Sugestão de Novo Texto |
+|---------|-------------|------------------------|
+| `StartTrial.tsx` (linha 135) | "5 conversas pra você conhecer sua nova amiga." | "5 conversas pra você sentir a diferença." |
+| `ThankYou.tsx` (linha 103) | "Converse como falaria com uma amiga — sem filtros" | "Converse com honestidade — sem filtros, sem julgamento" |
+| `Testimonials.tsx` (linha 20) | "É como ter uma amiga que entende..." | Manter (é depoimento de usuária, soa natural) |
 
-Adicionar campo de email no formulário:
-- Novo state `email`
-- Input de email entre nome e WhatsApp
-- Validação de formato (regex)
-- Enviar email para a edge function
+### Por que essas alternativas?
 
-```text
-+---------------------------+
-|        Seu nome           |
-|  [___________________]    |
-|                           |
-|        Seu email          |  ← NOVO
-|  [___________________]    |
-|                           |
-|        WhatsApp           |
-|  [___________________]    |
-+---------------------------+
-```
+**StartTrial.tsx:**
+- "Sentir a diferença" é mais orientado a resultado
+- Desperta curiosidade sobre o que muda
+- Não precisa "conhecer" — precisa experimentar o impacto
 
-#### 2. Edge Function (start-trial)
+**ThankYou.tsx:**
+- "Com honestidade" mantém o tom acolhedor
+- "Sem julgamento" reforça o diferencial da AURA
+- Remove a comparação com amiga
 
-- Receber `email` no request
-- Validar formato do email
-- Incluir email ao criar profile
-
-### Arquivos a Modificar
-
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/pages/StartTrial.tsx` | Adicionar campo de email no formulário |
-| `supabase/functions/start-trial/index.ts` | Receber email e salvar no profile |
-
-### Detalhes Técnicos
-
-**Validação de Email (Frontend)**:
-```typescript
-const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-if (!emailRegex.test(email)) {
-  toast({
-    title: "Email inválido",
-    description: "Por favor, insira um email válido.",
-    variant: "destructive",
-  });
-  return;
-}
-```
-
-**Profile Insert (Edge Function)**:
-```typescript
-const { data: profile, error: profileError } = await supabase
-  .from('profiles')
-  .insert({
-    user_id: userId,
-    name: name.trim(),
-    email: email.trim(),  // ← NOVO
-    phone: formattedPhone,
-    status: 'trial',
-    // ...
-  })
-```
+**Testimonials.tsx:**
+- Depoimentos são falas reais de usuários
+- "Amiga" aqui é natural e autêntico
+- Manter para não parecer artificial
 
 ### Resultado Esperado
-- Usuários trial também informam email
-- Email salvo no banco desde o início
-- Facilita comunicação e conversão futura
+
+A comunicação passa a focar em:
+- Resultado ("sentir a diferença")
+- Segurança emocional ("sem julgamento")
+- Profissionalismo implícito
+
+Sem perder o tom acolhedor e humano que é marca da AURA.
+
