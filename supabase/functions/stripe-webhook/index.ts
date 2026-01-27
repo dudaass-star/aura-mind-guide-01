@@ -301,6 +301,89 @@ Cuide-se. 🌟`;
       }
     }
 
+    // Process customer.subscription.resumed
+    if (event.type === 'customer.subscription.resumed') {
+      const subscription = event.data.object as Stripe.Subscription;
+      console.log('🟢 Subscription resumed:', subscription.id);
+
+      const customerId = subscription.customer as string;
+      
+      try {
+        const stripe = new Stripe(stripeSecretKey, { apiVersion: '2023-10-16' });
+        const customer = await stripe.customers.retrieve(customerId);
+        
+        if (customer.deleted) {
+          console.log('⚠️ Customer was deleted, skipping welcome back message');
+          return new Response(JSON.stringify({ received: true }), {
+            status: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        const customerPhone = customer.metadata?.phone;
+        const customerName = customer.name || 'Cliente';
+
+        if (!customerPhone) {
+          console.error('❌ No phone number found for customer');
+          return new Response(JSON.stringify({ received: true }), {
+            status: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        console.log(`👤 Sending welcome back to: ${customerName}`);
+
+        const welcomeBackMessage = `Oi, ${customerName}! 💜
+
+Que bom ter você de volta! 🌟
+
+Sua assinatura AURA foi reativada e estou aqui, pronta para continuar nossa jornada juntas.
+
+Me conta: como você está hoje?`;
+
+        const response = await fetch(`${supabaseUrl}/functions/v1/send-zapi-message`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseServiceKey}`,
+          },
+          body: JSON.stringify({
+            phone: customerPhone,
+            message: welcomeBackMessage,
+            isAudio: false,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('❌ Failed to send welcome back message:', errorText);
+        } else {
+          console.log('✅ Welcome back message sent successfully!');
+        }
+
+        // Update profile status back to active
+        const supabase = createClient(supabaseUrl, supabaseServiceKey);
+        const cleanPhone = customerPhone.replace(/\D/g, '');
+
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update({
+            status: 'active',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('phone', cleanPhone);
+
+        if (updateError) {
+          console.error('❌ Error updating profile status:', updateError);
+        } else {
+          console.log('✅ Profile status updated to active');
+        }
+
+      } catch (customerError) {
+        console.error('❌ Error processing subscription resumption:', customerError);
+      }
+    }
+
     return new Response(JSON.stringify({ received: true }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
