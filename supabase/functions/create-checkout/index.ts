@@ -7,21 +7,21 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Price IDs from Stripe
-const PRICES: Record<string, { monthly: string; yearly: string }> = {
+// Price IDs from environment variables (configurable for sandbox/production)
+const getPrices = (): Record<string, { monthly: string; yearly: string }> => ({
   essencial: {
-    monthly: "price_1SlEYjHMRAbm8MiTB689p4b6",  // R$ 29,90/mês
-    yearly: "price_1Sn2oPHMRAbm8MiTh68EoqzT",   // R$ 269,10/ano (25% off)
+    monthly: Deno.env.get("STRIPE_PRICE_ESSENCIAL_MONTHLY") || "",
+    yearly: Deno.env.get("STRIPE_PRICE_ESSENCIAL_YEARLY") || "",
   },
   direcao: {
-    monthly: "price_1SlEb6HMRAbm8MiTz4H3EBDT",  // R$ 49,90/mês
-    yearly: "price_1Sn2pAHMRAbm8MiTaVR3LOsm",   // R$ 419,16/ano (30% off)
+    monthly: Deno.env.get("STRIPE_PRICE_DIRECAO_MONTHLY") || "",
+    yearly: Deno.env.get("STRIPE_PRICE_DIRECAO_YEARLY") || "",
   },
   transformacao: {
-    monthly: "price_1SlEcKHMRAbm8MiTLWgfYHAV",  // R$ 79,90/mês
-    yearly: "price_1Sn2psHMRAbm8MiTV25S7DCi",   // R$ 671,16/ano (30% off)
+    monthly: Deno.env.get("STRIPE_PRICE_TRANSFORMACAO_MONTHLY") || "",
+    yearly: Deno.env.get("STRIPE_PRICE_TRANSFORMACAO_YEARLY") || "",
   },
-};
+});
 
 const logStep = (step: string, details?: any) => {
   const detailsStr = details ? ` - ${JSON.stringify(details)}` : '';
@@ -42,6 +42,8 @@ serve(async (req) => {
     const { plan, billing = "monthly", name, email, phone } = await req.json();
     logStep("Request received", { plan, billing, name, email, phone });
 
+    const PRICES = getPrices();
+    
     if (!plan || !PRICES[plan]) {
       throw new Error("Invalid plan selected");
     }
@@ -61,7 +63,7 @@ serve(async (req) => {
     const priceId = PRICES[plan][billingPeriod];
 
     if (!priceId) {
-      throw new Error("Invalid billing period");
+      throw new Error("Price ID not configured for this plan. Check environment variables.");
     }
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
