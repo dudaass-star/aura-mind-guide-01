@@ -1,36 +1,43 @@
 
 
-# Plano: Ajustar Velocidade da Voz nas Meditações
+# Plano: Corrigir Pronúncia do Nome "Aura"
 
 ## Problema
 
-A voz está muito lenta com `speakingRate: 0.90`. O usuário confirmou que em 1.25x a velocidade ficou adequada.
+O Google Cloud TTS está soletrando "A-U-R-A" ao invés de falar "Aura" como uma palavra. Isso acontece porque nos scripts de meditação o nome está em maiúsculas: **"AURA"**.
+
+O TTS interpreta texto em maiúsculas como siglas e soletra cada letra.
 
 ## Solução
 
-Alterar o `speakingRate` de **0.90** para **1.12** no arquivo `supabase/functions/generate-chunk/index.ts`:
+Atualizar todos os scripts de meditação no banco de dados, substituindo "AURA" por "Aura".
 
-```typescript
-// Linha 14 - ANTES
-speakingRate: 0.90,
+## Mudanças Necessárias
 
-// DEPOIS
-speakingRate: 1.12,
+| Local | Ação |
+|-------|------|
+| Tabela `meditations` | Executar UPDATE para trocar "AURA" → "Aura" em todos os scripts |
+| Áudios afetados | Regenerar os áudios das meditações que já foram geradas |
+
+## Comando SQL
+
+```sql
+UPDATE meditations 
+SET script = REPLACE(script, 'AURA', 'Aura')
+WHERE script LIKE '%AURA%';
 ```
 
-## Cálculo
+## Meditações que Precisam Regenerar
 
-- Velocidade atual: 0.90
-- Fator de correção do usuário: 1.25x
-- Nova velocidade: 0.90 × 1.25 = **1.125** (arredondado para 1.12)
+Após a correção dos scripts, será necessário regenerar os áudios das meditações que já foram geradas com a pronúncia incorreta:
 
-## Arquivos a Modificar
+- `med-ansiedade-tempestade`
+- `med-estresse-muscular`
+- Qualquer outra que já tenha áudio gerado
 
-| Arquivo | Mudança |
-|---------|---------|
-| `supabase/functions/generate-chunk/index.ts` | Alterar `speakingRate` de 0.90 para 1.12 |
+## Passos
 
-## Observação
-
-As meditações já geradas continuarão com a velocidade antiga. Apenas novas gerações usarão a velocidade corrigida. Se quiser, pode regenerar as meditações existentes depois.
+1. Executar a migração SQL para corrigir os scripts
+2. Deletar os áudios existentes (chunks e áudio final)
+3. Regenerar usando o botão "Gerar" na página admin
 
