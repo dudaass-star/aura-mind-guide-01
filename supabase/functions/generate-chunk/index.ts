@@ -151,27 +151,19 @@ async function generateAudio(
   return bytes;
 }
 
-serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
+// Processa um chunk de forma assíncrona (roda em background)
+async function processChunkAsync(
+  meditation_id: string,
+  chunk_index: number,
+  total_chunks?: number,
+  initialize?: boolean
+): Promise<void> {
+  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const body = await req.json();
-    const { meditation_id, chunk_index, total_chunks, initialize } = body;
-
-    if (!meditation_id || chunk_index === undefined) {
-      return new Response(JSON.stringify({ error: 'meditation_id and chunk_index are required' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    console.log(`🧩 Generating chunk ${chunk_index} for meditation: ${meditation_id}`);
-
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    console.log(`🧩 [ASYNC] Processing chunk ${chunk_index} for meditation: ${meditation_id}`);
 
     // Se for a primeira chamada (initialize=true), criar todos os registros de chunks
     if (initialize && chunk_index === 0 && total_chunks) {
@@ -197,6 +189,175 @@ serve(async (req) => {
 
       if (insertError) {
         console.error('Failed to insert chunk records:', insertError);
+        throw new Error(`Failed to initialize chunks: ${insertError.message}`);
+      }
+      
+      console.log(`✅ Created ${total_chunks} chunk records`);
+    }
+
+    // Verificar se chunk já foi gerado
+    const { data: existingChunk } = await supabase
+      .from('meditation_audio_chunks')
+      .select('*')
+      .eq('meditation_id', meditation_id)
+      .eq('chunk_index', chunk_index)
+      .maybeSingle();
+
+    if (existingChunk?.status === 'completed') {
+      console.log(`✅ Chunk ${chunk_index} already completed, skipping`);
+      return;
+    }
+
+    // Atualizar status para generating
+    await supabase
+      .from('meditation_audio_chunks')
+      .update({ status: 'generating' })
+      .eq('meditation_id', meditation_id)
+      .eq('chunk_index', chunk_index);
+
+    // Buscar meditação
+    const { data: meditation, error: meditationError } = await supabase
+      .from('meditations')
+      .select('*')
+      .eq('id', meditation_id)
+      .single();
+
+    if (meditationError || !meditation) {
+      throw new Error('Meditation not found');
+    }
+
+    // Dividir script e pegar o chunk correto
+    const chunks = splitScriptIntoChunks(meditation.script);
+    
+    if (chunk_index >= chunks.length) {
+      throw new Error(`Invalid chunk_index: ${chunk_index} (total: ${chunks.length})`);
+    }
+
+    const chunkText = chunks[chunk_index];
+    console.log(`📝 Chunk ${chunk_index}: ${chunkText.length} chars`);
+
+    // Carregar credenciais GCP
+    const gcpServiceAccountJson = Deno.env.get('GCP_SERVICE_ACCOUNT');
+    if (!gcpServiceAccountJson) {
+      throw new Error('GCP credentials not configured');
+    }
+
+    const serviceAccount: ServiceAccountCredentials = JSON.parse(gcpServiceAccountJson);
+    const accessToken = await getAccessToken(serviceAccount);
+
+    // Gerar áudio
+    const audioBytes = await generateAudio(chunkText, accessToken, serviceAccount.project_id);
+    console.log(`✅ Audio generated: ${audioBytes.byteLength} bytes`);
+
+    // Upload para Storage
+    const storagePath = `${meditation_id}/chunks/chunk_${chunk_index}.mp3`;
+    
+    const { error: uploadError } = await supabase.storage
+      .from('meditations')
+      .upload(storagePath, audioBytes, {
+        contentType: 'audio/mpeg',
+        upsert: true,
+      });
+
+    if (uploadError) {
+      throw new Error(`Storage upload error: ${uploadError.message}`);
+    }
+
+    // Atualizar registro com sucesso
+    await supabase
+      .from('meditation_audio_chunks')
+      .update({ 
+        status: 'completed',
+        storage_path: storagePath,
+        completed_at: new Date().toISOString(),
+        error_message: null
+      })
+      .eq('meditation_id', meditation_id)
+      .eq('chunk_index', chunk_index);
+
+    console.log(`✅ Chunk ${chunk_index} completed successfully`);
+  } catch (error) {
+    console.error('Error processing chunk:', error);
+    
+    // Atualizar status para failed
+    await supabase
+      .from('meditation_audio_chunks')
+      .update({ 
+        status: 'failed',
+        error_message: error instanceof Error ? error.message : 'Unknown error'
+      })
+      .eq('meditation_id', meditation_id)
+      .eq('chunk_index', chunk_index);
+  }
+}
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const body = await req.json();
+    const { meditation_id, chunk_index, total_chunks, initialize, async: asyncMode } = body;
+
+    if (!meditation_id || chunk_index === undefined) {
+      return new Response(JSON.stringify({ error: 'meditation_id and chunk_index are required' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    console.log(`🧩 Request for chunk ${chunk_index}, meditation: ${meditation_id}, async: ${asyncMode}`);
+
+    // MODO ASSÍNCRONO: Retorna imediatamente e processa em background
+    if (asyncMode) {
+      // Usar EdgeRuntime.waitUntil para manter a função rodando após retornar
+      // @ts-ignore - EdgeRuntime é específico do Supabase Edge Functions
+      if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime.waitUntil) {
+        // @ts-ignore
+        EdgeRuntime.waitUntil(processChunkAsync(meditation_id, chunk_index, total_chunks, initialize));
+      } else {
+        // Fallback: processar inline (não ideal, mas funciona)
+        processChunkAsync(meditation_id, chunk_index, total_chunks, initialize);
+      }
+      
+      return new Response(JSON.stringify({ 
+        success: true, 
+        async: true,
+        message: 'Generation started in background',
+        meditation_id,
+        chunk_index,
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // MODO SÍNCRONO (legado): Aguarda conclusão
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Se for a primeira chamada (initialize=true), criar todos os registros de chunks
+    if (initialize && chunk_index === 0 && total_chunks) {
+      console.log(`📝 Initializing ${total_chunks} chunk records...`);
+      
+      await supabase
+        .from('meditation_audio_chunks')
+        .delete()
+        .eq('meditation_id', meditation_id);
+
+      const chunkRecords = Array.from({ length: total_chunks }, (_, i) => ({
+        meditation_id,
+        chunk_index: i,
+        total_chunks,
+        status: 'pending',
+      }));
+
+      const { error: insertError } = await supabase
+        .from('meditation_audio_chunks')
+        .insert(chunkRecords);
+
+      if (insertError) {
         throw new Error(`Failed to initialize chunks: ${insertError.message}`);
       }
       

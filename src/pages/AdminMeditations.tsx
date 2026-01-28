@@ -36,6 +36,7 @@ interface ChunkStatus {
   total_chunks: number;
   status: string;
   error_message?: string;
+  created_at?: string;
 }
 
 interface MeditationWithAudio extends Meditation {
@@ -71,13 +72,88 @@ function splitScriptIntoChunks(script: string, maxChars = 1200): string[] {
   return chunks;
 }
 
+// Aguarda um chunk completar via polling
+async function waitForChunkCompletion(
+  meditationId: string, 
+  chunkIndex: number,
+  onProgress?: (completed: number, total: number) => void
+): Promise<boolean> {
+  const maxWait = 300000; // 5 minutos
+  const pollInterval = 3000; // 3 segundos
+  const startTime = Date.now();
+
+  while (Date.now() - startTime < maxWait) {
+    const { data, error } = await supabase
+      .from('meditation_audio_chunks')
+      .select('status, total_chunks')
+      .eq('meditation_id', meditationId)
+      .eq('chunk_index', chunkIndex)
+      .single();
+
+    if (error) {
+      console.error('Error polling chunk status:', error);
+      await new Promise(r => setTimeout(r, pollInterval));
+      continue;
+    }
+
+    if (data?.status === 'completed') {
+      // Buscar total de completos para atualizar progresso
+      const { data: allChunks } = await supabase
+        .from('meditation_audio_chunks')
+        .select('status')
+        .eq('meditation_id', meditationId);
+      
+      const completedCount = allChunks?.filter(c => c.status === 'completed').length || 0;
+      onProgress?.(completedCount, data.total_chunks);
+      
+      return true;
+    }
+    
+    if (data?.status === 'failed') {
+      throw new Error(`Chunk ${chunkIndex} failed`);
+    }
+
+    await new Promise(r => setTimeout(r, pollInterval));
+  }
+
+  throw new Error(`Chunk ${chunkIndex} timeout after ${maxWait / 1000}s`);
+}
+
+// Reseta chunks travados em "generating" há mais de 5 minutos
+async function resetStuckChunks(meditationId: string): Promise<number> {
+  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+  
+  const { data: stuckChunks } = await supabase
+    .from('meditation_audio_chunks')
+    .select('chunk_index, created_at')
+    .eq('meditation_id', meditationId)
+    .eq('status', 'generating');
+
+  if (!stuckChunks || stuckChunks.length === 0) return 0;
+
+  // Resetar chunks travados
+  const { error } = await supabase
+    .from('meditation_audio_chunks')
+    .update({ status: 'pending', error_message: 'Reset: stuck in generating' })
+    .eq('meditation_id', meditationId)
+    .eq('status', 'generating');
+
+  if (error) {
+    console.error('Error resetting stuck chunks:', error);
+    return 0;
+  }
+
+  console.log(`Reset ${stuckChunks.length} stuck chunks`);
+  return stuckChunks.length;
+}
+
 export default function AdminMeditations() {
   const [meditations, setMeditations] = useState<MeditationWithAudio[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState<string | null>(null);
   const [generationStatus, setGenerationStatus] = useState<{[key: string]: {current: number, total: number, status: string}}>({});
-  const [isPaused, setIsPaused] = useState(false);
-  const abortControllerRef = useRef<AbortController | null>(null);
+  const [isCancelled, setIsCancelled] = useState(false);
+  const cancelRef = useRef(false);
   const { toast } = useToast();
 
   const fetchMeditations = async () => {
@@ -163,7 +239,6 @@ export default function AdminMeditations() {
       if (chunks && chunks.length > 0) {
         const completed = chunks.filter(c => c.status === 'completed').length;
         const failed = chunks.filter(c => c.status === 'failed').length;
-        const current = chunks.find(c => c.status === 'generating')?.chunk_index ?? completed;
         
         setGenerationStatus(prev => ({
           ...prev,
@@ -184,8 +259,8 @@ export default function AdminMeditations() {
     if (!meditation) return;
 
     setGenerating(meditationId);
-    setIsPaused(false);
-    abortControllerRef.current = new AbortController();
+    setIsCancelled(false);
+    cancelRef.current = false;
 
     try {
       // Dividir script em chunks
@@ -199,44 +274,54 @@ export default function AdminMeditations() {
         [meditationId]: { current: 0, total: totalChunks, status: 'generating' }
       }));
 
-      // Gerar chunks sequencialmente
+      // Gerar chunks sequencialmente com modo async
       for (let i = 0; i < totalChunks; i++) {
-        // Verificar se foi cancelado ou pausado
-        if (abortControllerRef.current?.signal.aborted) {
+        // Verificar se foi cancelado
+        if (cancelRef.current) {
           console.log('Generation cancelled');
           break;
         }
 
-        if (isPaused) {
-          console.log('Generation paused');
-          break;
-        }
+        console.log(`Triggering chunk ${i + 1}/${totalChunks}...`);
 
-        console.log(`Generating chunk ${i + 1}/${totalChunks}...`);
-
+        // Disparar geração em modo async (retorna imediatamente)
         const response = await supabase.functions.invoke("generate-chunk", {
           body: { 
             meditation_id: meditationId, 
             chunk_index: i,
-            // Na primeira chamada, inicializar todos os registros
+            async: true, // Modo fire-and-forget
             ...(i === 0 && { initialize: true, total_chunks: totalChunks })
           },
         });
 
         if (response.error) {
-          throw new Error(response.error.message || `Error generating chunk ${i}`);
+          throw new Error(response.error.message || `Error triggering chunk ${i}`);
         }
 
-        setGenerationStatus(prev => ({
-          ...prev,
-          [meditationId]: { current: i + 1, total: totalChunks, status: 'generating' }
-        }));
+        // Aguardar chunk completar via polling (sem manter conexão HTTP)
+        try {
+          await waitForChunkCompletion(meditationId, i, (completed, total) => {
+            setGenerationStatus(prev => ({
+              ...prev,
+              [meditationId]: { current: completed, total, status: 'generating' }
+            }));
+          });
+        } catch (pollError) {
+          console.error(`Error waiting for chunk ${i}:`, pollError);
+          throw pollError;
+        }
+
+        // Verificar cancelamento após cada chunk
+        if (cancelRef.current) {
+          console.log('Generation cancelled after chunk completion');
+          break;
+        }
       }
 
       // Verificar se foi cancelado
-      if (abortControllerRef.current?.signal.aborted || isPaused) {
+      if (cancelRef.current) {
         toast({
-          title: isPaused ? "Geração pausada" : "Geração cancelada",
+          title: "Geração cancelada",
           description: "Você pode retomar a geração depois.",
         });
         setGenerating(null);
@@ -287,38 +372,72 @@ export default function AdminMeditations() {
     if (!meditation || !meditation.chunks) return;
 
     setGenerating(meditationId);
-    setIsPaused(false);
-    abortControllerRef.current = new AbortController();
+    setIsCancelled(false);
+    cancelRef.current = false;
 
     try {
+      // Resetar chunks travados
+      const resetCount = await resetStuckChunks(meditationId);
+      if (resetCount > 0) {
+        toast({
+          title: "Chunks resetados",
+          description: `${resetCount} chunks travados foram resetados.`,
+        });
+      }
+
       const totalChunks = meditation.chunks[0]?.total_chunks || 0;
-      const pendingChunks = meditation.chunks
+      
+      // Buscar chunks pendentes atualizados
+      const { data: freshChunks } = await supabase
+        .from('meditation_audio_chunks')
+        .select('*')
+        .eq('meditation_id', meditationId)
+        .order('chunk_index');
+
+      const pendingChunks = (freshChunks || [])
         .filter(c => c.status !== 'completed')
         .map(c => c.chunk_index);
 
       console.log(`Resuming generation: ${pendingChunks.length} pending chunks`);
 
       for (const chunkIndex of pendingChunks) {
-        if (abortControllerRef.current?.signal.aborted || isPaused) break;
+        if (cancelRef.current) break;
 
-        console.log(`Generating chunk ${chunkIndex + 1}/${totalChunks}...`);
+        console.log(`Triggering chunk ${chunkIndex + 1}/${totalChunks}...`);
 
         const response = await supabase.functions.invoke("generate-chunk", {
-          body: { meditation_id: meditationId, chunk_index: chunkIndex },
+          body: { 
+            meditation_id: meditationId, 
+            chunk_index: chunkIndex,
+            async: true
+          },
         });
 
         if (response.error) {
           throw new Error(response.error.message);
         }
+
+        // Aguardar chunk completar via polling
+        await waitForChunkCompletion(meditationId, chunkIndex, (completed, total) => {
+          setGenerationStatus(prev => ({
+            ...prev,
+            [meditationId]: { current: completed, total, status: 'generating' }
+          }));
+        });
       }
 
-      if (abortControllerRef.current?.signal.aborted || isPaused) {
+      if (cancelRef.current) {
         setGenerating(null);
         await fetchMeditations();
         return;
       }
 
       // Finalizar
+      setGenerationStatus(prev => ({
+        ...prev,
+        [meditationId]: { ...prev[meditationId], status: 'finalizing' }
+      }));
+
       const finalResponse = await supabase.functions.invoke("finalize-meditation-audio", {
         body: { meditation_id: meditationId },
       });
@@ -346,18 +465,8 @@ export default function AdminMeditations() {
   };
 
   const cancelGeneration = () => {
-    abortControllerRef.current?.abort();
-    setGenerating(null);
-  };
-
-  const pauseGeneration = () => {
-    setIsPaused(true);
-  };
-
-  const formatDuration = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, "0")}`;
+    cancelRef.current = true;
+    setIsCancelled(true);
   };
 
   const formatDate = (dateStr: string) => {
@@ -445,7 +554,7 @@ export default function AdminMeditations() {
           <div>
             <h1 className="text-2xl font-bold text-foreground">Admin - Meditações</h1>
             <p className="text-muted-foreground">
-              Geração de áudio em chunks (sem timeout!)
+              Geração de áudio em chunks com polling (sem timeout!)
             </p>
           </div>
           <Button onClick={fetchMeditations} variant="outline" disabled={loading}>
@@ -594,22 +703,13 @@ export default function AdminMeditations() {
                               )}
                               
                               {isGenerating ? (
-                                <>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={pauseGeneration}
-                                  >
-                                    <Pause className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="destructive"
-                                    onClick={cancelGeneration}
-                                  >
-                                    <X className="h-4 w-4" />
-                                  </Button>
-                                </>
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={cancelGeneration}
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
                               ) : hasPendingChunks ? (
                                 <Button
                                   size="sm"
@@ -647,19 +747,20 @@ export default function AdminMeditations() {
 
         <Card className="border-primary/30 bg-primary/5">
           <CardHeader>
-            <CardTitle className="text-primary">✨ Sistema de Chunks</CardTitle>
+            <CardTitle className="text-primary">✨ Sistema de Chunks com Polling</CardTitle>
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground space-y-2">
             <p>
               O áudio é gerado em <strong>partes de ~1.200 caracteres</strong> (~20s cada), 
-              evitando o timeout de 60 segundos.
+              usando modo <strong>fire-and-forget</strong>.
             </p>
             <p>
-              <strong>Vantagens:</strong> Sem timeout, progresso visível, retomável se pausar.
+              <strong>Vantagens:</strong> Sem timeout de conexão, geração continua em background, 
+              progresso monitorado via polling do banco de dados.
             </p>
             <p>
-              <strong>Como funciona:</strong> Script é dividido → cada chunk é gerado separadamente → 
-              ao final, todos são concatenados em um único MP3.
+              <strong>Resiliente:</strong> Se o navegador fechar, a geração continua. 
+              Chunks travados são resetados automaticamente ao retomar.
             </p>
           </CardContent>
         </Card>
