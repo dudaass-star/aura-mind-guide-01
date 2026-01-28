@@ -170,14 +170,24 @@ serve(async (req) => {
   try {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const body = await req.json();
-    const { meditation_id, admin_key } = body;
+    const { meditation_id } = body;
 
-    // Validate authentication: service role header OR admin_key in body
+    // For internal use - validate via API key header or skip auth for direct invocations
+    // This function should only be called internally by batch-generate or admin tools
     const authHeader = req.headers.get('Authorization');
-    const isServiceRole = authHeader && authHeader.includes(supabaseServiceKey);
-    const isAdminKey = admin_key === supabaseServiceKey;
+    const apiKey = req.headers.get('apikey') || req.headers.get('x-api-key');
     
-    if (!isServiceRole && !isAdminKey) {
+    // Accept: service role in auth header, or valid apikey header
+    const isAuthenticated = 
+      (authHeader && authHeader.includes(supabaseServiceKey)) ||
+      (apiKey === supabaseServiceKey) ||
+      (apiKey === Deno.env.get('SUPABASE_ANON_KEY'));
+    
+    if (!isAuthenticated) {
+      console.log('Auth failed - headers:', { 
+        hasAuth: !!authHeader, 
+        hasApiKey: !!apiKey 
+      });
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
