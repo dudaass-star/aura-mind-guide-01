@@ -11,7 +11,7 @@ const corsHeaders = {
 // Configuração de voz para meditações (mais lenta que conversação normal)
 const MEDITATION_VOICE_CONFIG = {
   voiceName: "Erinome",
-  speakingRate: 0.90,
+  speakingRate: 1.12,
   stylePrompt: "O tom é muito calmo, suave e hipnótico. Voz serena como uma guia de meditação. Pausas naturais entre frases. Respiração tranquila, sem pressa. Como uma guia espiritual gentil conduzindo uma jornada interior."
 };
 
