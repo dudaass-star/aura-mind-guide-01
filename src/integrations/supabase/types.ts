@@ -308,6 +308,42 @@ export type Database = {
           },
         ]
       }
+      meditation_audio_chunks: {
+        Row: {
+          chunk_index: number
+          completed_at: string | null
+          created_at: string | null
+          error_message: string | null
+          id: string
+          meditation_id: string
+          status: string | null
+          storage_path: string | null
+          total_chunks: number
+        }
+        Insert: {
+          chunk_index: number
+          completed_at?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          meditation_id: string
+          status?: string | null
+          storage_path?: string | null
+          total_chunks: number
+        }
+        Update: {
+          chunk_index?: number
+          completed_at?: string | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          meditation_id?: string
+          status?: string | null
+          storage_path?: string | null
+          total_chunks?: number
+        }
+        Relationships: []
+      }
       meditation_audios: {
         Row: {
           duration_seconds: number | null

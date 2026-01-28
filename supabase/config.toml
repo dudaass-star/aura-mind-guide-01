@@ -71,3 +71,9 @@ verify_jwt = false
 
 [functions.batch-generate-meditations]
 verify_jwt = false
+
+[functions.generate-chunk]
+verify_jwt = false
+
+[functions.finalize-meditation-audio]
+verify_jwt = false
