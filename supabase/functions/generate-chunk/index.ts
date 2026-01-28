@@ -160,7 +160,7 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const body = await req.json();
-    const { meditation_id, chunk_index } = body;
+    const { meditation_id, chunk_index, total_chunks, initialize } = body;
 
     if (!meditation_id || chunk_index === undefined) {
       return new Response(JSON.stringify({ error: 'meditation_id and chunk_index are required' }), {
@@ -172,6 +172,36 @@ serve(async (req) => {
     console.log(`🧩 Generating chunk ${chunk_index} for meditation: ${meditation_id}`);
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Se for a primeira chamada (initialize=true), criar todos os registros de chunks
+    if (initialize && chunk_index === 0 && total_chunks) {
+      console.log(`📝 Initializing ${total_chunks} chunk records...`);
+      
+      // Limpar chunks anteriores
+      await supabase
+        .from('meditation_audio_chunks')
+        .delete()
+        .eq('meditation_id', meditation_id);
+
+      // Criar registros para todos os chunks
+      const chunkRecords = Array.from({ length: total_chunks }, (_, i) => ({
+        meditation_id,
+        chunk_index: i,
+        total_chunks,
+        status: 'pending',
+      }));
+
+      const { error: insertError } = await supabase
+        .from('meditation_audio_chunks')
+        .insert(chunkRecords);
+
+      if (insertError) {
+        console.error('Failed to insert chunk records:', insertError);
+        throw new Error(`Failed to initialize chunks: ${insertError.message}`);
+      }
+      
+      console.log(`✅ Created ${total_chunks} chunk records`);
+    }
 
     // Verificar se chunk já foi gerado
     const { data: existingChunk } = await supabase
