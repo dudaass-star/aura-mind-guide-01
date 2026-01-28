@@ -124,20 +124,23 @@ async function generateAudioChunk(
   return bytes;
 }
 
-// Divide script em chunks de ~1800 chars (margem de segurança)
-function splitScriptIntoChunks(script: string, maxChars = 1800): string[] {
+// Divide script em chunks de ~1200 chars para geração mais rápida
+function splitScriptIntoChunks(script: string, maxChars = 1200): string[] {
   const chunks: string[] = [];
-  const sentences = script.split(/(?<=[.!?])\s+/);
+  // Split by periods followed by space or newline, or by "..."
+  const sentences = script.split(/(?<=[.!?])\s+|(?<=\.\.\.)\s*/);
   let currentChunk = "";
 
   for (const sentence of sentences) {
-    if (currentChunk.length + sentence.length > maxChars) {
+    if (!sentence.trim()) continue;
+    
+    if (currentChunk.length + sentence.length + 1 > maxChars) {
       if (currentChunk.trim()) {
         chunks.push(currentChunk.trim());
       }
       currentChunk = sentence;
     } else {
-      currentChunk += " " + sentence;
+      currentChunk += (currentChunk ? " " : "") + sentence;
     }
   }
 
