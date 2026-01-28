@@ -47,11 +47,16 @@ serve(async (req) => {
 
     const results: { id: string; title: string; status: string; error?: string }[] = [];
 
-    // Gerar áudio para cada meditação pendente
+    // Gerar áudio para cada meditação pendente com timeout de 5 minutos
+    const GENERATION_TIMEOUT = 5 * 60 * 1000; // 5 minutos
+    
     for (const meditation of pendingMeditations) {
       console.log(`🧘 Generating audio for: ${meditation.id} - ${meditation.title}`);
       
       try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), GENERATION_TIMEOUT);
+        
         const response = await fetch(`${supabaseUrl}/functions/v1/generate-meditation-audio`, {
           method: 'POST',
           headers: {
@@ -60,7 +65,10 @@ serve(async (req) => {
             'Authorization': `Bearer ${supabaseServiceKey}`,
           },
           body: JSON.stringify({ meditation_id: meditation.id }),
+          signal: controller.signal,
         });
+        
+        clearTimeout(timeoutId);
 
         if (!response.ok) {
           const errorText = await response.text();
@@ -79,7 +87,7 @@ serve(async (req) => {
 
       // Delay entre gerações para não sobrecarregar a API do Google
       if (pendingMeditations.indexOf(meditation) < pendingMeditations.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        await new Promise(resolve => setTimeout(resolve, 3000));
       }
     }
 

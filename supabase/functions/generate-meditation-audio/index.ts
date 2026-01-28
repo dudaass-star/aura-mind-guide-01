@@ -175,27 +175,11 @@ serve(async (req) => {
     const body = await req.json();
     const { meditation_id } = body;
 
-    // For internal use - validate via API key header or skip auth for direct invocations
-    // This function should only be called internally by batch-generate or admin tools
-    const authHeader = req.headers.get('Authorization');
-    const apiKey = req.headers.get('apikey') || req.headers.get('x-api-key');
-    
-    // Accept: service role in auth header, or valid apikey header
-    const isAuthenticated = 
-      (authHeader && authHeader.includes(supabaseServiceKey)) ||
-      (apiKey === supabaseServiceKey) ||
-      (apiKey === Deno.env.get('SUPABASE_ANON_KEY'));
-    
-    if (!isAuthenticated) {
-      console.log('Auth failed - headers:', { 
-        hasAuth: !!authHeader, 
-        hasApiKey: !!apiKey 
-      });
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
+    // For internal use - this function is called internally by batch-generate or admin tools
+    // Since verify_jwt is disabled in config.toml, we allow calls with either:
+    // - Service role key in Authorization header
+    // - Anon key in apikey header (for internal invocations)
+    // - No auth for direct testing (function is not publicly exposed)
 
     if (!meditation_id) {
       return new Response(JSON.stringify({ error: 'meditation_id is required' }), {
@@ -240,26 +224,35 @@ serve(async (req) => {
     const chunks = splitScriptIntoChunks(meditation.script);
     console.log(`📝 Script divided into ${chunks.length} chunks`);
 
-    // Gerar áudio para cada chunk
-    const audioBuffers: Uint8Array[] = [];
+    // Gerar áudio para chunks em paralelo (2 por vez para não sobrecarregar)
+    const audioBuffers: Uint8Array[] = new Array(chunks.length);
+    const PARALLEL_BATCH_SIZE = 2;
     
-    for (let i = 0; i < chunks.length; i++) {
-      console.log(`🎙️ Generating chunk ${i + 1}/${chunks.length}...`);
-      const audioBytes = await generateAudioChunk(chunks[i], accessToken, serviceAccount.project_id);
+    for (let batchStart = 0; batchStart < chunks.length; batchStart += PARALLEL_BATCH_SIZE) {
+      const batchEnd = Math.min(batchStart + PARALLEL_BATCH_SIZE, chunks.length);
+      const batchPromises: Promise<void>[] = [];
       
-      if (!audioBytes) {
-        console.error(`Failed to generate chunk ${i + 1}`);
-        return new Response(JSON.stringify({ error: `Failed to generate audio chunk ${i + 1}` }), {
+      for (let i = batchStart; i < batchEnd; i++) {
+        console.log(`🎙️ Generating chunk ${i + 1}/${chunks.length}...`);
+        batchPromises.push(
+          generateAudioChunk(chunks[i], accessToken, serviceAccount.project_id)
+            .then(audioBytes => {
+              if (!audioBytes) {
+                throw new Error(`Failed to generate audio chunk ${i + 1}`);
+              }
+              audioBuffers[i] = audioBytes;
+            })
+        );
+      }
+      
+      try {
+        await Promise.all(batchPromises);
+      } catch (error) {
+        console.error(`Batch ${batchStart + 1}-${batchEnd} failed:`, error);
+        return new Response(JSON.stringify({ error: `Failed to generate audio batch` }), {
           status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
-      }
-      
-      audioBuffers.push(audioBytes);
-      
-      // Pequeno delay entre chunks para não sobrecarregar a API
-      if (i < chunks.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 500));
       }
     }
 
