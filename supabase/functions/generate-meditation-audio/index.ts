@@ -168,18 +168,21 @@ serve(async (req) => {
   }
 
   try {
-    // Validate service role authentication
-    const authHeader = req.headers.get('Authorization');
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const body = await req.json();
+    const { meditation_id, admin_key } = body;
+
+    // Validate authentication: service role header OR admin_key in body
+    const authHeader = req.headers.get('Authorization');
+    const isServiceRole = authHeader && authHeader.includes(supabaseServiceKey);
+    const isAdminKey = admin_key === supabaseServiceKey;
     
-    if (!authHeader || !authHeader.includes(supabaseServiceKey)) {
+    if (!isServiceRole && !isAdminKey) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-
-    const { meditation_id } = await req.json();
 
     if (!meditation_id) {
       return new Response(JSON.stringify({ error: 'meditation_id is required' }), {

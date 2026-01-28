@@ -68,3 +68,6 @@ verify_jwt = false
 
 [functions.send-meditation]
 verify_jwt = false
+
+[functions.batch-generate-meditations]
+verify_jwt = false
