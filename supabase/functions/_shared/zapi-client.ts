@@ -296,6 +296,49 @@ export function parseZapiPayload(payload: Record<string, unknown>): ParsedZapiMe
 }
 
 // ============================================================================
+// AUDIO FROM URL
+// ============================================================================
+
+/**
+ * Send an audio message from a URL via Z-API
+ * Useful for pre-generated audio files stored in cloud storage
+ * @param audioUrl - Public URL of the audio file (MP3)
+ */
+export async function sendAudioFromUrl(phone: string, audioUrl: string): Promise<SendAudioResult> {
+  try {
+    const config = getZapiConfig();
+    const cleanPhone = cleanPhoneNumber(phone);
+
+    console.log(`🔊 [Z-API] Sending audio from URL to ${cleanPhone.substring(0, 4)}***`);
+
+    const response = await fetch(buildZapiUrl(config, 'send-audio'), {
+      method: 'POST',
+      headers: buildZapiHeaders(config),
+      body: JSON.stringify({
+        phone: cleanPhone,
+        audio: audioUrl, // Z-API aceita URL direta
+        waveform: true,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ [Z-API] Audio from URL send error:', errorText);
+      return { success: false, error: errorText };
+    }
+
+    const data = await response.json();
+    console.log('✅ [Z-API] Audio from URL sent successfully');
+    return { success: true, response: data };
+
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('❌ [Z-API] Audio from URL send exception:', errorMessage);
+    return { success: false, error: errorMessage };
+  }
+}
+
+// ============================================================================
 // CONVENIENCE: SEND WITH FALLBACK
 // ============================================================================
 

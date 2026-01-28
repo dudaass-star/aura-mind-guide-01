@@ -308,6 +308,80 @@ export type Database = {
           },
         ]
       }
+      meditation_audios: {
+        Row: {
+          duration_seconds: number | null
+          generated_at: string | null
+          id: string
+          meditation_id: string
+          public_url: string
+          storage_path: string
+        }
+        Insert: {
+          duration_seconds?: number | null
+          generated_at?: string | null
+          id?: string
+          meditation_id: string
+          public_url: string
+          storage_path: string
+        }
+        Update: {
+          duration_seconds?: number | null
+          generated_at?: string | null
+          id?: string
+          meditation_id?: string
+          public_url?: string
+          storage_path?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meditation_audios_meditation_id_fkey"
+            columns: ["meditation_id"]
+            isOneToOne: false
+            referencedRelation: "meditations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meditations: {
+        Row: {
+          best_for: string | null
+          category: string
+          created_at: string | null
+          description: string | null
+          duration_seconds: number
+          id: string
+          is_active: boolean | null
+          script: string
+          title: string
+          triggers: string[] | null
+        }
+        Insert: {
+          best_for?: string | null
+          category: string
+          created_at?: string | null
+          description?: string | null
+          duration_seconds?: number
+          id: string
+          is_active?: boolean | null
+          script: string
+          title: string
+          triggers?: string[] | null
+        }
+        Update: {
+          best_for?: string | null
+          category?: string
+          created_at?: string | null
+          description?: string | null
+          duration_seconds?: number
+          id?: string
+          is_active?: boolean | null
+          script?: string
+          title?: string
+          triggers?: string[] | null
+        }
+        Relationships: []
+      }
       messages: {
         Row: {
           content: string
@@ -700,6 +774,45 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "user_insights_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      user_meditation_history: {
+        Row: {
+          context: string | null
+          id: string
+          meditation_id: string
+          sent_at: string | null
+          user_id: string
+        }
+        Insert: {
+          context?: string | null
+          id?: string
+          meditation_id: string
+          sent_at?: string | null
+          user_id: string
+        }
+        Update: {
+          context?: string | null
+          id?: string
+          meditation_id?: string
+          sent_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_meditation_history_meditation_id_fkey"
+            columns: ["meditation_id"]
+            isOneToOne: false
+            referencedRelation: "meditations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_meditation_history_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"

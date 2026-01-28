@@ -62,3 +62,9 @@ verify_jwt = false
 
 [functions.generate-episode-manifesto]
 verify_jwt = false
+
+[functions.generate-meditation-audio]
+verify_jwt = false
+
+[functions.send-meditation]
+verify_jwt = false
