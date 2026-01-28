@@ -1,128 +1,171 @@
 
-# Plano: Scripts de Meditacao Expandidos (Sem Background)
 
-## Objetivo
+# Plano: Geração de Áudio em Chunks com Persistência
 
-Reescrever os 6 scripts de meditacao para atingir as duracoes planejadas (5-10 minutos), sem musica de fundo por enquanto.
+## Resumo
 
----
+Implementar um sistema de geração de áudio **progressiva por chunks**, onde cada chunk de ~1.200 caracteres é gerado em uma execução separada da Edge Function, salvo no Storage, e depois todos são concatenados para formar o áudio final. Isso contorna o limite de 60 segundos dividindo o trabalho em múltiplas chamadas.
 
-## Analise de Tamanho Necessario
+## Como Funciona
 
-Com `speakingRate: 0.90` e voz Erinome, aproximadamente **700-800 caracteres = 1 minuto** de audio.
-
-| Meditacao | Duracao Alvo | Caracteres Necessarios |
-|-----------|--------------|------------------------|
-| Respiracao 4-7-8 | 5 min | ~4.000 chars |
-| Ansiedade (Tempestade) | 7 min | ~5.500 chars |
-| Sono (Relaxamento) | 10 min | ~8.000 chars |
-| Estresse (Muscular) | 8 min | ~6.500 chars |
-| Foco (Clareza) | 5 min | ~4.000 chars |
-| Gratidao (Olhar) | 5 min | ~4.000 chars |
-
----
-
-## Estrutura dos Scripts Expandidos
-
-### 1. Respiracao 4-7-8 (5 min - ~4.000 chars)
-
-- Introducao acolhedora e preparacao (45s)
-- Explicacao da tecnica 4-7-8 (30s)
-- **8 ciclos completos** com contagem lenta detalhada (3 min)
-- Momentos de silencio guiado entre ciclos
-- Integracao e encerramento suave (45s)
-
-### 2. Acalmando a Tempestade - Ansiedade (7 min - ~5.500 chars)
-
-- Acolhimento emocional profundo (1 min)
-- Exercicio 5-4-3-2-1 **muito detalhado** com pausas longas (3.5 min)
-- Visualizacao expandida da tempestade se dissipando (1.5 min)
-- Respiracao de ancoragem com varios ciclos (45s)
-- Encerramento com afirmacoes de seguranca (15s)
-
-### 3. Relaxamento para Dormir (10 min - ~8.000 chars)
-
-- Preparacao para o sono, ambiente seguro (1 min)
-- Body scan **completo e detalhado**: pes, tornozelos, panturrilhas, joelhos, coxas, quadris, abdomen, peito, maos, bracos, ombros, pescoco, rosto, cabeca (6 min)
-- Visualizacao de lugar seguro e aconchegante (2 min)
-- Contagem regressiva suave de 10 a 1 (45s)
-- Transicao silenciosa para o sono (15s)
-
-### 4. Relaxamento Muscular Progressivo (8 min - ~6.500 chars)
-
-- Introducao e posicionamento corporal (45s)
-- Tensao/relaxamento: maos e antebracos (1.5 min)
-- Tensao/relaxamento: bracos e ombros (1.5 min)
-- Tensao/relaxamento: rosto completo (1 min)
-- Tensao/relaxamento: pescoco e nuca (45s)
-- Tensao/relaxamento: tronco e abdomen (1 min)
-- Tensao/relaxamento: pernas e pes (1 min)
-- Integracao corporal completa (30s)
-
-### 5. Clareza Mental - Foco (5 min - ~4.000 chars)
-
-- Centralizacao, postura e intencao (45s)
-- Metafora do ceu e nuvens **expandida** com detalhes visuais (1.5 min)
-- Exercicio de foco na respiracao com multiplos ciclos (2 min)
-- Definicao de intencao clara (30s)
-- Abertura energizada para acao (15s)
-
-### 6. Olhar de Gratidao (5 min - ~4.000 chars)
-
-- Preparacao e conexao com o momento presente (30s)
-- Gratidao pelo corpo - cada parte mencionada (1.5 min)
-- Gratidao pelas pessoas - visualizacao de rostos (1.5 min)
-- Gratidao pelas experiencias e aprendizados (1 min)
-- Irradiacao de gratidao para o mundo (30s)
-
----
-
-## Tecnicas de Expansao
-
-1. **Pausas naturais**: Uso extensivo de "..." para criar silencio
-2. **Contagem lenta**: "Inspire... um... dois... tres... quatro..."
-3. **Repeticoes**: Mais ciclos de respiracao e relaxamento
-4. **Descricoes sensoriais**: Cores, texturas, temperaturas, sensacoes
-5. **Verificacoes**: "Perceba como seu corpo esta agora..."
-6. **Transicoes suaves**: "Quando estiver pronto..." "Gentilmente..."
-
----
-
-## Implementacao
-
-### Passo 1: Escrever Scripts Expandidos
-Criar os 6 scripts completos em portugues brasileiro, formatados para a voz Erinome com pausas naturais.
-
-### Passo 2: Atualizar Banco de Dados
-```sql
-UPDATE meditations 
-SET script = '[script expandido]'
-WHERE id = 'med-respiracao-478';
--- (repetir para cada meditacao)
+```text
+Script (7.000 chars)
+        |
+        v
+  Divide em 6 chunks (~1.200 chars cada)
+        |
+        v
++-------+-------+-------+-------+-------+-------+
+|Chunk 1|Chunk 2|Chunk 3|Chunk 4|Chunk 5|Chunk 6|
++-------+-------+-------+-------+-------+-------+
+    |       |       |       |       |       |
+    v       v       v       v       v       v
+ Edge Fn  Edge Fn  Edge Fn  Edge Fn  Edge Fn  Edge Fn
+ (~20s)   (~20s)   (~20s)   (~20s)   (~20s)   (~20s)
+    |       |       |       |       |       |
+    v       v       v       v       v       v
+ Storage  Storage  Storage  Storage  Storage  Storage
+ chunk_0  chunk_1  chunk_2  chunk_3  chunk_4  chunk_5
+        \       \       \       |       /       /
+         \       \       \     |       /       /
+          +-------+-------+---+-------+-------+
+                          |
+                          v
+                   Concatenar MP3s
+                          |
+                          v
+                   audio.mp3 final
 ```
 
-### Passo 3: Limpar Audios Antigos
+## Etapa 1: Nova Tabela para Rastrear Progresso
+
+Criar tabela `meditation_audio_chunks` para rastrear o progresso de geração:
+
 ```sql
-DELETE FROM meditation_audios;
+CREATE TABLE meditation_audio_chunks (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  meditation_id TEXT NOT NULL,
+  chunk_index INTEGER NOT NULL,
+  total_chunks INTEGER NOT NULL,
+  storage_path TEXT,          -- null até gerar
+  status TEXT DEFAULT 'pending', -- pending, generating, completed, failed
+  error_message TEXT,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  completed_at TIMESTAMPTZ,
+  UNIQUE(meditation_id, chunk_index)
+);
 ```
 
-### Passo 4: Regenerar Audios
-Chamar `batch-generate-meditations` para gerar os novos MP3s com a voz da AURA.
+## Etapa 2: Nova Edge Function `generate-chunk`
 
-### Passo 5: Validar Duracoes
-Verificar se os audios gerados estao proximos das duracoes planejadas.
+Criar função focada que gera **apenas um chunk** por vez:
 
----
+**Input:**
+```json
+{
+  "meditation_id": "med-ansiedade-123",
+  "chunk_index": 0
+}
+```
 
-## Resultado Esperado
+**Processo:**
+1. Buscar meditação e dividir script em chunks
+2. Verificar se chunk já foi gerado (skip se já existe)
+3. Gerar áudio apenas do chunk especificado (~20s)
+4. Salvar em Storage: `{meditation_id}/chunks/chunk_0.mp3`
+5. Atualizar registro na tabela com status "completed"
+6. Retornar sucesso
 
-| Meditacao | Duracao Final |
-|-----------|---------------|
-| Respiracao 4-7-8 | ~5 minutos |
-| Ansiedade | ~7 minutos |
-| Sono | ~10 minutos |
-| Estresse | ~8 minutos |
-| Foco | ~5 minutos |
-| Gratidao | ~5 minutos |
+## Etapa 3: Nova Edge Function `finalize-meditation-audio`
 
-**Total**: 6 meditacoes guiadas completas, com a voz personalizada da AURA, prontas para envio via WhatsApp.
+Função que concatena todos os chunks quando todos estiverem prontos:
+
+**Input:**
+```json
+{
+  "meditation_id": "med-ansiedade-123"
+}
+```
+
+**Processo:**
+1. Verificar se todos chunks têm status "completed"
+2. Baixar todos os MP3 parciais do Storage
+3. Concatenar em ordem
+4. Salvar áudio final em `{meditation_id}/audio.mp3`
+5. Criar/atualizar registro em `meditation_audios`
+6. Limpar chunks do Storage (opcional, economia de espaço)
+
+## Etapa 4: Atualizar Admin para Orquestrar
+
+Modificar a página Admin para:
+
+1. **Botão "Iniciar Geração"**: 
+   - Divide script em chunks
+   - Cria registros na tabela `meditation_audio_chunks`
+   - Inicia geração do chunk 0
+
+2. **Polling de Progresso**:
+   - Mostra barra de progresso (ex: "Chunk 3/6 - 50%")
+   - Quando um chunk completa, automaticamente inicia o próximo
+   - Quando todos completam, chama `finalize-meditation-audio`
+
+3. **Interface Visual**:
+   ```text
+   Meditação: Controle da Ansiedade
+   Progresso: ████████░░░░░░░░ 3/6 chunks (50%)
+   Status: Gerando chunk 4...
+   [Pausar] [Cancelar]
+   ```
+
+4. **Retomada**: Se a geração pausar, pode retomar de onde parou
+
+## Etapa 5: Registro das Edge Functions
+
+Adicionar no `config.toml`:
+```toml
+[functions.generate-chunk]
+verify_jwt = false
+
+[functions.finalize-meditation-audio]
+verify_jwt = false
+```
+
+## Arquivos a Criar/Modificar
+
+| Arquivo | Ação |
+|---------|------|
+| `supabase/functions/generate-chunk/index.ts` | Criar |
+| `supabase/functions/finalize-meditation-audio/index.ts` | Criar |
+| `src/pages/AdminMeditations.tsx` | Modificar |
+| `supabase/config.toml` | Modificar |
+| Migration SQL | Criar tabela |
+
+## Vantagens
+
+- **Sem timeout**: Cada chunk processa em ~15-25 segundos
+- **Retomável**: Se falhar, não perde progresso anterior
+- **Visibilidade**: Progresso em tempo real na UI
+- **Escalável**: Funciona para meditações de qualquer tamanho
+- **Robusto**: Retry automático em caso de falha de chunk individual
+
+## Seção Tecnica
+
+### Concatenação de MP3
+
+A concatenação simples de bytes de MP3 funciona na maioria dos casos (o código atual já faz isso), mas para máxima compatibilidade, cada chunk deve:
+- Usar a mesma configuração de voz/velocidade
+- Não ter headers ID3 no meio do arquivo
+
+### Tamanho do Chunk
+
+Com `maxChars = 1200` e speaking rate de 0.90:
+- ~1.200 chars = ~25-30 segundos de áudio
+- Tempo de geração: ~15-20 segundos (bem dentro do limite de 60s)
+
+### Polling vs WebSocket
+
+Usaremos polling simples (a cada 2 segundos) no admin para verificar status, já que:
+- Geração é processo demorado (segundos)
+- Não precisa de latência ultra-baixa
+- Mais simples de implementar
+
