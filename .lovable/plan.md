@@ -1,309 +1,128 @@
 
-# Plano: Sistema de Meditações Guiadas com Voz da AURA
+# Plano: Scripts de Meditacao Expandidos (Sem Background)
 
-## Visão Geral
+## Objetivo
 
-Criar uma biblioteca de meditações guiadas pré-gravadas com a voz da AURA (usando a mesma voz Erinome do Google Cloud TTS), que podem ser enviadas automaticamente ou sob demanda durante as conversas. A AURA saberá quando e qual meditação oferecer com base no contexto emocional do usuário.
+Reescrever os 6 scripts de meditacao para atingir as duracoes planejadas (5-10 minutos), sem musica de fundo por enquanto.
 
 ---
 
-## Arquitetura Proposta
+## Analise de Tamanho Necessario
 
-```text
-┌─────────────────────────────────────────────────────────────────┐
-│                    BIBLIOTECA DE MEDITAÇÕES                      │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐       │
-│  │  meditations │    │  meditation  │    │   Storage    │       │
-│  │   (tabela)   │───▶│   _audios    │───▶│   Bucket     │       │
-│  │              │    │  (tabela)    │    │ (mp3 files)  │       │
-│  └──────────────┘    └──────────────┘    └──────────────┘       │
-│         │                                       ▲               │
-│         │                                       │               │
-│         ▼                                       │               │
-│  ┌──────────────────────────────────────────────┴──────────┐    │
-│  │              generate-meditation-audio                   │    │
-│  │        (Edge Function - gera áudio via TTS)              │    │
-│  └──────────────────────────────────────────────────────────┘    │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                         ENTREGA                                  │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  ┌────────────────┐                    ┌──────────────────┐     │
-│  │  aura-agent    │──── detecta ─────▶│  send-meditation │     │
-│  │   (conversa)   │    contexto       │  (Edge Function) │     │
-│  └────────────────┘                    └────────┬─────────┘     │
-│         │                                       │               │
-│         │  [MEDITACAO:ansiedade]                ▼               │
-│         │                              ┌──────────────────┐     │
-│         └─────────────────────────────▶│     Z-API        │     │
-│                                        │  (envia áudio)   │     │
-│                                        └──────────────────┘     │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+Com `speakingRate: 0.90` e voz Erinome, aproximadamente **700-800 caracteres = 1 minuto** de audio.
+
+| Meditacao | Duracao Alvo | Caracteres Necessarios |
+|-----------|--------------|------------------------|
+| Respiracao 4-7-8 | 5 min | ~4.000 chars |
+| Ansiedade (Tempestade) | 7 min | ~5.500 chars |
+| Sono (Relaxamento) | 10 min | ~8.000 chars |
+| Estresse (Muscular) | 8 min | ~6.500 chars |
+| Foco (Clareza) | 5 min | ~4.000 chars |
+| Gratidao (Olhar) | 5 min | ~4.000 chars |
+
+---
+
+## Estrutura dos Scripts Expandidos
+
+### 1. Respiracao 4-7-8 (5 min - ~4.000 chars)
+
+- Introducao acolhedora e preparacao (45s)
+- Explicacao da tecnica 4-7-8 (30s)
+- **8 ciclos completos** com contagem lenta detalhada (3 min)
+- Momentos de silencio guiado entre ciclos
+- Integracao e encerramento suave (45s)
+
+### 2. Acalmando a Tempestade - Ansiedade (7 min - ~5.500 chars)
+
+- Acolhimento emocional profundo (1 min)
+- Exercicio 5-4-3-2-1 **muito detalhado** com pausas longas (3.5 min)
+- Visualizacao expandida da tempestade se dissipando (1.5 min)
+- Respiracao de ancoragem com varios ciclos (45s)
+- Encerramento com afirmacoes de seguranca (15s)
+
+### 3. Relaxamento para Dormir (10 min - ~8.000 chars)
+
+- Preparacao para o sono, ambiente seguro (1 min)
+- Body scan **completo e detalhado**: pes, tornozelos, panturrilhas, joelhos, coxas, quadris, abdomen, peito, maos, bracos, ombros, pescoco, rosto, cabeca (6 min)
+- Visualizacao de lugar seguro e aconchegante (2 min)
+- Contagem regressiva suave de 10 a 1 (45s)
+- Transicao silenciosa para o sono (15s)
+
+### 4. Relaxamento Muscular Progressivo (8 min - ~6.500 chars)
+
+- Introducao e posicionamento corporal (45s)
+- Tensao/relaxamento: maos e antebracos (1.5 min)
+- Tensao/relaxamento: bracos e ombros (1.5 min)
+- Tensao/relaxamento: rosto completo (1 min)
+- Tensao/relaxamento: pescoco e nuca (45s)
+- Tensao/relaxamento: tronco e abdomen (1 min)
+- Tensao/relaxamento: pernas e pes (1 min)
+- Integracao corporal completa (30s)
+
+### 5. Clareza Mental - Foco (5 min - ~4.000 chars)
+
+- Centralizacao, postura e intencao (45s)
+- Metafora do ceu e nuvens **expandida** com detalhes visuais (1.5 min)
+- Exercicio de foco na respiracao com multiplos ciclos (2 min)
+- Definicao de intencao clara (30s)
+- Abertura energizada para acao (15s)
+
+### 6. Olhar de Gratidao (5 min - ~4.000 chars)
+
+- Preparacao e conexao com o momento presente (30s)
+- Gratidao pelo corpo - cada parte mencionada (1.5 min)
+- Gratidao pelas pessoas - visualizacao de rostos (1.5 min)
+- Gratidao pelas experiencias e aprendizados (1 min)
+- Irradiacao de gratidao para o mundo (30s)
+
+---
+
+## Tecnicas de Expansao
+
+1. **Pausas naturais**: Uso extensivo de "..." para criar silencio
+2. **Contagem lenta**: "Inspire... um... dois... tres... quatro..."
+3. **Repeticoes**: Mais ciclos de respiracao e relaxamento
+4. **Descricoes sensoriais**: Cores, texturas, temperaturas, sensacoes
+5. **Verificacoes**: "Perceba como seu corpo esta agora..."
+6. **Transicoes suaves**: "Quando estiver pronto..." "Gentilmente..."
+
+---
+
+## Implementacao
+
+### Passo 1: Escrever Scripts Expandidos
+Criar os 6 scripts completos em portugues brasileiro, formatados para a voz Erinome com pausas naturais.
+
+### Passo 2: Atualizar Banco de Dados
+```sql
+UPDATE meditations 
+SET script = '[script expandido]'
+WHERE id = 'med-respiracao-478';
+-- (repetir para cada meditacao)
 ```
 
----
-
-## Componentes
-
-### 1. Banco de Dados
-
-**Tabela `meditations`** - Catálogo de meditações
-
-| Campo | Tipo | Descrição |
-|-------|------|-----------|
-| id | text (PK) | Ex: "med-ansiedade-5min" |
-| title | text | "Acalmando a Ansiedade" |
-| description | text | Descrição curta |
-| category | text | ansiedade, sono, estresse, foco, gratidao, respiracao |
-| duration_seconds | int | Duração em segundos |
-| script | text | Texto completo da meditação (para gerar áudio) |
-| triggers | text[] | Palavras-chave que ativam sugestão |
-| best_for | text | Descrição do momento ideal |
-| is_active | boolean | Ativa/inativa |
-
-**Tabela `meditation_audios`** - Áudios gerados
-
-| Campo | Tipo | Descrição |
-|-------|------|-----------|
-| id | uuid (PK) | ID único |
-| meditation_id | text (FK) | Referência à meditação |
-| storage_path | text | Caminho no bucket |
-| public_url | text | URL pública do áudio |
-| duration_seconds | int | Duração real |
-| generated_at | timestamp | Data de geração |
-
-**Tabela `user_meditation_history`** - Histórico por usuário
-
-| Campo | Tipo | Descrição |
-|-------|------|-----------|
-| id | uuid (PK) | ID único |
-| user_id | uuid (FK) | Usuário |
-| meditation_id | text (FK) | Meditação |
-| sent_at | timestamp | Quando foi enviada |
-| context | text | Contexto da conversa |
-
-### 2. Storage Bucket
-
-- **Nome**: `meditations`
-- **Tipo**: Público (para URLs diretas)
-- **Estrutura**: `/{meditation_id}/audio.mp3`
-
-### 3. Edge Functions
-
-**`generate-meditation-audio`** - Gera áudios das meditações
-- Lê o script da meditação
-- Chama Google Cloud TTS com voz Erinome
-- Salva MP3 no Storage
-- Atualiza meditation_audios com URL pública
-
-**`send-meditation`** - Envia meditação ao usuário
-- Recebe meditation_id e user_id
-- Busca URL do áudio
-- Envia via Z-API (sendAudioMessage com URL)
-- Registra no histórico
-
-### 4. Integração com AURA Agent
-
-Adicionar ao prompt do agente:
-
-```text
-# MEDITAÇÕES GUIADAS
-
-Você tem acesso a uma biblioteca de meditações guiadas com SUA VOZ.
-São áudios pré-gravados para momentos específicos.
-
-## QUANDO OFERECER MEDITAÇÃO:
-- Usuário em crise de ansiedade → ofereça meditação de respiração
-- Usuário com insônia/dificuldade de dormir → ofereça meditação de sono
-- Usuário estressado/sobrecarregado → ofereça meditação de acalmar
-- Usuário pedindo explicitamente → envie a mais adequada
-- Início ou fim de sessão especial → ofereça como recurso
-
-## COMO ENVIAR:
-Use a tag [MEDITACAO:categoria] onde categoria pode ser:
-- respiracao (exercício de respiração guiada, 3-5 min)
-- ansiedade (meditação para acalmar ansiedade, 5-8 min)
-- sono (meditação para dormir, 10-15 min)
-- estresse (relaxamento muscular progressivo, 7-10 min)
-- gratidao (meditação de gratidão, 5 min)
-- foco (meditação para concentração, 5 min)
-
-## EXEMPLOS:
-- "Tenho uma meditação de respiração guiada que pode te ajudar agora. Quer que eu mande? [MEDITACAO:respiracao]"
-- "Antes de dormir, que tal fazer uma meditação comigo? [MEDITACAO:sono]"
-
-## REGRAS:
-- NÃO envie meditação sem contexto ou sem oferecer antes
-- Máximo 1 meditação por conversa (para não saturar)
-- Se o usuário não quiser, respeite
-- Lembre das meditações já enviadas (evitar repetição)
+### Passo 3: Limpar Audios Antigos
+```sql
+DELETE FROM meditation_audios;
 ```
 
----
+### Passo 4: Regenerar Audios
+Chamar `batch-generate-meditations` para gerar os novos MP3s com a voz da AURA.
 
-## Catálogo Inicial de Meditações
-
-### Categoria: Respiração (3-5 min)
-1. **Respiração 4-7-8** - Técnica clássica para acalmar
-2. **Respiração Consciente** - Foco na respiração natural
-3. **Box Breathing** - Técnica de controle
-
-### Categoria: Ansiedade (5-8 min)
-1. **Acalmando a Tempestade** - Para momentos de crise
-2. **Grounding 5-4-3-2-1** - Técnica de ancoragem
-3. **Soltando as Preocupações** - Visualização guiada
-
-### Categoria: Sono (10-15 min)
-1. **Relaxamento para Dormir** - Body scan suave
-2. **Contagem Regressiva** - Indução ao sono
-3. **Noite Tranquila** - Visualização calmante
-
-### Categoria: Estresse (7-10 min)
-1. **Relaxamento Muscular** - Progressivo
-2. **Liberando a Tensão** - Foco em áreas de tensão
-3. **Pausa no Caos** - Minutos de calma
-
-### Categoria: Foco (5 min)
-1. **Clareza Mental** - Limpando a mente
-2. **Preparação para Tarefa** - Antes de trabalho
-
-### Categoria: Gratidão (5 min)
-1. **Olhar de Gratidão** - Reflexão guiada
-2. **Celebrando o Dia** - Para fim de dia
+### Passo 5: Validar Duracoes
+Verificar se os audios gerados estao proximos das duracoes planejadas.
 
 ---
 
-## Fluxo de Uso
+## Resultado Esperado
 
-### Cenário 1: Detecção automática
-```text
-Usuário: "To com muito ansiedade, não consigo parar de pensar"
-AURA: "Respira fundo comigo... Eu sei que tá difícil agora. 
-       Tenho uma meditação de respiração que pode te ajudar. 
-       São só 5 minutinhos. Quer que eu mande? [MEDITACAO:respiracao]"
+| Meditacao | Duracao Final |
+|-----------|---------------|
+| Respiracao 4-7-8 | ~5 minutos |
+| Ansiedade | ~7 minutos |
+| Sono | ~10 minutos |
+| Estresse | ~8 minutos |
+| Foco | ~5 minutos |
+| Gratidao | ~5 minutos |
 
-Sistema detecta [MEDITACAO:respiracao]:
-1. Busca meditação da categoria
-2. Obtém URL do áudio
-3. Envia via Z-API como mensagem de voz
-4. Registra no histórico do usuário
-```
-
-### Cenário 2: Pedido direto
-```text
-Usuário: "Tem alguma meditação pra me ajudar a dormir?"
-AURA: "Tenho sim! 💜 Vou te mandar uma meditação de 10 minutos 
-       que vai te embalar pro sono... [MEDITACAO:sono]"
-```
-
-### Cenário 3: Oferta após sessão
-```text
-AURA: "Que sessão incrível! Antes de ir, quero te deixar um presente:
-       uma meditação de gratidão pra você fazer quando quiser. 
-       Te mando? [MEDITACAO:gratidao]"
-```
-
----
-
-## Detalhes Técnicos
-
-### Geração de Áudio
-- Usar a mesma voz Erinome do aura-tts
-- Speaking rate mais lento (0.9) para meditações
-- Adicionar pausas naturais no script com "..."
-- Formatar em MP3 44100Hz 128kbps
-- Limite de 2000 caracteres por chamada TTS (dividir scripts longos)
-
-### Envio via WhatsApp
-```typescript
-// send-meditation edge function
-const { data: meditation } = await supabase
-  .from('meditation_audios')
-  .select('public_url')
-  .eq('meditation_id', meditationId)
-  .single();
-
-await sendAudioFromUrl(phone, meditation.public_url);
-```
-
-### Z-API: Envio de áudio por URL
-```typescript
-// zapi-client.ts - nova função
-export async function sendAudioFromUrl(phone: string, audioUrl: string): Promise<SendAudioResult> {
-  const config = getZapiConfig();
-  const response = await fetch(buildZapiUrl(config, 'send-audio'), {
-    method: 'POST',
-    headers: buildZapiHeaders(config),
-    body: JSON.stringify({
-      phone: cleanPhoneNumber(phone),
-      audio: audioUrl, // Z-API aceita URL direta
-      waveform: true,
-    }),
-  });
-  // ...
-}
-```
-
----
-
-## Fases de Implementação
-
-### Fase 1: Infraestrutura
-1. Criar tabelas no banco (meditations, meditation_audios, user_meditation_history)
-2. Criar bucket de storage público
-3. Criar edge function generate-meditation-audio
-4. Criar edge function send-meditation
-5. Adicionar função sendAudioFromUrl no zapi-client
-
-### Fase 2: Conteúdo Inicial
-1. Escrever scripts de 6 meditações iniciais:
-   - 1x Respiração (5 min)
-   - 1x Ansiedade (7 min)
-   - 1x Sono (10 min)
-   - 1x Estresse (8 min)
-   - 1x Foco (5 min)
-   - 1x Gratidão (5 min)
-2. Gerar áudios via edge function
-3. Testar URLs e qualidade
-
-### Fase 3: Integração com AURA
-1. Atualizar prompt do aura-agent com instruções de meditação
-2. Adicionar detecção de tag [MEDITACAO:x] no processamento
-3. Implementar lógica de seleção de meditação adequada
-4. Adicionar histórico para evitar repetição
-
-### Fase 4: Refinamento
-1. Adicionar mais meditações por categoria
-2. Implementar preferências do usuário (salvando insights)
-3. Métricas de uso (quais meditações são mais populares)
-4. Feedback pós-meditação ("Como você está se sentindo agora?")
-
----
-
-## Diferencial Competitivo
-
-| App | Meditações | Voz | Personalização |
-|-----|------------|-----|----------------|
-| Calm | ✅ 100+ | Narradores diversos | ❌ Genérica |
-| Headspace | ✅ 100+ | Narradores | ❌ Genérica |
-| AURA | ✅ 20+ | Voz da própria AURA | ✅ Contextual + Relacional |
-
-**Diferencial AURA**: A meditação vem da mesma "amiga" que você conversa. Não é um narrador aleatório. É a AURA, que sabe o que você está passando, oferecendo no momento certo.
-
----
-
-## Estimativa de Esforço
-
-- Fase 1 (Infraestrutura): ~2-3 horas de desenvolvimento
-- Fase 2 (Conteúdo): ~4-6 horas (escrita + geração + testes)
-- Fase 3 (Integração): ~2-3 horas
-- Fase 4 (Refinamento): Contínuo
-
-**Total inicial**: ~8-12 horas para MVP funcional com 6 meditações
+**Total**: 6 meditacoes guiadas completas, com a voz personalizada da AURA, prontas para envio via WhatsApp.
