@@ -12,7 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { RefreshCw, Play, CheckCircle, XCircle, Clock, Loader2, Pause, X } from "lucide-react";
+import { RefreshCw, Play, CheckCircle, XCircle, Clock, Loader2, Pause, X, Download, Upload } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface Meditation {
@@ -153,8 +153,151 @@ export default function AdminMeditations() {
   const [generating, setGenerating] = useState<string | null>(null);
   const [generationStatus, setGenerationStatus] = useState<{[key: string]: {current: number, total: number, status: string}}>({});
   const [isCancelled, setIsCancelled] = useState(false);
+  const [uploading, setUploading] = useState<string | null>(null);
   const cancelRef = useRef(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadTargetRef = useRef<{id: string, title: string} | null>(null);
   const { toast } = useToast();
+
+  // Função para fazer download do áudio
+  const handleDownload = async (med: MeditationWithAudio) => {
+    if (!med.audio?.public_url) return;
+    
+    try {
+      const response = await fetch(med.audio.public_url);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `meditacao-${med.title.toLowerCase().replace(/\s+/g, '-')}.mp3`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error('Error downloading audio:', error);
+      toast({
+        title: "Erro no download",
+        description: "Não foi possível baixar o áudio.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Função para iniciar upload
+  const handleUploadClick = (med: MeditationWithAudio) => {
+    uploadTargetRef.current = { id: med.id, title: med.title };
+    fileInputRef.current?.click();
+  };
+
+  // Função para processar o arquivo selecionado
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    const target = uploadTargetRef.current;
+    
+    if (!file || !target) return;
+
+    // Validar tipo de arquivo
+    const validTypes = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-m4a', 'audio/mp4'];
+    if (!validTypes.includes(file.type)) {
+      toast({
+        title: "Tipo inválido",
+        description: "Apenas arquivos MP3, M4A ou WAV são aceitos.",
+        variant: "destructive",
+      });
+      e.target.value = '';
+      return;
+    }
+
+    // Validar tamanho (50MB max)
+    const maxSize = 50 * 1024 * 1024;
+    if (file.size > maxSize) {
+      toast({
+        title: "Arquivo muito grande",
+        description: "O arquivo deve ter no máximo 50MB.",
+        variant: "destructive",
+      });
+      e.target.value = '';
+      return;
+    }
+
+    setUploading(target.id);
+
+    try {
+      // Upload para Storage
+      const storagePath = `${target.id}/audio.mp3`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('meditations')
+        .upload(storagePath, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      // Obter URL pública
+      const { data: urlData } = supabase.storage
+        .from('meditations')
+        .getPublicUrl(storagePath);
+
+      const publicUrl = `${urlData.publicUrl}?t=${Date.now()}`;
+
+      // Verificar se já existe registro em meditation_audios
+      const { data: existingAudio } = await supabase
+        .from('meditation_audios')
+        .select('id')
+        .eq('meditation_id', target.id)
+        .single();
+
+      if (existingAudio) {
+        // Atualizar registro existente
+        const { error: updateError } = await supabase
+          .from('meditation_audios')
+          .update({
+            public_url: publicUrl,
+            storage_path: storagePath,
+            generated_at: new Date().toISOString(),
+          })
+          .eq('meditation_id', target.id);
+
+        if (updateError) throw updateError;
+      } else {
+        // Criar novo registro
+        const { error: insertError } = await supabase
+          .from('meditation_audios')
+          .insert({
+            meditation_id: target.id,
+            public_url: publicUrl,
+            storage_path: storagePath,
+            generated_at: new Date().toISOString(),
+          });
+
+        if (insertError) throw insertError;
+      }
+
+      // Limpar chunks antigos se existirem
+      await supabase
+        .from('meditation_audio_chunks')
+        .delete()
+        .eq('meditation_id', target.id);
+
+      toast({
+        title: "Upload concluído!",
+        description: `Áudio de "${target.title}" atualizado com sucesso.`,
+      });
+
+      await fetchMeditations();
+    } catch (error) {
+      console.error('Error uploading audio:', error);
+      toast({
+        title: "Erro no upload",
+        description: error instanceof Error ? error.message : "Não foi possível fazer o upload.",
+        variant: "destructive",
+      });
+    } finally {
+      setUploading(null);
+      e.target.value = '';
+      uploadTargetRef.current = null;
+    }
+  };
 
   const fetchMeditations = async () => {
     setLoading(true);
@@ -549,6 +692,14 @@ export default function AdminMeditations() {
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-8">
+      {/* Input de arquivo oculto para upload */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".mp3,.m4a,.wav,audio/mpeg,audio/mp3,audio/wav,audio/x-m4a,audio/mp4"
+        className="hidden"
+        onChange={handleFileChange}
+      />
       <div className="max-w-6xl mx-auto space-y-6">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
@@ -686,10 +837,12 @@ export default function AdminMeditations() {
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex items-center justify-end gap-2">
+                              {/* Play */}
                               {med.audio && (
                                 <Button
                                   size="sm"
                                   variant="ghost"
+                                  title="Ouvir"
                                   asChild
                                 >
                                   <a
@@ -702,6 +855,34 @@ export default function AdminMeditations() {
                                 </Button>
                               )}
                               
+                              {/* Download */}
+                              {med.audio && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  title="Baixar áudio"
+                                  onClick={() => handleDownload(med)}
+                                >
+                                  <Download className="h-4 w-4" />
+                                </Button>
+                              )}
+                              
+                              {/* Upload */}
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                title={med.audio ? "Substituir áudio" : "Enviar áudio"}
+                                onClick={() => handleUploadClick(med)}
+                                disabled={uploading === med.id || isGenerating}
+                              >
+                                {uploading === med.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Upload className="h-4 w-4" />
+                                )}
+                              </Button>
+                              
+                              {/* Gerar/Retomar/Cancelar */}
                               {isGenerating ? (
                                 <Button
                                   size="sm"
