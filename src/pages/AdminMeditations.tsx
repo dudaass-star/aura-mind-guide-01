@@ -194,24 +194,6 @@ export default function AdminMeditations() {
 
       console.log(`Starting generation: ${totalChunks} chunks for ${meditationId}`);
 
-      // Limpar chunks anteriores
-      await supabase
-        .from("meditation_audio_chunks")
-        .delete()
-        .eq("meditation_id", meditationId);
-
-      // Criar registros para todos os chunks
-      const chunkRecords = scriptChunks.map((_, index) => ({
-        meditation_id: meditationId,
-        chunk_index: index,
-        total_chunks: totalChunks,
-        status: 'pending',
-      }));
-
-      await supabase
-        .from("meditation_audio_chunks")
-        .insert(chunkRecords);
-
       setGenerationStatus(prev => ({
         ...prev,
         [meditationId]: { current: 0, total: totalChunks, status: 'generating' }
@@ -233,7 +215,12 @@ export default function AdminMeditations() {
         console.log(`Generating chunk ${i + 1}/${totalChunks}...`);
 
         const response = await supabase.functions.invoke("generate-chunk", {
-          body: { meditation_id: meditationId, chunk_index: i },
+          body: { 
+            meditation_id: meditationId, 
+            chunk_index: i,
+            // Na primeira chamada, inicializar todos os registros
+            ...(i === 0 && { initialize: true, total_chunks: totalChunks })
+          },
         });
 
         if (response.error) {
