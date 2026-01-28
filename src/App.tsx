@@ -12,6 +12,7 @@ import TermsOfService from "./pages/TermsOfService";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import StartTrial from "./pages/StartTrial";
 import TrialStarted from "./pages/TrialStarted";
+import AdminMeditations from "./pages/AdminMeditations";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -32,6 +33,7 @@ const App = () => (
             <Route path="/privacidade" element={<PrivacyPolicy />} />
             <Route path="/experimentar" element={<StartTrial />} />
             <Route path="/trial-iniciado" element={<TrialStarted />} />
+            <Route path="/admin/meditacoes" element={<AdminMeditations />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
