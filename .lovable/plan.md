@@ -1,79 +1,54 @@
 
 
-# Plano: Adicionar Download e Upload de Áudio na Página de Meditações
+# Correção: Permitir Upload de Áudio no Bucket Meditations
 
-## Objetivo
-Adicionar dois novos botões na página de administração de meditações:
-1. **Download** - Baixar o arquivo de áudio MP3 existente
-2. **Upload** - Substituir o áudio por outro arquivo enviado manualmente
+## Problema Identificado
 
----
-
-## Mudanças na Interface
-
-### Coluna de Ações (onde está o botão Play)
-Adicionar dois novos botões ao lado do botão de reprodução:
-
-```text
-┌─────────────────────────────────────────────────────────────┐
-│  Ações                                                      │
-├─────────────────────────────────────────────────────────────┤
-│  [▶ Play]  [⬇ Download]  [⬆ Upload]  [🔄 Gerar/Regenerar]  │
-└─────────────────────────────────────────────────────────────┘
+O upload de áudio está falhando com o erro:
+```
+StorageApiError: new row violates row-level security policy
 ```
 
-- **Download**: Visível apenas quando existe áudio
-- **Upload**: Sempre visível para qualquer meditação (permite substituir ou adicionar)
-
----
-
-## Implementação
-
-### 1. Botão de Download
-- Usar o atributo `download` do HTML para forçar download do arquivo
-- O nome do arquivo será baseado no título da meditação (ex: `meditacao-respiracao-profunda.mp3`)
-- Como o áudio já tem uma URL pública, basta criar um link com `download`
-
-### 2. Botão de Upload
-- Adicionar um input de arquivo oculto (`type="file"`)
-- Aceitar apenas arquivos de áudio (`.mp3, .m4a, .wav`)
-- Ao selecionar arquivo:
-  1. Fazer upload para o Storage no caminho `{meditation_id}/audio.mp3`
-  2. Atualizar o registro na tabela `meditation_audios` com a nova URL
-  3. Mostrar feedback de sucesso
-
----
-
-## Detalhes Técnicos
-
-### Componentes a modificar
-- **src/pages/AdminMeditations.tsx**
-
-### Novas dependências
-Usar ícones do Lucide que já estão disponíveis:
-- `Download` - ícone de download
-- `Upload` - ícone de upload
-
-### Lógica de Upload
-```text
-1. Usuário clica no botão "Upload"
-2. Input file abre seletor de arquivos
-3. Arquivo selecionado é validado (tipo e tamanho)
-4. Upload para Supabase Storage: meditations/{meditation_id}/audio.mp3
-5. Atualizar/inserir registro em meditation_audios
-6. Atualizar lista de meditações
+**Causa**: A política RLS atual do bucket `meditations` só permite INSERT com `service_role`:
+```sql
+INSERT: (bucket_id = 'meditations') AND (auth.role() = 'service_role')
 ```
 
-### Tratamento de erros
-- Validar tamanho máximo (ex: 50MB)
-- Validar tipo de arquivo (apenas áudio)
-- Mostrar toast de erro se upload falhar
+O código do frontend usa a chave anon (não autenticada), então o Storage bloqueia o upload.
 
 ---
 
-## Resultado Final
-O usuário poderá:
-- Baixar qualquer áudio gerado diretamente do navegador
-- Substituir um áudio gerado por uma versão editada manualmente
-- Adicionar áudio manualmente para meditações que ainda não têm
+## Solução
+
+Adicionar uma política RLS que permita uploads anônimos no bucket `meditations`. Como esta é uma página administrativa interna e o bucket já é público para leitura, podemos permitir INSERT também.
+
+### Migração SQL
+
+```sql
+-- Permitir uploads anônimos no bucket meditations (para admin page)
+CREATE POLICY "Allow anonymous upload to meditations bucket"
+ON storage.objects
+FOR INSERT
+WITH CHECK (bucket_id = 'meditations');
+```
+
+Esta política permite que qualquer pessoa faça upload para o bucket `meditations`. Isso é aceitável porque:
+1. A página `/admin/meditacoes` não é linkada na aplicação pública
+2. O bucket já é público para leitura (qualquer um pode ver os arquivos)
+3. Não há dados sensíveis - são apenas arquivos de áudio de meditação
+
+---
+
+## Alternativa Mais Segura (Opcional)
+
+Se preferir mais segurança, podemos criar uma edge function para fazer o upload usando `service_role`. Isso manteria as políticas restritivas, mas adiciona complexidade. Me avise se preferir essa abordagem.
+
+---
+
+## Resultado
+
+Após aplicar a migração:
+- Upload de áudio funcionará normalmente na página de meditações
+- Você poderá substituir qualquer áudio gerado por uma versão manual
+- Download continuará funcionando (já funciona pois o bucket é público)
 
