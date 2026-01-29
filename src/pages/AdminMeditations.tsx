@@ -12,7 +12,18 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { RefreshCw, Play, CheckCircle, XCircle, Clock, Loader2, Pause, X, Download, Upload } from "lucide-react";
+import { RefreshCw, Play, CheckCircle, XCircle, Clock, Loader2, Pause, X, Download, Upload, Trash2 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 
 interface Meditation {
@@ -154,6 +165,7 @@ export default function AdminMeditations() {
   const [generationStatus, setGenerationStatus] = useState<{[key: string]: {current: number, total: number, status: string}}>({});
   const [isCancelled, setIsCancelled] = useState(false);
   const [uploading, setUploading] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
   const cancelRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadTargetRef = useRef<{id: string, title: string} | null>(null);
@@ -296,6 +308,49 @@ export default function AdminMeditations() {
       setUploading(null);
       e.target.value = '';
       uploadTargetRef.current = null;
+    }
+  };
+
+  // Função para deletar áudio
+  const handleDeleteAudio = async (med: MeditationWithAudio) => {
+    if (!med.audio) return;
+    
+    setDeleting(med.id);
+    
+    try {
+      // Deletar do Storage
+      const storagePath = `${med.id}/audio.mp3`;
+      await supabase.storage.from('meditations').remove([storagePath]);
+
+      // Deletar registro em meditation_audios
+      const { error: deleteError } = await supabase
+        .from('meditation_audios')
+        .delete()
+        .eq('meditation_id', med.id);
+
+      if (deleteError) throw deleteError;
+
+      // Limpar chunks se existirem
+      await supabase
+        .from('meditation_audio_chunks')
+        .delete()
+        .eq('meditation_id', med.id);
+
+      toast({
+        title: "Áudio deletado",
+        description: `Áudio de "${med.title}" foi removido.`,
+      });
+
+      await fetchMeditations();
+    } catch (error) {
+      console.error('Error deleting audio:', error);
+      toast({
+        title: "Erro ao deletar",
+        description: error instanceof Error ? error.message : "Não foi possível deletar o áudio.",
+        variant: "destructive",
+      });
+    } finally {
+      setDeleting(null);
     }
   };
 
@@ -778,6 +833,7 @@ export default function AdminMeditations() {
                       <TableHead>Script</TableHead>
                       <TableHead>Chunks</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead>Última Atualização</TableHead>
                       <TableHead>Progresso</TableHead>
                       <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
@@ -805,6 +861,15 @@ export default function AdminMeditations() {
                           </TableCell>
                           <TableCell>{getStatusBadge(med)}</TableCell>
                           <TableCell>
+                            {med.audio ? (
+                              <span className="text-sm text-muted-foreground">
+                                {formatDate(med.audio.generated_at)}
+                              </span>
+                            ) : (
+                              <span className="text-sm text-muted-foreground">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
                             {isGenerating && status ? (
                               <div className="w-32">
                                 <Progress 
@@ -827,10 +892,6 @@ export default function AdminMeditations() {
                                   {med.generationProgress}% completo
                                 </p>
                               </div>
-                            ) : med.audio ? (
-                              <span className="text-sm text-muted-foreground">
-                                {formatDate(med.audio.generated_at)}
-                              </span>
                             ) : (
                               <span className="text-sm text-muted-foreground">-</span>
                             )}
@@ -881,6 +942,45 @@ export default function AdminMeditations() {
                                   <Upload className="h-4 w-4" />
                                 )}
                               </Button>
+                              
+                              {/* Delete */}
+                              {med.audio && (
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      title="Deletar áudio"
+                                      disabled={deleting === med.id || isGenerating}
+                                      className="text-destructive hover:text-destructive"
+                                    >
+                                      {deleting === med.id ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                      ) : (
+                                        <Trash2 className="h-4 w-4" />
+                                      )}
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>Deletar áudio?</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        Tem certeza que deseja deletar o áudio de "{med.title}"? 
+                                        Esta ação não pode ser desfeita.
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                      <AlertDialogAction
+                                        onClick={() => handleDeleteAudio(med)}
+                                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                      >
+                                        Deletar
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              )}
                               
                               {/* Gerar/Retomar/Cancelar */}
                               {isGenerating ? (
