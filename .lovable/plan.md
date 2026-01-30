@@ -1,59 +1,60 @@
 
-# Plano: Aumentar Delays da Demo para Ritmo Mais Natural
 
-## Problema
+# Plano: Gerar Áudio da AURA para a Demo
 
-Os delays atuais ainda estao rapidos demais. Vou aumentar significativamente todos os valores para criar um ritmo mais humano e contemplativo.
+## Contexto
 
-## Valores Atuais vs Propostos
+A Demo já está preparada para tocar áudio (tem `hasAudio: true` na última mensagem e um `AudioPlayer` que referencia `/audio/aura-demo-voice.mp3`). Falta gerar o arquivo de áudio da voz da AURA.
 
-| Tipo de Delay | Atual | Proposto |
-|---------------|-------|----------|
-| **Reading delay** (antes de "digitando") | 1.2-1.8s | **2.5-3.5s** |
-| **Typing delay curto** (< 50 chars) | 1-2.5s | **2-4s** |
-| **Typing delay medio** (< 100 chars) | 1.5-4s | **3-5s** |
-| **Typing delay longo** (100+ chars) | 2-5s | **4-6s** |
-| **Entre bubbles consecutivos** | 600-900ms | **1.2-1.8s** |
-| **Mensagens da usuaria** | 1.6-2.4s | **2.5-3.5s** |
+## Texto para o Áudio
 
-## Alteracoes no Arquivo
-
-### `src/components/Demo.tsx`
-
-**Funcao `calculateTypingDelay`:**
-```text
-Curtas (< 50 chars):  2000 + length * 40  → 2-4s
-Medias (< 100 chars): 3000 + length * 25  → 3-5.5s  
-Longas (100+ chars):  4000 + length * 20  → 4-6s (cap at 6s)
-```
-
-**Funcao `humanizeDelay`:** Manter ±20% (funciona bem)
-
-**Delays especificos:**
-- `readingDelay`: base 3000ms (era 1500ms) → 2.4-3.6s
-- `bubbleDelay`: base 1500ms (era 750ms) → 1.2-1.8s  
-- `userDelay`: base 3000ms (era 2000ms) → 2.4-3.6s
-
-## Comparacao do Fluxo
+A última sequência de mensagens da AURA que deve virar áudio:
 
 ```text
-ATUAL (ainda rapido):
-[User] → 1.6s → [lendo] → 1.5s → [digitando] → 2s → [Bubble1] → 0.7s → [Bubble2]
-
-PROPOSTO (mais contemplativo):
-[User] → 3s → [lendo] → 3s → [digitando] → 3.5s → [Bubble1] → 1.5s → [Bubble2]
+Olha só o que você acabou de me mostrar...
+Você diz que não sabe o que quer,
+mas seu corpo sabe.
+Ele te levou pra um lugar onde o tempo sumiu.
+Isso não é "só existir".
+Isso é uma pista enorme.
 ```
 
-## Resumo
+## Abordagem
+
+Como não é possível gerar um arquivo MP3 estático diretamente, vou usar o Supabase Storage:
+
+1. Criar edge function `generate-demo-audio` que gera o áudio via TTS (voz Erinome)
+2. Salvar no Storage bucket `meditations` (já existe)
+3. Atualizar o `Demo.tsx` para usar a URL pública do Storage
+
+## Alteracoes Tecnicas
+
+### Arquivo 1: `supabase/functions/generate-demo-audio/index.ts` (NOVO)
+
+Edge function para gerar o áudio da demo:
+- Usar a mesma configuração de TTS da AURA (voz Erinome, speakingRate 1.20)
+- Gerar áudio do texto completo
+- Salvar no Storage em `demo/aura-voice.mp3`
+- Retornar a URL pública
+
+### Arquivo 2: `src/components/Demo.tsx`
+
+Atualizar a referência do áudio:
+- Trocar `/audio/aura-demo-voice.mp3` pela URL do Storage
+- Usar a URL: `https://uhyogifgmutfmbyhzzyo.supabase.co/storage/v1/object/public/meditations/demo/aura-voice.mp3`
+
+## Execucao
+
+Apos criar a edge function, executar uma vez para gerar o arquivo no Storage. O áudio ficará permanentemente disponível via URL pública.
+
+## Resumo das Alteracoes
 
 | Arquivo | Alteracao |
 |---------|-----------|
-| `src/components/Demo.tsx` | Dobrar todos os valores de delay: readingDelay 1500→3000ms, bubbleDelay 750→1500ms, userDelay 2000→3000ms, e aumentar formula do calculateTypingDelay |
+| `supabase/functions/generate-demo-audio/index.ts` | NOVO - Edge function para gerar áudio da demo via Google Cloud TTS |
+| `src/components/Demo.tsx` | Atualizar URL do áudio para usar Storage (linha 255) |
 
-## Resultado
+## Resultado Esperado
 
-O ritmo vai parecer muito mais natural:
-- Pausa pensativa antes da AURA comecar a digitar
-- Tempo de "digitacao" proporcional ao tamanho real da mensagem
-- Bubbles consecutivos com respiro entre eles
-- Transicoes suaves entre turnos de fala
+Quando o usuário clicar em "Ouvir" na última mensagem da demo, vai ouvir a voz da AURA (Erinome) falando a frase final com o mesmo tom acolhedor e empático que usa nas conversas reais.
+
