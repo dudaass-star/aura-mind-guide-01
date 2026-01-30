@@ -2,9 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Check, Sparkles, MessageCircle, Calendar, FileText, Headphones, Zap, BookOpen } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useState } from "react";
-
 type BillingPeriod = "monthly" | "yearly";
-
 const plans = [{
   id: "essencial",
   name: "Essencial",
@@ -125,7 +123,6 @@ const plans = [{
 }];
 const Pricing = () => {
   const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>("monthly");
-
   return <section id="precos" className="py-24 bg-card relative overflow-hidden">
       {/* Background glow */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-sage-soft rounded-full blur-3xl opacity-40" />
@@ -142,30 +139,12 @@ const Pricing = () => {
           
           {/* Billing period toggle */}
           <div className="flex items-center justify-center gap-3">
-            <button
-              onClick={() => setBillingPeriod("monthly")}
-              className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all ${
-                billingPeriod === "monthly"
-                  ? "bg-primary text-primary-foreground shadow-md"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
+            <button onClick={() => setBillingPeriod("monthly")} className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all ${billingPeriod === "monthly" ? "bg-primary text-primary-foreground shadow-md" : "text-muted-foreground hover:text-foreground"}`}>
               Mensal
             </button>
-            <button
-              onClick={() => setBillingPeriod("yearly")}
-              className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all flex items-center gap-2 ${
-                billingPeriod === "yearly"
-                  ? "bg-primary text-primary-foreground shadow-md"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
+            <button onClick={() => setBillingPeriod("yearly")} className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all flex items-center gap-2 ${billingPeriod === "yearly" ? "bg-primary text-primary-foreground shadow-md" : "text-muted-foreground hover:text-foreground"}`}>
               Anual
-              <span className={`text-xs px-2 py-0.5 rounded-full ${
-                billingPeriod === "yearly" 
-                  ? "bg-primary-foreground/20 text-primary-foreground" 
-                  : "bg-primary/20 text-primary"
-              }`}>
+              <span className={`text-xs px-2 py-0.5 rounded-full ${billingPeriod === "yearly" ? "bg-primary-foreground/20 text-primary-foreground" : "bg-primary/20 text-primary"}`}>
                 Economize até 30%
               </span>
             </button>
@@ -174,11 +153,10 @@ const Pricing = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
           {plans.map((plan, index) => {
-            const price = billingPeriod === "monthly" ? plan.monthlyPrice : plan.yearlyPrice;
-            const period = plan.period[billingPeriod];
-            const dailyPrice = plan.dailyPrice[billingPeriod];
-            
-            return <div key={index} className={`relative rounded-3xl p-6 transition-all duration-300 flex flex-col ${plan.popular ? "bg-sage-soft/40 border-2 border-primary/50 shadow-glow md:scale-105" : "bg-background border border-border/50"}`}>
+          const price = billingPeriod === "monthly" ? plan.monthlyPrice : plan.yearlyPrice;
+          const period = plan.period[billingPeriod];
+          const dailyPrice = plan.dailyPrice[billingPeriod];
+          return <div key={index} className={`relative rounded-3xl p-6 transition-all duration-300 flex flex-col ${plan.popular ? "bg-sage-soft/40 border-2 border-primary/50 shadow-glow md:scale-105" : "bg-background border border-border/50"}`}>
               {/* Popular badge */}
               {plan.badge && <div className="absolute -top-4 left-1/2 -translate-x-1/2">
                   <div className="flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-primary text-primary-foreground text-sm font-semibold">
@@ -209,11 +187,9 @@ const Pricing = () => {
                   </span>
                   <span className="text-muted-foreground">{period}</span>
                 </div>
-                {billingPeriod === "yearly" && (
-                  <p className="text-xs text-muted-foreground mt-1">
+                {billingPeriod === "yearly" && <p className="text-xs text-muted-foreground mt-1">
                     equivale a R${plan.yearlyMonthlyEquivalent}/mês
-                  </p>
-                )}
+                  </p>}
                 <p className="text-xs text-primary font-medium mt-1">
                   {dailyPrice}
                 </p>
@@ -231,15 +207,15 @@ const Pricing = () => {
 
               {/* CTA */}
               <Link to="/checkout" state={{
-                plan: plan.id,
-                billing: billingPeriod
-              }}>
+              plan: plan.id,
+              billing: billingPeriod
+            }}>
                 <Button variant={plan.popular ? "sage" : "glass"} size="lg" className="w-full">
                   {plan.cta}
                 </Button>
               </Link>
-            </div>
-          })}
+            </div>;
+        })}
         </div>
 
         {/* Trust badges */}
@@ -254,11 +230,7 @@ const Pricing = () => {
           <h3 className="font-display text-xl font-semibold text-foreground mb-4">
             O que são as Sessões Especiais?
           </h3>
-          <p className="text-muted-foreground mb-6">
-            São encontros de 45 minutos só seus com a AURA, com metodologia estruturada baseada em 
-            Investigação Socrática e Logoterapia. Diferente do chat do dia a dia, as sessões 
-            são mais profundas, reflexivas e focadas em transformação real.
-          </p>
+          <p className="text-muted-foreground mb-6">São encontros de 45 minutos só seus com a AURA, com metodologia estruturada. Diferente do chat do dia a dia, as sessões são mais profundas, reflexivas e focadas em transformação real.</p>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
             <div className="bg-secondary/30 rounded-xl p-4">
               <p className="font-semibold text-foreground mb-1">Sessão de Clareza</p>
