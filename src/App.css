@@ -4,6 +4,19 @@
   padding: 2rem;
   text-align: center;
 }
+@keyframes waveform-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.animate-waveform-pulse {
+  animation: waveform-pulse 0.5s ease-in-out infinite;
+}
+
 
 .logo {
   height: 6em;
