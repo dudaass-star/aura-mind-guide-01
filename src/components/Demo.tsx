@@ -108,38 +108,79 @@ const TypingIndicator = () => (
   </div>
 );
 
-const AudioPlayer = ({ isPlaying, onToggle }: { isPlaying: boolean; onToggle: () => void }) => (
-  <button
-    onClick={onToggle}
-    className="mt-2 flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 hover:bg-primary/20 transition-colors group"
-  >
-    {isPlaying ? (
-      <Pause className="w-3.5 h-3.5 text-primary" />
-    ) : (
-      <Play className="w-3.5 h-3.5 text-primary" />
-    )}
-    
-    {/* Waveform */}
-    <div className="flex items-center gap-0.5 h-4">
-      {[...Array(8)].map((_, i) => (
-        <div
-          key={i}
-          className={`w-0.5 bg-primary rounded-full transition-all ${
-            isPlaying ? "animate-waveform" : "h-1"
-          }`}
-          style={{
-            animationDelay: `${i * 0.1}s`,
-            height: isPlaying ? undefined : `${4 + Math.random() * 8}px`,
-          }}
-        />
-      ))}
+const WhatsAppVoiceMessage = ({ 
+  isPlaying, 
+  onToggle,
+  duration = "0:04",
+  currentTime = 0,
+  totalDuration = 4
+}: { 
+  isPlaying: boolean; 
+  onToggle: () => void;
+  duration?: string;
+  currentTime?: number;
+  totalDuration?: number;
+}) => {
+  // Generate waveform bars with varying heights (WhatsApp style)
+  const waveformBars = [
+    4, 8, 5, 12, 6, 14, 8, 10, 5, 16, 12, 8, 14, 6, 10, 8, 12, 5, 14, 8,
+    6, 10, 12, 8, 5, 14, 10, 6, 12, 8, 4, 10, 8, 6, 4
+  ];
+  
+  const progress = (currentTime / totalDuration) * 100;
+
+  return (
+    <div className="flex items-center gap-2 mt-2 py-1">
+      {/* Play/Pause button */}
+      <button
+        onClick={onToggle}
+        className="w-10 h-10 rounded-full bg-primary flex items-center justify-center flex-shrink-0 hover:bg-primary/90 transition-colors"
+      >
+        {isPlaying ? (
+          <Pause className="w-5 h-5 text-primary-foreground" fill="currentColor" />
+        ) : (
+          <Play className="w-5 h-5 text-primary-foreground ml-0.5" fill="currentColor" />
+        )}
+      </button>
+
+      {/* Waveform container */}
+      <div className="flex-1 flex flex-col gap-1">
+        {/* Waveform bars */}
+        <div className="flex items-center gap-[2px] h-6 relative">
+          {waveformBars.map((height, i) => {
+            const barProgress = (i / waveformBars.length) * 100;
+            const isPlayed = barProgress <= progress;
+            
+            return (
+              <div
+                key={i}
+                className={`w-[3px] rounded-full transition-all duration-150 ${
+                  isPlayed ? "bg-primary" : "bg-muted-foreground/40"
+                } ${isPlaying && isPlayed ? "animate-waveform-pulse" : ""}`}
+                style={{
+                  height: `${height}px`,
+                  animationDelay: `${i * 0.02}s`,
+                }}
+              />
+            );
+          })}
+        </div>
+        
+        {/* Duration */}
+        <span className="text-[10px] text-muted-foreground">
+          {isPlaying ? `0:0${Math.floor(currentTime)}` : duration}
+        </span>
+      </div>
+
+      {/* Avatar */}
+      <img 
+        src={avatarAura} 
+        alt="AURA" 
+        className="w-10 h-10 rounded-full object-cover flex-shrink-0 border-2 border-primary/20"
+      />
     </div>
-    
-    <span className="text-xs text-primary font-medium">
-      {isPlaying ? "Pausar" : "Ouvir"}
-    </span>
-  </button>
-);
+  );
+};
 
 const Demo = () => {
   const [isPlaying, setIsPlaying] = useState(false);
@@ -377,11 +418,14 @@ const Demo = () => {
                               </p>
                             )}
                             
-                            {/* Audio player for last AURA message */}
+                            {/* WhatsApp-style voice message */}
                             {message.hasAudio && isComplete && (
-                              <AudioPlayer 
+                              <WhatsAppVoiceMessage 
                                 isPlaying={isAudioPlaying} 
-                                onToggle={handleAudioToggle} 
+                                onToggle={handleAudioToggle}
+                                duration="0:04"
+                                currentTime={0}
+                                totalDuration={4}
                               />
                             )}
                           </div>
