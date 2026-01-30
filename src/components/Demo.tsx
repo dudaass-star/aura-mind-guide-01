@@ -7,7 +7,7 @@ interface Message {
   sender: "user" | "aura";
   content: string;
   time?: string;
-  hasAudio?: boolean;
+  isAudioOnly?: boolean;
   isFirstInSequence?: boolean;
 }
 
@@ -93,8 +93,12 @@ const messages: Message[] = [
   {
     sender: "aura",
     content: "Isso é uma pista enorme 💡",
+  },
+  {
+    sender: "aura",
+    content: "",
     time: "21:34",
-    hasAudio: true,
+    isAudioOnly: true,
   },
 ];
 
@@ -394,32 +398,9 @@ const Demo = () => {
                           }`}
                           style={{ animationDelay: `${index * 0.02}s` }}
                         >
-                          <div
-                            className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${
-                              message.sender === "user"
-                                ? `bg-primary text-primary-foreground ${
-                                    partOfSequence ? "rounded-br-md" : "rounded-br-md"
-                                  }`
-                                : `bg-card border border-border/50 text-foreground ${
-                                    partOfSequence ? "rounded-bl-sm" : "rounded-bl-md"
-                                  }`
-                            }`}
-                          >
-                            <p className="text-sm leading-relaxed">{message.content}</p>
-                            
-                            {/* Time only on last message of sequence */}
-                            {message.time && lastInSequence && (
-                              <p className={`text-[10px] mt-1 ${
-                                message.sender === "user" 
-                                  ? "text-primary-foreground/70" 
-                                  : "text-muted-foreground"
-                              }`}>
-                                {message.time}
-                              </p>
-                            )}
-                            
-                            {/* WhatsApp-style voice message */}
-                            {message.hasAudio && isComplete && (
+                          {message.isAudioOnly ? (
+                            // Audio-only message (separate bubble)
+                            <div className="bg-card border border-border/50 rounded-2xl rounded-bl-sm px-3 py-2 max-w-[85%]">
                               <WhatsAppVoiceMessage 
                                 isPlaying={isAudioPlaying} 
                                 onToggle={handleAudioToggle}
@@ -427,8 +408,39 @@ const Demo = () => {
                                 currentTime={0}
                                 totalDuration={4}
                               />
-                            )}
-                          </div>
+                              {message.time && (
+                                <p className="text-[10px] mt-1 text-muted-foreground text-right">
+                                  {message.time}
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            // Text message bubble
+                            <div
+                              className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${
+                                message.sender === "user"
+                                  ? `bg-primary text-primary-foreground ${
+                                      partOfSequence ? "rounded-br-md" : "rounded-br-md"
+                                    }`
+                                  : `bg-card border border-border/50 text-foreground ${
+                                      partOfSequence ? "rounded-bl-sm" : "rounded-bl-md"
+                                    }`
+                              }`}
+                            >
+                              <p className="text-sm leading-relaxed">{message.content}</p>
+                              
+                              {/* Time only on last message of sequence */}
+                              {message.time && lastInSequence && (
+                                <p className={`text-[10px] mt-1 ${
+                                  message.sender === "user" 
+                                    ? "text-primary-foreground/70" 
+                                    : "text-muted-foreground"
+                                }`}>
+                                  {message.time}
+                                </p>
+                              )}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
