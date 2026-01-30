@@ -1,54 +1,79 @@
 
 
-# Correção: Permitir Upload de Áudio no Bucket Meditations
+# Plano: Remover Abertura Contextual das Jornadas
 
-## Problema Identificado
+## Objetivo
 
-O upload de áudio está falhando com o erro:
+Simplificar o envio de episódios das jornadas, removendo a parte inicial onde a IA tenta criar um contexto personalizado antes do conteúdo principal.
+
+## O que será removido
+
+A função `generate-episode-manifesto` atualmente faz o seguinte:
+1. Busca as últimas 15 mensagens do usuário
+2. Chama a IA para gerar 2-3 linhas contextuais conectando conversas recentes ao tema
+3. Inclui esse texto contextual antes do conteúdo do episódio
+
+**Antes (formato atual):**
 ```
-StorageApiError: new row violates row-level security policy
-```
+Oi Carlos. 💜
 
-**Causa**: A política RLS atual do bucket `meditations` só permite INSERT com `service_role`:
-```sql
-INSERT: (bucket_id = 'meditations') AND (auth.role() = 'service_role')
-```
-
-O código do frontend usa a chave anon (não autenticada), então o Storage bloqueia o upload.
+📍 *EP 1/8 — SENTIR*
+_Jornada da Ansiedade_
 
 ---
 
-## Solução
+[Texto gerado por IA conectando conversas recentes]
 
-Adicionar uma política RLS que permita uploads anônimos no bucket `meditations`. Como esta é uma página administrativa interna e o bucket já é público para leitura, podemos permitir INSERT também.
+---
 
-### Migração SQL
+[Conteúdo do episódio]
 
-```sql
--- Permitir uploads anônimos no bucket meditations (para admin page)
-CREATE POLICY "Allow anonymous upload to meditations bucket"
-ON storage.objects
-FOR INSERT
-WITH CHECK (bucket_id = 'meditations');
+---
+
+⏭️ *No próximo episódio...*
+[Hook]
+
+Te espero. 💜
 ```
 
-Esta política permite que qualquer pessoa faça upload para o bucket `meditations`. Isso é aceitável porque:
-1. A página `/admin/meditacoes` não é linkada na aplicação pública
-2. O bucket já é público para leitura (qualquer um pode ver os arquivos)
-3. Não há dados sensíveis - são apenas arquivos de áudio de meditação
+**Depois (formato simplificado):**
+```
+Oi Carlos. 💜
+
+📍 *EP 1/8 — SENTIR*
+_Jornada da Ansiedade_
 
 ---
 
-## Alternativa Mais Segura (Opcional)
-
-Se preferir mais segurança, podemos criar uma edge function para fazer o upload usando `service_role`. Isso manteria as políticas restritivas, mas adiciona complexidade. Me avise se preferir essa abordagem.
+[Conteúdo do episódio]
 
 ---
 
-## Resultado
+⏭️ *No próximo episódio...*
+[Hook]
 
-Após aplicar a migração:
-- Upload de áudio funcionará normalmente na página de meditações
-- Você poderá substituir qualquer áudio gerado por uma versão manual
-- Download continuará funcionando (já funciona pois o bucket é público)
+Te espero. 💜
+```
+
+## Mudanças Técnicas
+
+### Arquivo: `supabase/functions/generate-episode-manifesto/index.ts`
+
+1. **Remover busca de mensagens recentes** (linhas 57-71)
+   - Não precisamos mais buscar o histórico de mensagens
+
+2. **Remover geração de abertura contextual via IA** (linhas 73-129)
+   - Toda a lógica de chamada à API de IA será removida
+   - A variável `contextualOpening` será eliminada
+
+3. **Simplificar template de mensagem** (linhas 139-190)
+   - Remover a seção `${contextualOpening}` e o separador `---` associado
+   - O conteúdo do episódio (`essayContent`) virá logo após o cabeçalho
+
+## Benefícios
+
+- Mensagens mais diretas e objetivas
+- Menor latência (sem chamada extra à IA)
+- Menor consumo de tokens/créditos
+- Experiência mais consistente
 
