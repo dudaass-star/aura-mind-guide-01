@@ -160,7 +160,24 @@ const Demo = () => {
     }
   }, [visibleMessages, isTyping]);
 
-  // Animation logic with sequence support
+  // Human-like delay calculation based on real AURA timing
+  const calculateTypingDelay = (content: string): number => {
+    const length = content.length;
+    if (length < 50) {
+      return Math.min(2500, 1000 + length * 30); // 1-2.5s for short
+    } else if (length < 100) {
+      return Math.min(4000, 1500 + length * 25); // 1.5-4s for medium
+    } else {
+      return Math.min(5000, 2000 + length * 20); // 2-5s for long (capped)
+    }
+  };
+
+  // Randomize delay by ±20% for human-like variation
+  const humanizeDelay = (baseDelay: number): number => {
+    return baseDelay * (0.8 + Math.random() * 0.4);
+  };
+
+  // Animation logic with human-like timing
   useEffect(() => {
     if (!isPlaying || visibleMessages >= messages.length) {
       if (visibleMessages >= messages.length) {
@@ -174,43 +191,38 @@ const Demo = () => {
     const isAuraMessage = nextMessage.sender === "aura";
     const isFirstInSequence = nextMessage.isFirstInSequence === true;
     
-    // Calculate delays based on message type and sequence position
-    let delay: number;
-    let showTyping = false;
+    let typingTimeout: NodeJS.Timeout;
+    let messageTimeout: NodeJS.Timeout;
     
     if (isAuraMessage) {
       if (isFirstInSequence) {
-        // First message in AURA sequence: show typing indicator
-        showTyping = true;
-        delay = 1500 + Math.min(1500, nextMessage.content.length * 10);
+        // First message in AURA sequence: simulate "reading" then typing
+        const readingDelay = humanizeDelay(1500); // 1.2-1.8s to "read" the user message
+        const typingDuration = calculateTypingDelay(nextMessage.content);
+        
+        // Show typing indicator after "reading"
+        typingTimeout = setTimeout(() => {
+          setIsTyping(true);
+        }, readingDelay);
+
+        // Show message after typing duration
+        messageTimeout = setTimeout(() => {
+          setIsTyping(false);
+          setVisibleMessages((prev) => prev + 1);
+        }, readingDelay + typingDuration);
       } else {
-        // Consecutive AURA messages: quick succession (300-500ms)
-        delay = 300 + Math.random() * 200;
+        // Consecutive AURA bubbles: 600-900ms with ±20% randomization
+        const bubbleDelay = humanizeDelay(750); // Base 750ms → 600-900ms
+        messageTimeout = setTimeout(() => {
+          setVisibleMessages((prev) => prev + 1);
+        }, bubbleDelay);
       }
     } else {
-      // User messages
-      delay = 800 + Math.random() * 400;
-    }
-
-    let typingTimeout: NodeJS.Timeout;
-    let messageTimeout: NodeJS.Timeout;
-
-    if (showTyping) {
-      // Show typing indicator first
-      typingTimeout = setTimeout(() => {
-        setIsTyping(true);
-      }, 500);
-
-      // Then show the message
-      messageTimeout = setTimeout(() => {
-        setIsTyping(false);
-        setVisibleMessages((prev) => prev + 1);
-      }, delay);
-    } else {
-      // Show message directly
+      // User messages: longer pause to simulate natural conversation flow
+      const userDelay = humanizeDelay(2000); // 1.6-2.4s
       messageTimeout = setTimeout(() => {
         setVisibleMessages((prev) => prev + 1);
-      }, delay);
+      }, userDelay);
     }
 
     return () => {
