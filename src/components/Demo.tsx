@@ -6,39 +6,93 @@ import avatarAura from "@/assets/avatar-aura.jpg";
 interface Message {
   sender: "user" | "aura";
   content: string;
-  time: string;
+  time?: string;
   hasAudio?: boolean;
+  isFirstInSequence?: boolean;
 }
 
+// Conversa com balões múltiplos - estilo humano
 const messages: Message[] = [
+  // Mensagem 1 - Usuária
   {
     sender: "user",
     content: "Tenho 28 anos e ainda não sei o que quero da vida. Todo mundo parece ter um caminho, menos eu.",
     time: "21:32",
+    isFirstInSequence: true,
+  },
+  // Mensagens 2-4 - AURA (sequência)
+  {
+    sender: "aura",
+    content: "Esse peso de \"todo mundo parece saber\" é muito real...",
+    isFirstInSequence: true,
   },
   {
     sender: "aura",
-    content: "Esse peso de \"todo mundo parece saber\" é muito real... e muito injusto com você mesma. Me conta: quando você diz que não sabe o que quer, é sobre trabalho? Relacionamentos? Ou é algo mais fundo?",
+    content: "...e muito injusto com você mesma",
+  },
+  {
+    sender: "aura",
+    content: "Me conta: quando você diz que não sabe o que quer, é sobre trabalho? Relacionamentos? Ou é algo mais fundo?",
     time: "21:32",
   },
+  // Mensagem 5 - Usuária
   {
     sender: "user",
     content: "É tudo. Sinto que to só existindo, sabe? Não vivendo de verdade.",
     time: "21:33",
+    isFirstInSequence: true,
+  },
+  // Mensagens 6-9 - AURA (sequência)
+  {
+    sender: "aura",
+    content: "\"Só existindo\"...",
+    isFirstInSequence: true,
   },
   {
     sender: "aura",
-    content: "\"Só existindo\"... isso diz muito. Deixa eu te perguntar uma coisa: teve algum momento recente, mesmo que pequeno, em que você sentiu que estava vivendo de verdade? Pode ser algo simples.",
+    content: "isso diz muito",
+  },
+  {
+    sender: "aura",
+    content: "Deixa eu te perguntar uma coisa: teve algum momento recente, mesmo que pequeno, em que você sentiu que estava vivendo de verdade?",
+  },
+  {
+    sender: "aura",
+    content: "Pode ser algo simples",
     time: "21:33",
   },
+  // Mensagem 10 - Usuária
   {
     sender: "user",
     content: "Semana passada eu passei a tarde toda desenhando. Nem vi o tempo passar.",
     time: "21:34",
+    isFirstInSequence: true,
+  },
+  // Mensagens 11-16 - AURA (sequência final)
+  {
+    sender: "aura",
+    content: "Olha só o que você acabou de me mostrar...",
+    isFirstInSequence: true,
   },
   {
     sender: "aura",
-    content: "Olha só o que você acabou de me mostrar... Você diz que não sabe o que quer, mas seu corpo sabe. Ele te levou pra um lugar onde o tempo sumiu. Isso não é \"só existir\". Isso é uma pista enorme.",
+    content: "Você diz que não sabe o que quer",
+  },
+  {
+    sender: "aura",
+    content: "mas seu corpo sabe",
+  },
+  {
+    sender: "aura",
+    content: "Ele te levou pra um lugar onde o tempo sumiu",
+  },
+  {
+    sender: "aura",
+    content: "Isso não é \"só existir\"",
+  },
+  {
+    sender: "aura",
+    content: "Isso é uma pista enorme 💡",
     time: "21:34",
     hasAudio: true,
   },
@@ -106,7 +160,7 @@ const Demo = () => {
     }
   }, [visibleMessages, isTyping]);
 
-  // Animation logic
+  // Animation logic with sequence support
   useEffect(() => {
     if (!isPlaying || visibleMessages >= messages.length) {
       if (visibleMessages >= messages.length) {
@@ -118,30 +172,45 @@ const Demo = () => {
 
     const nextMessage = messages[visibleMessages];
     const isAuraMessage = nextMessage.sender === "aura";
+    const isFirstInSequence = nextMessage.isFirstInSequence === true;
     
-    // Calculate delay based on message type and length
-    const baseDelay = isAuraMessage ? 1500 : 800;
-    const typingDuration = isAuraMessage ? Math.min(2500, 1000 + nextMessage.content.length * 8) : 0;
+    // Calculate delays based on message type and sequence position
+    let delay: number;
+    let showTyping = false;
+    
+    if (isAuraMessage) {
+      if (isFirstInSequence) {
+        // First message in AURA sequence: show typing indicator
+        showTyping = true;
+        delay = 1500 + Math.min(1500, nextMessage.content.length * 10);
+      } else {
+        // Consecutive AURA messages: quick succession (300-500ms)
+        delay = 300 + Math.random() * 200;
+      }
+    } else {
+      // User messages
+      delay = 800 + Math.random() * 400;
+    }
 
     let typingTimeout: NodeJS.Timeout;
     let messageTimeout: NodeJS.Timeout;
 
-    if (isAuraMessage) {
+    if (showTyping) {
       // Show typing indicator first
       typingTimeout = setTimeout(() => {
         setIsTyping(true);
-      }, baseDelay);
+      }, 500);
 
       // Then show the message
       messageTimeout = setTimeout(() => {
         setIsTyping(false);
         setVisibleMessages((prev) => prev + 1);
-      }, baseDelay + typingDuration);
+      }, delay);
     } else {
-      // User messages appear after a shorter delay
+      // Show message directly
       messageTimeout = setTimeout(() => {
         setVisibleMessages((prev) => prev + 1);
-      }, baseDelay);
+      }, delay);
     }
 
     return () => {
@@ -180,7 +249,6 @@ const Demo = () => {
       setIsAudioPlaying(false);
     } else {
       audioRef.current.play().catch(() => {
-        // Audio file not available yet
         console.log("Audio file not available");
       });
       setIsAudioPlaying(true);
@@ -189,6 +257,21 @@ const Demo = () => {
 
   const showStartButton = !isPlaying && visibleMessages === 1 && !isComplete;
   const showRestartButton = isComplete || (!isPlaying && visibleMessages > 1);
+
+  // Helper to determine if message is part of a sequence (for visual grouping)
+  const isPartOfSequence = (index: number) => {
+    if (index === 0) return false;
+    const current = messages[index];
+    const previous = messages[index - 1];
+    return current.sender === previous.sender && !current.isFirstInSequence;
+  };
+
+  const isLastInSequence = (index: number) => {
+    if (index >= messages.length - 1) return true;
+    const current = messages[index];
+    const next = messages[index + 1];
+    return current.sender !== next.sender || next.isFirstInSequence === true;
+  };
 
   return (
     <section className="py-24 bg-gradient-to-b from-background via-sage-soft/30 to-background relative overflow-hidden">
@@ -243,43 +326,60 @@ const Demo = () => {
                 {/* Messages */}
                 <div 
                   ref={messagesContainerRef}
-                  className="bg-background/50 p-4 space-y-3 h-[420px] overflow-y-auto scroll-smooth"
+                  className="bg-background/50 p-4 h-[420px] overflow-y-auto scroll-smooth"
                 >
-                  {messages.slice(0, visibleMessages).map((message, index) => (
-                    <div
-                      key={index}
-                      className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"} animate-message-in`}
-                      style={{ animationDelay: `${index * 0.05}s` }}
-                    >
-                      <div
-                        className={`max-w-[85%] rounded-2xl px-4 py-3 ${
-                          message.sender === "user"
-                            ? "bg-primary text-primary-foreground rounded-br-md"
-                            : "bg-card border border-border/50 text-foreground rounded-bl-md"
-                        }`}
-                      >
-                        <p className="text-sm leading-relaxed">{message.content}</p>
-                        <p className={`text-[10px] mt-1 ${
-                          message.sender === "user" 
-                            ? "text-primary-foreground/70" 
-                            : "text-muted-foreground"
-                        }`}>
-                          {message.time}
-                        </p>
-                        
-                        {/* Audio player for last AURA message */}
-                        {message.hasAudio && isComplete && (
-                          <AudioPlayer 
-                            isPlaying={isAudioPlaying} 
-                            onToggle={handleAudioToggle} 
-                          />
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                  <div className="space-y-1">
+                    {messages.slice(0, visibleMessages).map((message, index) => {
+                      const partOfSequence = isPartOfSequence(index);
+                      const lastInSequence = isLastInSequence(index);
+                      
+                      return (
+                        <div
+                          key={index}
+                          className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"} animate-message-in ${
+                            !partOfSequence ? "mt-3" : ""
+                          }`}
+                          style={{ animationDelay: `${index * 0.02}s` }}
+                        >
+                          <div
+                            className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${
+                              message.sender === "user"
+                                ? `bg-primary text-primary-foreground ${
+                                    partOfSequence ? "rounded-br-md" : "rounded-br-md"
+                                  }`
+                                : `bg-card border border-border/50 text-foreground ${
+                                    partOfSequence ? "rounded-bl-sm" : "rounded-bl-md"
+                                  }`
+                            }`}
+                          >
+                            <p className="text-sm leading-relaxed">{message.content}</p>
+                            
+                            {/* Time only on last message of sequence */}
+                            {message.time && lastInSequence && (
+                              <p className={`text-[10px] mt-1 ${
+                                message.sender === "user" 
+                                  ? "text-primary-foreground/70" 
+                                  : "text-muted-foreground"
+                              }`}>
+                                {message.time}
+                              </p>
+                            )}
+                            
+                            {/* Audio player for last AURA message */}
+                            {message.hasAudio && isComplete && (
+                              <AudioPlayer 
+                                isPlaying={isAudioPlaying} 
+                                onToggle={handleAudioToggle} 
+                              />
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                   
                   {/* Typing indicator */}
-                  {isTyping && <TypingIndicator />}
+                  {isTyping && <div className="mt-3"><TypingIndicator /></div>}
                 </div>
 
                 {/* Input bar / CTA */}
