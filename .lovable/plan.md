@@ -1,120 +1,76 @@
 
-# Plano: Demo com Balões Múltiplos (Estilo Humano)
 
-## Problema Identificado
+# Plano: Ajustar Delays da Demo para Parecer Humano
 
-Atualmente cada mensagem da AURA aparece em um único balão grande. Mas a AURA real conversa em **múltiplos balões curtos**, como humano no WhatsApp:
+## Configuracao Real da AURA (Referencia)
 
-**Atual (errado):**
-```
-┌─────────────────────────────────────┐
-│ Esse peso de "todo mundo parece     │
-│ saber" é muito real... e muito      │
-│ injusto com você mesma. Me conta:   │
-│ quando você diz que não sabe o que  │
-│ quer, é sobre trabalho?             │
-│ Relacionamentos? Ou é algo mais     │
-│ fundo?                              │
-└─────────────────────────────────────┘
-```
+Analisei o codigo real da AURA em `webhook-zapi/index.ts` e as memorias de configuracao. Eis as regras de timing:
 
-**Correto (estilo humano):**
-```
-┌─────────────────────────────┐
-│ Esse peso de "todo mundo    │
-│ parece saber" é muito real  │
-└─────────────────────────────┘
+### Typing Delay (proporcional ao tamanho)
+- Mensagens curtas (< 50 chars): 1-2 segundos
+- Mensagens medias (< 100 chars): 2-3 segundos
+- Mensagens longas (100+ chars): 3-6 segundos
+- Formula: `length / 30` para curtas, `length / 40` para medias, `length / 35` para longas
 
-┌─────────────────────────────┐
-│ ...e muito injusto com      │
-│ você mesma                  │
-└─────────────────────────────┘
+### Delay Entre Bubbles
+- Delay base entre bubbles da mesma sequencia: 500-800ms
+- Randomizacao de ±20% para parecer natural
+- Delay apos resposta da usuaria antes da AURA comecar: 1.5-3.5s
 
-┌─────────────────────────────┐
-│ Me conta: quando você diz   │
-│ que não sabe o que quer,    │
-│ é sobre trabalho?           │
-│ Relacionamentos?            │
-│ Ou é algo mais fundo?       │
-└─────────────────────────────┘
-```
+## Problema Atual
 
-## Conversa Reformulada
+A Demo usa delays fixos e muito curtos:
+- Bubbles consecutivos: 300-500ms (muito rapido, parece maquina)
+- Sem randomizacao realista
+- Typing delay nao reflete o tamanho da mensagem
 
-Vou quebrar as mensagens da AURA em balões curtos, mantendo o ritmo natural:
-
-| # | Quem | Balão |
-|---|------|-------|
-| 1 | Usuária | Tenho 28 anos e ainda não sei o que quero da vida. Todo mundo parece ter um caminho, menos eu. |
-| 2 | AURA | Esse peso de "todo mundo parece saber" é muito real... |
-| 3 | AURA | ...e muito injusto com você mesma |
-| 4 | AURA | Me conta: quando você diz que não sabe o que quer, é sobre trabalho? Relacionamentos? Ou é algo mais fundo? |
-| 5 | Usuária | É tudo. Sinto que to só existindo, sabe? Não vivendo de verdade. |
-| 6 | AURA | "Só existindo"... |
-| 7 | AURA | isso diz muito |
-| 8 | AURA | Deixa eu te perguntar uma coisa: teve algum momento recente, mesmo que pequeno, em que você sentiu que estava vivendo de verdade? |
-| 9 | AURA | Pode ser algo simples |
-| 10 | Usuária | Semana passada eu passei a tarde toda desenhando. Nem vi o tempo passar. |
-| 11 | AURA | Olha só o que você acabou de me mostrar... |
-| 12 | AURA | Você diz que não sabe o que quer |
-| 13 | AURA | mas seu corpo sabe |
-| 14 | AURA | Ele te levou pra um lugar onde o tempo sumiu |
-| 15 | AURA | Isso não é "só existir" |
-| 16 | AURA | Isso é uma pista enorme 💡 |
-
-## Alteracoes Tecnicas
+## Alteracoes Propostas
 
 ### Arquivo: `src/components/Demo.tsx`
 
-**Mudancas na estrutura de dados:**
+**Nova logica de delays baseada na AURA real:**
 
-1. Reformular o array `messages` para ter cada balão como item separado
-2. Adicionar propriedade `isSequence` para indicar balões consecutivos do mesmo remetente
-3. O horário só aparece no último balão de cada sequência
+1. **Typing delay proporcional ao tamanho:**
+   ```text
+   if (length < 50)  -> 1000 + (length * 30)  // 1-2.5s
+   if (length < 100) -> 1500 + (length * 25)  // 1.5-4s  
+   else              -> 2000 + (length * 20)  // 2-5s (cap at 5s)
+   ```
 
-**Mudancas na animacao:**
+2. **Delay entre bubbles consecutivos (mais humano):**
+   - Base: 600-900ms (em vez de 300-500ms)
+   - Randomizacao: ±20%
+   - Formula: `baseDelay * (0.8 + Math.random() * 0.4)`
 
-1. Balões consecutivos da AURA aparecem com delay menor (300-500ms entre eles)
-2. O indicador "digitando..." aparece apenas antes do PRIMEIRO balão de cada sequência da AURA
-3. Balões da mesma sequência têm espaçamento visual menor
+3. **Delay antes da AURA comecar a responder:**
+   - Delay inicial: 1200-2000ms antes de mostrar "digitando..."
+   - Simula a AURA "lendo" a mensagem da usuaria
 
-**Mudancas visuais:**
+4. **Delay para mensagens da usuaria:**
+   - Maior intervalo: 1500-2500ms (tempo de "leitura")
+   - Simula a transicao natural entre quem fala
 
-1. Balões consecutivos usam `rounded-bl-sm` em vez de `rounded-bl-md` para indicar continuidade
-2. Horário aparece apenas no último balão da sequência
-3. Espaçamento reduzido entre balões da mesma pessoa (`space-y-1` em vez de `space-y-3`)
-
-## Fluxo da Animacao
+## Comparacao Visual
 
 ```text
-[Usuária envia]
-    |
-    v
-[AURA digitando...]  <- indicador aparece
-    |
-    v
-[Balão 1 da AURA] <- aparece
-    |
-  300ms
-    |
-    v
-[Balão 2 da AURA] <- aparece (sem "digitando")
-    |
-  300ms
-    |
-    v
-[Balão 3 da AURA] <- aparece (com horário)
-    |
-    v
-[Usuária envia próxima]
+ATUAL (muito rapido):
+[User msg] -> 800ms -> [AURA digitando] -> 1.5s -> [Bubble 1] -> 300ms -> [Bubble 2] -> 350ms -> [Bubble 3]
+
+PROPOSTO (mais humano):
+[User msg] -> 1.5s -> [pause lendo] -> 1.5s -> [AURA digitando] -> 2s -> [Bubble 1] -> 700ms -> [Bubble 2] -> 650ms -> [Bubble 3]
 ```
 
 ## Resumo das Alteracoes
 
 | Arquivo | Alteracao |
 |---------|-----------|
-| `src/components/Demo.tsx` | Reformular array de mensagens para balões múltiplos, ajustar lógica de timing para sequências, ajustar espaçamento visual entre balões consecutivos |
+| `src/components/Demo.tsx` | Ajustar funcao de calculo de delays para usar regras reais da AURA: typing proporcional ao tamanho, delays maiores entre bubbles consecutivos (600-900ms com ±20%), delay inicial de "leitura" antes do "digitando..." |
 
 ## Resultado Esperado
 
-O visitante verá a AURA respondendo exatamente como ela faz de verdade: em balões curtos, um após o outro, como uma pessoa real digitando no WhatsApp. Isso vai criar uma experiência muito mais imersiva e "UAU".
+Os delays vao parecer muito mais naturais e humanos:
+- A AURA vai "ler" a mensagem antes de comecar a digitar
+- O indicador "digitando" vai durar proporcionalmente ao tamanho da mensagem
+- Os bubbles vao aparecer com ritmo mais natural (nem muito rapido, nem muito lento)
+- A randomizacao vai evitar que pareca mecanico
+
