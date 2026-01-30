@@ -252,7 +252,7 @@ const Demo = () => {
 
   const handleAudioToggle = () => {
     if (!audioRef.current) {
-      audioRef.current = new Audio("/audio/aura-demo-voice.mp3");
+      audioRef.current = new Audio("https://uhyogifgmutfmbyhzzyo.supabase.co/storage/v1/object/public/meditations/demo/aura-voice.mp3");
       audioRef.current.onended = () => setIsAudioPlaying(false);
     }
 
