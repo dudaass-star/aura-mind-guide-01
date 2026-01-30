@@ -160,15 +160,15 @@ const Demo = () => {
     }
   }, [visibleMessages, isTyping]);
 
-  // Human-like delay calculation based on real AURA timing
+  // Human-like delay calculation based on real AURA timing - doubled for contemplative rhythm
   const calculateTypingDelay = (content: string): number => {
     const length = content.length;
     if (length < 50) {
-      return Math.min(2500, 1000 + length * 30); // 1-2.5s for short
+      return Math.min(4000, 2000 + length * 40); // 2-4s for short
     } else if (length < 100) {
-      return Math.min(4000, 1500 + length * 25); // 1.5-4s for medium
+      return Math.min(5500, 3000 + length * 25); // 3-5.5s for medium
     } else {
-      return Math.min(5000, 2000 + length * 20); // 2-5s for long (capped)
+      return Math.min(6000, 4000 + length * 20); // 4-6s for long (capped)
     }
   };
 
@@ -197,7 +197,7 @@ const Demo = () => {
     if (isAuraMessage) {
       if (isFirstInSequence) {
         // First message in AURA sequence: simulate "reading" then typing
-        const readingDelay = humanizeDelay(1500); // 1.2-1.8s to "read" the user message
+        const readingDelay = humanizeDelay(3000); // 2.4-3.6s to "read" the user message
         const typingDuration = calculateTypingDelay(nextMessage.content);
         
         // Show typing indicator after "reading"
@@ -211,15 +211,15 @@ const Demo = () => {
           setVisibleMessages((prev) => prev + 1);
         }, readingDelay + typingDuration);
       } else {
-        // Consecutive AURA bubbles: 600-900ms with ±20% randomization
-        const bubbleDelay = humanizeDelay(750); // Base 750ms → 600-900ms
+        // Consecutive AURA bubbles: 1.2-1.8s with ±20% randomization
+        const bubbleDelay = humanizeDelay(1500); // Base 1500ms → 1.2-1.8s
         messageTimeout = setTimeout(() => {
           setVisibleMessages((prev) => prev + 1);
         }, bubbleDelay);
       }
     } else {
       // User messages: longer pause to simulate natural conversation flow
-      const userDelay = humanizeDelay(2000); // 1.6-2.4s
+      const userDelay = humanizeDelay(3000); // 2.4-3.6s
       messageTimeout = setTimeout(() => {
         setVisibleMessages((prev) => prev + 1);
       }, userDelay);
