@@ -1,43 +1,32 @@
 
-# Plano: Atualizar Texto do Áudio da Demo
+# Plano: Adicionar Role de Admin para Eduardo
 
-## Objetivo
+## Resumo
+Adicionar a role de `admin` para o usuário Eduardo Santos (user_id: `329ebadd-07eb-4e1e-88db-d8974b2ea3e5`) na tabela `user_roles`.
 
-Regenerar o áudio da demo com o novo texto:
-> "O que você costuma desenhar? O que você gosta de desenhar mais?"
+## O que será feito
 
-## Alterações Técnicas
+1. **Inserir registro na tabela user_roles**
+   - Adicionar entrada com `user_id` = `329ebadd-07eb-4e1e-88db-d8974b2ea3e5` e `role` = `admin`
 
-### 1. Criar Edge Function Temporária
+## Comando SQL que será executado
 
-**Arquivo:** `supabase/functions/generate-demo-audio/index.ts`
-
-Recriar a função com os mesmos parâmetros de voz aprovados anteriormente:
-- **Voz:** Erinome
-- **Modelo:** gemini-2.5-pro-tts
-- **speakingRate:** 1.05 (ritmo mais lento e natural)
-- **stylePrompt:** "Fale de forma calorosa e genuinamente curiosa, como uma amiga próxima fazendo uma pergunta com interesse real. Tom suave, ritmo tranquilo, pausas naturais. Sem pressa. Voz acolhedora e presente."
-- **Texto:** "O que você costuma desenhar? O que você gosta de desenhar mais?"
-
-### 2. Atualizar config.toml
-
-Adicionar configuração temporária:
-```toml
-[functions.generate-demo-audio]
-verify_jwt = false
+```sql
+INSERT INTO public.user_roles (user_id, role) 
+VALUES ('329ebadd-07eb-4e1e-88db-d8974b2ea3e5', 'admin');
 ```
 
-### 3. Executar e Fazer Upload
+## Resultado esperado
+Após a execução, você terá acesso completo à página de administração de meditações (`/admin/meditations`).
 
-- Deploy da função
-- Executar para gerar o áudio
-- Upload automático para `meditations/demo/aura-voice.mp3` (sobrescreve o arquivo atual)
+## Seção Técnica
 
-### 4. Cleanup
+A tabela `user_roles` já existe com as seguintes características:
+- Políticas RLS configuradas corretamente
+- Função `has_role()` já implementada para verificação de roles
+- O hook `useAdminAuth` já utiliza esta função para validar acesso admin
 
-- Deletar a função `generate-demo-audio`
-- Remover entrada do `config.toml`
-
-## Resultado
-
-O áudio na demo da landing page será atualizado com a nova pergunta, mantendo o mesmo tom natural e acolhedor já aprovado.
+Após esta migração, quando você acessar a página `/admin/meditations`, o sistema irá:
+1. Verificar sua autenticação
+2. Chamar `has_role(user_id, 'admin')`
+3. Retornar `true` e permitir acesso à página
