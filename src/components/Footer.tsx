@@ -9,7 +9,7 @@ const Footer = () => {
         <div className="flex flex-col md:flex-row justify-between items-center gap-6 mb-8">
           {/* Logo */}
           <Link to="/">
-            <img src={logoOlaAura} alt="Olá AURA" className="h-20 w-auto" />
+            <img src={logoOlaAura} alt="Olá AURA" className="h-24 w-auto" />
           </Link>
 
           {/* Links */}
