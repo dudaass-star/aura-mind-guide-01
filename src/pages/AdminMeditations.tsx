@@ -12,7 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { RefreshCw, Play, CheckCircle, XCircle, Clock, Loader2, Pause, X, Download, Upload, Trash2 } from "lucide-react";
+import { RefreshCw, Play, CheckCircle, XCircle, Clock, Loader2, Pause, X, Download, Upload, Trash2, ShieldAlert } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,6 +25,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
+import { useAdminAuth } from "@/hooks/useAdminAuth";
 
 interface Meditation {
   id: string;
@@ -159,6 +160,7 @@ async function resetStuckChunks(meditationId: string): Promise<number> {
 }
 
 export default function AdminMeditations() {
+  const { isLoading: authLoading, isAdmin, isAuthenticated, redirectIfNotAdmin } = useAdminAuth();
   const [meditations, setMeditations] = useState<MeditationWithAudio[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState<string | null>(null);
@@ -170,6 +172,13 @@ export default function AdminMeditations() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadTargetRef = useRef<{id: string, title: string} | null>(null);
   const { toast } = useToast();
+
+  // Redirect non-admin users
+  useEffect(() => {
+    if (!authLoading) {
+      redirectIfNotAdmin();
+    }
+  }, [authLoading, isAdmin, redirectIfNotAdmin]);
 
   // Função para fazer download do áudio
   const handleDownload = async (med: MeditationWithAudio) => {
@@ -744,6 +753,34 @@ export default function AdminMeditations() {
   const totalWithAudio = meditations.filter((m) => m.audio).length;
   const totalMeditations = meditations.length;
   const totalInProgress = meditations.filter(m => m.chunks && m.chunks.length > 0).length;
+
+  // Show loading state while checking authentication
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+          <p className="text-muted-foreground">Verificando permissões...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show access denied if not admin
+  if (!isAdmin) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <ShieldAlert className="h-16 w-16 mx-auto text-destructive" />
+          <h1 className="text-2xl font-bold text-foreground">Acesso Negado</h1>
+          <p className="text-muted-foreground">
+            Você não tem permissão para acessar esta página.
+            {!isAuthenticated && " Faça login como administrador."}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-8">
