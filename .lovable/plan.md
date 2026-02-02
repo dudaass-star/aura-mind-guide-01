@@ -1,32 +1,37 @@
 
-# Plano: Adicionar Role de Admin para Eduardo
+# Plano: Atualizar Favicon do Site AURA
 
 ## Resumo
-Adicionar a role de `admin` para o usuário Eduardo Santos (user_id: `329ebadd-07eb-4e1e-88db-d8974b2ea3e5`) na tabela `user_roles`.
+Substituir o favicon atual (que está mostrando o ícone da Lovable) pela imagem do símbolo AURA que você acabou de enviar.
 
 ## O que será feito
 
-1. **Inserir registro na tabela user_roles**
-   - Adicionar entrada com `user_id` = `329ebadd-07eb-4e1e-88db-d8974b2ea3e5` e `role` = `admin`
+1. **Copiar a imagem para o projeto**
+   - Copiar o arquivo `user-uploads://Simbolo_Aura.png` para `public/favicon.png`
 
-## Comando SQL que será executado
+2. **Atualizar o `index.html`**
+   - Alterar a referência do favicon da URL externa para o arquivo local
+   - Linha 28: de URL do Google Storage para `/favicon.png`
 
-```sql
-INSERT INTO public.user_roles (user_id, role) 
-VALUES ('329ebadd-07eb-4e1e-88db-d8974b2ea3e5', 'admin');
+3. **Remover arquivo antigo (se necessário)**
+   - O arquivo `public/favicon.ico` existente pode estar sendo usado como fallback pelos navegadores
+
+## Mudanças no código
+
+**Arquivo: `index.html` (linha 28)**
+
+De:
+```html
+<link rel="icon" type="image/png" href="https://storage.googleapis.com/gpt-engineer-file-uploads/...">
+```
+
+Para:
+```html
+<link rel="icon" type="image/png" href="/favicon.png">
 ```
 
 ## Resultado esperado
-Após a execução, você terá acesso completo à página de administração de meditações (`/admin/meditations`).
+Após a alteração, a aba do navegador exibirá o símbolo AURA (círculo com gradiente verde/roxo) em vez do ícone da Lovable.
 
-## Seção Técnica
-
-A tabela `user_roles` já existe com as seguintes características:
-- Políticas RLS configuradas corretamente
-- Função `has_role()` já implementada para verificação de roles
-- O hook `useAdminAuth` já utiliza esta função para validar acesso admin
-
-Após esta migração, quando você acessar a página `/admin/meditations`, o sistema irá:
-1. Verificar sua autenticação
-2. Chamar `has_role(user_id, 'admin')`
-3. Retornar `true` e permitir acesso à página
+## Nota
+Pode ser necessário limpar o cache do navegador (Ctrl+Shift+R ou Cmd+Shift+R) para ver o novo favicon imediatamente.
