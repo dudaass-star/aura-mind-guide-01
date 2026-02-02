@@ -6,6 +6,45 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Allowed domains for short links - only these domains can be used as redirect targets
+const ALLOWED_DOMAINS = [
+  'olaaura.com.br',
+  'www.olaaura.com.br',
+  'aura-mind-guide-01.lovable.app',
+  'stripe.com',
+  'checkout.stripe.com',
+  'billing.stripe.com',
+  // Supabase storage for meditation files
+  'uhyogifgmutfmbyhzzyo.supabase.co',
+];
+
+// Validate URL format, protocol, and domain
+function validateUrl(urlString: string): { valid: boolean; error?: string } {
+  try {
+    const parsedUrl = new URL(urlString);
+    
+    // Only allow http and https protocols
+    if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+      return { valid: false, error: 'Only HTTP(S) URLs are allowed' };
+    }
+    
+    // Check if domain is in allowlist
+    const hostname = parsedUrl.hostname.toLowerCase();
+    const isAllowed = ALLOWED_DOMAINS.some(domain => 
+      hostname === domain || hostname.endsWith('.' + domain)
+    );
+    
+    if (!isAllowed) {
+      console.log(`❌ Domain not allowed: ${hostname}`);
+      return { valid: false, error: 'Domain not allowed for short links' };
+    }
+    
+    return { valid: true };
+  } catch (e) {
+    return { valid: false, error: 'Invalid URL format' };
+  }
+}
+
 // Generate a random alphanumeric code
 function generateShortCode(length: number = 6): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
@@ -31,6 +70,16 @@ serve(async (req) => {
     
     if (!url) {
       return new Response(JSON.stringify({ error: 'URL is required' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    
+    // Validate URL format, protocol, and domain
+    const validation = validateUrl(url);
+    if (!validation.valid) {
+      console.log(`❌ URL validation failed: ${validation.error}`);
+      return new Response(JSON.stringify({ error: validation.error }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
