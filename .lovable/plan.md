@@ -1,54 +1,51 @@
 
-# Plano: Corrigir Erro de Timeout no Cadastro Trial
 
-## Problema Identificado
+## Mensagem de continuidade para usuários que vêm do trial
 
-O erro `ERR_TIMED_OUT` está ocorrendo no preflight (requisição OPTIONS) do navegador ao tentar chamar a edge function `start-trial`. A causa raiz é que os **headers CORS estão incompletos** na edge function.
+### Problema atual
+Quando um usuário já conversou com a AURA durante o trial e depois assina um plano, o webhook envia a mesma mensagem de boas-vindas genérica ("Oi, eu sou a AURA..."), como se nunca tivessem conversado. Isso quebra a experiência de continuidade.
 
-O cliente Supabase envia headers adicionais que precisam ser explicitamente permitidos:
-- `x-supabase-client-platform`
-- `x-supabase-client-platform-version`
-- `x-supabase-client-runtime`
-- `x-supabase-client-runtime-version`
+### Solução
+Modificar o `stripe-webhook` para detectar se o perfil já existe (vindo do trial) e enviar uma **mensagem de upgrade** em vez da saudação padrão.
 
-**Evidência**: Quando testei a função diretamente (sem passar pelo navegador), ela funcionou perfeitamente e criou um perfil de teste com sucesso.
+### Lógica
+O webhook já verifica se o perfil existe (linha 164-168). Vamos usar essa verificação para escolher a mensagem:
 
-## Solução
+- **Perfil existente (upgrade do trial):** Mensagem de continuidade reconhecendo que já se conhecem
+- **Perfil novo (assinatura direta):** Mensagem de boas-vindas atual (sem mudança)
 
-Atualizar os headers CORS na edge function `start-trial` para incluir todos os headers necessários.
+### Mensagem de upgrade (exemplo)
 
-## Mudanças no código
+Para planos com sessões (Direção/Transformação):
+> "Oi, [nome]! Que notícia boa! Você escolheu o plano [plano], que inclui [X] sessões especiais por mês! [detalhes das sessões + pergunta sobre agenda]"
 
-**Arquivo: `supabase/functions/start-trial/index.ts`**
+Para plano Essencial:
+> "Oi, [nome]! Que notícia boa! Agora somos oficiais. Você escolheu o plano Essencial. Vamos continuar de onde paramos?"
 
-Alterar as linhas 3-6 de:
-```typescript
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+### Mudanças técnicas
+
+**Arquivo:** `supabase/functions/stripe-webhook/index.ts`
+
+1. Mover a verificação de perfil existente para **antes** do envio da mensagem
+2. Se perfil existente: montar mensagem de upgrade/continuidade
+3. Se perfil novo: manter mensagem de boas-vindas atual
+4. Manter toda a lógica de criação/atualização do perfil no banco
+
+### Reorganização do fluxo
+
+```text
+checkout.session.completed
+  |
+  +-- Verificar perfil no banco
+  |
+  +-- Perfil existe? (veio do trial)
+  |     SIM -> Mensagem de upgrade
+  |     NAO -> Mensagem de boas-vindas padrão
+  |
+  +-- Enviar mensagem via Z-API
+  |
+  +-- Criar ou atualizar perfil no banco
 ```
 
-Para:
-```typescript
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
-};
-```
+Nenhuma tabela ou migration é necessária.
 
-## Por que isso resolve
-
-O navegador faz uma requisição preflight (OPTIONS) antes da requisição real (POST) para verificar se o servidor permite os headers que o cliente quer enviar. Se o servidor não permitir explicitamente esses headers no `Access-Control-Allow-Headers`, o navegador bloqueia a requisição.
-
-## Resultado Esperado
-
-Após a correção:
-1. O preflight será bem-sucedido
-2. A requisição POST será processada normalmente
-3. O usuário será redirecionado para `/trial-iniciado`
-4. A mensagem de boas-vindas será enviada via WhatsApp
-
-## Nota sobre o teste
-
-Criei um perfil de teste durante a investigação (email: teste@teste.com). Você pode querer removê-lo do banco de dados depois.
