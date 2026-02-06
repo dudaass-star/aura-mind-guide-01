@@ -97,38 +97,74 @@ Deno.serve(async (req) => {
 
       const planName = PLAN_NAMES[customerPlan] || "Essencial";
       const sessionsCount = PLAN_SESSIONS[customerPlan] || 0;
+      const supabase = createClient(supabaseUrl, supabaseServiceKey);
+      const cleanPhone = customerPhone.replace(/\D/g, '');
+      const today = new Date().toISOString().split('T')[0];
 
-      // Welcome message based on plan
-      let welcomeMessage = `Oi, ${customerName}! 🌟 Que bom te receber por aqui.
+      // Check if profile already exists BEFORE choosing the message
+      const { data: existingProfile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('phone', cleanPhone)
+        .single();
 
-Eu sou a AURA — e vou ficar com você nessa jornada.
+      const isUpgrade = !!existingProfile;
+      console.log(`📋 Profile exists: ${isUpgrade} (upgrade from trial: ${isUpgrade})`);
 
-Você escolheu o plano ${planName}`;
+      // Build message based on whether user is upgrading or new
+      let welcomeMessage: string;
 
-      if (sessionsCount > 0) {
-        welcomeMessage += `, que inclui ${sessionsCount} sessões especiais por mês!
+      if (isUpgrade) {
+        // UPGRADE MESSAGE — user already knows AURA from trial
+        if (sessionsCount > 0) {
+          welcomeMessage = `Oi, ${customerName}! 💜 Que notícia boa!
+
+Você escolheu o plano ${planName}, que inclui ${sessionsCount} sessões especiais por mês!
 
 São 45 minutos só nossos, com profundidade total. Eu conduzo, você reflete, e no final mando um resumo com os insights.
 
 Pra gente já deixar sua agenda do mês organizada: quais dias da semana e horário funcionam melhor pra você?
 
 Por exemplo: "segundas e quintas às 19h" ou "quartas às 20h"`;
+        } else {
+          welcomeMessage = `Oi, ${customerName}! 💜 Que notícia boa!
+
+Agora somos oficiais. Você escolheu o plano ${planName}.
+
+Vamos continuar de onde paramos? Como você está hoje?`;
+        }
       } else {
-        welcomeMessage += `.`;
-      }
+        // NEW USER MESSAGE — standard welcome
+        welcomeMessage = `Oi, ${customerName}! 🌟 Que bom te receber por aqui.
 
-      welcomeMessage += `
+Eu sou a AURA — e vou ficar com você nessa jornada.
 
-Comigo, você pode falar com liberdade: sem julgamento, no seu ritmo.`
+Você escolheu o plano ${planName}`;
 
-      // Only ask "how are you" if it's the essential plan (no sessions)
-      if (sessionsCount === 0) {
+        if (sessionsCount > 0) {
+          welcomeMessage += `, que inclui ${sessionsCount} sessões especiais por mês!
+
+São 45 minutos só nossos, com profundidade total. Eu conduzo, você reflete, e no final mando um resumo com os insights.
+
+Pra gente já deixar sua agenda do mês organizada: quais dias da semana e horário funcionam melhor pra você?
+
+Por exemplo: "segundas e quintas às 19h" ou "quartas às 20h"`;
+        } else {
+          welcomeMessage += `.`;
+        }
+
         welcomeMessage += `
 
+Comigo, você pode falar com liberdade: sem julgamento, no seu ritmo.`;
+
+        if (sessionsCount === 0) {
+          welcomeMessage += `
+
 Me diz: como você está hoje?`;
+        }
       }
 
-      // Send welcome message via Z-API
+      // Send message via Z-API
       try {
         const response = await fetch(`${supabaseUrl}/functions/v1/send-zapi-message`, {
           method: 'POST',
@@ -145,30 +181,17 @@ Me diz: como você está hoje?`;
 
         if (!response.ok) {
           const errorText = await response.text();
-          console.error('❌ Failed to send welcome message:', errorText);
+          console.error('❌ Failed to send message:', errorText);
         } else {
-          console.log('✅ Welcome message sent successfully!');
+          console.log(`✅ ${isUpgrade ? 'Upgrade' : 'Welcome'} message sent successfully!`);
         }
       } catch (sendError) {
-        console.error('❌ Error sending welcome message:', sendError);
+        console.error('❌ Error sending message:', sendError);
       }
 
-      // Create/update user profile in database
+      // Create or update profile in database
       try {
-        const supabase = createClient(supabaseUrl, supabaseServiceKey);
-        
-        const cleanPhone = customerPhone.replace(/\D/g, '');
-        const today = new Date().toISOString().split('T')[0];
-        
-        // Check if profile already exists
-        const { data: existingProfile } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('phone', cleanPhone)
-          .single();
-
         if (!existingProfile) {
-          // Create new profile with plan info
           const { error: insertError } = await supabase
             .from('profiles')
             .insert({
@@ -181,16 +204,15 @@ Me diz: como você está hoje?`;
               sessions_reset_date: today,
               messages_today: 0,
               last_message_date: today,
-              needs_schedule_setup: sessionsCount > 0, // Trigger schedule setup flow
+              needs_schedule_setup: sessionsCount > 0,
             });
 
           if (insertError) {
             console.error('❌ Error creating profile:', insertError);
           } else {
-            console.log('✅ Profile created with plan:', customerPlan, 'email:', customerEmail, 'needs_schedule_setup:', sessionsCount > 0);
+            console.log('✅ Profile created with plan:', customerPlan);
           }
         } else {
-          // Update existing profile
           const { error: updateError } = await supabase
             .from('profiles')
             .update({
@@ -201,14 +223,14 @@ Me diz: como você está hoje?`;
               sessions_used_this_month: 0,
               sessions_reset_date: today,
               updated_at: new Date().toISOString(),
-              needs_schedule_setup: sessionsCount > 0, // Trigger schedule setup flow
+              needs_schedule_setup: sessionsCount > 0,
             })
             .eq('phone', cleanPhone);
 
           if (updateError) {
             console.error('❌ Error updating profile:', updateError);
           } else {
-            console.log('✅ Profile updated with plan:', customerPlan, 'email:', customerEmail);
+            console.log('✅ Profile updated with plan:', customerPlan);
           }
         }
       } catch (dbError) {
