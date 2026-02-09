@@ -1389,6 +1389,7 @@ function sanitizeMessageHistory(messages: { role: string; content: string; creat
       .replace(/\[INICIAR_SESSAO\]/gi, '')
       .replace(/\[AGENDAR_SESSAO:[^\]]+\]/gi, '')
       .replace(/\[REAGENDAR_SESSAO:[^\]]+\]/gi, '')
+      .replace(/\[SESSAO_PERDIDA_RECUSADA\]/gi, '')
       .replace(/\[TEMA_NOVO:[^\]]+\]/gi, '')
       .replace(/\[TEMA_RESOLVIDO:[^\]]+\]/gi, '')
       .replace(/\[TEMA_PROGREDINDO:[^\]]+\]/gi, '')
@@ -1448,6 +1449,7 @@ function splitIntoMessages(response: string, allowAudioThisTurn: boolean): Array
   cleanResponse = cleanResponse.replace(/\[INICIAR_SESSAO\]/gi, '').trim();
   cleanResponse = cleanResponse.replace(/\[AGENDAR_SESSAO:[^\]]+\]/gi, '').trim();
   cleanResponse = cleanResponse.replace(/\[REAGENDAR_SESSAO:[^\]]+\]/gi, '').trim();
+  cleanResponse = cleanResponse.replace(/\[SESSAO_PERDIDA_RECUSADA\]/gi, '').trim();
   cleanResponse = cleanResponse.replace(/\[TEMA_NOVO:[^\]]+\]/gi, '').trim();
   cleanResponse = cleanResponse.replace(/\[TEMA_RESOLVIDO:[^\]]+\]/gi, '').trim();
   cleanResponse = cleanResponse.replace(/\[TEMA_PROGREDINDO:[^\]]+\]/gi, '').trim();
@@ -2189,26 +2191,45 @@ serve(async (req) => {
       sessionsAvailable = Math.max(0, planConfig.sessions - sessionsUsed);
     }
 
-    // Verificar sessões agendadas pendentes (dentro de +/- 15 minutos)
+    // Verificar sessões agendadas pendentes (dentro de +/- 1 hora)
     let pendingScheduledSession = null;
+    let recentMissedSession: any = null;
     if (profile?.user_id) {
       const now = new Date();
-      const fifteenMinAgo = new Date(now.getTime() - 15 * 60 * 1000);
-      const fifteenMinAhead = new Date(now.getTime() + 15 * 60 * 1000);
+      const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+      const oneHourAhead = new Date(now.getTime() + 60 * 60 * 1000);
 
       const { data: scheduledSessions } = await supabase
         .from('sessions')
         .select('*')
         .eq('user_id', profile.user_id)
         .eq('status', 'scheduled')
-        .gte('scheduled_at', fifteenMinAgo.toISOString())
-        .lte('scheduled_at', fifteenMinAhead.toISOString())
+        .gte('scheduled_at', oneHourAgo.toISOString())
+        .lte('scheduled_at', oneHourAhead.toISOString())
         .order('scheduled_at', { ascending: true })
         .limit(1);
 
       if (scheduledSessions && scheduledSessions.length > 0) {
         pendingScheduledSession = scheduledSessions[0];
         console.log('📅 Found pending scheduled session:', pendingScheduledSession.id);
+      }
+
+      // Se não encontrou sessão scheduled, buscar sessão perdida (cancelled/no_show)
+      if (!pendingScheduledSession) {
+        const { data: missedSessions } = await supabase
+          .from('sessions')
+          .select('*')
+          .eq('user_id', profile.user_id)
+          .in('status', ['cancelled', 'no_show'])
+          .is('started_at', null)
+          .or('session_summary.is.null,session_summary.neq.reactivation_declined')
+          .order('scheduled_at', { ascending: false })
+          .limit(1);
+
+        if (missedSessions && missedSessions.length > 0) {
+          recentMissedSession = missedSessions[0];
+          console.log('🔍 Found recent missed session:', recentMissedSession.id, 'status:', recentMissedSession.status, 'scheduled_at:', recentMissedSession.scheduled_at);
+        }
       }
     }
 
@@ -2437,6 +2458,56 @@ serve(async (req) => {
       sessionTimeContext = calculateSessionTimeContext(currentSession).timeContext;
       
       console.log('✅ Session started:', pendingScheduledSession.id);
+    }
+
+    // Reativar sessão perdida quando usuário confirma que quer fazer agora
+    if (!shouldStartSession && !sessionActive && recentMissedSession && !pendingScheduledSession && profile) {
+      // Mover confirmsSessionStart para fora do bloco pendingScheduledSession para reusar
+      const confirmPhrasesMissed = [
+        'vamos', 'bora', 'pode comecar', 'pode começar', 'to pronta', 'tô pronta',
+        'to pronto', 'tô pronto', 'estou pronta', 'estou pronto', 'sim', 'simbora',
+        'vamos la', 'vamos lá', 'pode ser', 'quero', 'quero sim', 'claro',
+        'vem', 'começa', 'comeca', 'partiu', 'animada', 'animado', 'preparada', 'preparado',
+        'quero fazer agora', 'vamos fazer', 'pode ser agora', 'agora'
+      ];
+      const lowerMsg = message.toLowerCase().trim();
+      const userWantsToStartMissedSession = confirmPhrasesMissed.some(p => lowerMsg.includes(p));
+
+      if (userWantsToStartMissedSession) {
+        const now = new Date().toISOString();
+
+        // Reativar sessão: mudar status para in_progress
+        await supabase
+          .from('sessions')
+          .update({
+            status: 'in_progress',
+            started_at: now
+          })
+          .eq('id', recentMissedSession.id);
+
+        // Atualizar profile com current_session_id
+        await supabase
+          .from('profiles')
+          .update({
+            current_session_id: recentMissedSession.id
+          })
+          .eq('id', profile.id);
+
+        // Incrementar sessões usadas
+        await supabase
+          .from('profiles')
+          .update({
+            sessions_used_this_month: (profile.sessions_used_this_month || 0) + 1
+          })
+          .eq('id', profile.id);
+
+        sessionActive = true;
+        currentSession = { ...recentMissedSession, status: 'in_progress', started_at: now };
+        sessionTimeContext = calculateSessionTimeContext(currentSession).timeContext;
+        recentMissedSession = null; // Limpar para não injetar contexto de sessão perdida
+
+        console.log('✅ Missed session reactivated:', currentSession.id);
+      }
     }
 
     // Buscar histórico de mensagens (últimas 20)
@@ -2725,10 +2796,37 @@ O usuário tem uma sessão agendada para agora! Se ele parecer pronto ou confirm
 `;
     }
 
+    // Construir contexto de sessão perdida
+    let missedSessionContext = '';
+    if (!sessionActive && !pendingScheduledSession && recentMissedSession) {
+      const missedDate = new Date(recentMissedSession.scheduled_at);
+      const formattedDate = missedDate.toLocaleDateString('pt-BR', { 
+        weekday: 'long', day: '2-digit', month: '2-digit',
+        timeZone: 'America/Sao_Paulo'
+      });
+      const formattedTime = missedDate.toLocaleTimeString('pt-BR', { 
+        hour: '2-digit', minute: '2-digit',
+        timeZone: 'America/Sao_Paulo'
+      });
+      missedSessionContext = `
+🔔 SESSÃO PERDIDA DETECTADA!
+- O usuário tinha uma sessão agendada para ${formattedDate} às ${formattedTime} que não aconteceu.
+- Pergunte com carinho se ele quer:
+  1. Fazer a sessão agora (ele pode confirmar com "vamos", "quero", "sim", etc.)
+  2. Reagendar para outra data (usar [REAGENDAR_SESSAO:YYYY-MM-DD HH:mm])
+  3. Ou se prefere só conversar por hoje (usar [SESSAO_PERDIDA_RECUSADA])
+- Ofereça UMA vez e respeite a decisão. NÃO insista.
+- Se ele quiser fazer agora, inicie a sessão normalmente seguindo o método completo das 4 fases.
+`;
+      console.log('📋 Injecting missed session context for session:', recentMissedSession.id);
+    }
+
     // Montar prompt com contexto completo
     let sessionTimeInfoStr = sessionTimeContext;
-    if (!sessionActive && !pendingScheduledSession) {
+    if (!sessionActive && !pendingScheduledSession && !recentMissedSession) {
       sessionTimeInfoStr = 'Nenhuma sessão ativa ou agendada para agora.';
+    } else if (!sessionActive && recentMissedSession && !pendingScheduledSession) {
+      sessionTimeInfoStr = missedSessionContext;
     } else if (!sessionActive && pendingScheduledSession) {
       sessionTimeInfoStr = pendingSessionContext;
     }
@@ -3183,6 +3281,35 @@ INSTRUÇÃO: Faça um fechamento CALOROSO da sessão:
           console.log('📅 Session rescheduled via AURA:', nextSession.id, 'to', newScheduledAt.toISOString());
         }
       }
+    }
+
+    // ========================================================================
+    // PROCESSAR TAG [SESSAO_PERDIDA_RECUSADA]
+    // ========================================================================
+    if (assistantMessage.includes('[SESSAO_PERDIDA_RECUSADA]') && profile?.user_id) {
+      // Buscar sessão perdida mais recente para marcar como recusada
+      const { data: missedToDecline } = await supabase
+        .from('sessions')
+        .select('id')
+        .eq('user_id', profile.user_id)
+        .in('status', ['cancelled', 'no_show'])
+        .is('started_at', null)
+        .or('session_summary.is.null,session_summary.neq.reactivation_declined')
+        .order('scheduled_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (missedToDecline) {
+        await supabase
+          .from('sessions')
+          .update({ session_summary: 'reactivation_declined' })
+          .eq('id', missedToDecline.id);
+        
+        console.log('🚫 Missed session reactivation declined, marked:', missedToDecline.id);
+      }
+
+      // Limpar tag da resposta
+      assistantMessage = assistantMessage.replace(/\[SESSAO_PERDIDA_RECUSADA\]/gi, '');
     }
 
     // ========================================================================
