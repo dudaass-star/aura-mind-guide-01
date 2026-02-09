@@ -33,7 +33,8 @@ Deno.serve(async (req) => {
         profiles!commitments_user_id_fkey (
           name,
           phone,
-          user_id
+          user_id,
+          do_not_disturb_until
         )
       `)
       .eq('completed', false)
@@ -53,6 +54,12 @@ Deno.serve(async (req) => {
         const profile = commitment.profiles;
         if (!profile?.phone) {
           console.log(`⏭️ Skipping commitment ${commitment.id}: no phone`);
+          continue;
+        }
+
+        // Skip if do_not_disturb is active
+        if (profile.do_not_disturb_until && new Date(profile.do_not_disturb_until) > new Date()) {
+          console.log(`🔇 Skipping commitment ${commitment.id} - do not disturb until ${profile.do_not_disturb_until}`);
           continue;
         }
 

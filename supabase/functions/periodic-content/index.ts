@@ -67,6 +67,12 @@ serve(async (req) => {
 
     for (const user of eligibleUsers) {
       try {
+        // Skip if do_not_disturb is active
+        if (user.do_not_disturb_until && new Date(user.do_not_disturb_until) > new Date()) {
+          console.log(`🔇 Skipping user ${user.name || 'Unknown'} - do not disturb until ${user.do_not_disturb_until}`);
+          continue;
+        }
+
         console.log(`\n👤 Processing user: ${user.name || 'Unknown'} (episode ${user.current_episode || 0}, last_content: ${user.last_content_sent_at ? getBrasiliaTimeString(new Date(user.last_content_sent_at)) : 'never'} BR)`);
 
         // Buscar o episódio atual da jornada

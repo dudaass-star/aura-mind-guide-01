@@ -117,7 +117,7 @@ Estou aqui por você. ✨`;
     // ========================================================================
     const { data: inactiveProfiles, error: inactiveError } = await supabase
       .from('profiles')
-      .select('user_id, name, phone, last_message_date, last_reactivation_sent')
+      .select('user_id, name, phone, last_message_date, last_reactivation_sent, do_not_disturb_until')
       .eq('status', 'active')
       .lt('last_message_date', threeDaysAgo.toISOString().split('T')[0])
       .not('phone', 'is', null);
@@ -130,6 +130,12 @@ Estou aqui por você. ✨`;
       logStep(`Found ${inactiveProfiles.length} potentially inactive profiles`);
 
       for (const profile of inactiveProfiles) {
+        // Skip if do_not_disturb is active
+        if (profile.do_not_disturb_until && new Date(profile.do_not_disturb_until) > now) {
+          logStep(`Skipping user ${profile.user_id} - do not disturb until ${profile.do_not_disturb_until}`);
+          continue;
+        }
+
         // Verificar se já enviou reativação nas últimas 24h
         if (profile.last_reactivation_sent) {
           const lastSent = new Date(profile.last_reactivation_sent);

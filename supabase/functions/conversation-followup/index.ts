@@ -356,7 +356,7 @@ Deno.serve(async (req) => {
         // Buscar profile
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
-          .select('name, phone, status, plan, current_session_id')
+          .select('name, phone, status, plan, current_session_id, do_not_disturb_until')
           .eq('user_id', followup.user_id)
           .maybeSingle();
         
@@ -368,6 +368,12 @@ Deno.serve(async (req) => {
         // Skip if no phone or user is not active
         if (!profile?.phone || profile?.status !== 'active') {
           console.log(`⏭️ Skipping user ${followup.user_id}: no phone or inactive`);
+          continue;
+        }
+
+        // Skip if do_not_disturb is active
+        if (profile.do_not_disturb_until && new Date(profile.do_not_disturb_until) > new Date()) {
+          console.log(`🔇 Skipping user ${followup.user_id} - do not disturb until ${profile.do_not_disturb_until}`);
           continue;
         }
 
