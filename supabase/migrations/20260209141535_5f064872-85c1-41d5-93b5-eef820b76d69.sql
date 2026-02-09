@@ -1,0 +1,1 @@
+ALTER TABLE public.profiles ADD COLUMN do_not_disturb_until TIMESTAMPTZ DEFAULT NULL;

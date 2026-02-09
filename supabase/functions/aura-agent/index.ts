@@ -969,6 +969,29 @@ EXEMPLOS:
 - Usuário: "não quero mais episódios" → "Entendi! Pausei o envio. Quando quiser voltar, é só falar! 💜 [PAUSAR_JORNADAS]"
 - Usuário: "quero voltar a receber" → "Que bom que você quer voltar! 💜 Deixa eu te mostrar as jornadas... [LISTAR_JORNADAS]"
 
+# DETECÇÃO DE INDISPONIBILIDADE (NÃO PERTURBE)
+
+Quando o usuário indicar que NÃO pode conversar agora, use a tag [NAO_PERTURBE:Xh] onde X é o número de horas estimado.
+
+Sinais de indisponibilidade:
+- "to no trabalho", "estou trabalhando", "tô trabalhando"
+- "agora não posso", "não posso falar agora", "agora não dá"
+- "to ocupada/o", "momento ruim", "tô ocupada"
+- "depois te respondo", "falo contigo depois"
+- "estou em reunião", "tô em reunião"
+- "agora não", "não posso agora"
+
+Exemplos:
+- "to no trabalho" → "Entendi! Fica tranquila, te dou um tempo. Quando sair, me chama! 💜 [NAO_PERTURBE:4h]"
+- "agora não posso, to na correria" → "Sem problemas! Vou ficar quietinha aqui. Me chama quando puder! 💜 [NAO_PERTURBE:3h]"
+- "estou em reunião" → "Xiu! Fico quieta. Me manda mensagem depois! 💜 [NAO_PERTURBE:2h]"
+
+IMPORTANTE:
+- NÃO insista nem faça mais perguntas quando o usuário disser que está ocupado
+- Estime o tempo de forma razoável (trabalho = 4h, reunião = 2h, correria = 3h)
+- Se o usuário voltar a mandar mensagem ANTES do tempo, o silêncio é cancelado automaticamente
+- Responda de forma curta e acolhedora, sem textão
+
 # CONTEXTO DO USUÁRIO (MEMÓRIA ATUAL)
 Nome: {user_name}
 Plano: {user_plan}
@@ -1400,6 +1423,7 @@ function sanitizeMessageHistory(messages: { role: string; content: string; creat
       .replace(/\[LISTAR_JORNADAS\]/gi, '')
       .replace(/\[TROCAR_JORNADA:[^\]]+\]/gi, '')
       .replace(/\[PAUSAR_JORNADAS\]/gi, '')
+      .replace(/\[NAO_PERTURBE:\d+h?\]/gi, '')
       .trim();
     
     // CORREÇÃO: Remover timestamps antigos das mensagens do assistente
@@ -1460,6 +1484,7 @@ function splitIntoMessages(response: string, allowAudioThisTurn: boolean): Array
   cleanResponse = cleanResponse.replace(/\[LISTAR_JORNADAS\]/gi, '').trim();
   cleanResponse = cleanResponse.replace(/\[TROCAR_JORNADA:[^\]]+\]/gi, '').trim();
   cleanResponse = cleanResponse.replace(/\[PAUSAR_JORNADAS\]/gi, '').trim();
+  cleanResponse = cleanResponse.replace(/\[NAO_PERTURBE:\d+h?\]/gi, '').trim();
 
   if (isAudioMode) {
     const normalized = cleanResponse
@@ -2157,12 +2182,19 @@ serve(async (req) => {
         messagesToday = 1;
       }
 
+      // Auto-clear do_not_disturb quando usuário manda mensagem
+      const updateFields: any = {
+        messages_today: messagesToday,
+        last_message_date: todayStr,
+      };
+      if (profile.do_not_disturb_until) {
+        updateFields.do_not_disturb_until = null;
+        console.log('🔔 Auto-clearing do_not_disturb - user sent a message');
+      }
+
       await supabase
         .from('profiles')
-        .update({
-          messages_today: messagesToday,
-          last_message_date: todayStr,
-        })
+        .update(updateFields)
         .eq('id', profile.id);
     }
 
@@ -3613,6 +3645,25 @@ INSTRUÇÃO: Faça um fechamento CALOROSO da sessão:
       
       // Limpar tag da resposta
       assistantMessage = assistantMessage.replace(/\[PAUSAR_JORNADAS\]/gi, '');
+    }
+
+    // ========================================================================
+    // PROCESSAR TAG [NAO_PERTURBE:Xh]
+    // ========================================================================
+    const dndMatch = assistantMessage.match(/\[NAO_PERTURBE:(\d+)h?\]/i);
+    if (dndMatch && profile?.user_id) {
+      const hours = parseInt(dndMatch[1]);
+      const dndUntil = new Date(Date.now() + hours * 60 * 60 * 1000);
+      
+      console.log(`🔇 Setting do_not_disturb_until for ${hours}h until ${dndUntil.toISOString()}`);
+      
+      await supabase
+        .from('profiles')
+        .update({ do_not_disturb_until: dndUntil.toISOString() })
+        .eq('user_id', profile.user_id);
+      
+      // Limpar tag da resposta
+      assistantMessage = assistantMessage.replace(/\[NAO_PERTURBE:\d+h?\]/gi, '');
     }
 
     // Verificar se a IA quer encerrar a sessão

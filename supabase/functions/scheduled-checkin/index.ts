@@ -62,7 +62,8 @@ Deno.serve(async (req) => {
       .from('profiles')
       .select('*')
       .eq('status', 'active')
-      .not('phone', 'is', null);
+      .not('phone', 'is', null)
+      .or('do_not_disturb_until.is.null,do_not_disturb_until.lte.' + new Date().toISOString());
 
     if (profilesError) {
       throw new Error(`Error fetching profiles: ${profilesError.message}`);
