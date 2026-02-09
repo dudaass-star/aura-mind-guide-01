@@ -391,17 +391,14 @@ Deno.serve(async (req) => {
         const lastUserMessage = recentMessages?.find((m: any) => m.role === 'user');
         const lastAssistantMessage = recentMessages?.find((m: any) => m.role === 'assistant');
         
-        // FALLBACK: Se last_user_message_at for null, usar última mensagem do banco
-        let effectiveLastUserMessageAt = followup.last_user_message_at;
-        if (!effectiveLastUserMessageAt && lastUserMessage) {
-          effectiveLastUserMessageAt = lastUserMessage.created_at;
-          console.log(`🔄 Fallback: Using last message time for ${followup.user_id}`);
-        }
-        
-        if (!effectiveLastUserMessageAt) {
-          console.log(`⏭️ Skipping user ${followup.user_id}: no last_user_message_at available`);
+        // Se last_user_message_at for null, a conversa foi INTENCIONALMENTE encerrada
+        // NÃO buscar fallback - respeitar o encerramento
+        if (!followup.last_user_message_at) {
+          console.log(`⏭️ Skipping user ${followup.user_id}: conversation intentionally ended (last_user_message_at is null)`);
           continue;
         }
+        
+        const effectiveLastUserMessageAt = followup.last_user_message_at;
         
         // Calcular tempo desde última mensagem
         const lastUserMessageAt = new Date(effectiveLastUserMessageAt).getTime();
