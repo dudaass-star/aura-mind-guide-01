@@ -333,13 +333,24 @@ Deno.serve(async (req) => {
     const phoneVariations = getPhoneVariations(payload.cleanPhone);
     console.log(`🔍 Searching for phone variations: ${phoneVariations.join(', ')}`);
     
-    const { data: profile, error: profileError } = await supabase
+    const { data: profileResults, error: profileError } = await supabase
       .from('profiles')
       .select('*')
       .in('phone', phoneVariations)
-      .maybeSingle();
+      .order('status', { ascending: true }) // 'active' comes before 'trial'
+      .order('updated_at', { ascending: false })
+      .limit(1);
 
-    if (profileError || !profile) {
+    if (profileError) {
+      console.error('❌ Error looking up profile:', profileError);
+      return new Response(JSON.stringify({ status: 'profile_lookup_error' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const profile = profileResults?.[0];
+
+    if (!profile) {
       console.log('⚠️ User not found for phone variations:', phoneVariations.join(', '));
       return new Response(JSON.stringify({ status: 'user_not_found' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
