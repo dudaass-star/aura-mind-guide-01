@@ -1,112 +1,115 @@
 
 
-## Plano Completo: Reativacao de sessoes perdidas + janela de 1 hora
+## Respeitar quando o usuario diz que nao pode falar
 
-### Resumo
+### Problema
+Quando o usuario diz "estou no trabalho", "agora nao posso", "to ocupada", etc., a AURA entende na conversa mas os sistemas automatizados (follow-ups, check-ins, lembretes) continuam enviando mensagens normalmente, porque nao existe nenhum campo ou logica que registre que o usuario pediu para nao ser incomodado.
 
-Tres mudancas no `aura-agent`: (1) ampliar janela de deteccao de sessao agendada de 15 minutos para 1 hora, (2) buscar sessoes canceladas/no_show sem limite de tempo, e (3) tratar os 3 cenarios de resposta do usuario.
+### Solucao: Campo `do_not_disturb_until` no profiles
 
-### Mudancas tecnicas
+Adicionar um campo `do_not_disturb_until` (timestamp) na tabela `profiles`. Quando o usuario indicar que esta ocupado, a AURA seta esse campo com um horario futuro. Todas as funcoes automatizadas checam esse campo antes de enviar.
 
-**Arquivo unico:** `supabase/functions/aura-agent/index.ts`
+### Mudancas
 
----
+#### 1. Migration: Adicionar campo na tabela profiles
 
-#### 1. Ampliar janela de sessao agendada de 15min para 1h (linhas 2192-2197)
-
-Mudar de:
 ```text
-fifteenMinAgo = now - 15 min
-fifteenMinAhead = now + 15 min
-```
-Para:
-```text
-oneHourAgo = now - 60 min
-oneHourAhead = now + 60 min
+ALTER TABLE profiles ADD COLUMN do_not_disturb_until TIMESTAMPTZ DEFAULT NULL;
 ```
 
-Isso permite que usuarios que chegam ate 1 hora atrasados ainda encontrem a sessao com status `scheduled`.
+Quando `do_not_disturb_until` e futuro (> now), o usuario nao recebe mensagens automatizadas.
 
----
+#### 2. Nova tag no aura-agent: [NAO_PERTURBE:Xh]
 
-#### 2. Buscar sessao perdida (cancelled/no_show) sem limite de tempo (apos linha 2213)
-
-Quando nao encontrar `pendingScheduledSession`, buscar a sessao mais recente com status `cancelled` ou `no_show` que nunca foi iniciada e cuja reativacao nao foi recusada:
+No prompt do `aura-agent`, adicionar instrucoes para detectar sinais de "ocupado" e usar a tag:
 
 ```text
-if (!pendingScheduledSession && profile?.user_id) {
-  Buscar sessao mais recente com:
-    - user_id = profile.user_id
-    - status IN ('cancelled', 'no_show')
-    - started_at IS NULL
-    - session_summary IS NULL OR session_summary != 'reactivation_declined'
-  Ordenar por scheduled_at DESC, limit 1
-  Guardar em recentMissedSession
+DETECCAO DE INDISPONIBILIDADE:
+Quando o usuario indicar que nao pode conversar agora, use a tag [NAO_PERTURBE:Xh] onde X e o numero de horas estimado.
+
+Sinais de indisponibilidade:
+- "to no trabalho", "estou trabalhando"
+- "agora nao posso", "nao posso falar agora"
+- "to ocupada/o", "momento ruim"
+- "depois te respondo", "falo contigo depois"
+- "estou em reuniao"
+
+Exemplos:
+- "to no trabalho" -> "Entendi! Fica tranquila, te dou um tempo. Quando sair, me chama! 💜 [NAO_PERTURBE:4h]"
+- "agora nao posso, to na correria" -> "Sem problemas! Vou ficar quietinha aqui. Me chama quando puder! 💜 [NAO_PERTURBE:3h]"
+- "estou em reuniao" -> "Xiu! Fico quieta. Me manda mensagem depois! 💜 [NAO_PERTURBE:2h]"
+
+IMPORTANTE:
+- NAO insista nem faca mais perguntas quando o usuario disser que esta ocupado
+- Estime o tempo de forma razoavel (trabalho = 4h, reuniao = 2h, correria = 3h)
+- Se o usuario voltar a mandar mensagem ANTES do tempo, o silencio e cancelado automaticamente
+```
+
+Processamento da tag no `aura-agent`:
+- Extrair X horas da tag
+- Calcular `do_not_disturb_until = now + X horas`
+- Atualizar na tabela `profiles`
+- Limpar tag da resposta
+
+#### 3. Cancelar silencio quando usuario volta a falar
+
+No `aura-agent`, no inicio do processamento (antes de tudo), verificar se `do_not_disturb_until` esta setado. Se o usuario mandou mensagem, limpar o campo (setar para null), pois ele esta disponivel novamente.
+
+#### 4. Atualizar funcoes automatizadas para checar o campo
+
+**conversation-followup/index.ts** (linha ~369):
+Apos buscar o profile, verificar:
+```text
+if (profile.do_not_disturb_until && new Date(profile.do_not_disturb_until) > now) {
+  console.log('🔇 Skipping user - do not disturb until', profile.do_not_disturb_until);
+  continue;
 }
 ```
 
----
+**scheduled-checkin/index.ts** (linha ~75):
+Mesmo check antes de enviar check-in.
 
-#### 3. Logica de reativacao quando usuario confirma (apos linha ~2404)
+**scheduled-followup/index.ts** (linha ~51):
+Mesmo check antes de enviar follow-up de compromissos.
 
-Se `recentMissedSession` existe e usuario confirma que quer fazer agora (`confirmsSessionStart`):
-- Mudar status da sessao para `in_progress`
-- Setar `started_at = now`
-- Atualizar `current_session_id` no profile
-- Incrementar `sessions_used_this_month`
-- Seguir metodo completo das 4 fases
+**reactivation-check/index.ts** (linha ~100, seção de inativos):
+Mesmo check antes de enviar mensagem de reativacao por inatividade.
+Nota: lembretes de sessao (session-reminder) NAO serao bloqueados, pois sao importantes demais.
 
----
+**periodic-content/index.ts** (linha ~68):
+Mesmo check antes de enviar conteudo periodico (manifestos).
 
-#### 4. Processar tag [SESSAO_PERDIDA_RECUSADA] (secao de processamento de tags, ~linha 3400+)
+#### 5. Excecao: session-reminder
 
-Nova tag para quando o usuario nao quer fazer a sessao agora nem reagendar:
-- Atualizar `session_summary` da sessao para `"reactivation_declined"`
-- Isso impede que a sessao seja oferecida novamente
+Lembretes de sessao (24h, 1h, 15min) NAO serao bloqueados pelo do_not_disturb, pois o usuario agendou a sessao voluntariamente e precisa ser lembrado. A notificacao de inicio de sessao tambem nao sera bloqueada.
 
----
-
-#### 5. Injetar contexto no prompt (apos linha ~2714)
-
-Quando existir `recentMissedSession` e nao houver sessao ativa nem pendente, adicionar ao prompt:
+### Fluxo
 
 ```text
-SESSAO PERDIDA DETECTADA!
-- O usuario tinha uma sessao agendada para [dia] as [hora] que nao aconteceu.
-- Pergunte com carinho se ele quer:
-  1. Fazer a sessao agora
-  2. Reagendar para outra data (usar [REAGENDAR_SESSAO:YYYY-MM-DD HH:mm])
-  3. Ou se prefere so conversar por hoje (usar [SESSAO_PERDIDA_RECUSADA])
-- Ofereca UMA vez e respeite a decisao. NAO insista.
+Usuario: "to no trabalho"
+  |
+  +-- AURA: "Fica tranquila! [NAO_PERTURBE:4h]"
+  |
+  +-- Sistema seta do_not_disturb_until = now + 4h
+  |
+  +-- conversation-followup roda -> ve do_not_disturb -> SKIP
+  +-- scheduled-checkin roda -> ve do_not_disturb -> SKIP
+  +-- periodic-content roda -> ve do_not_disturb -> SKIP
+  +-- session-reminder roda -> ENVIA NORMALMENTE (excecao)
+  |
+  +-- 4 horas depois -> do_not_disturb_until expirou -> mensagens voltam ao normal
+  |
+  OU
+  |
+  +-- Usuario manda mensagem antes das 4h -> aura-agent limpa o campo -> normal
 ```
 
----
+### Resumo de arquivos modificados
 
-### Fluxo completo
-
-```text
-Usuario manda mensagem
-  |
-  +-- Buscar sessao scheduled (janela de 1 HORA) -> encontrou? Fluxo atual normal
-  |
-  +-- Nao encontrou? Buscar sessao cancelled/no_show mais recente (sem limite de tempo)
-  |     |
-  |     +-- Encontrou (e nao foi recusada antes)?
-  |     |     |
-  |     |     +-- AURA pergunta com carinho o que o usuario prefere
-  |     |     |
-  |     |     +-- "Quero fazer agora" -> Reativar sessao, iniciar metodo 4 fases
-  |     |     +-- "Quero reagendar" -> [REAGENDAR_SESSAO:data hora]
-  |     |     +-- "So quero conversar" -> [SESSAO_PERDIDA_RECUSADA] -> modo normal
-  |     |           (sessao nao conta como usada, nao pergunta mais sobre ela)
-  |     |
-  |     +-- Nao encontrou (ou ja recusada) -> Modo normal
-```
-
-### O que NAO muda
-- Logica do `reactivation-check` (continua marcando sessoes como no_show/cancelled)
-- Logica do `session-reminder`
-- Metodo das 4 fases (seguido normalmente apos reativacao)
-- Tag [REAGENDAR_SESSAO] (ja existe)
-- Nenhuma tabela ou migration necessaria (reutiliza campo `session_summary`)
-
+1. **Migration SQL** - adicionar coluna `do_not_disturb_until`
+2. **aura-agent/index.ts** - nova tag [NAO_PERTURBE:Xh], processamento, auto-clear
+3. **conversation-followup/index.ts** - checar campo antes de enviar
+4. **scheduled-checkin/index.ts** - checar campo antes de enviar
+5. **scheduled-followup/index.ts** - checar campo antes de enviar
+6. **reactivation-check/index.ts** - checar campo antes de enviar (secao de inativos)
+7. **periodic-content/index.ts** - checar campo antes de enviar
