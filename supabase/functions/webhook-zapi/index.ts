@@ -585,7 +585,9 @@ Vou ficar esperando você voltar. 🤗`;
       .upsert({
         user_id: profile.user_id,
         last_user_message_at: shouldEnableFollowup ? now : null,
-        followup_count: shouldEnableFollowup ? 0 : (existingFollowup ? undefined : null), // Reset só se ativando
+        // Quando conversa encerrada: setar followup_count alto para bloquear follow-ups
+        // Quando ativando: resetar para 0
+        followup_count: shouldEnableFollowup ? 0 : 99,
         // Preservar contexto bom existente, senão usar a mensagem atual
         conversation_context: shouldEnableFollowup 
           ? (hasGoodContext ? existingContext : messageText.substring(0, 200))
