@@ -70,32 +70,45 @@ export function isValidPhoneNumber(phone: string): boolean {
  * - 555196219341 (12 dígitos) -> ['555196219341', '5551996219341']
  */
 export function getPhoneVariations(phone: string): string[] {
-  let clean = cleanPhoneNumber(phone);
+  const clean = cleanPhoneNumber(phone);
   
-  // Adicionar 55 se não tiver
-  if (clean.length === 10 || clean.length === 11) {
-    clean = '55' + clean;
-  }
-  
+  // Sempre incluir o número original como primeira variação
   const variations: string[] = [clean];
   
-  // Se tem 13 dígitos (55 + DDD + 9 + 8 dígitos), criar versão sem o 9
-  if (clean.length === 13 && clean.startsWith('55')) {
-    const ddd = clean.substring(2, 4);
-    const rest = clean.substring(4); // 9 dígitos
-    if (rest.startsWith('9') && rest.length === 9) {
-      const without9 = '55' + ddd + rest.substring(1);
-      variations.push(without9);
+  // Números com 10-11 dígitos podem ser brasileiros (sem código de país)
+  // Aplicar lógica brasileira: adicionar 55 e manipular o nono dígito
+  if (clean.length === 10 || clean.length === 11) {
+    const withCountry = '55' + clean;
+    if (!variations.includes(withCountry)) variations.push(withCountry);
+    
+    // 11 dígitos (DDD + 9 + 8 dígitos) -> criar versão sem o 9
+    if (clean.length === 11 && clean.substring(2, 3) === '9') {
+      const without9 = '55' + clean.substring(0, 2) + clean.substring(3);
+      if (!variations.includes(without9)) variations.push(without9);
+    }
+    // 10 dígitos (DDD + 8 dígitos) -> criar versão com o 9
+    if (clean.length === 10) {
+      const with9 = '55' + clean.substring(0, 2) + '9' + clean.substring(2);
+      if (!variations.includes(with9)) variations.push(with9);
     }
   }
   
-  // Se tem 12 dígitos (55 + DDD + 8 dígitos), criar versão com o 9
+  // Números já com código 55 (12-13 dígitos): lógica brasileira existente
+  if (clean.length === 13 && clean.startsWith('55')) {
+    const ddd = clean.substring(2, 4);
+    const rest = clean.substring(4);
+    if (rest.startsWith('9') && rest.length === 9) {
+      const without9 = '55' + ddd + rest.substring(1);
+      if (!variations.includes(without9)) variations.push(without9);
+    }
+  }
+  
   if (clean.length === 12 && clean.startsWith('55')) {
     const ddd = clean.substring(2, 4);
-    const rest = clean.substring(4); // 8 dígitos
+    const rest = clean.substring(4);
     if (rest.length === 8) {
       const with9 = '55' + ddd + '9' + rest;
-      variations.push(with9);
+      if (!variations.includes(with9)) variations.push(with9);
     }
   }
   
