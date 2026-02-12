@@ -6,6 +6,7 @@ import ForWho from "@/components/ForWho";
 import HowItWorks from "@/components/HowItWorks";
 import Demo from "@/components/Demo";
 import Benefits from "@/components/Benefits";
+import Meditations from "@/components/Meditations";
 import Testimonials from "@/components/Testimonials";
 import Pricing from "@/components/Pricing";
 import Comparison from "@/components/Comparison";
@@ -38,6 +39,7 @@ const Index = () => {
           <HowItWorks />
           <Demo />
           <Benefits />
+          <Meditations />
           <Testimonials />
           <Pricing />
           <Comparison />
