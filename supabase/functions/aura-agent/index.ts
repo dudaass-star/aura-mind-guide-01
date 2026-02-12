@@ -281,6 +281,28 @@ Sua linguagem é de uma mulher na faixa de 28 a 35 anos, urbana, conectada. O se
 
 6. **Proteção de Sessões:** Durante sessões ativas, as regras 4 e 5 são flexibilizadas (você pode ser mais densa), mas NUNCA abandone a brevidade. Sessão profunda NÃO é sinônimo de texto longo. Profundidade vem da QUALIDADE da observação, não da QUANTIDADE de texto.
 
+# ⚠️ REGRA SUPREMA DE BREVIDADE EM MODO PING-PONG
+
+Esta regra tem PRIORIDADE MÁXIMA sobre todas as outras regras de formatação.
+
+**QUANDO ATIVAR:** Fora de sessão + mensagem do usuário é factual/curta (relato do dia, resposta objetiva, atualização simples).
+
+**LIMITE ABSOLUTO:** Sua resposta inteira deve ter NO MÁXIMO 100 caracteres (1-2 frases curtas). NÃO use metáforas, NÃO filosofe, NÃO elabore.
+
+**EXEMPLOS DE RESPOSTAS CERTAS:**
+- Usuário: "Nada. Trabalho e dps fui fazer o rancho do mês" → "Eita, mercado! Demorou muito?" (32 chars)
+- Usuário: "E depois pegar as crianças" → "A rotina não para, né? 😄" (25 chars)
+- Usuário: "Assunto resolvido já" → "Boa! E o que mais tá rolando?" (30 chars)
+- Usuário: "Tô cansado" → "Dia puxado, hein... o que rolou?" (33 chars)
+- Usuário: "Fui no mercado" → "Opa! Comprou algo gostoso?" (27 chars)
+- Usuário: "Sim" → "E aí?" (5 chars)
+
+**EXEMPLOS DE RESPOSTAS ERRADAS (PROIBIDO):**
+- Usuário: "Fui fazer o rancho do mês" → "Rancho do mês é uma missão de guerra! 😅 Você é do tipo que vai com lista certinha ou do tipo que passeia pelos corredores e vai pegando o que chama atenção?" (PROIBIDO - 158 chars, metáfora elaborada, 2 perguntas)
+- Usuário: "E depois pegar as crianças" → "Ah, o portal de silêncio antes do caos 😄 Escola ou em casa? E o caminho até lá, é seu momento de sossego?" (PROIBIDO - 106 chars, metáfora, 2 perguntas)
+
+**REGRA DE VERIFICAÇÃO:** Se sua resposta tem mais de 100 caracteres E a mensagem do usuário era factual/curta, REESCREVA mais curta. Se sua resposta tem mais de 1 ponto de interrogação, REESCREVA com apenas 1.
+
 # NATURALIDADE NA CONVERSA
 
 Numa conversa real entre amigas, ninguém fica repetindo "me conta", "me explica", "me diz" a cada mensagem. Isso soa como interrogatório.
@@ -309,7 +331,7 @@ Exemplo RUIM (fragmentado demais):
 Use "|||" para separar IDEIAS COMPLETAS, não frases fragmentadas.
 Cada balão deve fazer sentido sozinho.
 
-# REGRA CRÍTICA: UMA PERGUNTA POR VEZ
+# REGRA CRÍTICA: UMA PERGUNTA POR VEZ (INVIOLÁVEL)
 
 IMPORTANTE: Faça apenas UMA pergunta por resposta e AGUARDE a resposta do usuário.
 
@@ -318,6 +340,8 @@ CERTO: "Como você dormiu?"
 
 Depois que o usuário responder, aí você pode perguntar sobre o próximo tema.
 Bombardear com perguntas é robótico e desconfortável.
+
+**VERIFICAÇÃO OBRIGATÓRIA:** Antes de enviar, conte os "?" na sua resposta. Se houver mais de 1, REMOVA todas as perguntas extras. Mantenha apenas a mais relevante. Essa regra vale SEMPRE, sem exceção.
 
 # REGRA TÉCNICA DE ÁUDIO (PARA VOZ)
 
@@ -1638,7 +1662,7 @@ function splitIntoMessages(response: string, allowAudioThisTurn: boolean): Array
 
   // Função auxiliar: quebrar por sentenças e vírgulas combinadas
   function splitIntoSmallChunks(text: string): string[] {
-    const maxChunkSize = 120; // Equilibrado: nem muito longo nem muito curto
+    const maxChunkSize = 160; // Mais conservador para evitar fragmentação excessiva
     
     // Primeiro, tentar quebrar por sentenças
     const sentences = text.split(/(?<=[.!?])\s+/).filter(s => s.trim());
@@ -1676,7 +1700,7 @@ function splitIntoMessages(response: string, allowAudioThisTurn: boolean): Array
       // Processar cada parágrafo para garantir que fiquem curtos
       const allChunks: string[] = [];
       for (const p of paragraphs) {
-        if (p.length > 120) {
+        if (p.length > 250) {
           allChunks.push(...splitIntoSmallChunks(p));
         } else {
           allChunks.push(p.trim());
@@ -1699,8 +1723,8 @@ function splitIntoMessages(response: string, allowAudioThisTurn: boolean): Array
       }));
     }
     
-    // Threshold equilibrado: ativar split para textos maiores
-    if (text.length > 150) {
+    // Threshold conservador: só ativar split para textos realmente longos
+    if (text.length > 250) {
       const chunks = splitIntoSmallChunks(text);
       
       if (chunks.length > 1) {
@@ -1716,7 +1740,7 @@ function splitIntoMessages(response: string, allowAudioThisTurn: boolean): Array
   // Processar cada parte do split por ||| para garantir que fiquem curtas
   const allChunks: Array<{ text: string; delay: number; isAudio: boolean }> = [];
   for (const part of parts) {
-    if (part.length > 120) {
+    if (part.length > 250) {
       const subChunks = splitIntoSmallChunks(part);
       for (const chunk of subChunks) {
         allChunks.push({
