@@ -113,8 +113,8 @@ function isNaturalConversationEnd(lastUserMessage: string, lastAssistantMessage:
   return false;
 }
 
-// Função para extrair tema da conversa usando IA
-async function extractConversationTheme(
+// Função para extrair contexto completo da conversa usando IA
+async function extractConversationContext(
   supabase: any,
   userId: string,
   recentMessages: any[]
@@ -123,11 +123,11 @@ async function extractConversationTheme(
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY || recentMessages.length < 2) return null;
     
-    // Formatar as últimas mensagens para análise
+    // Janela ampliada: 20 mensagens, 300 chars cada
     const conversationText = recentMessages
-      .slice(0, 10)
+      .slice(0, 20)
       .reverse()
-      .map((m: any) => `${m.role === 'user' ? 'Usuário' : 'AURA'}: ${m.content.substring(0, 150)}`)
+      .map((m: any) => `${m.role === 'user' ? 'Usuário' : 'AURA'}: ${m.content.substring(0, 300)}`)
       .join('\n');
     
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
@@ -141,35 +141,39 @@ async function extractConversationTheme(
         messages: [
           {
             role: 'system',
-            content: `Extraia o TEMA principal desta conversa em uma frase curta (máx 50 caracteres).
-Exemplos:
-- "Educação da filha Bella, 2 anos"
-- "Ansiedade no trabalho"
-- "Término de relacionamento"
-- "Procrastinação nos estudos"
-- "Conversa casual, sem tema profundo"
+            content: `Analise esta conversa e extraia o CONTEXTO COMPLETO no formato estruturado abaixo.
 
-Retorne APENAS o tema, sem explicações.`
+Formato OBRIGATÓRIO:
+TEMA: [tema principal em até 60 caracteres] | TOM: [tom emocional do usuário] | CUIDADO: [considerações para próximo contato]
+
+Exemplos:
+- "TEMA: Rotina matinal e caminhada | TOM: leve e motivado | CUIDADO: nenhum"
+- "TEMA: Ideação suicida, sacada | TOM: crise emocional grave | CUIDADO: não enviar follow-up casual, apenas check-in cuidadoso"
+- "TEMA: Briga com mãe | TOM: triste e frustrada | CUIDADO: acolher sem pressionar"
+- "TEMA: Ansiedade no trabalho | TOM: nervoso mas buscando ajuda | CUIDADO: validar sem minimizar"
+- "TEMA: Conversa casual | TOM: neutro | CUIDADO: nenhum"
+
+Retorne APENAS o contexto no formato acima, sem explicações.`
           },
           {
             role: 'user',
             content: conversationText
           }
         ],
-        max_tokens: 60,
+        max_tokens: 150,
       }),
     });
     
     if (response.ok) {
       const data = await response.json();
-      const theme = data.choices?.[0]?.message?.content?.trim();
-      if (theme && theme.length <= 100) {
-        console.log('🎯 Extracted conversation theme:', theme);
-        return theme;
+      const context = data.choices?.[0]?.message?.content?.trim();
+      if (context && context.length <= 300) {
+        console.log('🎯 Extracted conversation context:', context);
+        return context;
       }
     }
   } catch (error) {
-    console.error('⚠️ Error extracting theme:', error);
+    console.error('⚠️ Error extracting context:', error);
   }
   return null;
 }
@@ -192,7 +196,7 @@ async function generateContextualFollowup(
   supabase: any,
   userId: string,
   followupCount: number,
-  conversationTheme: string | null,
+  conversationContext: string | null,
   isSessionActive: boolean,
   userPlan: string,
   isNaturalEnd: boolean,
@@ -206,8 +210,8 @@ async function generateContextualFollowup(
     .order('created_at', { ascending: false })
     .limit(5);
 
-  // Se temos tema da conversa, usar IA para gerar mensagem contextual
-  if (conversationTheme && conversationTheme !== 'Conversa casual, sem tema profundo') {
+  // Se temos contexto da conversa, usar IA para gerar mensagem contextual
+  if (conversationContext && !conversationContext.toLowerCase().includes('conversa casual')) {
     try {
       const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
       
@@ -245,13 +249,16 @@ async function generateContextualFollowup(
                 role: 'system',
                 content: `Você é a AURA, uma amiga próxima que entende de psicologia.
 
-TEMA DA CONVERSA ANTERIOR: "${conversationTheme}"
+CONTEXTO COMPLETO DA CONVERSA ANTERIOR: "${conversationContext}"
 ${situationContext}
 ${timeContext}
 ${tone}
 
-Gere UMA mensagem curta (1-2 frases, máximo 100 caracteres) que:
+IMPORTANTE: Se o campo CUIDADO do contexto indicar situação muito sensível (crise, ideação suicida, luto recente, trauma) ou que o usuário precisa de espaço, retorne exatamente a palavra SKIP (sem aspas, sem mais nada).
+
+Caso contrário, gere UMA mensagem curta (1-2 frases, máximo 100 caracteres) que:
 - Faça referência ESPECÍFICA ao tema (ex: se o tema era "filha Bella", pergunte sobre a Bella)
+- Adapte o TOM da mensagem ao tom emocional indicado no contexto
 - NÃO seja genérica como "tudo bem?" ou "como você está?"
 - Use linguagem informal brasileira
 - Use no máximo 1 emoji
@@ -269,6 +276,10 @@ Gere UMA mensagem curta (1-2 frases, máximo 100 caracteres) que:
         if (response.ok) {
           const data = await response.json();
           const aiMessage = data.choices?.[0]?.message?.content?.trim();
+          if (aiMessage && aiMessage.trim().toUpperCase() === 'SKIP') {
+            console.log('⚠️ AI decided to SKIP follow-up based on context sensitivity');
+            return 'SKIP';
+          }
           if (aiMessage && aiMessage.length <= 200) {
             console.log('✨ Generated contextual follow-up:', aiMessage);
             return aiMessage;
@@ -413,17 +424,18 @@ Deno.serve(async (req) => {
         // CALCULAR PROFUNDIDADE DA CONVERSA
         const { depth: conversationDepth, isDeep } = calculateConversationDepth(recentMessages || []);
         
-        // EXTRAIR TEMA DA CONVERSA (se não tiver salvo ou for muito genérico)
-        let conversationTheme = followup.conversation_context;
-        if (!conversationTheme || conversationTheme.length < 10 || 
-            ['ok', 'legal', 'beleza', 'sim', 'não'].includes(conversationTheme.toLowerCase())) {
-          conversationTheme = await extractConversationTheme(supabase, followup.user_id, recentMessages || []);
+        // EXTRAIR CONTEXTO DA CONVERSA (se não tiver salvo ou for muito genérico)
+        let conversationContext = followup.conversation_context;
+        if (!conversationContext || conversationContext.length < 10 || 
+            !conversationContext.includes('TEMA:') ||
+            ['ok', 'legal', 'beleza', 'sim', 'não'].includes(conversationContext.toLowerCase())) {
+          conversationContext = await extractConversationContext(supabase, followup.user_id, recentMessages || []);
           
-          // Salvar o tema extraído
-          if (conversationTheme) {
+          // Salvar o contexto extraído
+          if (conversationContext) {
             await supabase
               .from('conversation_followups')
-              .update({ conversation_context: conversationTheme })
+              .update({ conversation_context: conversationContext })
               .eq('id', followup.id);
           }
         }
@@ -435,7 +447,7 @@ Deno.serve(async (req) => {
           isNaturalEnd,
           isDeep,
           conversationDepth,
-          conversationTheme,
+          conversationContext,
           timeSinceLastUserMsg_min: Math.round(timeSinceLastUserMsg),
           followup_count: followup.followup_count
         });
@@ -509,12 +521,18 @@ Deno.serve(async (req) => {
           supabase,
           followup.user_id,
           followup.followup_count,
-          conversationTheme,
+          conversationContext,
           isSessionActive,
           userPlan,
           isNaturalEnd,
           hoursAgo
         );
+
+        // Tratar resposta SKIP - contexto indica situação sensível
+        if (message === 'SKIP' || message.trim().toUpperCase() === 'SKIP') {
+          console.log(`⚠️ Skipping follow-up for ${followup.user_id}: context indicates sensitive situation`);
+          continue;
+        }
 
         console.log(`📤 Sending follow-up #${followup.followup_count + 1} to ${profile.phone} (${timingReason})`);
 
@@ -544,7 +562,7 @@ Deno.serve(async (req) => {
             .update({
               followup_count: followup.followup_count + 1,
               last_followup_at: new Date().toISOString(),
-              conversation_context: conversationTheme || followup.conversation_context,
+              conversation_context: conversationContext || followup.conversation_context,
             })
             .eq('id', followup.id);
 

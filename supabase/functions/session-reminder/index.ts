@@ -6,6 +6,115 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Função para gerar summary de sessão via IA quando sessão foi abandonada mas teve participação ativa
+async function generateSessionSummaryFallback(
+  supabase: any,
+  session: any
+): Promise<{ summary: string; key_insights: any[]; commitments: any[] }> {
+  const fallback = {
+    summary: 'Sessão encerrada automaticamente após período de inatividade. O usuário participou ativamente da conversa.',
+    key_insights: [],
+    commitments: [],
+  };
+
+  try {
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    if (!LOVABLE_API_KEY) return fallback;
+
+    // Buscar mensagens da sessão
+    const { data: sessionMessages } = await supabase
+      .from('messages')
+      .select('content, role, created_at')
+      .eq('user_id', session.user_id)
+      .gte('created_at', session.started_at)
+      .order('created_at', { ascending: true })
+      .limit(50);
+
+    if (!sessionMessages || sessionMessages.length < 3) return fallback;
+
+    const conversationText = sessionMessages
+      .map((m: any) => `${m.role === 'user' ? 'Usuário' : 'AURA'}: ${m.content.substring(0, 400)}`)
+      .join('\n');
+
+    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash',
+        tools: [
+          {
+            type: 'function',
+            function: {
+              name: 'session_summary',
+              description: 'Gerar resumo estruturado da sessão terapêutica',
+              parameters: {
+                type: 'object',
+                properties: {
+                  summary: {
+                    type: 'string',
+                    description: 'Resumo da sessão em 2-3 frases (máx 200 chars)'
+                  },
+                  key_insights: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    description: 'Até 3 insights principais da sessão'
+                  },
+                  commitments: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        title: { type: 'string' }
+                      },
+                      required: ['title']
+                    },
+                    description: 'Compromissos assumidos pelo usuário (se houver)'
+                  }
+                },
+                required: ['summary', 'key_insights', 'commitments'],
+                additionalProperties: false
+              }
+            }
+          }
+        ],
+        tool_choice: { type: 'function', function: { name: 'session_summary' } },
+        messages: [
+          {
+            role: 'system',
+            content: `Você é uma psicóloga analisando uma sessão terapêutica que foi encerrada automaticamente (o usuário parou de responder).
+Gere um resumo estruturado da sessão com base na conversa. Seja empática e precisa.`
+          },
+          {
+            role: 'user',
+            content: `Conversa da sessão:\n${conversationText}`
+          }
+        ],
+      }),
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
+      if (toolCall?.function?.arguments) {
+        const parsed = JSON.parse(toolCall.function.arguments);
+        console.log('✨ Generated session summary fallback via AI');
+        return {
+          summary: parsed.summary || fallback.summary,
+          key_insights: parsed.key_insights || [],
+          commitments: parsed.commitments || [],
+        };
+      }
+    }
+  } catch (error) {
+    console.error('⚠️ Error generating session summary fallback:', error);
+  }
+
+  return fallback;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -518,8 +627,27 @@ Quer remarcar pra outro horário? É só me dizer quando fica bom pra você. ✨
 Parece que não conseguimos fazer nossa sessão hoje. Tudo bem, a vida acontece!
 
 Quer remarcar pra outro horário? É só me dizer quando fica bom pra você. ✨`;
+        } else if ((userMsgsInSession || 0) >= 5) {
+          // Usuário participou ativamente (5+ msgs) mas sessão expirou - marcar como completed
+          const aiSummary = await generateSessionSummaryFallback(supabase, session);
+          statusToSet = 'completed';
+          summaryToSet = aiSummary.summary;
+          messageToSend = `Oi ${userName}! 💜
+
+Nossa sessão de hoje foi ótima, mesmo que tenha ficado em silêncio no final. Já salvei o resumo pra você!
+
+Se quiser retomar de onde paramos ou agendar a próxima, é só me chamar. ✨`;
+
+          // Salvar key_insights e commitments também
+          await supabase
+            .from('sessions')
+            .update({
+              key_insights: aiSummary.key_insights,
+              commitments: aiSummary.commitments,
+            })
+            .eq('id', session.id);
         } else {
-          // Usuário participou mas abandonou no meio
+          // Usuário participou pouco (2-4 msgs) - manter como no_show
           statusToSet = 'no_show';
           summaryToSet = 'Sessão encerrada automaticamente - usuário parou de responder durante a sessão.';
           messageToSend = `Oi ${userName}! 💜
