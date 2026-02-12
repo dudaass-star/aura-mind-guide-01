@@ -1,87 +1,83 @@
 
 
-## Sessoes mais humanas: profundidade com brevidade no WhatsApp
+## Variacao natural no numero de baloes
 
 ### O problema
 
-O prompt atual desativa TODAS as regras de brevidade durante sessoes ativas (linha 282: "IGNORE as regras 4 e 5"). As instrucoes de sessao dizem "aprofunde com calma, sem pressa" sem nenhum limite de tamanho. Isso cria respostas longas demais pro WhatsApp.
+As regras atuais definem faixas fixas ("2-4 baloes" fora de sessao, "4-5 baloes" em sessao). A IA trata isso como meta e quase sempre responde no limite superior. Resultado: todas as respostas parecem iguais em estrutura, o que denuncia o padrao artificial.
 
 ### A solucao
 
-Manter a profundidade e estrutura das sessoes, mas aplicar regras de comunicacao humana dentro delas. A AURA continua conduzindo com metodo, mas fala como amiga — nao como terapeuta dando palestra.
+Substituir faixas fixas por uma regra de variacao natural com orientacao contextual. A AURA decide quantos baloes usar com base no que o usuario disse, nao num numero pre-definido.
 
-### Mudancas no prompt (arquivo `supabase/functions/aura-agent/index.ts`)
+### Mudancas no prompt (`supabase/functions/aura-agent/index.ts`)
 
-**1. Remover a "Protecao de Sessoes" que desativa brevidade (linha 282)**
+**1. Regra geral de formatacao (linha 295)**
 
 Trocar:
-- "Protecao de Sessoes: Durante sessoes ativas, IGNORE as regras 4 e 5"
+```
+Divida suas respostas em 2-4 baloes usando "|||" para parecer natural.
+REGRA DE OURO: Use MAXIMO 3-4 separadores por resposta. NAO exagere!
+```
 
 Por:
-- "Protecao de Sessoes: Durante sessoes ativas, as regras 4 e 5 sao flexibilizadas (voce pode ser mais densa), mas NUNCA abandone a brevidade. Sessao profunda NAO e sinonimo de texto longo."
+```
+Divida suas respostas em baloes usando "|||" para parecer natural.
+VARIACAO HUMANA: Nem toda resposta precisa ter varios baloes.
+- 1 balao: reacoes rapidas, validacoes, perguntas simples ("Eita, serio?", "E como voce se sentiu?")
+- 2 baloes: maioria das respostas — uma ideia + uma pergunta ou reacao
+- 3 baloes: quando precisa desenvolver um pouco mais
+- 4+ baloes: RARO. So quando realmente tem muito a dizer (fechamento de sessao, momento importante)
+MAXIMO ABSOLUTO: 5 baloes. Mais que isso, NUNCA.
+```
 
-**2. Adicionar regras de brevidade especificas para sessao (apos linha 648)**
+**2. Regra de brevidade em sessao (linhas 617-623)**
 
-Novas regras dentro do bloco de sessao:
-
+Trocar:
+```
 - Cada resposta de sessao: MAXIMO 4-5 baloes curtos (usando "|||")
 - Cada balao: maximo 2-3 frases
-- Uma ideia por balao, uma pergunta por resposta (regra ja existente, reforcar)
-- Profundidade vem da QUALIDADE da observacao, nao da QUANTIDADE de texto
-- Proibido "mini-palestras": se precisa explicar algo complexo, quebre em turnos de conversa
-- Preferir observacoes diretas e provocativas a paragrafos explicativos
-
-**3. Atualizar as instrucoes de cada fase da sessao (linhas 617-643)**
-
-Abertura:
-- Saudacao calorosa + 1 pergunta. Nada mais. (2 baloes max)
-
-Exploracao:
-- 1 observacao perceptiva + 1 pergunta que abre. Por turno.
-- NAO acumule 3 perguntas reflexivas numa resposta so
-- Deixe o usuario processar antes de aprofundar mais
-
-Reframe:
-- 1 perspectiva nova por vez. Curta e impactante.
-- "Voce percebeu que..." e mais forte que um paragrafo inteiro
-
-Fechamento:
-- Resumo em 3 baloes max: o que surgiu, o que leva, proximo passo
-- NAO liste 5 insights — escolha os 2 mais fortes
-
-**4. Adicionar exemplos de sessao boa vs ruim**
-
-Exemplo RUIM (textao de sessao):
-```
-"Entao, pelo que voce ta me contando, parece que existe um padrao aqui
-que se repete. Quando voce sente que nao esta sendo valorizada no
-trabalho, voce tende a se retrair e aceitar mais tarefas pra provar
-seu valor, o que acaba te sobrecarregando e criando um ciclo de
-frustracao. Isso me lembra o que voce contou sobre sua relacao com
-sua mae, onde voce tambem sentia que precisava fazer mais pra ser
-vista. Sera que existe uma conexao entre essas duas situacoes?
-Como voce se sente quando pensa nisso?"
 ```
 
-Exemplo BOM (mesmo conteudo, formato WhatsApp):
+Por:
 ```
-"Voce percebeu que faz a mesma coisa no trabalho e com sua mae? |||
-Nos dois lugares voce tenta provar seu valor fazendo MAIS... em vez
-de exigir ser vista pelo que ja faz |||
-O que voce acha que aconteceria se voce simplesmente parasse de
-compensar?"
+- VARIE o numero de baloes naturalmente:
+  - 1-2 baloes: acolhimentos, validacoes, perguntas que abrem ("Hmm... e o que voce sentiu na hora?")
+  - 2-3 baloes: exploracao normal — observacao + pergunta
+  - 4-5 baloes: APENAS em momentos-chave (reframe importante, fechamento)
+- Cada balao: maximo 2-3 frases
+- Se voce esta respondendo com 4+ baloes em TODA resposta de sessao, algo esta errado
+```
+
+**3. Adicionar exemplos de variacao (apos os exemplos bom/ruim, linha 658)**
+
+Novos exemplos:
+
+```
+### EXEMPLO DE VARIACAO NATURAL DE BALOES:
+
+Usuario: "Essa semana foi pesada"
+BOM (1 balao): "Pesada como? Me conta"
+RUIM (4 baloes): "Ah, sinto muito que a semana foi pesada... ||| Imagino que deve ter sido dificil ||| Quer me contar o que aconteceu? ||| To aqui pra ouvir"
+
+Usuario: "Briguei com minha mae de novo"
+BOM (2 baloes): "De novo... isso ja virou padrao, ne? ||| O que foi dessa vez?"
+RUIM (4 baloes): "Ah nao... ||| Briga com mae e sempre tao dificil ||| Voce deve estar se sentindo mal ||| Me conta o que aconteceu?"
+
+Usuario: conta algo profundo e revelador
+BOM (3-4 baloes): observacao certeira + conexao + pergunta
 ```
 
 ### Resultado esperado
 
-- Sessoes continuam profundas e estruturadas (metodo das 4 fases mantido)
-- Respostas ficam curtas e impactantes (estilo WhatsApp)
-- Profundidade vem de observacoes certeiras, nao de textos longos
-- Usuario processa melhor porque recebe uma ideia por vez
+- Respostas variam naturalmente entre 1 e 4 baloes
+- Respostas de 1-2 baloes aparecem com frequencia (como uma amiga real)
+- 4-5 baloes ficam reservados pra momentos que realmente precisam
+- A conversa flui mais como WhatsApp e menos como "terapeuta com formato fixo"
 
 ### Arquivo modificado
 
-- `supabase/functions/aura-agent/index.ts` (apenas o prompt, secoes de sessao)
+- `supabase/functions/aura-agent/index.ts` (3 trechos do prompt)
 
 ### Re-deploy
 
