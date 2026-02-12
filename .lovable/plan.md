@@ -1,39 +1,94 @@
+## Garantir que a AURA Respeite as Fases e o Tempo da Sessao
 
-## Corrigir AURA insistindo com Clara (e outros usuarios) apos conversa encerrada
+### Diagnostico
 
-### Problema Identificado
+A funcao `calculateSessionTimeContext` calcula as fases corretamente:
 
-A AURA mandou **5 mensagens de follow-up** para Clara em ~50 minutos, mesmo depois de Clara dizer que estava trabalhando e a AURA responder com `[CONVERSA_CONCLUIDA]`.
+```text
+0-5 min   -> Abertura
+5-25 min  -> Exploracao Profunda
+25-35 min -> Reframe e Insights
+35 min+   -> Transicao / Fechamento / Encerramento (baseado em timeRemaining)
+```
 
-A causa raiz sao **2 bugs** no sistema de follow-up:
+No caso do Lucas, aos 17 minutos a AURA estava na fase "Exploracao" e o sistema informou isso corretamente no contexto. Porem, a AURA decidiu fechar a sessao mesmo assim. O problema e que **nao existe nenhuma trava no codigo** -- todo o controle e apenas via prompt, e a IA pode ignorar.
 
-### Bug 1: Fallback anula o encerramento da conversa (CRITICO)
+### Problemas Identificados
 
-Quando a AURA marca `[CONVERSA_CONCLUIDA]`, o webhook corretamente seta `last_user_message_at = null` na tabela `conversation_followups` para desativar follow-ups.
+**1. Sem trava contra encerramento prematuro**
+A AURA pode usar `[ENCERRAR_SESSAO]` ou `[CONVERSA_CONCLUIDA]` a qualquer momento, mesmo no meio da exploracao. O codigo aceita e processa sem questionar.
 
-Porem, na funcao `conversation-followup` (linhas 395-399), existe um **fallback** que diz: "se `last_user_message_at` for null, use o timestamp da ultima mensagem do usuario no banco". Isso **reativa** os follow-ups que deveriam estar desativados.
+**2. Prompt nao proibe explicitamente encerramento fora de fase**
+As instrucoes de cada fase dizem o que fazer, mas nao dizem "NUNCA encerre nesta fase". A AURA interpreta como sugestao, nao como regra.
 
-### Bug 2: Contador reseta a cada interacao
+**3. `[CONVERSA_CONCLUIDA]` aceita durante sessao ativa**
+A AURA usou `[CONVERSA_CONCLUIDA]` (tag de conversa casual) durante uma sessao ativa. O codigo deveria rejeitar essa tag quando ha sessao em andamento.
 
-Cada vez que Clara responde (ex: "eu estou trabalhando!!"), o webhook reseta `followup_count: 0`. Entao o limite de `maxFollowups = 2` nunca e atingido porque o contador zera a cada resposta da usuario.
+### Solucao em 3 Camadas
 
-### Solucao
+#### Camada 1: Trava no Codigo (Hard Block)
 
-#### 1. Remover o fallback que reativa follow-ups desativados
-Na funcao `conversation-followup`, quando `last_user_message_at` e null, isso significa que a conversa foi **intencionalmente encerrada**. O sistema deve pular esse usuario em vez de buscar um fallback.
+No `aura-agent`, apos receber a resposta da IA, verificar:
 
-#### 2. Nao resetar followup_count quando conversa esta concluida
-No webhook, quando `[CONVERSA_CONCLUIDA]` e detectado, setar `followup_count` para o valor maximo (ou um valor alto) para garantir que nenhum follow-up seja enviado ate a proxima conversa real.
+- Se ha sessao ativa E a fase atual e anterior a `transition` (ou seja, `opening`, `exploration`, `reframe`, `development`)
+- E a resposta contem `[ENCERRAR_SESSAO]` ou `[CONVERSA_CONCLUIDA]`
+- Entao **remover a tag** e adicionar uma nota no log ("Tentativa de encerramento prematuro bloqueada")
+- Isso impede que a sessao seja encerrada antes do tempo
 
-#### 3. Respeitar "do_not_disturb" ao detectar pedidos de pausa
-Quando o usuario disser explicitamente que esta ocupado (e a AURA reconhecer com `[CONVERSA_CONCLUIDA]`), o sistema ja seta `do_not_disturb_until`. Mas isso so foi implementado na resposta da AURA e nao no webhook - precisa ser garantido.
+#### Camada 2: Reforco no Prompt por Fase
+
+Adicionar em CADA fase (opening, exploration, reframe) uma regra explicita:
+
+```
+PROIBIDO: Nao use [ENCERRAR_SESSAO] nem [CONVERSA_CONCLUIDA] nesta fase.
+Voce tem XX minutos restantes. USE-OS.
+```
+
+E na fase de exploration especificamente, adicionar:
+
+```
+REGRA DE TEMPO: Voce esta na fase de exploracao (5-25 min).
+NAO FACA resumos, NAO FACA fechamentos, NAO diga "nossa sessao esta terminando".
+Se sentir que "ja explorou o suficiente", va MAIS FUNDO no mesmo tema ou abra outra camada.
+```
+
+#### Camada 3: Rejeitar `[CONVERSA_CONCLUIDA]` Durante Sessao
+
+No codigo que processa as tags da resposta, se `sessionActive === true` e a resposta contem `[CONVERSA_CONCLUIDA]`:
+
+- Substituir por `[ENCERRAR_SESSAO]` se estiver em fase de fechamento
+- Ignorar completamente se estiver em fase anterior
 
 ### Detalhes Tecnicos
 
-**Arquivo: `supabase/functions/conversation-followup/index.ts`**
-- Linhas 395-404: Remover o bloco de fallback. Se `last_user_message_at` e null, fazer `continue` (pular o usuario)
+**Arquivo: `supabase/functions/aura-agent/index.ts**`
 
-**Arquivo: `supabase/functions/webhook-zapi/index.ts`**
-- Linhas 583-595: Quando `conversationStatus === 'complete'`, setar `last_user_message_at: null` E `followup_count` para um valor que garanta bloqueio (ex: 99), alem de limpar o `conversation_context`
+**Mudanca 1 - Trava de encerramento prematuro (~apos linha 3174, onde a resposta da IA e processada):**
 
-**Re-deploy:** Ambas as functions `conversation-followup` e `webhook-zapi` precisam ser re-deployed apos as correcoes.
+- Apos receber `aiReply`, verificar se `sessionActive && currentSession`
+- Calcular a fase atual via `calculateSessionTimeContext(currentSession)`
+- Se fase e `opening`, `exploration`, `reframe` ou `development` E a resposta contem `[ENCERRAR_SESSAO]` ou `[CONVERSA_CONCLUIDA]`:
+  - Remover as tags da resposta
+  - Logar: "Blocked premature session closure at phase: {phase}"
+  - A sessao continua normalmente
+
+**Mudanca 2 - Adicionar proibicao explicita nas fases (linhas 1282-1342):**
+
+- Na fase `opening` (apos linha 1317): adicionar "PROIBIDO: [ENCERRAR_SESSAO] e [CONVERSA_CONCLUIDA] nesta fase."
+- Na fase `exploration` (apos linha 1341): adicionar "PROIBIDO: [ENCERRAR_SESSAO] e [CONVERSA_CONCLUIDA] nesta fase. Voce tem {timeRemaining} minutos. Va mais fundo."
+- Na fase `reframe` (apos linha 1351): adicionar "PROIBIDO: [ENCERRAR_SESSAO] e [CONVERSA_CONCLUIDA] nesta fase."
+
+**Mudanca 3 - Rejeitar `[CONVERSA_CONCLUIDA]` durante sessao (~linhas 3400-3450, onde as tags sao processadas):**
+
+- Se `sessionActive` e resposta contem `[CONVERSA_CONCLUIDA]`:
+  - Se fase >= `transition`: converter para `[ENCERRAR_SESSAO]`
+  - Se fase < `transition`: remover a tag, nao encerrar
+
+**Re-deploy:** Apenas `aura-agent` precisa ser re-deployed.
+
+### Resultado Esperado
+
+- AURA nunca consegue encerrar uma sessao antes da fase de transicao (35 min em sessao de 45)
+- Se a IA tentar fechar cedo, a tag e removida silenciosamente e a sessao continua
+- O prompt reforça em cada fase que o encerramento e proibido antes da hora
+- `[CONVERSA_CONCLUIDA]` durante sessao ativa e tratado corretamente (convertido ou ignorado)
