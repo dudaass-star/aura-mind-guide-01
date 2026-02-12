@@ -1,31 +1,38 @@
 
 
-## Seção de Meditações Guiadas (versão genérica)
+## Corrigir perfil do Rodrigo e enviar boas-vindas
 
-### Abordagem
+### Situacao atual
+O Rodrigo foi cadastrado via `start-trial`, mas:
+- O telefone ficou `5564279241473` (com "55" brasileiro adicionado automaticamente)
+- O status ficou como `trial` em vez de `active`
+- O plano ficou vazio em vez de `direcao`
 
-Em vez de listar as 6 meditações individualmente, criar uma seção mais geral que destaque o conceito: a AURA detecta o momento certo e envia uma meditação guiada personalizada direto no WhatsApp, com a voz dela. Assim, conforme novas meditações forem adicionadas, a página não precisa ser atualizada.
+### O que fazer
 
-### Estrutura visual
+**1. Criar uma edge function utilitaria `admin-update-profile`**
 
-- Badge: "Novo" (estilo sage-soft)
-- Título: "Meditações guiadas no momento certo" com gradient
-- Subtítulo: Explica que a AURA percebe quando você precisa e envia direto no WhatsApp
-- 3 cards destacando os diferenciais:
-  1. **Momento certo** — A AURA identifica quando você precisa e oferece sem você pedir
-  2. **Voz da AURA** — Áudios com a voz que você já conhece da conversa
-  3. **Direto no WhatsApp** — Sem precisar abrir outro app, ouve ali mesmo
-- Frase de reforço embaixo: algo como "Ansiedade, sono, foco, estresse... a AURA escolhe a meditação certa pra você"
+Uma funcao simples que recebe `profile_id` e campos para atualizar. Vai ser util para operacoes futuras tambem.
 
-### Posicionamento
+Aceita: `{ profile_id, updates: { phone, status, plan, current_journey_id, current_episode, ... } }`
 
-Entre **Benefits** e **Testimonials** no Index.tsx.
+**2. Chamar a funcao para corrigir o perfil do Rodrigo**
 
-### Detalhes técnicos
+Atualizar:
+- `phone`: `64279241473`
+- `status`: `active`
+- `plan`: `direcao`
+- `current_journey_id`: `j1-ansiedade`
+- `current_episode`: `0`
 
-**Arquivo novo:**
-- `src/components/Meditations.tsx` — componente com 3 cards de diferenciais, seguindo o padrão visual existente (rounded cards, ícones Lucide, cores sage/lavender/sky)
+**3. Enviar mensagem de boas-vindas via `admin-send-message`**
 
-**Arquivo modificado:**
-- `src/pages/Index.tsx` — importar e adicionar `<Meditations />` entre `<Benefits />` e `<Testimonials />`
+Enviar para o numero correto `64279241473` uma mensagem personalizada da AURA.
 
+### Arquivos
+
+**Novo:**
+- `supabase/functions/admin-update-profile/index.ts` - Edge function para atualizar perfis (reutilizavel)
+
+### Resultado
+- Rodrigo cadastrado com plano Direcao, telefone correto, e mensagem de boas-vindas enviada
