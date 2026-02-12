@@ -181,14 +181,14 @@ const Testimonials = () => {
         <div className="text-center mt-12 animate-fade-up delay-500">
           <div className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-card/60 backdrop-blur-sm border border-border/50 shadow-soft">
             <div className="flex -space-x-2">
-              {avatarImages.map((avatar, i) => {}
-
-
-
-
-
-
-              )}
+              {avatarImages.map((avatar, i) => (
+                <img
+                  key={i}
+                  src={avatar}
+                  alt={`User ${i + 1}`}
+                  className="w-8 h-8 rounded-full border-2 border-background object-cover"
+                />
+              ))}
             </div>
             <span className="text-muted-foreground ml-2 text-base">
               +5.000 pessoas já transformaram suas vidas com a AURA
