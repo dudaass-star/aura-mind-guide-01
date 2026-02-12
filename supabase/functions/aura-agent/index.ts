@@ -1314,6 +1314,8 @@ PASSO 3 - DEFINIR FOCO:
 - USE áudio OBRIGATORIAMENTE para criar intimidade na transição
 - Depois que o usuário definir o foco, faça uma OBSERVAÇÃO (não mais perguntas):
   "Entendi. Parece que [observação sobre o que ela disse]. Vamos por aí?"
+
+🚫 PROIBIDO NESTA FASE: NÃO use [ENCERRAR_SESSAO] nem [CONVERSA_CONCLUIDA]. Você está nos primeiros 5 minutos. A sessão mal começou!
 `;
   } else if (phase === 'exploration') {
     timeContext += `
@@ -1339,6 +1341,11 @@ FAÇA:
 - Uma observação precisa
 - Uma pergunta direcionada (se necessário)
 - ESPERE a reação
+
+🚫 PROIBIDO NESTA FASE: NÃO use [ENCERRAR_SESSAO] nem [CONVERSA_CONCLUIDA]. Você tem ${timeRemaining} minutos restantes. USE-OS.
+REGRA DE TEMPO: Você está na fase de exploração (5-25 min).
+NÃO FAÇA resumos, NÃO FAÇA fechamentos, NÃO diga "nossa sessão está terminando".
+Se sentir que "já explorou o suficiente", vá MAIS FUNDO no mesmo tema ou abra outra camada.
 `;
   } else if (phase === 'reframe') {
     timeContext += `
@@ -1348,6 +1355,8 @@ FAÇA:
 - Ofereça NOVAS PERSPECTIVAS baseadas no que o usuário revelou
 - Comece a consolidar os aprendizados: "Então o que estou entendendo é..."
 - Pergunte: "O que você está levando dessa nossa conversa?"
+
+🚫 PROIBIDO NESTA FASE: NÃO use [ENCERRAR_SESSAO] nem [CONVERSA_CONCLUIDA]. Você tem ${timeRemaining} minutos restantes. Ainda não é hora de fechar.
 `;
   } else if (phase === 'transition') {
     timeContext += `
@@ -3222,6 +3231,35 @@ INSTRUÇÃO: Faça um fechamento CALOROSO da sessão:
     }
 
     console.log("AURA raw response:", assistantMessage.substring(0, 200));
+
+    // ========================================================================
+    // CAMADA 1: TRAVA DE ENCERRAMENTO PREMATURO (Hard Block)
+    // ========================================================================
+    if (sessionActive && currentSession) {
+      const currentPhaseInfo = calculateSessionTimeContext(currentSession);
+      const currentPhase = currentPhaseInfo.phase;
+      const earlyPhases = ['opening', 'exploration', 'reframe', 'development'];
+      
+      if (earlyPhases.includes(currentPhase)) {
+        // Block [ENCERRAR_SESSAO] in early phases
+        if (assistantMessage.includes('[ENCERRAR_SESSAO]')) {
+          console.warn(`🚫 Blocked premature session closure at phase: ${currentPhase} (timeRemaining: ${currentPhaseInfo.timeRemaining}min)`);
+          assistantMessage = assistantMessage.replace(/\[ENCERRAR_SESSAO\]/gi, '');
+        }
+        // Block [CONVERSA_CONCLUIDA] in early phases (Camada 3 - part 1)
+        if (assistantMessage.includes('[CONVERSA_CONCLUIDA]')) {
+          console.warn(`🚫 Blocked [CONVERSA_CONCLUIDA] during active session at phase: ${currentPhase}`);
+          assistantMessage = assistantMessage.replace(/\[CONVERSA_CONCLUIDA\]/gi, '[AGUARDANDO_RESPOSTA]');
+        }
+      } else {
+        // In closing phases (transition, soft_closing, final_closing, overtime):
+        // Convert [CONVERSA_CONCLUIDA] to [ENCERRAR_SESSAO] (Camada 3 - part 2)
+        if (assistantMessage.includes('[CONVERSA_CONCLUIDA]')) {
+          console.log(`🔄 Converting [CONVERSA_CONCLUIDA] to [ENCERRAR_SESSAO] during session closing phase: ${currentPhase}`);
+          assistantMessage = assistantMessage.replace(/\[CONVERSA_CONCLUIDA\]/gi, '[ENCERRAR_SESSAO]');
+        }
+      }
+    }
 
     // ========================================================================
     // PROCESSAR TAGS DE UPGRADE (gerar links de checkout)
