@@ -1,94 +1,84 @@
-## Garantir que a AURA Respeite as Fases e o Tempo da Sessao
 
-### Diagnostico
+## Implementacao: Follow-up Contextual Inteligente + Session-Reminder Fallback
 
-A funcao `calculateSessionTimeContext` calcula as fases corretamente:
+### 1. Conversation-Followup: Contexto Inteligente
+
+**Arquivo:** `supabase/functions/conversation-followup/index.ts`
+
+#### Mudanca A - `extractConversationTheme` vira `extractConversationContext` (linhas 117-175)
+
+Substituir a funcao atual que extrai apenas um tema curto (50 chars) por uma que extrai contexto completo:
+- Aumentar janela: 20 mensagens (era 10), 300 chars por mensagem (era 150)
+- Novo prompt pede formato estruturado: `TEMA: [tema] | TOM: [tom emocional] | CUIDADO: [consideracoes]`
+- `max_tokens`: 150 (era 60), aceitar ate 300 chars (era 100)
+- Modelo: `google/gemini-2.5-flash` (mantido)
+
+Exemplos no prompt:
+- `"TEMA: Rotina matinal e caminhada | TOM: leve e motivado | CUIDADO: nenhum"`
+- `"TEMA: Ideacao suicida, sacada | TOM: crise emocional grave | CUIDADO: nao enviar follow-up casual, apenas check-in cuidadoso"`
+- `"TEMA: Briga com mae | TOM: triste e frustrada | CUIDADO: acolher sem pressionar"`
+
+#### Mudanca B - `generateContextualFollowup` usa contexto completo (linhas 191-298)
+
+- Renomear parametro `conversationTheme` para `conversationContext`
+- No prompt de geracao (linha 246), passar o contexto completo em vez de apenas o tema
+- Adicionar instrucao: "Se o contexto indicar situacao muito sensivel ou que o usuario precisa de espaco, retorne exatamente SKIP"
+- A IA adapta o tom automaticamente com base no contexto
+
+#### Mudanca C - Tratar resposta "SKIP" no loop principal (apos linha 517)
+
+Apos receber a mensagem gerada:
+- Se `message === 'SKIP'` ou `message.trim().toUpperCase() === 'SKIP'`: logar motivo e `continue` (nao enviar)
+- Adicionar contador `skippedByContext` no resultado
+
+#### Mudanca D - Atualizar referencias
+
+- Todas as variaveis `conversationTheme` renomeadas para `conversationContext`
+- `extractConversationTheme` -> `extractConversationContext`
+- Log e salvamento no campo `conversation_context` continua funcionando igual
+
+### 2. Session-Reminder: Fallback para Completed
+
+**Arquivo:** `supabase/functions/session-reminder/index.ts`
+
+#### Mudanca E - Bloco else (linhas 521-532)
+
+Dividir o caso atual (tudo vira `no_show`) em dois:
 
 ```text
-0-5 min   -> Abertura
-5-25 min  -> Exploracao Profunda
-25-35 min -> Reframe e Insights
-35 min+   -> Transicao / Fechamento / Encerramento (baseado em timeRemaining)
+if userMsgsInSession >= 5:
+  statusToSet = 'completed'
+  summaryToSet = await generateSessionSummaryFallback(supabase, session)
+  messageToSend = mensagem reconhecendo que a sessao aconteceu
+else (2-4 mensagens):
+  statusToSet = 'no_show' (manter comportamento atual)
+  summaryToSet = 'Sessao encerrada automaticamente...'
+  messageToSend = mensagem atual
 ```
 
-No caso do Lucas, aos 17 minutos a AURA estava na fase "Exploracao" e o sistema informou isso corretamente no contexto. Porem, a AURA decidiu fechar a sessao mesmo assim. O problema e que **nao existe nenhuma trava no codigo** -- todo o controle e apenas via prompt, e a IA pode ignorar.
+#### Mudanca F - Nova funcao `generateSessionSummaryFallback()`
 
-### Problemas Identificados
+Adicionar antes do `Deno.serve`:
+- Buscar mensagens da sessao (entre `session.started_at` e agora)
+- Chamar Lovable AI gateway (`google/gemini-2.5-flash`) com prompt para gerar:
+  - Summary da sessao
+  - Key insights
+  - Commitments (se houver)
+- Salvar no registro da sessao
+- Fallback estatico se a IA falhar
 
-**1. Sem trava contra encerramento prematuro**
-A AURA pode usar `[ENCERRAR_SESSAO]` ou `[CONVERSA_CONCLUIDA]` a qualquer momento, mesmo no meio da exploracao. O codigo aceita e processa sem questionar.
+### 3. Correcao SQL da sessao do Lucas
 
-**2. Prompt nao proibe explicitamente encerramento fora de fase**
-As instrucoes de cada fase dizem o que fazer, mas nao dizem "NUNCA encerre nesta fase". A AURA interpreta como sugestao, nao como regra.
+Executar via migration tool:
+- `UPDATE sessions SET status = 'completed' WHERE id = 'fc82f4c4-...'` (preciso confirmar o ID completo)
 
-**3. `[CONVERSA_CONCLUIDA]` aceita durante sessao ativa**
-A AURA usou `[CONVERSA_CONCLUIDA]` (tag de conversa casual) durante uma sessao ativa. O codigo deveria rejeitar essa tag quando ha sessao em andamento.
+### Re-deploy
 
-### Solucao em 3 Camadas
-
-#### Camada 1: Trava no Codigo (Hard Block)
-
-No `aura-agent`, apos receber a resposta da IA, verificar:
-
-- Se ha sessao ativa E a fase atual e anterior a `transition` (ou seja, `opening`, `exploration`, `reframe`, `development`)
-- E a resposta contem `[ENCERRAR_SESSAO]` ou `[CONVERSA_CONCLUIDA]`
-- Entao **remover a tag** e adicionar uma nota no log ("Tentativa de encerramento prematuro bloqueada")
-- Isso impede que a sessao seja encerrada antes do tempo
-
-#### Camada 2: Reforco no Prompt por Fase
-
-Adicionar em CADA fase (opening, exploration, reframe) uma regra explicita:
-
-```
-PROIBIDO: Nao use [ENCERRAR_SESSAO] nem [CONVERSA_CONCLUIDA] nesta fase.
-Voce tem XX minutos restantes. USE-OS.
-```
-
-E na fase de exploration especificamente, adicionar:
-
-```
-REGRA DE TEMPO: Voce esta na fase de exploracao (5-25 min).
-NAO FACA resumos, NAO FACA fechamentos, NAO diga "nossa sessao esta terminando".
-Se sentir que "ja explorou o suficiente", va MAIS FUNDO no mesmo tema ou abra outra camada.
-```
-
-#### Camada 3: Rejeitar `[CONVERSA_CONCLUIDA]` Durante Sessao
-
-No codigo que processa as tags da resposta, se `sessionActive === true` e a resposta contem `[CONVERSA_CONCLUIDA]`:
-
-- Substituir por `[ENCERRAR_SESSAO]` se estiver em fase de fechamento
-- Ignorar completamente se estiver em fase anterior
-
-### Detalhes Tecnicos
-
-**Arquivo: `supabase/functions/aura-agent/index.ts**`
-
-**Mudanca 1 - Trava de encerramento prematuro (~apos linha 3174, onde a resposta da IA e processada):**
-
-- Apos receber `aiReply`, verificar se `sessionActive && currentSession`
-- Calcular a fase atual via `calculateSessionTimeContext(currentSession)`
-- Se fase e `opening`, `exploration`, `reframe` ou `development` E a resposta contem `[ENCERRAR_SESSAO]` ou `[CONVERSA_CONCLUIDA]`:
-  - Remover as tags da resposta
-  - Logar: "Blocked premature session closure at phase: {phase}"
-  - A sessao continua normalmente
-
-**Mudanca 2 - Adicionar proibicao explicita nas fases (linhas 1282-1342):**
-
-- Na fase `opening` (apos linha 1317): adicionar "PROIBIDO: [ENCERRAR_SESSAO] e [CONVERSA_CONCLUIDA] nesta fase."
-- Na fase `exploration` (apos linha 1341): adicionar "PROIBIDO: [ENCERRAR_SESSAO] e [CONVERSA_CONCLUIDA] nesta fase. Voce tem {timeRemaining} minutos. Va mais fundo."
-- Na fase `reframe` (apos linha 1351): adicionar "PROIBIDO: [ENCERRAR_SESSAO] e [CONVERSA_CONCLUIDA] nesta fase."
-
-**Mudanca 3 - Rejeitar `[CONVERSA_CONCLUIDA]` durante sessao (~linhas 3400-3450, onde as tags sao processadas):**
-
-- Se `sessionActive` e resposta contem `[CONVERSA_CONCLUIDA]`:
-  - Se fase >= `transition`: converter para `[ENCERRAR_SESSAO]`
-  - Se fase < `transition`: remover a tag, nao encerrar
-
-**Re-deploy:** Apenas `aura-agent` precisa ser re-deployed.
+Duas funcoes serao redeployadas automaticamente: `conversation-followup` e `session-reminder`
 
 ### Resultado Esperado
 
-- AURA nunca consegue encerrar uma sessao antes da fase de transicao (35 min em sessao de 45)
-- Se a IA tentar fechar cedo, a tag e removida silenciosamente e a sessao continua
-- O prompt reforça em cada fase que o encerramento e proibido antes da hora
-- `[CONVERSA_CONCLUIDA]` durante sessao ativa e tratado corretamente (convertido ou ignorado)
+- Follow-ups sempre consideram contexto emocional completo (tema + tom + cuidados)
+- Situacoes sensiveis recebem follow-up adequado ou nenhum follow-up (SKIP)
+- Sessoes com 5+ mensagens do usuario nunca mais sao marcadas como `no_show`
+- Dados de sessoes abandonadas com participacao ativa sao preservados via summary gerado por IA
