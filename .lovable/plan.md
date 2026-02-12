@@ -1,84 +1,88 @@
 
-## Implementacao: Follow-up Contextual Inteligente + Session-Reminder Fallback
 
-### 1. Conversation-Followup: Contexto Inteligente
+## Sessoes mais humanas: profundidade com brevidade no WhatsApp
 
-**Arquivo:** `supabase/functions/conversation-followup/index.ts`
+### O problema
 
-#### Mudanca A - `extractConversationTheme` vira `extractConversationContext` (linhas 117-175)
+O prompt atual desativa TODAS as regras de brevidade durante sessoes ativas (linha 282: "IGNORE as regras 4 e 5"). As instrucoes de sessao dizem "aprofunde com calma, sem pressa" sem nenhum limite de tamanho. Isso cria respostas longas demais pro WhatsApp.
 
-Substituir a funcao atual que extrai apenas um tema curto (50 chars) por uma que extrai contexto completo:
-- Aumentar janela: 20 mensagens (era 10), 300 chars por mensagem (era 150)
-- Novo prompt pede formato estruturado: `TEMA: [tema] | TOM: [tom emocional] | CUIDADO: [consideracoes]`
-- `max_tokens`: 150 (era 60), aceitar ate 300 chars (era 100)
-- Modelo: `google/gemini-2.5-flash` (mantido)
+### A solucao
 
-Exemplos no prompt:
-- `"TEMA: Rotina matinal e caminhada | TOM: leve e motivado | CUIDADO: nenhum"`
-- `"TEMA: Ideacao suicida, sacada | TOM: crise emocional grave | CUIDADO: nao enviar follow-up casual, apenas check-in cuidadoso"`
-- `"TEMA: Briga com mae | TOM: triste e frustrada | CUIDADO: acolher sem pressionar"`
+Manter a profundidade e estrutura das sessoes, mas aplicar regras de comunicacao humana dentro delas. A AURA continua conduzindo com metodo, mas fala como amiga — nao como terapeuta dando palestra.
 
-#### Mudanca B - `generateContextualFollowup` usa contexto completo (linhas 191-298)
+### Mudancas no prompt (arquivo `supabase/functions/aura-agent/index.ts`)
 
-- Renomear parametro `conversationTheme` para `conversationContext`
-- No prompt de geracao (linha 246), passar o contexto completo em vez de apenas o tema
-- Adicionar instrucao: "Se o contexto indicar situacao muito sensivel ou que o usuario precisa de espaco, retorne exatamente SKIP"
-- A IA adapta o tom automaticamente com base no contexto
+**1. Remover a "Protecao de Sessoes" que desativa brevidade (linha 282)**
 
-#### Mudanca C - Tratar resposta "SKIP" no loop principal (apos linha 517)
+Trocar:
+- "Protecao de Sessoes: Durante sessoes ativas, IGNORE as regras 4 e 5"
 
-Apos receber a mensagem gerada:
-- Se `message === 'SKIP'` ou `message.trim().toUpperCase() === 'SKIP'`: logar motivo e `continue` (nao enviar)
-- Adicionar contador `skippedByContext` no resultado
+Por:
+- "Protecao de Sessoes: Durante sessoes ativas, as regras 4 e 5 sao flexibilizadas (voce pode ser mais densa), mas NUNCA abandone a brevidade. Sessao profunda NAO e sinonimo de texto longo."
 
-#### Mudanca D - Atualizar referencias
+**2. Adicionar regras de brevidade especificas para sessao (apos linha 648)**
 
-- Todas as variaveis `conversationTheme` renomeadas para `conversationContext`
-- `extractConversationTheme` -> `extractConversationContext`
-- Log e salvamento no campo `conversation_context` continua funcionando igual
+Novas regras dentro do bloco de sessao:
 
-### 2. Session-Reminder: Fallback para Completed
+- Cada resposta de sessao: MAXIMO 4-5 baloes curtos (usando "|||")
+- Cada balao: maximo 2-3 frases
+- Uma ideia por balao, uma pergunta por resposta (regra ja existente, reforcar)
+- Profundidade vem da QUALIDADE da observacao, nao da QUANTIDADE de texto
+- Proibido "mini-palestras": se precisa explicar algo complexo, quebre em turnos de conversa
+- Preferir observacoes diretas e provocativas a paragrafos explicativos
 
-**Arquivo:** `supabase/functions/session-reminder/index.ts`
+**3. Atualizar as instrucoes de cada fase da sessao (linhas 617-643)**
 
-#### Mudanca E - Bloco else (linhas 521-532)
+Abertura:
+- Saudacao calorosa + 1 pergunta. Nada mais. (2 baloes max)
 
-Dividir o caso atual (tudo vira `no_show`) em dois:
+Exploracao:
+- 1 observacao perceptiva + 1 pergunta que abre. Por turno.
+- NAO acumule 3 perguntas reflexivas numa resposta so
+- Deixe o usuario processar antes de aprofundar mais
 
-```text
-if userMsgsInSession >= 5:
-  statusToSet = 'completed'
-  summaryToSet = await generateSessionSummaryFallback(supabase, session)
-  messageToSend = mensagem reconhecendo que a sessao aconteceu
-else (2-4 mensagens):
-  statusToSet = 'no_show' (manter comportamento atual)
-  summaryToSet = 'Sessao encerrada automaticamente...'
-  messageToSend = mensagem atual
+Reframe:
+- 1 perspectiva nova por vez. Curta e impactante.
+- "Voce percebeu que..." e mais forte que um paragrafo inteiro
+
+Fechamento:
+- Resumo em 3 baloes max: o que surgiu, o que leva, proximo passo
+- NAO liste 5 insights — escolha os 2 mais fortes
+
+**4. Adicionar exemplos de sessao boa vs ruim**
+
+Exemplo RUIM (textao de sessao):
+```
+"Entao, pelo que voce ta me contando, parece que existe um padrao aqui
+que se repete. Quando voce sente que nao esta sendo valorizada no
+trabalho, voce tende a se retrair e aceitar mais tarefas pra provar
+seu valor, o que acaba te sobrecarregando e criando um ciclo de
+frustracao. Isso me lembra o que voce contou sobre sua relacao com
+sua mae, onde voce tambem sentia que precisava fazer mais pra ser
+vista. Sera que existe uma conexao entre essas duas situacoes?
+Como voce se sente quando pensa nisso?"
 ```
 
-#### Mudanca F - Nova funcao `generateSessionSummaryFallback()`
+Exemplo BOM (mesmo conteudo, formato WhatsApp):
+```
+"Voce percebeu que faz a mesma coisa no trabalho e com sua mae? |||
+Nos dois lugares voce tenta provar seu valor fazendo MAIS... em vez
+de exigir ser vista pelo que ja faz |||
+O que voce acha que aconteceria se voce simplesmente parasse de
+compensar?"
+```
 
-Adicionar antes do `Deno.serve`:
-- Buscar mensagens da sessao (entre `session.started_at` e agora)
-- Chamar Lovable AI gateway (`google/gemini-2.5-flash`) com prompt para gerar:
-  - Summary da sessao
-  - Key insights
-  - Commitments (se houver)
-- Salvar no registro da sessao
-- Fallback estatico se a IA falhar
+### Resultado esperado
 
-### 3. Correcao SQL da sessao do Lucas
+- Sessoes continuam profundas e estruturadas (metodo das 4 fases mantido)
+- Respostas ficam curtas e impactantes (estilo WhatsApp)
+- Profundidade vem de observacoes certeiras, nao de textos longos
+- Usuario processa melhor porque recebe uma ideia por vez
 
-Executar via migration tool:
-- `UPDATE sessions SET status = 'completed' WHERE id = 'fc82f4c4-...'` (preciso confirmar o ID completo)
+### Arquivo modificado
+
+- `supabase/functions/aura-agent/index.ts` (apenas o prompt, secoes de sessao)
 
 ### Re-deploy
 
-Duas funcoes serao redeployadas automaticamente: `conversation-followup` e `session-reminder`
-
-### Resultado Esperado
-
-- Follow-ups sempre consideram contexto emocional completo (tema + tom + cuidados)
-- Situacoes sensiveis recebem follow-up adequado ou nenhum follow-up (SKIP)
-- Sessoes com 5+ mensagens do usuario nunca mais sao marcadas como `no_show`
-- Dados de sessoes abandonadas com participacao ativa sao preservados via summary gerado por IA
+- Funcao `aura-agent`
