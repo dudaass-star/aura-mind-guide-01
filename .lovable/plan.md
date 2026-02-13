@@ -1,57 +1,77 @@
 
 
-## Ajuste: Variação natural de ritmo nas respostas da AURA
+## Corrigir: AURA deve enviar meditacoes pre-gravadas em vez de criar audio na hora
 
-### Problema atual
+### Problema
 
-A "Regra Suprema de Brevidade" (linhas 284-304) força respostas curtas demais (maximo 100 chars) para qualquer mensagem factual. Isso torna a AURA previsivel e robotica -- sempre respondendo com 1 frase seca. Uma pessoa real no WhatsApp varia: as vezes manda 1 balao rapido, as vezes 2 ou 3, as vezes elabora mais. E essa variacao que da vida a conversa.
+Existem 6 meditacoes pre-gravadas com audio pronto no banco:
+- `sono` - Relaxamento para Dormir
+- `ansiedade` - Acalmando a Tempestade
+- `estresse` - Relaxamento Muscular Progressivo
+- `foco` - Clareza Mental
+- `respiracao` - Respiracao 4-7-8
+- `gratidao` - Olhar de Gratidao
 
-### O que mudar
+Porem, quando o Rodrigo pediu uma meditacao para dormir, a AURA gerou um audio TTS na hora em vez de enviar o audio pre-gravado. Isso acontece porque **nao existe nenhuma integracao** entre o fluxo de resposta da AURA e a funcao `send-meditation`.
+
+Especificamente:
+1. O prompt da AURA nao instrui o LLM a usar tags como `[MEDITACAO:sono]`
+2. O codigo do `aura-agent` nao detecta essas tags na resposta
+3. O `webhook-zapi` nao chama `send-meditation` em nenhum momento
+
+### Solucao em 2 partes
+
+**Parte 1 - Prompt (aura-agent/index.ts)**
+
+Adicionar instrucao no prompt do sistema para que, quando o usuario pedir ou a situacao indicar uma meditacao, a AURA use a tag `[MEDITACAO:categoria]` na resposta. Categorias validas: `sono`, `ansiedade`, `estresse`, `foco`, `respiracao`, `gratidao`.
+
+Exemplo de uso:
+- Usuario: "Nao consigo dormir" -> AURA: "Vou te mandar uma meditacao pra relaxar [MEDITACAO:sono]"
+- Usuario: "Estou muito ansioso" -> AURA: "Tenho uma meditacao que pode te ajudar agora [MEDITACAO:ansiedade]"
+
+A AURA NAO deve gerar audio TTS quando for enviar meditacao -- a tag substitui isso.
+
+**Parte 2 - Codigo (aura-agent/index.ts)**
+
+Apos receber a resposta do LLM e antes de montar os message chunks, detectar a tag `[MEDITACAO:categoria]` na resposta:
+
+1. Extrair a categoria da tag com regex
+2. Remover a tag do texto da resposta (o usuario nao deve ve-la)
+3. Chamar a funcao `send-meditation` passando a categoria e o telefone/user_id do usuario
+4. A funcao `send-meditation` ja cuida de: buscar meditacao da categoria, evitar repeticao, enviar mensagem de introducao e enviar o audio
+
+### Detalhes tecnicos
 
 **Arquivo:** `supabase/functions/aura-agent/index.ts`
 
-**1. Substituir a "Regra Suprema de Brevidade" por uma "Regra de Variacao Natural"**
+**Mudanca 1 - Adicionar instrucao de meditacao no prompt do sistema:**
 
-Remover o bloco rigido de "maximo 100 chars" (linhas 284-304) e substituir por instrucoes que incentivem variacao:
+Na secao de regras (proximo a regras de audio), adicionar bloco explicando as categorias disponiveis e quando usar a tag. Incluir regra de que ao usar `[MEDITACAO:...]`, a AURA NAO deve usar `[MODO_AUDIO]` nem tentar descrever a meditacao inteira -- apenas uma frase curta de introducao.
+
+**Mudanca 2 - Detectar tag e chamar send-meditation:**
+
+Apos a linha onde `assistantMessage` e obtida (resposta do LLM), antes do `splitIntoMessages`:
 
 ```text
-# RITMO NATURAL DE CONVERSA (FORA DE SESSAO)
-
-Varie o tamanho das suas respostas como uma pessoa real faria no WhatsApp:
-
-- 1 baloo (30%): Reacoes rapidas, validacoes. "Boa!", "Eita, serio?", "Haha que bom!"
-- 2 baloes (40%): O padrao -- uma reacao + uma pergunta ou comentario
-- 3 baloes (20%): Quando tem algo a desenvolver -- reacao + contexto + pergunta
-- 4 baloes (10%): Momentos mais ricos -- historia, reflexao, conexao com algo anterior
-
-A CHAVE e variar. Nao fique preso em 1 tamanho so.
-Cada baloo deve ter 1-3 frases curtas (maximo ~160 chars por baloo).
-MAXIMO 1 pergunta por turno (em qualquer quantidade de baloes).
+1. Regex: /\[MEDITACAO:(\w+)\]/i
+2. Se encontrar:
+   - Extrair categoria
+   - Remover tag do texto
+   - Fazer fetch para send-meditation com { category, user_id, phone }
+   - Log do envio
+3. Continuar fluxo normal (o texto limpo sera enviado como mensagem de texto normal)
 ```
 
-**2. Manter as regras de qualidade que ja funcionam**
+A meditacao sera enviada em paralelo -- a AURA manda o texto de introducao como mensagem normal, e o `send-meditation` envia o audio separadamente (ele ja tem sua propria mensagem de introducao com titulo e duracao).
 
-- Manter a regra de "maximo 1 pergunta por turno" (essa e boa)
-- Manter a regra de "espelhar energia do usuario" (linha 280)
-- Manter os exemplos de respostas ERRADAS (metaforas elaboradas, 2 perguntas) como referencia do que NAO fazer
-- Manter a secao de "NATURALIDADE NA CONVERSA" (linhas 306-313)
+**Mudanca 3 - Ajustar para evitar duplicacao de intro:**
 
-**3. Nao mexer no splitting**
-
-O `splitIntoMessages` (threshold 250, maxChunkSize 160) esta adequado. O problema nao e o codigo de splitting -- e o prompt que forçava brevidade extrema. Com o prompt corrigido, a AURA vai usar `|||` naturalmente para 2-4 baloes, e o splitting so vai atuar como safety net para textos muito longos.
-
-### Secao tecnica
-
-Mudancas especificas no arquivo `supabase/functions/aura-agent/index.ts`:
-
-- **Linhas 284-304**: Remover bloco "REGRA SUPREMA DE BREVIDADE" inteiro
-- **No mesmo local**: Inserir bloco "RITMO NATURAL DE CONVERSA" com as porcentagens de variacao e exemplos para cada quantidade de baloes
-- **Linhas 315-323**: Ajustar "FORMATACAO DE WHATSAPP" para ser consistente com a nova regra (remover redundancias)
-- **Manter** linhas 306-313 (NATURALIDADE NA CONVERSA) como esta
+Como o `send-meditation` ja envia uma mensagem de introducao ("Meditacao Guiada - Duracao: X min"), a AURA deve manter sua mensagem curta e complementar, sem repetir informacoes de duracao ou titulo.
 
 ### Resultado esperado
 
-- AURA alterna entre 1, 2, 3 e 4 baloes de forma organica
-- As vezes responde "Boa!" (1 baloo), as vezes desenvolve mais (3 baloes)
-- Continua com maximo 1 pergunta por turno
-- Parece mais uma pessoa real conversando no WhatsApp
+- Quando o usuario pedir meditacao ou a situacao indicar, a AURA envia o audio pre-gravado da biblioteca
+- O audio e de alta qualidade (gerado previamente com voz Erinome)
+- O historico de meditacoes e registrado para evitar repeticao
+- A AURA NAO gera audio TTS para meditacoes -- usa os pre-gravados
+
