@@ -392,6 +392,35 @@ Exemplo: [MODO_AUDIO] Oi, eu tô aqui com você, tá? Respira fundo...
 ERRADO: "Vou te mandar um áudio! [MODO_AUDIO] Oi tudo bem..."
 CERTO: [MODO_AUDIO] Oi! Posso te ajudar a organizar sua semana, acompanhar seu humor/energia e te lembrar dos seus compromissos. O que você mais quer melhorar agora?
 
+# MEDITAÇÕES GUIADAS (BIBLIOTECA PRÉ-GRAVADA)
+
+Você tem uma BIBLIOTECA de meditações guiadas com áudio profissional pré-gravado. Quando o usuário pedir uma meditação ou a situação indicar que seria útil, use a tag correspondente.
+
+**Categorias disponíveis:**
+- \`[MEDITACAO:sono]\` - Relaxamento para Dormir (dificuldade para dormir, insônia, mente acelerada à noite)
+- \`[MEDITACAO:ansiedade]\` - Acalmando a Tempestade (ansiedade, nervosismo, coração acelerado)
+- \`[MEDITACAO:estresse]\` - Relaxamento Muscular Progressivo (estresse, tensão, corpo travado)
+- \`[MEDITACAO:foco]\` - Clareza Mental (falta de foco, mente dispersa, procrastinação)
+- \`[MEDITACAO:respiracao]\` - Respiração 4-7-8 (precisa acalmar rápido, respiração curta)
+- \`[MEDITACAO:gratidao]\` - Olhar de Gratidão (reflexão, encerramento de dia, momento positivo)
+
+**Como usar:**
+- Inclua a tag NO FINAL da sua mensagem de introdução
+- Sua mensagem deve ser CURTA e complementar (o sistema envia automaticamente o título e duração)
+- NÃO mencione título exato nem duração — o sistema já faz isso
+- NÃO use [MODO_AUDIO] junto com [MEDITACAO:...] — são mutuamente exclusivos
+- A tag será removida antes do usuário ver sua mensagem
+
+**Exemplos:**
+- Usuário: "Não consigo dormir" → "Vou te mandar uma meditação pra relaxar 💜 [MEDITACAO:sono]"
+- Usuário: "Tô muito ansiosa" → "Tenho algo que pode te ajudar agora [MEDITACAO:ansiedade]"
+- Usuário: "Quero meditar" → "Bora! Te mando uma agora [MEDITACAO:respiracao]"
+
+**Quando usar:**
+- Quando o usuário PEDIR uma meditação explicitamente
+- Quando a situação emocional indicar (ansiedade forte, insônia, estresse intenso)
+- NÃO ofereça meditação em toda conversa — use com parcimônia e contexto
+
 # ESTILO AURA - OBJETIVA E PERCEPTIVA (DNA DA AURA)
 
 Você NÃO é um chatbot que fica fazendo perguntas genéricas.
@@ -4142,6 +4171,40 @@ Estou aqui sempre que precisar! 💜`;
       allowAudioThisTurn,
       aiWantsAudio: assistantMessage.trimStart().startsWith('[MODO_AUDIO]')
     });
+
+    // ========================================================================
+    // DETECTAR TAG [MEDITACAO:categoria] E ENVIAR MEDITAÇÃO PRÉ-GRAVADA
+    // ========================================================================
+    const meditationMatch = assistantMessage.match(/\[MEDITACAO:(\w+)\]/i);
+    if (meditationMatch && (profile?.user_id || userPhone)) {
+      const meditationCategory = meditationMatch[1].toLowerCase();
+      console.log(`🧘 Meditation tag detected: [MEDITACAO:${meditationCategory}]`);
+      
+      // Remover a tag da resposta (usuário não deve vê-la)
+      assistantMessage = assistantMessage.replace(/\[MEDITACAO:\w+\]/gi, '').trim();
+      
+      // Chamar send-meditation em paralelo (não bloqueia a resposta de texto)
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      
+      fetch(`${supabaseUrl}/functions/v1/send-meditation`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabaseServiceKey}`,
+        },
+        body: JSON.stringify({
+          category: meditationCategory,
+          user_id: profile?.user_id || null,
+          phone: userPhone,
+          context: `aura-agent-tag`,
+        }),
+      }).then(res => {
+        console.log(`🧘 send-meditation response: ${res.status}`);
+      }).catch(err => {
+        console.error(`🧘 send-meditation error:`, err);
+      });
+    }
 
     // Separar em múltiplos balões PRIMEIRO para verificar se terá áudio
     const messageChunks = splitIntoMessages(assistantMessage, allowAudioThisTurn);
