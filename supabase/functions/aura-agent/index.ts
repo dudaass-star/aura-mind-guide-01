@@ -2343,6 +2343,26 @@ serve(async (req) => {
       }
     }
 
+    // ========================================================================
+    // BUSCAR PRÓXIMAS SESSÕES AGENDADAS (para consciência de agenda)
+    // ========================================================================
+    let upcomingSessions: any[] = [];
+    if (profile?.user_id) {
+      const { data: upcoming } = await supabase
+        .from('sessions')
+        .select('id, scheduled_at, session_type, focus_topic')
+        .eq('user_id', profile.user_id)
+        .eq('status', 'scheduled')
+        .gt('scheduled_at', new Date().toISOString())
+        .order('scheduled_at', { ascending: true })
+        .limit(5);
+
+      if (upcoming && upcoming.length > 0) {
+        upcomingSessions = upcoming;
+        console.log(`📅 Found ${upcoming.length} upcoming sessions for user`);
+      }
+    }
+
     // Verificar se está em sessão ativa e buscar dados completos
     let sessionActive = false;
     let currentSession = null;
@@ -3156,7 +3176,67 @@ REGRA: ${behaviorInstruction}`;
       
       console.log(`⏰ Temporal gap detected: ${gapDescription} (${temporalGapHours.toFixed(1)}h)`);
     }
-    
+
+    // ========================================================================
+    // CONTEXTO DE AGENDA/SESSÕES - Próximas sessões do usuário
+    // ========================================================================
+    if (upcomingSessions.length > 0) {
+      const nextSession = upcomingSessions[0];
+      const nextDate = new Date(nextSession.scheduled_at);
+      const hoursUntilNext = (nextDate.getTime() - Date.now()) / (1000 * 60 * 60);
+
+      const dateStr = nextDate.toLocaleDateString('pt-BR', {
+        weekday: 'long', day: 'numeric', month: 'long',
+        timeZone: 'America/Sao_Paulo'
+      });
+      const timeStr = nextDate.toLocaleTimeString('pt-BR', {
+        hour: '2-digit', minute: '2-digit',
+        timeZone: 'America/Sao_Paulo'
+      });
+
+      let agendaBlock = `\n\n📅 AGENDA DO USUARIO (DADOS DO SISTEMA):`;
+      agendaBlock += `\nProxima sessao: ${dateStr} as ${timeStr}`;
+
+      if (nextSession.focus_topic) {
+        agendaBlock += ` (tema: ${nextSession.focus_topic})`;
+      }
+
+      if (hoursUntilNext <= 2) {
+        agendaBlock += `\n⚡ A sessao e MUITO EM BREVE (menos de 2h). Se o usuario conversar, lembre gentilmente que a sessao esta proxima.`;
+      } else if (hoursUntilNext <= 24) {
+        agendaBlock += `\n🔔 A sessao e HOJE ou AMANHA. Pode mencionar naturalmente se houver oportunidade.`;
+      }
+
+      if (upcomingSessions.length > 1) {
+        agendaBlock += `\nOutras sessoes agendadas:`;
+        for (let i = 1; i < upcomingSessions.length; i++) {
+          const s = upcomingSessions[i];
+          const d = new Date(s.scheduled_at);
+          const dStr = d.toLocaleDateString('pt-BR', {
+            weekday: 'short', day: 'numeric', month: 'short',
+            timeZone: 'America/Sao_Paulo'
+          });
+          const tStr = d.toLocaleTimeString('pt-BR', {
+            hour: '2-digit', minute: '2-digit',
+            timeZone: 'America/Sao_Paulo'
+          });
+          agendaBlock += `\n  - ${dStr} as ${tStr}`;
+        }
+      }
+
+      const sessionsUsed = profile?.sessions_used_this_month || 0;
+      const totalSessions = planConfig.sessions;
+      if (totalSessions > 0) {
+        const remaining = Math.max(0, totalSessions - sessionsUsed);
+        agendaBlock += `\nSessoes restantes no mes: ${remaining}/${totalSessions}`;
+      }
+
+      agendaBlock += `\nREGRA: Use esses dados para contextualizar a conversa. NAO invente datas ou horarios. Se o usuario perguntar sobre a agenda, use EXATAMENTE esses dados.`;
+
+      finalPrompt += agendaBlock;
+      console.log(`📅 Agenda context injected: ${upcomingSessions.length} upcoming sessions, next in ${hoursUntilNext.toFixed(1)}h`);
+    }
+
     // ========================================================================
     // CONTEXTO DE INTERRUPÇÃO - Conteúdo pendente de resposta anterior
     // ========================================================================
