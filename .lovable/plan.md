@@ -1,121 +1,65 @@
 
 
-## Consciencia de agenda/sessoes server-side no aura-agent
+## Controle determinístico de fases da sessão no finalPrompt
 
-### Problema atual
-A Aura so detecta sessoes agendadas dentro de uma janela de 1 hora (para inicio imediato). Ela nao tem nenhuma visao das proximas sessoes do usuario - nao sabe quando e a proxima, quantas faltam no mes, nem consegue lembrar o usuario proativamente.
+### Problema
+Hoje, as instruções de fase da sessão ficam apenas no `timeContext` (system prompt), que é um texto longo com tabelas, exemplos e regras. Quando o modelo "esquece" a fase, o hard block pós-resposta corrige removendo tags, mas o **tom e conteúdo** da resposta já saíram errados (ex: fazer resumo durante exploração).
 
-### Solucao: Injetar contexto de agenda no finalPrompt
+### Solução
+Aplicar o mesmo padrão dos blocos temporal e agenda: injetar um bloco **curto, imperativo e calculado pelo servidor** no `finalPrompt`, logo após os blocos de agenda e temporal. Esse bloco fica na última posição antes da geração, onde o modelo presta mais atenção.
 
-Usar a mesma abordagem do contexto temporal: buscar as sessoes futuras do usuario no banco e injetar um bloco deterministico no prompt com dados concretos.
-
-### Detalhes tecnicos
+### Detalhes técnicos
 
 **Arquivo:** `supabase/functions/aura-agent/index.ts`
 
-**Mudanca 1 - Buscar proximas sessoes agendadas (apos a busca de sessoes existente, ~linha 2344)**
-
-Adicionar uma query que busca as proximas sessoes futuras do usuario (status `scheduled`, `scheduled_at > now()`), limitada a 5 resultados:
+**Mudança única** - Após o bloco de agenda (~linha 3238), adicionar:
 
 ```typescript
-let upcomingSessions: any[] = [];
-if (profile?.user_id) {
-  const { data: upcoming } = await supabase
-    .from('sessions')
-    .select('id, scheduled_at, session_type, focus_topic')
-    .eq('user_id', profile.user_id)
-    .eq('status', 'scheduled')
-    .gt('scheduled_at', new Date().toISOString())
-    .order('scheduled_at', { ascending: true })
-    .limit(5);
+// ========================================================================
+// CONTROLE DE SESSÃO - Reforço determinístico de fase no finalPrompt
+// ========================================================================
+if (sessionActive && currentSession?.started_at) {
+  const phaseInfo = calculateSessionTimeContext(currentSession);
+  const elapsed = Math.floor(
+    (Date.now() - new Date(currentSession.started_at).getTime()) / 60000
+  );
 
-  if (upcoming && upcoming.length > 0) {
-    upcomingSessions = upcoming;
-  }
-}
-```
+  let phaseBlock = `\n\n⏱️ CONTROLE DE SESSÃO (CALCULADO PELO SISTEMA - SIGA OBRIGATORIAMENTE):`;
+  phaseBlock += `\nTempo decorrido: ${elapsed} min | Restante: ${Math.max(0, phaseInfo.timeRemaining)} min`;
+  phaseBlock += `\nFase atual: ${phaseInfo.phase.toUpperCase()}`;
 
-**Mudanca 2 - Injetar contexto de agenda no finalPrompt (junto ao bloco temporal, ~linha 3158)**
-
-Adicionar um bloco que informa a Aura sobre a agenda do usuario:
-
-```typescript
-if (upcomingSessions.length > 0) {
-  const nextSession = upcomingSessions[0];
-  const nextDate = new Date(nextSession.scheduled_at);
-  const hoursUntilNext = (nextDate.getTime() - Date.now()) / (1000 * 60 * 60);
-  
-  // Formatar data/hora em pt-BR (horario de Brasilia)
-  const dateStr = nextDate.toLocaleDateString('pt-BR', { 
-    weekday: 'long', day: 'numeric', month: 'long', 
-    timeZone: 'America/Sao_Paulo' 
-  });
-  const timeStr = nextDate.toLocaleTimeString('pt-BR', { 
-    hour: '2-digit', minute: '2-digit', 
-    timeZone: 'America/Sao_Paulo' 
-  });
-
-  let agendaBlock = `\n\n📅 AGENDA DO USUARIO (DADOS DO SISTEMA):`;
-  agendaBlock += `\nProxima sessao: ${dateStr} as ${timeStr}`;
-  
-  if (nextSession.focus_topic) {
-    agendaBlock += ` (tema: ${nextSession.focus_topic})`;
-  }
-
-  // Contexto de proximidade
-  if (hoursUntilNext <= 2) {
-    agendaBlock += `\n⚡ A sessao e MUITO EM BREVE (menos de 2h). 
-    Se o usuario conversar, lembre gentilmente que a sessao esta proxima.`;
-  } else if (hoursUntilNext <= 24) {
-    agendaBlock += `\n🔔 A sessao e HOJE ou AMANHA. 
-    Pode mencionar naturalmente se houver oportunidade.`;
-  }
-
-  // Listar demais sessoes se houver
-  if (upcomingSessions.length > 1) {
-    agendaBlock += `\nOutras sessoes agendadas:`;
-    for (let i = 1; i < upcomingSessions.length; i++) {
-      const s = upcomingSessions[i];
-      const d = new Date(s.scheduled_at);
-      const dStr = d.toLocaleDateString('pt-BR', { 
-        weekday: 'short', day: 'numeric', month: 'short',
-        timeZone: 'America/Sao_Paulo' 
-      });
-      const tStr = d.toLocaleTimeString('pt-BR', { 
-        hour: '2-digit', minute: '2-digit',
-        timeZone: 'America/Sao_Paulo' 
-      });
-      agendaBlock += `\n  - ${dStr} as ${tStr}`;
+  if (['opening', 'exploration', 'reframe', 'development'].includes(phaseInfo.phase)) {
+    phaseBlock += `\n🚫 PROIBIDO: NÃO resuma, NÃO feche, NÃO diga "nossa sessão está terminando".`;
+    phaseBlock += `\n✅ OBRIGATÓRIO: Continue explorando e aprofundando.`;
+    if (phaseInfo.phase === 'opening' && elapsed <= 3) {
+      phaseBlock += `\n📌 PRIMEIROS MINUTOS. Faça abertura e check-in.`;
+    } else if (phaseInfo.phase === 'exploration') {
+      phaseBlock += `\n📌 EXPLORAÇÃO. Vá mais fundo. Uma observação + uma pergunta.`;
     }
+  } else if (phaseInfo.phase === 'transition') {
+    phaseBlock += `\n⏳ Consolide SUAVEMENTE. Não abra tópicos novos.`;
+  } else if (phaseInfo.phase === 'soft_closing') {
+    phaseBlock += `\n🎯 Resuma insights e defina compromissos. Prepare encerramento.`;
+  } else if (phaseInfo.phase === 'final_closing') {
+    phaseBlock += `\n💜 ENCERRE AGORA: resumo + compromisso + escala 0-10 + [ENCERRAR_SESSAO].`;
+  } else if (phaseInfo.phase === 'overtime') {
+    phaseBlock += `\n⏰ TEMPO ESGOTADO. Finalize IMEDIATAMENTE com [ENCERRAR_SESSAO].`;
   }
 
-  // Info de sessoes restantes no mes
-  const sessionsUsed = profile?.sessions_used_this_month || 0;
-  const totalSessions = planConfig.sessions;
-  if (totalSessions > 0) {
-    const remaining = Math.max(0, totalSessions - sessionsUsed);
-    agendaBlock += `\nSessoes restantes no mes: ${remaining}/${totalSessions}`;
-  }
-
-  agendaBlock += `\nREGRA: Use esses dados para contextualizar a conversa. 
-  NAO invente datas ou horarios. Se o usuario perguntar sobre a agenda, 
-  use EXATAMENTE esses dados.`;
-
-  finalPrompt += agendaBlock;
-  console.log(`📅 Agenda context injected: ${upcomingSessions.length} upcoming sessions, next in ${hoursUntilNext.toFixed(1)}h`);
+  finalPrompt += phaseBlock;
+  console.log(`⏱️ Session phase reinforcement: ${phaseInfo.phase}, ${elapsed}min elapsed, ${phaseInfo.timeRemaining}min remaining`);
 }
 ```
 
-### Por que isso resolve
+### Como funciona em 3 camadas
 
-- **A Aura sabe exatamente quando e a proxima sessao**: datas e horarios reais do banco, sem inventar
-- **Pode lembrar o usuario naturalmente**: "a proposito, amanha temos sessao as 19h!"
-- **Evita confusao de datas**: o modelo recebe dados formatados, nao precisa calcular nada
-- **Contexto de proximidade**: quando a sessao e iminente, a Aura e instruida a lembrar
-- **Mesmo padrao do contexto temporal**: logica server-side deterministica, zero custo/latencia extra
+1. **`timeContext` no system prompt** - instruções detalhadas com tabelas e exemplos (já existe)
+2. **Bloco no `finalPrompt`** - reforço curto e imperativo no final da conversa (NOVO)
+3. **Hard block pós-resposta** - remove tags de encerramento em fases iniciais (já existe)
 
 ### Impacto
-- Aura passa a ter nocao da agenda real do usuario
-- Pode lembrar de sessoes proximas naturalmente na conversa
-- Nunca mais inventa datas ou horarios errados
-- Zero chamadas extras a API, apenas uma query SQL adicional leve
+- Zero custo extra (usa `calculateSessionTimeContext` que já é chamado)
+- Bloco curto e imperativo na posição de maior atenção do modelo
+- Tripla camada de proteção contra encerramento prematuro
+- Mesmo padrão dos blocos temporal e agenda
+
