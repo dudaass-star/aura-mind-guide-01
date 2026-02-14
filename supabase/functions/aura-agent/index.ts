@@ -3238,6 +3238,41 @@ REGRA: ${behaviorInstruction}`;
     }
 
     // ========================================================================
+    // CONTROLE DE SESSÃO - Reforço determinístico de fase no finalPrompt
+    // ========================================================================
+    if (sessionActive && currentSession?.started_at) {
+      const phaseInfo = calculateSessionTimeContext(currentSession);
+      const elapsed = Math.floor(
+        (Date.now() - new Date(currentSession.started_at).getTime()) / 60000
+      );
+
+      let phaseBlock = `\n\n⏱️ CONTROLE DE SESSÃO (CALCULADO PELO SISTEMA - SIGA OBRIGATORIAMENTE):`;
+      phaseBlock += `\nTempo decorrido: ${elapsed} min | Restante: ${Math.max(0, phaseInfo.timeRemaining)} min`;
+      phaseBlock += `\nFase atual: ${phaseInfo.phase.toUpperCase()}`;
+
+      if (['opening', 'exploration', 'reframe', 'development'].includes(phaseInfo.phase)) {
+        phaseBlock += `\n🚫 PROIBIDO: NÃO resuma, NÃO feche, NÃO diga "nossa sessão está terminando".`;
+        phaseBlock += `\n✅ OBRIGATÓRIO: Continue explorando e aprofundando.`;
+        if (phaseInfo.phase === 'opening' && elapsed <= 3) {
+          phaseBlock += `\n📌 PRIMEIROS MINUTOS. Faça abertura e check-in.`;
+        } else if (phaseInfo.phase === 'exploration') {
+          phaseBlock += `\n📌 EXPLORAÇÃO. Vá mais fundo. Uma observação + uma pergunta.`;
+        }
+      } else if (phaseInfo.phase === 'transition') {
+        phaseBlock += `\n⏳ Consolide SUAVEMENTE. Não abra tópicos novos.`;
+      } else if (phaseInfo.phase === 'soft_closing') {
+        phaseBlock += `\n🎯 Resuma insights e defina compromissos. Prepare encerramento.`;
+      } else if (phaseInfo.phase === 'final_closing') {
+        phaseBlock += `\n💜 ENCERRE AGORA: resumo + compromisso + escala 0-10 + [ENCERRAR_SESSAO].`;
+      } else if (phaseInfo.phase === 'overtime') {
+        phaseBlock += `\n⏰ TEMPO ESGOTADO. Finalize IMEDIATAMENTE com [ENCERRAR_SESSAO].`;
+      }
+
+      finalPrompt += phaseBlock;
+      console.log(`⏱️ Session phase reinforcement: ${phaseInfo.phase}, ${elapsed}min elapsed, ${phaseInfo.timeRemaining}min remaining`);
+    }
+
+    // ========================================================================
     // CONTEXTO DE INTERRUPÇÃO - Conteúdo pendente de resposta anterior
     // ========================================================================
     if (pending_content && pending_content.trim()) {
