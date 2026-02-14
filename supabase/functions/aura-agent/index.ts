@@ -2620,9 +2620,10 @@ serve(async (req) => {
       }
     }
 
-    // Buscar histórico de mensagens (últimas 20)
+    // Buscar histórico de mensagens (últimas 40)
     let messageHistory: { role: string; content: string }[] = [];
     let messageCount = 0;
+    let temporalGapHours = 0;
     if (profile?.user_id) {
       const { data: messages, count } = await supabase
         .from('messages')
@@ -2632,6 +2633,13 @@ serve(async (req) => {
         .limit(40);
 
       if (messages) {
+        // Calcular gap temporal ANTES de sanitizar (pois sanitize descarta created_at)
+        const lastUserMsg = messages.find(m => m.role === 'user');
+        if (lastUserMsg?.created_at) {
+          const lastUserMessageTime = new Date(lastUserMsg.created_at);
+          temporalGapHours = (Date.now() - lastUserMessageTime.getTime()) / (1000 * 60 * 60);
+        }
+
         messageHistory = sanitizeMessageHistory(messages.reverse());
         messageCount = count || messages.length;
       }
@@ -3117,6 +3125,36 @@ INSTRUÇÃO: Ao final da sua resposta, faça um convite carinhoso para continuar
         // Conversas 1-3: apenas informar internamente, sem mencionar
         finalPrompt += `\n\n(Nota interna: Esta é a conversa ${trial_count}/5 do trial gratuito. Não precisa mencionar isso ao usuário ainda.)`;
       }
+    }
+
+    // ========================================================================
+    // CONTEXTO TEMPORAL SERVER-SIDE (determinístico)
+    // ========================================================================
+    if (temporalGapHours >= 4) {
+      const gapDays = Math.floor(temporalGapHours / 24);
+      const gapRemainingHours = Math.floor(temporalGapHours % 24);
+      
+      let gapDescription = '';
+      if (gapDays >= 1) {
+        gapDescription = `${gapDays} dia(s) e ${gapRemainingHours} hora(s)`;
+      } else {
+        gapDescription = `${Math.floor(temporalGapHours)} horas`;
+      }
+
+      let behaviorInstruction = '';
+      if (temporalGapHours >= 48) {
+        behaviorInstruction = `Trate como conversa NOVA. Cumprimente naturalmente para o periodo do dia. NAO retome nenhum assunto anterior a menos que o USUARIO traga primeiro.`;
+      } else if (temporalGapHours >= 24) {
+        behaviorInstruction = `Faz mais de um dia. Cumprimente de forma fresca. Se quiser mencionar algo anterior, diga "da ultima vez" ou "outro dia". NAO continue o assunto anterior como se fosse agora.`;
+      } else {
+        behaviorInstruction = `Passaram-se algumas horas. NAO retome o assunto anterior como se fosse continuacao imediata. Pergunte como o usuario esta AGORA.`;
+      }
+
+      finalPrompt += `\n\n⏰ CONTEXTO TEMPORAL (CALCULADO PELO SISTEMA - SIGA OBRIGATORIAMENTE):
+Ultima mensagem do usuario foi ha ${gapDescription}.
+REGRA: ${behaviorInstruction}`;
+      
+      console.log(`⏰ Temporal gap detected: ${gapDescription} (${temporalGapHours.toFixed(1)}h)`);
     }
     
     // ========================================================================
