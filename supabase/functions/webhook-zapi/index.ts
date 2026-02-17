@@ -516,6 +516,23 @@ Vou ficar esperando você voltar. 🤗`;
     await new Promise(resolve => setTimeout(resolve, initialDelay));
 
     // ========================================================================
+    // DEBOUNCE CHECK - Verificar se outra mensagem chegou durante o delay
+    // ========================================================================
+    const { data: debounceCheck } = await supabase
+      .from('aura_response_state')
+      .select('last_user_message_id')
+      .eq('user_id', profile.user_id)
+      .maybeSingle();
+
+    if (debounceCheck?.last_user_message_id && 
+        debounceCheck.last_user_message_id !== currentMessageId) {
+      console.log(`⏭️ DEBOUNCE: Msg mais recente detectada (${debounceCheck.last_user_message_id} != ${currentMessageId}). Abortando.`);
+      return new Response(JSON.stringify({ status: 'debounced', reason: 'newer_message_exists' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // ========================================================================
     // CALL AURA AGENT
     // ========================================================================
     console.log(`📱 Processing message from: ${payload.cleanPhone.substring(0, 4)}***`);
