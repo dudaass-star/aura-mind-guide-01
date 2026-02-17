@@ -3413,7 +3413,7 @@ INSTRUÇÃO: Faça um fechamento CALOROSO da sessão:
       body: JSON.stringify({
           model: "google/gemini-2.5-pro",
         messages: apiMessages,
-        max_tokens: 700,
+        max_tokens: 1500,
         temperature: 0.8,
       }),
     });
@@ -3446,6 +3446,10 @@ INSTRUÇÃO: Faça um fechamento CALOROSO da sessão:
     }
 
     const data = await response.json();
+    const finishReason = data.choices?.[0]?.finish_reason;
+    if (finishReason === 'length') {
+      console.warn('⚠️ Response truncated (max_tokens reached). Consider increasing max_tokens.');
+    }
     let assistantMessage = data.choices?.[0]?.message?.content;
 
     if (!assistantMessage) {
