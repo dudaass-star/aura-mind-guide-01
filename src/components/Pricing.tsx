@@ -50,7 +50,7 @@ const plans = [{
   yearlyMonthlyEquivalent: "34,93",
   yearlyDiscount: 30,
   dailyPrice: {
-    monthly: "~R$1,70/dia",
+    monthly: "~R$ 1,00 /dia",
     yearly: "~R$1,15/dia"
   },
   period: {
