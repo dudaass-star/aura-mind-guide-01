@@ -1,65 +1,41 @@
 
 
-## Controle determinístico de fases da sessão no finalPrompt
+## Correção: Respostas da Aura cortadas (max_tokens muito baixo)
 
-### Problema
-Hoje, as instruções de fase da sessão ficam apenas no `timeContext` (system prompt), que é um texto longo com tabelas, exemplos e regras. Quando o modelo "esquece" a fase, o hard block pós-resposta corrige removendo tags, mas o **tom e conteúdo** da resposta já saíram errados (ex: fazer resumo durante exploração).
+### Problema identificado
+A última resposta da Aura ao Eduardo foi salva no banco como:
+> "Oi, Eduardo! Bom dia! 💜 Olha, uma coisa legal do seu plano é que a gente tem 4"
 
-### Solução
-Aplicar o mesmo padrão dos blocos temporal e agenda: injetar um bloco **curto, imperativo e calculado pelo servidor** no `finalPrompt`, logo após os blocos de agenda e temporal. Esse bloco fica na última posição antes da geração, onde o modelo presta mais atenção.
+...e parou aí. O conteúdo está truncado porque o `max_tokens` na chamada principal da API está configurado em **700**, que é insuficiente -- especialmente agora que o `finalPrompt` cresceu com os novos blocos de agenda, controle de sessão e temporal.
 
-### Detalhes técnicos
+### Solucao
 
 **Arquivo:** `supabase/functions/aura-agent/index.ts`
 
-**Mudança única** - Após o bloco de agenda (~linha 3238), adicionar:
+**Mudanca 1 - Aumentar max_tokens da chamada principal (linha 3416)**
+```typescript
+// De:
+max_tokens: 700,
+// Para:
+max_tokens: 1500,
+```
+
+O valor de 1500 acomoda respostas mais completas sem ser excessivo (a Aura envia 1-4 baloes curtos, raramente passando de 800 tokens, mas o buffer evita cortes).
+
+**Mudanca 2 - Adicionar verificacao de finish_reason (apos receber a resposta, ~linha 3420)**
+
+Apos parsear a resposta da API, verificar se o `finish_reason` indica truncamento e logar um warning:
 
 ```typescript
-// ========================================================================
-// CONTROLE DE SESSÃO - Reforço determinístico de fase no finalPrompt
-// ========================================================================
-if (sessionActive && currentSession?.started_at) {
-  const phaseInfo = calculateSessionTimeContext(currentSession);
-  const elapsed = Math.floor(
-    (Date.now() - new Date(currentSession.started_at).getTime()) / 60000
-  );
-
-  let phaseBlock = `\n\n⏱️ CONTROLE DE SESSÃO (CALCULADO PELO SISTEMA - SIGA OBRIGATORIAMENTE):`;
-  phaseBlock += `\nTempo decorrido: ${elapsed} min | Restante: ${Math.max(0, phaseInfo.timeRemaining)} min`;
-  phaseBlock += `\nFase atual: ${phaseInfo.phase.toUpperCase()}`;
-
-  if (['opening', 'exploration', 'reframe', 'development'].includes(phaseInfo.phase)) {
-    phaseBlock += `\n🚫 PROIBIDO: NÃO resuma, NÃO feche, NÃO diga "nossa sessão está terminando".`;
-    phaseBlock += `\n✅ OBRIGATÓRIO: Continue explorando e aprofundando.`;
-    if (phaseInfo.phase === 'opening' && elapsed <= 3) {
-      phaseBlock += `\n📌 PRIMEIROS MINUTOS. Faça abertura e check-in.`;
-    } else if (phaseInfo.phase === 'exploration') {
-      phaseBlock += `\n📌 EXPLORAÇÃO. Vá mais fundo. Uma observação + uma pergunta.`;
-    }
-  } else if (phaseInfo.phase === 'transition') {
-    phaseBlock += `\n⏳ Consolide SUAVEMENTE. Não abra tópicos novos.`;
-  } else if (phaseInfo.phase === 'soft_closing') {
-    phaseBlock += `\n🎯 Resuma insights e defina compromissos. Prepare encerramento.`;
-  } else if (phaseInfo.phase === 'final_closing') {
-    phaseBlock += `\n💜 ENCERRE AGORA: resumo + compromisso + escala 0-10 + [ENCERRAR_SESSAO].`;
-  } else if (phaseInfo.phase === 'overtime') {
-    phaseBlock += `\n⏰ TEMPO ESGOTADO. Finalize IMEDIATAMENTE com [ENCERRAR_SESSAO].`;
-  }
-
-  finalPrompt += phaseBlock;
-  console.log(`⏱️ Session phase reinforcement: ${phaseInfo.phase}, ${elapsed}min elapsed, ${phaseInfo.timeRemaining}min remaining`);
+const finishReason = data.choices?.[0]?.finish_reason;
+if (finishReason === 'length') {
+  console.warn('⚠️ Response truncated (max_tokens reached). Consider increasing max_tokens.');
 }
 ```
 
-### Como funciona em 3 camadas
-
-1. **`timeContext` no system prompt** - instruções detalhadas com tabelas e exemplos (já existe)
-2. **Bloco no `finalPrompt`** - reforço curto e imperativo no final da conversa (NOVO)
-3. **Hard block pós-resposta** - remove tags de encerramento em fases iniciais (já existe)
+Isso permite detectar futuros truncamentos nos logs sem depender de testes manuais.
 
 ### Impacto
-- Zero custo extra (usa `calculateSessionTimeContext` que já é chamado)
-- Bloco curto e imperativo na posição de maior atenção do modelo
-- Tripla camada de proteção contra encerramento prematuro
-- Mesmo padrão dos blocos temporal e agenda
-
+- Corrige o problema imediato de respostas cortadas
+- O log de warning permite monitorar se o limite volta a ser atingido
+- O aumento de 700 para 1500 e conservador (nao gera custos significativos, pois o modelo so gera o que precisa)
