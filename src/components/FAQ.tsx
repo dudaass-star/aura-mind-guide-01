@@ -27,11 +27,6 @@ const faqs = [
       "Sim! Se você precisar dar um tempo, pode pausar sua assinatura por até 30 dias sem perder seu histórico ou progresso. Quando voltar, a AURA continua de onde parou.",
   },
   {
-    question: "Como funciona a garantia de 7 dias?",
-    answer:
-      "Se nos primeiros 7 dias você não gostar da experiência, devolvemos 100% do valor. Sem burocracia, sem perguntas.",
-  },
-  {
     question: "O que são as Sessões Especiais?",
     answer:
       "São encontros de 45 minutos com metodologia estruturada (Investigação Socrática + Logoterapia). Você escolhe o tema: Clareza (decisões), Padrões (comportamentos repetitivos), Propósito (sentido de vida) ou Livre. Depois, recebe um resumo escrito com os principais insights.",
