@@ -1,28 +1,28 @@
 import { Clock, Mic, MessageCircle } from "lucide-react";
 
 const features = [
-  {
-    icon: Clock,
-    title: "Momento certo",
-    description: "A AURA percebe quando você precisa e oferece uma meditação — sem você pedir.",
-    color: "bg-sage-soft",
-    iconColor: "text-primary",
-  },
-  {
-    icon: Mic,
-    title: "Voz da AURA",
-    description: "Áudios com a mesma voz que você já conhece da conversa. Familiar e acolhedor.",
-    color: "bg-lavender-soft",
-    iconColor: "text-accent",
-  },
-  {
-    icon: MessageCircle,
-    title: "Direto no WhatsApp",
-    description: "Sem abrir outro app. Você ouve ali mesmo, no meio da conversa.",
-    color: "bg-sky-soft",
-    iconColor: "text-sky",
-  },
-];
+{
+  icon: Clock,
+  title: "Momento certo",
+  description: "A AURA percebe quando você precisa e oferece uma meditação — sem você pedir.",
+  color: "bg-sage-soft",
+  iconColor: "text-primary"
+},
+{
+  icon: Mic,
+  title: "Voz da AURA",
+  description: "Áudios com a mesma voz que você já conhece da conversa. Familiar e acolhedor.",
+  color: "bg-lavender-soft",
+  iconColor: "text-accent"
+},
+{
+  icon: MessageCircle,
+  title: "Direto no WhatsApp",
+  description: "Sem abrir outro app. Você ouve ali mesmo, no meio da conversa.",
+  color: "bg-sky-soft",
+  iconColor: "text-sky"
+}];
+
 
 const Meditations = () => {
   return (
@@ -45,12 +45,12 @@ const Meditations = () => {
         </div>
 
         <div className="grid md:grid-cols-3 gap-6 max-w-4xl mx-auto mb-12">
-          {features.map((feature, index) => (
-            <div
-              key={index}
-              className="group p-6 rounded-2xl bg-card/80 backdrop-blur-sm border border-border/50 hover:shadow-card hover:border-primary/20 transition-all duration-300 text-center animate-fade-up"
-              style={{ animationDelay: `${index * 100}ms` }}
-            >
+          {features.map((feature, index) =>
+          <div
+            key={index}
+            className="group p-6 rounded-2xl bg-card/80 backdrop-blur-sm border border-border/50 hover:shadow-card hover:border-primary/20 transition-all duration-300 text-center animate-fade-up"
+            style={{ animationDelay: `${index * 100}ms` }}>
+
               <div className={`w-14 h-14 rounded-xl ${feature.color} flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300`}>
                 <feature.icon className={`w-7 h-7 ${feature.iconColor}`} />
               </div>
@@ -61,15 +61,15 @@ const Meditations = () => {
                 {feature.description}
               </p>
             </div>
-          ))}
+          )}
         </div>
 
-        <p className="text-center text-muted-foreground text-sm animate-fade-up delay-300">
+        <p className="text-center text-muted-foreground text-sm animate-fade-up delay-300 font-semibold">
           Ansiedade, sono, foco, estresse, gratidão… a AURA escolhe a meditação certa pra você.
         </p>
       </div>
-    </section>
-  );
+    </section>);
+
 };
 
 export default Meditations;
