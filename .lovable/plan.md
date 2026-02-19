@@ -1,132 +1,91 @@
 
 
-# Multi-Numero WhatsApp com Balanceamento Aleatorio e Anti-Burst
+## Limpeza Automática de Usuários Inativos
 
-## Resumo
+### Contexto atual
 
-Implementar uma infraestrutura de multiplos numeros WhatsApp com distribuicao aleatoria entre instancias ativas e um sistema de delay anti-burst para mensagens programadas.
+Na base hoje existem 17 usuários registrados na instância "Aura #1":
+- **12 ativos** (pagantes, planos essencial/direcao/mensal)
+- **5 em trial** — sendo que 4 deles **nunca enviaram nenhuma mensagem** e o mais antigo (Dimas Martins) está há **41 dias** sem interagir
 
-## 1. Tabela `whatsapp_instances`
+O problema: cada usuário cadastrado ocupa 1 vaga no `current_users` da instância WhatsApp (max 250). Usuários que fizeram trial, nunca converteram e abandonaram continuam "travando" vagas indefinidamente.
 
-Nova tabela para armazenar as credenciais de cada numero WhatsApp:
+---
 
-| Campo | Tipo | Descricao |
-|---|---|---|
-| id | UUID | Chave primaria |
-| name | TEXT | Nome amigavel (ex: "Aura #1") |
-| phone_number | TEXT | Numero do WhatsApp |
-| zapi_instance_id | TEXT | Instance ID do Z-API |
-| zapi_token | TEXT | Token do Z-API |
-| zapi_client_token | TEXT | Client Token do Z-API |
-| max_users | INT (default 250) | Limite de usuarios |
-| current_users | INT (default 0) | Contador atual |
-| status | TEXT (default 'active') | active / paused / banned / disconnected |
-| created_at | TIMESTAMPTZ | Data de criacao |
+### Critérios de exclusão propostos
 
-- RLS: Apenas `service_role` tem acesso (credenciais sensiveis)
+Serão deletados perfis que se enquadrem em **qualquer** das categorias abaixo:
 
-## 2. Nova coluna em `profiles`
+| Categoria | Critério |
+|---|---|
+| Trial fantasma | `status = 'trial'` + `last_message_date IS NULL` + mais de **7 dias** desde `trial_started_at` |
+| Trial expirado | `status = 'trial'` + última mensagem há mais de **30 dias** |
+| Cancelado antigo | `status = 'canceled'` + última mensagem há mais de **60 dias** |
 
-- Adicionar `whatsapp_instance_id` (UUID, nullable, FK para `whatsapp_instances`)
+> **Nota:** Usuários `active` nunca são deletados automaticamente, independente de inatividade.
 
-## 3. Migracao de dados
+---
 
-- Criar a primeira instancia usando as credenciais atuais das env vars (ZAPI_INSTANCE_ID, ZAPI_TOKEN, ZAPI_CLIENT_TOKEN)
-- Vincular todos os perfis existentes a essa instancia
+### O que acontece na exclusão
 
-## 4. Logica de Alocacao: Roleta Distribuida
+1. O perfil é **deletado** da tabela `profiles`
+2. O `current_users` da instância vinculada é **decrementado** automaticamente (via trigger no banco)
+3. Os dados relacionados (messages, sessions, insights, etc.) são removidos em cascata — **ou** são anonimizados dependendo da política de privacidade desejada
 
-Ao criar um novo usuario (em `start-trial` e `stripe-webhook`):
+---
 
-```text
-Buscar todas instancias com:
-  - status = 'active'
-  - current_users < max_users
+### Implementação técnica
 
-Selecionar uma ALEATORIAMENTE entre as disponiveis
-  (usando ORDER BY random() LIMIT 1)
+**1. Trigger no banco para decrementar `current_users`**
 
-Vincular usuario a essa instancia
-Incrementar current_users
+Quando um perfil é deletado, um trigger executa:
+```sql
+UPDATE whatsapp_instances
+SET current_users = current_users - 1
+WHERE id = OLD.whatsapp_instance_id;
 ```
 
-Isso aquece todos os chips de forma natural e nao concentra novos usuarios em um unico numero.
+**2. Nova edge function: `cleanup-inactive-users`**
 
-## 5. Atualizacao do `zapi-client.ts`
+Executada via cron (uma vez por dia, ex: 3h da manhã), a função:
 
-A funcao `getZapiConfig()` passara a aceitar um parametro opcional com as credenciais da instancia:
+1. Busca perfis elegíveis para exclusão conforme os critérios acima
+2. Para cada perfil encontrado, registra um log antes de deletar
+3. Deleta o perfil (o trigger cuida do decremento da instância)
+4. Retorna um resumo: quantos foram deletados por categoria
 
-```text
-getZapiConfig()          -> usa env vars (retrocompativel)
-getZapiConfig(instance)  -> usa credenciais do objeto passado
-```
+**3. Cron job diário**
 
-Todas as funcoes de envio (`sendTextMessage`, `sendAudioMessage`, etc.) passarao a aceitar um `config` opcional em vez de buscar das env vars internamente.
+Agendado via `pg_cron` para rodar a função uma vez por dia às 3h (horário de Brasília).
 
-## 6. Funcao helper: buscar instancia do usuario
+---
 
-Nova funcao utilitaria que, dado um `user_id` ou `phone`, busca o perfil e retorna as credenciais da instancia vinculada. Se nao houver instancia vinculada, faz fallback para as env vars.
+### Impacto imediato (base atual)
 
-## 7. Delay Anti-Burst nas Mensagens Programadas
+Com os critérios propostos, **4 dos 5 usuários trial** seriam elegíveis para exclusão imediata:
+- Dimas Martins — 41 dias, nunca interagiu
+- Teste — 15 dias, nunca interagiu  
+- teste — 14 dias, nunca interagiu
+- teste qa 10 — 14 dias, nunca interagiu
 
-Adicionar um delay aleatorio de **25-45 segundos** entre cada envio nas seguintes edge functions:
+Apenas a Camila (8 dias, interagiu em 11/02) ficaria.
 
-| Edge Function | Delay atual | Novo delay |
-|---|---|---|
-| `scheduled-followup` | 1s | 25-45s aleatorio |
-| `weekly-report` | 1.5s | 25-45s aleatorio |
-| `periodic-content` | (sem delay explicito) | 25-45s aleatorio |
-| `session-reminder` | (sem delay explicito) | 25-45s aleatorio |
-| `scheduled-checkin` | (verificar) | 25-45s aleatorio |
-| `conversation-followup` | (verificar) | 25-45s aleatorio |
-| `reactivation-check` | (verificar) | 25-45s aleatorio |
+O `current_users` passaria de 17 para 13.
 
-O delay sera implementado como:
-```text
-const delay = 25000 + Math.random() * 20000; // 25-45 segundos
-await new Promise(resolve => setTimeout(resolve, delay));
-```
+---
 
-## 8. Atualizacao das Edge Functions de Envio
+### Pontos de atenção
 
-Cada funcao que envia mensagens sera atualizada para:
+- Usuários com `status = 'canceled'` que ainda estão no período pago (acesso ativo) **não devem ser deletados ainda** — o critério dos 60 dias garante essa janela
+- A função não envia mensagem de despedida para esses usuários (já foram notificados via reactivation-check ou nunca chegaram a usar de verdade)
+- O plano não toca em nenhum usuário `active`, garantindo zero risco para pagantes
 
-1. Buscar o `whatsapp_instance_id` do perfil do usuario
-2. Carregar as credenciais daquela instancia
-3. Usar essas credenciais no envio (em vez das env vars fixas)
+---
 
-**Functions afetadas:**
-- `webhook-zapi` (resposta ao usuario)
-- `send-zapi-message`
-- `scheduled-followup`
-- `weekly-report`
-- `periodic-content`
-- `session-reminder`
-- `scheduled-checkin`
-- `conversation-followup`
-- `reactivation-check`
-- `start-trial` (envio de boas-vindas)
-- `stripe-webhook` (envio de confirmacao)
-- `send-meditation`
+### Arquivos a criar/modificar
 
-## 9. Webhook de entrada (`webhook-zapi`)
-
-O Z-API envia no payload o `instanceId` da instancia que recebeu a mensagem. O `webhook-zapi` usara esse campo para identificar qual instancia responder, buscando as credenciais corretas da tabela.
-
-## 10. Retrocompatibilidade
-
-- Se um perfil nao tem `whatsapp_instance_id`, usa as env vars atuais
-- A primeira instancia eh criada automaticamente na migracao com os dados atuais
-- Nenhuma funcionalidade existente quebra
-
-## Ordem de Implementacao
-
-1. Criar tabela `whatsapp_instances` e coluna em `profiles`
-2. Inserir primeira instancia com credenciais atuais e vincular perfis existentes
-3. Atualizar `zapi-client.ts` para aceitar config por parametro
-4. Criar funcao helper de busca de instancia
-5. Atualizar `start-trial` e `stripe-webhook` com alocacao aleatoria
-6. Atualizar `webhook-zapi` para identificar instancia de origem
-7. Atualizar todas as functions de envio programado com delay anti-burst e instancia dinamica
-8. Atualizar `send-zapi-message` e `send-meditation`
+1. **Migration SQL** — criar trigger `on_profile_delete` para decrementar `current_users`
+2. **`supabase/functions/cleanup-inactive-users/index.ts`** — nova edge function com a lógica de limpeza
+3. **`supabase/config.toml`** — adicionar `verify_jwt = false` para a nova função
+4. **Cron job** — agendar via SQL (`pg_cron`) para execução diária às 3h
 
