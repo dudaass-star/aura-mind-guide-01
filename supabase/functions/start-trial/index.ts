@@ -1,4 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sendTextMessage, cleanPhoneNumber } from "../_shared/zapi-client.ts";
+import { allocateInstance, getInstanceConfigById } from "../_shared/instance-helper.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -73,6 +75,10 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Alocar instância WhatsApp (roleta distribuída)
+    const instanceId = await allocateInstance(supabase);
+    console.log(`📱 Allocated WhatsApp instance: ${instanceId || 'fallback (env vars)'}`);
+
     // Criar user_id único (não vinculado ao auth)
     const userId = crypto.randomUUID();
 
@@ -87,7 +93,8 @@ Deno.serve(async (req) => {
         status: 'trial',
         trial_started_at: new Date().toISOString(),
         trial_conversations_count: 0,
-        plan: null, // Sem plano ainda
+        plan: null,
+        whatsapp_instance_id: instanceId,
       })
       .select()
       .single();
@@ -99,13 +106,17 @@ Deno.serve(async (req) => {
 
     console.log('✅ Trial profile created:', profile.id);
 
-    // Enviar mensagem de boas-vindas via Z-API
-    const zapiInstanceId = Deno.env.get('ZAPI_INSTANCE_ID');
-    const zapiToken = Deno.env.get('ZAPI_TOKEN');
-    const zapiClientToken = Deno.env.get('ZAPI_CLIENT_TOKEN');
+    // Obter config da instância alocada para enviar mensagem de boas-vindas
+    let zapiConfig = undefined;
+    if (instanceId) {
+      try {
+        zapiConfig = await getInstanceConfigById(supabase, instanceId);
+      } catch (e) {
+        console.warn('⚠️ Could not get instance config, using env vars');
+      }
+    }
 
-    if (zapiInstanceId && zapiToken) {
-      const welcomeMessage = `Oi, ${name.trim()}! 💜
+    const welcomeMessage = `Oi, ${name.trim()}! 💜
 
 Que bom que você decidiu me conhecer! Eu sou a AURA.
 
@@ -113,30 +124,15 @@ Vou estar com você nessas primeiras 5 conversas. Pode falar comigo sobre qualqu
 
 Me conta: como você está se sentindo agora?`;
 
-      try {
-        const zapiResponse = await fetch(
-          `https://api.z-api.io/instances/${zapiInstanceId}/token/${zapiToken}/send-text`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Client-Token': zapiClientToken || '',
-            },
-            body: JSON.stringify({
-              phone: formattedPhone,
-              message: welcomeMessage,
-            }),
-          }
-        );
-
-        if (zapiResponse.ok) {
-          console.log('✅ Welcome message sent via Z-API');
-        } else {
-          console.error('⚠️ Z-API response error:', await zapiResponse.text());
-        }
-      } catch (zapiError) {
-        console.error('⚠️ Z-API error (non-blocking):', zapiError);
+    try {
+      const result = await sendTextMessage(formattedPhone, welcomeMessage, undefined, zapiConfig);
+      if (result.success) {
+        console.log('✅ Welcome message sent');
+      } else {
+        console.error('⚠️ Welcome message error:', result.error);
       }
+    } catch (zapiError) {
+      console.error('⚠️ Z-API error (non-blocking):', zapiError);
     }
 
     return new Response(JSON.stringify({ 

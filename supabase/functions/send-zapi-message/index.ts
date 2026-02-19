@@ -4,6 +4,7 @@ import {
   sendAudioMessage,
   cleanPhoneNumber,
 } from "../_shared/zapi-client.ts";
+import { getInstanceConfigForUser } from "../_shared/instance-helper.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -65,6 +66,19 @@ Deno.serve(async (req) => {
       throw new Error('Phone and message are required');
     }
 
+    // Get instance-specific config for this user
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey!);
+    
+    let zapiConfig = undefined;
+    if (user_id) {
+      try {
+        zapiConfig = await getInstanceConfigForUser(supabase, user_id);
+      } catch (e) {
+        console.warn('⚠️ Could not get instance config, using env vars');
+      }
+    }
+
     const cleanPhone = cleanPhoneNumber(phone);
     let result;
     let sentType: 'audio' | 'text' = 'text';
@@ -75,7 +89,7 @@ Deno.serve(async (req) => {
       
       if (audioBase64) {
         // Enviar como áudio
-        const audioResult = await sendAudioMessage(cleanPhone, audioBase64);
+        const audioResult = await sendAudioMessage(cleanPhone, audioBase64, zapiConfig);
         if (audioResult.success) {
           result = audioResult.response;
           sentType = 'audio';
@@ -83,18 +97,18 @@ Deno.serve(async (req) => {
         } else {
           // Fallback para texto se falhar
           console.log('⚠️ Audio send failed, falling back to text');
-          const textResult = await sendTextMessage(cleanPhone, message);
+          const textResult = await sendTextMessage(cleanPhone, message, undefined, zapiConfig);
           result = textResult.response;
         }
       } else {
         // Fallback para texto se falhar a geração de áudio
         console.log('⚠️ Audio generation failed, falling back to text');
-        const textResult = await sendTextMessage(cleanPhone, message);
+        const textResult = await sendTextMessage(cleanPhone, message, undefined, zapiConfig);
         result = textResult.response;
       }
     } else {
       // Enviar como texto
-      const textResult = await sendTextMessage(cleanPhone, message);
+      const textResult = await sendTextMessage(cleanPhone, message, undefined, zapiConfig);
       if (!textResult.success) {
         throw new Error(textResult.error || 'Failed to send text message');
       }
@@ -104,9 +118,6 @@ Deno.serve(async (req) => {
 
     // Save message to history
     if (user_id) {
-      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-      const supabase = createClient(supabaseUrl, supabaseServiceKey!);
-
       await supabase.from('messages').insert({
         user_id: user_id,
         role: 'assistant',

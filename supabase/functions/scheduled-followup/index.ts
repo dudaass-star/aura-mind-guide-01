@@ -1,4 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sendTextMessage, cleanPhoneNumber } from "../_shared/zapi-client.ts";
+import { getInstanceConfigForUser, antiBurstDelay } from "../_shared/instance-helper.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -16,9 +18,6 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-    const zapiInstanceId = Deno.env.get('ZAPI_INSTANCE_ID')!;
-    const zapiToken = Deno.env.get('ZAPI_TOKEN')!;
 
     // Get commitments that are due today or overdue and haven't been reminded
     const today = new Date();
@@ -89,24 +88,13 @@ Deno.serve(async (req) => {
           .update({ follow_up_count: newFollowUpCount })
           .eq('id', commitment.id);
 
-        // Send via Z-API
-        const zapiClientToken = Deno.env.get('ZAPI_CLIENT_TOKEN')!;
-        const sendResponse = await fetch(
-          `https://api.z-api.io/instances/${zapiInstanceId}/token/${zapiToken}/send-text`,
-          {
-            method: 'POST',
-            headers: { 
-              'Content-Type': 'application/json',
-              'Client-Token': zapiClientToken,
-            },
-            body: JSON.stringify({
-              phone: profile.phone,
-              message: message,
-            }),
-          }
-        );
+        // Get instance config for this user
+        const zapiConfig = await getInstanceConfigForUser(supabase, profile.user_id);
 
-        if (sendResponse.ok) {
+        const cleanPhone = cleanPhoneNumber(profile.phone);
+        const result = await sendTextMessage(cleanPhone, message, undefined, zapiConfig);
+
+        if (result.success) {
           console.log(`✅ Follow-up sent for commitment: ${commitment.title}`);
           sentCount++;
 
@@ -123,12 +111,11 @@ Deno.serve(async (req) => {
             content: message,
           });
         } else {
-          const error = await sendResponse.text();
-          console.error(`❌ Failed to send follow-up: ${error}`);
+          console.error(`❌ Failed to send follow-up: ${result.error}`);
         }
 
-        // Small delay between sends
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Anti-burst delay between sends
+        await antiBurstDelay();
 
       } catch (commitmentError) {
         console.error(`❌ Error processing commitment ${commitment.id}:`, commitmentError);

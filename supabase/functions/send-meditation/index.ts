@@ -5,6 +5,7 @@ import {
   sendTextMessage,
   cleanPhoneNumber,
 } from "../_shared/zapi-client.ts";
+import { getInstanceConfigForUser, getInstanceConfigForPhone } from "../_shared/instance-helper.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -30,7 +31,6 @@ serve(async (req) => {
 
     const { meditation_id, category, user_id, phone, context } = await req.json();
 
-    // Precisa de pelo menos meditation_id ou category
     if (!meditation_id && !category) {
       return new Response(JSON.stringify({ error: 'meditation_id or category is required' }), {
         status: 400,
@@ -83,15 +83,23 @@ serve(async (req) => {
       userId = profile?.user_id;
     }
 
+    // Get instance config for this user
+    let zapiConfig = undefined;
+    if (userId) {
+      try {
+        zapiConfig = await getInstanceConfigForUser(supabase, userId);
+      } catch (e) {
+        console.warn('⚠️ Could not get instance config, using env vars');
+      }
+    }
+
     // Buscar meditação
     let selectedMeditationId = meditation_id;
 
     if (!selectedMeditationId && category) {
-      // Buscar uma meditação aleatória da categoria que o usuário ainda não recebeu recentemente
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-      // Buscar meditações da categoria
       const { data: meditations } = await supabase
         .from('meditations')
         .select('id')
@@ -106,7 +114,6 @@ serve(async (req) => {
         });
       }
 
-      // Buscar histórico do usuário para evitar repetição
       let availableMeditations = meditations.map(m => m.id);
 
       if (userId) {
@@ -119,13 +126,11 @@ serve(async (req) => {
         const recentlyUsed = new Set(history?.map(h => h.meditation_id) || []);
         const notRecentlyUsed = availableMeditations.filter(id => !recentlyUsed.has(id));
         
-        // Se todas foram usadas recentemente, usar todas
         if (notRecentlyUsed.length > 0) {
           availableMeditations = notRecentlyUsed;
         }
       }
 
-      // Selecionar aleatoriamente
       selectedMeditationId = availableMeditations[Math.floor(Math.random() * availableMeditations.length)];
       console.log(`📌 Selected meditation: ${selectedMeditationId} from ${availableMeditations.length} options`);
     }
@@ -140,10 +145,11 @@ serve(async (req) => {
     if (audioError || !audioData) {
       console.error(`Audio not found for meditation: ${selectedMeditationId}`, audioError);
       
-      // Enviar mensagem de fallback
       await sendTextMessage(
         userPhone,
-        "🧘 Ops, parece que essa meditação ainda não está pronta. Me perdoa! Vou providenciar e te aviso quando estiver disponível. 💜"
+        "🧘 Ops, parece que essa meditação ainda não está pronta. Me perdoa! Vou providenciar e te aviso quando estiver disponível. 💜",
+        undefined,
+        zapiConfig
       );
       
       return new Response(JSON.stringify({ 
@@ -162,30 +168,27 @@ serve(async (req) => {
       .eq('id', selectedMeditationId)
       .single();
 
-    // Enviar mensagem de introdução
     const durationMinutes = Math.round((audioData.duration_seconds || meditation?.duration_seconds || 300) / 60);
     const introMessage = `🧘 *${meditation?.title || 'Meditação Guiada'}*\n\nDuração: ~${durationMinutes} minutos\n\nEncontre um lugar tranquilo, feche os olhos e me deixe te guiar... 💜`;
     
-    await sendTextMessage(userPhone, introMessage);
+    await sendTextMessage(userPhone, introMessage, undefined, zapiConfig);
 
-    // Pequeno delay para a mensagem de texto chegar primeiro
     await new Promise(resolve => setTimeout(resolve, 1500));
 
-    // Enviar áudio
     console.log(`🎧 Sending audio from URL: ${audioData.public_url}`);
-    const audioResult = await sendAudioFromUrl(userPhone, audioData.public_url);
+    const audioResult = await sendAudioFromUrl(userPhone, audioData.public_url, zapiConfig);
 
     if (!audioResult.success) {
       console.error('Failed to send audio:', audioResult.error);
       
-      // Fallback: enviar link direto
       await sendTextMessage(
         userPhone,
-        `🎧 Tive um probleminha para enviar o áudio direto. Você pode ouvir aqui: ${audioData.public_url}`
+        `🎧 Tive um probleminha para enviar o áudio direto. Você pode ouvir aqui: ${audioData.public_url}`,
+        undefined,
+        zapiConfig
       );
     }
 
-    // Registrar no histórico
     if (userId) {
       await supabase
         .from('user_meditation_history')
