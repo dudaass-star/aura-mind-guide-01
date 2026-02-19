@@ -80,3 +80,6 @@ verify_jwt = false
 
 [functions.finalize-meditation-audio]
 verify_jwt = false
+
+[functions.cleanup-inactive-users]
+verify_jwt = false
