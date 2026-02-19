@@ -1,4 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sendTextMessage, cleanPhoneNumber } from "../_shared/zapi-client.ts";
+import { getInstanceConfigForUser, antiBurstDelay } from "../_shared/instance-helper.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -23,33 +25,28 @@ async function fetchUserMetrics(
   currentEpisode: number,
   journeysCompleted: number
 ): Promise<UserMetrics> {
-  // Fetch total messages count
   const { count: totalMessages } = await supabase
     .from('messages')
     .select('*', { count: 'exact', head: true })
     .eq('user_id', userId);
 
-  // Fetch week messages count
   const { count: weekMessages } = await supabase
     .from('messages')
     .select('*', { count: 'exact', head: true })
     .eq('user_id', userId)
     .gte('created_at', weekStart.toISOString());
 
-  // Fetch insights count
   const { count: insightsCount } = await supabase
     .from('user_insights')
     .select('*', { count: 'exact', head: true })
     .eq('user_id', userId);
 
-  // Fetch completed sessions count
   const { count: sessionsCount } = await supabase
     .from('sessions')
     .select('*', { count: 'exact', head: true })
     .eq('user_id', userId)
     .eq('status', 'completed');
 
-  // Fetch journey title if user has one
   let journeyTitle: string | null = null;
   if (currentJourneyId) {
     const { data: journey } = await supabase
@@ -81,9 +78,8 @@ async function analyzeWeekConversations(
     return '';
   }
 
-  // Prepare conversation summary for analysis
   const conversationSummary = messages
-    .slice(-50) // Last 50 messages max
+    .slice(-50)
     .map(m => `${m.role === 'user' ? userName : 'Aura'}: ${m.content}`)
     .join('\n');
 
@@ -145,7 +141,6 @@ function generateWeeklyReport(
   let report = `📊 *Seu Relatório Semanal, ${name}!*\n\n`;
   report += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
   
-  // Seção: Números
   report += `📈 *Seus Números*\n`;
   report += `💬 ${metrics.totalMessages} ${metrics.totalMessages === 1 ? 'mensagem' : 'mensagens'}`;
   if (metrics.weekMessages > 0) {
@@ -163,7 +158,6 @@ function generateWeeklyReport(
   
   report += `\n━━━━━━━━━━━━━━━━━━━━━\n\n`;
   
-  // Seção: Jornada (se tiver)
   if (metrics.journeyTitle) {
     const progressBar = generateProgressBar(metrics.currentEpisode, 8);
     const percent = Math.round((metrics.currentEpisode / 8) * 100);
@@ -178,14 +172,12 @@ function generateWeeklyReport(
     report += `\n━━━━━━━━━━━━━━━━━━━━━\n\n`;
   }
   
-  // Seção: Evolução (IA)
   if (evolutionAnalysis) {
     report += `🌱 *Sua Evolução*\n`;
     report += `${evolutionAnalysis}\n\n`;
     report += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
   }
   
-  // Fechamento
   report += `✨ Continue assim, ${name}! Estou orgulhosa de você 💜`;
   
   return report;
@@ -202,10 +194,6 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-    const zapiInstanceId = Deno.env.get('ZAPI_INSTANCE_ID')!;
-    const zapiToken = Deno.env.get('ZAPI_TOKEN')!;
-    const zapiClientToken = Deno.env.get('ZAPI_CLIENT_TOKEN')!;
 
     // Calculate week range
     const now = new Date();
@@ -232,7 +220,6 @@ Deno.serve(async (req) => {
       try {
         const userName = profile.name?.split(' ')[0] || 'usuário';
         
-        // Fetch user metrics
         console.log(`📊 Fetching metrics for ${userName}...`);
         const metrics = await fetchUserMetrics(
           supabase,
@@ -245,7 +232,6 @@ Deno.serve(async (req) => {
         
         console.log(`📈 Metrics for ${userName}: ${metrics.totalMessages} msgs, ${metrics.insightsCount} insights, ${metrics.sessionsCount} sessions`);
 
-        // Get week's messages for AI analysis
         const { data: weekMessages } = await supabase
           .from('messages')
           .select('*')
@@ -253,7 +239,6 @@ Deno.serve(async (req) => {
           .gte('created_at', weekStart.toISOString())
           .order('created_at', { ascending: true });
 
-        // Analyze conversations with AI
         console.log(`🧠 Analyzing ${weekMessages?.length || 0} messages for ${userName}...`);
         
         const evolutionAnalysis = await analyzeWeekConversations(
@@ -265,37 +250,24 @@ Deno.serve(async (req) => {
           console.log(`✅ Evolution analysis generated for ${userName}`);
         }
 
-        // Generate report with metrics
         const report = generateWeeklyReport(profile, evolutionAnalysis, metrics);
 
-        // Send via Z-API
-        const sendResponse = await fetch(
-          `https://api.z-api.io/instances/${zapiInstanceId}/token/${zapiToken}/send-text`,
-          {
-            method: 'POST',
-            headers: { 
-              'Content-Type': 'application/json',
-              'Client-Token': zapiClientToken,
-            },
-            body: JSON.stringify({
-              phone: profile.phone,
-              message: report,
-            }),
-          }
-        );
+        // Get instance config for this user
+        const zapiConfig = await getInstanceConfigForUser(supabase, profile.user_id);
 
-        if (sendResponse.ok) {
+        const cleanPhone = cleanPhoneNumber(profile.phone);
+        const result = await sendTextMessage(cleanPhone, report, undefined, zapiConfig);
+
+        if (result.success) {
           console.log(`✅ Report sent to ${profile.name} (${profile.phone})`);
           sentCount++;
 
-          // Save report to messages
           await supabase.from('messages').insert({
             user_id: profile.user_id,
             role: 'assistant',
             content: report,
           });
 
-          // Save weekly plan record
           await supabase.from('weekly_plans').upsert({
             user_id: profile.user_id,
             week_start: weekStart.toISOString().split('T')[0],
@@ -303,14 +275,12 @@ Deno.serve(async (req) => {
           }, {
             onConflict: 'user_id,week_start'
           });
-
         } else {
-          const error = await sendResponse.text();
-          console.error(`❌ Failed to send report to ${profile.phone}: ${error}`);
+          console.error(`❌ Failed to send report to ${profile.phone}: ${result.error}`);
         }
 
-        // Delay between sends
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        // Anti-burst delay between sends
+        await antiBurstDelay();
 
       } catch (userError) {
         console.error(`❌ Error processing user ${profile.user_id}:`, userError);

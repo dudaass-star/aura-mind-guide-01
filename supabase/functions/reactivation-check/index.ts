@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendTextMessage, cleanPhoneNumber } from "../_shared/zapi-client.ts";
+import { getInstanceConfigForUser, antiBurstDelay } from "../_shared/instance-helper.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -25,7 +26,6 @@ Deno.serve(async (req) => {
 
     const now = new Date();
     const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
-    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
     let reactivationsSent = 0;
@@ -33,7 +33,6 @@ Deno.serve(async (req) => {
 
     // ========================================================================
     // 1. DETECTAR USUÁRIOS QUE FURARAM SESSÃO
-    // Sessões agendadas que passaram do horário e não iniciaram
     // ========================================================================
     const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
     
@@ -60,7 +59,6 @@ Deno.serve(async (req) => {
 
         if (!profile?.phone) continue;
 
-        // Não enviar se já enviou reativação nas últimas 24h
         if (profile.last_reactivation_sent) {
           const lastSent = new Date(profile.last_reactivation_sent);
           if (lastSent > oneDayAgo) {
@@ -86,17 +84,17 @@ Tá tudo bem? Se precisar, podemos remarcar pra um horário melhor. É só me co
 Estou aqui por você. ✨`;
 
         try {
+          // Get instance config for this user
+          const zapiConfig = await getInstanceConfigForUser(supabase, session.user_id);
           const cleanPhone = cleanPhoneNumber(profile.phone);
-          const result = await sendTextMessage(cleanPhone, message);
+          const result = await sendTextMessage(cleanPhone, message, undefined, zapiConfig);
 
           if (result.success) {
-            // Atualizar last_reactivation_sent
             await supabase
               .from('profiles')
               .update({ last_reactivation_sent: now.toISOString() })
               .eq('user_id', session.user_id);
 
-            // Marcar sessão como no_show
             await supabase
               .from('sessions')
               .update({ status: 'no_show' })
@@ -108,12 +106,14 @@ Estou aqui por você. ✨`;
         } catch (sendError) {
           logStep(`Error sending missed session message`, { error: sendError });
         }
+
+        // Anti-burst delay
+        await antiBurstDelay();
       }
     }
 
     // ========================================================================
     // 2. DETECTAR USUÁRIOS INATIVOS (3+ dias sem mensagem)
-    // Apenas se NÃO tiver sessão agendada
     // ========================================================================
     const { data: inactiveProfiles, error: inactiveError } = await supabase
       .from('profiles')
@@ -130,13 +130,11 @@ Estou aqui por você. ✨`;
       logStep(`Found ${inactiveProfiles.length} potentially inactive profiles`);
 
       for (const profile of inactiveProfiles) {
-        // Skip if do_not_disturb is active
         if (profile.do_not_disturb_until && new Date(profile.do_not_disturb_until) > now) {
           logStep(`Skipping user ${profile.user_id} - do not disturb until ${profile.do_not_disturb_until}`);
           continue;
         }
 
-        // Verificar se já enviou reativação nas últimas 24h
         if (profile.last_reactivation_sent) {
           const lastSent = new Date(profile.last_reactivation_sent);
           if (lastSent > oneDayAgo) {
@@ -145,7 +143,6 @@ Estou aqui por você. ✨`;
           }
         }
 
-        // Verificar se tem sessão agendada - NÃO enviar se tiver
         const { data: upcomingSessions } = await supabase
           .from('sessions')
           .select('id')
@@ -168,14 +165,12 @@ Estou aqui por você. ✨`;
         let message: string;
 
         if (daysSinceMessage >= 7) {
-          // Mensagem para 7+ dias de inatividade
           message = `${userName}, tô pensando em você! 💜
 
 Sei que a vida fica corrida às vezes. Quer marcar uma sessão pra gente colocar o papo em dia?
 
 Estou aqui quando você precisar. ✨`;
         } else {
-          // Mensagem para 3-6 dias de inatividade
           message = `Ei, ${userName}! Faz uns dias que a gente não se fala... 💜
 
 Como você está? Tô aqui se precisar conversar!
@@ -184,8 +179,10 @@ Qualquer coisa, é só me mandar uma mensagem. ✨`;
         }
 
         try {
+          // Get instance config for this user
+          const zapiConfig = await getInstanceConfigForUser(supabase, profile.user_id);
           const cleanPhone = cleanPhoneNumber(profile.phone!);
-          const result = await sendTextMessage(cleanPhone, message);
+          const result = await sendTextMessage(cleanPhone, message, undefined, zapiConfig);
 
           if (result.success) {
             await supabase
@@ -199,6 +196,9 @@ Qualquer coisa, é só me mandar uma mensagem. ✨`;
         } catch (sendError) {
           logStep(`Error sending reactivation message`, { error: sendError });
         }
+
+        // Anti-burst delay
+        await antiBurstDelay();
       }
     }
 

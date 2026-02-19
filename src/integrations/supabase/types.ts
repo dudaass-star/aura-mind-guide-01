@@ -519,6 +519,7 @@ export type Database = {
           updated_at: string | null
           upgrade_suggested_at: string | null
           user_id: string
+          whatsapp_instance_id: string | null
         }
         Insert: {
           created_at?: string | null
@@ -552,6 +553,7 @@ export type Database = {
           updated_at?: string | null
           upgrade_suggested_at?: string | null
           user_id: string
+          whatsapp_instance_id?: string | null
         }
         Update: {
           created_at?: string | null
@@ -585,6 +587,7 @@ export type Database = {
           updated_at?: string | null
           upgrade_suggested_at?: string | null
           user_id?: string
+          whatsapp_instance_id?: string | null
         }
         Relationships: [
           {
@@ -599,6 +602,13 @@ export type Database = {
             columns: ["current_session_id"]
             isOneToOne: false
             referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profiles_whatsapp_instance_id_fkey"
+            columns: ["whatsapp_instance_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_instances"
             referencedColumns: ["id"]
           },
         ]
@@ -918,6 +928,45 @@ export type Database = {
           },
         ]
       }
+      whatsapp_instances: {
+        Row: {
+          created_at: string
+          current_users: number
+          id: string
+          max_users: number
+          name: string
+          phone_number: string | null
+          status: string
+          zapi_client_token: string
+          zapi_instance_id: string
+          zapi_token: string
+        }
+        Insert: {
+          created_at?: string
+          current_users?: number
+          id?: string
+          max_users?: number
+          name: string
+          phone_number?: string | null
+          status?: string
+          zapi_client_token: string
+          zapi_instance_id: string
+          zapi_token: string
+        }
+        Update: {
+          created_at?: string
+          current_users?: number
+          id?: string
+          max_users?: number
+          name?: string
+          phone_number?: string | null
+          status?: string
+          zapi_client_token?: string
+          zapi_instance_id?: string
+          zapi_token?: string
+        }
+        Relationships: []
+      }
       zapi_message_dedup: {
         Row: {
           created_at: string
@@ -941,6 +990,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      allocate_whatsapp_instance: { Args: never; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

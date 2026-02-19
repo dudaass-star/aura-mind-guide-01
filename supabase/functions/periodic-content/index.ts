@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendTextMessage, cleanPhoneNumber } from "../_shared/zapi-client.ts";
+import { getInstanceConfigForUser, antiBurstDelay } from "../_shared/instance-helper.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -26,12 +27,6 @@ serve(async (req) => {
     console.log('🚀 Starting periodic content delivery (Manifesto System)');
     console.log(`🇧🇷 Horário de Brasília: ${getBrasiliaTimeString()}`);
 
-    // Buscar usuários elegíveis
-    // - status ativo ou trial
-    // - tem current_journey_id definido
-    // - não recebeu conteúdo nos últimos 2.5 dias (margem de segurança para terça/sexta)
-    // Nota: De terça 09:00 BR até sexta 09:00 BR = 3 dias exatos
-    // Usando 2.5 dias (60h) garante que pequenas variações de horário não afetem elegibilidade
     const eligibilityThreshold = new Date();
     eligibilityThreshold.setTime(eligibilityThreshold.getTime() - (2.5 * 24 * 60 * 60 * 1000));
 
@@ -75,8 +70,7 @@ serve(async (req) => {
 
         console.log(`\n👤 Processing user: ${user.name || 'Unknown'} (episode ${user.current_episode || 0}, last_content: ${user.last_content_sent_at ? getBrasiliaTimeString(new Date(user.last_content_sent_at)) : 'never'} BR)`);
 
-        // Buscar o episódio atual da jornada
-        const currentEpisode = (user.current_episode || 0) + 1; // Próximo episódio
+        const currentEpisode = (user.current_episode || 0) + 1;
 
         const { data: episode, error: episodeError } = await supabase
           .from('journey_episodes')
@@ -85,10 +79,12 @@ serve(async (req) => {
           .eq('episode_number', currentEpisode)
           .single();
 
+        // Get instance config for this user
+        const zapiConfig = await getInstanceConfigForUser(supabase, user.user_id);
+
         if (episodeError || !episode) {
           console.log(`⚠️ Episode ${currentEpisode} not found for journey ${user.current_journey_id}`);
           
-          // Verificar se terminou a jornada
           const { data: journey } = await supabase
             .from('content_journeys')
             .select('*')
@@ -96,10 +92,8 @@ serve(async (req) => {
             .single();
 
           if (journey && currentEpisode > journey.total_episodes) {
-            // Jornada completa! Enviar mensagem de conclusão com opções
             console.log(`🎉 Journey completed! Sending choice message`);
             
-            // Buscar todas as jornadas para mostrar opções
             const { data: allJourneys } = await supabase
               .from('content_journeys')
               .select('id, title, description')
@@ -130,11 +124,9 @@ _Se preferir pausar, é só dizer "pausar jornadas" 🌿_
 
 Qual vai ser?`;
 
-            // Enviar mensagem de conclusão
             const cleanPhone = cleanPhoneNumber(user.phone);
-            await sendTextMessage(cleanPhone, completionMessage);
+            await sendTextMessage(cleanPhone, completionMessage, undefined, zapiConfig);
             
-            // Atualizar para próxima jornada por padrão
             await supabase
               .from('profiles')
               .update({
@@ -145,7 +137,6 @@ Qual vai ser?`;
               })
               .eq('id', user.id);
             
-            // Salvar mensagem no histórico
             await supabase
               .from('messages')
               .insert({
@@ -156,6 +147,9 @@ Qual vai ser?`;
             
             successCount++;
           }
+
+          // Anti-burst delay
+          await antiBurstDelay();
           continue;
         }
 
@@ -175,19 +169,18 @@ Qual vai ser?`;
         if (manifestoError || !manifestoResult?.success) {
           console.error(`❌ Manifesto generation failed:`, manifestoError || manifestoResult?.error);
           errorCount++;
+          await antiBurstDelay();
           continue;
         }
 
         const message = manifestoResult.message;
 
-        // Enviar via Z-API
         const cleanPhone = cleanPhoneNumber(user.phone);
-        const sendResult = await sendTextMessage(cleanPhone, message);
+        const sendResult = await sendTextMessage(cleanPhone, message, undefined, zapiConfig);
 
         if (sendResult.success) {
           console.log(`✅ Manifesto sent to ${user.name?.split(' ')[0] || 'user'}`);
           
-          // Atualizar profile
           await supabase
             .from('profiles')
             .update({
@@ -196,7 +189,6 @@ Qual vai ser?`;
             })
             .eq('id', user.id);
 
-          // Salvar mensagem no histórico
           await supabase
             .from('messages')
             .insert({
@@ -210,6 +202,9 @@ Qual vai ser?`;
           console.error(`❌ Failed to send to ${user.name}:`, sendResult.error);
           errorCount++;
         }
+
+        // Anti-burst delay
+        await antiBurstDelay();
 
       } catch (userError) {
         console.error(`❌ Error processing user ${user.id}:`, userError);

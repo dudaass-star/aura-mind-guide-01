@@ -138,10 +138,11 @@ export interface SendAudioResult {
 export async function sendTextMessage(
   phone: string, 
   message: string,
-  delayTyping?: number
+  delayTyping?: number,
+  configOverride?: ZapiConfig
 ): Promise<SendTextResult> {
   try {
-    const config = getZapiConfig();
+    const config = configOverride || getZapiConfig();
     const cleanPhone = cleanPhoneNumber(phone);
 
     // Calcular delay de typing proporcional ao tamanho se não especificado
@@ -181,9 +182,9 @@ export async function sendTextMessage(
  * Send an audio message via Z-API
  * @param audioBase64 - Base64 encoded audio (without data URI prefix)
  */
-export async function sendAudioMessage(phone: string, audioBase64: string): Promise<SendAudioResult> {
+export async function sendAudioMessage(phone: string, audioBase64: string, configOverride?: ZapiConfig): Promise<SendAudioResult> {
   try {
-    const config = getZapiConfig();
+    const config = configOverride || getZapiConfig();
     const cleanPhone = cleanPhoneNumber(phone);
 
     console.log(`🔊 [Z-API] Sending audio to ${cleanPhone.substring(0, 4)}***`);
@@ -317,9 +318,9 @@ export function parseZapiPayload(payload: Record<string, unknown>): ParsedZapiMe
  * Useful for pre-generated audio files stored in cloud storage
  * @param audioUrl - Public URL of the audio file (MP3)
  */
-export async function sendAudioFromUrl(phone: string, audioUrl: string): Promise<SendAudioResult> {
+export async function sendAudioFromUrl(phone: string, audioUrl: string, configOverride?: ZapiConfig): Promise<SendAudioResult> {
   try {
-    const config = getZapiConfig();
+    const config = configOverride || getZapiConfig();
     const cleanPhone = cleanPhoneNumber(phone);
 
     console.log(`🔊 [Z-API] Sending audio from URL to ${cleanPhone.substring(0, 4)}***`);
@@ -361,18 +362,19 @@ export async function sendAudioFromUrl(phone: string, audioUrl: string): Promise
 export async function sendMessageWithFallback(
   phone: string,
   text: string,
-  audioBase64?: string | null
+  audioBase64?: string | null,
+  configOverride?: ZapiConfig
 ): Promise<{ success: boolean; type: 'audio' | 'text'; error?: string }> {
   
   if (audioBase64) {
-    const audioResult = await sendAudioMessage(phone, audioBase64);
+    const audioResult = await sendAudioMessage(phone, audioBase64, configOverride);
     if (audioResult.success) {
       return { success: true, type: 'audio' };
     }
     console.log('⚠️ [Z-API] Audio failed, falling back to text');
   }
 
-  const textResult = await sendTextMessage(phone, text);
+  const textResult = await sendTextMessage(phone, text, undefined, configOverride);
   return {
     success: textResult.success,
     type: 'text',
