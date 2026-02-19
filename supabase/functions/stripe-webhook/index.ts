@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import Stripe from "https://esm.sh/stripe@14.21.0";
+import { allocateInstance } from "../_shared/instance-helper.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -192,6 +193,10 @@ Me diz: como você está hoje?`;
       // Create or update profile in database
       try {
         if (!existingProfile) {
+          // Allocate WhatsApp instance for new user
+          const instanceId = await allocateInstance(supabase);
+          console.log(`📱 Allocated WhatsApp instance: ${instanceId || 'none (will use env vars)'}`);
+
           const { error: insertError } = await supabase
             .from('profiles')
             .insert({
@@ -205,6 +210,7 @@ Me diz: como você está hoje?`;
               messages_today: 0,
               last_message_date: today,
               needs_schedule_setup: sessionsCount > 0,
+              ...(instanceId && { whatsapp_instance_id: instanceId }),
             });
 
           if (insertError) {

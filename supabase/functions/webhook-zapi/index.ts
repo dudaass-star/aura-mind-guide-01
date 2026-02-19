@@ -7,7 +7,9 @@ import {
   cleanPhoneNumber,
   isValidPhoneNumber,
   getPhoneVariations,
+  ZapiConfig,
 } from "../_shared/zapi-client.ts";
+import { getInstanceConfigForUser, getInstanceConfigForPhone } from "../_shared/instance-helper.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -367,7 +369,7 @@ Deno.serve(async (req) => {
       profile.phone = payload.cleanPhone; // Atualizar na memória também
     }
 
-    console.log(`👤 Found user: ${profile.name} (${profile.user_id}), status: ${profile.status}`);
+    console.log(`👤 Found user: ${profile.name} (${profile.user_id}), status: ${profile.status}, instance: ${profile.whatsapp_instance_id || 'env-default'}`);
 
     // ========================================================================
     // INTERRUPTION SYSTEM - Atualizar estado com ID da mensagem atual
@@ -423,7 +425,8 @@ Foi muito bom te conhecer! Se você quiser continuar essa jornada comigo, escolh
 
 Vou ficar esperando você voltar. 🤗`;
         
-        await sendTextMessage(payload.cleanPhone, limitMessage);
+        const instanceConfig = await getInstanceConfigForUser(supabase, profile.user_id);
+        await sendTextMessage(payload.cleanPhone, limitMessage, undefined, instanceConfig);
         
         return new Response(JSON.stringify({ status: 'trial_limit_reached' }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -446,9 +449,12 @@ Vou ficar esperando você voltar. 🤗`;
     // HANDLE FAILED AUDIO TRANSCRIPTION
     // ========================================================================
     if (payload.hasAudio && !messageText) {
+      const instanceConfig = await getInstanceConfigForUser(supabase, profile.user_id);
       await sendTextMessage(
         payload.cleanPhone,
-        "Desculpa, não consegui ouvir seu áudio direito. 😅 Pode me mandar por texto ou tentar gravar de novo?"
+        "Desculpa, não consegui ouvir seu áudio direito. 😅 Pode me mandar por texto ou tentar gravar de novo?",
+        undefined,
+        instanceConfig
       );
       
       return new Response(JSON.stringify({ status: 'audio_transcription_failed' }), {
@@ -462,7 +468,8 @@ Vou ficar esperando você voltar. 🤗`;
     const ratingResult = await handleSessionRating(supabase, profile.user_id, messageText);
     if (ratingResult.handled && ratingResult.response) {
       console.log(`✅ Session rating handled for user ${profile.user_id}`);
-      await sendTextMessage(payload.cleanPhone, ratingResult.response);
+      const instanceConfig = await getInstanceConfigForUser(supabase, profile.user_id);
+      await sendTextMessage(payload.cleanPhone, ratingResult.response, undefined, instanceConfig);
       
       // Salvar mensagens no histórico
       await supabase.from('messages').insert({
@@ -488,7 +495,8 @@ Vou ficar esperando você voltar. 🤗`;
     const confirmationResult = await handleSessionConfirmation(supabase, profile.user_id, messageText);
     if (confirmationResult.handled && confirmationResult.response) {
       console.log(`✅ Session confirmation handled for user ${profile.user_id}`);
-      await sendTextMessage(payload.cleanPhone, confirmationResult.response);
+      const instanceConfig = await getInstanceConfigForUser(supabase, profile.user_id);
+      await sendTextMessage(payload.cleanPhone, confirmationResult.response, undefined, instanceConfig);
       
       // Salvar mensagens no histórico
       await supabase.from('messages').insert({
@@ -691,7 +699,8 @@ Vou ficar esperando você voltar. 🤗`;
         const audioContent = await generateTTS(responseText);
         
         if (audioContent) {
-          const audioResult = await sendAudioMessage(payload.cleanPhone, audioContent);
+          const instanceConfig = await getInstanceConfigForUser(supabase, profile.user_id);
+          const audioResult = await sendAudioMessage(payload.cleanPhone, audioContent, instanceConfig);
           if (audioResult.success) {
             continue; // Skip text send
           }
@@ -716,7 +725,8 @@ Vou ficar esperando você voltar. 🤗`;
       
       // Send as text message with typing indicator
       console.log(`📤 Sending text (${responseText.length} chars, ${typingSeconds}s typing): ${responseText.substring(0, 50)}...`);
-      await sendTextMessage(payload.cleanPhone, responseText, typingSeconds);
+      const instanceConfig2 = await getInstanceConfigForUser(supabase, profile.user_id);
+      await sendTextMessage(payload.cleanPhone, responseText, typingSeconds, instanceConfig2);
     }
     
     // ========================================================================

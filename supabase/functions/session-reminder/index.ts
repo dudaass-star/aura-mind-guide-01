@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendTextMessage, cleanPhoneNumber } from "../_shared/zapi-client.ts";
+import { getInstanceConfigForUser, antiBurstDelay } from "../_shared/instance-helper.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -158,7 +159,7 @@ Deno.serve(async (req) => {
       for (const session of sessions24h) {
         const { data: profile } = await supabase
           .from('profiles')
-          .select('name, phone')
+          .select('name, phone, whatsapp_instance_id')
           .eq('user_id', session.user_id)
           .maybeSingle();
 
@@ -224,7 +225,8 @@ Confirma que tá tudo certo? Me responde com "confirmo" ou me avisa se precisar 
 
         try {
           const cleanPhone = cleanPhoneNumber(profile.phone);
-          const result = await sendTextMessage(cleanPhone, message);
+          const instanceConfig = await getInstanceConfigForUser(supabase, session.user_id);
+          const result = await sendTextMessage(cleanPhone, message, undefined, instanceConfig);
 
           if (result.success) {
             await supabase
@@ -270,7 +272,7 @@ Confirma que tá tudo certo? Me responde com "confirmo" ou me avisa se precisar 
 
         const { data: profile } = await supabase
           .from('profiles')
-          .select('name, phone')
+          .select('name, phone, whatsapp_instance_id')
           .eq('user_id', session.user_id)
           .maybeSingle();
 
@@ -294,7 +296,8 @@ Separa um cantinho tranquilo pra gente conversar com calma. Te espero lá! 💜`
 
         try {
           const cleanPhone = cleanPhoneNumber(profile.phone);
-          const result = await sendTextMessage(cleanPhone, message);
+          const instanceConfig = await getInstanceConfigForUser(supabase, session.user_id);
+          const result = await sendTextMessage(cleanPhone, message, undefined, instanceConfig);
 
           if (result.success) {
             await supabase
@@ -337,7 +340,7 @@ Separa um cantinho tranquilo pra gente conversar com calma. Te espero lá! 💜`
 
         const { data: profile } = await supabase
           .from('profiles')
-          .select('name, phone')
+          .select('name, phone, whatsapp_instance_id')
           .eq('user_id', session.user_id)
           .maybeSingle();
 
@@ -354,7 +357,8 @@ Já estou aqui te esperando. Quando estiver pronta, é só me mandar uma mensage
 
         try {
           const cleanPhone = cleanPhoneNumber(profile.phone);
-          const result = await sendTextMessage(cleanPhone, message);
+          const instanceConfig = await getInstanceConfigForUser(supabase, session.user_id);
+          const result = await sendTextMessage(cleanPhone, message, undefined, instanceConfig);
 
           if (result.success) {
             await supabase
@@ -410,7 +414,7 @@ Já estou aqui te esperando. Quando estiver pronta, é só me mandar uma mensage
 
         const { data: profile } = await supabase
           .from('profiles')
-          .select('name, phone')
+          .select('name, phone, whatsapp_instance_id')
           .eq('user_id', session.user_id)
           .maybeSingle();
 
@@ -430,7 +434,8 @@ Você está pronta(o) pra começar? Me responde um "vamos" ou "bora" quando quis
 
         try {
           const cleanPhone = cleanPhoneNumber(profile.phone);
-          const result = await sendTextMessage(cleanPhone, message);
+          const instanceConfig = await getInstanceConfigForUser(supabase, session.user_id);
+          const result = await sendTextMessage(cleanPhone, message, undefined, instanceConfig);
 
           if (result.success) {
             // CORREÇÃO: APENAS marca como notificado, NÃO muda status para in_progress
@@ -481,7 +486,7 @@ Você está pronta(o) pra começar? Me responde um "vamos" ou "bora" quando quis
         if (minutesSinceScheduled >= 10 && minutesSinceScheduled < 15) {
           const { data: profile } = await supabase
             .from('profiles')
-            .select('name, phone')
+            .select('name, phone, whatsapp_instance_id')
             .eq('user_id', session.user_id)
             .maybeSingle();
           
@@ -495,7 +500,8 @@ Pra gente começar, me manda um "vamos" ou "bora" - ou me avisa se quer reagenda
           
           try {
             const cleanPhone = cleanPhoneNumber(profile.phone);
-            const result = await sendTextMessage(cleanPhone, reminderMessage);
+            const instanceConfig = await getInstanceConfigForUser(supabase, session.user_id);
+            const result = await sendTextMessage(cleanPhone, reminderMessage, undefined, instanceConfig);
             
             if (result.success) {
               reminder10mSent++;
@@ -532,7 +538,7 @@ Pra gente começar, me manda um "vamos" ou "bora" - ou me avisa se quer reagenda
         // Buscar profile para notificação
         const { data: profile } = await supabase
           .from('profiles')
-          .select('name, phone')
+          .select('name, phone, whatsapp_instance_id')
           .eq('user_id', session.user_id)
           .maybeSingle();
         
@@ -557,7 +563,8 @@ Quer remarcar pra outro horário? É só me dizer quando fica bom pra você. ✨
           
           try {
             const cleanPhone = cleanPhoneNumber(profile.phone);
-            await sendTextMessage(cleanPhone, message);
+            const instanceConfig = await getInstanceConfigForUser(supabase, session.user_id);
+            await sendTextMessage(cleanPhone, message, undefined, instanceConfig);
             console.log(`✅ Missed session message sent for session ${session.id}`);
           } catch (sendError) {
             console.error(`❌ Error sending missed session message for session ${session.id}:`, sendError);
@@ -609,7 +616,7 @@ Quer remarcar pra outro horário? É só me dizer quando fica bom pra você. ✨
         // Buscar profile para notificação
         const { data: profile } = await supabase
           .from('profiles')
-          .select('name, phone')
+          .select('name, phone, whatsapp_instance_id')
           .eq('user_id', session.user_id)
           .maybeSingle();
         
@@ -681,7 +688,8 @@ Se quiser remarcar uma nova sessão, é só me dizer!`;
         if (profile?.phone) {
           try {
             const cleanPhone = cleanPhoneNumber(profile.phone);
-            await sendTextMessage(cleanPhone, messageToSend);
+            const instanceConfig = await getInstanceConfigForUser(supabase, session.user_id);
+            await sendTextMessage(cleanPhone, messageToSend, undefined, instanceConfig);
             console.log(`✅ Closure message sent for session ${session.id}`);
           } catch (sendError) {
             console.error(`❌ Error sending closure message for session ${session.id}:`, sendError);
@@ -712,7 +720,7 @@ Se quiser remarcar uma nova sessão, é só me dizer!`;
       for (const session of completedSessions) {
         const { data: profile } = await supabase
           .from('profiles')
-          .select('name, phone')
+          .select('name, phone, whatsapp_instance_id')
           .eq('user_id', session.user_id)
           .maybeSingle();
 
@@ -765,7 +773,8 @@ Me conta durante a semana como está seu progresso! Estou aqui por você. ✨`;
 
         try {
           const cleanPhone = cleanPhoneNumber(profile.phone);
-          const result = await sendTextMessage(cleanPhone, message);
+          const instanceConfig = await getInstanceConfigForUser(supabase, session.user_id);
+          const result = await sendTextMessage(cleanPhone, message, undefined, instanceConfig);
 
           if (result.success) {
             await supabase
@@ -785,7 +794,7 @@ Me conta durante a semana como está seu progresso! Estou aqui por você. ✨`;
 
 (Só o número tá ótimo! E se quiser me dizer o que mais gostou ou o que posso melhorar, adoraria ouvir! 💜)`;
 
-            const ratingResult = await sendTextMessage(cleanPhone, ratingMessage);
+            const ratingResult = await sendTextMessage(cleanPhone, ratingMessage, undefined, instanceConfig);
             
             if (ratingResult.success) {
               await supabase
