@@ -1,4 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sendTextMessage } from "../_shared/zapi-client.ts";
+import { getInstanceConfigForUser, antiBurstDelay } from "../_shared/instance-helper.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -342,9 +344,7 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const zapiInstanceId = Deno.env.get('ZAPI_INSTANCE_ID')!;
-    const zapiToken = Deno.env.get('ZAPI_TOKEN')!;
-    const zapiClientToken = Deno.env.get('ZAPI_CLIENT_TOKEN')!;
+    // Instance config will be fetched per-user below
 
     // Buscar conversas que precisam de follow-up
     const { data: followups, error: fetchError } = await supabase
@@ -536,23 +536,11 @@ Deno.serve(async (req) => {
 
         console.log(`📤 Sending follow-up #${followup.followup_count + 1} to ${profile.phone} (${timingReason})`);
 
-        // Send via Z-API
-        const sendResponse = await fetch(
-          `https://api.z-api.io/instances/${zapiInstanceId}/token/${zapiToken}/send-text`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Client-Token': zapiClientToken,
-            },
-            body: JSON.stringify({
-              phone: profile.phone,
-              message: message,
-            }),
-          }
-        );
+        // Send via Z-API with instance routing
+        const instanceConfig = await getInstanceConfigForUser(supabase, followup.user_id);
+        const sendResult = await sendTextMessage(profile.phone, message, undefined, instanceConfig);
 
-        if (sendResponse.ok) {
+        if (sendResult.success) {
           console.log(`✅ Follow-up sent successfully`);
           sentCount++;
 
@@ -573,12 +561,11 @@ Deno.serve(async (req) => {
             content: message,
           });
         } else {
-          const error = await sendResponse.text();
-          console.error(`❌ Failed to send follow-up: ${error}`);
+          console.error(`❌ Failed to send follow-up: ${sendResult.error}`);
         }
 
-        // Small delay between sends
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Anti-burst delay between sends
+        await antiBurstDelay();
 
       } catch (userError) {
         console.error(`❌ Error processing follow-up for ${followup.user_id}:`, userError);
