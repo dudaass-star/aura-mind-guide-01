@@ -1,100 +1,48 @@
 
 
-# Logging de Tokens Reais no aura-agent
+# Backup Completo do Input da IA (aura-agent)
 
-## Objetivo
-Capturar e registrar o consumo real de tokens (prompt_tokens, completion_tokens, total_tokens) de todas as chamadas de IA no `aura-agent`, criando uma baseline de custos reais antes de qualquer otimizacao.
+## O que sera salvo
 
-## O que muda
+O arquivo de backup vai conter TODO o input que vai para a IA, nao apenas o template. Isso inclui:
 
-### 1. Nova tabela: `token_usage_logs`
-Armazena o consumo de cada chamada de IA com contexto suficiente para analise.
+### Parte 1: Template Base (~960 linhas)
+A variavel `AURA_SYSTEM_PROMPT` completa (linhas 194-1158) com todos os 15 placeholders.
 
-Colunas:
-- `id` (uuid, PK)
-- `user_id` (uuid, nullable) - usuario associado
-- `function_name` (text) - sempre "aura-agent" por agora
-- `call_type` (text) - "main_chat", "session_summary", "onboarding_extraction", "topic_extraction"
-- `model` (text) - modelo usado (ex: "google/gemini-2.5-pro")
-- `prompt_tokens` (integer) - tokens de entrada
-- `completion_tokens` (integer) - tokens de saida
-- `total_tokens` (integer) - total
-- `created_at` (timestamptz, default now())
+### Parte 2: Logica de Construcao do finalPrompt (~400 linhas)
+Todo o codigo que monta o prompt final (linhas 3025-3466), incluindo:
+- Substituicao de placeholders (contextualPrompt)
+- Contexto de continuidade entre sessoes
+- Dados de onboarding
+- Tracking de temas e compromissos
+- Contexto de trial gratuito
+- Gap temporal
+- Agenda do usuario
+- Controle de fases da sessao
+- Contexto de interrupcao
+- Instrucoes de upgrade
+- Configuracao de agenda mensal
+- Instrucoes de encerramento
 
-RLS: apenas service_role tem acesso (dados internos de monitoramento).
+### Parte 3: Contextos Condicionais (~300 linhas)
+Blocos que sao injetados condicionalmente:
+- Primeira sessao / onboarding estruturado (linhas 2775-2887, com as 5 fases)
+- Sessao pendente / sessao perdida (linhas 2986-3023)
+- Audio de sessao (linhas 3036-3048)
+- Jornada de conteudo
 
-### 2. Mudancas no `aura-agent/index.ts`
+### Parte 4: Mensagens enviadas a API
+A estrutura final: `[system: finalPrompt] + [messageHistory] + [user: message]`
 
-**Chamada principal (linha ~3488):** Apos `const data = await response.json()`, extrair `data.usage` e logar:
-```
-console.log('TOKEN_USAGE main_chat:', JSON.stringify(data.usage));
-```
-Inserir registro na tabela `token_usage_logs`.
+## Arquivo de saida
 
-**Chamada de resumo de sessao (linha ~4052):** Mesma extracao de `usage` do `summaryData`.
+`docs/AURA_FULL_INPUT_BACKUP_2026-02-22.md`
 
-**Chamada de onboarding (linha ~4146):** Mesma extracao de `usage` do `onboardingData`.
+Organizado em secoes claras com todo o codigo relevante em blocos, para que possa ser restaurado se necessario.
 
-**Chamada de topic extraction (linha ~4184):** Mesma extracao de `usage` do `topicData`.
+## Detalhes tecnicos
 
-### 3. Funcao auxiliar
+- O arquivo tera aproximadamente 1800-2000 linhas (template + codigo de construcao + contextos condicionais)
+- Inclui mapeamento de todas as variaveis, queries ao banco e condicoes que afetam o prompt
+- Nao altera nenhum codigo funcional
 
-Criar uma funcao `logTokenUsage()` que recebe os parametros e faz o insert + console.log de forma padronizada, para nao repetir codigo em 4 lugares.
-
-```typescript
-async function logTokenUsage(
-  supabase: any,
-  userId: string | null,
-  callType: string,
-  model: string,
-  usage: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } | undefined
-) {
-  if (!usage) {
-    console.warn('No usage data in API response for', callType);
-    return;
-  }
-  console.log(`TOKEN_USAGE [${callType}]: prompt=${usage.prompt_tokens}, completion=${usage.completion_tokens}, total=${usage.total_tokens}`);
-  
-  await supabase.from('token_usage_logs').insert({
-    user_id: userId,
-    function_name: 'aura-agent',
-    call_type: callType,
-    model: model,
-    prompt_tokens: usage.prompt_tokens || 0,
-    completion_tokens: usage.completion_tokens || 0,
-    total_tokens: usage.total_tokens || 0,
-  });
-}
-```
-
-## O que NAO muda
-- Comportamento da AURA (zero impacto nas respostas)
-- Fluxo da conversa
-- Nenhuma dependencia nova
-
-## Como consultar os dados depois
-
-Exemplos de queries para analisar custos:
-
-```sql
--- Media de tokens por tipo de chamada
-SELECT call_type, 
-  AVG(prompt_tokens) as avg_input, 
-  AVG(completion_tokens) as avg_output,
-  COUNT(*) as total_calls
-FROM token_usage_logs
-GROUP BY call_type;
-
--- Custo estimado por usuario (ultimos 30 dias)
-SELECT user_id, 
-  SUM(prompt_tokens) as total_input,
-  SUM(completion_tokens) as total_output,
-  COUNT(*) as messages
-FROM token_usage_logs
-WHERE created_at > now() - interval '30 days'
-GROUP BY user_id
-ORDER BY total_input DESC;
-```
-
-## Resultado esperado
-Apos implementar, cada mensagem processada pelo aura-agent vai gerar logs com os tokens reais, permitindo calcular o custo exato por mensagem, por usuario e por tipo de chamada.
