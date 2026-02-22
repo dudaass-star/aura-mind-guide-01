@@ -24,6 +24,32 @@ Deno.serve(async (req) => {
 
     console.log('🔔 Starting schedule setup reminder check...');
 
+    const today = new Date().toISOString().split('T')[0];
+
+    // ========================================================================
+    // REACTIVATION: Users whose pause has expired
+    // ========================================================================
+    const { data: expiredPauseUsers, error: errorReactivation } = await supabase
+      .from('profiles')
+      .select('user_id, name, sessions_paused_until')
+      .eq('status', 'active')
+      .in('plan', ['direcao', 'transformacao'])
+      .not('sessions_paused_until', 'is', null)
+      .lte('sessions_paused_until', today);
+
+    if (errorReactivation) {
+      console.error('❌ Error fetching expired pause users:', errorReactivation);
+    } else if (expiredPauseUsers && expiredPauseUsers.length > 0) {
+      console.log(`🔄 Reactivating ${expiredPauseUsers.length} users with expired pause`);
+      for (const user of expiredPauseUsers) {
+        await supabase
+          .from('profiles')
+          .update({ needs_schedule_setup: true, sessions_paused_until: null })
+          .eq('user_id', user.user_id);
+        console.log(`🔄 Reactivated ${user.name} (pause was until ${user.sessions_paused_until})`);
+      }
+    }
+
     // === FIRST REMINDER: 48-96 hours (2-4 days) ===
     const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
     const ninetySixHoursAgo = new Date(Date.now() - 96 * 60 * 60 * 1000).toISOString();
@@ -42,6 +68,7 @@ Deno.serve(async (req) => {
       .eq('needs_schedule_setup', true)
       .in('plan', ['direcao', 'transformacao'])
       .eq('status', 'active')
+      .or('sessions_paused_until.is.null,sessions_paused_until.lt.' + today)
       .lt('updated_at', fortyEightHoursAgo)
       .gt('updated_at', ninetySixHoursAgo);
 
@@ -91,6 +118,7 @@ Fico esperando! 🌟`;
       .eq('needs_schedule_setup', true)
       .in('plan', ['direcao', 'transformacao'])
       .eq('status', 'active')
+      .or('sessions_paused_until.is.null,sessions_paused_until.lt.' + today)
       .lt('updated_at', fiveDaysAgo)
       .gt('updated_at', sevenDaysAgo);
 

@@ -59,6 +59,7 @@ Deno.serve(async (req) => {
             sessions_used_this_month: 0,
             sessions_reset_date: today,
             needs_schedule_setup: true,
+            sessions_paused_until: null,
           })
           .eq('user_id', user.user_id);
 

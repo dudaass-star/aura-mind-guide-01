@@ -1038,6 +1038,38 @@ EXEMPLOS:
 - Usuário: "não quero mais episódios" → "Entendi! Pausei o envio. Quando quiser voltar, é só falar! 💜 [PAUSAR_JORNADAS]"
 - Usuário: "quero voltar a receber" → "Que bom que você quer voltar! 💜 Deixa eu te mostrar as jornadas... [LISTAR_JORNADAS]"
 
+# TAG [PAUSAR_SESSOES] - PAUSA FLEXÍVEL DE SESSÕES
+
+QUANDO O USUÁRIO QUISER PAUSAR OU ADIAR AS SESSÕES DO MÊS:
+Se o usuário disser algo como "sem sessões esse mês", "não quero sessões agora", "daqui a X dias a gente marca", 
+"semana que vem a gente organiza", "só depois do dia 10", "mês que vem a gente vê", "agora não dá pra marcar sessões":
+
+1. Calcule a data de retomada baseado no que o usuário disse:
+   - "daqui a 3 dias" → data atual + 3 dias
+   - "semana que vem" → próxima segunda-feira
+   - "sem sessões esse mês" / "só no próximo mês" → dia 1 do próximo mês
+   - "depois do dia 10" → dia 10 do mês atual (ou próximo mês se já passou)
+   - "daqui a 2 semanas" → data atual + 14 dias
+   - Se não especificar prazo, pergunte: "Tudo bem! Quando posso te procurar pra gente organizar?"
+
+2. Use a data ATUAL fornecida no contexto ({current_date}) para calcular a data exata no formato YYYY-MM-DD
+
+3. Confirme com o usuário a data de retomada:
+   "Combinado! Te procuro no dia DD/MM pra gente organizar suas sessões. Até lá, fico aqui se precisar! 💜"
+
+4. Inclua a tag [PAUSAR_SESSOES data="YYYY-MM-DD"] na sua resposta
+
+EXEMPLOS:
+- Usuário: "Esse mês não vai dar pra fazer sessões" → "Entendi! Te procuro no dia 01/03 pra gente organizar março, tudo bem? 💜 [PAUSAR_SESSOES data="2026-03-01"]"
+- Usuário: "Daqui a 5 dias a gente marca" → "Combinado! Dia 27/02 te procuro pra montar a agenda! 💜 [PAUSAR_SESSOES data="2026-02-27"]"
+- Usuário: "Semana que vem a gente vê isso" → "Pode ser! Segunda te procuro pra organizar, ok? 💜 [PAUSAR_SESSOES data="2026-03-02"]"
+
+REGRAS IMPORTANTES:
+- NUNCA use datas no passado
+- Máximo de 90 dias no futuro
+- Se o usuário não der indicação de prazo, PERGUNTE antes de usar a tag
+- A tag só deve ser usada quando o usuário explicitamente quer adiar/pausar o agendamento
+
 # DETECÇÃO DE INDISPONIBILIDADE (NÃO PERTURBE)
 
 Quando o usuário indicar que NÃO pode conversar agora, use a tag [NAO_PERTURBE:Xh] onde X é o número de horas estimado.
@@ -1502,6 +1534,7 @@ function sanitizeMessageHistory(messages: { role: string; content: string; creat
       .replace(/\[TROCAR_JORNADA:[^\]]+\]/gi, '')
       .replace(/\[PAUSAR_JORNADAS\]/gi, '')
       .replace(/\[NAO_PERTURBE:\d+h?\]/gi, '')
+      .replace(/\[PAUSAR_SESSOES[^\]]*\]/gi, '')
       .trim();
     
     // CORREÇÃO: Remover timestamps antigos das mensagens do assistente
@@ -1563,6 +1596,7 @@ function splitIntoMessages(response: string, allowAudioThisTurn: boolean): Array
   cleanResponse = cleanResponse.replace(/\[TROCAR_JORNADA:[^\]]+\]/gi, '').trim();
   cleanResponse = cleanResponse.replace(/\[PAUSAR_JORNADAS\]/gi, '').trim();
   cleanResponse = cleanResponse.replace(/\[NAO_PERTURBE:\d+h?\]/gi, '').trim();
+  cleanResponse = cleanResponse.replace(/\[PAUSAR_SESSOES[^\]]*\]/gi, '').trim();
 
   if (isAudioMode) {
     const normalized = cleanResponse
@@ -3326,7 +3360,13 @@ Se o usuário mencionar algo sobre "finalizar checkout" ou "upgrade", CONFIRME q
     // ========================================================================
     // CONTEXTO DE CONFIGURAÇÃO DE AGENDA MENSAL
     // ========================================================================
-    if (profile?.needs_schedule_setup && planConfig.sessions > 0) {
+    // Verificar se sessões estão pausadas
+    const isSessionsPaused = profile?.sessions_paused_until && new Date(profile.sessions_paused_until) > new Date();
+    if (isSessionsPaused) {
+      console.log(`⏸️ Sessions paused until ${profile.sessions_paused_until} - skipping schedule setup prompt`);
+    }
+
+    if (profile?.needs_schedule_setup && planConfig.sessions > 0 && !isSessionsPaused) {
       const sessionsCount = planConfig.sessions;
       finalPrompt += `
 
@@ -3910,6 +3950,36 @@ INSTRUÇÃO: Faça um fechamento CALOROSO da sessão:
       
       // Limpar tag da resposta
       assistantMessage = assistantMessage.replace(/\[PAUSAR_JORNADAS\]/gi, '');
+    }
+
+    // ========================================================================
+    // PROCESSAR TAG [PAUSAR_SESSOES data="YYYY-MM-DD"]
+    // ========================================================================
+    const pauseSessionsMatch = assistantMessage.match(/\[PAUSAR_SESSOES\s+data="(\d{4}-\d{2}-\d{2})"\]/i);
+    if (pauseSessionsMatch && profile?.user_id) {
+      const pauseDate = pauseSessionsMatch[1];
+      const pauseDateObj = new Date(pauseDate + 'T00:00:00');
+      const now = new Date();
+      const maxFuture = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
+
+      if (pauseDateObj > now && pauseDateObj <= maxFuture) {
+        console.log(`⏸️ Pausing sessions until ${pauseDate} for user ${profile.name}`);
+        
+        await supabase
+          .from('profiles')
+          .update({ 
+            needs_schedule_setup: false,
+            sessions_paused_until: pauseDate
+          })
+          .eq('user_id', profile.user_id);
+        
+        console.log('✅ Sessions paused successfully');
+      } else {
+        console.warn(`⚠️ Invalid pause date: ${pauseDate} (must be future and within 90 days)`);
+      }
+      
+      // Limpar tag da resposta
+      assistantMessage = assistantMessage.replace(/\[PAUSAR_SESSOES[^\]]*\]/gi, '');
     }
 
     // ========================================================================

@@ -510,6 +510,7 @@ export type Database = {
           preferred_session_time: string | null
           preferred_support_style: string | null
           primary_topic: string | null
+          sessions_paused_until: string | null
           sessions_reset_date: string | null
           sessions_used_this_month: number | null
           status: string | null
@@ -544,6 +545,7 @@ export type Database = {
           preferred_session_time?: string | null
           preferred_support_style?: string | null
           primary_topic?: string | null
+          sessions_paused_until?: string | null
           sessions_reset_date?: string | null
           sessions_used_this_month?: number | null
           status?: string | null
@@ -578,6 +580,7 @@ export type Database = {
           preferred_session_time?: string | null
           preferred_support_style?: string | null
           primary_topic?: string | null
+          sessions_paused_until?: string | null
           sessions_reset_date?: string | null
           sessions_used_this_month?: number | null
           status?: string | null
