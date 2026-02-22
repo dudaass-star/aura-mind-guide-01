@@ -58,6 +58,35 @@ function getCurrentDateTimeContext(): {
   };
 }
 
+// Helper para logging de tokens reais
+async function logTokenUsage(
+  supabase: any,
+  userId: string | null,
+  callType: string,
+  model: string,
+  usage: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } | undefined
+) {
+  if (!usage) {
+    console.warn('TOKEN_USAGE: No usage data in API response for', callType);
+    return;
+  }
+  console.log(`TOKEN_USAGE [${callType}]: prompt=${usage.prompt_tokens}, completion=${usage.completion_tokens}, total=${usage.total_tokens}`);
+  
+  try {
+    await supabase.from('token_usage_logs').insert({
+      user_id: userId,
+      function_name: 'aura-agent',
+      call_type: callType,
+      model: model,
+      prompt_tokens: usage.prompt_tokens || 0,
+      completion_tokens: usage.completion_tokens || 0,
+      total_tokens: usage.total_tokens || 0,
+    });
+  } catch (e) {
+    console.error('TOKEN_USAGE: Failed to insert log:', e);
+  }
+}
+
 // Mapeamento de dia da semana em português para getDay()
 const weekdayMap: Record<string, number> = {
   'domingo': 0, 'domingos': 0,
@@ -3486,6 +3515,7 @@ INSTRUÇÃO: Faça um fechamento CALOROSO da sessão:
     }
 
     const data = await response.json();
+    await logTokenUsage(supabase, user_id || null, 'main_chat', 'google/gemini-2.5-pro', data.usage);
     const finishReason = data.choices?.[0]?.finish_reason;
     console.log(`📊 API finish_reason: ${finishReason}, response length: ${data.choices?.[0]?.message?.content?.length || 0} chars`);
     if (finishReason && finishReason !== 'stop') {
@@ -4051,6 +4081,7 @@ Regras:
 
         if (summaryResponse.ok) {
           const summaryData = await summaryResponse.json();
+          await logTokenUsage(supabase, user_id || null, 'session_summary', 'google/gemini-2.5-pro', summaryData.usage);
           const aiResponse = summaryData.choices?.[0]?.message?.content?.trim();
           if (aiResponse) {
             try {
@@ -4145,6 +4176,7 @@ Regras:
 
           if (onboardingResponse.ok) {
             const onboardingData = await onboardingResponse.json();
+            await logTokenUsage(supabase, user_id || null, 'onboarding_extraction', 'google/gemini-2.5-pro', onboardingData.usage);
             const aiContent = onboardingData.choices?.[0]?.message?.content?.trim();
             if (aiContent) {
               try {
@@ -4183,6 +4215,7 @@ Apenas o tema, nada mais.`
                     
                     if (topicResponse.ok) {
                       const topicData = await topicResponse.json();
+                      await logTokenUsage(supabase, user_id || null, 'topic_extraction', 'google/gemini-2.5-pro', topicData.usage);
                       const topic = topicData.choices?.[0]?.message?.content?.trim()?.toLowerCase();
                       if (topic && topic.length < 50) {
                         profileUpdate.primary_topic = topic;

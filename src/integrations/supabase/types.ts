@@ -789,6 +789,42 @@ export type Database = {
         }
         Relationships: []
       }
+      token_usage_logs: {
+        Row: {
+          call_type: string
+          completion_tokens: number
+          created_at: string
+          function_name: string
+          id: string
+          model: string
+          prompt_tokens: number
+          total_tokens: number
+          user_id: string | null
+        }
+        Insert: {
+          call_type: string
+          completion_tokens?: number
+          created_at?: string
+          function_name: string
+          id?: string
+          model: string
+          prompt_tokens?: number
+          total_tokens?: number
+          user_id?: string | null
+        }
+        Update: {
+          call_type?: string
+          completion_tokens?: number
+          created_at?: string
+          function_name?: string
+          id?: string
+          model?: string
+          prompt_tokens?: number
+          total_tokens?: number
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       user_insights: {
         Row: {
           category: string
