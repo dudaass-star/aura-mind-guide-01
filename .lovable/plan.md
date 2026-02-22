@@ -1,118 +1,80 @@
 
 
-# Reestruturacao do Prompt para Cache Implicito do Gemini
+# Adicionar Verificacao de Conversa em Andamento e DND ao Relatorio Semanal
 
-## Resumo
+## Problema
 
-Separar o prompt atual (1 mensagem de sistema com tudo junto) em 2 mensagens de sistema: uma estatica (cacheavel) e uma dinamica (muda a cada chamada). O conteudo que chega ao modelo sera identico, apenas reorganizado.
+O `weekly-report` envia para todos os usuarios ativos sem verificar:
+1. Se o usuario esta em modo "Nao Perturbe" (`do_not_disturb_until`)
+2. Se houve mensagem recente do usuario (conversa possivelmente em andamento)
 
-## Mudancas no arquivo `supabase/functions/aura-agent/index.ts`
+Todas as outras automacoes (follow-up, check-in, conteudo periodico, reativacao) ja respeitam o DND, mas o relatorio semanal nao.
 
-### 1. Limpar placeholders do AURA_SYSTEM_PROMPT (linhas 194-1158)
+## Mudancas no arquivo `supabase/functions/weekly-report/index.ts`
 
-Remover os 15 placeholders dinamicos e tornar o template puramente estatico:
+### 1. Filtrar usuarios com DND na query inicial (linha 205-209)
 
-**Secao "CONTEXTO TEMPORAL" (linhas 996-1006):** Remover os valores `{current_date}`, `{current_time}`, `{current_weekday}` e substituir por instrucao generica: "Consulte o bloco DADOS DINAMICOS DO SISTEMA fornecido separadamente."
-
-**Secao "CONTEXTO DO USUARIO" (linhas 1125-1133):** Remover `{user_name}`, `{user_plan}`, `{sessions_available}`, `{messages_today}`, `{last_checkin}`, `{pending_commitments}`, `{message_count}`, `{session_active}` e substituir por instrucao: "Consulte o bloco DADOS DINAMICOS DO SISTEMA."
-
-**Secao "MEMORIA DE LONGO PRAZO" (linha 1148):** Remover `{user_insights}` e substituir por referencia ao bloco dinamico.
-
-**Secao "JORNADAS" (linhas 1035-1036):** Remover `{current_journey}`, `{current_episode}`, `{total_episodes}`.
-
-**Secao "AUDIO" (linha 1157):** Remover `{audio_session_context}`.
-
-**Referencia a `{current_date}` na secao de agendamento (linha 1084):** Substituir por "a data atual fornecida no bloco dinamico".
-
-Renomear a variavel de `AURA_SYSTEM_PROMPT` para `AURA_STATIC_INSTRUCTIONS`.
-
-### 2. Criar bloco de contexto dinamico (novo codigo, apos linha 3089)
-
-Substituir o bloco `.replace()` (linhas 3072-3089) por construcao de uma string `dynamicContext`:
+Adicionar filtro `.or()` na query de perfis para excluir usuarios com DND ativo, igual ao `scheduled-checkin` ja faz:
 
 ```typescript
-const dynamicContext = `# DADOS DINAMICOS DO SISTEMA
-
-## Contexto Temporal
-- Data de hoje: ${dateTimeContext.currentDate}
-- Hora atual: ${dateTimeContext.currentTime}
-- Dia da semana: ${dateTimeContext.currentWeekday}
-
-## Dados do Usuario
-- Nome: ${profile?.name || 'Ainda nao sei o nome'}
-- Plano: ${userPlan}
-- Sessoes disponiveis este mes: ${sessionsAvailable}
-- Mensagens hoje: ${messagesToday}
-- Ultimo check-in: ${lastCheckin}
-- Compromissos pendentes: ${pendingCommitments}
-- Historico de conversas: ${messageCount} mensagens
-- Em sessao especial: ${sessionActive ? 'Sim - MODO SESSAO ATIVO' : 'Nao'}
-
-## Jornada de Conteudo
-- Jornada atual: ${currentJourneyInfo}
-- Episodio atual: ${currentEpisodeInfo}/${totalEpisodesInfo}
-
-## Regra de Audio
-${audioSessionContext}
-
-## Memoria de Longo Prazo
-${formatInsightsForContext(userInsights)}
-`;
+const { data: profiles, error: profilesError } = await supabase
+  .from('profiles')
+  .select('*')
+  .eq('status', 'active')
+  .not('phone', 'is', null)
+  .or('do_not_disturb_until.is.null,do_not_disturb_until.lte.' + new Date().toISOString());
 ```
 
-### 3. Mover contextos condicionais para o dynamicContext
+### 2. Verificar conversa recente antes de enviar (dentro do loop, apos linha 220)
 
-Todos os blocos que hoje sao concatenados ao `finalPrompt` passam a ser concatenados ao `dynamicContext`:
+Antes de gerar o relatorio de cada usuario, verificar se houve mensagem do usuario nos ultimos 10 minutos. Se sim, pular o envio para nao interromper uma conversa ativa:
 
-- `continuityContext` (sessoes anteriores, onboarding, temas, compromissos)
-- Trial gratuito
-- Gap temporal
-- Agenda/sessoes
-- Controle de fase de sessao
-- Contexto de interrupcao
-- Instrucoes de upgrade
-- Configuracao de agenda mensal
-- Instrucao de encerramento
-
-Basicamente: onde hoje diz `finalPrompt += ...`, passa a dizer `dynamicContext += ...`.
-
-### 4. Alterar estrutura de mensagens da API (linhas 3468-3472)
-
-De:
 ```typescript
-const apiMessages = [
-  { role: "system", content: finalPrompt },
-  ...messageHistory,
-  { role: "user", content: message }
-];
+// Skip if user sent a message in the last 10 minutes (active conversation)
+const recentCutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+const { count: recentUserMessages } = await supabase
+  .from('messages')
+  .select('*', { count: 'exact', head: true })
+  .eq('user_id', profile.user_id)
+  .eq('role', 'user')
+  .gte('created_at', recentCutoff);
+
+if ((recentUserMessages || 0) > 0) {
+  console.log(`💬 Skipping ${userName} - active conversation (message in last 10min)`);
+  continue;
+}
 ```
 
-Para:
+### 3. Verificar sessao em andamento (junto com a verificacao acima)
+
+Tambem pular se o usuario tiver uma sessao ativa (`in_progress`):
+
 ```typescript
-const apiMessages = [
-  { role: "system", content: AURA_STATIC_INSTRUCTIONS },
-  { role: "system", content: dynamicContext },
-  ...messageHistory,
-  { role: "user", content: message }
-];
+// Skip if user has an active session
+if (profile.current_session_id) {
+  const { data: activeSession } = await supabase
+    .from('sessions')
+    .select('status')
+    .eq('id', profile.current_session_id)
+    .eq('status', 'in_progress')
+    .maybeSingle();
+  
+  if (activeSession) {
+    console.log(`🧘 Skipping ${userName} - session in progress`);
+    continue;
+  }
+}
 ```
 
-### 5. Remover variaveis obsoletas
+## Resumo das verificacoes (em ordem)
 
-- Remover `contextualPrompt` (nao existe mais, o template nao tem `.replace()`)
-- Remover `finalPrompt` (substituido por `dynamicContext` para a parte variavel)
+1. **DND ativo** - filtrado na query (nem entra no loop)
+2. **Sessao em andamento** - skip no loop
+3. **Mensagem recente (10 min)** - skip no loop
 
 ## O que NAO muda
 
-- Nenhuma query ao banco
-- Nenhuma logica de negocio
-- Nenhum post-processamento de tags
-- Nenhuma funcao auxiliar
-- O conteudo total que o modelo recebe e identico
-
-## Resultado esperado
-
-- ~14.000 tokens estaticos cacheados pelo Gemini (75% desconto)
-- Economia estimada de ~44% no custo de input
-- Comportamento da Aura 100% identico
-
+- Formato do relatorio
+- Logica de metricas e analise de evolucao
+- Insercao na tabela `messages` e `weekly_plans`
+- Anti-burst delay
