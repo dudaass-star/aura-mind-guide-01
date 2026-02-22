@@ -206,7 +206,8 @@ Deno.serve(async (req) => {
       .from('profiles')
       .select('*')
       .eq('status', 'active')
-      .not('phone', 'is', null);
+      .not('phone', 'is', null)
+      .or('do_not_disturb_until.is.null,do_not_disturb_until.lte.' + new Date().toISOString());
 
     if (profilesError) {
       throw new Error(`Error fetching profiles: ${profilesError.message}`);
@@ -219,6 +220,35 @@ Deno.serve(async (req) => {
     for (const profile of profiles || []) {
       try {
         const userName = profile.name?.split(' ')[0] || 'usuário';
+
+        // Skip if user has an active session
+        if (profile.current_session_id) {
+          const { data: activeSession } = await supabase
+            .from('sessions')
+            .select('status')
+            .eq('id', profile.current_session_id)
+            .eq('status', 'in_progress')
+            .maybeSingle();
+          
+          if (activeSession) {
+            console.log(`🧘 Skipping ${userName} - session in progress`);
+            continue;
+          }
+        }
+
+        // Skip if user sent a message in the last 10 minutes (active conversation)
+        const recentCutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+        const { count: recentUserMessages } = await supabase
+          .from('messages')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', profile.user_id)
+          .eq('role', 'user')
+          .gte('created_at', recentCutoff);
+
+        if ((recentUserMessages || 0) > 0) {
+          console.log(`💬 Skipping ${userName} - active conversation (message in last 10min)`);
+          continue;
+        }
         
         console.log(`📊 Fetching metrics for ${userName}...`);
         const metrics = await fetchUserMetrics(
