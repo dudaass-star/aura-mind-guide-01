@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendTextMessage, cleanPhoneNumber } from "../_shared/zapi-client.ts";
-import { getInstanceConfigForUser, antiBurstDelay } from "../_shared/instance-helper.ts";
+import { getInstanceConfigForUser, antiBurstDelayForInstance } from "../_shared/instance-helper.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -53,7 +53,7 @@ Deno.serve(async (req) => {
       for (const session of missedSessions) {
         const { data: profile } = await supabase
           .from('profiles')
-          .select('name, phone, last_reactivation_sent')
+          .select('name, phone, last_reactivation_sent, whatsapp_instance_id')
           .eq('user_id', session.user_id)
           .maybeSingle();
 
@@ -107,8 +107,8 @@ Estou aqui por você. ✨`;
           logStep(`Error sending missed session message`, { error: sendError });
         }
 
-        // Anti-burst delay
-        await antiBurstDelay();
+        // Per-instance anti-burst delay
+        await antiBurstDelayForInstance(profile?.whatsapp_instance_id || 'default');
       }
     }
 
@@ -117,7 +117,7 @@ Estou aqui por você. ✨`;
     // ========================================================================
     const { data: inactiveProfiles, error: inactiveError } = await supabase
       .from('profiles')
-      .select('user_id, name, phone, last_message_date, last_reactivation_sent, do_not_disturb_until')
+      .select('user_id, name, phone, last_message_date, last_reactivation_sent, do_not_disturb_until, whatsapp_instance_id')
       .eq('status', 'active')
       .lt('last_message_date', threeDaysAgo.toISOString().split('T')[0])
       .not('phone', 'is', null);
@@ -197,8 +197,8 @@ Qualquer coisa, é só me mandar uma mensagem. ✨`;
           logStep(`Error sending reactivation message`, { error: sendError });
         }
 
-        // Anti-burst delay
-        await antiBurstDelay();
+        // Per-instance anti-burst delay
+        await antiBurstDelayForInstance(profile.whatsapp_instance_id || 'default');
       }
     }
 

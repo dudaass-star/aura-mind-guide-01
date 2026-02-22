@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendTextMessage, cleanPhoneNumber } from "../_shared/zapi-client.ts";
-import { getInstanceConfigForUser, antiBurstDelay } from "../_shared/instance-helper.ts";
+import { getInstanceConfigForUser, antiBurstDelayForInstance } from "../_shared/instance-helper.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -33,7 +33,8 @@ Deno.serve(async (req) => {
           name,
           phone,
           user_id,
-          do_not_disturb_until
+          do_not_disturb_until,
+          whatsapp_instance_id
         )
       `)
       .eq('completed', false)
@@ -114,8 +115,8 @@ Deno.serve(async (req) => {
           console.error(`❌ Failed to send follow-up: ${result.error}`);
         }
 
-        // Anti-burst delay between sends
-        await antiBurstDelay();
+        // Per-instance anti-burst delay
+        await antiBurstDelayForInstance(profile?.whatsapp_instance_id || 'default');
 
       } catch (commitmentError) {
         console.error(`❌ Error processing commitment ${commitment.id}:`, commitmentError);

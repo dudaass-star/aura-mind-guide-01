@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendTextMessage, cleanPhoneNumber } from "../_shared/zapi-client.ts";
-import { getInstanceConfigForUser, antiBurstDelay } from "../_shared/instance-helper.ts";
+import { getInstanceConfigForUser, antiBurstDelayForInstance, groupByInstance } from "../_shared/instance-helper.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -60,57 +60,62 @@ serve(async (req) => {
     let successCount = 0;
     let errorCount = 0;
 
-    for (const user of eligibleUsers) {
-      try {
-        // Skip if do_not_disturb is active
-        if (user.do_not_disturb_until && new Date(user.do_not_disturb_until) > new Date()) {
-          console.log(`🔇 Skipping user ${user.name || 'Unknown'} - do not disturb until ${user.do_not_disturb_until}`);
-          continue;
-        }
+    // Group by WhatsApp instance for parallel processing
+    const instanceGroups = groupByInstance(eligibleUsers);
 
-        console.log(`\n👤 Processing user: ${user.name || 'Unknown'} (episode ${user.current_episode || 0}, last_content: ${user.last_content_sent_at ? getBrasiliaTimeString(new Date(user.last_content_sent_at)) : 'never'} BR)`);
-
-        const currentEpisode = (user.current_episode || 0) + 1;
-
-        const { data: episode, error: episodeError } = await supabase
-          .from('journey_episodes')
-          .select('*, content_journeys(*)')
-          .eq('journey_id', user.current_journey_id)
-          .eq('episode_number', currentEpisode)
-          .single();
-
-        // Get instance config for this user
-        const zapiConfig = await getInstanceConfigForUser(supabase, user.user_id);
-
-        if (episodeError || !episode) {
-          console.log(`⚠️ Episode ${currentEpisode} not found for journey ${user.current_journey_id}`);
-          
-          const { data: journey } = await supabase
-            .from('content_journeys')
-            .select('*')
-            .eq('id', user.current_journey_id)
-            .single();
-
-          if (journey && currentEpisode > journey.total_episodes) {
-            console.log(`🎉 Journey completed! Sending choice message`);
-            
-            const { data: allJourneys } = await supabase
-              .from('content_journeys')
-              .select('id, title, description')
-              .eq('is_active', true)
-              .neq('id', user.current_journey_id)
-              .order('id');
-            
-            const userName = user.name?.split(' ')[0] || 'você';
-            
-            let journeyOptions = '';
-            if (allJourneys && allJourneys.length > 0) {
-              journeyOptions = allJourneys.map((j, idx) => 
-                `${idx + 1}. *${j.title}*`
-              ).join('\n');
+    await Promise.all(
+      Array.from(instanceGroups.entries()).map(async ([instanceId, groupUsers]) => {
+        for (const user of groupUsers) {
+          try {
+            // Skip if do_not_disturb is active
+            if (user.do_not_disturb_until && new Date(user.do_not_disturb_until) > new Date()) {
+              console.log(`🔇 Skipping user ${user.name || 'Unknown'} - do not disturb until ${user.do_not_disturb_until}`);
+              continue;
             }
-            
-            const completionMessage = `🎉 ${userName}, você completou a jornada *${journey.title}*!
+
+            console.log(`\n👤 Processing user: ${user.name || 'Unknown'} (episode ${user.current_episode || 0}, last_content: ${user.last_content_sent_at ? getBrasiliaTimeString(new Date(user.last_content_sent_at)) : 'never'} BR)`);
+
+            const currentEpisode = (user.current_episode || 0) + 1;
+
+            const { data: episode, error: episodeError } = await supabase
+              .from('journey_episodes')
+              .select('*, content_journeys(*)')
+              .eq('journey_id', user.current_journey_id)
+              .eq('episode_number', currentEpisode)
+              .single();
+
+            // Get instance config for this user
+            const zapiConfig = await getInstanceConfigForUser(supabase, user.user_id);
+
+            if (episodeError || !episode) {
+              console.log(`⚠️ Episode ${currentEpisode} not found for journey ${user.current_journey_id}`);
+              
+              const { data: journey } = await supabase
+                .from('content_journeys')
+                .select('*')
+                .eq('id', user.current_journey_id)
+                .single();
+
+              if (journey && currentEpisode > journey.total_episodes) {
+                console.log(`🎉 Journey completed! Sending choice message`);
+                
+                const { data: allJourneys } = await supabase
+                  .from('content_journeys')
+                  .select('id, title, description')
+                  .eq('is_active', true)
+                  .neq('id', user.current_journey_id)
+                  .order('id');
+                
+                const userName = user.name?.split(' ')[0] || 'você';
+                
+                let journeyOptions = '';
+                if (allJourneys && allJourneys.length > 0) {
+                  journeyOptions = allJourneys.map((j, idx) => 
+                    `${idx + 1}. *${j.title}*`
+                  ).join('\n');
+                }
+                
+                const completionMessage = `🎉 ${userName}, você completou a jornada *${journey.title}*!
 
 Foram ${journey.total_episodes} episódios. Cada manifesto que você leu em voz alta plantou uma semente. 💜
 
@@ -124,93 +129,95 @@ _Se preferir pausar, é só dizer "pausar jornadas" 🌿_
 
 Qual vai ser?`;
 
-            const cleanPhone = cleanPhoneNumber(user.phone);
-            await sendTextMessage(cleanPhone, completionMessage, undefined, zapiConfig);
-            
-            await supabase
-              .from('profiles')
-              .update({
-                current_journey_id: journey.next_journey_id,
-                current_episode: 0,
-                journeys_completed: (user.journeys_completed || 0) + 1,
-                last_content_sent_at: new Date().toISOString()
-              })
-              .eq('id', user.id);
-            
-            await supabase
-              .from('messages')
-              .insert({
-                user_id: user.user_id,
-                role: 'assistant',
-                content: completionMessage
-              });
-            
-            successCount++;
-          }
+                const cleanPhone = cleanPhoneNumber(user.phone);
+                await sendTextMessage(cleanPhone, completionMessage, undefined, zapiConfig);
+                
+                await supabase
+                  .from('profiles')
+                  .update({
+                    current_journey_id: journey.next_journey_id,
+                    current_episode: 0,
+                    journeys_completed: (user.journeys_completed || 0) + 1,
+                    last_content_sent_at: new Date().toISOString()
+                  })
+                  .eq('id', user.id);
+                
+                await supabase
+                  .from('messages')
+                  .insert({
+                    user_id: user.user_id,
+                    role: 'assistant',
+                    content: completionMessage
+                  });
+                
+                successCount++;
+              }
 
-          // Anti-burst delay
-          await antiBurstDelay();
-          continue;
-        }
-
-        // Chamar a função de geração de manifesto
-        console.log(`📝 Calling generate-episode-manifesto for episode ${currentEpisode}`);
-
-        const { data: manifestoResult, error: manifestoError } = await supabase.functions.invoke(
-          'generate-episode-manifesto',
-          {
-            body: {
-              user_id: user.user_id,
-              episode_id: episode.id
+              // Per-instance anti-burst delay
+              await antiBurstDelayForInstance(instanceId);
+              continue;
             }
+
+            // Chamar a função de geração de manifesto
+            console.log(`📝 Calling generate-episode-manifesto for episode ${currentEpisode}`);
+
+            const { data: manifestoResult, error: manifestoError } = await supabase.functions.invoke(
+              'generate-episode-manifesto',
+              {
+                body: {
+                  user_id: user.user_id,
+                  episode_id: episode.id
+                }
+              }
+            );
+
+            if (manifestoError || !manifestoResult?.success) {
+              console.error(`❌ Manifesto generation failed:`, manifestoError || manifestoResult?.error);
+              errorCount++;
+              await antiBurstDelayForInstance(instanceId);
+              continue;
+            }
+
+            const message = manifestoResult.message;
+
+            const cleanPhone = cleanPhoneNumber(user.phone);
+            const sendResult = await sendTextMessage(cleanPhone, message, undefined, zapiConfig);
+
+            if (sendResult.success) {
+              console.log(`✅ Manifesto sent to ${user.name?.split(' ')[0] || 'user'}`);
+              
+              await supabase
+                .from('profiles')
+                .update({
+                  current_episode: currentEpisode,
+                  last_content_sent_at: new Date().toISOString()
+                })
+                .eq('id', user.id);
+
+              await supabase
+                .from('messages')
+                .insert({
+                  user_id: user.user_id,
+                  role: 'assistant',
+                  content: message
+                });
+
+              successCount++;
+            } else {
+              console.error(`❌ Failed to send to ${user.name}:`, sendResult.error);
+              errorCount++;
+            }
+
+            // Per-instance anti-burst delay
+            await antiBurstDelayForInstance(instanceId);
+
+          } catch (userError) {
+            console.error(`❌ Error processing user ${user.id}:`, userError);
+            errorCount++;
           }
-        );
-
-        if (manifestoError || !manifestoResult?.success) {
-          console.error(`❌ Manifesto generation failed:`, manifestoError || manifestoResult?.error);
-          errorCount++;
-          await antiBurstDelay();
-          continue;
         }
-
-        const message = manifestoResult.message;
-
-        const cleanPhone = cleanPhoneNumber(user.phone);
-        const sendResult = await sendTextMessage(cleanPhone, message, undefined, zapiConfig);
-
-        if (sendResult.success) {
-          console.log(`✅ Manifesto sent to ${user.name?.split(' ')[0] || 'user'}`);
-          
-          await supabase
-            .from('profiles')
-            .update({
-              current_episode: currentEpisode,
-              last_content_sent_at: new Date().toISOString()
-            })
-            .eq('id', user.id);
-
-          await supabase
-            .from('messages')
-            .insert({
-              user_id: user.user_id,
-              role: 'assistant',
-              content: message
-            });
-
-          successCount++;
-        } else {
-          console.error(`❌ Failed to send to ${user.name}:`, sendResult.error);
-          errorCount++;
-        }
-
-        // Anti-burst delay
-        await antiBurstDelay();
-
-      } catch (userError) {
-        console.error(`❌ Error processing user ${user.id}:`, userError);
-        errorCount++;
-      }
-    }
+      })
+    );
 
     console.log(`\n📊 Summary: ${successCount} sent, ${errorCount} errors`);
 
