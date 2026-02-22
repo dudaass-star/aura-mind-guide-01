@@ -1,91 +1,97 @@
 
+# Pausa Flexivel de Sessoes com Tag [PAUSAR_SESSOES]
 
-## Limpeza Automática de Usuários Inativos
+## Resumo
 
-### Contexto atual
+Adicionar a capacidade da AURA pausar sessoes quando o usuario pedir, com data de retomada dinamica. Hoje, quando o usuario diz "sem sessoes esse mes", a AURA concorda verbalmente mas a flag `needs_schedule_setup` continua ativa, causando insistencia nas proximas conversas.
 
-Na base hoje existem 17 usuários registrados na instância "Aura #1":
-- **12 ativos** (pagantes, planos essencial/direcao/mensal)
-- **5 em trial** — sendo que 4 deles **nunca enviaram nenhuma mensagem** e o mais antigo (Dimas Martins) está há **41 dias** sem interagir
+## Mudancas
 
-O problema: cada usuário cadastrado ocupa 1 vaga no `current_users` da instância WhatsApp (max 250). Usuários que fizeram trial, nunca converteram e abandonaram continuam "travando" vagas indefinidamente.
+### 1. Migracao SQL
+- Adicionar coluna `sessions_paused_until` (DATE, nullable) na tabela `profiles`
+- Corrigir perfil do Eduardo Santos: setar `needs_schedule_setup = false`
 
----
+### 2. aura-agent/index.ts
 
-### Critérios de exclusão propostos
+**Prompt (instrucoes da tag):**
+Adicionar bloco de instrucoes para a tag `[PAUSAR_SESSOES data="YYYY-MM-DD"]` no prompt do sistema, ensinando a AURA a:
+- Calcular a data de retomada baseado no que o usuario disser ("daqui a 3 dias", "semana que vem", "so no proximo mes", "depois do dia 10")
+- Usar a data atual do contexto temporal para o calculo
+- Confirmar com o usuario: "Te procuro no dia X pra gente organizar, tudo bem?"
 
-Serão deletados perfis que se enquadrem em **qualquer** das categorias abaixo:
+**Condicional do bloco de agenda (linha ~3329):**
+Alterar a condicao para verificar se a pausa esta ativa:
+```
+if (profile?.needs_schedule_setup && planConfig.sessions > 0 && !isSessionsPaused)
+```
+Onde `isSessionsPaused` = `sessions_paused_until` existe e esta no futuro.
 
-| Categoria | Critério |
-|---|---|
-| Trial fantasma | `status = 'trial'` + `last_message_date IS NULL` + mais de **7 dias** desde `trial_started_at` |
-| Trial expirado | `status = 'trial'` + última mensagem há mais de **30 dias** |
-| Cancelado antigo | `status = 'canceled'` + última mensagem há mais de **60 dias** |
+**Processamento da tag (pos-resposta):**
+- Detectar `[PAUSAR_SESSOES data="YYYY-MM-DD"]` na resposta da IA
+- Validar a data (nao no passado, maximo 90 dias no futuro)
+- Atualizar o perfil: `needs_schedule_setup = false` e `sessions_paused_until = data`
 
-> **Nota:** Usuários `active` nunca são deletados automaticamente, independente de inatividade.
+**Limpeza da tag:**
+- Adicionar regex de remocao em ambas as funcoes de limpeza (formatMessagesForAPI e splitIntoMessages)
 
----
+### 3. schedule-setup-reminder/index.ts
 
-### O que acontece na exclusão
+- Adicionar filtro `.or('sessions_paused_until.is.null,sessions_paused_until.lt.{hoje}')` nas queries de busca de usuarios
+- Adicionar logica de reativacao: buscar usuarios cuja `sessions_paused_until` ja passou, setar `needs_schedule_setup = true` e limpar `sessions_paused_until`
 
-1. O perfil é **deletado** da tabela `profiles`
-2. O `current_users` da instância vinculada é **decrementado** automaticamente (via trigger no banco)
-3. Os dados relacionados (messages, sessions, insights, etc.) são removidos em cascata — **ou** são anonimizados dependendo da política de privacidade desejada
+### 4. monthly-schedule-renewal/index.ts
 
----
+- No reset mensal, limpar `sessions_paused_until` para todos os usuarios (o novo mes reseta tudo)
+- Manter comportamento atual de setar `needs_schedule_setup = true`
 
-### Implementação técnica
+## Fluxo esperado
 
-**1. Trigger no banco para decrementar `current_users`**
-
-Quando um perfil é deletado, um trigger executa:
-```sql
-UPDATE whatsapp_instances
-SET current_users = current_users - 1
-WHERE id = OLD.whatsapp_instance_id;
+```text
+Usuario: "Sem sessoes esse mes"
+  |
+  v
+AURA: "Entendi! Te procuro em 01/03 pra organizar. Combinado?"
+  + [PAUSAR_SESSOES data="2026-03-01"]
+  |
+  v
+Backend: needs_schedule_setup = false
+         sessions_paused_until = 2026-03-01
+  |
+  v
+schedule-setup-reminder: ignora usuario (pausa ativa)
+  |
+  v
+01/03: monthly-schedule-renewal limpa pausa, reativa needs_schedule_setup
+  |
+  v
+AURA volta a oferecer agendamento naturalmente
 ```
 
-**2. Nova edge function: `cleanup-inactive-users`**
+```text
+Usuario: "Daqui a 3 dias a gente marca"
+  |
+  v
+AURA: "Combinado! Dia 25/02 te procuro. Ate la!"
+  + [PAUSAR_SESSOES data="2026-02-25"]
+  |
+  v
+Backend: needs_schedule_setup = false
+         sessions_paused_until = 2026-02-25
+  |
+  v
+25/02: schedule-setup-reminder detecta pausa expirada
+       -> reativa needs_schedule_setup = true
+       -> limpa sessions_paused_until
+  |
+  v
+Proxima conversa: AURA oferece agendamento
+```
 
-Executada via cron (uma vez por dia, ex: 3h da manhã), a função:
+## Detalhes tecnicos
 
-1. Busca perfis elegíveis para exclusão conforme os critérios acima
-2. Para cada perfil encontrado, registra um log antes de deletar
-3. Deleta o perfil (o trigger cuida do decremento da instância)
-4. Retorna um resumo: quantos foram deletados por categoria
-
-**3. Cron job diário**
-
-Agendado via `pg_cron` para rodar a função uma vez por dia às 3h (horário de Brasília).
-
----
-
-### Impacto imediato (base atual)
-
-Com os critérios propostos, **4 dos 5 usuários trial** seriam elegíveis para exclusão imediata:
-- Dimas Martins — 41 dias, nunca interagiu
-- Teste — 15 dias, nunca interagiu  
-- teste — 14 dias, nunca interagiu
-- teste qa 10 — 14 dias, nunca interagiu
-
-Apenas a Camila (8 dias, interagiu em 11/02) ficaria.
-
-O `current_users` passaria de 17 para 13.
-
----
-
-### Pontos de atenção
-
-- Usuários com `status = 'canceled'` que ainda estão no período pago (acesso ativo) **não devem ser deletados ainda** — o critério dos 60 dias garante essa janela
-- A função não envia mensagem de despedida para esses usuários (já foram notificados via reactivation-check ou nunca chegaram a usar de verdade)
-- O plano não toca em nenhum usuário `active`, garantindo zero risco para pagantes
-
----
-
-### Arquivos a criar/modificar
-
-1. **Migration SQL** — criar trigger `on_profile_delete` para decrementar `current_users`
-2. **`supabase/functions/cleanup-inactive-users/index.ts`** — nova edge function com a lógica de limpeza
-3. **`supabase/config.toml`** — adicionar `verify_jwt = false` para a nova função
-4. **Cron job** — agendar via SQL (`pg_cron`) para execução diária às 3h
-
+| Arquivo | Tipo de mudanca |
+|---------|----------------|
+| Migracao SQL | ALTER TABLE profiles ADD COLUMN sessions_paused_until DATE; UPDATE perfil Eduardo |
+| aura-agent/index.ts | Prompt + condicional agenda + parsing tag + limpeza tag (4 pontos de alteracao) |
+| schedule-setup-reminder/index.ts | Filtro de pausa + logica de reativacao automatica |
+| monthly-schedule-renewal/index.ts | Limpar sessions_paused_until no reset mensal |
