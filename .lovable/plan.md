@@ -1,97 +1,100 @@
 
-# Pausa Flexivel de Sessoes com Tag [PAUSAR_SESSOES]
 
-## Resumo
+# Logging de Tokens Reais no aura-agent
 
-Adicionar a capacidade da AURA pausar sessoes quando o usuario pedir, com data de retomada dinamica. Hoje, quando o usuario diz "sem sessoes esse mes", a AURA concorda verbalmente mas a flag `needs_schedule_setup` continua ativa, causando insistencia nas proximas conversas.
+## Objetivo
+Capturar e registrar o consumo real de tokens (prompt_tokens, completion_tokens, total_tokens) de todas as chamadas de IA no `aura-agent`, criando uma baseline de custos reais antes de qualquer otimizacao.
 
-## Mudancas
+## O que muda
 
-### 1. Migracao SQL
-- Adicionar coluna `sessions_paused_until` (DATE, nullable) na tabela `profiles`
-- Corrigir perfil do Eduardo Santos: setar `needs_schedule_setup = false`
+### 1. Nova tabela: `token_usage_logs`
+Armazena o consumo de cada chamada de IA com contexto suficiente para analise.
 
-### 2. aura-agent/index.ts
+Colunas:
+- `id` (uuid, PK)
+- `user_id` (uuid, nullable) - usuario associado
+- `function_name` (text) - sempre "aura-agent" por agora
+- `call_type` (text) - "main_chat", "session_summary", "onboarding_extraction", "topic_extraction"
+- `model` (text) - modelo usado (ex: "google/gemini-2.5-pro")
+- `prompt_tokens` (integer) - tokens de entrada
+- `completion_tokens` (integer) - tokens de saida
+- `total_tokens` (integer) - total
+- `created_at` (timestamptz, default now())
 
-**Prompt (instrucoes da tag):**
-Adicionar bloco de instrucoes para a tag `[PAUSAR_SESSOES data="YYYY-MM-DD"]` no prompt do sistema, ensinando a AURA a:
-- Calcular a data de retomada baseado no que o usuario disser ("daqui a 3 dias", "semana que vem", "so no proximo mes", "depois do dia 10")
-- Usar a data atual do contexto temporal para o calculo
-- Confirmar com o usuario: "Te procuro no dia X pra gente organizar, tudo bem?"
+RLS: apenas service_role tem acesso (dados internos de monitoramento).
 
-**Condicional do bloco de agenda (linha ~3329):**
-Alterar a condicao para verificar se a pausa esta ativa:
+### 2. Mudancas no `aura-agent/index.ts`
+
+**Chamada principal (linha ~3488):** Apos `const data = await response.json()`, extrair `data.usage` e logar:
 ```
-if (profile?.needs_schedule_setup && planConfig.sessions > 0 && !isSessionsPaused)
+console.log('TOKEN_USAGE main_chat:', JSON.stringify(data.usage));
 ```
-Onde `isSessionsPaused` = `sessions_paused_until` existe e esta no futuro.
+Inserir registro na tabela `token_usage_logs`.
 
-**Processamento da tag (pos-resposta):**
-- Detectar `[PAUSAR_SESSOES data="YYYY-MM-DD"]` na resposta da IA
-- Validar a data (nao no passado, maximo 90 dias no futuro)
-- Atualizar o perfil: `needs_schedule_setup = false` e `sessions_paused_until = data`
+**Chamada de resumo de sessao (linha ~4052):** Mesma extracao de `usage` do `summaryData`.
 
-**Limpeza da tag:**
-- Adicionar regex de remocao em ambas as funcoes de limpeza (formatMessagesForAPI e splitIntoMessages)
+**Chamada de onboarding (linha ~4146):** Mesma extracao de `usage` do `onboardingData`.
 
-### 3. schedule-setup-reminder/index.ts
+**Chamada de topic extraction (linha ~4184):** Mesma extracao de `usage` do `topicData`.
 
-- Adicionar filtro `.or('sessions_paused_until.is.null,sessions_paused_until.lt.{hoje}')` nas queries de busca de usuarios
-- Adicionar logica de reativacao: buscar usuarios cuja `sessions_paused_until` ja passou, setar `needs_schedule_setup = true` e limpar `sessions_paused_until`
+### 3. Funcao auxiliar
 
-### 4. monthly-schedule-renewal/index.ts
+Criar uma funcao `logTokenUsage()` que recebe os parametros e faz o insert + console.log de forma padronizada, para nao repetir codigo em 4 lugares.
 
-- No reset mensal, limpar `sessions_paused_until` para todos os usuarios (o novo mes reseta tudo)
-- Manter comportamento atual de setar `needs_schedule_setup = true`
-
-## Fluxo esperado
-
-```text
-Usuario: "Sem sessoes esse mes"
-  |
-  v
-AURA: "Entendi! Te procuro em 01/03 pra organizar. Combinado?"
-  + [PAUSAR_SESSOES data="2026-03-01"]
-  |
-  v
-Backend: needs_schedule_setup = false
-         sessions_paused_until = 2026-03-01
-  |
-  v
-schedule-setup-reminder: ignora usuario (pausa ativa)
-  |
-  v
-01/03: monthly-schedule-renewal limpa pausa, reativa needs_schedule_setup
-  |
-  v
-AURA volta a oferecer agendamento naturalmente
-```
-
-```text
-Usuario: "Daqui a 3 dias a gente marca"
-  |
-  v
-AURA: "Combinado! Dia 25/02 te procuro. Ate la!"
-  + [PAUSAR_SESSOES data="2026-02-25"]
-  |
-  v
-Backend: needs_schedule_setup = false
-         sessions_paused_until = 2026-02-25
-  |
-  v
-25/02: schedule-setup-reminder detecta pausa expirada
-       -> reativa needs_schedule_setup = true
-       -> limpa sessions_paused_until
-  |
-  v
-Proxima conversa: AURA oferece agendamento
+```typescript
+async function logTokenUsage(
+  supabase: any,
+  userId: string | null,
+  callType: string,
+  model: string,
+  usage: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } | undefined
+) {
+  if (!usage) {
+    console.warn('No usage data in API response for', callType);
+    return;
+  }
+  console.log(`TOKEN_USAGE [${callType}]: prompt=${usage.prompt_tokens}, completion=${usage.completion_tokens}, total=${usage.total_tokens}`);
+  
+  await supabase.from('token_usage_logs').insert({
+    user_id: userId,
+    function_name: 'aura-agent',
+    call_type: callType,
+    model: model,
+    prompt_tokens: usage.prompt_tokens || 0,
+    completion_tokens: usage.completion_tokens || 0,
+    total_tokens: usage.total_tokens || 0,
+  });
+}
 ```
 
-## Detalhes tecnicos
+## O que NAO muda
+- Comportamento da AURA (zero impacto nas respostas)
+- Fluxo da conversa
+- Nenhuma dependencia nova
 
-| Arquivo | Tipo de mudanca |
-|---------|----------------|
-| Migracao SQL | ALTER TABLE profiles ADD COLUMN sessions_paused_until DATE; UPDATE perfil Eduardo |
-| aura-agent/index.ts | Prompt + condicional agenda + parsing tag + limpeza tag (4 pontos de alteracao) |
-| schedule-setup-reminder/index.ts | Filtro de pausa + logica de reativacao automatica |
-| monthly-schedule-renewal/index.ts | Limpar sessions_paused_until no reset mensal |
+## Como consultar os dados depois
+
+Exemplos de queries para analisar custos:
+
+```sql
+-- Media de tokens por tipo de chamada
+SELECT call_type, 
+  AVG(prompt_tokens) as avg_input, 
+  AVG(completion_tokens) as avg_output,
+  COUNT(*) as total_calls
+FROM token_usage_logs
+GROUP BY call_type;
+
+-- Custo estimado por usuario (ultimos 30 dias)
+SELECT user_id, 
+  SUM(prompt_tokens) as total_input,
+  SUM(completion_tokens) as total_output,
+  COUNT(*) as messages
+FROM token_usage_logs
+WHERE created_at > now() - interval '30 days'
+GROUP BY user_id
+ORDER BY total_input DESC;
+```
+
+## Resultado esperado
+Apos implementar, cada mensagem processada pelo aura-agent vai gerar logs com os tokens reais, permitindo calcular o custo exato por mensagem, por usuario e por tipo de chamada.
