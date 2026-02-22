@@ -1,80 +1,100 @@
 
 
-# Adicionar Verificacao de Conversa em Andamento e DND ao Relatorio Semanal
+# Anti-Burst por Instancia (por Numero WhatsApp)
 
-## Problema
+## Problema Atual
 
-O `weekly-report` envia para todos os usuarios ativos sem verificar:
-1. Se o usuario esta em modo "Nao Perturbe" (`do_not_disturb_until`)
-2. Se houve mensagem recente do usuario (conversa possivelmente em andamento)
+Hoje o `antiBurstDelay()` e global: o sistema processa usuarios em sequencia e espera 25-45 segundos entre **cada envio**, independente de qual numero WhatsApp esta enviando. Se o numero A envia para o usuario 1, o numero B fica parado esperando sem necessidade.
 
-Todas as outras automacoes (follow-up, check-in, conteudo periodico, reativacao) ja respeitam o DND, mas o relatorio semanal nao.
+Com 12 usuarios e 3 instancias, o tempo total hoje e ~6-9 minutos. Com a mudanca, cada instancia processa seus usuarios em paralelo, reduzindo para ~2-3 minutos.
 
-## Mudancas no arquivo `supabase/functions/weekly-report/index.ts`
+## Solucao
 
-### 1. Filtrar usuarios com DND na query inicial (linha 205-209)
+Agrupar os usuarios por instancia e processar cada grupo em paralelo, mantendo o delay de 25-45s apenas entre envios **do mesmo numero**.
 
-Adicionar filtro `.or()` na query de perfis para excluir usuarios com DND ativo, igual ao `scheduled-checkin` ja faz:
+## Mudancas
 
-```typescript
-const { data: profiles, error: profilesError } = await supabase
-  .from('profiles')
-  .select('*')
-  .eq('status', 'active')
-  .not('phone', 'is', null)
-  .or('do_not_disturb_until.is.null,do_not_disturb_until.lte.' + new Date().toISOString());
-```
+### 1. `instance-helper.ts` - Nova funcao `antiBurstDelayForInstance`
 
-### 2. Verificar conversa recente antes de enviar (dentro do loop, apos linha 220)
-
-Antes de gerar o relatorio de cada usuario, verificar se houve mensagem do usuario nos ultimos 10 minutos. Se sim, pular o envio para nao interromper uma conversa ativa:
+Criar uma funcao que gerencia delays por instancia usando um `Map` de timestamps do ultimo envio:
 
 ```typescript
-// Skip if user sent a message in the last 10 minutes (active conversation)
-const recentCutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-const { count: recentUserMessages } = await supabase
-  .from('messages')
-  .select('*', { count: 'exact', head: true })
-  .eq('user_id', profile.user_id)
-  .eq('role', 'user')
-  .gte('created_at', recentCutoff);
+const lastSendByInstance = new Map<string, number>();
 
-if ((recentUserMessages || 0) > 0) {
-  console.log(`💬 Skipping ${userName} - active conversation (message in last 10min)`);
-  continue;
-}
-```
+export async function antiBurstDelayForInstance(instanceId: string): Promise<void> {
+  const lastSend = lastSendByInstance.get(instanceId) || 0;
+  const elapsed = Date.now() - lastSend;
+  const minDelay = 25000 + Math.random() * 20000; // 25-45s
 
-### 3. Verificar sessao em andamento (junto com a verificacao acima)
-
-Tambem pular se o usuario tiver uma sessao ativa (`in_progress`):
-
-```typescript
-// Skip if user has an active session
-if (profile.current_session_id) {
-  const { data: activeSession } = await supabase
-    .from('sessions')
-    .select('status')
-    .eq('id', profile.current_session_id)
-    .eq('status', 'in_progress')
-    .maybeSingle();
-  
-  if (activeSession) {
-    console.log(`🧘 Skipping ${userName} - session in progress`);
-    continue;
+  if (elapsed < minDelay) {
+    const waitTime = minDelay - elapsed;
+    await new Promise(resolve => setTimeout(resolve, waitTime));
   }
+
+  lastSendByInstance.set(instanceId, Date.now());
 }
 ```
 
-## Resumo das verificacoes (em ordem)
+A funcao `antiBurstDelay()` original sera mantida para compatibilidade.
 
-1. **DND ativo** - filtrado na query (nem entra no loop)
-2. **Sessao em andamento** - skip no loop
-3. **Mensagem recente (10 min)** - skip no loop
+### 2. `instance-helper.ts` - Funcao helper para agrupar usuarios por instancia
+
+```typescript
+export async function groupUsersByInstance(supabase, profiles): Map<string, profile[]>
+```
+
+Agrupa usuarios pelo `whatsapp_instance_id`. Usuarios sem instancia vao para um grupo "default".
+
+### 3. Atualizar as 7 funcoes que usam anti-burst
+
+Em cada funcao (`weekly-report`, `scheduled-checkin`, `scheduled-followup`, `conversation-followup`, `periodic-content`, `session-reminder`, `reactivation-check`):
+
+- Agrupar usuarios por `whatsapp_instance_id`
+- Processar cada grupo em paralelo com `Promise.all`
+- Dentro de cada grupo, manter o loop sequencial com `antiBurstDelayForInstance(instanceId)`
+
+Exemplo da estrutura (aplicada em todas):
+
+```typescript
+// Agrupar por instancia
+const instanceGroups = new Map<string, typeof profiles>();
+for (const profile of profiles) {
+  const key = profile.whatsapp_instance_id || 'default';
+  if (!instanceGroups.has(key)) instanceGroups.set(key, []);
+  instanceGroups.get(key)!.push(profile);
+}
+
+// Processar cada instancia em paralelo
+await Promise.all(
+  Array.from(instanceGroups.entries()).map(async ([instanceId, groupProfiles]) => {
+    for (const profile of groupProfiles) {
+      // ... logica existente de processamento ...
+      await antiBurstDelayForInstance(instanceId);
+    }
+  })
+);
+```
+
+## Funcoes Afetadas (7 arquivos)
+
+1. `supabase/functions/_shared/instance-helper.ts` - novas funcoes
+2. `supabase/functions/weekly-report/index.ts`
+3. `supabase/functions/scheduled-checkin/index.ts`
+4. `supabase/functions/scheduled-followup/index.ts`
+5. `supabase/functions/conversation-followup/index.ts`
+6. `supabase/functions/periodic-content/index.ts`
+7. `supabase/functions/session-reminder/index.ts`
+8. `supabase/functions/reactivation-check/index.ts`
+
+## Ganho de Performance
+
+Com 3 instancias e 12 usuarios (4 por instancia):
+- **Antes**: ~12 x 35s = ~7 minutos sequencial
+- **Depois**: ~4 x 35s = ~2.3 minutos (3 grupos em paralelo)
 
 ## O que NAO muda
 
-- Formato do relatorio
-- Logica de metricas e analise de evolucao
-- Insercao na tabela `messages` e `weekly_plans`
-- Anti-burst delay
+- Delay de 25-45s entre envios do mesmo numero (seguranca mantida)
+- Toda logica de negocio (metricas, analise, DND, sessao ativa)
+- Formato das mensagens e relatorios
+
