@@ -191,7 +191,7 @@ function parseDateTimeFromText(text: string, referenceDate: Date): Date | null {
 }
 
 // Prompt oficial da AURA
-const AURA_SYSTEM_PROMPT = `# REGRA CRÍTICA DE DATA/HORA
+const AURA_STATIC_INSTRUCTIONS = `# REGRA CRÍTICA DE DATA/HORA
 
 - A data e hora ATUAIS serão fornecidas no contexto da conversa
 - NUNCA copie timestamps do histórico de mensagens para suas respostas
@@ -746,7 +746,7 @@ Usuário: conta algo profundo e revelador
 BOM (3-4 balões): observação certeira + conexão + pergunta
 
 ## CONTROLE DE TEMPO DA SESSÃO:
-{session_time_context}
+Consulte o bloco DADOS DINÂMICOS DO SISTEMA para informações de tempo e fase da sessão atual.
 
 ## FLUXO DE UPGRADE PARA SESSOES (USUARIOS DO PLANO ESSENCIAL)
 
@@ -995,9 +995,7 @@ Isso aumenta a taxa de retorno e engajamento do usuário.
 
 # CONTEXTO TEMPORAL (MUITO IMPORTANTE!)
 
-Data de hoje: {current_date}
-Hora atual: {current_time}
-Dia da semana: {current_weekday}
+Consulte o bloco DADOS DINÂMICOS DO SISTEMA para a data, hora e dia da semana atuais.
 
 Use essas informações para:
 - Entender quando o usuário diz "amanhã", "segunda", "semana que vem"
@@ -1032,8 +1030,7 @@ EXEMPLOS DE CÁLCULO DE DATA:
 # JORNADAS DE CONTEÚDO
 
 O usuário recebe conteúdos periódicos sobre temas de bem-estar (ansiedade, autoconfiança, etc).
-Jornada atual: {current_journey}
-Episódio atual: {current_episode}/{total_episodes}
+Consulte o bloco DADOS DINÂMICOS DO SISTEMA para informações da jornada e episódio atuais.
 
 QUANDO O USUÁRIO PERGUNTAR SOBRE JORNADAS:
 Se o usuário disser algo como "quero ver outras jornadas", "tem outros temas?", "quero mudar de jornada", "quais jornadas tem?":
@@ -1081,7 +1078,7 @@ Se o usuário disser algo como "sem sessões esse mês", "não quero sessões ag
    - "daqui a 2 semanas" → data atual + 14 dias
    - Se não especificar prazo, pergunte: "Tudo bem! Quando posso te procurar pra gente organizar?"
 
-2. Use a data ATUAL fornecida no contexto ({current_date}) para calcular a data exata no formato YYYY-MM-DD
+2. Use a data ATUAL fornecida no bloco DADOS DINÂMICOS DO SISTEMA para calcular a data exata no formato YYYY-MM-DD
 
 3. Confirme com o usuário a data de retomada:
    "Combinado! Te procuro no dia DD/MM pra gente organizar suas sessões. Até lá, fico aqui se precisar! 💜"
@@ -1123,14 +1120,7 @@ IMPORTANTE:
 - Responda de forma curta e acolhedora, sem textão
 
 # CONTEXTO DO USUÁRIO (MEMÓRIA ATUAL)
-Nome: {user_name}
-Plano: {user_plan}
-Sessões disponíveis este mês: {sessions_available}
-Mensagens hoje: {messages_today}
-Último check-in: {last_checkin}
-Compromissos pendentes: {pending_commitments}
-Histórico de conversas: {message_count} mensagens
-Em sessão especial: {session_active}
+Consulte o bloco DADOS DINÂMICOS DO SISTEMA para nome, plano, sessões, mensagens e estado atual do usuário.
 
 ## SOBRE SUA MEMÓRIA (IMPORTANTE!)
 Você tem acesso completo a:
@@ -1145,7 +1135,7 @@ Use TODAS essas informações para:
 - Identificar padrões ("Percebi que isso já é a terceira vez...")
 
 ## MEMÓRIA DE LONGO PRAZO (O que você já sabe sobre esse usuário):
-{user_insights}
+Consulte o bloco DADOS DINÂMICOS DO SISTEMA para os insights salvos sobre este usuário.
 
 ## TIMESTAMPS NAS MENSAGENS
 Cada mensagem no histórico inclui [DD/MM/AAAA HH:mm] no início.
@@ -1154,7 +1144,7 @@ Cada mensagem no histórico inclui [DD/MM/AAAA HH:mm] no início.
 - Se não tiver histórico suficiente, seja honesta e diga que não lembra
 
 ## REGRA DE ÁUDIO NO INÍCIO DE SESSÃO:
-{audio_session_context}
+Consulte o bloco DADOS DINÂMICOS DO SISTEMA para a regra de áudio aplicável.
 `;
 
 // Função para calcular delay baseado no tamanho da mensagem
@@ -3069,24 +3059,37 @@ As primeiras 2 respostas de cada sessão DEVEM ser em áudio para maior intimida
       }
     }
 
-    const contextualPrompt = AURA_SYSTEM_PROMPT
-      .replace('{current_date}', dateTimeContext.currentDate)
-      .replace('{current_time}', dateTimeContext.currentTime)
-      .replace('{current_weekday}', dateTimeContext.currentWeekday)
-      .replace('{user_name}', profile?.name || 'Ainda não sei o nome')
-      .replace('{user_plan}', userPlan)
-      .replace('{sessions_available}', String(sessionsAvailable))
-      .replace('{messages_today}', String(messagesToday))
-      .replace('{last_checkin}', lastCheckin)
-      .replace('{pending_commitments}', pendingCommitments)
-      .replace('{message_count}', String(messageCount))
-      .replace('{session_active}', sessionActive ? 'Sim - MODO SESSÃO ATIVO' : 'Não')
-      .replace('{session_time_context}', sessionTimeInfoStr)
-      .replace('{user_insights}', formatInsightsForContext(userInsights))
-      .replace('{audio_session_context}', audioSessionContext)
-      .replace('{current_journey}', currentJourneyInfo)
-      .replace('{current_episode}', currentEpisodeInfo)
-      .replace('{total_episodes}', totalEpisodesInfo);
+    // Construir bloco de contexto dinâmico (separado do template estático para cache implícito do Gemini)
+    let dynamicContext = `# DADOS DINÂMICOS DO SISTEMA
+
+## Contexto Temporal
+- Data de hoje: ${dateTimeContext.currentDate}
+- Hora atual: ${dateTimeContext.currentTime}
+- Dia da semana: ${dateTimeContext.currentWeekday}
+
+## Dados do Usuário
+- Nome: ${profile?.name || 'Ainda não sei o nome'}
+- Plano: ${userPlan}
+- Sessões disponíveis este mês: ${sessionsAvailable}
+- Mensagens hoje: ${messagesToday}
+- Último check-in: ${lastCheckin}
+- Compromissos pendentes: ${pendingCommitments}
+- Histórico de conversas: ${messageCount} mensagens
+- Em sessão especial: ${sessionActive ? 'Sim - MODO SESSÃO ATIVO' : 'Não'}
+
+## Controle de Tempo da Sessão
+${sessionTimeInfoStr}
+
+## Jornada de Conteúdo
+- Jornada atual: ${currentJourneyInfo}
+- Episódio atual: ${currentEpisodeInfo}/${totalEpisodesInfo}
+
+## Regra de Áudio
+${audioSessionContext}
+
+## Memória de Longo Prazo
+${formatInsightsForContext(userInsights)}
+`;
 
     // Adicionar contexto de sessões anteriores e primeira sessão
     let continuityContext = '';
@@ -3177,8 +3180,8 @@ As primeiras 2 respostas de cada sessão DEVEM ser em áudio para maior intimida
       }
     }
 
-    // Adicionar instrução de upgrade se necessário
-    let finalPrompt = contextualPrompt + continuityContext;
+    // Adicionar contextos condicionais ao bloco dinâmico
+    dynamicContext += continuityContext;
     
     // Contexto de TRIAL GRATUITO
     if (trial_count !== null && trial_count !== undefined) {
@@ -3186,7 +3189,7 @@ As primeiras 2 respostas de cada sessão DEVEM ser em áudio para maior intimida
       
       if (trial_count === 4) {
         // 4ª conversa - lembrete gentil
-        finalPrompt += `\n\n💫 CONTEXTO DE TRIAL (LEMBRETE GENTIL):
+        dynamicContext += `\n\n💫 CONTEXTO DE TRIAL (LEMBRETE GENTIL):
 Esta é a 4ª conversa do trial gratuito de ${profile?.name || 'o usuário'}.
 Ele ainda tem ${remaining} conversa(s) grátis.
 
@@ -3196,7 +3199,7 @@ INSTRUÇÃO: No final NATURAL da sua resposta, mencione de forma gentil que rest
 - Continue a conversa normalmente, este aviso vem NO FINAL`;
       } else if (trial_count === 5) {
         // 5ª conversa - última, convite para assinar
-        finalPrompt += `\n\n💜 CONTEXTO DE TRIAL (ÚLTIMA CONVERSA):
+        dynamicContext += `\n\n💜 CONTEXTO DE TRIAL (ÚLTIMA CONVERSA):
 Esta é a ÚLTIMA conversa do trial gratuito de ${profile?.name || 'o usuário'}!
 
 INSTRUÇÃO: Ao final da sua resposta, faça um convite carinhoso para continuar:
@@ -3206,7 +3209,7 @@ INSTRUÇÃO: Ao final da sua resposta, faça um convite carinhoso para continuar
 - Seja genuína, não comercial demais`;
       } else if (trial_count <= 3) {
         // Conversas 1-3: apenas informar internamente, sem mencionar
-        finalPrompt += `\n\n(Nota interna: Esta é a conversa ${trial_count}/5 do trial gratuito. Não precisa mencionar isso ao usuário ainda.)`;
+        dynamicContext += `\n\n(Nota interna: Esta é a conversa ${trial_count}/5 do trial gratuito. Não precisa mencionar isso ao usuário ainda.)`;
       }
     }
 
@@ -3233,7 +3236,7 @@ INSTRUÇÃO: Ao final da sua resposta, faça um convite carinhoso para continuar
         behaviorInstruction = `Passaram-se algumas horas. NAO retome o assunto anterior como se fosse continuacao imediata. Pergunte como o usuario esta AGORA.`;
       }
 
-      finalPrompt += `\n\n⏰ CONTEXTO TEMPORAL (CALCULADO PELO SISTEMA - SIGA OBRIGATORIAMENTE):
+      dynamicContext += `\n\n⏰ CONTEXTO TEMPORAL (CALCULADO PELO SISTEMA - SIGA OBRIGATORIAMENTE):
 Ultima mensagem do usuario foi ha ${gapDescription}.
 REGRA: ${behaviorInstruction}`;
       
@@ -3296,12 +3299,12 @@ REGRA: ${behaviorInstruction}`;
 
       agendaBlock += `\nREGRA: Use esses dados para contextualizar a conversa. NAO invente datas ou horarios. Se o usuario perguntar sobre a agenda, use EXATAMENTE esses dados.`;
 
-      finalPrompt += agendaBlock;
+      dynamicContext += agendaBlock;
       console.log(`📅 Agenda context injected: ${upcomingSessions.length} upcoming sessions, next in ${hoursUntilNext.toFixed(1)}h`);
     }
 
     // ========================================================================
-    // CONTROLE DE SESSÃO - Reforço determinístico de fase no finalPrompt
+    // CONTROLE DE SESSÃO - Reforço determinístico de fase no dynamicContext
     // ========================================================================
     if (sessionActive && currentSession?.started_at) {
       const phaseInfo = calculateSessionTimeContext(currentSession);
@@ -3331,7 +3334,7 @@ REGRA: ${behaviorInstruction}`;
         phaseBlock += `\n⏰ TEMPO ESGOTADO. Finalize IMEDIATAMENTE com [ENCERRAR_SESSAO].`;
       }
 
-      finalPrompt += phaseBlock;
+      dynamicContext += phaseBlock;
       console.log(`⏱️ Session phase reinforcement: ${phaseInfo.phase}, ${elapsed}min elapsed, ${phaseInfo.timeRemaining}min remaining`);
     }
 
@@ -3341,7 +3344,7 @@ REGRA: ${behaviorInstruction}`;
     if (pending_content && pending_content.trim()) {
       console.log(`📦 Processing pending content from interrupted response (${pending_content.length} chars)`);
       
-      finalPrompt += `\n\n📦 CONTEXTO DE INTERRUPÇÃO:
+      dynamicContext += `\n\n📦 CONTEXTO DE INTERRUPÇÃO:
 Você foi INTERROMPIDA no meio de uma resposta anterior. O usuário mandou uma mensagem nova enquanto você estava digitando.
 
 CONTEÚDO QUE VOCÊ IA ENVIAR (mas não enviou):
@@ -3366,13 +3369,13 @@ Exemplo natural:
     }
     
     if (shouldSuggestUpgrade) {
-      finalPrompt += `\n\n⚠️ INSTRUÇÃO ESPECIAL: O usuário já mandou ${messagesToday} mensagens hoje. Sugira naturalmente o upgrade para o plano Direção no final da sua resposta.`;
+      dynamicContext += `\n\n⚠️ INSTRUÇÃO ESPECIAL: O usuário já mandou ${messagesToday} mensagens hoje. Sugira naturalmente o upgrade para o plano Direção no final da sua resposta.`;
     }
 
     // INSTRUÇÃO DE PRIORIDADE DE PLANO (evita conflito com histórico)
     // Se o usuário tem sessões disponíveis, garantir que a IA não peça upgrade
     if (planConfig.sessions > 0 && sessionsAvailable > 0) {
-      finalPrompt += `
+      dynamicContext += `
 
 🟢 CONFIRMAÇÃO DE PLANO ATUAL (PRIORIDADE MÁXIMA - IGNORE HISTÓRICO CONFLITANTE):
 O usuário ${profile?.name || ''} está no plano "${userPlan}" com ${sessionsAvailable} sessão(ões) disponível(is).
@@ -3397,7 +3400,7 @@ Se o usuário mencionar algo sobre "finalizar checkout" ou "upgrade", CONFIRME q
 
     if (profile?.needs_schedule_setup && planConfig.sessions > 0 && !isSessionsPaused) {
       const sessionsCount = planConfig.sessions;
-      finalPrompt += `
+      dynamicContext += `
 
 # 📅 CONFIGURAÇÃO DE AGENDA DO MÊS (ATIVO!)
 
@@ -3451,7 +3454,7 @@ Exemplo com 4 sessões:
     if (shouldEndSession) {
       const implicitEnd = detectsImplicitSessionEnd(message, sessionActive);
       if (implicitEnd) {
-        finalPrompt += `\n\n🔴 ENCERRAMENTO IMPLÍCITO DETECTADO: O usuário deu sinais de satisfação/conclusão (ex: "combinado", "obrigado").
+        dynamicContext += `\n\n🔴 ENCERRAMENTO IMPLÍCITO DETECTADO: O usuário deu sinais de satisfação/conclusão (ex: "combinado", "obrigado").
 INSTRUÇÃO: Faça um fechamento CALOROSO da sessão:
 1. Reconheça que vocês tiveram uma boa conversa
 2. Resuma os 2-3 principais insights/aprendizados
@@ -3461,12 +3464,13 @@ INSTRUÇÃO: Faça um fechamento CALOROSO da sessão:
 6. Use [MODO_AUDIO] para encerrar de forma mais íntima
 7. Inclua [ENCERRAR_SESSAO] no final da sua resposta`;
       } else {
-        finalPrompt += `\n\n🔴 INSTRUÇÃO CRÍTICA: ENCERRE A SESSÃO AGORA. Faça um breve resumo dos principais pontos discutidos, agradeça pelo tempo juntos e inclua a tag [ENCERRAR_SESSAO] no final.`;
+        dynamicContext += `\n\n🔴 INSTRUÇÃO CRÍTICA: ENCERRE A SESSÃO AGORA. Faça um breve resumo dos principais pontos discutidos, agradeça pelo tempo juntos e inclua a tag [ENCERRAR_SESSAO] no final.`;
       }
     }
 
     const apiMessages = [
-      { role: "system", content: finalPrompt },
+      { role: "system", content: AURA_STATIC_INSTRUCTIONS },
+      { role: "system", content: dynamicContext },
       ...messageHistory,
       { role: "user", content: message }
     ];
