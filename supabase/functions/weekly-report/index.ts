@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendTextMessage, cleanPhoneNumber } from "../_shared/zapi-client.ts";
-import { getInstanceConfigForUser, antiBurstDelay } from "../_shared/instance-helper.ts";
+import { getInstanceConfigForUser, antiBurstDelayForInstance, groupByInstance } from "../_shared/instance-helper.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -217,105 +217,112 @@ Deno.serve(async (req) => {
 
     let sentCount = 0;
 
-    for (const profile of profiles || []) {
-      try {
-        const userName = profile.name?.split(' ')[0] || 'usuário';
+    // Group by WhatsApp instance for parallel processing
+    const instanceGroups = groupByInstance(profiles || []);
 
-        // Skip if user has an active session
-        if (profile.current_session_id) {
-          const { data: activeSession } = await supabase
-            .from('sessions')
-            .select('status')
-            .eq('id', profile.current_session_id)
-            .eq('status', 'in_progress')
-            .maybeSingle();
-          
-          if (activeSession) {
-            console.log(`🧘 Skipping ${userName} - session in progress`);
-            continue;
+    await Promise.all(
+      Array.from(instanceGroups.entries()).map(async ([instanceId, groupProfiles]) => {
+        for (const profile of groupProfiles) {
+          try {
+            const userName = profile.name?.split(' ')[0] || 'usuário';
+
+            // Skip if user has an active session
+            if (profile.current_session_id) {
+              const { data: activeSession } = await supabase
+                .from('sessions')
+                .select('status')
+                .eq('id', profile.current_session_id)
+                .eq('status', 'in_progress')
+                .maybeSingle();
+              
+              if (activeSession) {
+                console.log(`🧘 Skipping ${userName} - session in progress`);
+                continue;
+              }
+            }
+
+            // Skip if user sent a message in the last 10 minutes (active conversation)
+            const recentCutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+            const { count: recentUserMessages } = await supabase
+              .from('messages')
+              .select('*', { count: 'exact', head: true })
+              .eq('user_id', profile.user_id)
+              .eq('role', 'user')
+              .gte('created_at', recentCutoff);
+
+            if ((recentUserMessages || 0) > 0) {
+              console.log(`💬 Skipping ${userName} - active conversation (message in last 10min)`);
+              continue;
+            }
+            
+            console.log(`📊 Fetching metrics for ${userName}...`);
+            const metrics = await fetchUserMetrics(
+              supabase,
+              profile.user_id,
+              weekStart,
+              profile.current_journey_id,
+              profile.current_episode,
+              profile.journeys_completed
+            );
+            
+            console.log(`📈 Metrics for ${userName}: ${metrics.totalMessages} msgs, ${metrics.insightsCount} insights, ${metrics.sessionsCount} sessions`);
+
+            const { data: weekMsgs } = await supabase
+              .from('messages')
+              .select('*')
+              .eq('user_id', profile.user_id)
+              .gte('created_at', weekStart.toISOString())
+              .order('created_at', { ascending: true });
+
+            console.log(`🧠 Analyzing ${weekMsgs?.length || 0} messages for ${userName}...`);
+            
+            const evolutionAnalysis = await analyzeWeekConversations(
+              weekMsgs || [],
+              userName
+            );
+            
+            if (evolutionAnalysis) {
+              console.log(`✅ Evolution analysis generated for ${userName}`);
+            }
+
+            const report = generateWeeklyReport(profile, evolutionAnalysis, metrics);
+
+            // Get instance config for this user
+            const zapiConfig = await getInstanceConfigForUser(supabase, profile.user_id);
+
+            const cleanPhone = cleanPhoneNumber(profile.phone);
+            const result = await sendTextMessage(cleanPhone, report, undefined, zapiConfig);
+
+            if (result.success) {
+              console.log(`✅ Report sent to ${profile.name} (${profile.phone})`);
+              sentCount++;
+
+              await supabase.from('messages').insert({
+                user_id: profile.user_id,
+                role: 'assistant',
+                content: report,
+              });
+
+              await supabase.from('weekly_plans').upsert({
+                user_id: profile.user_id,
+                week_start: weekStart.toISOString().split('T')[0],
+                reflections: evolutionAnalysis || `Relatório enviado em ${now.toISOString()}`,
+              }, {
+                onConflict: 'user_id,week_start'
+              });
+            } else {
+              console.error(`❌ Failed to send report to ${profile.phone}: ${result.error}`);
+            }
+
+            // Per-instance anti-burst delay
+            await antiBurstDelayForInstance(instanceId);
+
+          } catch (userError) {
+            console.error(`❌ Error processing user ${profile.user_id}:`, userError);
           }
         }
-
-        // Skip if user sent a message in the last 10 minutes (active conversation)
-        const recentCutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-        const { count: recentUserMessages } = await supabase
-          .from('messages')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', profile.user_id)
-          .eq('role', 'user')
-          .gte('created_at', recentCutoff);
-
-        if ((recentUserMessages || 0) > 0) {
-          console.log(`💬 Skipping ${userName} - active conversation (message in last 10min)`);
-          continue;
-        }
-        
-        console.log(`📊 Fetching metrics for ${userName}...`);
-        const metrics = await fetchUserMetrics(
-          supabase,
-          profile.user_id,
-          weekStart,
-          profile.current_journey_id,
-          profile.current_episode,
-          profile.journeys_completed
-        );
-        
-        console.log(`📈 Metrics for ${userName}: ${metrics.totalMessages} msgs, ${metrics.insightsCount} insights, ${metrics.sessionsCount} sessions`);
-
-        const { data: weekMessages } = await supabase
-          .from('messages')
-          .select('*')
-          .eq('user_id', profile.user_id)
-          .gte('created_at', weekStart.toISOString())
-          .order('created_at', { ascending: true });
-
-        console.log(`🧠 Analyzing ${weekMessages?.length || 0} messages for ${userName}...`);
-        
-        const evolutionAnalysis = await analyzeWeekConversations(
-          weekMessages || [],
-          userName
-        );
-        
-        if (evolutionAnalysis) {
-          console.log(`✅ Evolution analysis generated for ${userName}`);
-        }
-
-        const report = generateWeeklyReport(profile, evolutionAnalysis, metrics);
-
-        // Get instance config for this user
-        const zapiConfig = await getInstanceConfigForUser(supabase, profile.user_id);
-
-        const cleanPhone = cleanPhoneNumber(profile.phone);
-        const result = await sendTextMessage(cleanPhone, report, undefined, zapiConfig);
-
-        if (result.success) {
-          console.log(`✅ Report sent to ${profile.name} (${profile.phone})`);
-          sentCount++;
-
-          await supabase.from('messages').insert({
-            user_id: profile.user_id,
-            role: 'assistant',
-            content: report,
-          });
-
-          await supabase.from('weekly_plans').upsert({
-            user_id: profile.user_id,
-            week_start: weekStart.toISOString().split('T')[0],
-            reflections: evolutionAnalysis || `Relatório enviado em ${now.toISOString()}`,
-          }, {
-            onConflict: 'user_id,week_start'
-          });
-        } else {
-          console.error(`❌ Failed to send report to ${profile.phone}: ${result.error}`);
-        }
-
-        // Anti-burst delay between sends
-        await antiBurstDelay();
-
-      } catch (userError) {
-        console.error(`❌ Error processing user ${profile.user_id}:`, userError);
-      }
-    }
+      })
+    );
 
     console.log(`📊 Weekly reports complete: ${sentCount}/${profiles?.length || 0} sent`);
 

@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendTextMessage, cleanPhoneNumber } from "../_shared/zapi-client.ts";
-import { getInstanceConfigForUser, antiBurstDelay } from "../_shared/instance-helper.ts";
+import { getInstanceConfigForUser, antiBurstDelayForInstance, groupByInstance } from "../_shared/instance-helper.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -69,51 +69,58 @@ Deno.serve(async (req) => {
 
     let sentCount = 0;
 
-    for (const profile of profiles || []) {
-      try {
-        const { data: lastCheckin } = await supabase
-          .from('checkins')
-          .select('*')
-          .eq('user_id', profile.user_id)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .single();
+    // Group by WhatsApp instance for parallel processing
+    const instanceGroups = groupByInstance(profiles || []);
 
-        const { data: pendingCommitments } = await supabase
-          .from('commitments')
-          .select('*')
-          .eq('user_id', profile.user_id)
-          .eq('completed', false)
-          .order('due_date', { ascending: true });
+    await Promise.all(
+      Array.from(instanceGroups.entries()).map(async ([instanceId, groupProfiles]) => {
+        for (const profile of groupProfiles) {
+          try {
+            const { data: lastCheckin } = await supabase
+              .from('checkins')
+              .select('*')
+              .eq('user_id', profile.user_id)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .single();
 
-        const message = getCheckinMessage(profile, lastCheckin, pendingCommitments || []);
+            const { data: pendingCommitments } = await supabase
+              .from('commitments')
+              .select('*')
+              .eq('user_id', profile.user_id)
+              .eq('completed', false)
+              .order('due_date', { ascending: true });
 
-        // Get instance config for this user
-        const zapiConfig = await getInstanceConfigForUser(supabase, profile.user_id);
+            const message = getCheckinMessage(profile, lastCheckin, pendingCommitments || []);
 
-        const cleanPhone = cleanPhoneNumber(profile.phone);
-        const result = await sendTextMessage(cleanPhone, message, undefined, zapiConfig);
+            // Get instance config for this user
+            const zapiConfig = await getInstanceConfigForUser(supabase, profile.user_id);
 
-        if (result.success) {
-          console.log(`✅ Check-in sent to ${profile.name} (${profile.phone})`);
-          sentCount++;
+            const cleanPhone = cleanPhoneNumber(profile.phone);
+            const result = await sendTextMessage(cleanPhone, message, undefined, zapiConfig);
 
-          await supabase.from('messages').insert({
-            user_id: profile.user_id,
-            role: 'assistant',
-            content: message,
-          });
-        } else {
-          console.error(`❌ Failed to send to ${profile.phone}: ${result.error}`);
+            if (result.success) {
+              console.log(`✅ Check-in sent to ${profile.name} (${profile.phone})`);
+              sentCount++;
+
+              await supabase.from('messages').insert({
+                user_id: profile.user_id,
+                role: 'assistant',
+                content: message,
+              });
+            } else {
+              console.error(`❌ Failed to send to ${profile.phone}: ${result.error}`);
+            }
+
+            // Per-instance anti-burst delay
+            await antiBurstDelayForInstance(instanceId);
+
+          } catch (userError) {
+            console.error(`❌ Error processing user ${profile.user_id}:`, userError);
+          }
         }
-
-        // Anti-burst delay between sends
-        await antiBurstDelay();
-
-      } catch (userError) {
-        console.error(`❌ Error processing user ${profile.user_id}:`, userError);
-      }
-    }
+      })
+    );
 
     console.log(`📊 Check-in complete: ${sentCount}/${profiles?.length || 0} messages sent`);
 

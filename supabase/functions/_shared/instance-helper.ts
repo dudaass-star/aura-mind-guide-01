@@ -150,10 +150,59 @@ export async function allocateInstance(supabase: any): Promise<string | null> {
 /**
  * Wait a random delay between 25-45 seconds to prevent burst sending.
  * Use between each message in batch/scheduled functions.
+ * @deprecated Use antiBurstDelayForInstance() for per-instance delays
  */
 export async function antiBurstDelay(): Promise<void> {
   const delay = 25000 + Math.random() * 20000; // 25-45 seconds
   const seconds = (delay / 1000).toFixed(1);
   console.log(`⏳ [Anti-burst] Waiting ${seconds}s before next send...`);
   await new Promise(resolve => setTimeout(resolve, delay));
+}
+
+// ============================================================================
+// PER-INSTANCE ANTI-BURST DELAY
+// ============================================================================
+
+const lastSendByInstance = new Map<string, number>();
+
+/**
+ * Per-instance anti-burst delay. Only waits if the SAME instance
+ * sent a message too recently. Different instances can send in parallel.
+ */
+export async function antiBurstDelayForInstance(instanceId: string): Promise<void> {
+  const lastSend = lastSendByInstance.get(instanceId) || 0;
+  const elapsed = Date.now() - lastSend;
+  const minDelay = 25000 + Math.random() * 20000; // 25-45 seconds
+
+  if (elapsed < minDelay) {
+    const waitTime = minDelay - elapsed;
+    const seconds = (waitTime / 1000).toFixed(1);
+    const shortId = instanceId.length > 8 ? instanceId.substring(0, 8) : instanceId;
+    console.log(`⏳ [Anti-burst/${shortId}] Waiting ${seconds}s before next send...`);
+    await new Promise(resolve => setTimeout(resolve, waitTime));
+  }
+
+  lastSendByInstance.set(instanceId, Date.now());
+}
+
+// ============================================================================
+// GROUP ITEMS BY WHATSAPP INSTANCE
+// ============================================================================
+
+/**
+ * Group an array of items by their whatsapp_instance_id field.
+ * Items without an instance go to the 'default' group.
+ */
+export function groupByInstance<T extends Record<string, any>>(
+  items: T[],
+  keyField: string = 'whatsapp_instance_id'
+): Map<string, T[]> {
+  const groups = new Map<string, T[]>();
+  for (const item of items) {
+    const key = item[keyField] || 'default';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(item);
+  }
+  console.log(`📡 Grouped ${items.length} items into ${groups.size} instance group(s): ${Array.from(groups.entries()).map(([k, v]) => `${k.substring(0, 8)}(${v.length})`).join(', ')}`);
+  return groups;
 }
