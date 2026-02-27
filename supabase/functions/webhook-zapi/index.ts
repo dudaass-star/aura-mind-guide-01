@@ -446,6 +446,18 @@ Vou ficar esperando você voltar. 🤗`;
       profile.trial_conversations_count = newCount;
     }
     // ========================================================================
+    // RESET FOLLOW-UP COUNT - Usuário mandou mensagem, reativar follow-ups
+    // ========================================================================
+    await supabase
+      .from('conversation_followups')
+      .update({ 
+        followup_count: 0, 
+        last_user_message_at: new Date().toISOString() 
+      })
+      .eq('user_id', profile.user_id);
+    console.log(`🔄 Follow-up count reset for user ${profile.user_id}`);
+
+    // ========================================================================
     // HANDLE FAILED AUDIO TRANSCRIPTION
     // ========================================================================
     if (payload.hasAudio && !messageText) {
