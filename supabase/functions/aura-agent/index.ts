@@ -425,13 +425,9 @@ CERTO: [MODO_AUDIO] Oi! Posso te ajudar a organizar sua semana, acompanhar seu h
 
 Você tem uma BIBLIOTECA de meditações guiadas com áudio profissional pré-gravado. Quando o usuário pedir uma meditação ou a situação indicar que seria útil, use a tag correspondente.
 
-**Categorias disponíveis:**
-- \`[MEDITACAO:sono]\` - Relaxamento para Dormir (dificuldade para dormir, insônia, mente acelerada à noite)
-- \`[MEDITACAO:ansiedade]\` - Acalmando a Tempestade (ansiedade, nervosismo, coração acelerado)
-- \`[MEDITACAO:estresse]\` - Relaxamento Muscular Progressivo (estresse, tensão, corpo travado)
-- \`[MEDITACAO:foco]\` - Clareza Mental (falta de foco, mente dispersa, procrastinação)
-- \`[MEDITACAO:respiracao]\` - Respiração 4-7-8 (precisa acalmar rápido, respiração curta)
-- \`[MEDITACAO:gratidao]\` - Olhar de Gratidão (reflexão, encerramento de dia, momento positivo)
+As categorias disponíveis serão listadas no CONTEXTO DINÂMICO abaixo. Use APENAS as categorias listadas lá.
+
+**REGRA CRÍTICA:** Se o usuário PEDIR meditação explicitamente (ex: "me manda uma meditação", "quero meditar", "meditação pra dormir"), você DEVE incluir a tag [MEDITACAO:categoria]. NUNCA responda sobre meditação sem a tag. Sem a tag, o áudio NÃO será enviado.
 
 **Como usar:**
 - Inclua a tag NO FINAL da sua mensagem de introdução
@@ -3059,6 +3055,38 @@ As primeiras 2 respostas de cada sessão DEVEM ser em áudio para maior intimida
       }
     }
 
+    // ========================================================================
+    // CATÁLOGO DINÂMICO DE MEDITAÇÕES (carregado do banco)
+    // ========================================================================
+    const { data: availableMeditations } = await supabase
+      .from('meditations')
+      .select('category, title, best_for, triggers')
+      .eq('is_active', true);
+
+    const meditationCatalog = new Map<string, { titles: string[], triggers: string[], best_for: string[] }>();
+    for (const m of availableMeditations || []) {
+      if (!meditationCatalog.has(m.category)) {
+        meditationCatalog.set(m.category, { titles: [], triggers: [], best_for: [] });
+      }
+      const entry = meditationCatalog.get(m.category)!;
+      entry.titles.push(m.title);
+      if (m.triggers) entry.triggers.push(...m.triggers);
+      if (m.best_for) entry.best_for.push(m.best_for);
+    }
+
+    let meditationCatalogSection = `\n## Meditações Disponíveis (Biblioteca Pré-Gravada)\n\n`;
+    meditationCatalogSection += `**Categorias disponíveis:**\n`;
+    for (const [category, info] of meditationCatalog) {
+      const triggersText = info.triggers.length > 0 ? ` (${info.triggers.join(', ')})` : '';
+      const bestForText = info.best_for.length > 0 ? ` — Melhor para: ${info.best_for.join(', ')}` : '';
+      meditationCatalogSection += `- \`[MEDITACAO:${category}]\` - ${info.titles[0]}${triggersText}${bestForText}\n`;
+    }
+    if (meditationCatalog.size === 0) {
+      meditationCatalogSection += `- Nenhuma meditação disponível no momento\n`;
+    }
+
+    console.log(`🧘 Meditation catalog loaded: ${meditationCatalog.size} categories`);
+
     // Construir bloco de contexto dinâmico (separado do template estático para cache implícito do Gemini)
     let dynamicContext = `# DADOS DINÂMICOS DO SISTEMA
 
@@ -3089,6 +3117,7 @@ ${audioSessionContext}
 
 ## Memória de Longo Prazo
 ${formatInsightsForContext(userInsights)}
+${meditationCatalogSection}
 `;
 
     // Adicionar contexto de sessões anteriores e primeira sessão
@@ -4471,7 +4500,62 @@ Estou aqui sempre que precisar! 💜`;
       });
     }
 
-    // Separar em múltiplos balões PRIMEIRO para verificar se terá áudio
+    // ========================================================================
+    // FALLBACK: Se usuário pediu meditação mas LLM esqueceu a tag
+    // ========================================================================
+    if (!meditationMatch && (profile?.user_id || userPhone)) {
+      const userLower = message.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const meditationKeywords = ['meditacao', 'meditar', 'meditando', 'meditation', 'medita pra', 'medita para'];
+      const userAskedMeditation = meditationKeywords.some(k => userLower.includes(k));
+      
+      if (userAskedMeditation) {
+        // Inferir categoria usando triggers do catálogo dinâmico
+        let fallbackCategory = 'respiracao'; // default
+        
+        // Tentar match com triggers do catálogo
+        for (const [category, info] of meditationCatalog) {
+          const allTriggers = info.triggers.map(t => t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
+          if (allTriggers.some(t => userLower.includes(t))) {
+            fallbackCategory = category;
+            break;
+          }
+        }
+        
+        // Fallback por keywords genéricos se triggers não matcharam
+        if (fallbackCategory === 'respiracao') {
+          if (userLower.match(/dorm|sono|insonia|noite/)) fallbackCategory = 'sono';
+          else if (userLower.match(/ansie|nervos|panico/)) fallbackCategory = 'ansiedade';
+          else if (userLower.match(/estress|tens|press/)) fallbackCategory = 'estresse';
+          else if (userLower.match(/foco|concentr|dispers/)) fallbackCategory = 'foco';
+          else if (userLower.match(/gratid|agrade/)) fallbackCategory = 'gratidao';
+        }
+        
+        console.log(`⚠️ FALLBACK: User asked for meditation but LLM forgot tag. Using [MEDITACAO:${fallbackCategory}]`);
+        
+        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+        const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+        
+        fetch(`${supabaseUrl}/functions/v1/send-meditation`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseServiceKey}`,
+          },
+          body: JSON.stringify({
+            category: fallbackCategory,
+            user_id: profile?.user_id || null,
+            phone: userPhone,
+            context: `aura-agent-fallback`,
+          }),
+        }).then(res => {
+          console.log(`🧘 FALLBACK send-meditation response: ${res.status}`);
+        }).catch(err => {
+          console.error(`🧘 FALLBACK send-meditation error:`, err);
+        });
+      }
+    }
+
+
     const messageChunks = splitIntoMessages(assistantMessage, allowAudioThisTurn);
     const hasAudioInResponse = messageChunks.some(m => m.isAudio);
     
