@@ -1,100 +1,73 @@
 
 
-# Anti-Burst por Instancia (por Numero WhatsApp)
+# Catalogo Dinamico de Meditacoes no aura-agent
 
-## Problema Atual
+## Problema
 
-Hoje o `antiBurstDelay()` e global: o sistema processa usuarios em sequencia e espera 25-45 segundos entre **cada envio**, independente de qual numero WhatsApp esta enviando. Se o numero A envia para o usuario 1, o numero B fica parado esperando sem necessidade.
-
-Com 12 usuarios e 3 instancias, o tempo total hoje e ~6-9 minutos. Com a mudanca, cada instancia processa seus usuarios em paralelo, reduzindo para ~2-3 minutos.
+As categorias de meditacao estao hardcoded no prompt (linhas 428-434). Cada nova meditacao adicionada ao banco exige editar manualmente o prompt do agente.
 
 ## Solucao
 
-Agrupar os usuarios por instancia e processar cada grupo em paralelo, mantendo o delay de 25-45s apenas entre envios **do mesmo numero**.
+Carregar as categorias disponiveis do banco de dados em runtime e injetar no prompt dinamicamente.
 
-## Mudancas
+## Mudancas em `supabase/functions/aura-agent/index.ts`
 
-### 1. `instance-helper.ts` - Nova funcao `antiBurstDelayForInstance`
+### 1. Buscar categorias do banco antes de montar o prompt
 
-Criar uma funcao que gerencia delays por instancia usando um `Map` de timestamps do ultimo envio:
+No inicio do processamento (antes de montar o system prompt), consultar a tabela `meditations`:
 
 ```typescript
-const lastSendByInstance = new Map<string, number>();
+const { data: availableMeditations } = await supabase
+  .from('meditations')
+  .select('category, title, best_for, triggers')
+  .eq('is_active', true);
 
-export async function antiBurstDelayForInstance(instanceId: string): Promise<void> {
-  const lastSend = lastSendByInstance.get(instanceId) || 0;
-  const elapsed = Date.now() - lastSend;
-  const minDelay = 25000 + Math.random() * 20000; // 25-45s
-
-  if (elapsed < minDelay) {
-    const waitTime = minDelay - elapsed;
-    await new Promise(resolve => setTimeout(resolve, waitTime));
+// Agrupar por categoria
+const meditationCatalog = new Map<string, { titles: string[], triggers: string[], best_for: string[] }>();
+for (const m of availableMeditations || []) {
+  if (!meditationCatalog.has(m.category)) {
+    meditationCatalog.set(m.category, { titles: [], triggers: [], best_for: [] });
   }
-
-  lastSendByInstance.set(instanceId, Date.now());
+  const entry = meditationCatalog.get(m.category)!;
+  entry.titles.push(m.title);
+  if (m.triggers) entry.triggers.push(...m.triggers);
+  if (m.best_for) entry.best_for.push(m.best_for);
 }
 ```
 
-A funcao `antiBurstDelay()` original sera mantida para compatibilidade.
+### 2. Gerar a secao de meditacoes dinamicamente
 
-### 2. `instance-helper.ts` - Funcao helper para agrupar usuarios por instancia
-
-```typescript
-export async function groupUsersByInstance(supabase, profiles): Map<string, profile[]>
-```
-
-Agrupa usuarios pelo `whatsapp_instance_id`. Usuarios sem instancia vao para um grupo "default".
-
-### 3. Atualizar as 7 funcoes que usam anti-burst
-
-Em cada funcao (`weekly-report`, `scheduled-checkin`, `scheduled-followup`, `conversation-followup`, `periodic-content`, `session-reminder`, `reactivation-check`):
-
-- Agrupar usuarios por `whatsapp_instance_id`
-- Processar cada grupo em paralelo com `Promise.all`
-- Dentro de cada grupo, manter o loop sequencial com `antiBurstDelayForInstance(instanceId)`
-
-Exemplo da estrutura (aplicada em todas):
+Substituir as linhas 424-451 (bloco hardcoded) por uma string gerada em runtime:
 
 ```typescript
-// Agrupar por instancia
-const instanceGroups = new Map<string, typeof profiles>();
-for (const profile of profiles) {
-  const key = profile.whatsapp_instance_id || 'default';
-  if (!instanceGroups.has(key)) instanceGroups.set(key, []);
-  instanceGroups.get(key)!.push(profile);
+let meditationSection = `# MEDITAÇÕES GUIADAS (BIBLIOTECA PRÉ-GRAVADA)\n\n`;
+meditationSection += `Você tem uma BIBLIOTECA de meditações guiadas com áudio profissional.\n\n`;
+meditationSection += `**Categorias disponíveis:**\n`;
+
+for (const [category, info] of meditationCatalog) {
+  const triggersText = info.triggers.length > 0 ? ` (${info.triggers.join(', ')})` : '';
+  meditationSection += `- \`[MEDITACAO:${category}]\` - ${info.titles[0]}${triggersText}\n`;
 }
 
-// Processar cada instancia em paralelo
-await Promise.all(
-  Array.from(instanceGroups.entries()).map(async ([instanceId, groupProfiles]) => {
-    for (const profile of groupProfiles) {
-      // ... logica existente de processamento ...
-      await antiBurstDelayForInstance(instanceId);
-    }
-  })
-);
+meditationSection += `\n**Como usar:**\n`;
+meditationSection += `- Inclua a tag NO FINAL da sua mensagem\n`;
+meditationSection += `- NÃO mencione título exato nem duração\n`;
+meditationSection += `- NÃO use [MODO_AUDIO] junto com [MEDITACAO:...]\n`;
+// ... resto das instrucoes estaticas
 ```
 
-## Funcoes Afetadas (7 arquivos)
+### 3. Injetar no system prompt
 
-1. `supabase/functions/_shared/instance-helper.ts` - novas funcoes
-2. `supabase/functions/weekly-report/index.ts`
-3. `supabase/functions/scheduled-checkin/index.ts`
-4. `supabase/functions/scheduled-followup/index.ts`
-5. `supabase/functions/conversation-followup/index.ts`
-6. `supabase/functions/periodic-content/index.ts`
-7. `supabase/functions/session-reminder/index.ts`
-8. `supabase/functions/reactivation-check/index.ts`
+Substituir o bloco estatico de meditacoes pela variavel `meditationSection` na montagem do prompt.
 
-## Ganho de Performance
+### 4. Fallback mantido
 
-Com 3 instancias e 12 usuarios (4 por instancia):
-- **Antes**: ~12 x 35s = ~7 minutos sequencial
-- **Depois**: ~4 x 35s = ~2.3 minutos (3 grupos em paralelo)
+O fallback de keyword detection (plano anterior aprovado) continua valido como segunda camada de seguranca -- e agora usa as categorias reais do banco em vez de um mapa hardcoded.
 
-## O que NAO muda
+## Resultado
 
-- Delay de 25-45s entre envios do mesmo numero (seguranca mantida)
-- Toda logica de negocio (metricas, analise, DND, sessao ativa)
-- Formato das mensagens e relatorios
+- Novas categorias adicionadas na tabela `meditations` aparecem automaticamente no prompt da AURA
+- Campo `triggers` na tabela `meditations` ja existe e sera usado para informar a AURA quando usar cada categoria
+- Campo `best_for` complementa o contexto
+- Zero manutencao no codigo ao expandir o catalogo
 
