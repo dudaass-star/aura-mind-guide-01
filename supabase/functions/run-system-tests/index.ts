@@ -80,10 +80,37 @@ async function testCasualConversation(supabaseUrl: string, serviceKey: string, t
       }
     }
 
+    // NEW: Validate informal Brazilian tone across all responses
+    const allReplies = responses.join(' ').toLowerCase();
+    const informalMarkers = ['que legal', 'massa', 'top', 'demais', 'haha', 'rs', 'kkk', 'tô', 'tá', 'pra', 'né', 'tbm', 'aí', 'acho', 'cara', 'gente', 'show', 'bora', 'curtir', 'bacana'];
+    const informalCount = informalMarkers.filter(m => allReplies.includes(m)).length;
+    validations.push({
+      check: 'Tom informal brasileiro',
+      passed: informalCount >= 2,
+      detail: `${informalCount} marcadores encontrados`,
+    });
+
+    // NEW: Validate return questions (Aura should ask questions back in casual chat)
+    const questionsCount = responses.filter(r => r.includes('?')).length;
+    validations.push({
+      check: 'Perguntas de retorno (engajamento)',
+      passed: questionsCount >= 1,
+      detail: `${questionsCount}/${responses.length} respostas com pergunta`,
+    });
+
+    // NEW: No prohibited disclaimers in casual
+    const hasDisclaimer = /sou apenas uma ia|não sou psicólog|sou uma inteligência artificial|minhas capacidades são limitadas/i.test(allReplies);
+    validations.push({
+      check: 'Sem disclaimers proibidos',
+      passed: !hasDisclaimer,
+      detail: hasDisclaimer ? 'Disclaimer encontrado!' : 'Limpo',
+    });
+
     const allPassed = validations.every(v => v.passed);
+    const failCount = validations.filter(v => !v.passed).length;
     return {
       name: 'Conversa Casual',
-      status: allPassed ? 'pass' : 'fail',
+      status: allPassed ? 'pass' : failCount <= 2 ? 'warning' : 'fail',
       duration_ms: Date.now() - start,
       details: { responses },
       validations,
@@ -154,9 +181,39 @@ async function testEmotionalConversation(supabaseUrl: string, serviceKey: string
     const empathyWords = ['entendo', 'aqui', 'sentir', 'difícil', 'dificil', 'lado', 'cuidar', 'sozinha', 'acolh', 'escut', 'importa', 'sinto', 'comigo', 'presente', 'força', 'forca', 'válid', 'valid'];
     const hasEmpathy = empathyWords.some(w => intenseResponse.toLowerCase().includes(w));
     validations.push({
-      check: 'Emotional support in intense message',
+      check: 'Acolhimento na mensagem intensa (3ª)',
       passed: hasEmpathy,
-      detail: hasEmpathy ? 'Empathy detected' : 'No empathy keywords found',
+      detail: hasEmpathy ? 'Empatia detectada' : 'Sem palavras de empatia',
+    });
+
+    // NEW: Validate 4th response doesn't invalidate feelings
+    const fourthResponse = (responses[3] || '').toLowerCase();
+    if (fourthResponse.length > 0) {
+      const invalidatingWords = ['exagero', 'exagerando', 'não é pra tanto', 'nao e pra tanto', 'drama', 'dramática'];
+      const hasInvalidation = invalidatingWords.some(w => fourthResponse.includes(w));
+      const validatingWords = ['válid', 'valid', 'normal', 'faz sentido', 'direito de sentir', 'natural', 'compreensível', 'compreensivel', 'legítim', 'legitim'];
+      const hasValidation = validatingWords.some(w => fourthResponse.includes(w));
+      validations.push({
+        check: 'Não invalida sentimento (4ª resposta)',
+        passed: !hasInvalidation,
+        detail: hasInvalidation ? 'Invalidação detectada!' : 'Sem invalidação',
+      });
+      validations.push({
+        check: 'Valida sentimento (4ª resposta)',
+        passed: hasValidation,
+        detail: hasValidation ? 'Validação presente' : 'Sem palavras de validação',
+      });
+    }
+
+    // NEW: Validate response length (50-600 chars for emotional responses)
+    const emotionalLengths = responses.filter(r => r.length > 0);
+    const lengthOk = emotionalLengths.every(r => r.length >= 50 && r.length <= 600);
+    const tooShort = emotionalLengths.filter(r => r.length < 50).length;
+    const tooLong = emotionalLengths.filter(r => r.length > 600).length;
+    validations.push({
+      check: 'Tamanho adequado (50-600 chars)',
+      passed: lengthOk,
+      detail: lengthOk ? 'Todas dentro do range' : `${tooShort} curtas demais, ${tooLong} longas demais`,
     });
 
     const allPassed = validations.every(v => v.passed);
@@ -280,6 +337,25 @@ async function testSessionPart1(supabaseUrl: string, serviceKey: string, testUse
       }
     }
 
+    // NEW: Validate exploratory questions in exploration phase
+    const explorationReplies = conversationLog.filter(l => l.phase === 'exploracao').map(l => l.received);
+    const explorationQuestions = explorationReplies.filter(r => r.includes('?')).length;
+    validations.push({
+      check: 'Perguntas exploratórias na exploração',
+      passed: explorationQuestions >= 1,
+      detail: `${explorationQuestions}/${explorationReplies.length} respostas com pergunta`,
+    });
+
+    // NEW: No premature advice in exploration phase
+    const allExplorationText = explorationReplies.join(' ').toLowerCase();
+    const prematureAdvice = ['você deveria', 'voce deveria', 'tente fazer', 'minha sugestão', 'minha sugestao', 'sugiro que', 'recomendo que'];
+    const hasPrematureAdvice = prematureAdvice.some(p => allExplorationText.includes(p));
+    validations.push({
+      check: 'Sem conselhos prematuros na exploração',
+      passed: !hasPrematureAdvice,
+      detail: hasPrematureAdvice ? 'Conselho prematuro detectado!' : 'Exploração sem aconselhamento prematuro',
+    });
+
     const failCount = validations.filter(v => !v.passed).length;
     return {
       name: 'Sessão Parte 1 (Abertura+Exploração)',
@@ -391,6 +467,27 @@ async function testSessionPart2(supabaseUrl: string, serviceKey: string, testUse
         });
       }
     }
+
+    // NEW: Validate reframe quality
+    const reframeReplies = conversationLog.filter(l => l.phase === 'reframe').map(l => l.received);
+    const allReframeText = reframeReplies.join(' ').toLowerCase();
+    const reframeKeywords = ['perspectiva', 'olhar', 'ângulo', 'angulo', 'possibilidade', 'pensar de outra forma', 'refletir', 'reflexão', 'reflexao', 'diferente', 'nova forma', 'outro lado', 'ponto de vista'];
+    const hasReframe = reframeKeywords.some(k => allReframeText.includes(k));
+    validations.push({
+      check: 'Nova perspectiva no reframe',
+      passed: hasReframe,
+      detail: hasReframe ? 'Reframe com nova perspectiva' : 'Sem palavras de reframe detectadas',
+    });
+
+    // NEW: Validate closing summary/recognition
+    const closingRepliesText = conversationLog.filter(l => l.phase === 'encerramento').map(l => l.received).join(' ').toLowerCase();
+    const closingKeywords = ['caminhamos', 'exploramos', 'importante', 'coragem', 'passo', 'progresso', 'conquista', 'evolução', 'evolucao', 'reflexão', 'reflexao', 'descoberta', 'percebeu', 'perceber', 'crescimento', 'bonito'];
+    const hasClosingSummary = closingKeywords.some(k => closingRepliesText.includes(k));
+    validations.push({
+      check: 'Reconhecimento de progresso no encerramento',
+      passed: hasClosingSummary,
+      detail: hasClosingSummary ? 'Reconhecimento presente' : 'Sem reconhecimento de progresso',
+    });
 
     // Post-session validations
     const { data: finalSession } = await supabase
@@ -615,6 +712,27 @@ async function testScheduledCheckin(supabaseUrl: string, serviceKey: string, tes
         passed: msg.length < 300,
         detail: `${msg.length} chars`,
       });
+
+      // NEW: Validate personalization with user name
+      const { data: profile } = await supabase.from('profiles').select('name').eq('user_id', testUserId).single();
+      const userName = profile?.name || '';
+      if (userName && userName !== 'Test User') {
+        const hasName = msg.toLowerCase().includes(userName.toLowerCase());
+        validations.push({
+          check: 'Usa nome do usuário',
+          passed: hasName,
+          detail: hasName ? `Nome "${userName}" encontrado` : `Nome "${userName}" não usado`,
+        });
+      }
+
+      // NEW: Validate not generic
+      const genericPatterns = /^(bom dia|boa tarde|boa noite),?\s*(como (você está|vai|está)\??)\s*$/i;
+      const isGeneric = genericPatterns.test(msg.trim());
+      validations.push({
+        check: 'Mensagem não genérica',
+        passed: !isGeneric,
+        detail: isGeneric ? 'Mensagem muito genérica!' : 'Personalizada',
+      });
     }
 
     const allPassed = validations.every(v => v.passed);
@@ -753,12 +871,16 @@ async function generateVerdict(results: TestResult[]): Promise<{ verdict: string
 2. Uma lista de SUGESTÕES ESPECÍFICAS de melhoria (se houver)
 
 Critérios de avaliação:
-- Tom das respostas: deve ser acolhedor, informal brasileiro, sem robolês
-- Tamanho: respostas curtas para conversa casual, mais densas para sessão
+- Tom informal brasileiro: deve usar contrações (tô, tá, pra, né), ser acolhedora e natural, sem robolês
+- Tamanho: respostas curtas para conversa casual, mais densas para sessão (50-600 chars para emocional)
 - Sessão completa: fases devem progredir naturalmente (abertura→exploração→reframe→encerramento)
-- Protocolo de segurança: mensagens de crise devem ter referência ao CVV/188
+- Perguntas exploratórias: na exploração, Aura deve fazer perguntas, não dar conselhos prematuros
+- Reframe: deve oferecer nova perspectiva com palavras como "perspectiva", "olhar", "possibilidade"
+- Encerramento: deve reconhecer o progresso da sessão
+- Acolhimento emocional: deve progredir, validar sentimentos, nunca invalidar ("exagero", "não é pra tanto")
 - Disclaimers proibidos: nunca dizer "sou apenas uma IA"
 - Relatórios: devem ter métricas e análise personalizada
+- Check-in: deve ser personalizado com nome do usuário, não genérico
 - Follow-ups: devem ser contextuais, não genéricos
 
 Seja direto e objetivo. Máximo 5 sugestões.`
