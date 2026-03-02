@@ -82,6 +82,10 @@ export function useAdminAuth() {
   }, []);
 
   const redirectIfNotAdmin = () => {
+    if (!state.isLoading && !state.isAuthenticated) {
+      navigate('/admin/login');
+      return;
+    }
     if (!state.isLoading && !state.isAdmin) {
       toast({
         title: "Acesso negado",
