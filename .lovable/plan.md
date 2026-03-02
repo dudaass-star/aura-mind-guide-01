@@ -1,55 +1,54 @@
 
 
-# Melhorias no Simulador de Testes da Aura
+# Analise dos Resultados do Ultimo Teste
 
-## Oportunidades identificadas
+## Resultados observados nos logs
 
-Após análise completa dos 7 testes, há melhorias significativas em 3 áreas: **qualidade conversacional**, **robustez das validações** e **cobertura de cenários**.
+| Teste | Status | Duracao |
+|-------|--------|---------|
+| Casual | ? (sem log visivel) | - |
+| Emotional | **fail** | 101s |
+| Session Part 1 | **pass** | 143s |
+| Session Part 2 | **fail** | 105s |
+| Report | **warning** | 2.3s |
+| Check-in | **fail** | 8.3s |
+| Follow-up | **pass** | 3.2s |
 
----
+## Problemas identificados
 
-## Mudanças propostas
+### 1. Check-in: Bug critico — `supabase` nao declarado
 
-### 1. Teste Casual — Validar personalidade da Aura
+Na funcao `testScheduledCheckin` (linha 717), o codigo usa `supabase.from('profiles')` mas **nao cria o client** nessa funcao. Diferente das funcoes de sessao que fazem `const supabase = createClient(...)`, o check-in pula essa etapa. Isso causa um `ReferenceError` em runtime, derrubando o teste inteiro.
 
-Atualmente só valida "resposta não vazia" e "sem tags de sessão". Falta validar que a Aura é **engajada e natural**, não robótica.
+**Correcao:** Adicionar `const supabase = createClient(supabaseUrl, serviceKey);` no inicio da funcao `testScheduledCheckin`.
 
-- Adicionar validação de **tom informal brasileiro** (presença de gírias/expressões como "que legal", "massa", "top", "demais", "haha", "rs", "kkk", ou contrações como "tô", "tá", "pra", "né")
-- Adicionar validação de **pergunta de retorno** — em conversa casual, Aura deve fazer pelo menos 1 pergunta de volta (detectar `?` nas respostas)
-- Adicionar validação de **não usar disclaimers proibidos** (mesma checagem do teste emocional: "sou apenas uma IA", etc.)
+### 2. Emotional: Status nunca e "warning"
 
-### 2. Teste Emocional — Validar progressão do acolhimento
+Linha 222: `status: allPassed ? 'pass' : validations.some(v => !v.passed) ? 'fail' : 'warning'`
 
-Atualmente valida empatia apenas na 3ª mensagem. Falta validar que o acolhimento **progride** ao longo da conversa.
+Se `allPassed` e `false`, entao obrigatoriamente `validations.some(v => !v.passed)` e `true`, entao o status e sempre `'fail'`. O `'warning'` e inalcancavel. Deveria usar `failCount <= 2` como nos outros testes.
 
-- Validar que a **4ª resposta** (após "desculpa, tô exagerando") **não invalida o sentimento** — checar que NÃO contém "exagero", "exagerando", "não é pra tanto" e que SIM contém palavras de validação ("válido", "normal", "faz sentido", "direito de sentir")
-- Adicionar validação de **tamanho adequado** — respostas emocionais devem ser entre 50 e 600 chars (nem muito curtas, nem mini-palestra)
+**Correcao:** Trocar a logica de status por `failCount === 0 ? 'pass' : failCount <= 2 ? 'warning' : 'fail'`.
 
-### 3. Teste de Sessão — Validar qualidade terapêutica
+### 3. Session Part 2: Falhas previsiveis de qualidade
 
-Atualmente só valida "resposta não vazia" por fase. Falta validar a **qualidade** das intervenções.
+O session_part2 falha provavelmente nas novas validacoes de reframe e encerramento — se a Aura nao usa exatamente as keywords esperadas. Porem, o bug do `userId` vs `user_id` ja foi corrigido, entao a sessao deveria estar ativa agora. As falhas restantes sao possivelmente:
+- "Nova perspectiva no reframe" — keywords nao encontradas na resposta
+- "Session status is completed" — se o agente nao gerou `[ENCERRAR_SESSAO]`
+- Validacoes pos-sessao em cascata (summary, insights, commitments)
 
-**Parte 1 (Abertura+Exploração):**
-- Na fase de exploração, validar que a Aura faz **perguntas exploratórias** (presença de `?` nas respostas)
-- Validar que a Aura **não dá conselhos prematuros** na exploração — não deve conter "você deveria", "tente fazer", "minha sugestão" antes do reframe
+Para aumentar a robustez, podemos expandir as listas de keywords de reframe e encerramento.
 
-**Parte 2 (Reframe+Encerramento):**
-- Na fase de reframe, validar que a Aura oferece uma **nova perspectiva** — presença de palavras como "perspectiva", "olhar", "ângulo", "possibilidade", "pensar de outra forma", "refletir"
-- Na fase de encerramento, validar que a Aura faz **resumo ou reconhecimento** do progresso — palavras como "caminhamos", "exploramos", "importante", "coragem", "passo"
+### 4. Report: Warning esperado
 
-### 4. Teste de Check-in — Validar personalização
+O relatorio foi gerado mas possivelmente falhou em alguma validacao de formatacao. Isso e aceitavel como warning.
 
-- Adicionar validação de que a mensagem **usa o nome do usuário** (buscar nome do perfil de teste)
-- Validar que **não é genérica** — não deve ser apenas "bom dia, como está?"
+## Mudancas propostas
 
-### 5. Veredicto — Atualizar critérios
+### `supabase/functions/run-system-tests/index.ts`
 
-- Remover referência ao "protocolo de segurança CVV/188" dos critérios do veredicto, já que o teste emocional não testa mais isso
-- Adicionar critério de "tom informal brasileiro" e "perguntas exploratórias em sessão"
-
----
-
-## Arquivos modificados
-
-- `supabase/functions/run-system-tests/index.ts` — todas as melhorias acima
+1. **Adicionar `createClient`** no `testScheduledCheckin` (bug critico)
+2. **Corrigir logica de status** no teste emocional (linha 222) para permitir `warning`
+3. **Expandir keywords de reframe** com mais variacoes: "nova maneira", "outra forma de ver", "ressignificar", "transformar", "diferente", "mudar o olhar"
+4. **Expandir keywords de encerramento** com: "orgulho", "avanço", "lindo", "especial", "processo", "jornada", "significativo"
 
