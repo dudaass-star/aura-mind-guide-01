@@ -13,7 +13,12 @@ interface TestResult {
   validations: { check: string; passed: boolean; detail?: string }[];
 }
 
-const AVAILABLE_TESTS = ['casual', 'emotional', 'session', 'report', 'checkin', 'followup'];
+const AVAILABLE_TESTS = ['casual', 'emotional', 'session_part1', 'session_part2', 'report', 'checkin', 'followup'];
+
+// Helper: extract reply from aura-agent response
+function extractReply(data: any): string {
+  return (data.messages || []).map((m: any) => m.text).join(' ||| ') || '';
+}
 
 // ========== TEST: Casual Conversation ==========
 async function testCasualConversation(supabaseUrl: string, serviceKey: string, testUserId: string): Promise<TestResult> {
@@ -50,7 +55,7 @@ async function testCasualConversation(supabaseUrl: string, serviceKey: string, t
       }
 
       const data = await res.json();
-      const reply = data.reply || data.response || '';
+      const reply = extractReply(data);
       responses.push(reply);
 
       validations.push({
@@ -128,7 +133,7 @@ async function testEmotionalConversation(supabaseUrl: string, serviceKey: string
       }
 
       const data = await res.json();
-      const reply = data.reply || data.response || '';
+      const reply = extractReply(data);
       responses.push(reply);
 
       validations.push({
@@ -171,16 +176,15 @@ async function testEmotionalConversation(supabaseUrl: string, serviceKey: string
   }
 }
 
-// ========== TEST: Full Session (reduced to ~9 messages) ==========
-async function testFullSession(supabaseUrl: string, serviceKey: string, testUserId: string): Promise<TestResult> {
+// ========== TEST: Session Part 1 (abertura + exploração) ==========
+async function testSessionPart1(supabaseUrl: string, serviceKey: string, testUserId: string): Promise<TestResult> {
   const start = Date.now();
   const validations: TestResult['validations'] = [];
   const conversationLog: { phase: string; sent: string; received: string; elapsed_min: number }[] = [];
 
   const supabase = createClient(supabaseUrl, serviceKey);
 
-  // Reduced session script: 9 messages instead of 14
-  const sessionScript: { phase: string; minuteOffset: number; messages: string[] }[] = [
+  const sessionScript = [
     {
       phase: 'abertura',
       minuteOffset: 0,
@@ -196,22 +200,6 @@ async function testFullSession(supabaseUrl: string, serviceKey: string, testUser
         "É que meu chefe tá me cobrando muito e eu não sei como lidar",
         "Sinto que nunca é suficiente, sabe? Faço tudo e parece que nunca tá bom",
         "Talvez tenha a ver com meu pai, ele sempre cobrava demais de mim",
-      ],
-    },
-    {
-      phase: 'reframe',
-      minuteOffset: 25,
-      messages: [
-        "Faz sentido... nunca tinha pensado por esse ângulo",
-        "Acho que posso tentar me cobrar menos e aceitar que tá bom o suficiente",
-      ],
-    },
-    {
-      phase: 'encerramento',
-      minuteOffset: 38,
-      messages: [
-        "Vou tentar essa semana falar com ele",
-        "Obrigada, Aura! Foi muito boa a sessão",
       ],
     },
   ];
@@ -233,7 +221,7 @@ async function testFullSession(supabaseUrl: string, serviceKey: string, testUser
 
     if (sessionError || !session) {
       return {
-        name: 'Sessão Completa (45min)',
+        name: 'Sessão Parte 1 (Abertura+Exploração)',
         status: 'fail',
         duration_ms: Date.now() - start,
         details: { error: `Failed to create test session: ${sessionError?.message}` },
@@ -272,7 +260,7 @@ async function testFullSession(supabaseUrl: string, serviceKey: string, testUser
         let reply = '';
         if (res.ok) {
           const data = await res.json();
-          reply = data.reply || data.response || '';
+          reply = extractReply(data);
         }
 
         conversationLog.push({
@@ -290,10 +278,123 @@ async function testFullSession(supabaseUrl: string, serviceKey: string, testUser
       }
     }
 
+    const failCount = validations.filter(v => !v.passed).length;
+    return {
+      name: 'Sessão Parte 1 (Abertura+Exploração)',
+      status: failCount === 0 ? 'pass' : failCount <= 2 ? 'warning' : 'fail',
+      duration_ms: Date.now() - start,
+      details: { conversationLog, session_id: session.id },
+      validations,
+    };
+  } catch (error) {
+    try {
+      const supabase = createClient(supabaseUrl, serviceKey);
+      await supabase.from('profiles').update({ current_session_id: null }).eq('user_id', testUserId);
+    } catch {}
+    return {
+      name: 'Sessão Parte 1 (Abertura+Exploração)',
+      status: 'fail',
+      duration_ms: Date.now() - start,
+      details: { error: String(error) },
+      validations,
+    };
+  }
+}
+
+// ========== TEST: Session Part 2 (reframe + encerramento + validações + cleanup) ==========
+async function testSessionPart2(supabaseUrl: string, serviceKey: string, testUserId: string, sessionId: string): Promise<TestResult> {
+  const start = Date.now();
+  const validations: TestResult['validations'] = [];
+  const conversationLog: { phase: string; sent: string; received: string; elapsed_min: number }[] = [];
+
+  const supabase = createClient(supabaseUrl, serviceKey);
+
+  const sessionScript = [
+    {
+      phase: 'reframe',
+      minuteOffset: 25,
+      messages: [
+        "Faz sentido... nunca tinha pensado por esse ângulo",
+        "Acho que posso tentar me cobrar menos e aceitar que tá bom o suficiente",
+      ],
+    },
+    {
+      phase: 'encerramento',
+      minuteOffset: 38,
+      messages: [
+        "Vou tentar essa semana falar com ele",
+        "Obrigada, Aura! Foi muito boa a sessão",
+      ],
+    },
+  ];
+
+  try {
+    // Verify session exists
+    const { data: existingSession } = await supabase
+      .from('sessions')
+      .select('id, status')
+      .eq('id', sessionId)
+      .single();
+
+    if (!existingSession) {
+      return {
+        name: 'Sessão Parte 2 (Reframe+Encerramento)',
+        status: 'fail',
+        duration_ms: Date.now() - start,
+        details: { error: `Session ${sessionId} not found` },
+        validations: [{ check: 'Session exists', passed: false, detail: `Session ${sessionId} not found` }],
+      };
+    }
+
+    validations.push({ check: 'Session exists from part 1', passed: true, detail: sessionId });
+
+    for (const group of sessionScript) {
+      const simulatedStartTime = new Date(Date.now() - (45 - group.minuteOffset) * 60 * 1000);
+      await supabase
+        .from('sessions')
+        .update({ started_at: simulatedStartTime.toISOString() })
+        .eq('id', sessionId);
+
+      for (const msg of group.messages) {
+        const res = await fetch(`${supabaseUrl}/functions/v1/aura-agent`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${serviceKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            userId: testUserId,
+            message: msg,
+            phone: 'test-simulation',
+          }),
+        });
+
+        let reply = '';
+        if (res.ok) {
+          const data = await res.json();
+          reply = extractReply(data);
+        }
+
+        conversationLog.push({
+          phase: group.phase,
+          sent: msg,
+          received: reply,
+          elapsed_min: group.minuteOffset,
+        });
+
+        validations.push({
+          check: `[${group.phase}] Response not empty`,
+          passed: reply.length > 0,
+          detail: `${reply.substring(0, 100)}...`,
+        });
+      }
+    }
+
+    // Post-session validations
     const { data: finalSession } = await supabase
       .from('sessions')
       .select('*')
-      .eq('id', session.id)
+      .eq('id', sessionId)
       .single();
 
     const isCompleted = finalSession?.status === 'completed';
@@ -348,15 +449,14 @@ async function testFullSession(supabaseUrl: string, serviceKey: string, testUser
     });
 
     // Cleanup
-    await supabase.from('sessions').delete().eq('id', session.id);
+    await supabase.from('sessions').delete().eq('id', sessionId);
     await supabase.from('profiles').update({ current_session_id: null }).eq('user_id', testUserId);
-    const totalTestMessages = sessionScript.reduce((sum, g) => sum + g.messages.length, 0);
     const { data: testMsgs } = await supabase
       .from('messages')
       .select('id')
       .eq('user_id', testUserId)
       .order('created_at', { ascending: false })
-      .limit(totalTestMessages * 2 + 5);
+      .limit(25);
     if (testMsgs && testMsgs.length > 0) {
       await supabase.from('messages').delete().in('id', testMsgs.map(m => m.id));
     }
@@ -365,7 +465,7 @@ async function testFullSession(supabaseUrl: string, serviceKey: string, testUser
 
     const failCount = validations.filter(v => !v.passed).length;
     return {
-      name: 'Sessão Completa (45min)',
+      name: 'Sessão Parte 2 (Reframe+Encerramento)',
       status: failCount === 0 ? 'pass' : failCount <= 2 ? 'warning' : 'fail',
       duration_ms: Date.now() - start,
       details: { conversationLog },
@@ -373,11 +473,11 @@ async function testFullSession(supabaseUrl: string, serviceKey: string, testUser
     };
   } catch (error) {
     try {
-      const supabase = createClient(supabaseUrl, serviceKey);
       await supabase.from('profiles').update({ current_session_id: null }).eq('user_id', testUserId);
+      if (sessionId) await supabase.from('sessions').delete().eq('id', sessionId);
     } catch {}
     return {
-      name: 'Sessão Completa (45min)',
+      name: 'Sessão Parte 2 (Reframe+Encerramento)',
       status: 'fail',
       duration_ms: Date.now() - start,
       details: { error: String(error) },
@@ -750,12 +850,14 @@ Deno.serve(async (req) => {
     let testUserId: string | null = null;
     let testName: string | null = null;
     let verdictResults: TestResult[] | null = null;
+    let sessionId: string | null = null;
 
     try {
       const body = await req.json();
       testUserId = body?.user_id || null;
       testName = body?.test || null;
       verdictResults = body?.results || null;
+      sessionId = body?.session_id || null;
     } catch {}
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -772,7 +874,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Verdict mode: generate verdict from provided results
+    // Verdict mode
     if (testName === 'verdict') {
       if (!verdictResults || !Array.isArray(verdictResults)) {
         return new Response(JSON.stringify({ error: 'Pass results array in body for verdict' }), {
@@ -824,8 +926,15 @@ Deno.serve(async (req) => {
       case 'emotional':
         result = await testEmotionalConversation(supabaseUrl, serviceKey, resolvedUserId);
         break;
-      case 'session':
-        result = await testFullSession(supabaseUrl, serviceKey, resolvedUserId);
+      case 'session_part1':
+        result = await testSessionPart1(supabaseUrl, serviceKey, resolvedUserId);
+        break;
+      case 'session_part2':
+        if (!sessionId) {
+          result = { name: 'Sessão Parte 2', status: 'fail', duration_ms: 0, details: { error: 'session_id is required for session_part2' }, validations: [{ check: 'session_id provided', passed: false }] };
+        } else {
+          result = await testSessionPart2(supabaseUrl, serviceKey, resolvedUserId, sessionId);
+        }
         break;
       case 'report':
         result = await testWeeklyReport(supabaseUrl, serviceKey, resolvedUserId);

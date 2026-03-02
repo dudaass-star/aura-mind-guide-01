@@ -21,24 +21,11 @@ interface TestResult {
   validations: Validation[];
 }
 
-interface TestResponse {
-  status: string;
-  summary: {
-    total: number;
-    pass: number;
-    fail: number;
-    warning: number;
-    total_duration_ms: number;
-  };
-  verdict: string;
-  suggestions: string[];
-  results: TestResult[];
-}
-
 const TEST_QUEUE = [
   { key: 'casual', label: 'Conversa Casual', emoji: '💬' },
   { key: 'emotional', label: 'Conversa Emocional', emoji: '💜' },
-  { key: 'session', label: 'Sessão Completa', emoji: '🧘' },
+  { key: 'session_part1', label: 'Sessão (Abertura+Exploração)', emoji: '🧘', mergeKey: 'session' },
+  { key: 'session_part2', label: 'Sessão (Reframe+Encerramento)', emoji: '🧘', mergeKey: 'session' },
   { key: 'report', label: 'Relatório Semanal', emoji: '📊' },
   { key: 'checkin', label: 'Check-in Agendado', emoji: '🔔' },
   { key: 'followup', label: 'Follow-up de Conversa', emoji: '🔄' },
@@ -56,7 +43,7 @@ export default function AdminTests() {
   const [currentTest, setCurrentTest] = useState<string | null>(null);
   const [completedTests, setCompletedTests] = useState(0);
   const [results, setResults] = useState<TestResult[]>([]);
-  const [verdictData, setVerdictData] = useState<{ verdict: string; suggestions: string[]; summary: TestResponse['summary'] } | null>(null);
+  const [verdictData, setVerdictData] = useState<{ verdict: string; suggestions: string[]; summary: any } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expandedTests, setExpandedTests] = useState<Set<number>>(new Set());
 
@@ -74,18 +61,24 @@ export default function AdminTests() {
 
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
     const collectedResults: TestResult[] = [];
+    let sessionId: string | null = null;
 
     try {
-      // Run each test individually
       for (let i = 0; i < TEST_QUEUE.length; i++) {
         const test = TEST_QUEUE[i];
         setCurrentTest(test.key);
         setCompletedTests(i);
 
+        const body: any = { test: test.key };
+        // Pass session_id from part1 to part2
+        if (test.key === 'session_part2' && sessionId) {
+          body.session_id = sessionId;
+        }
+
         const res = await fetch(`${supabaseUrl}/functions/v1/run-system-tests`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ test: test.key }),
+          body: JSON.stringify(body),
         });
 
         if (!res.ok) {
@@ -95,6 +88,10 @@ export default function AdminTests() {
 
         const data = await res.json();
         if (data.result) {
+          // Capture session_id from part1 for part2
+          if (test.key === 'session_part1' && data.result.details?.session_id) {
+            sessionId = data.result.details.session_id;
+          }
           collectedResults.push(data.result);
           setResults([...collectedResults]);
         }
@@ -163,6 +160,45 @@ export default function AdminTests() {
 
   if (!isAdmin) return null;
 
+  // Merge session_part1 and session_part2 into a single display card
+  const displayResults: TestResult[] = [];
+  let sessionPart1: TestResult | null = null;
+
+  for (let i = 0; i < results.length; i++) {
+    const queueItem = TEST_QUEUE[i];
+    if (queueItem?.mergeKey === 'session' && queueItem.key === 'session_part1') {
+      sessionPart1 = results[i];
+    } else if (queueItem?.mergeKey === 'session' && queueItem.key === 'session_part2' && sessionPart1) {
+      // Merge both parts
+      const part2 = results[i];
+      const mergedValidations = [...sessionPart1.validations, ...part2.validations];
+      const failCount = mergedValidations.filter(v => !v.passed).length;
+      const mergedLog = [
+        ...(sessionPart1.details?.conversationLog || []),
+        ...(part2.details?.conversationLog || []),
+      ];
+      displayResults.push({
+        name: 'Sessão Completa (45min)',
+        status: failCount === 0 ? 'pass' : failCount <= 2 ? 'warning' : 'fail',
+        duration_ms: sessionPart1.duration_ms + part2.duration_ms,
+        details: { conversationLog: mergedLog },
+        validations: mergedValidations,
+      });
+      sessionPart1 = null;
+    } else {
+      // If we have an orphan part1 (part2 not yet arrived), show it standalone
+      if (sessionPart1) {
+        displayResults.push(sessionPart1);
+        sessionPart1 = null;
+      }
+      displayResults.push(results[i]);
+    }
+  }
+  // If part1 arrived but part2 didn't yet
+  if (sessionPart1) {
+    displayResults.push(sessionPart1);
+  }
+
   return (
     <div className="min-h-screen bg-background p-4 md:p-8">
       <div className="max-w-4xl mx-auto space-y-6">
@@ -216,7 +252,7 @@ export default function AdminTests() {
 
         {/* Verdict */}
         {verdictData && (
-          <Card className={verdictData.summary.fail > 0 ? 'border-red-500/30 bg-red-500/5' : 'border-green-500/30 bg-green-500/5'}>
+          <Card className={verdictData.summary?.fail > 0 ? 'border-red-500/30 bg-red-500/5' : 'border-green-500/30 bg-green-500/5'}>
             <CardHeader>
               <CardTitle className="text-lg">Veredicto Final</CardTitle>
             </CardHeader>
@@ -238,12 +274,12 @@ export default function AdminTests() {
               )}
 
               <div className="flex gap-4 text-sm text-muted-foreground pt-2 border-t">
-                <span>✅ {verdictData.summary.pass} pass</span>
-                <span>⚠️ {verdictData.summary.warning} warning</span>
-                <span>❌ {verdictData.summary.fail} fail</span>
+                <span>✅ {verdictData.summary?.pass} pass</span>
+                <span>⚠️ {verdictData.summary?.warning} warning</span>
+                <span>❌ {verdictData.summary?.fail} fail</span>
                 <span className="ml-auto">
                   <Clock className="inline h-3 w-3 mr-1" />
-                  {(verdictData.summary.total_duration_ms / 1000).toFixed(1)}s total
+                  {((verdictData.summary?.total_duration_ms || 0) / 1000).toFixed(1)}s total
                 </span>
               </div>
             </CardContent>
@@ -251,7 +287,7 @@ export default function AdminTests() {
         )}
 
         {/* Test Results */}
-        {results.map((result, index) => {
+        {displayResults.map((result, index) => {
           const config = statusConfig[result.status];
           const StatusIcon = config.icon;
           const isExpanded = expandedTests.has(index);
