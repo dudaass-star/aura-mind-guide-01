@@ -1191,7 +1191,12 @@ function isCrisis(message: string): boolean {
     'to chorando muito', 'tô chorando muito', 'não aguento mais', 'nao aguento mais',
     'não consigo parar de chorar', 'nao consigo parar de chorar',
     'crise de ansiedade', 'crise de pânico', 'crise de panico',
-    'quero morrer', 'me matar', 'suicídio', 'suicidio', 'acabar com tudo'
+    'quero morrer', 'me matar', 'suicídio', 'suicidio', 'acabar com tudo',
+    'seria melhor se eu não existisse', 'seria melhor se eu nao existisse',
+    'não deveria existir', 'nao deveria existir',
+    'mundo seria melhor sem mim', 'melhor sem mim',
+    'não quero mais viver', 'nao quero mais viver',
+    'penso em desaparecer', 'queria sumir pra sempre'
   ];
   return crisisPhrases.some(phrase => lowerMsg.includes(phrase));
 }

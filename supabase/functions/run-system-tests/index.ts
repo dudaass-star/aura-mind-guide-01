@@ -320,7 +320,7 @@ async function testSessionPart2(supabaseUrl: string, serviceKey: string, testUse
     },
     {
       phase: 'encerramento',
-      minuteOffset: 38,
+      minuteOffset: 44,
       messages: [
         "Vou tentar essa semana falar com ele",
         "Obrigada, Aura! Foi muito boa a sessão",
