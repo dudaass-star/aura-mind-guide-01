@@ -325,11 +325,19 @@ Deno.serve(async (req) => {
   }
 
   try {
-    console.log('🔄 Starting conversation follow-up check...');
+    let dryRun = false;
+    let targetUserId: string | null = null;
+    try {
+      const body = await req.json();
+      dryRun = body?.dry_run === true;
+      targetUserId = body?.target_user_id || null;
+    } catch { /* no body */ }
+
+    console.log(`🔄 Starting conversation follow-up check... (dry_run=${dryRun})`);
 
     // ===== QUIET HOURS: Não enviar follow-ups entre 22h e 8h =====
     const saoPauloHour = getSaoPauloHour();
-    if (saoPauloHour >= 22 || saoPauloHour < 8) {
+    if (!dryRun && (saoPauloHour >= 22 || saoPauloHour < 8)) {
       console.log(`🌙 Quiet hours (${saoPauloHour}h São Paulo) - skipping all follow-ups`);
       return new Response(JSON.stringify({
         status: 'skipped',
@@ -360,6 +368,7 @@ Deno.serve(async (req) => {
 
     let sentCount = 0;
     let skippedNaturalEnd = 0;
+    const dryRunResults: any[] = [];
     const now = Date.now();
 
     for (const followup of followups || []) {
@@ -536,6 +545,21 @@ Deno.serve(async (req) => {
 
         console.log(`📤 Sending follow-up #${followup.followup_count + 1} to ${profile.phone} (${timingReason})`);
 
+        if (dryRun) {
+          dryRunResults.push({
+            user_id: followup.user_id,
+            name: profile.name,
+            message,
+            timingReason,
+            conversationContext,
+            followup_count: followup.followup_count,
+            isSessionActive,
+            isNaturalEnd,
+          });
+          sentCount++;
+          continue;
+        }
+
         // Send via Z-API with instance routing
         const instanceConfig = await getInstanceConfigForUser(supabase, followup.user_id);
         const sendResult = await sendTextMessage(profile.phone, message, undefined, instanceConfig);
@@ -576,6 +600,7 @@ Deno.serve(async (req) => {
 
     // ===== REENGAJAMENTO SEMANAL: Usuários inativos há >7 dias =====
     let reengagementSent = 0;
+    if (!dryRun) {
     try {
       console.log('🔄 Starting weekly re-engagement check...');
 
@@ -782,16 +807,23 @@ IMPORTANTE:
     } catch (reengageErr) {
       console.error('❌ Re-engagement block error:', reengageErr);
     }
+    } // end if (!dryRun)
 
     console.log(`📊 Re-engagement complete: ${reengagementSent} sent`);
 
-    return new Response(JSON.stringify({
+    const responsePayload: any = {
       status: 'success',
       totalConversations: followups?.length || 0,
       followupsSent: sentCount,
       skippedNaturalEnd,
       reengagementSent,
-    }), {
+    };
+    if (dryRun) {
+      responsePayload.dry_run = true;
+      responsePayload.followups = dryRunResults;
+    }
+
+    return new Response(JSON.stringify(responsePayload), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 

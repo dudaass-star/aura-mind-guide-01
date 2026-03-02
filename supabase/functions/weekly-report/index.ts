@@ -189,7 +189,16 @@ Deno.serve(async (req) => {
   }
 
   try {
-    console.log('📅 Starting weekly report generation...');
+    // Parse body for dry_run and target_user_id
+    let dryRun = false;
+    let targetUserId: string | null = null;
+    try {
+      const body = await req.json();
+      dryRun = body?.dry_run === true;
+      targetUserId = body?.target_user_id || null;
+    } catch { /* no body */ }
+
+    console.log(`📅 Starting weekly report generation... (dry_run=${dryRun})`);
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -201,13 +210,20 @@ Deno.serve(async (req) => {
     weekStart.setDate(now.getDate() - 7);
     weekStart.setHours(0, 0, 0, 0);
 
-    // Get active users
-    const { data: profiles, error: profilesError } = await supabase
+    // Get active users (or a specific user in dry_run mode)
+    let profilesQuery = supabase
       .from('profiles')
       .select('*')
       .eq('status', 'active')
-      .not('phone', 'is', null)
-      .or('do_not_disturb_until.is.null,do_not_disturb_until.lte.' + new Date().toISOString());
+      .not('phone', 'is', null);
+
+    if (targetUserId) {
+      profilesQuery = profilesQuery.eq('user_id', targetUserId);
+    } else {
+      profilesQuery = profilesQuery.or('do_not_disturb_until.is.null,do_not_disturb_until.lte.' + new Date().toISOString());
+    }
+
+    const { data: profiles, error: profilesError } = await profilesQuery;
 
     if (profilesError) {
       throw new Error(`Error fetching profiles: ${profilesError.message}`);
@@ -216,7 +232,7 @@ Deno.serve(async (req) => {
     console.log(`📋 Generating reports for ${profiles?.length || 0} users`);
 
     let sentCount = 0;
-
+    const dryRunResults: any[] = [];
     // Group by WhatsApp instance for parallel processing
     const instanceGroups = groupByInstance(profiles || []);
 
@@ -287,6 +303,18 @@ Deno.serve(async (req) => {
 
             const report = generateWeeklyReport(profile, evolutionAnalysis, metrics);
 
+            if (dryRun) {
+              dryRunResults.push({
+                user_id: profile.user_id,
+                name: profile.name,
+                report,
+                metrics,
+                evolutionAnalysis,
+              });
+              sentCount++;
+              continue;
+            }
+
             // Get instance config for this user
             const zapiConfig = await getInstanceConfigForUser(supabase, profile.user_id);
 
@@ -326,11 +354,17 @@ Deno.serve(async (req) => {
 
     console.log(`📊 Weekly reports complete: ${sentCount}/${profiles?.length || 0} sent`);
 
-    return new Response(JSON.stringify({ 
+    const responsePayload: any = { 
       status: 'success', 
       totalUsers: profiles?.length || 0,
-      reportsSent: sentCount 
-    }), {
+      reportsSent: sentCount,
+    };
+    if (dryRun) {
+      responsePayload.dry_run = true;
+      responsePayload.reports = dryRunResults;
+    }
+
+    return new Response(JSON.stringify(responsePayload), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
