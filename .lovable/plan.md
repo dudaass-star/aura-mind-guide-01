@@ -1,54 +1,53 @@
 
 
-# Analise dos Resultados do Ultimo Teste
+# Diversificação do Vocabulário da Aura
 
-## Resultados observados nos logs
+## Diagnóstico
 
-| Teste | Status | Duracao |
-|-------|--------|---------|
-| Casual | ? (sem log visivel) | - |
-| Emotional | **fail** | 101s |
-| Session Part 1 | **pass** | 143s |
-| Session Part 2 | **fail** | 105s |
-| Report | **warning** | 2.3s |
-| Check-in | **fail** | 8.3s |
-| Follow-up | **pass** | 3.2s |
+O prompt atual tem **listas de exemplos muito curtas e repetitivas** em 3 pontos-chave, o que faz o LLM gravitar sempre para as mesmas frases:
 
-## Problemas identificados
+1. **Afeto genuíno** (linha 243): Só 4 exemplos — "Tô aqui contigo", "Conta comigo", "Te entendo demais", "Você não tá sozinha nisso". O LLM repete esses ad nauseam.
 
-### 1. Check-in: Bug critico — `supabase` nao declarado
+2. **Celebrações** (linha 235): Só 5 exemplos — "Boa!!", "Isso aí!", "Adorei!", "Que orgulho!", "Arrasou!".
 
-Na funcao `testScheduledCheckin` (linha 717), o codigo usa `supabase.from('profiles')` mas **nao cria o client** nessa funcao. Diferente das funcoes de sessao que fazem `const supabase = createClient(...)`, o check-in pula essa etapa. Isso causa um `ReferenceError` em runtime, derrubando o teste inteiro.
+3. **Interjeições** (linha 239): Só 7 exemplos — "Caramba!", "Puxa vida...", "Nossa!", "Eita!", etc.
 
-**Correcao:** Adicionar `const supabase = createClient(supabaseUrl, serviceKey);` no inicio da funcao `testScheduledCheckin`.
+4. **Silêncio intencional** (linha 484): Só 3 exemplos — "Hmm... isso é pesado. Tô aqui.", "Entendi.", "Faz sentido."
 
-### 2. Emotional: Status nunca e "warning"
+5. **Conectivos de conversa** (linha 287): Só 5 exemplos — "Então...", "Sabe o que eu penso?", etc.
 
-Linha 222: `status: allPassed ? 'pass' : validations.some(v => !v.passed) ? 'fail' : 'warning'`
+O LLM tende a reciclar os exemplos literais do prompt. Com listas pequenas, a Aura soa repetitiva.
 
-Se `allPassed` e `false`, entao obrigatoriamente `validations.some(v => !v.passed)` e `true`, entao o status e sempre `'fail'`. O `'warning'` e inalcancavel. Deveria usar `failCount <= 2` como nos outros testes.
+---
 
-**Correcao:** Trocar a logica de status por `failCount === 0 ? 'pass' : failCount <= 2 ? 'warning' : 'fail'`.
+## Mudanças propostas
 
-### 3. Session Part 2: Falhas previsiveis de qualidade
+### `supabase/functions/aura-agent/index.ts` — expandir exemplos no `AURA_STATIC_INSTRUCTIONS`
 
-O session_part2 falha provavelmente nas novas validacoes de reframe e encerramento — se a Aura nao usa exatamente as keywords esperadas. Porem, o bug do `userId` vs `user_id` ja foi corrigido, entao a sessao deveria estar ativa agora. As falhas restantes sao possivelmente:
-- "Nova perspectiva no reframe" — keywords nao encontradas na resposta
-- "Session status is completed" — se o agente nao gerou `[ENCERRAR_SESSAO]`
-- Validacoes pos-sessao em cascata (summary, insights, commitments)
+**1. Afeto genuíno** — expandir de 4 para ~12 variações:
+- Adicionar: "Pode contar comigo", "Tô do seu lado", "Aqui pra você", "Não vou a lugar nenhum", "Tô junto", "Segura aqui", "Pode falar, tô ouvindo", "Eu te ouço"
 
-Para aumentar a robustez, podemos expandir as listas de keywords de reframe e encerramento.
+**2. Celebrações** — expandir de 5 para ~12:
+- Adicionar: "Demais!", "Que show!", "Olha só!", "Amei!", "Mandou bem!", "Tá voando!", "Que delícia!", "Uhuul!", "Lacrou!"
 
-### 4. Report: Warning esperado
+**3. Interjeições** — expandir de 7 para ~14:
+- Adicionar: "Vish!", "Opa!", "Aaah!", "Ih!", "Uau!", "Oxe!", "Puts!", "Xi!"
 
-O relatorio foi gerado mas possivelmente falhou em alguma validacao de formatacao. Isso e aceitavel como warning.
+**4. Silêncio intencional** — expandir de 3 para ~8:
+- Adicionar: "É... isso pesa.", "Tô aqui, sem pressa.", "Não precisa dizer nada agora.", "Respira.", "Hmm."
 
-## Mudancas propostas
+**5. Conectivos** — expandir de 5 para ~10:
+- Adicionar: "Ei...", "Pois é...", "Ah, sabe o quê?", "Hm, deixa eu te falar uma coisa...", "Vem cá..."
 
-### `supabase/functions/run-system-tests/index.ts`
+**6. Adicionar regra anti-repetição** — um bloco novo curto:
+```
+## VARIAÇÃO OBRIGATÓRIA (ANTI-REPETIÇÃO)
+NUNCA repita a mesma frase de afeto em conversas seguidas.
+Se você já disse "Tô aqui" nessa conversa, use outra forma.
+Varie seus conectivos, interjeições e formas de acolher.
+Cada mensagem deve soar ÚNICA, não um template.
+```
 
-1. **Adicionar `createClient`** no `testScheduledCheckin` (bug critico)
-2. **Corrigir logica de status** no teste emocional (linha 222) para permitir `warning`
-3. **Expandir keywords de reframe** com mais variacoes: "nova maneira", "outra forma de ver", "ressignificar", "transformar", "diferente", "mudar o olhar"
-4. **Expandir keywords de encerramento** com: "orgulho", "avanço", "lindo", "especial", "processo", "jornada", "significativo"
+### Arquivo modificado
+- `supabase/functions/aura-agent/index.ts` — expandir exemplos e adicionar regra anti-repetição no prompt estático
 
