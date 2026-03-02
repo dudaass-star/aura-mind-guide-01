@@ -751,18 +751,30 @@ Deno.serve(async (req) => {
       testUserId = adminRole.user_id;
     }
 
-    // Verify test user exists
-    const { data: testProfile } = await supabase
+    // Verify test user exists, create temporary profile if missing
+    let createdTempProfile = false;
+    let { data: testProfile } = await supabase
       .from('profiles')
       .select('user_id, name, phone, current_session_id')
       .eq('user_id', testUserId)
       .single();
 
     if (!testProfile) {
-      return new Response(JSON.stringify({ error: 'Test user profile not found' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      console.log('⚠️ No profile found for test user, creating temporary profile...');
+      const { data: newProfile, error: insertErr } = await supabase
+        .from('profiles')
+        .insert({ user_id: testUserId, name: 'Test User', phone: 'test-simulation', status: 'active' })
+        .select('user_id, name, phone, current_session_id')
+        .single();
+
+      if (insertErr || !newProfile) {
+        return new Response(JSON.stringify({ error: 'Failed to create temp profile: ' + (insertErr?.message || 'unknown') }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      testProfile = newProfile;
+      createdTempProfile = true;
     }
 
     // Clear any existing session before tests
@@ -792,6 +804,12 @@ Deno.serve(async (req) => {
 
     console.log('🔹 Test 6: Conversation Follow-up');
     results.push(await testConversationFollowup(supabaseUrl, serviceKey));
+
+    // Cleanup temp profile if created
+    if (createdTempProfile) {
+      console.log('🧹 Cleaning up temporary test profile...');
+      await supabase.from('profiles').delete().eq('user_id', testUserId);
+    }
 
     // Generate AI verdict
     console.log('🤖 Generating AI verdict...');
