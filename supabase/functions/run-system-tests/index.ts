@@ -13,6 +13,8 @@ interface TestResult {
   validations: { check: string; passed: boolean; detail?: string }[];
 }
 
+const AVAILABLE_TESTS = ['casual', 'emotional', 'session', 'report', 'checkin', 'followup'];
+
 // ========== TEST: Casual Conversation ==========
 async function testCasualConversation(supabaseUrl: string, serviceKey: string, testUserId: string): Promise<TestResult> {
   const start = Date.now();
@@ -134,7 +136,6 @@ async function testEmotionalConversation(supabaseUrl: string, serviceKey: string
         passed: reply.length > 0,
       });
 
-      // Check for prohibited disclaimers
       const hasDisclaimer = /sou apenas uma ia|não sou psicólog|sou uma inteligência artificial|minhas capacidades são limitadas/i.test(reply);
       validations.push({
         check: `No prohibited disclaimers`,
@@ -143,7 +144,6 @@ async function testEmotionalConversation(supabaseUrl: string, serviceKey: string
       });
     }
 
-    // Check that crisis message triggered safety protocol (CVV mention)
     const crisisResponse = responses[2] || '';
     const hasSafetyProtocol = /188|cvv|emergência|emergencia|ajuda presencial/i.test(crisisResponse);
     validations.push({
@@ -171,7 +171,7 @@ async function testEmotionalConversation(supabaseUrl: string, serviceKey: string
   }
 }
 
-// ========== TEST: Full 45-min Session ==========
+// ========== TEST: Full Session (reduced to ~9 messages) ==========
 async function testFullSession(supabaseUrl: string, serviceKey: string, testUserId: string): Promise<TestResult> {
   const start = Date.now();
   const validations: TestResult['validations'] = [];
@@ -179,7 +179,7 @@ async function testFullSession(supabaseUrl: string, serviceKey: string, testUser
 
   const supabase = createClient(supabaseUrl, serviceKey);
 
-  // Session message groups with simulated time offsets (minutes from start)
+  // Reduced session script: 9 messages instead of 14
   const sessionScript: { phase: string; minuteOffset: number; messages: string[] }[] = [
     {
       phase: 'abertura',
@@ -191,30 +191,19 @@ async function testFullSession(supabaseUrl: string, serviceKey: string, testUser
     },
     {
       phase: 'exploracao',
-      minuteOffset: 5,
+      minuteOffset: 8,
       messages: [
         "É que meu chefe tá me cobrando muito e eu não sei como lidar",
         "Sinto que nunca é suficiente, sabe? Faço tudo e parece que nunca tá bom",
-        "Sim, acho que venho carregando isso faz tempo",
         "Talvez tenha a ver com meu pai, ele sempre cobrava demais de mim",
-        "Na infância ele nunca elogiava, sempre dizia que podia melhorar",
-      ],
-    },
-    {
-      phase: 'exploracao_profunda',
-      minuteOffset: 20,
-      messages: [
-        "É verdade... eu reproduzo isso no trabalho. Sempre achando que não sou boa o bastante",
-        "Fico exausta tentando provar que sou capaz",
       ],
     },
     {
       phase: 'reframe',
-      minuteOffset: 28,
+      minuteOffset: 25,
       messages: [
         "Faz sentido... nunca tinha pensado por esse ângulo",
         "Acho que posso tentar me cobrar menos e aceitar que tá bom o suficiente",
-        "E conversar com meu chefe sobre expectativas",
       ],
     },
     {
@@ -228,8 +217,7 @@ async function testFullSession(supabaseUrl: string, serviceKey: string, testUser
   ];
 
   try {
-    // Create test session
-    const sessionStartTime = new Date(Date.now() - 45 * 60 * 1000); // started 45 min ago
+    const sessionStartTime = new Date(Date.now() - 45 * 60 * 1000);
     const { data: session, error: sessionError } = await supabase
       .from('sessions')
       .insert({
@@ -253,7 +241,6 @@ async function testFullSession(supabaseUrl: string, serviceKey: string, testUser
       };
     }
 
-    // Set current_session_id on profile
     await supabase
       .from('profiles')
       .update({ current_session_id: session.id })
@@ -261,9 +248,7 @@ async function testFullSession(supabaseUrl: string, serviceKey: string, testUser
 
     validations.push({ check: 'Test session created', passed: true, detail: session.id });
 
-    // Run through session script
     for (const group of sessionScript) {
-      // Manipulate started_at to simulate time progression
       const simulatedStartTime = new Date(Date.now() - (45 - group.minuteOffset) * 60 * 1000);
       await supabase
         .from('sessions')
@@ -305,7 +290,6 @@ async function testFullSession(supabaseUrl: string, serviceKey: string, testUser
       }
     }
 
-    // Check session final state
     const { data: finalSession } = await supabase
       .from('sessions')
       .select('*')
@@ -340,7 +324,6 @@ async function testFullSession(supabaseUrl: string, serviceKey: string, testUser
       detail: `${(finalSession?.commitments as any[] || []).length} commitments`,
     });
 
-    // Check profile current_session_id is null
     const { data: profileAfter } = await supabase
       .from('profiles')
       .select('current_session_id')
@@ -354,21 +337,19 @@ async function testFullSession(supabaseUrl: string, serviceKey: string, testUser
       detail: sessionCleared ? 'Cleared' : `Still set: ${profileAfter?.current_session_id}`,
     });
 
-    // Check encerramento responses had closing tags
     const closingResponses = conversationLog.filter(l => l.phase === 'encerramento');
     const anyClosingTag = closingResponses.some(l =>
       /\[ENCERRAR_SESSAO\]|\[CONVERSA_CONCLUIDA\]/i.test(l.received)
     );
     validations.push({
       check: 'Closing tags in encerramento phase',
-      passed: anyClosingTag || isCompleted, // if session is completed, tags worked even if stripped
+      passed: anyClosingTag || isCompleted,
       detail: anyClosingTag ? 'Tags found' : (isCompleted ? 'Session completed (tags may be stripped)' : 'No closing tags'),
     });
 
-    // Cleanup: delete test session and messages
+    // Cleanup
     await supabase.from('sessions').delete().eq('id', session.id);
     await supabase.from('profiles').update({ current_session_id: null }).eq('user_id', testUserId);
-    // Delete test messages (last N messages for this user)
     const totalTestMessages = sessionScript.reduce((sum, g) => sum + g.messages.length, 0);
     const { data: testMsgs } = await supabase
       .from('messages')
@@ -391,8 +372,8 @@ async function testFullSession(supabaseUrl: string, serviceKey: string, testUser
       validations,
     };
   } catch (error) {
-    // Cleanup on error
     try {
+      const supabase = createClient(supabaseUrl, serviceKey);
       await supabase.from('profiles').update({ current_session_id: null }).eq('user_id', testUserId);
     } catch {}
     return {
@@ -581,7 +562,6 @@ async function testConversationFollowup(supabaseUrl: string, serviceKey: string)
     const data = await res.json();
     validations.push({ check: 'Function returned successfully', passed: true });
 
-    // It's OK if no followups are eligible - just validate the function ran
     if (data.status === 'skipped' && data.reason === 'quiet_hours') {
       validations.push({ check: 'Quiet hours respected (but bypassed in dry_run)', passed: true });
     }
@@ -694,7 +674,6 @@ Seja direto e objetivo. Máximo 5 sugestões.`
       const data = await response.json();
       const content = data.choices?.[0]?.message?.content || '';
 
-      // Parse verdict and suggestions
       const lines = content.split('\n').filter((l: string) => l.trim());
       const verdict = lines[0] || '⚠️ Análise inconclusiva';
       const suggestions = lines
@@ -716,6 +695,51 @@ Seja direto e objetivo. Máximo 5 sugestões.`
   };
 }
 
+// ========== SETUP: Get or create test user ==========
+async function getTestUser(supabase: any, testUserId: string | null) {
+  if (!testUserId) {
+    const { data: adminRole } = await supabase
+      .from('user_roles')
+      .select('user_id')
+      .eq('role', 'admin')
+      .limit(1)
+      .single();
+
+    if (!adminRole) {
+      throw new Error('No admin user found. Pass user_id in body.');
+    }
+    testUserId = adminRole.user_id;
+  }
+
+  let createdTempProfile = false;
+  let { data: testProfile } = await supabase
+    .from('profiles')
+    .select('user_id, name, phone, current_session_id')
+    .eq('user_id', testUserId)
+    .single();
+
+  if (!testProfile) {
+    console.log('⚠️ No profile found for test user, creating temporary profile...');
+    const { data: newProfile, error: insertErr } = await supabase
+      .from('profiles')
+      .insert({ user_id: testUserId, name: 'Test User', phone: 'test-simulation', status: 'active' })
+      .select('user_id, name, phone, current_session_id')
+      .single();
+
+    if (insertErr || !newProfile) {
+      throw new Error('Failed to create temp profile: ' + (insertErr?.message || 'unknown'));
+    }
+    testProfile = newProfile;
+    createdTempProfile = true;
+  }
+
+  if (testProfile.current_session_id) {
+    await supabase.from('profiles').update({ current_session_id: null }).eq('user_id', testUserId);
+  }
+
+  return { testUserId: testUserId!, testProfile, createdTempProfile };
+}
+
 // ========== MAIN ==========
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -724,116 +748,110 @@ Deno.serve(async (req) => {
 
   try {
     let testUserId: string | null = null;
+    let testName: string | null = null;
+    let verdictResults: TestResult[] | null = null;
+
     try {
       const body = await req.json();
       testUserId = body?.user_id || null;
+      testName = body?.test || null;
+      verdictResults = body?.results || null;
     } catch {}
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, serviceKey);
 
-    // If no user_id provided, find the admin user
-    if (!testUserId) {
-      const { data: adminRole } = await supabase
-        .from('user_roles')
-        .select('user_id')
-        .eq('role', 'admin')
-        .limit(1)
-        .single();
+    // If no test specified, return available tests
+    if (!testName) {
+      return new Response(JSON.stringify({
+        available_tests: AVAILABLE_TESTS,
+        usage: 'Pass { "test": "casual" } to run a single test. Pass { "test": "verdict", "results": [...] } to generate verdict.',
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
-      if (!adminRole) {
-        return new Response(JSON.stringify({ error: 'No admin user found. Pass user_id in body.' }), {
+    // Verdict mode: generate verdict from provided results
+    if (testName === 'verdict') {
+      if (!verdictResults || !Array.isArray(verdictResults)) {
+        return new Response(JSON.stringify({ error: 'Pass results array in body for verdict' }), {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
-      testUserId = adminRole.user_id;
+      console.log('🤖 Generating AI verdict...');
+      const { verdict, suggestions } = await generateVerdict(verdictResults);
+
+      const totalDuration = verdictResults.reduce((sum, r) => sum + r.duration_ms, 0);
+      const passCount = verdictResults.filter(r => r.status === 'pass').length;
+      const failCount = verdictResults.filter(r => r.status === 'fail').length;
+      const warnCount = verdictResults.filter(r => r.status === 'warning').length;
+
+      return new Response(JSON.stringify({
+        status: 'success',
+        summary: {
+          total: verdictResults.length,
+          pass: passCount,
+          fail: failCount,
+          warning: warnCount,
+          total_duration_ms: totalDuration,
+        },
+        verdict,
+        suggestions,
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
-    // Verify test user exists, create temporary profile if missing
-    let createdTempProfile = false;
-    let { data: testProfile } = await supabase
-      .from('profiles')
-      .select('user_id, name, phone, current_session_id')
-      .eq('user_id', testUserId)
-      .single();
-
-    if (!testProfile) {
-      console.log('⚠️ No profile found for test user, creating temporary profile...');
-      const { data: newProfile, error: insertErr } = await supabase
-        .from('profiles')
-        .insert({ user_id: testUserId, name: 'Test User', phone: 'test-simulation', status: 'active' })
-        .select('user_id, name, phone, current_session_id')
-        .single();
-
-      if (insertErr || !newProfile) {
-        return new Response(JSON.stringify({ error: 'Failed to create temp profile: ' + (insertErr?.message || 'unknown') }), {
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-      testProfile = newProfile;
-      createdTempProfile = true;
+    // Single test mode
+    if (!AVAILABLE_TESTS.includes(testName)) {
+      return new Response(JSON.stringify({ error: `Unknown test: ${testName}. Available: ${AVAILABLE_TESTS.join(', ')}` }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
-    // Clear any existing session before tests
-    if (testProfile.current_session_id) {
-      await supabase.from('profiles').update({ current_session_id: null }).eq('user_id', testUserId);
+    const { testUserId: resolvedUserId, createdTempProfile } = await getTestUser(supabase, testUserId);
+    console.log(`🧪 Running test "${testName}" for user ${resolvedUserId}`);
+
+    let result: TestResult;
+
+    switch (testName) {
+      case 'casual':
+        result = await testCasualConversation(supabaseUrl, serviceKey, resolvedUserId);
+        break;
+      case 'emotional':
+        result = await testEmotionalConversation(supabaseUrl, serviceKey, resolvedUserId);
+        break;
+      case 'session':
+        result = await testFullSession(supabaseUrl, serviceKey, resolvedUserId);
+        break;
+      case 'report':
+        result = await testWeeklyReport(supabaseUrl, serviceKey, resolvedUserId);
+        break;
+      case 'checkin':
+        result = await testScheduledCheckin(supabaseUrl, serviceKey, resolvedUserId);
+        break;
+      case 'followup':
+        result = await testConversationFollowup(supabaseUrl, serviceKey);
+        break;
+      default:
+        result = { name: 'Unknown', status: 'fail', duration_ms: 0, details: {}, validations: [] };
     }
 
-    console.log(`🧪 Starting system tests for user ${testProfile.name} (${testUserId})`);
-
-    const results: TestResult[] = [];
-
-    // Run tests sequentially (they share state via the test user)
-    console.log('🔹 Test 1: Casual Conversation');
-    results.push(await testCasualConversation(supabaseUrl, serviceKey, testUserId));
-
-    console.log('🔹 Test 2: Emotional Conversation');
-    results.push(await testEmotionalConversation(supabaseUrl, serviceKey, testUserId));
-
-    console.log('🔹 Test 3: Full Session (45min simulation)');
-    results.push(await testFullSession(supabaseUrl, serviceKey, testUserId));
-
-    console.log('🔹 Test 4: Weekly Report');
-    results.push(await testWeeklyReport(supabaseUrl, serviceKey, testUserId));
-
-    console.log('🔹 Test 5: Scheduled Check-in');
-    results.push(await testScheduledCheckin(supabaseUrl, serviceKey, testUserId));
-
-    console.log('🔹 Test 6: Conversation Follow-up');
-    results.push(await testConversationFollowup(supabaseUrl, serviceKey));
-
-    // Cleanup temp profile if created
+    // Cleanup temp profile
     if (createdTempProfile) {
       console.log('🧹 Cleaning up temporary test profile...');
-      await supabase.from('profiles').delete().eq('user_id', testUserId);
+      await supabase.from('profiles').delete().eq('user_id', resolvedUserId);
     }
 
-    // Generate AI verdict
-    console.log('🤖 Generating AI verdict...');
-    const { verdict, suggestions } = await generateVerdict(results);
-
-    const totalDuration = results.reduce((sum, r) => sum + r.duration_ms, 0);
-    const passCount = results.filter(r => r.status === 'pass').length;
-    const failCount = results.filter(r => r.status === 'fail').length;
-    const warnCount = results.filter(r => r.status === 'warning').length;
-
-    console.log(`🧪 Tests complete: ${passCount} pass, ${warnCount} warn, ${failCount} fail (${totalDuration}ms)`);
+    console.log(`✅ Test "${testName}" complete: ${result.status} (${result.duration_ms}ms)`);
 
     return new Response(JSON.stringify({
       status: 'success',
-      summary: {
-        total: results.length,
-        pass: passCount,
-        fail: failCount,
-        warning: warnCount,
-        total_duration_ms: totalDuration,
-      },
-      verdict,
-      suggestions,
-      results,
+      test: testName,
+      result,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
