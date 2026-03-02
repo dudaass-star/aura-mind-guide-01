@@ -47,19 +47,34 @@ Deno.serve(async (req) => {
   }
 
   try {
-    console.log('🕐 Starting scheduled check-in...');
+    let dryRun = false;
+    let targetUserId: string | null = null;
+    try {
+      const body = await req.json();
+      dryRun = body?.dry_run === true;
+      targetUserId = body?.target_user_id || null;
+    } catch { /* no body */ }
+
+    console.log(`🕐 Starting scheduled check-in... (dry_run=${dryRun})`);
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Get active users with phone numbers
-    const { data: profiles, error: profilesError } = await supabase
+    let profilesQuery = supabase
       .from('profiles')
       .select('*')
       .eq('status', 'active')
-      .not('phone', 'is', null)
-      .or('do_not_disturb_until.is.null,do_not_disturb_until.lte.' + new Date().toISOString());
+      .not('phone', 'is', null);
+
+    if (targetUserId) {
+      profilesQuery = profilesQuery.eq('user_id', targetUserId);
+    } else {
+      profilesQuery = profilesQuery.or('do_not_disturb_until.is.null,do_not_disturb_until.lte.' + new Date().toISOString());
+    }
+
+    const { data: profiles, error: profilesError } = await profilesQuery;
 
     if (profilesError) {
       throw new Error(`Error fetching profiles: ${profilesError.message}`);
@@ -68,6 +83,7 @@ Deno.serve(async (req) => {
     console.log(`📋 Found ${profiles?.length || 0} active users`);
 
     let sentCount = 0;
+    const dryRunResults: any[] = [];
 
     // Group by WhatsApp instance for parallel processing
     const instanceGroups = groupByInstance(profiles || []);
@@ -92,6 +108,16 @@ Deno.serve(async (req) => {
               .order('due_date', { ascending: true });
 
             const message = getCheckinMessage(profile, lastCheckin, pendingCommitments || []);
+
+            if (dryRun) {
+              dryRunResults.push({
+                user_id: profile.user_id,
+                name: profile.name,
+                message,
+              });
+              sentCount++;
+              continue;
+            }
 
             // Get instance config for this user
             const zapiConfig = await getInstanceConfigForUser(supabase, profile.user_id);
@@ -124,11 +150,17 @@ Deno.serve(async (req) => {
 
     console.log(`📊 Check-in complete: ${sentCount}/${profiles?.length || 0} messages sent`);
 
-    return new Response(JSON.stringify({ 
+    const responsePayload: any = { 
       status: 'success', 
       totalUsers: profiles?.length || 0,
-      messagesSent: sentCount 
-    }), {
+      messagesSent: sentCount,
+    };
+    if (dryRun) {
+      responsePayload.dry_run = true;
+      responsePayload.messages = dryRunResults;
+    }
+
+    return new Response(JSON.stringify(responsePayload), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 

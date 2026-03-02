@@ -13,6 +13,7 @@ import PrivacyPolicy from "./pages/PrivacyPolicy";
 import StartTrial from "./pages/StartTrial";
 import TrialStarted from "./pages/TrialStarted";
 import AdminMeditations from "./pages/AdminMeditations";
+import AdminTests from "./pages/AdminTests";
 import AdminLogin from "./pages/AdminLogin";
 import NotFound from "./pages/NotFound";
 
@@ -36,6 +37,7 @@ const App = () => (
             <Route path="/trial-iniciado" element={<TrialStarted />} />
             <Route path="/admin/login" element={<AdminLogin />} />
             <Route path="/admin/meditacoes" element={<AdminMeditations />} />
+            <Route path="/admin/testes" element={<AdminTests />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
