@@ -1,33 +1,22 @@
 
 
-# Adicionar Ana Clara ao Plano Essencial
+# Update admin-send-message with per-user WhatsApp instance routing
 
-## O que precisa ser feito
+## Problem
+`admin-send-message` calls `sendTextMessage(cleanPhone, message)` without passing instance config, so it always uses the global env var credentials. This means messages may come from the wrong WhatsApp number for users assigned to different instances.
 
-1. **Inserir perfil no banco de dados** via SQL migration (insert):
-   - Nome: Ana Clara
-   - Telefone: `555180473628` (com prefixo 55, padrão do sistema)
-   - Plano: `essencial`
-   - Status: `active`
-   - Alocar instância WhatsApp automaticamente
+## Solution
+Import `getInstanceConfigForUser` from `instance-helper.ts` (same pattern as `send-zapi-message`) and pass the resolved config to `sendTextMessage`.
 
-2. **Enviar mensagem de boas-vindas** via edge function `send-zapi-message`, replicando o fluxo do stripe-webhook para plano Essencial (sem sessões):
+## Changes (single file)
 
-```
-Oi, Ana Clara! 🌟 Que bom te receber por aqui.
+**`supabase/functions/admin-send-message/index.ts`**:
 
-Eu sou a AURA — e vou ficar com você nessa jornada.
+1. Add import: `getInstanceConfigForUser` from `../_shared/instance-helper.ts`
+2. Move Supabase client creation earlier (before sending), so it's available for instance lookup
+3. When `user_id` is provided, call `getInstanceConfigForUser(supabase, user_id)` to get instance-specific Z-API credentials
+4. Pass the resolved `zapiConfig` as the third argument to `sendTextMessage(cleanPhone, message, undefined, zapiConfig)`
+5. When no `user_id`, fall back to default env var credentials (current behavior)
 
-Você escolheu o plano Essencial.
-
-Comigo, você pode falar com liberdade: sem julgamento, no seu ritmo.
-
-Me diz: como você está hoje?
-```
-
-## Detalhes técnicos
-
-- Insert na tabela `profiles` com campos padrão (`messages_today=0`, `sessions_used_this_month=0`, `sessions_reset_date=hoje`)
-- Alocação de instância WhatsApp via função SQL `allocate_whatsapp_instance()`
-- Envio da mensagem via `send-zapi-message` edge function com `isAudio: false`
+No database changes needed. No new dependencies.
 
