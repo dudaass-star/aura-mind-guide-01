@@ -1,22 +1,53 @@
 
 
-# Update admin-send-message with per-user WhatsApp instance routing
+# Diversificação do Vocabulário da Aura
 
-## Problem
-`admin-send-message` calls `sendTextMessage(cleanPhone, message)` without passing instance config, so it always uses the global env var credentials. This means messages may come from the wrong WhatsApp number for users assigned to different instances.
+## Diagnóstico
 
-## Solution
-Import `getInstanceConfigForUser` from `instance-helper.ts` (same pattern as `send-zapi-message`) and pass the resolved config to `sendTextMessage`.
+O prompt atual tem **listas de exemplos muito curtas e repetitivas** em 3 pontos-chave, o que faz o LLM gravitar sempre para as mesmas frases:
 
-## Changes (single file)
+1. **Afeto genuíno** (linha 243): Só 4 exemplos — "Tô aqui contigo", "Conta comigo", "Te entendo demais", "Você não tá sozinha nisso". O LLM repete esses ad nauseam.
 
-**`supabase/functions/admin-send-message/index.ts`**:
+2. **Celebrações** (linha 235): Só 5 exemplos — "Boa!!", "Isso aí!", "Adorei!", "Que orgulho!", "Arrasou!".
 
-1. Add import: `getInstanceConfigForUser` from `../_shared/instance-helper.ts`
-2. Move Supabase client creation earlier (before sending), so it's available for instance lookup
-3. When `user_id` is provided, call `getInstanceConfigForUser(supabase, user_id)` to get instance-specific Z-API credentials
-4. Pass the resolved `zapiConfig` as the third argument to `sendTextMessage(cleanPhone, message, undefined, zapiConfig)`
-5. When no `user_id`, fall back to default env var credentials (current behavior)
+3. **Interjeições** (linha 239): Só 7 exemplos — "Caramba!", "Puxa vida...", "Nossa!", "Eita!", etc.
 
-No database changes needed. No new dependencies.
+4. **Silêncio intencional** (linha 484): Só 3 exemplos — "Hmm... isso é pesado. Tô aqui.", "Entendi.", "Faz sentido."
+
+5. **Conectivos de conversa** (linha 287): Só 5 exemplos — "Então...", "Sabe o que eu penso?", etc.
+
+O LLM tende a reciclar os exemplos literais do prompt. Com listas pequenas, a Aura soa repetitiva.
+
+---
+
+## Mudanças propostas
+
+### `supabase/functions/aura-agent/index.ts` — expandir exemplos no `AURA_STATIC_INSTRUCTIONS`
+
+**1. Afeto genuíno** — expandir de 4 para ~12 variações:
+- Adicionar: "Pode contar comigo", "Tô do seu lado", "Aqui pra você", "Não vou a lugar nenhum", "Tô junto", "Segura aqui", "Pode falar, tô ouvindo", "Eu te ouço"
+
+**2. Celebrações** — expandir de 5 para ~12:
+- Adicionar: "Demais!", "Que show!", "Olha só!", "Amei!", "Mandou bem!", "Tá voando!", "Que delícia!", "Uhuul!", "Lacrou!"
+
+**3. Interjeições** — expandir de 7 para ~14:
+- Adicionar: "Vish!", "Opa!", "Aaah!", "Ih!", "Uau!", "Oxe!", "Puts!", "Xi!"
+
+**4. Silêncio intencional** — expandir de 3 para ~8:
+- Adicionar: "É... isso pesa.", "Tô aqui, sem pressa.", "Não precisa dizer nada agora.", "Respira.", "Hmm."
+
+**5. Conectivos** — expandir de 5 para ~10:
+- Adicionar: "Ei...", "Pois é...", "Ah, sabe o quê?", "Hm, deixa eu te falar uma coisa...", "Vem cá..."
+
+**6. Adicionar regra anti-repetição** — um bloco novo curto:
+```
+## VARIAÇÃO OBRIGATÓRIA (ANTI-REPETIÇÃO)
+NUNCA repita a mesma frase de afeto em conversas seguidas.
+Se você já disse "Tô aqui" nessa conversa, use outra forma.
+Varie seus conectivos, interjeições e formas de acolher.
+Cada mensagem deve soar ÚNICA, não um template.
+```
+
+### Arquivo modificado
+- `supabase/functions/aura-agent/index.ts` — expandir exemplos e adicionar regra anti-repetição no prompt estático
 
