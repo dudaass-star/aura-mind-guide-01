@@ -2,6 +2,7 @@ import {
   sendTextMessage,
   cleanPhoneNumber,
 } from "../_shared/zapi-client.ts";
+import { getInstanceConfigForUser } from "../_shared/instance-helper.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -17,14 +18,25 @@ Deno.serve(async (req) => {
   try {
     const { phone, message, user_id } = await req.json();
     
-    console.log(`📤 [Admin] Sending message to ${phone}`);
+    console.log(`📤 [Admin] Sending message to ${phone}${user_id ? ` (user: ${user_id})` : ''}`);
 
     if (!phone || !message) {
       throw new Error('Phone and message are required');
     }
 
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Resolve instance-specific Z-API config if user_id provided
+    let zapiConfig = undefined;
+    if (user_id) {
+      zapiConfig = await getInstanceConfigForUser(supabase, user_id);
+      console.log(`📡 [Admin] Using instance config for user ${user_id}`);
+    }
+
     const cleanPhone = cleanPhoneNumber(phone);
-    const result = await sendTextMessage(cleanPhone, message);
+    const result = await sendTextMessage(cleanPhone, message, undefined, zapiConfig);
 
     if (!result.success) {
       throw new Error(result.error || 'Failed to send message');
@@ -32,10 +44,6 @@ Deno.serve(async (req) => {
 
     // Save message to history if user_id provided
     if (user_id) {
-      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-      const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-      const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
       await supabase.from('messages').insert({
         user_id: user_id,
         role: 'assistant',
