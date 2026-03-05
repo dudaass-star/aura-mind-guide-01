@@ -11,6 +11,7 @@ interface InstanceRow {
   phone_number: string | null;
   zapi_instance_id: string;
   zapi_token: string;
+  zapi_client_token: string;
   status: string;
 }
 
@@ -38,7 +39,7 @@ Deno.serve(async (req) => {
     // Fetch all instances (active or disconnected - we check all)
     const { data: instances, error: fetchError } = await supabase
       .from('whatsapp_instances')
-      .select('id, name, phone_number, zapi_instance_id, zapi_token, status')
+      .select('id, name, phone_number, zapi_instance_id, zapi_token, zapi_client_token, status')
       .in('status', ['active', 'disconnected']);
 
     if (fetchError) throw fetchError;
@@ -97,7 +98,10 @@ async function checkInstance(supabase: any, instance: InstanceRow): Promise<Heal
     const url = `https://api.z-api.io/instances/${instance.zapi_instance_id}/token/${instance.zapi_token}/status`;
     const response = await fetch(url, {
       method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Client-Token': instance.zapi_client_token,
+      },
     });
 
     if (!response.ok) {
