@@ -11,6 +11,7 @@ interface InstanceRow {
   phone_number: string | null;
   zapi_instance_id: string;
   zapi_token: string;
+  zapi_client_token: string;
   status: string;
 }
 
