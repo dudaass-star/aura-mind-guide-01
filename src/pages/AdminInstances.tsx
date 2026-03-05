@@ -105,7 +105,30 @@ export default function AdminInstances() {
     setChecking(false);
   };
 
-  if (authLoading || !isAdmin) {
+  const runReconciliation = async (dryRun = false) => {
+    setReconciling(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('reconcile-subscriptions', {
+        body: { dry_run: dryRun },
+      });
+      if (error) throw error;
+      setReconcileResult(data);
+      setShowReconcileDialog(true);
+      toast({
+        title: 'Reconciliação concluída',
+        description: `${data.inconsistencies_found} inconsistências encontradas`,
+      });
+    } catch (err: any) {
+      toast({
+        title: 'Erro na reconciliação',
+        description: err.message,
+        variant: 'destructive',
+      });
+    }
+    setReconciling(false);
+  };
+
+
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
