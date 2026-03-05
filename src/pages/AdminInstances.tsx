@@ -48,6 +48,9 @@ export default function AdminInstances() {
   const [healthLogs, setHealthLogs] = useState<HealthLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
+  const [reconciling, setReconciling] = useState(false);
+  const [reconcileResult, setReconcileResult] = useState<any>(null);
+  const [showReconcileDialog, setShowReconcileDialog] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
 
