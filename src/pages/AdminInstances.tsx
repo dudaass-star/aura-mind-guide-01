@@ -129,6 +129,7 @@ export default function AdminInstances() {
   };
 
 
+  if (authLoading || !isAdmin) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -143,7 +144,7 @@ export default function AdminInstances() {
     <div className="min-h-screen bg-background p-4 md:p-8">
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="icon" onClick={() => navigate('/admin/testes')}>
               <ArrowLeft className="h-5 w-5" />
@@ -153,10 +154,16 @@ export default function AdminInstances() {
               <p className="text-sm text-muted-foreground">Status das instâncias Z-API em tempo real</p>
             </div>
           </div>
-          <Button onClick={runHealthCheck} disabled={checking} variant="sage">
-            {checking ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RefreshCw className="h-4 w-4 mr-2" />}
-            Verificar Agora
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button onClick={() => runReconciliation(false)} disabled={reconciling} variant="outline">
+              {reconciling ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CreditCard className="h-4 w-4 mr-2" />}
+              Reconciliar Stripe
+            </Button>
+            <Button onClick={runHealthCheck} disabled={checking} variant="sage">
+              {checking ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+              Verificar Agora
+            </Button>
+          </div>
         </div>
 
         {/* Summary Cards */}
@@ -315,6 +322,76 @@ export default function AdminInstances() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Reconciliation Results Dialog */}
+      <Dialog open={showReconcileDialog} onOpenChange={setShowReconcileDialog}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Resultado da Reconciliação Stripe</DialogTitle>
+          </DialogHeader>
+          {reconcileResult && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-3 rounded-lg bg-muted">
+                  <p className="text-sm text-muted-foreground">Assinaturas ativas no Stripe</p>
+                  <p className="text-2xl font-bold">{reconcileResult.total_active_subscriptions}</p>
+                </div>
+                <div className="p-3 rounded-lg bg-muted">
+                  <p className="text-sm text-muted-foreground">Inconsistências encontradas</p>
+                  <p className="text-2xl font-bold">{reconcileResult.inconsistencies_found}</p>
+                </div>
+              </div>
+
+              {reconcileResult.fixes?.length > 0 && (
+                <div>
+                  <h3 className="font-semibold mb-2">Correções</h3>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Nome</TableHead>
+                        <TableHead>Telefone</TableHead>
+                        <TableHead>Problema</TableHead>
+                        <TableHead>Ação</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {reconcileResult.fixes.map((fix: any, i: number) => (
+                        <TableRow key={i}>
+                          <TableCell className="font-medium">{fix.name}</TableCell>
+                          <TableCell className="text-muted-foreground">{fix.phone}</TableCell>
+                          <TableCell className="text-sm">{fix.issue}</TableCell>
+                          <TableCell>
+                            <Badge variant={fix.action === 'Corrigido' ? 'default' : 'secondary'}>
+                              {fix.action}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+
+              {reconcileResult.errors?.length > 0 && (
+                <div>
+                  <h3 className="font-semibold mb-2 text-destructive">Erros</h3>
+                  <ul className="space-y-1 text-sm text-muted-foreground">
+                    {reconcileResult.errors.map((err: any, i: number) => (
+                      <li key={i}>• {err.error}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {reconcileResult.fixes?.length === 0 && reconcileResult.errors?.length === 0 && (
+                <p className="text-center text-muted-foreground py-4">
+                  ✅ Tudo consistente! Nenhuma divergência encontrada.
+                </p>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
