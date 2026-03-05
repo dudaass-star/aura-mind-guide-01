@@ -97,7 +97,10 @@ async function checkInstance(supabase: any, instance: InstanceRow): Promise<Heal
     const url = `https://api.z-api.io/instances/${instance.zapi_instance_id}/token/${instance.zapi_token}/status`;
     const response = await fetch(url, {
       method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Client-Token': instance.zapi_client_token,
+      },
     });
 
     if (!response.ok) {
