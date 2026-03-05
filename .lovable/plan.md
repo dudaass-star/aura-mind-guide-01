@@ -1,54 +1,53 @@
 
 
-# Monitoramento de Instâncias WhatsApp com Alerta por Email
+# Diversificação do Vocabulário da Aura
 
-## O que será feito
+## Diagnóstico
 
-1. **Nova tabela `instance_health_logs`** para registrar o histórico de verificações de cada instância
-2. **Colunas extras em `whatsapp_instances`**: `last_health_check`, `last_disconnected_at`
-3. **Edge Function `check-instance-health`** que verifica o status de cada instância ativa via Z-API (`GET /status`) e envia email de alerta quando detecta queda
-4. **Cron job a cada 5 minutos** chamando a function
-5. **Painel de status na página Admin** mostrando cada instância com indicador verde/vermelho, último check e histórico recente
+O prompt atual tem **listas de exemplos muito curtas e repetitivas** em 3 pontos-chave, o que faz o LLM gravitar sempre para as mesmas frases:
 
-## Detalhes técnicos
+1. **Afeto genuíno** (linha 243): Só 4 exemplos — "Tô aqui contigo", "Conta comigo", "Te entendo demais", "Você não tá sozinha nisso". O LLM repete esses ad nauseam.
 
-### Migração SQL
-- Criar `instance_health_logs` (id, instance_id FK, checked_at, is_connected, smartphone_connected, error_message, response_raw jsonb, alert_sent boolean)
-- RLS: apenas service_role
-- Adicionar `last_health_check timestamptz` e `last_disconnected_at timestamptz` em `whatsapp_instances`
+2. **Celebrações** (linha 235): Só 5 exemplos — "Boa!!", "Isso aí!", "Adorei!", "Que orgulho!", "Arrasou!".
 
-### Edge Function `check-instance-health`
-- Para cada instância ativa, chama `GET https://api.z-api.io/instances/{id}/token/{token}/status`
-- Se `connected: false` ou erro:
-  - Atualiza `whatsapp_instances.status = 'disconnected'` e `last_disconnected_at = now()`
-  - Verifica se já enviou alerta recente (últimos 30 min) para evitar spam
-  - Envia email de alerta usando Lovable AI (ou edge function interna com Resend se disponível) para o admin
-- Se conectado: atualiza `last_health_check = now()` e garante `status = 'active'`
-- Registra tudo em `instance_health_logs`
+3. **Interjeições** (linha 239): Só 7 exemplos — "Caramba!", "Puxa vida...", "Nossa!", "Eita!", etc.
 
-### Alerta por email
-- Usará um email simples enviado via edge function (precisa verificar se há integração de email disponível, senão usar um serviço como Resend com API key)
+4. **Silêncio intencional** (linha 484): Só 3 exemplos — "Hmm... isso é pesado. Tô aqui.", "Entendi.", "Faz sentido."
 
-### Cron job
-- `pg_cron` + `pg_net` a cada 5 minutos chamando `check-instance-health`
+5. **Conectivos de conversa** (linha 287): Só 5 exemplos — "Então...", "Sabe o que eu penso?", etc.
 
-### Painel Admin (nova página ou seção em AdminTests)
-- Nova rota `/admin/instancias` ou seção no topo de AdminTests
-- Lista cada instância com: nome, telefone, status (badge verde/vermelho), último check, usuários atuais/max
-- Histórico das últimas 24h de checks por instância
-- Botão "Verificar Agora" que chama a function manualmente
+O LLM tende a reciclar os exemplos literais do prompt. Com listas pequenas, a Aura soa repetitiva.
 
-## Arquivos a criar/modificar
+---
 
-| Arquivo | Ação |
-|---|---|
-| Migração SQL | Criar tabela + colunas |
-| `supabase/functions/check-instance-health/index.ts` | Criar |
-| `supabase/config.toml` | Adicionar function |
-| `src/pages/AdminInstances.tsx` | Criar painel de monitoramento |
-| `src/App.tsx` | Adicionar rota `/admin/instancias` |
-| SQL (insert, não migração) | Cron job |
+## Mudanças propostas
 
-## Pré-requisito
-- Será necessária uma API key de serviço de email (ex: Resend) para enviar os alertas, a menos que já exista uma configurada. Verificarei as opções disponíveis na implementação.
+### `supabase/functions/aura-agent/index.ts` — expandir exemplos no `AURA_STATIC_INSTRUCTIONS`
+
+**1. Afeto genuíno** — expandir de 4 para ~12 variações:
+- Adicionar: "Pode contar comigo", "Tô do seu lado", "Aqui pra você", "Não vou a lugar nenhum", "Tô junto", "Segura aqui", "Pode falar, tô ouvindo", "Eu te ouço"
+
+**2. Celebrações** — expandir de 5 para ~12:
+- Adicionar: "Demais!", "Que show!", "Olha só!", "Amei!", "Mandou bem!", "Tá voando!", "Que delícia!", "Uhuul!", "Lacrou!"
+
+**3. Interjeições** — expandir de 7 para ~14:
+- Adicionar: "Vish!", "Opa!", "Aaah!", "Ih!", "Uau!", "Oxe!", "Puts!", "Xi!"
+
+**4. Silêncio intencional** — expandir de 3 para ~8:
+- Adicionar: "É... isso pesa.", "Tô aqui, sem pressa.", "Não precisa dizer nada agora.", "Respira.", "Hmm."
+
+**5. Conectivos** — expandir de 5 para ~10:
+- Adicionar: "Ei...", "Pois é...", "Ah, sabe o quê?", "Hm, deixa eu te falar uma coisa...", "Vem cá..."
+
+**6. Adicionar regra anti-repetição** — um bloco novo curto:
+```
+## VARIAÇÃO OBRIGATÓRIA (ANTI-REPETIÇÃO)
+NUNCA repita a mesma frase de afeto em conversas seguidas.
+Se você já disse "Tô aqui" nessa conversa, use outra forma.
+Varie seus conectivos, interjeições e formas de acolher.
+Cada mensagem deve soar ÚNICA, não um template.
+```
+
+### Arquivo modificado
+- `supabase/functions/aura-agent/index.ts` — expandir exemplos e adicionar regra anti-repetição no prompt estático
 
