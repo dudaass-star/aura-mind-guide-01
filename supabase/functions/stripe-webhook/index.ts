@@ -197,9 +197,11 @@ Me diz: como você está hoje?`;
           const instanceId = await allocateInstance(supabase);
           console.log(`📱 Allocated WhatsApp instance: ${instanceId || 'none (will use env vars)'}`);
 
+          const newUserId = crypto.randomUUID();
           const { error: insertError } = await supabase
             .from('profiles')
             .insert({
+              user_id: newUserId,
               name: customerName,
               phone: cleanPhone,
               email: customerEmail,
