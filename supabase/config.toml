@@ -86,3 +86,6 @@ verify_jwt = false
 
 [functions.run-system-tests]
 verify_jwt = false
+
+[functions.check-instance-health]
+verify_jwt = false
