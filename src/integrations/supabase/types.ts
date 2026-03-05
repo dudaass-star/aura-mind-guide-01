@@ -243,6 +243,47 @@ export type Database = {
           },
         ]
       }
+      instance_health_logs: {
+        Row: {
+          alert_sent: boolean
+          checked_at: string
+          error_message: string | null
+          id: string
+          instance_id: string
+          is_connected: boolean
+          response_raw: Json | null
+          smartphone_connected: boolean
+        }
+        Insert: {
+          alert_sent?: boolean
+          checked_at?: string
+          error_message?: string | null
+          id?: string
+          instance_id: string
+          is_connected?: boolean
+          response_raw?: Json | null
+          smartphone_connected?: boolean
+        }
+        Update: {
+          alert_sent?: boolean
+          checked_at?: string
+          error_message?: string | null
+          id?: string
+          instance_id?: string
+          is_connected?: boolean
+          response_raw?: Json | null
+          smartphone_connected?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "instance_health_logs_instance_id_fkey"
+            columns: ["instance_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       journey_episodes: {
         Row: {
           content_prompt: string
@@ -972,6 +1013,8 @@ export type Database = {
           created_at: string
           current_users: number
           id: string
+          last_disconnected_at: string | null
+          last_health_check: string | null
           max_users: number
           name: string
           phone_number: string | null
@@ -984,6 +1027,8 @@ export type Database = {
           created_at?: string
           current_users?: number
           id?: string
+          last_disconnected_at?: string | null
+          last_health_check?: string | null
           max_users?: number
           name: string
           phone_number?: string | null
@@ -996,6 +1041,8 @@ export type Database = {
           created_at?: string
           current_users?: number
           id?: string
+          last_disconnected_at?: string | null
+          last_health_check?: string | null
           max_users?: number
           name?: string
           phone_number?: string | null
