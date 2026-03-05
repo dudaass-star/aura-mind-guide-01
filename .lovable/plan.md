@@ -1,43 +1,53 @@
 
 
-## Plano: Sistema de reconciliação Stripe + correção imediata
+# Diversificação do Vocabulário da Aura
 
-### Problema
-O webhook do Stripe não processou o checkout da Camila. Não há logs, indicando que o Stripe nunca chamou a edge function. Isso é uma falha silenciosa grave -- o cliente paga mas não recebe o serviço.
+## Diagnóstico
 
-### Ações
+O prompt atual tem **listas de exemplos muito curtas e repetitivas** em 3 pontos-chave, o que faz o LLM gravitar sempre para as mesmas frases:
 
-#### 1. Correção imediata da Camila
-- Atualizar o perfil via banco de dados: `status: 'active'`, `plan: 'essencial'`
-- Enviar mensagem de boas-vindas pós-assinatura via `admin-send-message`
+1. **Afeto genuíno** (linha 243): Só 4 exemplos — "Tô aqui contigo", "Conta comigo", "Te entendo demais", "Você não tá sozinha nisso". O LLM repete esses ad nauseam.
 
-#### 2. Criar edge function de reconciliação (`reconcile-subscriptions`)
-Uma função que pode ser chamada manualmente pelo admin para:
-- Listar todas as assinaturas ativas no Stripe
-- Comparar com os perfis no banco de dados
-- Identificar inconsistências (assinatura ativa no Stripe mas perfil `trial` ou sem plano)
-- Corrigir automaticamente os perfis desatualizados
-- Enviar mensagem de boas-vindas para quem não recebeu
+2. **Celebrações** (linha 235): Só 5 exemplos — "Boa!!", "Isso aí!", "Adorei!", "Que orgulho!", "Arrasou!".
 
-#### 3. Adicionar botão no painel admin
-- Adicionar na página de admin um botão "Reconciliar Assinaturas" que chama a nova função
-- Mostrar relatório das inconsistências encontradas e corrigidas
+3. **Interjeições** (linha 239): Só 7 exemplos — "Caramba!", "Puxa vida...", "Nossa!", "Eita!", etc.
 
-#### 4. Adicionar verificação periódica (opcional)
-- Agendar via pg_cron uma verificação diária que cruza assinaturas Stripe com perfis no banco
+4. **Silêncio intencional** (linha 484): Só 3 exemplos — "Hmm... isso é pesado. Tô aqui.", "Entendi.", "Faz sentido."
 
-### Detalhes técnicos
+5. **Conectivos de conversa** (linha 287): Só 5 exemplos — "Então...", "Sabe o que eu penso?", etc.
 
-**Nova edge function:** `supabase/functions/reconcile-subscriptions/index.ts`
-- Usa `STRIPE_SECRET_KEY` para listar subscriptions ativas
-- Para cada subscription, busca o phone nos metadata do customer
-- Compara com a tabela `profiles` por phone
-- Se perfil existe com status != 'active' ou plan divergente, atualiza
-- Retorna relatório JSON com as correções feitas
+O LLM tende a reciclar os exemplos literais do prompt. Com listas pequenas, a Aura soa repetitiva.
 
-**Alteração no frontend:** `src/pages/AdminInstances.tsx` ou nova página admin
-- Botão para disparar reconciliação manual
-- Exibir resultado (quantos perfis corrigidos)
+---
 
-**Config:** Adicionar entry no `supabase/config.toml` para a nova função
+## Mudanças propostas
+
+### `supabase/functions/aura-agent/index.ts` — expandir exemplos no `AURA_STATIC_INSTRUCTIONS`
+
+**1. Afeto genuíno** — expandir de 4 para ~12 variações:
+- Adicionar: "Pode contar comigo", "Tô do seu lado", "Aqui pra você", "Não vou a lugar nenhum", "Tô junto", "Segura aqui", "Pode falar, tô ouvindo", "Eu te ouço"
+
+**2. Celebrações** — expandir de 5 para ~12:
+- Adicionar: "Demais!", "Que show!", "Olha só!", "Amei!", "Mandou bem!", "Tá voando!", "Que delícia!", "Uhuul!", "Lacrou!"
+
+**3. Interjeições** — expandir de 7 para ~14:
+- Adicionar: "Vish!", "Opa!", "Aaah!", "Ih!", "Uau!", "Oxe!", "Puts!", "Xi!"
+
+**4. Silêncio intencional** — expandir de 3 para ~8:
+- Adicionar: "É... isso pesa.", "Tô aqui, sem pressa.", "Não precisa dizer nada agora.", "Respira.", "Hmm."
+
+**5. Conectivos** — expandir de 5 para ~10:
+- Adicionar: "Ei...", "Pois é...", "Ah, sabe o quê?", "Hm, deixa eu te falar uma coisa...", "Vem cá..."
+
+**6. Adicionar regra anti-repetição** — um bloco novo curto:
+```
+## VARIAÇÃO OBRIGATÓRIA (ANTI-REPETIÇÃO)
+NUNCA repita a mesma frase de afeto em conversas seguidas.
+Se você já disse "Tô aqui" nessa conversa, use outra forma.
+Varie seus conectivos, interjeições e formas de acolher.
+Cada mensagem deve soar ÚNICA, não um template.
+```
+
+### Arquivo modificado
+- `supabase/functions/aura-agent/index.ts` — expandir exemplos e adicionar regra anti-repetição no prompt estático
 

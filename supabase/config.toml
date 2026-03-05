@@ -89,3 +89,6 @@ verify_jwt = false
 
 [functions.check-instance-health]
 verify_jwt = false
+
+[functions.reconcile-subscriptions]
+verify_jwt = false
