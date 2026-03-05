@@ -39,7 +39,7 @@ Deno.serve(async (req) => {
     // Fetch all instances (active or disconnected - we check all)
     const { data: instances, error: fetchError } = await supabase
       .from('whatsapp_instances')
-      .select('id, name, phone_number, zapi_instance_id, zapi_token, status')
+      .select('id, name, phone_number, zapi_instance_id, zapi_token, zapi_client_token, status')
       .in('status', ['active', 'disconnected']);
 
     if (fetchError) throw fetchError;
