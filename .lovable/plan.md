@@ -1,53 +1,41 @@
 
 
-# Diversificação do Vocabulário da Aura
+## Problema: Nilda não recebeu mensagem da AURA
 
-## Diagnóstico
+### Causa raiz
 
-O prompt atual tem **listas de exemplos muito curtas e repetitivas** em 3 pontos-chave, o que faz o LLM gravitar sempre para as mesmas frases:
+O telefone da Nilda está armazenado como `51981519712` (sem o código do país `55`). O `stripe-webhook` envia a mensagem de boas-vindas usando esse número exatamente como está nos metadados, sem adicionar o prefixo `55`.
 
-1. **Afeto genuíno** (linha 243): Só 4 exemplos — "Tô aqui contigo", "Conta comigo", "Te entendo demais", "Você não tá sozinha nisso". O LLM repete esses ad nauseam.
+A Z-API precisa do número no formato internacional completo: `5551981519712`.
 
-2. **Celebrações** (linha 235): Só 5 exemplos — "Boa!!", "Isso aí!", "Adorei!", "Que orgulho!", "Arrasou!".
-
-3. **Interjeições** (linha 239): Só 7 exemplos — "Caramba!", "Puxa vida...", "Nossa!", "Eita!", etc.
-
-4. **Silêncio intencional** (linha 484): Só 3 exemplos — "Hmm... isso é pesado. Tô aqui.", "Entendi.", "Faz sentido."
-
-5. **Conectivos de conversa** (linha 287): Só 5 exemplos — "Então...", "Sabe o que eu penso?", etc.
-
-O LLM tende a reciclar os exemplos literais do prompt. Com listas pequenas, a Aura soa repetitiva.
-
----
-
-## Mudanças propostas
-
-### `supabase/functions/aura-agent/index.ts` — expandir exemplos no `AURA_STATIC_INSTRUCTIONS`
-
-**1. Afeto genuíno** — expandir de 4 para ~12 variações:
-- Adicionar: "Pode contar comigo", "Tô do seu lado", "Aqui pra você", "Não vou a lugar nenhum", "Tô junto", "Segura aqui", "Pode falar, tô ouvindo", "Eu te ouço"
-
-**2. Celebrações** — expandir de 5 para ~12:
-- Adicionar: "Demais!", "Que show!", "Olha só!", "Amei!", "Mandou bem!", "Tá voando!", "Que delícia!", "Uhuul!", "Lacrou!"
-
-**3. Interjeições** — expandir de 7 para ~14:
-- Adicionar: "Vish!", "Opa!", "Aaah!", "Ih!", "Uau!", "Oxe!", "Puts!", "Xi!"
-
-**4. Silêncio intencional** — expandir de 3 para ~8:
-- Adicionar: "É... isso pesa.", "Tô aqui, sem pressa.", "Não precisa dizer nada agora.", "Respira.", "Hmm."
-
-**5. Conectivos** — expandir de 5 para ~10:
-- Adicionar: "Ei...", "Pois é...", "Ah, sabe o quê?", "Hm, deixa eu te falar uma coisa...", "Vem cá..."
-
-**6. Adicionar regra anti-repetição** — um bloco novo curto:
-```
-## VARIAÇÃO OBRIGATÓRIA (ANTI-REPETIÇÃO)
-NUNCA repita a mesma frase de afeto em conversas seguidas.
-Se você já disse "Tô aqui" nessa conversa, use outra forma.
-Varie seus conectivos, interjeições e formas de acolher.
-Cada mensagem deve soar ÚNICA, não um template.
+Compare com o `start-trial/index.ts`, que corretamente adiciona o prefixo:
+```typescript
+const formattedPhone = cleanPhone.length === 11 ? `55${cleanPhone}` : ...
 ```
 
-### Arquivo modificado
-- `supabase/functions/aura-agent/index.ts` — expandir exemplos e adicionar regra anti-repetição no prompt estático
+O `stripe-webhook` **não faz essa normalização**.
+
+### Correção
+
+No `supabase/functions/stripe-webhook/index.ts`, após limpar o telefone (linha ~102), adicionar normalização do formato:
+
+```typescript
+const cleanPhone = customerPhone.replace(/\D/g, '');
+
+// Adicionar código do país se necessário
+const formattedPhone = (cleanPhone.length === 10 || cleanPhone.length === 11) 
+  ? `55${cleanPhone}` 
+  : cleanPhone;
+```
+
+Usar `formattedPhone` em vez de `cleanPhone`/`customerPhone` em todos os lugares:
+1. No envio da mensagem via `send-zapi-message` (linha 177)
+2. Na busca de perfil existente (linha 109)
+3. No insert/update do perfil (linhas 206 e 236)
+
+### Ação imediata para a Nilda
+
+Após o deploy da correção, disparar manualmente a mensagem de boas-vindas para ela, ou corrigir o telefone no banco para `5551981519712` e reenviar o evento.
+
+Alternativamente, posso atualizar o telefone dela no banco agora e enviar a mensagem via a Edge Function `admin-send-message`.
 
