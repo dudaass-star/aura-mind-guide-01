@@ -94,6 +94,8 @@ Deno.serve(async (req) => {
         trial_started_at: new Date().toISOString(),
         trial_conversations_count: 0,
         plan: null,
+        current_journey_id: 'j1-ansiedade',
+        current_episode: 0,
         whatsapp_instance_id: instanceId,
       })
       .select()
