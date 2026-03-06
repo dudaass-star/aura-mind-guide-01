@@ -213,40 +213,98 @@ const UserGuide = () => {
           </div>
         </Section>
 
-        {/* Relatório + Check-in */}
+        {/* Relatório Semanal */}
         <Section
           id="relatorio"
-          title="Relatório Semanal & Check-in"
+          title="Relatório Semanal"
           subtitle="Acompanhe sua evolução com clareza"
           bg="bg-card"
         >
-          <div className="grid md:grid-cols-2 gap-6">
-            <FeatureCard
-              icon={<BarChart3 className="text-primary" />}
-              title="Relatório Semanal"
-              description="Todo domingo às 19h você recebe uma análise da sua semana: humor, temas discutidos, evolução e próximos passos sugeridos."
-            />
-            <FeatureCard
-              icon={<SmilePlus className="text-primary" />}
-              title="Check-in de Humor"
-              description="Toda segunda a AURA faz um check-in rápido: como você está, seu nível de energia e humor. Isso ajuda a personalizar seu acompanhamento."
-            />
+          <div className="bg-gradient-to-br from-sage-soft/40 via-background to-lavender-soft/30 rounded-2xl border border-primary/10 p-8 md:p-10">
+            <div className="flex flex-col md:flex-row items-start gap-6">
+              <div className="shrink-0 w-16 h-16 rounded-2xl bg-sage-soft flex items-center justify-center">
+                <BarChart3 className="w-8 h-8 text-primary" />
+              </div>
+              <div>
+                <h3 className="font-display text-xl font-bold text-foreground mb-2">
+                  Sua semana em perspectiva
+                </h3>
+                <p className="text-muted-foreground leading-relaxed mb-4">
+                  Todo domingo às 19h, a AURA envia uma análise completa da sua semana: humor, temas discutidos, evolução emocional e próximos passos sugeridos. É como ter um espelho gentil que te ajuda a enxergar seus avanços.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {["Humor & energia", "Temas principais", "Evolução", "Próximos passos"].map((item) => (
+                    <span key={item} className="px-3 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
+                      {item}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
         </Section>
 
         {/* Meditações */}
-        <Section
-          id="meditacoes"
-          title="Meditações Personalizadas"
-          subtitle="Áudios de meditação escolhidos para o seu momento"
-          bg="bg-background"
-        >
-          <FeatureCard
-            icon={<Music className="text-primary" />}
-            title="Meditações sob medida"
-            description="A AURA escolhe meditações com base no que vocês estão conversando. Pode ser para ansiedade, sono, foco ou qualquer tema que faça sentido pra você naquele momento."
-          />
-        </Section>
+        <section id="meditacoes" className="py-16 md:py-20 bg-background relative overflow-hidden">
+          <div className="absolute top-10 right-10 w-72 h-72 bg-lavender-soft rounded-full blur-3xl opacity-30" />
+          <div className="absolute bottom-10 left-10 w-64 h-64 bg-sage-soft rounded-full blur-3xl opacity-30" />
+
+          <div className="container mx-auto px-4 max-w-4xl relative z-10">
+            <div className="text-center mb-10">
+              <span className="inline-block px-4 py-2 rounded-full bg-sage-soft text-primary text-sm font-medium mb-4">
+                🧘 Tudo em um só lugar
+              </span>
+              <h2 className="font-display text-2xl md:text-3xl font-bold text-foreground mb-2">
+                Meditações Personalizadas
+              </h2>
+              <p className="text-muted-foreground max-w-2xl mx-auto">
+                Sem precisar de outro app. A AURA envia meditações guiadas direto no WhatsApp, escolhidas para o que você está vivendo.
+              </p>
+            </div>
+
+            <div className="grid md:grid-cols-3 gap-5 mb-8">
+              {[
+                {
+                  icon: Clock,
+                  title: "Momento certo",
+                  desc: "A AURA percebe quando você precisa e oferece uma meditação — sem você pedir.",
+                  bg: "bg-sage-soft",
+                  iconColor: "text-primary",
+                },
+                {
+                  icon: Mic,
+                  title: "Voz da AURA",
+                  desc: "Áudios com a mesma voz que você já conhece. Familiar e acolhedor.",
+                  bg: "bg-lavender-soft",
+                  iconColor: "text-accent",
+                },
+                {
+                  icon: MessageCircle,
+                  title: "Direto no WhatsApp",
+                  desc: "Sem abrir outro app. Você ouve ali mesmo, no meio da conversa.",
+                  bg: "bg-sky-soft",
+                  iconColor: "text-sky",
+                },
+              ].map((f, i) => (
+                <div key={i} className="p-6 rounded-2xl bg-card border border-border/50 hover:border-primary/20 transition-colors text-center">
+                  <div className={`w-14 h-14 rounded-xl ${f.bg} flex items-center justify-center mx-auto mb-4`}>
+                    <f.icon className={`w-7 h-7 ${f.iconColor}`} />
+                  </div>
+                  <h3 className="font-display text-lg font-semibold text-foreground mb-2">{f.title}</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{f.desc}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex flex-wrap justify-center gap-2">
+              {["Ansiedade", "Sono", "Foco", "Estresse", "Gratidão", "Respiração"].map((tag) => (
+                <span key={tag} className="px-3 py-1.5 rounded-full text-sm bg-card text-muted-foreground border border-border/50">
+                  {tag}
+                </span>
+              ))}
+            </div>
+          </div>
+        </section>
 
         {/* Dicas */}
         <Section
