@@ -100,13 +100,17 @@ Deno.serve(async (req) => {
       const sessionsCount = PLAN_SESSIONS[customerPlan] || 0;
       const supabase = createClient(supabaseUrl, supabaseServiceKey);
       const cleanPhone = customerPhone.replace(/\D/g, '');
+      // Add country code for Brazilian numbers (10-11 digits without prefix)
+      const formattedPhone = (cleanPhone.length === 10 || cleanPhone.length === 11)
+        ? `55${cleanPhone}`
+        : cleanPhone;
       const today = new Date().toISOString().split('T')[0];
 
       // Check if profile already exists BEFORE choosing the message
       const { data: existingProfile } = await supabase
         .from('profiles')
         .select('id')
-        .eq('phone', cleanPhone)
+        .eq('phone', formattedPhone)
         .single();
 
       const isUpgrade = !!existingProfile;
@@ -174,7 +178,7 @@ Me diz: como você está hoje?`;
             'Authorization': `Bearer ${supabaseServiceKey}`,
           },
           body: JSON.stringify({
-            phone: customerPhone,
+            phone: formattedPhone,
             message: welcomeMessage,
             isAudio: false,
           }),
@@ -203,7 +207,7 @@ Me diz: como você está hoje?`;
             .insert({
               user_id: newUserId,
               name: customerName,
-              phone: cleanPhone,
+              phone: formattedPhone,
               email: customerEmail,
               plan: customerPlan,
               status: 'active',
@@ -233,7 +237,7 @@ Me diz: como você está hoje?`;
               updated_at: new Date().toISOString(),
               needs_schedule_setup: sessionsCount > 0,
             })
-            .eq('phone', cleanPhone);
+            .eq('phone', formattedPhone);
 
           if (updateError) {
             console.error('❌ Error updating profile:', updateError);
