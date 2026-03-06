@@ -8,8 +8,6 @@ import {
   FileText,
   BookOpen,
   BarChart3,
-  SmilePlus,
-  Music,
   Sparkles,
   Heart,
   ArrowRight,
