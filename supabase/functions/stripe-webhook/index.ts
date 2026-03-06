@@ -110,7 +110,7 @@ Deno.serve(async (req) => {
       const { data: existingProfile } = await supabase
         .from('profiles')
         .select('id')
-        .eq('phone', cleanPhone)
+        .eq('phone', formattedPhone)
         .single();
 
       const isUpgrade = !!existingProfile;
@@ -178,7 +178,7 @@ Me diz: como você está hoje?`;
             'Authorization': `Bearer ${supabaseServiceKey}`,
           },
           body: JSON.stringify({
-            phone: customerPhone,
+            phone: formattedPhone,
             message: welcomeMessage,
             isAudio: false,
           }),
@@ -207,7 +207,7 @@ Me diz: como você está hoje?`;
             .insert({
               user_id: newUserId,
               name: customerName,
-              phone: cleanPhone,
+              phone: formattedPhone,
               email: customerEmail,
               plan: customerPlan,
               status: 'active',
@@ -237,7 +237,7 @@ Me diz: como você está hoje?`;
               updated_at: new Date().toISOString(),
               needs_schedule_setup: sessionsCount > 0,
             })
-            .eq('phone', cleanPhone);
+            .eq('phone', formattedPhone);
 
           if (updateError) {
             console.error('❌ Error updating profile:', updateError);
