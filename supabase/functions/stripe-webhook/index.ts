@@ -100,6 +100,10 @@ Deno.serve(async (req) => {
       const sessionsCount = PLAN_SESSIONS[customerPlan] || 0;
       const supabase = createClient(supabaseUrl, supabaseServiceKey);
       const cleanPhone = customerPhone.replace(/\D/g, '');
+      // Add country code for Brazilian numbers (10-11 digits without prefix)
+      const formattedPhone = (cleanPhone.length === 10 || cleanPhone.length === 11)
+        ? `55${cleanPhone}`
+        : cleanPhone;
       const today = new Date().toISOString().split('T')[0];
 
       // Check if profile already exists BEFORE choosing the message
