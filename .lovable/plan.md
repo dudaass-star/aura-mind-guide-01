@@ -1,20 +1,15 @@
 
 
-## Remover perfil duplicado da Nilda Rita
+## Correções Pendentes
 
-Existem dois perfis:
+### 1. Deletar perfil duplicado da Nilda Rita
+O perfil com telefone `555181519712` (sem o 9) ainda existe no banco. Precisa ser deletado junto com suas mensagens.
 
-| Perfil | Telefone | Jornada | Msgs | Última msg |
-|--------|----------|---------|------|------------|
-| `2b13cadb` | 5551981519712 (correto) | j1-ansiedade | 14 | hoje 12:36 ✅ |
-| `71e88f06` | 555181519712 (sem o 9) | null | 15 | hoje 00:16 ❌ |
+### 2. Verificar cron do periodic-content
+A função `periodic-content` deveria ter rodado hoje (sexta, 9h BR) mas não há logs. Verificar se o cron job está ativo e funcionando.
 
-**Manter**: `2b13cadb` — telefone correto, jornada atribuída, conversa mais recente.
-**Deletar**: `71e88f06` — telefone com formato errado, sem jornada.
-
-### Ação
-1. Deletar as mensagens do perfil `71e88f06` (15 mensagens)
-2. Deletar o perfil `71e88f06` da tabela `profiles`
-
-Isso também vai decrementar o `current_users` da instância WhatsApp associada (via trigger `decrement_instance_on_profile_delete`).
+### Ações
+1. Executar DELETE nas mensagens e no perfil duplicado da Nilda Rita (phone `555181519712`)
+2. Verificar/recriar o cron job do `periodic-content` se necessário
+3. Opcionalmente, disparar manualmente o `periodic-content` para enviar o EP1 da Nilda agora
 
