@@ -16,6 +16,7 @@ import AdminMeditations from "./pages/AdminMeditations";
 import AdminTests from "./pages/AdminTests";
 import AdminInstances from "./pages/AdminInstances";
 import AdminLogin from "./pages/AdminLogin";
+import UserGuide from "./pages/UserGuide";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
