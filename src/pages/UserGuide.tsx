@@ -402,20 +402,15 @@ const UserGuide = () => {
         <section className="py-16 md:py-24 bg-gradient-to-br from-sage-soft via-background to-lavender-soft">
           <div className="container mx-auto px-4 text-center max-w-xl">
             <h2 className="font-display text-2xl md:text-4xl font-bold text-foreground mb-4">
-              Pronta para começar?
+              Quer experimentar tudo isso?
             </h2>
             <p className="text-muted-foreground mb-8 text-lg">
-              Volte ao WhatsApp e diga oi pra AURA. Ela tá te esperando. 💜
+              5 conversas grátis. Sem cartão. Sem compromisso. 💜
             </p>
-            <Button variant="whatsapp" size="xl" asChild>
-              <a
-                href="https://wa.me/5511999999999"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <MessageCircle size={20} />
-                Abrir WhatsApp
-              </a>
+            <Button variant="sage" size="xl" asChild>
+              <Link to="/experimentar">
+                Começar Grátis
+              </Link>
             </Button>
           </div>
         </section>
