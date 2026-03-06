@@ -9,7 +9,7 @@ const faqs = [
   {
     question: "Por que é tão mais barato que terapia?",
     answer:
-      "A AURA usa inteligência artificial avançada para oferecer acompanhamento emocional de qualidade a um custo muito menor. Não é terapia — é suporte emocional contínuo, com metodologia, memória do seu histórico e direção prática. É um complemento ou ponto de partida acessível para quem não pode pagar R$200 por sessão.",
+      "A AURA consegue oferecer acompanhamento emocional de qualidade a um custo muito menor porque está disponível 24/7 e escala com tecnologia. Não é terapia — é suporte emocional contínuo, com metodologia, memória do seu histórico e direção prática. É um complemento ou ponto de partida acessível para quem não pode pagar R$200 por sessão.",
   },
   {
     question: "A AURA substitui terapia com psicólogo?",

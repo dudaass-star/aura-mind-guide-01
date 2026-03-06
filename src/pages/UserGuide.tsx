@@ -379,7 +379,7 @@ const UserGuide = () => {
                 },
                 {
                   q: "A AURA substitui terapia?",
-                  a: "A AURA é acompanhamento emocional com IA — não substitui terapia profissional. Muitos usam como complemento entre sessões ou como primeiro passo acessível.",
+                  a: "A AURA é acompanhamento emocional contínuo — não substitui terapia profissional. Muitos usam como complemento entre sessões ou como primeiro passo acessível.",
                 },
               ].map((faq, i) => (
                 <AccordionItem
