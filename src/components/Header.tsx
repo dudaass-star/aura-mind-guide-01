@@ -18,6 +18,12 @@ const Header = () => {
 
           {/* Desktop nav */}
           <nav className="hidden md:flex items-center gap-8">
+            <Link
+              to="/guia"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium"
+            >
+              Guia
+            </Link>
             <a
               href="#precos"
               className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium"
@@ -50,6 +56,13 @@ const Header = () => {
         {isMenuOpen && (
           <nav className="md:hidden py-4 border-t border-border/50 animate-fade-in">
             <div className="flex flex-col gap-4">
+              <Link
+                to="/guia"
+                className="text-muted-foreground hover:text-foreground transition-colors font-medium"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Guia
+              </Link>
               <a
                 href="#precos"
                 className="text-muted-foreground hover:text-foreground transition-colors font-medium"
