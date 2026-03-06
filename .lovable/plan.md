@@ -1,42 +1,53 @@
 
 
-## Guia de Utilização da AURA — Plano Atualizado
+# Diversificação do Vocabulário da Aura
 
-Boa observação! O guia precisa cobrir **todas** as funcionalidades que o usuário tem acesso. Vou expandir o conteúdo.
+## Diagnóstico
 
-### Seções do guia (`/guia`)
+O prompt atual tem **listas de exemplos muito curtas e repetitivas** em 3 pontos-chave, o que faz o LLM gravitar sempre para as mesmas frases:
 
-1. **Bem-vinda** — Saudação + visão geral do que a AURA oferece
-2. **Como conversar** — Texto e áudio, 24/7, dicas de temas
-3. **Sessões Especiais** (planos Direção/Transformação):
-   - Tipos: Clareza, Padrões, Propósito, Livre
-   - Como agendar (basta dizer dia e horário)
-   - **Trocar data/horário** — pedir para a AURA reagendar
-   - **Pausar sessões** — pedir pausa temporária (ex: "pausa minhas sessões por 2 semanas")
-   - Resumo escrito após cada sessão
-4. **Jornadas de Conteúdo** — Episódios semanais personalizados (terças e sextas), temas como autoconfiança, ansiedade, etc., progressão automática entre jornadas
-5. **Relatório Semanal** — Review de evolução enviado todo domingo às 19h, métricas + análise qualitativa
-6. **Check-in de Humor** — Check-in semanal às segundas
-7. **Meditações Personalizadas** — Como a AURA escolhe e envia meditações
-8. **Dicas para melhor experiência** — Ser honesto, manter constância, usar áudio, pedir ajuda específica
-9. **FAQ rápido** — Pausar assinatura, cancelar, dados seguros
-10. **CTA** — Voltar ao WhatsApp e começar
+1. **Afeto genuíno** (linha 243): Só 4 exemplos — "Tô aqui contigo", "Conta comigo", "Te entendo demais", "Você não tá sozinha nisso". O LLM repete esses ad nauseam.
 
-### Arquivos
+2. **Celebrações** (linha 235): Só 5 exemplos — "Boa!!", "Isso aí!", "Adorei!", "Que orgulho!", "Arrasou!".
 
-- **Criar**: `src/pages/UserGuide.tsx` — página completa, responsiva, identidade visual AURA (sage/lavender/blush)
-- **Editar**: `src/App.tsx` — adicionar rota `/guia`
+3. **Interjeições** (linha 239): Só 7 exemplos — "Caramba!", "Puxa vida...", "Nossa!", "Eita!", etc.
 
-### Design
+4. **Silêncio intencional** (linha 484): Só 3 exemplos — "Hmm... isso é pesado. Tô aqui.", "Entendi.", "Faz sentido."
 
-- Cards com ícones Lucide para cada seção
-- Seções com fundos alternados (bg-background / bg-card)
-- Accordion para FAQ
-- Tipografia consistente (Libre Baskerville + Nunito)
-- Mobile-first, responsivo
-- Sem necessidade de autenticação (página pública)
+5. **Conectivos de conversa** (linha 287): Só 5 exemplos — "Então...", "Sabe o que eu penso?", etc.
 
-### Integração futura
+O LLM tende a reciclar os exemplos literais do prompt. Com listas pequenas, a Aura soa repetitiva.
 
-Após criação, o link pode ser adicionado à mensagem de boas-vindas no `stripe-webhook` e `start-trial`.
+---
+
+## Mudanças propostas
+
+### `supabase/functions/aura-agent/index.ts` — expandir exemplos no `AURA_STATIC_INSTRUCTIONS`
+
+**1. Afeto genuíno** — expandir de 4 para ~12 variações:
+- Adicionar: "Pode contar comigo", "Tô do seu lado", "Aqui pra você", "Não vou a lugar nenhum", "Tô junto", "Segura aqui", "Pode falar, tô ouvindo", "Eu te ouço"
+
+**2. Celebrações** — expandir de 5 para ~12:
+- Adicionar: "Demais!", "Que show!", "Olha só!", "Amei!", "Mandou bem!", "Tá voando!", "Que delícia!", "Uhuul!", "Lacrou!"
+
+**3. Interjeições** — expandir de 7 para ~14:
+- Adicionar: "Vish!", "Opa!", "Aaah!", "Ih!", "Uau!", "Oxe!", "Puts!", "Xi!"
+
+**4. Silêncio intencional** — expandir de 3 para ~8:
+- Adicionar: "É... isso pesa.", "Tô aqui, sem pressa.", "Não precisa dizer nada agora.", "Respira.", "Hmm."
+
+**5. Conectivos** — expandir de 5 para ~10:
+- Adicionar: "Ei...", "Pois é...", "Ah, sabe o quê?", "Hm, deixa eu te falar uma coisa...", "Vem cá..."
+
+**6. Adicionar regra anti-repetição** — um bloco novo curto:
+```
+## VARIAÇÃO OBRIGATÓRIA (ANTI-REPETIÇÃO)
+NUNCA repita a mesma frase de afeto em conversas seguidas.
+Se você já disse "Tô aqui" nessa conversa, use outra forma.
+Varie seus conectivos, interjeições e formas de acolher.
+Cada mensagem deve soar ÚNICA, não um template.
+```
+
+### Arquivo modificado
+- `supabase/functions/aura-agent/index.ts` — expandir exemplos e adicionar regra anti-repetição no prompt estático
 
