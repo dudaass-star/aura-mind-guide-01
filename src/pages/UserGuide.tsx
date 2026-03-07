@@ -249,6 +249,129 @@ const UserGuide = () => {
           </div>
         </Section>
 
+        {/* Insights Proativos */}
+        <Section
+          id="insights"
+          title="Insights Proativos"
+          subtitle="A AURA enxerga o que você ainda não percebeu"
+          bg="bg-background"
+        >
+          <div className="bg-gradient-to-br from-sage-soft/40 via-background to-lavender-soft/30 rounded-2xl border border-primary/10 p-8 md:p-10 mb-8">
+            <div className="flex flex-col md:flex-row items-start gap-6">
+              <div className="shrink-0 w-16 h-16 rounded-2xl bg-sage-soft flex items-center justify-center">
+                <Eye className="w-8 h-8 text-primary" />
+              </div>
+              <div>
+                <h3 className="font-display text-xl font-bold text-foreground mb-2">
+                  Padrões que só quem acompanha de perto percebe
+                </h3>
+                <p className="text-muted-foreground leading-relaxed">
+                  Ao longo das semanas, a AURA observa conexões entre o que você vive e o que você sente. Quando percebe algo relevante, ela traz — sem você precisar perguntar. É como ter alguém que te conhece profundamente e diz: "Você já percebeu que...?"
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-5">
+            {[
+              {
+                icon: Sparkles,
+                title: "Automático",
+                desc: "A AURA identifica padrões e traz reflexões quando percebe algo importante — sem você pedir.",
+                bg: "bg-sage-soft",
+                iconColor: "text-primary",
+              },
+              {
+                icon: BarChart3,
+                title: "Correlações invisíveis",
+                desc: "Descobre conexões que você não notou: entre certas situações e seu humor, ciclos emocionais recorrentes.",
+                bg: "bg-lavender-soft",
+                iconColor: "text-accent",
+              },
+              {
+                icon: Heart,
+                title: "No momento certo",
+                desc: "Não enche de informações. Traz o insight quando ele pode fazer diferença na sua vida.",
+                bg: "bg-blush-soft",
+                iconColor: "text-blush",
+              },
+            ].map((f, i) => (
+              <div key={i} className="p-6 rounded-2xl bg-card border border-border/50 hover:border-primary/20 transition-colors text-center">
+                <div className={`w-14 h-14 rounded-xl ${f.bg} flex items-center justify-center mx-auto mb-4`}>
+                  <f.icon className={`w-7 h-7 ${f.iconColor}`} />
+                </div>
+                <h3 className="font-display text-lg font-semibold text-foreground mb-2">{f.title}</h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">{f.desc}</p>
+              </div>
+            ))}
+          </div>
+        </Section>
+
+        {/* Lembretes */}
+        <Section
+          id="lembretes"
+          title="Lembretes"
+          subtitle="Pede pra AURA lembrar e ela lembra — no horário exato"
+          bg="bg-card"
+        >
+          <div className="grid md:grid-cols-3 gap-5 mb-8">
+            {[
+              {
+                icon: Mic,
+                title: "Por texto ou áudio",
+                desc: 'Basta pedir naturalmente: "Me lembra de tomar o remédio" ou mande um áudio.',
+                bg: "bg-sage-soft",
+                iconColor: "text-primary",
+              },
+              {
+                icon: Clock,
+                title: "Horário exato",
+                desc: '"Daqui a 10 minutos", "amanhã às 9h", "quinta às 14h" — a AURA calcula e agenda.',
+                bg: "bg-lavender-soft",
+                iconColor: "text-accent",
+              },
+              {
+                icon: XCircle,
+                title: "Cancela fácil",
+                desc: 'Mudou de ideia? Diga "cancela meu lembrete" e pronto. Simples assim.',
+                bg: "bg-sky-soft",
+                iconColor: "text-sky",
+              },
+            ].map((f, i) => (
+              <div key={i} className="p-6 rounded-2xl bg-background border border-border/50 hover:border-primary/20 transition-colors text-center">
+                <div className={`w-14 h-14 rounded-xl ${f.bg} flex items-center justify-center mx-auto mb-4`}>
+                  <f.icon className={`w-7 h-7 ${f.iconColor}`} />
+                </div>
+                <h3 className="font-display text-lg font-semibold text-foreground mb-2">{f.title}</h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">{f.desc}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="bg-background rounded-2xl border border-border/50 p-6 mb-6">
+            <h3 className="font-display text-lg font-semibold text-foreground mb-3">
+              💬 Exemplo prático
+            </h3>
+            <div className="space-y-3 text-sm">
+              <div className="flex gap-3">
+                <span className="shrink-0 font-semibold text-foreground">Você:</span>
+                <span className="text-muted-foreground italic">"Me lembra daqui a 30 min de tomar o remédio"</span>
+              </div>
+              <div className="flex gap-3">
+                <span className="shrink-0 font-semibold text-primary">AURA:</span>
+                <span className="text-muted-foreground italic">"Anotado! Daqui a 30 minutinhos eu te aviso pra não esquecer. 💊"</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-3 bg-sage-soft rounded-xl p-4 border border-primary/10">
+            <Bell size={20} className="text-primary shrink-0 mt-0.5" />
+            <p className="text-sm text-muted-foreground">
+              <strong className="text-foreground">Tudo pelo WhatsApp</strong> — sem precisar instalar outro app ou abrir outra tela. A AURA te avisa ali mesmo, na conversa.
+            </p>
+          </div>
+        </Section>
+
         {/* Meditações */}
         <section id="meditacoes" className="py-16 md:py-20 bg-background relative overflow-hidden">
           <div className="absolute top-10 right-10 w-72 h-72 bg-lavender-soft rounded-full blur-3xl opacity-30" />
