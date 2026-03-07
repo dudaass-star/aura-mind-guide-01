@@ -95,3 +95,6 @@ verify_jwt = false
 
 [functions.deliver-time-capsule]
 verify_jwt = false
+
+[functions.pattern-analysis]
+verify_jwt = false
