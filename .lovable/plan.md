@@ -1,48 +1,41 @@
 
-# Cápsula do Tempo — Implementado ✅
 
-## O que foi feito
+# Plano: Adicionar Insights Proativos e Lembretes ao Site e Guia
 
-1. **Tabela `time_capsules`** + colunas `awaiting_time_capsule` e `pending_capsule_audio_url` no `profiles`
-2. **Intercepção no `webhook-zapi`**: antes do fluxo normal, detecta estado da cápsula e gerencia áudio/confirmação/cancelamento/regravação
-3. **Tag `[CAPSULA_DO_TEMPO]` no `aura-agent`**: quando a Aura propõe e o usuário aceita, a tag ativa o modo de captura
-4. **Instrução no prompt**: ~10 linhas ensinando a Aura quando/como propor a cápsula
-5. **Edge function `deliver-time-capsule`**: cron diário (10h) que entrega cápsulas vencidas via WhatsApp
-6. **Fluxo de confirmação**: o usuário pode regravar quantas vezes quiser antes de confirmar
+## O que adicionar
 
----
+Duas features novas que a AURA agora possui e que ainda não aparecem no conteúdo público:
 
-# Sistema de Agendamento de Tarefas (Efeito Oráculo) — Implementado ✅
+1. **Insights Proativos** ("Efeito Oráculo") — A AURA identifica padrões emocionais invisíveis e traz observações antes de você pedir
+2. **Lembretes e Agendamentos** — A AURA agenda lembretes por voz ou texto, direto no WhatsApp
 
-## O que foi feito
+## Onde adicionar
 
-1. **Tabela `scheduled_tasks`**: id, user_id, execute_at, task_type, payload (JSONB), status, created_at, executed_at
-2. **Índice parcial**: `idx_scheduled_tasks_pending` em `execute_at WHERE status = 'pending'` — busca em milissegundos
-3. **Função RPC `claim_pending_tasks`**: `FOR UPDATE SKIP LOCKED` com limite de 150 — atomicidade absoluta contra duplicidade
-4. **RLS**: service_role full access + users can view own
-5. **Tags no prompt do `aura-agent`**:
-   - `[AGENDAR_TAREFA:YYYY-MM-DD HH:mm:tipo:descricao]` — agendar lembretes e meditações
-   - `[CANCELAR_TAREFA:tipo]` — cancela o PRÓXIMO pendente (ORDER BY execute_at ASC)
-6. **Processamento no `aura-agent`**: detecta as tags, cria/cancela tasks no banco, remove tags antes de mostrar ao usuário
-7. **Sanitização no `webhook-zapi`**: remove tags de agendamento que vazem na resposta
-8. **Edge function `execute-scheduled-tasks`**: processa tasks claimed, com delay 300ms anti-burst, handlers por tipo (reminder, meditation, message)
-9. **Safety net**: tasks em `executing` há >10 min são resetadas para `pending`
-10. **Cron `pg_cron`**: `*/5 * * * *` (cada 5 minutos) invocando a edge function
+### 1. Landing Page — `src/components/Benefits.tsx`
+Adicionar 2 novos cards no array `benefits`:
+- **"Insights que você não pediu"** — "A AURA percebe padrões no que você sente e traz reflexões antes mesmo de você pedir." (icon: Sparkles)
+- **"Lembretes na hora certa"** — "Pediu pra lembrar de algo? A AURA agenda e te avisa no horário exato pelo WhatsApp." (icon: Bell)
 
-## Tipos de tarefa suportados
+### 2. Guia do Usuário — `src/pages/UserGuide.tsx`
+Adicionar 2 novas seções (após "Relatório Semanal", antes de "Meditações"):
 
-| Tipo | Payload | Ação |
-|------|---------|------|
-| `reminder` | `{ "text": "mensagem" }` | Envia texto via WhatsApp |
-| `meditation` | `{ "category": "sono" }` | Invoca `send-meditation` |
-| `message` | `{ "text": "mensagem" }` | Envia texto customizado |
+**Seção "Insights Proativos":**
+- Explicar que a AURA observa padrões ao longo das semanas
+- Exemplos: correlação entre certas situações e humor, ciclos emocionais recorrentes
+- Destacar que é automático — ela traz quando percebe algo relevante
 
-## Fluxo completo
+**Seção "Lembretes":**
+- 3 cards: "Por texto ou áudio" (basta pedir naturalmente), "Horário exato" (daqui a 10 min ou amanhã às 9h), "Cancela fácil" (diga "cancela meu lembrete")
+- Exemplo prático: "Me lembra daqui a 30 min de tomar o remédio"
+- Nota: sem precisar de outro app, tudo pelo WhatsApp
 
-1. Usuário pede lembrete → Aura inclui `[AGENDAR_TAREFA:...]` na resposta
-2. `aura-agent` detecta a tag → insere na tabela `scheduled_tasks` com payload padronizado
-3. Tag é removida antes de o usuário ver a mensagem
-4. A cada 5 min, `pg_cron` invoca `execute-scheduled-tasks`
-5. Edge function chama `claim_pending_tasks(150)` (atômico, skip locked)
-6. Processa cada task com 300ms de delay → envia via Z-API
-7. Marca como `executed` ou `failed`
+### 3. Landing Page — `src/components/HowItWorks.tsx` (ajuste menor)
+Não precisa mudar estrutura, mas pode mencionar lembretes na descrição do step 1 como reforço.
+
+## Arquivos editados
+- `src/components/Benefits.tsx` — 2 novos cards
+- `src/pages/UserGuide.tsx` — 2 novas seções
+
+## Tom
+Manter linguagem humanizada, sem mencionar "IA". Focar no benefício emocional e na praticidade.
+
