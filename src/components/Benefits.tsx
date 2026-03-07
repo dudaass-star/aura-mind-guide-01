@@ -63,6 +63,20 @@ const benefits = [
   description: "Grave uma mensagem pro seu eu do futuro. A AURA guarda e entrega de surpresa daqui a 3 meses.",
   color: "bg-lavender-soft",
   iconColor: "text-accent"
+},
+{
+  icon: Sparkles,
+  title: "Insights que você não pediu",
+  description: "A AURA percebe padrões no que você sente e traz reflexões antes mesmo de você pedir.",
+  color: "bg-sage-soft",
+  iconColor: "text-primary"
+},
+{
+  icon: Bell,
+  title: "Lembretes na hora certa",
+  description: "Pediu pra lembrar de algo? A AURA agenda e te avisa no horário exato pelo WhatsApp.",
+  color: "bg-sky-soft",
+  iconColor: "text-sky"
 }];
 
 
