@@ -1,4 +1,4 @@
-import { Clock, Brain, Calendar, FileText, Heart, PauseCircle, BookOpen, Mic } from "lucide-react";
+import { Clock, Brain, Calendar, FileText, Heart, PauseCircle, BookOpen, Mic, Timer } from "lucide-react";
 
 const benefits = [
 {
@@ -56,6 +56,13 @@ const benefits = [
   description: "Fala do jeito que for mais fácil pra você.",
   color: "bg-blush-soft",
   iconColor: "text-blush"
+},
+{
+  icon: Timer,
+  title: "Cápsula do Tempo",
+  description: "Grave uma mensagem pro seu eu do futuro. A AURA guarda e entrega de surpresa daqui a 3 meses.",
+  color: "bg-lavender-soft",
+  iconColor: "text-accent"
 }];
 
 

@@ -15,6 +15,9 @@ import {
   CheckCircle2,
   Clock,
   RefreshCw,
+  Timer,
+  RotateCcw,
+  Gift,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -304,6 +307,71 @@ const UserGuide = () => {
             </div>
           </div>
         </section>
+
+        {/* Cápsula do Tempo */}
+        <Section
+          id="capsula"
+          title="Cápsula do Tempo"
+          subtitle="Uma mensagem para o seu eu do futuro"
+          bg="bg-background"
+        >
+          <div className="bg-gradient-to-br from-lavender-soft/40 via-background to-sage-soft/30 rounded-2xl border border-accent/10 p-8 md:p-10 mb-8">
+            <div className="flex flex-col md:flex-row items-start gap-6">
+              <div className="shrink-0 w-16 h-16 rounded-2xl bg-lavender-soft flex items-center justify-center">
+                <Timer className="w-8 h-8 text-accent" />
+              </div>
+              <div>
+                <h3 className="font-display text-xl font-bold text-foreground mb-2">
+                  Como funciona
+                </h3>
+                <p className="text-muted-foreground leading-relaxed">
+                  Em momentos especiais da conversa, a AURA te convida a gravar um áudio para o seu eu do futuro. Você grava, confirma que ficou do jeito que queria, e a AURA guarda com carinho. Daqui a 3 meses, você recebe essa mensagem de volta — de surpresa.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-5 mb-8">
+            {[
+              {
+                icon: Mic,
+                title: "Grave quando quiser",
+                desc: "A AURA propõe no momento certo, mas você decide se quer gravar ou não.",
+                bg: "bg-sage-soft",
+                iconColor: "text-primary",
+              },
+              {
+                icon: RotateCcw,
+                title: "Regrave quantas vezes precisar",
+                desc: "Enviou errado? Sem problema. Mande outro áudio antes de confirmar.",
+                bg: "bg-lavender-soft",
+                iconColor: "text-accent",
+              },
+              {
+                icon: Gift,
+                title: "Receba de surpresa",
+                desc: "3 meses depois, a AURA entrega sua cápsula. É poderoso se ouvir de novo.",
+                bg: "bg-blush-soft",
+                iconColor: "text-blush",
+              },
+            ].map((f, i) => (
+              <div key={i} className="p-6 rounded-2xl bg-card border border-border/50 hover:border-accent/20 transition-colors text-center">
+                <div className={`w-14 h-14 rounded-xl ${f.bg} flex items-center justify-center mx-auto mb-4`}>
+                  <f.icon className={`w-7 h-7 ${f.iconColor}`} />
+                </div>
+                <h3 className="font-display text-lg font-semibold text-foreground mb-2">{f.title}</h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">{f.desc}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex items-start gap-3 bg-lavender-soft rounded-xl p-4 border border-lavender/20">
+            <Heart size={20} className="text-accent shrink-0 mt-0.5" />
+            <p className="text-sm text-muted-foreground">
+              <strong className="text-foreground">Por que isso importa?</strong> Ouvir sua própria voz meses depois, falando sobre o que sentia naquele momento, é uma das formas mais profundas de perceber o quanto você evoluiu.
+            </p>
+          </div>
+        </Section>
 
         {/* Dicas */}
         <Section

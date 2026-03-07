@@ -46,6 +46,11 @@ const faqs = [
     answer:
       "Sim. No plano mensal você cancela quando quiser, sem fidelidade ou multa.",
   },
+  {
+    question: "O que é a Cápsula do Tempo?",
+    answer:
+      "É um recurso exclusivo da AURA. Em momentos especiais da conversa, a AURA te convida a gravar um áudio para o seu eu do futuro. Você grava, confirma que ficou do jeito que queria, e a AURA guarda com carinho. Daqui a 3 meses, você recebe essa mensagem de volta — de surpresa. É poderoso se ouvir meses depois e perceber o quanto você evoluiu.",
+  },
 ];
 
 const FAQ = () => {
