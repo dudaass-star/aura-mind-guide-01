@@ -98,3 +98,6 @@ verify_jwt = false
 
 [functions.pattern-analysis]
 verify_jwt = false
+
+[functions.execute-scheduled-tasks]
+verify_jwt = false
