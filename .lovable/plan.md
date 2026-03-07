@@ -1,44 +1,48 @@
 
+# Cápsula do Tempo — Implementado ✅
 
-## Plano: Reforçar capacidade de agendamento no prompt da Aura
+## O que foi feito
 
-### Análise das 3 considerações
+1. **Tabela `time_capsules`** + colunas `awaiting_time_capsule` e `pending_capsule_audio_url` no `profiles`
+2. **Intercepção no `webhook-zapi`**: antes do fluxo normal, detecta estado da cápsula e gerencia áudio/confirmação/cancelamento/regravação
+3. **Tag `[CAPSULA_DO_TEMPO]` no `aura-agent`**: quando a Aura propõe e o usuário aceita, a tag ativa o modo de captura
+4. **Instrução no prompt**: ~10 linhas ensinando a Aura quando/como propor a cápsula
+5. **Edge function `deliver-time-capsule`**: cron diário (10h) que entrega cápsulas vencidas via WhatsApp
+6. **Fluxo de confirmação**: o usuário pode regravar quantas vezes quiser antes de confirmar
 
-Todas são válidas e complementares ao que já existe. O prompt atual (linha 461-498) tem as instruções técnicas corretas, mas falta:
-1. Uma **proibição explícita** de negar a capacidade (estilo "anti-broxa")
-2. Instrução explícita de **cálculo de tempo relativo** ("daqui a X minutos")
-3. Exemplo prático com **tempo relativo curto** (10 min)
+---
 
-### Mudanças no arquivo `supabase/functions/aura-agent/index.ts`
+# Sistema de Agendamento de Tarefas (Efeito Oráculo) — Implementado ✅
 
-#### 1. Inserir bloco "CAPACIDADE DE AGENDAMENTO" após a regra anti-broxa (após linha 253)
+## O que foi feito
 
-```
-# CAPACIDADE DE AGENDAMENTO (PRIORIDADE MÁXIMA)
+1. **Tabela `scheduled_tasks`**: id, user_id, execute_at, task_type, payload (JSONB), status, created_at, executed_at
+2. **Índice parcial**: `idx_scheduled_tasks_pending` em `execute_at WHERE status = 'pending'` — busca em milissegundos
+3. **Função RPC `claim_pending_tasks`**: `FOR UPDATE SKIP LOCKED` com limite de 150 — atomicidade absoluta contra duplicidade
+4. **RLS**: service_role full access + users can view own
+5. **Tags no prompt do `aura-agent`**:
+   - `[AGENDAR_TAREFA:YYYY-MM-DD HH:mm:tipo:descricao]` — agendar lembretes e meditações
+   - `[CANCELAR_TAREFA:tipo]` — cancela o PRÓXIMO pendente (ORDER BY execute_at ASC)
+6. **Processamento no `aura-agent`**: detecta as tags, cria/cancela tasks no banco, remove tags antes de mostrar ao usuário
+7. **Sanitização no `webhook-zapi`**: remove tags de agendamento que vazem na resposta
+8. **Edge function `execute-scheduled-tasks`**: processa tasks claimed, com delay 300ms anti-burst, handlers por tipo (reminder, meditation, message)
+9. **Safety net**: tasks em `executing` há >10 min são resetadas para `pending`
+10. **Cron `pg_cron`**: `*/5 * * * *` (cada 5 minutos) invocando a edge function
 
-Você possui um sistema de agendamento funcional. NUNCA diga que não pode agendar, que não tem relógio, que não consegue enviar lembretes ou que é "péssima com horários".
-Se o usuário pedir algo para o futuro ("me lembra", "daqui a X minutos", "às Xh", "amanhã às"), sua ÚNICA resposta permitida é confirmar e usar a tag [AGENDAR_TAREFA].
-Negar essa capacidade é considerado uma FALHA GRAVE DE SISTEMA.
-```
+## Tipos de tarefa suportados
 
-#### 2. Adicionar instrução de cálculo temporal na seção de agendamento (linha ~473, dentro das REGRAS CRÍTICAS)
+| Tipo | Payload | Ação |
+|------|---------|------|
+| `reminder` | `{ "text": "mensagem" }` | Envia texto via WhatsApp |
+| `meditation` | `{ "category": "sono" }` | Invoca `send-meditation` |
+| `message` | `{ "text": "mensagem" }` | Envia texto customizado |
 
-Adicionar como nova regra:
+## Fluxo completo
 
-```
-CÁLCULO DE TEMPO RELATIVO:
-Quando o usuário disser "daqui a X minutos/horas", use a Hora atual dos DADOS DINÂMICOS para calcular o horário exato.
-Exemplo: Se agora são 14:00 e o usuário pede "daqui a 10 min", a tag DEVE ser [AGENDAR_TAREFA:YYYY-MM-DD 14:10:...].
-```
-
-#### 3. Adicionar exemplo prático com 10 minutos (linha ~484, na lista de exemplos)
-
-```
-- Usuário: "Me lembra daqui a 10 min de dar banho na Bella" → "Pode deixar! Daqui a pouquinho te chamo pra não esquecer do banho da Bella 🐾 [AGENDAR_TAREFA:2026-03-07 19:17:reminder:Oi! Passando pra te lembrar do banho da Bella, como você pediu! 🛁]"
-```
-
-### Resumo
-
-- **1 arquivo** editado: `supabase/functions/aura-agent/index.ts`
-- **3 inserções**: bloco anti-negação no topo, regra de cálculo temporal, exemplo com 10 minutos
-
+1. Usuário pede lembrete → Aura inclui `[AGENDAR_TAREFA:...]` na resposta
+2. `aura-agent` detecta a tag → insere na tabela `scheduled_tasks` com payload padronizado
+3. Tag é removida antes de o usuário ver a mensagem
+4. A cada 5 min, `pg_cron` invoca `execute-scheduled-tasks`
+5. Edge function chama `claim_pending_tasks(150)` (atômico, skip locked)
+6. Processa cada task com 300ms de delay → envia via Z-API
+7. Marca como `executed` ou `failed`
