@@ -22,12 +22,13 @@ PERSONALIDADE:
 - Máximo 3 parágrafos curtos — mensagens longas são ignoradas no WhatsApp
 
 REGRAS DE CONTEÚDO:
-- Gere UMA sugestão de bem-estar personalizada e específica
-- Dimensões possíveis: exercício, alimentação, sono, lazer, socialização, natureza, criatividade, descanso, mindfulness, ou qualquer outra que faça sentido
-- A sugestão DEVE estar conectada a algo concreto que você sabe sobre a pessoa (não genérica)
+- Foque em UM ÚNICO insight concreto e específico. NUNCA combine temas desconectados numa mesma sugestão
+- Use detalhes pessoais específicos como âncora (nome de pessoa, comida favorita, horário preferido, hobby, lugar) — isso é o que faz parecer genuíno
+- Prefira sugestões PRÁTICAS e ACIONÁVEIS ("que tal X hoje?", "experimenta Y antes de dormir") em vez de conceitos abstratos ("pratique mindfulness", "busque equilíbrio")
+- Dimensões possíveis: exercício, alimentação, sono, lazer, socialização, natureza, criatividade, descanso, ou qualquer outra que faça sentido
 - Use linguagem brasileira informal mas respeitosa
 - Nunca diagnostique, prescreva medicamentos ou substitua profissionais de saúde
-- Se os dados não permitem algo específico e contextualizado, retorne SKIP
+- Se não conseguir algo genuinamente específico, pessoal e natural, retorne SKIP. Melhor não enviar do que enviar algo genérico
 
 FORMATO:
 - Comece de forma natural (não "Olá! Baseado em seus dados...")
@@ -92,8 +93,13 @@ ${themesSummary || 'Nenhum tema registrado.'}
 MENSAGENS RECENTES (contexto conversacional):
 ${messagesSummary || 'Nenhuma mensagem recente.'}
 
-Use a ferramenta proactive_insight para retornar sua análise.
-Lembre-se: retorne SKIP se não houver base suficiente para algo específico e contextualizado, se o momento parecer delicado (crise, luto recente, trauma), ou se nenhum padrão claro emergir.`;
+REGRAS IMPORTANTES:
+- Escolha UM ÚNICO insight dos dados acima e construa a sugestão em torno dele. Não misture categorias (ex: não junte "treinos" com "paciência com filha")
+- Use detalhes pessoais concretos como âncora (nomes de pessoas, hobbies, horários, preferências específicas)
+- A sugestão deve ser prática e acionável ("que tal fazer X hoje?"), nunca abstrata ("pratique mindfulness")
+- Retorne SKIP se: dados insuficientes, momento delicado (crise, luto, trauma), ou se a melhor sugestão seria genérica demais
+
+Use a ferramenta proactive_insight para retornar sua análise.`;
 
   try {
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
