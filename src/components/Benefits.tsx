@@ -1,4 +1,4 @@
-import { Clock, Brain, Calendar, FileText, Heart, PauseCircle, BookOpen, Mic, Timer } from "lucide-react";
+import { Clock, Brain, Calendar, FileText, Heart, PauseCircle, BookOpen, Mic, Timer, Sparkles, Bell } from "lucide-react";
 
 const benefits = [
 {
