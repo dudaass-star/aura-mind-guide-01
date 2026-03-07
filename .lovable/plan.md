@@ -1,75 +1,48 @@
 
+# Cápsula do Tempo — Implementado ✅
 
-## Análise das Considerações Adicionais
+## O que foi feito
 
-### 1. `FOR UPDATE SKIP LOCKED` -- CONCORDO, essencial para concorrência
-
-A observação é precisa. Mesmo com cron de 5 minutos, atrasos ou sobreposições podem causar duas execuções simultâneas pegando as mesmas tasks.
-
-**Solução**: Criar uma função RPC no Postgres que faz o claim atômico:
-
-```sql
-CREATE OR REPLACE FUNCTION claim_pending_tasks(max_tasks INT DEFAULT 150)
-RETURNS SETOF scheduled_tasks
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-BEGIN
-  RETURN QUERY
-  UPDATE scheduled_tasks
-  SET status = 'executing'
-  WHERE id IN (
-    SELECT id FROM scheduled_tasks
-    WHERE status = 'pending' AND execute_at <= now()
-    ORDER BY execute_at ASC
-    LIMIT max_tasks
-    FOR UPDATE SKIP LOCKED
-  )
-  RETURNING *;
-END;
-$$;
-```
-
-A edge function chama `supabase.rpc('claim_pending_tasks', { max_tasks: 150 })` e recebe apenas tasks que nenhum outro processo está tocando. Zero duplicidade, mesmo sob concorrência.
+1. **Tabela `time_capsules`** + colunas `awaiting_time_capsule` e `pending_capsule_audio_url` no `profiles`
+2. **Intercepção no `webhook-zapi`**: antes do fluxo normal, detecta estado da cápsula e gerencia áudio/confirmação/cancelamento/regravação
+3. **Tag `[CAPSULA_DO_TEMPO]` no `aura-agent`**: quando a Aura propõe e o usuário aceita, a tag ativa o modo de captura
+4. **Instrução no prompt**: ~10 linhas ensinando a Aura quando/como propor a cápsula
+5. **Edge function `deliver-time-capsule`**: cron diário (10h) que entrega cápsulas vencidas via WhatsApp
+6. **Fluxo de confirmação**: o usuário pode regravar quantas vezes quiser antes de confirmar
 
 ---
 
-### 2. Aumentar limite de 50 para 150 -- CONCORDO
+# Sistema de Agendamento de Tarefas (Efeito Oráculo) — Implementado ✅
 
-A matemática é simples:
-- 150 tasks × 300ms delay = **45 segundos** de processamento
-- Timeout da edge function = **120+ segundos**
-- Margem de segurança confortável
+## O que foi feito
 
-Com `FOR UPDATE SKIP LOCKED`, não há risco de duplicidade mesmo com limite maior. Isso elimina o gargalo nos horários de pico (09:00, 22:00).
+1. **Tabela `scheduled_tasks`**: id, user_id, execute_at, task_type, payload (JSONB), status, created_at, executed_at
+2. **Índice parcial**: `idx_scheduled_tasks_pending` em `execute_at WHERE status = 'pending'` — busca em milissegundos
+3. **Função RPC `claim_pending_tasks`**: `FOR UPDATE SKIP LOCKED` com limite de 150 — atomicidade absoluta contra duplicidade
+4. **RLS**: service_role full access + users can view own
+5. **Tags no prompt do `aura-agent`**:
+   - `[AGENDAR_TAREFA:YYYY-MM-DD HH:mm:tipo:descricao]` — agendar lembretes e meditações
+   - `[CANCELAR_TAREFA:tipo]` — cancela o PRÓXIMO pendente (ORDER BY execute_at ASC)
+6. **Processamento no `aura-agent`**: detecta as tags, cria/cancela tasks no banco, remove tags antes de mostrar ao usuário
+7. **Sanitização no `webhook-zapi`**: remove tags de agendamento que vazem na resposta
+8. **Edge function `execute-scheduled-tasks`**: processa tasks claimed, com delay 300ms anti-burst, handlers por tipo (reminder, meditation, message)
+9. **Safety net**: tasks em `executing` há >10 min são resetadas para `pending`
+10. **Cron `pg_cron`**: `*/5 * * * *` (cada 5 minutos) invocando a edge function
 
-**Limite revisado: 150 tarefas por ciclo.**
+## Tipos de tarefa suportados
 
----
+| Tipo | Payload | Ação |
+|------|---------|------|
+| `reminder` | `{ "text": "mensagem" }` | Envia texto via WhatsApp |
+| `meditation` | `{ "category": "sono" }` | Invoca `send-meditation` |
+| `message` | `{ "text": "mensagem" }` | Envia texto customizado |
 
-### Plano final consolidado (todas as considerações incorporadas)
+## Fluxo completo
 
-#### Migração SQL
-1. Tabela `scheduled_tasks` com colunas: `id`, `user_id`, `execute_at`, `task_type`, `payload`, `status`, `created_at`, `executed_at`
-2. Índice parcial: `CREATE INDEX idx_scheduled_tasks_pending ON scheduled_tasks (execute_at) WHERE status = 'pending'`
-3. Função RPC `claim_pending_tasks` com `FOR UPDATE SKIP LOCKED` e limite default 150
-4. RLS: service_role full access + users can view own
-
-#### Prompt do `aura-agent`
-- Tag `[AGENDAR_TAREFA:YYYY-MM-DD HH:mm:tipo:descricao]`
-- Tag `[CANCELAR_TAREFA:tipo]`
-- Instruções de quando usar cada tag
-
-#### Processamento no `webhook-zapi`
-- Detectar `[AGENDAR_TAREFA:...]` → montar payload padronizado → insert
-- Detectar `[CANCELAR_TAREFA:...]` → buscar próxima pendente (`ORDER BY execute_at ASC LIMIT 1`) → marcar `cancelled`
-
-#### Edge function `execute-scheduled-tasks`
-- Chama RPC `claim_pending_tasks(150)` (atômico, skip locked)
-- Processa com delay de 300ms entre envios
-- Marca individualmente como `executed` ou `failed`
-- Safety net: tasks em `executing` há >10 min são resetadas para `pending`
-
-#### Cron
-- `*/5 * * * *` via `pg_cron` + `pg_net`
-
+1. Usuário pede lembrete → Aura inclui `[AGENDAR_TAREFA:...]` na resposta
+2. `aura-agent` detecta a tag → insere na tabela `scheduled_tasks` com payload padronizado
+3. Tag é removida antes de o usuário ver a mensagem
+4. A cada 5 min, `pg_cron` invoca `execute-scheduled-tasks`
+5. Edge function chama `claim_pending_tasks(150)` (atômico, skip locked)
+6. Processa cada task com 300ms de delay → envia via Z-API
+7. Marca como `executed` ou `failed`

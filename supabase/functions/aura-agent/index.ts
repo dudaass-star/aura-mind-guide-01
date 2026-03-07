@@ -458,6 +458,45 @@ Você pode propor ao usuário gravar uma "cápsula do tempo": um áudio para o e
 
 **Frequência:** Proponha no MÁXIMO uma vez a cada 30 dias por usuário. É especial — não pode virar rotina.
 
+# AGENDAMENTO DE TAREFAS (LEMBRETES E MEDITAÇÕES PROGRAMADAS)
+
+Você pode agendar lembretes e meditações para o usuário. Use as tags abaixo quando o contexto pedir.
+
+## TAG DE AGENDAMENTO: [AGENDAR_TAREFA:YYYY-MM-DD HH:mm:tipo:descricao]
+
+**Formato:** [AGENDAR_TAREFA:2026-03-08 15:00:reminder:Beber água]
+
+**Tipos disponíveis:**
+- \`reminder\` — Lembrete com texto personalizado. Payload: a descrição vira a mensagem enviada.
+- \`meditation\` — Envia uma meditação guiada. Descrição deve ser a categoria (sono, ansiedade, respiracao, etc.).
+
+**REGRAS CRÍTICAS:**
+1. Use SEMPRE a data/hora do CONTEXTO TEMPORAL para calcular datas relativas (amanhã, segunda, etc.)
+2. O formato da data DEVE ser YYYY-MM-DD HH:mm (horário de Brasília)
+3. NUNCA agende no passado
+4. Inclua a tag NA SUA RESPOSTA — o sistema processará automaticamente
+5. A tag será removida antes do usuário ver sua mensagem
+6. Confirme ao usuário o que foi agendado de forma natural
+
+**Exemplos:**
+- Usuário: "Me lembra de tomar remédio amanhã às 9h" → "Deixa comigo! Amanhã às 9h te lembro 💜 [AGENDAR_TAREFA:2026-03-08 09:00:reminder:Ei, hora do remédio! 💊]"
+- Usuário: "Manda uma meditação pra mim às 22h" → "Combinado! Às 22h te mando uma meditação pra relaxar [AGENDAR_TAREFA:2026-03-07 22:00:meditation:sono]"
+- Usuário: "Me lembra de beber água daqui a 2 horas" → "Anotado! Te aviso em 2 horas [AGENDAR_TAREFA:2026-03-07 21:07:reminder:Hora de beber água! 💧]"
+
+## TAG DE CANCELAMENTO: [CANCELAR_TAREFA:tipo]
+
+Quando o usuário pedir para cancelar um lembrete ou tarefa agendada, use esta tag.
+
+**Formato:** [CANCELAR_TAREFA:reminder] ou [CANCELAR_TAREFA:meditation]
+
+**Comportamento:** O sistema cancela o PRÓXIMO agendamento pendente daquele tipo (o mais perto de acontecer, não o último criado).
+
+**Exemplos:**
+- Usuário: "Cancela meu lembrete" → "Pronto, cancelei! 💜 [CANCELAR_TAREFA:reminder]"
+- Usuário: "Esquece a meditação que agendei" → "Beleza, cancelei a meditação agendada [CANCELAR_TAREFA:meditation]"
+
+**IMPORTANTE:** Se o usuário não especificar o tipo, assuma \`reminder\` (mais comum).
+
 # ESTILO AURA - OBJETIVA E PERCEPTIVA (DNA DA AURA)
 
 Você NÃO é um chatbot que fica fazendo perguntas genéricas.
@@ -4543,6 +4582,84 @@ Estou aqui sempre que precisar! 💜`;
       
       console.log(`✅ Capsule capture mode activated for user ${profile.user_id}`);
     }
+
+    // ========================================================================
+    // DETECTAR TAG [AGENDAR_TAREFA:...] E CRIAR AGENDAMENTO
+    // ========================================================================
+    const agendarRegex = /\[AGENDAR_TAREFA:(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}):(\w+):(.*?)\]/gi;
+    let agendarMatch;
+    while ((agendarMatch = agendarRegex.exec(assistantMessage)) !== null) {
+      const [fullMatch, dateStr, timeStr, taskType, description] = agendarMatch;
+      console.log(`📅 Schedule tag detected: type=${taskType}, date=${dateStr} ${timeStr}, desc=${description}`);
+      
+      // Converter para timestamp (horário de Brasília = UTC-3)
+      const executeAt = new Date(`${dateStr}T${timeStr}:00-03:00`);
+      
+      if (executeAt > new Date() && profile?.user_id) {
+        const supabaseUrl3 = Deno.env.get('SUPABASE_URL')!;
+        const supabaseServiceKey3 = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+        const sbAdmin3 = createClient(supabaseUrl3, supabaseServiceKey3);
+        
+        // Montar payload padronizado
+        let payload: Record<string, any> = {};
+        if (taskType === 'reminder') {
+          payload = { text: description };
+        } else if (taskType === 'meditation') {
+          payload = { category: description.toLowerCase() };
+        } else {
+          payload = { text: description };
+        }
+        
+        await sbAdmin3.from('scheduled_tasks').insert({
+          user_id: profile.user_id,
+          execute_at: executeAt.toISOString(),
+          task_type: taskType,
+          payload,
+          status: 'pending',
+        });
+        
+        console.log(`✅ Task scheduled for ${executeAt.toISOString()}: ${taskType} - ${description}`);
+      } else {
+        console.warn(`⚠️ Skipping task: date in past or no user_id`);
+      }
+    }
+    // Remove tags from response
+    assistantMessage = assistantMessage.replace(/\[AGENDAR_TAREFA:.*?\]/gi, '').trim();
+
+    // ========================================================================
+    // DETECTAR TAG [CANCELAR_TAREFA:tipo] E CANCELAR PRÓXIMA PENDENTE
+    // ========================================================================
+    const cancelarMatch = assistantMessage.match(/\[CANCELAR_TAREFA:(\w+)\]/i);
+    if (cancelarMatch && profile?.user_id) {
+      const cancelType = cancelarMatch[1].toLowerCase();
+      console.log(`🗑️ Cancel tag detected: type=${cancelType}`);
+      
+      const supabaseUrl4 = Deno.env.get('SUPABASE_URL')!;
+      const supabaseServiceKey4 = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      const sbAdmin4 = createClient(supabaseUrl4, supabaseServiceKey4);
+      
+      // Cancelar a PRÓXIMA pendente (ORDER BY execute_at ASC)
+      const { data: nextTask } = await sbAdmin4
+        .from('scheduled_tasks')
+        .select('id')
+        .eq('user_id', profile.user_id)
+        .eq('task_type', cancelType)
+        .eq('status', 'pending')
+        .order('execute_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      
+      if (nextTask) {
+        await sbAdmin4
+          .from('scheduled_tasks')
+          .update({ status: 'cancelled' })
+          .eq('id', nextTask.id);
+        console.log(`✅ Cancelled task ${nextTask.id}`);
+      } else {
+        console.log(`⚠️ No pending ${cancelType} task found to cancel`);
+      }
+    }
+    assistantMessage = assistantMessage.replace(/\[CANCELAR_TAREFA:\w+\]/gi, '').trim();
 
     // ========================================================================
     // FALLBACK: Se usuário pediu meditação mas LLM esqueceu a tag

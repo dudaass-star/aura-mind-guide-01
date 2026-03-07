@@ -666,6 +666,39 @@ export type Database = {
           },
         ]
       }
+      scheduled_tasks: {
+        Row: {
+          created_at: string
+          execute_at: string
+          executed_at: string | null
+          id: string
+          payload: Json
+          status: string
+          task_type: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          execute_at: string
+          executed_at?: string | null
+          id?: string
+          payload?: Json
+          status?: string
+          task_type: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          execute_at?: string
+          executed_at?: string | null
+          id?: string
+          payload?: Json
+          status?: string
+          task_type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       session_ratings: {
         Row: {
           created_at: string
@@ -1130,6 +1163,25 @@ export type Database = {
     }
     Functions: {
       allocate_whatsapp_instance: { Args: never; Returns: string }
+      claim_pending_tasks: {
+        Args: { max_tasks?: number }
+        Returns: {
+          created_at: string
+          execute_at: string
+          executed_at: string | null
+          id: string
+          payload: Json
+          status: string
+          task_type: string
+          user_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "scheduled_tasks"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
