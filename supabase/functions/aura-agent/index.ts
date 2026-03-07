@@ -487,6 +487,7 @@ Você pode agendar lembretes e meditações para o usuário. Use as tags abaixo 
 Quando o usuário disser "daqui a X minutos/horas", use a Hora atual dos DADOS DINÂMICOS para calcular o horário exato.
 Exemplo: Se agora são 14:00 e o usuário pede "daqui a 10 min", a tag DEVE ser [AGENDAR_TAREFA:YYYY-MM-DD 14:10:reminder:...].
 Se agora são 19:07 e o usuário pede "daqui a 10 min", a tag DEVE ser [AGENDAR_TAREFA:YYYY-MM-DD 19:17:reminder:...].
+
 6. Confirme ao usuário o que foi agendado de forma natural
 
 **Exemplos:**
