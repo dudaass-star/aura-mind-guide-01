@@ -1,0 +1,1 @@
+ALTER TABLE public.profiles ADD COLUMN last_proactive_insight_at timestamptz DEFAULT NULL;

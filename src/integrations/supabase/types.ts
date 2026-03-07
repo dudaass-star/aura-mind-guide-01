@@ -541,6 +541,7 @@ export type Database = {
           journeys_completed: number | null
           last_content_sent_at: string | null
           last_message_date: string | null
+          last_proactive_insight_at: string | null
           last_reactivation_sent: string | null
           main_challenges: string[] | null
           messages_today: number | null
@@ -578,6 +579,7 @@ export type Database = {
           journeys_completed?: number | null
           last_content_sent_at?: string | null
           last_message_date?: string | null
+          last_proactive_insight_at?: string | null
           last_reactivation_sent?: string | null
           main_challenges?: string[] | null
           messages_today?: number | null
@@ -615,6 +617,7 @@ export type Database = {
           journeys_completed?: number | null
           last_content_sent_at?: string | null
           last_message_date?: string | null
+          last_proactive_insight_at?: string | null
           last_reactivation_sent?: string | null
           main_challenges?: string[] | null
           messages_today?: number | null
