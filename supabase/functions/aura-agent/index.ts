@@ -446,6 +446,18 @@ As categorias disponíveis serão listadas no CONTEXTO DINÂMICO abaixo. Use APE
 - Quando a situação emocional indicar (ansiedade forte, insônia, estresse intenso)
 - NÃO ofereça meditação em toda conversa — use com parcimônia e contexto
 
+# CÁPSULA DO TEMPO EMOCIONAL
+
+Você pode propor ao usuário gravar uma "cápsula do tempo": um áudio para o eu dele do futuro, que a AURA guardará e reenviará em 90 dias.
+
+**Quando propor:** Em momentos de vulnerabilidade bonita, crescimento percebido, ou quando o usuário expressar desejo de mudança. NÃO proponha em crises agudas.
+
+**Como propor (adapte ao contexto):** "Ei, tive uma ideia... que tal gravar um áudio pro seu eu do futuro? Tipo uma mensagem de 90 dias pra frente. Eu guardo e te mando de surpresa no dia exato 💜 Quer tentar?"
+
+**Quando o usuário ACEITAR** (disser "sim", "quero", "bora", etc.), inclua a tag **[CAPSULA_DO_TEMPO]** na sua resposta. Sem essa tag, o sistema NÃO ativará a captura de áudio. Exemplo: "Que legal! Então grava um áudio agora com a mensagem pro seu eu do futuro. Pode ser do tamanho que quiser 🎙️ [CAPSULA_DO_TEMPO]"
+
+**Frequência:** Proponha no MÁXIMO uma vez a cada 30 dias por usuário. É especial — não pode virar rotina.
+
 # ESTILO AURA - OBJETIVA E PERCEPTIVA (DNA DA AURA)
 
 Você NÃO é um chatbot que fica fazendo perguntas genéricas.
@@ -4511,6 +4523,25 @@ Estou aqui sempre que precisar! 💜`;
       }).catch(err => {
         console.error(`🧘 send-meditation error:`, err);
       });
+    }
+
+    // ========================================================================
+    // DETECTAR TAG [CAPSULA_DO_TEMPO] E ATIVAR CAPTURA
+    // ========================================================================
+    const capsuleMatch = assistantMessage.match(/\[CAPSULA_DO_TEMPO\]/i);
+    if (capsuleMatch && profile?.user_id) {
+      console.log('📦 Time capsule tag detected - activating capture mode');
+      assistantMessage = assistantMessage.replace(/\[CAPSULA_DO_TEMPO\]/gi, '').trim();
+      
+      const supabaseUrl2 = Deno.env.get('SUPABASE_URL')!;
+      const supabaseServiceKey2 = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      const sbAdmin = createClient(supabaseUrl2, supabaseServiceKey2);
+      
+      await sbAdmin.from('profiles').update({
+        awaiting_time_capsule: 'awaiting_audio',
+      }).eq('user_id', profile.user_id);
+      
+      console.log(`✅ Capsule capture mode activated for user ${profile.user_id}`);
     }
 
     // ========================================================================

@@ -529,6 +529,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          awaiting_time_capsule: string | null
           created_at: string | null
           current_episode: number | null
           current_journey_id: string | null
@@ -546,6 +547,7 @@ export type Database = {
           name: string | null
           needs_schedule_setup: boolean | null
           onboarding_completed: boolean | null
+          pending_capsule_audio_url: string | null
           phone: string | null
           plan: string | null
           preferred_session_time: string | null
@@ -564,6 +566,7 @@ export type Database = {
           whatsapp_instance_id: string | null
         }
         Insert: {
+          awaiting_time_capsule?: string | null
           created_at?: string | null
           current_episode?: number | null
           current_journey_id?: string | null
@@ -581,6 +584,7 @@ export type Database = {
           name?: string | null
           needs_schedule_setup?: boolean | null
           onboarding_completed?: boolean | null
+          pending_capsule_audio_url?: string | null
           phone?: string | null
           plan?: string | null
           preferred_session_time?: string | null
@@ -599,6 +603,7 @@ export type Database = {
           whatsapp_instance_id?: string | null
         }
         Update: {
+          awaiting_time_capsule?: string | null
           created_at?: string | null
           current_episode?: number | null
           current_journey_id?: string | null
@@ -616,6 +621,7 @@ export type Database = {
           name?: string | null
           needs_schedule_setup?: boolean | null
           onboarding_completed?: boolean | null
+          pending_capsule_audio_url?: string | null
           phone?: string | null
           plan?: string | null
           preferred_session_time?: string | null
@@ -829,6 +835,50 @@ export type Database = {
           url?: string
         }
         Relationships: []
+      }
+      time_capsules: {
+        Row: {
+          audio_url: string
+          context_message: string | null
+          created_at: string
+          deliver_at: string
+          delivered: boolean
+          delivered_at: string | null
+          id: string
+          transcription: string | null
+          user_id: string
+        }
+        Insert: {
+          audio_url: string
+          context_message?: string | null
+          created_at?: string
+          deliver_at: string
+          delivered?: boolean
+          delivered_at?: string | null
+          id?: string
+          transcription?: string | null
+          user_id: string
+        }
+        Update: {
+          audio_url?: string
+          context_message?: string | null
+          created_at?: string
+          deliver_at?: string
+          delivered?: boolean
+          delivered_at?: string | null
+          id?: string
+          transcription?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "time_capsules_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
       }
       token_usage_logs: {
         Row: {

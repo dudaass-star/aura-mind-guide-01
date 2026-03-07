@@ -475,6 +475,159 @@ Vou ficar esperando você voltar. 🤗`;
     }
 
     // ========================================================================
+    // CHECK TIME CAPSULE STATE (Cápsula do Tempo)
+    // ========================================================================
+    const capsuleState = profile.awaiting_time_capsule;
+    
+    if (capsuleState === 'awaiting_audio' || capsuleState === 'awaiting_confirmation') {
+      const instanceConfig = await getInstanceConfigForUser(supabase, profile.user_id);
+      
+      if (capsuleState === 'awaiting_audio') {
+        if (payload.hasAudio && payload.audioUrl) {
+          // Salvar áudio temporariamente e pedir confirmação
+          await supabase.from('profiles').update({
+            awaiting_time_capsule: 'awaiting_confirmation',
+            pending_capsule_audio_url: payload.audioUrl,
+          }).eq('user_id', profile.user_id);
+
+          const confirmMsg = `Recebi seu áudio! 🎙️ Ficou do jeito que você queria?\n\nSe quiser regravar, manda outro áudio. Se tiver bom, me diz "pode guardar" 💜`;
+          await sendTextMessage(payload.cleanPhone, confirmMsg, undefined, instanceConfig);
+
+          await supabase.from('messages').insert([
+            { user_id: profile.user_id, role: 'user', content: messageText || '[áudio para cápsula do tempo]' },
+            { user_id: profile.user_id, role: 'assistant', content: confirmMsg },
+          ]);
+
+          return new Response(JSON.stringify({ status: 'capsule_audio_received' }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+        // Se mandou texto em vez de áudio, lembrar gentilmente
+        const reminderMsg = `Manda um áudio pra eu guardar sua voz! 🎙️ Quando quiser desistir, é só dizer "deixa pra lá" 💜`;
+        await sendTextMessage(payload.cleanPhone, reminderMsg, undefined, instanceConfig);
+        await supabase.from('messages').insert([
+          { user_id: profile.user_id, role: 'user', content: messageText },
+          { user_id: profile.user_id, role: 'assistant', content: reminderMsg },
+        ]);
+        return new Response(JSON.stringify({ status: 'capsule_awaiting_audio_reminder' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (capsuleState === 'awaiting_confirmation') {
+        // Se mandou outro áudio, substituir o pendente
+        if (payload.hasAudio && payload.audioUrl) {
+          await supabase.from('profiles').update({
+            pending_capsule_audio_url: payload.audioUrl,
+          }).eq('user_id', profile.user_id);
+
+          const replaceMsg = `Troquei o áudio! 🎙️ Esse ficou bom? Me diz "pode guardar" quando tiver certeza 💜`;
+          await sendTextMessage(payload.cleanPhone, replaceMsg, undefined, instanceConfig);
+          await supabase.from('messages').insert([
+            { user_id: profile.user_id, role: 'user', content: messageText || '[novo áudio para cápsula]' },
+            { user_id: profile.user_id, role: 'assistant', content: replaceMsg },
+          ]);
+          return new Response(JSON.stringify({ status: 'capsule_audio_replaced' }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        const lowerMsg = (messageText || '').toLowerCase().trim();
+
+        // Cancelamento
+        if (/deixa|cancela|desist|não quero|nao quero|esquece|para|parar/i.test(lowerMsg)) {
+          await supabase.from('profiles').update({
+            awaiting_time_capsule: null,
+            pending_capsule_audio_url: null,
+          }).eq('user_id', profile.user_id);
+
+          const cancelMsg = `Tudo bem! Quando quiser gravar uma cápsula do tempo, é só falar 💜`;
+          await sendTextMessage(payload.cleanPhone, cancelMsg, undefined, instanceConfig);
+          await supabase.from('messages').insert([
+            { user_id: profile.user_id, role: 'user', content: messageText },
+            { user_id: profile.user_id, role: 'assistant', content: cancelMsg },
+          ]);
+          return new Response(JSON.stringify({ status: 'capsule_cancelled' }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        // Confirmação
+        if (/sim|pode|guard|confirm|ficou|bom|bora|manda|salv|tá (bom|ótimo|perfeito)|ta (bom|otimo|perfeito)|perfeito|certeza|isso/i.test(lowerMsg)) {
+          const pendingUrl = profile.pending_capsule_audio_url;
+          if (!pendingUrl) {
+            // Edge case: URL perdida
+            await supabase.from('profiles').update({
+              awaiting_time_capsule: null,
+              pending_capsule_audio_url: null,
+            }).eq('user_id', profile.user_id);
+            // Let flow continue normally
+          } else {
+            const deliverAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000); // 90 dias
+            
+            // Transcrever o áudio para registro
+            let transcription: string | null = null;
+            try {
+              transcription = await transcribeAudio(pendingUrl);
+            } catch (e) {
+              console.warn('⚠️ Could not transcribe capsule audio:', e);
+            }
+
+            await supabase.from('time_capsules').insert({
+              user_id: profile.user_id,
+              audio_url: pendingUrl,
+              transcription,
+              deliver_at: deliverAt.toISOString(),
+              context_message: `Cápsula gravada em ${new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`,
+            });
+
+            await supabase.from('profiles').update({
+              awaiting_time_capsule: null,
+              pending_capsule_audio_url: null,
+            }).eq('user_id', profile.user_id);
+
+            const deliverDateStr = deliverAt.toLocaleDateString('pt-BR', { 
+              day: '2-digit', month: '2-digit', year: 'numeric', 
+              timeZone: 'America/Sao_Paulo' 
+            });
+            const savedMsg = `Guardei sua mensagem com carinho! 💜✨\n\nVou te enviar de volta no dia ${deliverDateStr}. Vai ser uma surpresa especial do seu eu de hoje pro seu eu do futuro 🫶`;
+            await sendTextMessage(payload.cleanPhone, savedMsg, undefined, instanceConfig);
+            await supabase.from('messages').insert([
+              { user_id: profile.user_id, role: 'user', content: messageText },
+              { user_id: profile.user_id, role: 'assistant', content: savedMsg },
+            ]);
+
+            console.log(`✅ Time capsule saved for user ${profile.user_id}, deliver_at: ${deliverDateStr}`);
+            return new Response(JSON.stringify({ status: 'capsule_saved' }), {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+          }
+        }
+
+        // Mensagem não reconhecida durante confirmação — continuar fluxo normal
+        // (pode ser que o usuário mudou de assunto)
+        await supabase.from('profiles').update({
+          awaiting_time_capsule: null,
+          pending_capsule_audio_url: null,
+        }).eq('user_id', profile.user_id);
+        console.log('⚠️ Capsule confirmation state cleared - unrecognized response, continuing normal flow');
+      }
+    }
+
+    // Timeout: limpar flags pendentes há mais de 24h
+    if (capsuleState && profile.updated_at) {
+      const updatedAt = new Date(profile.updated_at).getTime();
+      const hoursAgo = (Date.now() - updatedAt) / (1000 * 60 * 60);
+      if (hoursAgo > 24) {
+        console.log(`🕐 Capsule timeout (${Math.round(hoursAgo)}h), clearing flags`);
+        await supabase.from('profiles').update({
+          awaiting_time_capsule: null,
+          pending_capsule_audio_url: null,
+        }).eq('user_id', profile.user_id);
+      }
+    }
+
+    // ========================================================================
     // CHECK FOR SESSION RATING (Quick reply handling)
     // ========================================================================
     const ratingResult = await handleSessionRating(supabase, profile.user_id, messageText);
