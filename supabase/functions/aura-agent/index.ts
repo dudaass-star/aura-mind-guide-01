@@ -4584,6 +4584,84 @@ Estou aqui sempre que precisar! 💜`;
     }
 
     // ========================================================================
+    // DETECTAR TAG [AGENDAR_TAREFA:...] E CRIAR AGENDAMENTO
+    // ========================================================================
+    const agendarRegex = /\[AGENDAR_TAREFA:(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}):(\w+):(.*?)\]/gi;
+    let agendarMatch;
+    while ((agendarMatch = agendarRegex.exec(assistantMessage)) !== null) {
+      const [fullMatch, dateStr, timeStr, taskType, description] = agendarMatch;
+      console.log(`📅 Schedule tag detected: type=${taskType}, date=${dateStr} ${timeStr}, desc=${description}`);
+      
+      // Converter para timestamp (horário de Brasília = UTC-3)
+      const executeAt = new Date(`${dateStr}T${timeStr}:00-03:00`);
+      
+      if (executeAt > new Date() && profile?.user_id) {
+        const supabaseUrl3 = Deno.env.get('SUPABASE_URL')!;
+        const supabaseServiceKey3 = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+        const sbAdmin3 = createClient(supabaseUrl3, supabaseServiceKey3);
+        
+        // Montar payload padronizado
+        let payload: Record<string, any> = {};
+        if (taskType === 'reminder') {
+          payload = { text: description };
+        } else if (taskType === 'meditation') {
+          payload = { category: description.toLowerCase() };
+        } else {
+          payload = { text: description };
+        }
+        
+        await sbAdmin3.from('scheduled_tasks').insert({
+          user_id: profile.user_id,
+          execute_at: executeAt.toISOString(),
+          task_type: taskType,
+          payload,
+          status: 'pending',
+        });
+        
+        console.log(`✅ Task scheduled for ${executeAt.toISOString()}: ${taskType} - ${description}`);
+      } else {
+        console.warn(`⚠️ Skipping task: date in past or no user_id`);
+      }
+    }
+    // Remove tags from response
+    assistantMessage = assistantMessage.replace(/\[AGENDAR_TAREFA:.*?\]/gi, '').trim();
+
+    // ========================================================================
+    // DETECTAR TAG [CANCELAR_TAREFA:tipo] E CANCELAR PRÓXIMA PENDENTE
+    // ========================================================================
+    const cancelarMatch = assistantMessage.match(/\[CANCELAR_TAREFA:(\w+)\]/i);
+    if (cancelarMatch && profile?.user_id) {
+      const cancelType = cancelarMatch[1].toLowerCase();
+      console.log(`🗑️ Cancel tag detected: type=${cancelType}`);
+      
+      const supabaseUrl4 = Deno.env.get('SUPABASE_URL')!;
+      const supabaseServiceKey4 = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      const sbAdmin4 = createClient(supabaseUrl4, supabaseServiceKey4);
+      
+      // Cancelar a PRÓXIMA pendente (ORDER BY execute_at ASC)
+      const { data: nextTask } = await sbAdmin4
+        .from('scheduled_tasks')
+        .select('id')
+        .eq('user_id', profile.user_id)
+        .eq('task_type', cancelType)
+        .eq('status', 'pending')
+        .order('execute_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      
+      if (nextTask) {
+        await sbAdmin4
+          .from('scheduled_tasks')
+          .update({ status: 'cancelled' })
+          .eq('id', nextTask.id);
+        console.log(`✅ Cancelled task ${nextTask.id}`);
+      } else {
+        console.log(`⚠️ No pending ${cancelType} task found to cancel`);
+      }
+    }
+    assistantMessage = assistantMessage.replace(/\[CANCELAR_TAREFA:\w+\]/gi, '').trim();
+
+    // ========================================================================
     // FALLBACK: Se usuário pediu meditação mas LLM esqueceu a tag
     // ========================================================================
     if (!meditationMatch && (profile?.user_id || userPhone)) {

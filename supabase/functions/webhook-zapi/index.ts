@@ -850,6 +850,8 @@ Vou ficar esperando você voltar. 🤗`;
         .replace(/\[CONVERSA_CONCLUIDA\]/gi, '')
         .replace(/\[MODO_AUDIO\]/gi, '')
         .replace(/\[INSIGHTS\].*?\[\/INSIGHTS\]/gis, '')
+        .replace(/\[AGENDAR_TAREFA:.*?\]/gi, '')
+        .replace(/\[CANCELAR_TAREFA:\w+\]/gi, '')
         .trim();
       
       if (!responseText) {
