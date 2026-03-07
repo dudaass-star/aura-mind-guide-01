@@ -18,6 +18,9 @@ import {
   Timer,
   RotateCcw,
   Gift,
+  Bell,
+  Eye,
+  XCircle,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import {
