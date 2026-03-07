@@ -1,11 +1,14 @@
 
-# Cápsula do Tempo — Implementado ✅
 
-## O que foi feito
+## Disparar o Efeito Oráculo (pattern-analysis) em modo real
 
-1. **Tabela `time_capsules`** + colunas `awaiting_time_capsule` e `pending_capsule_audio_url` no `profiles`
-2. **Intercepção no `webhook-zapi`**: antes do fluxo normal, detecta estado da cápsula e gerencia áudio/confirmação/cancelamento/regravação
-3. **Tag `[CAPSULA_DO_TEMPO]` no `aura-agent`**: quando a Aura propõe e o usuário aceita, a tag ativa o modo de captura
-4. **Instrução no prompt**: ~10 linhas ensinando a Aura quando/como propor a cápsula
-5. **Edge function `deliver-time-capsule`**: cron diário (10h) que entrega cápsulas vencidas via WhatsApp
-6. **Fluxo de confirmação**: o usuário pode regravar quantas vezes quiser antes de confirmar
+### Contexto
+A última tentativa falhou porque a instância Z-API estava com assinatura expirada. O usuário quer tentar novamente.
+
+### Plano
+1. Invocar a edge function `pattern-analysis` sem `dry_run` (modo real) para enviar as mensagens proativas via WhatsApp
+2. Verificar os logs para confirmar se os envios foram bem-sucedidos desta vez
+
+### Ação
+Chamar `curl_edge_functions` para `pattern-analysis` com body vazio (sem dry_run) e depois verificar os logs de execução.
+
