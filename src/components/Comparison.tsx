@@ -1,4 +1,4 @@
-import { Check, X } from "lucide-react";
+import { Check, X, AlertTriangle } from "lucide-react";
 
 const comparisonData = [
   {
