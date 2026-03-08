@@ -1,37 +1,27 @@
 
-Diagnóstico atual (confirmado pelos logs):
-- O webhook recebe a mensagem normalmente, encontra usuário e chama o agente.
-- A falha acontece no boot do `aura-agent` com: `Uncaught SyntaxError: Identifier 'sessionAudioCount' has already been declared`.
-- Enquanto esse boot error existir, a Aura não responde no WhatsApp (independente do modelo).
+Diagnóstico confirmado:
+- O fluxo WhatsApp está chegando no backend e chamando o agente corretamente.
+- A falha atual não é de deploy/boot: é erro de runtime no `aura-agent`.
+- Erro exato nos logs: `ReferenceError: shouldSuggestUpgrade is not defined` em `supabase/functions/aura-agent/index.ts` (durante montagem do `dynamicContext`).
+- Isso faz o `aura-agent` cair no catch e retornar fallback: `"Desculpa, tive um probleminha aqui..."`, por isso você não recebe resposta útil.
 
-Plano de correção (hotfix + validação):
-1) Isolar a colisão de escopo no `supabase/functions/aura-agent/index.ts`
-- Revisar o bloco de contexto dinâmico (regra de áudio) e o bloco de envio/controle de áudio.
-- Garantir nomenclatura sem colisão:
-  - contexto: `sessionAudioCountForContext`
-  - lógica operacional: `sessionAudioCount`
-- Validar que não há segunda declaração de `sessionAudioCount` no mesmo escopo do handler.
+Plano de correção (hotfix direto):
+1. Abrir `supabase/functions/aura-agent/index.ts` e corrigir o bloco onde existe:
+   - `if (shouldSuggestUpgrade) { ... }`
+2. Definir `shouldSuggestUpgrade` antes desse `if`, usando os dados já calculados:
+   - `userPlan`
+   - `messagesToday`
+   - `planConfig.dailyMessageTarget`
+3. Regra sugerida (coerente com o prompt do sistema “acima do target”):
+   - `shouldSuggestUpgrade = userPlan === 'essencial' && planConfig.dailyMessageTarget > 0 && messagesToday > planConfig.dailyMessageTarget`
+4. Alternativa ainda mais segura (evita nova variável solta): substituir o `if (shouldSuggestUpgrade)` por condição inline com essa mesma regra.
 
-2) Blindar para não repetir
-- Aplicar padrão de nomes:
-  - variáveis de prompt/contexto: `...ForContext`
-  - variáveis de decisão operacional: nomes sem sufixo.
-- Fazer varredura rápida no arquivo por declarações duplicadas em escopo amplo pós-refatoração.
+Validação após correção:
+1. Publicar `aura-agent`.
+2. Ver logs de `aura-agent` e confirmar ausência de `ReferenceError`.
+3. Enviar mensagem real no WhatsApp (“Oi Aura”) e confirmar resposta normal (não fallback de erro).
+4. Rodar `/admin/testes` (mínimo: casual, emotional, session_part1, session_part2) para validar regressão.
 
-3) Publicar novamente as funções críticas
-- Republicar `aura-agent` (obrigatório).
-- Republicar `webhook-zapi` (recomendado para garantir cadeia estável ponta a ponta).
-
-4) Verificação técnica imediata
-- Conferir logs do `aura-agent` até aparecer `booted` sem `BootFailure`.
-- Confirmar no `webhook-zapi` que a chamada ao agente não retorna mais `BOOT_ERROR`.
-
-5) Verificação funcional fim a fim
-- Enviar mensagem real “Aura” no WhatsApp.
-- Confirmar resposta recebida.
-- Rodar testes no `/admin/testes` (mínimo: casual, emotional, session_part1 e session_part2) para garantir que a troca de modelo + áudio/sessão seguem estáveis.
-
-Resultado esperado:
-- Boot do agente normalizado.
-- Respostas restauradas no WhatsApp.
-- Sem regressão nos fluxos de sessão/áudio com Flash Low.
+Blindagem imediata para não repetir:
+- Fazer varredura rápida no `aura-agent` por variáveis usadas em `if (...)` sem declaração local próxima (mesmo padrão que causou `audioSessionContext`, `sessionAudioCount` e agora `shouldSuggestUpgrade`).
+- Padronizar nome de variáveis de contexto com sufixo (`...ForContext`) e manter variáveis operacionais separadas.
