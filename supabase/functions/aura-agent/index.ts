@@ -3233,6 +3233,14 @@ REGRAS GERAIS DO ONBOARDING:
     }
 
     const dateTimeContext = getCurrentDateTimeContext();
+
+    const sessionAudioCount = currentSession?.audio_sent_count || 0;
+    const audioSessionContext = sessionActive
+      ? (sessionAudioCount < 2
+        ? `SESSÃO ATIVA — OBRIGATÓRIO usar [MODO_AUDIO] nas primeiras 2 respostas da sessão (áudios enviados: ${sessionAudioCount}). Cria intimidade e presença.`
+        : `SESSÃO ATIVA — Áudio já foi usado no início. Use texto normalmente, exceto em momentos de encerramento ou crise.`)
+      : 'Fora de sessão — use áudio apenas quando o usuário pedir ou em situações de crise emocional.';
+
     // Construir bloco de contexto dinâmico (separado do template estático para cache implícito do Gemini)
     let dynamicContext = `# DADOS DINÂMICOS DO SISTEMA
 
