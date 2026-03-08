@@ -3232,6 +3232,7 @@ REGRAS GERAIS DO ONBOARDING:
 `;
     }
 
+    const dateTimeContext = getCurrentDateTimeContext();
     // Construir bloco de contexto dinâmico (separado do template estático para cache implícito do Gemini)
     let dynamicContext = `# DADOS DINÂMICOS DO SISTEMA
 
