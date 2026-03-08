@@ -1,36 +1,48 @@
 
+# Cápsula do Tempo — Implementado ✅
 
-# Remover/substituir emojis por icones Lucide
+## O que foi feito
 
-## Escopo
+1. **Tabela `time_capsules`** + colunas `awaiting_time_capsule` e `pending_capsule_audio_url` no `profiles`
+2. **Intercepção no `webhook-zapi`**: antes do fluxo normal, detecta estado da cápsula e gerencia áudio/confirmação/cancelamento/regravação
+3. **Tag `[CAPSULA_DO_TEMPO]` no `aura-agent`**: quando a Aura propõe e o usuário aceita, a tag ativa o modo de captura
+4. **Instrução no prompt**: ~10 linhas ensinando a Aura quando/como propor a cápsula
+5. **Edge function `deliver-time-capsule`**: cron diário (10h) que entrega cápsulas vencidas via WhatsApp
+6. **Fluxo de confirmação**: o usuário pode regravar quantas vezes quiser antes de confirmar
 
-Encontrei emojis em **6 arquivos de paginas publicas** e **3 arquivos admin** (admin vou manter como esta, pois sao internos). Vou focar nos arquivos voltados ao usuario:
+---
 
-### Arquivos e substituicoes
+# Sistema de Agendamento de Tarefas (Efeito Oráculo) — Implementado ✅
 
-| Arquivo | Emoji atual | Substituicao |
-|---|---|---|
-| `Demo.tsx` | `💬 Veja na prática` (badge) | Icone Lucide `MessageSquare` inline |
-| `Demo.tsx` | `💡` dentro do conteudo de chat | Remover (texto natural sem emoji) |
-| `Benefits.tsx` | `✨ Tudo isso` (badge) | Icone Lucide `Sparkles` inline |
-| `Meditations.tsx` | `🆕 Novo` (badge) | Icone Lucide `Zap` ou `Star` inline |
-| `Testimonials.tsx` | `❤️ Depoimentos Reais` (badge) | Icone Lucide `Heart` inline |
-| `Comparison.tsx` | `⚠️` no disclaimer | Icone Lucide `AlertTriangle` inline |
-| `Pricing.tsx` | `✓` nos trust badges | Icone Lucide `Check` inline |
-| `TrialStarted.tsx` | `💜` no titulo | Remover |
-| `UserGuide.tsx` | `💡`, `🔍`, `🔄`, `🧭`, `💬` (session types + headers) | Substituir por icones Lucide correspondentes (`Lightbulb`, `Search`, `RefreshCw`, `Compass`, `MessageCircle`) |
+## O que foi feito
 
-### Padrao de substituicao
+1. **Tabela `scheduled_tasks`**: id, user_id, execute_at, task_type, payload (JSONB), status, created_at, executed_at
+2. **Índice parcial**: `idx_scheduled_tasks_pending` em `execute_at WHERE status = 'pending'` — busca em milissegundos
+3. **Função RPC `claim_pending_tasks`**: `FOR UPDATE SKIP LOCKED` com limite de 150 — atomicidade absoluta contra duplicidade
+4. **RLS**: service_role full access + users can view own
+5. **Tags no prompt do `aura-agent`**:
+   - `[AGENDAR_TAREFA:YYYY-MM-DD HH:mm:tipo:descricao]` — agendar lembretes e meditações
+   - `[CANCELAR_TAREFA:tipo]` — cancela o PRÓXIMO pendente (ORDER BY execute_at ASC)
+6. **Processamento no `aura-agent`**: detecta as tags, cria/cancela tasks no banco, remove tags antes de mostrar ao usuário
+7. **Sanitização no `webhook-zapi`**: remove tags de agendamento que vazem na resposta
+8. **Edge function `execute-scheduled-tasks`**: processa tasks claimed, com delay 300ms anti-burst, handlers por tipo (reminder, meditation, message)
+9. **Safety net**: tasks em `executing` há >10 min são resetadas para `pending`
+10. **Cron `pg_cron`**: `*/5 * * * *` (cada 5 minutos) invocando a edge function
 
-Os badges de secao (ex: `❤️ Depoimentos Reais`) seguirao o padrao:
-```text
-Antes:  <span>❤️ Depoimentos Reais</span>
-Depois: <span><Heart className="w-4 h-4 inline mr-1" /> Depoimentos Reais</span>
-```
+## Tipos de tarefa suportados
 
-Emojis decorativos em texto serao simplesmente removidos.
+| Tipo | Payload | Ação |
+|------|---------|------|
+| `reminder` | `{ "text": "mensagem" }` | Envia texto via WhatsApp |
+| `meditation` | `{ "category": "sono" }` | Invoca `send-meditation` |
+| `message` | `{ "text": "mensagem" }` | Envia texto customizado |
 
-### Arquivos NAO alterados
-- `AdminTests.tsx`, `AdminInstances.tsx`, `AdminMeditations.tsx` — paineis internos, emojis sao uteis la
-- `FAQ.tsx`, `ForWho.tsx`, `FinalCTA.tsx`, `Header.tsx` — nao tem emojis
+## Fluxo completo
 
+1. Usuário pede lembrete → Aura inclui `[AGENDAR_TAREFA:...]` na resposta
+2. `aura-agent` detecta a tag → insere na tabela `scheduled_tasks` com payload padronizado
+3. Tag é removida antes de o usuário ver a mensagem
+4. A cada 5 min, `pg_cron` invoca `execute-scheduled-tasks`
+5. Edge function chama `claim_pending_tasks(150)` (atômico, skip locked)
+6. Processa cada task com 300ms de delay → envia via Z-API
+7. Marca como `executed` ou `failed`

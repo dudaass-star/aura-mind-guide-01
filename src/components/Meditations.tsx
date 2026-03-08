@@ -1,4 +1,4 @@
-import { Clock, Mic, MessageCircle } from "lucide-react";
+import { Clock, Mic, MessageCircle, Star } from "lucide-react";
 
 const features = [
 {
@@ -32,8 +32,8 @@ const Meditations = () => {
 
       <div className="container mx-auto px-4 relative z-10">
         <div className="text-center mb-16 animate-fade-up">
-          <span className="inline-block px-4 py-2 rounded-full bg-sage-soft text-primary text-sm font-medium mb-4">
-            🆕 Novo
+          <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-sage-soft text-primary text-sm font-medium mb-4">
+            <Star className="w-4 h-4" /> Novo
           </span>
           <h2 className="font-display text-3xl md:text-4xl lg:text-5xl font-bold text-foreground mb-4">
             Meditações guiadas no{" "}

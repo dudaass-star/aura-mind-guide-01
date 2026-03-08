@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Smartphone, Play, Pause, RotateCcw } from "lucide-react";
+import { Smartphone, Play, Pause, RotateCcw, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import avatarAura from "@/assets/avatar-aura.jpg";
 
@@ -92,7 +92,7 @@ const messages: Message[] = [
   },
   {
     sender: "aura",
-    content: "Isso é uma pista enorme 💡",
+    content: "Isso é uma pista enorme.",
   },
   {
     sender: "aura",
@@ -338,8 +338,8 @@ const Demo = () => {
       
       <div className="container mx-auto px-4 relative z-10">
         <div className="text-center mb-12">
-          <span className="inline-block px-4 py-2 rounded-full bg-sage-soft text-primary text-sm font-medium mb-4">
-            💬 Veja na prática
+          <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-sage-soft text-primary text-sm font-medium mb-4">
+            <MessageSquare className="w-4 h-4" /> Veja na prática
           </span>
           <h2 className="font-display text-3xl md:text-4xl lg:text-5xl font-bold text-foreground mb-4">
             Como é conversar com a{" "}

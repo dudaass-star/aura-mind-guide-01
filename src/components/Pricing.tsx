@@ -220,9 +220,9 @@ const Pricing = () => {
 
         {/* Trust badges */}
         <div className="flex flex-wrap justify-center gap-4 mt-10 text-sm text-muted-foreground">
-          <span>✓ 5 conversas grátis pra começar</span>
-          <span>✓ Cancela ou pausa quando quiser</span>
-          <span>✓ Sem fidelidade</span>
+          <span className="inline-flex items-center gap-1.5"><Check className="w-4 h-4 text-primary" /> 5 conversas grátis pra começar</span>
+          <span className="inline-flex items-center gap-1.5"><Check className="w-4 h-4 text-primary" /> Cancela ou pausa quando quiser</span>
+          <span className="inline-flex items-center gap-1.5"><Check className="w-4 h-4 text-primary" /> Sem fidelidade</span>
         </div>
 
         {/* Sessions explanation */}

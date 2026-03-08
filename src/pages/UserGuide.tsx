@@ -80,8 +80,8 @@ const UserGuide = () => {
             />
           </div>
           <div className="mt-8 bg-card rounded-2xl border border-border/50 p-6">
-            <h3 className="font-display text-lg font-semibold text-foreground mb-3">
-              💡 Temas que você pode trazer
+            <h3 className="font-display text-lg font-semibold text-foreground mb-3 flex items-center gap-2">
+              <Sparkles size={18} className="text-primary" /> Temas que você pode trazer
             </h3>
             <div className="grid sm:grid-cols-2 gap-2">
               {[
@@ -115,22 +115,22 @@ const UserGuide = () => {
               {
                 name: "Clareza",
                 desc: "Para decisões difíceis e momentos de dúvida",
-                emoji: "🔍",
+                icon: Eye,
               },
               {
                 name: "Padrões",
                 desc: "Para entender comportamentos que se repetem",
-                emoji: "🔄",
+                icon: RefreshCw,
               },
               {
                 name: "Propósito",
                 desc: "Para explorar sentido de vida e direção",
-                emoji: "🧭",
+                icon: ArrowRight,
               },
               {
                 name: "Livre",
                 desc: "Para aprofundar qualquer tema que você quiser",
-                emoji: "💬",
+                icon: MessageCircle,
               },
             ].map((tipo) => (
               <Card
@@ -138,7 +138,9 @@ const UserGuide = () => {
                 className="border-border/50 bg-background hover:border-primary/30 transition-colors"
               >
                 <CardContent className="p-5 text-center">
-                  <span className="text-3xl mb-2 block">{tipo.emoji}</span>
+                  <div className="w-10 h-10 rounded-xl bg-sage-soft flex items-center justify-center mx-auto mb-2">
+                    <tipo.icon className="w-5 h-5 text-primary" />
+                  </div>
                   <h4 className="font-display font-semibold text-foreground mb-1">
                     {tipo.name}
                   </h4>
@@ -196,8 +198,8 @@ const UserGuide = () => {
             />
           </div>
           <div className="mt-6 bg-card rounded-2xl border border-border/50 p-6">
-            <h3 className="font-display text-lg font-semibold text-foreground mb-3">
-              📚 Exemplos de jornadas
+            <h3 className="font-display text-lg font-semibold text-foreground mb-3 flex items-center gap-2">
+              <BookOpen size={18} className="text-primary" /> Exemplos de jornadas
             </h3>
             <div className="flex flex-wrap gap-2">
               {[
@@ -349,8 +351,8 @@ const UserGuide = () => {
           </div>
 
           <div className="bg-background rounded-2xl border border-border/50 p-6 mb-6">
-            <h3 className="font-display text-lg font-semibold text-foreground mb-3">
-              💬 Exemplo prático
+            <h3 className="font-display text-lg font-semibold text-foreground mb-3 flex items-center gap-2">
+              <MessageCircle size={18} className="text-primary" /> Exemplo prático
             </h3>
             <div className="space-y-3 text-sm">
               <div className="flex gap-3">
@@ -359,7 +361,7 @@ const UserGuide = () => {
               </div>
               <div className="flex gap-3">
                 <span className="shrink-0 font-semibold text-primary">AURA:</span>
-                <span className="text-muted-foreground italic">"Anotado! Daqui a 30 minutinhos eu te aviso pra não esquecer. 💊"</span>
+                <span className="text-muted-foreground italic">"Anotado! Daqui a 30 minutinhos eu te aviso pra não esquecer."</span>
               </div>
             </div>
           </div>
@@ -379,8 +381,8 @@ const UserGuide = () => {
 
           <div className="container mx-auto px-4 max-w-4xl relative z-10">
             <div className="text-center mb-10">
-              <span className="inline-block px-4 py-2 rounded-full bg-sage-soft text-primary text-sm font-medium mb-4">
-                🧘 Tudo em um só lugar
+              <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-sage-soft text-primary text-sm font-medium mb-4">
+                <Heart size={16} /> Tudo em um só lugar
               </span>
               <h2 className="font-display text-2xl md:text-3xl font-bold text-foreground mb-2">
                 Meditações Personalizadas
@@ -600,7 +602,7 @@ const UserGuide = () => {
               Quer experimentar tudo isso?
             </h2>
             <p className="text-muted-foreground mb-8 text-lg">
-              5 conversas grátis. Sem cartão. Sem compromisso. 💜
+              5 conversas grátis. Sem cartão. Sem compromisso.
             </p>
             <Button variant="sage" size="xl" asChild>
               <Link to="/experimentar">
