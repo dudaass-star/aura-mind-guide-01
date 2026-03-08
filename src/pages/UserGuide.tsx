@@ -80,8 +80,8 @@ const UserGuide = () => {
             />
           </div>
           <div className="mt-8 bg-card rounded-2xl border border-border/50 p-6">
-            <h3 className="font-display text-lg font-semibold text-foreground mb-3">
-              💡 Temas que você pode trazer
+            <h3 className="font-display text-lg font-semibold text-foreground mb-3 flex items-center gap-2">
+              <Sparkles size={18} className="text-primary" /> Temas que você pode trazer
             </h3>
             <div className="grid sm:grid-cols-2 gap-2">
               {[
