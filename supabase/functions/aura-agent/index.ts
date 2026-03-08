@@ -799,7 +799,7 @@ Siga SEMPRE a estrutura da fase atual (Abertura/Exploração/Reframe/Encerrament
 As sessões têm método próprio - não simplifique!
 
 ## FORA DE SESSÃO - MODO PROFUNDO (desabafo, dor, reflexão):
-1. **Conexão com Afeto:** Mostre que leu, sentiu e se importa. (Ex: "Ai, que barra... 😔 Imagino como você tá se sentindo...")
+1. **Reaja de forma genuína, sem fórmulas:** Mostre que leu e se importa — mas do SEU jeito, sem script de acolhimento. (Ex: "Porra, que situação..." ou "Ai, isso dói demais...")
 2. **A Virada (Reframing):** Ofereça perspectiva, se couber. (Ex: "Sabe o que eu acho? Talvez...")
 
 ## FORA DE SESSÃO - MODO PING-PONG (resposta objetiva):
@@ -854,7 +854,8 @@ Sinais de Ping-Pong:
 - Resposta tipo lista ou enumeração
 
 Sua Ação: 
-- Resposta CURTA e LEVE (máximo 2-3 frases)
+- ⚠️ MÁXIMO 300 CARACTERES TOTAL. Menos é mais. Frase curta, natural, como WhatsApp real.
+- Resposta CURTA e LEVE (máximo 1-2 frases)
 - NÃO valide emocionalmente (não tem emoção pra validar!)
 - NÃO filosofe nem reflita
 - Reaja brevemente e faça 1 pergunta simples OU apenas comente
@@ -865,9 +866,9 @@ Exemplos:
 - "em academia" → "Perto de casa ou do trabalho?"
 - "já dorme sim" → "Que sorte! Isso ajuda demais 💜"
 
-CENARIO A: ACOLHIMENTO PURO
+CENARIO A: PRESENÇA GENUÍNA
 Gatilho: Luto, tristeza profunda, raiva, choro, desabafo de dor.
-Sua Acao: NAO de solucoes. Apenas abrace com palavras, valide a dor, mostre presenca.
+Sua Acao: NAO de solucoes. Esteja presente, sem script. Reaja como amiga de verdade, não como terapeuta robótica.
 
 CENARIO B: CHACOALHADA DE AMIGA
 Gatilho: Usuario travado, preguica, "nao consigo fazer".
@@ -1760,10 +1761,19 @@ IMPORTANTE: Se a exploração ainda estava rasa (respostas curtas, sem emoções
 3. PERGUNTA DE ESCALA: "De 0 a 10, como você está saindo dessa sessão comparado a quando chegou?"
 4. DESPEDIDA: Agradeça de forma genuína e sugira próxima sessão
 
+⚠️ OBRIGATÓRIO — TAGS DE EXTRAÇÃO (inclua no final da sua resposta, o usuário NÃO verá):
+- Inclua 2-3 tags [INSIGHT:texto do insight aqui] com os principais aprendizados da sessão
+- Inclua 1-2 tags [COMPROMISSO:texto do compromisso aqui] com as ações combinadas
+- Se não houve ação prática clara, registre a intenção emocional (ex: [COMPROMISSO:Me permitir sentir isso sem culpa])
+- Nunca invente ações que o usuário não mencionou
+
 EXEMPLO:
 "[nome], foi uma sessão intensa! 💜 Passamos pelo [tema] e você teve um insight importante sobre [X].
 Seu compromisso pra semana: [ação]. Me conta depois como foi!
-De 0 a 10, como você sai agora? Vou adorar ouvir! ✨"
+De 0 a 10, como você sai agora? Vou adorar ouvir! ✨
+[INSIGHT:Percebeu que o medo de rejeição vem da infância]
+[INSIGHT:Reconheceu que evita conflitos para não perder pessoas]
+[COMPROMISSO:Ter uma conversa honesta com o parceiro essa semana]"
 
 - Inclua [ENCERRAR_SESSAO] quando finalizar
 `;
@@ -4266,14 +4276,37 @@ INSTRUÇÃO: Faça um fechamento CALOROSO da sessão:
     // Verificar se a IA quer encerrar a sessão
     const aiWantsToEndSession = assistantMessage.includes('[ENCERRAR_SESSAO]');
 
+    // === EXTRAÇÃO DETERMINÍSTICA DE TAGS [INSIGHT:...] e [COMPROMISSO:...] ===
+    const insightTagRegex = /\[INSIGHT:(.*?)\]/gi;
+    const compromissoTagRegex = /\[COMPROMISSO:(.*?)\]/gi;
+    const extractedInsights: string[] = [];
+    const extractedCommitments: string[] = [];
+    
+    let tagMatch;
+    while ((tagMatch = insightTagRegex.exec(assistantMessage)) !== null) {
+      extractedInsights.push(tagMatch[1].trim());
+    }
+    while ((tagMatch = compromissoTagRegex.exec(assistantMessage)) !== null) {
+      extractedCommitments.push(tagMatch[1].trim());
+    }
+    
+    // Remover tags da mensagem visível ao usuário
+    assistantMessage = assistantMessage.replace(/\[INSIGHT:.*?\]/gi, '').replace(/\[COMPROMISSO:.*?\]/gi, '').trim();
+    
+    if (extractedInsights.length > 0 || extractedCommitments.length > 0) {
+      console.log('🏷️ Tags extraídas:', { insights: extractedInsights.length, commitments: extractedCommitments.length });
+    }
+
     // Executar encerramento de sessão com resumo, insights e compromissos
     if ((shouldEndSession || aiWantsToEndSession) && currentSession && profile) {
       const endTime = new Date().toISOString();
 
-      // Gerar resumo da sessão usando IA
+      // Usar tags extraídas se disponíveis, senão gerar via IA
       let sessionSummary = "Sessão concluída.";
-      let keyInsights: string[] = [];
-      let commitments: any[] = [];
+      let keyInsights: string[] = extractedInsights.length > 0 ? extractedInsights : [];
+      let commitments: any[] = extractedCommitments.length > 0 
+        ? extractedCommitments.map(c => ({ title: c })) 
+        : [];
       
       try {
         const summaryMessages = messageHistory.slice(-15); // Últimas 15 mensagens
@@ -4290,9 +4323,9 @@ Retorne EXATAMENTE neste formato JSON (sem markdown, apenas o JSON):
 
 Regras:
 - summary: resumo BREVE do tema central e conclusão
-- insights: 2-4 aprendizados/percepções importantes do usuário
-- commitments: ações que o usuário se comprometeu a fazer (se houver)
-- Se não houver insights ou compromissos claros, deixe array vazio
+- insights: SEMPRE extraia pelo menos 2 insights/aprendizados da sessão. Busque mudanças de perspectiva, reconhecimentos e percepções do usuário.
+- commitments: Se houver ação prática combinada, registre-a. Se NÃO houver ação clara, registre a intenção emocional da sessão (ex: "Me permitir sentir isso hoje sem culpa", "Reconhecer que essa dor é válida"). Nunca invente ações que o usuário não mencionou.
+- NUNCA retorne arrays vazios — sempre extraia ou infira pelo menos 2 insights e 1 compromisso/intenção.
 - Escreva em português brasileiro, de forma clara e objetiva`
               },
               ...summaryMessages,
@@ -4310,10 +4343,15 @@ Regras:
               const parsed = JSON.parse(cleanJson);
               
               sessionSummary = parsed.summary || sessionSummary;
-              keyInsights = Array.isArray(parsed.insights) ? parsed.insights : [];
-              commitments = Array.isArray(parsed.commitments) 
-                ? parsed.commitments.map((c: string) => ({ title: c }))
-                : [];
+              // Tags extraídas têm prioridade sobre extração do Flash
+              if (keyInsights.length === 0) {
+                keyInsights = Array.isArray(parsed.insights) ? parsed.insights : [];
+              }
+              if (commitments.length === 0) {
+                commitments = Array.isArray(parsed.commitments) 
+                  ? parsed.commitments.map((c: string) => ({ title: c }))
+                  : [];
+              }
               
               console.log('📝 Extracted session data:', {
                 summary: sessionSummary.substring(0, 50),
