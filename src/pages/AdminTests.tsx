@@ -105,6 +105,13 @@ export default function AdminTests() {
           collectedResults.push(data.result);
           setResults([...collectedResults]);
         }
+
+        // Adaptive delay for Anthropic rate limits
+        if (isAnthropic && i < TEST_QUEUE.length - 1) {
+          setWaitingRateLimit(true);
+          await new Promise(r => setTimeout(r, 15000));
+          setWaitingRateLimit(false);
+        }
       }
 
       // Generate verdict
