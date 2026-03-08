@@ -381,8 +381,8 @@ const UserGuide = () => {
 
           <div className="container mx-auto px-4 max-w-4xl relative z-10">
             <div className="text-center mb-10">
-              <span className="inline-block px-4 py-2 rounded-full bg-sage-soft text-primary text-sm font-medium mb-4">
-                🧘 Tudo em um só lugar
+              <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-sage-soft text-primary text-sm font-medium mb-4">
+                <Heart size={16} /> Tudo em um só lugar
               </span>
               <h2 className="font-display text-2xl md:text-3xl font-bold text-foreground mb-2">
                 Meditações Personalizadas
