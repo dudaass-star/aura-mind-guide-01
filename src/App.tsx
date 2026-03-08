@@ -16,6 +16,7 @@ import AdminMeditations from "./pages/AdminMeditations";
 import AdminTests from "./pages/AdminTests";
 import AdminInstances from "./pages/AdminInstances";
 import AdminLogin from "./pages/AdminLogin";
+import AdminSettings from "./pages/AdminSettings";
 import UserGuide from "./pages/UserGuide";
 import NotFound from "./pages/NotFound";
 
@@ -41,6 +42,7 @@ const App = () => (
             <Route path="/admin/meditacoes" element={<AdminMeditations />} />
             <Route path="/admin/testes" element={<AdminTests />} />
             <Route path="/admin/instancias" element={<AdminInstances />} />
+            <Route path="/admin/configuracoes" element={<AdminSettings />} />
             <Route path="/guia" element={<UserGuide />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />

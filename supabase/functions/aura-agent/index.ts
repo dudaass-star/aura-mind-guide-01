@@ -87,6 +87,96 @@ async function logTokenUsage(
   }
 }
 
+// ============================================================
+// callAI: Unified wrapper — routes to Gateway or Anthropic API
+// ============================================================
+async function callAI(
+  model: string,
+  messages: Array<{ role: string; content: string }>,
+  maxTokens: number,
+  temperature: number,
+  LOVABLE_API_KEY: string
+): Promise<{ choices: Array<{ message: { content: string }; finish_reason?: string }>; usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } }> {
+  
+  // Anthropic direct API
+  if (model.startsWith('anthropic/') || model.startsWith('claude-')) {
+    const anthropicModel = model.startsWith('anthropic/') ? model.replace('anthropic/', '') : model;
+    const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
+    if (!ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY not configured');
+
+    // Extract system messages
+    const systemMessages = messages.filter(m => m.role === 'system');
+    const chatMessages = messages.filter(m => m.role !== 'system');
+    const systemPrompt = systemMessages.map(m => m.content).join('\n\n');
+
+    // Merge consecutive messages of the same role (Anthropic requirement)
+    const merged: Array<{ role: string; content: string }> = [];
+    for (const msg of chatMessages) {
+      if (merged.length > 0 && merged[merged.length - 1].role === msg.role) {
+        merged[merged.length - 1].content += '\n\n' + msg.content;
+      } else {
+        merged.push({ role: msg.role, content: msg.content });
+      }
+    }
+
+    // Ensure first message is from user (Anthropic requirement)
+    if (merged.length === 0 || merged[0].role !== 'user') {
+      merged.unshift({ role: 'user', content: '...' });
+    }
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: anthropicModel,
+        system: systemPrompt,
+        messages: merged,
+        max_tokens: maxTokens,
+        temperature,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Anthropic API error:', response.status, errorText);
+      throw new Error(`Anthropic API error: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    // Convert Anthropic response to OpenAI-compatible format
+    const content = data.content?.map((c: any) => c.text).join('') || '';
+    return {
+      choices: [{ message: { content }, finish_reason: data.stop_reason === 'end_turn' ? 'stop' : data.stop_reason }],
+      usage: {
+        prompt_tokens: data.usage?.input_tokens,
+        completion_tokens: data.usage?.output_tokens,
+        total_tokens: (data.usage?.input_tokens || 0) + (data.usage?.output_tokens || 0),
+      },
+    };
+  }
+
+  // Lovable AI Gateway (Google/OpenAI models)
+  const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${LOVABLE_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ model, messages, max_tokens: maxTokens, temperature }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw Object.assign(new Error(`AI gateway error: ${response.status}`), { status: response.status, body: errorText });
+  }
+
+  return response.json();
+}
+
 // Mapeamento de dia da semana em português para getDay()
 const weekdayMap: Record<string, number> = {
   'domingo': 0, 'domingos': 0,
@@ -2347,6 +2437,23 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
 
+    // Read configured AI model from system_config
+    let configuredModel = 'google/gemini-2.5-pro';
+    try {
+      const { data: configData } = await supabase
+        .from('system_config')
+        .select('value')
+        .eq('key', 'ai_model')
+        .single();
+      if (configData?.value) {
+        const val = typeof configData.value === 'string' ? configData.value : JSON.stringify(configData.value);
+        configuredModel = val.replace(/^"|"$/g, '');
+      }
+      console.log('🤖 AI model from config:', configuredModel);
+    } catch (e) {
+      console.warn('Failed to read AI model config, using default:', e);
+    }
+
     const { message, user_id, phone, trial_count, pending_content, pending_context } = await req.json();
 
     console.log("AURA received:", { user_id, phone, message: message?.substring(0, 50), trial_count, hasPendingContent: !!pending_content });
@@ -3583,25 +3690,11 @@ INSTRUÇÃO: Faça um fechamento CALOROSO da sessão:
 
     console.log("Calling Lovable AI with", apiMessages.length, "messages, plan:", userPlan, "sessions:", sessionsAvailable, "sessionActive:", sessionActive, "shouldEndSession:", shouldEndSession, "phase:", currentSession ? calculateSessionTimeContext(currentSession).phase : 'none');
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-          model: "google/gemini-2.5-pro",
-        messages: apiMessages,
-        max_tokens: 4096,
-        temperature: 0.8,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Lovable AI error:", response.status, errorText);
-      
-      if (response.status === 429) {
+    let data: any;
+    try {
+      data = await callAI(configuredModel, apiMessages, 4096, 0.8, LOVABLE_API_KEY);
+    } catch (e: any) {
+      if (e.status === 429) {
         return new Response(JSON.stringify({ 
           error: "Muitas requisições. Aguarde um momento.",
           messages: [{ text: "Calma, tô processando muita coisa aqui. Me dá uns segundinhos? 😅", delay: 0, isAudio: false }]
@@ -3610,8 +3703,7 @@ INSTRUÇÃO: Faça um fechamento CALOROSO da sessão:
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      
-      if (response.status === 402) {
+      if (e.status === 402) {
         return new Response(JSON.stringify({ 
           error: "Créditos insuficientes.",
           messages: [{ text: "Ops, tive um probleminha técnico aqui. Tenta de novo daqui a pouco?", delay: 0, isAudio: false }]
@@ -3620,12 +3712,10 @@ INSTRUÇÃO: Faça um fechamento CALOROSO da sessão:
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      
-      throw new Error(`AI gateway error: ${response.status}`);
+      throw e;
     }
 
-    const data = await response.json();
-    await logTokenUsage(supabase, user_id || null, 'main_chat', 'google/gemini-2.5-pro', data.usage);
+    await logTokenUsage(supabase, user_id || null, 'main_chat', configuredModel, data.usage);
     const finishReason = data.choices?.[0]?.finish_reason;
     console.log(`📊 API finish_reason: ${finishReason}, response length: ${data.choices?.[0]?.message?.content?.length || 0} chars`);
     if (finishReason && finishReason !== 'stop') {
@@ -4155,15 +4245,7 @@ INSTRUÇÃO: Faça um fechamento CALOROSO da sessão:
       
       try {
         const summaryMessages = messageHistory.slice(-15); // Últimas 15 mensagens
-        const summaryResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${LOVABLE_API_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-          model: "google/gemini-2.5-pro",
-            messages: [
+        const summaryData = await callAI('google/gemini-2.5-flash', [
               { 
                 role: "system", 
                 content: `Você é um assistente que analisa sessões de mentoria emocional.
@@ -4184,14 +4266,10 @@ Regras:
               ...summaryMessages,
               { role: "user", content: message },
               { role: "assistant", content: assistantMessage }
-            ],
-            max_tokens: 400,
-          }),
-        });
+            ], 400, 0.5, LOVABLE_API_KEY);
 
-        if (summaryResponse.ok) {
-          const summaryData = await summaryResponse.json();
-          await logTokenUsage(supabase, user_id || null, 'session_summary', 'google/gemini-2.5-pro', summaryData.usage);
+        if (summaryData) {
+          await logTokenUsage(supabase, user_id || null, 'session_summary', 'google/gemini-2.5-flash', summaryData.usage);
           const aiResponse = summaryData.choices?.[0]?.message?.content?.trim();
           if (aiResponse) {
             try {
@@ -4251,15 +4329,7 @@ Regras:
         // Tentar extrair descobertas do onboarding da conversa
         try {
           const onboardingMessages = messageHistory.slice(-20);
-          const onboardingResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${LOVABLE_API_KEY}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-          model: "google/gemini-2.5-pro",
-              messages: [
+          const onboardingData = await callAI('google/gemini-2.5-flash', [
                 { 
                   role: "system", 
                   content: `Analise esta conversa de onboarding e extraia informações do usuário.
@@ -4279,14 +4349,10 @@ Regras:
 - Se não houver informação clara, use null`
                 },
                 ...onboardingMessages.map(m => ({ role: m.role, content: m.content }))
-              ],
-              max_tokens: 300,
-            }),
-          });
+              ], 300, 0.5, LOVABLE_API_KEY);
 
-          if (onboardingResponse.ok) {
-            const onboardingData = await onboardingResponse.json();
-            await logTokenUsage(supabase, user_id || null, 'onboarding_extraction', 'google/gemini-2.5-pro', onboardingData.usage);
+          if (onboardingData) {
+            await logTokenUsage(supabase, user_id || null, 'onboarding_extraction', 'google/gemini-2.5-flash', onboardingData.usage);
             const aiContent = onboardingData.choices?.[0]?.message?.content?.trim();
             if (aiContent) {
               try {
@@ -4301,15 +4367,7 @@ Regras:
                   
                   // Extrair primary_topic e atribuir jornada inicial
                   try {
-                    const topicResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-                      method: "POST",
-                      headers: {
-                        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-                        "Content-Type": "application/json",
-                      },
-                      body: JSON.stringify({
-                        model: "google/gemini-2.5-pro",
-                        messages: [
+                    const topicData = await callAI('google/gemini-2.5-flash', [
                           { 
                             role: "system", 
                             content: `Baseado nos desafios mencionados, identifique o TEMA PRINCIPAL.
@@ -4318,14 +4376,10 @@ Exemplos: "ansiedade", "autoestima", "relacionamentos", "procrastinação"
 Apenas o tema, nada mais.`
                           },
                           { role: "user", content: parsed.main_challenges.join(', ') }
-                        ],
-                        max_tokens: 50,
-                      }),
-                    });
+                        ], 50, 0.5, LOVABLE_API_KEY);
                     
-                    if (topicResponse.ok) {
-                      const topicData = await topicResponse.json();
-                      await logTokenUsage(supabase, user_id || null, 'topic_extraction', 'google/gemini-2.5-pro', topicData.usage);
+                    if (topicData) {
+                      await logTokenUsage(supabase, user_id || null, 'topic_extraction', 'google/gemini-2.5-flash', topicData.usage);
                       const topic = topicData.choices?.[0]?.message?.content?.trim()?.toLowerCase();
                       if (topic && topic.length < 50) {
                         profileUpdate.primary_topic = topic;
