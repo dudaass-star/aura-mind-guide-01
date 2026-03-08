@@ -65,6 +65,14 @@ export default function AdminTests() {
     const collectedResults: TestResult[] = [];
     let sessionId: string | null = null;
 
+    // Detect active model for adaptive delay
+    let isAnthropic = false;
+    try {
+      const { data } = await supabase.from('system_config').select('value').eq('key', 'ai_model').single();
+      const model = data?.value || 'google/gemini-2.5-pro';
+      isAnthropic = typeof model === 'string' && model.startsWith('anthropic/');
+    } catch {} 
+
     try {
       for (let i = 0; i < TEST_QUEUE.length; i++) {
         const test = TEST_QUEUE[i];
