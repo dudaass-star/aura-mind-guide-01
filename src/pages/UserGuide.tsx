@@ -602,7 +602,7 @@ const UserGuide = () => {
               Quer experimentar tudo isso?
             </h2>
             <p className="text-muted-foreground mb-8 text-lg">
-              5 conversas grátis. Sem cartão. Sem compromisso. 💜
+              5 conversas grátis. Sem cartão. Sem compromisso.
             </p>
             <Button variant="sage" size="xl" asChild>
               <Link to="/experimentar">
