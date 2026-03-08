@@ -126,11 +126,12 @@ async function callAI(
 
     console.log('🔀 Routing to Anthropic API, model:', anthropicModel);
     console.log('🔑 ANTHROPIC_API_KEY prefix:', ANTHROPIC_API_KEY.substring(0, 12) + '...');
+    console.log('📦 Anthropic request: model=' + anthropicModel + ', messages=' + merged.length + ', max_tokens=' + maxTokens + ', system_length=' + systemPrompt.length);
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'x-api-key': ANTHROPIC_API_KEY,
-        'anthropic-version': '2025-01-01',
+        'anthropic-version': '2023-06-01',
         'content-type': 'application/json',
       },
       body: JSON.stringify({
@@ -144,7 +145,7 @@ async function callAI(
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Anthropic API error:', response.status, errorText);
+      console.error('❌ Anthropic API error:', response.status, errorText);
       throw new Error(`Anthropic API error: ${response.status} - ${errorText}`);
     }
 
