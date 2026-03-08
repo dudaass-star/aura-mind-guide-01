@@ -1,4 +1,3 @@
-
 # Cápsula do Tempo — Implementado ✅
 
 ## O que foi feito
@@ -46,3 +45,25 @@
 5. Edge function chama `claim_pending_tasks(150)` (atômico, skip locked)
 6. Processa cada task com 300ms de delay → envia via Z-API
 7. Marca como `executed` ou `failed`
+
+---
+
+# Seletor de Modelo AI no Admin — Implementado ✅
+
+## O que foi feito
+
+1. **Tabela `system_config`**: key/value JSONB com RLS (admin + service_role)
+2. **Página `AdminSettings.tsx`**: rota `/admin/configuracoes` com dropdown dos 4 modelos
+3. **Função `callAI()`** no `aura-agent`: roteamento unificado Gateway vs Anthropic API
+4. **Adaptador Anthropic**: system prompt separado, merge de mensagens consecutivas, max_tokens obrigatório
+5. **Chamada principal** usa modelo configurado no banco; chamadas auxiliares (summary, onboarding, topic) usam `google/gemini-2.5-flash`
+6. **Secret `ANTHROPIC_API_KEY`** configurado
+
+## Modelos disponíveis
+
+| Modelo | Via | Uso |
+|---|---|---|
+| `google/gemini-2.5-pro` (default) | Lovable AI Gateway | Chat principal |
+| `google/gemini-2.5-flash` | Lovable AI Gateway | Auxiliares + opção principal |
+| `anthropic/claude-sonnet-4-6` | API Anthropic direta | Chat principal |
+| `openai/gpt-5` | Lovable AI Gateway | Chat principal |
