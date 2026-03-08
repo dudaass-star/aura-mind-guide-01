@@ -2902,81 +2902,228 @@ serve(async (req) => {
       }
     }
 
-    // Buscar histórico de mensagens (últimas 40)
+    // ========================================================================
+    // CARREGAR TODO O CONTEXTO EM PARALELO (Promise.allSettled)
+    // ========================================================================
     let messageHistory: { role: string; content: string }[] = [];
     let messageCount = 0;
     let temporalGapHours = 0;
-    if (profile?.user_id) {
-      const { data: messages, count } = await supabase
-        .from('messages')
-        .select('role, content, created_at', { count: 'exact' })
-        .eq('user_id', profile.user_id)
-        .order('created_at', { ascending: false })
-        .limit(40);
+    let userInsights: any[] = [];
+    let previousSessionsContext = '';
+    let isFirstSession = false;
+    let lastCheckin = "Nenhum registrado";
+    let userThemes: any[] = [];
+    let pendingCommitments = "Nenhum";
+    let pendingCommitmentsDetailed: any[] = [];
+    let completedSessionsCount = 0;
+    let retrospectiveContext = '';
+    let currentJourneyInfo = 'Nenhuma jornada ativa';
+    let currentEpisodeInfo = '0';
+    let totalEpisodesInfo = '0';
+    let meditationCatalogSection = '';
 
-      if (messages) {
-        // Calcular gap temporal ANTES de sanitizar (pois sanitize descarta created_at)
-        const lastUserMsg = messages.find(m => m.role === 'user');
+    if (profile?.user_id) {
+      const userId = profile.user_id;
+
+      // Disparar TODAS as queries independentes em paralelo
+      const [
+        messagesResult,
+        criticalInsightsResult,
+        generalInsightsResult,
+        completedSessionsResult,
+        checkinResult,
+        themesResult,
+        commitmentsResult,
+        completedCountResult,
+        journeyResult,
+        meditationsResult,
+      ] = await Promise.allSettled([
+        // 1. Últimas 40 mensagens
+        supabase
+          .from('messages')
+          .select('role, content, created_at', { count: 'exact' })
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(40),
+        // 2. Insights críticos (pessoa, identidade)
+        supabase
+          .from('user_insights')
+          .select('category, key, value, importance')
+          .eq('user_id', userId)
+          .in('category', ['pessoa', 'identidade'])
+          .order('importance', { ascending: false })
+          .limit(15),
+        // 3. Insights gerais
+        supabase
+          .from('user_insights')
+          .select('category, key, value, importance')
+          .eq('user_id', userId)
+          .not('category', 'in', '("pessoa","identidade")')
+          .order('importance', { ascending: false })
+          .order('last_mentioned_at', { ascending: false })
+          .limit(35),
+        // 4. Últimas 3 sessões completadas
+        supabase
+          .from('sessions')
+          .select('session_summary, key_insights, focus_topic, ended_at, commitments', { count: 'exact' })
+          .eq('user_id', userId)
+          .eq('status', 'completed')
+          .not('session_summary', 'is', null)
+          .order('ended_at', { ascending: false })
+          .limit(3),
+        // 5. Último check-in
+        supabase
+          .from('checkins')
+          .select('mood, energy, notes, created_at')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        // 6. Temas ativos
+        supabase
+          .from('session_themes')
+          .select('*')
+          .eq('user_id', userId)
+          .order('last_mentioned_at', { ascending: false })
+          .limit(10),
+        // 7. Compromissos pendentes
+        supabase
+          .from('commitments')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('completed', false)
+          .order('created_at', { ascending: false })
+          .limit(5),
+        // 8. Count de sessões completadas
+        supabase
+          .from('sessions')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', userId)
+          .eq('status', 'completed'),
+        // 9. Jornada atual (condicional)
+        profile?.current_journey_id
+          ? supabase
+              .from('content_journeys')
+              .select('title, total_episodes')
+              .eq('id', profile.current_journey_id)
+              .single()
+          : Promise.resolve({ data: null, error: null }),
+        // 10. Catálogo de meditações ativas
+        supabase
+          .from('meditations')
+          .select('category, title, best_for, triggers')
+          .eq('is_active', true),
+      ]);
+
+      console.log('⚡ All context queries completed in parallel');
+
+      // ---- Extrair resultados com fallbacks seguros ----
+
+      // 1. Messages
+      if (messagesResult.status === 'fulfilled' && messagesResult.value.data) {
+        const messages = messagesResult.value.data;
+        const count = messagesResult.value.count;
+        const lastUserMsg = messages.find((m: any) => m.role === 'user');
         if (lastUserMsg?.created_at) {
           const lastUserMessageTime = new Date(lastUserMsg.created_at);
           temporalGapHours = (Date.now() - lastUserMessageTime.getTime()) / (1000 * 60 * 60);
         }
-
         messageHistory = sanitizeMessageHistory(messages.reverse());
         messageCount = count || messages.length;
       }
-    }
 
-    // Buscar insights com priorização inteligente
-    let userInsights: any[] = [];
-    if (profile?.user_id) {
-      // Primeiro: SEMPRE buscar pessoas e identidade (categorias críticas - nunca podem faltar)
-      const { data: criticalInsights } = await supabase
-        .from('user_insights')
-        .select('category, key, value, importance')
-        .eq('user_id', profile.user_id)
-        .in('category', ['pessoa', 'identidade'])
-        .order('importance', { ascending: false })
-        .limit(15);
+      // 2+3. Insights
+      const criticalInsights = criticalInsightsResult.status === 'fulfilled' ? criticalInsightsResult.value.data || [] : [];
+      const generalInsights = generalInsightsResult.status === 'fulfilled' ? generalInsightsResult.value.data || [] : [];
+      userInsights = [...criticalInsights, ...generalInsights];
+      console.log('🧠 Loaded insights:', { critical: criticalInsights.length, general: generalInsights.length, total: userInsights.length });
 
-      // Depois: buscar insights gerais por importância
-      const { data: generalInsights } = await supabase
-        .from('user_insights')
-        .select('category, key, value, importance')
-        .eq('user_id', profile.user_id)
-        .not('category', 'in', '("pessoa","identidade")')
-        .order('importance', { ascending: false })
-        .order('last_mentioned_at', { ascending: false })
-        .limit(35);
-
-      // Combinar: críticos primeiro + gerais depois (max 50 total)
-      userInsights = [...(criticalInsights || []), ...(generalInsights || [])];
-      console.log('🧠 Loaded insights:', { critical: criticalInsights?.length || 0, general: generalInsights?.length || 0, total: userInsights.length });
-    }
-
-    // Buscar últimas 3 sessões completadas para contexto de continuidade
-    let previousSessionsContext = '';
-    let isFirstSession = false;
-    if (profile?.user_id) {
-      const { data: completedSessions, count: completedCount } = await supabase
-        .from('sessions')
-        .select('session_summary, key_insights, focus_topic, ended_at, commitments', { count: 'exact' })
-        .eq('user_id', profile.user_id)
-        .eq('status', 'completed')
-        .not('session_summary', 'is', null)
-        .order('ended_at', { ascending: false })
-        .limit(3);
-
-      if (completedSessions && completedSessions.length > 0) {
-        previousSessionsContext = formatPreviousSessionsContext(completedSessions);
-        console.log('📚 Found', completedSessions.length, 'previous sessions for context');
+      // 4. Previous sessions
+      if (completedSessionsResult.status === 'fulfilled') {
+        const completedSessions = completedSessionsResult.value.data;
+        const completedCount = completedSessionsResult.value.count;
+        if (completedSessions && completedSessions.length > 0) {
+          previousSessionsContext = formatPreviousSessionsContext(completedSessions);
+          console.log('📚 Found', completedSessions.length, 'previous sessions for context');
+        }
+        isFirstSession = sessionActive && (completedCount === 0 || completedCount === null);
+        if (isFirstSession) {
+          console.log('🌟 First session detected for user');
+        }
       }
-      
-      // Verificar se é primeira sessão (nenhuma completada ainda)
-      isFirstSession = sessionActive && (completedCount === 0 || completedCount === null);
-      if (isFirstSession) {
-        console.log('🌟 First session detected for user');
+
+      // 5. Last checkin
+      if (checkinResult.status === 'fulfilled' && checkinResult.value.data) {
+        const checkin = checkinResult.value.data;
+        const date = new Date(checkin.created_at).toLocaleDateString('pt-BR');
+        lastCheckin = `Humor: ${checkin.mood}/5, Energia: ${checkin.energy}/5 em ${date}`;
+        if (checkin.notes) lastCheckin += ` - "${checkin.notes}"`;
       }
+
+      // 6. Themes
+      if (themesResult.status === 'fulfilled' && themesResult.value.data) {
+        userThemes = themesResult.value.data;
+        console.log('🎯 Found', userThemes.length, 'tracked themes for user');
+      }
+
+      // 7. Commitments
+      if (commitmentsResult.status === 'fulfilled' && commitmentsResult.value.data && commitmentsResult.value.data.length > 0) {
+        const commitments = commitmentsResult.value.data;
+        pendingCommitmentsDetailed = commitments;
+        pendingCommitments = commitments.map((c: any) => {
+          if (c.due_date) {
+            const date = new Date(c.due_date).toLocaleDateString('pt-BR');
+            return `${c.title} (${date})`;
+          }
+          return c.title;
+        }).join(", ");
+        console.log('📌 Found', commitments.length, 'pending commitments for active follow-up');
+      }
+
+      // 8. Completed count + retrospective
+      if (completedCountResult.status === 'fulfilled') {
+        completedSessionsCount = completedCountResult.value.count || 0;
+        if (sessionActive) {
+          const retroCheck = shouldOfferRetrospective(completedSessionsCount);
+          if (retroCheck.shouldOffer) {
+            retrospectiveContext = retroCheck.context;
+            console.log('🎯 Retrospective triggered at', completedSessionsCount, 'sessions');
+          }
+        }
+      }
+
+      // 9. Journey info
+      if (journeyResult.status === 'fulfilled' && journeyResult.value.data) {
+        const journey = journeyResult.value.data as any;
+        currentJourneyInfo = journey.title;
+        currentEpisodeInfo = String(profile.current_episode || 0);
+        totalEpisodesInfo = String(journey.total_episodes);
+      }
+
+      // 10. Meditations catalog
+      const availableMeditations = meditationsResult.status === 'fulfilled' ? meditationsResult.value.data || [] : [];
+      const meditationCatalog = new Map<string, { titles: string[], triggers: string[], best_for: string[] }>();
+      for (const m of availableMeditations) {
+        if (!meditationCatalog.has(m.category)) {
+          meditationCatalog.set(m.category, { titles: [], triggers: [], best_for: [] });
+        }
+        const entry = meditationCatalog.get(m.category)!;
+        entry.titles.push(m.title);
+        if (m.triggers) entry.triggers.push(...m.triggers);
+        if (m.best_for) entry.best_for.push(m.best_for);
+      }
+
+      meditationCatalogSection = `\n## Meditações Disponíveis (Biblioteca Pré-Gravada)\n\n`;
+      meditationCatalogSection += `**Categorias disponíveis:**\n`;
+      for (const [category, info] of meditationCatalog) {
+        const triggersText = info.triggers.length > 0 ? ` (${info.triggers.join(', ')})` : '';
+        const bestForText = info.best_for.length > 0 ? ` — Melhor para: ${info.best_for.join(', ')}` : '';
+        meditationCatalogSection += `- \`[MEDITACAO:${category}]\` - ${info.titles[0]}${triggersText}${bestForText}\n`;
+      }
+      if (meditationCatalog.size === 0) {
+        meditationCatalogSection += `- Nenhuma meditação disponível no momento\n`;
+      }
+      console.log(`🧘 Meditation catalog loaded: ${meditationCatalog.size} categories`);
     }
 
     // Contexto especial para primeira sessão (onboarding estruturado por fases)
@@ -3084,221 +3231,6 @@ REGRAS GERAIS DO ONBOARDING:
 - Se o usuário quiser pular direto para um problema, acolha mas volte ao onboarding gentilmente
 `;
     }
-
-    // Buscar último check-in
-    let lastCheckin = "Nenhum registrado";
-    if (profile?.user_id) {
-      const { data: checkin } = await supabase
-        .from('checkins')
-        .select('mood, energy, notes, created_at')
-        .eq('user_id', profile.user_id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (checkin) {
-        const date = new Date(checkin.created_at).toLocaleDateString('pt-BR');
-        lastCheckin = `Humor: ${checkin.mood}/5, Energia: ${checkin.energy}/5 em ${date}`;
-        if (checkin.notes) lastCheckin += ` - "${checkin.notes}"`;
-      }
-    }
-
-    // Buscar temas ativos do usuário para tracking
-    let userThemes: any[] = [];
-    if (profile?.user_id) {
-      const { data: themes } = await supabase
-        .from('session_themes')
-        .select('*')
-        .eq('user_id', profile.user_id)
-        .order('last_mentioned_at', { ascending: false })
-        .limit(10);
-      
-      if (themes) {
-        userThemes = themes;
-        console.log('🎯 Found', themes.length, 'tracked themes for user');
-      }
-    }
-
-    // Buscar compromissos pendentes com mais detalhes para cobrança ativa
-    let pendingCommitments = "Nenhum";
-    let pendingCommitmentsDetailed: any[] = [];
-    if (profile?.user_id) {
-      const { data: commitments } = await supabase
-        .from('commitments')
-        .select('*')
-        .eq('user_id', profile.user_id)
-        .eq('completed', false)
-        .order('created_at', { ascending: false })
-        .limit(5);
-
-      if (commitments && commitments.length > 0) {
-        pendingCommitmentsDetailed = commitments;
-        pendingCommitments = commitments.map(c => {
-          if (c.due_date) {
-            const date = new Date(c.due_date).toLocaleDateString('pt-BR');
-            return `${c.title} (${date})`;
-          }
-          return c.title;
-        }).join(", ");
-        console.log('📌 Found', commitments.length, 'pending commitments for active follow-up');
-      }
-    }
-
-    // Verificar se é hora de retrospectiva
-    let retrospectiveContext = '';
-    let completedSessionsCount = 0;
-    if (profile?.user_id && sessionActive) {
-      const { count } = await supabase
-        .from('sessions')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', profile.user_id)
-        .eq('status', 'completed');
-      
-      completedSessionsCount = count || 0;
-      const retroCheck = shouldOfferRetrospective(completedSessionsCount);
-      if (retroCheck.shouldOffer) {
-        retrospectiveContext = retroCheck.context;
-        console.log('🎯 Retrospective triggered at', completedSessionsCount, 'sessions');
-      }
-    }
-
-    // Verificar se deve sugerir upgrade
-    let shouldSuggestUpgrade = false;
-    if (userPlan === 'essencial' && planConfig.dailyMessageTarget > 0) {
-      const target = planConfig.dailyMessageTarget;
-      const lastSuggestion = profile?.upgrade_suggested_at;
-      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-      
-      if (messagesToday >= target && (!lastSuggestion || lastSuggestion < oneDayAgo)) {
-        shouldSuggestUpgrade = true;
-        // Marcar que sugerimos upgrade
-        if (profile) {
-          await supabase
-            .from('profiles')
-            .update({ upgrade_suggested_at: new Date().toISOString() })
-            .eq('id', profile.id);
-        }
-      }
-    }
-
-    // Construir contexto de sessão pendente
-    let pendingSessionContext = '';
-    if (!sessionActive && pendingScheduledSession) {
-      const scheduledTime = new Date(pendingScheduledSession.scheduled_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-      const sessionType = pendingScheduledSession.session_type || 'livre';
-      pendingSessionContext = `
-⏰ SESSÃO AGENDADA DETECTADA!
-- Horário: ${scheduledTime}
-- Tipo: ${sessionType}
-- Foco: ${pendingScheduledSession.focus_topic || 'A definir'}
-
-O usuário tem uma sessão agendada para agora! Se ele parecer pronto ou confirmar, inicie a sessão com uma saudação especial. Se ele mandar "vamos começar", "pode começar", "tô pronta/o", considere como confirmação para iniciar.
-`;
-    }
-
-    // Construir contexto de sessão perdida
-    let missedSessionContext = '';
-    if (!sessionActive && !pendingScheduledSession && recentMissedSession) {
-      const missedDate = new Date(recentMissedSession.scheduled_at);
-      const formattedDate = missedDate.toLocaleDateString('pt-BR', { 
-        weekday: 'long', day: '2-digit', month: '2-digit',
-        timeZone: 'America/Sao_Paulo'
-      });
-      const formattedTime = missedDate.toLocaleTimeString('pt-BR', { 
-        hour: '2-digit', minute: '2-digit',
-        timeZone: 'America/Sao_Paulo'
-      });
-      missedSessionContext = `
-🔔 SESSÃO PERDIDA DETECTADA!
-- O usuário tinha uma sessão agendada para ${formattedDate} às ${formattedTime} que não aconteceu.
-- Pergunte com carinho se ele quer:
-  1. Fazer a sessão agora (ele pode confirmar com "vamos", "quero", "sim", etc.)
-  2. Reagendar para outra data (usar [REAGENDAR_SESSAO:YYYY-MM-DD HH:mm])
-  3. Ou se prefere só conversar por hoje (usar [SESSAO_PERDIDA_RECUSADA])
-- Ofereça UMA vez e respeite a decisão. NÃO insista.
-- Se ele quiser fazer agora, inicie a sessão normalmente seguindo o método completo das 4 fases.
-`;
-      console.log('📋 Injecting missed session context for session:', recentMissedSession.id);
-    }
-
-    // Montar prompt com contexto completo
-    let sessionTimeInfoStr = sessionTimeContext;
-    if (!sessionActive && !pendingScheduledSession && !recentMissedSession) {
-      sessionTimeInfoStr = 'Nenhuma sessão ativa ou agendada para agora.';
-    } else if (!sessionActive && recentMissedSession && !pendingScheduledSession) {
-      sessionTimeInfoStr = missedSessionContext;
-    } else if (!sessionActive && pendingScheduledSession) {
-      sessionTimeInfoStr = pendingSessionContext;
-    }
-
-    // Contexto de áudio para início de sessão
-    let audioSessionContext = '';
-    if (sessionActive && currentSession) {
-      const audioCount = currentSession.audio_sent_count || 0;
-      if (audioCount < 2) {
-        audioSessionContext = `🎙️ IMPORTANTE: Esta é a ${audioCount === 0 ? 'PRIMEIRA' : 'SEGUNDA'} mensagem da sessão. 
-Use OBRIGATORIAMENTE [MODO_AUDIO] para criar conexão e engajamento. 
-As primeiras 2 respostas de cada sessão DEVEM ser em áudio para maior intimidade.`;
-      } else {
-        audioSessionContext = 'As primeiras mensagens de áudio da sessão já foram enviadas. Siga a regra normal de áudio.';
-      }
-    } else {
-      audioSessionContext = 'Não está em sessão. Siga a regra normal de áudio.';
-    }
-
-    // Obter contexto de data/hora atual
-    const dateTimeContext = getCurrentDateTimeContext();
-
-    // Buscar informações da jornada atual
-    let currentJourneyInfo = 'Nenhuma jornada ativa';
-    let currentEpisodeInfo = '0';
-    let totalEpisodesInfo = '0';
-    
-    if (profile?.current_journey_id) {
-      const { data: journey } = await supabase
-        .from('content_journeys')
-        .select('title, total_episodes')
-        .eq('id', profile.current_journey_id)
-        .single();
-      
-      if (journey) {
-        currentJourneyInfo = journey.title;
-        currentEpisodeInfo = String(profile.current_episode || 0);
-        totalEpisodesInfo = String(journey.total_episodes);
-      }
-    }
-
-    // ========================================================================
-    // CATÁLOGO DINÂMICO DE MEDITAÇÕES (carregado do banco)
-    // ========================================================================
-    const { data: availableMeditations } = await supabase
-      .from('meditations')
-      .select('category, title, best_for, triggers')
-      .eq('is_active', true);
-
-    const meditationCatalog = new Map<string, { titles: string[], triggers: string[], best_for: string[] }>();
-    for (const m of availableMeditations || []) {
-      if (!meditationCatalog.has(m.category)) {
-        meditationCatalog.set(m.category, { titles: [], triggers: [], best_for: [] });
-      }
-      const entry = meditationCatalog.get(m.category)!;
-      entry.titles.push(m.title);
-      if (m.triggers) entry.triggers.push(...m.triggers);
-      if (m.best_for) entry.best_for.push(m.best_for);
-    }
-
-    let meditationCatalogSection = `\n## Meditações Disponíveis (Biblioteca Pré-Gravada)\n\n`;
-    meditationCatalogSection += `**Categorias disponíveis:**\n`;
-    for (const [category, info] of meditationCatalog) {
-      const triggersText = info.triggers.length > 0 ? ` (${info.triggers.join(', ')})` : '';
-      const bestForText = info.best_for.length > 0 ? ` — Melhor para: ${info.best_for.join(', ')}` : '';
-      meditationCatalogSection += `- \`[MEDITACAO:${category}]\` - ${info.titles[0]}${triggersText}${bestForText}\n`;
-    }
-    if (meditationCatalog.size === 0) {
-      meditationCatalogSection += `- Nenhuma meditação disponível no momento\n`;
-    }
-
-    console.log(`🧘 Meditation catalog loaded: ${meditationCatalog.size} categories`);
 
     // Construir bloco de contexto dinâmico (separado do template estático para cache implícito do Gemini)
     let dynamicContext = `# DADOS DINÂMICOS DO SISTEMA
