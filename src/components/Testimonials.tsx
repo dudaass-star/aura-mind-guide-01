@@ -81,8 +81,8 @@ const Testimonials = () => {
 
         {/* Header */}
         <div className="text-center mb-16 animate-fade-up">
-          <span className="inline-block px-4 py-2 rounded-full bg-lavender-soft text-accent text-sm font-medium mb-4">
-            ❤️ Depoimentos Reais
+          <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-lavender-soft text-accent text-sm font-medium mb-4">
+            <Heart className="w-4 h-4" /> Depoimentos Reais
           </span>
           <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold text-foreground mb-4">
             Vidas transformadas pela{" "}

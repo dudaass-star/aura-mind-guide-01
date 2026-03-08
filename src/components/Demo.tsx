@@ -92,7 +92,7 @@ const messages: Message[] = [
   },
   {
     sender: "aura",
-    content: "Isso é uma pista enorme 💡",
+    content: "Isso é uma pista enorme.",
   },
   {
     sender: "aura",

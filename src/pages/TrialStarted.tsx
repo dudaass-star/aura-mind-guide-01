@@ -46,7 +46,7 @@ const TrialStarted = () => {
 
             {/* Message */}
             <h1 className="font-display text-2xl md:text-3xl font-bold text-foreground mb-3">
-              Prontinho{name ? `, ${name}` : ""}! 💜
+              Prontinho{name ? `, ${name}` : ""}!
             </h1>
             <p className="text-muted-foreground mb-8">
               Olha seu WhatsApp — a AURA já te mandou uma mensagem de boas-vindas.

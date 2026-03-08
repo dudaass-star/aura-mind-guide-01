@@ -85,8 +85,8 @@ const Benefits = () => {
     <section className="py-24 bg-card relative">
       <div className="container mx-auto px-4">
         <div className="text-center mb-16">
-          <span className="inline-block px-4 py-2 rounded-full bg-sage-soft text-primary text-sm font-medium mb-4">
-            ✨ Tudo isso
+          <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-sage-soft text-primary text-sm font-medium mb-4">
+            <Sparkles className="w-4 h-4" /> Tudo isso
           </span>
           <h2 className="font-display text-3xl md:text-4xl lg:text-5xl font-bold text-foreground mb-4">
             Por menos de{" "}

@@ -93,9 +93,10 @@ const Comparison = () => {
           </div>
         </div>
 
-        <p className="text-center text-sm text-muted-foreground mt-8 max-w-2xl mx-auto">
-          ⚠️ AURA é acompanhamento emocional e direção prática — não substitui atendimento psicológico profissional. 
-          Se você está em crise severa, procure ajuda especializada.
+        <p className="text-center text-sm text-muted-foreground mt-8 max-w-2xl mx-auto flex items-start justify-center gap-2">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+          <span>AURA é acompanhamento emocional e direção prática — não substitui atendimento psicológico profissional. 
+          Se você está em crise severa, procure ajuda especializada.</span>
         </p>
       </div>
     </section>

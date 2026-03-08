@@ -361,7 +361,7 @@ const UserGuide = () => {
               </div>
               <div className="flex gap-3">
                 <span className="shrink-0 font-semibold text-primary">AURA:</span>
-                <span className="text-muted-foreground italic">"Anotado! Daqui a 30 minutinhos eu te aviso pra não esquecer. 💊"</span>
+                <span className="text-muted-foreground italic">"Anotado! Daqui a 30 minutinhos eu te aviso pra não esquecer."</span>
               </div>
             </div>
           </div>
