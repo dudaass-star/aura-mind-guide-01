@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -46,6 +47,7 @@ export default function AdminTests() {
   const [verdictData, setVerdictData] = useState<{ verdict: string; suggestions: string[]; summary: any } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expandedTests, setExpandedTests] = useState<Set<number>>(new Set());
+  const [waitingRateLimit, setWaitingRateLimit] = useState(false);
 
   useEffect(() => {
     redirectIfNotAdmin();
@@ -62,6 +64,14 @@ export default function AdminTests() {
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
     const collectedResults: TestResult[] = [];
     let sessionId: string | null = null;
+
+    // Detect active model for adaptive delay
+    let isAnthropic = false;
+    try {
+      const { data } = await supabase.from('system_config').select('value').eq('key', 'ai_model').single();
+      const model = data?.value || 'google/gemini-2.5-pro';
+      isAnthropic = typeof model === 'string' && model.startsWith('anthropic/');
+    } catch {} 
 
     try {
       for (let i = 0; i < TEST_QUEUE.length; i++) {
@@ -94,6 +104,13 @@ export default function AdminTests() {
           }
           collectedResults.push(data.result);
           setResults([...collectedResults]);
+        }
+
+        // Adaptive delay for Anthropic rate limits
+        if (isAnthropic && i < TEST_QUEUE.length - 1) {
+          setWaitingRateLimit(true);
+          await new Promise(r => setTimeout(r, 15000));
+          setWaitingRateLimit(false);
         }
       }
 
@@ -224,11 +241,13 @@ export default function AdminTests() {
               <div className="space-y-2">
                 <div className="flex justify-between text-sm text-muted-foreground">
                   <span>
-                    {currentTest === 'verdict'
-                      ? '🤖 Gerando veredicto...'
-                      : currentTest
-                        ? `${TEST_QUEUE.find(t => t.key === currentTest)?.emoji || ''} ${TEST_QUEUE.find(t => t.key === currentTest)?.label || currentTest}...`
-                        : 'Preparando...'}
+                    {waitingRateLimit
+                      ? '⏳ Aguardando rate limit (15s)...'
+                      : currentTest === 'verdict'
+                        ? '🤖 Gerando veredicto...'
+                        : currentTest
+                          ? `${TEST_QUEUE.find(t => t.key === currentTest)?.emoji || ''} ${TEST_QUEUE.find(t => t.key === currentTest)?.label || currentTest}...`
+                          : 'Preparando...'}
                   </span>
                   <span>{completedTests}/{TEST_QUEUE.length} testes</span>
                 </div>
