@@ -2437,6 +2437,23 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
 
+    // Read configured AI model from system_config
+    let configuredModel = 'google/gemini-2.5-pro';
+    try {
+      const { data: configData } = await supabase
+        .from('system_config')
+        .select('value')
+        .eq('key', 'ai_model')
+        .single();
+      if (configData?.value) {
+        const val = typeof configData.value === 'string' ? configData.value : JSON.stringify(configData.value);
+        configuredModel = val.replace(/^"|"$/g, '');
+      }
+      console.log('🤖 AI model from config:', configuredModel);
+    } catch (e) {
+      console.warn('Failed to read AI model config, using default:', e);
+    }
+
     const { message, user_id, phone, trial_count, pending_content, pending_context } = await req.json();
 
     console.log("AURA received:", { user_id, phone, message: message?.substring(0, 50), trial_count, hasPendingContent: !!pending_content });
