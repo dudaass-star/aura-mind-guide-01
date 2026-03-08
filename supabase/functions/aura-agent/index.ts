@@ -4276,14 +4276,37 @@ INSTRUÇÃO: Faça um fechamento CALOROSO da sessão:
     // Verificar se a IA quer encerrar a sessão
     const aiWantsToEndSession = assistantMessage.includes('[ENCERRAR_SESSAO]');
 
+    // === EXTRAÇÃO DETERMINÍSTICA DE TAGS [INSIGHT:...] e [COMPROMISSO:...] ===
+    const insightTagRegex = /\[INSIGHT:(.*?)\]/gi;
+    const compromissoTagRegex = /\[COMPROMISSO:(.*?)\]/gi;
+    const extractedInsights: string[] = [];
+    const extractedCommitments: string[] = [];
+    
+    let tagMatch;
+    while ((tagMatch = insightTagRegex.exec(assistantMessage)) !== null) {
+      extractedInsights.push(tagMatch[1].trim());
+    }
+    while ((tagMatch = compromissoTagRegex.exec(assistantMessage)) !== null) {
+      extractedCommitments.push(tagMatch[1].trim());
+    }
+    
+    // Remover tags da mensagem visível ao usuário
+    assistantMessage = assistantMessage.replace(/\[INSIGHT:.*?\]/gi, '').replace(/\[COMPROMISSO:.*?\]/gi, '').trim();
+    
+    if (extractedInsights.length > 0 || extractedCommitments.length > 0) {
+      console.log('🏷️ Tags extraídas:', { insights: extractedInsights.length, commitments: extractedCommitments.length });
+    }
+
     // Executar encerramento de sessão com resumo, insights e compromissos
     if ((shouldEndSession || aiWantsToEndSession) && currentSession && profile) {
       const endTime = new Date().toISOString();
 
-      // Gerar resumo da sessão usando IA
+      // Usar tags extraídas se disponíveis, senão gerar via IA
       let sessionSummary = "Sessão concluída.";
-      let keyInsights: string[] = [];
-      let commitments: any[] = [];
+      let keyInsights: string[] = extractedInsights.length > 0 ? extractedInsights : [];
+      let commitments: any[] = extractedCommitments.length > 0 
+        ? extractedCommitments.map(c => ({ title: c })) 
+        : [];
       
       try {
         const summaryMessages = messageHistory.slice(-15); // Últimas 15 mensagens
@@ -4300,9 +4323,9 @@ Retorne EXATAMENTE neste formato JSON (sem markdown, apenas o JSON):
 
 Regras:
 - summary: resumo BREVE do tema central e conclusão
-- insights: 2-4 aprendizados/percepções importantes do usuário
-- commitments: ações que o usuário se comprometeu a fazer (se houver)
-- Se não houver insights ou compromissos claros, deixe array vazio
+- insights: SEMPRE extraia pelo menos 2 insights/aprendizados da sessão. Busque mudanças de perspectiva, reconhecimentos e percepções do usuário.
+- commitments: Se houver ação prática combinada, registre-a. Se NÃO houver ação clara, registre a intenção emocional da sessão (ex: "Me permitir sentir isso hoje sem culpa", "Reconhecer que essa dor é válida"). Nunca invente ações que o usuário não mencionou.
+- NUNCA retorne arrays vazios — sempre extraia ou infira pelo menos 2 insights e 1 compromisso/intenção.
 - Escreva em português brasileiro, de forma clara e objetiva`
               },
               ...summaryMessages,
