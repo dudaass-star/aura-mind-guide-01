@@ -47,6 +47,7 @@ export default function AdminTests() {
   const [verdictData, setVerdictData] = useState<{ verdict: string; suggestions: string[]; summary: any } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expandedTests, setExpandedTests] = useState<Set<number>>(new Set());
+  const [waitingRateLimit, setWaitingRateLimit] = useState(false);
 
   useEffect(() => {
     redirectIfNotAdmin();
