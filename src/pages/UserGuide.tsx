@@ -351,8 +351,8 @@ const UserGuide = () => {
           </div>
 
           <div className="bg-background rounded-2xl border border-border/50 p-6 mb-6">
-            <h3 className="font-display text-lg font-semibold text-foreground mb-3">
-              💬 Exemplo prático
+            <h3 className="font-display text-lg font-semibold text-foreground mb-3 flex items-center gap-2">
+              <MessageCircle size={18} className="text-primary" /> Exemplo prático
             </h3>
             <div className="space-y-3 text-sm">
               <div className="flex gap-3">
