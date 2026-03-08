@@ -3690,7 +3690,7 @@ INSTRUÇÃO: Faça um fechamento CALOROSO da sessão:
       { role: "user", content: message }
     ];
 
-    console.log("Calling Lovable AI with", apiMessages.length, "messages, plan:", userPlan, "sessions:", sessionsAvailable, "sessionActive:", sessionActive, "shouldEndSession:", shouldEndSession, "phase:", currentSession ? calculateSessionTimeContext(currentSession).phase : 'none');
+    console.log("Calling AI (model: " + configuredModel + ") with", apiMessages.length, "messages, plan:", userPlan, "sessions:", sessionsAvailable, "sessionActive:", sessionActive, "shouldEndSession:", shouldEndSession, "phase:", currentSession ? calculateSessionTimeContext(currentSession).phase : 'none');
 
     let data: any;
     try {
