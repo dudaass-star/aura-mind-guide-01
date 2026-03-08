@@ -163,14 +163,39 @@ async function callAI(
   }
 
   // Lovable AI Gateway (Google/OpenAI models)
-  console.log('🔀 Routing to Lovable AI Gateway, model:', model);
+  // Extrair modelo real e nível de reasoning (sufixo :low/:medium/:high)
+  let actualModel = model;
+  let reasoningLevel: string | null = null;
+
+  if (model.includes(':')) {
+    const parts = model.split(':');
+    actualModel = parts[0];
+    reasoningLevel = parts[1];
+  }
+
+  console.log('🔀 Routing to Lovable AI Gateway, model:', actualModel, reasoningLevel ? `reasoning_effort: ${reasoningLevel}` : '');
+
+  // Montar payload — NÃO enviar temperature com reasoning_effort (causa 400)
+  const gatewayBody: any = {
+    model: actualModel,
+    messages,
+    max_tokens: maxTokens,
+  };
+
+  if (reasoningLevel) {
+    gatewayBody.reasoning_effort = reasoningLevel;
+    // temperature omitida intencionalmente — modelos thinking exigem temp fixa
+  } else {
+    gatewayBody.temperature = temperature;
+  }
+
   const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${LOVABLE_API_KEY}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ model, messages, max_tokens: maxTokens, temperature }),
+    body: JSON.stringify(gatewayBody),
   });
 
   if (!response.ok) {
