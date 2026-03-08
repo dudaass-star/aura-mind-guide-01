@@ -161,6 +161,7 @@ async function callAI(
   }
 
   // Lovable AI Gateway (Google/OpenAI models)
+  console.log('🔀 Routing to Lovable AI Gateway, model:', model);
   const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
     method: 'POST',
     headers: {
