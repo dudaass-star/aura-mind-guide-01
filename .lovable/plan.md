@@ -1,60 +1,69 @@
+# Cápsula do Tempo — Implementado ✅
 
+## O que foi feito
 
-# Avaliação de Qualidade Terapêutica das Sessões da Aura
+1. **Tabela `time_capsules`** + colunas `awaiting_time_capsule` e `pending_capsule_audio_url` no `profiles`
+2. **Intercepção no `webhook-zapi`**: antes do fluxo normal, detecta estado da cápsula e gerencia áudio/confirmação/cancelamento/regravação
+3. **Tag `[CAPSULA_DO_TEMPO]` no `aura-agent`**: quando a Aura propõe e o usuário aceita, a tag ativa o modo de captura
+4. **Instrução no prompt**: ~10 linhas ensinando a Aura quando/como propor a cápsula
+5. **Edge function `deliver-time-capsule`**: cron diário (10h) que entrega cápsulas vencidas via WhatsApp
+6. **Fluxo de confirmação**: o usuário pode regravar quantas vezes quiser antes de confirmar
 
-## O que já está forte
+---
 
-- Estrutura de 6 fases com controle temporal server-side (não depende da IA)
-- Hard blocks que impedem encerramento prematuro
-- Método Socrático + Logoterapia no prompt
-- Continuidade entre sessões (compromissos, temas, insights)
-- Extração automática de insights e compromissos no encerramento
-- Instruções claras de "observar > perguntar" e "provocar com gentileza"
+# Sistema de Agendamento de Tarefas (Efeito Oráculo) — Implementado ✅
 
-## Pontos de preocupação (o que pode comprometer a qualidade)
+## O que foi feito
 
-### 1. Reframe depende 100% do improviso da IA
-O prompt da fase de reframe (linhas 1662-1672) é vago: "Ofereça NOVAS PERSPECTIVAS baseadas no que o usuário revelou". Não há técnicas estruturadas. Em terapia real, o reframe usa ferramentas específicas:
-- **Externalização** ("Se essa ansiedade fosse uma pessoa, o que ela diria?")
-- **Escala temporal** ("Daqui a 5 anos, como você vê isso?")
-- **Inversão de papéis** ("Se sua melhor amiga estivesse vivendo isso, o que você diria pra ela?")
-- **Busca de sentido (Logoterapia)** ("Por quem você está enfrentando isso?")
+1. **Tabela `scheduled_tasks`**: id, user_id, execute_at, task_type, payload (JSONB), status, created_at, executed_at
+2. **Índice parcial**: `idx_scheduled_tasks_pending` em `execute_at WHERE status = 'pending'` — busca em milissegundos
+3. **Função RPC `claim_pending_tasks`**: `FOR UPDATE SKIP LOCKED` com limite de 150 — atomicidade absoluta contra duplicidade
+4. **RLS**: service_role full access + users can view own
+5. **Tags no prompt do `aura-agent`**:
+   - `[AGENDAR_TAREFA:YYYY-MM-DD HH:mm:tipo:descricao]` — agendar lembretes e meditações
+   - `[CANCELAR_TAREFA:tipo]` — cancela o PRÓXIMO pendente (ORDER BY execute_at ASC)
+6. **Processamento no `aura-agent`**: detecta as tags, cria/cancela tasks no banco, remove tags antes de mostrar ao usuário
+7. **Sanitização no `webhook-zapi`**: remove tags de agendamento que vazem na resposta
+8. **Edge function `execute-scheduled-tasks`**: processa tasks claimed, com delay 300ms anti-burst, handlers por tipo (reminder, meditation, message)
+9. **Safety net**: tasks em `executing` há >10 min são resetadas para `pending`
+10. **Cron `pg_cron`**: `*/5 * * * *` (cada 5 minutos) invocando a edge function
 
-**Sugestão**: Enriquecer o prompt de reframe com 4-5 técnicas concretas que a IA pode escolher conforme o contexto, sem engessar — oferecendo um "cardápio" de ferramentas.
+## Tipos de tarefa suportados
 
-### 2. Exploração pode ficar circular
-A fase de exploração diz "vá mais fundo", mas não dá direcionamento de profundidade. Um terapeuta real usa camadas:
-- Camada 1: O que aconteceu (fato)
-- Camada 2: O que sentiu (emoção)
-- Camada 3: O que isso significa pra você (crença)
-- Camada 4: De onde vem essa crença (origem)
+| Tipo | Payload | Ação |
+|------|---------|------|
+| `reminder` | `{ "text": "mensagem" }` | Envia texto via WhatsApp |
+| `meditation` | `{ "category": "sono" }` | Invoca `send-meditation` |
+| `message` | `{ "text": "mensagem" }` | Envia texto customizado |
 
-**Sugestão**: Adicionar esse modelo de "camadas de profundidade" no prompt de exploração como guia (não regra rígida), para que a IA saiba quando está na superfície e quando já chegou fundo.
+## Fluxo completo
 
-### 3. Fechamento pode ficar superficial
-O roteiro de encerramento pede "resumo + compromisso + escala 0-10". Mas falta o elemento mais transformador: a **pergunta de integração** — "O que mudou em você entre o começo e o final dessa sessão?". Esse é o momento em que o usuário conscientiza a transformação.
+1. Usuário pede lembrete → Aura inclui `[AGENDAR_TAREFA:...]` na resposta
+2. `aura-agent` detecta a tag → insere na tabela `scheduled_tasks` com payload padronizado
+3. Tag é removida antes de o usuário ver a mensagem
+4. A cada 5 min, `pg_cron` invoca `execute-scheduled-tasks`
+5. Edge function chama `claim_pending_tasks(150)` (atômico, skip locked)
+6. Processa cada task com 300ms de delay → envia via Z-API
+7. Marca como `executed` ou `failed`
 
-**Sugestão**: Adicionar uma "pergunta de integração" ao protocolo de soft_closing/final_closing.
+---
 
-### 4. Sem validação da qualidade da exploração antes de avançar
-A transição entre fases é puramente temporal (25 min → reframe). Em terapia real, você só faz reframe quando explorou o suficiente. Se a conversa está superficial aos 25 min, o reframe vai ser fraco.
+# Seletor de Modelo AI no Admin — Implementado ✅
 
-**Sugestão**: Adicionar no prompt de transição exploration→reframe uma checagem: "Se ainda está na superfície (usuário dando respostas curtas, sem nomear emoções), CONTINUE explorando em vez de avançar para reframe. O tempo é guia, não regra."
+## O que foi feito
 
-### 5. Falta "meta-comunicação terapêutica"
-Terapeutas bons nomeiam o processo: "Percebi que quando eu perguntei X, você mudou de assunto. O que aconteceu ali?". O prompt menciona isso vagamente na seção de padrões, mas não no contexto de sessão.
+1. **Tabela `system_config`**: key/value JSONB com RLS (admin + service_role)
+2. **Página `AdminSettings.tsx`**: rota `/admin/configuracoes` com dropdown dos 4 modelos
+3. **Função `callAI()`** no `aura-agent`: roteamento unificado Gateway vs Anthropic API
+4. **Adaptador Anthropic**: system prompt separado, merge de mensagens consecutivas, max_tokens obrigatório
+5. **Chamada principal** usa modelo configurado no banco; chamadas auxiliares (summary, onboarding, topic) usam `google/gemini-2.5-flash`
+6. **Secret `ANTHROPIC_API_KEY`** configurado
 
-**Sugestão**: Adicionar 2-3 exemplos de meta-comunicação no prompt de exploração.
+## Modelos disponíveis
 
-## Resumo das mudanças propostas
-
-| Local no prompt | Mudança | Risco |
+| Modelo | Via | Uso |
 |---|---|---|
-| Fase de Reframe (linhas 1662-1672) | Adicionar cardápio de 5 técnicas de reframe | Baixo — enriquece sem engessar |
-| Fase de Exploração (linhas 1632-1661) | Adicionar modelo de "camadas de profundidade" | Baixo — é guia, não regra |
-| Fase de Soft Closing (linhas 1681-1688) | Adicionar pergunta de integração | Mínimo |
-| Transição Exploration→Reframe | Flexibilizar avanço se exploração está rasa | Baixo |
-| Exploração | Exemplos de meta-comunicação terapêutica | Mínimo |
-
-**Filosofia**: Nenhuma dessas mudanças engessa. São ferramentas que a IA pode usar quando fizer sentido, não regras obrigatórias com keywords. É como dar mais instrumentos pra um músico — ele escolhe qual tocar.
-
+| `google/gemini-2.5-pro` (default) | Lovable AI Gateway | Chat principal |
+| `google/gemini-2.5-flash` | Lovable AI Gateway | Auxiliares + opção principal |
+| `anthropic/claude-sonnet-4-6` | API Anthropic direta | Chat principal |
+| `openai/gpt-5` | Lovable AI Gateway | Chat principal |
