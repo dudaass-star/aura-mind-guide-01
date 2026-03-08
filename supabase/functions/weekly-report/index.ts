@@ -242,8 +242,8 @@ Deno.serve(async (req) => {
           try {
             const userName = profile.name?.split(' ')[0] || 'usuário';
 
-            // Skip if user has an active session
-            if (profile.current_session_id) {
+            // Skip if user has an active session (bypass in dry_run)
+            if (!dryRun && profile.current_session_id) {
               const { data: activeSession } = await supabase
                 .from('sessions')
                 .select('status')
@@ -257,18 +257,20 @@ Deno.serve(async (req) => {
               }
             }
 
-            // Skip if user sent a message in the last 10 minutes (active conversation)
-            const recentCutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-            const { count: recentUserMessages } = await supabase
-              .from('messages')
-              .select('*', { count: 'exact', head: true })
-              .eq('user_id', profile.user_id)
-              .eq('role', 'user')
-              .gte('created_at', recentCutoff);
+            // Skip if user sent a message in the last 10 minutes (bypass in dry_run)
+            if (!dryRun) {
+              const recentCutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+              const { count: recentUserMessages } = await supabase
+                .from('messages')
+                .select('*', { count: 'exact', head: true })
+                .eq('user_id', profile.user_id)
+                .eq('role', 'user')
+                .gte('created_at', recentCutoff);
 
-            if ((recentUserMessages || 0) > 0) {
-              console.log(`💬 Skipping ${userName} - active conversation (message in last 10min)`);
-              continue;
+              if ((recentUserMessages || 0) > 0) {
+                console.log(`💬 Skipping ${userName} - active conversation (message in last 10min)`);
+                continue;
+              }
             }
             
             console.log(`📊 Fetching metrics for ${userName}...`);

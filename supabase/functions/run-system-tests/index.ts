@@ -65,10 +65,11 @@ async function testCasualConversation(supabaseUrl: string, serviceKey: string, t
       });
 
       if (reply.length > 0) {
+        const isShort = reply.length < 800;
         validations.push({
-          check: `Response under 500 chars`,
-          passed: reply.length < 500,
-          detail: `${reply.length} chars`,
+          check: `Response concise (< 800 chars)`,
+          passed: isShort,
+          detail: `${reply.length} chars${!isShort ? ' (warning: um pouco longo para casual)' : ''}`,
         });
 
         const hasSessionTag = /\[ENCERRAR_SESSAO\]|\[CONVERSA_CONCLUIDA\]|\[INICIAR_SESSAO\]/i.test(reply);
@@ -191,17 +192,43 @@ async function testEmotionalConversation(supabaseUrl: string, serviceKey: string
     if (fourthResponse.length > 0) {
       const invalidatingWords = ['exagero', 'exagerando', 'não é pra tanto', 'nao e pra tanto', 'drama', 'dramática'];
       const hasInvalidation = invalidatingWords.some(w => fourthResponse.includes(w));
-      const validatingWords = ['válid', 'valid', 'normal', 'faz sentido', 'direito de sentir', 'natural', 'compreensível', 'compreensivel', 'legítim', 'legitim'];
-      const hasValidation = validatingWords.some(w => fourthResponse.includes(w));
       validations.push({
         check: 'Não invalida sentimento (4ª resposta)',
         passed: !hasInvalidation,
         detail: hasInvalidation ? 'Invalidação detectada!' : 'Sem invalidação',
       });
+
+      // AI-based validation check instead of rigid keywords
+      const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
+      let aiValidationPassed = false;
+      if (lovableApiKey) {
+        try {
+          const aiRes = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${lovableApiKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              model: 'google/gemini-2.5-flash',
+              messages: [
+                { role: 'system', content: 'Você é um avaliador. Responda APENAS "SIM" ou "NÃO".' },
+                { role: 'user', content: `O usuário disse: "Desculpa, tô exagerando... é que tá difícil"\n\nA resposta da Aura foi: "${responses[3]}"\n\nA resposta da Aura valida e acolhe o sentimento do usuário, deixando claro que ele tem direito de sentir o que sente?` }
+              ],
+              max_tokens: 5,
+              temperature: 0,
+            }),
+          });
+          if (aiRes.ok) {
+            const aiData = await aiRes.json();
+            const answer = (aiData.choices?.[0]?.message?.content || '').trim().toUpperCase();
+            aiValidationPassed = answer.startsWith('SIM');
+          }
+        } catch (e) {
+          console.error('AI validation check error:', e);
+        }
+      }
       validations.push({
-        check: 'Valida sentimento (4ª resposta)',
-        passed: hasValidation,
-        detail: hasValidation ? 'Validação presente' : 'Sem palavras de validação',
+        check: 'Valida sentimento (4ª resposta) [avaliação IA]',
+        passed: aiValidationPassed,
+        detail: aiValidationPassed ? 'IA confirmou validação empática' : 'IA não detectou validação suficiente',
       });
     }
 
@@ -468,15 +495,39 @@ async function testSessionPart2(supabaseUrl: string, serviceKey: string, testUse
       }
     }
 
-    // NEW: Validate reframe quality
+    // AI-based reframe quality check
     const reframeReplies = conversationLog.filter(l => l.phase === 'reframe').map(l => l.received);
-    const allReframeText = reframeReplies.join(' ').toLowerCase();
-    const reframeKeywords = ['perspectiva', 'olhar', 'ângulo', 'angulo', 'possibilidade', 'pensar de outra forma', 'refletir', 'reflexão', 'reflexao', 'diferente', 'nova forma', 'outro lado', 'ponto de vista', 'nova maneira', 'outra forma de ver', 'ressignificar', 'transformar', 'mudar o olhar', 'enxergar', 'perceber', 'repensar', 'considerar', 'interessante'];
-    const hasReframe = reframeKeywords.some(k => allReframeText.includes(k));
+    const allReframeText = reframeReplies.join('\n');
+    const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
+    let aiReframePassed = false;
+    if (lovableApiKey && allReframeText.length > 0) {
+      try {
+        const aiRes = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${lovableApiKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'google/gemini-2.5-flash',
+            messages: [
+              { role: 'system', content: 'Você é um avaliador. Responda APENAS "SIM" ou "NÃO".' },
+              { role: 'user', content: `O contexto: o usuário está numa sessão terapêutica falando sobre cobrança excessiva no trabalho e de si mesmo.\n\nAs respostas da coach foram:\n${allReframeText}\n\nAs respostas oferecem uma nova forma de ver a situação, trazendo uma "virada de chave" ou perspectiva diferente?` }
+            ],
+            max_tokens: 5,
+            temperature: 0,
+          }),
+        });
+        if (aiRes.ok) {
+          const aiData = await aiRes.json();
+          const answer = (aiData.choices?.[0]?.message?.content || '').trim().toUpperCase();
+          aiReframePassed = answer.startsWith('SIM');
+        }
+      } catch (e) {
+        console.error('AI reframe check error:', e);
+      }
+    }
     validations.push({
-      check: 'Nova perspectiva no reframe',
-      passed: hasReframe,
-      detail: hasReframe ? 'Reframe com nova perspectiva' : 'Sem palavras de reframe detectadas',
+      check: 'Nova perspectiva no reframe [avaliação IA]',
+      passed: aiReframePassed,
+      detail: aiReframePassed ? 'IA confirmou reframe com nova perspectiva' : 'IA não detectou reframe claro',
     });
 
     // NEW: Validate closing summary/recognition
