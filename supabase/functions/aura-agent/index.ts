@@ -4367,15 +4367,7 @@ Regras:
                   
                   // Extrair primary_topic e atribuir jornada inicial
                   try {
-                    const topicResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-                      method: "POST",
-                      headers: {
-                        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-                        "Content-Type": "application/json",
-                      },
-                      body: JSON.stringify({
-                        model: "google/gemini-2.5-pro",
-                        messages: [
+                    const topicData = await callAI('google/gemini-2.5-flash', [
                           { 
                             role: "system", 
                             content: `Baseado nos desafios mencionados, identifique o TEMA PRINCIPAL.
@@ -4384,14 +4376,10 @@ Exemplos: "ansiedade", "autoestima", "relacionamentos", "procrastinação"
 Apenas o tema, nada mais.`
                           },
                           { role: "user", content: parsed.main_challenges.join(', ') }
-                        ],
-                        max_tokens: 50,
-                      }),
-                    });
+                        ], 50, 0.5, LOVABLE_API_KEY);
                     
-                    if (topicResponse.ok) {
-                      const topicData = await topicResponse.json();
-                      await logTokenUsage(supabase, user_id || null, 'topic_extraction', 'google/gemini-2.5-pro', topicData.usage);
+                    if (topicData) {
+                      await logTokenUsage(supabase, user_id || null, 'topic_extraction', 'google/gemini-2.5-flash', topicData.usage);
                       const topic = topicData.choices?.[0]?.message?.content?.trim()?.toLowerCase();
                       if (topic && topic.length < 50) {
                         profileUpdate.primary_topic = topic;
