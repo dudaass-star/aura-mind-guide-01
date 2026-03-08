@@ -138,7 +138,9 @@ const UserGuide = () => {
                 className="border-border/50 bg-background hover:border-primary/30 transition-colors"
               >
                 <CardContent className="p-5 text-center">
-                  <span className="text-3xl mb-2 block">{tipo.emoji}</span>
+                  <div className="w-10 h-10 rounded-xl bg-sage-soft flex items-center justify-center mx-auto mb-2">
+                    <tipo.icon className="w-5 h-5 text-primary" />
+                  </div>
                   <h4 className="font-display font-semibold text-foreground mb-1">
                     {tipo.name}
                   </h4>
