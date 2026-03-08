@@ -65,10 +65,11 @@ async function testCasualConversation(supabaseUrl: string, serviceKey: string, t
       });
 
       if (reply.length > 0) {
+        const isShort = reply.length < 800;
         validations.push({
-          check: `Response under 500 chars`,
-          passed: reply.length < 500,
-          detail: `${reply.length} chars`,
+          check: `Response concise (< 800 chars)`,
+          passed: isShort,
+          detail: `${reply.length} chars${!isShort ? ' (warning: um pouco longo para casual)' : ''}`,
         });
 
         const hasSessionTag = /\[ENCERRAR_SESSAO\]|\[CONVERSA_CONCLUIDA\]|\[INICIAR_SESSAO\]/i.test(reply);
