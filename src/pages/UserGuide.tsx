@@ -115,22 +115,22 @@ const UserGuide = () => {
               {
                 name: "Clareza",
                 desc: "Para decisões difíceis e momentos de dúvida",
-                emoji: "🔍",
+                icon: Eye,
               },
               {
                 name: "Padrões",
                 desc: "Para entender comportamentos que se repetem",
-                emoji: "🔄",
+                icon: RefreshCw,
               },
               {
                 name: "Propósito",
                 desc: "Para explorar sentido de vida e direção",
-                emoji: "🧭",
+                icon: ArrowRight,
               },
               {
                 name: "Livre",
                 desc: "Para aprofundar qualquer tema que você quiser",
-                emoji: "💬",
+                icon: MessageCircle,
               },
             ].map((tipo) => (
               <Card
