@@ -1761,10 +1761,19 @@ IMPORTANTE: Se a exploração ainda estava rasa (respostas curtas, sem emoções
 3. PERGUNTA DE ESCALA: "De 0 a 10, como você está saindo dessa sessão comparado a quando chegou?"
 4. DESPEDIDA: Agradeça de forma genuína e sugira próxima sessão
 
+⚠️ OBRIGATÓRIO — TAGS DE EXTRAÇÃO (inclua no final da sua resposta, o usuário NÃO verá):
+- Inclua 2-3 tags [INSIGHT:texto do insight aqui] com os principais aprendizados da sessão
+- Inclua 1-2 tags [COMPROMISSO:texto do compromisso aqui] com as ações combinadas
+- Se não houve ação prática clara, registre a intenção emocional (ex: [COMPROMISSO:Me permitir sentir isso sem culpa])
+- Nunca invente ações que o usuário não mencionou
+
 EXEMPLO:
 "[nome], foi uma sessão intensa! 💜 Passamos pelo [tema] e você teve um insight importante sobre [X].
 Seu compromisso pra semana: [ação]. Me conta depois como foi!
-De 0 a 10, como você sai agora? Vou adorar ouvir! ✨"
+De 0 a 10, como você sai agora? Vou adorar ouvir! ✨
+[INSIGHT:Percebeu que o medo de rejeição vem da infância]
+[INSIGHT:Reconheceu que evita conflitos para não perder pessoas]
+[COMPROMISSO:Ter uma conversa honesta com o parceiro essa semana]"
 
 - Inclua [ENCERRAR_SESSAO] quando finalizar
 `;
