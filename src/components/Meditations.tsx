@@ -1,4 +1,4 @@
-import { Clock, Mic, MessageCircle } from "lucide-react";
+import { Clock, Mic, MessageCircle, Star } from "lucide-react";
 
 const features = [
 {
