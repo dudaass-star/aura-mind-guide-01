@@ -872,6 +872,24 @@ export type Database = {
         }
         Relationships: []
       }
+      system_config: {
+        Row: {
+          key: string
+          updated_at: string | null
+          value: Json
+        }
+        Insert: {
+          key: string
+          updated_at?: string | null
+          value: Json
+        }
+        Update: {
+          key?: string
+          updated_at?: string | null
+          value?: Json
+        }
+        Relationships: []
+      }
       time_capsules: {
         Row: {
           audio_url: string
