@@ -1,40 +1,69 @@
+# Cápsula do Tempo — Implementado ✅
 
+## O que foi feito
 
-## Plano: Paralelizar queries de contexto no aura-agent
+1. **Tabela `time_capsules`** + colunas `awaiting_time_capsule` e `pending_capsule_audio_url` no `profiles`
+2. **Intercepção no `webhook-zapi`**: antes do fluxo normal, detecta estado da cápsula e gerencia áudio/confirmação/cancelamento/regravação
+3. **Tag `[CAPSULA_DO_TEMPO]` no `aura-agent`**: quando a Aura propõe e o usuário aceita, a tag ativa o modo de captura
+4. **Instrução no prompt**: ~10 linhas ensinando a Aura quando/como propor a cápsula
+5. **Edge function `deliver-time-capsule`**: cron diário (10h) que entrega cápsulas vencidas via WhatsApp
+6. **Fluxo de confirmação**: o usuário pode regravar quantas vezes quiser antes de confirmar
 
-### O que muda
+---
 
-**Arquivo**: `supabase/functions/aura-agent/index.ts` (linhas ~2905-3298)
+# Sistema de Agendamento de Tarefas (Efeito Oráculo) — Implementado ✅
 
-Atualmente existem **8 queries sequenciais** ao banco, todas dependendo apenas de `profile.user_id`. Vamos agrupá-las em um único `Promise.allSettled()`.
+## O que foi feito
 
-### Queries a paralelizar
+1. **Tabela `scheduled_tasks`**: id, user_id, execute_at, task_type, payload (JSONB), status, created_at, executed_at
+2. **Índice parcial**: `idx_scheduled_tasks_pending` em `execute_at WHERE status = 'pending'` — busca em milissegundos
+3. **Função RPC `claim_pending_tasks`**: `FOR UPDATE SKIP LOCKED` com limite de 150 — atomicidade absoluta contra duplicidade
+4. **RLS**: service_role full access + users can view own
+5. **Tags no prompt do `aura-agent`**:
+   - `[AGENDAR_TAREFA:YYYY-MM-DD HH:mm:tipo:descricao]` — agendar lembretes e meditações
+   - `[CANCELAR_TAREFA:tipo]` — cancela o PRÓXIMO pendente (ORDER BY execute_at ASC)
+6. **Processamento no `aura-agent`**: detecta as tags, cria/cancela tasks no banco, remove tags antes de mostrar ao usuário
+7. **Sanitização no `webhook-zapi`**: remove tags de agendamento que vazem na resposta
+8. **Edge function `execute-scheduled-tasks`**: processa tasks claimed, com delay 300ms anti-burst, handlers por tipo (reminder, meditation, message)
+9. **Safety net**: tasks em `executing` há >10 min são resetadas para `pending`
+10. **Cron `pg_cron`**: `*/5 * * * *` (cada 5 minutos) invocando a edge function
 
-| # | Tabela | Linha atual | O que busca |
-|---|--------|-------------|-------------|
-| 1 | messages | 2910 | Últimas 40 mensagens |
-| 2 | user_insights | 2934 | Insights críticos (pessoa, identidade) |
-| 3 | user_insights | 2943 | Insights gerais |
-| 4 | sessions | 2961 | Últimas 3 sessões completadas |
-| 5 | checkins | 3091 | Último check-in |
-| 6 | session_themes | 3109 | Temas ativos |
-| 7 | commitments | 3126 | Compromissos pendentes |
-| 8 | sessions | 3151 | Count de sessões completadas |
-| 9 | content_journeys | 3258 | Jornada atual (condicional) |
-| 10 | meditations | 3274 | Catálogo ativo |
+## Tipos de tarefa suportados
 
-### Abordagem
+| Tipo | Payload | Ação |
+|------|---------|------|
+| `reminder` | `{ "text": "mensagem" }` | Envia texto via WhatsApp |
+| `meditation` | `{ "category": "sono" }` | Invoca `send-meditation` |
+| `message` | `{ "text": "mensagem" }` | Envia texto customizado |
 
-1. Disparar todas as 10 queries com `Promise.allSettled()`
-2. Extrair cada resultado com fallback seguro (`[]`, `null`, `0`) — se uma query falhar, as outras continuam normais
-3. Processar os resultados da mesma forma que o código atual (messageHistory, userInsights, previousSessionsContext, etc.)
-4. O bloco de "primeira sessão" (linhas 2982-3086) continua igual, pois depende de `isFirstSession` que vem do resultado das queries
+## Fluxo completo
 
-### Resultado esperado
+1. Usuário pede lembrete → Aura inclui `[AGENDAR_TAREFA:...]` na resposta
+2. `aura-agent` detecta a tag → insere na tabela `scheduled_tasks` com payload padronizado
+3. Tag é removida antes de o usuário ver a mensagem
+4. A cada 5 min, `pg_cron` invoca `execute-scheduled-tasks`
+5. Edge function chama `claim_pending_tasks(150)` (atômico, skip locked)
+6. Processa cada task com 300ms de delay → envia via Z-API
+7. Marca como `executed` ou `failed`
 
-```text
-Antes:  ~3s (10 queries sequenciais, ~300ms cada)
-Depois: ~0.5s (todas em paralelo, tempo da mais lenta)
-Ganho:  ~2.5s
-```
+---
 
+# Seletor de Modelo AI no Admin — Implementado ✅
+
+## O que foi feito
+
+1. **Tabela `system_config`**: key/value JSONB com RLS (admin + service_role)
+2. **Página `AdminSettings.tsx`**: rota `/admin/configuracoes` com dropdown dos 4 modelos
+3. **Função `callAI()`** no `aura-agent`: roteamento unificado Gateway vs Anthropic API
+4. **Adaptador Anthropic**: system prompt separado, merge de mensagens consecutivas, max_tokens obrigatório
+5. **Chamada principal** usa modelo configurado no banco; chamadas auxiliares (summary, onboarding, topic) usam `google/gemini-2.5-flash`
+6. **Secret `ANTHROPIC_API_KEY`** configurado
+
+## Modelos disponíveis
+
+| Modelo | Via | Uso |
+|---|---|---|
+| `google/gemini-2.5-pro` (default) | Lovable AI Gateway | Chat principal |
+| `google/gemini-2.5-flash` | Lovable AI Gateway | Auxiliares + opção principal |
+| `anthropic/claude-sonnet-4-6` | API Anthropic direta | Chat principal |
+| `openai/gpt-5` | Lovable AI Gateway | Chat principal |
