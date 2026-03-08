@@ -1,4 +1,4 @@
-import { Star, Quote, Users, MessageSquare, RefreshCw, Zap } from "lucide-react";
+import { Star, Quote, Users, MessageSquare, RefreshCw, Zap, Heart } from "lucide-react";
 import avatarMariana from "@/assets/avatar-mariana.jpg";
 import avatarCarlos from "@/assets/avatar-carlos.jpg";
 import avatarJuliana from "@/assets/avatar-juliana.jpg";
