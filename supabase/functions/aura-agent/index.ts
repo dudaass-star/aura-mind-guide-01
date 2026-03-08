@@ -4245,15 +4245,7 @@ INSTRUÇÃO: Faça um fechamento CALOROSO da sessão:
       
       try {
         const summaryMessages = messageHistory.slice(-15); // Últimas 15 mensagens
-        const summaryResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${LOVABLE_API_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-          model: "google/gemini-2.5-pro",
-            messages: [
+        const summaryData = await callAI('google/gemini-2.5-flash', [
               { 
                 role: "system", 
                 content: `Você é um assistente que analisa sessões de mentoria emocional.
@@ -4274,14 +4266,10 @@ Regras:
               ...summaryMessages,
               { role: "user", content: message },
               { role: "assistant", content: assistantMessage }
-            ],
-            max_tokens: 400,
-          }),
-        });
+            ], 400, 0.5, LOVABLE_API_KEY);
 
-        if (summaryResponse.ok) {
-          const summaryData = await summaryResponse.json();
-          await logTokenUsage(supabase, user_id || null, 'session_summary', 'google/gemini-2.5-pro', summaryData.usage);
+        if (summaryData) {
+          await logTokenUsage(supabase, user_id || null, 'session_summary', 'google/gemini-2.5-flash', summaryData.usage);
           const aiResponse = summaryData.choices?.[0]?.message?.content?.trim();
           if (aiResponse) {
             try {
