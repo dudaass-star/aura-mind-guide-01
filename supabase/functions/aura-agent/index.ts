@@ -3690,25 +3690,11 @@ INSTRUÇÃO: Faça um fechamento CALOROSO da sessão:
 
     console.log("Calling Lovable AI with", apiMessages.length, "messages, plan:", userPlan, "sessions:", sessionsAvailable, "sessionActive:", sessionActive, "shouldEndSession:", shouldEndSession, "phase:", currentSession ? calculateSessionTimeContext(currentSession).phase : 'none');
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-          model: "google/gemini-2.5-pro",
-        messages: apiMessages,
-        max_tokens: 4096,
-        temperature: 0.8,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Lovable AI error:", response.status, errorText);
-      
-      if (response.status === 429) {
+    let data: any;
+    try {
+      data = await callAI(configuredModel, apiMessages, 4096, 0.8, LOVABLE_API_KEY);
+    } catch (e: any) {
+      if (e.status === 429) {
         return new Response(JSON.stringify({ 
           error: "Muitas requisições. Aguarde um momento.",
           messages: [{ text: "Calma, tô processando muita coisa aqui. Me dá uns segundinhos? 😅", delay: 0, isAudio: false }]
@@ -3717,8 +3703,7 @@ INSTRUÇÃO: Faça um fechamento CALOROSO da sessão:
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      
-      if (response.status === 402) {
+      if (e.status === 402) {
         return new Response(JSON.stringify({ 
           error: "Créditos insuficientes.",
           messages: [{ text: "Ops, tive um probleminha técnico aqui. Tenta de novo daqui a pouco?", delay: 0, isAudio: false }]
@@ -3727,12 +3712,10 @@ INSTRUÇÃO: Faça um fechamento CALOROSO da sessão:
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      
-      throw new Error(`AI gateway error: ${response.status}`);
+      throw e;
     }
 
-    const data = await response.json();
-    await logTokenUsage(supabase, user_id || null, 'main_chat', 'google/gemini-2.5-pro', data.usage);
+    await logTokenUsage(supabase, user_id || null, 'main_chat', configuredModel, data.usage);
     const finishReason = data.choices?.[0]?.finish_reason;
     console.log(`📊 API finish_reason: ${finishReason}, response length: ${data.choices?.[0]?.message?.content?.length || 0} chars`);
     if (finishReason && finishReason !== 'stop') {
