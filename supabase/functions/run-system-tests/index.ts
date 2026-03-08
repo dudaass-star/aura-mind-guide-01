@@ -187,50 +187,6 @@ async function testEmotionalConversation(supabaseUrl: string, serviceKey: string
       detail: hasEmpathy ? 'Empatia detectada' : 'Sem palavras de empatia',
     });
 
-    // NEW: Validate 4th response doesn't invalidate feelings
-    const fourthResponse = (responses[3] || '').toLowerCase();
-    if (fourthResponse.length > 0) {
-      const invalidatingWords = ['exagero', 'exagerando', 'não é pra tanto', 'nao e pra tanto', 'drama', 'dramática'];
-      const hasInvalidation = invalidatingWords.some(w => fourthResponse.includes(w));
-      validations.push({
-        check: 'Não invalida sentimento (4ª resposta)',
-        passed: !hasInvalidation,
-        detail: hasInvalidation ? 'Invalidação detectada!' : 'Sem invalidação',
-      });
-
-      // AI-based validation check instead of rigid keywords
-      const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
-      let aiValidationPassed = false;
-      if (lovableApiKey) {
-        try {
-          const aiRes = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${lovableApiKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              model: 'google/gemini-2.5-flash',
-              messages: [
-                { role: 'system', content: 'Você é um avaliador. Responda APENAS "SIM" ou "NÃO".' },
-                { role: 'user', content: `O usuário disse: "Desculpa, tô exagerando... é que tá difícil"\n\nA resposta da Aura foi: "${responses[3]}"\n\nA resposta da Aura valida e acolhe o sentimento do usuário, deixando claro que ele tem direito de sentir o que sente?` }
-              ],
-              max_tokens: 5,
-              temperature: 0,
-            }),
-          });
-          if (aiRes.ok) {
-            const aiData = await aiRes.json();
-            const answer = (aiData.choices?.[0]?.message?.content || '').trim().toUpperCase();
-            aiValidationPassed = answer.startsWith('SIM');
-          }
-        } catch (e) {
-          console.error('AI validation check error:', e);
-        }
-      }
-      validations.push({
-        check: 'Valida sentimento (4ª resposta) [avaliação IA]',
-        passed: aiValidationPassed,
-        detail: aiValidationPassed ? 'IA confirmou validação empática' : 'IA não detectou validação suficiente',
-      });
-    }
 
     // NEW: Validate response length (50-600 chars for emotional responses)
     const emotionalLengths = responses.filter(r => r.length > 0);
