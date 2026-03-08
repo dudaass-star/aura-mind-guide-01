@@ -1,69 +1,34 @@
-# Cápsula do Tempo — Implementado ✅
 
-## O que foi feito
 
-1. **Tabela `time_capsules`** + colunas `awaiting_time_capsule` e `pending_capsule_audio_url` no `profiles`
-2. **Intercepção no `webhook-zapi`**: antes do fluxo normal, detecta estado da cápsula e gerencia áudio/confirmação/cancelamento/regravação
-3. **Tag `[CAPSULA_DO_TEMPO]` no `aura-agent`**: quando a Aura propõe e o usuário aceita, a tag ativa o modo de captura
-4. **Instrução no prompt**: ~10 linhas ensinando a Aura quando/como propor a cápsula
-5. **Edge function `deliver-time-capsule`**: cron diário (10h) que entrega cápsulas vencidas via WhatsApp
-6. **Fluxo de confirmação**: o usuário pode regravar quantas vezes quiser antes de confirmar
+# Diagnóstico: Claude ainda com erro de créditos
 
----
+## Situação
 
-# Sistema de Agendamento de Tarefas (Efeito Oráculo) — Implementado ✅
+Os logs mais recentes (17:24) mostram:
+```
+"Your credit balance is too low to access the Anthropic API"
+```
 
-## O que foi feito
+O roteamento está funcionando corretamente (`🔀 Routing to Anthropic API, model: claude-sonnet-4-6`), mas a API rejeita a requisição por falta de saldo.
 
-1. **Tabela `scheduled_tasks`**: id, user_id, execute_at, task_type, payload (JSONB), status, created_at, executed_at
-2. **Índice parcial**: `idx_scheduled_tasks_pending` em `execute_at WHERE status = 'pending'` — busca em milissegundos
-3. **Função RPC `claim_pending_tasks`**: `FOR UPDATE SKIP LOCKED` com limite de 150 — atomicidade absoluta contra duplicidade
-4. **RLS**: service_role full access + users can view own
-5. **Tags no prompt do `aura-agent`**:
-   - `[AGENDAR_TAREFA:YYYY-MM-DD HH:mm:tipo:descricao]` — agendar lembretes e meditações
-   - `[CANCELAR_TAREFA:tipo]` — cancela o PRÓXIMO pendente (ORDER BY execute_at ASC)
-6. **Processamento no `aura-agent`**: detecta as tags, cria/cancela tasks no banco, remove tags antes de mostrar ao usuário
-7. **Sanitização no `webhook-zapi`**: remove tags de agendamento que vazem na resposta
-8. **Edge function `execute-scheduled-tasks`**: processa tasks claimed, com delay 300ms anti-burst, handlers por tipo (reminder, meditation, message)
-9. **Safety net**: tasks em `executing` há >10 min são resetadas para `pending`
-10. **Cron `pg_cron`**: `*/5 * * * *` (cada 5 minutos) invocando a edge function
+## Causa provável
 
-## Tipos de tarefa suportados
+A `ANTHROPIC_API_KEY` armazenada no projeto pode pertencer a uma conta diferente de onde você adicionou o saldo. Ou a key foi regenerada e a antiga ficou salva.
 
-| Tipo | Payload | Ação |
-|------|---------|------|
-| `reminder` | `{ "text": "mensagem" }` | Envia texto via WhatsApp |
-| `meditation` | `{ "category": "sono" }` | Invoca `send-meditation` |
-| `message` | `{ "text": "mensagem" }` | Envia texto customizado |
+## Ação necessária
 
-## Fluxo completo
+1. **Verificar a API key**: Vou solicitar que você insira novamente a `ANTHROPIC_API_KEY` para garantir que é a chave da conta onde o saldo foi adicionado.
 
-1. Usuário pede lembrete → Aura inclui `[AGENDAR_TAREFA:...]` na resposta
-2. `aura-agent` detecta a tag → insere na tabela `scheduled_tasks` com payload padronizado
-3. Tag é removida antes de o usuário ver a mensagem
-4. A cada 5 min, `pg_cron` invoca `execute-scheduled-tasks`
-5. Edge function chama `claim_pending_tasks(150)` (atômico, skip locked)
-6. Processa cada task com 300ms de delay → envia via Z-API
-7. Marca como `executed` ou `failed`
+2. **Validar o nome do modelo**: Confirmar que `claude-sonnet-4-6` é o identificador exato aceito pela API Anthropic (pode ser algo como `claude-sonnet-4-20250514` dependendo da versão).
 
----
+3. **Testar**: Após atualizar a key, enviar nova mensagem para verificar.
 
-# Seletor de Modelo AI no Admin — Implementado ✅
+## Verificação que você pode fazer agora
 
-## O que foi feito
+No console da Anthropic (console.anthropic.com):
+- Acesse **API Keys** e copie a key ativa
+- Acesse **Plans & Billing** e confirme que o saldo aparece > $0
+- Verifique o nome exato do modelo disponível na sua conta
 
-1. **Tabela `system_config`**: key/value JSONB com RLS (admin + service_role)
-2. **Página `AdminSettings.tsx`**: rota `/admin/configuracoes` com dropdown dos 4 modelos
-3. **Função `callAI()`** no `aura-agent`: roteamento unificado Gateway vs Anthropic API
-4. **Adaptador Anthropic**: system prompt separado, merge de mensagens consecutivas, max_tokens obrigatório
-5. **Chamada principal** usa modelo configurado no banco; chamadas auxiliares (summary, onboarding, topic) usam `google/gemini-2.5-flash`
-6. **Secret `ANTHROPIC_API_KEY`** configurado
+Após confirmar, eu atualizo a secret e testamos.
 
-## Modelos disponíveis
-
-| Modelo | Via | Uso |
-|---|---|---|
-| `google/gemini-2.5-pro` (default) | Lovable AI Gateway | Chat principal |
-| `google/gemini-2.5-flash` | Lovable AI Gateway | Auxiliares + opção principal |
-| `anthropic/claude-sonnet-4-6` | API Anthropic direta | Chat principal |
-| `openai/gpt-5` | Lovable AI Gateway | Chat principal |
