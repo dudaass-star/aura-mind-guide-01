@@ -3252,7 +3252,7 @@ REGRAS GERAIS DO ONBOARDING:
 - Em sessão especial: ${sessionActive ? 'Sim - MODO SESSÃO ATIVO' : 'Não'}
 
 ## Controle de Tempo da Sessão
-${sessionTimeInfoStr}
+${sessionTimeContext}
 
 ## Jornada de Conteúdo
 - Jornada atual: ${currentJourneyInfo}
