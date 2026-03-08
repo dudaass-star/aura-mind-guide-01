@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Smartphone, Play, Pause, RotateCcw } from "lucide-react";
+import { Smartphone, Play, Pause, RotateCcw, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import avatarAura from "@/assets/avatar-aura.jpg";
 
