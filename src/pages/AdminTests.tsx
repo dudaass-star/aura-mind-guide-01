@@ -241,11 +241,13 @@ export default function AdminTests() {
               <div className="space-y-2">
                 <div className="flex justify-between text-sm text-muted-foreground">
                   <span>
-                    {currentTest === 'verdict'
-                      ? '🤖 Gerando veredicto...'
-                      : currentTest
-                        ? `${TEST_QUEUE.find(t => t.key === currentTest)?.emoji || ''} ${TEST_QUEUE.find(t => t.key === currentTest)?.label || currentTest}...`
-                        : 'Preparando...'}
+                    {waitingRateLimit
+                      ? '⏳ Aguardando rate limit (15s)...'
+                      : currentTest === 'verdict'
+                        ? '🤖 Gerando veredicto...'
+                        : currentTest
+                          ? `${TEST_QUEUE.find(t => t.key === currentTest)?.emoji || ''} ${TEST_QUEUE.find(t => t.key === currentTest)?.label || currentTest}...`
+                          : 'Preparando...'}
                   </span>
                   <span>{completedTests}/{TEST_QUEUE.length} testes</span>
                 </div>
