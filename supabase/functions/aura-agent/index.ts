@@ -4329,15 +4329,7 @@ Regras:
         // Tentar extrair descobertas do onboarding da conversa
         try {
           const onboardingMessages = messageHistory.slice(-20);
-          const onboardingResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${LOVABLE_API_KEY}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-          model: "google/gemini-2.5-pro",
-              messages: [
+          const onboardingData = await callAI('google/gemini-2.5-flash', [
                 { 
                   role: "system", 
                   content: `Analise esta conversa de onboarding e extraia informações do usuário.
@@ -4357,14 +4349,10 @@ Regras:
 - Se não houver informação clara, use null`
                 },
                 ...onboardingMessages.map(m => ({ role: m.role, content: m.content }))
-              ],
-              max_tokens: 300,
-            }),
-          });
+              ], 300, 0.5, LOVABLE_API_KEY);
 
-          if (onboardingResponse.ok) {
-            const onboardingData = await onboardingResponse.json();
-            await logTokenUsage(supabase, user_id || null, 'onboarding_extraction', 'google/gemini-2.5-pro', onboardingData.usage);
+          if (onboardingData) {
+            await logTokenUsage(supabase, user_id || null, 'onboarding_extraction', 'google/gemini-2.5-flash', onboardingData.usage);
             const aiContent = onboardingData.choices?.[0]?.message?.content?.trim();
             if (aiContent) {
               try {
