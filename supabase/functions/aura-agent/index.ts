@@ -124,6 +124,7 @@ async function callAI(
       merged.unshift({ role: 'user', content: '...' });
     }
 
+    console.log('🔀 Routing to Anthropic API, model:', anthropicModel);
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -160,6 +161,7 @@ async function callAI(
   }
 
   // Lovable AI Gateway (Google/OpenAI models)
+  console.log('🔀 Routing to Lovable AI Gateway, model:', model);
   const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -3688,7 +3690,7 @@ INSTRUÇÃO: Faça um fechamento CALOROSO da sessão:
       { role: "user", content: message }
     ];
 
-    console.log("Calling Lovable AI with", apiMessages.length, "messages, plan:", userPlan, "sessions:", sessionsAvailable, "sessionActive:", sessionActive, "shouldEndSession:", shouldEndSession, "phase:", currentSession ? calculateSessionTimeContext(currentSession).phase : 'none');
+    console.log("Calling AI (model: " + configuredModel + ") with", apiMessages.length, "messages, plan:", userPlan, "sessions:", sessionsAvailable, "sessionActive:", sessionActive, "shouldEndSession:", shouldEndSession, "phase:", currentSession ? calculateSessionTimeContext(currentSession).phase : 'none');
 
     let data: any;
     try {
