@@ -15,6 +15,7 @@ interface Metrics {
   messagesPerSession: number;
   returnRate: number;
   uniqueRecentUsers: number;
+  avgDailyMessagesPerUser: number;
 }
 
 export default function AdminEngagement() {
