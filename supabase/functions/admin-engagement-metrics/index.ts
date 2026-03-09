@@ -68,21 +68,31 @@ Deno.serve(async (req) => {
       avgSessionMinutes = Math.round(totalMinutes / allCompletedSessions.length);
     }
 
-    // 5. Total messages / total completed sessions = messages per session
-    const { count: totalMessages } = await supabase
-      .from('messages')
-      .select('*', { count: 'exact', head: true });
-
-    const { count: totalCompletedSessions } = await supabase
+    // 5. Messages per session: for each completed session with start/end, count user messages in that window
+    const { data: completedSessionsForMsg } = await supabase
       .from('sessions')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'completed');
+      .select('id, user_id, started_at, ended_at')
+      .eq('status', 'completed')
+      .not('started_at', 'is', null)
+      .not('ended_at', 'is', null);
 
-    const messagesPerSession = totalCompletedSessions && totalCompletedSessions > 0
-      ? Math.round((totalMessages || 0) / totalCompletedSessions * 10) / 10
-      : 0;
+    let messagesPerSession = 0;
+    if (completedSessionsForMsg && completedSessionsForMsg.length > 0) {
+      let totalSessionMessages = 0;
+      for (const session of completedSessionsForMsg) {
+        const { count } = await supabase
+          .from('messages')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', session.user_id)
+          .eq('role', 'user')
+          .gte('created_at', session.started_at!)
+          .lte('created_at', session.ended_at!);
+        totalSessionMessages += (count || 0);
+      }
+      messagesPerSession = Math.round(totalSessionMessages / completedSessionsForMsg.length * 10) / 10;
+    }
 
-    // 6. Return rate: distinct users who messaged in last 7 days / active users
+    // 6. Return rate
     const { data: recentUserMessages } = await supabase
       .from('messages')
       .select('user_id')
@@ -94,6 +104,11 @@ Deno.serve(async (req) => {
       ? Math.round(uniqueRecentUsers / activeUsers * 100)
       : 0;
 
+    // 7. Average daily messages per user (last 7 days)
+    const avgDailyMessagesPerUser = activeUsers && activeUsers > 0
+      ? Math.round((weeklyMessages || 0) / 7 / activeUsers * 10) / 10
+      : 0;
+
     return new Response(JSON.stringify({
       activeUsers: activeUsers || 0,
       weeklyMessages: weeklyMessages || 0,
@@ -102,6 +117,7 @@ Deno.serve(async (req) => {
       messagesPerSession,
       returnRate,
       uniqueRecentUsers,
+      avgDailyMessagesPerUser,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

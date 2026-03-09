@@ -15,6 +15,7 @@ interface Metrics {
   messagesPerSession: number;
   returnRate: number;
   uniqueRecentUsers: number;
+  avgDailyMessagesPerUser: number;
 }
 
 export default function AdminEngagement() {
@@ -69,7 +70,8 @@ export default function AdminEngagement() {
     { title: 'Mensagens na Semana', value: metrics.weeklyMessages, icon: MessageSquare, subtitle: 'últimos 7 dias' },
     { title: 'Sessões Completadas', value: metrics.weeklySessionsCount, icon: BarChart3, subtitle: 'últimos 7 dias' },
     { title: 'Tempo Médio de Sessão', value: `${metrics.avgSessionMinutes} min`, icon: Clock, subtitle: 'sessões completadas' },
-    { title: 'Mensagens por Sessão', value: metrics.messagesPerSession, icon: MessageSquare, subtitle: 'total msg / total sessões' },
+    { title: 'Mensagens por Sessão', value: metrics.messagesPerSession, icon: MessageSquare, subtitle: 'msgs do usuário durante sessão' },
+    { title: 'Média Msgs/Dia por Usuário', value: metrics.avgDailyMessagesPerUser, icon: TrendingUp, subtitle: 'últimos 7 dias / ativos' },
     { title: 'Taxa de Retorno', value: `${metrics.returnRate}%`, icon: TrendingUp, subtitle: `${metrics.uniqueRecentUsers} de ${metrics.activeUsers} ativos` },
   ] : [];
 
