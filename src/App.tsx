@@ -17,6 +17,7 @@ import AdminTests from "./pages/AdminTests";
 import AdminInstances from "./pages/AdminInstances";
 import AdminLogin from "./pages/AdminLogin";
 import AdminSettings from "./pages/AdminSettings";
+import AdminEngagement from "./pages/AdminEngagement";
 import UserGuide from "./pages/UserGuide";
 import NotFound from "./pages/NotFound";
 
