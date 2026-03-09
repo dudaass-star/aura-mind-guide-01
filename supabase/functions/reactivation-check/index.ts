@@ -169,6 +169,19 @@ Estou aqui por você. ✨`;
           continue;
         }
 
+        // Check for pending scheduled tasks (return already planned)
+        const { data: pendingTasksInactive } = await supabase
+          .from('scheduled_tasks')
+          .select('id')
+          .eq('user_id', profile.user_id)
+          .eq('status', 'pending')
+          .limit(1);
+
+        if (pendingTasksInactive && pendingTasksInactive.length > 0) {
+          logStep(`Skipping user ${profile.user_id} - has pending scheduled task`);
+          continue;
+        }
+
         const userName = profile.name || 'você';
         const lastMessageDate = profile.last_message_date ? new Date(profile.last_message_date) : null;
         const daysSinceMessage = lastMessageDate 
