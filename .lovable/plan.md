@@ -1,38 +1,50 @@
 
-## Investigar Por Que os Relatórios Semanais Não Foram Enviados
+# Investigação: Quem Recebeu os Relatórios Semanais
 
-**Problema**: O usuário está perguntando por que os relatórios semanais da Aura não foram enviados conforme esperado.
+**Objetivo**: Identificar através dos logs quais usuários efetivamente receberam os relatórios semanais da Aura.
 
-**Contexto**: De acordo com o sistema, os relatórios semanais devem ser enviados automaticamente aos domingos às 19:00 (horário de Brasília). Preciso investigar:
+## Plano de Investigação
 
-1. **Status do Cron Job**: Verificar se o job está ativo e funcionando
-2. **Logs da Edge Function**: Analisar logs da função `weekly-report` 
-3. **Usuários Elegíveis**: Ver quantos usuários estão qualificados para receber
-4. **Travas de Segurança**: Verificar se as condições de envio estão sendo atendidas
+### 1. Análise dos Logs da Edge Function
+- Verificar logs da função `weekly-report` para encontrar execuções recentes
+- Buscar evidências de envios bem-sucedidos nos logs de função
+- Examinar logs de analytics do Supabase para chamadas HTTP à função
 
-**Plano de Investigação**:
+### 2. Consulta da Tabela weekly_plans
+- Verificar registros criados recentemente na tabela `weekly_plans`
+- Identificar usuários que têm entradas com `week_start` da semana passada
+- Analisar o campo `reflections` que contém as análises de evolução enviadas
 
-1. **Verificar Logs da Weekly Report**: Usar `supabase--edge_function_logs` para buscar execuções recentes da função `weekly-report`
+### 3. Análise da Tabela messages  
+- Buscar mensagens do tipo `assistant` enviadas recentemente
+- Filtrar por conteúdo que contenha padrões típicos do relatório semanal
+- Identificar usuários que receberam essas mensagens
 
-2. **Analisar Condições de Envio**: Revisar no código as travas de segurança:
-   - Status 'Não Perturbe' (DND) 
-   - Sessões em andamento
-   - Mensagens recentes (últimos 10 minutos)
-   - Status 'active' dos usuários
+### 4. Verificação de Logs de Rede
+- Examinar logs de requisições HTTP para a Z-API
+- Verificar status codes de sucesso/falha nos envios
+- Identificar possíveis erros de entrega
 
-3. **Verificar Usuários Ativos**: Consultar quantos usuários estão elegíveis para receber relatórios
+## Metodologia Técnica
 
-4. **Testar Manualmente**: Se necessário, executar um teste da função com `dry_run=true`
+1. **Logs de Edge Function**: Usar `supabase--edge_function_logs` para buscar execuções da `weekly-report`
 
-5. **Verificar Configuração do Cron**: Confirmar se o job está agendado corretamente no `pg_cron`
+2. **Consulta de Dados**: Usar `supabase--read_query` para:
+   - Buscar na `weekly_plans` por registros da última semana
+   - Verificar `messages` por relatórios enviados
+   - Correlacionar com dados de `profiles` para identificar usuários
 
-**Investigação dos Logs**: Vou começar analisando os logs mais recentes da função `weekly-report` para entender o que aconteceu na última execução programada.
+3. **Análise de Analytics**: Usar `supabase--analytics_query` para logs de função e rede
 
-**Possíveis Causas**:
-- Função não executou (problema no cron)
-- Nenhum usuário elegível (todos com DND, sessões ativas, ou mensagens recentes)
-- Erro na execução da função
-- Problema na conexão com WhatsApp (Z-API)
-- Configuração incorreta do horário
+4. **Correlação de Dados**: Cruzar informações de múltiplas fontes para confirmar entregas
 
-**Resultado Esperado**: Identificar a causa raiz e propor soluções para garantir que os relatórios sejam enviados corretamente no próximo domingo.
+## Resultado Esperado
+
+- Lista de usuários que efetivamente receberam relatórios
+- Identificação de falhas específicas no envio
+- Detalhes sobre horário e conteúdo dos relatórios enviados
+- Recomendações para correção de problemas identificados
+
+## Abordagem de Debugging
+
+A investigação seguirá a trilha: **Execução da Função → Processamento de Usuários → Envio via Z-API → Confirmação de Entrega**, permitindo identificar exatamente onde pode ter ocorrido falha no processo.
