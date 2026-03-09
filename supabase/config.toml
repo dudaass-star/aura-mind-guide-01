@@ -18,8 +18,6 @@ verify_jwt = false
 [functions.send-zapi-message]
 verify_jwt = false
 
-[functions.scheduled-checkin]
-verify_jwt = false
 
 [functions.scheduled-followup]
 verify_jwt = false
