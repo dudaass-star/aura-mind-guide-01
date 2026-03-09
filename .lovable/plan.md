@@ -67,3 +67,25 @@
 | `google/gemini-2.5-flash` | Lovable AI Gateway | Auxiliares + opção principal |
 | `anthropic/claude-sonnet-4-6` | API Anthropic direta | Chat principal |
 | `openai/gpt-5` | Lovable AI Gateway | Chat principal |
+
+---
+
+# Insights Proativos 2x/semana + Remoção Check-in Segunda — Implementado ✅
+
+## O que foi feito
+
+1. **Cron `pattern-analysis` atualizado**: de `0 14 * * 4` (quinta) para `0 14 * * 4,6` (quinta + sábado, 11h BRT)
+2. **Filtros de proteção adicionados** no `pattern-analysis/index.ts`:
+   - Sessão ativa (`current_session_id`) → skip
+   - Qualquer mensagem (user ou assistant) nas últimas 2h → skip
+   - `scheduled_tasks` pendente (retorno já combinado) → skip
+3. **Check-in de segunda desativado**: cron `weekly-checkin-monday-8am` removido, entrada removida do `config.toml`
+4. **Limite de 1 insight/7 dias por usuário** mantido via `last_proactive_insight_at`
+
+## Cronograma atualizado
+
+| Dia | Sistema | Função |
+|-----|---------|--------|
+| Quinta 11h BRT | Insight proativo | `pattern-analysis` |
+| Sábado 11h BRT | Insight proativo (2ª chance) | `pattern-analysis` |
+| ~~Segunda 08h~~ | ~~Check-in semanal~~ | ~~Removido~~ |
