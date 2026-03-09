@@ -67,6 +67,19 @@ Deno.serve(async (req) => {
           }
         }
 
+        // Check for pending scheduled tasks (return already planned)
+        const { data: pendingTasksMissed } = await supabase
+          .from('scheduled_tasks')
+          .select('id')
+          .eq('user_id', session.user_id)
+          .eq('status', 'pending')
+          .limit(1);
+
+        if (pendingTasksMissed && pendingTasksMissed.length > 0) {
+          logStep(`Skipping user ${session.user_id} - has pending scheduled task`);
+          continue;
+        }
+
         const userName = profile.name || 'você';
         const sessionDate = new Date(session.scheduled_at);
         const formattedDate = sessionDate.toLocaleDateString('pt-BR', {
