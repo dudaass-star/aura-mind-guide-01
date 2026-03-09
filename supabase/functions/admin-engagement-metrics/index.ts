@@ -117,6 +117,7 @@ Deno.serve(async (req) => {
       messagesPerSession,
       returnRate,
       uniqueRecentUsers,
+      avgDailyMessagesPerUser,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
