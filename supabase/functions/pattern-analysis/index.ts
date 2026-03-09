@@ -251,20 +251,40 @@ serve(async (req) => {
               continue;
             }
 
-            // Check recent conversation (< 2 hours)
+            // Check active session
+            if (user.current_session_id) {
+              console.log(`🎯 [${user.name || 'Unknown'}] Session active, skipping`);
+              skipCount++;
+              continue;
+            }
+
             const twoHoursAgo = new Date();
             twoHoursAgo.setHours(twoHoursAgo.getHours() - 2);
 
-            const { data: recentUserMsg } = await supabase
+            // Check recent conversation from user OR Aura (< 2 hours)
+            const { data: recentMsg } = await supabase
               .from('messages')
               .select('created_at')
               .eq('user_id', user.user_id)
-              .eq('role', 'user')
               .gte('created_at', twoHoursAgo.toISOString())
               .limit(1);
 
-            if (recentUserMsg && recentUserMsg.length > 0) {
-              console.log(`💬 [${user.name || 'Unknown'}] Active conversation, skipping`);
+            if (recentMsg && recentMsg.length > 0) {
+              console.log(`💬 [${user.name || 'Unknown'}] Recent conversation, skipping`);
+              skipCount++;
+              continue;
+            }
+
+            // Check pending scheduled tasks (return already planned)
+            const { data: pendingTask } = await supabase
+              .from('scheduled_tasks')
+              .select('id')
+              .eq('user_id', user.user_id)
+              .eq('status', 'pending')
+              .limit(1);
+
+            if (pendingTask && pendingTask.length > 0) {
+              console.log(`📅 [${user.name || 'Unknown'}] Has pending scheduled task, skipping`);
               skipCount++;
               continue;
             }
