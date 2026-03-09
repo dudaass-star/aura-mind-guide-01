@@ -68,7 +68,7 @@ Deno.serve(async (req) => {
       avgSessionMinutes = Math.round(totalMinutes / allCompletedSessions.length);
     }
 
-    // 5. Messages per session: for each completed session with start/end, count user messages in that window
+    // 5. Messages per session: per-user average, then average across users
     const { data: completedSessionsForMsg } = await supabase
       .from('sessions')
       .select('id, user_id, started_at, ended_at')
@@ -78,18 +78,32 @@ Deno.serve(async (req) => {
 
     let messagesPerSession = 0;
     if (completedSessionsForMsg && completedSessionsForMsg.length > 0) {
-      let totalSessionMessages = 0;
-      for (const session of completedSessionsForMsg) {
-        const { count } = await supabase
-          .from('messages')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', session.user_id)
-          .eq('role', 'user')
-          .gte('created_at', session.started_at!)
-          .lte('created_at', session.ended_at!);
-        totalSessionMessages += (count || 0);
+      // Group sessions by user
+      const sessionsByUser = new Map<string, typeof completedSessionsForMsg>();
+      for (const s of completedSessionsForMsg) {
+        if (!sessionsByUser.has(s.user_id)) sessionsByUser.set(s.user_id, []);
+        sessionsByUser.get(s.user_id)!.push(s);
       }
-      messagesPerSession = Math.round(totalSessionMessages / completedSessionsForMsg.length * 10) / 10;
+
+      const userAverages: number[] = [];
+      for (const [userId, sessions] of sessionsByUser) {
+        let userTotalMsgs = 0;
+        for (const session of sessions) {
+          const { count } = await supabase
+            .from('messages')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', userId)
+            .eq('role', 'user')
+            .gte('created_at', session.started_at!)
+            .lte('created_at', session.ended_at!);
+          userTotalMsgs += (count || 0);
+        }
+        userAverages.push(userTotalMsgs / sessions.length);
+      }
+
+      messagesPerSession = userAverages.length > 0
+        ? Math.round(userAverages.reduce((a, b) => a + b, 0) / userAverages.length * 10) / 10
+        : 0;
     }
 
     // 6. Return rate
