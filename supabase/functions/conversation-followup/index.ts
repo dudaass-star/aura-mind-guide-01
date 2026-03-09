@@ -397,6 +397,19 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        // Skip if user has pending scheduled tasks (return already planned)
+        const { data: pendingTasks } = await supabase
+          .from('scheduled_tasks')
+          .select('id')
+          .eq('user_id', followup.user_id)
+          .eq('status', 'pending')
+          .limit(1);
+
+        if (pendingTasks && pendingTasks.length > 0) {
+          console.log(`⏭️ Skipping user ${followup.user_id} - has pending scheduled task`);
+          continue;
+        }
+
         const userPlan = profile.plan || 'essencial';
         const isSessionActive = !!profile.current_session_id;
         
