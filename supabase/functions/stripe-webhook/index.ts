@@ -358,7 +358,7 @@ Cuide-se. 🌟`;
         }
 
         // Update profile status
-        const supabase = createClient(supabaseUrl, supabaseServiceKey);
+        
         const cleanPhone = customerPhone.replace(/\D/g, '');
 
         const { error: updateError } = await supabase
