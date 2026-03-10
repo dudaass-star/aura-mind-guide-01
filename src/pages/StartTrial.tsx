@@ -81,6 +81,14 @@ const StartTrial = () => {
         return;
       }
 
+      // Track Lead event
+      if (typeof window !== 'undefined' && (window as any).fbq) {
+        (window as any).fbq('track', 'Lead', {
+          content_name: 'Trial Start',
+          content_category: 'trial',
+        });
+      }
+
       // Salvar no localStorage para a página de confirmação
       localStorage.setItem("trialName", name.trim());
       localStorage.setItem("trialPhone", cleanPhone);
