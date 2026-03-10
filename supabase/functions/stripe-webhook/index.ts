@@ -136,7 +136,7 @@ Por exemplo: "segundas e quintas às 19h" ou "quartas às 20h"`;
 
 Agora somos oficiais. Você escolheu o plano ${planName}.
 
-Vamos continuar de onde paramos? Como você está hoje?`;
+Vamos continuar de onde paramos?`;
         }
       } else {
         // NEW USER MESSAGE — standard welcome
