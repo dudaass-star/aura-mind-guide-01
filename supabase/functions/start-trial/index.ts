@@ -14,7 +14,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { name, email, phone } = await req.json();
+    const { name, email, phone, event_id } = await req.json();
 
     console.log('📝 Starting trial for:', name, email, phone?.substring(0, 4) + '***');
 

@@ -93,12 +93,12 @@ const StartTrial = () => {
         return;
       }
 
-      // Track Lead event
+      // Track Lead event with event_id for deduplication
       if (typeof window !== 'undefined' && (window as any).fbq) {
         (window as any).fbq('track', 'Lead', {
           content_name: 'Trial Start',
           content_category: 'trial',
-        });
+        }, { eventID: eventId });
       }
 
       // Salvar no localStorage para a página de confirmação
