@@ -92,6 +92,24 @@ Deno.serve(async (req) => {
       Array.from(instanceGroups.entries()).map(async ([instanceId, groupProfiles]) => {
         for (const profile of groupProfiles) {
           try {
+            // Skip if user has a session scheduled in the next 7 days
+            const sevenDaysFromNow = new Date();
+            sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
+
+            const { data: upcomingSessions } = await supabase
+              .from('sessions')
+              .select('id')
+              .eq('user_id', profile.user_id)
+              .eq('status', 'scheduled')
+              .gte('scheduled_at', new Date().toISOString())
+              .lte('scheduled_at', sevenDaysFromNow.toISOString())
+              .limit(1);
+
+            if (upcomingSessions && upcomingSessions.length > 0) {
+              console.log(`📅 Skipping check-in for ${profile.name} - session scheduled in next 7 days`);
+              continue;
+            }
+
             const { data: lastCheckin } = await supabase
               .from('checkins')
               .select('*')

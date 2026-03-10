@@ -1,69 +1,91 @@
+# Cápsula do Tempo — Implementado ✅
 
+## O que foi feito
 
-# Desativar follow-ups automáticos para usuários com sessão agendada nos proximos 7 dias
+1. **Tabela `time_capsules`** + colunas `awaiting_time_capsule` e `pending_capsule_audio_url` no `profiles`
+2. **Intercepção no `webhook-zapi`**: antes do fluxo normal, detecta estado da cápsula e gerencia áudio/confirmação/cancelamento/regravação
+3. **Tag `[CAPSULA_DO_TEMPO]` no `aura-agent`**: quando a Aura propõe e o usuário aceita, a tag ativa o modo de captura
+4. **Instrução no prompt**: ~10 linhas ensinando a Aura quando/como propor a cápsula
+5. **Edge function `deliver-time-capsule`**: cron diário (10h) que entrega cápsulas vencidas via WhatsApp
+6. **Fluxo de confirmação**: o usuário pode regravar quantas vezes quiser antes de confirmar
 
-## Escopo
+---
 
-| Função | Ação |
-|---|---|
-| `pattern-analysis` (insights) | Manter como está |
-| `conversation-followup` | Manter como está |
-| `scheduled-followup` (compromissos) | Adicionar trava de sessão 7 dias |
-| `scheduled-checkin` (check-in diário) | Adicionar trava de sessão 7 dias |
+# Sistema de Agendamento de Tarefas (Efeito Oráculo) — Implementado ✅
 
-## Implementação
+## O que foi feito
 
-### 1. `scheduled-followup/index.ts`
+1. **Tabela `scheduled_tasks`**: id, user_id, execute_at, task_type, payload (JSONB), status, created_at, executed_at
+2. **Índice parcial**: `idx_scheduled_tasks_pending` em `execute_at WHERE status = 'pending'` — busca em milissegundos
+3. **Função RPC `claim_pending_tasks`**: `FOR UPDATE SKIP LOCKED` com limite de 150 — atomicidade absoluta contra duplicidade
+4. **RLS**: service_role full access + users can view own
+5. **Tags no prompt do `aura-agent`**:
+   - `[AGENDAR_TAREFA:YYYY-MM-DD HH:mm:tipo:descricao]` — agendar lembretes e meditações
+   - `[CANCELAR_TAREFA:tipo]` — cancela o PRÓXIMO pendente (ORDER BY execute_at ASC)
+6. **Processamento no `aura-agent`**: detecta as tags, cria/cancela tasks no banco, remove tags antes de mostrar ao usuário
+7. **Sanitização no `webhook-zapi`**: remove tags de agendamento que vazem na resposta
+8. **Edge function `execute-scheduled-tasks`**: processa tasks claimed, com delay 300ms anti-burst, handlers por tipo (reminder, meditation, message)
+9. **Safety net**: tasks em `executing` há >10 min são resetadas para `pending`
+10. **Cron `pg_cron`**: `*/5 * * * *` (cada 5 minutos) invocando a edge function
 
-Dentro do loop de commitments, após o check de DND (linha 64), adicionar consulta à tabela `sessions`:
+## Tipos de tarefa suportados
 
-```typescript
-// Skip if user has a session scheduled in the next 7 days
-const sevenDaysFromNow = new Date();
-sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
+| Tipo | Payload | Ação |
+|------|---------|------|
+| `reminder` | `{ "text": "mensagem" }` | Envia texto via WhatsApp |
+| `meditation` | `{ "category": "sono" }` | Invoca `send-meditation` |
+| `message` | `{ "text": "mensagem" }` | Envia texto customizado |
 
-const { data: upcomingSessions } = await supabase
-  .from('sessions')
-  .select('id')
-  .eq('user_id', profile.user_id)
-  .eq('status', 'scheduled')
-  .gte('scheduled_at', new Date().toISOString())
-  .lte('scheduled_at', sevenDaysFromNow.toISOString())
-  .limit(1);
+## Fluxo completo
 
-if (upcomingSessions && upcomingSessions.length > 0) {
-  console.log(`📅 Skipping commitment ${commitment.id} - user has session in next 7 days`);
-  continue;
-}
-```
+1. Usuário pede lembrete → Aura inclui `[AGENDAR_TAREFA:...]` na resposta
+2. `aura-agent` detecta a tag → insere na tabela `scheduled_tasks` com payload padronizado
+3. Tag é removida antes de o usuário ver a mensagem
+4. A cada 5 min, `pg_cron` invoca `execute-scheduled-tasks`
+5. Edge function chama `claim_pending_tasks(150)` (atômico, skip locked)
+6. Processa cada task com 300ms de delay → envia via Z-API
+7. Marca como `executed` ou `failed`
 
-### 2. `scheduled-checkin/index.ts`
+---
 
-Dentro do loop por profile (após linha 93, antes de buscar lastCheckin), adicionar a mesma verificação:
+# Seletor de Modelo AI no Admin — Implementado ✅
 
-```typescript
-const sevenDaysFromNow = new Date();
-sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
+## O que foi feito
 
-const { data: upcomingSessions } = await supabase
-  .from('sessions')
-  .select('id')
-  .eq('user_id', profile.user_id)
-  .eq('status', 'scheduled')
-  .gte('scheduled_at', new Date().toISOString())
-  .lte('scheduled_at', sevenDaysFromNow.toISOString())
-  .limit(1);
+1. **Tabela `system_config`**: key/value JSONB com RLS (admin + service_role)
+2. **Página `AdminSettings.tsx`**: rota `/admin/configuracoes` com dropdown dos 4 modelos
+3. **Função `callAI()`** no `aura-agent`: roteamento unificado Gateway vs Anthropic API
+4. **Adaptador Anthropic**: system prompt separado, merge de mensagens consecutivas, max_tokens obrigatório
+5. **Chamada principal** usa modelo configurado no banco; chamadas auxiliares (summary, onboarding, topic) usam `google/gemini-2.5-flash`
+6. **Secret `ANTHROPIC_API_KEY`** configurado
 
-if (upcomingSessions && upcomingSessions.length > 0) {
-  console.log(`📅 Skipping check-in for ${profile.name} - session scheduled in next 7 days`);
-  continue;
-}
-```
+## Modelos disponíveis
 
-## Arquivos afetados
+| Modelo | Via | Uso |
+|---|---|---|
+| `google/gemini-2.5-pro` (default) | Lovable AI Gateway | Chat principal |
+| `google/gemini-2.5-flash` | Lovable AI Gateway | Auxiliares + opção principal |
+| `anthropic/claude-sonnet-4-6` | API Anthropic direta | Chat principal |
+| `openai/gpt-5` | Lovable AI Gateway | Chat principal |
 
-- `supabase/functions/scheduled-followup/index.ts`
-- `supabase/functions/scheduled-checkin/index.ts`
+---
 
-Sem alterações no banco de dados. A tabela `sessions` já tem a coluna `status` e `scheduled_at` necessárias.
+# Insights Proativos 2x/semana + Remoção Check-in Segunda — Implementado ✅
 
+## O que foi feito
+
+1. **Cron `pattern-analysis` atualizado**: de `0 14 * * 4` (quinta) para `0 14 * * 4,6` (quinta + sábado, 11h BRT)
+2. **Filtros de proteção adicionados** no `pattern-analysis/index.ts`:
+   - Sessão ativa (`current_session_id`) → skip
+   - Qualquer mensagem (user ou assistant) nas últimas 2h → skip
+   - `scheduled_tasks` pendente (retorno já combinado) → skip
+3. **Check-in de segunda desativado**: cron `weekly-checkin-monday-8am` removido, entrada removida do `config.toml`
+4. **Limite de 1 insight/7 dias por usuário** mantido via `last_proactive_insight_at`
+
+## Cronograma atualizado
+
+| Dia | Sistema | Função |
+|-----|---------|--------|
+| Quinta 11h BRT | Insight proativo | `pattern-analysis` |
+| Sábado 11h BRT | Insight proativo (2ª chance) | `pattern-analysis` |
+| ~~Segunda 08h~~ | ~~Check-in semanal~~ | ~~Removido~~ |

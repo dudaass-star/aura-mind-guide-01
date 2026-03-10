@@ -63,6 +63,24 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        // Skip if user has a session scheduled in the next 7 days
+        const sevenDaysFromNow = new Date();
+        sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
+
+        const { data: upcomingSessions } = await supabase
+          .from('sessions')
+          .select('id')
+          .eq('user_id', profile.user_id)
+          .eq('status', 'scheduled')
+          .gte('scheduled_at', new Date().toISOString())
+          .lte('scheduled_at', sevenDaysFromNow.toISOString())
+          .limit(1);
+
+        if (upcomingSessions && upcomingSessions.length > 0) {
+          console.log(`📅 Skipping commitment ${commitment.id} - user has session in next 7 days`);
+          continue;
+        }
+
         const name = profile.name?.split(' ')[0] || 'você';
         const dueDate = new Date(commitment.due_date);
         const isOverdue = dueDate < today;
