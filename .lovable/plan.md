@@ -1,91 +1,62 @@
-# Cápsula do Tempo — Implementado ✅
 
-## O que foi feito
 
-1. **Tabela `time_capsules`** + colunas `awaiting_time_capsule` e `pending_capsule_audio_url` no `profiles`
-2. **Intercepção no `webhook-zapi`**: antes do fluxo normal, detecta estado da cápsula e gerencia áudio/confirmação/cancelamento/regravação
-3. **Tag `[CAPSULA_DO_TEMPO]` no `aura-agent`**: quando a Aura propõe e o usuário aceita, a tag ativa o modo de captura
-4. **Instrução no prompt**: ~10 linhas ensinando a Aura quando/como propor a cápsula
-5. **Edge function `deliver-time-capsule`**: cron diário (10h) que entrega cápsulas vencidas via WhatsApp
-6. **Fluxo de confirmação**: o usuário pode regravar quantas vezes quiser antes de confirmar
+# Implementar Meta Conversions API (CAPI) Server-Side
 
----
+## O que é
+A CAPI envia eventos de conversão diretamente do servidor para o Meta, sem depender do navegador. Isso melhora a precisão dos dados (não é bloqueado por ad blockers, iOS 14+, etc.) e complementa o pixel client-side.
 
-# Sistema de Agendamento de Tarefas (Efeito Oráculo) — Implementado ✅
+## Arquitetura
 
-## O que foi feito
+Criar uma edge function `meta-capi` que recebe eventos e os envia para a API do Meta. As edge functions existentes (`start-trial` e `stripe-webhook`) vão chamar essa função para enviar os eventos server-side.
 
-1. **Tabela `scheduled_tasks`**: id, user_id, execute_at, task_type, payload (JSONB), status, created_at, executed_at
-2. **Índice parcial**: `idx_scheduled_tasks_pending` em `execute_at WHERE status = 'pending'` — busca em milissegundos
-3. **Função RPC `claim_pending_tasks`**: `FOR UPDATE SKIP LOCKED` com limite de 150 — atomicidade absoluta contra duplicidade
-4. **RLS**: service_role full access + users can view own
-5. **Tags no prompt do `aura-agent`**:
-   - `[AGENDAR_TAREFA:YYYY-MM-DD HH:mm:tipo:descricao]` — agendar lembretes e meditações
-   - `[CANCELAR_TAREFA:tipo]` — cancela o PRÓXIMO pendente (ORDER BY execute_at ASC)
-6. **Processamento no `aura-agent`**: detecta as tags, cria/cancela tasks no banco, remove tags antes de mostrar ao usuário
-7. **Sanitização no `webhook-zapi`**: remove tags de agendamento que vazem na resposta
-8. **Edge function `execute-scheduled-tasks`**: processa tasks claimed, com delay 300ms anti-burst, handlers por tipo (reminder, meditation, message)
-9. **Safety net**: tasks em `executing` há >10 min são resetadas para `pending`
-10. **Cron `pg_cron`**: `*/5 * * * *` (cada 5 minutos) invocando a edge function
+```text
+[Usuário submete form]
+    ├── Client: fbq('track', 'Lead')        ← já existe
+    └── Server: start-trial → meta-capi     ← novo
+         envia Lead via CAPI
 
-## Tipos de tarefa suportados
+[Stripe webhook: checkout.session.completed]
+    └── Server: stripe-webhook → meta-capi  ← novo
+         envia Purchase via CAPI
+```
 
-| Tipo | Payload | Ação |
-|------|---------|------|
-| `reminder` | `{ "text": "mensagem" }` | Envia texto via WhatsApp |
-| `meditation` | `{ "category": "sono" }` | Invoca `send-meditation` |
-| `message` | `{ "text": "mensagem" }` | Envia texto customizado |
+## Secrets necessários
+Você vai precisar me fornecer:
+1. **META_PIXEL_ID** — `939366085297921` (já temos)
+2. **META_ACCESS_TOKEN** — Token de acesso da API de Conversões (gerado no Meta Events Manager → Configurações → API de Conversões → Gerar Token)
 
-## Fluxo completo
+## Implementação
 
-1. Usuário pede lembrete → Aura inclui `[AGENDAR_TAREFA:...]` na resposta
-2. `aura-agent` detecta a tag → insere na tabela `scheduled_tasks` com payload padronizado
-3. Tag é removida antes de o usuário ver a mensagem
-4. A cada 5 min, `pg_cron` invoca `execute-scheduled-tasks`
-5. Edge function chama `claim_pending_tasks(150)` (atômico, skip locked)
-6. Processa cada task com 300ms de delay → envia via Z-API
-7. Marca como `executed` ou `failed`
+### 1. Nova edge function: `supabase/functions/meta-capi/index.ts`
+- Recebe: `event_name`, `user_data` (email, phone, name), `custom_data` (value, currency), `event_source_url`
+- Faz hash SHA-256 dos dados do usuário (exigido pelo Meta)
+- Envia para `https://graph.facebook.com/v21.0/{PIXEL_ID}/events`
+- Inclui `event_id` para deduplicação com o pixel client-side
 
----
+### 2. Atualizar `supabase/functions/start-trial/index.ts`
+- Após criar o perfil com sucesso, chamar `meta-capi` com evento `Lead`
+- Dados: email (hash), phone (hash), nome
 
-# Seletor de Modelo AI no Admin — Implementado ✅
+### 3. Atualizar `supabase/functions/stripe-webhook/index.ts`
+- No `checkout.session.completed`, chamar `meta-capi` com evento `Purchase`
+- Dados: email, phone, valor, plano
 
-## O que foi feito
+### 4. Deduplicação client-side ↔ server-side
+- Gerar `event_id` único no client e enviar para o servidor
+- Passar o mesmo `event_id` na chamada CAPI para que o Meta deduplicar automaticamente
 
-1. **Tabela `system_config`**: key/value JSONB com RLS (admin + service_role)
-2. **Página `AdminSettings.tsx`**: rota `/admin/configuracoes` com dropdown dos 4 modelos
-3. **Função `callAI()`** no `aura-agent`: roteamento unificado Gateway vs Anthropic API
-4. **Adaptador Anthropic**: system prompt separado, merge de mensagens consecutivas, max_tokens obrigatório
-5. **Chamada principal** usa modelo configurado no banco; chamadas auxiliares (summary, onboarding, topic) usam `google/gemini-2.5-flash`
-6. **Secret `ANTHROPIC_API_KEY`** configurado
+## Arquivos afetados
+- **Novo**: `supabase/functions/meta-capi/index.ts`
+- **Novo**: `supabase/config.toml` — adicionar entrada para `meta-capi`
+- **Editar**: `supabase/functions/start-trial/index.ts` — chamada CAPI após criação do trial
+- **Editar**: `supabase/functions/stripe-webhook/index.ts` — chamada CAPI após checkout
+- **Editar**: `src/pages/StartTrial.tsx` — gerar `event_id` e enviar junto no form
 
-## Modelos disponíveis
+## Próximo passo
+Preciso do **Access Token da API de Conversões** do Meta. Para gerar:
+1. Acesse o [Meta Events Manager](https://business.facebook.com/events_manager2)
+2. Selecione o pixel `939366085297921`
+3. Vá em **Configurações** → **API de Conversões**
+4. Clique em **Gerar token de acesso**
+5. Copie e me envie o token
 
-| Modelo | Via | Uso |
-|---|---|---|
-| `google/gemini-2.5-pro` (default) | Lovable AI Gateway | Chat principal |
-| `google/gemini-2.5-flash` | Lovable AI Gateway | Auxiliares + opção principal |
-| `anthropic/claude-sonnet-4-6` | API Anthropic direta | Chat principal |
-| `openai/gpt-5` | Lovable AI Gateway | Chat principal |
-
----
-
-# Insights Proativos 2x/semana + Remoção Check-in Segunda — Implementado ✅
-
-## O que foi feito
-
-1. **Cron `pattern-analysis` atualizado**: de `0 14 * * 4` (quinta) para `0 14 * * 4,6` (quinta + sábado, 11h BRT)
-2. **Filtros de proteção adicionados** no `pattern-analysis/index.ts`:
-   - Sessão ativa (`current_session_id`) → skip
-   - Qualquer mensagem (user ou assistant) nas últimas 2h → skip
-   - `scheduled_tasks` pendente (retorno já combinado) → skip
-3. **Check-in de segunda desativado**: cron `weekly-checkin-monday-8am` removido, entrada removida do `config.toml`
-4. **Limite de 1 insight/7 dias por usuário** mantido via `last_proactive_insight_at`
-
-## Cronograma atualizado
-
-| Dia | Sistema | Função |
-|-----|---------|--------|
-| Quinta 11h BRT | Insight proativo | `pattern-analysis` |
-| Sábado 11h BRT | Insight proativo (2ª chance) | `pattern-analysis` |
-| ~~Segunda 08h~~ | ~~Check-in semanal~~ | ~~Removido~~ |
