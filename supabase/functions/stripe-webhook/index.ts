@@ -194,6 +194,36 @@ Me diz: como você está hoje?`;
         console.error('❌ Error sending message:', sendError);
       }
 
+      // Send CAPI Purchase event (non-blocking)
+      try {
+        const amountTotal = session.amount_total ? session.amount_total / 100 : 0;
+        await fetch(`${supabaseUrl}/functions/v1/meta-capi`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseServiceKey}`,
+          },
+          body: JSON.stringify({
+            event_name: 'Purchase',
+            event_source_url: 'https://aura-mind-guide-01.lovable.app/checkout',
+            user_data: {
+              email: customerEmail || undefined,
+              phone: formattedPhone,
+              first_name: customerName.split(' ')[0],
+            },
+            custom_data: {
+              value: amountTotal,
+              currency: 'BRL',
+              content_name: `Plano ${planName}`,
+              content_category: customerPlan,
+            },
+          }),
+        });
+        console.log('✅ CAPI Purchase event sent');
+      } catch (capiError) {
+        console.warn('⚠️ CAPI Purchase event failed (non-blocking):', capiError);
+      }
+
       // Create or update profile in database
       try {
         if (!existingProfile) {

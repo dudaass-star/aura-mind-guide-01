@@ -108,6 +108,34 @@ Deno.serve(async (req) => {
 
     console.log('✅ Trial profile created:', profile.id);
 
+    // Send CAPI Lead event (non-blocking)
+    try {
+      await fetch(`${supabaseUrl}/functions/v1/meta-capi`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabaseServiceKey}`,
+        },
+        body: JSON.stringify({
+          event_name: 'Lead',
+          event_id: event_id || undefined,
+          event_source_url: 'https://aura-mind-guide-01.lovable.app/experimentar',
+          user_data: {
+            email: email.trim(),
+            phone: formattedPhone,
+            first_name: name.trim().split(' ')[0],
+          },
+          custom_data: {
+            content_name: 'Trial Start',
+            content_category: 'trial',
+          },
+        }),
+      });
+      console.log('✅ CAPI Lead event sent');
+    } catch (capiError) {
+      console.warn('⚠️ CAPI Lead event failed (non-blocking):', capiError);
+    }
+
     // Obter config da instância alocada para enviar mensagem de boas-vindas
     let zapiConfig = undefined;
     if (instanceId) {
