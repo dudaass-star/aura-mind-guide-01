@@ -9,6 +9,14 @@ const ThankYou = () => {
   const [userData, setUserData] = useState({ name: "", plan: "anual" });
 
   useEffect(() => {
+    // Track Purchase event
+    if (typeof window !== 'undefined' && (window as any).fbq) {
+      (window as any).fbq('track', 'Purchase', {
+        content_name: 'AURA Subscription',
+        currency: 'BRL',
+      });
+    }
+
     // Try to get data from location state first, then localStorage
     if (location.state?.name) {
       setUserData({ name: location.state.name, plan: location.state.plan || "anual" });
