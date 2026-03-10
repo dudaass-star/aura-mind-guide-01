@@ -113,7 +113,7 @@ Deno.serve(async (req) => {
 
       const planName = PLAN_NAMES[customerPlan] || "Essencial";
       const sessionsCount = PLAN_SESSIONS[customerPlan] || 0;
-      const supabase = createClient(supabaseUrl, supabaseServiceKey);
+      
       const cleanPhone = customerPhone.replace(/\D/g, '');
       // Add country code for Brazilian numbers (10-11 digits without prefix)
       const formattedPhone = (cleanPhone.length === 10 || cleanPhone.length === 11)
