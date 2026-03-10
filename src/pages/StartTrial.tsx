@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,15 @@ const StartTrial = () => {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && (window as any).fbq) {
+      (window as any).fbq('track', 'ViewContent', {
+        content_name: 'Trial Page',
+        content_category: 'trial',
+      });
+    }
+  }, []);
 
   const formatPhone = (value: string) => {
     const numbers = value.replace(/\D/g, "");
