@@ -102,3 +102,6 @@ verify_jwt = false
 
 [functions.admin-engagement-metrics]
 verify_jwt = false
+
+[functions.meta-capi]
+verify_jwt = false

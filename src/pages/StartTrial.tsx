@@ -73,9 +73,12 @@ const StartTrial = () => {
 
     setIsLoading(true);
 
+    // Generate event_id for deduplication between client pixel and server CAPI
+    const eventId = crypto.randomUUID();
+
     try {
       const { data, error } = await supabase.functions.invoke("start-trial", {
-        body: { name: name.trim(), email: email.trim(), phone: cleanPhone },
+        body: { name: name.trim(), email: email.trim(), phone: cleanPhone, event_id: eventId },
       });
 
       if (error) throw error;
@@ -90,12 +93,12 @@ const StartTrial = () => {
         return;
       }
 
-      // Track Lead event
+      // Track Lead event with event_id for deduplication
       if (typeof window !== 'undefined' && (window as any).fbq) {
         (window as any).fbq('track', 'Lead', {
           content_name: 'Trial Start',
           content_category: 'trial',
-        });
+        }, { eventID: eventId });
       }
 
       // Salvar no localStorage para a página de confirmação
