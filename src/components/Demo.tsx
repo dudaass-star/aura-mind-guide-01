@@ -236,8 +236,8 @@ const Demo = () => {
     const isAuraMessage = nextMessage.sender === "aura";
     const isFirstInSequence = nextMessage.isFirstInSequence === true;
     
-    let typingTimeout: NodeJS.Timeout;
-    let messageTimeout: NodeJS.Timeout;
+    let typingTimeout: ReturnType<typeof setTimeout>;
+    let messageTimeout: ReturnType<typeof setTimeout>;
     
     if (isAuraMessage) {
       if (isFirstInSequence) {
