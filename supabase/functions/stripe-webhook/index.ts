@@ -441,7 +441,7 @@ Me conta: como você está hoje?`;
         }
 
         // Update profile status back to active
-        const supabase = createClient(supabaseUrl, supabaseServiceKey);
+        
         const cleanPhone = customerPhone.replace(/\D/g, '');
 
         const { error: updateError } = await supabase
