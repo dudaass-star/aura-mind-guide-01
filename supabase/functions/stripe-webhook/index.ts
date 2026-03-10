@@ -66,6 +66,21 @@ Deno.serve(async (req) => {
 
     console.log(`📩 Received event: ${event.type}`);
 
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Idempotency check — prevent duplicate processing on Stripe retries
+    const { error: dedupError } = await supabase
+      .from('stripe_webhook_events')
+      .insert({ id: event.id, event_type: event.type });
+
+    if (dedupError?.code === '23505') {
+      console.log(`⚠️ Event ${event.id} already processed, skipping`);
+      return new Response(JSON.stringify({ received: true, duplicate: true }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // Process checkout.session.completed
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object as Stripe.Checkout.Session;
@@ -98,7 +113,7 @@ Deno.serve(async (req) => {
 
       const planName = PLAN_NAMES[customerPlan] || "Essencial";
       const sessionsCount = PLAN_SESSIONS[customerPlan] || 0;
-      const supabase = createClient(supabaseUrl, supabaseServiceKey);
+      
       const cleanPhone = customerPhone.replace(/\D/g, '');
       // Add country code for Brazilian numbers (10-11 digits without prefix)
       const formattedPhone = (cleanPhone.length === 10 || cleanPhone.length === 11)
@@ -343,7 +358,7 @@ Cuide-se. 🌟`;
         }
 
         // Update profile status
-        const supabase = createClient(supabaseUrl, supabaseServiceKey);
+        
         const cleanPhone = customerPhone.replace(/\D/g, '');
 
         const { error: updateError } = await supabase
@@ -426,7 +441,7 @@ Me conta: como você está hoje?`;
         }
 
         // Update profile status back to active
-        const supabase = createClient(supabaseUrl, supabaseServiceKey);
+        
         const cleanPhone = customerPhone.replace(/\D/g, '');
 
         const { error: updateError } = await supabase
