@@ -73,9 +73,12 @@ const StartTrial = () => {
 
     setIsLoading(true);
 
+    // Generate event_id for deduplication between client pixel and server CAPI
+    const eventId = crypto.randomUUID();
+
     try {
       const { data, error } = await supabase.functions.invoke("start-trial", {
-        body: { name: name.trim(), email: email.trim(), phone: cleanPhone },
+        body: { name: name.trim(), email: email.trim(), phone: cleanPhone, event_id: eventId },
       });
 
       if (error) throw error;
