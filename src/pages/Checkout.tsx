@@ -72,6 +72,12 @@ const Checkout = () => {
   const [email, setEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
+  useEffect(() => {
+    if (typeof window !== 'undefined' && (window as any).fbq) {
+      (window as any).fbq('track', 'InitiateCheckout');
+    }
+  }, []);
+
   const currentPlan = plans[selectedPlan];
   const currentPrice = billingPeriod === "monthly" ? currentPlan.monthlyPrice : currentPlan.yearlyPrice;
   const periodLabel = billingPeriod === "monthly" ? "mês" : "ano";
