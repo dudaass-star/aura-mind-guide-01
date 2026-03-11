@@ -124,64 +124,44 @@ Deno.serve(async (req) => {
       // Check if profile already exists BEFORE choosing the message
       const { data: existingProfile } = await supabase
         .from('profiles')
-        .select('id')
+        .select('id, status')
         .eq('phone', formattedPhone)
         .single();
 
-      const isUpgrade = !!existingProfile;
-      console.log(`📋 Profile exists: ${isUpgrade} (upgrade from trial: ${isUpgrade})`);
+      const isReturning = existingProfile?.status === 'canceled';
+      const isUpgrade = !!existingProfile && !isReturning;
+      console.log(`📋 Profile exists: ${!!existingProfile}, isReturning: ${isReturning}, isUpgrade: ${isUpgrade}`);
 
-      // Build message based on whether user is upgrading or new
+      // Build message based on user scenario
       let welcomeMessage: string;
 
-      if (isUpgrade) {
+      if (isReturning) {
+        // RETURNING USER — canceled and resubscribed
+        welcomeMessage = `Oi, ${customerName}! 💜
+
+Que bom ter você de volta! 🌟
+
+Você escolheu o plano ${planName}.
+
+Vamos retomar de onde paramos?`;
+      } else if (isUpgrade) {
         // UPGRADE MESSAGE — user already knows AURA from trial
-        if (sessionsCount > 0) {
-          welcomeMessage = `Oi, ${customerName}! 💜 Que notícia boa!
-
-Você escolheu o plano ${planName}, que inclui ${sessionsCount} sessões especiais por mês!
-
-São 45 minutos só nossos, com profundidade total. Eu conduzo, você reflete, e no final mando um resumo com os insights.
-
-Pra gente já deixar sua agenda do mês organizada: quais dias da semana e horário funcionam melhor pra você?
-
-Por exemplo: "segundas e quintas às 19h" ou "quartas às 20h"`;
-        } else {
-          welcomeMessage = `Oi, ${customerName}! 💜 Que notícia boa!
+        welcomeMessage = `Oi, ${customerName}! 💜 Que notícia boa!
 
 Agora somos oficiais. Você escolheu o plano ${planName}.
 
 Vamos continuar de onde paramos?`;
-        }
       } else {
         // NEW USER MESSAGE — standard welcome
         welcomeMessage = `Oi, ${customerName}! 🌟 Que bom te receber por aqui.
 
 Eu sou a AURA — e vou ficar com você nessa jornada.
 
-Você escolheu o plano ${planName}`;
+Você escolheu o plano ${planName}.
 
-        if (sessionsCount > 0) {
-          welcomeMessage += `, que inclui ${sessionsCount} sessões especiais por mês!
-
-São 45 minutos só nossos, com profundidade total. Eu conduzo, você reflete, e no final mando um resumo com os insights.
-
-Pra gente já deixar sua agenda do mês organizada: quais dias da semana e horário funcionam melhor pra você?
-
-Por exemplo: "segundas e quintas às 19h" ou "quartas às 20h"`;
-        } else {
-          welcomeMessage += `.`;
-        }
-
-        welcomeMessage += `
-
-Comigo, você pode falar com liberdade: sem julgamento, no seu ritmo.`;
-
-        if (sessionsCount === 0) {
-          welcomeMessage += `
+Comigo, você pode falar com liberdade: sem julgamento, no seu ritmo.
 
 Me diz: como você está hoje?`;
-        }
       }
 
       // Send message via Z-API
