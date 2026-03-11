@@ -1,91 +1,69 @@
-# Cápsula do Tempo — Implementado ✅
 
-## O que foi feito
 
-1. **Tabela `time_capsules`** + colunas `awaiting_time_capsule` e `pending_capsule_audio_url` no `profiles`
-2. **Intercepção no `webhook-zapi`**: antes do fluxo normal, detecta estado da cápsula e gerencia áudio/confirmação/cancelamento/regravação
-3. **Tag `[CAPSULA_DO_TEMPO]` no `aura-agent`**: quando a Aura propõe e o usuário aceita, a tag ativa o modo de captura
-4. **Instrução no prompt**: ~10 linhas ensinando a Aura quando/como propor a cápsula
-5. **Edge function `deliver-time-capsule`**: cron diário (10h) que entrega cápsulas vencidas via WhatsApp
-6. **Fluxo de confirmação**: o usuário pode regravar quantas vezes quiser antes de confirmar
+# Diferenciar retornantes + remover menção a sessões das mensagens do webhook
 
----
+## Contexto
 
-# Sistema de Agendamento de Tarefas (Efeito Oráculo) — Implementado ✅
+O usuário pediu duas coisas:
+1. Diferenciar mensagem para quem **cancelou e reassinou** (retornante) vs upgrade de trial
+2. **Remover toda menção a sessões** das mensagens do webhook — a AURA já cuida disso automaticamente
 
-## O que foi feito
+## Alterações no `supabase/functions/stripe-webhook/index.ts`
 
-1. **Tabela `scheduled_tasks`**: id, user_id, execute_at, task_type, payload (JSONB), status, created_at, executed_at
-2. **Índice parcial**: `idx_scheduled_tasks_pending` em `execute_at WHERE status = 'pending'` — busca em milissegundos
-3. **Função RPC `claim_pending_tasks`**: `FOR UPDATE SKIP LOCKED` com limite de 150 — atomicidade absoluta contra duplicidade
-4. **RLS**: service_role full access + users can view own
-5. **Tags no prompt do `aura-agent`**:
-   - `[AGENDAR_TAREFA:YYYY-MM-DD HH:mm:tipo:descricao]` — agendar lembretes e meditações
-   - `[CANCELAR_TAREFA:tipo]` — cancela o PRÓXIMO pendente (ORDER BY execute_at ASC)
-6. **Processamento no `aura-agent`**: detecta as tags, cria/cancela tasks no banco, remove tags antes de mostrar ao usuário
-7. **Sanitização no `webhook-zapi`**: remove tags de agendamento que vazem na resposta
-8. **Edge function `execute-scheduled-tasks`**: processa tasks claimed, com delay 300ms anti-burst, handlers por tipo (reminder, meditation, message)
-9. **Safety net**: tasks em `executing` há >10 min são resetadas para `pending`
-10. **Cron `pg_cron`**: `*/5 * * * *` (cada 5 minutos) invocando a edge function
+### 1. Query do perfil — trazer `status`
 
-## Tipos de tarefa suportados
+```typescript
+const { data: existingProfile } = await supabase
+  .from('profiles')
+  .select('id, status')
+  .eq('phone', formattedPhone)
+  .single();
 
-| Tipo | Payload | Ação |
-|------|---------|------|
-| `reminder` | `{ "text": "mensagem" }` | Envia texto via WhatsApp |
-| `meditation` | `{ "category": "sono" }` | Invoca `send-meditation` |
-| `message` | `{ "text": "mensagem" }` | Envia texto customizado |
+const isReturning = existingProfile?.status === 'canceled';
+const isUpgrade = !!existingProfile && !isReturning;
+```
 
-## Fluxo completo
+### 2. Três branches de mensagem (sem menção a sessões em nenhum)
 
-1. Usuário pede lembrete → Aura inclui `[AGENDAR_TAREFA:...]` na resposta
-2. `aura-agent` detecta a tag → insere na tabela `scheduled_tasks` com payload padronizado
-3. Tag é removida antes de o usuário ver a mensagem
-4. A cada 5 min, `pg_cron` invoca `execute-scheduled-tasks`
-5. Edge function chama `claim_pending_tasks(150)` (atômico, skip locked)
-6. Processa cada task com 300ms de delay → envia via Z-API
-7. Marca como `executed` ou `failed`
-
----
-
-# Seletor de Modelo AI no Admin — Implementado ✅
-
-## O que foi feito
-
-1. **Tabela `system_config`**: key/value JSONB com RLS (admin + service_role)
-2. **Página `AdminSettings.tsx`**: rota `/admin/configuracoes` com dropdown dos 4 modelos
-3. **Função `callAI()`** no `aura-agent`: roteamento unificado Gateway vs Anthropic API
-4. **Adaptador Anthropic**: system prompt separado, merge de mensagens consecutivas, max_tokens obrigatório
-5. **Chamada principal** usa modelo configurado no banco; chamadas auxiliares (summary, onboarding, topic) usam `google/gemini-2.5-flash`
-6. **Secret `ANTHROPIC_API_KEY`** configurado
-
-## Modelos disponíveis
-
-| Modelo | Via | Uso |
+| Cenário | Condição | Mensagem |
 |---|---|---|
-| `google/gemini-2.5-pro` (default) | Lovable AI Gateway | Chat principal |
-| `google/gemini-2.5-flash` | Lovable AI Gateway | Auxiliares + opção principal |
-| `anthropic/claude-sonnet-4-6` | API Anthropic direta | Chat principal |
-| `openai/gpt-5` | Lovable AI Gateway | Chat principal |
+| **Retornante** | `isReturning` | "Que bom ter você de volta! Vamos retomar de onde paramos?" |
+| **Upgrade (trial→pago)** | `isUpgrade` | "Agora somos oficiais. Vamos continuar de onde paramos?" |
+| **Novo usuário** | `else` | Boas-vindas + "Como você está hoje?" |
 
----
+```typescript
+if (isReturning) {
+  welcomeMessage = `Oi, ${customerName}! 💜
 
-# Insights Proativos 2x/semana + Remoção Check-in Segunda — Implementado ✅
+Que bom ter você de volta! 🌟
 
-## O que foi feito
+Você escolheu o plano ${planName}.
 
-1. **Cron `pattern-analysis` atualizado**: de `0 14 * * 4` (quinta) para `0 14 * * 4,6` (quinta + sábado, 11h BRT)
-2. **Filtros de proteção adicionados** no `pattern-analysis/index.ts`:
-   - Sessão ativa (`current_session_id`) → skip
-   - Qualquer mensagem (user ou assistant) nas últimas 2h → skip
-   - `scheduled_tasks` pendente (retorno já combinado) → skip
-3. **Check-in de segunda desativado**: cron `weekly-checkin-monday-8am` removido, entrada removida do `config.toml`
-4. **Limite de 1 insight/7 dias por usuário** mantido via `last_proactive_insight_at`
+Vamos retomar de onde paramos?`;
+} else if (isUpgrade) {
+  welcomeMessage = `Oi, ${customerName}! 💜 Que notícia boa!
 
-## Cronograma atualizado
+Agora somos oficiais. Você escolheu o plano ${planName}.
 
-| Dia | Sistema | Função |
-|-----|---------|--------|
-| Quinta 11h BRT | Insight proativo | `pattern-analysis` |
-| Sábado 11h BRT | Insight proativo (2ª chance) | `pattern-analysis` |
-| ~~Segunda 08h~~ | ~~Check-in semanal~~ | ~~Removido~~ |
+Vamos continuar de onde paramos?`;
+} else {
+  welcomeMessage = `Oi, ${customerName}! 🌟 Que bom te receber por aqui.
+
+Eu sou a AURA — e vou ficar com você nessa jornada.
+
+Você escolheu o plano ${planName}.
+
+Comigo, você pode falar com liberdade: sem julgamento, no seu ritmo.
+
+Me diz: como você está hoje?`;
+}
+```
+
+Toda a lógica de `sessionsCount` e `if (sessionsCount > 0)` é removida das mensagens. As constantes `PLAN_SESSIONS` continuam existindo pois são usadas no `needs_schedule_setup` do perfil.
+
+## Arquivo afetado
+
+- `supabase/functions/stripe-webhook/index.ts`
+
+Sem alterações no banco de dados.
+
