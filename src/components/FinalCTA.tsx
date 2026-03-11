@@ -14,8 +14,14 @@ const FinalCTA = () => {
             <span className="text-gradient-sage">E pode ter isso agora.</span>
           </h2>
           
-          <p className="font-body text-lg md:text-xl text-muted-foreground mb-8 leading-relaxed">
+          <p className="font-body text-lg md:text-xl text-muted-foreground mb-6 leading-relaxed">
             5 conversas grátis + conteúdo semanal. Sem cartão. Sem compromisso.
+          </p>
+
+          <p className="font-body text-base text-muted-foreground/80 mb-8 leading-relaxed italic max-w-2xl mx-auto">
+            Você pode continuar tentando resolver tudo sozinho, remoendo os mesmos pensamentos amanhã. 
+            Ou pode dar 5 minutos de atenção para si mesmo agora. É grátis, não pede cartão e, no mínimo, 
+            você vai dormir sabendo que alguém realmente te ouviu hoje.
           </p>
 
           <Link to="/experimentar">
