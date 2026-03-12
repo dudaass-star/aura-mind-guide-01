@@ -732,9 +732,10 @@ Se quiser remarcar uma nova sessão, é só me dizer!`;
 
     // ========================================================================
     // LEMBRETE PÓS-SESSÃO (fallback: 5 minutos após término se não foi enviado pelo aura-agent)
+    // Skip during quiet hours - will be processed next run
     // ========================================================================
     const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
-    const { data: completedSessions, error: errorCompleted } = await supabase
+    const { data: completedSessions, error: errorCompleted } = isQuietHours ? { data: null, error: null } : await supabase
       .from('sessions')
       .select(`id, user_id, session_summary, commitments, key_insights, ended_at`)
       .eq('status', 'completed')
