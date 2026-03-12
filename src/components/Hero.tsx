@@ -98,7 +98,7 @@ const Hero = () => {
 
           {/* Simplified headline */}
           <h1 className="font-display text-2xl md:text-3xl lg:text-4xl font-bold leading-tight mb-4 animate-fade-up opacity-0 delay-100">
-            <span className="text-gradient-sage">Acompanhamento emocional acessível.</span>
+            <span className="text-gradient-sage">Cuidar da sua mente não deveria ser um luxo</span>
           </h1>
 
           {/* Subheadline */}
