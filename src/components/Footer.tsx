@@ -23,8 +23,8 @@ const Footer = () => {
             <Link to="/cancelar" className="hover:text-foreground transition-colors">
               Cancelar Assinatura
             </Link>
-            <a href="mailto:suporte@aura.app" className="hover:text-foreground transition-colors">
-              Suporte
+            <a href="mailto:suporte@olaaura.com.br" className="hover:text-foreground transition-colors">
+              suporte@olaaura.com.br
             </a>
           </nav>
         </div>
