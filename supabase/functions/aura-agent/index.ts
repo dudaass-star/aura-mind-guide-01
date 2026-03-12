@@ -3600,6 +3600,17 @@ REGRA: ${behaviorInstruction}`;
 
       dynamicContext += phaseBlock;
       console.log(`⏱️ Session phase reinforcement: ${phaseInfo.phase}, ${elapsed}min elapsed, ${phaseInfo.timeRemaining}min remaining`);
+      
+      // Se a sessão foi PAUSADA anteriormente, adicionar contexto de retomada
+      if (currentSession.session_summary && currentSession.session_summary.startsWith('[PAUSADA]')) {
+        const pauseContext = currentSession.session_summary.replace('[PAUSADA] ', '');
+        dynamicContext += `\n\n⏸️➡️ RETOMADA DE SESSÃO PAUSADA:
+O usuário precisou sair na última vez e está voltando agora. Contexto de onde pararam:
+"${pauseContext}"
+
+INSTRUÇÃO: Retome de onde pararam naturalmente. Diga algo como "Que bom que voltou! Da última vez estávamos falando sobre..." e continue a partir daquele ponto. NÃO comece do zero.`;
+        console.log('⏸️ Loaded pause context for session resume');
+      }
     }
 
     // ========================================================================
