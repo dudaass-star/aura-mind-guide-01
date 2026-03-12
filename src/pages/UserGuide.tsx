@@ -49,7 +49,7 @@ const UserGuide = () => {
             <img
 
               alt="AURA"
-              className="mx-auto mb-6 h-16 w-16 rounded-2xl" src="/lovable-uploads/e1e511ac-b1eb-4e1b-ad14-f4af1c3a3b48.jpg" />
+              className="mx-auto mb-6 h-24 w-24 rounded-2xl" src="/lovable-uploads/e1e511ac-b1eb-4e1b-ad14-f4af1c3a3b48.jpg" />
             
             <h1 className="font-display text-3xl md:text-5xl font-bold text-foreground mb-4">
               Seu Guia da <span className="text-primary">AURA</span>
