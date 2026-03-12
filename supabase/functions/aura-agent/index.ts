@@ -3814,15 +3814,17 @@ Exemplo com 4 sessões:
       const earlyPhases = ['opening', 'exploration', 'reframe', 'development'];
       
       if (earlyPhases.includes(currentPhase)) {
-        // Block [ENCERRAR_SESSAO] in early phases
+        // Block [ENCERRAR_SESSAO] in early phases AND reset shouldEndSession
         if (assistantMessage.includes('[ENCERRAR_SESSAO]')) {
           console.warn(`🚫 Blocked premature session closure at phase: ${currentPhase} (timeRemaining: ${currentPhaseInfo.timeRemaining}min)`);
           assistantMessage = assistantMessage.replace(/\[ENCERRAR_SESSAO\]/gi, '');
+          shouldEndSession = false; // RESET — sessão NÃO deve encerrar em fase early
         }
         // Block [CONVERSA_CONCLUIDA] in early phases (Camada 3 - part 1)
         if (assistantMessage.includes('[CONVERSA_CONCLUIDA]')) {
           console.warn(`🚫 Blocked [CONVERSA_CONCLUIDA] during active session at phase: ${currentPhase}`);
           assistantMessage = assistantMessage.replace(/\[CONVERSA_CONCLUIDA\]/gi, '[AGUARDANDO_RESPOSTA]');
+          shouldEndSession = false; // RESET
         }
       } else {
         // In closing phases (transition, soft_closing, final_closing, overtime):
