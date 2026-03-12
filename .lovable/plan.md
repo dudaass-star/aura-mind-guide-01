@@ -105,3 +105,31 @@ A função `schedule-setup-reminder` rodava `0 */6 * * *` UTC (21h, 03h, 09h, 15
 | Quinta 11h BRT | Insight proativo | `pattern-analysis` |
 | Sábado 11h BRT | Insight proativo (2ª chance) | `pattern-analysis` |
 | ~~Segunda 08h~~ | ~~Check-in semanal~~ | ~~Removido~~ |
+
+---
+
+# Auditoria Quiet Hours (8h-22h BRT) em todas as Edge Functions — Implementado ✅
+
+## O que foi feito
+
+Guardrail de quiet hours (8h-22h BRT) adicionado em **7 edge functions** que enviavam mensagens sem restrição de horário:
+
+| Function | Tipo de guardrail |
+|---|---|
+| `periodic-content` | Skip total em quiet hours |
+| `weekly-report` | Skip total (defensivo) |
+| `scheduled-followup` | Skip total em quiet hours |
+| `scheduled-checkin` | Skip total em quiet hours |
+| `reactivation-check` | Skip total em quiet hours |
+| `deliver-time-capsule` | Skip total (entrega na próxima execução diurna) |
+| `session-reminder` | **Seletivo**: blocos 24h, post-sessão, missed e abandoned skipados; 1h, 15m, start e 10m continuam 24/7 (time-sensitive) |
+
+## Functions já seguras (não alteradas)
+
+| Function | Motivo |
+|---|---|
+| `conversation-followup` | Já tinha quiet hours |
+| `pattern-analysis` | Já tinha quiet hours |
+| `schedule-setup-reminder` | Corrigido na rodada anterior |
+| `send-meditation` | Sob demanda (via aura-agent) |
+| `cleanup-inactive-users` | Não envia mensagens |
