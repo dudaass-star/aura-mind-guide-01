@@ -481,9 +481,9 @@ Você está pronta(o) pra começar? Me responde um "vamos" ou "bora" quando quis
         const scheduledTime = new Date(session.scheduled_at);
         const minutesSinceScheduled = (now.getTime() - scheduledTime.getTime()) / 60000;
         
-        // Se já passaram 10 minutos e sessão não iniciou, enviar lembrete gentil
-        // Mas só entre 10 e 15 minutos para não enviar duplicado
-        if (minutesSinceScheduled >= 10 && minutesSinceScheduled < 15) {
+        // Se já passaram 15 minutos e sessão não iniciou, enviar lembrete gentil
+        // Mas só entre 15 e 25 minutos para não enviar duplicado (era 10-15)
+        if (minutesSinceScheduled >= 15 && minutesSinceScheduled < 25) {
           const { data: profile } = await supabase
             .from('profiles')
             .select('name, phone, whatsapp_instance_id')
@@ -491,6 +491,22 @@ Você está pronta(o) pra começar? Me responde um "vamos" ou "bora" quando quis
             .maybeSingle();
           
           if (!profile?.phone) continue;
+          
+          // NOVO: Verificar se o usuário mandou mensagem recente (pode estar conversando/avisou que vai demorar)
+          const { data: recentUserMsg } = await supabase
+            .from('messages')
+            .select('created_at')
+            .eq('user_id', session.user_id)
+            .eq('role', 'user')
+            .gte('created_at', scheduledTime.toISOString())
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          
+          if (recentUserMsg) {
+            console.log(`⏭️ Skipping 10min reminder for session ${session.id}: user sent message after session notification`);
+            continue;
+          }
           
           const userName = profile.name || 'você';
           // MENSAGEM MAIS CLARA: Reforça que precisa de resposta para iniciar
