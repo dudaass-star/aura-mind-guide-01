@@ -2706,6 +2706,7 @@ serve(async (req) => {
     let currentSession = null;
     let sessionTimeContext = '';
     let shouldEndSession = false;
+    let shouldPauseSession = false;
     let shouldStartSession = false;
 
     // LOG DETALHADO: Estado inicial de detecção de sessão
