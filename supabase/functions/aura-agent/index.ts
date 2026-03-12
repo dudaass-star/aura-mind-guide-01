@@ -3796,8 +3796,23 @@ INSTRUÇÃO: Faça um fechamento CALOROSO da sessão:
     
     if (normalizedResponse === normalizedUserMsg || 
         (normalizedUserMsg.length > 10 && normalizedResponse.startsWith(normalizedUserMsg))) {
-      console.error('🚫 ANTI-ECHO: AI response is identical to user message! Replacing with fallback.');
-      assistantMessage = 'Me conta mais sobre isso... 💜';
+      console.warn('🚫 ANTI-ECHO: resposta idêntica detectada, re-gerando...');
+      
+      const retryMessages = [...messagesForAI];
+      retryMessages.push({ role: 'assistant', content: assistantMessage });
+      retryMessages.push({ role: 'user', content: 
+        '[SISTEMA: Sua resposta anterior repetiu o que o usuário disse. Gere uma resposta COMPLETAMENTE DIFERENTE. Reaja com suas próprias palavras, faça uma pergunta ou traga uma observação nova.]' 
+      });
+      
+      try {
+        const retryResponse = await callAI(retryMessages, systemPrompt, activeModel);
+        if (retryResponse) {
+          assistantMessage = retryResponse;
+          console.log('✅ ANTI-ECHO: retry bem-sucedido');
+        }
+      } catch (retryErr) {
+        console.error('⚠️ ANTI-ECHO: retry falhou, mantendo resposta original', retryErr);
+      }
     }
 
     console.log("AURA raw response:", assistantMessage.substring(0, 200));
