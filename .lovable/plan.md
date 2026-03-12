@@ -11,6 +11,22 @@
 
 ---
 
+# Fix Schedule Setup Reminder (mensagens às 3h da manhã) — Implementado ✅
+
+## Problema
+A função `schedule-setup-reminder` rodava `0 */6 * * *` UTC (21h, 03h, 09h, 15h BRT), sem trava de horário silencioso, sem deduplicação e sem logging em `messages`.
+
+## O que foi feito
+
+1. **Quiet hours**: guardrail no código — skip se BRT < 8h ou >= 22h
+2. **Cron ajustado**: de `0 */6 * * *` para `0 13 * * *` (10h BRT, 1x/dia)
+3. **Deduplicação por estágio**: colunas `schedule_reminder_first_sent_at` e `schedule_reminder_urgent_sent_at` em `profiles` — cada lembrete enviado no máximo 1x por ciclo
+4. **Safety filters**: skip se DND ativo, sessão ativa, interação recente (<2h), ou tarefa pendente
+5. **Observabilidade**: mensagens enviadas agora são logadas na tabela `messages`
+6. **Reset mensal**: `monthly-schedule-renewal` reseta os marcadores de dedup no início de cada mês
+
+---
+
 # Sistema de Agendamento de Tarefas (Efeito Oráculo) — Implementado ✅
 
 ## O que foi feito
