@@ -1,58 +1,107 @@
+# Cápsula do Tempo — Implementado ✅
 
-Diagnóstico confirmado: sim, o print bate exatamente com um fluxo automático do backend.
+## O que foi feito
 
-1) O que aconteceu (causa raiz)
-- A mensagem do print é gerada pela função `schedule-setup-reminder` (texto idêntico no código).
-- Essa função está agendada no cron como `0 */6 * * *` (UTC), ou seja, em horário de Brasília ela roda em:
-```text
-21:00, 03:00, 09:00, 15:00
-```
-- Isso explica o padrão do print (21h → 03h → 09h).
-- Ela também não tem trava de horário silencioso (22h–7h/8h), então 03h passa normalmente.
-- E não existe controle de “já enviei esse lembrete para esse estágio”, então o mesmo usuário pode receber repetido enquanto continuar elegível.
+1. **Tabela `time_capsules`** + colunas `awaiting_time_capsule` e `pending_capsule_audio_url` no `profiles`
+2. **Intercepção no `webhook-zapi`**: antes do fluxo normal, detecta estado da cápsula e gerencia áudio/confirmação/cancelamento/regravação
+3. **Tag `[CAPSULA_DO_TEMPO]` no `aura-agent`**: quando a Aura propõe e o usuário aceita, a tag ativa o modo de captura
+4. **Instrução no prompt**: ~10 linhas ensinando a Aura quando/como propor a cápsula
+5. **Edge function `deliver-time-capsule`**: cron diário (10h) que entrega cápsulas vencidas via WhatsApp
+6. **Fluxo de confirmação**: o usuário pode regravar quantas vezes quiser antes de confirmar
 
-2) Por que nas análises anteriores “não aparecia”
-- Essa função envia no WhatsApp, mas não grava essas saídas na tabela `messages`.
-- Então consulta só em histórico de mensagens não capturava esse tipo de disparo.
+---
 
-3) Plano de correção (implementação)
-- Passo 1 (contenção imediata):
-  - Pausar temporariamente o job `schedule-setup-reminder` para interromper disparos enquanto aplicamos correção.
-- Passo 2 (corrigir horário):
-  - Trocar cron de `0 */6 * * *` para um horário comercial em Brasília (proposta padrão: 1x/dia às 10h BRT).
-  - Adicionar guardrail no código: não enviar entre 22h e 7h/8h BRT, mesmo que o cron seja alterado incorretamente no futuro.
-- Passo 3 (eliminar duplicidade):
-  - Adicionar rastreio de envio por estágio (primeiro lembrete e urgente) no perfil do usuário.
-  - Enviar cada estágio no máximo uma vez por ciclo mensal.
-  - Resetar esses campos quando iniciar novo ciclo mensal.
-- Passo 4 (proteger experiência):
-  - Antes de enviar lembrete, bloquear envio se houver:
-    - DND ativo,
-    - sessão ativa,
-    - interação recente,
-    - tarefa pendente já combinada com usuário.
-- Passo 5 (observabilidade):
-  - Registrar esses envios automáticos no histórico interno (`messages`) para auditoria futura.
+# Fix Schedule Setup Reminder (mensagens às 3h da manhã) — Implementado ✅
 
-4) Detalhes técnicos (arquivos/itens a alterar)
-- `supabase/functions/schedule-setup-reminder/index.ts`
-  - adicionar quiet hours BRT
-  - adicionar deduplicação por estágio
-  - adicionar filtros de segurança (sessão ativa/interação recente/tarefa pendente)
-  - inserir log em `messages`
-- `supabase/functions/monthly-schedule-renewal/index.ts`
-  - reset dos marcadores de lembrete no início do mês
-- `supabase/functions/stripe-webhook/index.ts` (quando reativar necessidade de agendamento)
-  - reset dos marcadores para novo ciclo
-- Banco (migration)
-  - novas colunas de controle de lembrete por estágio em `profiles`
-- Cron (SQL operacional)
-  - ajustar `schedule` do job `schedule-setup-reminder` para janela diurna BRT
+## Problema
+A função `schedule-setup-reminder` rodava `0 */6 * * *` UTC (21h, 03h, 09h, 15h BRT), sem trava de horário silencioso, sem deduplicação e sem logging em `messages`.
 
-5) Validação após correção
-- Verificar cron atualizado.
-- Rodar a função em modo de teste e confirmar:
-  - 03h BRT => “skipped quiet_hours”
-  - usuário elegível recebe no máximo 1 lembrete por estágio
-  - envio passa a aparecer em histórico auditável
-- Auditoria de 7/30 dias para confirmar zero automações entre 22h e 7h.
+## O que foi feito
+
+1. **Quiet hours**: guardrail no código — skip se BRT < 8h ou >= 22h
+2. **Cron ajustado**: de `0 */6 * * *` para `0 13 * * *` (10h BRT, 1x/dia)
+3. **Deduplicação por estágio**: colunas `schedule_reminder_first_sent_at` e `schedule_reminder_urgent_sent_at` em `profiles` — cada lembrete enviado no máximo 1x por ciclo
+4. **Safety filters**: skip se DND ativo, sessão ativa, interação recente (<2h), ou tarefa pendente
+5. **Observabilidade**: mensagens enviadas agora são logadas na tabela `messages`
+6. **Reset mensal**: `monthly-schedule-renewal` reseta os marcadores de dedup no início de cada mês
+
+---
+
+# Sistema de Agendamento de Tarefas (Efeito Oráculo) — Implementado ✅
+
+## O que foi feito
+
+1. **Tabela `scheduled_tasks`**: id, user_id, execute_at, task_type, payload (JSONB), status, created_at, executed_at
+2. **Índice parcial**: `idx_scheduled_tasks_pending` em `execute_at WHERE status = 'pending'` — busca em milissegundos
+3. **Função RPC `claim_pending_tasks`**: `FOR UPDATE SKIP LOCKED` com limite de 150 — atomicidade absoluta contra duplicidade
+4. **RLS**: service_role full access + users can view own
+5. **Tags no prompt do `aura-agent`**:
+   - `[AGENDAR_TAREFA:YYYY-MM-DD HH:mm:tipo:descricao]` — agendar lembretes e meditações
+   - `[CANCELAR_TAREFA:tipo]` — cancela o PRÓXIMO pendente (ORDER BY execute_at ASC)
+6. **Processamento no `aura-agent`**: detecta as tags, cria/cancela tasks no banco, remove tags antes de mostrar ao usuário
+7. **Sanitização no `webhook-zapi`**: remove tags de agendamento que vazem na resposta
+8. **Edge function `execute-scheduled-tasks`**: processa tasks claimed, com delay 300ms anti-burst, handlers por tipo (reminder, meditation, message)
+9. **Safety net**: tasks em `executing` há >10 min são resetadas para `pending`
+10. **Cron `pg_cron`**: `*/5 * * * *` (cada 5 minutos) invocando a edge function
+
+## Tipos de tarefa suportados
+
+| Tipo | Payload | Ação |
+|------|---------|------|
+| `reminder` | `{ "text": "mensagem" }` | Envia texto via WhatsApp |
+| `meditation` | `{ "category": "sono" }` | Invoca `send-meditation` |
+| `message` | `{ "text": "mensagem" }` | Envia texto customizado |
+
+## Fluxo completo
+
+1. Usuário pede lembrete → Aura inclui `[AGENDAR_TAREFA:...]` na resposta
+2. `aura-agent` detecta a tag → insere na tabela `scheduled_tasks` com payload padronizado
+3. Tag é removida antes de o usuário ver a mensagem
+4. A cada 5 min, `pg_cron` invoca `execute-scheduled-tasks`
+5. Edge function chama `claim_pending_tasks(150)` (atômico, skip locked)
+6. Processa cada task com 300ms de delay → envia via Z-API
+7. Marca como `executed` ou `failed`
+
+---
+
+# Seletor de Modelo AI no Admin — Implementado ✅
+
+## O que foi feito
+
+1. **Tabela `system_config`**: key/value JSONB com RLS (admin + service_role)
+2. **Página `AdminSettings.tsx`**: rota `/admin/configuracoes` com dropdown dos 4 modelos
+3. **Função `callAI()`** no `aura-agent`: roteamento unificado Gateway vs Anthropic API
+4. **Adaptador Anthropic**: system prompt separado, merge de mensagens consecutivas, max_tokens obrigatório
+5. **Chamada principal** usa modelo configurado no banco; chamadas auxiliares (summary, onboarding, topic) usam `google/gemini-2.5-flash`
+6. **Secret `ANTHROPIC_API_KEY`** configurado
+
+## Modelos disponíveis
+
+| Modelo | Via | Uso |
+|---|---|---|
+| `google/gemini-2.5-pro` (default) | Lovable AI Gateway | Chat principal |
+| `google/gemini-2.5-flash` | Lovable AI Gateway | Auxiliares + opção principal |
+| `anthropic/claude-sonnet-4-6` | API Anthropic direta | Chat principal |
+| `openai/gpt-5` | Lovable AI Gateway | Chat principal |
+
+---
+
+# Insights Proativos 2x/semana + Remoção Check-in Segunda — Implementado ✅
+
+## O que foi feito
+
+1. **Cron `pattern-analysis` atualizado**: de `0 14 * * 4` (quinta) para `0 14 * * 4,6` (quinta + sábado, 11h BRT)
+2. **Filtros de proteção adicionados** no `pattern-analysis/index.ts`:
+   - Sessão ativa (`current_session_id`) → skip
+   - Qualquer mensagem (user ou assistant) nas últimas 2h → skip
+   - `scheduled_tasks` pendente (retorno já combinado) → skip
+3. **Check-in de segunda desativado**: cron `weekly-checkin-monday-8am` removido, entrada removida do `config.toml`
+4. **Limite de 1 insight/7 dias por usuário** mantido via `last_proactive_insight_at`
+
+## Cronograma atualizado
+
+| Dia | Sistema | Função |
+|-----|---------|--------|
+| Quinta 11h BRT | Insight proativo | `pattern-analysis` |
+| Sábado 11h BRT | Insight proativo (2ª chance) | `pattern-analysis` |
+| ~~Segunda 08h~~ | ~~Check-in semanal~~ | ~~Removido~~ |
