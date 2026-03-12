@@ -46,10 +46,13 @@ const UserGuide = () => {
         {/* Hero */}
         <section className="relative overflow-hidden bg-gradient-to-br from-sage-soft via-background to-lavender-soft py-16 md:py-24">
           <div className="container mx-auto px-4 text-center max-w-3xl">
-            <img
-
-              alt="AURA"
-              className="mx-auto mb-6 h-24 w-24 rounded-2xl" src="/lovable-uploads/e1e511ac-b1eb-4e1b-ad14-f4af1c3a3b48.jpg" />
+            <div className="mx-auto mb-6 h-28 w-28 rounded-full overflow-hidden border-4 border-primary/20 shadow-lg">
+              <img
+                alt="Olá AURA"
+                className="h-full w-full object-cover scale-150"
+                src={olaAuraLogo}
+              />
+            </div>
             
             <h1 className="font-display text-3xl md:text-5xl font-bold text-foreground mb-4">
               Seu Guia da <span className="text-primary">AURA</span>
