@@ -1479,35 +1479,21 @@ function wantsToEndSession(message: string): boolean {
   return endPhrases.some(phrase => lowerMsg.includes(phrase));
 }
 
-// Detecta sinais IMPLÍCITOS de encerramento durante sessão
-function detectsImplicitSessionEnd(message: string, sessionActive: boolean): boolean {
-  if (!sessionActive) return false;
-  
+// Detecta se o usuário quer PAUSAR a sessão (sair agora, continuar depois)
+function wantsToPauseSession(message: string): boolean {
   const lowerMsg = message.toLowerCase().trim();
-  
-  // Sinais de satisfação/conclusão que indicam que a sessão pode acabar
-  const implicitEndSignals = [
-    // Agradecimentos
-    'obrigado', 'obrigada', 'muito obrigado', 'muito obrigada',
-    'valeu', 'agradeço', 'agradecer',
-    // Confirmações de conclusão
-    'combinado', 'combinamos', 'fechado', 'perfeito',
-    'ótimo', 'otimo', 'excelente', 'maravilha',
-    // Despedidas sutis
-    'até mais', 'ate mais', 'até logo', 'ate logo',
-    'tchau', 'bye', 'beijos', 'abraço', 'abracos',
-    // Indicações de satisfação final
-    'foi ótimo', 'foi otimo', 'foi muito bom', 'adorei',
-    'gostei muito', 'me ajudou muito', 'me ajudou demais'
+  const pausePhrases = [
+    'preciso sair', 'tenho que sair', 'preciso ir', 'tenho que ir',
+    'preciso desligar', 'tenho que desligar',
+    'continuamos depois', 'continua depois', 'a gente continua',
+    'continuamos outro dia', 'continua outro dia', 'continuamos amanhã',
+    'não consigo continuar agora', 'nao consigo continuar agora',
+    'vamos continuar depois', 'depois a gente continua',
+    'preciso parar agora', 'tenho que parar agora',
+    'surgiu algo aqui', 'surgiu um imprevisto',
+    'me chamaram', 'tenho um compromisso'
   ];
-  
-  // Verificar se a mensagem é curta (menos de 50 chars) e contém sinal implícito
-  // Mensagens longas provavelmente não são sinais de encerramento
-  if (lowerMsg.length < 50) {
-    return implicitEndSignals.some(signal => lowerMsg.includes(signal));
-  }
-  
-  return false;
+  return pausePhrases.some(phrase => lowerMsg.includes(phrase));
 }
 
 // Calcula fase e tempo restante da sessão - COM FASES GRANULARES
