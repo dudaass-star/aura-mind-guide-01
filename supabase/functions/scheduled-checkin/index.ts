@@ -41,12 +41,24 @@ function getCheckinMessage(profile: any, lastCheckin: any, pendingCommitments: a
   return defaultMessages[Math.floor(Math.random() * defaultMessages.length)];
 }
 
+function getBrtHour(): number {
+  return (new Date().getUTCHours() - 3 + 24) % 24;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    // Quiet hours guard: no messages between 22h and 8h BRT
+    const brtHour = getBrtHour();
+    if (brtHour < 8 || brtHour >= 22) {
+      console.log(`🌙 Quiet hours (${brtHour}h BRT) - skipping scheduled check-in`);
+      return new Response(JSON.stringify({ status: 'skipped', reason: 'quiet_hours', brt_hour: brtHour }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
     let dryRun = false;
     let targetUserId: string | null = null;
     try {

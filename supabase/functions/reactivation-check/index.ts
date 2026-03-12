@@ -12,12 +12,25 @@ const logStep = (step: string, details?: any) => {
   console.log(`[REACTIVATION-CHECK] ${step}${detailsStr}`);
 };
 
+function getBrtHour(): number {
+  return (new Date().getUTCHours() - 3 + 24) % 24;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    // Quiet hours guard: no messages between 22h and 8h BRT
+    const brtHour = getBrtHour();
+    if (brtHour < 8 || brtHour >= 22) {
+      logStep(`Quiet hours (${brtHour}h BRT) - skipping`);
+      return new Response(JSON.stringify({ status: 'skipped', reason: 'quiet_hours', brt_hour: brtHour }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     logStep("Function started");
     
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
