@@ -480,9 +480,9 @@ Deno.serve(async (req) => {
         let timingReason: string;
         
         if (isSessionActive) {
-          // DURANTE SESSÃO: mais urgente
-          timeThresholdMinutes = 5;
-          maxFollowups = 4;
+          // DURANTE SESSÃO: mais espaçado para evitar spam
+          timeThresholdMinutes = 12; // 12 minutos entre follow-ups (era 5)
+          maxFollowups = 2; // Máximo 2 follow-ups em sessão (era 4)
           timingReason = 'IN_SESSION';
         } else if (isNaturalEnd) {
           // FIM NATURAL: respeitar o fechamento, esperar muito mais
