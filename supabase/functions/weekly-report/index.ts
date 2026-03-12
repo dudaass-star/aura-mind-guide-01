@@ -183,12 +183,24 @@ function generateWeeklyReport(
   return report;
 }
 
+function getBrtHour(): number {
+  return (new Date().getUTCHours() - 3 + 24) % 24;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    // Quiet hours guard: no messages between 22h and 8h BRT
+    const brtHour = getBrtHour();
+    if (brtHour < 8 || brtHour >= 22) {
+      console.log(`🌙 Quiet hours (${brtHour}h BRT) - skipping weekly report`);
+      return new Response(JSON.stringify({ status: 'skipped', reason: 'quiet_hours', brt_hour: brtHour }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
     // Parse body for dry_run and target_user_id
     let dryRun = false;
     let targetUserId: string | null = null;
