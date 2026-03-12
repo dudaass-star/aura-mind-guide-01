@@ -116,6 +116,10 @@ Gere um resumo estruturado da sessão com base na conversa. Seja empática e pre
   return fallback;
 }
 
+function getBrtHour(): number {
+  return (new Date().getUTCHours() - 3 + 24) % 24;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -127,6 +131,11 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const now = new Date();
+    const brtHour = getBrtHour();
+    const isQuietHours = brtHour < 8 || brtHour >= 22;
+    if (isQuietHours) {
+      console.log(`🌙 Quiet hours (${brtHour}h BRT) - only time-sensitive reminders (1h, 15m, start, 10m) will be sent`);
+    }
     const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
     const fifteenMinutesFromNow = new Date(now.getTime() + 15 * 60 * 1000);
     const twentyFourHoursFromNow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
