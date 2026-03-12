@@ -3788,6 +3788,18 @@ INSTRUÇÃO: Faça um fechamento CALOROSO da sessão:
       throw new Error("No response from AI");
     }
 
+    // ========================================================================
+    // ANTI-ECHO GUARD: Se a IA devolveu exatamente o texto do usuário, rejeitar
+    // ========================================================================
+    const normalizedResponse = assistantMessage.trim().toLowerCase().replace(/[.!?…\s]+$/g, '');
+    const normalizedUserMsg = message.trim().toLowerCase().replace(/[.!?…\s]+$/g, '');
+    
+    if (normalizedResponse === normalizedUserMsg || 
+        (normalizedUserMsg.length > 10 && normalizedResponse.startsWith(normalizedUserMsg))) {
+      console.error('🚫 ANTI-ECHO: AI response is identical to user message! Replacing with fallback.');
+      assistantMessage = 'Me conta mais sobre isso... 💜';
+    }
+
     console.log("AURA raw response:", assistantMessage.substring(0, 200));
 
     // ========================================================================

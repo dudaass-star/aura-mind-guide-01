@@ -740,8 +740,17 @@ Se quiser remarcar uma nova sessão, é só me dizer!`;
           .eq('user_id', session.user_id)
           .maybeSingle();
 
-        if (!profile?.phone || !session.session_summary) {
-          console.log(`⚠️ No phone or summary for completed session ${session.id}`);
+        if (!profile?.phone) {
+          console.log(`⚠️ No phone for completed session ${session.id} (user: ${session.user_id})`);
+          // Marcar como enviado para parar de tentar em cada ciclo
+          await supabase
+            .from('sessions')
+            .update({ post_session_sent: true })
+            .eq('id', session.id);
+          continue;
+        }
+        if (!session.session_summary) {
+          console.log(`⚠️ No summary for completed session ${session.id}`);
           continue;
         }
 
