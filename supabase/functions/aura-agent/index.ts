@@ -3786,16 +3786,16 @@ Exemplo com 4 sessões:
         (normalizedUserMsg.length > 10 && normalizedResponse.startsWith(normalizedUserMsg))) {
       console.warn('🚫 ANTI-ECHO: resposta idêntica detectada, re-gerando...');
       
-      const retryMessages = [...messagesForAI];
+      const retryMessages = [...apiMessages];
       retryMessages.push({ role: 'assistant', content: assistantMessage });
       retryMessages.push({ role: 'user', content: 
         '[SISTEMA: Sua resposta anterior repetiu o que o usuário disse. Gere uma resposta COMPLETAMENTE DIFERENTE. Reaja com suas próprias palavras, faça uma pergunta ou traga uma observação nova.]' 
       });
       
       try {
-        const retryResponse = await callAI(retryMessages, systemPrompt, activeModel);
-        if (retryResponse) {
-          assistantMessage = retryResponse;
+        const retryData = await callAI(configuredModel, retryMessages, 4096, 0.8, LOVABLE_API_KEY);
+        if (retryData?.choices?.[0]?.message?.content) {
+          assistantMessage = retryData.choices[0].message.content;
           console.log('✅ ANTI-ECHO: retry bem-sucedido');
         }
       } catch (retryErr) {
