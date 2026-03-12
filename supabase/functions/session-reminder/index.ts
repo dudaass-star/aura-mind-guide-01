@@ -544,10 +544,11 @@ Pra gente começar, me manda um "vamos" ou "bora" - ou me avisa se quer reagenda
 
     // ========================================================================
     // DETECTAR SESSÕES NOTIFICADAS MAS NUNCA INICIADAS (missed - 30 min após notificação)
+    // Skip during quiet hours - will be processed next run
     // ========================================================================
     let missedSessionsClosed = 0;
     
-    const { data: missedSessions, error: errorMissed } = await supabase
+    const { data: missedSessions, error: errorMissed } = isQuietHours ? { data: null, error: null } : await supabase
       .from('sessions')
       .select('id, user_id, scheduled_at')
       .eq('status', 'scheduled')
