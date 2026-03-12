@@ -1,91 +1,54 @@
-# Cápsula do Tempo — Implementado ✅
 
-## O que foi feito
 
-1. **Tabela `time_capsules`** + colunas `awaiting_time_capsule` e `pending_capsule_audio_url` no `profiles`
-2. **Intercepção no `webhook-zapi`**: antes do fluxo normal, detecta estado da cápsula e gerencia áudio/confirmação/cancelamento/regravação
-3. **Tag `[CAPSULA_DO_TEMPO]` no `aura-agent`**: quando a Aura propõe e o usuário aceita, a tag ativa o modo de captura
-4. **Instrução no prompt**: ~10 linhas ensinando a Aura quando/como propor a cápsula
-5. **Edge function `deliver-time-capsule`**: cron diário (10h) que entrega cápsulas vencidas via WhatsApp
-6. **Fluxo de confirmação**: o usuário pode regravar quantas vezes quiser antes de confirmar
+# Análise dos Problemas na Conversa da AURA com Clara
 
----
+## Problemas Identificados
 
-# Sistema de Agendamento de Tarefas (Efeito Oráculo) — Implementado ✅
+### 1. Spam de mensagens automáticas (session-reminder)
+Em 11/03, após Clara dizer "vamos agendar" às 11:28, a AURA entrou numa sessão que ficou sem resposta. O sistema disparou **4 mensagens automáticas consecutivas** em poucos minutos:
+- 11:35 — "E aí, sumiu no meio do rolê?"
+- 11:45 — "Chegou a ver o horário?"
+- 11:50 — "Ei, tudo bem? Tá quietinho aí..."
+- 12:00 — "Ei, a gente tava falando da nossa sessão, né?"
 
-## O que foi feito
+Clara estava na academia e avisou que demoraria. O sistema ignorou isso. A própria Clara mencionou: *"Me desculpa por ter te apressado antes, meu sistema deu uma bugada e eu te enchi de notificação"* — a AURA reconheceu o bug na resposta.
 
-1. **Tabela `scheduled_tasks`**: id, user_id, execute_at, task_type, payload (JSONB), status, created_at, executed_at
-2. **Índice parcial**: `idx_scheduled_tasks_pending` em `execute_at WHERE status = 'pending'` — busca em milissegundos
-3. **Função RPC `claim_pending_tasks`**: `FOR UPDATE SKIP LOCKED` com limite de 150 — atomicidade absoluta contra duplicidade
-4. **RLS**: service_role full access + users can view own
-5. **Tags no prompt do `aura-agent`**:
-   - `[AGENDAR_TAREFA:YYYY-MM-DD HH:mm:tipo:descricao]` — agendar lembretes e meditações
-   - `[CANCELAR_TAREFA:tipo]` — cancela o PRÓXIMO pendente (ORDER BY execute_at ASC)
-6. **Processamento no `aura-agent`**: detecta as tags, cria/cancela tasks no banco, remove tags antes de mostrar ao usuário
-7. **Sanitização no `webhook-zapi`**: remove tags de agendamento que vazem na resposta
-8. **Edge function `execute-scheduled-tasks`**: processa tasks claimed, com delay 300ms anti-burst, handlers por tipo (reminder, meditation, message)
-9. **Safety net**: tasks em `executing` há >10 min são resetadas para `pending`
-10. **Cron `pg_cron`**: `*/5 * * * *` (cada 5 minutos) invocando a edge function
+### 2. AURA ecoou a mensagem da usuária
+Clara enviou: *"Não tem como isso ser positivo"*
+A AURA respondeu com o **texto idêntico** da Clara: *"Não tem como isso ser positivo."*
+Clara reclamou: *"Você só mandou o que eu mesma mandei"* e perguntou *"É bug de novo?"*
 
-## Tipos de tarefa suportados
+Isso indica um problema no `aura-agent` onde, em algum caso, o conteúdo da mensagem do usuário é retornado como resposta.
 
-| Tipo | Payload | Ação |
-|------|---------|------|
-| `reminder` | `{ "text": "mensagem" }` | Envia texto via WhatsApp |
-| `meditation` | `{ "category": "sono" }` | Invoca `send-meditation` |
-| `message` | `{ "text": "mensagem" }` | Envia texto customizado |
+### 3. Erro "Phone is empty" no session-reminder
+Os logs mostram que o `session-reminder` está tentando enviar post-session summary para a sessão `046077f6` mas falha com `"Phone is empty"`. Isso pode indicar que:
+- A sessão pertence a um usuário sem telefone cadastrado
+- Ou o código não está buscando o phone corretamente do perfil
 
-## Fluxo completo
+### 4. Sessão marcada como no_show indevidamente
+A sessão `30643671` (agendada para 27/02 às 23:30) foi iniciada em 11/03 às 11:28 e encerrada como `no_show` com summary "Usuário não participou ativamente". Mas Clara **estava conversando** — ela disse "vamos agendar" e a AURA respondeu. O sistema parece ter considerado no_show por falta de resposta subsequente, mas ela estava na academia.
 
-1. Usuário pede lembrete → Aura inclui `[AGENDAR_TAREFA:...]` na resposta
-2. `aura-agent` detecta a tag → insere na tabela `scheduled_tasks` com payload padronizado
-3. Tag é removida antes de o usuário ver a mensagem
-4. A cada 5 min, `pg_cron` invoca `execute-scheduled-tasks`
-5. Edge function chama `claim_pending_tasks(150)` (atômico, skip locked)
-6. Processa cada task com 300ms de delay → envia via Z-API
-7. Marca como `executed` ou `failed`
+### 5. Follow-up insistente em contexto emocional delicado
+O contexto da conversa registra: *"TOM: frustrado e irritadiço"*. Mesmo assim, o sistema enviou follow-up em 12/03 às 11:00: *"E aí, já deu uma olhada na sessão de hoje?"* — tom casual inadequado para o estado emocional registrado.
 
----
+## Recomendações de Correção
 
-# Seletor de Modelo AI no Admin — Implementado ✅
+### A. Corrigir echo de mensagens no aura-agent
+Investigar o `aura-agent/index.ts` para encontrar o caso onde a resposta da IA replica o texto do usuário. Provável problema na construção do prompt ou no fallback de resposta.
 
-## O que foi feito
+### B. Limitar mensagens automáticas do session-reminder
+Adicionar lógica para:
+- Não enviar mais de 2 lembretes sem resposta do usuário
+- Respeitar quando o usuário avisa que vai demorar
+- Aumentar o intervalo entre lembretes
 
-1. **Tabela `system_config`**: key/value JSONB com RLS (admin + service_role)
-2. **Página `AdminSettings.tsx`**: rota `/admin/configuracoes` com dropdown dos 4 modelos
-3. **Função `callAI()`** no `aura-agent`: roteamento unificado Gateway vs Anthropic API
-4. **Adaptador Anthropic**: system prompt separado, merge de mensagens consecutivas, max_tokens obrigatório
-5. **Chamada principal** usa modelo configurado no banco; chamadas auxiliares (summary, onboarding, topic) usam `google/gemini-2.5-flash`
-6. **Secret `ANTHROPIC_API_KEY`** configurado
+### C. Corrigir "Phone is empty" no session-reminder
+Verificar a query que busca o telefone do usuário na função `session-reminder` — provavelmente não está fazendo join com a tabela `profiles` corretamente.
 
-## Modelos disponíveis
-
-| Modelo | Via | Uso |
-|---|---|---|
-| `google/gemini-2.5-pro` (default) | Lovable AI Gateway | Chat principal |
-| `google/gemini-2.5-flash` | Lovable AI Gateway | Auxiliares + opção principal |
-| `anthropic/claude-sonnet-4-6` | API Anthropic direta | Chat principal |
-| `openai/gpt-5` | Lovable AI Gateway | Chat principal |
+### D. Ajustar tom dos follow-ups baseado no contexto emocional
+O `conversation_context` já registra o tom. Usar essa informação para adaptar ou suprimir follow-ups quando o tom indica frustração.
 
 ---
 
-# Insights Proativos 2x/semana + Remoção Check-in Segunda — Implementado ✅
+Quer que eu investigue e corrija algum desses problemas específicos? Posso começar pelo mais crítico (echo de mensagens ou spam de lembretes).
 
-## O que foi feito
-
-1. **Cron `pattern-analysis` atualizado**: de `0 14 * * 4` (quinta) para `0 14 * * 4,6` (quinta + sábado, 11h BRT)
-2. **Filtros de proteção adicionados** no `pattern-analysis/index.ts`:
-   - Sessão ativa (`current_session_id`) → skip
-   - Qualquer mensagem (user ou assistant) nas últimas 2h → skip
-   - `scheduled_tasks` pendente (retorno já combinado) → skip
-3. **Check-in de segunda desativado**: cron `weekly-checkin-monday-8am` removido, entrada removida do `config.toml`
-4. **Limite de 1 insight/7 dias por usuário** mantido via `last_proactive_insight_at`
-
-## Cronograma atualizado
-
-| Dia | Sistema | Função |
-|-----|---------|--------|
-| Quinta 11h BRT | Insight proativo | `pattern-analysis` |
-| Sábado 11h BRT | Insight proativo (2ª chance) | `pattern-analysis` |
-| ~~Segunda 08h~~ | ~~Check-in semanal~~ | ~~Removido~~ |
