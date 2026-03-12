@@ -1,4 +1,5 @@
 import { Helmet } from "react-helmet-async";
+import olaAuraLogo from "@/assets/ola-aura-logo.jpg";
 import { Link } from "react-router-dom";
 import {
   MessageCircle,
