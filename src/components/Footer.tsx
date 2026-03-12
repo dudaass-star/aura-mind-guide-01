@@ -6,14 +6,14 @@ const Footer = () => {
   return (
     <footer className="py-12 bg-card border-t border-border/50">
       <div className="container mx-auto px-4">
-        <div className="flex flex-col md:flex-row justify-between items-center gap-6 mb-8">
+        <div className="flex flex-col items-center gap-6 mb-8">
           {/* Logo */}
           <Link to="/">
             <img src={logoOlaAura} alt="Olá AURA" className="h-24 w-auto" />
           </Link>
 
           {/* Links */}
-          <nav className="flex flex-wrap justify-center gap-6 text-sm text-muted-foreground">
+          <nav className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
             <Link to="/termos" className="hover:text-foreground transition-colors">
               Termos de Uso
             </Link>
@@ -26,12 +26,9 @@ const Footer = () => {
           </nav>
 
           {/* Suporte */}
-          <div className="text-center md:text-right">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">Suporte</p>
-            <a href="mailto:suporte@olaaura.com.br" className="text-sm text-primary hover:text-primary/80 transition-colors">
-              suporte@olaaura.com.br
-            </a>
-          </div>
+          <a href="mailto:suporte@olaaura.com.br" className="text-sm text-primary hover:text-primary/80 transition-colors">
+            suporte@olaaura.com.br
+          </a>
         </div>
 
         {/* Trust badges */}
