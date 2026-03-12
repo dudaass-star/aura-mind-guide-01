@@ -1479,35 +1479,21 @@ function wantsToEndSession(message: string): boolean {
   return endPhrases.some(phrase => lowerMsg.includes(phrase));
 }
 
-// Detecta sinais IMPLÍCITOS de encerramento durante sessão
-function detectsImplicitSessionEnd(message: string, sessionActive: boolean): boolean {
-  if (!sessionActive) return false;
-  
+// Detecta se o usuário quer PAUSAR a sessão (sair agora, continuar depois)
+function wantsToPauseSession(message: string): boolean {
   const lowerMsg = message.toLowerCase().trim();
-  
-  // Sinais de satisfação/conclusão que indicam que a sessão pode acabar
-  const implicitEndSignals = [
-    // Agradecimentos
-    'obrigado', 'obrigada', 'muito obrigado', 'muito obrigada',
-    'valeu', 'agradeço', 'agradecer',
-    // Confirmações de conclusão
-    'combinado', 'combinamos', 'fechado', 'perfeito',
-    'ótimo', 'otimo', 'excelente', 'maravilha',
-    // Despedidas sutis
-    'até mais', 'ate mais', 'até logo', 'ate logo',
-    'tchau', 'bye', 'beijos', 'abraço', 'abracos',
-    // Indicações de satisfação final
-    'foi ótimo', 'foi otimo', 'foi muito bom', 'adorei',
-    'gostei muito', 'me ajudou muito', 'me ajudou demais'
+  const pausePhrases = [
+    'preciso sair', 'tenho que sair', 'preciso ir', 'tenho que ir',
+    'preciso desligar', 'tenho que desligar',
+    'continuamos depois', 'continua depois', 'a gente continua',
+    'continuamos outro dia', 'continua outro dia', 'continuamos amanhã',
+    'não consigo continuar agora', 'nao consigo continuar agora',
+    'vamos continuar depois', 'depois a gente continua',
+    'preciso parar agora', 'tenho que parar agora',
+    'surgiu algo aqui', 'surgiu um imprevisto',
+    'me chamaram', 'tenho um compromisso'
   ];
-  
-  // Verificar se a mensagem é curta (menos de 50 chars) e contém sinal implícito
-  // Mensagens longas provavelmente não são sinais de encerramento
-  if (lowerMsg.length < 50) {
-    return implicitEndSignals.some(signal => lowerMsg.includes(signal));
-  }
-  
-  return false;
+  return pausePhrases.some(phrase => lowerMsg.includes(phrase));
 }
 
 // Calcula fase e tempo restante da sessão - COM FASES GRANULARES
@@ -2720,6 +2706,7 @@ serve(async (req) => {
     let currentSession = null;
     let sessionTimeContext = '';
     let shouldEndSession = false;
+    let shouldPauseSession = false;
     let shouldStartSession = false;
 
     // LOG DETALHADO: Estado inicial de detecção de sessão
@@ -2756,13 +2743,15 @@ serve(async (req) => {
           isOvertime: timeInfo.isOvertime
         });
 
-        // Verificar se usuário quer encerrar ou se está em overtime ou encerramento implícito
-        const implicitEnd = detectsImplicitSessionEnd(message, true);
-        if (wantsToEndSession(message) || timeInfo.isOvertime || implicitEnd) {
+        // Verificar se usuário quer encerrar (EXPLÍCITO apenas) ou se está em overtime
+        if (wantsToEndSession(message) || timeInfo.isOvertime) {
           shouldEndSession = true;
-          if (implicitEnd) {
-            console.log('🔍 Implicit session end detected from message:', message.substring(0, 50));
-          }
+        }
+        
+        // Verificar se usuário quer PAUSAR (sair agora, continuar depois)
+        if (wantsToPauseSession(message) && !shouldEndSession) {
+          shouldPauseSession = true;
+          console.log('⏸️ User wants to PAUSE session:', message.substring(0, 50));
         }
       }
     } else if (profile?.user_id) {
@@ -2797,13 +2786,15 @@ serve(async (req) => {
         
         console.log('✅ Orphan session linked and activated');
         
-        // Verificar se usuário quer encerrar ou se está em overtime
-        const implicitEnd = detectsImplicitSessionEnd(message, true);
-        if (wantsToEndSession(message) || timeInfo.isOvertime || implicitEnd) {
+        // Verificar se usuário quer encerrar (EXPLÍCITO apenas) ou se está em overtime
+        if (wantsToEndSession(message) || timeInfo.isOvertime) {
           shouldEndSession = true;
-          if (implicitEnd) {
-            console.log('🔍 Implicit session end detected (orphan session) from message:', message.substring(0, 50));
-          }
+        }
+        
+        // Verificar se usuário quer PAUSAR
+        if (wantsToPauseSession(message) && !shouldEndSession) {
+          shouldPauseSession = true;
+          console.log('⏸️ User wants to PAUSE orphan session:', message.substring(0, 50));
         }
       } else {
         console.log('ℹ️ No orphan session found');
@@ -3609,6 +3600,17 @@ REGRA: ${behaviorInstruction}`;
 
       dynamicContext += phaseBlock;
       console.log(`⏱️ Session phase reinforcement: ${phaseInfo.phase}, ${elapsed}min elapsed, ${phaseInfo.timeRemaining}min remaining`);
+      
+      // Se a sessão foi PAUSADA anteriormente, adicionar contexto de retomada
+      if (currentSession.session_summary && currentSession.session_summary.startsWith('[PAUSADA]')) {
+        const pauseContext = currentSession.session_summary.replace('[PAUSADA] ', '');
+        dynamicContext += `\n\n⏸️➡️ RETOMADA DE SESSÃO PAUSADA:
+O usuário precisou sair na última vez e está voltando agora. Contexto de onde pararam:
+"${pauseContext}"
+
+INSTRUÇÃO: Retome de onde pararam naturalmente. Diga algo como "Que bom que voltou! Da última vez estávamos falando sobre..." e continue a partir daquele ponto. NÃO comece do zero.`;
+        console.log('⏸️ Loaded pause context for session resume');
+      }
     }
 
     // ========================================================================
@@ -3726,20 +3728,18 @@ Exemplo com 4 sessões:
 
     // Adicionar instrução de encerramento se necessário
     if (shouldEndSession) {
-      const implicitEnd = detectsImplicitSessionEnd(message, sessionActive);
-      if (implicitEnd) {
-        dynamicContext += `\n\n🔴 ENCERRAMENTO IMPLÍCITO DETECTADO: O usuário deu sinais de satisfação/conclusão (ex: "combinado", "obrigado").
-INSTRUÇÃO: Faça um fechamento CALOROSO da sessão:
-1. Reconheça que vocês tiveram uma boa conversa
-2. Resuma os 2-3 principais insights/aprendizados
-3. Relembre qualquer compromisso que ele tenha feito
-4. Agradeça com carinho genuíno
-5. Pergunte se quer agendar a próxima sessão
-6. Use [MODO_AUDIO] para encerrar de forma mais íntima
-7. Inclua [ENCERRAR_SESSAO] no final da sua resposta`;
-      } else {
-        dynamicContext += `\n\n🔴 INSTRUÇÃO CRÍTICA: ENCERRE A SESSÃO AGORA. Faça um breve resumo dos principais pontos discutidos, agradeça pelo tempo juntos e inclua a tag [ENCERRAR_SESSAO] no final.`;
-      }
+      dynamicContext += `\n\n🔴 INSTRUÇÃO CRÍTICA: ENCERRE A SESSÃO AGORA. Faça um breve resumo dos principais pontos discutidos, agradeça pelo tempo juntos e inclua a tag [ENCERRAR_SESSAO] no final.`;
+    }
+    
+    // Adicionar instrução de PAUSA se necessário
+    if (shouldPauseSession && !shouldEndSession) {
+      dynamicContext += `\n\n⏸️ O USUÁRIO PRECISA SAIR AGORA. NÃO encerre a sessão. Em vez disso:
+1. Acolha com naturalidade ("Claro, sem problema!")
+2. Faça um BREVE resumo do que vocês estavam explorando (2-3 frases)
+3. Diga que continuam de onde pararam na próxima vez
+4. Despeça-se com carinho
+5. NÃO inclua [ENCERRAR_SESSAO] — a sessão fica pausada, não encerrada
+6. NÃO faça perguntas ou prolongue a conversa`;
     }
 
     const apiMessages = [
@@ -3798,16 +3798,16 @@ INSTRUÇÃO: Faça um fechamento CALOROSO da sessão:
         (normalizedUserMsg.length > 10 && normalizedResponse.startsWith(normalizedUserMsg))) {
       console.warn('🚫 ANTI-ECHO: resposta idêntica detectada, re-gerando...');
       
-      const retryMessages = [...messagesForAI];
+      const retryMessages = [...apiMessages];
       retryMessages.push({ role: 'assistant', content: assistantMessage });
       retryMessages.push({ role: 'user', content: 
         '[SISTEMA: Sua resposta anterior repetiu o que o usuário disse. Gere uma resposta COMPLETAMENTE DIFERENTE. Reaja com suas próprias palavras, faça uma pergunta ou traga uma observação nova.]' 
       });
       
       try {
-        const retryResponse = await callAI(retryMessages, systemPrompt, activeModel);
-        if (retryResponse) {
-          assistantMessage = retryResponse;
+        const retryData = await callAI(configuredModel, retryMessages, 4096, 0.8, LOVABLE_API_KEY);
+        if (retryData?.choices?.[0]?.message?.content) {
+          assistantMessage = retryData.choices[0].message.content;
           console.log('✅ ANTI-ECHO: retry bem-sucedido');
         }
       } catch (retryErr) {
@@ -3826,15 +3826,17 @@ INSTRUÇÃO: Faça um fechamento CALOROSO da sessão:
       const earlyPhases = ['opening', 'exploration', 'reframe', 'development'];
       
       if (earlyPhases.includes(currentPhase)) {
-        // Block [ENCERRAR_SESSAO] in early phases
+        // Block [ENCERRAR_SESSAO] in early phases AND reset shouldEndSession
         if (assistantMessage.includes('[ENCERRAR_SESSAO]')) {
           console.warn(`🚫 Blocked premature session closure at phase: ${currentPhase} (timeRemaining: ${currentPhaseInfo.timeRemaining}min)`);
           assistantMessage = assistantMessage.replace(/\[ENCERRAR_SESSAO\]/gi, '');
+          shouldEndSession = false; // RESET — sessão NÃO deve encerrar em fase early
         }
         // Block [CONVERSA_CONCLUIDA] in early phases (Camada 3 - part 1)
         if (assistantMessage.includes('[CONVERSA_CONCLUIDA]')) {
           console.warn(`🚫 Blocked [CONVERSA_CONCLUIDA] during active session at phase: ${currentPhase}`);
           assistantMessage = assistantMessage.replace(/\[CONVERSA_CONCLUIDA\]/gi, '[AGUARDANDO_RESPOSTA]');
+          shouldEndSession = false; // RESET
         }
       } else {
         // In closing phases (transition, soft_closing, final_closing, overtime):
@@ -4642,8 +4644,47 @@ Estou aqui sempre que precisar! 💜`;
         }
       }
     }
+    
+    // ========================================================================
+    // PAUSAR SESSÃO: Salvar contexto sem encerrar
+    // ========================================================================
+    if (shouldPauseSession && !shouldEndSession && !aiWantsToEndSession && currentSession && profile) {
+      try {
+        // Gerar resumo breve do que foi discutido até agora
+        const pauseMessages = messageHistory.slice(-10);
+        const pauseData = await callAI('google/gemini-2.5-flash', [
+          { 
+            role: "system", 
+            content: `Resuma em 2-3 frases o que estava sendo discutido nesta sessão de mentoria emocional. 
+O usuário precisou sair e vai continuar depois. 
+Foque no tema principal, onde pararam e o que falta explorar.
+Responda apenas o resumo, sem formatação.`
+          },
+          ...pauseMessages,
+          { role: "user", content: message }
+        ], 200, 0.5, LOVABLE_API_KEY);
+        
+        let pauseSummary = 'Sessão pausada pelo usuário.';
+        if (pauseData?.choices?.[0]?.message?.content) {
+          await logTokenUsage(supabase, user_id || null, 'session_pause_summary', 'google/gemini-2.5-flash', pauseData.usage);
+          pauseSummary = pauseData.choices[0].message.content.trim();
+        }
+        
+        // Salvar resumo com prefixo [PAUSADA] - sessão continua in_progress
+        await supabase
+          .from('sessions')
+          .update({ 
+            session_summary: `[PAUSADA] ${pauseSummary}`
+          })
+          .eq('id', currentSession.id);
+        
+        console.log('⏸️ Session PAUSED with context:', pauseSummary.substring(0, 100));
+      } catch (pauseError) {
+        console.error('⚠️ Error saving pause context:', pauseError);
+      }
+    }
 
-    // Extrair e salvar novos insights com importância automática por categoria
+
     const newInsights = extractInsights(assistantMessage);
     if (newInsights.length > 0 && profile?.user_id) {
       console.log("Saving", newInsights.length, "new insights");
