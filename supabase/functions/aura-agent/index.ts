@@ -4633,8 +4633,47 @@ Estou aqui sempre que precisar! 💜`;
         }
       }
     }
+    
+    // ========================================================================
+    // PAUSAR SESSÃO: Salvar contexto sem encerrar
+    // ========================================================================
+    if (shouldPauseSession && !shouldEndSession && !aiWantsToEndSession && currentSession && profile) {
+      try {
+        // Gerar resumo breve do que foi discutido até agora
+        const pauseMessages = messageHistory.slice(-10);
+        const pauseData = await callAI('google/gemini-2.5-flash', [
+          { 
+            role: "system", 
+            content: `Resuma em 2-3 frases o que estava sendo discutido nesta sessão de mentoria emocional. 
+O usuário precisou sair e vai continuar depois. 
+Foque no tema principal, onde pararam e o que falta explorar.
+Responda apenas o resumo, sem formatação.`
+          },
+          ...pauseMessages,
+          { role: "user", content: message }
+        ], 200, 0.5, LOVABLE_API_KEY);
+        
+        let pauseSummary = 'Sessão pausada pelo usuário.';
+        if (pauseData?.choices?.[0]?.message?.content) {
+          await logTokenUsage(supabase, user_id || null, 'session_pause_summary', 'google/gemini-2.5-flash', pauseData.usage);
+          pauseSummary = pauseData.choices[0].message.content.trim();
+        }
+        
+        // Salvar resumo com prefixo [PAUSADA] - sessão continua in_progress
+        await supabase
+          .from('sessions')
+          .update({ 
+            session_summary: `[PAUSADA] ${pauseSummary}`
+          })
+          .eq('id', currentSession.id);
+        
+        console.log('⏸️ Session PAUSED with context:', pauseSummary.substring(0, 100));
+      } catch (pauseError) {
+        console.error('⚠️ Error saving pause context:', pauseError);
+      }
+    }
 
-    // Extrair e salvar novos insights com importância automática por categoria
+
     const newInsights = extractInsights(assistantMessage);
     if (newInsights.length > 0 && profile?.user_id) {
       console.log("Saving", newInsights.length, "new insights");
