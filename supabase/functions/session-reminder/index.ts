@@ -607,11 +607,12 @@ Quer remarcar pra outro horário? É só me dizer quando fica bom pra você. ✨
     // ========================================================================
     // DETECTAR E FECHAR SESSÕES ABANDONADAS (30 min após fim previsto)
     // CORREÇÃO: Diferenciar entre usuário que participou vs apenas recebeu abertura
+    // Skip during quiet hours - will be processed next run
     // ========================================================================
     let abandonedSessionsClosed = 0;
     
     // Buscar sessões in_progress que deveriam ter terminado há mais de 30 minutos
-    const { data: abandonedSessions, error: errorAbandoned } = await supabase
+    const { data: abandonedSessions, error: errorAbandoned } = isQuietHours ? { data: null, error: null } : await supabase
       .from('sessions')
       .select('id, user_id, scheduled_at, duration_minutes, started_at')
       .eq('status', 'in_progress')
