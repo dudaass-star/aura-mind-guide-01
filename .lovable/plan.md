@@ -1,82 +1,135 @@
+# Cápsula do Tempo — Implementado ✅
 
+## O que foi feito
 
-# Auditoria: Quiet Hours (8h-22h BRT) em todas as Edge Functions
+1. **Tabela `time_capsules`** + colunas `awaiting_time_capsule` e `pending_capsule_audio_url` no `profiles`
+2. **Intercepção no `webhook-zapi`**: antes do fluxo normal, detecta estado da cápsula e gerencia áudio/confirmação/cancelamento/regravação
+3. **Tag `[CAPSULA_DO_TEMPO]` no `aura-agent`**: quando a Aura propõe e o usuário aceita, a tag ativa o modo de captura
+4. **Instrução no prompt**: ~10 linhas ensinando a Aura quando/como propor a cápsula
+5. **Edge function `deliver-time-capsule`**: cron diário (10h) que entrega cápsulas vencidas via WhatsApp
+6. **Fluxo de confirmação**: o usuário pode regravar quantas vezes quiser antes de confirmar
 
-## Resultado da Auditoria
+---
 
-| Function | Envia msgs? | Tem quiet hours? | Risco |
-|---|---|---|---|
-| `conversation-followup` | Sim | **Sim** (L339-349) | Seguro |
-| `pattern-analysis` | Sim | **Sim** (L48-51, L196-201) | Seguro |
-| `periodic-content` | Sim | **Nao** | **RISCO** |
-| `session-reminder` | Sim | **Nao** | **RISCO** |
-| `weekly-report` | Sim | **Nao** | **RISCO** |
-| `scheduled-followup` | Sim | **Nao** | **RISCO** |
-| `scheduled-checkin` | Sim | **Nao** | **RISCO** |
-| `reactivation-check` | Sim | **Nao** | **RISCO** |
-| `deliver-time-capsule` | Sim | **Nao** | **RISCO** |
-| `send-meditation` | Sim (sob demanda) | N/A | Seguro (chamada pelo aura-agent) |
-| `schedule-setup-reminder` | Sim | **Sim** (corrigido agora) | Seguro |
-| `cleanup-inactive-users` | Nao (so deleta) | N/A | Seguro |
+# Fix Schedule Setup Reminder (mensagens às 3h da manhã) — Implementado ✅
 
-## Functions que precisam de correção (6 no total)
+## Problema
+A função `schedule-setup-reminder` rodava `0 */6 * * *` UTC (21h, 03h, 09h, 15h BRT), sem trava de horário silencioso, sem deduplicação e sem logging em `messages`.
 
-### 1. `periodic-content` - Conteudo de jornadas
-- Roda via cron, envia manifestos
-- Precisa de guardrail de quiet hours no inicio
+## O que foi feito
 
-### 2. `session-reminder` - Lembretes de sessao
-- Roda a cada 5 min (`*/5 * * * *`)
-- Envia lembretes 24h, 1h, 15min, inicio de sessao, post-sessao, sessao perdida
-- **Caso especial**: lembretes de sessao sao time-sensitive. Se a sessao do usuario e as 8h, o lembrete de 1h precisa sair as 7h. Proposta: aplicar quiet hours apenas nos blocos de post-sessao e lembrete de 24h, mas permitir lembretes operacionais (1h, 15min, inicio) mesmo fora do horario
+1. **Quiet hours**: guardrail no código — skip se BRT < 8h ou >= 22h
+2. **Cron ajustado**: de `0 */6 * * *` para `0 13 * * *` (10h BRT, 1x/dia)
+3. **Deduplicação por estágio**: colunas `schedule_reminder_first_sent_at` e `schedule_reminder_urgent_sent_at` em `profiles` — cada lembrete enviado no máximo 1x por ciclo
+4. **Safety filters**: skip se DND ativo, sessão ativa, interação recente (<2h), ou tarefa pendente
+5. **Observabilidade**: mensagens enviadas agora são logadas na tabela `messages`
+6. **Reset mensal**: `monthly-schedule-renewal` reseta os marcadores de dedup no início de cada mês
 
-### 3. `weekly-report` - Relatorio semanal
-- Roda domingos as 19h BRT (seguro pelo cron), mas nao tem guardrail no codigo
-- Precisa de guardrail defensivo
+---
 
-### 4. `scheduled-followup` - Follow-up de compromissos
-- Envia lembretes de compromissos pendentes
-- Sem nenhum guardrail de horario
+# Sistema de Agendamento de Tarefas (Efeito Oráculo) — Implementado ✅
 
-### 5. `scheduled-checkin` - Check-in diario
-- Envia check-ins proativos
-- Sem nenhum guardrail de horario
+## O que foi feito
 
-### 6. `reactivation-check` - Reativacao de inativos
-- Envia msgs para usuarios inativos e sessoes perdidas
-- Sem nenhum guardrail de horario
+1. **Tabela `scheduled_tasks`**: id, user_id, execute_at, task_type, payload (JSONB), status, created_at, executed_at
+2. **Índice parcial**: `idx_scheduled_tasks_pending` em `execute_at WHERE status = 'pending'` — busca em milissegundos
+3. **Função RPC `claim_pending_tasks`**: `FOR UPDATE SKIP LOCKED` com limite de 150 — atomicidade absoluta contra duplicidade
+4. **RLS**: service_role full access + users can view own
+5. **Tags no prompt do `aura-agent`**:
+   - `[AGENDAR_TAREFA:YYYY-MM-DD HH:mm:tipo:descricao]` — agendar lembretes e meditações
+   - `[CANCELAR_TAREFA:tipo]` — cancela o PRÓXIMO pendente (ORDER BY execute_at ASC)
+6. **Processamento no `aura-agent`**: detecta as tags, cria/cancela tasks no banco, remove tags antes de mostrar ao usuário
+7. **Sanitização no `webhook-zapi`**: remove tags de agendamento que vazem na resposta
+8. **Edge function `execute-scheduled-tasks`**: processa tasks claimed, com delay 300ms anti-burst, handlers por tipo (reminder, meditation, message)
+9. **Safety net**: tasks em `executing` há >10 min são resetadas para `pending`
+10. **Cron `pg_cron`**: `*/5 * * * *` (cada 5 minutos) invocando a edge function
 
-### 7. `deliver-time-capsule` - Capsulas do tempo
-- Entrega capsulas agendadas pelo usuario
-- Sem guardrail de horario
+## Tipos de tarefa suportados
 
-## Plano de implementacao
+| Tipo | Payload | Ação |
+|------|---------|------|
+| `reminder` | `{ "text": "mensagem" }` | Envia texto via WhatsApp |
+| `meditation` | `{ "category": "sono" }` | Invoca `send-meditation` |
+| `message` | `{ "text": "mensagem" }` | Envia texto customizado |
 
-Adicionar o mesmo padrao de quiet hours usado em `conversation-followup` e `pattern-analysis` em todas as 7 functions acima:
+## Fluxo completo
 
-```typescript
-function getBrtHour(): number {
-  return (new Date().getUTCHours() - 3 + 24) % 24;
-}
+1. Usuário pede lembrete → Aura inclui `[AGENDAR_TAREFA:...]` na resposta
+2. `aura-agent` detecta a tag → insere na tabela `scheduled_tasks` com payload padronizado
+3. Tag é removida antes de o usuário ver a mensagem
+4. A cada 5 min, `pg_cron` invoca `execute-scheduled-tasks`
+5. Edge function chama `claim_pending_tasks(150)` (atômico, skip locked)
+6. Processa cada task com 300ms de delay → envia via Z-API
+7. Marca como `executed` ou `failed`
 
-// No inicio do handler:
-const brtHour = getBrtHour();
-if (brtHour < 8 || brtHour >= 22) {
-  console.log(`🌙 Quiet hours (${brtHour}h BRT) - skipping`);
-  return new Response(JSON.stringify({ status: 'skipped', reason: 'quiet_hours' }));
-}
-```
+---
 
-**Excecao para `session-reminder`**: Lembretes de 1h, 15min e inicio de sessao continuam funcionando 24/7 (sao time-sensitive e vinculados a sessoes que o proprio usuario agendou). Apenas os blocos de lembrete de 24h, post-sessao e sessao abandonada recebem o guardrail.
+# Seletor de Modelo AI no Admin — Implementado ✅
 
-**Excecao para `deliver-time-capsule`**: O usuario escolheu a data de entrega. Se caiu de madrugada, guardar e entregar as 8h BRT. Adicionar logica de "atrasar entrega para 8h se quiet hours".
+## O que foi feito
 
-## Arquivos a alterar
-- `supabase/functions/periodic-content/index.ts`
-- `supabase/functions/session-reminder/index.ts`
-- `supabase/functions/weekly-report/index.ts`
-- `supabase/functions/scheduled-followup/index.ts`
-- `supabase/functions/scheduled-checkin/index.ts`
-- `supabase/functions/reactivation-check/index.ts`
-- `supabase/functions/deliver-time-capsule/index.ts`
+1. **Tabela `system_config`**: key/value JSONB com RLS (admin + service_role)
+2. **Página `AdminSettings.tsx`**: rota `/admin/configuracoes` com dropdown dos 4 modelos
+3. **Função `callAI()`** no `aura-agent`: roteamento unificado Gateway vs Anthropic API
+4. **Adaptador Anthropic**: system prompt separado, merge de mensagens consecutivas, max_tokens obrigatório
+5. **Chamada principal** usa modelo configurado no banco; chamadas auxiliares (summary, onboarding, topic) usam `google/gemini-2.5-flash`
+6. **Secret `ANTHROPIC_API_KEY`** configurado
 
+## Modelos disponíveis
+
+| Modelo | Via | Uso |
+|---|---|---|
+| `google/gemini-2.5-pro` (default) | Lovable AI Gateway | Chat principal |
+| `google/gemini-2.5-flash` | Lovable AI Gateway | Auxiliares + opção principal |
+| `anthropic/claude-sonnet-4-6` | API Anthropic direta | Chat principal |
+| `openai/gpt-5` | Lovable AI Gateway | Chat principal |
+
+---
+
+# Insights Proativos 2x/semana + Remoção Check-in Segunda — Implementado ✅
+
+## O que foi feito
+
+1. **Cron `pattern-analysis` atualizado**: de `0 14 * * 4` (quinta) para `0 14 * * 4,6` (quinta + sábado, 11h BRT)
+2. **Filtros de proteção adicionados** no `pattern-analysis/index.ts`:
+   - Sessão ativa (`current_session_id`) → skip
+   - Qualquer mensagem (user ou assistant) nas últimas 2h → skip
+   - `scheduled_tasks` pendente (retorno já combinado) → skip
+3. **Check-in de segunda desativado**: cron `weekly-checkin-monday-8am` removido, entrada removida do `config.toml`
+4. **Limite de 1 insight/7 dias por usuário** mantido via `last_proactive_insight_at`
+
+## Cronograma atualizado
+
+| Dia | Sistema | Função |
+|-----|---------|--------|
+| Quinta 11h BRT | Insight proativo | `pattern-analysis` |
+| Sábado 11h BRT | Insight proativo (2ª chance) | `pattern-analysis` |
+| ~~Segunda 08h~~ | ~~Check-in semanal~~ | ~~Removido~~ |
+
+---
+
+# Auditoria Quiet Hours (8h-22h BRT) em todas as Edge Functions — Implementado ✅
+
+## O que foi feito
+
+Guardrail de quiet hours (8h-22h BRT) adicionado em **7 edge functions** que enviavam mensagens sem restrição de horário:
+
+| Function | Tipo de guardrail |
+|---|---|
+| `periodic-content` | Skip total em quiet hours |
+| `weekly-report` | Skip total (defensivo) |
+| `scheduled-followup` | Skip total em quiet hours |
+| `scheduled-checkin` | Skip total em quiet hours |
+| `reactivation-check` | Skip total em quiet hours |
+| `deliver-time-capsule` | Skip total (entrega na próxima execução diurna) |
+| `session-reminder` | **Seletivo**: blocos 24h, post-sessão, missed e abandoned skipados; 1h, 15m, start e 10m continuam 24/7 (time-sensitive) |
+
+## Functions já seguras (não alteradas)
+
+| Function | Motivo |
+|---|---|
+| `conversation-followup` | Já tinha quiet hours |
+| `pattern-analysis` | Já tinha quiet hours |
+| `schedule-setup-reminder` | Corrigido na rodada anterior |
+| `send-meditation` | Sob demanda (via aura-agent) |
+| `cleanup-inactive-users` | Não envia mensagens |

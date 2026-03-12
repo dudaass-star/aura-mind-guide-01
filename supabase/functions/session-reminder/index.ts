@@ -116,6 +116,10 @@ Gere um resumo estruturado da sessão com base na conversa. Seja empática e pre
   return fallback;
 }
 
+function getBrtHour(): number {
+  return (new Date().getUTCHours() - 3 + 24) % 24;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -127,6 +131,11 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const now = new Date();
+    const brtHour = getBrtHour();
+    const isQuietHours = brtHour < 8 || brtHour >= 22;
+    if (isQuietHours) {
+      console.log(`🌙 Quiet hours (${brtHour}h BRT) - only time-sensitive reminders (1h, 15m, start, 10m) will be sent`);
+    }
     const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
     const fifteenMinutesFromNow = new Date(now.getTime() + 15 * 60 * 1000);
     const twentyFourHoursFromNow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
@@ -141,9 +150,12 @@ Deno.serve(async (req) => {
     let postSessionSent = 0;
 
     // ========================================================================
-    // LEMBRETE DE 24 HORAS + CONFIRMAÇÃO
+    // LEMBRETE DE 24 HORAS + CONFIRMAÇÃO (skip during quiet hours)
     // ========================================================================
-    const { data: sessions24h, error: error24h } = await supabase
+    if (isQuietHours) {
+      console.log('🌙 Skipping 24h reminders during quiet hours');
+    }
+    const { data: sessions24h, error: error24h } = isQuietHours ? { data: null, error: null } : await supabase
       .from('sessions')
       .select(`id, user_id, scheduled_at, session_type, focus_topic`)
       .eq('status', 'scheduled')
@@ -532,10 +544,11 @@ Pra gente começar, me manda um "vamos" ou "bora" - ou me avisa se quer reagenda
 
     // ========================================================================
     // DETECTAR SESSÕES NOTIFICADAS MAS NUNCA INICIADAS (missed - 30 min após notificação)
+    // Skip during quiet hours - will be processed next run
     // ========================================================================
     let missedSessionsClosed = 0;
     
-    const { data: missedSessions, error: errorMissed } = await supabase
+    const { data: missedSessions, error: errorMissed } = isQuietHours ? { data: null, error: null } : await supabase
       .from('sessions')
       .select('id, user_id, scheduled_at')
       .eq('status', 'scheduled')
@@ -594,11 +607,12 @@ Quer remarcar pra outro horário? É só me dizer quando fica bom pra você. ✨
     // ========================================================================
     // DETECTAR E FECHAR SESSÕES ABANDONADAS (30 min após fim previsto)
     // CORREÇÃO: Diferenciar entre usuário que participou vs apenas recebeu abertura
+    // Skip during quiet hours - will be processed next run
     // ========================================================================
     let abandonedSessionsClosed = 0;
     
     // Buscar sessões in_progress que deveriam ter terminado há mais de 30 minutos
-    const { data: abandonedSessions, error: errorAbandoned } = await supabase
+    const { data: abandonedSessions, error: errorAbandoned } = isQuietHours ? { data: null, error: null } : await supabase
       .from('sessions')
       .select('id, user_id, scheduled_at, duration_minutes, started_at')
       .eq('status', 'in_progress')
@@ -718,9 +732,10 @@ Se quiser remarcar uma nova sessão, é só me dizer!`;
 
     // ========================================================================
     // LEMBRETE PÓS-SESSÃO (fallback: 5 minutos após término se não foi enviado pelo aura-agent)
+    // Skip during quiet hours - will be processed next run
     // ========================================================================
     const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
-    const { data: completedSessions, error: errorCompleted } = await supabase
+    const { data: completedSessions, error: errorCompleted } = isQuietHours ? { data: null, error: null } : await supabase
       .from('sessions')
       .select(`id, user_id, session_summary, commitments, key_insights, ended_at`)
       .eq('status', 'completed')

@@ -7,12 +7,25 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+function getBrtHour(): number {
+  return (new Date().getUTCHours() - 3 + 24) % 24;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    // Quiet hours guard: no deliveries between 22h and 8h BRT
+    const brtHour = getBrtHour();
+    if (brtHour < 8 || brtHour >= 22) {
+      console.log(`🌙 Quiet hours (${brtHour}h BRT) - skipping time capsule delivery (will retry next run)`);
+      return new Response(JSON.stringify({ status: 'skipped', reason: 'quiet_hours', brt_hour: brtHour }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
