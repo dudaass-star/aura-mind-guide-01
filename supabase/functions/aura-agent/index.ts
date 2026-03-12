@@ -3716,20 +3716,18 @@ Exemplo com 4 sessões:
 
     // Adicionar instrução de encerramento se necessário
     if (shouldEndSession) {
-      const implicitEnd = detectsImplicitSessionEnd(message, sessionActive);
-      if (implicitEnd) {
-        dynamicContext += `\n\n🔴 ENCERRAMENTO IMPLÍCITO DETECTADO: O usuário deu sinais de satisfação/conclusão (ex: "combinado", "obrigado").
-INSTRUÇÃO: Faça um fechamento CALOROSO da sessão:
-1. Reconheça que vocês tiveram uma boa conversa
-2. Resuma os 2-3 principais insights/aprendizados
-3. Relembre qualquer compromisso que ele tenha feito
-4. Agradeça com carinho genuíno
-5. Pergunte se quer agendar a próxima sessão
-6. Use [MODO_AUDIO] para encerrar de forma mais íntima
-7. Inclua [ENCERRAR_SESSAO] no final da sua resposta`;
-      } else {
-        dynamicContext += `\n\n🔴 INSTRUÇÃO CRÍTICA: ENCERRE A SESSÃO AGORA. Faça um breve resumo dos principais pontos discutidos, agradeça pelo tempo juntos e inclua a tag [ENCERRAR_SESSAO] no final.`;
-      }
+      dynamicContext += `\n\n🔴 INSTRUÇÃO CRÍTICA: ENCERRE A SESSÃO AGORA. Faça um breve resumo dos principais pontos discutidos, agradeça pelo tempo juntos e inclua a tag [ENCERRAR_SESSAO] no final.`;
+    }
+    
+    // Adicionar instrução de PAUSA se necessário
+    if (shouldPauseSession && !shouldEndSession) {
+      dynamicContext += `\n\n⏸️ O USUÁRIO PRECISA SAIR AGORA. NÃO encerre a sessão. Em vez disso:
+1. Acolha com naturalidade ("Claro, sem problema!")
+2. Faça um BREVE resumo do que vocês estavam explorando (2-3 frases)
+3. Diga que continuam de onde pararam na próxima vez
+4. Despeça-se com carinho
+5. NÃO inclua [ENCERRAR_SESSAO] — a sessão fica pausada, não encerrada
+6. NÃO faça perguntas ou prolongue a conversa`;
     }
 
     const apiMessages = [
