@@ -2742,13 +2742,15 @@ serve(async (req) => {
           isOvertime: timeInfo.isOvertime
         });
 
-        // Verificar se usuário quer encerrar ou se está em overtime ou encerramento implícito
-        const implicitEnd = detectsImplicitSessionEnd(message, true);
-        if (wantsToEndSession(message) || timeInfo.isOvertime || implicitEnd) {
+        // Verificar se usuário quer encerrar (EXPLÍCITO apenas) ou se está em overtime
+        if (wantsToEndSession(message) || timeInfo.isOvertime) {
           shouldEndSession = true;
-          if (implicitEnd) {
-            console.log('🔍 Implicit session end detected from message:', message.substring(0, 50));
-          }
+        }
+        
+        // Verificar se usuário quer PAUSAR (sair agora, continuar depois)
+        if (wantsToPauseSession(message) && !shouldEndSession) {
+          shouldPauseSession = true;
+          console.log('⏸️ User wants to PAUSE session:', message.substring(0, 50));
         }
       }
     } else if (profile?.user_id) {
