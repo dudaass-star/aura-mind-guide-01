@@ -150,9 +150,12 @@ Deno.serve(async (req) => {
     let postSessionSent = 0;
 
     // ========================================================================
-    // LEMBRETE DE 24 HORAS + CONFIRMAÇÃO
+    // LEMBRETE DE 24 HORAS + CONFIRMAÇÃO (skip during quiet hours)
     // ========================================================================
-    const { data: sessions24h, error: error24h } = await supabase
+    if (isQuietHours) {
+      console.log('🌙 Skipping 24h reminders during quiet hours');
+    }
+    const { data: sessions24h, error: error24h } = isQuietHours ? { data: null, error: null } : await supabase
       .from('sessions')
       .select(`id, user_id, scheduled_at, session_type, focus_topic`)
       .eq('status', 'scheduled')
