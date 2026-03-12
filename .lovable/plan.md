@@ -1,3 +1,16 @@
+# Sessão só encerra por decisão explícita do usuário — Implementado ✅
+
+## O que foi feito
+
+1. **Removido `detectsImplicitSessionEnd`**: palavras como "perfeito", "obrigado", "combinado" não encerram mais a sessão
+2. **Sessão só encerra quando**: usuário pede explicitamente (`wantsToEndSession`) OU overtime (>45 min)
+3. **`wantsToPauseSession()`**: detecta "preciso sair", "tenho que ir", etc. — salva contexto com `[PAUSADA]` no `session_summary` sem encerrar
+4. **Retomada de sessão pausada**: quando o usuário volta, o contexto da pausa é carregado no dynamicContext para continuar de onde parou
+5. **Hard block corrigido**: agora reseta `shouldEndSession = false` quando bloqueia tags em fases early
+6. **Anti-echo guard corrigido**: parâmetros de `callAI()` corrigidos (`configuredModel`, `apiMessages`, `LOVABLE_API_KEY`)
+
+---
+
 # Cápsula do Tempo — Implementado ✅
 
 ## O que foi feito
