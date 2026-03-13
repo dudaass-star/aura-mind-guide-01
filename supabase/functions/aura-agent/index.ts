@@ -4831,6 +4831,13 @@ Responda apenas o resumo, sem formatação.`
       }
     }
 
+    // Auto-inject [AGUARDANDO_RESPOSTA] se a resposta contém ? mas não tem tag de status
+    const hasStatusTag = /\[(AGUARDANDO_RESPOSTA|CONVERSA_CONCLUIDA|ENCERRAR_SESSAO)\]/i.test(assistantMessage);
+    if (!hasStatusTag && assistantMessage.includes('?')) {
+      assistantMessage = assistantMessage.trimEnd() + ' [AGUARDANDO_RESPOSTA]';
+      console.log('🏷️ Auto-injected [AGUARDANDO_RESPOSTA] — response contains ? but no status tag');
+    }
+
     // Detectar status da conversa
     const isConversationComplete = assistantMessage.includes('[CONVERSA_CONCLUIDA]');
     const isAwaitingResponse = assistantMessage.includes('[AGUARDANDO_RESPOSTA]');
