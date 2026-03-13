@@ -1497,12 +1497,14 @@ function wantsToPauseSession(message: string): boolean {
 }
 
 // Calcula fase e tempo restante da sessão - COM FASES GRANULARES
-function calculateSessionTimeContext(session: any): { 
+// lastMessageAt: opcional — se fornecido, detecta gaps >2h como retomada
+function calculateSessionTimeContext(session: any, lastMessageAt?: string | null): { 
   timeRemaining: number; 
   phase: string; 
   timeContext: string;
   shouldWarnClosing: boolean;
   isOvertime: boolean;
+  isResuming: boolean;
   forceAudioForClose: boolean;
 } {
   if (!session?.started_at) {
@@ -1512,14 +1514,29 @@ function calculateSessionTimeContext(session: any): {
       timeContext: '',
       shouldWarnClosing: false,
       isOvertime: false,
+      isResuming: false,
       forceAudioForClose: false
     };
   }
 
   const startedAt = new Date(session.started_at);
   const now = new Date();
-  const elapsedMinutes = Math.floor((now.getTime() - startedAt.getTime()) / 60000);
+  let elapsedMinutes = Math.floor((now.getTime() - startedAt.getTime()) / 60000);
   const duration = session.duration_minutes || 45;
+  
+  // Detectar gaps longos (>2h) como retomada
+  let isResuming = false;
+  if (lastMessageAt) {
+    const lastMsgTime = new Date(lastMessageAt);
+    const gapMinutes = Math.floor((now.getTime() - lastMsgTime.getTime()) / 60000);
+    if (gapMinutes > 120) {
+      // Gap >2h: tratar como retomada, resetar relógio para ~20 min
+      isResuming = true;
+      elapsedMinutes = Math.max(0, duration - 20); // Simular que faltam ~20 min
+      console.log(`⏸️➡️ Gap de ${gapMinutes} min detectado. Tratando como RETOMADA (${20} min restantes)`);
+    }
+  }
+  
   const timeRemaining = duration - elapsedMinutes;
 
   let phase: string;
@@ -1782,19 +1799,27 @@ De 0 a 10, como você sai agora? Vou adorar ouvir! ✨
 
 - Inclua [ENCERRAR_SESSAO] quando finalizar
 `;
-  } else if (phase === 'overtime') {
+  } else if (phase === 'overtime' && !isResuming) {
     timeContext += `
 ⏰ SESSÃO ALÉM DO TEMPO (${Math.abs(timeRemaining)} min além):
-- FINALIZE AGORA, mas com carinho (não abrupto!)
-- Dê um resumo BREVE da conversa (2-3 frases)
-- Lembre dos compromissos definidos
-- Agradeça pelo tempo juntos
-- Use [MODO_AUDIO] para despedida calorosa
-- Inclua a tag [ENCERRAR_SESSAO] no final
+- PROPONHA encerrar a sessão ao usuário, mas NÃO force
+- Diga algo como "Já passamos do nosso tempo, quer que a gente encerre ou prefere continuar mais um pouco?"
+- Se o usuário quiser continuar, continue normalmente
+- Se quiser encerrar: resumo + compromissos + [ENCERRAR_SESSAO]
+- Use [MODO_AUDIO] para despedida calorosa quando encerrar
+`;
+  } else if (isResuming) {
+    timeContext += `
+⏸️➡️ SESSÃO RETOMADA APÓS PAUSA LONGA:
+- O usuário voltou após um longo período sem responder (provavelmente dormiu ou teve compromissos)
+- Você tem ~20 minutos para esta sessão retomada
+- Retome o assunto anterior com naturalidade
+- NÃO encerre automaticamente — o usuário está re-engajando
+- Pergunte se quer continuar o assunto de antes ou trazer algo novo
 `;
   }
 
-  return { timeRemaining, phase, timeContext, shouldWarnClosing, isOvertime, forceAudioForClose };
+  return { timeRemaining, phase, timeContext, shouldWarnClosing, isOvertime, isResuming, forceAudioForClose };
 }
 
 // Remove tags de controle do histórico e adiciona timestamps
@@ -2733,18 +2758,28 @@ serve(async (req) => {
         sessionActive = true;
         currentSession = session;
         
-        // Calcular tempo e fase da sessão
-        const timeInfo = calculateSessionTimeContext(session);
+        // Buscar última mensagem para detectar gaps longos
+        const { data: lastMsg } = await supabase
+          .from('messages')
+          .select('created_at')
+          .eq('user_id', profile.user_id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        
+        // Calcular tempo e fase da sessão (com detecção de gap)
+        const timeInfo = calculateSessionTimeContext(session, lastMsg?.created_at);
         sessionTimeContext = timeInfo.timeContext;
         
         console.log('⏱️ Session time:', {
           timeRemaining: timeInfo.timeRemaining,
           phase: timeInfo.phase,
-          isOvertime: timeInfo.isOvertime
+          isOvertime: timeInfo.isOvertime,
+          isResuming: timeInfo.isResuming
         });
 
-        // Verificar se usuário quer encerrar (EXPLÍCITO apenas) ou se está em overtime
-        if (wantsToEndSession(message) || timeInfo.isOvertime) {
+        // Verificar se usuário quer encerrar (EXPLÍCITO apenas — overtime NÃO força encerramento)
+        if (wantsToEndSession(message)) {
           shouldEndSession = true;
         }
         
@@ -2780,14 +2815,23 @@ serve(async (req) => {
         sessionActive = true;
         currentSession = orphanSession;
         
-        // Calcular tempo e fase da sessão
-        const timeInfo = calculateSessionTimeContext(orphanSession);
+        // Buscar última mensagem para detectar gaps longos
+        const { data: lastMsgOrphan } = await supabase
+          .from('messages')
+          .select('created_at')
+          .eq('user_id', profile.user_id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        
+        // Calcular tempo e fase da sessão (com detecção de gap)
+        const timeInfo = calculateSessionTimeContext(orphanSession, lastMsgOrphan?.created_at);
         sessionTimeContext = timeInfo.timeContext;
         
         console.log('✅ Orphan session linked and activated');
         
-        // Verificar se usuário quer encerrar (EXPLÍCITO apenas) ou se está em overtime
-        if (wantsToEndSession(message) || timeInfo.isOvertime) {
+        // Verificar se usuário quer encerrar (EXPLÍCITO apenas — overtime NÃO força encerramento)
+        if (wantsToEndSession(message)) {
           shouldEndSession = true;
         }
         
@@ -3595,7 +3639,16 @@ REGRA: ${behaviorInstruction}`;
       } else if (phaseInfo.phase === 'final_closing') {
         phaseBlock += `\n💜 ENCERRE AGORA: resumo + compromisso + escala 0-10 + [ENCERRAR_SESSAO].`;
       } else if (phaseInfo.phase === 'overtime') {
-        phaseBlock += `\n⏰ TEMPO ESGOTADO. Finalize IMEDIATAMENTE com [ENCERRAR_SESSAO].`;
+        phaseBlock += `\n⏰ TEMPO ESGOTADO. PROPONHA encerrar a sessão ao usuário, mas NÃO force. Pergunte se quer continuar ou encerrar.`;
+      }
+      
+      // Instrução especial para retomada após gap longo
+      if (phaseInfo.isResuming) {
+        phaseBlock += `\n\n⏸️➡️ RETOMADA APÓS PAUSA LONGA:`;
+        phaseBlock += `\nO usuário voltou após um longo período sem responder. Trate como retomada natural.`;
+        phaseBlock += `\nVocê tem ~20 minutos restantes nesta sessão retomada.`;
+        phaseBlock += `\nRetome o assunto anterior com naturalidade: "Que bom que voltou! Vamos continuar de onde paramos?"`;
+        phaseBlock += `\n🚫 NÃO encerre a sessão automaticamente. O usuário está re-engajando.`;
       }
 
       dynamicContext += phaseBlock;
