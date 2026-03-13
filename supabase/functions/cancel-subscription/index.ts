@@ -78,7 +78,7 @@ serve(async (req) => {
 
     logStep("Customer search result", { found: !!customer });
 
-    if (customers.data.length === 0) {
+    if (!customer) {
       return new Response(
         JSON.stringify({ 
           success: false, 
@@ -91,7 +91,6 @@ serve(async (req) => {
       );
     }
 
-    const customer = customers.data[0];
     logStep("Customer found", { customerId: customer.id });
 
     // Get active subscriptions
