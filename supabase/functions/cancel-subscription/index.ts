@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
+import { getPhoneVariations } from "../_shared/zapi-client.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -42,7 +43,7 @@ serve(async (req) => {
       throw new Error("Phone number is required");
     }
 
-    // Clean phone number - remove all non-digits except leading +
+    // Clean phone number - remove all non-digits
     let phoneClean = phone.replace(/\D/g, "");
     
     // Ensure it starts with country code (55 for Brazil)
@@ -59,15 +60,25 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Search for customer by phone in metadata
-    const customers = await stripe.customers.search({
-      query: `metadata['phone']:'${phoneClean}'`,
-      limit: 1,
-    });
+    // Search for customer by phone in metadata using all variations
+    const phoneVariations = getPhoneVariations(phoneClean);
+    logStep("Searching with phone variations", { phoneVariations });
+    
+    let customer: Stripe.Customer | null = null;
+    for (const phoneVar of phoneVariations) {
+      const customers = await stripe.customers.search({
+        query: `metadata['phone']:'${phoneVar}'`,
+        limit: 1,
+      });
+      if (customers.data.length > 0) {
+        customer = customers.data[0];
+        break;
+      }
+    }
 
-    logStep("Customer search result", { found: customers.data.length > 0 });
+    logStep("Customer search result", { found: !!customer });
 
-    if (customers.data.length === 0) {
+    if (!customer) {
       return new Response(
         JSON.stringify({ 
           success: false, 
@@ -80,7 +91,6 @@ serve(async (req) => {
       );
     }
 
-    const customer = customers.data[0];
     logStep("Customer found", { customerId: customer.id });
 
     // Get active subscriptions
