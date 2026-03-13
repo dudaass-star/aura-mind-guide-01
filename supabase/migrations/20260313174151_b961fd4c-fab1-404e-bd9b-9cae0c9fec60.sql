@@ -1,0 +1,1 @@
+ALTER TABLE public.sessions ADD COLUMN resumption_count integer NOT NULL DEFAULT 0;
