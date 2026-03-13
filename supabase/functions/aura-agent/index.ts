@@ -1498,7 +1498,7 @@ function wantsToPauseSession(message: string): boolean {
 
 // Calcula fase e tempo restante da sessão - COM FASES GRANULARES
 // lastMessageAt: opcional — se fornecido, detecta gaps >2h como retomada
-function calculateSessionTimeContext(session: any, lastMessageAt?: string | null): { 
+function calculateSessionTimeContext(session: any, lastMessageAt?: string | null, resumptionCount?: number): { 
   timeRemaining: number; 
   phase: string; 
   timeContext: string;
@@ -1506,6 +1506,7 @@ function calculateSessionTimeContext(session: any, lastMessageAt?: string | null
   isOvertime: boolean;
   isResuming: boolean;
   forceAudioForClose: boolean;
+  maxResumptionsReached: boolean;
 } {
   if (!session?.started_at) {
     return { 
@@ -1515,7 +1516,8 @@ function calculateSessionTimeContext(session: any, lastMessageAt?: string | null
       shouldWarnClosing: false,
       isOvertime: false,
       isResuming: false,
-      forceAudioForClose: false
+      forceAudioForClose: false,
+      maxResumptionsReached: false
     };
   }
 
@@ -1526,14 +1528,22 @@ function calculateSessionTimeContext(session: any, lastMessageAt?: string | null
   
   // Detectar gaps longos (>2h) como retomada
   let isResuming = false;
+  let maxResumptionsReached = false;
+  const MAX_RESUMPTIONS = 3;
   if (lastMessageAt) {
     const lastMsgTime = new Date(lastMessageAt);
     const gapMinutes = Math.floor((now.getTime() - lastMsgTime.getTime()) / 60000);
     if (gapMinutes > 120) {
-      // Gap >2h: tratar como retomada, resetar relógio para ~20 min
-      isResuming = true;
-      elapsedMinutes = Math.max(0, duration - 20); // Simular que faltam ~20 min
-      console.log(`⏸️➡️ Gap de ${gapMinutes} min detectado. Tratando como RETOMADA (${20} min restantes)`);
+      if ((resumptionCount ?? 0) >= MAX_RESUMPTIONS) {
+        // Limite atingido: NÃO tratar como retomada, manter overtime
+        maxResumptionsReached = true;
+        console.log(`🚫 Gap de ${gapMinutes} min detectado, mas sessão já foi retomada ${resumptionCount} vezes (máx ${MAX_RESUMPTIONS}). Mantendo OVERTIME.`);
+      } else {
+        // Gap >2h: tratar como retomada, resetar relógio para ~20 min
+        isResuming = true;
+        elapsedMinutes = Math.max(0, duration - 20); // Simular que faltam ~20 min
+        console.log(`⏸️➡️ Gap de ${gapMinutes} min detectado. Tratando como RETOMADA (${20} min restantes, retomada #${(resumptionCount ?? 0) + 1})`);
+      }
     }
   }
   
@@ -1819,7 +1829,18 @@ De 0 a 10, como você sai agora? Vou adorar ouvir! ✨
 `;
   }
 
-  return { timeRemaining, phase, timeContext, shouldWarnClosing, isOvertime, isResuming, forceAudioForClose };
+  if (maxResumptionsReached) {
+    timeContext += `
+🚫 LIMITE DE RETOMADAS ATINGIDO (${resumptionCount ?? 0} retomadas):
+- Esta sessão já foi retomada ${resumptionCount ?? 0} vezes, o máximo permitido.
+- PROPONHA encerrar esta sessão e agendar uma nova.
+- Diga algo como: "Essa sessão já se estendeu bastante ao longo dos dias. Que tal a gente encerrar ela e marcar uma sessão nova pra você?"
+- Se o usuário quiser encerrar: resumo + compromissos + [ENCERRAR_SESSAO]
+- Se insistir em continuar, continue mas sugira novamente em breve.
+`;
+  }
+
+  return { timeRemaining, phase, timeContext, shouldWarnClosing, isOvertime, isResuming, forceAudioForClose, maxResumptionsReached };
 }
 
 // Remove tags de controle do histórico e adiciona timestamps
@@ -2772,15 +2793,25 @@ serve(async (req) => {
         lastMessageTimestamp = lastMsg?.created_at || null;
         
         // Calcular tempo e fase da sessão (com detecção de gap)
-        const timeInfo = calculateSessionTimeContext(session, lastMessageTimestamp);
+        const timeInfo = calculateSessionTimeContext(session, lastMessageTimestamp, session.resumption_count ?? 0);
         sessionTimeContext = timeInfo.timeContext;
         
         console.log('⏱️ Session time:', {
           timeRemaining: timeInfo.timeRemaining,
           phase: timeInfo.phase,
           isOvertime: timeInfo.isOvertime,
-          isResuming: timeInfo.isResuming
+          isResuming: timeInfo.isResuming,
+          resumptionCount: session.resumption_count ?? 0,
+          maxResumptionsReached: timeInfo.maxResumptionsReached
         });
+
+        // Incrementar contador de retomadas no banco
+        if (timeInfo.isResuming) {
+          await supabase.from('sessions')
+            .update({ resumption_count: (session.resumption_count ?? 0) + 1 })
+            .eq('id', session.id);
+          console.log(`📊 Resumption count incrementado para ${(session.resumption_count ?? 0) + 1}`);
+        }
 
         // Verificar se usuário quer encerrar (EXPLÍCITO apenas — overtime NÃO força encerramento)
         if (wantsToEndSession(message)) {
@@ -2832,10 +2863,20 @@ serve(async (req) => {
         lastMessageTimestamp = lastMsgOrphan?.created_at || null;
         
         // Calcular tempo e fase da sessão (com detecção de gap)
-        const timeInfo = calculateSessionTimeContext(orphanSession, lastMessageTimestamp);
+        const timeInfo = calculateSessionTimeContext(orphanSession, lastMessageTimestamp, orphanSession.resumption_count ?? 0);
         sessionTimeContext = timeInfo.timeContext;
         
-        console.log('✅ Orphan session linked and activated');
+        console.log('✅ Orphan session linked and activated', {
+          resumptionCount: orphanSession.resumption_count ?? 0,
+          maxResumptionsReached: timeInfo.maxResumptionsReached
+        });
+
+        // Incrementar contador de retomadas no banco
+        if (timeInfo.isResuming) {
+          await supabase.from('sessions')
+            .update({ resumption_count: (orphanSession.resumption_count ?? 0) + 1 })
+            .eq('id', orphanSession.id);
+        }
         
         // Verificar se usuário quer encerrar (EXPLÍCITO apenas — overtime NÃO força encerramento)
         if (wantsToEndSession(message)) {
@@ -3622,7 +3663,7 @@ REGRA: ${behaviorInstruction}`;
     // CONTROLE DE SESSÃO - Reforço determinístico de fase no dynamicContext
     // ========================================================================
     if (sessionActive && currentSession?.started_at) {
-      const phaseInfo = calculateSessionTimeContext(currentSession, lastMessageTimestamp);
+      const phaseInfo = calculateSessionTimeContext(currentSession, lastMessageTimestamp, currentSession.resumption_count ?? 0);
       const elapsed = Math.floor(
         (Date.now() - new Date(currentSession.started_at).getTime()) / 60000
       );
@@ -3809,7 +3850,7 @@ Exemplo com 4 sessões:
       { role: "user", content: message }
     ];
 
-    console.log("Calling AI (model: " + configuredModel + ") with", apiMessages.length, "messages, plan:", userPlan, "sessions:", sessionsAvailable, "sessionActive:", sessionActive, "shouldEndSession:", shouldEndSession, "phase:", currentSession ? calculateSessionTimeContext(currentSession, lastMessageTimestamp).phase : 'none');
+    console.log("Calling AI (model: " + configuredModel + ") with", apiMessages.length, "messages, plan:", userPlan, "sessions:", sessionsAvailable, "sessionActive:", sessionActive, "shouldEndSession:", shouldEndSession, "phase:", currentSession ? calculateSessionTimeContext(currentSession, lastMessageTimestamp, currentSession.resumption_count ?? 0).phase : 'none');
 
     let data: any;
     try {
@@ -3881,7 +3922,7 @@ Exemplo com 4 sessões:
     // CAMADA 1: TRAVA DE ENCERRAMENTO PREMATURO (Hard Block)
     // ========================================================================
     if (sessionActive && currentSession) {
-      const currentPhaseInfo = calculateSessionTimeContext(currentSession, lastMessageTimestamp);
+      const currentPhaseInfo = calculateSessionTimeContext(currentSession, lastMessageTimestamp, currentSession.resumption_count ?? 0);
       const currentPhase = currentPhaseInfo.phase;
       const earlyPhases = ['opening', 'exploration', 'reframe', 'development'];
       
@@ -4798,7 +4839,7 @@ Responda apenas o resumo, sem formatação.`
     const forceAudioForSessionStart = sessionActive && sessionAudioCount < 2;
     
     // Verificar se é encerramento de sessão (forçar áudio caloroso)
-    const sessionCloseInfo = currentSession ? calculateSessionTimeContext(currentSession, lastMessageTimestamp) : null;
+    const sessionCloseInfo = currentSession ? calculateSessionTimeContext(currentSession, lastMessageTimestamp, currentSession.resumption_count ?? 0) : null;
     const forceAudioForSessionClose = sessionCloseInfo?.forceAudioForClose || shouldEndSession || aiWantsToEndSession;
     
     const allowAudioThisTurn = !wantsText && (wantsAudio || crisis || forceAudioForSessionStart || forceAudioForSessionClose);

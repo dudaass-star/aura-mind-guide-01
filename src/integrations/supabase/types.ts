@@ -789,6 +789,7 @@ export type Database = {
           reminder_15m_sent: boolean | null
           reminder_1h_sent: boolean | null
           reminder_24h_sent: boolean | null
+          resumption_count: number
           scheduled_at: string
           session_start_notified: boolean | null
           session_summary: string | null
@@ -814,6 +815,7 @@ export type Database = {
           reminder_15m_sent?: boolean | null
           reminder_1h_sent?: boolean | null
           reminder_24h_sent?: boolean | null
+          resumption_count?: number
           scheduled_at: string
           session_start_notified?: boolean | null
           session_summary?: string | null
@@ -839,6 +841,7 @@ export type Database = {
           reminder_15m_sent?: boolean | null
           reminder_1h_sent?: boolean | null
           reminder_24h_sent?: boolean | null
+          resumption_count?: number
           scheduled_at?: string
           session_start_notified?: boolean | null
           session_summary?: string | null
