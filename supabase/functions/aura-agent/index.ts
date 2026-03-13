@@ -2828,8 +2828,11 @@ serve(async (req) => {
           .limit(1)
           .maybeSingle();
         
+        // Armazenar timestamp para uso consistente em todas as chamadas
+        lastMessageTimestamp = lastMsgOrphan?.created_at || null;
+        
         // Calcular tempo e fase da sessão (com detecção de gap)
-        const timeInfo = calculateSessionTimeContext(orphanSession, lastMsgOrphan?.created_at);
+        const timeInfo = calculateSessionTimeContext(orphanSession, lastMessageTimestamp);
         sessionTimeContext = timeInfo.timeContext;
         
         console.log('✅ Orphan session linked and activated');
