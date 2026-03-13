@@ -55,7 +55,12 @@ export default function AdminSettings() {
       if (error) throw error;
 
       for (const row of data || []) {
-        const val = typeof row.value === 'string' ? row.value : JSON.stringify(row.value).replace(/"/g, '');
+        let val: string;
+        try {
+          val = typeof row.value === 'string' ? JSON.parse(row.value) : String(row.value);
+        } catch {
+          val = String(row.value).replace(/"/g, '');
+        }
         if (row.key === 'ai_model') {
           setSelectedModel(val);
           setCurrentModel(val);
@@ -144,7 +149,7 @@ export default function AdminSettings() {
             <CardContent className="space-y-4">
               <Select value={selectedModel} onValueChange={setSelectedModel}>
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Selecione um modelo" />
                 </SelectTrigger>
                 <SelectContent>
                   {AI_MODELS.map(model => (
@@ -160,7 +165,7 @@ export default function AdminSettings() {
 
               <div className="flex items-center justify-between pt-2">
                 <p className="text-sm text-muted-foreground">
-                  Modelo ativo: <span className="font-medium text-foreground">{AI_MODELS.find(m => m.value === currentModel)?.label}</span>
+                  Modelo ativo: <span className="font-medium text-foreground">{AI_MODELS.find(m => m.value === currentModel)?.label || currentModel}</span>
                 </p>
                 <Button onClick={handleSave} disabled={saving || !hasChanges} variant="sage">
                   <Save className="h-4 w-4 mr-2" />
@@ -183,7 +188,7 @@ export default function AdminSettings() {
             <CardContent className="space-y-4">
               <Select value={selectedTTSModel} onValueChange={setSelectedTTSModel}>
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Selecione um modelo" />
                 </SelectTrigger>
                 <SelectContent>
                   {TTS_MODELS.map(model => (
@@ -199,7 +204,7 @@ export default function AdminSettings() {
 
               <div className="flex items-center justify-between pt-2">
                 <p className="text-sm text-muted-foreground">
-                  Modelo ativo: <span className="font-medium text-foreground">{TTS_MODELS.find(m => m.value === currentTTSModel)?.label}</span>
+                  Modelo ativo: <span className="font-medium text-foreground">{TTS_MODELS.find(m => m.value === currentTTSModel)?.label || currentTTSModel}</span>
                 </p>
                 <Button onClick={handleSaveTTS} disabled={savingTTS || !hasTTSChanges} variant="sage">
                   <Save className="h-4 w-4 mr-2" />
