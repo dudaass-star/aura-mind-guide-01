@@ -3881,7 +3881,7 @@ Exemplo com 4 sessões:
     // CAMADA 1: TRAVA DE ENCERRAMENTO PREMATURO (Hard Block)
     // ========================================================================
     if (sessionActive && currentSession) {
-      const currentPhaseInfo = calculateSessionTimeContext(currentSession);
+      const currentPhaseInfo = calculateSessionTimeContext(currentSession, lastMessageTimestamp);
       const currentPhase = currentPhaseInfo.phase;
       const earlyPhases = ['opening', 'exploration', 'reframe', 'development'];
       
