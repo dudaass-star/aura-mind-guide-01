@@ -640,6 +640,46 @@ Deno.serve(async (req) => {
               continue;
             }
 
+            // Skip if user has upcoming scheduled sessions
+            const { data: upcomingSessions } = await supabase
+              .from('sessions')
+              .select('id')
+              .eq('user_id', profile.user_id)
+              .eq('status', 'scheduled')
+              .gt('scheduled_at', new Date().toISOString())
+              .limit(1);
+
+            if (upcomingSessions && upcomingSessions.length > 0) {
+              console.log(`⏭️ Re-engagement skip ${profile.user_id}: has upcoming session`);
+              continue;
+            }
+
+            // Skip if user has pending commitments (tasks/reflections from Aura)
+            const { data: pendingCommitments } = await supabase
+              .from('commitments')
+              .select('id')
+              .eq('user_id', profile.user_id)
+              .eq('completed', false)
+              .limit(1);
+
+            if (pendingCommitments && pendingCommitments.length > 0) {
+              console.log(`⏭️ Re-engagement skip ${profile.user_id}: has pending commitments`);
+              continue;
+            }
+
+            // Skip if user has pending scheduled tasks
+            const { data: pendingTasks } = await supabase
+              .from('scheduled_tasks')
+              .select('id')
+              .eq('user_id', profile.user_id)
+              .eq('status', 'pending')
+              .limit(1);
+
+            if (pendingTasks && pendingTasks.length > 0) {
+              console.log(`⏭️ Re-engagement skip ${profile.user_id}: has pending scheduled task`);
+              continue;
+            }
+
             // Check last user message date
             const { data: lastUserMsg } = await supabase
               .from('messages')
@@ -657,17 +697,17 @@ Deno.serve(async (req) => {
               continue; // Active recently, skip
             }
 
-            // Check last follow-up/re-engagement sent (frequency control: max 1x per 7 days)
+            // Check last re-engagement sent (frequency control: max 1x per 7 days)
             const { data: followupRecord } = await supabase
               .from('conversation_followups')
-              .select('last_followup_at')
+              .select('last_reengagement_at')
               .eq('user_id', profile.user_id)
               .maybeSingle();
 
-            if (followupRecord?.last_followup_at) {
-              const daysSinceLastFollowup = (now - new Date(followupRecord.last_followup_at).getTime()) / (1000 * 60 * 60 * 24);
-              if (daysSinceLastFollowup < 7) {
-                console.log(`⏭️ Re-engagement skip ${profile.user_id}: last followup ${Math.round(daysSinceLastFollowup)}d ago`);
+            if (followupRecord?.last_reengagement_at) {
+              const daysSinceLastReengagement = (now - new Date(followupRecord.last_reengagement_at).getTime()) / (1000 * 60 * 60 * 24);
+              if (daysSinceLastReengagement < 7) {
+                console.log(`⏭️ Re-engagement skip ${profile.user_id}: last reengagement ${Math.round(daysSinceLastReengagement)}d ago`);
                 continue;
               }
             }
@@ -797,7 +837,7 @@ IMPORTANTE:
                 .from('conversation_followups')
                 .upsert({
                   user_id: profile.user_id,
-                  last_followup_at: new Date().toISOString(),
+                  last_reengagement_at: new Date().toISOString(),
                   updated_at: new Date().toISOString(),
                 }, { onConflict: 'user_id' });
 
