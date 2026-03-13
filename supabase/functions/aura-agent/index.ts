@@ -2750,18 +2750,28 @@ serve(async (req) => {
         sessionActive = true;
         currentSession = session;
         
-        // Calcular tempo e fase da sessão
-        const timeInfo = calculateSessionTimeContext(session);
+        // Buscar última mensagem para detectar gaps longos
+        const { data: lastMsg } = await supabase
+          .from('messages')
+          .select('created_at')
+          .eq('user_id', profile.user_id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        
+        // Calcular tempo e fase da sessão (com detecção de gap)
+        const timeInfo = calculateSessionTimeContext(session, lastMsg?.created_at);
         sessionTimeContext = timeInfo.timeContext;
         
         console.log('⏱️ Session time:', {
           timeRemaining: timeInfo.timeRemaining,
           phase: timeInfo.phase,
-          isOvertime: timeInfo.isOvertime
+          isOvertime: timeInfo.isOvertime,
+          isResuming: timeInfo.isResuming
         });
 
-        // Verificar se usuário quer encerrar (EXPLÍCITO apenas) ou se está em overtime
-        if (wantsToEndSession(message) || timeInfo.isOvertime) {
+        // Verificar se usuário quer encerrar (EXPLÍCITO apenas — overtime NÃO força encerramento)
+        if (wantsToEndSession(message)) {
           shouldEndSession = true;
         }
         
