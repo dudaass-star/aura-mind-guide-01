@@ -4730,7 +4730,8 @@ Guarde esse resumo! Vou te lembrar dos compromissos nos próximos dias.
 
 Estou aqui sempre que precisar! 💜`;
 
-          const sendResult = await sendTextMessage(cleanPhone, summaryMessage);
+          const instanceConfig = await getInstanceConfigForUser(supabase, profile.user_id);
+          const sendResult = await sendTextMessage(cleanPhone, summaryMessage, undefined, instanceConfig);
           
           if (sendResult.success) {
             // Marcar como enviado para evitar duplicação pelo session-reminder
