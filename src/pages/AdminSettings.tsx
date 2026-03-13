@@ -188,7 +188,7 @@ export default function AdminSettings() {
             <CardContent className="space-y-4">
               <Select value={selectedTTSModel} onValueChange={setSelectedTTSModel}>
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Selecione um modelo" />
                 </SelectTrigger>
                 <SelectContent>
                   {TTS_MODELS.map(model => (
