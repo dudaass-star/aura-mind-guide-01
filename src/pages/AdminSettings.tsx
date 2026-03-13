@@ -55,7 +55,12 @@ export default function AdminSettings() {
       if (error) throw error;
 
       for (const row of data || []) {
-        const val = typeof row.value === 'string' ? row.value : JSON.stringify(row.value).replace(/"/g, '');
+        let val: string;
+        try {
+          val = typeof row.value === 'string' ? JSON.parse(row.value) : String(row.value);
+        } catch {
+          val = String(row.value).replace(/"/g, '');
+        }
         if (row.key === 'ai_model') {
           setSelectedModel(val);
           setCurrentModel(val);
