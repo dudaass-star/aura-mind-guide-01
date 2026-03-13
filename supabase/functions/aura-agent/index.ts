@@ -5092,7 +5092,7 @@ Responda apenas o resumo, sem formatação.`
       const estimatedSeconds = Math.ceil(audioText.length / 15);
       
       // Se mês mudou, resetar antes de incrementar
-      const newSecondsUsed = (currentMonth !== resetMonth) ? estimatedSeconds : (audioSecondsUsed + estimatedSeconds);
+      const newSecondsUsed = (currentAudioMonth !== resetMonth) ? estimatedSeconds : (audioSecondsUsed + estimatedSeconds);
       
       await supabase
         .from('profiles')
