@@ -1,25 +1,19 @@
-# Sistema de Orçamento Mensal de Áudio ✅ Implementado
 
-## Resumo
-Sistema de orçamento mensal de áudio por plano, com estimativa de duração por caracteres.
 
-### Orçamentos
-- Essencial: 30 min (1800s)
-- Direção: 50 min (3000s)
-- Transformação: 120 min (7200s)
+# Correção: Variável `currentMonth` duplicada no aura-agent
 
-### O que foi implementado
+## O que aconteceu
+A integração do Inworld TTS criou uma segunda declaração `const currentMonth` na linha 4864, conflitando com a já existente na linha 2684. Isso causa um `BOOT_ERROR` que impede a Aura de responder qualquer mensagem.
 
-1. **Migração SQL** ✅ — Colunas `audio_seconds_used_this_month` e `audio_reset_date` em `profiles`
-2. **`allowAudioThisTurn` expandido** ✅ — Aceita `[MODO_AUDIO]` da IA se tem orçamento disponível
-3. **Contador pós-envio** ✅ — Estima duração com `Math.ceil(texto.length / 15)` e incrementa no perfil
-4. **Reset inline** ✅ — Se o mês mudou, reseta antes de verificar orçamento
-5. **Auto-inject `[AGUARDANDO_RESPOSTA]`** ✅ — Se resposta contém `?` sem tag de status
-6. **Reset mensal** ✅ — `monthly-schedule-renewal` zera o contador no dia 1
+## Correção
 
-### Regras de prioridade
-- Crise: sempre permite áudio (ignora orçamento)
-- Usuário pediu: sempre permite
-- Abertura de sessão: obrigatório (primeiras 2 mensagens)
-- Encerramento de sessão: permite
-- IA decidiu (`[MODO_AUDIO]`): permite SE tem orçamento
+No arquivo `supabase/functions/aura-agent/index.ts`, renomear a segunda ocorrência:
+
+| Linha | Antes | Depois |
+|-------|-------|--------|
+| 4864 | `const currentMonth = new Date()...` | `const currentAudioMonth = new Date()...` |
+| 4866 | `currentMonth !== resetMonth` | `currentAudioMonth !== resetMonth` |
+| 5095 | `currentMonth !== resetMonth` | `currentAudioMonth !== resetMonth` |
+
+São apenas 3 linhas alteradas. O agente volta a funcionar imediatamente após o deploy.
+
