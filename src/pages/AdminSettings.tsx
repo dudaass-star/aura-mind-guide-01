@@ -149,7 +149,7 @@ export default function AdminSettings() {
             <CardContent className="space-y-4">
               <Select value={selectedModel} onValueChange={setSelectedModel}>
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Selecione um modelo" />
                 </SelectTrigger>
                 <SelectContent>
                   {AI_MODELS.map(model => (
