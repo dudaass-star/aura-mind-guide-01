@@ -1869,6 +1869,15 @@ function sanitizeMessageHistory(messages: { role: string; content: string; creat
       .replace(/\[PAUSAR_JORNADAS\]/gi, '')
       .replace(/\[NAO_PERTURBE:\d+h?\]/gi, '')
       .replace(/\[PAUSAR_SESSOES[^\]]*\]/gi, '')
+      .replace(/\[AGENDAR_TAREFA:[^\]]+\]/gi, '')
+      .replace(/\[CANCELAR_TAREFA:[^\]]+\]/gi, '')
+      .replace(/\[CAPSULA_DO_TEMPO\]/gi, '')
+      .replace(/\[MEDITACAO:[^\]]+\]/gi, '')
+      .replace(/\[UPGRADE:[^\]]+\]/gi, '')
+      .replace(/\[INSIGHT:[^\]]+\]/gi, '')
+      .replace(/\[COMPROMISSO:[^\]]+\]/gi, '')
+      .replace(/\[CRIAR_AGENDA:[^\]]+\]/gi, '')
+      .replace(/\[REATIVAR_SESSAO\]/gi, '')
       .trim();
     
     // CORREÇÃO: Remover timestamps antigos das mensagens do assistente
