@@ -21,7 +21,7 @@ const INWORLD_CONFIG = {
   voiceId: "default-m-ple0rtxdeidhocwm57qw__aura",
   modelId: "inworld-tts-1.5-max",
   speakingRate: 1.10,
-  temperature: 1.10,
+  temperature: 1.4,
 };
 
 // ─── Interfaces ────────────────────────────────────────────────────
