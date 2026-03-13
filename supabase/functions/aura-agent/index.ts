@@ -1940,6 +1940,15 @@ function splitIntoMessages(response: string, allowAudioThisTurn: boolean): Array
   cleanResponse = cleanResponse.replace(/\[PAUSAR_JORNADAS\]/gi, '').trim();
   cleanResponse = cleanResponse.replace(/\[NAO_PERTURBE:\d+h?\]/gi, '').trim();
   cleanResponse = cleanResponse.replace(/\[PAUSAR_SESSOES[^\]]*\]/gi, '').trim();
+  cleanResponse = cleanResponse.replace(/\[AGENDAR_TAREFA:[^\]]+\]/gi, '').trim();
+  cleanResponse = cleanResponse.replace(/\[CANCELAR_TAREFA:[^\]]+\]/gi, '').trim();
+  cleanResponse = cleanResponse.replace(/\[CAPSULA_DO_TEMPO\]/gi, '').trim();
+  cleanResponse = cleanResponse.replace(/\[MEDITACAO:[^\]]+\]/gi, '').trim();
+  cleanResponse = cleanResponse.replace(/\[UPGRADE:[^\]]+\]/gi, '').trim();
+  cleanResponse = cleanResponse.replace(/\[INSIGHT:[^\]]+\]/gi, '').trim();
+  cleanResponse = cleanResponse.replace(/\[COMPROMISSO:[^\]]+\]/gi, '').trim();
+  cleanResponse = cleanResponse.replace(/\[CRIAR_AGENDA:[^\]]+\]/gi, '').trim();
+  cleanResponse = cleanResponse.replace(/\[REATIVAR_SESSAO\]/gi, '').trim();
 
   if (isAudioMode) {
     const normalized = cleanResponse
