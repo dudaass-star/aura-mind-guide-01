@@ -4861,9 +4861,9 @@ Responda apenas o resumo, sem formatação.`
     const audioSecondsUsed = profile?.audio_seconds_used_this_month || 0;
     
     // Reset inline se mês mudou
-    const currentMonth = new Date().toISOString().slice(0, 7);
+    const currentAudioMonth = new Date().toISOString().slice(0, 7);
     const resetMonth = profile?.audio_reset_date?.slice(0, 7);
-    const budgetAvailable = (currentMonth !== resetMonth) || (audioSecondsUsed < budgetSeconds);
+    const budgetAvailable = (currentAudioMonth !== resetMonth) || (audioSecondsUsed < budgetSeconds);
 
     const allowAudioThisTurn = !wantsText && (
       crisis ||                         // segurança: sempre
@@ -5092,7 +5092,7 @@ Responda apenas o resumo, sem formatação.`
       const estimatedSeconds = Math.ceil(audioText.length / 15);
       
       // Se mês mudou, resetar antes de incrementar
-      const newSecondsUsed = (currentMonth !== resetMonth) ? estimatedSeconds : (audioSecondsUsed + estimatedSeconds);
+      const newSecondsUsed = (currentAudioMonth !== resetMonth) ? estimatedSeconds : (audioSecondsUsed + estimatedSeconds);
       
       await supabase
         .from('profiles')
