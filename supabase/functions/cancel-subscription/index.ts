@@ -43,7 +43,7 @@ serve(async (req) => {
       throw new Error("Phone number is required");
     }
 
-    // Clean phone number - remove all non-digits except leading +
+    // Clean phone number - remove all non-digits
     let phoneClean = phone.replace(/\D/g, "");
     
     // Ensure it starts with country code (55 for Brazil)
@@ -60,13 +60,23 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Search for customer by phone in metadata
-    const customers = await stripe.customers.search({
-      query: `metadata['phone']:'${phoneClean}'`,
-      limit: 1,
-    });
+    // Search for customer by phone in metadata using all variations
+    const phoneVariations = getPhoneVariations(phoneClean);
+    logStep("Searching with phone variations", { phoneVariations });
+    
+    let customer: Stripe.Customer | null = null;
+    for (const phoneVar of phoneVariations) {
+      const customers = await stripe.customers.search({
+        query: `metadata['phone']:'${phoneVar}'`,
+        limit: 1,
+      });
+      if (customers.data.length > 0) {
+        customer = customers.data[0];
+        break;
+      }
+    }
 
-    logStep("Customer search result", { found: customers.data.length > 0 });
+    logStep("Customer search result", { found: !!customer });
 
     if (customers.data.length === 0) {
       return new Response(
