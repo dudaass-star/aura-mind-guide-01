@@ -3921,6 +3921,76 @@ Exemplo com 4 sessões:
       }
     }
 
+    // ========================================================================
+    // DETECÇÃO DE RESPOSTA REPETIDA (compara output com respostas recentes)
+    // ========================================================================
+    const recentAssistantResponses = messageHistory
+      .filter((m: any) => m.role === 'assistant')
+      .slice(-3)
+      .map((m: any) => m.content);
+
+    if (recentAssistantResponses.length > 0) {
+      const normalizeForSimilarity = (text: string): Set<string> => {
+        return new Set(
+          text.toLowerCase()
+            .replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, '')
+            .replace(/[^\w\sàáâãéêíóôõúüç]/gi, '')
+            .split(/\s+/)
+            .filter(w => w.length > 3)
+        );
+      };
+
+      const jaccardSimilarity = (a: Set<string>, b: Set<string>): number => {
+        if (a.size === 0 && b.size === 0) return 0;
+        const intersection = new Set([...a].filter(x => b.has(x)));
+        const union = new Set([...a, ...b]);
+        return union.size === 0 ? 0 : intersection.size / union.size;
+      };
+
+      const currentWords = normalizeForSimilarity(assistantMessage);
+      let maxSim = 0;
+      let mostSimilarIdx = -1;
+
+      for (let i = 0; i < recentAssistantResponses.length; i++) {
+        const prevWords = normalizeForSimilarity(recentAssistantResponses[i]);
+        const sim = jaccardSimilarity(currentWords, prevWords);
+        if (sim > maxSim) {
+          maxSim = sim;
+          mostSimilarIdx = i;
+        }
+      }
+
+      console.log(`📊 Similaridade máxima com respostas recentes: ${(maxSim * 100).toFixed(1)}%`);
+
+      if (maxSim > 0.6) {
+        console.warn(`🔄 ANTI-REPETIÇÃO: similaridade ${(maxSim * 100).toFixed(1)}% com resposta recente #${mostSimilarIdx}, re-gerando...`);
+
+        const retryMsgs = [...apiMessages];
+        retryMsgs.push({ role: 'assistant', content: assistantMessage });
+        retryMsgs.push({ role: 'user', content: 
+          `[SISTEMA: Sua resposta é muito parecida com uma que você enviou recentemente. Gere uma resposta COMPLETAMENTE DIFERENTE e original. Traga um ângulo novo, uma pergunta diferente, ou explore outro aspecto do tema. NÃO repita o tom, as palavras-chave ou a estrutura da resposta anterior.]`
+        });
+
+        try {
+          const retryData = await callAI(configuredModel, retryMsgs, 4096, 0.9, LOVABLE_API_KEY);
+          if (retryData?.choices?.[0]?.message?.content) {
+            const retryResponse = retryData.choices[0].message.content;
+            const retryWords = normalizeForSimilarity(retryResponse);
+            const retrySim = jaccardSimilarity(retryWords, normalizeForSimilarity(recentAssistantResponses[mostSimilarIdx]));
+            
+            if (retrySim < maxSim) {
+              assistantMessage = retryResponse;
+              console.log(`✅ ANTI-REPETIÇÃO: retry reduziu similaridade para ${(retrySim * 100).toFixed(1)}%`);
+            } else {
+              console.log(`⚠️ ANTI-REPETIÇÃO: retry não melhorou (${(retrySim * 100).toFixed(1)}%), mantendo original`);
+            }
+          }
+        } catch (retryErr) {
+          console.error('⚠️ ANTI-REPETIÇÃO: retry falhou, mantendo resposta original', retryErr);
+        }
+      }
+    }
+
     console.log("AURA raw response:", assistantMessage.substring(0, 200));
 
     // ========================================================================
