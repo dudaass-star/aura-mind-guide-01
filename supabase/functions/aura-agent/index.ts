@@ -1799,15 +1799,23 @@ De 0 a 10, como você sai agora? Vou adorar ouvir! ✨
 
 - Inclua [ENCERRAR_SESSAO] quando finalizar
 `;
-  } else if (phase === 'overtime') {
+  } else if (phase === 'overtime' && !isResuming) {
     timeContext += `
 ⏰ SESSÃO ALÉM DO TEMPO (${Math.abs(timeRemaining)} min além):
-- FINALIZE AGORA, mas com carinho (não abrupto!)
-- Dê um resumo BREVE da conversa (2-3 frases)
-- Lembre dos compromissos definidos
-- Agradeça pelo tempo juntos
-- Use [MODO_AUDIO] para despedida calorosa
-- Inclua a tag [ENCERRAR_SESSAO] no final
+- PROPONHA encerrar a sessão ao usuário, mas NÃO force
+- Diga algo como "Já passamos do nosso tempo, quer que a gente encerre ou prefere continuar mais um pouco?"
+- Se o usuário quiser continuar, continue normalmente
+- Se quiser encerrar: resumo + compromissos + [ENCERRAR_SESSAO]
+- Use [MODO_AUDIO] para despedida calorosa quando encerrar
+`;
+  } else if (isResuming) {
+    timeContext += `
+⏸️➡️ SESSÃO RETOMADA APÓS PAUSA LONGA:
+- O usuário voltou após um longo período sem responder (provavelmente dormiu ou teve compromissos)
+- Você tem ~20 minutos para esta sessão retomada
+- Retome o assunto anterior com naturalidade
+- NÃO encerre automaticamente — o usuário está re-engajando
+- Pergunte se quer continuar o assunto de antes ou trazer algo novo
 `;
   }
 
