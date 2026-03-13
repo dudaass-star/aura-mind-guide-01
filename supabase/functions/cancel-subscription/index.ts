@@ -46,11 +46,6 @@ serve(async (req) => {
     // Clean phone number - remove all non-digits
     let phoneClean = phone.replace(/\D/g, "");
     
-    // Ensure it starts with country code (55 for Brazil)
-    if (!phoneClean.startsWith("55")) {
-      phoneClean = "55" + phoneClean;
-    }
-    
     logStep("Phone cleaned", { phoneClean });
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });

@@ -101,6 +101,14 @@ export function getPhoneVariations(phone: string): string[] {
       const without9 = '55' + ddd + rest.substring(1);
       if (!variations.includes(without9)) variations.push(without9);
     }
+    // Variação sem código de país (ex: 5519998849238 → 19998849238)
+    const withoutCountry = clean.substring(2);
+    if (!variations.includes(withoutCountry)) variations.push(withoutCountry);
+    // Sem código de país e sem nono dígito (ex: 5519998849238 → 1998849238)
+    if (rest.startsWith('9') && rest.length === 9) {
+      const withoutCountryAnd9 = ddd + rest.substring(1);
+      if (!variations.includes(withoutCountryAnd9)) variations.push(withoutCountryAnd9);
+    }
   }
   
   if (clean.length === 12 && clean.startsWith('55')) {
@@ -109,6 +117,14 @@ export function getPhoneVariations(phone: string): string[] {
     if (rest.length === 8) {
       const with9 = '55' + ddd + '9' + rest;
       if (!variations.includes(with9)) variations.push(with9);
+    }
+    // Variação sem código de país (ex: 551998849238 → 1998849238)
+    const withoutCountry = clean.substring(2);
+    if (!variations.includes(withoutCountry)) variations.push(withoutCountry);
+    // Sem código de país e com nono dígito (ex: 551998849238 → 19998849238)
+    if (rest.length === 8) {
+      const withoutCountryWith9 = ddd + '9' + rest;
+      if (!variations.includes(withoutCountryWith9)) variations.push(withoutCountryWith9);
     }
   }
   
