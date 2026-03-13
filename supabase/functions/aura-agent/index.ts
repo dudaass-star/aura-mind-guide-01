@@ -2863,10 +2863,20 @@ serve(async (req) => {
         lastMessageTimestamp = lastMsgOrphan?.created_at || null;
         
         // Calcular tempo e fase da sessão (com detecção de gap)
-        const timeInfo = calculateSessionTimeContext(orphanSession, lastMessageTimestamp);
+        const timeInfo = calculateSessionTimeContext(orphanSession, lastMessageTimestamp, orphanSession.resumption_count ?? 0);
         sessionTimeContext = timeInfo.timeContext;
         
-        console.log('✅ Orphan session linked and activated');
+        console.log('✅ Orphan session linked and activated', {
+          resumptionCount: orphanSession.resumption_count ?? 0,
+          maxResumptionsReached: timeInfo.maxResumptionsReached
+        });
+
+        // Incrementar contador de retomadas no banco
+        if (timeInfo.isResuming) {
+          await supabase.from('sessions')
+            .update({ resumption_count: (orphanSession.resumption_count ?? 0) + 1 })
+            .eq('id', orphanSession.id);
+        }
         
         // Verificar se usuário quer encerrar (EXPLÍCITO apenas — overtime NÃO força encerramento)
         if (wantsToEndSession(message)) {
