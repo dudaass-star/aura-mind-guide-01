@@ -1497,12 +1497,14 @@ function wantsToPauseSession(message: string): boolean {
 }
 
 // Calcula fase e tempo restante da sessão - COM FASES GRANULARES
-function calculateSessionTimeContext(session: any): { 
+// lastMessageAt: opcional — se fornecido, detecta gaps >2h como retomada
+function calculateSessionTimeContext(session: any, lastMessageAt?: string | null): { 
   timeRemaining: number; 
   phase: string; 
   timeContext: string;
   shouldWarnClosing: boolean;
   isOvertime: boolean;
+  isResuming: boolean;
   forceAudioForClose: boolean;
 } {
   if (!session?.started_at) {
@@ -1512,14 +1514,29 @@ function calculateSessionTimeContext(session: any): {
       timeContext: '',
       shouldWarnClosing: false,
       isOvertime: false,
+      isResuming: false,
       forceAudioForClose: false
     };
   }
 
   const startedAt = new Date(session.started_at);
   const now = new Date();
-  const elapsedMinutes = Math.floor((now.getTime() - startedAt.getTime()) / 60000);
+  let elapsedMinutes = Math.floor((now.getTime() - startedAt.getTime()) / 60000);
   const duration = session.duration_minutes || 45;
+  
+  // Detectar gaps longos (>2h) como retomada
+  let isResuming = false;
+  if (lastMessageAt) {
+    const lastMsgTime = new Date(lastMessageAt);
+    const gapMinutes = Math.floor((now.getTime() - lastMsgTime.getTime()) / 60000);
+    if (gapMinutes > 120) {
+      // Gap >2h: tratar como retomada, resetar relógio para ~20 min
+      isResuming = true;
+      elapsedMinutes = Math.max(0, duration - 20); // Simular que faltam ~20 min
+      console.log(`⏸️➡️ Gap de ${gapMinutes} min detectado. Tratando como RETOMADA (${20} min restantes)`);
+    }
+  }
+  
   const timeRemaining = duration - elapsedMinutes;
 
   let phase: string;
