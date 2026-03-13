@@ -62,6 +62,8 @@ Deno.serve(async (req) => {
             sessions_paused_until: null,
             schedule_reminder_first_sent_at: null,
             schedule_reminder_urgent_sent_at: null,
+            audio_seconds_used_this_month: 0,
+            audio_reset_date: today,
           })
           .eq('user_id', user.user_id);
 

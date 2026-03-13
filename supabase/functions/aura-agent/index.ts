@@ -5086,6 +5086,24 @@ Responda apenas o resumo, sem formatação.`
       console.log('🎙️ Session audio count incremented to:', sessionAudioCount + 1);
     }
 
+    // Incrementar contador de orçamento mensal de áudio
+    if (hasAudioInResponse && profile?.user_id) {
+      const audioText = messageChunks.filter(m => m.isAudio).map(m => m.text).join(' ');
+      const estimatedSeconds = Math.ceil(audioText.length / 15);
+      
+      // Se mês mudou, resetar antes de incrementar
+      const newSecondsUsed = (currentMonth !== resetMonth) ? estimatedSeconds : (audioSecondsUsed + estimatedSeconds);
+      
+      await supabase
+        .from('profiles')
+        .update({ 
+          audio_seconds_used_this_month: newSecondsUsed,
+          audio_reset_date: new Date().toISOString().split('T')[0]
+        })
+        .eq('user_id', profile.user_id);
+      console.log(`🎙️ Audio budget: +${estimatedSeconds}s → ${newSecondsUsed}s / ${budgetSeconds}s`);
+    }
+
     console.log("Split into", messageChunks.length, "bubbles, plan:", userPlan);
 
     // Salvar mensagens no histórico
