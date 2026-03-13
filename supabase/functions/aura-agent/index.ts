@@ -1516,7 +1516,8 @@ function calculateSessionTimeContext(session: any, lastMessageAt?: string | null
       shouldWarnClosing: false,
       isOvertime: false,
       isResuming: false,
-      forceAudioForClose: false
+      forceAudioForClose: false,
+      maxResumptionsReached: false
     };
   }
 
