@@ -3622,7 +3622,7 @@ REGRA: ${behaviorInstruction}`;
     // CONTROLE DE SESSÃO - Reforço determinístico de fase no dynamicContext
     // ========================================================================
     if (sessionActive && currentSession?.started_at) {
-      const phaseInfo = calculateSessionTimeContext(currentSession);
+      const phaseInfo = calculateSessionTimeContext(currentSession, lastMessageTimestamp);
       const elapsed = Math.floor(
         (Date.now() - new Date(currentSession.started_at).getTime()) / 60000
       );
