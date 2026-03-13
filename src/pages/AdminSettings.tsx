@@ -204,7 +204,7 @@ export default function AdminSettings() {
 
               <div className="flex items-center justify-between pt-2">
                 <p className="text-sm text-muted-foreground">
-                  Modelo ativo: <span className="font-medium text-foreground">{TTS_MODELS.find(m => m.value === currentTTSModel)?.label}</span>
+                  Modelo ativo: <span className="font-medium text-foreground">{TTS_MODELS.find(m => m.value === currentTTSModel)?.label || currentTTSModel}</span>
                 </p>
                 <Button onClick={handleSaveTTS} disabled={savingTTS || !hasTTSChanges} variant="sage">
                   <Save className="h-4 w-4 mr-2" />
