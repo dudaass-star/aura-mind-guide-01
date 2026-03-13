@@ -4831,6 +4831,13 @@ Responda apenas o resumo, sem formatação.`
       }
     }
 
+    // Auto-inject [AGUARDANDO_RESPOSTA] se a resposta contém ? mas não tem tag de status
+    const hasStatusTag = /\[(AGUARDANDO_RESPOSTA|CONVERSA_CONCLUIDA|ENCERRAR_SESSAO)\]/i.test(assistantMessage);
+    if (!hasStatusTag && assistantMessage.includes('?')) {
+      assistantMessage = assistantMessage.trimEnd() + ' [AGUARDANDO_RESPOSTA]';
+      console.log('🏷️ Auto-injected [AGUARDANDO_RESPOSTA] — response contains ? but no status tag');
+    }
+
     // Detectar status da conversa
     const isConversationComplete = assistantMessage.includes('[CONVERSA_CONCLUIDA]');
     const isAwaitingResponse = assistantMessage.includes('[AGUARDANDO_RESPOSTA]');
@@ -4848,7 +4855,23 @@ Responda apenas o resumo, sem formatação.`
     const sessionCloseInfo = currentSession ? calculateSessionTimeContext(currentSession, lastMessageTimestamp, currentSession.resumption_count ?? 0) : null;
     const forceAudioForSessionClose = sessionCloseInfo?.forceAudioForClose || shouldEndSession || aiWantsToEndSession;
     
-    const allowAudioThisTurn = !wantsText && (wantsAudio || crisis || forceAudioForSessionStart || forceAudioForSessionClose);
+    // Audio budget system
+    const aiWantsAudio = assistantMessage.trimStart().startsWith('[MODO_AUDIO]');
+    const budgetSeconds = profile?.plan === 'transformacao' ? 7200 : profile?.plan === 'direcao' ? 3000 : 1800;
+    const audioSecondsUsed = profile?.audio_seconds_used_this_month || 0;
+    
+    // Reset inline se mês mudou
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    const resetMonth = profile?.audio_reset_date?.slice(0, 7);
+    const budgetAvailable = (currentMonth !== resetMonth) || (audioSecondsUsed < budgetSeconds);
+
+    const allowAudioThisTurn = !wantsText && (
+      crisis ||                         // segurança: sempre
+      wantsAudio ||                     // usuário pediu
+      forceAudioForSessionStart ||      // OBRIGATÓRIO: abertura de sessão
+      forceAudioForSessionClose ||      // encerramento
+      (aiWantsAudio && budgetAvailable) // IA decidiu + tem orçamento
+    );
     
     console.log("🎙️ Audio control:", { 
       wantsText, 
@@ -4858,7 +4881,10 @@ Responda apenas o resumo, sem formatação.`
       forceAudioForSessionClose,
       sessionAudioCount,
       allowAudioThisTurn,
-      aiWantsAudio: assistantMessage.trimStart().startsWith('[MODO_AUDIO]')
+      aiWantsAudio,
+      budgetAvailable,
+      audioSecondsUsed,
+      budgetSeconds
     });
 
     // ========================================================================
@@ -5058,6 +5084,24 @@ Responda apenas o resumo, sem formatação.`
         .update({ audio_sent_count: sessionAudioCount + 1 })
         .eq('id', currentSession.id);
       console.log('🎙️ Session audio count incremented to:', sessionAudioCount + 1);
+    }
+
+    // Incrementar contador de orçamento mensal de áudio
+    if (hasAudioInResponse && profile?.user_id) {
+      const audioText = messageChunks.filter(m => m.isAudio).map(m => m.text).join(' ');
+      const estimatedSeconds = Math.ceil(audioText.length / 15);
+      
+      // Se mês mudou, resetar antes de incrementar
+      const newSecondsUsed = (currentMonth !== resetMonth) ? estimatedSeconds : (audioSecondsUsed + estimatedSeconds);
+      
+      await supabase
+        .from('profiles')
+        .update({ 
+          audio_seconds_used_this_month: newSecondsUsed,
+          audio_reset_date: new Date().toISOString().split('T')[0]
+        })
+        .eq('user_id', profile.user_id);
+      console.log(`🎙️ Audio budget: +${estimatedSeconds}s → ${newSecondsUsed}s / ${budgetSeconds}s`);
     }
 
     console.log("Split into", messageChunks.length, "bubbles, plan:", userPlan);
