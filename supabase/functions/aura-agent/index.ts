@@ -4839,7 +4839,7 @@ Responda apenas o resumo, sem formatação.`
     const forceAudioForSessionStart = sessionActive && sessionAudioCount < 2;
     
     // Verificar se é encerramento de sessão (forçar áudio caloroso)
-    const sessionCloseInfo = currentSession ? calculateSessionTimeContext(currentSession, lastMessageTimestamp) : null;
+    const sessionCloseInfo = currentSession ? calculateSessionTimeContext(currentSession, lastMessageTimestamp, currentSession.resumption_count ?? 0) : null;
     const forceAudioForSessionClose = sessionCloseInfo?.forceAudioForClose || shouldEndSession || aiWantsToEndSession;
     
     const allowAudioThisTurn = !wantsText && (wantsAudio || crisis || forceAudioForSessionStart || forceAudioForSessionClose);
