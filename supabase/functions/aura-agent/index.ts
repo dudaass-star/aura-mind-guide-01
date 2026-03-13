@@ -3631,7 +3631,16 @@ REGRA: ${behaviorInstruction}`;
       } else if (phaseInfo.phase === 'final_closing') {
         phaseBlock += `\n💜 ENCERRE AGORA: resumo + compromisso + escala 0-10 + [ENCERRAR_SESSAO].`;
       } else if (phaseInfo.phase === 'overtime') {
-        phaseBlock += `\n⏰ TEMPO ESGOTADO. Finalize IMEDIATAMENTE com [ENCERRAR_SESSAO].`;
+        phaseBlock += `\n⏰ TEMPO ESGOTADO. PROPONHA encerrar a sessão ao usuário, mas NÃO force. Pergunte se quer continuar ou encerrar.`;
+      }
+      
+      // Instrução especial para retomada após gap longo
+      if (phaseInfo.isResuming) {
+        phaseBlock += `\n\n⏸️➡️ RETOMADA APÓS PAUSA LONGA:`;
+        phaseBlock += `\nO usuário voltou após um longo período sem responder. Trate como retomada natural.`;
+        phaseBlock += `\nVocê tem ~20 minutos restantes nesta sessão retomada.`;
+        phaseBlock += `\nRetome o assunto anterior com naturalidade: "Que bom que voltou! Vamos continuar de onde paramos?"`;
+        phaseBlock += `\n🚫 NÃO encerre a sessão automaticamente. O usuário está re-engajando.`;
       }
 
       dynamicContext += phaseBlock;
