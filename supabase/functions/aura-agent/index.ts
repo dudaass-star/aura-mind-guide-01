@@ -1498,7 +1498,7 @@ function wantsToPauseSession(message: string): boolean {
 
 // Calcula fase e tempo restante da sessão - COM FASES GRANULARES
 // lastMessageAt: opcional — se fornecido, detecta gaps >2h como retomada
-function calculateSessionTimeContext(session: any, lastMessageAt?: string | null): { 
+function calculateSessionTimeContext(session: any, lastMessageAt?: string | null, resumptionCount?: number): { 
   timeRemaining: number; 
   phase: string; 
   timeContext: string;
@@ -1506,6 +1506,7 @@ function calculateSessionTimeContext(session: any, lastMessageAt?: string | null
   isOvertime: boolean;
   isResuming: boolean;
   forceAudioForClose: boolean;
+  maxResumptionsReached: boolean;
 } {
   if (!session?.started_at) {
     return { 
