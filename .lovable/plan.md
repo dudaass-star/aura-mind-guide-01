@@ -146,3 +146,43 @@ Guardrail de quiet hours (8h-22h BRT) adicionado em **7 edge functions** que env
 | `schedule-setup-reminder` | Corrigido na rodada anterior |
 | `send-meditation` | Sob demanda (via aura-agent) |
 | `cleanup-inactive-users` | Não envia mensagens |
+
+---
+
+# Correção: Overtime não encerra sessão + Retomada após gaps longos — Implementado ✅
+
+## Problema
+Quando Clara voltou após 8h de silêncio, `calculateSessionTimeContext` calculou `elapsedMinutes = 480` → `isOvertime = true` → `shouldEndSession = true`. A sessão foi encerrada unilateralmente sem a Clara pedir. Isso contradiz a regra: "sessão só encerra se o usuário pedir".
+
+## O que foi feito
+
+### 1. Removido `timeInfo.isOvertime` como trigger de `shouldEndSession`
+- Nas duas linhas onde `shouldEndSession` era setado (sessão normal e sessão órfã), removido `|| timeInfo.isOvertime`
+- Agora apenas `wantsToEndSession(message)` pode setar `shouldEndSession = true`
+- Overtime continua existindo como **fase** — a Aura recebe instrução de **propor** encerramento, mas NÃO é forçada
+
+### 2. Detecção de gaps longos (>2h) como retomada
+- `calculateSessionTimeContext` agora aceita parâmetro opcional `lastMessageAt`
+- Antes de calcular a fase, busca a última mensagem do usuário no banco
+- Se o gap entre agora e a última mensagem for >2h, trata como **retomada**:
+  - `isResuming = true`
+  - Relógio resetado para ~20 min restantes (simula `elapsedMinutes = duration - 20`)
+  - Fase calculada será `exploration` ou `reframe` (em vez de `overtime`)
+
+### 3. Nova fase `resuming` no timeContext e phaseBlock
+- `timeContext` inclui instrução para retomar o assunto anterior naturalmente
+- `phaseBlock` (reforço determinístico) inclui instrução de NÃO encerrar automaticamente
+- Aura é instruída a perguntar se quer continuar o assunto ou trazer algo novo
+
+### 4. Overtime agora propõe em vez de forçar
+- Instrução de overtime mudou de "FINALIZE AGORA" para "PROPONHA encerrar"
+- Aura pergunta: "Já passamos do nosso tempo, quer encerrar ou continuar?"
+- Se o usuário quiser continuar, continua normalmente
+
+## Fluxo: Antes vs Depois
+
+| Cenário | Antes | Depois |
+|---------|-------|--------|
+| Clara volta após 8h | `isOvertime=true` → `shouldEndSession=true` → encerra | Gap >2h → `isResuming=true` → retoma com ~20 min |
+| Sessão passa de 45min | `shouldEndSession=true` → encerra | Aura propõe encerrar, usuário decide |
+| Usuário pede para encerrar | `shouldEndSession=true` → encerra | Mesmo comportamento (sem mudança) |
