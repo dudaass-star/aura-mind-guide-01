@@ -4855,7 +4855,23 @@ Responda apenas o resumo, sem formatação.`
     const sessionCloseInfo = currentSession ? calculateSessionTimeContext(currentSession, lastMessageTimestamp, currentSession.resumption_count ?? 0) : null;
     const forceAudioForSessionClose = sessionCloseInfo?.forceAudioForClose || shouldEndSession || aiWantsToEndSession;
     
-    const allowAudioThisTurn = !wantsText && (wantsAudio || crisis || forceAudioForSessionStart || forceAudioForSessionClose);
+    // Audio budget system
+    const aiWantsAudio = assistantMessage.trimStart().startsWith('[MODO_AUDIO]');
+    const budgetSeconds = profile?.plan === 'transformacao' ? 7200 : profile?.plan === 'direcao' ? 3000 : 1800;
+    const audioSecondsUsed = profile?.audio_seconds_used_this_month || 0;
+    
+    // Reset inline se mês mudou
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    const resetMonth = profile?.audio_reset_date?.slice(0, 7);
+    const budgetAvailable = (currentMonth !== resetMonth) || (audioSecondsUsed < budgetSeconds);
+
+    const allowAudioThisTurn = !wantsText && (
+      crisis ||                         // segurança: sempre
+      wantsAudio ||                     // usuário pediu
+      forceAudioForSessionStart ||      // OBRIGATÓRIO: abertura de sessão
+      forceAudioForSessionClose ||      // encerramento
+      (aiWantsAudio && budgetAvailable) // IA decidiu + tem orçamento
+    );
     
     console.log("🎙️ Audio control:", { 
       wantsText, 
@@ -4865,7 +4881,10 @@ Responda apenas o resumo, sem formatação.`
       forceAudioForSessionClose,
       sessionAudioCount,
       allowAudioThisTurn,
-      aiWantsAudio: assistantMessage.trimStart().startsWith('[MODO_AUDIO]')
+      aiWantsAudio,
+      budgetAvailable,
+      audioSecondsUsed,
+      budgetSeconds
     });
 
     // ========================================================================
