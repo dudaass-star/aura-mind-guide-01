@@ -1,16 +1,22 @@
-# Correções Críticas — Implementadas ✅
+# Correções de Risco Médio — Implementadas ✅
 
-## O que foi corrigido
+## Resultado da Investigação
 
-### 1. Sanitização de tags faltantes ✅
-Adicionadas 9 regex em `sanitizeMessageHistory()` e `splitIntoMessages()`:
-`[AGENDAR_TAREFA]`, `[CANCELAR_TAREFA]`, `[CAPSULA_DO_TEMPO]`, `[MEDITACAO]`, `[UPGRADE]`, `[INSIGHT]`, `[COMPROMISSO]`, `[CRIAR_AGENDA]`, `[REATIVAR_SESSAO]`
+### 1. Índice UNIQUE em `user_insights` ✅ Já existia
+### 2. Guard de phone vazio no `session-reminder` ✅ Já existia
+### 3. Reengajamento no `conversation-followup` ✅ Corrigido
 
-### 2. Consistência em `calculateSessionTimeContext` ✅
-Passados `null, 0` explicitamente nos 2 locais de início/reativação de sessão.
+## O que foi corrigido no reengajamento
 
-### 3. Envio de resumo com instância correta ✅
-Importado `getInstanceConfigForUser` e usado antes de `sendTextMessage` no envio de resumo pós-sessão.
+### Migração SQL ✅
+Adicionada coluna `last_reengagement_at` na tabela `conversation_followups` para separar controle de frequência do reengajamento vs follow-ups regulares.
 
-### 4. Updates duplicados de profile consolidados ✅
-Unificados 2 UPDATEs em 1 nos blocos de início de sessão e reativação de sessão perdida.
+### Guards adicionados no bloco de reengajamento ✅
+Antes de enviar reengajamento, agora verifica:
+1. **Sessões futuras agendadas** — se tem sessão `scheduled` com `scheduled_at > now`, pula
+2. **Compromissos pendentes** — se tem `commitments` com `completed = false`, pula
+3. **Tarefas agendadas pendentes** — se tem `scheduled_tasks` com `status = 'pending'`, pula
+
+### Campo de frequência separado ✅
+- Controle de frequência agora usa `last_reengagement_at` em vez de `last_followup_at`
+- Após envio, atualiza `last_reengagement_at` no upsert
