@@ -2793,15 +2793,25 @@ serve(async (req) => {
         lastMessageTimestamp = lastMsg?.created_at || null;
         
         // Calcular tempo e fase da sessão (com detecção de gap)
-        const timeInfo = calculateSessionTimeContext(session, lastMessageTimestamp);
+        const timeInfo = calculateSessionTimeContext(session, lastMessageTimestamp, session.resumption_count ?? 0);
         sessionTimeContext = timeInfo.timeContext;
         
         console.log('⏱️ Session time:', {
           timeRemaining: timeInfo.timeRemaining,
           phase: timeInfo.phase,
           isOvertime: timeInfo.isOvertime,
-          isResuming: timeInfo.isResuming
+          isResuming: timeInfo.isResuming,
+          resumptionCount: session.resumption_count ?? 0,
+          maxResumptionsReached: timeInfo.maxResumptionsReached
         });
+
+        // Incrementar contador de retomadas no banco
+        if (timeInfo.isResuming) {
+          await supabase.from('sessions')
+            .update({ resumption_count: (session.resumption_count ?? 0) + 1 })
+            .eq('id', session.id);
+          console.log(`📊 Resumption count incrementado para ${(session.resumption_count ?? 0) + 1}`);
+        }
 
         // Verificar se usuário quer encerrar (EXPLÍCITO apenas — overtime NÃO força encerramento)
         if (wantsToEndSession(message)) {
