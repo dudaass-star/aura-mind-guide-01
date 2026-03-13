@@ -165,7 +165,7 @@ export default function AdminSettings() {
 
               <div className="flex items-center justify-between pt-2">
                 <p className="text-sm text-muted-foreground">
-                  Modelo ativo: <span className="font-medium text-foreground">{AI_MODELS.find(m => m.value === currentModel)?.label}</span>
+                  Modelo ativo: <span className="font-medium text-foreground">{AI_MODELS.find(m => m.value === currentModel)?.label || currentModel}</span>
                 </p>
                 <Button onClick={handleSave} disabled={saving || !hasChanges} variant="sage">
                   <Save className="h-4 w-4 mr-2" />
