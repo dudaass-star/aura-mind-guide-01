@@ -1811,7 +1811,7 @@ De 0 a 10, como você sai agora? Vou adorar ouvir! ✨
 `;
   }
 
-  return { timeRemaining, phase, timeContext, shouldWarnClosing, isOvertime, forceAudioForClose };
+  return { timeRemaining, phase, timeContext, shouldWarnClosing, isOvertime, isResuming, forceAudioForClose };
 }
 
 // Remove tags de controle do histórico e adiciona timestamps
