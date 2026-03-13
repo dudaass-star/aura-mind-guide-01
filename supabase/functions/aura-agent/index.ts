@@ -3021,25 +3021,18 @@ serve(async (req) => {
         })
         .eq('id', pendingScheduledSession.id);
 
-      // Atualizar profile com current_session_id
+      // Atualizar profile com current_session_id e incrementar sessões usadas
       await supabase
         .from('profiles')
         .update({
-          current_session_id: pendingScheduledSession.id
-        })
-        .eq('id', profile.id);
-
-      // Incrementar sessões usadas
-      await supabase
-        .from('profiles')
-        .update({
+          current_session_id: pendingScheduledSession.id,
           sessions_used_this_month: (profile.sessions_used_this_month || 0) + 1
         })
         .eq('id', profile.id);
 
       sessionActive = true;
       currentSession = { ...pendingScheduledSession, status: 'in_progress', started_at: now };
-      sessionTimeContext = calculateSessionTimeContext(currentSession).timeContext;
+      sessionTimeContext = calculateSessionTimeContext(currentSession, null, 0).timeContext;
       
       console.log('✅ Session started:', pendingScheduledSession.id);
     }
