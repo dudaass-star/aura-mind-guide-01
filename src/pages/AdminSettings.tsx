@@ -5,7 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, Save, Brain } from 'lucide-react';
+import { ArrowLeft, Save, Brain, Mic } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const AI_MODELS = [
@@ -19,11 +19,19 @@ const AI_MODELS = [
   { value: 'openai/gpt-5', label: 'OpenAI GPT-5', description: 'Potente, custo mais alto via Gateway' },
 ];
 
+const TTS_MODELS = [
+  { value: 'google/erinome', label: 'Google Erinome', description: 'Voz Erinome via Google Cloud TTS (atual)' },
+  { value: 'inworld/aura', label: 'Inworld Aura', description: 'Voz customizada criada no Inworld' },
+];
+
 export default function AdminSettings() {
   const { isLoading, isAdmin, redirectIfNotAdmin } = useAdminAuth();
   const [selectedModel, setSelectedModel] = useState('google/gemini-2.5-pro');
   const [currentModel, setCurrentModel] = useState('google/gemini-2.5-pro');
+  const [selectedTTSModel, setSelectedTTSModel] = useState('google/erinome');
+  const [currentTTSModel, setCurrentTTSModel] = useState('google/erinome');
   const [saving, setSaving] = useState(false);
+  const [savingTTS, setSavingTTS] = useState(false);
   const [loadingConfig, setLoadingConfig] = useState(true);
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -41,14 +49,21 @@ export default function AdminSettings() {
     try {
       const { data, error } = await supabase
         .from('system_config')
-        .select('value')
-        .eq('key', 'ai_model')
-        .single();
+        .select('key, value')
+        .in('key', ['ai_model', 'tts_model']);
 
       if (error) throw error;
-      const model = typeof data.value === 'string' ? data.value : JSON.stringify(data.value).replace(/"/g, '');
-      setSelectedModel(model);
-      setCurrentModel(model);
+
+      for (const row of data || []) {
+        const val = typeof row.value === 'string' ? row.value : JSON.stringify(row.value).replace(/"/g, '');
+        if (row.key === 'ai_model') {
+          setSelectedModel(val);
+          setCurrentModel(val);
+        } else if (row.key === 'tts_model') {
+          setSelectedTTSModel(val);
+          setCurrentTTSModel(val);
+        }
+      }
     } catch (e) {
       console.error('Error loading config:', e);
     } finally {
@@ -74,6 +89,24 @@ export default function AdminSettings() {
     }
   };
 
+  const handleSaveTTS = async () => {
+    setSavingTTS(true);
+    try {
+      const { error } = await supabase
+        .from('system_config')
+        .upsert({ key: 'tts_model', value: JSON.stringify(selectedTTSModel), updated_at: new Date().toISOString() }, { onConflict: 'key' });
+
+      if (error) throw error;
+
+      setCurrentTTSModel(selectedTTSModel);
+      toast({ title: 'Configuração salva', description: `Modelo de áudio alterado para ${TTS_MODELS.find(m => m.value === selectedTTSModel)?.label}` });
+    } catch (e: any) {
+      toast({ title: 'Erro ao salvar', description: e.message, variant: 'destructive' });
+    } finally {
+      setSavingTTS(false);
+    }
+  };
+
   if (isLoading || loadingConfig) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -85,6 +118,7 @@ export default function AdminSettings() {
   if (!isAdmin) return null;
 
   const hasChanges = selectedModel !== currentModel;
+  const hasTTSChanges = selectedTTSModel !== currentTTSModel;
 
   return (
     <div className="min-h-screen bg-background">
@@ -96,44 +130,85 @@ export default function AdminSettings() {
           <h1 className="text-2xl font-bold text-foreground">Configurações</h1>
         </div>
 
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Brain className="h-5 w-5 text-primary" />
-              <CardTitle>Modelo de IA</CardTitle>
-            </div>
-            <CardDescription>
-              Selecione o modelo usado pela Aura nas conversas principais. Modelos auxiliares (resumo, onboarding) sempre usam Gemini Flash.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Select value={selectedModel} onValueChange={setSelectedModel}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {AI_MODELS.map(model => (
-                  <SelectItem key={model.value} value={model.value}>
-                    <div className="flex flex-col">
-                      <span className="font-medium">{model.label}</span>
-                      <span className="text-xs text-muted-foreground">{model.description}</span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Brain className="h-5 w-5 text-primary" />
+                <CardTitle>Modelo de IA</CardTitle>
+              </div>
+              <CardDescription>
+                Selecione o modelo usado pela Aura nas conversas principais. Modelos auxiliares (resumo, onboarding) sempre usam Gemini Flash.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Select value={selectedModel} onValueChange={setSelectedModel}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {AI_MODELS.map(model => (
+                    <SelectItem key={model.value} value={model.value}>
+                      <div className="flex flex-col">
+                        <span className="font-medium">{model.label}</span>
+                        <span className="text-xs text-muted-foreground">{model.description}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
 
-            <div className="flex items-center justify-between pt-2">
-              <p className="text-sm text-muted-foreground">
-                Modelo ativo: <span className="font-medium text-foreground">{AI_MODELS.find(m => m.value === currentModel)?.label}</span>
-              </p>
-              <Button onClick={handleSave} disabled={saving || !hasChanges} variant="sage">
-                <Save className="h-4 w-4 mr-2" />
-                {saving ? 'Salvando...' : 'Salvar'}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+              <div className="flex items-center justify-between pt-2">
+                <p className="text-sm text-muted-foreground">
+                  Modelo ativo: <span className="font-medium text-foreground">{AI_MODELS.find(m => m.value === currentModel)?.label}</span>
+                </p>
+                <Button onClick={handleSave} disabled={saving || !hasChanges} variant="sage">
+                  <Save className="h-4 w-4 mr-2" />
+                  {saving ? 'Salvando...' : 'Salvar'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Mic className="h-5 w-5 text-primary" />
+                <CardTitle>Modelo de Áudio</CardTitle>
+              </div>
+              <CardDescription>
+                Selecione o provedor de voz usado pela Aura para gerar áudios. Se falhar, o texto é enviado no lugar.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Select value={selectedTTSModel} onValueChange={setSelectedTTSModel}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {TTS_MODELS.map(model => (
+                    <SelectItem key={model.value} value={model.value}>
+                      <div className="flex flex-col">
+                        <span className="font-medium">{model.label}</span>
+                        <span className="text-xs text-muted-foreground">{model.description}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <div className="flex items-center justify-between pt-2">
+                <p className="text-sm text-muted-foreground">
+                  Modelo ativo: <span className="font-medium text-foreground">{TTS_MODELS.find(m => m.value === currentTTSModel)?.label}</span>
+                </p>
+                <Button onClick={handleSaveTTS} disabled={savingTTS || !hasTTSChanges} variant="sage">
+                  <Save className="h-4 w-4 mr-2" />
+                  {savingTTS ? 'Salvando...' : 'Salvar'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );
