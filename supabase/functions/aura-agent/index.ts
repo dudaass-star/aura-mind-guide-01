@@ -2733,6 +2733,7 @@ serve(async (req) => {
     let shouldEndSession = false;
     let shouldPauseSession = false;
     let shouldStartSession = false;
+    let lastMessageTimestamp: string | null = null;
 
     // LOG DETALHADO: Estado inicial de detecção de sessão
     console.log('🔍 Session detection start:', {
