@@ -2733,6 +2733,7 @@ serve(async (req) => {
     let shouldEndSession = false;
     let shouldPauseSession = false;
     let shouldStartSession = false;
+    let lastMessageTimestamp: string | null = null;
 
     // LOG DETALHADO: Estado inicial de detecção de sessão
     console.log('🔍 Session detection start:', {
@@ -2767,8 +2768,11 @@ serve(async (req) => {
           .limit(1)
           .maybeSingle();
         
+        // Armazenar timestamp para uso consistente em todas as chamadas
+        lastMessageTimestamp = lastMsg?.created_at || null;
+        
         // Calcular tempo e fase da sessão (com detecção de gap)
-        const timeInfo = calculateSessionTimeContext(session, lastMsg?.created_at);
+        const timeInfo = calculateSessionTimeContext(session, lastMessageTimestamp);
         sessionTimeContext = timeInfo.timeContext;
         
         console.log('⏱️ Session time:', {
@@ -2824,8 +2828,11 @@ serve(async (req) => {
           .limit(1)
           .maybeSingle();
         
+        // Armazenar timestamp para uso consistente em todas as chamadas
+        lastMessageTimestamp = lastMsgOrphan?.created_at || null;
+        
         // Calcular tempo e fase da sessão (com detecção de gap)
-        const timeInfo = calculateSessionTimeContext(orphanSession, lastMsgOrphan?.created_at);
+        const timeInfo = calculateSessionTimeContext(orphanSession, lastMessageTimestamp);
         sessionTimeContext = timeInfo.timeContext;
         
         console.log('✅ Orphan session linked and activated');
@@ -3615,7 +3622,7 @@ REGRA: ${behaviorInstruction}`;
     // CONTROLE DE SESSÃO - Reforço determinístico de fase no dynamicContext
     // ========================================================================
     if (sessionActive && currentSession?.started_at) {
-      const phaseInfo = calculateSessionTimeContext(currentSession);
+      const phaseInfo = calculateSessionTimeContext(currentSession, lastMessageTimestamp);
       const elapsed = Math.floor(
         (Date.now() - new Date(currentSession.started_at).getTime()) / 60000
       );
@@ -3802,7 +3809,7 @@ Exemplo com 4 sessões:
       { role: "user", content: message }
     ];
 
-    console.log("Calling AI (model: " + configuredModel + ") with", apiMessages.length, "messages, plan:", userPlan, "sessions:", sessionsAvailable, "sessionActive:", sessionActive, "shouldEndSession:", shouldEndSession, "phase:", currentSession ? calculateSessionTimeContext(currentSession).phase : 'none');
+    console.log("Calling AI (model: " + configuredModel + ") with", apiMessages.length, "messages, plan:", userPlan, "sessions:", sessionsAvailable, "sessionActive:", sessionActive, "shouldEndSession:", shouldEndSession, "phase:", currentSession ? calculateSessionTimeContext(currentSession, lastMessageTimestamp).phase : 'none');
 
     let data: any;
     try {
@@ -3874,7 +3881,7 @@ Exemplo com 4 sessões:
     // CAMADA 1: TRAVA DE ENCERRAMENTO PREMATURO (Hard Block)
     // ========================================================================
     if (sessionActive && currentSession) {
-      const currentPhaseInfo = calculateSessionTimeContext(currentSession);
+      const currentPhaseInfo = calculateSessionTimeContext(currentSession, lastMessageTimestamp);
       const currentPhase = currentPhaseInfo.phase;
       const earlyPhases = ['opening', 'exploration', 'reframe', 'development'];
       
@@ -4791,7 +4798,7 @@ Responda apenas o resumo, sem formatação.`
     const forceAudioForSessionStart = sessionActive && sessionAudioCount < 2;
     
     // Verificar se é encerramento de sessão (forçar áudio caloroso)
-    const sessionCloseInfo = currentSession ? calculateSessionTimeContext(currentSession) : null;
+    const sessionCloseInfo = currentSession ? calculateSessionTimeContext(currentSession, lastMessageTimestamp) : null;
     const forceAudioForSessionClose = sessionCloseInfo?.forceAudioForClose || shouldEndSession || aiWantsToEndSession;
     
     const allowAudioThisTurn = !wantsText && (wantsAudio || crisis || forceAudioForSessionStart || forceAudioForSessionClose);
