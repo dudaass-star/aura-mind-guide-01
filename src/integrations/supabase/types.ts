@@ -532,6 +532,8 @@ export type Database = {
       }
       profiles: {
         Row: {
+          audio_reset_date: string | null
+          audio_seconds_used_this_month: number | null
           awaiting_time_capsule: string | null
           created_at: string | null
           current_episode: number | null
@@ -572,6 +574,8 @@ export type Database = {
           whatsapp_instance_id: string | null
         }
         Insert: {
+          audio_reset_date?: string | null
+          audio_seconds_used_this_month?: number | null
           awaiting_time_capsule?: string | null
           created_at?: string | null
           current_episode?: number | null
@@ -612,6 +616,8 @@ export type Database = {
           whatsapp_instance_id?: string | null
         }
         Update: {
+          audio_reset_date?: string | null
+          audio_seconds_used_this_month?: number | null
           awaiting_time_capsule?: string | null
           created_at?: string | null
           current_episode?: number | null
