@@ -1528,14 +1528,22 @@ function calculateSessionTimeContext(session: any, lastMessageAt?: string | null
   
   // Detectar gaps longos (>2h) como retomada
   let isResuming = false;
+  let maxResumptionsReached = false;
+  const MAX_RESUMPTIONS = 3;
   if (lastMessageAt) {
     const lastMsgTime = new Date(lastMessageAt);
     const gapMinutes = Math.floor((now.getTime() - lastMsgTime.getTime()) / 60000);
     if (gapMinutes > 120) {
-      // Gap >2h: tratar como retomada, resetar relógio para ~20 min
-      isResuming = true;
-      elapsedMinutes = Math.max(0, duration - 20); // Simular que faltam ~20 min
-      console.log(`⏸️➡️ Gap de ${gapMinutes} min detectado. Tratando como RETOMADA (${20} min restantes)`);
+      if ((resumptionCount ?? 0) >= MAX_RESUMPTIONS) {
+        // Limite atingido: NÃO tratar como retomada, manter overtime
+        maxResumptionsReached = true;
+        console.log(`🚫 Gap de ${gapMinutes} min detectado, mas sessão já foi retomada ${resumptionCount} vezes (máx ${MAX_RESUMPTIONS}). Mantendo OVERTIME.`);
+      } else {
+        // Gap >2h: tratar como retomada, resetar relógio para ~20 min
+        isResuming = true;
+        elapsedMinutes = Math.max(0, duration - 20); // Simular que faltam ~20 min
+        console.log(`⏸️➡️ Gap de ${gapMinutes} min detectado. Tratando como RETOMADA (${20} min restantes, retomada #${(resumptionCount ?? 0) + 1})`);
+      }
     }
   }
   
