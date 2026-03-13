@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendTextMessage, cleanPhoneNumber } from "../_shared/zapi-client.ts";
+import { getInstanceConfigForUser } from "../_shared/instance-helper.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -1868,6 +1869,15 @@ function sanitizeMessageHistory(messages: { role: string; content: string; creat
       .replace(/\[PAUSAR_JORNADAS\]/gi, '')
       .replace(/\[NAO_PERTURBE:\d+h?\]/gi, '')
       .replace(/\[PAUSAR_SESSOES[^\]]*\]/gi, '')
+      .replace(/\[AGENDAR_TAREFA:[^\]]+\]/gi, '')
+      .replace(/\[CANCELAR_TAREFA:[^\]]+\]/gi, '')
+      .replace(/\[CAPSULA_DO_TEMPO\]/gi, '')
+      .replace(/\[MEDITACAO:[^\]]+\]/gi, '')
+      .replace(/\[UPGRADE:[^\]]+\]/gi, '')
+      .replace(/\[INSIGHT:[^\]]+\]/gi, '')
+      .replace(/\[COMPROMISSO:[^\]]+\]/gi, '')
+      .replace(/\[CRIAR_AGENDA:[^\]]+\]/gi, '')
+      .replace(/\[REATIVAR_SESSAO\]/gi, '')
       .trim();
     
     // CORREÇÃO: Remover timestamps antigos das mensagens do assistente
@@ -1930,6 +1940,15 @@ function splitIntoMessages(response: string, allowAudioThisTurn: boolean): Array
   cleanResponse = cleanResponse.replace(/\[PAUSAR_JORNADAS\]/gi, '').trim();
   cleanResponse = cleanResponse.replace(/\[NAO_PERTURBE:\d+h?\]/gi, '').trim();
   cleanResponse = cleanResponse.replace(/\[PAUSAR_SESSOES[^\]]*\]/gi, '').trim();
+  cleanResponse = cleanResponse.replace(/\[AGENDAR_TAREFA:[^\]]+\]/gi, '').trim();
+  cleanResponse = cleanResponse.replace(/\[CANCELAR_TAREFA:[^\]]+\]/gi, '').trim();
+  cleanResponse = cleanResponse.replace(/\[CAPSULA_DO_TEMPO\]/gi, '').trim();
+  cleanResponse = cleanResponse.replace(/\[MEDITACAO:[^\]]+\]/gi, '').trim();
+  cleanResponse = cleanResponse.replace(/\[UPGRADE:[^\]]+\]/gi, '').trim();
+  cleanResponse = cleanResponse.replace(/\[INSIGHT:[^\]]+\]/gi, '').trim();
+  cleanResponse = cleanResponse.replace(/\[COMPROMISSO:[^\]]+\]/gi, '').trim();
+  cleanResponse = cleanResponse.replace(/\[CRIAR_AGENDA:[^\]]+\]/gi, '').trim();
+  cleanResponse = cleanResponse.replace(/\[REATIVAR_SESSAO\]/gi, '').trim();
 
   if (isAudioMode) {
     const normalized = cleanResponse
@@ -3002,25 +3021,18 @@ serve(async (req) => {
         })
         .eq('id', pendingScheduledSession.id);
 
-      // Atualizar profile com current_session_id
+      // Atualizar profile com current_session_id e incrementar sessões usadas
       await supabase
         .from('profiles')
         .update({
-          current_session_id: pendingScheduledSession.id
-        })
-        .eq('id', profile.id);
-
-      // Incrementar sessões usadas
-      await supabase
-        .from('profiles')
-        .update({
+          current_session_id: pendingScheduledSession.id,
           sessions_used_this_month: (profile.sessions_used_this_month || 0) + 1
         })
         .eq('id', profile.id);
 
       sessionActive = true;
       currentSession = { ...pendingScheduledSession, status: 'in_progress', started_at: now };
-      sessionTimeContext = calculateSessionTimeContext(currentSession).timeContext;
+      sessionTimeContext = calculateSessionTimeContext(currentSession, null, 0).timeContext;
       
       console.log('✅ Session started:', pendingScheduledSession.id);
     }
@@ -3050,25 +3062,18 @@ serve(async (req) => {
           })
           .eq('id', recentMissedSession.id);
 
-        // Atualizar profile com current_session_id
+        // Atualizar profile com current_session_id e incrementar sessões usadas
         await supabase
           .from('profiles')
           .update({
-            current_session_id: recentMissedSession.id
-          })
-          .eq('id', profile.id);
-
-        // Incrementar sessões usadas
-        await supabase
-          .from('profiles')
-          .update({
+            current_session_id: recentMissedSession.id,
             sessions_used_this_month: (profile.sessions_used_this_month || 0) + 1
           })
           .eq('id', profile.id);
 
         sessionActive = true;
         currentSession = { ...recentMissedSession, status: 'in_progress', started_at: now };
-        sessionTimeContext = calculateSessionTimeContext(currentSession).timeContext;
+        sessionTimeContext = calculateSessionTimeContext(currentSession, null, 0).timeContext;
         recentMissedSession = null; // Limpar para não injetar contexto de sessão perdida
 
         console.log('✅ Missed session reactivated:', currentSession.id);
@@ -4725,7 +4730,8 @@ Guarde esse resumo! Vou te lembrar dos compromissos nos próximos dias.
 
 Estou aqui sempre que precisar! 💜`;
 
-          const sendResult = await sendTextMessage(cleanPhone, summaryMessage);
+          const instanceConfig = await getInstanceConfigForUser(supabase, profile.user_id);
+          const sendResult = await sendTextMessage(cleanPhone, summaryMessage, undefined, instanceConfig);
           
           if (sendResult.success) {
             // Marcar como enviado para evitar duplicação pelo session-reminder
