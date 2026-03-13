@@ -1,17 +1,45 @@
-# Fix: lastMessageTimestamp consistente em todas as chamadas — Implementado ✅
+
+
+# Limite de retomadas por sessão (máx. 3)
 
 ## Problema
-4 chamadas a `calculateSessionTimeContext` não recebiam `lastMessageAt`, recalculando a fase com base no `started_at` original. Em sessões retomadas (gap >2h), isso gerava `phase = 'overtime'` em vez de `resuming`, criando instruções contraditórias para a IA.
+Uma sessão pode ser retomada infinitamente — cada gap >2h reseta o relógio para +20 min. Um usuário que volta a cada 8h poderia manter a mesma sessão ativa por dias.
 
-## O que foi feito
+## Mudanças
 
-1. **Variável `lastMessageTimestamp`** declarada no escopo principal (junto com `shouldEndSession` etc.)
-2. **Atribuída** nos dois pontos onde `lastMsg` é buscado (sessão normal e sessão órfã)
-3. **Passada** em todas as 4 chamadas que faltavam:
-   - Reforço de fase no `dynamicContext` (phaseBlock)
-   - Log antes da chamada AI
-   - Hard block pós-resposta
-   - Controle de áudio de encerramento
+### 1. Novo campo `resumption_count` na tabela `sessions`
+Migração SQL para adicionar coluna com default 0:
+```sql
+ALTER TABLE public.sessions ADD COLUMN resumption_count integer NOT NULL DEFAULT 0;
+```
 
-## Resultado
-Todas as camadas (timeContext, phaseBlock, hard block, áudio) agora calculam a fase de forma consistente. Sessões retomadas após gap >2h recebem `phase = 'development'` + `isResuming = true` em vez de `overtime`.
+### 2. Incrementar contador no `aura-agent` quando detectar retomada
+No bloco onde `isResuming = true` é detectado (~linha 2780), após confirmar que é uma retomada, incrementar o contador no banco:
+```typescript
+await supabase.from('sessions')
+  .update({ resumption_count: (currentSession.resumption_count || 0) + 1 })
+  .eq('id', currentSession.id);
+```
+
+### 3. Forçar encerramento quando `resumption_count >= 3`
+Na detecção de retomada, se o contador já é >= 3:
+- Não tratar como `isResuming` — manter `isOvertime = true`
+- Instruir a Aura a encerrar esta sessão e sugerir agendar uma nova
+- O `timeContext` incluirá: "Esta sessão já foi retomada 3 vezes. Proponha encerrar e agendar uma nova sessão."
+
+### 4. Passar `resumption_count` para `calculateSessionTimeContext`
+Adicionar parâmetro opcional `resumptionCount` à função. Quando `resumptionCount >= 3` e gap >2h, não ativar `isResuming` — manter comportamento de overtime com instrução de encerramento (mas sem auto-end forçado, seguindo a regra atual).
+
+## Fluxo
+
+```text
+Retomada 1: gap >2h → isResuming=true, +20 min, counter=1
+Retomada 2: gap >2h → isResuming=true, +20 min, counter=2  
+Retomada 3: gap >2h → isResuming=true, +20 min, counter=3
+Retomada 4: gap >2h → isResuming=false, overtime, Aura propõe encerrar
+```
+
+## Arquivos alterados
+- **Migração SQL**: adicionar `resumption_count` à tabela `sessions`
+- **`supabase/functions/aura-agent/index.ts`**: 3 pontos — buscar o count, passar para `calculateSessionTimeContext`, incrementar no banco
+
