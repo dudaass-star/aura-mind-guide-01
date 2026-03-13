@@ -2768,8 +2768,11 @@ serve(async (req) => {
           .limit(1)
           .maybeSingle();
         
+        // Armazenar timestamp para uso consistente em todas as chamadas
+        lastMessageTimestamp = lastMsg?.created_at || null;
+        
         // Calcular tempo e fase da sessão (com detecção de gap)
-        const timeInfo = calculateSessionTimeContext(session, lastMsg?.created_at);
+        const timeInfo = calculateSessionTimeContext(session, lastMessageTimestamp);
         sessionTimeContext = timeInfo.timeContext;
         
         console.log('⏱️ Session time:', {
