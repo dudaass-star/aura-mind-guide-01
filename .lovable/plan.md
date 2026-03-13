@@ -1,22 +1,25 @@
-# Correções de Risco Médio — Implementadas ✅
+# Sistema de Orçamento Mensal de Áudio ✅ Implementado
 
-## Resultado da Investigação
+## Resumo
+Sistema de orçamento mensal de áudio por plano, com estimativa de duração por caracteres.
 
-### 1. Índice UNIQUE em `user_insights` ✅ Já existia
-### 2. Guard de phone vazio no `session-reminder` ✅ Já existia
-### 3. Reengajamento no `conversation-followup` ✅ Corrigido
+### Orçamentos
+- Essencial: 30 min (1800s)
+- Direção: 50 min (3000s)
+- Transformação: 120 min (7200s)
 
-## O que foi corrigido no reengajamento
+### O que foi implementado
 
-### Migração SQL ✅
-Adicionada coluna `last_reengagement_at` na tabela `conversation_followups` para separar controle de frequência do reengajamento vs follow-ups regulares.
+1. **Migração SQL** ✅ — Colunas `audio_seconds_used_this_month` e `audio_reset_date` em `profiles`
+2. **`allowAudioThisTurn` expandido** ✅ — Aceita `[MODO_AUDIO]` da IA se tem orçamento disponível
+3. **Contador pós-envio** ✅ — Estima duração com `Math.ceil(texto.length / 15)` e incrementa no perfil
+4. **Reset inline** ✅ — Se o mês mudou, reseta antes de verificar orçamento
+5. **Auto-inject `[AGUARDANDO_RESPOSTA]`** ✅ — Se resposta contém `?` sem tag de status
+6. **Reset mensal** ✅ — `monthly-schedule-renewal` zera o contador no dia 1
 
-### Guards adicionados no bloco de reengajamento ✅
-Antes de enviar reengajamento, agora verifica:
-1. **Sessões futuras agendadas** — se tem sessão `scheduled` com `scheduled_at > now`, pula
-2. **Compromissos pendentes** — se tem `commitments` com `completed = false`, pula
-3. **Tarefas agendadas pendentes** — se tem `scheduled_tasks` com `status = 'pending'`, pula
-
-### Campo de frequência separado ✅
-- Controle de frequência agora usa `last_reengagement_at` em vez de `last_followup_at`
-- Após envio, atualiza `last_reengagement_at` no upsert
+### Regras de prioridade
+- Crise: sempre permite áudio (ignora orçamento)
+- Usuário pediu: sempre permite
+- Abertura de sessão: obrigatório (primeiras 2 mensagens)
+- Encerramento de sessão: permite
+- IA decidiu (`[MODO_AUDIO]`): permite SE tem orçamento
