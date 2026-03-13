@@ -1829,7 +1829,18 @@ De 0 a 10, como você sai agora? Vou adorar ouvir! ✨
 `;
   }
 
-  return { timeRemaining, phase, timeContext, shouldWarnClosing, isOvertime, isResuming, forceAudioForClose };
+  if (maxResumptionsReached) {
+    timeContext += `
+🚫 LIMITE DE RETOMADAS ATINGIDO (${resumptionCount ?? 0} retomadas):
+- Esta sessão já foi retomada ${resumptionCount ?? 0} vezes, o máximo permitido.
+- PROPONHA encerrar esta sessão e agendar uma nova.
+- Diga algo como: "Essa sessão já se estendeu bastante ao longo dos dias. Que tal a gente encerrar ela e marcar uma sessão nova pra você?"
+- Se o usuário quiser encerrar: resumo + compromissos + [ENCERRAR_SESSAO]
+- Se insistir em continuar, continue mas sugira novamente em breve.
+`;
+  }
+
+  return { timeRemaining, phase, timeContext, shouldWarnClosing, isOvertime, isResuming, forceAudioForClose, maxResumptionsReached };
 }
 
 // Remove tags de controle do histórico e adiciona timestamps
