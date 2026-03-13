@@ -837,7 +837,7 @@ IMPORTANTE:
                 .from('conversation_followups')
                 .upsert({
                   user_id: profile.user_id,
-                  last_followup_at: new Date().toISOString(),
+                  last_reengagement_at: new Date().toISOString(),
                   updated_at: new Date().toISOString(),
                 }, { onConflict: 'user_id' });
 
