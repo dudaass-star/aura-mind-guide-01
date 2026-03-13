@@ -1,25 +1,28 @@
-# Sistema de Orçamento Mensal de Áudio ✅ Implementado
 
-## Resumo
-Sistema de orçamento mensal de áudio por plano, com estimativa de duração por caracteres.
 
-### Orçamentos
-- Essencial: 30 min (1800s)
-- Direção: 50 min (3000s)
-- Transformação: 120 min (7200s)
+## Diagnóstico: Cancelamento falha para Roberto (19) 99884-9238
 
-### O que foi implementado
+**Problema**: A função `cancel-subscription` busca o cliente no Stripe com `metadata['phone']:'5519998849238'`, mas o telefone pode estar armazenado no Stripe em formato diferente (ex: `19998849238` sem o prefixo 55), pois a `create-checkout` armazena o telefone exatamente como o usuário digitou (apenas removendo caracteres não-numéricos).
 
-1. **Migração SQL** ✅ — Colunas `audio_seconds_used_this_month` e `audio_reset_date` em `profiles`
-2. **`allowAudioThisTurn` expandido** ✅ — Aceita `[MODO_AUDIO]` da IA se tem orçamento disponível
-3. **Contador pós-envio** ✅ — Estima duração com `Math.ceil(texto.length / 15)` e incrementa no perfil
-4. **Reset inline** ✅ — Se o mês mudou, reseta antes de verificar orçamento
-5. **Auto-inject `[AGUARDANDO_RESPOSTA]`** ✅ — Se resposta contém `?` sem tag de status
-6. **Reset mensal** ✅ — `monthly-schedule-renewal` zera o contador no dia 1
+**Causa raiz**: A `create-checkout` usa `getPhoneVariations()` para **buscar** clientes existentes, mas armazena o telefone como veio. Já a `cancel-subscription` faz uma busca simples com formato fixo (sempre adiciona "55"), sem usar `getPhoneVariations()`.
 
-### Regras de prioridade
-- Crise: sempre permite áudio (ignora orçamento)
-- Usuário pediu: sempre permite
-- Abertura de sessão: obrigatório (primeiras 2 mensagens)
-- Encerramento de sessão: permite
-- IA decidiu (`[MODO_AUDIO]`): permite SE tem orçamento
+### Plano de correção
+
+**Arquivo**: `supabase/functions/cancel-subscription/index.ts`
+
+1. Importar `getPhoneVariations` de `../_shared/zapi-client.ts`
+2. Substituir a busca simples por um loop que testa todas as variações do telefone (com e sem 55, com e sem nono dígito), igual ao padrão já usado em `create-checkout`
+
+```text
+Antes:
+  customers = stripe.customers.search({ query: `metadata['phone']:'5519998849238'` })
+
+Depois:
+  for (phoneVar of getPhoneVariations(phone)) {
+    customers = stripe.customers.search({ query: `metadata['phone']:'${phoneVar}'` })
+    if found → break
+  }
+```
+
+Isso garante que o cancelamento encontre o cliente independentemente do formato em que o telefone foi salvo no Stripe.
+
