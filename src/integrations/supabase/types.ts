@@ -209,6 +209,7 @@ export type Database = {
           followup_count: number
           id: string
           last_followup_at: string | null
+          last_reengagement_at: string | null
           last_user_message_at: string | null
           updated_at: string
           user_id: string
@@ -219,6 +220,7 @@ export type Database = {
           followup_count?: number
           id?: string
           last_followup_at?: string | null
+          last_reengagement_at?: string | null
           last_user_message_at?: string | null
           updated_at?: string
           user_id: string
@@ -229,6 +231,7 @@ export type Database = {
           followup_count?: number
           id?: string
           last_followup_at?: string | null
+          last_reengagement_at?: string | null
           last_user_message_at?: string | null
           updated_at?: string
           user_id?: string

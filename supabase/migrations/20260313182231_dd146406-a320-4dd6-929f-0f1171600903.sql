@@ -1,0 +1,1 @@
+ALTER TABLE public.conversation_followups ADD COLUMN last_reengagement_at timestamptz DEFAULT NULL;
