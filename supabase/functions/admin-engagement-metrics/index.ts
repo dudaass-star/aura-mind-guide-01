@@ -245,6 +245,8 @@ Deno.serve(async (req) => {
       trialsLast7Days: trialsLast7Days || 0,
       trialsLast30Days: trialsLast30Days || 0,
       totalTrialsEver: totalTrialsEver || 0,
+      trialRespondedCount: trialRespondedCount || 0,
+      trialCompletedCount: trialCompletedCount || 0,
       convertedCount,
       conversionRate,
       expiredTrials: expiredTrials || 0,
