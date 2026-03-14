@@ -92,7 +92,7 @@ Deno.serve(async (req) => {
           } else if (hoursSinceSignup >= 2) {
             nudgeMessage = `Ei, ${userName}! Tô aqui ainda 💜\n\nPode me responder quando quiser, tá? Não precisa pensar muito — pode ser um "oi" mesmo. Eu adoraria te conhecer.`;
           }
-        } else if (trialCount >= 1 && trialCount <= 4) {
+        } else if (trialCount >= 1 && trialCount <= 9) {
           // ── Partial Trial Nudges ──
           const lastMsgDate = tp.last_message_date ? new Date(tp.last_message_date) : null;
           const hoursSinceLastMsg = lastMsgDate ? (now.getTime() - lastMsgDate.getTime()) / (1000 * 60 * 60) : 999;
