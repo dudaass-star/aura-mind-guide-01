@@ -567,6 +567,7 @@ export type Database = {
           status: string | null
           therapy_experience: string | null
           trial_conversations_count: number
+          trial_nudge_active: boolean | null
           trial_started_at: string | null
           updated_at: string | null
           upgrade_suggested_at: string | null
@@ -609,6 +610,7 @@ export type Database = {
           status?: string | null
           therapy_experience?: string | null
           trial_conversations_count?: number
+          trial_nudge_active?: boolean | null
           trial_started_at?: string | null
           updated_at?: string | null
           upgrade_suggested_at?: string | null
@@ -651,6 +653,7 @@ export type Database = {
           status?: string | null
           therapy_experience?: string | null
           trial_conversations_count?: number
+          trial_nudge_active?: boolean | null
           trial_started_at?: string | null
           updated_at?: string | null
           upgrade_suggested_at?: string | null

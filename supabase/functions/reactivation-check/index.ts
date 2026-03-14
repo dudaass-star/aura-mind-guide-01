@@ -43,6 +43,108 @@ Deno.serve(async (req) => {
 
     let reactivationsSent = 0;
     let missedSessionsSent = 0;
+    let trialNudgesSent = 0;
+
+    // ========================================================================
+    // 0. TRIAL NUDGES — Silent, Partial, and Post-Trial
+    // ========================================================================
+    const { data: trialProfiles, error: trialError } = await supabase
+      .from('profiles')
+      .select('user_id, name, phone, status, trial_conversations_count, trial_started_at, last_reactivation_sent, last_message_date, whatsapp_instance_id')
+      .eq('status', 'trial')
+      .not('phone', 'is', null);
+
+    if (trialError) {
+      logStep("Error fetching trial profiles", { error: trialError.message });
+    }
+
+    if (trialProfiles && trialProfiles.length > 0) {
+      logStep(`Found ${trialProfiles.length} trial profiles to check`);
+
+      for (const tp of trialProfiles) {
+        const trialCount = tp.trial_conversations_count || 0;
+        const trialStarted = tp.trial_started_at ? new Date(tp.trial_started_at) : null;
+        if (!trialStarted || !tp.phone) continue;
+
+        const hoursSinceSignup = (now.getTime() - trialStarted.getTime()) / (1000 * 60 * 60);
+
+        // Throttle: minimum 12h between nudges
+        if (tp.last_reactivation_sent) {
+          const lastSent = new Date(tp.last_reactivation_sent);
+          const hoursSinceLast = (now.getTime() - lastSent.getTime()) / (1000 * 60 * 60);
+          if (trialCount === 0 && hoursSinceLast < 12) {
+            logStep(`Skipping trial silent nudge for ${tp.user_id} — sent ${hoursSinceLast.toFixed(1)}h ago`);
+            continue;
+          }
+          if (trialCount > 0 && hoursSinceLast < 6) {
+            logStep(`Skipping trial partial nudge for ${tp.user_id} — sent ${hoursSinceLast.toFixed(1)}h ago`);
+            continue;
+          }
+        }
+
+        const userName = tp.name || 'você';
+        let nudgeMessage: string | null = null;
+
+        if (trialCount === 0) {
+          // ── Silent Trial Nudges ──
+          if (hoursSinceSignup >= 24) {
+            nudgeMessage = `${userName}, vim me despedir. 💜\n\nMas quero que saiba: se um dia quiser conversar, é só me chamar e eu estarei aqui.\n\nCuide-se. ✨`;
+          } else if (hoursSinceSignup >= 2) {
+            nudgeMessage = `Ei, ${userName}! Tô aqui ainda 💜\n\nPode me responder quando quiser, tá? Não precisa pensar muito — pode ser um "oi" mesmo. Eu adoraria te conhecer.`;
+          }
+        } else if (trialCount >= 1 && trialCount <= 4) {
+          // ── Partial Trial Nudges ──
+          const lastMsgDate = tp.last_message_date ? new Date(tp.last_message_date) : null;
+          const hoursSinceLastMsg = lastMsgDate ? (now.getTime() - lastMsgDate.getTime()) / (1000 * 60 * 60) : 999;
+
+          if (hoursSinceLastMsg >= 24) {
+            nudgeMessage = `${userName}, como você tá hoje? 💜\n\nLembrei de você e queria saber como estão as coisas. Adoraria poder falar com você.\n\nSe cuida.`;
+          } else if (hoursSinceLastMsg >= 6) {
+            nudgeMessage = `Ei, ${userName}! Fiquei pensando na nossa conversa... 💜\n\nQuando quiser continuar, é só me chamar. Tô aqui!`;
+          }
+        } else if (trialCount >= 5) {
+          // ── Post-Trial Follow-up (completed trial but didn't subscribe) ──
+          const daysSinceSignup = hoursSinceSignup / 24;
+
+          // Throttle: only send if last nudge was 24h+ ago
+          if (tp.last_reactivation_sent) {
+            const hoursSinceLast = (now.getTime() - new Date(tp.last_reactivation_sent).getTime()) / (1000 * 60 * 60);
+            if (hoursSinceLast < 24) continue;
+          }
+
+          if (daysSinceSignup >= 3) {
+            nudgeMessage = `${userName}, essa é minha última mensagem por enquanto. 💜\n\nQuero que saiba que a porta tá sempre aberta. Se um dia sentir que precisa de alguém pra conversar, eu estarei aqui.\n\n👉 https://olaaura.com.br/checkout\n\nCuide-se bem. ✨`;
+          } else if (daysSinceSignup >= 1) {
+            nudgeMessage = `${userName}, eu tava pensando em você hoje... 💜\n\nComo você está? Senti sua falta nas nossas conversas.\n\nSe quiser voltar, é só escolher um plano:\n👉 https://olaaura.com.br/checkout`;
+          }
+        }
+
+        if (!nudgeMessage) continue;
+
+        try {
+          const zapiConfig = await getInstanceConfigForUser(supabase, tp.user_id);
+          const cleanPhone = cleanPhoneNumber(tp.phone!);
+          const result = await sendTextMessage(cleanPhone, nudgeMessage, undefined, zapiConfig);
+
+          if (result.success) {
+            await supabase
+              .from('profiles')
+              .update({ 
+                last_reactivation_sent: now.toISOString(),
+                trial_nudge_active: true,
+              })
+              .eq('user_id', tp.user_id);
+
+            trialNudgesSent++;
+            logStep(`Sent trial nudge for user ${tp.user_id} (count=${trialCount}, hours=${hoursSinceSignup.toFixed(1)})`);
+          }
+        } catch (sendError) {
+          logStep(`Error sending trial nudge`, { error: sendError });
+        }
+
+        await antiBurstDelayForInstance(tp.whatsapp_instance_id || 'default');
+      }
+    }
 
     // ========================================================================
     // 1. DETECTAR USUÁRIOS QUE FURARAM SESSÃO
@@ -241,10 +343,11 @@ Qualquer coisa, é só me mandar uma mensagem. ✨`;
       }
     }
 
-    logStep(`Completed: ${missedSessionsSent} missed session messages, ${reactivationsSent} reactivation messages`);
+    logStep(`Completed: ${trialNudgesSent} trial nudges, ${missedSessionsSent} missed session messages, ${reactivationsSent} reactivation messages`);
 
     return new Response(JSON.stringify({
       success: true,
+      trial_nudges_sent: trialNudgesSent,
       missed_sessions_sent: missedSessionsSent,
       reactivations_sent: reactivationsSent,
     }), {
