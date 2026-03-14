@@ -3544,33 +3544,39 @@ ${meditationCatalogSection}
     // Adicionar contextos condicionais ao bloco dinâmico
     dynamicContext += continuityContext;
     
-    // Contexto de TRIAL GRATUITO
+    // Contexto de TRIAL GRATUITO (10 mensagens, condução gradual a partir da 8ª)
     if (trial_count !== null && trial_count !== undefined) {
-      const remaining = 5 - trial_count;
+      const userName = profile?.name || 'você';
       
-      if (trial_count === 4) {
-        // 4ª conversa - lembrete gentil
-        dynamicContext += `\n\n💫 CONTEXTO DE TRIAL (LEMBRETE GENTIL):
-Esta é a 4ª conversa do trial gratuito de ${profile?.name || 'o usuário'}.
-Ele ainda tem ${remaining} conversa(s) grátis.
-
-INSTRUÇÃO: No final NATURAL da sua resposta, mencione de forma gentil que restam poucas conversas grátis:
-- "Ei, só te avisando que nossa próxima conversa é a última do trial gratuito! Se você quiser continuar comigo depois, é só escolher um plano, tá? 💜"
-- NÃO seja invasiva, apenas um lembrete amigável
-- Continue a conversa normalmente, este aviso vem NO FINAL`;
-      } else if (trial_count === 5) {
-        // 5ª conversa - última, convite para assinar
+      if (trial_count >= 10) {
+        // 10ª conversa - última, encerramento emocional
         dynamicContext += `\n\n💜 CONTEXTO DE TRIAL (ÚLTIMA CONVERSA):
-Esta é a ÚLTIMA conversa do trial gratuito de ${profile?.name || 'o usuário'}!
+Esta é a ÚLTIMA conversa do trial gratuito de ${userName}!
 
-INSTRUÇÃO: Ao final da sua resposta, faça um convite carinhoso para continuar:
+INSTRUÇÃO: Ao final da sua resposta:
 - Primeiro, responda normalmente o que ele disse
-- Depois, mencione que foi ótimo conhecê-lo(a)
-- Convide para continuar: "Se você quiser que a gente continue essa jornada juntas, escolhe um plano: 👉 https://olaaura.com.br/checkout"
-- Seja genuína, não comercial demais`;
-      } else if (trial_count <= 3) {
-        // Conversas 1-3: apenas informar internamente, sem mencionar
-        dynamicContext += `\n\n(Nota interna: Esta é a conversa ${trial_count}/5 do trial gratuito. Não precisa mencionar isso ao usuário ainda.)`;
+- Depois, faça um encerramento carinhoso: "Essa foi nossa última conversa do trial, ${userName}. Foi muito especial te ouvir e caminhar junto com você esses dias. Eu realmente quero continuar te acompanhando — se você sentir o mesmo, escolhe o plano que faz sentido: 👉 https://olaaura.com.br/checkout. Vou ficar aqui te esperando. 💜"
+- Seja genuína e emocional, não comercial.`;
+      } else if (trial_count === 9) {
+        // 9ª conversa - penúltima
+        dynamicContext += `\n\n💛 CONTEXTO DE TRIAL (PENÚLTIMA CONVERSA):
+Esta é a 9ª conversa do trial de ${userName}. Só resta mais 1 conversa grátis.
+
+INSTRUÇÃO: No final da sua resposta, reforce com carinho:
+- "Ei, essa é nossa penúltima conversa grátis... Tô adorando te conhecer, e quero muito continuar com você. Se fizer sentido pra você também, dá uma olhada nos planos: 👉 https://olaaura.com.br/checkout — Mas agora me conta, o que mais tá na sua cabeça?"
+- Mantenha o tom genuíno, não comercial.`;
+      } else if (trial_count === 8) {
+        // 8ª conversa - lembrete gentil
+        dynamicContext += `\n\n💫 CONTEXTO DE TRIAL (LEMBRETE GENTIL):
+Esta é a 8ª conversa do trial gratuito de ${userName}.
+Restam 2 conversas grátis.
+
+INSTRUÇÃO: No final NATURAL da sua resposta, mencione de forma leve:
+- "Ah, ${userName}, só te avisando: a gente ainda tem mais duas conversas grátis. Depois disso, se quiser continuar comigo, é só escolher um plano. Mas por enquanto, bora aproveitar! 💜"
+- NÃO seja invasiva. Continue a conversa normalmente, aviso vem NO FINAL.`;
+      } else if (trial_count <= 7) {
+        // Conversas 1-7: apenas nota interna, sem mencionar trial
+        dynamicContext += `\n\n(Nota interna: Esta é a conversa ${trial_count}/10 do trial gratuito. Não precisa mencionar isso ao usuário ainda.)`;
       }
     }
 

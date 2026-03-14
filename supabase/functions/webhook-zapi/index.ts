@@ -493,11 +493,11 @@ Tô aqui te esperando. 🤗`;
           .update({ trial_conversations_count: newCount })
           .eq('user_id', profile.user_id);
         
-        console.log(`📊 Trial conversation ${newCount}/5 for user ${profile.user_id}`);
+        console.log(`📊 Trial conversation ${newCount}/10 for user ${profile.user_id}`);
         profile.trial_conversations_count = newCount;
         
-        // Schedule trial closing message after 5th conversation
-        if (newCount === 5) {
+        // Schedule trial closing message after 10th conversation
+        if (newCount === 10) {
           try {
             const closeAt = new Date(Date.now() + 2 * 60 * 1000).toISOString();
             await supabase.from('scheduled_tasks').insert({
@@ -507,7 +507,7 @@ Tô aqui te esperando. 🤗`;
               payload: {},
               status: 'pending',
             });
-            console.log(`⏰ Scheduled trial_closing for 2 min after 5th conversation`);
+            console.log(`⏰ Scheduled trial_closing for 2 min after 10th conversation`);
           } catch (e) {
             console.warn('⚠️ Failed to schedule trial_closing:', e);
           }

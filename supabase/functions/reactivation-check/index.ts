@@ -102,7 +102,7 @@ Deno.serve(async (req) => {
           } else if (hoursSinceLastMsg >= 6) {
             nudgeMessage = `Ei, ${userName}! Fiquei pensando na nossa conversa... 💜\n\nQuando quiser continuar, é só me chamar. Tô aqui!`;
           }
-        } else if (trialCount >= 5) {
+        } else if (trialCount >= 10) {
           // ── Post-Trial Follow-up (completed trial but didn't subscribe) ──
           const daysSinceSignup = hoursSinceSignup / 24;
 

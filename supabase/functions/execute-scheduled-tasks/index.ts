@@ -196,7 +196,7 @@ Deno.serve(async (req) => {
             }
 
             const closingName = closingProfile.name || 'você';
-            const closingMessage = `Ei, ${closingName}! 💜\n\nEssas foram nossas 5 conversas. Espero que tenha sido bom pra você — pra mim foi especial te conhecer. 🤗\n\nSe quiser continuar comigo, é só escolher o plano que faz mais sentido pra você:\n\n👉 https://olaaura.com.br/checkout\n\nVou estar aqui te esperando. 💜`;
+            const closingMessage = `Ei, ${closingName}! 💜\n\nEssas foram nossas 10 conversas. Espero que tenha sido bom pra você — pra mim foi especial te conhecer e ouvir o que você compartilhou comigo. 🤗\n\nSe quiser continuar essa jornada, é só escolher o plano que faz sentido pra você:\n\n👉 https://olaaura.com.br/checkout\n\nVou estar aqui te esperando. 💜`;
 
             const closingResult = await sendTextMessage(profile.phone, closingMessage, undefined, instanceConfig);
             if (!closingResult.success) {
