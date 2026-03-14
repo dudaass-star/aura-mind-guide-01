@@ -1,22 +1,25 @@
+# Sistema de Orçamento Mensal de Áudio ✅ Implementado
 
+## Resumo
+Sistema de orçamento mensal de áudio por plano, com estimativa de duração por caracteres.
 
-## Diagnóstico Final
+### Orçamentos
+- Essencial: 30 min (1800s)
+- Direção: 50 min (3000s)
+- Transformação: 120 min (7200s)
 
-Os logs confirmam: `"Raw current_period_end value - {"type":"undefined"}"`. O campo `subscription.current_period_end` retorna **undefined**.
+### O que foi implementado
 
-**Causa raiz**: A partir da API Stripe versão `2025-03-31.basil`, os campos `current_period_start` e `current_period_end` foram **removidos** do objeto Subscription e movidos para `subscription.items.data[0].current_period_start` e `subscription.items.data[0].current_period_end`.
+1. **Migração SQL** ✅ — Colunas `audio_seconds_used_this_month` e `audio_reset_date` em `profiles`
+2. **`allowAudioThisTurn` expandido** ✅ — Aceita `[MODO_AUDIO]` da IA se tem orçamento disponível
+3. **Contador pós-envio** ✅ — Estima duração com `Math.ceil(texto.length / 15)` e incrementa no perfil
+4. **Reset inline** ✅ — Se o mês mudou, reseta antes de verificar orçamento
+5. **Auto-inject `[AGUARDANDO_RESPOSTA]`** ✅ — Se resposta contém `?` sem tag de status
+6. **Reset mensal** ✅ — `monthly-schedule-renewal` zera o contador no dia 1
 
-O código usa `apiVersion: "2025-08-27.basil"`, que é posterior a essa mudança.
-
-## Correção
-
-**Arquivo**: `supabase/functions/cancel-subscription/index.ts`
-
-Alterar todas as referências a `subscription.current_period_end` para usar `subscription.items.data[0].current_period_end`. Mesma lógica para `cancelingSub.current_period_end`.
-
-Pontos de alteração:
-1. **Linha 135-136** (cancelingSub): `cancelingSub.current_period_end` → `cancelingSub.items.data[0].current_period_end`
-2. **Linha 169-171** (subscription ativa): `subscription.current_period_end` → `subscription.items.data[0].current_period_end`
-
-Manter a conversão defensiva (typeof check) já implementada.
-
+### Regras de prioridade
+- Crise: sempre permite áudio (ignora orçamento)
+- Usuário pediu: sempre permite
+- Abertura de sessão: obrigatório (primeiras 2 mensagens)
+- Encerramento de sessão: permite
+- IA decidiu (`[MODO_AUDIO]`): permite SE tem orçamento

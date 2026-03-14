@@ -132,8 +132,8 @@ serve(async (req) => {
       }
 
       if (cancelingSub) {
-        const rawCancelEnd = cancelingSub.current_period_end;
-        const endDate = typeof rawCancelEnd === 'string' ? new Date(rawCancelEnd) : new Date(rawCancelEnd * 1000);
+        const rawCancelEnd = cancelingSub.items.data[0]?.current_period_end;
+        const endDate = typeof rawCancelEnd === 'string' ? new Date(rawCancelEnd) : new Date((rawCancelEnd ?? 0) * 1000);
         return new Response(
           JSON.stringify({
             success: true,
@@ -166,9 +166,9 @@ serve(async (req) => {
     }
 
     const subscription = subscriptions.data[0];
-    const rawEnd = subscription.current_period_end;
+    const rawEnd = subscription.items.data[0]?.current_period_end;
     logStep("Raw current_period_end value", { rawEnd, type: typeof rawEnd });
-    const currentPeriodEnd = typeof rawEnd === 'string' ? new Date(rawEnd) : new Date(rawEnd * 1000);
+    const currentPeriodEnd = typeof rawEnd === 'string' ? new Date(rawEnd) : new Date((rawEnd ?? 0) * 1000);
 
     // If action is "check", just return subscription info
     if (action === "check") {
