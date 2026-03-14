@@ -343,10 +343,11 @@ Qualquer coisa, é só me mandar uma mensagem. ✨`;
       }
     }
 
-    logStep(`Completed: ${missedSessionsSent} missed session messages, ${reactivationsSent} reactivation messages`);
+    logStep(`Completed: ${trialNudgesSent} trial nudges, ${missedSessionsSent} missed session messages, ${reactivationsSent} reactivation messages`);
 
     return new Response(JSON.stringify({
       success: true,
+      trial_nudges_sent: trialNudgesSent,
       missed_sessions_sent: missedSessionsSent,
       reactivations_sent: reactivationsSent,
     }), {
