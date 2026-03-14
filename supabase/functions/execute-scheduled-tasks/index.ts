@@ -163,7 +163,7 @@ Deno.serve(async (req) => {
             if (ttsRes.ok) {
               const ttsData = await ttsRes.json();
               if (ttsData.audioContent) {
-                await sendAudioFromUrl(profile.phone, `data:audio/mp3;base64,${ttsData.audioContent}`, undefined, instanceConfig);
+                await sendAudioMessage(profile.phone, ttsData.audioContent, instanceConfig);
                 // Mark trial_nudge_active so response doesn't count
                 await supabase.from('profiles').update({ trial_nudge_active: true }).eq('user_id', task.user_id);
                 console.log(`✅ Trial activation audio sent to ${profile.phone.substring(0, 4)}***`);
