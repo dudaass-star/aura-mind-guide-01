@@ -226,6 +226,20 @@ export default function AdminEngagement() {
                   </CardContent>
                 </Card>
 
+                {/* Botão de Reativação */}
+                <Card>
+                  <CardContent className="flex items-center justify-between py-4">
+                    <div>
+                      <p className="font-medium text-foreground">Reativar Trials Finalizados</p>
+                      <p className="text-xs text-muted-foreground">Envia mensagem conversacional e reseta contador para continuar o fluxo de trial</p>
+                    </div>
+                    <Button onClick={handleReactivationBlast} disabled={blasting} variant="outline" size="sm">
+                      <Send className={`h-4 w-4 mr-2 ${blasting ? 'animate-pulse' : ''}`} />
+                      {blasting ? 'Enviando...' : 'Disparar'}
+                    </Button>
+                  </CardContent>
+                </Card>
+
                 {/* Cards detalhados */}
                 <MetricCards cards={trialCards} />
               </>
