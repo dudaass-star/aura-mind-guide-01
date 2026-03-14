@@ -74,6 +74,33 @@ export default function AdminEngagement() {
     if (isAdmin) fetchMetrics();
   }, [isAdmin]);
 
+  const handleReactivationBlast = async () => {
+    if (!confirm('Enviar mensagem de reativação para todos os trials finalizados?')) return;
+    setBlasting(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('No session');
+
+      const { data, error } = await supabase.functions.invoke('reactivation-blast', {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+
+      if (error) throw error;
+      toast({
+        title: 'Disparo concluído!',
+        description: `${data.sent} mensagens enviadas${data.errors > 0 ? `, ${data.errors} erros` : ''}.`,
+      });
+    } catch (err: unknown) {
+      toast({
+        title: 'Erro no disparo',
+        description: err instanceof Error ? err.message : 'Erro desconhecido',
+        variant: 'destructive',
+      });
+    } finally {
+      setBlasting(false);
+    }
+  };
+
   if (isLoading || !isAdmin) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
