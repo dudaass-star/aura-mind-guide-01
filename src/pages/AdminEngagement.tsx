@@ -22,6 +22,8 @@ interface Metrics {
   trialsLast7Days: number;
   trialsLast30Days: number;
   totalTrialsEver: number;
+  trialRespondedCount: number;
+  trialCompletedCount: number;
   convertedCount: number;
   conversionRate: number;
   expiredTrials: number;
