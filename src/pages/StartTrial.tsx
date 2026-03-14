@@ -152,7 +152,7 @@ const StartTrial = () => {
                 Experimente a AURA
               </h1>
               <p className="text-muted-foreground">
-                5 conversas pra você sentir a diferença.
+                10 conversas pra você sentir a diferença.
               </p>
             </div>
 
@@ -160,7 +160,7 @@ const StartTrial = () => {
             <div className="grid grid-cols-3 gap-3 mb-8">
               <div className="bg-card/50 rounded-xl p-3 text-center">
                 <MessageCircle className="w-5 h-5 text-primary mx-auto mb-1" />
-                <p className="text-xs text-muted-foreground">5 conversas</p>
+                <p className="text-xs text-muted-foreground">10 conversas</p>
               </div>
               <div className="bg-card/50 rounded-xl p-3 text-center">
                 <CreditCard className="w-5 h-5 text-primary mx-auto mb-1" />

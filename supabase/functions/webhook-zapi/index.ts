@@ -463,19 +463,19 @@ Deno.serve(async (req) => {
       // Re-read count after potential bonus
       const effectiveTrialCount = profile.trial_conversations_count || 0;
       
-      // Se já passou do limite (5+ mensagens), bloquear
-      if (effectiveTrialCount >= 5) {
+      // Se já passou do limite (10+ mensagens), bloquear
+      if (effectiveTrialCount >= 10) {
         console.log(`🚫 Trial limit reached for user ${profile.user_id}, count: ${effectiveTrialCount}`);
         
-        const limitMessage = `Oi, ${profile.name}! 💜
+        const limitMessage = `Oi, ${profile.name || 'você'}! 💜
 
-Suas 5 conversas grátis acabaram.
+Suas 10 conversas grátis acabaram, mas o que a gente viveu junto não vai embora.
 
-Foi muito bom te conhecer! Se você quiser continuar essa jornada comigo, escolha um plano:
+Quando você quiser voltar, é só escolher um plano e a gente continua de onde parou:
 
 👉 https://olaaura.com.br/checkout
 
-Vou ficar esperando você voltar. 🤗`;
+Tô aqui te esperando. 🤗`;
         
         const instanceConfig = await getInstanceConfigForUser(supabase, profile.user_id);
         await sendTextMessage(payload.cleanPhone, limitMessage, undefined, instanceConfig);
@@ -493,11 +493,11 @@ Vou ficar esperando você voltar. 🤗`;
           .update({ trial_conversations_count: newCount })
           .eq('user_id', profile.user_id);
         
-        console.log(`📊 Trial conversation ${newCount}/5 for user ${profile.user_id}`);
+        console.log(`📊 Trial conversation ${newCount}/10 for user ${profile.user_id}`);
         profile.trial_conversations_count = newCount;
         
-        // Schedule trial closing message after 5th conversation
-        if (newCount === 5) {
+        // Schedule trial closing message after 10th conversation
+        if (newCount === 10) {
           try {
             const closeAt = new Date(Date.now() + 2 * 60 * 1000).toISOString();
             await supabase.from('scheduled_tasks').insert({
@@ -507,7 +507,7 @@ Vou ficar esperando você voltar. 🤗`;
               payload: {},
               status: 'pending',
             });
-            console.log(`⏰ Scheduled trial_closing for 2 min after 5th conversation`);
+            console.log(`⏰ Scheduled trial_closing for 2 min after 10th conversation`);
           } catch (e) {
             console.warn('⚠️ Failed to schedule trial_closing:', e);
           }
