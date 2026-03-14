@@ -220,7 +220,8 @@ Deno.serve(async (req) => {
       .from('profiles')
       .select('trial_conversations_count')
       .eq('status', 'trial')
-      .not('trial_started_at', 'is', null);
+      .not('trial_started_at', 'is', null)
+      .gte('trial_started_at', funnelCutoff);
 
     const avgMsgsNonConverted = nonConvertedProfiles && nonConvertedProfiles.length > 0
       ? Math.round(nonConvertedProfiles.reduce((sum, p) => sum + (p.trial_conversations_count || 0), 0) / nonConvertedProfiles.length * 10) / 10
