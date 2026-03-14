@@ -108,8 +108,9 @@ serve(async (req) => {
       const pausedSub = allSubscriptions.data.find((s: Stripe.Subscription) => s.pause_collection);
       
       if (pausedSub && pausedSub.pause_collection) {
-        const resumesAt = pausedSub.pause_collection.resumes_at 
-          ? new Date(pausedSub.pause_collection.resumes_at * 1000)
+        const rawResumes = pausedSub.pause_collection.resumes_at;
+        const resumesAt = rawResumes
+          ? (typeof rawResumes === 'string' ? new Date(rawResumes) : new Date(rawResumes * 1000))
           : null;
         return new Response(
           JSON.stringify({
