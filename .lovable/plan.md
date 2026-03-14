@@ -1,25 +1,33 @@
-# Sistema de Orçamento Mensal de Áudio ✅ Implementado
 
-## Resumo
-Sistema de orçamento mensal de áudio por plano, com estimativa de duração por caracteres.
 
-### Orçamentos
-- Essencial: 30 min (1800s)
-- Direção: 50 min (3000s)
-- Transformação: 120 min (7200s)
+## Diagnóstico
 
-### O que foi implementado
+Os logs da edge function mostram claramente:
+1. ✅ Cliente encontrado (`cus_U8wrjaSN97Iyp3`) — a correção do telefone **funcionou**
+2. ✅ Assinatura encontrada (count: 1)
+3. ✅ "Returning subscription info for check"
+4. ❌ ERROR: **"Invalid time value"**
 
-1. **Migração SQL** ✅ — Colunas `audio_seconds_used_this_month` e `audio_reset_date` em `profiles`
-2. **`allowAudioThisTurn` expandido** ✅ — Aceita `[MODO_AUDIO]` da IA se tem orçamento disponível
-3. **Contador pós-envio** ✅ — Estima duração com `Math.ceil(texto.length / 15)` e incrementa no perfil
-4. **Reset inline** ✅ — Se o mês mudou, reseta antes de verificar orçamento
-5. **Auto-inject `[AGUARDANDO_RESPOSTA]`** ✅ — Se resposta contém `?` sem tag de status
-6. **Reset mensal** ✅ — `monthly-schedule-renewal` zera o contador no dia 1
+O problema agora **não é mais a busca do telefone**. A função encontra o cliente e a assinatura, mas **crasha ao formatar a data** `currentPeriodEnd`. Isso acontece porque na versão `2025-08-27.basil` da API do Stripe, o campo `current_period_end` pode ter formato diferente (string ISO em vez de timestamp Unix), fazendo `new Date(value * 1000)` gerar uma data inválida.
 
-### Regras de prioridade
-- Crise: sempre permite áudio (ignora orçamento)
-- Usuário pediu: sempre permite
-- Abertura de sessão: obrigatório (primeiras 2 mensagens)
-- Encerramento de sessão: permite
-- IA decidiu (`[MODO_AUDIO]`): permite SE tem orçamento
+## Correção
+
+**Arquivo**: `supabase/functions/cancel-subscription/index.ts`
+
+Adicionar formatação defensiva de data que funcione tanto com timestamp Unix quanto com string ISO:
+
+```typescript
+// Antes (linha 167):
+const currentPeriodEnd = new Date(subscription.current_period_end * 1000);
+
+// Depois:
+const rawEnd = subscription.current_period_end;
+const currentPeriodEnd = typeof rawEnd === 'string' 
+  ? new Date(rawEnd) 
+  : new Date(rawEnd * 1000);
+```
+
+Aplicar a mesma lógica defensiva em todos os outros pontos do arquivo onde datas do Stripe são convertidas (linhas ~127, ~134, ~167).
+
+Também adicionar um log do valor bruto de `current_period_end` para confirmar o formato recebido.
+
