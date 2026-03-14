@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { sendTextMessage, sendAudioFromUrl, cleanPhoneNumber } from "../_shared/zapi-client.ts";
+import { sendTextMessage, sendAudioMessage, cleanPhoneNumber } from "../_shared/zapi-client.ts";
 import { getInstanceConfigForUser } from "../_shared/instance-helper.ts";
 
 const corsHeaders = {
