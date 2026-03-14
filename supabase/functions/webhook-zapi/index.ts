@@ -463,19 +463,19 @@ Deno.serve(async (req) => {
       // Re-read count after potential bonus
       const effectiveTrialCount = profile.trial_conversations_count || 0;
       
-      // Se já passou do limite (5+ mensagens), bloquear
-      if (effectiveTrialCount >= 5) {
+      // Se já passou do limite (10+ mensagens), bloquear
+      if (effectiveTrialCount >= 10) {
         console.log(`🚫 Trial limit reached for user ${profile.user_id}, count: ${effectiveTrialCount}`);
         
-        const limitMessage = `Oi, ${profile.name}! 💜
+        const limitMessage = `Oi, ${profile.name || 'você'}! 💜
 
-Suas 5 conversas grátis acabaram.
+Suas 10 conversas grátis acabaram, mas o que a gente viveu junto não vai embora.
 
-Foi muito bom te conhecer! Se você quiser continuar essa jornada comigo, escolha um plano:
+Quando você quiser voltar, é só escolher um plano e a gente continua de onde parou:
 
 👉 https://olaaura.com.br/checkout
 
-Vou ficar esperando você voltar. 🤗`;
+Tô aqui te esperando. 🤗`;
         
         const instanceConfig = await getInstanceConfigForUser(supabase, profile.user_id);
         await sendTextMessage(payload.cleanPhone, limitMessage, undefined, instanceConfig);
