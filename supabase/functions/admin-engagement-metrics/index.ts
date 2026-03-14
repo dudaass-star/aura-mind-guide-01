@@ -147,11 +147,15 @@ Deno.serve(async (req) => {
       .not('trial_started_at', 'is', null)
       .gte('trial_started_at', thirtyDaysAgo);
 
-    // Total trials ever (anyone who has trial_started_at)
+    // === FUNNEL DATE CUTOFF: only count trials from 2026-03-14 onwards ===
+    const funnelCutoff = '2026-03-14T00:00:00-03:00';
+
+    // Total trials ever (anyone who has trial_started_at, from cutoff)
     const { count: totalTrialsEver } = await supabase
       .from('profiles')
       .select('*', { count: 'exact', head: true })
-      .not('trial_started_at', 'is', null);
+      .not('trial_started_at', 'is', null)
+      .gte('trial_started_at', funnelCutoff);
 
     // Converted: status = active AND went through trial (trial_conversations_count > 0)
     const { data: convertedProfiles } = await supabase
@@ -159,6 +163,7 @@ Deno.serve(async (req) => {
       .select('trial_started_at, created_at, trial_conversations_count')
       .eq('status', 'active')
       .not('trial_started_at', 'is', null)
+      .gte('trial_started_at', funnelCutoff)
       .gt('trial_conversations_count', 0);
 
     const convertedCount = convertedProfiles?.length || 0;
@@ -174,6 +179,7 @@ Deno.serve(async (req) => {
       .from('profiles')
       .select('*', { count: 'exact', head: true })
       .eq('status', 'trial')
+      .gte('trial_started_at', funnelCutoff)
       .lt('trial_started_at', sevenDaysAgoDate);
 
     // Average time to conversion (days)
@@ -182,8 +188,6 @@ Deno.serve(async (req) => {
       const totalDays = convertedProfiles.reduce((sum, p) => {
         if (!p.trial_started_at || !p.created_at) return sum;
         const trialStart = new Date(p.trial_started_at).getTime();
-        // Use updated_at would be better but we use created_at of active status
-        // Since we can't know exact conversion date, estimate from trial_started_at to now or use a reasonable proxy
         const conversionDate = new Date(p.created_at).getTime();
         const days = Math.max(0, (conversionDate - trialStart) / (1000 * 60 * 60 * 24));
         return sum + days;
@@ -201,6 +205,7 @@ Deno.serve(async (req) => {
       .from('profiles')
       .select('*', { count: 'exact', head: true })
       .not('trial_started_at', 'is', null)
+      .gte('trial_started_at', funnelCutoff)
       .gte('trial_conversations_count', 1);
 
     // Trial funnel: completed 5 conversations
@@ -208,6 +213,7 @@ Deno.serve(async (req) => {
       .from('profiles')
       .select('*', { count: 'exact', head: true })
       .not('trial_started_at', 'is', null)
+      .gte('trial_started_at', funnelCutoff)
       .gte('trial_conversations_count', 5);
 
     const { data: nonConvertedProfiles } = await supabase
