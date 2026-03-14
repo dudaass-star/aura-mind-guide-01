@@ -153,12 +153,13 @@ Deno.serve(async (req) => {
       .select('*', { count: 'exact', head: true })
       .not('trial_started_at', 'is', null);
 
-    // Converted: status = active AND trial_started_at is not null
+    // Converted: status = active AND went through trial (trial_conversations_count > 0)
     const { data: convertedProfiles } = await supabase
       .from('profiles')
       .select('trial_started_at, created_at, trial_conversations_count')
       .eq('status', 'active')
-      .not('trial_started_at', 'is', null);
+      .not('trial_started_at', 'is', null)
+      .gt('trial_conversations_count', 0);
 
     const convertedCount = convertedProfiles?.length || 0;
 
