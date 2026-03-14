@@ -4,7 +4,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowLeft, Users, MessageSquare, Clock, BarChart3, RefreshCw, TrendingUp } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ArrowLeft, Users, MessageSquare, Clock, BarChart3, RefreshCw, TrendingUp, UserPlus, Percent, Timer, XCircle, ArrowRightLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface Metrics {
@@ -16,6 +17,19 @@ interface Metrics {
   returnRate: number;
   uniqueRecentUsers: number;
   avgDailyMessagesPerUser: number;
+  // Trial & Conversion
+  activeTrials: number;
+  trialsLast7Days: number;
+  trialsLast30Days: number;
+  totalTrialsEver: number;
+  convertedCount: number;
+  conversionRate: number;
+  expiredTrials: number;
+  avgDaysToConversion: number;
+  avgMsgsConverted: number;
+  avgMsgsNonConverted: number;
+  canceledUsers: number;
+  cancelingUsers: number;
 }
 
 export default function AdminEngagement() {
@@ -65,7 +79,7 @@ export default function AdminEngagement() {
     );
   }
 
-  const cards = metrics ? [
+  const engagementCards = metrics ? [
     { title: 'Usuários Ativos', value: metrics.activeUsers, icon: Users, subtitle: 'status = active' },
     { title: 'Mensagens na Semana', value: metrics.weeklyMessages, icon: MessageSquare, subtitle: 'últimos 7 dias' },
     { title: 'Sessões Completadas', value: metrics.weeklySessionsCount, icon: BarChart3, subtitle: 'últimos 7 dias' },
@@ -75,9 +89,52 @@ export default function AdminEngagement() {
     { title: 'Taxa de Retorno', value: `${metrics.returnRate}%`, icon: TrendingUp, subtitle: `${metrics.uniqueRecentUsers} de ${metrics.activeUsers} ativos` },
   ] : [];
 
+  const trialCards = metrics ? [
+    { title: 'Trials Ativos', value: metrics.activeTrials, icon: UserPlus, subtitle: 'status = trial agora' },
+    { title: 'Trials (7 dias)', value: metrics.trialsLast7Days, icon: UserPlus, subtitle: 'iniciados nos últimos 7 dias' },
+    { title: 'Trials (30 dias)', value: metrics.trialsLast30Days, icon: UserPlus, subtitle: 'iniciados nos últimos 30 dias' },
+    { title: 'Total Trials (histórico)', value: metrics.totalTrialsEver, icon: Users, subtitle: 'todos os trials já criados' },
+    { title: 'Convertidos', value: metrics.convertedCount, icon: ArrowRightLeft, subtitle: 'trial → assinante' },
+    { title: 'Taxa de Conversão', value: `${metrics.conversionRate}%`, icon: Percent, subtitle: `${metrics.convertedCount} de ${metrics.totalTrialsEver} trials` },
+    { title: 'Trials Expirados', value: metrics.expiredTrials, icon: XCircle, subtitle: 'trial há mais de 7 dias sem converter' },
+    { title: 'Tempo Médio até Conversão', value: `${metrics.avgDaysToConversion} dias`, icon: Timer, subtitle: 'trial_started_at → ativação' },
+    { title: 'Msgs Trial (Convertidos)', value: metrics.avgMsgsConverted, icon: MessageSquare, subtitle: 'média de msgs durante trial' },
+    { title: 'Msgs Trial (Não Convertidos)', value: metrics.avgMsgsNonConverted, icon: MessageSquare, subtitle: 'média de msgs durante trial' },
+    { title: 'Cancelados', value: metrics.canceledUsers, icon: XCircle, subtitle: 'status = canceled' },
+    { title: 'Cancelando', value: metrics.cancelingUsers, icon: Clock, subtitle: 'aguardando fim do período' },
+  ] : [];
+
+  const SkeletonCards = () => (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {[...Array(6)].map((_, i) => (
+        <Card key={i} className="animate-pulse">
+          <CardHeader className="pb-2"><div className="h-4 bg-muted rounded w-32" /></CardHeader>
+          <CardContent><div className="h-8 bg-muted rounded w-20" /></CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+
+  const MetricCards = ({ cards }: { cards: typeof engagementCards }) => (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {cards.map((card) => (
+        <Card key={card.title}>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">{card.title}</CardTitle>
+            <card.icon className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-foreground">{card.value}</div>
+            <p className="text-xs text-muted-foreground mt-1">{card.subtitle}</p>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-background p-6">
-      <div className="max-w-4xl mx-auto space-y-6">
+      <div className="max-w-5xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="icon" onClick={() => navigate('/admin/configuracoes')}>
@@ -91,31 +148,20 @@ export default function AdminEngagement() {
           </Button>
         </div>
 
-        {loading && !metrics ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[...Array(6)].map((_, i) => (
-              <Card key={i} className="animate-pulse">
-                <CardHeader className="pb-2"><div className="h-4 bg-muted rounded w-32" /></CardHeader>
-                <CardContent><div className="h-8 bg-muted rounded w-20" /></CardContent>
-              </Card>
-            ))}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {cards.map((card) => (
-              <Card key={card.title}>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">{card.title}</CardTitle>
-                  <card.icon className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-foreground">{card.value}</div>
-                  <p className="text-xs text-muted-foreground mt-1">{card.subtitle}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
+        <Tabs defaultValue="engagement" className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="engagement">Engajamento</TabsTrigger>
+            <TabsTrigger value="trial">Trial & Conversão</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="engagement" className="mt-4">
+            {loading && !metrics ? <SkeletonCards /> : <MetricCards cards={engagementCards} />}
+          </TabsContent>
+
+          <TabsContent value="trial" className="mt-4">
+            {loading && !metrics ? <SkeletonCards /> : <MetricCards cards={trialCards} />}
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );
