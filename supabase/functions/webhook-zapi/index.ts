@@ -449,12 +449,19 @@ Deno.serve(async (req) => {
       const isNudgeResponse = profile.trial_nudge_active === true;
       
       if (isNudgeResponse) {
-        console.log(`🎁 Nudge response detected — NOT counting this message for trial (count stays ${trialCount})`);
+        // Apply 3-message bonus: reduce counter so user has breathing room
+        const bonusCount = trialCount >= 3 ? trialCount - 3 : 0;
+        console.log(`🎁 Nudge response detected — applying 3-msg bonus (count ${trialCount} → ${bonusCount})`);
         await supabase
           .from('profiles')
-          .update({ trial_nudge_active: false })
+          .update({ trial_nudge_active: false, trial_conversations_count: bonusCount })
           .eq('user_id', profile.user_id);
+        // Update local profile so limit check below uses the new value
+        profile.trial_conversations_count = bonusCount;
       }
+      
+      // Re-read count after potential bonus
+      const effectiveTrialCount = profile.trial_conversations_count || 0;
       
       // Se já passou do limite (5+ mensagens), bloquear
       if (trialCount >= 5) {
