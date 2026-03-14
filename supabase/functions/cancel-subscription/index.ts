@@ -108,8 +108,9 @@ serve(async (req) => {
       const pausedSub = allSubscriptions.data.find((s: Stripe.Subscription) => s.pause_collection);
       
       if (pausedSub && pausedSub.pause_collection) {
-        const resumesAt = pausedSub.pause_collection.resumes_at 
-          ? new Date(pausedSub.pause_collection.resumes_at * 1000)
+        const rawResumes = pausedSub.pause_collection.resumes_at;
+        const resumesAt = rawResumes
+          ? (typeof rawResumes === 'string' ? new Date(rawResumes) : new Date(rawResumes * 1000))
           : null;
         return new Response(
           JSON.stringify({
@@ -131,7 +132,8 @@ serve(async (req) => {
       }
 
       if (cancelingSub) {
-        const endDate = new Date(cancelingSub.current_period_end * 1000);
+        const rawCancelEnd = cancelingSub.current_period_end;
+        const endDate = typeof rawCancelEnd === 'string' ? new Date(rawCancelEnd) : new Date(rawCancelEnd * 1000);
         return new Response(
           JSON.stringify({
             success: true,
@@ -164,7 +166,9 @@ serve(async (req) => {
     }
 
     const subscription = subscriptions.data[0];
-    const currentPeriodEnd = new Date(subscription.current_period_end * 1000);
+    const rawEnd = subscription.current_period_end;
+    logStep("Raw current_period_end value", { rawEnd, type: typeof rawEnd });
+    const currentPeriodEnd = typeof rawEnd === 'string' ? new Date(rawEnd) : new Date(rawEnd * 1000);
 
     // If action is "check", just return subscription info
     if (action === "check") {
