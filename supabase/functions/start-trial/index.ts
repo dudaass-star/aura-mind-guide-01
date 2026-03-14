@@ -165,6 +165,21 @@ Me conta: como você está se sentindo agora?`;
       console.error('⚠️ Z-API error (non-blocking):', zapiError);
     }
 
+    // Schedule activation audio for 15 minutes later
+    try {
+      const executeAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+      await supabase.from('scheduled_tasks').insert({
+        user_id: userId,
+        task_type: 'trial_activation_audio',
+        execute_at: executeAt,
+        payload: { name: name.trim() },
+        status: 'pending',
+      });
+      console.log('⏰ Scheduled trial_activation_audio for 15 min later');
+    } catch (scheduleError) {
+      console.warn('⚠️ Failed to schedule activation audio (non-blocking):', scheduleError);
+    }
+
     return new Response(JSON.stringify({ 
       success: true,
       profileId: profile.id,

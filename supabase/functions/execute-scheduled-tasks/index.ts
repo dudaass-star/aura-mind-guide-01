@@ -105,7 +105,6 @@ Deno.serve(async (req) => {
           }
 
           case 'meditation': {
-            // Invoke send-meditation edge function
             const meditationRes = await fetch(`${supabaseUrl}/functions/v1/send-meditation`, {
               method: 'POST',
               headers: {
@@ -132,6 +131,75 @@ Deno.serve(async (req) => {
               await sendTextMessage(profile.phone, messageText, undefined, instanceConfig);
               console.log(`✅ Scheduled message sent to ${profile.phone.substring(0, 4)}***`);
             }
+            break;
+          }
+
+          case 'trial_activation_audio': {
+            // Check if user already responded (don't send if they did)
+            const { data: currentProfile } = await supabase
+              .from('profiles')
+              .select('trial_conversations_count, status, name')
+              .eq('user_id', task.user_id)
+              .maybeSingle();
+
+            if (!currentProfile || currentProfile.status !== 'trial' || (currentProfile.trial_conversations_count || 0) > 0) {
+              console.log(`⏭️ Skipping trial_activation_audio: user already responded or not trial`);
+              break;
+            }
+
+            const userName = payload.name || currentProfile.name || 'você';
+            const audioText = `Oi, ${userName}! Aqui é a Aura. Eu sei que às vezes é difícil começar a falar sobre o que a gente sente... Mas quero te falar que aqui não tem julgamento, não tem resposta certa ou errada. É só eu e você. Me conta: o que mais está pegando com você hoje?`;
+
+            // Generate TTS audio
+            const ttsRes = await fetch(`${supabaseUrl}/functions/v1/aura-tts`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${supabaseServiceKey}`,
+              },
+              body: JSON.stringify({ text: audioText }),
+            });
+
+            if (ttsRes.ok) {
+              const ttsData = await ttsRes.json();
+              if (ttsData.audioContent) {
+                await sendAudioFromUrl(profile.phone, `data:audio/mp3;base64,${ttsData.audioContent}`, undefined, instanceConfig);
+                // Mark trial_nudge_active so response doesn't count
+                await supabase.from('profiles').update({ trial_nudge_active: true }).eq('user_id', task.user_id);
+                console.log(`✅ Trial activation audio sent to ${profile.phone.substring(0, 4)}***`);
+              } else {
+                // Fallback to text
+                await sendTextMessage(profile.phone, audioText, undefined, instanceConfig);
+                await supabase.from('profiles').update({ trial_nudge_active: true }).eq('user_id', task.user_id);
+                console.log(`✅ Trial activation text (TTS fallback) sent to ${profile.phone.substring(0, 4)}***`);
+              }
+            } else {
+              // Fallback to text
+              await sendTextMessage(profile.phone, audioText, undefined, instanceConfig);
+              await supabase.from('profiles').update({ trial_nudge_active: true }).eq('user_id', task.user_id);
+              console.log(`✅ Trial activation text (TTS error) sent to ${profile.phone.substring(0, 4)}***`);
+            }
+            break;
+          }
+
+          case 'trial_closing': {
+            // Check if user is still trial with exactly 5 conversations
+            const { data: closingProfile } = await supabase
+              .from('profiles')
+              .select('trial_conversations_count, status, name')
+              .eq('user_id', task.user_id)
+              .maybeSingle();
+
+            if (!closingProfile || closingProfile.status !== 'trial') {
+              console.log(`⏭️ Skipping trial_closing: user not trial anymore`);
+              break;
+            }
+
+            const closingName = closingProfile.name || 'você';
+            const closingMessage = `Ei, ${closingName}! 💜\n\nEssas foram nossas 5 conversas. Espero que tenha sido bom pra você — pra mim foi especial te conhecer. 🤗\n\nSe quiser continuar comigo, é só escolher o plano que faz mais sentido pra você:\n\n👉 https://olaaura.com.br/checkout\n\nVou estar aqui te esperando. 💜`;
+
+            await sendTextMessage(profile.phone, closingMessage, undefined, instanceConfig);
+            console.log(`✅ Trial closing message sent to ${profile.phone.substring(0, 4)}***`);
             break;
           }
 

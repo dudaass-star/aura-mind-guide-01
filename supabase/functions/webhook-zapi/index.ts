@@ -445,7 +445,18 @@ Deno.serve(async (req) => {
     if (profile.status === 'trial') {
       const trialCount = profile.trial_conversations_count || 0;
       
-      // Se já passou do limite (6+ mensagens), bloquear
+      // Check if this is a response to a nudge (free message)
+      const isNudgeResponse = profile.trial_nudge_active === true;
+      
+      if (isNudgeResponse) {
+        console.log(`🎁 Nudge response detected — NOT counting this message for trial (count stays ${trialCount})`);
+        await supabase
+          .from('profiles')
+          .update({ trial_nudge_active: false })
+          .eq('user_id', profile.user_id);
+      }
+      
+      // Se já passou do limite (5+ mensagens), bloquear
       if (trialCount >= 5) {
         console.log(`🚫 Trial limit reached for user ${profile.user_id}, count: ${trialCount}`);
         
@@ -467,17 +478,37 @@ Vou ficar esperando você voltar. 🤗`;
         });
       }
       
-      // Incrementar contador de conversas do trial
-      const newCount = trialCount + 1;
-      await supabase
-        .from('profiles')
-        .update({ trial_conversations_count: newCount })
-        .eq('user_id', profile.user_id);
-      
-      console.log(`📊 Trial conversation ${newCount}/5 for user ${profile.user_id}`);
-      
-      // Passar info do trial para o agent
-      profile.trial_conversations_count = newCount;
+      // Incrementar contador ONLY if not a nudge response
+      if (!isNudgeResponse) {
+        const newCount = trialCount + 1;
+        await supabase
+          .from('profiles')
+          .update({ trial_conversations_count: newCount })
+          .eq('user_id', profile.user_id);
+        
+        console.log(`📊 Trial conversation ${newCount}/5 for user ${profile.user_id}`);
+        profile.trial_conversations_count = newCount;
+        
+        // Schedule trial closing message after 5th conversation
+        if (newCount === 5) {
+          try {
+            const closeAt = new Date(Date.now() + 2 * 60 * 1000).toISOString();
+            await supabase.from('scheduled_tasks').insert({
+              user_id: profile.user_id,
+              task_type: 'trial_closing',
+              execute_at: closeAt,
+              payload: {},
+              status: 'pending',
+            });
+            console.log(`⏰ Scheduled trial_closing for 2 min after 5th conversation`);
+          } catch (e) {
+            console.warn('⚠️ Failed to schedule trial_closing:', e);
+          }
+        }
+      } else {
+        // Keep current count for agent context
+        profile.trial_conversations_count = trialCount;
+      }
     }
     // ========================================================================
     // RESET FOLLOW-UP COUNT - Usuário mandou mensagem, reativar follow-ups
