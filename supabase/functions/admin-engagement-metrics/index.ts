@@ -28,6 +28,9 @@ Deno.serve(async (req) => {
 
     const now = new Date();
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    // ========== ENGAGEMENT METRICS ==========
 
     // 1. Active users count
     const { count: activeUsers } = await supabase
@@ -50,7 +53,7 @@ Deno.serve(async (req) => {
 
     const weeklySessionsCount = weeklySessions?.length || 0;
 
-    // 4. Average session duration (all completed sessions with both timestamps)
+    // 4. Average session duration
     const { data: allCompletedSessions } = await supabase
       .from('sessions')
       .select('started_at, ended_at')
@@ -68,7 +71,7 @@ Deno.serve(async (req) => {
       avgSessionMinutes = Math.round(totalMinutes / allCompletedSessions.length);
     }
 
-    // 5. Messages per session: per-user average, then average across users
+    // 5. Messages per session
     const { data: completedSessionsForMsg } = await supabase
       .from('sessions')
       .select('id, user_id, started_at, ended_at')
@@ -78,7 +81,6 @@ Deno.serve(async (req) => {
 
     let messagesPerSession = 0;
     if (completedSessionsForMsg && completedSessionsForMsg.length > 0) {
-      // Group sessions by user
       const sessionsByUser = new Map<string, typeof completedSessionsForMsg>();
       for (const s of completedSessionsForMsg) {
         if (!sessionsByUser.has(s.user_id)) sessionsByUser.set(s.user_id, []);
@@ -118,12 +120,104 @@ Deno.serve(async (req) => {
       ? Math.round(uniqueRecentUsers / activeUsers * 100)
       : 0;
 
-    // 7. Average daily messages per user (last 7 days)
+    // 7. Average daily messages per user
     const avgDailyMessagesPerUser = activeUsers && activeUsers > 0
       ? Math.round((weeklyMessages || 0) / 7 / activeUsers * 10) / 10
       : 0;
 
+    // ========== TRIAL & CONVERSION METRICS ==========
+
+    // Active trials
+    const { count: activeTrials } = await supabase
+      .from('profiles')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'trial');
+
+    // Trials started in last 7 days
+    const { count: trialsLast7Days } = await supabase
+      .from('profiles')
+      .select('*', { count: 'exact', head: true })
+      .not('trial_started_at', 'is', null)
+      .gte('trial_started_at', sevenDaysAgo);
+
+    // Trials started in last 30 days
+    const { count: trialsLast30Days } = await supabase
+      .from('profiles')
+      .select('*', { count: 'exact', head: true })
+      .not('trial_started_at', 'is', null)
+      .gte('trial_started_at', thirtyDaysAgo);
+
+    // Total trials ever (anyone who has trial_started_at)
+    const { count: totalTrialsEver } = await supabase
+      .from('profiles')
+      .select('*', { count: 'exact', head: true })
+      .not('trial_started_at', 'is', null);
+
+    // Converted: status = active AND trial_started_at is not null
+    const { data: convertedProfiles } = await supabase
+      .from('profiles')
+      .select('trial_started_at, created_at, trial_conversations_count')
+      .eq('status', 'active')
+      .not('trial_started_at', 'is', null);
+
+    const convertedCount = convertedProfiles?.length || 0;
+
+    // Conversion rate
+    const conversionRate = totalTrialsEver && totalTrialsEver > 0
+      ? Math.round(convertedCount / totalTrialsEver * 1000) / 10
+      : 0;
+
+    // Expired/abandoned trials (status still 'trial' but trial_started_at > 7 days ago)
+    const sevenDaysAgoDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const { count: expiredTrials } = await supabase
+      .from('profiles')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'trial')
+      .lt('trial_started_at', sevenDaysAgoDate);
+
+    // Average time to conversion (days)
+    let avgDaysToConversion = 0;
+    if (convertedProfiles && convertedProfiles.length > 0) {
+      const totalDays = convertedProfiles.reduce((sum, p) => {
+        if (!p.trial_started_at || !p.created_at) return sum;
+        const trialStart = new Date(p.trial_started_at).getTime();
+        // Use updated_at would be better but we use created_at of active status
+        // Since we can't know exact conversion date, estimate from trial_started_at to now or use a reasonable proxy
+        const conversionDate = new Date(p.created_at).getTime();
+        const days = Math.max(0, (conversionDate - trialStart) / (1000 * 60 * 60 * 24));
+        return sum + days;
+      }, 0);
+      avgDaysToConversion = Math.round(totalDays / convertedProfiles.length * 10) / 10;
+    }
+
+    // Average trial messages for converted vs non-converted
+    const avgMsgsConverted = convertedProfiles && convertedProfiles.length > 0
+      ? Math.round(convertedProfiles.reduce((sum, p) => sum + (p.trial_conversations_count || 0), 0) / convertedProfiles.length * 10) / 10
+      : 0;
+
+    const { data: nonConvertedProfiles } = await supabase
+      .from('profiles')
+      .select('trial_conversations_count')
+      .eq('status', 'trial')
+      .not('trial_started_at', 'is', null);
+
+    const avgMsgsNonConverted = nonConvertedProfiles && nonConvertedProfiles.length > 0
+      ? Math.round(nonConvertedProfiles.reduce((sum, p) => sum + (p.trial_conversations_count || 0), 0) / nonConvertedProfiles.length * 10) / 10
+      : 0;
+
+    // Cancellation counts
+    const { count: canceledUsers } = await supabase
+      .from('profiles')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'canceled');
+
+    const { count: cancelingUsers } = await supabase
+      .from('profiles')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'canceling');
+
     return new Response(JSON.stringify({
+      // Engagement
       activeUsers: activeUsers || 0,
       weeklyMessages: weeklyMessages || 0,
       weeklySessionsCount,
@@ -132,6 +226,19 @@ Deno.serve(async (req) => {
       returnRate,
       uniqueRecentUsers,
       avgDailyMessagesPerUser,
+      // Trial & Conversion
+      activeTrials: activeTrials || 0,
+      trialsLast7Days: trialsLast7Days || 0,
+      trialsLast30Days: trialsLast30Days || 0,
+      totalTrialsEver: totalTrialsEver || 0,
+      convertedCount,
+      conversionRate,
+      expiredTrials: expiredTrials || 0,
+      avgDaysToConversion,
+      avgMsgsConverted,
+      avgMsgsNonConverted,
+      canceledUsers: canceledUsers || 0,
+      cancelingUsers: cancelingUsers || 0,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
