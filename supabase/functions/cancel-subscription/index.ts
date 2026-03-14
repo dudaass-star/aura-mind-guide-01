@@ -132,7 +132,8 @@ serve(async (req) => {
       }
 
       if (cancelingSub) {
-        const endDate = new Date(cancelingSub.current_period_end * 1000);
+        const rawCancelEnd = cancelingSub.current_period_end;
+        const endDate = typeof rawCancelEnd === 'string' ? new Date(rawCancelEnd) : new Date(rawCancelEnd * 1000);
         return new Response(
           JSON.stringify({
             success: true,
