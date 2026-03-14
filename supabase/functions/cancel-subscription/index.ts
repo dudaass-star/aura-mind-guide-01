@@ -166,7 +166,9 @@ serve(async (req) => {
     }
 
     const subscription = subscriptions.data[0];
-    const currentPeriodEnd = new Date(subscription.current_period_end * 1000);
+    const rawEnd = subscription.current_period_end;
+    logStep("Raw current_period_end value", { rawEnd, type: typeof rawEnd });
+    const currentPeriodEnd = typeof rawEnd === 'string' ? new Date(rawEnd) : new Date(rawEnd * 1000);
 
     // If action is "check", just return subscription info
     if (action === "check") {
