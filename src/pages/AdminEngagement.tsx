@@ -5,7 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Users, MessageSquare, Clock, BarChart3, RefreshCw, TrendingUp, UserPlus, Percent, Timer, XCircle, ArrowRightLeft, ArrowDown } from 'lucide-react';
+import { ArrowLeft, Users, MessageSquare, Clock, BarChart3, RefreshCw, TrendingUp, UserPlus, Percent, Timer, XCircle, ArrowRightLeft, ArrowDown, Send } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface Metrics {
@@ -38,6 +38,7 @@ export default function AdminEngagement() {
   const { isLoading, isAdmin, redirectIfNotAdmin } = useAdminAuth();
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [loading, setLoading] = useState(true);
+  const [blasting, setBlasting] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -72,6 +73,33 @@ export default function AdminEngagement() {
   useEffect(() => {
     if (isAdmin) fetchMetrics();
   }, [isAdmin]);
+
+  const handleReactivationBlast = async () => {
+    if (!confirm('Enviar mensagem de reativação para todos os trials finalizados?')) return;
+    setBlasting(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('No session');
+
+      const { data, error } = await supabase.functions.invoke('reactivation-blast', {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+
+      if (error) throw error;
+      toast({
+        title: 'Disparo concluído!',
+        description: `${data.sent} mensagens enviadas${data.errors > 0 ? `, ${data.errors} erros` : ''}.`,
+      });
+    } catch (err: unknown) {
+      toast({
+        title: 'Erro no disparo',
+        description: err instanceof Error ? err.message : 'Erro desconhecido',
+        variant: 'destructive',
+      });
+    } finally {
+      setBlasting(false);
+    }
+  };
 
   if (isLoading || !isAdmin) {
     return (
@@ -195,6 +223,20 @@ export default function AdminEngagement() {
                         <FunnelStep label="Assinaram" value={metrics.convertedCount} total={metrics.totalTrialsEver} color="bg-green-500" />
                       </>
                     )}
+                  </CardContent>
+                </Card>
+
+                {/* Botão de Reativação */}
+                <Card>
+                  <CardContent className="flex items-center justify-between py-4">
+                    <div>
+                      <p className="font-medium text-foreground">Reativar Trials Finalizados</p>
+                      <p className="text-xs text-muted-foreground">Envia mensagem conversacional e reseta contador para continuar o fluxo de trial</p>
+                    </div>
+                    <Button onClick={handleReactivationBlast} disabled={blasting} variant="outline" size="sm">
+                      <Send className={`h-4 w-4 mr-2 ${blasting ? 'animate-pulse' : ''}`} />
+                      {blasting ? 'Enviando...' : 'Disparar'}
+                    </Button>
                   </CardContent>
                 </Card>
 
