@@ -5,7 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Users, MessageSquare, Clock, BarChart3, RefreshCw, TrendingUp, UserPlus, Percent, Timer, XCircle, ArrowRightLeft } from 'lucide-react';
+import { ArrowLeft, Users, MessageSquare, Clock, BarChart3, RefreshCw, TrendingUp, UserPlus, Percent, Timer, XCircle, ArrowRightLeft, ArrowDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface Metrics {
@@ -22,6 +22,8 @@ interface Metrics {
   trialsLast7Days: number;
   trialsLast30Days: number;
   totalTrialsEver: number;
+  trialRespondedCount: number;
+  trialCompletedCount: number;
   convertedCount: number;
   conversionRate: number;
   expiredTrials: number;
@@ -132,6 +134,21 @@ export default function AdminEngagement() {
     </div>
   );
 
+  const FunnelStep = ({ label, value, total, color }: { label: string; value: number; total: number; color: string }) => {
+    const pct = total > 0 ? Math.round(value / total * 100) : 0;
+    return (
+      <div className="space-y-1.5">
+        <div className="flex justify-between text-sm">
+          <span className="text-muted-foreground">{label}</span>
+          <span className="font-semibold text-foreground">{value} <span className="text-muted-foreground font-normal">({pct}%)</span></span>
+        </div>
+        <div className="h-4 bg-muted rounded-full overflow-hidden">
+          <div className={`h-full rounded-full transition-all ${color}`} style={{ width: `${Math.max(pct, 2)}%` }} />
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-background p-6">
       <div className="max-w-5xl mx-auto space-y-6">
@@ -158,8 +175,33 @@ export default function AdminEngagement() {
             {loading && !metrics ? <SkeletonCards /> : <MetricCards cards={engagementCards} />}
           </TabsContent>
 
-          <TabsContent value="trial" className="mt-4">
-            {loading && !metrics ? <SkeletonCards /> : <MetricCards cards={trialCards} />}
+          <TabsContent value="trial" className="mt-4 space-y-6">
+            {loading && !metrics ? <SkeletonCards /> : (
+              <>
+                {/* Funil de Conversão */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base font-semibold flex items-center gap-2">
+                      <ArrowDown className="h-4 w-4" />
+                      Funil de Conversão do Trial
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {metrics && (
+                      <>
+                        <FunnelStep label="Cadastraram (iniciaram trial)" value={metrics.totalTrialsEver} total={metrics.totalTrialsEver} color="bg-blue-500" />
+                        <FunnelStep label="Responderam (1+ mensagem)" value={metrics.trialRespondedCount} total={metrics.totalTrialsEver} color="bg-cyan-500" />
+                        <FunnelStep label="Completaram 5 conversas" value={metrics.trialCompletedCount} total={metrics.totalTrialsEver} color="bg-amber-500" />
+                        <FunnelStep label="Assinaram" value={metrics.convertedCount} total={metrics.totalTrialsEver} color="bg-green-500" />
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Cards detalhados */}
+                <MetricCards cards={trialCards} />
+              </>
+            )}
           </TabsContent>
         </Tabs>
       </div>
