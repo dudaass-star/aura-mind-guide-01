@@ -38,6 +38,7 @@ export default function AdminEngagement() {
   const { isLoading, isAdmin, redirectIfNotAdmin } = useAdminAuth();
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [loading, setLoading] = useState(true);
+  const [blasting, setBlasting] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
 
