@@ -449,16 +449,23 @@ Deno.serve(async (req) => {
       const isNudgeResponse = profile.trial_nudge_active === true;
       
       if (isNudgeResponse) {
-        console.log(`🎁 Nudge response detected — NOT counting this message for trial (count stays ${trialCount})`);
+        // Apply 3-message bonus: reduce counter so user has breathing room
+        const bonusCount = trialCount >= 3 ? trialCount - 3 : 0;
+        console.log(`🎁 Nudge response detected — applying 3-msg bonus (count ${trialCount} → ${bonusCount})`);
         await supabase
           .from('profiles')
-          .update({ trial_nudge_active: false })
+          .update({ trial_nudge_active: false, trial_conversations_count: bonusCount })
           .eq('user_id', profile.user_id);
+        // Update local profile so limit check below uses the new value
+        profile.trial_conversations_count = bonusCount;
       }
       
+      // Re-read count after potential bonus
+      const effectiveTrialCount = profile.trial_conversations_count || 0;
+      
       // Se já passou do limite (5+ mensagens), bloquear
-      if (trialCount >= 5) {
-        console.log(`🚫 Trial limit reached for user ${profile.user_id}, count: ${trialCount}`);
+      if (effectiveTrialCount >= 5) {
+        console.log(`🚫 Trial limit reached for user ${profile.user_id}, count: ${effectiveTrialCount}`);
         
         const limitMessage = `Oi, ${profile.name}! 💜
 
@@ -478,9 +485,9 @@ Vou ficar esperando você voltar. 🤗`;
         });
       }
       
-      // Incrementar contador ONLY if not a nudge response
+      // Incrementar contador (nudge responses already got bonus above, but still count this interaction)
       if (!isNudgeResponse) {
-        const newCount = trialCount + 1;
+        const newCount = effectiveTrialCount + 1;
         await supabase
           .from('profiles')
           .update({ trial_conversations_count: newCount })
@@ -505,9 +512,6 @@ Vou ficar esperando você voltar. 🤗`;
             console.warn('⚠️ Failed to schedule trial_closing:', e);
           }
         }
-      } else {
-        // Keep current count for agent context
-        profile.trial_conversations_count = trialCount;
       }
     }
     // ========================================================================
