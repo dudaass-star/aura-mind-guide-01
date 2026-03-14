@@ -1,25 +1,12 @@
-# Sistema de Orçamento Mensal de Áudio ✅ Implementado
 
-## Resumo
-Sistema de orçamento mensal de áudio por plano, com estimativa de duração por caracteres.
 
-### Orçamentos
-- Essencial: 30 min (1800s)
-- Direção: 50 min (3000s)
-- Transformação: 120 min (7200s)
+## Análise
 
-### O que foi implementado
+Você está correto. O Roberto provavelmente tem status `canceling` (cancelamento agendado para o fim do período), o que significa que ele ainda tem acesso até o final dos 30 dias pagos. A AURA continuar respondendo nesse caso é o **comportamento esperado**.
 
-1. **Migração SQL** ✅ — Colunas `audio_seconds_used_this_month` e `audio_reset_date` em `profiles`
-2. **`allowAudioThisTurn` expandido** ✅ — Aceita `[MODO_AUDIO]` da IA se tem orçamento disponível
-3. **Contador pós-envio** ✅ — Estima duração com `Math.ceil(texto.length / 15)` e incrementa no perfil
-4. **Reset inline** ✅ — Se o mês mudou, reseta antes de verificar orçamento
-5. **Auto-inject `[AGUARDANDO_RESPOSTA]`** ✅ — Se resposta contém `?` sem tag de status
-6. **Reset mensal** ✅ — `monthly-schedule-renewal` zera o contador no dia 1
+O cancelamento pelo site funcionou corretamente — ele agenda o encerramento para o fim do período (`cancel_at_period_end`). Quando o período expirar, o Stripe disparará um webhook que atualizará o status para `canceled`, e aí sim a AURA deveria parar de responder.
 
-### Regras de prioridade
-- Crise: sempre permite áudio (ignora orçamento)
-- Usuário pediu: sempre permite
-- Abertura de sessão: obrigatório (primeiras 2 mensagens)
-- Encerramento de sessão: permite
-- IA decidiu (`[MODO_AUDIO]`): permite SE tem orçamento
+## Recomendação
+
+Mesmo assim, vale garantir que o `webhook-zapi` tenha uma verificação de status para quando o período expirar e o status mudar para `canceled` ou `inactive`. Se você quiser, posso implementar essa verificação preventiva no webhook para que, quando o período acabar, a AURA pare de responder automaticamente e envie uma mensagem de reativação.
+
