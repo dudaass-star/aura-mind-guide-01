@@ -372,6 +372,40 @@ Deno.serve(async (req) => {
     console.log(`👤 Found user: ${profile.name} (${profile.user_id}), status: ${profile.status}, instance: ${profile.whatsapp_instance_id || 'env-default'}`);
 
     // ========================================================================
+    // SUBSCRIPTION STATUS CHECK - Bloquear usuários sem assinatura ativa
+    // ========================================================================
+    const blockedStatuses = ['canceled', 'inactive', 'paused'];
+    if (blockedStatuses.includes(profile.status || '')) {
+      console.log(`🚫 User ${profile.user_id} blocked: status is '${profile.status}'`);
+
+      // Buscar config da instância para enviar mensagem
+      let instanceConfig = undefined;
+      if (profile.whatsapp_instance_id) {
+        const { data: inst } = await supabase
+          .from('whatsapp_instances')
+          .select('zapi_instance_id, zapi_token, zapi_client_token')
+          .eq('id', profile.whatsapp_instance_id)
+          .single();
+        if (inst) {
+          instanceConfig = { instanceId: inst.zapi_instance_id, token: inst.zapi_token, clientToken: inst.zapi_client_token };
+        }
+      }
+
+      const statusMessages: Record<string, string> = {
+        canceled: `Oi, ${profile.name || 'querido(a)'}! 💜\n\nSua assinatura foi encerrada. Sinto sua falta!\n\nSe quiser voltar a conversar comigo, é só assinar novamente:\n👉 https://olaaura.com.br/checkout\n\nVou adorar te receber de volta! ✨`,
+        inactive: `Oi, ${profile.name || 'querido(a)'}! 💜\n\nSua conta está inativa no momento.\n\nPara continuarmos nossas conversas, assine um plano:\n👉 https://olaaura.com.br/checkout\n\nEstou aqui te esperando! ✨`,
+        paused: `Oi, ${profile.name || 'querido(a)'}! 💜\n\nSua assinatura está pausada no momento.\n\nQuando estiver pronto(a) para voltar, é só reativar:\n👉 https://olaaura.com.br/checkout\n\nEstarei aqui quando você precisar! ✨`,
+      };
+
+      const msg = statusMessages[profile.status!];
+      await sendTextMessage(payload.cleanPhone!, msg, undefined, instanceConfig);
+
+      return new Response(JSON.stringify({ success: true, action: 'subscription_blocked', status: profile.status }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // ========================================================================
     // INTERRUPTION SYSTEM - Atualizar estado com ID da mensagem atual
     // ========================================================================
     const currentMessageId = payload.messageId || `msg_${Date.now()}`;
