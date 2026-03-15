@@ -3833,7 +3833,7 @@ Exemplo natural:
     
     const shouldSuggestUpgrade = userPlan === 'essencial' && planConfig.dailyMessageTarget > 0 && messagesToday > planConfig.dailyMessageTarget;
     if (shouldSuggestUpgrade) {
-      dynamicContext += `\n\n⚠️ INSTRUÇÃO ESPECIAL: O usuário já mandou ${messagesToday} mensagens hoje. Sugira naturalmente o upgrade para o plano Direção no final da sua resposta.`;
+      dynamicContext += `\n\n⚠️ INSTRUÇÃO ESPECIAL: O usuário já mandou ${messagesToday} mensagens hoje. Sugira naturalmente o upgrade para o plano Direção no final da sua resposta. IMPORTANTE: No plano Direção e Transformação, o usuário pode mandar mensagens o quanto quiser, sem limite. NÃO diga "limite maior" — diga que pode falar o quanto quiser.`;
     }
 
     // INSTRUÇÃO DE PRIORIDADE DE PLANO (evita conflito com histórico)
