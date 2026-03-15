@@ -3576,16 +3576,25 @@ ${userName} já teve um momento de virada na conversa ${ahaAt}. Agora é hora de
 
 INSTRUÇÃO: No final da sua resposta, adicione naturalmente:
 - "Tô adorando te conhecer, ${userName}... e quero muito continuar com você. Se fizer sentido pra você também, a gente pode continuar caminhando por menos de R$1 por dia 💜"
-- Mantenha o tom genuíno e caloroso, NÃO comercial. Continue a conversa normalmente, o nudge vem no FINAL.`;
+- Mantenha o tom genuíno e caloroso, NÃO comercial. Continue a conversa normalmente, o nudge vem no FINAL.
+- NÃO use tags [UPGRADE:]. NÃO substitua links por tags.`;
         } else if (msgsSinceAha === 4) {
+          // Generate short link for checkout
+          let trialCheckoutLink = 'https://olaaura.com.br/checkout';
+          try {
+            const shortUrl = await createShortLink('https://olaaura.com.br/checkout', userPhone || '');
+            if (shortUrl) trialCheckoutLink = shortUrl;
+          } catch (e) { console.warn('⚠️ Short link generation failed, using fallback'); }
+          
           dynamicContext += `\n\n💛 CONTEXTO DE TRIAL (NUDGE COM LINK PÓS-AHA):
 ${userName} já teve seu momento de virada e já recebeu um nudge suave.
 
 INSTRUÇÃO: 
 - Primeiro, faça um mini-resumo do que vocês trabalharam na conversa (2-3 frases): temas, insights, progresso.
 - Depois, no final, reforce com carinho:
-- "Ei, ${userName}... nossa jornada grátis tá chegando ao fim, mas o que a gente construiu aqui não precisa parar. Quando quiser continuar: 👉 https://olaaura.com.br/checkout"
-- Continue a conversa normalmente, o resumo + nudge vem no FINAL.`;
+- "Ei, ${userName}... nossa jornada grátis tá chegando ao fim, mas o que a gente construiu aqui não precisa parar. Quando quiser continuar: 👉 ${trialCheckoutLink}"
+- Continue a conversa normalmente, o resumo + nudge vem no FINAL.
+- IMPORTANTE: Use EXATAMENTE o link acima. NÃO substitua por tags [UPGRADE:].`;
         } else {
           // Outras mensagens após aha: nota interna apenas
           dynamicContext += `\n\n(Nota interna: Conversa ${trial_count}/50 da primeira jornada. Aha detectado na msg ${ahaAt}. Continue normalmente.)`;
