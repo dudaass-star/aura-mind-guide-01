@@ -2389,8 +2389,8 @@ function shouldOfferRetrospective(completedSessionsCount: number): { shouldOffer
 O usuário completou ${completedSessionsCount} sessões. 
 Ofereça uma mini-retrospectiva no início desta sessão:
 
-"[Nome], olha só... já fizemos ${completedSessionsCount} sessões juntas! 
-Deixa eu te lembrar por onde passamos..."
+"[Nome], olha só... já fizemos ${completedSessionsCount} sessões! 
+Deixa eu te lembrar por onde a gente passou..."
 
 ESTRUTURA DA RETROSPECTIVA:
 1. Liste os principais temas trabalhados
