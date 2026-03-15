@@ -36,12 +36,12 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Fetch eligible trial users: completed 10+ conversations, not yet subscribed
+    // Fetch eligible trial users: completed 3+ conversations, not yet subscribed
     const { data: users, error } = await supabase
       .from("profiles")
       .select("user_id, name, phone, whatsapp_instance_id")
       .eq("status", "trial")
-      .gte("trial_conversations_count", 10)
+      .gte("trial_conversations_count", 3)
       .not("phone", "is", null);
 
     if (error) throw error;
