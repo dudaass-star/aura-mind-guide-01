@@ -849,6 +849,8 @@ Tô aqui te esperando. 🤗`;
         phone: payload.cleanPhone,
         is_audio_message: isAudioMessage,
         trial_count: profile.status === 'trial' ? profile.trial_conversations_count : null,
+        trial_phase: profile.status === 'trial' ? ((profile as any).trial_phase || 'listening') : null,
+        trial_aha_at_count: profile.status === 'trial' ? ((profile as any).trial_aha_at_count || null) : null,
         pending_content: pendingContent,
         pending_context: pendingContext,
       }),
