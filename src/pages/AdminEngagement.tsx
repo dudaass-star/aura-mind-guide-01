@@ -44,6 +44,8 @@ export default function AdminEngagement() {
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [blasting, setBlasting] = useState(false);
+  const [dateFrom, setDateFrom] = useState<Date>(subDays(new Date(), 7));
+  const [dateTo, setDateTo] = useState<Date>(new Date());
   const { toast } = useToast();
   const navigate = useNavigate();
 
