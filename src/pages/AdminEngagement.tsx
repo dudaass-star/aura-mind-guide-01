@@ -301,8 +301,34 @@ export default function AdminEngagement() {
                     )}
                   </CardContent>
                 </Card>
+                {/* Distribuição por Fase (trials ativos) */}
+                {metrics && metrics.phaseDistribution && Object.keys(metrics.phaseDistribution).length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base font-semibold flex items-center gap-2">
+                        <BarChart3 className="h-4 w-4" />
+                        Distribuição por Fase (Trials Ativos)
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                        {[
+                          { key: 'listening', label: 'Escuta', color: 'bg-slate-100 text-slate-700' },
+                          { key: 'engaged', label: 'Engajado', color: 'bg-blue-100 text-blue-700' },
+                          { key: 'value_delivered', label: 'Valor Entregue', color: 'bg-purple-100 text-purple-700' },
+                          { key: 'aha_reached', label: 'Aha Moment', color: 'bg-amber-100 text-amber-700' },
+                          { key: 'converting', label: 'Convertendo', color: 'bg-green-100 text-green-700' },
+                        ].map(({ key, label, color }) => (
+                          <div key={key} className={`rounded-lg p-3 text-center ${color}`}>
+                            <div className="text-2xl font-bold">{metrics.phaseDistribution[key] || 0}</div>
+                            <div className="text-xs font-medium mt-1">{label}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
 
-                {/* Botão de Reativação */}
                 <Card>
                   <CardContent className="flex items-center justify-between py-4">
                     <div>
