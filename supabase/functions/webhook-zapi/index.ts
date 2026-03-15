@@ -525,16 +525,59 @@ Tô aqui te esperando. 🤗`;
               console.warn('⚠️ Failed to extract theme:', themeErr);
             }
             
-            await supabase.from('scheduled_tasks').insert({
-              user_id: profile.user_id,
-              task_type: 'trial_closing',
-              execute_at: closeAt,
-              payload: { theme: conversationTheme, name: profile.name || '' },
-              status: 'pending',
-            });
-            console.log(`⏰ Scheduled trial_closing for 2 min after 10th conversation (theme: ${conversationTheme.substring(0, 30)}...)`);
+            const followupPayload = { theme: conversationTheme, name: profile.name || '' };
+
+            // Calculate next 9h BRT (12h UTC)
+            const now = new Date();
+            const tomorrow9hBRT = new Date(now);
+            tomorrow9hBRT.setUTCHours(12, 0, 0, 0);
+            if (tomorrow9hBRT.getTime() <= now.getTime()) {
+              tomorrow9hBRT.setUTCDate(tomorrow9hBRT.getUTCDate() + 1);
+            } else {
+              // If it's before 9h BRT today, schedule for tomorrow anyway (user just finished trial)
+              tomorrow9hBRT.setUTCDate(tomorrow9hBRT.getUTCDate() + 1);
+            }
+
+            await supabase.from('scheduled_tasks').insert([
+              {
+                user_id: profile.user_id,
+                task_type: 'trial_closing',
+                execute_at: closeAt,
+                payload: followupPayload,
+                status: 'pending',
+              },
+              {
+                user_id: profile.user_id,
+                task_type: 'trial_followup_15m',
+                execute_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+                payload: followupPayload,
+                status: 'pending',
+              },
+              {
+                user_id: profile.user_id,
+                task_type: 'trial_followup_2h',
+                execute_at: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+                payload: followupPayload,
+                status: 'pending',
+              },
+              {
+                user_id: profile.user_id,
+                task_type: 'trial_followup_morning',
+                execute_at: tomorrow9hBRT.toISOString(),
+                payload: followupPayload,
+                status: 'pending',
+              },
+              {
+                user_id: profile.user_id,
+                task_type: 'trial_followup_48h',
+                execute_at: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
+                payload: followupPayload,
+                status: 'pending',
+              },
+            ]);
+            console.log(`⏰ Scheduled trial_closing + 4 follow-ups after 10th conversation`);
           } catch (e) {
-            console.warn('⚠️ Failed to schedule trial_closing:', e);
+            console.warn('⚠️ Failed to schedule trial follow-ups:', e);
           }
         }
       }
