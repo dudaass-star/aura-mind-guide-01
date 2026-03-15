@@ -3601,23 +3601,34 @@ INSTRUÇÃO:
         }
       } else if (trial_count >= 45) {
         // Fallback: nudge de segurança perto do limite, sem Aha detectado
-        if (trial_count === 45) {
-          dynamicContext += `\n\n💛 CONTEXTO DE TRIAL (NUDGE FALLBACK):
+        if (trial_count === 45 || trial_count === 48) {
+          // Generate short link for checkout
+          let fallbackCheckoutLink = 'https://olaaura.com.br/checkout';
+          try {
+            const shortUrl = await createShortLink('https://olaaura.com.br/checkout', userPhone || '');
+            if (shortUrl) fallbackCheckoutLink = shortUrl;
+          } catch (e) { console.warn('⚠️ Short link generation failed, using fallback'); }
+          
+          if (trial_count === 45) {
+            dynamicContext += `\n\n💛 CONTEXTO DE TRIAL (NUDGE FALLBACK):
 Conversa ${trial_count}/50. O Aha Moment não foi detectado, mas estamos perto do limite.
 
 INSTRUÇÃO: 
 - Primeiro, faça um mini-resumo do que vocês trabalharam até aqui (2-3 frases): temas, insights, progresso.
 - Depois, no final, adicione naturalmente:
-- "Ei, ${userName}, nossa primeira jornada tá quase acabando... Mas tô adorando te conhecer e quero continuar com você. Se fizer sentido: 👉 https://olaaura.com.br/checkout 💜"
-- Tom genuíno e caloroso.`;
-        } else if (trial_count === 48) {
-          dynamicContext += `\n\n💛 CONTEXTO DE TRIAL (NUDGE FINAL):
+- "Ei, ${userName}, nossa primeira jornada tá quase acabando... Mas tô adorando te conhecer e quero continuar com você. Se fizer sentido: 👉 ${fallbackCheckoutLink} 💜"
+- Tom genuíno e caloroso.
+- IMPORTANTE: Use EXATAMENTE o link acima. NÃO substitua por tags [UPGRADE:].`;
+          } else {
+            dynamicContext += `\n\n💛 CONTEXTO DE TRIAL (NUDGE FINAL):
 Conversa ${trial_count}/50. Penúltimas conversas.
 
 INSTRUÇÃO:
 - Primeiro, faça um mini-resumo do que vocês viveram na conversa (2-3 frases): o que foi compartilhado, o que mudou, o que ficou de aprendizado.
 - Depois, no final:
-- "Essa é uma das nossas últimas conversas grátis, ${userName}... O que a gente viveu aqui foi real e especial. Se quiser que continue: 👉 https://olaaura.com.br/checkout"`;
+- "Essa é uma das nossas últimas conversas grátis, ${userName}... O que a gente viveu aqui foi real e especial. Se quiser que continue: 👉 ${fallbackCheckoutLink}"
+- IMPORTANTE: Use EXATAMENTE o link acima. NÃO substitua por tags [UPGRADE:].`;
+          }
         } else {
           dynamicContext += `\n\n(Nota interna: Conversa ${trial_count}/50. Perto do limite. Continue normalmente.)`;
         }
