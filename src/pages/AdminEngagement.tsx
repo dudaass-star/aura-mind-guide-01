@@ -254,7 +254,7 @@ export default function AdminEngagement() {
                 <Calendar mode="single" selected={dateTo} onSelect={(d) => d && setDateTo(d)} locale={ptBR} className="p-3 pointer-events-auto" />
               </PopoverContent>
             </Popover>
-            <Button variant="outline" size="sm" onClick={fetchMetrics} disabled={loading} className="h-8">
+            <Button variant="outline" size="sm" onClick={() => fetchMetrics()} disabled={loading} className="h-8">
               <RefreshCw className={`h-4 w-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
               Atualizar
             </Button>
