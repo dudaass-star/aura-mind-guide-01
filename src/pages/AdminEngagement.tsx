@@ -191,17 +191,63 @@ export default function AdminEngagement() {
   return (
     <div className="min-h-screen bg-background p-6">
       <div className="max-w-5xl mx-auto space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="icon" onClick={() => navigate('/admin/configuracoes')}>
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <h1 className="text-2xl font-bold text-foreground">Métricas de Engajamento</h1>
           </div>
-          <Button variant="outline" size="sm" onClick={fetchMetrics} disabled={loading}>
-            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            Atualizar
-          </Button>
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Quick presets */}
+            <div className="flex gap-1">
+              {[
+                { label: '7d', days: 7 },
+                { label: '14d', days: 14 },
+                { label: '30d', days: 30 },
+                { label: '90d', days: 90 },
+              ].map(({ label, days }) => (
+                <Button
+                  key={label}
+                  variant="outline"
+                  size="sm"
+                  className="h-8 px-2 text-xs"
+                  onClick={() => { setDateFrom(subDays(new Date(), days)); setDateTo(new Date()); }}
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
+            {/* Date from */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className={cn("h-8 text-xs justify-start", !dateFrom && "text-muted-foreground")}>
+                  <CalendarIcon className="h-3 w-3 mr-1" />
+                  {format(dateFrom, 'dd/MM/yy')}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="end">
+                <Calendar mode="single" selected={dateFrom} onSelect={(d) => d && setDateFrom(d)} locale={ptBR} className="p-3 pointer-events-auto" />
+              </PopoverContent>
+            </Popover>
+            <span className="text-xs text-muted-foreground">até</span>
+            {/* Date to */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className={cn("h-8 text-xs justify-start", !dateTo && "text-muted-foreground")}>
+                  <CalendarIcon className="h-3 w-3 mr-1" />
+                  {format(dateTo, 'dd/MM/yy')}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="end">
+                <Calendar mode="single" selected={dateTo} onSelect={(d) => d && setDateTo(d)} locale={ptBR} className="p-3 pointer-events-auto" />
+              </PopoverContent>
+            </Popover>
+            <Button variant="outline" size="sm" onClick={fetchMetrics} disabled={loading} className="h-8">
+              <RefreshCw className={`h-4 w-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
+              Atualizar
+            </Button>
+          </div>
         </div>
 
         <Tabs defaultValue="engagement" className="w-full">
