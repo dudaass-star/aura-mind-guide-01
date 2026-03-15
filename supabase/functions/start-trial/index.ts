@@ -184,6 +184,15 @@ Me conta: como você está se sentindo agora?`;
       const result = await sendTextMessage(formattedPhone, welcomeMessage, undefined, zapiConfig);
       if (result.success) {
         console.log('✅ Welcome message sent');
+
+        // Segunda mensagem: informar sobre funcionalidade de áudio
+        try {
+          const audioMsg = `Ah, e se preferir, pode me mandar áudio também! 🎙️ Eu ouço e respondo — por texto ou por voz, como você preferir.`;
+          await sendTextMessage(formattedPhone, audioMsg, 3, zapiConfig);
+          console.log('✅ Audio info message sent');
+        } catch (audioMsgError) {
+          console.warn('⚠️ Audio info message failed (non-blocking):', audioMsgError);
+        }
       } else {
         console.error('⚠️ Welcome message error:', result.error);
       }
