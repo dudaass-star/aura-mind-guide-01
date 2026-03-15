@@ -234,7 +234,25 @@ Deno.serve(async (req) => {
       .lte('trial_started_at', periodEnd)
       .gte('trial_conversations_count', 1);
 
-    // Trial funnel: completed 20+ conversations in period (engaged users)
+    // Trial funnel: value_delivered (Aura entregou valor)
+    const { count: trialValueDeliveredCount } = await supabase
+      .from('profiles')
+      .select('*', { count: 'exact', head: true })
+      .not('trial_started_at', 'is', null)
+      .gte('trial_started_at', periodStart)
+      .lte('trial_started_at', periodEnd)
+      .in('trial_phase', ['value_delivered', 'aha_reached', 'converting']);
+
+    // Trial funnel: aha_reached (momento de virada)
+    const { count: trialAhaCount } = await supabase
+      .from('profiles')
+      .select('*', { count: 'exact', head: true })
+      .not('trial_started_at', 'is', null)
+      .gte('trial_started_at', periodStart)
+      .lte('trial_started_at', periodEnd)
+      .in('trial_phase', ['aha_reached', 'converting']);
+
+    // Trial funnel: engaged (20+ msgs) in period
     const { count: trialCompletedCount } = await supabase
       .from('profiles')
       .select('*', { count: 'exact', head: true })
@@ -242,6 +260,31 @@ Deno.serve(async (req) => {
       .gte('trial_started_at', periodStart)
       .lte('trial_started_at', periodEnd)
       .gte('trial_conversations_count', 20);
+
+    // Phase distribution for current trials
+    const { data: trialPhaseData } = await supabase
+      .from('profiles')
+      .select('trial_phase')
+      .eq('status', 'trial')
+      .not('trial_started_at', 'is', null);
+
+    const phaseDistribution: Record<string, number> = {};
+    for (const p of trialPhaseData || []) {
+      const phase = p.trial_phase || 'listening';
+      phaseDistribution[phase] = (phaseDistribution[phase] || 0) + 1;
+    }
+
+    // Average aha_at_count for users who reached aha
+    const { data: ahaProfiles } = await supabase
+      .from('profiles')
+      .select('trial_aha_at_count')
+      .not('trial_aha_at_count', 'is', null)
+      .gte('trial_started_at', periodStart)
+      .lte('trial_started_at', periodEnd);
+
+    const avgAhaAtCount = ahaProfiles && ahaProfiles.length > 0
+      ? Math.round(ahaProfiles.reduce((sum, p) => sum + (p.trial_aha_at_count || 0), 0) / ahaProfiles.length * 10) / 10
+      : 0;
 
     const { data: nonConvertedProfiles } = await supabase
       .from('profiles')
