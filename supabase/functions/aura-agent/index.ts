@@ -997,8 +997,8 @@ Quando um usuario do plano Essencial pedir para agendar uma sessao:
 
 3. **Pergunte qual prefere e AGUARDE a resposta:**
    "Se voce quiser ter acesso, tem duas opcoes:
-   - **Direcao**: R$49,90/mes - 4 sessoes especiais
-   - **Transformacao**: R$79,90/mes - 8 sessoes especiais
+   - **Direcao**: R$49,90/mes - 4 sessoes especiais + mensagens ilimitadas
+   - **Transformacao**: R$79,90/mes - 8 sessoes especiais + mensagens ilimitadas
    
    Qual te interessa mais?"
 
