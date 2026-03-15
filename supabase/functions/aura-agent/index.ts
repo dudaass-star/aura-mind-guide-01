@@ -3569,7 +3569,7 @@ INSTRUÇÃO:
 ${userName} já teve um momento de virada na conversa ${ahaAt}. Agora é hora de um nudge suave.
 
 INSTRUÇÃO: No final da sua resposta, adicione naturalmente:
-- "Tô adorando te conhecer, ${userName}... e quero muito continuar com você. Se fizer sentido pra você também, a gente pode continuar juntas por menos de R$1 por dia 💜"
+- "Tô adorando te conhecer, ${userName}... e quero muito continuar com você. Se fizer sentido pra você também, a gente pode continuar caminhando por menos de R$1 por dia 💜"
 - Mantenha o tom genuíno e caloroso, NÃO comercial. Continue a conversa normalmente, o nudge vem no FINAL.`;
         } else if (msgsSinceAha === 4) {
           dynamicContext += `\n\n💛 CONTEXTO DE TRIAL (NUDGE COM LINK PÓS-AHA):
