@@ -146,15 +146,18 @@ Deno.serve(async (req) => {
       ? Math.round((weeklyMessages || 0) / periodDays / activeUsers * 10) / 10
       : 0;
 
-    // ========== TRIAL & CONVERSION METRICS ==========
+    // ========== TRIAL & CONVERSION METRICS (filtered by period) ==========
 
-    // Active trials
+    // Active trials that started in period
     const { count: activeTrials } = await supabase
       .from('profiles')
       .select('*', { count: 'exact', head: true })
-      .eq('status', 'trial');
+      .eq('status', 'trial')
+      .not('trial_started_at', 'is', null)
+      .gte('trial_started_at', periodStart)
+      .lte('trial_started_at', periodEnd);
 
-    // Trials started in last 7 days
+    // Trials started in period (same as above but all statuses)
     const { count: trialsLast7Days } = await supabase
       .from('profiles')
       .select('*', { count: 'exact', head: true })
@@ -162,30 +165,29 @@ Deno.serve(async (req) => {
       .gte('trial_started_at', periodStart)
       .lte('trial_started_at', periodEnd);
 
-    // Trials started in last 30 days
+    // Trials started in last 30 days (keep as reference)
     const { count: trialsLast30Days } = await supabase
       .from('profiles')
       .select('*', { count: 'exact', head: true })
       .not('trial_started_at', 'is', null)
       .gte('trial_started_at', thirtyDaysAgo);
 
-    // === FUNNEL DATE CUTOFF: only count trials from 2026-03-14 onwards ===
-    const funnelCutoff = '2026-03-14T00:00:00-03:00';
-
-    // Total trials ever (anyone who has trial_started_at, from cutoff)
+    // Total trials in selected period
     const { count: totalTrialsEver } = await supabase
       .from('profiles')
       .select('*', { count: 'exact', head: true })
       .not('trial_started_at', 'is', null)
-      .gte('trial_started_at', funnelCutoff);
+      .gte('trial_started_at', periodStart)
+      .lte('trial_started_at', periodEnd);
 
-    // Converted: status = active AND went through trial (trial_conversations_count > 0)
+    // Converted in period: status = active AND trial started in period
     const { data: convertedProfiles } = await supabase
       .from('profiles')
       .select('trial_started_at, created_at, trial_conversations_count')
       .eq('status', 'active')
       .not('trial_started_at', 'is', null)
-      .gte('trial_started_at', funnelCutoff)
+      .gte('trial_started_at', periodStart)
+      .lte('trial_started_at', periodEnd)
       .gt('trial_conversations_count', 0);
 
     const convertedCount = convertedProfiles?.length || 0;
@@ -195,13 +197,14 @@ Deno.serve(async (req) => {
       ? Math.round(convertedCount / totalTrialsEver * 1000) / 10
       : 0;
 
-    // Expired/abandoned trials (status still 'trial' but trial_started_at > 7 days ago)
+    // Expired/abandoned trials in period
     const sevenDaysAgoDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
     const { count: expiredTrials } = await supabase
       .from('profiles')
       .select('*', { count: 'exact', head: true })
       .eq('status', 'trial')
-      .gte('trial_started_at', funnelCutoff)
+      .gte('trial_started_at', periodStart)
+      .lte('trial_started_at', periodEnd)
       .lt('trial_started_at', sevenDaysAgoDate);
 
     // Average time to conversion (days)
@@ -222,20 +225,22 @@ Deno.serve(async (req) => {
       ? Math.round(convertedProfiles.reduce((sum, p) => sum + (p.trial_conversations_count || 0), 0) / convertedProfiles.length * 10) / 10
       : 0;
 
-    // Trial funnel: responded (1+ msgs)
+    // Trial funnel: responded (1+ msgs) in period
     const { count: trialRespondedCount } = await supabase
       .from('profiles')
       .select('*', { count: 'exact', head: true })
       .not('trial_started_at', 'is', null)
-      .gte('trial_started_at', funnelCutoff)
+      .gte('trial_started_at', periodStart)
+      .lte('trial_started_at', periodEnd)
       .gte('trial_conversations_count', 1);
 
-    // Trial funnel: completed 10 conversations
+    // Trial funnel: completed 10 conversations in period
     const { count: trialCompletedCount } = await supabase
       .from('profiles')
       .select('*', { count: 'exact', head: true })
       .not('trial_started_at', 'is', null)
-      .gte('trial_started_at', funnelCutoff)
+      .gte('trial_started_at', periodStart)
+      .lte('trial_started_at', periodEnd)
       .gte('trial_conversations_count', 10);
 
     const { data: nonConvertedProfiles } = await supabase
@@ -243,7 +248,8 @@ Deno.serve(async (req) => {
       .select('trial_conversations_count')
       .eq('status', 'trial')
       .not('trial_started_at', 'is', null)
-      .gte('trial_started_at', funnelCutoff);
+      .gte('trial_started_at', periodStart)
+      .lte('trial_started_at', periodEnd);
 
     const avgMsgsNonConverted = nonConvertedProfiles && nonConvertedProfiles.length > 0
       ? Math.round(nonConvertedProfiles.reduce((sum, p) => sum + (p.trial_conversations_count || 0), 0) / nonConvertedProfiles.length * 10) / 10
