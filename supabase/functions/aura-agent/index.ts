@@ -3376,7 +3376,7 @@ O QUE FAZER AGORA:
 - Crie um senso de parceria e confiança
 
 EXEMPLO:
-"Olha, eu tô aqui pra te ajudar do jeito que fizer mais sentido pra você. Algumas pessoas gostam que eu seja mais direta, outras preferem que eu só ouça... O que você mais precisa de mim nesse nosso caminho juntas?"`;
+"Olha, eu tô aqui pra te ajudar do jeito que fizer mais sentido pra você. Algumas pessoas gostam que eu seja mais direta, outras preferem que eu só ouça... O que você mais precisa de mim nesse nosso caminho?"`;
 
       } else {
         onboardingPhase = 'focus';
