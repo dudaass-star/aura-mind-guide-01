@@ -2624,7 +2624,7 @@ serve(async (req) => {
       console.warn('Failed to read AI model config, using default:', e);
     }
 
-    const { message, user_id, phone, trial_count, pending_content, pending_context } = await req.json();
+    const { message, user_id, phone, trial_count, trial_phase, trial_aha_at_count, pending_content, pending_context } = await req.json();
 
     console.log("AURA received:", { user_id, phone, message: message?.substring(0, 50), trial_count, hasPendingContent: !!pending_content });
 
