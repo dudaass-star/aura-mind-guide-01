@@ -447,6 +447,24 @@ Me conta: como você está hoje?`;
           console.error('❌ Error updating profile status:', updateError);
         } else {
           console.log('✅ Profile status updated to active');
+          // Cancel any pending trial follow-up tasks for this user
+          const { data: profileForCancel } = await supabase
+            .from('profiles')
+            .select('user_id')
+            .eq('phone', cleanPhone)
+            .maybeSingle();
+          if (profileForCancel) {
+            const { data: cancelledTasks } = await supabase
+              .from('scheduled_tasks')
+              .update({ status: 'cancelled', executed_at: new Date().toISOString() })
+              .eq('user_id', profileForCancel.user_id)
+              .in('status', ['pending'])
+              .like('task_type', 'trial_%')
+              .select('id');
+            if (cancelledTasks && cancelledTasks.length > 0) {
+              console.log(`🗑️ Cancelled ${cancelledTasks.length} pending trial tasks (subscription resumed)`);
+            }
+          }
         }
 
       } catch (customerError) {
