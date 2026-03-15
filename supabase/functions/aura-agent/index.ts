@@ -3599,7 +3599,9 @@ INSTRUÇÃO:
           dynamicContext += `\n\n💛 CONTEXTO DE TRIAL (NUDGE FINAL):
 Conversa ${trial_count}/50. Penúltimas conversas.
 
-INSTRUÇÃO: No final da sua resposta:
+INSTRUÇÃO:
+- Primeiro, faça um mini-resumo do que vocês viveram na conversa (2-3 frases): o que foi compartilhado, o que mudou, o que ficou de aprendizado.
+- Depois, no final:
 - "Essa é uma das nossas últimas conversas grátis, ${userName}... O que a gente viveu aqui foi real e especial. Se quiser que continue: 👉 https://olaaura.com.br/checkout"`;
         } else {
           dynamicContext += `\n\n(Nota interna: Conversa ${trial_count}/50. Perto do limite. Continue normalmente.)`;
