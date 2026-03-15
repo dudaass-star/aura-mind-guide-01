@@ -3575,9 +3575,11 @@ INSTRUÇÃO: No final da sua resposta, adicione naturalmente:
           dynamicContext += `\n\n💛 CONTEXTO DE TRIAL (NUDGE COM LINK PÓS-AHA):
 ${userName} já teve seu momento de virada e já recebeu um nudge suave.
 
-INSTRUÇÃO: No final da sua resposta, reforce com carinho:
+INSTRUÇÃO: 
+- Primeiro, faça um mini-resumo do que vocês trabalharam na conversa (2-3 frases): temas, insights, progresso.
+- Depois, no final, reforce com carinho:
 - "Ei, ${userName}... nossa jornada grátis tá chegando ao fim, mas o que a gente construiu aqui não precisa parar. Quando quiser continuar: 👉 https://olaaura.com.br/checkout"
-- Continue a conversa normalmente, o nudge vem no FINAL.`;
+- Continue a conversa normalmente, o resumo + nudge vem no FINAL.`;
         } else {
           // Outras mensagens após aha: nota interna apenas
           dynamicContext += `\n\n(Nota interna: Conversa ${trial_count}/50 da primeira jornada. Aha detectado na msg ${ahaAt}. Continue normalmente.)`;
