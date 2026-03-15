@@ -54,8 +54,10 @@ export default function AdminEngagement() {
     if (!isLoading) redirectIfNotAdmin();
   }, [isLoading, isAdmin]);
 
-  const fetchMetrics = async () => {
+  const fetchMetrics = async (from: Date = dateFrom, to: Date = dateTo) => {
+    const requestId = ++requestIdRef.current;
     setLoading(true);
+
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('No session');
@@ -63,22 +65,28 @@ export default function AdminEngagement() {
       const { data, error } = await supabase.functions.invoke('admin-engagement-metrics', {
         headers: { Authorization: `Bearer ${session.access_token}` },
         body: {
-          dateFrom: startOfDay(dateFrom).toISOString(),
-          dateTo: endOfDay(dateTo).toISOString(),
+          dateFrom: startOfDay(from).toISOString(),
+          dateTo: endOfDay(to).toISOString(),
         },
       });
 
       if (error) throw error;
-      setMetrics(data);
+      if (requestId === requestIdRef.current) {
+        setMetrics(data);
+      }
     } catch (err: unknown) {
-      console.error('Error fetching metrics:', err);
-      toast({
-        title: 'Erro ao carregar métricas',
-        description: err instanceof Error ? err.message : 'Erro desconhecido',
-        variant: 'destructive',
-      });
+      if (requestId === requestIdRef.current) {
+        console.error('Error fetching metrics:', err);
+        toast({
+          title: 'Erro ao carregar métricas',
+          description: err instanceof Error ? err.message : 'Erro desconhecido',
+          variant: 'destructive',
+        });
+      }
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) {
+        setLoading(false);
+      }
     }
   };
 
