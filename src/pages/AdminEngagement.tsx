@@ -288,7 +288,7 @@ export default function AdminEngagement() {
                       <>
                         <FunnelStep label="Cadastraram (iniciaram trial)" value={metrics.totalTrialsEver} total={metrics.totalTrialsEver} color="bg-blue-500" />
                         <FunnelStep label="Responderam (1+ mensagem)" value={metrics.trialRespondedCount} total={metrics.totalTrialsEver} color="bg-cyan-500" />
-                        <FunnelStep label="Completaram 5 conversas" value={metrics.trialCompletedCount} total={metrics.totalTrialsEver} color="bg-amber-500" />
+                        <FunnelStep label="Engajaram (20+ msgs)" value={metrics.trialCompletedCount} total={metrics.totalTrialsEver} color="bg-amber-500" />
                         <FunnelStep label="Assinaram" value={metrics.convertedCount} total={metrics.totalTrialsEver} color="bg-green-500" />
                       </>
                     )}

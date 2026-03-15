@@ -150,7 +150,7 @@ Deno.serve(async (req) => {
 
 Que bom que você decidiu me conhecer! Eu sou a AURA.
 
-Vou estar com você nessas primeiras 5 conversas. Pode falar comigo sobre qualquer coisa — sem julgamento, no seu ritmo.
+Vou estar com você nessa primeira jornada. Pode falar comigo sobre qualquer coisa — sem julgamento, no seu ritmo.
 
 Me conta: como você está se sentindo agora?`;
 
