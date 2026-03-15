@@ -194,7 +194,7 @@ Fico esperando! 🌟`;
 
 Já se passaram 5 dias e suas ${sessionsCount} sessões do mês ainda não foram agendadas.
 
-Essas sessões são parte do seu plano e eu quero muito te ajudar, mas preciso que a gente organize nossa agenda juntas.
+Essas sessões são parte do seu plano e eu quero muito te ajudar, mas preciso que a gente organize nossa agenda.
 
 Me responde agora: qual dia e horário funciona pra você? Pode ser algo simples como "terças às 20h".
 

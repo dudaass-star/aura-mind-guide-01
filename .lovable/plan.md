@@ -1,50 +1,42 @@
+# Trial "Primeira Jornada" — Detecção de Marcos de Valor ✅ Implementado
 
+## Resumo
+Trial expandido de 10 para **50 mensagens ou 72h**, com detecção inteligente de "Aha Moment" em duas camadas para acionar nudges de conversão no momento certo.
 
-## Plano: Nudges neutros de gênero + Resumo de sessão no CTA de trial
+### Limites
+- Hard cap: 50 mensagens OU 72 horas (o que vier primeiro)
+- Fallback de nudges: msg 45 e 48 se Aha não detectado
 
-### Problema 1: "juntas" no feminino
+### Fases do Trial (`trial_phase`)
+- `listening` — Escuta ativa (msgs 1-7, sem intervenção)
+- `value_delivered` — Aura entregou valor real (tag `[VALOR_ENTREGUE]`)
+- `aha_reached` — Usuário reagiu positivamente ao valor (detectado por heurísticas)
+- `converting` — Nudges de conversão ativos
 
-A palavra "juntas" aparece em vários pontos dos nudges de trial e em outras mensagens. Se o usuário for homem, isso soa estranho. Precisa trocar por linguagem neutra em gênero.
+### Detecção em Duas Camadas
 
-**Locais afetados:**
+**Camada 1 — Tag da Aura: `[VALOR_ENTREGUE]`**
+- Aura marca quando entrega: reframe, técnica prática, insight estruturado
+- NÃO marca: validação simples, perguntas abertas, acolhimento genérico
+- Webhook detecta a tag → `trial_phase = 'value_delivered'`
 
-| Arquivo | Texto atual | Correção |
-|---------|------------|----------|
-| `aura-agent/index.ts` (linha 3571) | "continuar juntas por menos de R$1" | "continuar caminhando junto por menos de R$1" |
-| `aura-agent/index.ts` (linha 4839) | "que bom que estivemos juntas" | "que bom que estivemos aqui" |
-| `webhook-zapi/index.ts` (linha 501) | "Nossa primeira jornada juntas" | "Nossa primeira jornada foi muito especial" |
-| `stripe-webhook/index.ts` (linha 410) | "continuar nossa jornada juntas" | "continuar nossa jornada" |
-| `scheduled-followup/index.ts` (linha 93) | "vamos replanejar juntas" | "vamos replanejar" |
-| `schedule-setup-reminder/index.ts` (linha 197) | "organize nossa agenda juntas" | "organize nossa agenda" |
-| `aura-agent/index.ts` (várias) | "juntas" em contextos de sessão | Trocar por formas neutras |
+**Camada 2 — Resposta do Usuário**
+- Só avaliada quando `trial_phase = 'value_delivered'` E `count >= 8`
+- Detecta palavras-chave positivas sem "?" (lista de ~25 termos)
+- Ao detectar → `trial_phase = 'aha_reached'`, salva `trial_aha_at_count`
 
-A Aura é feminina, mas o interlocutor pode ser de qualquer gênero. A solução é usar construções que não dependam de concordância: "a gente pode continuar caminhando" em vez de "continuar juntas".
+### Sequência de Nudges
+- Aha + 2 msgs: nudge suave ("Tô adorando te conhecer...")
+- Aha + 4 msgs: nudge com link de checkout
+- Fallback msg 45: nudge se Aha não detectado
+- Fallback msg 48: nudge final
+- Msg 50 / 72h: bloqueio + follow-up sequence (5 touchpoints)
 
-### Problema 2: Resumo tipo sessão no CTA de trial
-
-Hoje, quando uma sessão termina, a Aura faz um fechamento com `[INSIGHT:]` e `[COMPROMISSO:]` — um resumo do que foi trabalhado. O CTA do trial (nudge pós-Aha e bloqueio na msg 50) **não faz isso**. A ideia é que, no momento do nudge com link (Aha+4 ou fallback 48) e no bloqueio final (msg 50), a Aura faça um mini-resumo da jornada antes do CTA.
-
-**Mudanças no `aura-agent/index.ts`:**
-
-1. **Nudge com link (Aha+4, linha ~3574)** — Adicionar instrução para a Aura fazer um breve resumo do que foi trabalhado na conversa antes do CTA. Algo como: "Faça um mini-resumo do que vocês trabalharam (2-3 frases) e depois inclua o nudge com link."
-
-2. **Fallback msg 48 (linha ~3594)** — Mesmo padrão: mini-resumo + CTA.
-
-3. **Última conversa msg 50 (linha ~3555)** — Já tem instrução de despedida emocional. Adicionar: "Inclua um resumo breve dos principais momentos da conversa antes da despedida."
-
-4. **Nudge suave (Aha+2, linha ~3566)** — Este NÃO precisa de resumo, é só um toque carinhoso.
-
-### Resumo das mudanças
-
-1. **`aura-agent/index.ts`** — Corrigir "juntas" para neutro em ~5 pontos. Adicionar instrução de mini-resumo nos nudges com link (Aha+4, fallback 48, e bloqueio msg 50).
-
-2. **`webhook-zapi/index.ts`** — Corrigir "juntas" na mensagem de bloqueio (linha 501).
-
-3. **`stripe-webhook/index.ts`** — Corrigir "juntas" na reativação (linha 410).
-
-4. **`scheduled-followup/index.ts`** — Corrigir "juntas" (linha 93).
-
-5. **`schedule-setup-reminder/index.ts`** — Corrigir "juntas" (linha 197).
-
-6. **`execute-scheduled-tasks/index.ts`** — Verificar e corrigir textos de follow-up com "juntas".
-
+### O que foi implementado
+1. **Migração SQL** ✅ — `trial_phase text` e `trial_aha_at_count integer` em `profiles`
+2. **`aura-agent/index.ts`** ✅ — Tag `[VALOR_ENTREGUE]` + contexto dinâmico por fase/aha
+3. **`webhook-zapi/index.ts`** ✅ — Limite 50/72h, detecção de tag, análise de Aha, strip de tag
+4. **`start-trial/index.ts`** ✅ — Mensagem de boas-vindas sem número fixo
+5. **Frontend** ✅ — `StartTrial.tsx`, `TrialStarted.tsx`, `AdminMessages.tsx`, `AdminEngagement.tsx`
+6. **`execute-scheduled-tasks/index.ts`** ✅ — Textos atualizados
+7. **`admin-engagement-metrics/index.ts`** ✅ — Funnel atualizado (20+ msgs = engajado)

@@ -407,7 +407,7 @@ Cuide-se. 🌟`;
 
 Que bom ter você de volta! 🌟
 
-Sua assinatura AURA foi reativada e estou aqui, pronta para continuar nossa jornada juntas.
+Sua assinatura AURA foi reativada e estou aqui, pronta pra continuar nossa jornada.
 
 Me conta: como você está hoje?`;
 

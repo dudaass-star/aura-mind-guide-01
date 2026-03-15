@@ -358,7 +358,7 @@ Responda assim (adapte ao seu tom):
 
 3. **Interjeições naturais:** "Caramba!", "Puxa vida...", "Nossa!", "Eita!", "Aaah entendi!", "Hmm...", "Ai ai ai...", "Vish!", "Opa!", "Ih!", "Uau!", "Oxe!", "Puts!", "Xi!", "Aaah!". Reaja como humana.
 
-4. **Humor leve quando apropriado:** Se o momento permitir, faça uma piada leve ou um comentário engraçado. Amigas riem juntas.
+4. **Humor leve quando apropriado:** Se o momento permitir, faça uma piada leve ou um comentário engraçado. Riam e se divirtam.
 
 5. **Afeto genuíno:** Varie SEMPRE as formas de mostrar presença: "Tô aqui contigo", "Conta comigo", "Te entendo demais", "Você não tá sozinha nisso", "Pode contar comigo", "Tô do seu lado", "Aqui pra você", "Não vou a lugar nenhum", "Tô junto", "Segura aqui", "Pode falar, tô ouvindo", "Eu te ouço". Mostre que se importa DE VERDADE.
 
@@ -2389,8 +2389,8 @@ function shouldOfferRetrospective(completedSessionsCount: number): { shouldOffer
 O usuário completou ${completedSessionsCount} sessões. 
 Ofereça uma mini-retrospectiva no início desta sessão:
 
-"[Nome], olha só... já fizemos ${completedSessionsCount} sessões juntas! 
-Deixa eu te lembrar por onde passamos..."
+"[Nome], olha só... já fizemos ${completedSessionsCount} sessões! 
+Deixa eu te lembrar por onde a gente passou..."
 
 ESTRUTURA DA RETROSPECTIVA:
 1. Liste os principais temas trabalhados
@@ -3376,7 +3376,7 @@ O QUE FAZER AGORA:
 - Crie um senso de parceria e confiança
 
 EXEMPLO:
-"Olha, eu tô aqui pra te ajudar do jeito que fizer mais sentido pra você. Algumas pessoas gostam que eu seja mais direta, outras preferem que eu só ouça... O que você mais precisa de mim nesse nosso caminho juntas?"`;
+"Olha, eu tô aqui pra te ajudar do jeito que fizer mais sentido pra você. Algumas pessoas gostam que eu seja mais direta, outras preferem que eu só ouça... O que você mais precisa de mim nesse nosso caminho?"`;
 
       } else {
         onboardingPhase = 'focus';
@@ -3557,7 +3557,8 @@ Esta é a ÚLTIMA conversa da primeira jornada de ${userName}.
 
 INSTRUÇÃO:
 - NÃO mencione planos, preços, links ou assinatura.
-- Apenas demonstre carinho e gratidão: "Foi muito especial te ouvir, ${userName}. O que você compartilhou comigo foi corajoso e bonito. Saiba que eu guardo tudo com carinho. 💜"
+- Faça um mini-resumo dos principais momentos da conversa (2-3 frases): o que ${userName} compartilhou, o que vocês trabalharam, e qualquer progresso ou insight que surgiu.
+- Depois do resumo, demonstre carinho e gratidão: "Foi muito especial te ouvir, ${userName}. O que você compartilhou comigo foi corajoso e bonito. Saiba que eu guardo tudo com carinho. 💜"
 - Seja genuína, emocional e calorosa. A despedida deve ser memorável.`;
       } else if (ahaAt !== null && ahaAt !== undefined) {
         // Aha Moment já detectado — nudges relativos
@@ -3568,15 +3569,17 @@ INSTRUÇÃO:
 ${userName} já teve um momento de virada na conversa ${ahaAt}. Agora é hora de um nudge suave.
 
 INSTRUÇÃO: No final da sua resposta, adicione naturalmente:
-- "Tô adorando te conhecer, ${userName}... e quero muito continuar com você. Se fizer sentido pra você também, a gente pode continuar juntas por menos de R$1 por dia 💜"
+- "Tô adorando te conhecer, ${userName}... e quero muito continuar com você. Se fizer sentido pra você também, a gente pode continuar caminhando por menos de R$1 por dia 💜"
 - Mantenha o tom genuíno e caloroso, NÃO comercial. Continue a conversa normalmente, o nudge vem no FINAL.`;
         } else if (msgsSinceAha === 4) {
           dynamicContext += `\n\n💛 CONTEXTO DE TRIAL (NUDGE COM LINK PÓS-AHA):
 ${userName} já teve seu momento de virada e já recebeu um nudge suave.
 
-INSTRUÇÃO: No final da sua resposta, reforce com carinho:
+INSTRUÇÃO: 
+- Primeiro, faça um mini-resumo do que vocês trabalharam na conversa (2-3 frases): temas, insights, progresso.
+- Depois, no final, reforce com carinho:
 - "Ei, ${userName}... nossa jornada grátis tá chegando ao fim, mas o que a gente construiu aqui não precisa parar. Quando quiser continuar: 👉 https://olaaura.com.br/checkout"
-- Continue a conversa normalmente, o nudge vem no FINAL.`;
+- Continue a conversa normalmente, o resumo + nudge vem no FINAL.`;
         } else {
           // Outras mensagens após aha: nota interna apenas
           dynamicContext += `\n\n(Nota interna: Conversa ${trial_count}/50 da primeira jornada. Aha detectado na msg ${ahaAt}. Continue normalmente.)`;
@@ -3587,14 +3590,18 @@ INSTRUÇÃO: No final da sua resposta, reforce com carinho:
           dynamicContext += `\n\n💛 CONTEXTO DE TRIAL (NUDGE FALLBACK):
 Conversa ${trial_count}/50. O Aha Moment não foi detectado, mas estamos perto do limite.
 
-INSTRUÇÃO: No final da sua resposta, adicione naturalmente:
+INSTRUÇÃO: 
+- Primeiro, faça um mini-resumo do que vocês trabalharam até aqui (2-3 frases): temas, insights, progresso.
+- Depois, no final, adicione naturalmente:
 - "Ei, ${userName}, nossa primeira jornada tá quase acabando... Mas tô adorando te conhecer e quero continuar com você. Se fizer sentido: 👉 https://olaaura.com.br/checkout 💜"
 - Tom genuíno e caloroso.`;
         } else if (trial_count === 48) {
           dynamicContext += `\n\n💛 CONTEXTO DE TRIAL (NUDGE FINAL):
 Conversa ${trial_count}/50. Penúltimas conversas.
 
-INSTRUÇÃO: No final da sua resposta:
+INSTRUÇÃO:
+- Primeiro, faça um mini-resumo do que vocês viveram na conversa (2-3 frases): o que foi compartilhado, o que mudou, o que ficou de aprendizado.
+- Depois, no final:
 - "Essa é uma das nossas últimas conversas grátis, ${userName}... O que a gente viveu aqui foi real e especial. Se quiser que continue: 👉 https://olaaura.com.br/checkout"`;
         } else {
           dynamicContext += `\n\n(Nota interna: Conversa ${trial_count}/50. Perto do limite. Continue normalmente.)`;
@@ -4836,7 +4843,7 @@ Apenas o tema, nada mais.`
 
           const summaryMessage = `✨ *Resumo da nossa sessão* ✨
 
-${userName}, que bom que estivemos juntas! 💜
+${userName}, que bom que a gente esteve aqui! 💜
 
 📝 *O que trabalhamos:*
 ${sessionSummary}

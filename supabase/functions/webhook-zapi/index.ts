@@ -498,7 +498,7 @@ Deno.serve(async (req) => {
         
         const limitMessage = `${profile.name || 'Ei'}, 💜
 
-Nossa primeira jornada juntas foi muito especial pra mim. O que você compartilhou comigo esses dias foi corajoso e bonito.
+Nossa primeira jornada foi muito especial pra mim. O que você compartilhou comigo esses dias foi corajoso e bonito.
 
 Quando você quiser continuar, é só escolher um plano — por menos de R$1 por dia:
 
