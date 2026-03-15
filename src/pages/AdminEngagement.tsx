@@ -29,6 +29,8 @@ interface Metrics {
   trialsLast30Days: number;
   totalTrialsEver: number;
   trialRespondedCount: number;
+  trialValueDeliveredCount: number;
+  trialAhaCount: number;
   trialCompletedCount: number;
   convertedCount: number;
   conversionRate: number;
@@ -36,6 +38,8 @@ interface Metrics {
   avgDaysToConversion: number;
   avgMsgsConverted: number;
   avgMsgsNonConverted: number;
+  avgAhaAtCount: number;
+  phaseDistribution: Record<string, number>;
   canceledUsers: number;
   cancelingUsers: number;
 }
@@ -151,6 +155,7 @@ export default function AdminEngagement() {
     { title: 'Taxa de Conversão', value: `${metrics.conversionRate}%`, icon: Percent, subtitle: `${metrics.convertedCount} de ${metrics.totalTrialsEver} trials` },
     { title: 'Trials Expirados', value: metrics.expiredTrials, icon: XCircle, subtitle: 'trial há mais de 7 dias sem converter' },
     { title: 'Tempo Médio até Conversão', value: `${metrics.avgDaysToConversion} dias`, icon: Timer, subtitle: 'trial_started_at → ativação' },
+    { title: 'Msg Média do Aha', value: metrics.avgAhaAtCount, icon: TrendingUp, subtitle: 'msg onde o Aha Moment ocorreu' },
     { title: 'Msgs Trial (Convertidos)', value: metrics.avgMsgsConverted, icon: MessageSquare, subtitle: 'média de msgs durante trial' },
     { title: 'Msgs Trial (Não Convertidos)', value: metrics.avgMsgsNonConverted, icon: MessageSquare, subtitle: 'média de msgs durante trial' },
     { title: 'Cancelados', value: metrics.canceledUsers, icon: XCircle, subtitle: 'status = canceled' },
@@ -288,14 +293,42 @@ export default function AdminEngagement() {
                       <>
                         <FunnelStep label="Cadastraram (iniciaram trial)" value={metrics.totalTrialsEver} total={metrics.totalTrialsEver} color="bg-blue-500" />
                         <FunnelStep label="Responderam (1+ mensagem)" value={metrics.trialRespondedCount} total={metrics.totalTrialsEver} color="bg-cyan-500" />
-                        <FunnelStep label="Engajaram (20+ msgs)" value={metrics.trialCompletedCount} total={metrics.totalTrialsEver} color="bg-amber-500" />
+                        <FunnelStep label="Valor Entregue (Aura entregou técnica/insight)" value={metrics.trialValueDeliveredCount} total={metrics.totalTrialsEver} color="bg-purple-500" />
+                        <FunnelStep label="Aha Moment (virada emocional)" value={metrics.trialAhaCount} total={metrics.totalTrialsEver} color="bg-amber-500" />
+                        <FunnelStep label="Engajaram (20+ msgs)" value={metrics.trialCompletedCount} total={metrics.totalTrialsEver} color="bg-orange-500" />
                         <FunnelStep label="Assinaram" value={metrics.convertedCount} total={metrics.totalTrialsEver} color="bg-green-500" />
                       </>
                     )}
                   </CardContent>
                 </Card>
+                {/* Distribuição por Fase (trials ativos) */}
+                {metrics && metrics.phaseDistribution && Object.keys(metrics.phaseDistribution).length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base font-semibold flex items-center gap-2">
+                        <BarChart3 className="h-4 w-4" />
+                        Distribuição por Fase (Trials Ativos)
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                        {[
+                          { key: 'listening', label: 'Escuta', color: 'bg-slate-100 text-slate-700' },
+                          { key: 'engaged', label: 'Engajado', color: 'bg-blue-100 text-blue-700' },
+                          { key: 'value_delivered', label: 'Valor Entregue', color: 'bg-purple-100 text-purple-700' },
+                          { key: 'aha_reached', label: 'Aha Moment', color: 'bg-amber-100 text-amber-700' },
+                          { key: 'converting', label: 'Convertendo', color: 'bg-green-100 text-green-700' },
+                        ].map(({ key, label, color }) => (
+                          <div key={key} className={`rounded-lg p-3 text-center ${color}`}>
+                            <div className="text-2xl font-bold">{metrics.phaseDistribution[key] || 0}</div>
+                            <div className="text-xs font-medium mt-1">{label}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
 
-                {/* Botão de Reativação */}
                 <Card>
                   <CardContent className="flex items-center justify-between py-4">
                     <div>
