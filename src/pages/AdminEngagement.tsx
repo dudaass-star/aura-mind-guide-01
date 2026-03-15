@@ -120,13 +120,15 @@ export default function AdminEngagement() {
     );
   }
 
+  const periodLabel = `${format(dateFrom, 'dd/MM')} – ${format(dateTo, 'dd/MM')}`;
+
   const engagementCards = metrics ? [
     { title: 'Usuários Ativos', value: metrics.activeUsers, icon: Users, subtitle: 'status = active' },
-    { title: 'Mensagens na Semana', value: metrics.weeklyMessages, icon: MessageSquare, subtitle: 'últimos 7 dias' },
-    { title: 'Sessões Completadas', value: metrics.weeklySessionsCount, icon: BarChart3, subtitle: 'últimos 7 dias' },
+    { title: 'Mensagens no Período', value: metrics.weeklyMessages, icon: MessageSquare, subtitle: periodLabel },
+    { title: 'Sessões Completadas', value: metrics.weeklySessionsCount, icon: BarChart3, subtitle: periodLabel },
     { title: 'Tempo Médio de Sessão', value: `${metrics.avgSessionMinutes} min`, icon: Clock, subtitle: 'sessões completadas' },
     { title: 'Mensagens por Sessão', value: metrics.messagesPerSession, icon: MessageSquare, subtitle: 'msgs do usuário durante sessão' },
-    { title: 'Média Msgs/Dia por Usuário', value: metrics.avgDailyMessagesPerUser, icon: TrendingUp, subtitle: 'últimos 7 dias / ativos' },
+    { title: 'Média Msgs/Dia por Usuário', value: metrics.avgDailyMessagesPerUser, icon: TrendingUp, subtitle: periodLabel },
     { title: 'Taxa de Retorno', value: `${metrics.returnRate}%`, icon: TrendingUp, subtitle: `${metrics.uniqueRecentUsers} de ${metrics.activeUsers} ativos` },
   ] : [];
 
