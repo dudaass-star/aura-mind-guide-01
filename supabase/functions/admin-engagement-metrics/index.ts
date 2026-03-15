@@ -133,9 +133,10 @@ Deno.serve(async (req) => {
       ? Math.round(uniqueRecentUsers / activeUsers * 100)
       : 0;
 
-    // 7. Average daily messages per user
+    // Average daily messages per user (based on period length)
+    const periodDays = Math.max(1, Math.round((new Date(periodEnd).getTime() - new Date(periodStart).getTime()) / (1000 * 60 * 60 * 24)));
     const avgDailyMessagesPerUser = activeUsers && activeUsers > 0
-      ? Math.round((weeklyMessages || 0) / 7 / activeUsers * 10) / 10
+      ? Math.round((weeklyMessages || 0) / periodDays / activeUsers * 10) / 10
       : 0;
 
     // ========== TRIAL & CONVERSION METRICS ==========
