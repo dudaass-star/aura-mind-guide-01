@@ -11,6 +11,22 @@ import {
 } from "../_shared/zapi-client.ts";
 import { getInstanceConfigForUser, getInstanceConfigForPhone } from "../_shared/instance-helper.ts";
 
+// Helper to create short links for checkout URLs
+async function createShortLink(url: string, phone: string): Promise<string | null> {
+  const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
+  const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  try {
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/create-short-link`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+      body: JSON.stringify({ url, phone }),
+    });
+    const data = await response.json();
+    if (response.ok && data.shortUrl) return data.shortUrl;
+    return null;
+  } catch { return null; }
+}
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -391,10 +407,13 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Generate short link for checkout
+      const checkoutLink = await createShortLink('https://olaaura.com.br/checkout', payload.cleanPhone || '') || 'https://olaaura.com.br/checkout';
+      
       const statusMessages: Record<string, string> = {
-        canceled: `Oi, ${profile.name || 'querido(a)'}! 💜\n\nSua assinatura foi encerrada. Sinto sua falta!\n\nSe quiser voltar a conversar comigo, é só assinar novamente:\n👉 https://olaaura.com.br/checkout\n\nVou adorar te receber de volta! ✨`,
-        inactive: `Oi, ${profile.name || 'querido(a)'}! 💜\n\nSua conta está inativa no momento.\n\nPara continuarmos nossas conversas, assine um plano:\n👉 https://olaaura.com.br/checkout\n\nEstou aqui te esperando! ✨`,
-        paused: `Oi, ${profile.name || 'querido(a)'}! 💜\n\nSua assinatura está pausada no momento.\n\nQuando estiver pronto(a) para voltar, é só reativar:\n👉 https://olaaura.com.br/checkout\n\nEstarei aqui quando você precisar! ✨`,
+        canceled: `Oi, ${profile.name || 'querido(a)'}! 💜\n\nSua assinatura foi encerrada. Sinto sua falta!\n\nSe quiser voltar a conversar comigo, é só assinar novamente:\n👉 ${checkoutLink}\n\nVou adorar te receber de volta! ✨`,
+        inactive: `Oi, ${profile.name || 'querido(a)'}! 💜\n\nSua conta está inativa no momento.\n\nPara continuarmos nossas conversas, assine um plano:\n👉 ${checkoutLink}\n\nEstou aqui te esperando! ✨`,
+        paused: `Oi, ${profile.name || 'querido(a)'}! 💜\n\nSua assinatura está pausada no momento.\n\nQuando estiver pronto(a) para voltar, é só reativar:\n👉 ${checkoutLink}\n\nEstarei aqui quando você precisar! ✨`,
       };
 
       const msg = statusMessages[profile.status!];
@@ -496,13 +515,16 @@ Deno.serve(async (req) => {
       if (effectiveTrialCount >= 50 || hoursElapsed >= 72) {
         console.log(`🚫 Trial hard limit reached for user ${profile.user_id}, count: ${effectiveTrialCount}, hours: ${hoursElapsed.toFixed(1)}`);
         
+        // Generate short link for trial limit message
+        const trialCheckoutLink = await createShortLink('https://olaaura.com.br/checkout', payload.cleanPhone || '') || 'https://olaaura.com.br/checkout';
+        
         const limitMessage = `${profile.name || 'Ei'}, 💜
 
 Nossa primeira jornada foi muito especial pra mim. O que você compartilhou comigo esses dias foi corajoso e bonito.
 
 Quando você quiser continuar, é só escolher um plano — por menos de R$1 por dia:
 
-👉 https://olaaura.com.br/checkout
+👉 ${trialCheckoutLink}
 
 Tô aqui te esperando. 🤗`;
         

@@ -2,6 +2,22 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendTextMessage, sendAudioMessage, cleanPhoneNumber } from "../_shared/zapi-client.ts";
 import { getInstanceConfigForUser } from "../_shared/instance-helper.ts";
 
+// Helper to create short links for checkout URLs
+async function createShortLink(url: string, phone: string): Promise<string> {
+  const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
+  const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  try {
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/create-short-link`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+      body: JSON.stringify({ url, phone }),
+    });
+    const data = await response.json();
+    if (response.ok && data.shortUrl) return data.shortUrl;
+  } catch { /* fallback */ }
+  return url; // fallback to original URL
+}
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -201,7 +217,8 @@ Deno.serve(async (req) => {
               ? `Foi muito especial conversar com você sobre o que você compartilhou — especialmente sobre ${theme.length > 60 ? theme.substring(0, 60) + '...' : theme}` 
               : `Foi muito especial te ouvir e caminhar junto com você nesses dias`;
             
-            const closingMessage = `${closingName}, 💜\n\n${themeIntro}.\n\nEu vi o quanto isso é importante pra você, e quero continuar te acompanhando nessa jornada.\n\nPor menos de R$1 por dia, você tem conversas ilimitadas comigo — no seu ritmo, quando precisar.\n\n👉 https://olaaura.com.br/checkout`;
+            const closingCheckoutLink = await createShortLink('https://olaaura.com.br/checkout', profile.phone);
+            const closingMessage = `${closingName}, 💜\n\n${themeIntro}.\n\nEu vi o quanto isso é importante pra você, e quero continuar te acompanhando nessa jornada.\n\nPor menos de R$1 por dia, você tem conversas ilimitadas comigo — no seu ritmo, quando precisar.\n\n👉 ${closingCheckoutLink}`;
 
             const closingResult = await sendTextMessage(profile.phone, closingMessage, undefined, instanceConfig);
             if (!closingResult.success) {
@@ -234,7 +251,8 @@ Deno.serve(async (req) => {
             }
 
             const name15 = payload.name || fp15.name || 'você';
-            const msg15 = `${name15}, acabei de perceber que você não destravou seu acesso ainda. Aquele alívio que você sentiu agora? Ele não precisa ser um momento isolado. Pode ser o seu dia a dia. Por menos de R$1 por dia, eu tô aqui sempre que precisar. 👉 https://olaaura.com.br/checkout`;
+            const link15 = await createShortLink('https://olaaura.com.br/checkout', profile.phone);
+            const msg15 = `${name15}, acabei de perceber que você não destravou seu acesso ainda. Aquele alívio que você sentiu agora? Ele não precisa ser um momento isolado. Pode ser o seu dia a dia. Por menos de R$1 por dia, eu tô aqui sempre que precisar. 👉 ${link15}`;
 
             const res15 = await sendTextMessage(profile.phone, msg15, undefined, instanceConfig);
             if (!res15.success) throw new Error(`Failed: ${res15.error}`);
@@ -256,7 +274,8 @@ Deno.serve(async (req) => {
             }
 
             const name2h = payload.name || fp2h.name || 'você';
-            const msg2h = `${name2h}, sei que a vida puxa a gente de volta pro automático... Mas lembra do que você sentiu nas nossas conversas? Aquilo foi real. E tá a um clique de voltar. Não deixa esse peso voltar sozinho amanhã. 👉 https://olaaura.com.br/checkout`;
+            const link2h = await createShortLink('https://olaaura.com.br/checkout', profile.phone);
+            const msg2h = `${name2h}, sei que a vida puxa a gente de volta pro automático... Mas lembra do que você sentiu nas nossas conversas? Aquilo foi real. E tá a um clique de voltar. Não deixa esse peso voltar sozinho amanhã. 👉 ${link2h}`;
 
             const res2h = await sendTextMessage(profile.phone, msg2h, undefined, instanceConfig);
             if (!res2h.success) throw new Error(`Failed: ${res2h.error}`);
@@ -302,7 +321,8 @@ Deno.serve(async (req) => {
             }
 
             const name48 = payload.name || fp48.name || 'você';
-            const msg48 = `${name48}, essa é minha última mensagem sobre isso. Eu vi o que você carrega e sei o quanto nosso papo te fez bem. Não vou ficar insistindo — mas quero que saiba que essa porta não fica aberta pra sempre. Por menos de R$1 por dia, esse refúgio é seu. Se faz sentido, agora é a hora. 👉 https://olaaura.com.br/checkout`;
+            const link48 = await createShortLink('https://olaaura.com.br/checkout', profile.phone);
+            const msg48 = `${name48}, essa é minha última mensagem sobre isso. Eu vi o que você carrega e sei o quanto nosso papo te fez bem. Não vou ficar insistindo — mas quero que saiba que essa porta não fica aberta pra sempre. Por menos de R$1 por dia, esse refúgio é seu. Se faz sentido, agora é a hora. 👉 ${link48}`;
 
             const res48 = await sendTextMessage(profile.phone, msg48, undefined, instanceConfig);
             if (!res48.success) throw new Error(`Failed: ${res48.error}`);

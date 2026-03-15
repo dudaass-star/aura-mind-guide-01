@@ -2525,9 +2525,15 @@ async function processUpgradeTags(
     const plan = planMatch?.[1]?.toLowerCase();
     if (!plan) continue;
     
-    // Não faz sentido upgrade para essencial
+    // Trial users on essencial: generate checkout link instead of stripping
     if (plan === 'essencial') {
-      processedContent = processedContent.replace(match, '');
+      try {
+        const shortUrl = await createShortLink('https://olaaura.com.br/checkout', phone);
+        processedContent = processedContent.replace(match, shortUrl || 'https://olaaura.com.br/checkout');
+        console.log('🔗 [UPGRADE:essencial] replaced with checkout link:', shortUrl || 'fallback');
+      } catch (e) {
+        processedContent = processedContent.replace(match, 'https://olaaura.com.br/checkout');
+      }
       continue;
     }
     
@@ -3570,39 +3576,59 @@ ${userName} já teve um momento de virada na conversa ${ahaAt}. Agora é hora de
 
 INSTRUÇÃO: No final da sua resposta, adicione naturalmente:
 - "Tô adorando te conhecer, ${userName}... e quero muito continuar com você. Se fizer sentido pra você também, a gente pode continuar caminhando por menos de R$1 por dia 💜"
-- Mantenha o tom genuíno e caloroso, NÃO comercial. Continue a conversa normalmente, o nudge vem no FINAL.`;
+- Mantenha o tom genuíno e caloroso, NÃO comercial. Continue a conversa normalmente, o nudge vem no FINAL.
+- NÃO use tags [UPGRADE:]. NÃO substitua links por tags.`;
         } else if (msgsSinceAha === 4) {
+          // Generate short link for checkout
+          let trialCheckoutLink = 'https://olaaura.com.br/checkout';
+          try {
+            const shortUrl = await createShortLink('https://olaaura.com.br/checkout', userPhone || '');
+            if (shortUrl) trialCheckoutLink = shortUrl;
+          } catch (e) { console.warn('⚠️ Short link generation failed, using fallback'); }
+          
           dynamicContext += `\n\n💛 CONTEXTO DE TRIAL (NUDGE COM LINK PÓS-AHA):
 ${userName} já teve seu momento de virada e já recebeu um nudge suave.
 
 INSTRUÇÃO: 
 - Primeiro, faça um mini-resumo do que vocês trabalharam na conversa (2-3 frases): temas, insights, progresso.
 - Depois, no final, reforce com carinho:
-- "Ei, ${userName}... nossa jornada grátis tá chegando ao fim, mas o que a gente construiu aqui não precisa parar. Quando quiser continuar: 👉 https://olaaura.com.br/checkout"
-- Continue a conversa normalmente, o resumo + nudge vem no FINAL.`;
+- "Ei, ${userName}... nossa jornada grátis tá chegando ao fim, mas o que a gente construiu aqui não precisa parar. Quando quiser continuar: 👉 ${trialCheckoutLink}"
+- Continue a conversa normalmente, o resumo + nudge vem no FINAL.
+- IMPORTANTE: Use EXATAMENTE o link acima. NÃO substitua por tags [UPGRADE:].`;
         } else {
           // Outras mensagens após aha: nota interna apenas
           dynamicContext += `\n\n(Nota interna: Conversa ${trial_count}/50 da primeira jornada. Aha detectado na msg ${ahaAt}. Continue normalmente.)`;
         }
       } else if (trial_count >= 45) {
         // Fallback: nudge de segurança perto do limite, sem Aha detectado
-        if (trial_count === 45) {
-          dynamicContext += `\n\n💛 CONTEXTO DE TRIAL (NUDGE FALLBACK):
+        if (trial_count === 45 || trial_count === 48) {
+          // Generate short link for checkout
+          let fallbackCheckoutLink = 'https://olaaura.com.br/checkout';
+          try {
+            const shortUrl = await createShortLink('https://olaaura.com.br/checkout', userPhone || '');
+            if (shortUrl) fallbackCheckoutLink = shortUrl;
+          } catch (e) { console.warn('⚠️ Short link generation failed, using fallback'); }
+          
+          if (trial_count === 45) {
+            dynamicContext += `\n\n💛 CONTEXTO DE TRIAL (NUDGE FALLBACK):
 Conversa ${trial_count}/50. O Aha Moment não foi detectado, mas estamos perto do limite.
 
 INSTRUÇÃO: 
 - Primeiro, faça um mini-resumo do que vocês trabalharam até aqui (2-3 frases): temas, insights, progresso.
 - Depois, no final, adicione naturalmente:
-- "Ei, ${userName}, nossa primeira jornada tá quase acabando... Mas tô adorando te conhecer e quero continuar com você. Se fizer sentido: 👉 https://olaaura.com.br/checkout 💜"
-- Tom genuíno e caloroso.`;
-        } else if (trial_count === 48) {
-          dynamicContext += `\n\n💛 CONTEXTO DE TRIAL (NUDGE FINAL):
+- "Ei, ${userName}, nossa primeira jornada tá quase acabando... Mas tô adorando te conhecer e quero continuar com você. Se fizer sentido: 👉 ${fallbackCheckoutLink} 💜"
+- Tom genuíno e caloroso.
+- IMPORTANTE: Use EXATAMENTE o link acima. NÃO substitua por tags [UPGRADE:].`;
+          } else {
+            dynamicContext += `\n\n💛 CONTEXTO DE TRIAL (NUDGE FINAL):
 Conversa ${trial_count}/50. Penúltimas conversas.
 
 INSTRUÇÃO:
 - Primeiro, faça um mini-resumo do que vocês viveram na conversa (2-3 frases): o que foi compartilhado, o que mudou, o que ficou de aprendizado.
 - Depois, no final:
-- "Essa é uma das nossas últimas conversas grátis, ${userName}... O que a gente viveu aqui foi real e especial. Se quiser que continue: 👉 https://olaaura.com.br/checkout"`;
+- "Essa é uma das nossas últimas conversas grátis, ${userName}... O que a gente viveu aqui foi real e especial. Se quiser que continue: 👉 ${fallbackCheckoutLink}"
+- IMPORTANTE: Use EXATAMENTE o link acima. NÃO substitua por tags [UPGRADE:].`;
+          }
         } else {
           dynamicContext += `\n\n(Nota interna: Conversa ${trial_count}/50. Perto do limite. Continue normalmente.)`;
         }
