@@ -36,10 +36,10 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Fetch eligible trial users: completed 3+ conversations, not yet subscribed
+    // Fetch eligible trial users: had conversations, not yet subscribed
     const { data: users, error } = await supabase
       .from("profiles")
-      .select("user_id, name, phone, whatsapp_instance_id")
+      .select("user_id, name, phone, whatsapp_instance_id, trial_conversations_count, trial_phase")
       .eq("status", "trial")
       .gte("trial_conversations_count", 3)
       .not("phone", "is", null);
@@ -85,12 +85,15 @@ Deno.serve(async (req) => {
             );
 
             if (result.success) {
-              // Reset counter to 5, activate nudge, update reactivation timestamp
+              // Reset to new model: count back to 0, phase to listening, clear aha
               await supabase
                 .from("profiles")
                 .update({
-                  trial_conversations_count: 5,
-                  trial_nudge_active: true,
+                  trial_conversations_count: 0,
+                  trial_phase: 'listening',
+                  trial_aha_at_count: null,
+                  trial_nudge_active: false,
+                  trial_started_at: new Date().toISOString(),
                   last_reactivation_sent: new Date().toISOString(),
                 })
                 .eq("user_id", user.user_id);
