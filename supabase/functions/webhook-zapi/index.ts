@@ -970,14 +970,29 @@ Tô aqui te esperando. 🤗`;
       let responseText = msg.text || msg.content || '';
       
       // Remove any internal tags that might have leaked through
+      const hadValorEntregue = /\[VALOR_ENTREGUE\]/i.test(responseText);
       responseText = responseText
         .replace(/\[AGUARDANDO_RESPOSTA\]/gi, '')
         .replace(/\[CONVERSA_CONCLUIDA\]/gi, '')
         .replace(/\[MODO_AUDIO\]/gi, '')
+        .replace(/\[VALOR_ENTREGUE\]/gi, '')
         .replace(/\[INSIGHTS\].*?\[\/INSIGHTS\]/gis, '')
         .replace(/\[AGENDAR_TAREFA:.*?\]/gi, '')
         .replace(/\[CANCELAR_TAREFA:\w+\]/gi, '')
         .trim();
+      
+      // ── VALOR_ENTREGUE detection (Layer 1) — update trial_phase ──
+      if (hadValorEntregue && profile.status === 'trial' && i === 0) {
+        const currentPhase = (profile as any).trial_phase || 'listening';
+        if (currentPhase === 'listening' || currentPhase === 'engaged') {
+          console.log(`💎 [VALOR_ENTREGUE] detected — updating trial_phase to value_delivered`);
+          await supabase
+            .from('profiles')
+            .update({ trial_phase: 'value_delivered' })
+            .eq('user_id', profile.user_id);
+          (profile as any).trial_phase = 'value_delivered';
+        }
+      }
       
       if (!responseText) {
         console.log('⏭️ Skipping empty message');
