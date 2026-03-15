@@ -407,10 +407,13 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Generate short link for checkout
+      const checkoutLink = await createShortLink('https://olaaura.com.br/checkout', payload.cleanPhone || '') || 'https://olaaura.com.br/checkout';
+      
       const statusMessages: Record<string, string> = {
-        canceled: `Oi, ${profile.name || 'querido(a)'}! 💜\n\nSua assinatura foi encerrada. Sinto sua falta!\n\nSe quiser voltar a conversar comigo, é só assinar novamente:\n👉 https://olaaura.com.br/checkout\n\nVou adorar te receber de volta! ✨`,
-        inactive: `Oi, ${profile.name || 'querido(a)'}! 💜\n\nSua conta está inativa no momento.\n\nPara continuarmos nossas conversas, assine um plano:\n👉 https://olaaura.com.br/checkout\n\nEstou aqui te esperando! ✨`,
-        paused: `Oi, ${profile.name || 'querido(a)'}! 💜\n\nSua assinatura está pausada no momento.\n\nQuando estiver pronto(a) para voltar, é só reativar:\n👉 https://olaaura.com.br/checkout\n\nEstarei aqui quando você precisar! ✨`,
+        canceled: `Oi, ${profile.name || 'querido(a)'}! 💜\n\nSua assinatura foi encerrada. Sinto sua falta!\n\nSe quiser voltar a conversar comigo, é só assinar novamente:\n👉 ${checkoutLink}\n\nVou adorar te receber de volta! ✨`,
+        inactive: `Oi, ${profile.name || 'querido(a)'}! 💜\n\nSua conta está inativa no momento.\n\nPara continuarmos nossas conversas, assine um plano:\n👉 ${checkoutLink}\n\nEstou aqui te esperando! ✨`,
+        paused: `Oi, ${profile.name || 'querido(a)'}! 💜\n\nSua assinatura está pausada no momento.\n\nQuando estiver pronto(a) para voltar, é só reativar:\n👉 ${checkoutLink}\n\nEstarei aqui quando você precisar! ✨`,
       };
 
       const msg = statusMessages[profile.status!];
