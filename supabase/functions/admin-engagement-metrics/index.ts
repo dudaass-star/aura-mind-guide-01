@@ -152,7 +152,8 @@ Deno.serve(async (req) => {
       .from('profiles')
       .select('*', { count: 'exact', head: true })
       .not('trial_started_at', 'is', null)
-      .gte('trial_started_at', sevenDaysAgo);
+      .gte('trial_started_at', periodStart)
+      .lte('trial_started_at', periodEnd);
 
     // Trials started in last 30 days
     const { count: trialsLast30Days } = await supabase
