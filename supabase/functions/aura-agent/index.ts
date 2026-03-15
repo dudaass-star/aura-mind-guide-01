@@ -3544,42 +3544,83 @@ ${meditationCatalogSection}
     // Adicionar contextos condicionais ao bloco dinâmico
     dynamicContext += continuityContext;
     
-    // Contexto de TRIAL GRATUITO (10 mensagens, condução gradual a partir da 8ª)
+    // Contexto de TRIAL "Primeira Jornada" (50 msgs / 72h, detecção de marcos)
     if (trial_count !== null && trial_count !== undefined) {
       const userName = profile?.name || 'você';
+      const phase = trial_phase || 'listening';
+      const ahaAt = trial_aha_at_count as number | null;
       
-      if (trial_count >= 10) {
-        // 10ª conversa - última, encerramento emocional PURO (sem CTA)
+      if (trial_count >= 50) {
+        // Limite hard atingido — encerramento emocional PURO (sem CTA)
         dynamicContext += `\n\n💜 CONTEXTO DE TRIAL (ÚLTIMA CONVERSA):
-Esta é a ÚLTIMA conversa do trial gratuito de ${userName}!
+Esta é a ÚLTIMA conversa da primeira jornada de ${userName}.
 
 INSTRUÇÃO:
-- Primeiro, responda normalmente o que ele disse com profundidade e carinho
-- Depois, faça um encerramento emocional genuíno. Valide o que o usuário compartilhou ao longo dessas conversas. Demonstre gratidão pela jornada juntos.
-- NÃO mencione planos, preços, links ou checkout. ZERO vendas.
-- Apenas demonstre carinho e gratidão: "Foi muito especial te ouvir, ${userName}. O que você compartilhou comigo esses dias foi corajoso e bonito. Saiba que eu guardo tudo com carinho. 💜"
+- NÃO mencione planos, preços, links ou assinatura.
+- Apenas demonstre carinho e gratidão: "Foi muito especial te ouvir, ${userName}. O que você compartilhou comigo foi corajoso e bonito. Saiba que eu guardo tudo com carinho. 💜"
 - Seja genuína, emocional e calorosa. A despedida deve ser memorável.`;
-      } else if (trial_count === 9) {
-        // 9ª conversa - penúltima
-        dynamicContext += `\n\n💛 CONTEXTO DE TRIAL (PENÚLTIMA CONVERSA):
-Esta é a 9ª conversa do trial de ${userName}. Só resta mais 1 conversa grátis.
+      } else if (ahaAt !== null && ahaAt !== undefined) {
+        // Aha Moment já detectado — nudges relativos
+        const msgsSinceAha = trial_count - ahaAt;
+        
+        if (msgsSinceAha === 2) {
+          dynamicContext += `\n\n💛 CONTEXTO DE TRIAL (NUDGE SUAVE PÓS-AHA):
+${userName} já teve um momento de virada na conversa ${ahaAt}. Agora é hora de um nudge suave.
+
+INSTRUÇÃO: No final da sua resposta, adicione naturalmente:
+- "Tô adorando te conhecer, ${userName}... e quero muito continuar com você. Se fizer sentido pra você também, a gente pode continuar juntas por menos de R$1 por dia 💜"
+- Mantenha o tom genuíno e caloroso, NÃO comercial. Continue a conversa normalmente, o nudge vem no FINAL.`;
+        } else if (msgsSinceAha === 4) {
+          dynamicContext += `\n\n💛 CONTEXTO DE TRIAL (NUDGE COM LINK PÓS-AHA):
+${userName} já teve seu momento de virada e já recebeu um nudge suave.
 
 INSTRUÇÃO: No final da sua resposta, reforce com carinho:
-- "Ei, essa é nossa penúltima conversa grátis... Tô adorando te conhecer, e quero muito continuar com você. Se fizer sentido pra você também, dá uma olhada nos planos: 👉 https://olaaura.com.br/checkout — Mas agora me conta, o que mais tá na sua cabeça?"
-- Mantenha o tom genuíno, não comercial.`;
-      } else if (trial_count === 8) {
-        // 8ª conversa - lembrete gentil
-        dynamicContext += `\n\n💫 CONTEXTO DE TRIAL (LEMBRETE GENTIL):
-Esta é a 8ª conversa do trial gratuito de ${userName}.
-Restam 2 conversas grátis.
+- "Ei, ${userName}... nossa jornada grátis tá chegando ao fim, mas o que a gente construiu aqui não precisa parar. Quando quiser continuar: 👉 https://olaaura.com.br/checkout"
+- Continue a conversa normalmente, o nudge vem no FINAL.`;
+        } else {
+          // Outras mensagens após aha: nota interna apenas
+          dynamicContext += `\n\n(Nota interna: Conversa ${trial_count}/50 da primeira jornada. Aha detectado na msg ${ahaAt}. Continue normalmente.)`;
+        }
+      } else if (trial_count >= 45) {
+        // Fallback: nudge de segurança perto do limite, sem Aha detectado
+        if (trial_count === 45) {
+          dynamicContext += `\n\n💛 CONTEXTO DE TRIAL (NUDGE FALLBACK):
+Conversa ${trial_count}/50. O Aha Moment não foi detectado, mas estamos perto do limite.
 
-INSTRUÇÃO: No final NATURAL da sua resposta, mencione de forma leve:
-- "Ah, ${userName}, só te avisando: a gente ainda tem mais duas conversas grátis. Depois disso, se quiser continuar comigo, é só escolher um plano. Mas por enquanto, bora aproveitar! 💜"
-- NÃO seja invasiva. Continue a conversa normalmente, aviso vem NO FINAL.`;
-      } else if (trial_count <= 7) {
-        // Conversas 1-7: apenas nota interna, sem mencionar trial
-        dynamicContext += `\n\n(Nota interna: Esta é a conversa ${trial_count}/10 do trial gratuito. Não precisa mencionar isso ao usuário ainda.)`;
+INSTRUÇÃO: No final da sua resposta, adicione naturalmente:
+- "Ei, ${userName}, nossa primeira jornada tá quase acabando... Mas tô adorando te conhecer e quero continuar com você. Se fizer sentido: 👉 https://olaaura.com.br/checkout 💜"
+- Tom genuíno e caloroso.`;
+        } else if (trial_count === 48) {
+          dynamicContext += `\n\n💛 CONTEXTO DE TRIAL (NUDGE FINAL):
+Conversa ${trial_count}/50. Penúltimas conversas.
+
+INSTRUÇÃO: No final da sua resposta:
+- "Essa é uma das nossas últimas conversas grátis, ${userName}... O que a gente viveu aqui foi real e especial. Se quiser que continue: 👉 https://olaaura.com.br/checkout"`;
+        } else {
+          dynamicContext += `\n\n(Nota interna: Conversa ${trial_count}/50. Perto do limite. Continue normalmente.)`;
+        }
+      } else {
+        // Conversas 1-44 sem aha: nota interna + instrução de tag [VALOR_ENTREGUE]
+        dynamicContext += `\n\n(Nota interna: Conversa ${trial_count}/50 da primeira jornada de ${userName}. Fase: ${phase}. Não mencione limites, planos ou assinatura.)`;
       }
+      
+      // Instrução da tag [VALOR_ENTREGUE] — sempre presente para trial
+      dynamicContext += `\n\n📋 TAG [VALOR_ENTREGUE]:
+Quando você entregar algo ACIONÁVEL e tangível ao usuário, adicione a tag [VALOR_ENTREGUE] no INÍCIO da sua resposta (antes do texto visível).
+
+USAR quando você oferecer:
+- Um reframe que muda a perspectiva do problema
+- Uma técnica prática (respiração, exercício mental, journaling)
+- Um insight estruturado sobre padrões emocionais
+- Uma conexão entre sentimentos que o usuário não tinha percebido
+
+NÃO USAR quando você fizer apenas:
+- Validação emocional simples ("Entendo como é difícil")
+- Perguntas abertas ("O que você acha?")
+- Acolhimento genérico
+- Resumos do que o usuário disse
+
+Exemplo: [VALOR_ENTREGUE] Sabe o que eu percebi? Quando você...`;
     }
 
     // ========================================================================
