@@ -268,6 +268,17 @@ Me diz: como você está hoje?`;
             console.error('❌ Error updating profile:', updateError);
           } else {
             console.log('✅ Profile updated with plan:', customerPlan);
+            // Cancel any pending trial follow-up tasks
+            const { data: cancelled } = await supabase
+              .from('scheduled_tasks')
+              .update({ status: 'cancelled', executed_at: new Date().toISOString() })
+              .eq('user_id', existingProfile.user_id)
+              .in('status', ['pending'])
+              .like('task_type', 'trial_%')
+              .select('id');
+            if (cancelled && cancelled.length > 0) {
+              console.log(`🗑️ Cancelled ${cancelled.length} pending trial follow-up tasks (user converted)`);
+            }
           }
         }
       } catch (dbError) {

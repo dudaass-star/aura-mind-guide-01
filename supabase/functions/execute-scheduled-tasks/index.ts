@@ -201,7 +201,7 @@ Deno.serve(async (req) => {
               ? `Foi muito especial conversar com você sobre o que você compartilhou — especialmente sobre ${theme.length > 60 ? theme.substring(0, 60) + '...' : theme}` 
               : `Foi muito especial te ouvir e caminhar junto com você esses dias`;
             
-            const closingMessage = `${closingName}, 💜\n\n${themeIntro}.\n\nEu vi o quanto isso é importante pra você, e quero continuar te acompanhando nessa jornada.\n\nCom o plano Essencial (a partir de R$29,90/mês), você tem conversas ilimitadas comigo — no seu ritmo, quando precisar.\n\n👉 https://olaaura.com.br/checkout\n\nSem pressa. Vou estar aqui quando você decidir. 💜`;
+            const closingMessage = `${closingName}, 💜\n\n${themeIntro}.\n\nEu vi o quanto isso é importante pra você, e quero continuar te acompanhando nessa jornada.\n\nPor menos de R$1 por dia, você tem conversas ilimitadas comigo — no seu ritmo, quando precisar.\n\n👉 https://olaaura.com.br/checkout`;
 
             const closingResult = await sendTextMessage(profile.phone, closingMessage, undefined, instanceConfig);
             if (!closingResult.success) {
@@ -216,6 +216,99 @@ Deno.serve(async (req) => {
             });
 
             console.log(`✅ Trial closing message sent and recorded for ${profile.phone.substring(0, 4)}***`);
+            break;
+          }
+
+          // ================================================================
+          // TRIAL FOLLOW-UP SEQUENCE (4 touchpoints after trial_closing)
+          // ================================================================
+          case 'trial_followup_15m': {
+            const { data: fp15 } = await supabase
+              .from('profiles')
+              .select('status, name')
+              .eq('user_id', task.user_id)
+              .maybeSingle();
+
+            if (!fp15 || fp15.status !== 'trial') {
+              console.log(`⏭️ Skipping trial_followup_15m: user not trial`);
+              break;
+            }
+
+            const name15 = payload.name || fp15.name || 'você';
+            const msg15 = `${name15}, acabei de perceber que você não destravou seu acesso ainda. Aquele alívio que você sentiu agora? Ele não precisa ser um momento isolado. Pode ser o seu dia a dia. Por menos de R$1 por dia, eu tô aqui sempre que precisar. 👉 https://olaaura.com.br/checkout`;
+
+            const res15 = await sendTextMessage(profile.phone, msg15, undefined, instanceConfig);
+            if (!res15.success) throw new Error(`Failed: ${res15.error}`);
+            await supabase.from('messages').insert({ user_id: task.user_id, role: 'assistant', content: msg15 });
+            console.log(`✅ trial_followup_15m sent`);
+            break;
+          }
+
+          case 'trial_followup_2h': {
+            const { data: fp2h } = await supabase
+              .from('profiles')
+              .select('status, name')
+              .eq('user_id', task.user_id)
+              .maybeSingle();
+
+            if (!fp2h || fp2h.status !== 'trial') {
+              console.log(`⏭️ Skipping trial_followup_2h: user not trial`);
+              break;
+            }
+
+            const name2h = payload.name || fp2h.name || 'você';
+            const msg2h = `${name2h}, sei que a vida puxa a gente de volta pro automático... Mas lembra do que você sentiu nas nossas conversas? Aquilo foi real. E tá a um clique de voltar. Não deixa esse peso voltar sozinho amanhã. 👉 https://olaaura.com.br/checkout`;
+
+            const res2h = await sendTextMessage(profile.phone, msg2h, undefined, instanceConfig);
+            if (!res2h.success) throw new Error(`Failed: ${res2h.error}`);
+            await supabase.from('messages').insert({ user_id: task.user_id, role: 'assistant', content: msg2h });
+            console.log(`✅ trial_followup_2h sent`);
+            break;
+          }
+
+          case 'trial_followup_morning': {
+            const { data: fpM } = await supabase
+              .from('profiles')
+              .select('status, name')
+              .eq('user_id', task.user_id)
+              .maybeSingle();
+
+            if (!fpM || fpM.status !== 'trial') {
+              console.log(`⏭️ Skipping trial_followup_morning: user not trial`);
+              break;
+            }
+
+            const nameM = payload.name || fpM.name || 'você';
+            const msgM = `Bom dia, ${nameM} 💜 Como foi sua noite? Se a mente acelerou de novo... eu entendo. Me conta como você tá — essa conversa é por minha conta. Responde aqui e a gente conversa mais um pouco.`;
+
+            const resM = await sendTextMessage(profile.phone, msgM, undefined, instanceConfig);
+            if (!resM.success) throw new Error(`Failed: ${resM.error}`);
+            await supabase.from('messages').insert({ user_id: task.user_id, role: 'assistant', content: msgM });
+            // Set trial_nudge_active to give +3 bonus messages on reply
+            await supabase.from('profiles').update({ trial_nudge_active: true }).eq('user_id', task.user_id);
+            console.log(`✅ trial_followup_morning sent (nudge_active=true for +3 bonus)`);
+            break;
+          }
+
+          case 'trial_followup_48h': {
+            const { data: fp48 } = await supabase
+              .from('profiles')
+              .select('status, name')
+              .eq('user_id', task.user_id)
+              .maybeSingle();
+
+            if (!fp48 || fp48.status !== 'trial') {
+              console.log(`⏭️ Skipping trial_followup_48h: user not trial`);
+              break;
+            }
+
+            const name48 = payload.name || fp48.name || 'você';
+            const msg48 = `${name48}, essa é minha última mensagem sobre isso. Eu vi o que você carrega e sei o quanto nosso papo te fez bem. Não vou ficar insistindo — mas quero que saiba que essa porta não fica aberta pra sempre. Por menos de R$1 por dia, esse refúgio é seu. Se faz sentido, agora é a hora. 👉 https://olaaura.com.br/checkout`;
+
+            const res48 = await sendTextMessage(profile.phone, msg48, undefined, instanceConfig);
+            if (!res48.success) throw new Error(`Failed: ${res48.error}`);
+            await supabase.from('messages').insert({ user_id: task.user_id, role: 'assistant', content: msg48 });
+            console.log(`✅ trial_followup_48h sent`);
             break;
           }
 
