@@ -83,7 +83,7 @@ export default function AdminEngagement() {
 
   useEffect(() => {
     if (isAdmin) fetchMetrics();
-  }, [isAdmin]);
+  }, [isAdmin, dateFrom, dateTo]);
 
   const handleReactivationBlast = async () => {
     if (!confirm('Enviar mensagem de reativação para todos os trials finalizados?')) return;
