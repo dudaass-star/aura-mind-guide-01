@@ -26,8 +26,18 @@ Deno.serve(async (req) => {
     const { data: isAdmin } = await supabase.rpc('has_role', { _user_id: user.id, _role: 'admin' });
     if (!isAdmin) throw new Error('Not admin');
 
+    // Parse date filters from request body
+    let dateFrom: string | null = null;
+    let dateTo: string | null = null;
+    try {
+      const body = await req.json();
+      dateFrom = body.dateFrom || null;
+      dateTo = body.dateTo || null;
+    } catch { /* no body, use defaults */ }
+
     const now = new Date();
-    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const periodStart = dateFrom || new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const periodEnd = dateTo || now.toISOString();
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
     // ========== ENGAGEMENT METRICS ==========
@@ -38,18 +48,20 @@ Deno.serve(async (req) => {
       .select('*', { count: 'exact', head: true })
       .eq('status', 'active');
 
-    // 2. Messages in last 7 days
+    // 2. Messages in period
     const { count: weeklyMessages } = await supabase
       .from('messages')
       .select('*', { count: 'exact', head: true })
-      .gte('created_at', sevenDaysAgo);
+      .gte('created_at', periodStart)
+      .lte('created_at', periodEnd);
 
-    // 3. Completed sessions in last 7 days
+    // 3. Completed sessions in period
     const { data: weeklySessions } = await supabase
       .from('sessions')
       .select('started_at, ended_at')
       .eq('status', 'completed')
-      .gte('created_at', sevenDaysAgo);
+      .gte('created_at', periodStart)
+      .lte('created_at', periodEnd);
 
     const weeklySessionsCount = weeklySessions?.length || 0;
 
@@ -112,7 +124,8 @@ Deno.serve(async (req) => {
     const { data: recentUserMessages } = await supabase
       .from('messages')
       .select('user_id')
-      .gte('created_at', sevenDaysAgo)
+      .gte('created_at', periodStart)
+      .lte('created_at', periodEnd)
       .eq('role', 'user');
 
     const uniqueRecentUsers = new Set(recentUserMessages?.map(m => m.user_id) || []).size;
@@ -120,9 +133,10 @@ Deno.serve(async (req) => {
       ? Math.round(uniqueRecentUsers / activeUsers * 100)
       : 0;
 
-    // 7. Average daily messages per user
+    // Average daily messages per user (based on period length)
+    const periodDays = Math.max(1, Math.round((new Date(periodEnd).getTime() - new Date(periodStart).getTime()) / (1000 * 60 * 60 * 24)));
     const avgDailyMessagesPerUser = activeUsers && activeUsers > 0
-      ? Math.round((weeklyMessages || 0) / 7 / activeUsers * 10) / 10
+      ? Math.round((weeklyMessages || 0) / periodDays / activeUsers * 10) / 10
       : 0;
 
     // ========== TRIAL & CONVERSION METRICS ==========
@@ -138,7 +152,8 @@ Deno.serve(async (req) => {
       .from('profiles')
       .select('*', { count: 'exact', head: true })
       .not('trial_started_at', 'is', null)
-      .gte('trial_started_at', sevenDaysAgo);
+      .gte('trial_started_at', periodStart)
+      .lte('trial_started_at', periodEnd);
 
     // Trials started in last 30 days
     const { count: trialsLast30Days } = await supabase
