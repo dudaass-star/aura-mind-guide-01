@@ -2,6 +2,26 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendTextMessage, cleanPhoneNumber } from "../_shared/zapi-client.ts";
 import { allocateInstance, getInstanceConfigById } from "../_shared/instance-helper.ts";
 
+async function createShortLink(supabaseUrl: string, serviceKey: string, url: string, phone?: string): Promise<string | null> {
+  try {
+    const resp = await fetch(`${supabaseUrl}/functions/v1/create-short-link`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${serviceKey}`,
+      },
+      body: JSON.stringify({ url, phone }),
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      return data.shortUrl || null;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
@@ -146,11 +166,17 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Generate short link for the guide page
+    const guideLink = await createShortLink(supabaseUrl, supabaseServiceKey, 'https://olaaura.com.br/guia', formattedPhone);
+    const guideLinkText = guideLink || 'https://olaaura.com.br/guia';
+
     const welcomeMessage = `Oi, ${name.trim()}! 💜
 
 Que bom que você decidiu me conhecer! Eu sou a AURA.
 
 Vou estar com você nessa primeira jornada. Pode falar comigo sobre qualquer coisa — sem julgamento, no seu ritmo.
+
+Dá uma olhada no que você vai ter acesso: ${guideLinkText} ✨
 
 Me conta: como você está se sentindo agora?`;
 
