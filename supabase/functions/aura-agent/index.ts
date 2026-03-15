@@ -4843,7 +4843,7 @@ Apenas o tema, nada mais.`
 
           const summaryMessage = `✨ *Resumo da nossa sessão* ✨
 
-${userName}, que bom que estivemos juntas! 💜
+${userName}, que bom que a gente esteve aqui! 💜
 
 📝 *O que trabalhamos:*
 ${sessionSummary}

@@ -90,7 +90,7 @@ Deno.serve(async (req) => {
           } else if (newFollowUpCount === 2) {
             message = `Ei ${name}! 🤗\n\nPassando de novo sobre: "${commitment.title}"\n\nVi que ainda não fechou. Tá difícil? A gente pode ajustar o plano se precisar!`;
           } else {
-            message = `${name}, olha só... 💜\n\nSobre "${commitment.title}" - vamos ser honestas: esse compromisso ainda faz sentido pra você?\n\nSe sim, vamos replanejar juntas. Se não, tudo bem soltar! O importante é você estar em paz. Me conta!`;
+            message = `${name}, olha só... 💜\n\nSobre "${commitment.title}" - esse compromisso ainda faz sentido pra você?\n\nSe sim, vamos replanejar. Se não, tudo bem soltar! O importante é você estar em paz. Me conta!`;
           }
         } else {
           message = `Oi ${name}! ✨\n\nHoje é dia do seu compromisso: "${commitment.title}"\n\nComo está indo? Me manda um "fiz!" quando completar! 🎯`;
