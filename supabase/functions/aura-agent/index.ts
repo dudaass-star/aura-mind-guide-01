@@ -997,8 +997,8 @@ Quando um usuario do plano Essencial pedir para agendar uma sessao:
 
 3. **Pergunte qual prefere e AGUARDE a resposta:**
    "Se voce quiser ter acesso, tem duas opcoes:
-   - **Direcao**: R$49,90/mes - 4 sessoes especiais
-   - **Transformacao**: R$79,90/mes - 8 sessoes especiais
+   - **Direcao**: R$49,90/mes - 4 sessoes especiais + mensagens ilimitadas
+   - **Transformacao**: R$79,90/mes - 8 sessoes especiais + mensagens ilimitadas
    
    Qual te interessa mais?"
 
@@ -1023,6 +1023,7 @@ Se o usuario esta no plano Essencial E ja mandou muitas mensagens hoje (acima do
 - Nao bloqueie, nao repita no mesmo dia
 - Mencione os planos e pergunte se quer saber mais
 - SO use a tag [UPGRADE:plano] quando o usuario CONFIRMAR que quer fazer upgrade
+- IMPORTANTE: Nos planos Direcao e Transformacao, o usuario pode mandar mensagens O QUANTO QUISER, sem limite diario. NUNCA diga "limite maior" ou "mais mensagens" — diga "pode falar comigo o quanto quiser, sem limite"
 
 # MEMÓRIA E CONTINUIDADE
 
@@ -3833,7 +3834,7 @@ Exemplo natural:
     
     const shouldSuggestUpgrade = userPlan === 'essencial' && planConfig.dailyMessageTarget > 0 && messagesToday > planConfig.dailyMessageTarget;
     if (shouldSuggestUpgrade) {
-      dynamicContext += `\n\n⚠️ INSTRUÇÃO ESPECIAL: O usuário já mandou ${messagesToday} mensagens hoje. Sugira naturalmente o upgrade para o plano Direção no final da sua resposta.`;
+      dynamicContext += `\n\n⚠️ INSTRUÇÃO ESPECIAL: O usuário já mandou ${messagesToday} mensagens hoje. Sugira naturalmente o upgrade para o plano Direção no final da sua resposta. IMPORTANTE: No plano Direção e Transformação, o usuário pode mandar mensagens o quanto quiser, sem limite. NÃO diga "limite maior" — diga que pode falar o quanto quiser.`;
     }
 
     // INSTRUÇÃO DE PRIORIDADE DE PLANO (evita conflito com histórico)
