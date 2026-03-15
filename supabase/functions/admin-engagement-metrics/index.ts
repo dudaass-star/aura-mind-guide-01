@@ -101,7 +101,9 @@ Deno.serve(async (req) => {
       .select('id, user_id, started_at, ended_at')
       .eq('status', 'completed')
       .not('started_at', 'is', null)
-      .not('ended_at', 'is', null);
+      .not('ended_at', 'is', null)
+      .gte('created_at', periodStart)
+      .lte('created_at', periodEnd);
 
     let messagesPerSession = 0;
     if (completedSessionsForMsg && completedSessionsForMsg.length > 0) {
