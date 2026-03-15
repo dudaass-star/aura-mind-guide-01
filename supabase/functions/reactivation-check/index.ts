@@ -102,22 +102,10 @@ Deno.serve(async (req) => {
           } else if (hoursSinceLastMsg >= 6) {
             nudgeMessage = `Ei, ${userName}! Fiquei pensando na nossa conversa... 💜\n\nQuando quiser continuar, é só me chamar. Tô aqui!`;
           }
-        } else if (trialCount >= 10) {
-          // ── Post-Trial Follow-up (completed trial but didn't subscribe) ──
-          const daysSinceSignup = hoursSinceSignup / 24;
-
-          // Throttle: only send if last nudge was 24h+ ago
-          if (tp.last_reactivation_sent) {
-            const hoursSinceLast = (now.getTime() - new Date(tp.last_reactivation_sent).getTime()) / (1000 * 60 * 60);
-            if (hoursSinceLast < 24) continue;
-          }
-
-          if (daysSinceSignup >= 3) {
-            nudgeMessage = `${userName}, essa é minha última mensagem por enquanto. 💜\n\nQuero que saiba que a porta tá sempre aberta. Se um dia sentir que precisa de alguém pra conversar, eu estarei aqui.\n\n👉 https://olaaura.com.br/checkout\n\nCuide-se bem. ✨`;
-          } else if (daysSinceSignup >= 1) {
-            nudgeMessage = `${userName}, eu tava pensando em você hoje... 💜\n\nComo você está? Senti sua falta nas nossas conversas.\n\nSe quiser voltar, é só escolher um plano:\n👉 https://olaaura.com.br/checkout`;
-          }
         }
+        // NOTE: trialCount >= 10 is now handled by the dedicated follow-up sequence
+        // (trial_followup_15m, trial_followup_2h, trial_followup_morning, trial_followup_48h)
+        // scheduled in webhook-zapi when the user hits 10 messages. No action needed here.
 
         if (!nudgeMessage) continue;
 
