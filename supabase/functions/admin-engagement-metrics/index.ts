@@ -38,6 +38,8 @@ Deno.serve(async (req) => {
     const now = new Date();
     const periodStart = dateFrom || new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
     const periodEnd = dateTo || now.toISOString();
+    const periodStartDate = periodStart.slice(0, 10);
+    const periodEndDate = periodEnd.slice(0, 10);
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
     // ========== ENGAGEMENT METRICS ==========
