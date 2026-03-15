@@ -75,13 +75,15 @@ Deno.serve(async (req) => {
 
     const weeklySessionsCount = weeklySessions?.length || 0;
 
-    // 4. Average session duration
+    // 4. Average session duration (selected period)
     const { data: allCompletedSessions } = await supabase
       .from('sessions')
       .select('started_at, ended_at')
       .eq('status', 'completed')
       .not('started_at', 'is', null)
-      .not('ended_at', 'is', null);
+      .not('ended_at', 'is', null)
+      .gte('created_at', periodStart)
+      .lte('created_at', periodEnd);
 
     let avgSessionMinutes = 0;
     if (allCompletedSessions && allCompletedSessions.length > 0) {
