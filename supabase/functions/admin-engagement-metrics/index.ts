@@ -48,18 +48,20 @@ Deno.serve(async (req) => {
       .select('*', { count: 'exact', head: true })
       .eq('status', 'active');
 
-    // 2. Messages in last 7 days
+    // 2. Messages in period
     const { count: weeklyMessages } = await supabase
       .from('messages')
       .select('*', { count: 'exact', head: true })
-      .gte('created_at', sevenDaysAgo);
+      .gte('created_at', periodStart)
+      .lte('created_at', periodEnd);
 
-    // 3. Completed sessions in last 7 days
+    // 3. Completed sessions in period
     const { data: weeklySessions } = await supabase
       .from('sessions')
       .select('started_at, ended_at')
       .eq('status', 'completed')
-      .gte('created_at', sevenDaysAgo);
+      .gte('created_at', periodStart)
+      .lte('created_at', periodEnd);
 
     const weeklySessionsCount = weeklySessions?.length || 0;
 
