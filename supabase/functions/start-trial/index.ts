@@ -166,11 +166,17 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Generate short link for the guide page
+    const guideLink = await createShortLink(supabaseUrl, supabaseServiceKey, 'https://olaaura.com.br/guia', formattedPhone);
+    const guideLinkText = guideLink || 'https://olaaura.com.br/guia';
+
     const welcomeMessage = `Oi, ${name.trim()}! 💜
 
 Que bom que você decidiu me conhecer! Eu sou a AURA.
 
 Vou estar com você nessa primeira jornada. Pode falar comigo sobre qualquer coisa — sem julgamento, no seu ritmo.
+
+Dá uma olhada no que você vai ter acesso: ${guideLinkText} ✨
 
 Me conta: como você está se sentindo agora?`;
 
