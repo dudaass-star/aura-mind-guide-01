@@ -15,6 +15,7 @@ import { ptBR } from 'date-fns/locale';
 
 interface Metrics {
   activeUsers: number;
+  activeUsersBase: number;
   weeklyMessages: number;
   weeklySessionsCount: number;
   avgSessionMinutes: number;
