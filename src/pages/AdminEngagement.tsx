@@ -293,7 +293,9 @@ export default function AdminEngagement() {
                       <>
                         <FunnelStep label="Cadastraram (iniciaram trial)" value={metrics.totalTrialsEver} total={metrics.totalTrialsEver} color="bg-blue-500" />
                         <FunnelStep label="Responderam (1+ mensagem)" value={metrics.trialRespondedCount} total={metrics.totalTrialsEver} color="bg-cyan-500" />
-                        <FunnelStep label="Engajaram (20+ msgs)" value={metrics.trialCompletedCount} total={metrics.totalTrialsEver} color="bg-amber-500" />
+                        <FunnelStep label="Valor Entregue (Aura entregou técnica/insight)" value={metrics.trialValueDeliveredCount} total={metrics.totalTrialsEver} color="bg-purple-500" />
+                        <FunnelStep label="Aha Moment (virada emocional)" value={metrics.trialAhaCount} total={metrics.totalTrialsEver} color="bg-amber-500" />
+                        <FunnelStep label="Engajaram (20+ msgs)" value={metrics.trialCompletedCount} total={metrics.totalTrialsEver} color="bg-orange-500" />
                         <FunnelStep label="Assinaram" value={metrics.convertedCount} total={metrics.totalTrialsEver} color="bg-green-500" />
                       </>
                     )}
