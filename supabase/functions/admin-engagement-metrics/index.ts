@@ -262,7 +262,7 @@ Deno.serve(async (req) => {
 
     return new Response(JSON.stringify({
       // Engagement
-      activeUsers: activeUsers || 0,
+      activeUsers: activeUsersInPeriod || 0,
       weeklyMessages: weeklyMessages || 0,
       weeklySessionsCount,
       avgSessionMinutes,
