@@ -274,7 +274,8 @@ Deno.serve(async (req) => {
             }
 
             const name2h = payload.name || fp2h.name || 'você';
-            const msg2h = `${name2h}, sei que a vida puxa a gente de volta pro automático... Mas lembra do que você sentiu nas nossas conversas? Aquilo foi real. E tá a um clique de voltar. Não deixa esse peso voltar sozinho amanhã. 👉 https://olaaura.com.br/checkout`;
+            const link2h = await createShortLink('https://olaaura.com.br/checkout', profile.phone);
+            const msg2h = `${name2h}, sei que a vida puxa a gente de volta pro automático... Mas lembra do que você sentiu nas nossas conversas? Aquilo foi real. E tá a um clique de voltar. Não deixa esse peso voltar sozinho amanhã. 👉 ${link2h}`;
 
             const res2h = await sendTextMessage(profile.phone, msg2h, undefined, instanceConfig);
             if (!res2h.success) throw new Error(`Failed: ${res2h.error}`);
