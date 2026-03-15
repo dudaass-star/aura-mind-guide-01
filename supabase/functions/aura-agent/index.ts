@@ -2525,9 +2525,15 @@ async function processUpgradeTags(
     const plan = planMatch?.[1]?.toLowerCase();
     if (!plan) continue;
     
-    // Não faz sentido upgrade para essencial
+    // Trial users on essencial: generate checkout link instead of stripping
     if (plan === 'essencial') {
-      processedContent = processedContent.replace(match, '');
+      try {
+        const shortUrl = await createShortLink('https://olaaura.com.br/checkout', phone);
+        processedContent = processedContent.replace(match, shortUrl || 'https://olaaura.com.br/checkout');
+        console.log('🔗 [UPGRADE:essencial] replaced with checkout link:', shortUrl || 'fallback');
+      } catch (e) {
+        processedContent = processedContent.replace(match, 'https://olaaura.com.br/checkout');
+      }
       continue;
     }
     
