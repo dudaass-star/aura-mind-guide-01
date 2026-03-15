@@ -134,7 +134,7 @@ export default function AdminEngagement() {
 
   const trialCards = metrics ? [
     { title: 'Trials Ativos', value: metrics.activeTrials, icon: UserPlus, subtitle: 'status = trial agora' },
-    { title: 'Trials (7 dias)', value: metrics.trialsLast7Days, icon: UserPlus, subtitle: 'iniciados nos últimos 7 dias' },
+    { title: 'Trials (período)', value: metrics.trialsLast7Days, icon: UserPlus, subtitle: periodLabel },
     { title: 'Trials (30 dias)', value: metrics.trialsLast30Days, icon: UserPlus, subtitle: 'iniciados nos últimos 30 dias' },
     { title: 'Total Trials (histórico)', value: metrics.totalTrialsEver, icon: Users, subtitle: 'todos os trials já criados' },
     { title: 'Convertidos', value: metrics.convertedCount, icon: ArrowRightLeft, subtitle: 'trial → assinante' },
