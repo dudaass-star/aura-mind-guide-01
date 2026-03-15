@@ -48,6 +48,7 @@ export default function AdminEngagement() {
   const [dateTo, setDateTo] = useState<Date>(new Date());
   const { toast } = useToast();
   const navigate = useNavigate();
+  const requestIdRef = useRef(0);
 
   useEffect(() => {
     if (!isLoading) redirectIfNotAdmin();
