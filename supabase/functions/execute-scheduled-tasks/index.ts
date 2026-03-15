@@ -321,7 +321,8 @@ Deno.serve(async (req) => {
             }
 
             const name48 = payload.name || fp48.name || 'você';
-            const msg48 = `${name48}, essa é minha última mensagem sobre isso. Eu vi o que você carrega e sei o quanto nosso papo te fez bem. Não vou ficar insistindo — mas quero que saiba que essa porta não fica aberta pra sempre. Por menos de R$1 por dia, esse refúgio é seu. Se faz sentido, agora é a hora. 👉 https://olaaura.com.br/checkout`;
+            const link48 = await createShortLink('https://olaaura.com.br/checkout', profile.phone);
+            const msg48 = `${name48}, essa é minha última mensagem sobre isso. Eu vi o que você carrega e sei o quanto nosso papo te fez bem. Não vou ficar insistindo — mas quero que saiba que essa porta não fica aberta pra sempre. Por menos de R$1 por dia, esse refúgio é seu. Se faz sentido, agora é a hora. 👉 ${link48}`;
 
             const res48 = await sendTextMessage(profile.phone, msg48, undefined, instanceConfig);
             if (!res48.success) throw new Error(`Failed: ${res48.error}`);
