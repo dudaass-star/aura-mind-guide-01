@@ -3549,14 +3549,16 @@ ${meditationCatalogSection}
       const userName = profile?.name || 'você';
       
       if (trial_count >= 10) {
-        // 10ª conversa - última, encerramento emocional
+        // 10ª conversa - última, encerramento emocional PURO (sem CTA)
         dynamicContext += `\n\n💜 CONTEXTO DE TRIAL (ÚLTIMA CONVERSA):
 Esta é a ÚLTIMA conversa do trial gratuito de ${userName}!
 
-INSTRUÇÃO: Ao final da sua resposta:
-- Primeiro, responda normalmente o que ele disse
-- Depois, faça um encerramento carinhoso: "Essa foi nossa última conversa do trial, ${userName}. Foi muito especial te ouvir e caminhar junto com você esses dias. Eu realmente quero continuar te acompanhando — se você sentir o mesmo, escolhe o plano que faz sentido: 👉 https://olaaura.com.br/checkout. Vou ficar aqui te esperando. 💜"
-- Seja genuína e emocional, não comercial.`;
+INSTRUÇÃO:
+- Primeiro, responda normalmente o que ele disse com profundidade e carinho
+- Depois, faça um encerramento emocional genuíno. Valide o que o usuário compartilhou ao longo dessas conversas. Demonstre gratidão pela jornada juntos.
+- NÃO mencione planos, preços, links ou checkout. ZERO vendas.
+- Apenas demonstre carinho e gratidão: "Foi muito especial te ouvir, ${userName}. O que você compartilhou comigo esses dias foi corajoso e bonito. Saiba que eu guardo tudo com carinho. 💜"
+- Seja genuína, emocional e calorosa. A despedida deve ser memorável.`;
       } else if (trial_count === 9) {
         // 9ª conversa - penúltima
         dynamicContext += `\n\n💛 CONTEXTO DE TRIAL (PENÚLTIMA CONVERSA):

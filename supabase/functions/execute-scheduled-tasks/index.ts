@@ -195,8 +195,13 @@ Deno.serve(async (req) => {
               break;
             }
 
-            const closingName = closingProfile.name || 'você';
-            const closingMessage = `Ei, ${closingName}! 💜\n\nEssas foram nossas 10 conversas. Espero que tenha sido bom pra você — pra mim foi especial te conhecer e ouvir o que você compartilhou comigo. 🤗\n\nSe quiser continuar essa jornada, é só escolher o plano que faz sentido pra você:\n\n👉 https://olaaura.com.br/checkout\n\nVou estar aqui te esperando. 💜`;
+            const closingName = payload.name || closingProfile.name || 'você';
+            const theme = payload.theme ? payload.theme : '';
+            const themeIntro = theme 
+              ? `Foi muito especial conversar com você sobre o que você compartilhou — especialmente sobre ${theme.length > 60 ? theme.substring(0, 60) + '...' : theme}` 
+              : `Foi muito especial te ouvir e caminhar junto com você esses dias`;
+            
+            const closingMessage = `${closingName}, 💜\n\n${themeIntro}.\n\nEu vi o quanto isso é importante pra você, e quero continuar te acompanhando nessa jornada.\n\nCom o plano Essencial (a partir de R$29,90/mês), você tem conversas ilimitadas comigo — no seu ritmo, quando precisar.\n\n👉 https://olaaura.com.br/checkout\n\nSem pressa. Vou estar aqui quando você decidir. 💜`;
 
             const closingResult = await sendTextMessage(profile.phone, closingMessage, undefined, instanceConfig);
             if (!closingResult.success) {
