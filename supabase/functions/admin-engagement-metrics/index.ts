@@ -134,15 +134,8 @@ Deno.serve(async (req) => {
         : 0;
     }
 
-    // 6. Return rate
-    const { data: recentUserMessages } = await supabase
-      .from('messages')
-      .select('user_id')
-      .gte('created_at', periodStart)
-      .lte('created_at', periodEnd)
-      .eq('role', 'user');
-
-    const uniqueRecentUsers = new Set(recentUserMessages?.map(m => m.user_id) || []).size;
+    // 6. Return rate in selected period
+    const uniqueRecentUsers = activeUsersInPeriod || 0;
     const returnRate = activeUsers && activeUsers > 0
       ? Math.round(uniqueRecentUsers / activeUsers * 100)
       : 0;
