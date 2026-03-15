@@ -26,8 +26,18 @@ Deno.serve(async (req) => {
     const { data: isAdmin } = await supabase.rpc('has_role', { _user_id: user.id, _role: 'admin' });
     if (!isAdmin) throw new Error('Not admin');
 
+    // Parse date filters from request body
+    let dateFrom: string | null = null;
+    let dateTo: string | null = null;
+    try {
+      const body = await req.json();
+      dateFrom = body.dateFrom || null;
+      dateTo = body.dateTo || null;
+    } catch { /* no body, use defaults */ }
+
     const now = new Date();
-    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const periodStart = dateFrom || new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const periodEnd = dateTo || now.toISOString();
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
     // ========== ENGAGEMENT METRICS ==========
