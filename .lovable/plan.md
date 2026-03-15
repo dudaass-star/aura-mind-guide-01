@@ -1,42 +1,50 @@
-# Trial "Primeira Jornada" — Detecção de Marcos de Valor ✅ Implementado
 
-## Resumo
-Trial expandido de 10 para **50 mensagens ou 72h**, com detecção inteligente de "Aha Moment" em duas camadas para acionar nudges de conversão no momento certo.
 
-### Limites
-- Hard cap: 50 mensagens OU 72 horas (o que vier primeiro)
-- Fallback de nudges: msg 45 e 48 se Aha não detectado
+## Problema identificado
 
-### Fases do Trial (`trial_phase`)
-- `listening` — Escuta ativa (msgs 1-7, sem intervenção)
-- `value_delivered` — Aura entregou valor real (tag `[VALOR_ENTREGUE]`)
-- `aha_reached` — Usuário reagiu positivamente ao valor (detectado por heurísticas)
-- `converting` — Nudges de conversão ativos
+O link de checkout está **desaparecendo** da mensagem da Aura para trials. Aqui está o que acontece:
 
-### Detecção em Duas Camadas
+1. Os nudges de trial instruem a LLM a incluir o URL hardcoded `https://olaaura.com.br/checkout`
+2. Porém, o sistema prompt TAMBÉM ensina a Aura a usar tags `[UPGRADE:plano]` para gerar links
+3. A LLM às vezes "traduz" o URL para `[UPGRADE:essencial]` em vez de enviar o link literal
+4. O `processUpgradeTags` **remove** `[UPGRADE:essencial]` (linha 2529) porque "upgrade para essencial não faz sentido"
+5. Resultado: a mensagem chega ao usuário **sem nenhum link**
 
-**Camada 1 — Tag da Aura: `[VALOR_ENTREGUE]`**
-- Aura marca quando entrega: reframe, técnica prática, insight estruturado
-- NÃO marca: validação simples, perguntas abertas, acolhimento genérico
-- Webhook detecta a tag → `trial_phase = 'value_delivered'`
+Isso explica o "Tem que mandar certo" da Valdenice — a Aura prometeu um link mas ele foi removido no processamento.
 
-**Camada 2 — Resposta do Usuário**
-- Só avaliada quando `trial_phase = 'value_delivered'` E `count >= 8`
-- Detecta palavras-chave positivas sem "?" (lista de ~25 termos)
-- Ao detectar → `trial_phase = 'aha_reached'`, salva `trial_aha_at_count`
+## Solução
 
-### Sequência de Nudges
-- Aha + 2 msgs: nudge suave ("Tô adorando te conhecer...")
-- Aha + 4 msgs: nudge com link de checkout
-- Fallback msg 45: nudge se Aha não detectado
-- Fallback msg 48: nudge final
-- Msg 50 / 72h: bloqueio + follow-up sequence (5 touchpoints)
+**Gerar o link curto ANTES de montar o prompt**, e injetá-lo diretamente no contexto do trial — eliminando a chance da LLM alterar o URL.
 
-### O que foi implementado
-1. **Migração SQL** ✅ — `trial_phase text` e `trial_aha_at_count integer` em `profiles`
-2. **`aura-agent/index.ts`** ✅ — Tag `[VALOR_ENTREGUE]` + contexto dinâmico por fase/aha
-3. **`webhook-zapi/index.ts`** ✅ — Limite 50/72h, detecção de tag, análise de Aha, strip de tag
-4. **`start-trial/index.ts`** ✅ — Mensagem de boas-vindas sem número fixo
-5. **Frontend** ✅ — `StartTrial.tsx`, `TrialStarted.tsx`, `AdminMessages.tsx`, `AdminEngagement.tsx`
-6. **`execute-scheduled-tasks/index.ts`** ✅ — Textos atualizados
-7. **`admin-engagement-metrics/index.ts`** ✅ — Funnel atualizado (20+ msgs = engajado)
+### Mudanças em `supabase/functions/aura-agent/index.ts`:
+
+1. **Na seção de trial nudges (linhas ~3574-3605)**: Em vez de hardcodar `https://olaaura.com.br/checkout`, gerar um short link via `create-short-link` para a URL de checkout e injetar o short link no prompt. Isso garante que o link é um URL real e curto que não será confundido com uma tag.
+
+2. **Criar função helper `generateTrialCheckoutLink`**: Chama `create-short-link` com a URL `https://olaaura.com.br/checkout` + phone do usuário. Retorna o short URL ou fallback para o URL original.
+
+3. **Aplicar nos 4 pontos de nudge com link**:
+   - Aha+4 (linha 3581)
+   - Fallback msg 45 (linha 3596)
+   - Fallback msg 48 (linha 3605)
+   - Instruir explicitamente no prompt: "Use EXATAMENTE este link, não substitua por tags [UPGRADE:]"
+
+4. **Mesma correção nos follow-ups hardcoded** em `execute-scheduled-tasks/index.ts` (linhas 204, 237, 259, 305) e `webhook-zapi/index.ts` (linhas 395-397, 505): Gerar short links dinâmicos para evitar URLs longos no WhatsApp.
+
+### Mudança secundária: não remover `[UPGRADE:essencial]` silenciosamente
+
+Na função `processUpgradeTags` (linha 2529-2531), em vez de simplesmente remover a tag, substituir pelo link de checkout genérico para que o usuário ainda receba um link funcional:
+
+```typescript
+if (plan === 'essencial') {
+  // Trial users on essencial: generate checkout link instead of stripping
+  const shortUrl = await createShortLink('https://olaaura.com.br/checkout', phone);
+  processedContent = processedContent.replace(match, shortUrl || 'https://olaaura.com.br/checkout');
+  continue;
+}
+```
+
+### Resumo dos arquivos afetados:
+1. **`aura-agent/index.ts`** — Helper para gerar short link de trial + injetar nos prompts de nudge + fix no `processUpgradeTags` para essencial
+2. **`execute-scheduled-tasks/index.ts`** — Gerar short links nos follow-ups hardcoded
+3. **`webhook-zapi/index.ts`** — Gerar short links nas mensagens de status (canceled, inactive, paused)
+
