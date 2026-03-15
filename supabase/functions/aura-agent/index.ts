@@ -3590,7 +3590,9 @@ INSTRUÇÃO:
           dynamicContext += `\n\n💛 CONTEXTO DE TRIAL (NUDGE FALLBACK):
 Conversa ${trial_count}/50. O Aha Moment não foi detectado, mas estamos perto do limite.
 
-INSTRUÇÃO: No final da sua resposta, adicione naturalmente:
+INSTRUÇÃO: 
+- Primeiro, faça um mini-resumo do que vocês trabalharam até aqui (2-3 frases): temas, insights, progresso.
+- Depois, no final, adicione naturalmente:
 - "Ei, ${userName}, nossa primeira jornada tá quase acabando... Mas tô adorando te conhecer e quero continuar com você. Se fizer sentido: 👉 https://olaaura.com.br/checkout 💜"
 - Tom genuíno e caloroso.`;
         } else if (trial_count === 48) {
