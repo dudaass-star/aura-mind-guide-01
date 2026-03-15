@@ -2,6 +2,22 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendTextMessage, sendAudioMessage, cleanPhoneNumber } from "../_shared/zapi-client.ts";
 import { getInstanceConfigForUser } from "../_shared/instance-helper.ts";
 
+// Helper to create short links for checkout URLs
+async function createShortLink(url: string, phone: string): Promise<string> {
+  const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
+  const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  try {
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/create-short-link`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+      body: JSON.stringify({ url, phone }),
+    });
+    const data = await response.json();
+    if (response.ok && data.shortUrl) return data.shortUrl;
+  } catch { /* fallback */ }
+  return url; // fallback to original URL
+}
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
