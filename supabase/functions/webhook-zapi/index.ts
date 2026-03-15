@@ -500,14 +500,39 @@ Tô aqui te esperando. 🤗`;
         if (newCount === 10) {
           try {
             const closeAt = new Date(Date.now() + 2 * 60 * 1000).toISOString();
+            
+            // Extract conversation theme from last user messages
+            let conversationTheme = '';
+            try {
+              const { data: recentMsgs } = await supabase
+                .from('messages')
+                .select('content, role')
+                .eq('user_id', profile.user_id)
+                .eq('role', 'user')
+                .order('created_at', { ascending: false })
+                .limit(5);
+              
+              if (recentMsgs && recentMsgs.length > 0) {
+                // Use the longest recent user message as theme context
+                const longestMsg = recentMsgs.reduce((a, b) => 
+                  (a.content?.length || 0) > (b.content?.length || 0) ? a : b
+                );
+                // Extract first ~80 chars as theme summary
+                const rawTheme = longestMsg.content?.substring(0, 80) || '';
+                conversationTheme = rawTheme.replace(/\n/g, ' ').trim();
+              }
+            } catch (themeErr) {
+              console.warn('⚠️ Failed to extract theme:', themeErr);
+            }
+            
             await supabase.from('scheduled_tasks').insert({
               user_id: profile.user_id,
               task_type: 'trial_closing',
               execute_at: closeAt,
-              payload: {},
+              payload: { theme: conversationTheme, name: profile.name || '' },
               status: 'pending',
             });
-            console.log(`⏰ Scheduled trial_closing for 2 min after 10th conversation`);
+            console.log(`⏰ Scheduled trial_closing for 2 min after 10th conversation (theme: ${conversationTheme.substring(0, 30)}...)`);
           } catch (e) {
             console.warn('⚠️ Failed to schedule trial_closing:', e);
           }
