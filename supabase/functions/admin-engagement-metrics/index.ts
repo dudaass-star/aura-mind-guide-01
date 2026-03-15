@@ -124,7 +124,8 @@ Deno.serve(async (req) => {
     const { data: recentUserMessages } = await supabase
       .from('messages')
       .select('user_id')
-      .gte('created_at', sevenDaysAgo)
+      .gte('created_at', periodStart)
+      .lte('created_at', periodEnd)
       .eq('role', 'user');
 
     const uniqueRecentUsers = new Set(recentUserMessages?.map(m => m.user_id) || []).size;
