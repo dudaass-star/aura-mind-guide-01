@@ -152,7 +152,7 @@ const StartTrial = () => {
                 Experimente a AURA
               </h1>
               <p className="text-muted-foreground">
-                10 conversas pra você sentir a diferença.
+                Suas primeiras conversas com a AURA, sem compromisso.
               </p>
             </div>
 
