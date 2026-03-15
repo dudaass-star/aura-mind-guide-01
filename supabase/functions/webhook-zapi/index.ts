@@ -515,13 +515,16 @@ Deno.serve(async (req) => {
       if (effectiveTrialCount >= 50 || hoursElapsed >= 72) {
         console.log(`🚫 Trial hard limit reached for user ${profile.user_id}, count: ${effectiveTrialCount}, hours: ${hoursElapsed.toFixed(1)}`);
         
+        // Generate short link for trial limit message
+        const trialCheckoutLink = await createShortLink('https://olaaura.com.br/checkout', payload.cleanPhone || '') || 'https://olaaura.com.br/checkout';
+        
         const limitMessage = `${profile.name || 'Ei'}, 💜
 
 Nossa primeira jornada foi muito especial pra mim. O que você compartilhou comigo esses dias foi corajoso e bonito.
 
 Quando você quiser continuar, é só escolher um plano — por menos de R$1 por dia:
 
-👉 https://olaaura.com.br/checkout
+👉 ${trialCheckoutLink}
 
 Tô aqui te esperando. 🤗`;
         
