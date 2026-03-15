@@ -18,6 +18,7 @@ import AdminInstances from "./pages/AdminInstances";
 import AdminLogin from "./pages/AdminLogin";
 import AdminSettings from "./pages/AdminSettings";
 import AdminEngagement from "./pages/AdminEngagement";
+import AdminMessages from "./pages/AdminMessages";
 import UserGuide from "./pages/UserGuide";
 import NotFound from "./pages/NotFound";
 
@@ -45,6 +46,7 @@ const App = () => (
             <Route path="/admin/instancias" element={<AdminInstances />} />
             <Route path="/admin/configuracoes" element={<AdminSettings />} />
             <Route path="/admin/engajamento" element={<AdminEngagement />} />
+            <Route path="/admin/mensagens" element={<AdminMessages />} />
             <Route path="/guia" element={<UserGuide />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />

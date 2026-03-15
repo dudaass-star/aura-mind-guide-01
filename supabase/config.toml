@@ -108,3 +108,6 @@ verify_jwt = false
 
 [functions.reactivation-blast]
 verify_jwt = false
+
+[functions.admin-messages]
+verify_jwt = false
