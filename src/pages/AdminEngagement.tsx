@@ -29,6 +29,8 @@ interface Metrics {
   trialsLast30Days: number;
   totalTrialsEver: number;
   trialRespondedCount: number;
+  trialValueDeliveredCount: number;
+  trialAhaCount: number;
   trialCompletedCount: number;
   convertedCount: number;
   conversionRate: number;
@@ -36,6 +38,8 @@ interface Metrics {
   avgDaysToConversion: number;
   avgMsgsConverted: number;
   avgMsgsNonConverted: number;
+  avgAhaAtCount: number;
+  phaseDistribution: Record<string, number>;
   canceledUsers: number;
   cancelingUsers: number;
 }
