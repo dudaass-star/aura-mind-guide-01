@@ -183,7 +183,7 @@ Deno.serve(async (req) => {
           }
 
           case 'trial_closing': {
-            // Check if user is still trial with 5+ conversations
+            // Check if user is still trial
             const { data: closingProfile } = await supabase
               .from('profiles')
               .select('trial_conversations_count, status, name')
@@ -199,7 +199,7 @@ Deno.serve(async (req) => {
             const theme = payload.theme ? payload.theme : '';
             const themeIntro = theme 
               ? `Foi muito especial conversar com você sobre o que você compartilhou — especialmente sobre ${theme.length > 60 ? theme.substring(0, 60) + '...' : theme}` 
-              : `Foi muito especial te ouvir e caminhar junto com você esses dias`;
+              : `Foi muito especial te ouvir e caminhar junto com você nesses dias`;
             
             const closingMessage = `${closingName}, 💜\n\n${themeIntro}.\n\nEu vi o quanto isso é importante pra você, e quero continuar te acompanhando nessa jornada.\n\nPor menos de R$1 por dia, você tem conversas ilimitadas comigo — no seu ritmo, quando precisar.\n\n👉 https://olaaura.com.br/checkout`;
 
@@ -208,14 +208,13 @@ Deno.serve(async (req) => {
               throw new Error(`Failed to send trial closing: ${closingResult.error}`);
             }
 
-            // Record in messages table for tracking
             await supabase.from('messages').insert({
               user_id: task.user_id,
               role: 'assistant',
               content: closingMessage,
             });
 
-            console.log(`✅ Trial closing message sent and recorded for ${profile.phone.substring(0, 4)}***`);
+            console.log(`✅ Trial closing message sent for ${profile.phone.substring(0, 4)}***`);
             break;
           }
 

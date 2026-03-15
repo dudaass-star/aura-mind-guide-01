@@ -440,38 +440,67 @@ Deno.serve(async (req) => {
     }
 
     // ========================================================================
-    // TRIAL LIMIT CHECK
+    // TRIAL LIMIT CHECK — "Primeira Jornada" (50 msgs or 72h)
     // ========================================================================
     if (profile.status === 'trial') {
       const trialCount = profile.trial_conversations_count || 0;
+      const trialPhase = (profile as any).trial_phase || 'listening';
+      const trialAhaAtCount = (profile as any).trial_aha_at_count as number | null;
+      const trialStartedAt = profile.trial_started_at ? new Date(profile.trial_started_at).getTime() : null;
+      const hoursElapsed = trialStartedAt ? (Date.now() - trialStartedAt) / (1000 * 60 * 60) : 0;
       
       // Check if this is a response to a nudge (free message)
       const isNudgeResponse = profile.trial_nudge_active === true;
       
       if (isNudgeResponse) {
-        // Apply 3-message bonus: reduce counter so user has breathing room
         const bonusCount = trialCount >= 3 ? trialCount - 3 : 0;
         console.log(`🎁 Nudge response detected — applying 3-msg bonus (count ${trialCount} → ${bonusCount})`);
         await supabase
           .from('profiles')
           .update({ trial_nudge_active: false, trial_conversations_count: bonusCount })
           .eq('user_id', profile.user_id);
-        // Update local profile so limit check below uses the new value
         profile.trial_conversations_count = bonusCount;
       }
       
-      // Re-read count after potential bonus
       const effectiveTrialCount = profile.trial_conversations_count || 0;
       
-      // Se já passou do limite (10+ mensagens), bloquear
-      if (effectiveTrialCount >= 10) {
-        console.log(`🚫 Trial limit reached for user ${profile.user_id}, count: ${effectiveTrialCount}`);
+      // ── AHA MOMENT DETECTION (Layer 2) ──
+      // If Aura delivered value last turn, check if user's response signals an Aha
+      if (trialPhase === 'value_delivered' && effectiveTrialCount >= 8) {
+        const lowerMsg = messageText.toLowerCase().trim();
+        const ahaKeywords = [
+          'nossa', 'caramba', 'nunca pensei', 'nunca tinha pensado', 'é verdade',
+          'faz sentido', 'fez sentido', 'obrigad', 'to melhor', 'tô melhor',
+          'me ajudou', 'fez diferença', 'verdade mesmo', 'putz', 'uau',
+          'realmente', 'exatamente', 'isso mesmo', 'mudou', 'aliviou',
+          'incrível', 'não tinha visto', 'agora entendi', 'abriu minha mente',
+        ];
+        const hasPositiveSentiment = ahaKeywords.some(kw => lowerMsg.includes(kw));
+        const isNotQuestion = !lowerMsg.includes('?');
+        const isShortEnough = lowerMsg.length < 120;
         
-        const limitMessage = `Oi, ${profile.name || 'você'}! 💜
+        if (hasPositiveSentiment && isNotQuestion && isShortEnough) {
+          console.log(`🎯 AHA MOMENT detected at msg ${effectiveTrialCount}! Phrase: "${lowerMsg.substring(0, 60)}"`);
+          await supabase
+            .from('profiles')
+            .update({ trial_phase: 'aha_reached', trial_aha_at_count: effectiveTrialCount })
+            .eq('user_id', profile.user_id);
+          (profile as any).trial_phase = 'aha_reached';
+          (profile as any).trial_aha_at_count = effectiveTrialCount;
+        } else {
+          console.log(`📊 Value delivered but no Aha yet (msg ${effectiveTrialCount}): positive=${hasPositiveSentiment}, noQuestion=${isNotQuestion}`);
+        }
+      }
+      
+      // ── HARD LIMIT: 50 msgs or 72h ──
+      if (effectiveTrialCount >= 50 || hoursElapsed >= 72) {
+        console.log(`🚫 Trial hard limit reached for user ${profile.user_id}, count: ${effectiveTrialCount}, hours: ${hoursElapsed.toFixed(1)}`);
+        
+        const limitMessage = `${profile.name || 'Ei'}, 💜
 
-Suas 10 conversas grátis acabaram, mas o que a gente viveu junto não vai embora.
+Nossa primeira jornada juntas foi muito especial pra mim. O que você compartilhou comigo esses dias foi corajoso e bonito.
 
-Quando você quiser voltar, é só escolher um plano e a gente continua de onde parou:
+Quando você quiser continuar, é só escolher um plano — por menos de R$1 por dia:
 
 👉 https://olaaura.com.br/checkout
 
@@ -480,12 +509,56 @@ Tô aqui te esperando. 🤗`;
         const instanceConfig = await getInstanceConfigForUser(supabase, profile.user_id);
         await sendTextMessage(payload.cleanPhone, limitMessage, undefined, instanceConfig);
         
+        // Schedule follow-up sequence
+        try {
+          let conversationTheme = '';
+          try {
+            const { data: recentMsgs } = await supabase
+              .from('messages')
+              .select('content, role')
+              .eq('user_id', profile.user_id)
+              .eq('role', 'user')
+              .order('created_at', { ascending: false })
+              .limit(5);
+            if (recentMsgs && recentMsgs.length > 0) {
+              const longestMsg = recentMsgs.reduce((a: any, b: any) => 
+                (a.content?.length || 0) > (b.content?.length || 0) ? a : b
+              );
+              conversationTheme = (longestMsg.content?.substring(0, 80) || '').replace(/\n/g, ' ').trim();
+            }
+          } catch (themeErr) {
+            console.warn('⚠️ Failed to extract theme:', themeErr);
+          }
+
+          const followupPayload = { theme: conversationTheme, name: profile.name || '' };
+
+          const now = new Date();
+          const tomorrow9hBRT = new Date(now);
+          tomorrow9hBRT.setUTCHours(12, 0, 0, 0);
+          if (tomorrow9hBRT.getTime() <= now.getTime()) {
+            tomorrow9hBRT.setUTCDate(tomorrow9hBRT.getUTCDate() + 1);
+          } else {
+            tomorrow9hBRT.setUTCDate(tomorrow9hBRT.getUTCDate() + 1);
+          }
+
+          await supabase.from('scheduled_tasks').insert([
+            { user_id: profile.user_id, task_type: 'trial_closing', execute_at: new Date(Date.now() + 2 * 60 * 1000).toISOString(), payload: followupPayload, status: 'pending' },
+            { user_id: profile.user_id, task_type: 'trial_followup_15m', execute_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(), payload: followupPayload, status: 'pending' },
+            { user_id: profile.user_id, task_type: 'trial_followup_2h', execute_at: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(), payload: followupPayload, status: 'pending' },
+            { user_id: profile.user_id, task_type: 'trial_followup_morning', execute_at: tomorrow9hBRT.toISOString(), payload: followupPayload, status: 'pending' },
+            { user_id: profile.user_id, task_type: 'trial_followup_48h', execute_at: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(), payload: followupPayload, status: 'pending' },
+          ]);
+          console.log(`⏰ Scheduled trial_closing + 4 follow-ups after hard limit`);
+        } catch (e) {
+          console.warn('⚠️ Failed to schedule trial follow-ups:', e);
+        }
+        
         return new Response(JSON.stringify({ status: 'trial_limit_reached' }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
       
-      // Incrementar contador (nudge responses already got bonus above, but still count this interaction)
+      // ── INCREMENT COUNTER ──
       if (!isNudgeResponse) {
         const newCount = effectiveTrialCount + 1;
         await supabase
@@ -493,93 +566,8 @@ Tô aqui te esperando. 🤗`;
           .update({ trial_conversations_count: newCount })
           .eq('user_id', profile.user_id);
         
-        console.log(`📊 Trial conversation ${newCount}/10 for user ${profile.user_id}`);
+        console.log(`📊 Trial conversation ${newCount}/50 for user ${profile.user_id} (phase: ${trialPhase})`);
         profile.trial_conversations_count = newCount;
-        
-        // Schedule trial closing message after 10th conversation
-        if (newCount === 10) {
-          try {
-            const closeAt = new Date(Date.now() + 2 * 60 * 1000).toISOString();
-            
-            // Extract conversation theme from last user messages
-            let conversationTheme = '';
-            try {
-              const { data: recentMsgs } = await supabase
-                .from('messages')
-                .select('content, role')
-                .eq('user_id', profile.user_id)
-                .eq('role', 'user')
-                .order('created_at', { ascending: false })
-                .limit(5);
-              
-              if (recentMsgs && recentMsgs.length > 0) {
-                // Use the longest recent user message as theme context
-                const longestMsg = recentMsgs.reduce((a, b) => 
-                  (a.content?.length || 0) > (b.content?.length || 0) ? a : b
-                );
-                // Extract first ~80 chars as theme summary
-                const rawTheme = longestMsg.content?.substring(0, 80) || '';
-                conversationTheme = rawTheme.replace(/\n/g, ' ').trim();
-              }
-            } catch (themeErr) {
-              console.warn('⚠️ Failed to extract theme:', themeErr);
-            }
-            
-            const followupPayload = { theme: conversationTheme, name: profile.name || '' };
-
-            // Calculate next 9h BRT (12h UTC)
-            const now = new Date();
-            const tomorrow9hBRT = new Date(now);
-            tomorrow9hBRT.setUTCHours(12, 0, 0, 0);
-            if (tomorrow9hBRT.getTime() <= now.getTime()) {
-              tomorrow9hBRT.setUTCDate(tomorrow9hBRT.getUTCDate() + 1);
-            } else {
-              // If it's before 9h BRT today, schedule for tomorrow anyway (user just finished trial)
-              tomorrow9hBRT.setUTCDate(tomorrow9hBRT.getUTCDate() + 1);
-            }
-
-            await supabase.from('scheduled_tasks').insert([
-              {
-                user_id: profile.user_id,
-                task_type: 'trial_closing',
-                execute_at: closeAt,
-                payload: followupPayload,
-                status: 'pending',
-              },
-              {
-                user_id: profile.user_id,
-                task_type: 'trial_followup_15m',
-                execute_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
-                payload: followupPayload,
-                status: 'pending',
-              },
-              {
-                user_id: profile.user_id,
-                task_type: 'trial_followup_2h',
-                execute_at: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
-                payload: followupPayload,
-                status: 'pending',
-              },
-              {
-                user_id: profile.user_id,
-                task_type: 'trial_followup_morning',
-                execute_at: tomorrow9hBRT.toISOString(),
-                payload: followupPayload,
-                status: 'pending',
-              },
-              {
-                user_id: profile.user_id,
-                task_type: 'trial_followup_48h',
-                execute_at: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
-                payload: followupPayload,
-                status: 'pending',
-              },
-            ]);
-            console.log(`⏰ Scheduled trial_closing + 4 follow-ups after 10th conversation`);
-          } catch (e) {
-            console.warn('⚠️ Failed to schedule trial follow-ups:', e);
-          }
-        }
       }
     }
     // ========================================================================
@@ -861,6 +849,8 @@ Tô aqui te esperando. 🤗`;
         phone: payload.cleanPhone,
         is_audio_message: isAudioMessage,
         trial_count: profile.status === 'trial' ? profile.trial_conversations_count : null,
+        trial_phase: profile.status === 'trial' ? ((profile as any).trial_phase || 'listening') : null,
+        trial_aha_at_count: profile.status === 'trial' ? ((profile as any).trial_aha_at_count || null) : null,
         pending_content: pendingContent,
         pending_context: pendingContext,
       }),
@@ -982,14 +972,29 @@ Tô aqui te esperando. 🤗`;
       let responseText = msg.text || msg.content || '';
       
       // Remove any internal tags that might have leaked through
+      const hadValorEntregue = /\[VALOR_ENTREGUE\]/i.test(responseText);
       responseText = responseText
         .replace(/\[AGUARDANDO_RESPOSTA\]/gi, '')
         .replace(/\[CONVERSA_CONCLUIDA\]/gi, '')
         .replace(/\[MODO_AUDIO\]/gi, '')
+        .replace(/\[VALOR_ENTREGUE\]/gi, '')
         .replace(/\[INSIGHTS\].*?\[\/INSIGHTS\]/gis, '')
         .replace(/\[AGENDAR_TAREFA:.*?\]/gi, '')
         .replace(/\[CANCELAR_TAREFA:\w+\]/gi, '')
         .trim();
+      
+      // ── VALOR_ENTREGUE detection (Layer 1) — update trial_phase ──
+      if (hadValorEntregue && profile.status === 'trial' && i === 0) {
+        const currentPhase = (profile as any).trial_phase || 'listening';
+        if (currentPhase === 'listening' || currentPhase === 'engaged') {
+          console.log(`💎 [VALOR_ENTREGUE] detected — updating trial_phase to value_delivered`);
+          await supabase
+            .from('profiles')
+            .update({ trial_phase: 'value_delivered' })
+            .eq('user_id', profile.user_id);
+          (profile as any).trial_phase = 'value_delivered';
+        }
+      }
       
       if (!responseText) {
         console.log('⏭️ Skipping empty message');

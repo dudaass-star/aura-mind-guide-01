@@ -301,7 +301,7 @@ export default function AdminMessages() {
                             {user.plan || 'trial'}
                           </Badge>
                           <span className="text-[10px] text-muted-foreground">
-                            trial: {user.trial_conversations_count}/10
+                            trial: {user.trial_conversations_count}/50
                           </span>
                         </div>
                       </div>

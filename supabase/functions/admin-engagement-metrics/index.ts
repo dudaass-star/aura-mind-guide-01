@@ -234,14 +234,14 @@ Deno.serve(async (req) => {
       .lte('trial_started_at', periodEnd)
       .gte('trial_conversations_count', 1);
 
-    // Trial funnel: completed 10 conversations in period
+    // Trial funnel: completed 20+ conversations in period (engaged users)
     const { count: trialCompletedCount } = await supabase
       .from('profiles')
       .select('*', { count: 'exact', head: true })
       .not('trial_started_at', 'is', null)
       .gte('trial_started_at', periodStart)
       .lte('trial_started_at', periodEnd)
-      .gte('trial_conversations_count', 10);
+      .gte('trial_conversations_count', 20);
 
     const { data: nonConvertedProfiles } = await supabase
       .from('profiles')

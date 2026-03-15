@@ -69,7 +69,7 @@ const TrialStarted = () => {
                 </li>
                 <li className="flex items-start gap-3">
                   <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-xs text-primary font-medium">3</span>
-                  <span>Você tem 10 conversas pra conhecer a AURA</span>
+                  <span>Converse o quanto quiser nessa primeira jornada</span>
                 </li>
                 <li className="flex items-start gap-3">
                   <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-xs text-primary font-medium">4</span>
