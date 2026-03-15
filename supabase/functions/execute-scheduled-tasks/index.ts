@@ -251,7 +251,8 @@ Deno.serve(async (req) => {
             }
 
             const name15 = payload.name || fp15.name || 'você';
-            const msg15 = `${name15}, acabei de perceber que você não destravou seu acesso ainda. Aquele alívio que você sentiu agora? Ele não precisa ser um momento isolado. Pode ser o seu dia a dia. Por menos de R$1 por dia, eu tô aqui sempre que precisar. 👉 https://olaaura.com.br/checkout`;
+            const link15 = await createShortLink('https://olaaura.com.br/checkout', profile.phone);
+            const msg15 = `${name15}, acabei de perceber que você não destravou seu acesso ainda. Aquele alívio que você sentiu agora? Ele não precisa ser um momento isolado. Pode ser o seu dia a dia. Por menos de R$1 por dia, eu tô aqui sempre que precisar. 👉 ${link15}`;
 
             const res15 = await sendTextMessage(profile.phone, msg15, undefined, instanceConfig);
             if (!res15.success) throw new Error(`Failed: ${res15.error}`);
