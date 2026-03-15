@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -15,6 +15,7 @@ import { ptBR } from 'date-fns/locale';
 
 interface Metrics {
   activeUsers: number;
+  activeUsersBase: number;
   weeklyMessages: number;
   weeklySessionsCount: number;
   avgSessionMinutes: number;
@@ -48,13 +49,16 @@ export default function AdminEngagement() {
   const [dateTo, setDateTo] = useState<Date>(new Date());
   const { toast } = useToast();
   const navigate = useNavigate();
+  const requestIdRef = useRef(0);
 
   useEffect(() => {
     if (!isLoading) redirectIfNotAdmin();
   }, [isLoading, isAdmin]);
 
-  const fetchMetrics = async () => {
+  const fetchMetrics = async (from: Date = dateFrom, to: Date = dateTo) => {
+    const requestId = ++requestIdRef.current;
     setLoading(true);
+
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('No session');
@@ -62,22 +66,28 @@ export default function AdminEngagement() {
       const { data, error } = await supabase.functions.invoke('admin-engagement-metrics', {
         headers: { Authorization: `Bearer ${session.access_token}` },
         body: {
-          dateFrom: startOfDay(dateFrom).toISOString(),
-          dateTo: endOfDay(dateTo).toISOString(),
+          dateFrom: startOfDay(from).toISOString(),
+          dateTo: endOfDay(to).toISOString(),
         },
       });
 
       if (error) throw error;
-      setMetrics(data);
+      if (requestId === requestIdRef.current) {
+        setMetrics(data);
+      }
     } catch (err: unknown) {
-      console.error('Error fetching metrics:', err);
-      toast({
-        title: 'Erro ao carregar métricas',
-        description: err instanceof Error ? err.message : 'Erro desconhecido',
-        variant: 'destructive',
-      });
+      if (requestId === requestIdRef.current) {
+        console.error('Error fetching metrics:', err);
+        toast({
+          title: 'Erro ao carregar métricas',
+          description: err instanceof Error ? err.message : 'Erro desconhecido',
+          variant: 'destructive',
+        });
+      }
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) {
+        setLoading(false);
+      }
     }
   };
 
@@ -123,13 +133,13 @@ export default function AdminEngagement() {
   const periodLabel = `${format(dateFrom, 'dd/MM')} – ${format(dateTo, 'dd/MM')}`;
 
   const engagementCards = metrics ? [
-    { title: 'Usuários Ativos', value: metrics.activeUsers, icon: Users, subtitle: 'status = active' },
+    { title: 'Usuários Ativos no Período', value: metrics.activeUsers, icon: Users, subtitle: `${metrics.activeUsersBase} ativos na base` },
     { title: 'Mensagens no Período', value: metrics.weeklyMessages, icon: MessageSquare, subtitle: periodLabel },
     { title: 'Sessões Completadas', value: metrics.weeklySessionsCount, icon: BarChart3, subtitle: periodLabel },
-    { title: 'Tempo Médio de Sessão', value: `${metrics.avgSessionMinutes} min`, icon: Clock, subtitle: 'sessões completadas' },
-    { title: 'Mensagens por Sessão', value: metrics.messagesPerSession, icon: MessageSquare, subtitle: 'msgs do usuário durante sessão' },
+    { title: 'Tempo Médio de Sessão', value: `${metrics.avgSessionMinutes} min`, icon: Clock, subtitle: 'sessões completadas no período' },
+    { title: 'Mensagens por Sessão', value: metrics.messagesPerSession, icon: MessageSquare, subtitle: 'média nas sessões do período' },
     { title: 'Média Msgs/Dia por Usuário', value: metrics.avgDailyMessagesPerUser, icon: TrendingUp, subtitle: periodLabel },
-    { title: 'Taxa de Retorno', value: `${metrics.returnRate}%`, icon: TrendingUp, subtitle: `${metrics.uniqueRecentUsers} de ${metrics.activeUsers} ativos` },
+    { title: 'Taxa de Retorno', value: `${metrics.returnRate}%`, icon: TrendingUp, subtitle: `${metrics.uniqueRecentUsers} de ${metrics.activeUsersBase} ativos da base` },
   ] : [];
 
   const trialCards = metrics ? [
@@ -245,7 +255,7 @@ export default function AdminEngagement() {
                 <Calendar mode="single" selected={dateTo} onSelect={(d) => d && setDateTo(d)} locale={ptBR} className="p-3 pointer-events-auto" />
               </PopoverContent>
             </Popover>
-            <Button variant="outline" size="sm" onClick={fetchMetrics} disabled={loading} className="h-8">
+            <Button variant="outline" size="sm" onClick={() => fetchMetrics()} disabled={loading} className="h-8">
               <RefreshCw className={`h-4 w-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
               Atualizar
             </Button>

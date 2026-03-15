@@ -38,15 +38,25 @@ Deno.serve(async (req) => {
     const now = new Date();
     const periodStart = dateFrom || new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
     const periodEnd = dateTo || now.toISOString();
+    const periodStartDate = periodStart.slice(0, 10);
+    const periodEndDate = periodEnd.slice(0, 10);
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
     // ========== ENGAGEMENT METRICS ==========
 
-    // 1. Active users count
+    // 1. Active users count (base)
     const { count: activeUsers } = await supabase
       .from('profiles')
       .select('*', { count: 'exact', head: true })
       .eq('status', 'active');
+
+    // 1b. Active users in selected period
+    const { count: activeUsersInPeriod } = await supabase
+      .from('profiles')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'active')
+      .gte('last_message_date', periodStartDate)
+      .lte('last_message_date', periodEndDate);
 
     // 2. Messages in period
     const { count: weeklyMessages } = await supabase
@@ -65,13 +75,15 @@ Deno.serve(async (req) => {
 
     const weeklySessionsCount = weeklySessions?.length || 0;
 
-    // 4. Average session duration
+    // 4. Average session duration (selected period)
     const { data: allCompletedSessions } = await supabase
       .from('sessions')
       .select('started_at, ended_at')
       .eq('status', 'completed')
       .not('started_at', 'is', null)
-      .not('ended_at', 'is', null);
+      .not('ended_at', 'is', null)
+      .gte('created_at', periodStart)
+      .lte('created_at', periodEnd);
 
     let avgSessionMinutes = 0;
     if (allCompletedSessions && allCompletedSessions.length > 0) {
@@ -89,7 +101,9 @@ Deno.serve(async (req) => {
       .select('id, user_id, started_at, ended_at')
       .eq('status', 'completed')
       .not('started_at', 'is', null)
-      .not('ended_at', 'is', null);
+      .not('ended_at', 'is', null)
+      .gte('created_at', periodStart)
+      .lte('created_at', periodEnd);
 
     let messagesPerSession = 0;
     if (completedSessionsForMsg && completedSessionsForMsg.length > 0) {
@@ -120,15 +134,8 @@ Deno.serve(async (req) => {
         : 0;
     }
 
-    // 6. Return rate
-    const { data: recentUserMessages } = await supabase
-      .from('messages')
-      .select('user_id')
-      .gte('created_at', periodStart)
-      .lte('created_at', periodEnd)
-      .eq('role', 'user');
-
-    const uniqueRecentUsers = new Set(recentUserMessages?.map(m => m.user_id) || []).size;
+    // 6. Return rate in selected period
+    const uniqueRecentUsers = activeUsersInPeriod || 0;
     const returnRate = activeUsers && activeUsers > 0
       ? Math.round(uniqueRecentUsers / activeUsers * 100)
       : 0;
@@ -255,7 +262,8 @@ Deno.serve(async (req) => {
 
     return new Response(JSON.stringify({
       // Engagement
-      activeUsers: activeUsers || 0,
+      activeUsers: activeUsersInPeriod || 0,
+      activeUsersBase: activeUsers || 0,
       weeklyMessages: weeklyMessages || 0,
       weeklySessionsCount,
       avgSessionMinutes,
