@@ -326,6 +326,8 @@ Deno.serve(async (req) => {
       trialsLast30Days: trialsLast30Days || 0,
       totalTrialsEver: totalTrialsEver || 0,
       trialRespondedCount: trialRespondedCount || 0,
+      trialValueDeliveredCount: trialValueDeliveredCount || 0,
+      trialAhaCount: trialAhaCount || 0,
       trialCompletedCount: trialCompletedCount || 0,
       convertedCount,
       conversionRate,
@@ -333,6 +335,8 @@ Deno.serve(async (req) => {
       avgDaysToConversion,
       avgMsgsConverted,
       avgMsgsNonConverted,
+      avgAhaAtCount,
+      phaseDistribution,
       canceledUsers: canceledUsers || 0,
       cancelingUsers: cancelingUsers || 0,
     }), {
