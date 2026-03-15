@@ -3557,7 +3557,8 @@ Esta é a ÚLTIMA conversa da primeira jornada de ${userName}.
 
 INSTRUÇÃO:
 - NÃO mencione planos, preços, links ou assinatura.
-- Apenas demonstre carinho e gratidão: "Foi muito especial te ouvir, ${userName}. O que você compartilhou comigo foi corajoso e bonito. Saiba que eu guardo tudo com carinho. 💜"
+- Faça um mini-resumo dos principais momentos da conversa (2-3 frases): o que ${userName} compartilhou, o que vocês trabalharam, e qualquer progresso ou insight que surgiu.
+- Depois do resumo, demonstre carinho e gratidão: "Foi muito especial te ouvir, ${userName}. O que você compartilhou comigo foi corajoso e bonito. Saiba que eu guardo tudo com carinho. 💜"
 - Seja genuína, emocional e calorosa. A despedida deve ser memorável.`;
       } else if (ahaAt !== null && ahaAt !== undefined) {
         // Aha Moment já detectado — nudges relativos
