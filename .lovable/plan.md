@@ -1,42 +1,55 @@
-# Trial "Primeira Jornada" — Detecção de Marcos de Valor ✅ Implementado
 
-## Resumo
-Trial expandido de 10 para **50 mensagens ou 72h**, com detecção inteligente de "Aha Moment" em duas camadas para acionar nudges de conversão no momento certo.
 
-### Limites
-- Hard cap: 50 mensagens OU 72 horas (o que vier primeiro)
-- Fallback de nudges: msg 45 e 48 se Aha não detectado
+## Análise: Caso Glaudia — Resposta desproporcional ao CVV
 
-### Fases do Trial (`trial_phase`)
-- `listening` — Escuta ativa (msgs 1-7, sem intervenção)
-- `value_delivered` — Aura entregou valor real (tag `[VALOR_ENTREGUE]`)
-- `aha_reached` — Usuário reagiu positivamente ao valor (detectado por heurísticas)
-- `converting` — Nudges de conversão ativos
+### O que aconteceu
 
-### Detecção em Duas Camadas
+A Glaudia estava desabafando sobre o filho que trouxe uma mulher da Indonésia, se sente impotente e disse frases como "prefiro morrer do que ver meu filho indo pro abismo" e "gostaria de partir mesmo". Isso é **ideação passiva** — expressão de dor extrema, não plano concreto de suicídio.
 
-**Camada 1 — Tag da Aura: `[VALOR_ENTREGUE]`**
-- Aura marca quando entrega: reframe, técnica prática, insight estruturado
-- NÃO marca: validação simples, perguntas abertas, acolhimento genérico
-- Webhook detecta a tag → `trial_phase = 'value_delivered'`
+A AURA respondeu bem inicialmente (acolheu, perguntou sobre rede de apoio), mas na segunda menção ("gostaria de partir") mandou direto pro CVV 188. Isso deu a sensação de "largou a mão dela".
 
-**Camada 2 — Resposta do Usuário**
-- Só avaliada quando `trial_phase = 'value_delivered'` E `count >= 8`
-- Detecta palavras-chave positivas sem "?" (lista de ~25 termos)
-- Ao detectar → `trial_phase = 'aha_reached'`, salva `trial_aha_at_count`
+### Causa raiz
 
-### Sequência de Nudges
-- Aha + 2 msgs: nudge suave ("Tô adorando te conhecer...")
-- Aha + 4 msgs: nudge com link de checkout
-- Fallback msg 45: nudge se Aha não detectado
-- Fallback msg 48: nudge final
-- Msg 50 / 72h: bloqueio + follow-up sequence (5 touchpoints)
+Dois problemas:
 
-### O que foi implementado
-1. **Migração SQL** ✅ — `trial_phase text` e `trial_aha_at_count integer` em `profiles`
-2. **`aura-agent/index.ts`** ✅ — Tag `[VALOR_ENTREGUE]` + contexto dinâmico por fase/aha
-3. **`webhook-zapi/index.ts`** ✅ — Limite 50/72h, detecção de tag, análise de Aha, strip de tag
-4. **`start-trial/index.ts`** ✅ — Mensagem de boas-vindas sem número fixo
-5. **Frontend** ✅ — `StartTrial.tsx`, `TrialStarted.tsx`, `AdminMessages.tsx`, `AdminEngagement.tsx`
-6. **`execute-scheduled-tasks/index.ts`** ✅ — Textos atualizados
-7. **`admin-engagement-metrics/index.ts`** ✅ — Funnel atualizado (20+ msgs = engajado)
+1. **`isCrisis()` (detecção determinística)** — A lista de frases inclui termos amplos demais como `'quero morrer'` e `'acabar com tudo'` que capturam ideação passiva junto com ideação ativa. "Prefiro morrer" casa parcialmente.
+
+2. **System prompt** — Embora diga "só encaminhe em CASOS DE VIDA OU MORTE" e "plano concreto de suicídio", a IA não tem orientação clara sobre como lidar com ideação passiva. Falta um bloco intermediário que diga "acolha, aprofunde, e continue presente".
+
+### Plano de correção
+
+**1. Refinar `isCrisis()` — separar emergência real de ideação passiva**
+
+- Criar duas funções: `isLifeThreatening()` (plano concreto) e `isEmotionalCrisis()` (ideação passiva)
+- `isLifeThreatening`: "vou me matar", "comprei remédios", "vou pular", "tenho um plano" → encaminha ao CVV
+- `isEmotionalCrisis`: "quero morrer", "prefiro morrer", "partir", "acabar com tudo", "desistir de viver" → NÃO encaminha, sinaliza para a IA acolher com profundidade
+
+**2. Atualizar system prompt — adicionar bloco de "Crise Emocional (NÃO é emergência)"**
+
+Adicionar entre os blocos 1 e 2 do protocolo de segurança:
+
+```
+**1.5 CRISE EMOCIONAL (IDEAÇÃO PASSIVA — NÃO ENCAMINHE):**
+- Frases como: "prefiro morrer", "quero partir", "desisti de viver", 
+  "não vejo sentido", "seria melhor se eu não existisse"
+- Isso é EXPRESSÃO DE DOR, não plano concreto
+- Ação: Acolha profundamente. Valide a dor. Pergunte o que está por trás. 
+  Continue presente. NÃO mande pro CVV. NÃO diga "procure ajuda profissional".
+  A pessoa está pedindo para ser ouvida, não para ser descartada.
+- Exemplo: "Eu ouço você, e essa dor é real. Você não precisa carregar isso 
+  sozinha. Me conta mais — o que tá mais pesado agora?"
+```
+
+**3. Ajustar a lista de `isCrisis()` para remover termos de ideação passiva**
+
+Remover da lista: `'quero morrer'`, `'acabar com tudo'`
+Manter apenas gatilhos de risco real: `'me matar'`, `'suicídio'`, `'vou me matar'`
+
+### Arquivos afetados
+1. `supabase/functions/aura-agent/index.ts` — função `isCrisis()` + system prompt (protocolo de segurança)
+
+### Resultado esperado
+- Ideação passiva → AURA acolhe, aprofunda, fica presente
+- Emergência real (plano concreto) → AURA encaminha ao CVV 188
+- Nunca mais "larga a mão" de alguém que só precisa ser ouvida
+
