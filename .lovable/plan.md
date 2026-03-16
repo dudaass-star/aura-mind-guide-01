@@ -1,42 +1,75 @@
-# Trial "Primeira Jornada" — Detecção de Marcos de Valor ✅ Implementado
 
-## Resumo
-Trial expandido de 10 para **50 mensagens ou 72h**, com detecção inteligente de "Aha Moment" em duas camadas para acionar nudges de conversão no momento certo.
+Diagnóstico confirmado: eu olhei a conversa, e você está certa.
 
-### Limites
-- Hard cap: 50 mensagens OU 72 horas (o que vier primeiro)
-- Fallback de nudges: msg 45 e 48 se Aha não detectado
+Verifiquei no histórico salvo:
+- 02:28:04.648596 — usuário: `Exatamente. É isso.`
+- 02:28:04.860656 — Aura: `Exatamente. É isso. [AGUARDANDO_RESPOSTA]`
 
-### Fases do Trial (`trial_phase`)
-- `listening` — Escuta ativa (msgs 1-7, sem intervenção)
-- `value_delivered` — Aura entregou valor real (tag `[VALOR_ENTREGUE]`)
-- `aha_reached` — Usuário reagiu positivamente ao valor (detectado por heurísticas)
-- `converting` — Nudges de conversão ativos
+Ou seja: foi o bug exato de repetição, e a Aura realmente “parou” porque respondeu só com eco + tag de espera.
 
-### Detecção em Duas Camadas
+O que isso mostra:
+1. Não foi o caso da Glaudia; eu estava olhando o trecho errado antes.
+2. Não foi o sistema de envio que travou.
+3. O problema aconteceu dentro do `aura-agent`, antes do envio, porque a resposta ecoada foi salva no banco.
 
-**Camada 1 — Tag da Aura: `[VALOR_ENTREGUE]`**
-- Aura marca quando entrega: reframe, técnica prática, insight estruturado
-- NÃO marca: validação simples, perguntas abertas, acolhimento genérico
-- Webhook detecta a tag → `trial_phase = 'value_delivered'`
+Causa provável no código atual:
+- O guard anti-echo existe em `supabase/functions/aura-agent/index.ts` (bloco ~4006), mas hoje ele:
+  - só tenta re-gerar 1 vez;
+  - se o retry falhar ou não melhorar, mantém a resposta ruim;
+  - não tem uma trava final que proíba enviar eco puro;
+  - deixa a resposta seguir com `[AGUARDANDO_RESPOSTA]`, o que faz parecer que a Aura abandonou a conversa.
+- O sistema de interrupção do `webhook-zapi` não parece ser a causa desse caso.
 
-**Camada 2 — Resposta do Usuário**
-- Só avaliada quando `trial_phase = 'value_delivered'` E `count >= 8`
-- Detecta palavras-chave positivas sem "?" (lista de ~25 termos)
-- Ao detectar → `trial_phase = 'aha_reached'`, salva `trial_aha_at_count`
+Plano de correção:
+1. Fortalecer a comparação anti-echo no `aura-agent`
+- Remover tags internas antes de comparar:
+  - `[AGUARDANDO_RESPOSTA]`
+  - `[CONVERSA_CONCLUIDA]`
+  - `[MODO_AUDIO]`
+  - `[VALOR_ENTREGUE]`
+  - `[ENCERRAR_SESSAO]`
+  - bloco `[INSIGHTS]`
+- Comparar a resposta “limpa” com a mensagem do usuário “limpa”.
 
-### Sequência de Nudges
-- Aha + 2 msgs: nudge suave ("Tô adorando te conhecer...")
-- Aha + 4 msgs: nudge com link de checkout
-- Fallback msg 45: nudge se Aha não detectado
-- Fallback msg 48: nudge final
-- Msg 50 / 72h: bloqueio + follow-up sequence (5 touchpoints)
+2. Criar uma trava final de “eco proibido”
+- Se a resposta final for:
+  - idêntica ao texto do usuário; ou
+  - quase idêntica e muito curta; ou
+  - só uma confirmação vazia do tipo `Exatamente. É isso.`
+então ela não poderá ser enviada.
 
-### O que foi implementado
-1. **Migração SQL** ✅ — `trial_phase text` e `trial_aha_at_count integer` em `profiles`
-2. **`aura-agent/index.ts`** ✅ — Tag `[VALOR_ENTREGUE]` + contexto dinâmico por fase/aha
-3. **`webhook-zapi/index.ts`** ✅ — Limite 50/72h, detecção de tag, análise de Aha, strip de tag
-4. **`start-trial/index.ts`** ✅ — Mensagem de boas-vindas sem número fixo
-5. **Frontend** ✅ — `StartTrial.tsx`, `TrialStarted.tsx`, `AdminMessages.tsx`, `AdminEngagement.tsx`
-6. **`execute-scheduled-tasks/index.ts`** ✅ — Textos atualizados
-7. **`admin-engagement-metrics/index.ts`** ✅ — Funnel atualizado (20+ msgs = engajado)
+3. Melhorar o fallback
+- Em vez de “se o retry falhar, manda o eco mesmo”, trocar para:
+  - tentar 1-2 retries com instrução explícita anti-eco;
+  - se ainda falhar, usar um fallback seguro e não repetitivo, por exemplo:
+    - validação curta + pergunta nova;
+    - continuação contextual baseada no último tema.
+- Isso garante que nunca mais saia uma resposta vazia/espelhada.
+
+4. Bloquear tag de espera em resposta sem conteúdo novo
+- Se a mensagem não trouxer avanço real, não permitir `[AGUARDANDO_RESPOSTA]`.
+- Regra: só pode marcar “aguardando resposta” se houver acolhimento, reflexão ou pergunta nova de verdade.
+
+5. Adicionar logs de diagnóstico
+- Registrar quando o anti-echo:
+  - detectou eco;
+  - tentou retry;
+  - caiu no fallback;
+  - bloqueou uma resposta curta espelhada.
+- Isso facilita confirmar se o bug sumiu.
+
+6. Cobrir com casos de regressão
+- Casos que precisam passar:
+  - usuário: `Exatamente. É isso.` → Aura não pode repetir;
+  - usuário: `É isso` → Aura precisa continuar a conversa;
+  - usuário: `sim`, `isso`, `aham` → Aura pode confirmar, mas precisa acrescentar algo;
+  - resposta com tag interna não pode mascarar eco.
+
+Arquivos a ajustar:
+- `supabase/functions/aura-agent/index.ts` — correção principal do anti-echo e fallback final
+- opcionalmente `src/pages/AdminTests.tsx` — adicionar teste manual/diagnóstico para esse cenário
+
+Resultado esperado:
+- Mesmo se o modelo tentar repetir exatamente o usuário, a resposta não será enviada.
+- A Aura sempre vai continuar com algo novo, em vez de ecoar e “parar”.
+- Casos curtos como `Exatamente. É isso.` deixam de quebrar a conversa.
