@@ -166,9 +166,8 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Generate short link for the guide page
-    const guideLink = await createShortLink(supabaseUrl, supabaseServiceKey, 'https://olaaura.com.br/guia', formattedPhone);
-    const guideLinkText = guideLink || 'https://olaaura.com.br/guia';
+    // Link direto para o guia (sem short link para manter URL amigável no WhatsApp)
+    const guideLinkText = 'https://olaaura.com.br/guia';
 
     const welcomeMessage = `Oi, ${name.trim()}! 💜
 
