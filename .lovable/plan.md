@@ -1,42 +1,29 @@
-# Trial "Primeira Jornada" — Detecção de Marcos de Valor ✅ Implementado
+
+
+# Implementação das 4 Reescritas no System Prompt do aura-agent
 
 ## Resumo
-Trial expandido de 10 para **50 mensagens ou 72h**, com detecção inteligente de "Aha Moment" em duas camadas para acionar nudges de conversão no momento certo.
 
-### Limites
-- Hard cap: 50 mensagens OU 72 horas (o que vier primeiro)
-- Fallback de nudges: msg 45 e 48 se Aha não detectado
+4 alterações no `AURA_STATIC_INSTRUCTIONS` em `supabase/functions/aura-agent/index.ts`:
 
-### Fases do Trial (`trial_phase`)
-- `listening` — Escuta ativa (msgs 1-7, sem intervenção)
-- `value_delivered` — Aura entregou valor real (tag `[VALOR_ENTREGUE]`)
-- `aha_reached` — Usuário reagiu positivamente ao valor (detectado por heurísticas)
-- `converting` — Nudges de conversão ativos
+### Reescrita 1 -- Timer Emocional (linha 330)
+**Substituir** a linha 330 (`Seu foco: O usuário te procurou porque confia em você. Entregue CONEXÃO primeiro, depois clareza.`) pelo bloco completo com a nova hierarquia e a REGRA DO TIMER EMOCIONAL (turnos 1/2/3+).
 
-### Detecção em Duas Camadas
+### Reescrita 2 -- Modo Direção (linhas 901-903)
+**Substituir** o Cenário B (3 linhas) pelo protocolo completo com as 4 etapas: Nomeie o Travamento, Micro-passo Inegociável, Cobrança com Data (conectada ao sistema de follow-up), Resistência (conectada à detecção recorrente). Inclui exemplos de frases.
 
-**Camada 1 — Tag da Aura: `[VALOR_ENTREGUE]`**
-- Aura marca quando entrega: reframe, técnica prática, insight estruturado
-- NÃO marca: validação simples, perguntas abertas, acolhimento genérico
-- Webhook detecta a tag → `trial_phase = 'value_delivered'`
+### Reescrita 3 -- Detecção de Travamento Recorrente (após linha 821)
+**Inserir nova seção** entre o bloco "DETECÇÃO DE PADRÕES (ESPELHO)" e "ESTRUTURA DA RESPOSTA". Cobre padrões de inação recorrente com protocolo progressivo (1a vez, 2a vez, 3a+ vez com confronto direto).
 
-**Camada 2 — Resposta do Usuário**
-- Só avaliada quando `trial_phase = 'value_delivered'` E `count >= 8`
-- Detecta palavras-chave positivas sem "?" (lista de ~25 termos)
-- Ao detectar → `trial_phase = 'aha_reached'`, salva `trial_aha_at_count`
+### Reescrita 4 -- Modo Padrão (linhas 909-911)
+**Substituir** o Cenário D (3 linhas) pelo protocolo em 3 tempos: Entenda o que a pessoa quer (classificar internamente como DESABAFAR/DECIDIR/MOVER), Entregue valor real, Feche com intenção.
 
-### Sequência de Nudges
-- Aha + 2 msgs: nudge suave ("Tô adorando te conhecer...")
-- Aha + 4 msgs: nudge com link de checkout
-- Fallback msg 45: nudge se Aha não detectado
-- Fallback msg 48: nudge final
-- Msg 50 / 72h: bloqueio + follow-up sequence (5 touchpoints)
+### Também remover (linha 913)
+A "REGRA DE OURO" com a pergunta `"Você quer que eu te ajude a pensar nisso ou quer uma ideia prática pra agir agora?"` -- pois o novo Modo Padrão já resolve isso internamente sem perguntar ao usuário.
 
-### O que foi implementado
-1. **Migração SQL** ✅ — `trial_phase text` e `trial_aha_at_count integer` em `profiles`
-2. **`aura-agent/index.ts`** ✅ — Tag `[VALOR_ENTREGUE]` + contexto dinâmico por fase/aha
-3. **`webhook-zapi/index.ts`** ✅ — Limite 50/72h, detecção de tag, análise de Aha, strip de tag
-4. **`start-trial/index.ts`** ✅ — Mensagem de boas-vindas sem número fixo
-5. **Frontend** ✅ — `StartTrial.tsx`, `TrialStarted.tsx`, `AdminMessages.tsx`, `AdminEngagement.tsx`
-6. **`execute-scheduled-tasks/index.ts`** ✅ — Textos atualizados
-7. **`admin-engagement-metrics/index.ts`** ✅ — Funnel atualizado (20+ msgs = engajado)
+### Impacto estimado
+- Linhas removidas: ~10
+- Linhas adicionadas: ~109
+- Aumento líquido: ~99 linhas (~600 tokens)
+- Prompt total estimado: ~6000 tokens (ainda bem dentro dos limites)
+
