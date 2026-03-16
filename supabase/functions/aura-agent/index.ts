@@ -4004,29 +4004,93 @@ Exemplo com 4 sessões:
     }
 
     // ========================================================================
-    // ANTI-ECHO GUARD: Se a IA devolveu exatamente o texto do usuário, rejeitar
+    // ANTI-ECHO GUARD v2: Detecção robusta de eco/paráfrase do input do usuário
     // ========================================================================
-    const normalizedResponse = assistantMessage.trim().toLowerCase().replace(/[.!?…\s]+$/g, '');
-    const normalizedUserMsg = message.trim().toLowerCase().replace(/[.!?…\s]+$/g, '');
-    
-    if (normalizedResponse === normalizedUserMsg || 
-        (normalizedUserMsg.length > 10 && normalizedResponse.startsWith(normalizedUserMsg))) {
-      console.warn('🚫 ANTI-ECHO: resposta idêntica detectada, re-gerando...');
-      
-      const retryMessages = [...apiMessages];
-      retryMessages.push({ role: 'assistant', content: assistantMessage });
-      retryMessages.push({ role: 'user', content: 
-        '[SISTEMA: Sua resposta anterior repetiu o que o usuário disse. Gere uma resposta COMPLETAMENTE DIFERENTE. Reaja com suas próprias palavras, faça uma pergunta ou traga uma observação nova.]' 
-      });
-      
-      try {
-        const retryData = await callAI(configuredModel, retryMessages, 4096, 0.8, LOVABLE_API_KEY);
-        if (retryData?.choices?.[0]?.message?.content) {
-          assistantMessage = retryData.choices[0].message.content;
-          console.log('✅ ANTI-ECHO: retry bem-sucedido');
+    const stripInternalTags = (text: string): string => {
+      return text
+        .replace(/\[AGUARDANDO_RESPOSTA\]/gi, '')
+        .replace(/\[CONVERSA_CONCLUIDA\]/gi, '')
+        .replace(/\[MODO_AUDIO\]/gi, '')
+        .replace(/\[VALOR_ENTREGUE\]/gi, '')
+        .replace(/\[ENCERRAR_SESSAO\]/gi, '')
+        .replace(/\[INSIGHTS\][\s\S]*?\[\/INSIGHTS\]/gi, '')
+        .trim();
+    };
+
+    const cleanAIResponse = stripInternalTags(assistantMessage);
+    const cleanUserMsg = message.trim();
+
+    const normalizedResponse = cleanAIResponse.toLowerCase().replace(/[.!?…,;:\s]+/g, ' ').trim();
+    const normalizedUserMsg = cleanUserMsg.toLowerCase().replace(/[.!?…,;:\s]+/g, ' ').trim();
+
+    // Helper: extract significant words (>2 chars)
+    const extractWords = (text: string): string[] => {
+      return text.toLowerCase()
+        .replace(/[^\w\sàáâãéêíóôõúüç]/gi, '')
+        .split(/\s+/)
+        .filter(w => w.length > 2);
+    };
+
+    // Helper: word overlap ratio
+    const wordOverlapRatio = (source: string[], target: string[]): number => {
+      if (target.length === 0) return 0;
+      const targetSet = new Set(target);
+      const overlap = source.filter(w => targetSet.has(w)).length;
+      return overlap / target.length;
+    };
+
+    // Detect echo: exact match, startsWith, or high word overlap
+    const userWords = extractWords(cleanUserMsg);
+    const aiWords = extractWords(cleanAIResponse);
+    const isExactMatch = normalizedResponse === normalizedUserMsg;
+    const isStartsWith = normalizedUserMsg.length > 5 && normalizedResponse.startsWith(normalizedUserMsg);
+    const overlapRatio = wordOverlapRatio(aiWords, userWords);
+    const isShortParaphrase = overlapRatio > 0.6 && cleanAIResponse.length < cleanUserMsg.length * 2.5;
+    const isEcho = isExactMatch || isStartsWith || isShortParaphrase;
+
+    if (isEcho) {
+      console.warn(`🚫 ANTI-ECHO v2: eco detectado (exact=${isExactMatch}, starts=${isStartsWith}, overlap=${(overlapRatio * 100).toFixed(0)}%, shortPara=${isShortParaphrase}). Tentando retry...`);
+
+      let echoFixed = false;
+
+      // Retry up to 2 times
+      for (let echoRetry = 0; echoRetry < 2 && !echoFixed; echoRetry++) {
+        const retryMessages = [...apiMessages];
+        retryMessages.push({ role: 'assistant', content: assistantMessage });
+        retryMessages.push({ role: 'user', content: 
+          `[SISTEMA: ERRO CRÍTICO — Sua resposta anterior REPETIU o que o usuário disse ("${cleanUserMsg.substring(0, 80)}"). Isso é PROIBIDO. Gere uma resposta COMPLETAMENTE DIFERENTE. NÃO use as mesmas palavras. Reaja com empatia usando SUAS PRÓPRIAS palavras originais, traga uma reflexão nova ou faça uma pergunta que aprofunde o tema. A resposta precisa avançar a conversa.]`
+        });
+
+        try {
+          const retryData = await callAI(configuredModel, retryMessages, 4096, 0.85 + echoRetry * 0.05, LOVABLE_API_KEY);
+          if (retryData?.choices?.[0]?.message?.content) {
+            const retryClean = stripInternalTags(retryData.choices[0].message.content);
+            const retryWords = extractWords(retryClean);
+            const retryOverlap = wordOverlapRatio(retryWords, userWords);
+            const retryNorm = retryClean.toLowerCase().replace(/[.!?…,;:\s]+/g, ' ').trim();
+
+            if (retryNorm !== normalizedUserMsg && retryOverlap < 0.5) {
+              assistantMessage = retryData.choices[0].message.content;
+              echoFixed = true;
+              console.log(`✅ ANTI-ECHO v2: retry #${echoRetry + 1} bem-sucedido (overlap=${(retryOverlap * 100).toFixed(0)}%)`);
+            } else {
+              console.warn(`⚠️ ANTI-ECHO v2: retry #${echoRetry + 1} ainda é eco (overlap=${(retryOverlap * 100).toFixed(0)}%)`);
+            }
+          }
+        } catch (retryErr) {
+          console.error(`⚠️ ANTI-ECHO v2: retry #${echoRetry + 1} falhou`, retryErr);
         }
-      } catch (retryErr) {
-        console.error('⚠️ ANTI-ECHO: retry falhou, mantendo resposta original', retryErr);
+      }
+
+      // TRAVA FINAL: se nenhum retry resolveu, usar fallback seguro
+      if (!echoFixed) {
+        console.error('🚫 ANTI-ECHO v2: TRAVA FINAL — todos os retries falharam, usando fallback seguro');
+        // Fallback contextual based on whether we're in a session or casual chat
+        if (sessionActive && currentSession) {
+          assistantMessage = 'Entendo o que você está dizendo… e isso me faz pensar em algo. Me conta mais sobre como isso aparece no seu dia a dia? Quero entender melhor a sua experiência com isso.';
+        } else {
+          assistantMessage = 'Fico feliz que isso faça sentido pra você 💛 Me conta: o que mais está passando pela sua cabeça agora? Tem algo que você gostaria de explorar mais?';
+        }
       }
     }
 
