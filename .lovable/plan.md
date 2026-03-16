@@ -1,42 +1,49 @@
-# Trial "Primeira Jornada" — Detecção de Marcos de Valor ✅ Implementado
 
-## Resumo
-Trial expandido de 10 para **50 mensagens ou 72h**, com detecção inteligente de "Aha Moment" em duas camadas para acionar nudges de conversão no momento certo.
 
-### Limites
-- Hard cap: 50 mensagens OU 72 horas (o que vier primeiro)
-- Fallback de nudges: msg 45 e 48 se Aha não detectado
+## Plano: Janela de 2h para lógica temporal
 
-### Fases do Trial (`trial_phase`)
-- `listening` — Escuta ativa (msgs 1-7, sem intervenção)
-- `value_delivered` — Aura entregou valor real (tag `[VALOR_ENTREGUE]`)
-- `aha_reached` — Usuário reagiu positivamente ao valor (detectado por heurísticas)
-- `converting` — Nudges de conversão ativos
+### Arquivo
+`supabase/functions/aura-agent/index.ts` — linhas 3237-3241
 
-### Detecção em Duas Camadas
+### Mudança
+Substituir o cálculo atual do `temporalGapHours` por uma versão que também verifica a última mensagem da Aura:
 
-**Camada 1 — Tag da Aura: `[VALOR_ENTREGUE]`**
-- Aura marca quando entrega: reframe, técnica prática, insight estruturado
-- NÃO marca: validação simples, perguntas abertas, acolhimento genérico
-- Webhook detecta a tag → `trial_phase = 'value_delivered'`
+```typescript
+// Antes (linhas 3237-3241):
+const lastUserMsg = messages.find((m: any) => m.role === 'user');
+if (lastUserMsg?.created_at) {
+  const lastUserMessageTime = new Date(lastUserMsg.created_at);
+  temporalGapHours = (Date.now() - lastUserMessageTime.getTime()) / (1000 * 60 * 60);
+}
 
-**Camada 2 — Resposta do Usuário**
-- Só avaliada quando `trial_phase = 'value_delivered'` E `count >= 8`
-- Detecta palavras-chave positivas sem "?" (lista de ~25 termos)
-- Ao detectar → `trial_phase = 'aha_reached'`, salva `trial_aha_at_count`
+// Depois:
+const lastUserMsg = messages.find((m: any) => m.role === 'user');
+const lastAuraMsg = messages.find((m: any) => m.role === 'assistant');
 
-### Sequência de Nudges
-- Aha + 2 msgs: nudge suave ("Tô adorando te conhecer...")
-- Aha + 4 msgs: nudge com link de checkout
-- Fallback msg 45: nudge se Aha não detectado
-- Fallback msg 48: nudge final
-- Msg 50 / 72h: bloqueio + follow-up sequence (5 touchpoints)
+const userGapMs = lastUserMsg?.created_at 
+  ? Date.now() - new Date(lastUserMsg.created_at).getTime() 
+  : Infinity;
+const auraGapMs = lastAuraMsg?.created_at 
+  ? Date.now() - new Date(lastAuraMsg.created_at).getTime() 
+  : Infinity;
 
-### O que foi implementado
-1. **Migração SQL** ✅ — `trial_phase text` e `trial_aha_at_count integer` em `profiles`
-2. **`aura-agent/index.ts`** ✅ — Tag `[VALOR_ENTREGUE]` + contexto dinâmico por fase/aha
-3. **`webhook-zapi/index.ts`** ✅ — Limite 50/72h, detecção de tag, análise de Aha, strip de tag
-4. **`start-trial/index.ts`** ✅ — Mensagem de boas-vindas sem número fixo
-5. **Frontend** ✅ — `StartTrial.tsx`, `TrialStarted.tsx`, `AdminMessages.tsx`, `AdminEngagement.tsx`
-6. **`execute-scheduled-tasks/index.ts`** ✅ — Textos atualizados
-7. **`admin-engagement-metrics/index.ts`** ✅ — Funnel atualizado (20+ msgs = engajado)
+// Se a Aura enviou mensagem nas últimas 2h, usar o gap dela
+// (evita tratar como "conversa nova" quando a Aura acabou de falar)
+const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
+if (auraGapMs < TWO_HOURS_MS) {
+  temporalGapHours = auraGapMs / (1000 * 60 * 60);
+} else {
+  temporalGapHours = userGapMs / (1000 * 60 * 60);
+}
+```
+
+### Por que funciona
+- `messages` já vem ordenado por `created_at desc`, então `.find()` pega a mais recente de cada role
+- Se a Aura mandou "Bom dia" às 09:00 e o usuário responde às 09:26, o `auraGapMs` é ~26min → `temporalGapHours ≈ 0.43` → nenhuma instrução de "cumprimente de forma fresca" é injetada
+- Se a Aura mandou uma meditação à noite e o usuário fala de manhã (gap > 2h), volta ao comportamento atual baseado no gap do usuário
+
+### Impacto
+- 1 bloco de código alterado (~10 linhas)
+- Zero risco para fluxos existentes
+- Resolve saudações duplicadas após qualquer mensagem proativa recente
+
