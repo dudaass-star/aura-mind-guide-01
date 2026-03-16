@@ -1431,19 +1431,37 @@ function userWantsAudio(message: string): boolean {
   return audioPhrases.some(phrase => lowerMsg.includes(phrase));
 }
 
-// Detecta crise emocional
+// Detecta crise emocional (inclui ideação passiva — para forçar áudio de acolhimento)
 function isCrisis(message: string): boolean {
+  return isLifeThreatening(message) || isEmotionalCrisis(message);
+}
+
+// Detecta emergência REAL — plano concreto de suicídio/autolesão
+function isLifeThreatening(message: string): boolean {
   const lowerMsg = message.toLowerCase();
-  const crisisPhrases = [
+  const lifeThreateningPhrases = [
+    'vou me matar', 'vou me suicidar', 'comprei os remédios', 'comprei os remedios',
+    'vou pular', 'tenho um plano', 'me matar', 'suicídio', 'suicidio',
+    'to me cortando', 'tô me cortando', 'estou me cortando',
+    'tomei os comprimidos', 'tomei remédios', 'tomei remedios'
+  ];
+  return lifeThreateningPhrases.some(phrase => lowerMsg.includes(phrase));
+}
+
+// Detecta ideação passiva / crise emocional intensa (NÃO é emergência, precisa de acolhimento)
+function isEmotionalCrisis(message: string): boolean {
+  const lowerMsg = message.toLowerCase();
+  const emotionalCrisisPhrases = [
     'pânico', 'panico', 'ataque de pânico', 'ataque de panico',
     'não consigo respirar', 'nao consigo respirar', 'to desesperada', 'to desesperado',
     'tô desesperada', 'tô desesperado', 'to tremendo', 'tô tremendo',
     'to chorando muito', 'tô chorando muito', 'não aguento mais', 'nao aguento mais',
     'não consigo parar de chorar', 'nao consigo parar de chorar',
     'crise de ansiedade', 'crise de pânico', 'crise de panico',
-    'quero morrer', 'me matar', 'suicídio', 'suicidio', 'acabar com tudo'
+    'quero morrer', 'prefiro morrer', 'quero partir', 'gostaria de partir',
+    'acabar com tudo', 'desisti de viver', 'queria sumir', 'queria desaparecer'
   ];
-  return crisisPhrases.some(phrase => lowerMsg.includes(phrase));
+  return emotionalCrisisPhrases.some(phrase => lowerMsg.includes(phrase));
 }
 
 // Detecta pedido de sessão
