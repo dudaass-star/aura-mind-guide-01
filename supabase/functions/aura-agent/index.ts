@@ -3235,9 +3235,22 @@ serve(async (req) => {
         const messages = messagesResult.value.data;
         const count = messagesResult.value.count;
         const lastUserMsg = messages.find((m: any) => m.role === 'user');
-        if (lastUserMsg?.created_at) {
-          const lastUserMessageTime = new Date(lastUserMsg.created_at);
-          temporalGapHours = (Date.now() - lastUserMessageTime.getTime()) / (1000 * 60 * 60);
+        const lastAuraMsg = messages.find((m: any) => m.role === 'assistant');
+
+        const userGapMs = lastUserMsg?.created_at 
+          ? Date.now() - new Date(lastUserMsg.created_at).getTime() 
+          : Infinity;
+        const auraGapMs = lastAuraMsg?.created_at 
+          ? Date.now() - new Date(lastAuraMsg.created_at).getTime() 
+          : Infinity;
+
+        // Se a Aura enviou mensagem nas últimas 2h, usar o gap dela
+        // (evita tratar como "conversa nova" quando a Aura acabou de falar)
+        const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
+        if (auraGapMs < TWO_HOURS_MS) {
+          temporalGapHours = auraGapMs / (1000 * 60 * 60);
+        } else {
+          temporalGapHours = userGapMs / (1000 * 60 * 60);
         }
         messageHistory = sanitizeMessageHistory(messages.reverse());
         messageCount = count || messages.length;
