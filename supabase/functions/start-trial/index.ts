@@ -185,11 +185,24 @@ Me conta: como você está se sentindo agora?`;
       if (result.success) {
         console.log('✅ Welcome message sent');
 
+        // Save welcome message to history so it appears in admin panel
+        await supabase.from('messages').insert({
+          user_id: userId,
+          role: 'assistant',
+          content: welcomeMessage,
+        });
+
         // Segunda mensagem: informar sobre funcionalidade de áudio
         try {
           const audioMsg = `Ah, e se preferir, pode me mandar áudio também! 🎙️ Eu ouço e respondo — por texto ou por voz, como você preferir.`;
           await sendTextMessage(formattedPhone, audioMsg, 3, zapiConfig);
           console.log('✅ Audio info message sent');
+
+          await supabase.from('messages').insert({
+            user_id: userId,
+            role: 'assistant',
+            content: audioMsg,
+          });
         } catch (audioMsgError) {
           console.warn('⚠️ Audio info message failed (non-blocking):', audioMsgError);
         }
