@@ -16,6 +16,7 @@ const AI_MODELS = [
   { value: 'google/gemini-3-flash-preview:medium', label: 'Gemini 3 Flash (Medium)', description: 'Thinking moderado — equilíbrio' },
   { value: 'google/gemini-3-flash-preview:high', label: 'Gemini 3 Flash (High)', description: 'Thinking máximo — mais preciso' },
   { value: 'anthropic/claude-sonnet-4-6', label: 'Claude Sonnet 4.6', description: 'API Anthropic direta — maior custo' },
+  { value: 'anthropic/claude-haiku-4-5', label: 'Claude Haiku 4.5', description: 'Anthropic rápido e barato — bom para alto volume' },
   { value: 'openai/gpt-5', label: 'OpenAI GPT-5', description: 'Potente, custo mais alto via Gateway' },
 ];
 
