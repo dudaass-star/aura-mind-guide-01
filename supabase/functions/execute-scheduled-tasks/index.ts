@@ -331,6 +331,28 @@ Deno.serve(async (req) => {
             break;
           }
 
+          case 'trial_ghost_nudge': {
+            const { data: ghostProfile } = await supabase
+              .from('profiles')
+              .select('trial_conversations_count, status, name')
+              .eq('user_id', task.user_id)
+              .maybeSingle();
+
+            if (!ghostProfile || ghostProfile.status !== 'trial' || (ghostProfile.trial_conversations_count || 0) > 0) {
+              console.log(`⏭️ Skipping trial_ghost_nudge: user already responded or not trial`);
+              break;
+            }
+
+            const ghostName = payload.name || ghostProfile.name || 'você';
+            const ghostMsg = `Oi, ${ghostName}! Vi que você ainda não respondeu... Não precisa de nenhum preparo, é só me contar como está se sentindo agora. Tô aqui 💜`;
+
+            const ghostRes = await sendTextMessage(profile.phone, ghostMsg, undefined, instanceConfig);
+            if (!ghostRes.success) throw new Error(`Failed: ${ghostRes.error}`);
+            await supabase.from('messages').insert({ user_id: task.user_id, role: 'assistant', content: ghostMsg });
+            console.log(`✅ trial_ghost_nudge sent to ${profile.phone.substring(0, 4)}***`);
+            break;
+          }
+
           default:
             console.warn(`⚠️ Unknown task type: ${task.task_type}`);
         }
