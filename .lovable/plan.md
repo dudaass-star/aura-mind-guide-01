@@ -1,39 +1,42 @@
+# Trial "Primeira Jornada" — Detecção de Marcos de Valor ✅ Implementado
 
+## Resumo
+Trial expandido de 10 para **50 mensagens ou 72h**, com detecção inteligente de "Aha Moment" em duas camadas para acionar nudges de conversão no momento certo.
 
-# Limpeza de Redundâncias no System Prompt da Aura
+### Limites
+- Hard cap: 50 mensagens OU 72 horas (o que vier primeiro)
+- Fallback de nudges: msg 45 e 48 se Aha não detectado
 
-## Análise de Segurança
+### Fases do Trial (`trial_phase`)
+- `listening` — Escuta ativa (msgs 1-7, sem intervenção)
+- `value_delivered` — Aura entregou valor real (tag `[VALOR_ENTREGUE]`)
+- `aha_reached` — Usuário reagiu positivamente ao valor (detectado por heurísticas)
+- `converting` — Nudges de conversão ativos
 
-Confirmei que as 3 cirurgias são seguras:
+### Detecção em Duas Camadas
 
-1. **FILTRO DE AÇÃO (1207-1227):** É uma versão antiga e mais fraca dos Cenários A/B que já existem nas linhas 930-979. O Cenário B aqui contradiz diretamente o novo protocolo Modo Direção em 4 etapas. A "REGRA DE OURO" também contradiz o novo Modo Padrão que classifica internamente. **Seguro apagar.**
+**Camada 1 — Tag da Aura: `[VALOR_ENTREGUE]`**
+- Aura marca quando entrega: reframe, técnica prática, insight estruturado
+- NÃO marca: validação simples, perguntas abertas, acolhimento genérico
+- Webhook detecta a tag → `trial_phase = 'value_delivered'`
 
-2. **DIRETRIZES DE LINGUAGEM (1147-1167):** Tudo já está coberto pela seção "LINGUAGEM E TOM DE VOZ (BRASILEIRA NATURAL)" na linha 422, que é mais completa (incluindo "Ginga Emocional", "Sem Listas Chatas", etc.). **Seguro apagar.**
+**Camada 2 — Resposta do Usuário**
+- Só avaliada quando `trial_phase = 'value_delivered'` E `count >= 8`
+- Detecta palavras-chave positivas sem "?" (lista de ~25 termos)
+- Ao detectar → `trial_phase = 'aha_reached'`, salva `trial_aha_at_count`
 
-3. **MEMÓRIA E CONTINUIDADE (1137-1145):** O conceito já existe no "PROTOCOLO DE CONTEXTO E MEMÓRIA" (linha 1169) e na "CONTINUIDADE DE LONGO PRAZO" (linha 1183). Fundir numa linha no início do protocolo existente. **Seguro fundir.**
+### Sequência de Nudges
+- Aha + 2 msgs: nudge suave ("Tô adorando te conhecer...")
+- Aha + 4 msgs: nudge com link de checkout
+- Fallback msg 45: nudge se Aha não detectado
+- Fallback msg 48: nudge final
+- Msg 50 / 72h: bloqueio + follow-up sequence (5 touchpoints)
 
-## Plano de Implementação
-
-### Cirurgia 1 — Apagar FILTRO DE AÇÃO (linhas 1207-1227)
-Remover integralmente o bloco "FILTRO DE AÇÃO: LENDO O MOMENTO".
-
-### Cirurgia 2 — Apagar DIRETRIZES DE LINGUAGEM (linhas 1147-1167)
-Remover integralmente o bloco "DIRETRIZES DE LINGUAGEM E NATURALIDADE (PT-BR)".
-
-### Cirurgia 3 — Fundir MEMÓRIA E CONTINUIDADE (linhas 1137-1145)
-Apagar o bloco e adicionar uma linha contextual no início do PROTOCOLO DE CONTEXTO E MEMÓRIA (linha 1169), antes da REGRA SUPREMA:
-
-```
-PROTOCOLO DE CONTEXTO E MEMÓRIA (ANTI-ALUCINAÇÃO)
-
-Mostre que você lembra da vida do usuário. Se ele falou do chefe semana passada, pergunte. Se passou por algo difícil, traga. Memória é conexão.
-
-REGRA SUPREMA: A LEI DA ANCORAGEM...
-```
-
-### Impacto
-- ~40 linhas removidas
-- ~2 linhas adicionadas
-- Redução líquida de ~38 linhas (~250 tokens)
-- Nenhuma funcionalidade perdida — tudo já existe em versões melhores no prompt
-
+### O que foi implementado
+1. **Migração SQL** ✅ — `trial_phase text` e `trial_aha_at_count integer` em `profiles`
+2. **`aura-agent/index.ts`** ✅ — Tag `[VALOR_ENTREGUE]` + contexto dinâmico por fase/aha
+3. **`webhook-zapi/index.ts`** ✅ — Limite 50/72h, detecção de tag, análise de Aha, strip de tag
+4. **`start-trial/index.ts`** ✅ — Mensagem de boas-vindas sem número fixo
+5. **Frontend** ✅ — `StartTrial.tsx`, `TrialStarted.tsx`, `AdminMessages.tsx`, `AdminEngagement.tsx`
+6. **`execute-scheduled-tasks/index.ts`** ✅ — Textos atualizados
+7. **`admin-engagement-metrics/index.ts`** ✅ — Funnel atualizado (20+ msgs = engajado)
