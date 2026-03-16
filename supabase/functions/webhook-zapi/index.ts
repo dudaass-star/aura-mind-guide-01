@@ -994,15 +994,28 @@ Tô aqui te esperando. 🤗`;
       let responseText = msg.text || msg.content || '';
       
       // Remove any internal tags that might have leaked through
+      // Detect tags BEFORE cleaning (for trial tracking)
       const hadValorEntregue = /\[VALOR_ENTREGUE\]/i.test(responseText);
+      const hadConversaConcluida = /\[CONVERSA_CONCLUIDA\]/i.test(responseText);
+      
+      // Clean all known internal tags
       responseText = responseText
         .replace(/\[AGUARDANDO_RESPOSTA\]/gi, '')
         .replace(/\[CONVERSA_CONCLUIDA\]/gi, '')
         .replace(/\[MODO_AUDIO\]/gi, '')
         .replace(/\[VALOR_ENTREGUE\]/gi, '')
+        .replace(/\[ENCERRAR_SESSAO\]/gi, '')
+        .replace(/\[INICIAR_SESSAO\]/gi, '')
         .replace(/\[INSIGHTS\].*?\[\/INSIGHTS\]/gis, '')
         .replace(/\[AGENDAR_TAREFA:.*?\]/gi, '')
         .replace(/\[CANCELAR_TAREFA:\w+\]/gi, '')
+        .trim();
+      
+      // Safety net: remove any remaining [UPPERCASE_TAG] patterns that LLMs might generate
+      // This catches tags with unicode chars, extra spaces, or new tags we haven't listed
+      responseText = responseText
+        .replace(/\[\s*[A-Z_]{3,}(?::[^\]]*)?\s*\]/g, '')
+        .replace(/\[\s*\/[A-Z_]{3,}\s*\]/g, '')
         .trim();
       
       // ── VALOR_ENTREGUE detection (Layer 1) — update trial_phase ──
