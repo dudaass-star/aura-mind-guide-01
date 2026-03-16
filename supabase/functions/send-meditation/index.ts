@@ -190,12 +190,25 @@ serve(async (req) => {
     if (!audioResult.success) {
       console.error('Failed to send audio:', audioResult.error);
       
-      await sendTextMessage(
-        userPhone,
-        `🎧 Tive um probleminha para enviar o áudio direto. Você pode ouvir aqui: ${audioData.public_url}`,
-        undefined,
-        zapiConfig
-      );
+      const fallbackMsg = `🎧 Tive um probleminha para enviar o áudio direto. Você pode ouvir aqui: ${audioData.public_url}`;
+      await sendTextMessage(userPhone, fallbackMsg, undefined, zapiConfig);
+      
+      if (userId) {
+        await supabase.from('messages').insert({
+          user_id: userId,
+          role: 'assistant',
+          content: fallbackMsg,
+        });
+      }
+    } else {
+      // Register audio send in messages table for admin visibility
+      if (userId) {
+        await supabase.from('messages').insert({
+          user_id: userId,
+          role: 'assistant',
+          content: `🎧 [Áudio de meditação enviado: ${meditation?.title || 'Meditação Guiada'}]`,
+        });
+      }
     }
 
     if (userId) {
