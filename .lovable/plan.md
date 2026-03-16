@@ -1,30 +1,42 @@
+# Trial "Primeira Jornada" — Detecção de Marcos de Valor ✅ Implementado
 
+## Resumo
+Trial expandido de 10 para **50 mensagens ou 72h**, com detecção inteligente de "Aha Moment" em duas camadas para acionar nudges de conversão no momento certo.
 
-## Plano: Nudge automática 1h após cadastro para ghost trials
+### Limites
+- Hard cap: 50 mensagens OU 72 horas (o que vier primeiro)
+- Fallback de nudges: msg 45 e 48 se Aha não detectado
 
-### Contexto
-Já existe um `trial_activation_audio` agendado para +15min que envia um áudio se o usuário não respondeu. A nova nudge será uma mensagem de texto ~1h após o cadastro, com tom mais direto, caso o usuário continue sem responder.
+### Fases do Trial (`trial_phase`)
+- `listening` — Escuta ativa (msgs 1-7, sem intervenção)
+- `value_delivered` — Aura entregou valor real (tag `[VALOR_ENTREGUE]`)
+- `aha_reached` — Usuário reagiu positivamente ao valor (detectado por heurísticas)
+- `converting` — Nudges de conversão ativos
 
-### Mudanças
+### Detecção em Duas Camadas
 
-**1. `supabase/functions/start-trial/index.ts`**
-- Agendar nova `scheduled_task` com `task_type: 'trial_ghost_nudge'` para +60 minutos após o cadastro
-- Mesma estrutura do `trial_activation_audio` já existente (linhas 204-216)
+**Camada 1 — Tag da Aura: `[VALOR_ENTREGUE]`**
+- Aura marca quando entrega: reframe, técnica prática, insight estruturado
+- NÃO marca: validação simples, perguntas abertas, acolhimento genérico
+- Webhook detecta a tag → `trial_phase = 'value_delivered'`
 
-**2. `supabase/functions/execute-scheduled-tasks/index.ts`**
-- Adicionar novo case `'trial_ghost_nudge'` no switch de task types
-- Verificar se `trial_conversations_count === 0` e `status === 'trial'` antes de enviar (mesmo padrão do `trial_activation_audio`)
-- Mensagem algo como: "Oi, {nome}! Vi que você ainda não respondeu... Não precisa de nenhum preparo, é só me contar como está se sentindo agora. Tô aqui 💜"
-- Salvar na tabela `messages` para manter histórico
+**Camada 2 — Resposta do Usuário**
+- Só avaliada quando `trial_phase = 'value_delivered'` E `count >= 8`
+- Detecta palavras-chave positivas sem "?" (lista de ~25 termos)
+- Ao detectar → `trial_phase = 'aha_reached'`, salva `trial_aha_at_count`
 
-### Fluxo temporal do trial
-```text
-0min  → Welcome message + msg de áudio
-+15min → trial_activation_audio (áudio TTS se não respondeu)
-+60min → trial_ghost_nudge (texto se ainda não respondeu)  ← NOVO
-```
+### Sequência de Nudges
+- Aha + 2 msgs: nudge suave ("Tô adorando te conhecer...")
+- Aha + 4 msgs: nudge com link de checkout
+- Fallback msg 45: nudge se Aha não detectado
+- Fallback msg 48: nudge final
+- Msg 50 / 72h: bloqueio + follow-up sequence (5 touchpoints)
 
-### Arquivos afetados
-1. `supabase/functions/start-trial/index.ts` — agendar task
-2. `supabase/functions/execute-scheduled-tasks/index.ts` — handler do novo tipo
-
+### O que foi implementado
+1. **Migração SQL** ✅ — `trial_phase text` e `trial_aha_at_count integer` em `profiles`
+2. **`aura-agent/index.ts`** ✅ — Tag `[VALOR_ENTREGUE]` + contexto dinâmico por fase/aha
+3. **`webhook-zapi/index.ts`** ✅ — Limite 50/72h, detecção de tag, análise de Aha, strip de tag
+4. **`start-trial/index.ts`** ✅ — Mensagem de boas-vindas sem número fixo
+5. **Frontend** ✅ — `StartTrial.tsx`, `TrialStarted.tsx`, `AdminMessages.tsx`, `AdminEngagement.tsx`
+6. **`execute-scheduled-tasks/index.ts`** ✅ — Textos atualizados
+7. **`admin-engagement-metrics/index.ts`** ✅ — Funnel atualizado (20+ msgs = engajado)
