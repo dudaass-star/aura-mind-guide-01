@@ -173,6 +173,15 @@ serve(async (req) => {
     
     await sendTextMessage(userPhone, introMessage, undefined, zapiConfig);
 
+    // Register intro message in messages table for admin visibility
+    if (userId) {
+      await supabase.from('messages').insert({
+        user_id: userId,
+        role: 'assistant',
+        content: introMessage,
+      });
+    }
+
     await new Promise(resolve => setTimeout(resolve, 1500));
 
     console.log(`🎧 Sending audio from URL: ${audioData.public_url}`);
