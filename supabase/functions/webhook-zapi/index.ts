@@ -728,9 +728,10 @@ Tô aqui te esperando. 🤗`;
           const replaceMsg = `Troquei o áudio! 🎙️ Esse ficou bom? Me diz "pode guardar" quando tiver certeza 💜`;
           await sendTextMessage(payload.cleanPhone, replaceMsg, undefined, instanceConfig);
           await supabase.from('messages').insert([
-            { user_id: profile.user_id, role: 'user', content: messageText || '[novo áudio para cápsula]' },
+            ...(!inboundSaved ? [{ user_id: profile.user_id, role: 'user', content: messageText || '[novo áudio para cápsula]' }] : []),
             { user_id: profile.user_id, role: 'assistant', content: replaceMsg },
           ]);
+          inboundSaved = true;
           return new Response(JSON.stringify({ status: 'capsule_audio_replaced' }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
