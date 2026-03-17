@@ -5629,13 +5629,7 @@ Responda apenas o resumo, sem formatação.`
 
     // Salvar mensagens no histórico
     if (profile?.user_id) {
-      await supabase.from('messages').insert({
-        user_id: profile.user_id,
-        role: 'user',
-        content: message
-      });
-
-      // Limpar TODAS as tags internas antes de salvar no banco
+      // User message already persisted by webhook-zapi — only save assistant response
       const cleanAssistantMessage = stripAllInternalTags(assistantMessage);
       
       await supabase.from('messages').insert({
