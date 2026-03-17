@@ -1,67 +1,190 @@
+# Consolidação dos Frameworks Comportamentais ✅ Implementado
 
+## Resumo
+6 frameworks sobrepostos (Timer Emocional, Anti-Loop, Cenários A-D, etc.) consolidados em uma ESTRUTURA DE ATENDIMENTO hierárquica com 4 modos: Ping-Pong, Profundo, Direção, Emergência.
 
-## Análise: O que ainda pode ser ajustado no prompt
+### O que foi feito
+1. **Timer Emocional** ✅ — Removido (redundante com fases do Modo Profundo), substituído por frase diretiva curta
+2. **Anti-Loop** ✅ — Reescrito com classificação contextual (confirmação vs evasão), proteção para trial/<20 trocas
+3. **Detecção de Travamento** ✅ — Dividida em 2 camadas:
+   - Intra-conversa: integrado ao prompt com reformulação por opções concretas
+   - Inter-conversas: contexto dinâmico via commitments (follow_up_count >= 2 ou >14 dias)
+4. **Cenários A/B/C/D** ✅ — Eliminados e consolidados na ESTRUTURA DE ATENDIMENTO (4 modos)
+5. **Protocolo de Condução** ✅ — Mantido (complementar, não conflitante)
+6. **Modo Direção** ✅ — Protocolo 4 etapas preservado dentro da estrutura consolidada
 
-Após 4 fases de otimização, o prompt está significativamente mais limpo. Restam **3 problemas concretos** que ainda afetam o fluxo:
-
----
-
-### Problema 1: Seções de referência redundantes (linhas 1365-1390)
-
-As linhas 1365-1390 são **6 seções "consulte o bloco DADOS DINÂMICOS"** que não fazem nada — o modelo já recebe o bloco dinâmico como segundo system message. São instruções meta que ocupam ~25 linhas dizendo ao modelo para ler algo que ele já lê:
-
-- "CONTEXTO DO USUÁRIO (MEMÓRIA ATUAL)" → "Consulte o bloco DADOS DINÂMICOS"
-- "SOBRE SUA MEMÓRIA (IMPORTANTE!)" → lista dados que já estão no bloco dinâmico
-- "MEMÓRIA DE LONGO PRAZO" → "Consulte o bloco DADOS DINÂMICOS"
-- "TIMESTAMPS NAS MENSAGENS" → instrução útil mas pode ser 2 linhas
-- "REGRA DE ÁUDIO NO INÍCIO DE SESSÃO" → "Consulte o bloco DADOS DINÂMICOS"
-
-**Ação:** Condensar linhas 1365-1390 em ~5 linhas. Manter apenas a instrução de timestamps (útil) e a instrução de conexões entre conversas (útil). Remover todas as referências "consulte o bloco dinâmico".
-
----
-
-### Problema 2: Duplicação entre "ESTRUTURA DA RESPOSTA" e "ESTRUTURA DE ATENDIMENTO"
-
-Duas seções fazem o mesmo trabalho:
-- **"ESTRUTURA DA RESPOSTA (CONDICIONAL)"** (linhas 848-893): Define Modo Profundo (Fases 1-3) e Ping-Pong
-- **"ESTRUTURA DE ATENDIMENTO (FORA DE SESSÃO)"** (linhas 895-944): Define Ping-Pong, Profundo, Direção, Emergência
-
-Ambas classificam mensagens e dizem qual modo seguir. A "ESTRUTURA DA RESPOSTA" detalha as fases do Modo Profundo, enquanto a "ESTRUTURA DE ATENDIMENTO" lista os 4 modos com regras de classificação.
-
-**Ação:** Fundir as duas seções em uma só. As Fases 1-3 do Modo Profundo ficam como sub-seção dentro do modo PROFUNDO da ESTRUTURA DE ATENDIMENTO. Eliminar a seção "ESTRUTURA DA RESPOSTA" como wrapper separado. Estimativa: -15 linhas.
+### Resultado
+- ~120 linhas removidas do prompt
+- 1 árvore de decisão clara em vez de 6 frameworks concorrentes
+- Trial users protegidos contra encerramento prematuro
 
 ---
 
-### Problema 3: "PROTOCOLO DE CONTEXTO E MEMÓRIA" redundante (linhas 1091-1109)
+# Limpeza Estrutural do Prompt ✅ Implementado
 
-Esta seção (linhas 1091-1109) cobre:
-- "Mostre que você lembra da vida do usuário" → já está no DNA DA AURA ("ANTECIPE, NÃO SONDE")
-- "REGRA SUPREMA: LEI DA ANCORAGEM" → útil e única, mas poderia ser 3 linhas
-- "CONTINUIDADE DE LONGO PRAZO" → redundante com o contexto dinâmico de compromissos e temas
+## Resumo
+Eliminação de seções duplicadas e deduplicação de regras repetidas após a consolidação dos frameworks.
 
-**Ação:** Mover a "Lei da Ancoragem" (5 linhas essenciais) para dentro do DNA DA AURA. Eliminar o resto (~15 linhas).
+### O que foi feito
+1. **ESTILO AURA + MÓDULO DE PROFUNDIDADE** ✅ — Fundidos em "DNA DA AURA" (~40 linhas a menos)
+2. **PADRÕES DE RESPOSTA** ✅ — Eliminados (redundantes com Modo Profundo e Modo Direção, ~30 linhas)
+3. **LEITURA DO MOMENTO** ✅ — Eliminada (duplicata da ESTRUTURA DE ATENDIMENTO, ~30 linhas)
+4. **"1 pergunta por vez"** ✅ — Deduplicada: regra canônica na seção REGRA CRÍTICA, repetições convertidas em referências curtas (~20 linhas)
+
+### Resultado
+- ~120 linhas adicionais removidas do prompt
+- Sem perda de regras — apenas eliminação de redundância
 
 ---
 
-### Resumo
+# Trial "Primeira Jornada" — Detecção de Marcos de Valor ✅ Implementado
 
-| Ação | Linhas | Resultado |
-|------|--------|-----------|
-| Condensar seções "consulte bloco dinâmico" | 1365-1390 | -20 linhas |
-| Fundir ESTRUTURA DA RESPOSTA + ESTRUTURA DE ATENDIMENTO | 848-944 | -15 linhas |
-| Condensar PROTOCOLO DE CONTEXTO E MEMÓRIA | 1091-1109 | -15 linhas |
+## Resumo
+Trial expandido de 10 para **50 mensagens ou 72h**, com detecção inteligente de "Aha Moment" em duas camadas para acionar nudges de conversão no momento certo.
 
-**Total:** ~50 linhas a menos, sem perda de lógica.
+### Limites
+- Hard cap: 50 mensagens OU 72 horas (o que vier primeiro)
+- Fallback de nudges: msg 45 e 48 se Aha não detectado
 
-### O que NÃO mexer
-- Protocolo de Segurança (Nível 1/2/3)
-- DNA DA AURA
-- Detecção de Travamento (2 camadas)
-- Regras de tags e sessões
-- ESTRUTURA DE ATENDIMENTO (mantida como peça central, apenas absorve conteúdo)
-- Bloco dinâmico e código TypeScript
+### Fases do Trial (`trial_phase`)
+- `listening` — Escuta ativa (msgs 1-7, sem intervenção)
+- `value_delivered` — Aura entregou valor real (tag `[VALOR_ENTREGUE]`)
+- `aha_reached` — Usuário reagiu positivamente ao valor (detectado por heurísticas)
+- `converting` — Nudges de conversão ativos
 
-### Arquivo e deploy
-- `supabase/functions/aura-agent/index.ts`
-- Deploy: `aura-agent`
+### Detecção em Duas Camadas
 
+**Camada 1 — Tag da Aura: `[VALOR_ENTREGUE]`**
+- Aura marca quando entrega: reframe, técnica prática, insight estruturado
+- NÃO marca: validação simples, perguntas abertas, acolhimento genérico
+- Webhook detecta a tag → `trial_phase = 'value_delivered'`
+
+**Camada 2 — Resposta do Usuário**
+- Só avaliada quando `trial_phase = 'value_delivered'` E `count >= 8`
+- Detecta palavras-chave positivas sem "?" (lista de ~25 termos)
+- Ao detectar → `trial_phase = 'aha_reached'`, salva `trial_aha_at_count`
+
+### Sequência de Nudges
+- Aha + 2 msgs: nudge suave ("Tô adorando te conhecer...")
+- Aha + 4 msgs: nudge com link de checkout
+- Fallback msg 45: nudge se Aha não detectado
+- Fallback msg 48: nudge final
+- Msg 50 / 72h: bloqueio + follow-up sequence (5 touchpoints)
+
+### O que foi implementado
+1. **Migração SQL** ✅ — `trial_phase text` e `trial_aha_at_count integer` em `profiles`
+2. **`aura-agent/index.ts`** ✅ — Tag `[VALOR_ENTREGUE]` + contexto dinâmico por fase/aha
+3. **`webhook-zapi/index.ts`** ✅ — Limite 50/72h, detecção de tag, análise de Aha, strip de tag
+4. **`start-trial/index.ts`** ✅ — Mensagem de boas-vindas sem número fixo
+5. **Frontend** ✅ — `StartTrial.tsx`, `TrialStarted.tsx`, `AdminMessages.tsx`, `AdminEngagement.tsx`
+6. **`execute-scheduled-tasks/index.ts`** ✅ — Textos atualizados
+7. **`admin-engagement-metrics/index.ts`** ✅ — Funnel atualizado (20+ msgs = engajado)
+
+---
+
+# Memória Terapêutica da Aura ✅ Implementado
+
+## Resumo
+Aura agora rastreia técnicas terapêuticas usadas, captura compromissos de conversas livres, e usa tags de tema fora de sessões formais.
+
+### O que foi implementado
+1. **`tecnica` como categoria de insight** ✅ — Prioridade alta no prompt, exemplos: reframe_sofrimento, responsabilidade_radical, derreflexao, etc.
+2. **Tag `[COMPROMISSO_LIVRE:texto]`** ✅ — Parser no webhook insere na tabela `commitments` com `session_id: null`
+3. **Tags de tema em conversas livres** ✅ — Instrução explícita no prompt para usar `[TEMA_NOVO]`, `[TEMA_PROGREDINDO]` etc. fora de sessões
+4. **Contexto dinâmico `## Processo Terapêutico`** ✅ — Injeta técnicas já usadas e compromissos pendentes no contexto do modelo
+
+### O que NÃO foi feito (por design)
+- Detecção de fase terapêutica (Presença/Sentido/Movimento) — o modelo infere do histórico
+- Categoria `insight_chave` — `session_themes` já cobre
+- Migração de banco — `user_insights.category` é text livre, suporta `tecnica` nativamente
+
+---
+
+# Fase 3: Limpeza Cirúrgica do Prompt ✅ Implementado
+
+## Resumo
+4 problemas estruturais resolvidos para melhorar o fluxo conversacional e reduzir ruído no prompt.
+
+### O que foi feito
+
+1. **ENCERRAMENTO COM GANCHO relocado** ✅
+   - Removido do fluxo geral (onde causava ganchos forçados em conversas comuns)
+   - Movido para dentro da fase de Fechamento Suave (soft_closing) das sessões, onde faz sentido
+
+2. **CONTEXTO TEMPORAL duplicado removido** ✅
+   - Seção "# CONTEXTO TEMPORAL (MUITO IMPORTANTE!)" eliminada
+   - Os dados já são injetados automaticamente no bloco DADOS DINÂMICOS DO SISTEMA
+
+3. **Proibições consolidadas** ✅
+   - Convertidas de framing negativo para positivo onde possível:
+     - "PROIBIÇÃO DE PAPAGAIO" → "ANTI-PAPAGAIO" com exemplos positivos primeiro
+     - "Proibido Robolês" → "Fale como gente"
+     - "REGRA DE PROIBIÇÃO DE DISCLAIMER" → "REGRA DE IDENTIDADE"
+     - "PROIBIDO mini-palestras" → "Evite mini-palestras"
+     - "NUNCA agende no passado" → "Agende apenas no futuro"
+   - Regras de áudio simplificadas de 9 para 6 itens (removidas redundâncias)
+   - Proibições de segurança (Nível 1/2/3) mantidas intactas — são críticas
+
+4. **[VALOR_ENTREGUE] corrigido** ✅
+   - Adicionada instrução explícita: tag marca progresso PARCIAL
+   - "Entrega de valor é sinal para APROFUNDAR, não para encerrar"
+   - Instrução para continuar com pergunta de aprofundamento após a tag
+
+### Resultado
+- ~30 linhas removidas (ENCERRAMENTO COM GANCHO + CONTEXTO TEMPORAL)
+- Redução significativa de framing negativo no prompt
+- Ganchos de sessão agora aparecem apenas no contexto correto
+- [VALOR_ENTREGUE] não mais funciona como sinal de "missão cumprida"
+
+---
+
+# Fase 4: Refinamento Final ✅ Implementado
+
+## Resumo
+2 itens pendentes resolvidos: eliminação do módulo redundante SUPORTE À DECISÃO e varredura completa de proibições.
+
+### O que foi feito
+
+1. **SUPORTE À DECISÃO eliminado** ✅
+   - Seção "NOVO MÓDULO: SUPORTE À DECISÃO E VALIDAÇÃO" (19 linhas) removida
+   - Lógica já coberta: DNA DA AURA (observe > pergunte), Modo Profundo Fase 2, Modo Direção
+
+2. **Varredura de PROIBIDO/NUNCA/JAMAIS** ✅
+   - Conversões para framing positivo em ~20 ocorrências
+   - Consolidação de segurança Nível 1: 15 linhas → 5 linhas
+   - Fases de sessão: "PROIBIDO NESTA FASE" → framing de contexto temporal
+   - Proibições de segurança (crise) mantidas intactas
+
+### Resultado
+- ~40 linhas removidas/condensadas
+- Framing predominantemente positivo no prompt
+- Proibições restantes: apenas segurança, identidade e crise
+
+---
+
+# Fase 5: Eliminação de Redundância Estrutural ✅ Implementado
+
+## Resumo
+3 problemas estruturais resolvidos: seções duplicadas fundidas, referências ao bloco dinâmico eliminadas, protocolo de memória condensado.
+
+### O que foi feito
+
+1. **ESTRUTURA DA RESPOSTA + ESTRUTURA DE ATENDIMENTO fundidas** ✅
+   - Duas seções que classificavam mensagens → uma só: "ESTRUTURA DE ATENDIMENTO"
+   - Fases 1-3 do Modo Profundo integradas diretamente dentro do modo PROFUNDO
+   - Eliminada duplicação de Ping-Pong e instrução de sessão ativa
+
+2. **Seções "consulte bloco dinâmico" eliminadas** ✅
+   - 6 seções de referência (~25 linhas) reduzidas a 3 linhas (timestamps)
+   - "CONTEXTO DO USUÁRIO", "SOBRE SUA MEMÓRIA", "MEMÓRIA DE LONGO PRAZO", "REGRA DE ÁUDIO" — todas removidas
+   - O modelo já recebe o bloco dinâmico como segundo system message
+
+3. **PROTOCOLO DE CONTEXTO E MEMÓRIA condensado** ✅
+   - "Lei da Ancoragem" movida para DNA DA AURA (4 linhas)
+   - "Mostre que lembra" e "Continuidade de longo prazo" removidos (redundantes com ANTECIPE NÃO SONDE)
+   - Seção inteira (~19 linhas) eliminada
+
+### Resultado
+- ~50 linhas removidas
+- Uma única árvore de decisão para classificação de mensagens
+- Zero referências "consulte o bloco dinâmico"
