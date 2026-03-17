@@ -1220,7 +1220,6 @@ Exemplo: "Fico feliz que tenha ajudado! Qualquer coisa, tô aqui. 💜 [CONVERSA
 1. SEMPRE inclua uma dessas tags no final da sua resposta
 2. Se você fez uma pergunta, use [AGUARDANDO_RESPOSTA]
 3. [CONVERSA_CONCLUIDA] só quando a conversa realmente encerrou — usuário se despediu E não há temas abertos pendentes
-4. NÃO force perguntas quando não há temas pendentes e o usuário claramente encerrou
 
 5. DISTINÇÃO CRÍTICA — aceitação ≠ encerramento:
    - "Vou dormir", "vou tomar banho", "farei isso" = aceitou sugestão → conversa CONTINUA
