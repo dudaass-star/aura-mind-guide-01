@@ -844,11 +844,14 @@ Tô aqui te esperando. 🤗`;
       await sendTextMessage(payload.cleanPhone, ratingResult.response, undefined, instanceConfig);
       
       // Salvar mensagens no histórico
-      await supabase.from('messages').insert({
-        user_id: profile.user_id,
-        role: 'user',
-        content: messageText
-      });
+      if (!inboundSaved) {
+        await supabase.from('messages').insert({
+          user_id: profile.user_id,
+          role: 'user',
+          content: messageText
+        });
+        inboundSaved = true;
+      }
       
       await supabase.from('messages').insert({
         user_id: profile.user_id,
