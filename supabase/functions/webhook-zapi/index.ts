@@ -388,6 +388,24 @@ Deno.serve(async (req) => {
     console.log(`👤 Found user: ${profile.name} (${profile.user_id}), status: ${profile.status}, instance: ${profile.whatsapp_instance_id || 'env-default'}`);
 
     // ========================================================================
+    // PERSIST INBOUND MESSAGE IMMEDIATELY (before any early return)
+    // ========================================================================
+    let inboundSaved = false;
+    if (messageText) {
+      try {
+        await supabase.from('messages').insert({
+          user_id: profile.user_id,
+          role: 'user',
+          content: messageText,
+        });
+        inboundSaved = true;
+        console.log(`💾 Inbound message persisted for user ${profile.user_id}`);
+      } catch (persistErr) {
+        console.warn('⚠️ Failed to persist inbound message:', persistErr);
+      }
+    }
+
+    // ========================================================================
     // SUBSCRIPTION STATUS CHECK - Bloquear usuários sem assinatura ativa
     // ========================================================================
     const blockedStatuses = ['canceled', 'inactive', 'paused'];
