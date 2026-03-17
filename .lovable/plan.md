@@ -135,3 +135,27 @@ Aura agora rastreia técnicas terapêuticas usadas, captura compromissos de conv
 - Redução significativa de framing negativo no prompt
 - Ganchos de sessão agora aparecem apenas no contexto correto
 - [VALOR_ENTREGUE] não mais funciona como sinal de "missão cumprida"
+
+---
+
+# Fase 4: Refinamento Final ✅ Implementado
+
+## Resumo
+2 itens pendentes resolvidos: eliminação do módulo redundante SUPORTE À DECISÃO e varredura completa de proibições.
+
+### O que foi feito
+
+1. **SUPORTE À DECISÃO eliminado** ✅
+   - Seção "NOVO MÓDULO: SUPORTE À DECISÃO E VALIDAÇÃO" (19 linhas) removida
+   - Lógica já coberta: DNA DA AURA (observe > pergunte), Modo Profundo Fase 2, Modo Direção
+
+2. **Varredura de PROIBIDO/NUNCA/JAMAIS** ✅
+   - Conversões para framing positivo em ~20 ocorrências
+   - Consolidação de segurança Nível 1: 15 linhas → 5 linhas
+   - Fases de sessão: "PROIBIDO NESTA FASE" → framing de contexto temporal
+   - Proibições de segurança (crise) mantidas intactas
+
+### Resultado
+- ~40 linhas removidas/condensadas
+- Framing predominantemente positivo no prompt
+- Proibições restantes: apenas segurança, identidade e crise
