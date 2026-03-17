@@ -5585,10 +5585,8 @@ Responda apenas o resumo, sem formatação.`
         content: message
       });
 
-      // Limpar timestamps redundantes antes de salvar no banco
-      const cleanAssistantMessage = assistantMessage
-        .replace(/^\[\d{2}\/\d{2}\/\d{4},?\s*\d{2}:\d{2}\]\s*/g, '')
-        .trim();
+      // Limpar TODAS as tags internas antes de salvar no banco
+      const cleanAssistantMessage = stripAllInternalTags(assistantMessage);
       
       await supabase.from('messages').insert({
         user_id: profile.user_id,
