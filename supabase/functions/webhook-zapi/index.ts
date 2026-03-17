@@ -696,9 +696,10 @@ Tô aqui te esperando. 🤗`;
           await sendTextMessage(payload.cleanPhone, confirmMsg, undefined, instanceConfig);
 
           await supabase.from('messages').insert([
-            { user_id: profile.user_id, role: 'user', content: messageText || '[áudio para cápsula do tempo]' },
+            ...(!inboundSaved ? [{ user_id: profile.user_id, role: 'user', content: messageText || '[áudio para cápsula do tempo]' }] : []),
             { user_id: profile.user_id, role: 'assistant', content: confirmMsg },
           ]);
+          inboundSaved = true;
 
           return new Response(JSON.stringify({ status: 'capsule_audio_received' }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
