@@ -20,6 +20,23 @@
 
 ---
 
+# Limpeza Estrutural do Prompt ✅ Implementado
+
+## Resumo
+Eliminação de seções duplicadas e deduplicação de regras repetidas após a consolidação dos frameworks.
+
+### O que foi feito
+1. **ESTILO AURA + MÓDULO DE PROFUNDIDADE** ✅ — Fundidos em "DNA DA AURA" (~40 linhas a menos)
+2. **PADRÕES DE RESPOSTA** ✅ — Eliminados (redundantes com Modo Profundo e Modo Direção, ~30 linhas)
+3. **LEITURA DO MOMENTO** ✅ — Eliminada (duplicata da ESTRUTURA DE ATENDIMENTO, ~30 linhas)
+4. **"1 pergunta por vez"** ✅ — Deduplicada: regra canônica na seção REGRA CRÍTICA, repetições convertidas em referências curtas (~20 linhas)
+
+### Resultado
+- ~120 linhas adicionais removidas do prompt
+- Sem perda de regras — apenas eliminação de redundância
+
+---
+
 # Trial "Primeira Jornada" — Detecção de Marcos de Valor ✅ Implementado
 
 ## Resumo
