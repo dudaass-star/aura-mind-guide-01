@@ -1,3 +1,25 @@
+# Consolidação dos Frameworks Comportamentais ✅ Implementado
+
+## Resumo
+6 frameworks sobrepostos (Timer Emocional, Anti-Loop, Cenários A-D, etc.) consolidados em uma ESTRUTURA DE ATENDIMENTO hierárquica com 4 modos: Ping-Pong, Profundo, Direção, Emergência.
+
+### O que foi feito
+1. **Timer Emocional** ✅ — Removido (redundante com fases do Modo Profundo), substituído por frase diretiva curta
+2. **Anti-Loop** ✅ — Reescrito com classificação contextual (confirmação vs evasão), proteção para trial/<20 trocas
+3. **Detecção de Travamento** ✅ — Dividida em 2 camadas:
+   - Intra-conversa: integrado ao prompt com reformulação por opções concretas
+   - Inter-conversas: contexto dinâmico via commitments (follow_up_count >= 2 ou >14 dias)
+4. **Cenários A/B/C/D** ✅ — Eliminados e consolidados na ESTRUTURA DE ATENDIMENTO (4 modos)
+5. **Protocolo de Condução** ✅ — Mantido (complementar, não conflitante)
+6. **Modo Direção** ✅ — Protocolo 4 etapas preservado dentro da estrutura consolidada
+
+### Resultado
+- ~120 linhas removidas do prompt
+- 1 árvore de decisão clara em vez de 6 frameworks concorrentes
+- Trial users protegidos contra encerramento prematuro
+
+---
+
 # Trial "Primeira Jornada" — Detecção de Marcos de Valor ✅ Implementado
 
 ## Resumo
