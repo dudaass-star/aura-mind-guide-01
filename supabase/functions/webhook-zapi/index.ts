@@ -709,9 +709,10 @@ Tô aqui te esperando. 🤗`;
         const reminderMsg = `Manda um áudio pra eu guardar sua voz! 🎙️ Quando quiser desistir, é só dizer "deixa pra lá" 💜`;
         await sendTextMessage(payload.cleanPhone, reminderMsg, undefined, instanceConfig);
         await supabase.from('messages').insert([
-          { user_id: profile.user_id, role: 'user', content: messageText },
+          ...(!inboundSaved ? [{ user_id: profile.user_id, role: 'user', content: messageText }] : []),
           { user_id: profile.user_id, role: 'assistant', content: reminderMsg },
         ]);
+        inboundSaved = true;
         return new Response(JSON.stringify({ status: 'capsule_awaiting_audio_reminder' }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
