@@ -2161,41 +2161,7 @@ function splitIntoMessages(response: string, allowAudioThisTurn: boolean): Array
     console.log('⚠️ Audio tag received but NOT allowed this turn - converting to text');
   }
   
-  let cleanResponse = response.replace('[MODO_AUDIO]', '').trim();
-  
-  // Remover timestamps que a AURA gera erroneamente no início das respostas
-  // Ex: [22/01/2026, 12:15] - esses NÃO devem aparecer para os usuários
-  cleanResponse = cleanResponse.replace(/^\[\d{2}\/\d{2}\/\d{4},?\s*\d{2}:\d{2}\]\s*/g, '').trim();
-  
-  cleanResponse = cleanResponse.replace(/\[INSIGHTS\].*?\[\/INSIGHTS\]/gis, '').trim();
-  cleanResponse = cleanResponse.replace(/\[AGUARDANDO_RESPOSTA\]/gi, '').trim();
-  cleanResponse = cleanResponse.replace(/\[CONVERSA_CONCLUIDA\]/gi, '').trim();
-  cleanResponse = cleanResponse.replace(/\[ENCERRAR_SESSAO\]/gi, '').trim();
-  cleanResponse = cleanResponse.replace(/\[INICIAR_SESSAO\]/gi, '').trim();
-  cleanResponse = cleanResponse.replace(/\[AGENDAR_SESSAO:[^\]]+\]/gi, '').trim();
-  cleanResponse = cleanResponse.replace(/\[REAGENDAR_SESSAO:[^\]]+\]/gi, '').trim();
-  cleanResponse = cleanResponse.replace(/\[SESSAO_PERDIDA_RECUSADA\]/gi, '').trim();
-  cleanResponse = cleanResponse.replace(/\[TEMA_NOVO:[^\]]+\]/gi, '').trim();
-  cleanResponse = cleanResponse.replace(/\[TEMA_RESOLVIDO:[^\]]+\]/gi, '').trim();
-  cleanResponse = cleanResponse.replace(/\[TEMA_PROGREDINDO:[^\]]+\]/gi, '').trim();
-  cleanResponse = cleanResponse.replace(/\[TEMA_ESTAGNADO:[^\]]+\]/gi, '').trim();
-  cleanResponse = cleanResponse.replace(/\[COMPROMISSO_CUMPRIDO:[^\]]+\]/gi, '').trim();
-  cleanResponse = cleanResponse.replace(/\[COMPROMISSO_ABANDONADO:[^\]]+\]/gi, '').trim();
-  cleanResponse = cleanResponse.replace(/\[COMPROMISSO_RENEGOCIADO:[^\]]+\]/gi, '').trim();
-  cleanResponse = cleanResponse.replace(/\[LISTAR_JORNADAS\]/gi, '').trim();
-  cleanResponse = cleanResponse.replace(/\[TROCAR_JORNADA:[^\]]+\]/gi, '').trim();
-  cleanResponse = cleanResponse.replace(/\[PAUSAR_JORNADAS\]/gi, '').trim();
-  cleanResponse = cleanResponse.replace(/\[NAO_PERTURBE:\d+h?\]/gi, '').trim();
-  cleanResponse = cleanResponse.replace(/\[PAUSAR_SESSOES[^\]]*\]/gi, '').trim();
-  cleanResponse = cleanResponse.replace(/\[AGENDAR_TAREFA:[^\]]+\]/gi, '').trim();
-  cleanResponse = cleanResponse.replace(/\[CANCELAR_TAREFA:[^\]]+\]/gi, '').trim();
-  cleanResponse = cleanResponse.replace(/\[CAPSULA_DO_TEMPO\]/gi, '').trim();
-  cleanResponse = cleanResponse.replace(/\[MEDITACAO:[^\]]+\]/gi, '').trim();
-  cleanResponse = cleanResponse.replace(/\[UPGRADE:[^\]]+\]/gi, '').trim();
-  cleanResponse = cleanResponse.replace(/\[INSIGHT:[^\]]+\]/gi, '').trim();
-  cleanResponse = cleanResponse.replace(/\[COMPROMISSO:[^\]]+\]/gi, '').trim();
-  cleanResponse = cleanResponse.replace(/\[CRIAR_AGENDA:[^\]]+\]/gi, '').trim();
-  cleanResponse = cleanResponse.replace(/\[REATIVAR_SESSAO\]/gi, '').trim();
+  let cleanResponse = stripAllInternalTags(response);
 
   if (isAudioMode) {
     const normalized = cleanResponse
