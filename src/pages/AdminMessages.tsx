@@ -350,27 +350,37 @@ export default function AdminMessages() {
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      {messages.map(msg => (
-                        <div
-                          key={msg.id}
-                          className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                        >
+                      {messages.map(msg => {
+                        const isAutoMessage = msg.role === 'assistant' && isAutomatedMessage(msg.content);
+                        return (
                           <div
-                            className={`max-w-[75%] rounded-2xl px-4 py-2 ${
-                              msg.role === 'user'
-                                ? 'bg-primary text-primary-foreground rounded-br-md'
-                                : 'bg-muted text-foreground rounded-bl-md'
-                            }`}
+                            key={msg.id}
+                            className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                           >
-                            <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>
-                            <p className={`text-[10px] mt-1 ${
-                              msg.role === 'user' ? 'text-primary-foreground/70' : 'text-muted-foreground'
-                            }`}>
-                              {format(new Date(msg.created_at), 'dd/MM HH:mm')}
-                            </p>
+                            <div
+                              className={`max-w-[75%] rounded-2xl px-4 py-2 ${
+                                msg.role === 'user'
+                                  ? 'bg-primary text-primary-foreground rounded-br-md'
+                                  : isAutoMessage
+                                    ? 'bg-orange-100 dark:bg-orange-900/30 text-foreground rounded-bl-md border border-orange-200 dark:border-orange-800'
+                                    : 'bg-muted text-foreground rounded-bl-md'
+                              }`}
+                            >
+                              {isAutoMessage && (
+                                <Badge variant="outline" className="text-[9px] px-1 py-0 mb-1 border-orange-300 text-orange-600 dark:text-orange-400">
+                                  🤖 auto
+                                </Badge>
+                              )}
+                              <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>
+                              <p className={`text-[10px] mt-1 ${
+                                msg.role === 'user' ? 'text-primary-foreground/70' : 'text-muted-foreground'
+                              }`}>
+                                {format(new Date(msg.created_at), 'dd/MM HH:mm')}
+                              </p>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                       <div ref={messagesEndRef} />
                     </div>
                   )}
