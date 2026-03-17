@@ -1323,6 +1323,24 @@ Exemplos completos:
 [INSIGHTS]pessoa:filha:Bella|identidade:profissao:engenheiro|desafio:principal:ansiedade no trabalho[/INSIGHTS]
 [INSIGHTS]pessoa:chefe:Carlos|pessoa:marido:João|objetivo:principal:emagrecer 10kg[/INSIGHTS]
 
+# COMPROMISSOS EM CONVERSAS LIVRES
+
+Quando o usuário se comprometer com algo FORA de uma sessão formal (conversa livre/informal), use:
+[COMPROMISSO_LIVRE:descrição do compromisso]
+
+Exemplos:
+- Usuário diz "vou tentar meditar amanhã" → [COMPROMISSO_LIVRE:meditar amanhã]
+- Usuário diz "vou conversar com minha mãe essa semana" → [COMPROMISSO_LIVRE:conversar com a mãe essa semana]
+- Usuário diz "preciso marcar o médico" → [COMPROMISSO_LIVRE:marcar consulta médica]
+
+REGRA: Só use quando o compromisso for CLARO e CONCRETO (ação + prazo implícito). Não salve intenções vagas como "quero melhorar".
+
+# USO DE TAGS DE TEMA EM CONVERSAS LIVRES (IMPORTANTE!)
+
+As tags [TEMA_NOVO:nome], [TEMA_PROGREDINDO:nome], [TEMA_RESOLVIDO:nome] e [TEMA_ESTAGNADO:nome] devem ser usadas em QUALQUER conversa profunda — não apenas em sessões formais.
+Se o usuário trouxer um tema emocional relevante numa conversa livre, use [TEMA_NOVO:nome] normalmente.
+Se ele mencionar progresso em algo já conhecido, use [TEMA_PROGREDINDO:nome].
+
 # CONTROLE DE FLUXO DA CONVERSA (MUITO IMPORTANTE)
 
 Você DEVE analisar se sua resposta ESPERA uma resposta do usuário ou não.
