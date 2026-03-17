@@ -1287,6 +1287,15 @@ Formato: [INSIGHTS]categoria:chave:valor|categoria:chave:valor[/INSIGHTS]
 | trauma | Medos profundos e dores emocionais | medo_abandono:identificado, perda:pai, rejeição:infância |
 | saude | Informações de saúde física e mental | medicacao:nenhuma, terapia:6 meses, diagnostico:ansiedade |
 
+### PRIORIDADE ALTA — Processo Terapêutico
+
+| Categoria | Quando salvar | Exemplos |
+|-----------|---------------|----------|
+| tecnica | Técnica de Logoterapia que você EFETIVAMENTE USOU com o usuário nesta conversa | reframe_sofrimento, responsabilidade_radical, projecao_futuro, derreflexao, dialogo_socratico, intencao_paradoxal, modulacao_atitude, descoberta_sentido |
+
+**REGRA:** Salve APENAS quando você efetivamente aplicou a técnica na conversa, NÃO quando mencionou de passagem.
+Exemplo: [INSIGHTS]tecnica:usada:reframe_sofrimento[/INSIGHTS]
+
 ### PRIORIDADE MÉDIA - Evolução e Metas
 
 | Categoria | Quando salvar | Exemplos |
@@ -1313,6 +1322,24 @@ Formato: [INSIGHTS]categoria:chave:valor|categoria:chave:valor[/INSIGHTS]
 Exemplos completos:
 [INSIGHTS]pessoa:filha:Bella|identidade:profissao:engenheiro|desafio:principal:ansiedade no trabalho[/INSIGHTS]
 [INSIGHTS]pessoa:chefe:Carlos|pessoa:marido:João|objetivo:principal:emagrecer 10kg[/INSIGHTS]
+
+# COMPROMISSOS EM CONVERSAS LIVRES
+
+Quando o usuário se comprometer com algo FORA de uma sessão formal (conversa livre/informal), use:
+[COMPROMISSO_LIVRE:descrição do compromisso]
+
+Exemplos:
+- Usuário diz "vou tentar meditar amanhã" → [COMPROMISSO_LIVRE:meditar amanhã]
+- Usuário diz "vou conversar com minha mãe essa semana" → [COMPROMISSO_LIVRE:conversar com a mãe essa semana]
+- Usuário diz "preciso marcar o médico" → [COMPROMISSO_LIVRE:marcar consulta médica]
+
+REGRA: Só use quando o compromisso for CLARO e CONCRETO (ação + prazo implícito). Não salve intenções vagas como "quero melhorar".
+
+# USO DE TAGS DE TEMA EM CONVERSAS LIVRES (IMPORTANTE!)
+
+As tags [TEMA_NOVO:nome], [TEMA_PROGREDINDO:nome], [TEMA_RESOLVIDO:nome] e [TEMA_ESTAGNADO:nome] devem ser usadas em QUALQUER conversa profunda — não apenas em sessões formais.
+Se o usuário trouxer um tema emocional relevante numa conversa livre, use [TEMA_NOVO:nome] normalmente.
+Se ele mencionar progresso em algo já conhecido, use [TEMA_PROGREDINDO:nome].
 
 # CONTROLE DE FLUXO DA CONVERSA (MUITO IMPORTANTE)
 
@@ -3635,6 +3662,21 @@ ${audioSessionContext}
 
 ## Memória de Longo Prazo
 ${formatInsightsForContext(userInsights)}
+
+## Processo Terapêutico
+${(() => {
+  const techniques = userInsights?.filter((i: any) => i.category === 'tecnica') || [];
+  let ctx = '';
+  if (techniques.length > 0) {
+    ctx += `- Técnicas já usadas: ${techniques.map((t: any) => t.value || t.key).join(', ')}\n`;
+  } else {
+    ctx += '- Nenhuma técnica registrada ainda\n';
+  }
+  if (pendingCommitmentsDetailed.length > 0) {
+    ctx += `- Compromissos pendentes: ${pendingCommitmentsDetailed.map((c: any) => c.title).join(', ')}\n`;
+  }
+  return ctx;
+})()}
 ${meditationCatalogSection}
 `;
 
@@ -4694,6 +4736,31 @@ Exemplo com 4 sessões:
     assistantMessage = assistantMessage.replace(/\[COMPROMISSO_CUMPRIDO:[^\]]+\]/gi, '');
     assistantMessage = assistantMessage.replace(/\[COMPROMISSO_ABANDONADO:[^\]]+\]/gi, '');
     assistantMessage = assistantMessage.replace(/\[COMPROMISSO_RENEGOCIADO:[^\]]+\]/gi, '');
+
+    // ========================================================================
+    // PROCESSAR TAGS DE COMPROMISSO LIVRE (conversas fora de sessão)
+    // ========================================================================
+    
+    const commitmentFreeMatches = assistantMessage.matchAll(/\[COMPROMISSO_LIVRE:([^\]]+)\]/gi);
+    
+    if (profile?.user_id) {
+      for (const match of commitmentFreeMatches) {
+        const title = match[1].trim();
+        console.log('📋 Free commitment detected:', title);
+        
+        await supabase
+          .from('commitments')
+          .insert({
+            user_id: profile.user_id,
+            title: title,
+            completed: false,
+            commitment_status: 'pending',
+            session_id: null
+          });
+      }
+    }
+    
+    assistantMessage = assistantMessage.replace(/\[COMPROMISSO_LIVRE:[^\]]+\]/gi, '');
 
     // ========================================================================
     // PROCESSAR TAGS DE JORNADA
