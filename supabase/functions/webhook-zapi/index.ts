@@ -577,25 +577,37 @@ Tô aqui te esperando. 🤗`;
             console.warn('⚠️ Failed to extract theme:', themeErr);
           }
 
-          const followupPayload = { theme: conversationTheme, name: profile.name || '' };
+          // Check if follow-up tasks already exist for this user to prevent duplicates
+          const { count: existingTasks } = await supabase
+            .from('scheduled_tasks')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', profile.user_id)
+            .in('task_type', ['trial_closing', 'trial_followup_15m', 'trial_followup_2h', 'trial_followup_morning', 'trial_followup_48h'])
+            .in('status', ['pending', 'executing']);
 
-          const now = new Date();
-          const tomorrow9hBRT = new Date(now);
-          tomorrow9hBRT.setUTCHours(12, 0, 0, 0);
-          if (tomorrow9hBRT.getTime() <= now.getTime()) {
-            tomorrow9hBRT.setUTCDate(tomorrow9hBRT.getUTCDate() + 1);
+          if ((existingTasks || 0) > 0) {
+            console.log(`⏭️ Trial follow-up tasks already exist for user ${profile.user_id}, skipping creation`);
           } else {
-            tomorrow9hBRT.setUTCDate(tomorrow9hBRT.getUTCDate() + 1);
-          }
+            const followupPayload = { theme: conversationTheme, name: profile.name || '' };
 
-          await supabase.from('scheduled_tasks').insert([
-            { user_id: profile.user_id, task_type: 'trial_closing', execute_at: new Date(Date.now() + 2 * 60 * 1000).toISOString(), payload: followupPayload, status: 'pending' },
-            { user_id: profile.user_id, task_type: 'trial_followup_15m', execute_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(), payload: followupPayload, status: 'pending' },
-            { user_id: profile.user_id, task_type: 'trial_followup_2h', execute_at: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(), payload: followupPayload, status: 'pending' },
-            { user_id: profile.user_id, task_type: 'trial_followup_morning', execute_at: tomorrow9hBRT.toISOString(), payload: followupPayload, status: 'pending' },
-            { user_id: profile.user_id, task_type: 'trial_followup_48h', execute_at: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(), payload: followupPayload, status: 'pending' },
-          ]);
-          console.log(`⏰ Scheduled trial_closing + 4 follow-ups after hard limit`);
+            const now = new Date();
+            const tomorrow9hBRT = new Date(now);
+            tomorrow9hBRT.setUTCHours(12, 0, 0, 0);
+            if (tomorrow9hBRT.getTime() <= now.getTime()) {
+              tomorrow9hBRT.setUTCDate(tomorrow9hBRT.getUTCDate() + 1);
+            } else {
+              tomorrow9hBRT.setUTCDate(tomorrow9hBRT.getUTCDate() + 1);
+            }
+
+            await supabase.from('scheduled_tasks').insert([
+              { user_id: profile.user_id, task_type: 'trial_closing', execute_at: new Date(Date.now() + 2 * 60 * 1000).toISOString(), payload: followupPayload, status: 'pending' },
+              { user_id: profile.user_id, task_type: 'trial_followup_15m', execute_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(), payload: followupPayload, status: 'pending' },
+              { user_id: profile.user_id, task_type: 'trial_followup_2h', execute_at: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(), payload: followupPayload, status: 'pending' },
+              { user_id: profile.user_id, task_type: 'trial_followup_morning', execute_at: tomorrow9hBRT.toISOString(), payload: followupPayload, status: 'pending' },
+              { user_id: profile.user_id, task_type: 'trial_followup_48h', execute_at: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(), payload: followupPayload, status: 'pending' },
+            ]);
+            console.log(`⏰ Scheduled trial_closing + 4 follow-ups after hard limit`);
+          }
         } catch (e) {
           console.warn('⚠️ Failed to schedule trial follow-ups:', e);
         }
