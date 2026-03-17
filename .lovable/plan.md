@@ -1,42 +1,28 @@
-# Trial "Primeira Jornada" — Detecção de Marcos de Valor ✅ Implementado
 
-## Resumo
-Trial expandido de 10 para **50 mensagens ou 72h**, com detecção inteligente de "Aha Moment" em duas camadas para acionar nudges de conversão no momento certo.
 
-### Limites
-- Hard cap: 50 mensagens OU 72 horas (o que vier primeiro)
-- Fallback de nudges: msg 45 e 48 se Aha não detectado
+## Plano: Adicionar Protocolo de De-escalação de Crise
 
-### Fases do Trial (`trial_phase`)
-- `listening` — Escuta ativa (msgs 1-7, sem intervenção)
-- `value_delivered` — Aura entregou valor real (tag `[VALOR_ENTREGUE]`)
-- `aha_reached` — Usuário reagiu positivamente ao valor (detectado por heurísticas)
-- `converting` — Nudges de conversão ativos
+### Problema
+Quando a Aura entra em modo de crise (CVV/emergência), ela fica "presa" nesse modo mesmo depois que o usuário diz que já passou. Falta instrução explícita no prompt sobre **quando e como sair** do modo crise.
 
-### Detecção em Duas Camadas
+### O que será feito
+Adicionar uma nova seção **"3. SAINDO DO MODO CRISE (DE-ESCALAÇÃO)"** no system prompt, logo após a linha 420 (após a ação de emergência) e antes da seção de linguagem (linha 422).
 
-**Camada 1 — Tag da Aura: `[VALOR_ENTREGUE]`**
-- Aura marca quando entrega: reframe, técnica prática, insight estruturado
-- NÃO marca: validação simples, perguntas abertas, acolhimento genérico
-- Webhook detecta a tag → `trial_phase = 'value_delivered'`
+### Conteúdo a ser adicionado (100% em português)
 
-**Camada 2 — Resposta do Usuário**
-- Só avaliada quando `trial_phase = 'value_delivered'` E `count >= 8`
-- Detecta palavras-chave positivas sem "?" (lista de ~25 termos)
-- Ao detectar → `trial_phase = 'aha_reached'`, salva `trial_aha_at_count`
+```
+**3. SAINDO DO MODO CRISE (DE-ESCALAÇÃO):**
 
-### Sequência de Nudges
-- Aha + 2 msgs: nudge suave ("Tô adorando te conhecer...")
-- Aha + 4 msgs: nudge com link de checkout
-- Fallback msg 45: nudge se Aha não detectado
-- Fallback msg 48: nudge final
-- Msg 50 / 72h: bloqueio + follow-up sequence (5 touchpoints)
+- Quando o usuário disser que a crise passou ("já passou", "foi bobagem", "tô melhor", "não vou fazer nada", "já liguei pro CVV", "já falei com alguém"), ACEITE e SIGA EM FRENTE.
+- Valide a coragem UMA VEZ ("Fico aliviada que você esteja melhor 💜") e mude de assunto imediatamente.
+- Depois que o usuário confirmar que está bem, PARE de mencionar CVV, 188, crise, ou perguntar se ainda tem pensamentos ruins. ZERO referências.
+- Máximo de 1 verificação após estabilização. Se o usuário confirmar de novo que está bem, NUNCA mais volte ao tema de crise naquela conversa.
+- Frase de transição: "Fico aliviada. 💜 Agora me conta — o que mais tá na sua cabeça?"
+- ERRO GRAVE: Ficar repetindo "você ainda tá com esses pensamentos?" depois que a pessoa já disse que passou. Isso retraumatiza e faz o usuário se sentir preso.
+```
 
-### O que foi implementado
-1. **Migração SQL** ✅ — `trial_phase text` e `trial_aha_at_count integer` em `profiles`
-2. **`aura-agent/index.ts`** ✅ — Tag `[VALOR_ENTREGUE]` + contexto dinâmico por fase/aha
-3. **`webhook-zapi/index.ts`** ✅ — Limite 50/72h, detecção de tag, análise de Aha, strip de tag
-4. **`start-trial/index.ts`** ✅ — Mensagem de boas-vindas sem número fixo
-5. **Frontend** ✅ — `StartTrial.tsx`, `TrialStarted.tsx`, `AdminMessages.tsx`, `AdminEngagement.tsx`
-6. **`execute-scheduled-tasks/index.ts`** ✅ — Textos atualizados
-7. **`admin-engagement-metrics/index.ts`** ✅ — Funnel atualizado (20+ msgs = engajado)
+### Detalhes técnicos
+- **Arquivo:** `supabase/functions/aura-agent/index.ts`
+- **Local:** Entre a linha 420 (ação de emergência) e linha 422 (seção de linguagem)
+- **Redeploy:** `aura-agent`
+
