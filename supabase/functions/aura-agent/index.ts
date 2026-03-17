@@ -733,10 +733,10 @@ Você pode agendar lembretes e meditações para o usuário. Use as tags abaixo 
 - \`reminder\` — Lembrete com texto personalizado. Payload: a descrição vira a mensagem enviada.
 - \`meditation\` — Envia uma meditação guiada. Descrição deve ser a categoria (sono, ansiedade, respiracao, etc.).
 
-**REGRAS CRÍTICAS:**
+**REGRAS:**
 1. Use SEMPRE a data/hora do CONTEXTO TEMPORAL para calcular datas relativas (amanhã, segunda, etc.)
 2. O formato da data DEVE ser YYYY-MM-DD HH:mm (horário de Brasília)
-3. NUNCA agende no passado
+3. Agende apenas no futuro (use a hora atual para validar)
 4. Inclua a tag NA SUA RESPOSTA — o sistema processará automaticamente
 5. A tag será removida antes do usuário ver sua mensagem
 
