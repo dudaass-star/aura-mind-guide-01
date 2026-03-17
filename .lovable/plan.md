@@ -97,3 +97,41 @@ Aura agora rastreia técnicas terapêuticas usadas, captura compromissos de conv
 - Detecção de fase terapêutica (Presença/Sentido/Movimento) — o modelo infere do histórico
 - Categoria `insight_chave` — `session_themes` já cobre
 - Migração de banco — `user_insights.category` é text livre, suporta `tecnica` nativamente
+
+---
+
+# Fase 3: Limpeza Cirúrgica do Prompt ✅ Implementado
+
+## Resumo
+4 problemas estruturais resolvidos para melhorar o fluxo conversacional e reduzir ruído no prompt.
+
+### O que foi feito
+
+1. **ENCERRAMENTO COM GANCHO relocado** ✅
+   - Removido do fluxo geral (onde causava ganchos forçados em conversas comuns)
+   - Movido para dentro da fase de Fechamento Suave (soft_closing) das sessões, onde faz sentido
+
+2. **CONTEXTO TEMPORAL duplicado removido** ✅
+   - Seção "# CONTEXTO TEMPORAL (MUITO IMPORTANTE!)" eliminada
+   - Os dados já são injetados automaticamente no bloco DADOS DINÂMICOS DO SISTEMA
+
+3. **Proibições consolidadas** ✅
+   - Convertidas de framing negativo para positivo onde possível:
+     - "PROIBIÇÃO DE PAPAGAIO" → "ANTI-PAPAGAIO" com exemplos positivos primeiro
+     - "Proibido Robolês" → "Fale como gente"
+     - "REGRA DE PROIBIÇÃO DE DISCLAIMER" → "REGRA DE IDENTIDADE"
+     - "PROIBIDO mini-palestras" → "Evite mini-palestras"
+     - "NUNCA agende no passado" → "Agende apenas no futuro"
+   - Regras de áudio simplificadas de 9 para 6 itens (removidas redundâncias)
+   - Proibições de segurança (Nível 1/2/3) mantidas intactas — são críticas
+
+4. **[VALOR_ENTREGUE] corrigido** ✅
+   - Adicionada instrução explícita: tag marca progresso PARCIAL
+   - "Entrega de valor é sinal para APROFUNDAR, não para encerrar"
+   - Instrução para continuar com pergunta de aprofundamento após a tag
+
+### Resultado
+- ~30 linhas removidas (ENCERRAMENTO COM GANCHO + CONTEXTO TEMPORAL)
+- Redução significativa de framing negativo no prompt
+- Ganchos de sessão agora aparecem apenas no contexto correto
+- [VALOR_ENTREGUE] não mais funciona como sinal de "missão cumprida"
