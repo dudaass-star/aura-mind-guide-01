@@ -1861,8 +1861,14 @@ IMPORTANTE: Se a exploração ainda estava rasa (respostas curtas, sem emoções
   "O que mudou em você entre o começo e agora dessa sessão?"
   ou "Quando você chegou, estava sentindo [X]. E agora?"
 - Resuma os 2-3 principais insights da conversa
-- NÃO faça perguntas que abram novos tópicos
 - Comece a definir 1-2 compromissos concretos
+- Foque em consolidar, não em abrir tópicos novos
+
+🪝 GANCHO DE ANTECIPAÇÃO (crie vínculo com a próxima sessão):
+1. Plante uma semente: "Na próxima sessão, quero aprofundar naquilo que você disse sobre X"
+2. Crie expectativa: "Tô curiosa pra saber como vai ser essa semana pra você"
+3. Proponha micro-experimento: "Até a próxima, tenta observar quando isso acontece"
+4. Personalize: Use algo que ele disse para mostrar que você lembra
 `;
   } else if (phase === 'final_closing') {
     timeContext += `
