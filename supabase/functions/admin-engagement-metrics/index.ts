@@ -138,15 +138,15 @@ Deno.serve(async (req) => {
     }
 
     // 6. Return rate in selected period
-    const uniqueRecentUsers = activeUsersInPeriod || 0;
-    const returnRate = activeUsers && activeUsers > 0
-      ? Math.round(uniqueRecentUsers / activeUsers * 100)
+    const uniqueRecentUsers = activeUsersInPeriod;
+    const returnRate = activeUsersBase && activeUsersBase > 0
+      ? Math.round(uniqueRecentUsers / activeUsersBase * 100)
       : 0;
 
     // Average daily messages per user (based on period length)
-    const periodDays = Math.max(1, Math.round((new Date(periodEnd).getTime() - new Date(periodStart).getTime()) / (1000 * 60 * 60 * 24)));
-    const avgDailyMessagesPerUser = activeUsers && activeUsers > 0
-      ? Math.round((weeklyMessages || 0) / periodDays / activeUsers * 10) / 10
+    const periodDays = Math.max(1, Math.round((new Date(periodEnd).getTime() - new Date(periodStart).getTime()) / (1000 * 60 * 60 * 24))) || 1;
+    const avgDailyMessagesPerUser = activeUsersInPeriod > 0
+      ? Math.round((weeklyMessages || 0) / periodDays / activeUsersInPeriod * 10) / 10
       : 0;
 
     // ========== TRIAL & CONVERSION METRICS (filtered by period) ==========
