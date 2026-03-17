@@ -543,10 +543,35 @@ Tô aqui te esperando. 🤗`;
               .order('created_at', { ascending: false })
               .limit(5);
             if (recentMsgs && recentMsgs.length > 0) {
-              const longestMsg = recentMsgs.reduce((a: any, b: any) => 
-                (a.content?.length || 0) > (b.content?.length || 0) ? a : b
-              );
-              conversationTheme = (longestMsg.content?.substring(0, 80) || '').replace(/\n/g, ' ').trim();
+              const userTexts = recentMsgs.map((m: any) => m.content || '').join('\n');
+              const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+              if (LOVABLE_API_KEY && userTexts.length > 10) {
+                try {
+                  const controller = new AbortController();
+                  const timeout = setTimeout(() => controller.abort(), 5000);
+                  const aiRes = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${LOVABLE_API_KEY}`, 'Content-Type': 'application/json' },
+                    signal: controller.signal,
+                    body: JSON.stringify({
+                      model: 'google/gemini-2.5-flash-lite',
+                      messages: [
+                        { role: 'system', content: 'Extraia o tema principal dessas mensagens em 3-6 palavras, em português informal. Retorne APENAS o tema, sem aspas nem pontuação final. Exemplos: "sua relação com a espiritualidade", "a ansiedade antes de dormir", "o luto pela sua mãe"' },
+                        { role: 'user', content: userTexts }
+                      ],
+                      max_tokens: 60,
+                    }),
+                  });
+                  clearTimeout(timeout);
+                  if (aiRes.ok) {
+                    const aiData = await aiRes.json();
+                    const extracted = (aiData.choices?.[0]?.message?.content || '').replace(/[\n\r"']/g, '').trim().substring(0, 100);
+                    if (extracted.length >= 3) conversationTheme = extracted;
+                  }
+                } catch (aiErr) {
+                  console.warn('⚠️ AI theme extraction failed, using empty theme:', aiErr);
+                }
+              }
             }
           } catch (themeErr) {
             console.warn('⚠️ Failed to extract theme:', themeErr);
