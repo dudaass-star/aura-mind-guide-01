@@ -40,3 +40,21 @@ Trial expandido de 10 para **50 mensagens ou 72h**, com detecção inteligente d
 5. **Frontend** ✅ — `StartTrial.tsx`, `TrialStarted.tsx`, `AdminMessages.tsx`, `AdminEngagement.tsx`
 6. **`execute-scheduled-tasks/index.ts`** ✅ — Textos atualizados
 7. **`admin-engagement-metrics/index.ts`** ✅ — Funnel atualizado (20+ msgs = engajado)
+
+---
+
+# Memória Terapêutica da Aura ✅ Implementado
+
+## Resumo
+Aura agora rastreia técnicas terapêuticas usadas, captura compromissos de conversas livres, e usa tags de tema fora de sessões formais.
+
+### O que foi implementado
+1. **`tecnica` como categoria de insight** ✅ — Prioridade alta no prompt, exemplos: reframe_sofrimento, responsabilidade_radical, derreflexao, etc.
+2. **Tag `[COMPROMISSO_LIVRE:texto]`** ✅ — Parser no webhook insere na tabela `commitments` com `session_id: null`
+3. **Tags de tema em conversas livres** ✅ — Instrução explícita no prompt para usar `[TEMA_NOVO]`, `[TEMA_PROGREDINDO]` etc. fora de sessões
+4. **Contexto dinâmico `## Processo Terapêutico`** ✅ — Injeta técnicas já usadas e compromissos pendentes no contexto do modelo
+
+### O que NÃO foi feito (por design)
+- Detecção de fase terapêutica (Presença/Sentido/Movimento) — o modelo infere do histórico
+- Categoria `insight_chave` — `session_themes` já cobre
+- Migração de banco — `user_insights.category` é text livre, suporta `tecnica` nativamente
