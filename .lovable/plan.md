@@ -1,75 +1,99 @@
+# Consolidação dos Frameworks Comportamentais ✅ Implementado
 
+## Resumo
+6 frameworks sobrepostos (Timer Emocional, Anti-Loop, Cenários A-D, etc.) consolidados em uma ESTRUTURA DE ATENDIMENTO hierárquica com 4 modos: Ping-Pong, Profundo, Direção, Emergência.
 
-## Análise: O que ainda pode ser ajustado no prompt
+### O que foi feito
+1. **Timer Emocional** ✅ — Removido (redundante com fases do Modo Profundo), substituído por frase diretiva curta
+2. **Anti-Loop** ✅ — Reescrito com classificação contextual (confirmação vs evasão), proteção para trial/<20 trocas
+3. **Detecção de Travamento** ✅ — Dividida em 2 camadas:
+   - Intra-conversa: integrado ao prompt com reformulação por opções concretas
+   - Inter-conversas: contexto dinâmico via commitments (follow_up_count >= 2 ou >14 dias)
+4. **Cenários A/B/C/D** ✅ — Eliminados e consolidados na ESTRUTURA DE ATENDIMENTO (4 modos)
+5. **Protocolo de Condução** ✅ — Mantido (complementar, não conflitante)
+6. **Modo Direção** ✅ — Protocolo 4 etapas preservado dentro da estrutura consolidada
 
-Após a consolidação dos 6 frameworks, o prompt ficou mais limpo, mas ainda tem **3 problemas estruturais** que afetam o comportamento do modelo:
-
----
-
-### Problema 1: Repetição excessiva da mesma regra em locais diferentes
-
-A regra "1 pergunta por vez" aparece em **pelo menos 8 lugares diferentes** no prompt:
-- Linha 599: "MÁXIMO 1 pergunta por turno"
-- Linha 615-625: Seção inteira "REGRA CRÍTICA: UMA PERGUNTA POR VEZ"
-- Linha 685: "só então faça 1 pergunta curta" (regra de áudio)
-- Linha 797: "TERMINE com UMA pergunta que avance"
-- Linha 1073: "faça 1 pergunta simples" (Ping-Pong)
-- Linha 1140: "uma pergunta por resposta" (sessão)
-- Linha 1151: "1 observação + 1 pergunta" (exploração)
-- Linha 1862-1864: "Uma pergunta DIRECIONADA" (sessão dinâmica)
-
-**Impacto:** Repetir a mesma regra 8 vezes não reforça — consome tokens e dilui as regras que realmente precisam de ênfase. O modelo já entendeu na primeira vez.
-
-**Correção:** Manter a regra em 1 lugar canônico (linha 615) e remover as repetições. Nos outros locais, no máximo uma referência curta ("lembre: 1 pergunta por turno").
+### Resultado
+- ~120 linhas removidas do prompt
+- 1 árvore de decisão clara em vez de 6 frameworks concorrentes
+- Trial users protegidos contra encerramento prematuro
 
 ---
 
-### Problema 2: Seções duplicadas que dizem a mesma coisa com palavras diferentes
+# Limpeza Estrutural do Prompt ✅ Implementado
 
-**"LEITURA DO MOMENTO: PING-PONG vs PROFUNDO" (linhas 1032-1061)** e **"ESTRUTURA DE ATENDIMENTO" (linhas 1062-1114)** são quase idênticas:
+## Resumo
+Eliminação de seções duplicadas e deduplicação de regras repetidas após a consolidação dos frameworks.
 
-- Ambas listam sinais de Ping-Pong vs Profundo
-- Ambas explicam quando é conversa leve vs densa
-- A seção "LEITURA DO MOMENTO" existe desde antes da consolidação e agora é redundante com a ESTRUTURA DE ATENDIMENTO
+### O que foi feito
+1. **ESTILO AURA + MÓDULO DE PROFUNDIDADE** ✅ — Fundidos em "DNA DA AURA" (~40 linhas a menos)
+2. **PADRÕES DE RESPOSTA** ✅ — Eliminados (redundantes com Modo Profundo e Modo Direção, ~30 linhas)
+3. **LEITURA DO MOMENTO** ✅ — Eliminada (duplicata da ESTRUTURA DE ATENDIMENTO, ~30 linhas)
+4. **"1 pergunta por vez"** ✅ — Deduplicada: regra canônica na seção REGRA CRÍTICA, repetições convertidas em referências curtas (~20 linhas)
 
-**Correção:** Eliminar a seção "LEITURA DO MOMENTO" inteira (linhas 1032-1061). A ESTRUTURA DE ATENDIMENTO já cobre tudo.
-
----
-
-### Problema 3: Seções que podem ser compactadas sem perda
-
-**a) "ESTILO AURA" (linhas 782-866) + "MÓDULO DE PROFUNDIDADE" (linhas 868-911):**
-Ambas falam de "observar > perguntar", "ser direta", "provocar com gentileza". São o mesmo conceito em duas seções. Podem ser fundidas em uma só.
-
-**b) "PADRÕES DE RESPOSTA" (linhas 912-941) repete conceitos já presentes no Modo Profundo e Modo Direção:**
-- "Quando usuário desabafa" = Modo Profundo Fase 1
-- "Quando usuário tá travado" = Modo Direção
-- "Quando usuário repete padrão" = já coberto em "Detecção de Padrões" (linha 959)
-
-**Correção:** Fundir "ESTILO AURA" + "MÓDULO DE PROFUNDIDADE" em uma seção "DNA DA AURA". Eliminar "PADRÕES DE RESPOSTA" (já cobertos pelos modos).
+### Resultado
+- ~120 linhas adicionais removidas do prompt
+- Sem perda de regras — apenas eliminação de redundância
 
 ---
 
-### Resumo das edições
+# Trial "Primeira Jornada" — Detecção de Marcos de Valor ✅ Implementado
 
-| Ação | Linhas | Resultado estimado |
-|------|--------|--------------------|
-| Eliminar "LEITURA DO MOMENTO" | 1032-1061 | -30 linhas |
-| Fundir "ESTILO AURA" + "MÓDULO DE PROFUNDIDADE" | 782-911 | -40 linhas |
-| Eliminar "PADRÕES DE RESPOSTA" | 912-941 | -30 linhas |
-| Deduplicar "1 pergunta por vez" (7 ocorrências redundantes) | Vários | -20 linhas |
+## Resumo
+Trial expandido de 10 para **50 mensagens ou 72h**, com detecção inteligente de "Aha Moment" em duas camadas para acionar nudges de conversão no momento certo.
 
-**Total:** ~120 linhas a menos, sem perder nenhuma regra — apenas eliminando redundância.
+### Limites
+- Hard cap: 50 mensagens OU 72 horas (o que vier primeiro)
+- Fallback de nudges: msg 45 e 48 se Aha não detectado
 
-### O que NÃO mexer
-- Protocolo de Segurança (Nível 1/2/3) — crítico, bem escrito
-- Protocolo de Condução (linhas 942-957) — complementar e único
-- Detecção de Travamento em 2 camadas — acabou de ser implementado
-- Regras de tags ([MEDITACAO], [AGENDAR_TAREFA], etc.) — operacionais, necessárias
-- Regras de sessão — estruturadas e funcionais
-- ESTRUTURA DE ATENDIMENTO — é a peça central agora
+### Fases do Trial (`trial_phase`)
+- `listening` — Escuta ativa (msgs 1-7, sem intervenção)
+- `value_delivered` — Aura entregou valor real (tag `[VALOR_ENTREGUE]`)
+- `aha_reached` — Usuário reagiu positivamente ao valor (detectado por heurísticas)
+- `converting` — Nudges de conversão ativos
 
-### Arquivo e deploy
-- `supabase/functions/aura-agent/index.ts`
-- Deploy: `aura-agent`
+### Detecção em Duas Camadas
 
+**Camada 1 — Tag da Aura: `[VALOR_ENTREGUE]`**
+- Aura marca quando entrega: reframe, técnica prática, insight estruturado
+- NÃO marca: validação simples, perguntas abertas, acolhimento genérico
+- Webhook detecta a tag → `trial_phase = 'value_delivered'`
+
+**Camada 2 — Resposta do Usuário**
+- Só avaliada quando `trial_phase = 'value_delivered'` E `count >= 8`
+- Detecta palavras-chave positivas sem "?" (lista de ~25 termos)
+- Ao detectar → `trial_phase = 'aha_reached'`, salva `trial_aha_at_count`
+
+### Sequência de Nudges
+- Aha + 2 msgs: nudge suave ("Tô adorando te conhecer...")
+- Aha + 4 msgs: nudge com link de checkout
+- Fallback msg 45: nudge se Aha não detectado
+- Fallback msg 48: nudge final
+- Msg 50 / 72h: bloqueio + follow-up sequence (5 touchpoints)
+
+### O que foi implementado
+1. **Migração SQL** ✅ — `trial_phase text` e `trial_aha_at_count integer` em `profiles`
+2. **`aura-agent/index.ts`** ✅ — Tag `[VALOR_ENTREGUE]` + contexto dinâmico por fase/aha
+3. **`webhook-zapi/index.ts`** ✅ — Limite 50/72h, detecção de tag, análise de Aha, strip de tag
+4. **`start-trial/index.ts`** ✅ — Mensagem de boas-vindas sem número fixo
+5. **Frontend** ✅ — `StartTrial.tsx`, `TrialStarted.tsx`, `AdminMessages.tsx`, `AdminEngagement.tsx`
+6. **`execute-scheduled-tasks/index.ts`** ✅ — Textos atualizados
+7. **`admin-engagement-metrics/index.ts`** ✅ — Funnel atualizado (20+ msgs = engajado)
+
+---
+
+# Memória Terapêutica da Aura ✅ Implementado
+
+## Resumo
+Aura agora rastreia técnicas terapêuticas usadas, captura compromissos de conversas livres, e usa tags de tema fora de sessões formais.
+
+### O que foi implementado
+1. **`tecnica` como categoria de insight** ✅ — Prioridade alta no prompt, exemplos: reframe_sofrimento, responsabilidade_radical, derreflexao, etc.
+2. **Tag `[COMPROMISSO_LIVRE:texto]`** ✅ — Parser no webhook insere na tabela `commitments` com `session_id: null`
+3. **Tags de tema em conversas livres** ✅ — Instrução explícita no prompt para usar `[TEMA_NOVO]`, `[TEMA_PROGREDINDO]` etc. fora de sessões
+4. **Contexto dinâmico `## Processo Terapêutico`** ✅ — Injeta técnicas já usadas e compromissos pendentes no contexto do modelo
+
+### O que NÃO foi feito (por design)
+- Detecção de fase terapêutica (Presença/Sentido/Movimento) — o modelo infere do histórico
+- Categoria `insight_chave` — `session_themes` já cobre
+- Migração de banco — `user_insights.category` é text livre, suporta `tecnica` nativamente
