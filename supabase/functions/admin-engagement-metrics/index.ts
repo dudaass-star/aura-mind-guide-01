@@ -44,19 +44,22 @@ Deno.serve(async (req) => {
 
     // ========== ENGAGEMENT METRICS ==========
 
-    // 1. Active users count (base)
-    const { count: activeUsers } = await supabase
+    // 1. Active users count (base) — all profiles with status 'active'
+    const { count: activeUsersBase } = await supabase
       .from('profiles')
       .select('*', { count: 'exact', head: true })
       .eq('status', 'active');
 
-    // 1b. Active users in selected period
-    const { count: activeUsersInPeriod } = await supabase
-      .from('profiles')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'active')
-      .gte('last_message_date', periodStartDate)
-      .lte('last_message_date', periodEndDate);
+    // 1b. Active users in selected period — distinct users who sent messages
+    const { data: periodMessages } = await supabase
+      .from('messages')
+      .select('user_id')
+      .eq('role', 'user')
+      .gte('created_at', periodStart)
+      .lte('created_at', periodEnd);
+
+    const uniqueUsersInPeriod = new Set(periodMessages?.map(m => m.user_id) || []);
+    const activeUsersInPeriod = uniqueUsersInPeriod.size;
 
     // 2. Messages in period
     const { count: weeklyMessages } = await supabase
