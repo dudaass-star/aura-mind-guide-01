@@ -4220,18 +4220,7 @@ Exemplo com 4 sessões:
     // ========================================================================
     // ANTI-ECHO GUARD v2: Detecção robusta de eco/paráfrase do input do usuário
     // ========================================================================
-    const stripInternalTags = (text: string): string => {
-      return text
-        .replace(/\[AGUARDANDO_RESPOSTA\]/gi, '')
-        .replace(/\[CONVERSA_CONCLUIDA\]/gi, '')
-        .replace(/\[MODO_AUDIO\]/gi, '')
-        .replace(/\[VALOR_ENTREGUE\]/gi, '')
-        .replace(/\[ENCERRAR_SESSAO\]/gi, '')
-        .replace(/\[INSIGHTS\][\s\S]*?\[\/INSIGHTS\]/gi, '')
-        .trim();
-    };
-
-    const cleanAIResponse = stripInternalTags(assistantMessage);
+    const cleanAIResponse = stripAllInternalTags(assistantMessage);
     const cleanUserMsg = message.trim();
 
     const normalizedResponse = cleanAIResponse.toLowerCase().replace(/[.!?…,;:\s]+/g, ' ').trim();
