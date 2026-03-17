@@ -1737,19 +1737,10 @@ Se precisar fazer uma pergunta, seja DIRETA:
 - "Se você já sabe a resposta, o que te impede?"
 - "Isso é medo de quê exatamente?"
 
-NÃO FAÇA:
-- "Como você se sente sobre isso?"
-- "O que você acha que causa isso?"
-- Várias perguntas seguidas
+EVITE: perguntas genéricas ("como você se sente?"), múltiplas perguntas seguidas.
+PREFIRA: uma observação precisa + uma pergunta direcionada (se necessário) + ESPERE a reação.
 
-FAÇA:
-- Uma observação precisa
-- Uma pergunta direcionada (se necessário)
-- ESPERE a reação
-
-🚫 PROIBIDO NESTA FASE: NÃO use [ENCERRAR_SESSAO] nem [CONVERSA_CONCLUIDA]. Você tem ${timeRemaining} minutos restantes. USE-OS.
-REGRA DE TEMPO: Você está na fase de exploração (5-25 min).
-NÃO FAÇA resumos, NÃO FAÇA fechamentos, NÃO diga "nossa sessão está terminando".
+⚠️ Fase de exploração — faltam ${timeRemaining} min. Continue aprofundando, sem resumos nem fechamentos prematuros.
 Se sentir que "já explorou o suficiente", vá MAIS FUNDO no mesmo tema ou abra outra camada.
 `;
   } else if (phase === 'reframe') {
