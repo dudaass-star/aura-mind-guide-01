@@ -19,7 +19,7 @@ const faqs = [
   {
     question: "Como funciona o teste grátis?",
     answer:
-      "Você ganha 5 conversas grátis pra conhecer a AURA. Sem precisar de cartão de crédito. Se fizer sentido, você escolhe um plano pra continuar.",
+      "Você experimenta a AURA por 7 dias grátis com acesso completo ao plano Essencial. Basta cadastrar um cartão — nenhuma cobrança é feita nos primeiros 7 dias. Se não fizer sentido, cancele a qualquer momento antes do 8º dia e não será cobrado nada.",
   },
   {
     question: "Posso pausar minha assinatura?",

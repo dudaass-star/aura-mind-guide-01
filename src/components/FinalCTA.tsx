@@ -15,7 +15,7 @@ const FinalCTA = () => {
           </h2>
           
           <p className="font-body text-lg md:text-xl text-muted-foreground mb-6 leading-relaxed">
-            5 conversas grátis + conteúdo semanal. Sem cartão. Sem compromisso.
+            7 dias grátis — cancele antes de ser cobrado.
           </p>
 
           <p className="font-body text-base text-muted-foreground/80 mb-8 leading-relaxed italic max-w-2xl mx-auto">
@@ -26,7 +26,7 @@ const FinalCTA = () => {
 
           <Link to="/experimentar">
             <Button variant="sage" size="xl" className="min-w-[280px] mb-6">
-              Experimentar Grátis
+              Experimentar 7 dias grátis
             </Button>
           </Link>
 

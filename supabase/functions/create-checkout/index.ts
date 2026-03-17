@@ -39,8 +39,13 @@ serve(async (req) => {
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
 
-    const { plan, billing = "monthly", name, email, phone } = await req.json();
-    logStep("Request received", { plan, billing, name, email, phone });
+    const { plan: requestedPlan, billing = "monthly", name, email, phone, trial } = await req.json();
+    
+    // When trial mode: force essencial monthly
+    const plan = trial ? "essencial" : requestedPlan;
+    const billingOverride = trial ? "monthly" : billing;
+    
+    logStep("Request received", { plan, billing: billingOverride, name, email, phone, trial: !!trial });
 
     const PRICES = getPrices();
     
@@ -59,7 +64,7 @@ serve(async (req) => {
     }
 
     // Validate billing period
-    const billingPeriod = billing === "yearly" ? "yearly" : "monthly";
+    const billingPeriod = billingOverride === "yearly" ? "yearly" : "monthly";
     const priceId = PRICES[plan][billingPeriod];
 
     if (!priceId) {
@@ -135,13 +140,14 @@ serve(async (req) => {
       mode: "subscription",
       locale: "pt-BR",
       success_url: `${origin}/obrigado?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}/checkout`,
+      cancel_url: trial ? `${origin}/experimentar` : `${origin}/checkout`,
       metadata: {
         phone: phoneClean,
         name: name,
         email: email,
         plan: plan,
         billing: billingPeriod,
+        ...(trial && { trial: "true" }),
       },
       subscription_data: {
         metadata: {
@@ -150,7 +156,9 @@ serve(async (req) => {
           email: email,
           plan: plan,
           billing: billingPeriod,
+          ...(trial && { trial: "true" }),
         },
+        ...(trial && { trial_period_days: 7 }),
       },
       payment_method_types: ["card"],
     };
