@@ -3754,6 +3754,10 @@ NÃO USAR quando você fizer apenas:
 - Acolhimento genérico
 - Resumos do que o usuário disse
 
+⚠️ IMPORTANTE: A tag marca PROGRESSO PARCIAL — a conversa CONTINUA normalmente após valor entregue.
+Entrega de valor é sinal para APROFUNDAR (explorar mais, conectar com outros temas), NÃO para encerrar.
+Após marcar [VALOR_ENTREGUE], faça uma pergunta que aprofunde ou conecte o insight com outro aspecto da vida do usuário.
+
 Exemplo: [VALOR_ENTREGUE] Sabe o que eu percebi? Quando você...`;
     }
 
