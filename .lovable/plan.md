@@ -1,60 +1,89 @@
-# Trial "Primeira Jornada" — Detecção de Marcos de Valor ✅ Implementado
 
-## Resumo
-Trial expandido de 10 para **50 mensagens ou 72h**, com detecção inteligente de "Aha Moment" em duas camadas para acionar nudges de conversão no momento certo.
 
-### Limites
-- Hard cap: 50 mensagens OU 72 horas (o que vier primeiro)
-- Fallback de nudges: msg 45 e 48 se Aha não detectado
+## Consolidação dos frameworks comportamentais do prompt
 
-### Fases do Trial (`trial_phase`)
-- `listening` — Escuta ativa (msgs 1-7, sem intervenção)
-- `value_delivered` — Aura entregou valor real (tag `[VALOR_ENTREGUE]`)
-- `aha_reached` — Usuário reagiu positivamente ao valor (detectado por heurísticas)
-- `converting` — Nudges de conversão ativos
+### Concordo com sua mudança
 
-### Detecção em Duas Camadas
+A distinção faz total sentido. Travamento **intra-conversa** (Micheli: "Certo → Certo → Ok") é padrão em tempo real que o modelo precisa detectar no prompt. Travamento **inter-conversas** (Luciana voltando 3x com o mesmo tema) já tem dados no banco (`user_insights`, `commitments`, `session_themes`) e deve vir no contexto dinâmico.
 
-**Camada 1 — Tag da Aura: `[VALOR_ENTREGUE]`**
-- Aura marca quando entrega: reframe, técnica prática, insight estruturado
-- NÃO marca: validação simples, perguntas abertas, acolhimento genérico
-- Webhook detecta a tag → `trial_phase = 'value_delivered'`
+### O que existe hoje (6 frameworks sobrepostos)
 
-**Camada 2 — Resposta do Usuário**
-- Só avaliada quando `trial_phase = 'value_delivered'` E `count >= 8`
-- Detecta palavras-chave positivas sem "?" (lista de ~25 termos)
-- Ao detectar → `trial_phase = 'aha_reached'`, salva `trial_aha_at_count`
+| # | Framework | Linhas | Função |
+|---|-----------|--------|--------|
+| 1 | Timer Emocional | 386-392 | Turno 1→acolha, 2→mova, 3+→mude |
+| 2 | Anti-Loop | 903-907 | 3 msgs curtas → pare de perguntar |
+| 3 | Protocolo de Condução | 939-954 | Ancoragem, fechamento de loop, autoridade |
+| 4 | Detecção de Travamento Recorrente | 966-988 | 1ª→acolha, 2ª→cobre, 3ª→confronte |
+| 5 | Modo Profundo (Fases 1-3) | 996-1031 | Presença → Sentido → Movimento |
+| 6 | Cenários A/B/C/D | 1096-1180 | Presença / Direção / Emergência / Padrão |
 
-### Sequência de Nudges
-- Aha + 2 msgs: nudge suave ("Tô adorando te conhecer...")
-- Aha + 4 msgs: nudge com link de checkout
-- Fallback msg 45: nudge se Aha não detectado
-- Fallback msg 48: nudge final
-- Msg 50 / 72h: bloqueio + follow-up sequence (5 touchpoints)
+**Conflitos identificados:** Timer diz "turno 3 mude de marcha" vs Modo Profundo diz "fique na Fase 1 por 1-2 trocas". Anti-Loop diz "3 msgs curtas = pare" sem distinguir confirmação de evasão. Cenários A-D são duplicatas exatas dos modos já definidos.
 
-### O que foi implementado
-1. **Migração SQL** ✅ — `trial_phase text` e `trial_aha_at_count integer` em `profiles`
-2. **`aura-agent/index.ts`** ✅ — Tag `[VALOR_ENTREGUE]` + contexto dinâmico por fase/aha
-3. **`webhook-zapi/index.ts`** ✅ — Limite 50/72h, detecção de tag, análise de Aha, strip de tag
-4. **`start-trial/index.ts`** ✅ — Mensagem de boas-vindas sem número fixo
-5. **Frontend** ✅ — `StartTrial.tsx`, `TrialStarted.tsx`, `AdminMessages.tsx`, `AdminEngagement.tsx`
-6. **`execute-scheduled-tasks/index.ts`** ✅ — Textos atualizados
-7. **`admin-engagement-metrics/index.ts`** ✅ — Funnel atualizado (20+ msgs = engajado)
+### Estrutura consolidada proposta
 
----
+```text
+ESTRUTURA DE ATENDIMENTO (fora de sessão):
+│
+├── PING-PONG (conversa leve)        ← mantém como está
+│
+├── MODO PROFUNDO (conteúdo emocional)
+│   ├── Fase 1: Presença (1-2 trocas)
+│   │   └── NOVO: detecção intra-conversa de travamento
+│   │       (respostas curtas de confirmação vs evasão)
+│   ├── Fase 2: Sentido (perguntas-âncora)
+│   └── Fase 3: Movimento
+│
+├── MODO DIREÇÃO (travado, em loop)   ← Cenário B consolidado
+│
+└── MODO EMERGÊNCIA (crise imediata)  ← Cenário C, mantém
+```
 
-# Memória Terapêutica da Aura ✅ Implementado
+### Edições concretas no `aura-agent/index.ts`
 
-## Resumo
-Aura agora rastreia técnicas terapêuticas usadas, captura compromissos de conversas livres, e usa tags de tema fora de sessões formais.
+**1. Remover Timer Emocional (linhas 386-392)**
+Substituir por uma frase curta: "Não fique presa no acolhimento — após validar, mova para sentido ou ação conforme o modo ativo."
 
-### O que foi implementado
-1. **`tecnica` como categoria de insight** ✅ — Prioridade alta no prompt, exemplos: reframe_sofrimento, responsabilidade_radical, derreflexao, etc.
-2. **Tag `[COMPROMISSO_LIVRE:texto]`** ✅ — Parser no webhook insere na tabela `commitments` com `session_id: null`
-3. **Tags de tema em conversas livres** ✅ — Instrução explícita no prompt para usar `[TEMA_NOVO]`, `[TEMA_PROGREDINDO]` etc. fora de sessões
-4. **Contexto dinâmico `## Processo Terapêutico`** ✅ — Injeta técnicas já usadas e compromissos pendentes no contexto do modelo
+**2. Refinar Anti-Loop (linhas 903-907)**
+Reescrever integrando contexto:
+- Se respostas curtas são **confirmações** ("ok", "certo", "sim", "viu") → NÃO é loop, é concordância. Reformule com opções concretas ou assuma e siga.
+- Se respostas curtas são **evasão** (tema emocional aberto + respostas monossilábicas sem responder à pergunta) → aí sim ofereça sua leitura.
+- **NUNCA** diga "tô percebendo que você tá respondendo curtinho" para usuários em trial ou com <20 trocas.
 
-### O que NÃO foi feito (por design)
-- Detecção de fase terapêutica (Presença/Sentido/Movimento) — o modelo infere do histórico
-- Categoria `insight_chave` — `session_themes` já cobre
-- Migração de banco — `user_insights.category` é text livre, suporta `tecnica` nativamente
+**3. Integrar travamento intra-conversa na Fase 1 do Modo Profundo (após linha 1005)**
+Adicionar ao corpo da Fase 1:
+```
+TRAVAMENTO INTRA-CONVERSA (detecte em tempo real):
+Se o usuário deu 3+ respostas curtas seguidas que NÃO respondem suas perguntas:
+- Primeiro: reformule com opções concretas ("Seria mais 6h-7h ou 8h-9h?")
+- Se continuar: assuma uma resposta razoável e siga ("Vou considerar 7h — me corrige se for diferente!")
+- NÃO encerre a conversa. NÃO aponte que as respostas são curtas.
+- Trial/novos: respostas curtas de confirmação são NORMAIS. Continue engajando.
+```
+
+**4. Mover Detecção de Travamento Recorrente (linhas 966-988) para contexto dinâmico**
+Remover do prompt estático. O contexto dinâmico já injeta `user_insights` e `commitments` — adicionar uma linha no builder de contexto que, quando detectar commitments com `status: pending` e `follow_up_count >= 2`, injete: "⚠️ [Nome] tem compromissos recorrentes não cumpridos sobre [tema]. Considere confronto afetuoso."
+
+**5. Eliminar Cenários A/B/C/D (linhas 1096-1180)**
+São duplicatas:
+- Cenário A (Presença) = Modo Profundo Fase 1
+- Cenário B (Direção) = Modo Direção (já detalhado em 1100-1139, manter esse bloco mas renomear)
+- Cenário C (Emergência) = manter como modo separado (2 linhas)
+- Cenário D (Padrão) = redundante com a seção Ping-Pong vs Profundo
+
+Substituir por referência simples: "Classifique: Ping-Pong, Profundo, Direção ou Emergência. Siga o protocolo do modo identificado."
+
+**6. Protocolo de Condução (linhas 939-954)**
+Manter, é complementar (ancoragem no tema, fechamento de loop). Não conflita.
+
+### Resultado esperado
+
+- ~150 linhas removidas do prompt
+- 1 árvore de decisão clara em vez de 6 frameworks concorrentes
+- Travamento intra-conversa protegido na Fase 1
+- Travamento inter-conversas no contexto dinâmico
+- Trial users protegidos contra encerramento prematuro
+
+### Arquivo e deploy
+- `supabase/functions/aura-agent/index.ts` — edições no system prompt + builder de contexto dinâmico
+- Deploy: `aura-agent`
+
