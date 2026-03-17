@@ -799,9 +799,10 @@ Tô aqui te esperando. 🤗`;
             const savedMsg = `Guardei sua mensagem com carinho! 💜✨\n\nVou te enviar de volta no dia ${deliverDateStr}. Vai ser uma surpresa especial do seu eu de hoje pro seu eu do futuro 🫶`;
             await sendTextMessage(payload.cleanPhone, savedMsg, undefined, instanceConfig);
             await supabase.from('messages').insert([
-              { user_id: profile.user_id, role: 'user', content: messageText },
+              ...(!inboundSaved ? [{ user_id: profile.user_id, role: 'user', content: messageText }] : []),
               { user_id: profile.user_id, role: 'assistant', content: savedMsg },
             ]);
+            inboundSaved = true;
 
             console.log(`✅ Time capsule saved for user ${profile.user_id}, deliver_at: ${deliverDateStr}`);
             return new Response(JSON.stringify({ status: 'capsule_saved' }), {
