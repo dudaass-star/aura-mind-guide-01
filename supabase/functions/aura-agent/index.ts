@@ -27,6 +27,59 @@ function normalizePlan(planFromDb: string | null): string {
   return planMapping[planFromDb || 'essencial'] || 'essencial';
 }
 
+// ========================================================================
+// Função centralizada para remover TODAS as tags internas da Aura
+// Usada antes de salvar no banco E antes de enviar ao WhatsApp
+// ========================================================================
+function stripAllInternalTags(text: string): string {
+  return text
+    // Timestamps espúrios gerados pela Aura
+    .replace(/^\[\d{2}\/\d{2}\/\d{4},?\s*\d{2}:\d{2}\]\s*/g, '')
+    // Blocos compostos
+    .replace(/\[INSIGHTS\][\s\S]*?\[\/INSIGHTS\]/gi, '')
+    // Tags de modo/estado
+    .replace(/\[MODO_AUDIO\]/gi, '')
+    .replace(/\[AGUARDANDO_RESPOSTA\]/gi, '')
+    .replace(/\[CONVERSA_CONCLUIDA\]/gi, '')
+    .replace(/\[ENCERRAR_SESSAO\]/gi, '')
+    .replace(/\[INICIAR_SESSAO\]/gi, '')
+    .replace(/\[REATIVAR_SESSAO\]/gi, '')
+    .replace(/\[VALOR_ENTREGUE\]/gi, '')
+    // Tags de sessão
+    .replace(/\[AGENDAR_SESSAO:[^\]]+\]/gi, '')
+    .replace(/\[REAGENDAR_SESSAO:[^\]]+\]/gi, '')
+    .replace(/\[SESSAO_PERDIDA_RECUSADA\]/gi, '')
+    // Tags de tema
+    .replace(/\[TEMA_NOVO:[^\]]+\]/gi, '')
+    .replace(/\[TEMA_RESOLVIDO:[^\]]+\]/gi, '')
+    .replace(/\[TEMA_PROGREDINDO:[^\]]+\]/gi, '')
+    .replace(/\[TEMA_ESTAGNADO:[^\]]+\]/gi, '')
+    // Tags de compromisso
+    .replace(/\[COMPROMISSO:[^\]]+\]/gi, '')
+    .replace(/\[COMPROMISSO_CUMPRIDO:[^\]]+\]/gi, '')
+    .replace(/\[COMPROMISSO_ABANDONADO:[^\]]+\]/gi, '')
+    .replace(/\[COMPROMISSO_RENEGOCIADO:[^\]]+\]/gi, '')
+    .replace(/\[COMPROMISSO_LIVRE:[^\]]+\]/gi, '')
+    // Tags de jornada/conteúdo
+    .replace(/\[LISTAR_JORNADAS\]/gi, '')
+    .replace(/\[TROCAR_JORNADA:[^\]]+\]/gi, '')
+    .replace(/\[PAUSAR_JORNADAS\]/gi, '')
+    // Tags de controle
+    .replace(/\[NAO_PERTURBE:\d+h?\]/gi, '')
+    .replace(/\[PAUSAR_SESSOES[^\]]*\]/gi, '')
+    .replace(/\[AGENDAR_TAREFA:[^\]]+\]/gi, '')
+    .replace(/\[CANCELAR_TAREFA:[^\]]+\]/gi, '')
+    .replace(/\[CAPSULA_DO_TEMPO\]/gi, '')
+    .replace(/\[MEDITACAO:[^\]]+\]/gi, '')
+    .replace(/\[UPGRADE:[^\]]+\]/gi, '')
+    .replace(/\[INSIGHT:[^\]]+\]/gi, '')
+    .replace(/\[CRIAR_AGENDA:[^\]]+\]/gi, '')
+    // Catch-all: qualquer tag [ALGO] ou [ALGO:valor] remanescente
+    // (segurança para tags futuras esquecidas)
+    .replace(/\[[A-Z_]{3,}(?::[^\]]+)?\]/g, '')
+    .trim();
+}
+
 // Função para obter data/hora atual em São Paulo (mais confiável que toLocaleTimeString no Deno)
 function getCurrentDateTimeContext(): { 
   currentDate: string; 
