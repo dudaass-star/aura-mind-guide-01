@@ -4723,6 +4723,31 @@ Exemplo com 4 sessões:
     assistantMessage = assistantMessage.replace(/\[COMPROMISSO_RENEGOCIADO:[^\]]+\]/gi, '');
 
     // ========================================================================
+    // PROCESSAR TAGS DE COMPROMISSO LIVRE (conversas fora de sessão)
+    // ========================================================================
+    
+    const commitmentFreeMatches = assistantMessage.matchAll(/\[COMPROMISSO_LIVRE:([^\]]+)\]/gi);
+    
+    if (profile?.user_id) {
+      for (const match of commitmentFreeMatches) {
+        const title = match[1].trim();
+        console.log('📋 Free commitment detected:', title);
+        
+        await supabase
+          .from('commitments')
+          .insert({
+            user_id: profile.user_id,
+            title: title,
+            completed: false,
+            commitment_status: 'pending',
+            session_id: null
+          });
+      }
+    }
+    
+    assistantMessage = assistantMessage.replace(/\[COMPROMISSO_LIVRE:[^\]]+\]/gi, '');
+
+    // ========================================================================
     // PROCESSAR TAGS DE JORNADA
     // ========================================================================
     
