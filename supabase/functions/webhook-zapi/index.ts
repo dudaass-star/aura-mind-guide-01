@@ -388,6 +388,24 @@ Deno.serve(async (req) => {
     console.log(`👤 Found user: ${profile.name} (${profile.user_id}), status: ${profile.status}, instance: ${profile.whatsapp_instance_id || 'env-default'}`);
 
     // ========================================================================
+    // PERSIST INBOUND MESSAGE IMMEDIATELY (before any early return)
+    // ========================================================================
+    let inboundSaved = false;
+    if (messageText) {
+      try {
+        await supabase.from('messages').insert({
+          user_id: profile.user_id,
+          role: 'user',
+          content: messageText,
+        });
+        inboundSaved = true;
+        console.log(`💾 Inbound message persisted for user ${profile.user_id}`);
+      } catch (persistErr) {
+        console.warn('⚠️ Failed to persist inbound message:', persistErr);
+      }
+    }
+
+    // ========================================================================
     // SUBSCRIPTION STATUS CHECK - Bloquear usuários sem assinatura ativa
     // ========================================================================
     const blockedStatuses = ['canceled', 'inactive', 'paused'];
@@ -678,9 +696,10 @@ Tô aqui te esperando. 🤗`;
           await sendTextMessage(payload.cleanPhone, confirmMsg, undefined, instanceConfig);
 
           await supabase.from('messages').insert([
-            { user_id: profile.user_id, role: 'user', content: messageText || '[áudio para cápsula do tempo]' },
+            ...(!inboundSaved ? [{ user_id: profile.user_id, role: 'user', content: messageText || '[áudio para cápsula do tempo]' }] : []),
             { user_id: profile.user_id, role: 'assistant', content: confirmMsg },
           ]);
+          inboundSaved = true;
 
           return new Response(JSON.stringify({ status: 'capsule_audio_received' }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -690,9 +709,10 @@ Tô aqui te esperando. 🤗`;
         const reminderMsg = `Manda um áudio pra eu guardar sua voz! 🎙️ Quando quiser desistir, é só dizer "deixa pra lá" 💜`;
         await sendTextMessage(payload.cleanPhone, reminderMsg, undefined, instanceConfig);
         await supabase.from('messages').insert([
-          { user_id: profile.user_id, role: 'user', content: messageText },
+          ...(!inboundSaved ? [{ user_id: profile.user_id, role: 'user', content: messageText }] : []),
           { user_id: profile.user_id, role: 'assistant', content: reminderMsg },
         ]);
+        inboundSaved = true;
         return new Response(JSON.stringify({ status: 'capsule_awaiting_audio_reminder' }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
@@ -708,9 +728,10 @@ Tô aqui te esperando. 🤗`;
           const replaceMsg = `Troquei o áudio! 🎙️ Esse ficou bom? Me diz "pode guardar" quando tiver certeza 💜`;
           await sendTextMessage(payload.cleanPhone, replaceMsg, undefined, instanceConfig);
           await supabase.from('messages').insert([
-            { user_id: profile.user_id, role: 'user', content: messageText || '[novo áudio para cápsula]' },
+            ...(!inboundSaved ? [{ user_id: profile.user_id, role: 'user', content: messageText || '[novo áudio para cápsula]' }] : []),
             { user_id: profile.user_id, role: 'assistant', content: replaceMsg },
           ]);
+          inboundSaved = true;
           return new Response(JSON.stringify({ status: 'capsule_audio_replaced' }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
@@ -728,9 +749,10 @@ Tô aqui te esperando. 🤗`;
           const cancelMsg = `Tudo bem! Quando quiser gravar uma cápsula do tempo, é só falar 💜`;
           await sendTextMessage(payload.cleanPhone, cancelMsg, undefined, instanceConfig);
           await supabase.from('messages').insert([
-            { user_id: profile.user_id, role: 'user', content: messageText },
+            ...(!inboundSaved ? [{ user_id: profile.user_id, role: 'user', content: messageText }] : []),
             { user_id: profile.user_id, role: 'assistant', content: cancelMsg },
           ]);
+          inboundSaved = true;
           return new Response(JSON.stringify({ status: 'capsule_cancelled' }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
@@ -777,9 +799,10 @@ Tô aqui te esperando. 🤗`;
             const savedMsg = `Guardei sua mensagem com carinho! 💜✨\n\nVou te enviar de volta no dia ${deliverDateStr}. Vai ser uma surpresa especial do seu eu de hoje pro seu eu do futuro 🫶`;
             await sendTextMessage(payload.cleanPhone, savedMsg, undefined, instanceConfig);
             await supabase.from('messages').insert([
-              { user_id: profile.user_id, role: 'user', content: messageText },
+              ...(!inboundSaved ? [{ user_id: profile.user_id, role: 'user', content: messageText }] : []),
               { user_id: profile.user_id, role: 'assistant', content: savedMsg },
             ]);
+            inboundSaved = true;
 
             console.log(`✅ Time capsule saved for user ${profile.user_id}, deliver_at: ${deliverDateStr}`);
             return new Response(JSON.stringify({ status: 'capsule_saved' }), {
@@ -821,11 +844,14 @@ Tô aqui te esperando. 🤗`;
       await sendTextMessage(payload.cleanPhone, ratingResult.response, undefined, instanceConfig);
       
       // Salvar mensagens no histórico
-      await supabase.from('messages').insert({
-        user_id: profile.user_id,
-        role: 'user',
-        content: messageText
-      });
+      if (!inboundSaved) {
+        await supabase.from('messages').insert({
+          user_id: profile.user_id,
+          role: 'user',
+          content: messageText
+        });
+        inboundSaved = true;
+      }
       
       await supabase.from('messages').insert({
         user_id: profile.user_id,
@@ -848,11 +874,14 @@ Tô aqui te esperando. 🤗`;
       await sendTextMessage(payload.cleanPhone, confirmationResult.response, undefined, instanceConfig);
       
       // Salvar mensagens no histórico
-      await supabase.from('messages').insert({
-        user_id: profile.user_id,
-        role: 'user',
-        content: messageText
-      });
+      if (!inboundSaved) {
+        await supabase.from('messages').insert({
+          user_id: profile.user_id,
+          role: 'user',
+          content: messageText
+        });
+        inboundSaved = true;
+      }
       
       await supabase.from('messages').insert({
         user_id: profile.user_id,

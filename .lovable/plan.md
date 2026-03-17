@@ -1,61 +1,60 @@
+# Trial "Primeira Jornada" — Detecção de Marcos de Valor ✅ Implementado
 
+## Resumo
+Trial expandido de 10 para **50 mensagens ou 72h**, com detecção inteligente de "Aha Moment" em duas camadas para acionar nudges de conversão no momento certo.
 
-## Diagnóstico confirmado por leitura do código
+### Limites
+- Hard cap: 50 mensagens OU 72 horas (o que vier primeiro)
+- Fallback de nudges: msg 45 e 48 se Aha não detectado
 
-### Bug principal (linha 515-618 do `webhook-zapi/index.ts`)
-Quando `effectiveTrialCount >= 50 || hoursElapsed >= 72`, o código:
-1. Envia CTA de limite
-2. Agenda follow-ups
-3. Faz `return` **sem salvar a mensagem do usuário na tabela `messages`**
+### Fases do Trial (`trial_phase`)
+- `listening` — Escuta ativa (msgs 1-7, sem intervenção)
+- `value_delivered` — Aura entregou valor real (tag `[VALOR_ENTREGUE]`)
+- `aha_reached` — Usuário reagiu positivamente ao valor (detectado por heurísticas)
+- `converting` — Nudges de conversão ativos
 
-### Contador de trial — NÃO há consumo silencioso
-O incremento do contador acontece na **linha 620-631**, DEPOIS do hard limit check. Então quando a Elvira já está em 50/50, mensagens novas batem no return sem incrementar. O contador está correto — o problema é exclusivamente de persistência.
+### Detecção em Duas Camadas
 
-### Outros caminhos com o mesmo bug
-- **Status bloqueado** (linha 394-425): `canceled/inactive/paused` — envia CTA e retorna sem salvar
-- **Áudio sem transcrição** (linha 647-659): envia pedido de reenvio e retorna sem salvar
-- **Cápsula do tempo** (linha 666+): este JÁ salva corretamente
+**Camada 1 — Tag da Aura: `[VALOR_ENTREGUE]`**
+- Aura marca quando entrega: reframe, técnica prática, insight estruturado
+- NÃO marca: validação simples, perguntas abertas, acolhimento genérico
+- Webhook detecta a tag → `trial_phase = 'value_delivered'`
+
+**Camada 2 — Resposta do Usuário**
+- Só avaliada quando `trial_phase = 'value_delivered'` E `count >= 8`
+- Detecta palavras-chave positivas sem "?" (lista de ~25 termos)
+- Ao detectar → `trial_phase = 'aha_reached'`, salva `trial_aha_at_count`
+
+### Sequência de Nudges
+- Aha + 2 msgs: nudge suave ("Tô adorando te conhecer...")
+- Aha + 4 msgs: nudge com link de checkout
+- Fallback msg 45: nudge se Aha não detectado
+- Fallback msg 48: nudge final
+- Msg 50 / 72h: bloqueio + follow-up sequence (5 touchpoints)
+
+### O que foi implementado
+1. **Migração SQL** ✅ — `trial_phase text` e `trial_aha_at_count integer` em `profiles`
+2. **`aura-agent/index.ts`** ✅ — Tag `[VALOR_ENTREGUE]` + contexto dinâmico por fase/aha
+3. **`webhook-zapi/index.ts`** ✅ — Limite 50/72h, detecção de tag, análise de Aha, strip de tag
+4. **`start-trial/index.ts`** ✅ — Mensagem de boas-vindas sem número fixo
+5. **Frontend** ✅ — `StartTrial.tsx`, `TrialStarted.tsx`, `AdminMessages.tsx`, `AdminEngagement.tsx`
+6. **`execute-scheduled-tasks/index.ts`** ✅ — Textos atualizados
+7. **`admin-engagement-metrics/index.ts`** ✅ — Funnel atualizado (20+ msgs = engajado)
 
 ---
 
-## Plano de implementação (5 tarefas, por prioridade)
+# Memória Terapêutica da Aura ✅ Implementado
 
-### 1. Persistir inbound antes de qualquer early return
-**Arquivo:** `supabase/functions/webhook-zapi/index.ts`
+## Resumo
+Aura agora rastreia técnicas terapêuticas usadas, captura compromissos de conversas livres, e usa tags de tema fora de sessões formais.
 
-Inserir a mensagem do usuário na tabela `messages` logo após a seção de USER LOOKUP (linha ~388), antes dos blocos de subscription check e trial limit. Criar uma flag `let inboundSaved = false` para evitar duplicata nos caminhos que já fazem insert.
+### O que foi implementado
+1. **`tecnica` como categoria de insight** ✅ — Prioridade alta no prompt, exemplos: reframe_sofrimento, responsabilidade_radical, derreflexao, etc.
+2. **Tag `[COMPROMISSO_LIVRE:texto]`** ✅ — Parser no webhook insere na tabela `commitments` com `session_id: null`
+3. **Tags de tema em conversas livres** ✅ — Instrução explícita no prompt para usar `[TEMA_NOVO]`, `[TEMA_PROGREDINDO]` etc. fora de sessões
+4. **Contexto dinâmico `## Processo Terapêutico`** ✅ — Injeta técnicas já usadas e compromissos pendentes no contexto do modelo
 
-Ponto exato: entre a linha 388 (log do usuário encontrado) e a linha 393 (subscription status check).
-
-```
-// Após encontrar o perfil e antes de qualquer early return:
-if (messageText) {
-  await supabase.from('messages').insert({
-    user_id: profile.user_id,
-    role: 'user',
-    content: messageText,
-  });
-  inboundSaved = true;
-}
-```
-
-Nos caminhos que já inserem a mensagem (cápsula do tempo, fluxo normal do aura-agent), verificar `if (!inboundSaved)` antes de inserir novamente.
-
-### 2. Flag de deduplicação
-Declarar `let inboundSaved = false` no início do handler. Marcar como `true` após o insert acima. Nos pontos existentes que já fazem insert de `role: 'user'` (cápsula do tempo ~linha 680-683, 692-695, e o insert final antes do aura-agent), adicionar guard `if (!inboundSaved)`.
-
-### 3. Badge visual no admin para mensagens automáticas
-**Arquivo:** `src/pages/AdminMessages.tsx`
-
-Diferenciar mensagens automáticas de follow-up/CTA das conversacionais. Lógica: detectar padrões conhecidos no conteúdo (ex: contém link de checkout, ou começa com textos de follow-up conhecidos como "Nossa primeira jornada", "acabei de perceber"). Exibir um badge `🤖 auto` ou `📢 CTA` ao lado do timestamp.
-
-### 4. Limpeza de duplicatas da Elvira e outros
-**Via migração SQL:**
-- Deletar mensagens duplicadas de follow-up/CTA usando `ROW_NUMBER()` particionado por `user_id` + primeiros 60 chars do conteúdo + `role = 'assistant'`
-- Manter apenas a cópia mais antiga de cada mensagem repetida
-- Escopo: todos os usuários, não só a Elvira
-
-### 5. Deploy e validação
-- Deploy da edge function `webhook-zapi`
-- Testar: enviar mensagem de um trial com limite atingido e confirmar que aparece no admin
-
+### O que NÃO foi feito (por design)
+- Detecção de fase terapêutica (Presença/Sentido/Movimento) — o modelo infere do histórico
+- Categoria `insight_chave` — `session_themes` já cobre
+- Migração de banco — `user_insights.category` é text livre, suporta `tecnica` nativamente

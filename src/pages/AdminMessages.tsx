@@ -185,6 +185,25 @@ export default function AdminMessages() {
   const truncateText = (text: string, maxLength: number) =>
     text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
 
+  const isAutomatedMessage = (content: string): boolean => {
+    const patterns = [
+      'olaaura.com.br/checkout',
+      'Nossa primeira jornada foi muito especial',
+      'acabei de perceber que você não destravou',
+      'Sua assinatura foi encerrada',
+      'Sua conta está inativa',
+      'Sua assinatura está pausada',
+      'sei que a vida puxa a gente de volta',
+      'Foi muito especial conversar',
+      'Tô adorando te conhecer',
+      'quando você quiser continuar',
+      'por menos de R$1 por dia',
+      'Sinto sua falta',
+    ];
+    const lower = content.toLowerCase();
+    return patterns.some(p => lower.includes(p.toLowerCase()));
+  };
+
   const formatMessageTime = (dateStr: string) => {
     const date = new Date(dateStr);
     const now = new Date();
@@ -350,27 +369,37 @@ export default function AdminMessages() {
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      {messages.map(msg => (
-                        <div
-                          key={msg.id}
-                          className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                        >
+                      {messages.map(msg => {
+                        const isAutoMessage = msg.role === 'assistant' && isAutomatedMessage(msg.content);
+                        return (
                           <div
-                            className={`max-w-[75%] rounded-2xl px-4 py-2 ${
-                              msg.role === 'user'
-                                ? 'bg-primary text-primary-foreground rounded-br-md'
-                                : 'bg-muted text-foreground rounded-bl-md'
-                            }`}
+                            key={msg.id}
+                            className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                           >
-                            <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>
-                            <p className={`text-[10px] mt-1 ${
-                              msg.role === 'user' ? 'text-primary-foreground/70' : 'text-muted-foreground'
-                            }`}>
-                              {format(new Date(msg.created_at), 'dd/MM HH:mm')}
-                            </p>
+                            <div
+                              className={`max-w-[75%] rounded-2xl px-4 py-2 ${
+                                msg.role === 'user'
+                                  ? 'bg-primary text-primary-foreground rounded-br-md'
+                                  : isAutoMessage
+                                    ? 'bg-orange-100 dark:bg-orange-900/30 text-foreground rounded-bl-md border border-orange-200 dark:border-orange-800'
+                                    : 'bg-muted text-foreground rounded-bl-md'
+                              }`}
+                            >
+                              {isAutoMessage && (
+                                <Badge variant="outline" className="text-[9px] px-1 py-0 mb-1 border-orange-300 text-orange-600 dark:text-orange-400">
+                                  🤖 auto
+                                </Badge>
+                              )}
+                              <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>
+                              <p className={`text-[10px] mt-1 ${
+                                msg.role === 'user' ? 'text-primary-foreground/70' : 'text-muted-foreground'
+                              }`}>
+                                {format(new Date(msg.created_at), 'dd/MM HH:mm')}
+                              </p>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                       <div ref={messagesEndRef} />
                     </div>
                   )}
