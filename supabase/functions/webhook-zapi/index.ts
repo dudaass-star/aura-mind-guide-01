@@ -749,9 +749,10 @@ Tô aqui te esperando. 🤗`;
           const cancelMsg = `Tudo bem! Quando quiser gravar uma cápsula do tempo, é só falar 💜`;
           await sendTextMessage(payload.cleanPhone, cancelMsg, undefined, instanceConfig);
           await supabase.from('messages').insert([
-            { user_id: profile.user_id, role: 'user', content: messageText },
+            ...(!inboundSaved ? [{ user_id: profile.user_id, role: 'user', content: messageText }] : []),
             { user_id: profile.user_id, role: 'assistant', content: cancelMsg },
           ]);
+          inboundSaved = true;
           return new Response(JSON.stringify({ status: 'capsule_cancelled' }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
