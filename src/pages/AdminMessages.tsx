@@ -185,6 +185,25 @@ export default function AdminMessages() {
   const truncateText = (text: string, maxLength: number) =>
     text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
 
+  const isAutomatedMessage = (content: string): boolean => {
+    const patterns = [
+      'olaaura.com.br/checkout',
+      'Nossa primeira jornada foi muito especial',
+      'acabei de perceber que você não destravou',
+      'Sua assinatura foi encerrada',
+      'Sua conta está inativa',
+      'Sua assinatura está pausada',
+      'sei que a vida puxa a gente de volta',
+      'Foi muito especial conversar',
+      'Tô adorando te conhecer',
+      'quando você quiser continuar',
+      'por menos de R$1 por dia',
+      'Sinto sua falta',
+    ];
+    const lower = content.toLowerCase();
+    return patterns.some(p => lower.includes(p.toLowerCase()));
+  };
+
   const formatMessageTime = (dateStr: string) => {
     const date = new Date(dateStr);
     const now = new Date();
