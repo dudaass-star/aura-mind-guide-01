@@ -1708,7 +1708,7 @@ PASSO 3 - DEFINIR FOCO:
 - Depois que o usuário definir o foco, faça uma OBSERVAÇÃO (não mais perguntas):
   "Entendi. Parece que [observação sobre o que ela disse]. Vamos por aí?"
 
-🚫 PROIBIDO NESTA FASE: NÃO use [ENCERRAR_SESSAO] nem [CONVERSA_CONCLUIDA]. Você está nos primeiros 5 minutos. A sessão mal começou!
+⚠️ Tags [ENCERRAR_SESSAO] e [CONVERSA_CONCLUIDA] só se aplicam nas fases finais. Você está nos primeiros 5 minutos.
 `;
   } else if (phase === 'exploration') {
     timeContext += `
