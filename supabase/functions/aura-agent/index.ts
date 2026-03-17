@@ -1775,7 +1775,7 @@ IMPORTANTE: Se a exploração ainda estava rasa (respostas curtas, sem emoções
 - Comece a consolidar os aprendizados: "Então o que estou entendendo é..."
 - Pergunte: "O que você está levando dessa nossa conversa?"
 
-🚫 PROIBIDO NESTA FASE: NÃO use [ENCERRAR_SESSAO] nem [CONVERSA_CONCLUIDA]. Você tem ${timeRemaining} minutos restantes. Ainda não é hora de fechar.
+⚠️ Faltam ${timeRemaining} min — continue nesta fase, sem encerrar prematuramente.
 `;
   } else if (phase === 'transition') {
     timeContext += `
