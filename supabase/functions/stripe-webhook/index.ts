@@ -128,9 +128,10 @@ Deno.serve(async (req) => {
         .eq('phone', formattedPhone)
         .single();
 
+      const isTrial = session.metadata?.trial === 'true';
       const isReturning = existingProfile?.status === 'canceled';
       const isUpgrade = !!existingProfile && !isReturning;
-      console.log(`📋 Profile exists: ${!!existingProfile}, isReturning: ${isReturning}, isUpgrade: ${isUpgrade}`);
+      console.log(`📋 Profile exists: ${!!existingProfile}, isReturning: ${isReturning}, isUpgrade: ${isUpgrade}, isTrial: ${isTrial}`);
 
       // Build message based on user scenario
       let welcomeMessage: string;
