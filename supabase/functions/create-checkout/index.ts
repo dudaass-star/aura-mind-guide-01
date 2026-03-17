@@ -64,7 +64,7 @@ serve(async (req) => {
     }
 
     // Validate billing period
-    const billingPeriod = billing === "yearly" ? "yearly" : "monthly";
+    const billingPeriod = billingOverride === "yearly" ? "yearly" : "monthly";
     const priceId = PRICES[plan][billingPeriod];
 
     if (!priceId) {
