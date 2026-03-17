@@ -26,7 +26,7 @@ const FinalCTA = () => {
 
           <Link to="/experimentar">
             <Button variant="sage" size="xl" className="min-w-[280px] mb-6">
-              Experimentar Grátis
+              Experimentar 7 dias grátis
             </Button>
           </Link>
 

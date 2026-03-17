@@ -1,16 +1,15 @@
 import { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, MessageCircle, CreditCard, Clock, Sparkles } from "lucide-react";
+import { ArrowLeft, MessageCircle, Shield, Clock, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import logoOlaAura from "@/assets/logo-ola-aura.png";
 
 const StartTrial = () => {
-  const navigate = useNavigate();
   const { toast } = useToast();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -45,55 +44,34 @@ const StartTrial = () => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     
     if (!name.trim()) {
-      toast({
-        title: "Nome é obrigatório",
-        description: "Por favor, digite seu nome.",
-        variant: "destructive",
-      });
+      toast({ title: "Nome é obrigatório", description: "Por favor, digite seu nome.", variant: "destructive" });
       return;
     }
 
     if (!emailRegex.test(email)) {
-      toast({
-        title: "Email inválido",
-        description: "Por favor, insira um email válido.",
-        variant: "destructive",
-      });
+      toast({ title: "Email inválido", description: "Por favor, insira um email válido.", variant: "destructive" });
       return;
     }
 
     if (cleanPhone.length < 10 || cleanPhone.length > 11) {
-      toast({
-        title: "WhatsApp inválido",
-        description: "Por favor, digite um número válido com DDD.",
-        variant: "destructive",
-      });
+      toast({ title: "WhatsApp inválido", description: "Por favor, digite um número válido com DDD.", variant: "destructive" });
       return;
     }
 
     setIsLoading(true);
 
-    // Generate event_id for deduplication between client pixel and server CAPI
     const eventId = crypto.randomUUID();
 
     try {
-      const { data, error } = await supabase.functions.invoke("start-trial", {
-        body: { name: name.trim(), email: email.trim(), phone: cleanPhone, event_id: eventId },
+      const { data, error } = await supabase.functions.invoke("create-checkout", {
+        body: { plan: "essencial", trial: true, name: name.trim(), email: email.trim(), phone: cleanPhone },
       });
 
       if (error) throw error;
 
-      if (data.alreadyExists) {
-        toast({
-          title: "Você já usou seu trial",
-          description: "Esse número já tem um cadastro. Escolha um plano para continuar!",
-          variant: "default",
-        });
-        navigate("/checkout");
-        return;
-      }
+      if (!data?.url) throw new Error("Não foi possível criar a sessão de pagamento.");
 
-      // Track Lead event with event_id for deduplication
+      // Track Lead event
       if (typeof window !== 'undefined' && (window as any).fbq) {
         (window as any).fbq('track', 'Lead', {
           content_name: 'Trial Start',
@@ -101,11 +79,8 @@ const StartTrial = () => {
         }, { eventID: eventId });
       }
 
-      // Salvar no localStorage para a página de confirmação
-      localStorage.setItem("trialName", name.trim());
-      localStorage.setItem("trialPhone", cleanPhone);
-
-      navigate("/trial-iniciado");
+      // Redirect to Stripe Checkout
+      window.location.href = data.url;
     } catch (error: any) {
       console.error("Trial error:", error);
       toast({
@@ -113,7 +88,6 @@ const StartTrial = () => {
         description: error.message || "Tente novamente em alguns instantes.",
         variant: "destructive",
       });
-    } finally {
       setIsLoading(false);
     }
   };
@@ -121,12 +95,11 @@ const StartTrial = () => {
   return (
     <>
       <Helmet>
-        <title>Experimentar Grátis | AURA</title>
-        <meta name="description" content="Experimente a AURA gratuitamente. 5 conversas sem compromisso, sem cartão de crédito." />
+        <title>Experimentar 7 dias grátis | AURA</title>
+        <meta name="description" content="Experimente a AURA por 7 dias grátis. Sem cobrança nos primeiros 7 dias — cancele quando quiser." />
       </Helmet>
 
       <div className="min-h-screen bg-gradient-hero">
-        {/* Header */}
         <header className="py-4 px-4">
           <div className="container mx-auto flex items-center justify-between">
             <Link to="/" className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
@@ -142,92 +115,62 @@ const StartTrial = () => {
 
         <main className="container mx-auto px-4 py-8">
           <div className="max-w-md mx-auto">
-            {/* Hero */}
             <div className="text-center mb-8">
               <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full text-primary text-sm font-medium mb-4">
                 <Sparkles className="w-4 h-4" />
-                100% Grátis
+                7 dias grátis
               </div>
               <h1 className="font-display text-2xl md:text-3xl font-bold text-foreground mb-3">
                 Experimente a AURA
               </h1>
               <p className="text-muted-foreground">
-                Suas primeiras conversas com a AURA, sem compromisso.
+                Sem cobrança nos primeiros 7 dias — cancele quando quiser.
               </p>
             </div>
 
-            {/* Benefícios */}
             <div className="grid grid-cols-3 gap-3 mb-8">
               <div className="bg-card/50 rounded-xl p-3 text-center">
                 <MessageCircle className="w-5 h-5 text-primary mx-auto mb-1" />
-                <p className="text-xs text-muted-foreground">Conversas grátis</p>
+                <p className="text-xs text-muted-foreground">Acesso completo</p>
               </div>
               <div className="bg-card/50 rounded-xl p-3 text-center">
-                <CreditCard className="w-5 h-5 text-primary mx-auto mb-1" />
-                <p className="text-xs text-muted-foreground">Sem cartão</p>
+                <Shield className="w-5 h-5 text-primary mx-auto mb-1" />
+                <p className="text-xs text-muted-foreground">Cancele quando quiser</p>
               </div>
               <div className="bg-card/50 rounded-xl p-3 text-center">
                 <Clock className="w-5 h-5 text-primary mx-auto mb-1" />
-                <p className="text-xs text-muted-foreground">Sem prazo</p>
+                <p className="text-xs text-muted-foreground">Sem cobrança por 7 dias</p>
               </div>
             </div>
 
-            {/* Formulário */}
             <form onSubmit={handleSubmit} className="bg-card rounded-2xl p-6 shadow-lg border border-border/50">
               <div className="space-y-4">
                 <div>
                   <Label htmlFor="name" className="text-foreground">Seu nome</Label>
-                  <Input
-                    id="name"
-                    type="text"
-                    placeholder="Como posso te chamar?"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="mt-1.5"
-                    disabled={isLoading}
-                  />
+                  <Input id="name" type="text" placeholder="Como posso te chamar?" value={name} onChange={(e) => setName(e.target.value)} className="mt-1.5" disabled={isLoading} />
                 </div>
                 <div>
                   <Label htmlFor="email" className="text-foreground">Seu email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="seu@email.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="mt-1.5"
-                    disabled={isLoading}
-                  />
+                  <Input id="email" type="email" placeholder="seu@email.com" value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1.5" disabled={isLoading} />
                 </div>
                 <div>
                   <Label htmlFor="phone" className="text-foreground">WhatsApp</Label>
-                  <Input
-                    id="phone"
-                    type="tel"
-                    placeholder="(11) 99999-9999"
-                    value={phone}
-                    onChange={handlePhoneChange}
-                    className="mt-1.5"
-                    disabled={isLoading}
-                  />
+                  <Input id="phone" type="tel" placeholder="(11) 99999-9999" value={phone} onChange={handlePhoneChange} className="mt-1.5" disabled={isLoading} />
                   <p className="text-xs text-muted-foreground mt-1">
                     A AURA vai te mandar uma mensagem por lá
                   </p>
                 </div>
               </div>
 
-              <Button
-                type="submit"
-                variant="sage"
-                size="lg"
-                className="w-full mt-6"
-                disabled={isLoading}
-              >
-                {isLoading ? "Iniciando..." : "Começar Grátis"}
+              <Button type="submit" variant="sage" size="lg" className="w-full mt-6" disabled={isLoading}>
+                {isLoading ? "Redirecionando..." : "Começar 7 dias grátis"}
               </Button>
+
+              <p className="text-center text-xs text-muted-foreground mt-3">
+                Você será redirecionado para o pagamento seguro via Stripe
+              </p>
             </form>
 
-            {/* Trust */}
             <p className="text-center text-xs text-muted-foreground mt-6">
               Ao continuar, você concorda com nossos{" "}
               <Link to="/termos" className="underline">Termos</Link> e{" "}

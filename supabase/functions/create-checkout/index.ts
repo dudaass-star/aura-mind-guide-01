@@ -140,13 +140,14 @@ serve(async (req) => {
       mode: "subscription",
       locale: "pt-BR",
       success_url: `${origin}/obrigado?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}/checkout`,
+      cancel_url: trial ? `${origin}/experimentar` : `${origin}/checkout`,
       metadata: {
         phone: phoneClean,
         name: name,
         email: email,
         plan: plan,
         billing: billingPeriod,
+        ...(trial && { trial: "true" }),
       },
       subscription_data: {
         metadata: {
@@ -155,7 +156,9 @@ serve(async (req) => {
           email: email,
           plan: plan,
           billing: billingPeriod,
+          ...(trial && { trial: "true" }),
         },
+        ...(trial && { trial_period_days: 7 }),
       },
       payment_method_types: ["card"],
     };
