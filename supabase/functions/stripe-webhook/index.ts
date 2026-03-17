@@ -236,7 +236,7 @@ Me diz: como você está hoje?`;
               phone: formattedPhone,
               email: customerEmail,
               plan: customerPlan,
-              status: 'active',
+              status: isTrial ? 'trial' : 'active',
               sessions_used_this_month: 0,
               sessions_reset_date: today,
               messages_today: 0,
