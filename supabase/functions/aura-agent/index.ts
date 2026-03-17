@@ -3662,6 +3662,22 @@ ${audioSessionContext}
 
 ## Memória de Longo Prazo
 ${formatInsightsForContext(userInsights)}
+
+## Processo Terapêutico
+${(() => {
+  const techniques = userInsights?.filter((i: any) => i.category === 'tecnica') || [];
+  const pendingCommitmentsData = pendingCommitmentsArray || [];
+  let ctx = '';
+  if (techniques.length > 0) {
+    ctx += `- Técnicas já usadas: ${techniques.map((t: any) => t.value || t.key).join(', ')}\n`;
+  } else {
+    ctx += '- Nenhuma técnica registrada ainda\n';
+  }
+  if (pendingCommitmentsData.length > 0) {
+    ctx += `- Compromissos pendentes: ${pendingCommitmentsData.map((c: any) => c.title).join(', ')}\n`;
+  }
+  return ctx;
+})()}
 ${meditationCatalogSection}
 `;
 
