@@ -44,19 +44,22 @@ Deno.serve(async (req) => {
 
     // ========== ENGAGEMENT METRICS ==========
 
-    // 1. Active users count (base)
-    const { count: activeUsers } = await supabase
+    // 1. Active users count (base) — all profiles with status 'active'
+    const { count: activeUsersBase } = await supabase
       .from('profiles')
       .select('*', { count: 'exact', head: true })
       .eq('status', 'active');
 
-    // 1b. Active users in selected period
-    const { count: activeUsersInPeriod } = await supabase
-      .from('profiles')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'active')
-      .gte('last_message_date', periodStartDate)
-      .lte('last_message_date', periodEndDate);
+    // 1b. Active users in selected period — distinct users who sent messages
+    const { data: periodMessages } = await supabase
+      .from('messages')
+      .select('user_id')
+      .eq('role', 'user')
+      .gte('created_at', periodStart)
+      .lte('created_at', periodEnd);
+
+    const uniqueUsersInPeriod = new Set(periodMessages?.map(m => m.user_id) || []);
+    const activeUsersInPeriod = uniqueUsersInPeriod.size;
 
     // 2. Messages in period
     const { count: weeklyMessages } = await supabase
@@ -135,15 +138,15 @@ Deno.serve(async (req) => {
     }
 
     // 6. Return rate in selected period
-    const uniqueRecentUsers = activeUsersInPeriod || 0;
-    const returnRate = activeUsers && activeUsers > 0
-      ? Math.round(uniqueRecentUsers / activeUsers * 100)
+    const uniqueRecentUsers = activeUsersInPeriod;
+    const returnRate = activeUsersBase && activeUsersBase > 0
+      ? Math.round(uniqueRecentUsers / activeUsersBase * 100)
       : 0;
 
     // Average daily messages per user (based on period length)
-    const periodDays = Math.max(1, Math.round((new Date(periodEnd).getTime() - new Date(periodStart).getTime()) / (1000 * 60 * 60 * 24)));
-    const avgDailyMessagesPerUser = activeUsers && activeUsers > 0
-      ? Math.round((weeklyMessages || 0) / periodDays / activeUsers * 10) / 10
+    const periodDays = Math.max(1, Math.round((new Date(periodEnd).getTime() - new Date(periodStart).getTime()) / (1000 * 60 * 60 * 24))) || 1;
+    const avgDailyMessagesPerUser = activeUsersInPeriod > 0
+      ? Math.round((weeklyMessages || 0) / periodDays / activeUsersInPeriod * 10) / 10
       : 0;
 
     // ========== TRIAL & CONVERSION METRICS (filtered by period) ==========
@@ -311,8 +314,8 @@ Deno.serve(async (req) => {
 
     return new Response(JSON.stringify({
       // Engagement
-      activeUsers: activeUsersInPeriod || 0,
-      activeUsersBase: activeUsers || 0,
+      activeUsers: activeUsersInPeriod,
+      activeUsersBase: activeUsersBase || 0,
       weeklyMessages: weeklyMessages || 0,
       weeklySessionsCount,
       avgSessionMinutes,
