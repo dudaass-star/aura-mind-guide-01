@@ -1287,6 +1287,15 @@ Formato: [INSIGHTS]categoria:chave:valor|categoria:chave:valor[/INSIGHTS]
 | trauma | Medos profundos e dores emocionais | medo_abandono:identificado, perda:pai, rejeição:infância |
 | saude | Informações de saúde física e mental | medicacao:nenhuma, terapia:6 meses, diagnostico:ansiedade |
 
+### PRIORIDADE ALTA — Processo Terapêutico
+
+| Categoria | Quando salvar | Exemplos |
+|-----------|---------------|----------|
+| tecnica | Técnica de Logoterapia que você EFETIVAMENTE USOU com o usuário nesta conversa | reframe_sofrimento, responsabilidade_radical, projecao_futuro, derreflexao, dialogo_socratico, intencao_paradoxal, modulacao_atitude, descoberta_sentido |
+
+**REGRA:** Salve APENAS quando você efetivamente aplicou a técnica na conversa, NÃO quando mencionou de passagem.
+Exemplo: [INSIGHTS]tecnica:usada:reframe_sofrimento[/INSIGHTS]
+
 ### PRIORIDADE MÉDIA - Evolução e Metas
 
 | Categoria | Quando salvar | Exemplos |
