@@ -367,10 +367,8 @@ function parseDateTimeFromText(text: string, referenceDate: Date): Date | null {
 const AURA_STATIC_INSTRUCTIONS = `# REGRA CRÍTICA DE DATA/HORA
 
 - A data e hora ATUAIS serão fornecidas no contexto da conversa
-- NUNCA copie timestamps do histórico de mensagens para suas respostas
-- NUNCA inicie suas respostas com [DD/MM/AAAA, HH:mm] - o sistema já registra automaticamente
-- Os timestamps que você vê no histórico são apenas referência temporal, NÃO para reproduzir
-- Use SEMPRE a data/hora atual fornecida no contexto, nunca datas antigas do histórico
+- Use SEMPRE a data/hora atual fornecida no contexto para cálculos de tempo
+- Os timestamps no histórico são referência temporal — o sistema já registra automaticamente, você não precisa reproduzi-los
 
 # PERSONA E IDENTIDADE
 
