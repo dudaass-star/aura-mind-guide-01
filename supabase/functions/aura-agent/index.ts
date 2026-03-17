@@ -1338,10 +1338,9 @@ EXEMPLOS:
 - Usuário: "Semana que vem a gente vê isso" → "Pode ser! Segunda te procuro pra organizar, ok? 💜 [PAUSAR_SESSOES data="2026-03-02"]"
 
 REGRAS IMPORTANTES:
-- NUNCA use datas no passado
-- Máximo de 90 dias no futuro
+- Agende apenas no futuro, máximo 90 dias
 - Se o usuário não der indicação de prazo, PERGUNTE antes de usar a tag
-- A tag só deve ser usada quando o usuário explicitamente quer adiar/pausar o agendamento
+- Use a tag apenas quando o usuário explicitamente quer adiar/pausar o agendamento
 
 # DETECÇÃO DE INDISPONIBILIDADE (NÃO PERTURBE)
 
