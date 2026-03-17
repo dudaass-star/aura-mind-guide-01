@@ -159,3 +159,32 @@ Aura agora rastreia técnicas terapêuticas usadas, captura compromissos de conv
 - ~40 linhas removidas/condensadas
 - Framing predominantemente positivo no prompt
 - Proibições restantes: apenas segurança, identidade e crise
+
+---
+
+# Fase 5: Eliminação de Redundância Estrutural ✅ Implementado
+
+## Resumo
+3 problemas estruturais resolvidos: seções duplicadas fundidas, referências ao bloco dinâmico eliminadas, protocolo de memória condensado.
+
+### O que foi feito
+
+1. **ESTRUTURA DA RESPOSTA + ESTRUTURA DE ATENDIMENTO fundidas** ✅
+   - Duas seções que classificavam mensagens → uma só: "ESTRUTURA DE ATENDIMENTO"
+   - Fases 1-3 do Modo Profundo integradas diretamente dentro do modo PROFUNDO
+   - Eliminada duplicação de Ping-Pong e instrução de sessão ativa
+
+2. **Seções "consulte bloco dinâmico" eliminadas** ✅
+   - 6 seções de referência (~25 linhas) reduzidas a 3 linhas (timestamps)
+   - "CONTEXTO DO USUÁRIO", "SOBRE SUA MEMÓRIA", "MEMÓRIA DE LONGO PRAZO", "REGRA DE ÁUDIO" — todas removidas
+   - O modelo já recebe o bloco dinâmico como segundo system message
+
+3. **PROTOCOLO DE CONTEXTO E MEMÓRIA condensado** ✅
+   - "Lei da Ancoragem" movida para DNA DA AURA (4 linhas)
+   - "Mostre que lembra" e "Continuidade de longo prazo" removidos (redundantes com ANTECIPE NÃO SONDE)
+   - Seção inteira (~19 linhas) eliminada
+
+### Resultado
+- ~50 linhas removidas
+- Uma única árvore de decisão para classificação de mensagens
+- Zero referências "consulte o bloco dinâmico"
