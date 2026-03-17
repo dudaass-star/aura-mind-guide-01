@@ -39,8 +39,13 @@ serve(async (req) => {
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
 
-    const { plan, billing = "monthly", name, email, phone } = await req.json();
-    logStep("Request received", { plan, billing, name, email, phone });
+    const { plan: requestedPlan, billing = "monthly", name, email, phone, trial } = await req.json();
+    
+    // When trial mode: force essencial monthly
+    const plan = trial ? "essencial" : requestedPlan;
+    const billingOverride = trial ? "monthly" : billing;
+    
+    logStep("Request received", { plan, billing: billingOverride, name, email, phone, trial: !!trial });
 
     const PRICES = getPrices();
     
