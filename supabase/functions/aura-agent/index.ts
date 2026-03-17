@@ -719,6 +719,14 @@ As categorias disponíveis serão listadas no CONTEXTO DINÂMICO abaixo. Use APE
 - Quando a situação emocional indicar (ansiedade forte, insônia, estresse intenso)
 - NÃO ofereça meditação em toda conversa — use com parcimônia e contexto
 
+**NUNCA REPETIR MEDITAÇÃO:**
+- Se uma meditação já foi enviada nesta conversa (visível no histórico como "[Áudio de meditação enviado]"), NÃO inclua [MEDITACAO:...] novamente
+- Quando o usuário responder "ok", "sim", "gostei", "amei" após receber uma meditação, continue a conversa SEM re-disparar a tag
+- A tag [MEDITACAO:...] deve aparecer NO MÁXIMO UMA VEZ por tema de meditação na conversa
+
+ERRADO: usuário diz "Ok" → Aura inclui [MEDITACAO:respiracao] de novo
+CERTO:  usuário diz "Ok" → Aura: "Que bom! Faz com calma 💜 Me conta como você se sentiu depois. [AGUARDANDO_RESPOSTA]"
+
 # CÁPSULA DO TEMPO EMOCIONAL
 
 Você pode propor ao usuário gravar uma "cápsula do tempo": um áudio para o eu dele do futuro, que a AURA guardará e reenviará em 90 dias.
@@ -5419,27 +5427,53 @@ Responda apenas o resumo, sem formatação.`
       // Remover a tag da resposta (usuário não deve vê-la)
       assistantMessage = assistantMessage.replace(/\[MEDITACAO:\w+\]/gi, '').trim();
       
-      // Chamar send-meditation em paralelo (não bloqueia a resposta de texto)
-      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-      const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      // SAFETY NET: check if meditation was sent recently (last 10 min)
+      let skipMeditation = false;
+      if (profile?.user_id) {
+        try {
+          const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+          const sbCheckUrl = Deno.env.get('SUPABASE_URL')!;
+          const sbCheckKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+          const sbCheck = createClient(sbCheckUrl, sbCheckKey);
+          const { data: recentMeditation } = await sbCheck
+            .from('user_meditation_history')
+            .select('id')
+            .eq('user_id', profile.user_id)
+            .gte('sent_at', tenMinutesAgo)
+            .limit(1);
+          
+          if (recentMeditation && recentMeditation.length > 0) {
+            console.log('⏭️ Meditation already sent in last 10 min, skipping duplicate');
+            skipMeditation = true;
+          }
+        } catch (e) {
+          console.warn('⚠️ Could not check meditation history, proceeding with send:', e);
+        }
+      }
       
-      fetch(`${supabaseUrl}/functions/v1/send-meditation`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${supabaseServiceKey}`,
-        },
-        body: JSON.stringify({
-          category: meditationCategory,
-          user_id: profile?.user_id || null,
-          phone: userPhone,
-          context: `aura-agent-tag`,
-        }),
-      }).then(res => {
-        console.log(`🧘 send-meditation response: ${res.status}`);
-      }).catch(err => {
-        console.error(`🧘 send-meditation error:`, err);
-      });
+      if (!skipMeditation) {
+        // Chamar send-meditation em paralelo (não bloqueia a resposta de texto)
+        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+        const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+        
+        fetch(`${supabaseUrl}/functions/v1/send-meditation`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseServiceKey}`,
+          },
+          body: JSON.stringify({
+            category: meditationCategory,
+            user_id: profile?.user_id || null,
+            phone: userPhone,
+            context: `aura-agent-tag`,
+          }),
+        }).then(res => {
+          console.log(`🧘 send-meditation response: ${res.status}`);
+        }).catch(err => {
+          console.error(`🧘 send-meditation error:`, err);
+        });
+      }
     }
 
     // ========================================================================

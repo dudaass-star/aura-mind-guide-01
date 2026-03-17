@@ -1,66 +1,60 @@
+# Trial "Primeira Jornada" — Detecção de Marcos de Valor ✅ Implementado
 
+## Resumo
+Trial expandido de 10 para **50 mensagens ou 72h**, com detecção inteligente de "Aha Moment" em duas camadas para acionar nudges de conversão no momento certo.
 
-## Plano: Impedir repetição de meditação após envio recente
+### Limites
+- Hard cap: 50 mensagens OU 72 horas (o que vier primeiro)
+- Fallback de nudges: msg 45 e 48 se Aha não detectado
 
-### Análise das observações do usuário
+### Fases do Trial (`trial_phase`)
+- `listening` — Escuta ativa (msgs 1-7, sem intervenção)
+- `value_delivered` — Aura entregou valor real (tag `[VALOR_ENTREGUE]`)
+- `aha_reached` — Usuário reagiu positivamente ao valor (detectado por heurísticas)
+- `converting` — Nudges de conversão ativos
 
-Concordo com ambas:
+### Detecção em Duas Camadas
 
-1. **Camada 2 — usar `user_meditation_history`** em vez de texto nas mensagens. A tabela `user_meditation_history` já recebe um insert pelo `send-meditation` (linha 174 do send-meditation). É o marcador mais confiável — não depende de texto frágil. Não precisa de nova coluna nem tabela.
+**Camada 1 — Tag da Aura: `[VALOR_ENTREGUE]`**
+- Aura marca quando entrega: reframe, técnica prática, insight estruturado
+- NÃO marca: validação simples, perguntas abertas, acolhimento genérico
+- Webhook detecta a tag → `trial_phase = 'value_delivered'`
 
-2. **Camada 1 — adicionar exemplo concreto** do comportamento errado vs certo. Melhora o treinamento do modelo.
+**Camada 2 — Resposta do Usuário**
+- Só avaliada quando `trial_phase = 'value_delivered'` E `count >= 8`
+- Detecta palavras-chave positivas sem "?" (lista de ~25 termos)
+- Ao detectar → `trial_phase = 'aha_reached'`, salva `trial_aha_at_count`
 
-### Edições
+### Sequência de Nudges
+- Aha + 2 msgs: nudge suave ("Tô adorando te conhecer...")
+- Aha + 4 msgs: nudge com link de checkout
+- Fallback msg 45: nudge se Aha não detectado
+- Fallback msg 48: nudge final
+- Msg 50 / 72h: bloqueio + follow-up sequence (5 touchpoints)
 
-**Arquivo:** `supabase/functions/aura-agent/index.ts`
+### O que foi implementado
+1. **Migração SQL** ✅ — `trial_phase text` e `trial_aha_at_count integer` em `profiles`
+2. **`aura-agent/index.ts`** ✅ — Tag `[VALOR_ENTREGUE]` + contexto dinâmico por fase/aha
+3. **`webhook-zapi/index.ts`** ✅ — Limite 50/72h, detecção de tag, análise de Aha, strip de tag
+4. **`start-trial/index.ts`** ✅ — Mensagem de boas-vindas sem número fixo
+5. **Frontend** ✅ — `StartTrial.tsx`, `TrialStarted.tsx`, `AdminMessages.tsx`, `AdminEngagement.tsx`
+6. **`execute-scheduled-tasks/index.ts`** ✅ — Textos atualizados
+7. **`admin-engagement-metrics/index.ts`** ✅ — Funnel atualizado (20+ msgs = engajado)
 
-**Bloco 1 — Prompt (após linha 720):** Inserir regra + exemplos:
+---
 
-```
-**NUNCA REPETIR MEDITAÇÃO:**
-- Se uma meditação já foi enviada nesta conversa (visível no histórico), NÃO inclua [MEDITACAO:...] novamente
-- Quando o usuário responder "ok", "sim", "gostei", "amei" após receber uma meditação, continue a conversa SEM re-disparar a tag
-- A tag [MEDITACAO:...] deve aparecer NO MÁXIMO UMA VEZ por tema de meditação na conversa
+# Memória Terapêutica da Aura ✅ Implementado
 
-ERRADO: usuário diz "Ok" → Aura inclui [MEDITACAO:respiracao] de novo
-CERTO:  usuário diz "Ok" → Aura: "Que bom! Faz com calma 💜 Me conta como você se sentiu depois. [AGUARDANDO_RESPOSTA]"
-```
+## Resumo
+Aura agora rastreia técnicas terapêuticas usadas, captura compromissos de conversas livres, e usa tags de tema fora de sessões formais.
 
-**Bloco 2 — Código (linha 5414-5443):** Antes de disparar `send-meditation`, consultar `user_meditation_history` para o `user_id` nos últimos 10 minutos. Se existir registro, logar skip e não chamar:
+### O que foi implementado
+1. **`tecnica` como categoria de insight** ✅ — Prioridade alta no prompt, exemplos: reframe_sofrimento, responsabilidade_radical, derreflexao, etc.
+2. **Tag `[COMPROMISSO_LIVRE:texto]`** ✅ — Parser no webhook insere na tabela `commitments` com `session_id: null`
+3. **Tags de tema em conversas livres** ✅ — Instrução explícita no prompt para usar `[TEMA_NOVO]`, `[TEMA_PROGREDINDO]` etc. fora de sessões
+4. **Contexto dinâmico `## Processo Terapêutico`** ✅ — Injeta técnicas já usadas e compromissos pendentes no contexto do modelo
 
-```typescript
-const meditationMatch = assistantMessage.match(/\[MEDITACAO:(\w+)\]/i);
-if (meditationMatch && (profile?.user_id || userPhone)) {
-  const meditationCategory = meditationMatch[1].toLowerCase();
-  console.log(`🧘 Meditation tag detected: [MEDITACAO:${meditationCategory}]`);
-  
-  // Remover a tag da resposta (usuário não deve vê-la)
-  assistantMessage = assistantMessage.replace(/\[MEDITACAO:\w+\]/gi, '').trim();
-  
-  // SAFETY NET: check if meditation was sent recently
-  let skipMeditation = false;
-  if (profile?.user_id) {
-    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-    const sbCheck = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
-    const { data: recentMeditation } = await sbCheck
-      .from('user_meditation_history')
-      .select('id')
-      .eq('user_id', profile.user_id)
-      .gte('sent_at', tenMinutesAgo)
-      .limit(1);
-    
-    if (recentMeditation && recentMeditation.length > 0) {
-      console.log('⏭️ Meditation already sent in last 10 min, skipping duplicate');
-      skipMeditation = true;
-    }
-  }
-  
-  if (!skipMeditation) {
-    // chamar send-meditation (código existente)
-    ...
-  }
-}
-```
-
-**Deploy:** `aura-agent`
-
+### O que NÃO foi feito (por design)
+- Detecção de fase terapêutica (Presença/Sentido/Movimento) — o modelo infere do histórico
+- Categoria `insight_chave` — `session_themes` já cobre
+- Migração de banco — `user_insights.category` é text livre, suporta `tecnica` nativamente
