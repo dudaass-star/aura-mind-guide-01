@@ -11,7 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 type PlanId = "essencial" | "direcao" | "transformacao";
 type BillingPeriod = "monthly" | "yearly";
-type PaymentMethod = "card" | "pix";
+type PaymentMethod = "card" | "boleto";
 
 interface PlanConfig {
   name: string;
