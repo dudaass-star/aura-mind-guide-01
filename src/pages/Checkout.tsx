@@ -372,7 +372,6 @@ const Checkout = () => {
                 <div className="flex justify-between items-center mb-4">
                   <span className="text-muted-foreground">
                     Plano {currentPlan.name} ({billingPeriod === "monthly" ? "mensal" : "anual"})
-                    
                   </span>
                   <span className="font-semibold text-foreground">R$ {currentPrice}</span>
                 </div>
@@ -385,11 +384,14 @@ const Checkout = () => {
                   </div>
                 )}
                 <div className="flex justify-between items-center pt-4 border-t border-border/50">
-                  <span className="font-medium text-foreground">Total {billingPeriod === "monthly" ? "mensal" : "anual"}</span>
-                  <span className="font-display text-2xl font-semibold text-foreground">
-                    R$ {currentPrice}
+                  <span className="font-medium text-foreground">Hoje</span>
+                  <span className="font-display text-2xl font-semibold text-primary">
+                    R$ 0,00
                   </span>
                 </div>
+                <p className="text-sm text-muted-foreground mt-3 text-center">
+                  Primeira cobrança em 7 dias: R$ {currentPrice}/{periodLabel}
+                </p>
               </div>
 
               {/* Submit */}
