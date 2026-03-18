@@ -85,12 +85,12 @@ const plans = [{
   id: "transformacao",
   name: "Transformação",
   monthlyPrice: "79,90",
-  yearlyPrice: "671,16",
-  yearlyMonthlyEquivalent: "55,93",
-  yearlyDiscount: 30,
+  yearlyPrice: "574,90",
+  yearlyMonthlyEquivalent: "47,91",
+  yearlyDiscount: 40,
   dailyPrice: {
     monthly: "~R$2,70/dia",
-    yearly: "~R$1,84/dia"
+    yearly: "~R$1,57/dia"
   },
   period: {
     monthly: "/mês",
