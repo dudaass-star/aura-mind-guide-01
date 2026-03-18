@@ -4224,6 +4224,13 @@ Exemplo com 4 sessões:
     
     if (userPhone && assistantMessage.includes('[UPGRADE:')) {
       assistantMessage = await processUpgradeTags(assistantMessage, userPhone, userName);
+      // Registrar que CTA de upgrade foi enviado — ativa cooldown de 30 dias
+      if (profile?.id) {
+        await supabase.from('profiles')
+          .update({ upgrade_suggested_at: new Date().toISOString() })
+          .eq('id', profile.id);
+        console.log('📊 upgrade_suggested_at updated — cooldown 30 dias ativado');
+      }
     }
 
     // ========================================================================
