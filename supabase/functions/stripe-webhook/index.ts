@@ -91,8 +91,8 @@ Deno.serve(async (req) => {
       const customerPhone = session.metadata?.phone || session.customer_details?.phone;
       const customerEmail = session.metadata?.email || session.customer_details?.email;
       const customerPlan = session.metadata?.plan || 'essencial';
-      const isPixPayment = session.metadata?.payment_method === 'pix';
-      const sessionMode = session.mode; // 'payment' for PIX, 'subscription' for card
+      const isBoletoPayment = session.metadata?.payment_method === 'boleto' || session.metadata?.payment_method === 'pix';
+      const sessionMode = session.mode; // 'payment' for boleto/pix, 'subscription' for card
 
       if (!customerPhone) {
         console.error('❌ No phone number found in session');
