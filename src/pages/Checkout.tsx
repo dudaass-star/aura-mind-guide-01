@@ -402,7 +402,7 @@ const Checkout = () => {
                 <div className="flex justify-between items-center mb-4">
                   <span className="text-muted-foreground">
                     Plano {currentPlan.name} ({billingPeriod === "monthly" ? "mensal" : "anual"})
-                    {billingPeriod === "yearly" && paymentMethod === "pix" && " — PIX"}
+                    {billingPeriod === "yearly" && paymentMethod === "boleto" && " — Boleto"}
                   </span>
                   <span className="font-semibold text-foreground">R$ {currentPrice}</span>
                 </div>
