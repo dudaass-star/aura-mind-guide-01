@@ -540,6 +540,8 @@ Sua linguagem é de uma mulher na faixa de 28 a 35 anos, urbana, conectada. O se
 # REGRA ANTI-ECO (ANTI-PAPAGAIO)
 
 Amigas de verdade NÃO repetem o que você acabou de falar. Elas REAGEM.
+Sua PRIMEIRA FRASE nunca pode conter palavras-chave da última mensagem do usuário.
+Você é alguém que REAGE, não que REPETE.
 
 EVITE começar assim:
 - Usuário: "Tenho medo de ficar sozinha" → "Esse medo de ficar sozinha..."
@@ -551,6 +553,15 @@ FAÇA isso em vez disso:
 - Vá direto ao ponto: "E o que você fez?" / "Faz tempo isso?"
 - Faça uma observação nova: "Isso me lembra uma coisa que você falou semana passada..."
 - Provoque: "Sozinha tipo sem ninguém, ou sozinha tipo sem você mesma?"
+
+## MENSAGENS CURTAS (1-5 palavras):
+Mensagem curta NÃO é falta de material — É suficiente para reagir.
+Não reformule. Não espelhe. Escolha uma dessas reações:
+- Emoção genuína: "Eita..." / "Hmm..." / "Sério?"
+- Observação sobre o padrão: "Você tá respondendo curtinho..."
+- Pergunta que avança: "Me conta mais"
+- Presença com silêncio: "Tô aqui."
+A mensagem curta do usuário É suficiente para reagir — não precisa de mais material.
 
 # RITMO NATURAL DE CONVERSA (FORA DE SESSÃO)
 
@@ -3915,6 +3926,12 @@ Exemplo com 4 sessões:
 6. NÃO faça perguntas ou prolongue a conversa`;
     }
 
+    // Lembrete anti-eco condicional — só para mensagens curtas (≤5 palavras)
+    const userWordCount = message.trim().split(/\s+/).length;
+    if (userWordCount <= 5) {
+      dynamicContext += `\nLEMBRETE ANTI-ECO: Mensagem curta detectada. Sua resposta NÃO pode começar reformulando o que o usuário disse. Reaja com emoção própria, observação nova ou pergunta que avança. Use reações como "Eita...", "Hmm...", "Sério?" ou faça uma pergunta direta.`;
+    }
+
     const apiMessages = [
       { role: "system", content: AURA_STATIC_INSTRUCTIONS },
       { role: "system", content: dynamicContext },
@@ -3926,7 +3943,10 @@ Exemplo com 4 sessões:
 
     let data: any;
     try {
-      data = await callAI(configuredModel, apiMessages, 4096, 0.8, LOVABLE_API_KEY);
+      // Temperature dinâmica: 0.9 para mensagens curtas (reduz tendência de eco do Gemini Flash)
+      // TODO: Revisar ao migrar de modelo — específico para Gemini 3 Flash Preview
+      const temperature = userWordCount <= 5 ? 0.9 : 0.8;
+      data = await callAI(configuredModel, apiMessages, 4096, temperature, LOVABLE_API_KEY);
     } catch (e: any) {
       if (e.status === 429) {
         return new Response(JSON.stringify({ 
@@ -3987,12 +4007,14 @@ Exemplo com 4 sessões:
     };
 
     // Detect echo: exact match, startsWith, or high word overlap
+    // Mensagens curtas (≤5 palavras) são isentas — tratadas pelo prompt reforçado + temperature
     const userWords = extractWords(cleanUserMsg);
     const aiWords = extractWords(cleanAIResponse);
-    const isExactMatch = normalizedResponse === normalizedUserMsg;
-    const isStartsWith = normalizedUserMsg.length > 5 && normalizedResponse.startsWith(normalizedUserMsg);
+    const isShortMessage = userWords.length <= 5;
+    const isExactMatch = !isShortMessage && normalizedResponse === normalizedUserMsg;
+    const isStartsWith = !isShortMessage && normalizedUserMsg.length > 5 && normalizedResponse.startsWith(normalizedUserMsg);
     const overlapRatio = wordOverlapRatio(aiWords, userWords);
-    const isShortParaphrase = overlapRatio > 0.6 && cleanAIResponse.length < cleanUserMsg.length * 2.5;
+    const isShortParaphrase = !isShortMessage && overlapRatio > 0.65 && cleanAIResponse.length < cleanUserMsg.length * 2.5;
     const isEcho = isExactMatch || isStartsWith || isShortParaphrase;
 
     if (isEcho) {
@@ -4029,15 +4051,44 @@ Exemplo com 4 sessões:
         }
       }
 
-      // TRAVA FINAL: se nenhum retry resolveu, usar fallback seguro
+      // TRAVA FINAL: se nenhum retry resolveu, usar fallback seguro contextual
       if (!echoFixed) {
-        console.error('🚫 ANTI-ECHO v2: TRAVA FINAL — todos os retries falharam, usando fallback seguro');
-        // Fallback contextual based on whether we're in a session or casual chat
-        if (sessionActive && currentSession) {
-          assistantMessage = 'Entendo o que você está dizendo… e isso me faz pensar em algo. Me conta mais sobre como isso aparece no seu dia a dia? Quero entender melhor a sua experiência com isso.';
-        } else {
-          assistantMessage = 'Fico feliz que isso faça sentido pra você 💛 Me conta: o que mais está passando pela sua cabeça agora? Tem algo que você gostaria de explorar mais?';
-        }
+        console.error('🚫 ANTI-ECHO v2: TRAVA FINAL — todos os retries falharam, usando fallback contextual');
+        const fallbackUserName = profile?.name?.split(' ')[0] || '';
+        const fallbackNamePrefix = fallbackUserName ? `${fallbackUserName}, ` : '';
+        
+        // Buscar tema recente das session_themes se disponível
+        let recentThemeName = '';
+        try {
+          const { data: recentTheme } = await supabase
+            .from('session_themes')
+            .select('theme_name')
+            .eq('user_id', user_id)
+            .order('last_mentioned_at', { ascending: false })
+            .limit(1)
+            .single();
+          if (recentTheme?.theme_name) recentThemeName = recentTheme.theme_name;
+        } catch (_) { /* ignore */ }
+
+        const sessionFallbacks = [
+          `${fallbackNamePrefix}isso ficou aqui comigo. O que tá por baixo disso?`,
+          `Hmm. Me conta mais sobre como isso aparece no seu dia a dia.`,
+          `${fallbackNamePrefix}isso é pesado. Fica comigo — o que mais tá rolando?`,
+          `Entendi. E como você tá com isso agora?`,
+          `${fallbackNamePrefix}isso importa. Me conta mais sobre ${recentThemeName || 'isso'}.`,
+          `Hmm... faz sentido. O que você tá sentindo agora?`,
+        ];
+        const casualFallbacks = [
+          `${fallbackNamePrefix}tô processando isso aqui. Me conta mais.`,
+          `Hmm... e o que mais tá passando pela sua cabeça?`,
+          `Entendi. E como você tá com isso agora?`,
+          `${fallbackNamePrefix}isso ficou aqui comigo. Me conta mais sobre ${recentThemeName || 'isso'}.`,
+          `Sério? Me fala mais.`,
+          `Hmm. Faz sentido. O que você tá sentindo agora?`,
+        ];
+        
+        const fallbacks = (sessionActive && currentSession) ? sessionFallbacks : casualFallbacks;
+        assistantMessage = fallbacks[Date.now() % fallbacks.length];
       }
     }
 
