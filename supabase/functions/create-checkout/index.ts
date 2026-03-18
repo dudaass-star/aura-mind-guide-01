@@ -47,9 +47,9 @@ serve(async (req) => {
     // When trial mode: force essencial monthly
     const plan = trial ? "essencial" : requestedPlan;
     const billingOverride = trial ? "monthly" : billing;
-    const isPixPayment = paymentMethod === "pix" && billingOverride === "yearly";
+    const isBoletoPayment = paymentMethod === "boleto" && billingOverride === "yearly";
     
-    logStep("Request received", { plan, billing: billingOverride, name, email, phone, trial: !!trial, paymentMethod, isPixPayment });
+    logStep("Request received", { plan, billing: billingOverride, name, email, phone, trial: !!trial, paymentMethod, isBoleto: isBoletoPayment });
 
     const PRICES = getPrices();
     
