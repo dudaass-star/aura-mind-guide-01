@@ -72,8 +72,8 @@ serve(async (req) => {
     
     // Select the correct price ID
     let priceId: string;
-    if (isPixPayment) {
-      priceId = PRICES[plan].pixYearly;
+    if (isBoletoPayment) {
+      priceId = PRICES[plan].boletoYearly;
     } else {
       priceId = PRICES[plan][billingPeriod];
     }
