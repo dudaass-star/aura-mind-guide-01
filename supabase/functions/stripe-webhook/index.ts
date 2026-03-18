@@ -111,7 +111,7 @@ Deno.serve(async (req) => {
         });
       }
 
-      console.log(`👤 Customer: ${customerName}, Plan: ${customerPlan}, PIX: ${isPixPayment}, Mode: ${sessionMode}`);
+      console.log(`👤 Customer: ${customerName}, Plan: ${customerPlan}, Boleto: ${isBoletoPayment}, Mode: ${sessionMode}`);
 
       const planName = PLAN_NAMES[customerPlan] || "Essencial";
       const sessionsCount = PLAN_SESSIONS[customerPlan] || 0;
