@@ -984,6 +984,7 @@ export type Database = {
       }
       token_usage_logs: {
         Row: {
+          cached_tokens: number
           call_type: string
           completion_tokens: number
           created_at: string
@@ -995,6 +996,7 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          cached_tokens?: number
           call_type: string
           completion_tokens?: number
           created_at?: string
@@ -1006,6 +1008,7 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          cached_tokens?: number
           call_type?: string
           completion_tokens?: number
           created_at?: string

@@ -5,6 +5,25 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Model pricing per 1M tokens (USD)
+const MODEL_PRICING: Record<string, { input: number; inputCached: number; output: number }> = {
+  'gemini-2.5-flash': { input: 0.15, inputCached: 0.0375, output: 0.60 },
+  'gemini-3-flash-preview': { input: 0.15, inputCached: 0.0375, output: 0.60 },
+  'gemini-2.5-pro': { input: 1.25, inputCached: 0.3125, output: 10.00 },
+  'claude-sonnet-4-6': { input: 3.00, inputCached: 0.30, output: 15.00 },
+  'claude-haiku-4-5': { input: 0.80, inputCached: 0.08, output: 4.00 },
+};
+
+function getModelPricing(model: string) {
+  // Try exact match first, then partial match
+  if (MODEL_PRICING[model]) return MODEL_PRICING[model];
+  for (const [key, pricing] of Object.entries(MODEL_PRICING)) {
+    if (model.includes(key)) return pricing;
+  }
+  // Default fallback (gemini flash pricing)
+  return { input: 0.15, inputCached: 0.0375, output: 0.60 };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -26,31 +45,28 @@ Deno.serve(async (req) => {
     const { data: isAdmin } = await supabase.rpc('has_role', { _user_id: user.id, _role: 'admin' });
     if (!isAdmin) throw new Error('Not admin');
 
-    // Parse date filters from request body
+    // Parse date filters
     let dateFrom: string | null = null;
     let dateTo: string | null = null;
     try {
       const body = await req.json();
       dateFrom = body.dateFrom || null;
       dateTo = body.dateTo || null;
-    } catch { /* no body, use defaults */ }
+    } catch { /* no body */ }
 
     const now = new Date();
     const periodStart = dateFrom || new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
     const periodEnd = dateTo || now.toISOString();
-    const periodStartDate = periodStart.slice(0, 10);
-    const periodEndDate = periodEnd.slice(0, 10);
+    const periodLabel = `${periodStart.slice(0, 10)} – ${periodEnd.slice(0, 10)}`;
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
     // ========== ENGAGEMENT METRICS ==========
 
-    // 1. Active users count (base) — all profiles with status 'active'
     const { count: activeUsersBase } = await supabase
       .from('profiles')
       .select('*', { count: 'exact', head: true })
       .eq('status', 'active');
 
-    // 1b. Active users in selected period — distinct users who sent messages
     const { data: periodMessages } = await supabase
       .from('messages')
       .select('user_id')
@@ -61,14 +77,12 @@ Deno.serve(async (req) => {
     const uniqueUsersInPeriod = new Set(periodMessages?.map(m => m.user_id) || []);
     const activeUsersInPeriod = uniqueUsersInPeriod.size;
 
-    // 2. Messages in period
     const { count: weeklyMessages } = await supabase
       .from('messages')
       .select('*', { count: 'exact', head: true })
       .gte('created_at', periodStart)
       .lte('created_at', periodEnd);
 
-    // 3. Completed sessions in period
     const { data: weeklySessions } = await supabase
       .from('sessions')
       .select('started_at, ended_at')
@@ -78,7 +92,7 @@ Deno.serve(async (req) => {
 
     const weeklySessionsCount = weeklySessions?.length || 0;
 
-    // 4. Average session duration (selected period)
+    // Avg session duration
     const { data: allCompletedSessions } = await supabase
       .from('sessions')
       .select('started_at, ended_at')
@@ -98,7 +112,7 @@ Deno.serve(async (req) => {
       avgSessionMinutes = Math.round(totalMinutes / allCompletedSessions.length);
     }
 
-    // 5. Messages per session
+    // Messages per session
     const { data: completedSessionsForMsg } = await supabase
       .from('sessions')
       .select('id, user_id, started_at, ended_at')
@@ -137,21 +151,66 @@ Deno.serve(async (req) => {
         : 0;
     }
 
-    // 6. Return rate in selected period
-    const uniqueRecentUsers = activeUsersInPeriod;
+    // Return rate
     const returnRate = activeUsersBase && activeUsersBase > 0
-      ? Math.round(uniqueRecentUsers / activeUsersBase * 100)
+      ? Math.round(activeUsersInPeriod / activeUsersBase * 100)
       : 0;
 
-    // Average daily messages per user (based on period length)
     const periodDays = Math.max(1, Math.round((new Date(periodEnd).getTime() - new Date(periodStart).getTime()) / (1000 * 60 * 60 * 24))) || 1;
     const avgDailyMessagesPerUser = activeUsersInPeriod > 0
       ? Math.round((weeklyMessages || 0) / periodDays / activeUsersInPeriod * 10) / 10
       : 0;
 
-    // ========== TRIAL & CONVERSION METRICS (filtered by period) ==========
+    // ========== COST METRICS ==========
 
-    // Active trials that started in period
+    // Fetch all token usage logs in period (up to 1000)
+    const { data: tokenLogs } = await supabase
+      .from('token_usage_logs')
+      .select('model, prompt_tokens, completion_tokens, cached_tokens')
+      .gte('created_at', periodStart)
+      .lte('created_at', periodEnd);
+
+    let totalCostUSD = 0;
+    const costByModel: Record<string, { calls: number; inputCost: number; outputCost: number; cacheSavings: number }> = {};
+
+    for (const log of tokenLogs || []) {
+      const pricing = getModelPricing(log.model);
+      const cached = log.cached_tokens || 0;
+      const nonCachedInput = Math.max(0, (log.prompt_tokens || 0) - cached);
+      
+      const inputCost = (nonCachedInput / 1_000_000) * pricing.input + (cached / 1_000_000) * pricing.inputCached;
+      const outputCost = ((log.completion_tokens || 0) / 1_000_000) * pricing.output;
+      const fullInputCost = ((log.prompt_tokens || 0) / 1_000_000) * pricing.input;
+      const savings = fullInputCost - inputCost;
+
+      totalCostUSD += inputCost + outputCost;
+
+      if (!costByModel[log.model]) {
+        costByModel[log.model] = { calls: 0, inputCost: 0, outputCost: 0, cacheSavings: 0 };
+      }
+      costByModel[log.model].calls++;
+      costByModel[log.model].inputCost += inputCost;
+      costByModel[log.model].outputCost += outputCost;
+      costByModel[log.model].cacheSavings += savings;
+    }
+
+    totalCostUSD = Math.round(totalCostUSD * 100) / 100;
+    const avgCostPerActiveUser = activeUsersInPeriod > 0
+      ? Math.round(totalCostUSD / activeUsersInPeriod * 100) / 100
+      : 0;
+
+    // Format breakdown
+    const costBreakdownByModel = Object.entries(costByModel).map(([model, data]) => ({
+      model,
+      calls: data.calls,
+      cost: Math.round((data.inputCost + data.outputCost) * 100) / 100,
+      cacheSavings: Math.round(data.cacheSavings * 100) / 100,
+    })).sort((a, b) => b.cost - a.cost);
+
+    const totalCacheSavings = Math.round(costBreakdownByModel.reduce((s, m) => s + m.cacheSavings, 0) * 100) / 100;
+
+    // ========== TRIAL & CONVERSION METRICS ==========
+
     const { count: activeTrials } = await supabase
       .from('profiles')
       .select('*', { count: 'exact', head: true })
@@ -160,7 +219,6 @@ Deno.serve(async (req) => {
       .gte('trial_started_at', periodStart)
       .lte('trial_started_at', periodEnd);
 
-    // Trials started in period (same as above but all statuses)
     const { count: trialsLast7Days } = await supabase
       .from('profiles')
       .select('*', { count: 'exact', head: true })
@@ -168,14 +226,12 @@ Deno.serve(async (req) => {
       .gte('trial_started_at', periodStart)
       .lte('trial_started_at', periodEnd);
 
-    // Trials started in last 30 days (keep as reference)
     const { count: trialsLast30Days } = await supabase
       .from('profiles')
       .select('*', { count: 'exact', head: true })
       .not('trial_started_at', 'is', null)
       .gte('trial_started_at', thirtyDaysAgo);
 
-    // Total trials in selected period
     const { count: totalTrialsEver } = await supabase
       .from('profiles')
       .select('*', { count: 'exact', head: true })
@@ -183,7 +239,16 @@ Deno.serve(async (req) => {
       .gte('trial_started_at', periodStart)
       .lte('trial_started_at', periodEnd);
 
-    // Converted in period: status = active AND trial started in period
+    // Responded (1+ msg)
+    const { count: trialRespondedCount } = await supabase
+      .from('profiles')
+      .select('*', { count: 'exact', head: true })
+      .not('trial_started_at', 'is', null)
+      .gte('trial_started_at', periodStart)
+      .lte('trial_started_at', periodEnd)
+      .gte('trial_conversations_count', 1);
+
+    // Converted
     const { data: convertedProfiles } = await supabase
       .from('profiles')
       .select('trial_started_at, created_at, trial_conversations_count')
@@ -195,12 +260,11 @@ Deno.serve(async (req) => {
 
     const convertedCount = convertedProfiles?.length || 0;
 
-    // Conversion rate
     const conversionRate = totalTrialsEver && totalTrialsEver > 0
       ? Math.round(convertedCount / totalTrialsEver * 1000) / 10
       : 0;
 
-    // Expired/abandoned trials in period
+    // Expired trials
     const sevenDaysAgoDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
     const { count: expiredTrials } = await supabase
       .from('profiles')
@@ -210,83 +274,21 @@ Deno.serve(async (req) => {
       .lte('trial_started_at', periodEnd)
       .lt('trial_started_at', sevenDaysAgoDate);
 
-    // Average time to conversion (days)
+    // Avg days to conversion
     let avgDaysToConversion = 0;
     if (convertedProfiles && convertedProfiles.length > 0) {
       const totalDays = convertedProfiles.reduce((sum, p) => {
         if (!p.trial_started_at || !p.created_at) return sum;
         const trialStart = new Date(p.trial_started_at).getTime();
         const conversionDate = new Date(p.created_at).getTime();
-        const days = Math.max(0, (conversionDate - trialStart) / (1000 * 60 * 60 * 24));
-        return sum + days;
+        return sum + Math.max(0, (conversionDate - trialStart) / (1000 * 60 * 60 * 24));
       }, 0);
       avgDaysToConversion = Math.round(totalDays / convertedProfiles.length * 10) / 10;
     }
 
-    // Average trial messages for converted vs non-converted
+    // Avg msgs converted vs non-converted
     const avgMsgsConverted = convertedProfiles && convertedProfiles.length > 0
       ? Math.round(convertedProfiles.reduce((sum, p) => sum + (p.trial_conversations_count || 0), 0) / convertedProfiles.length * 10) / 10
-      : 0;
-
-    // Trial funnel: responded (1+ msgs) in period
-    const { count: trialRespondedCount } = await supabase
-      .from('profiles')
-      .select('*', { count: 'exact', head: true })
-      .not('trial_started_at', 'is', null)
-      .gte('trial_started_at', periodStart)
-      .lte('trial_started_at', periodEnd)
-      .gte('trial_conversations_count', 1);
-
-    // Trial funnel: value_delivered (Aura entregou valor)
-    const { count: trialValueDeliveredCount } = await supabase
-      .from('profiles')
-      .select('*', { count: 'exact', head: true })
-      .not('trial_started_at', 'is', null)
-      .gte('trial_started_at', periodStart)
-      .lte('trial_started_at', periodEnd)
-      .in('trial_phase', ['value_delivered', 'aha_reached', 'converting']);
-
-    // Trial funnel: aha_reached (momento de virada)
-    const { count: trialAhaCount } = await supabase
-      .from('profiles')
-      .select('*', { count: 'exact', head: true })
-      .not('trial_started_at', 'is', null)
-      .gte('trial_started_at', periodStart)
-      .lte('trial_started_at', periodEnd)
-      .in('trial_phase', ['aha_reached', 'converting']);
-
-    // Trial funnel: engaged (20+ msgs) in period
-    const { count: trialCompletedCount } = await supabase
-      .from('profiles')
-      .select('*', { count: 'exact', head: true })
-      .not('trial_started_at', 'is', null)
-      .gte('trial_started_at', periodStart)
-      .lte('trial_started_at', periodEnd)
-      .gte('trial_conversations_count', 20);
-
-    // Phase distribution for current trials
-    const { data: trialPhaseData } = await supabase
-      .from('profiles')
-      .select('trial_phase')
-      .eq('status', 'trial')
-      .not('trial_started_at', 'is', null);
-
-    const phaseDistribution: Record<string, number> = {};
-    for (const p of trialPhaseData || []) {
-      const phase = p.trial_phase || 'listening';
-      phaseDistribution[phase] = (phaseDistribution[phase] || 0) + 1;
-    }
-
-    // Average aha_at_count for users who reached aha
-    const { data: ahaProfiles } = await supabase
-      .from('profiles')
-      .select('trial_aha_at_count')
-      .not('trial_aha_at_count', 'is', null)
-      .gte('trial_started_at', periodStart)
-      .lte('trial_started_at', periodEnd);
-
-    const avgAhaAtCount = ahaProfiles && ahaProfiles.length > 0
-      ? Math.round(ahaProfiles.reduce((sum, p) => sum + (p.trial_aha_at_count || 0), 0) / ahaProfiles.length * 10) / 10
       : 0;
 
     const { data: nonConvertedProfiles } = await supabase
@@ -321,25 +323,25 @@ Deno.serve(async (req) => {
       avgSessionMinutes,
       messagesPerSession,
       returnRate,
-      uniqueRecentUsers,
+      uniqueRecentUsers: activeUsersInPeriod,
       avgDailyMessagesPerUser,
+      // Cost
+      totalCostUSD,
+      avgCostPerActiveUser,
+      costBreakdownByModel,
+      totalCacheSavings,
       // Trial & Conversion
       activeTrials: activeTrials || 0,
       trialsLast7Days: trialsLast7Days || 0,
       trialsLast30Days: trialsLast30Days || 0,
       totalTrialsEver: totalTrialsEver || 0,
       trialRespondedCount: trialRespondedCount || 0,
-      trialValueDeliveredCount: trialValueDeliveredCount || 0,
-      trialAhaCount: trialAhaCount || 0,
-      trialCompletedCount: trialCompletedCount || 0,
       convertedCount,
       conversionRate,
       expiredTrials: expiredTrials || 0,
       avgDaysToConversion,
       avgMsgsConverted,
       avgMsgsNonConverted,
-      avgAhaAtCount,
-      phaseDistribution,
       canceledUsers: canceledUsers || 0,
       cancelingUsers: cancelingUsers || 0,
     }), {
