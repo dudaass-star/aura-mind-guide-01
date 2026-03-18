@@ -154,7 +154,7 @@ serve(async (req) => {
         plan: plan,
         billing: billingPeriod,
         ...(trial && { trial: "true" }),
-        ...(isPixPayment && { payment_method: "pix" }),
+        ...(isBoletoPayment && { payment_method: "boleto" }),
       },
     };
 
