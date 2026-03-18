@@ -158,10 +158,15 @@ serve(async (req) => {
       },
     };
 
-    if (isPixPayment) {
-      // PIX: one-time payment
+    if (isBoletoPayment) {
+      // Boleto: one-time payment
       sessionConfig.mode = "payment";
-      sessionConfig.payment_method_types = ["pix"];
+      sessionConfig.payment_method_types = ["boleto"];
+      sessionConfig.payment_method_options = {
+        boleto: {
+          expires_after_days: 3,
+        },
+      };
     } else {
       // Card: subscription
       sessionConfig.mode = "subscription";
