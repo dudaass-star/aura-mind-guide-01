@@ -3411,6 +3411,17 @@ REGRAS GERAIS DO ONBOARDING:
 - Compromissos pendentes: ${pendingCommitments}
 - Histórico de conversas: ${messageCount} mensagens
 - Em sessão especial: ${sessionActive ? 'Sim - MODO SESSÃO ATIVO' : 'Não'}
+- Último CTA de upgrade: ${(() => {
+  const upgradeSuggestedAt = profile?.upgrade_suggested_at;
+  if (!upgradeSuggestedAt) return 'Nenhum CTA recente — pode sugerir se apropriado e de forma quase imperceptível';
+  const lastCTA = new Date(upgradeSuggestedAt);
+  const daysSince = Math.floor((Date.now() - lastCTA.getTime()) / 86400000);
+  if (daysSince < 30) {
+    const cooldownEnd = new Date(lastCTA.getTime() + 30 * 86400000);
+    return `Último CTA: ${lastCTA.toLocaleDateString('pt-BR')} (há ${daysSince} dias) — cooldown ativo até ${cooldownEnd.toLocaleDateString('pt-BR')}. NÃO sugira upgrade.`;
+  }
+  return `Último CTA: há ${daysSince} dias — cooldown expirado, pode sugerir de forma quase imperceptível`;
+})()}
 
 ## Controle de Tempo da Sessão
 ${sessionTimeContext}
