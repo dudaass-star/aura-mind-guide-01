@@ -5,13 +5,13 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { ArrowLeft, CreditCard, Check, Shield, Lock, MessageCircle, Calendar, QrCode } from "lucide-react";
+import { ArrowLeft, CreditCard, Check, Shield, Lock, MessageCircle, Calendar, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
 type PlanId = "essencial" | "direcao" | "transformacao";
 type BillingPeriod = "monthly" | "yearly";
-type PaymentMethod = "card" | "pix";
+type PaymentMethod = "card" | "boleto";
 
 interface PlanConfig {
   name: string;
@@ -130,7 +130,7 @@ const Checkout = () => {
           name: name.trim(),
           email: email.trim(),
           phone: phone,
-          ...(billingPeriod === "yearly" && paymentMethod === "pix" && { paymentMethod: "pix" }),
+          ...(billingPeriod === "yearly" && paymentMethod === "boleto" && { paymentMethod: "boleto" }),
         },
       });
 
@@ -245,20 +245,20 @@ const Checkout = () => {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setPaymentMethod("pix")}
+                      onClick={() => setPaymentMethod("boleto")}
                       className={`flex-1 px-4 py-2.5 rounded-full text-sm font-medium transition-all flex items-center justify-center gap-2 ${
-                        paymentMethod === "pix"
+                        paymentMethod === "boleto"
                           ? "bg-primary text-primary-foreground shadow-md"
                           : "text-muted-foreground hover:text-foreground"
                       }`}
                     >
-                      <QrCode className="w-4 h-4" />
-                      PIX
+                      <FileText className="w-4 h-4" />
+                      Boleto
                     </button>
                   </div>
-                  {paymentMethod === "pix" && (
+                  {paymentMethod === "boleto" && (
                     <p className="text-xs text-muted-foreground mt-3 text-center">
-                      Pagamento único anual. Não renova automaticamente.
+                      Pagamento único anual via boleto. Não renova automaticamente.
                     </p>
                   )}
                 </div>
@@ -402,7 +402,7 @@ const Checkout = () => {
                 <div className="flex justify-between items-center mb-4">
                   <span className="text-muted-foreground">
                     Plano {currentPlan.name} ({billingPeriod === "monthly" ? "mensal" : "anual"})
-                    {billingPeriod === "yearly" && paymentMethod === "pix" && " — PIX"}
+                    {billingPeriod === "yearly" && paymentMethod === "boleto" && " — Boleto"}
                   </span>
                   <span className="font-semibold text-foreground">R$ {currentPrice}</span>
                 </div>
@@ -430,12 +430,12 @@ const Checkout = () => {
                 className="w-full"
                 disabled={isLoading}
               >
-                {paymentMethod === "pix" && billingPeriod === "yearly" ? (
-                  <QrCode className="w-5 h-5 mr-2" />
+                {paymentMethod === "boleto" && billingPeriod === "yearly" ? (
+                  <FileText className="w-5 h-5 mr-2" />
                 ) : (
                   <CreditCard className="w-5 h-5 mr-2" />
                 )}
-                {isLoading ? "Processando..." : paymentMethod === "pix" && billingPeriod === "yearly" ? "Pagar com PIX" : "Continuar para pagamento"}
+                {isLoading ? "Processando..." : paymentMethod === "boleto" && billingPeriod === "yearly" ? "Gerar Boleto" : "Continuar para pagamento"}
               </Button>
 
               {/* Trust badges */}

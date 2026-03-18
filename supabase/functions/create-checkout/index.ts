@@ -8,21 +8,21 @@ const corsHeaders = {
 };
 
 // Price IDs from environment variables
-const getPrices = (): Record<string, { monthly: string; yearly: string; pixYearly: string }> => ({
+const getPrices = (): Record<string, { monthly: string; yearly: string; boletoYearly: string }> => ({
   essencial: {
     monthly: Deno.env.get("STRIPE_PRICE_ESSENCIAL_MONTHLY") || "",
     yearly: Deno.env.get("STRIPE_PRICE_ESSENCIAL_YEARLY") || "",
-    pixYearly: Deno.env.get("STRIPE_PRICE_ESSENCIAL_PIX_YEARLY") || "",
+    boletoYearly: Deno.env.get("STRIPE_PRICE_ESSENCIAL_PIX_YEARLY") || "",
   },
   direcao: {
     monthly: Deno.env.get("STRIPE_PRICE_DIRECAO_MONTHLY") || "",
     yearly: Deno.env.get("STRIPE_PRICE_DIRECAO_YEARLY") || "",
-    pixYearly: Deno.env.get("STRIPE_PRICE_DIRECAO_PIX_YEARLY") || "",
+    boletoYearly: Deno.env.get("STRIPE_PRICE_DIRECAO_PIX_YEARLY") || "",
   },
   transformacao: {
     monthly: Deno.env.get("STRIPE_PRICE_TRANSFORMACAO_MONTHLY") || "",
     yearly: Deno.env.get("STRIPE_PRICE_TRANSFORMACAO_YEARLY") || "",
-    pixYearly: Deno.env.get("STRIPE_PRICE_TRANSFORMACAO_PIX_YEARLY") || "",
+    boletoYearly: Deno.env.get("STRIPE_PRICE_TRANSFORMACAO_PIX_YEARLY") || "",
   },
 });
 
@@ -47,9 +47,9 @@ serve(async (req) => {
     // When trial mode: force essencial monthly
     const plan = trial ? "essencial" : requestedPlan;
     const billingOverride = trial ? "monthly" : billing;
-    const isPixPayment = paymentMethod === "pix" && billingOverride === "yearly";
+    const isBoletoPayment = paymentMethod === "boleto" && billingOverride === "yearly";
     
-    logStep("Request received", { plan, billing: billingOverride, name, email, phone, trial: !!trial, paymentMethod, isPixPayment });
+    logStep("Request received", { plan, billing: billingOverride, name, email, phone, trial: !!trial, paymentMethod, isBoleto: isBoletoPayment });
 
     const PRICES = getPrices();
     
@@ -72,8 +72,8 @@ serve(async (req) => {
     
     // Select the correct price ID
     let priceId: string;
-    if (isPixPayment) {
-      priceId = PRICES[plan].pixYearly;
+    if (isBoletoPayment) {
+      priceId = PRICES[plan].boletoYearly;
     } else {
       priceId = PRICES[plan][billingPeriod];
     }
@@ -154,14 +154,19 @@ serve(async (req) => {
         plan: plan,
         billing: billingPeriod,
         ...(trial && { trial: "true" }),
-        ...(isPixPayment && { payment_method: "pix" }),
+        ...(isBoletoPayment && { payment_method: "boleto" }),
       },
     };
 
-    if (isPixPayment) {
-      // PIX: one-time payment
+    if (isBoletoPayment) {
+      // Boleto: one-time payment
       sessionConfig.mode = "payment";
-      sessionConfig.payment_method_types = ["pix"];
+      sessionConfig.payment_method_types = ["boleto"];
+      sessionConfig.payment_method_options = {
+        boleto: {
+          expires_after_days: 3,
+        },
+      };
     } else {
       // Card: subscription
       sessionConfig.mode = "subscription";

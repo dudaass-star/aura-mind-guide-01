@@ -91,8 +91,8 @@ Deno.serve(async (req) => {
       const customerPhone = session.metadata?.phone || session.customer_details?.phone;
       const customerEmail = session.metadata?.email || session.customer_details?.email;
       const customerPlan = session.metadata?.plan || 'essencial';
-      const isPixPayment = session.metadata?.payment_method === 'pix';
-      const sessionMode = session.mode; // 'payment' for PIX, 'subscription' for card
+      const isBoletoPayment = session.metadata?.payment_method === 'boleto' || session.metadata?.payment_method === 'pix';
+      const sessionMode = session.mode; // 'payment' for boleto/pix, 'subscription' for card
 
       if (!customerPhone) {
         console.error('❌ No phone number found in session');
@@ -111,7 +111,7 @@ Deno.serve(async (req) => {
         });
       }
 
-      console.log(`👤 Customer: ${customerName}, Plan: ${customerPlan}, PIX: ${isPixPayment}, Mode: ${sessionMode}`);
+      console.log(`👤 Customer: ${customerName}, Plan: ${customerPlan}, Boleto: ${isBoletoPayment}, Mode: ${sessionMode}`);
 
       const planName = PLAN_NAMES[customerPlan] || "Essencial";
       const sessionsCount = PLAN_SESSIONS[customerPlan] || 0;
@@ -122,13 +122,13 @@ Deno.serve(async (req) => {
         : cleanPhone;
       const today = new Date().toISOString().split('T')[0];
 
-      // Calculate plan_expires_at for PIX payments (12 months from now)
+      // Calculate plan_expires_at for boleto/one-time payments (12 months from now)
       let planExpiresAt: string | null = null;
-      if (isPixPayment || sessionMode === 'payment') {
+      if (isBoletoPayment || sessionMode === 'payment') {
         const expirationDate = new Date();
         expirationDate.setFullYear(expirationDate.getFullYear() + 1);
         planExpiresAt = expirationDate.toISOString();
-        console.log(`📅 PIX payment — plan expires at: ${planExpiresAt}`);
+        console.log(`📅 One-time payment — plan expires at: ${planExpiresAt}`);
       }
 
       // Check if profile already exists BEFORE choosing the message
