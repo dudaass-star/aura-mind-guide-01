@@ -127,6 +127,13 @@ async function logTokenUsage(
   console.log(`TOKEN_USAGE_RAW [${callType}]:`, JSON.stringify(usage));
   console.log(`TOKEN_USAGE [${callType}]: prompt=${usage.prompt_tokens}, completion=${usage.completion_tokens}, total=${usage.total_tokens}`);
   
+  // Extract cached tokens from various possible formats
+  const cachedTokens = 
+    usage.prompt_tokens_details?.cached_tokens ??
+    usage.cached_tokens ??
+    usage.cache_read_input_tokens ??
+    0;
+
   try {
     await supabase.from('token_usage_logs').insert({
       user_id: userId,
@@ -136,6 +143,7 @@ async function logTokenUsage(
       prompt_tokens: usage.prompt_tokens || 0,
       completion_tokens: usage.completion_tokens || 0,
       total_tokens: usage.total_tokens || 0,
+      cached_tokens: cachedTokens,
     });
   } catch (e) {
     console.error('TOKEN_USAGE: Failed to insert log:', e);

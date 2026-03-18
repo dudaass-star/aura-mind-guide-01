@@ -5,13 +5,20 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Users, MessageSquare, Clock, BarChart3, RefreshCw, TrendingUp, UserPlus, Percent, Timer, XCircle, ArrowRightLeft, ArrowDown, Send, CalendarIcon } from 'lucide-react';
+import { ArrowLeft, Users, MessageSquare, Clock, BarChart3, RefreshCw, TrendingUp, UserPlus, Percent, Timer, XCircle, ArrowRightLeft, ArrowDown, Send, CalendarIcon, DollarSign } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { format, subDays, startOfDay, endOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+
+interface CostBreakdown {
+  model: string;
+  calls: number;
+  cost: number;
+  cacheSavings: number;
+}
 
 interface Metrics {
   activeUsers: number;
@@ -23,23 +30,23 @@ interface Metrics {
   returnRate: number;
   uniqueRecentUsers: number;
   avgDailyMessagesPerUser: number;
+  // Cost
+  totalCostUSD: number;
+  avgCostPerActiveUser: number;
+  costBreakdownByModel: CostBreakdown[];
+  totalCacheSavings: number;
   // Trial & Conversion
   activeTrials: number;
   trialsLast7Days: number;
   trialsLast30Days: number;
   totalTrialsEver: number;
   trialRespondedCount: number;
-  trialValueDeliveredCount: number;
-  trialAhaCount: number;
-  trialCompletedCount: number;
   convertedCount: number;
   conversionRate: number;
   expiredTrials: number;
   avgDaysToConversion: number;
   avgMsgsConverted: number;
   avgMsgsNonConverted: number;
-  avgAhaAtCount: number;
-  phaseDistribution: Record<string, number>;
   canceledUsers: number;
   cancelingUsers: number;
 }
@@ -155,7 +162,6 @@ export default function AdminEngagement() {
     { title: 'Taxa de Conversão', value: `${metrics.conversionRate}%`, icon: Percent, subtitle: `${metrics.convertedCount} de ${metrics.totalTrialsEver} trials` },
     { title: 'Trials Expirados', value: metrics.expiredTrials, icon: XCircle, subtitle: 'trial há mais de 7 dias sem converter' },
     { title: 'Tempo Médio até Conversão', value: `${metrics.avgDaysToConversion} dias`, icon: Timer, subtitle: 'trial_started_at → ativação' },
-    { title: 'Msg Média do Aha', value: metrics.avgAhaAtCount, icon: TrendingUp, subtitle: 'msg onde o Aha Moment ocorreu' },
     { title: 'Msgs Trial (Convertidos)', value: metrics.avgMsgsConverted, icon: MessageSquare, subtitle: 'média de msgs durante trial' },
     { title: 'Msgs Trial (Não Convertidos)', value: metrics.avgMsgsNonConverted, icon: MessageSquare, subtitle: 'média de msgs durante trial' },
     { title: 'Cancelados', value: metrics.canceledUsers, icon: XCircle, subtitle: 'status = canceled' },
@@ -216,7 +222,6 @@ export default function AdminEngagement() {
             <h1 className="text-2xl font-bold text-foreground">Métricas de Engajamento</h1>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            {/* Quick presets */}
             <div className="flex gap-1">
               {[
                 { label: '7d', days: 7 },
@@ -235,7 +240,6 @@ export default function AdminEngagement() {
                 </Button>
               ))}
             </div>
-            {/* Date from */}
             <Popover>
               <PopoverTrigger asChild>
                 <Button variant="outline" size="sm" className={cn("h-8 text-xs justify-start", !dateFrom && "text-muted-foreground")}>
@@ -248,7 +252,6 @@ export default function AdminEngagement() {
               </PopoverContent>
             </Popover>
             <span className="text-xs text-muted-foreground">até</span>
-            {/* Date to */}
             <Popover>
               <PopoverTrigger asChild>
                 <Button variant="outline" size="sm" className={cn("h-8 text-xs justify-start", !dateTo && "text-muted-foreground")}>
@@ -273,14 +276,87 @@ export default function AdminEngagement() {
             <TabsTrigger value="trial">Trial & Conversão</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="engagement" className="mt-4">
-            {loading && !metrics ? <SkeletonCards /> : <MetricCards cards={engagementCards} />}
+          <TabsContent value="engagement" className="mt-4 space-y-6">
+            {loading && !metrics ? <SkeletonCards /> : (
+              <>
+                <MetricCards cards={engagementCards} />
+
+                {/* Cost Section */}
+                {metrics && (
+                  <div className="space-y-4">
+                    <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                      <DollarSign className="h-5 w-5" />
+                      Custo de IA no Período
+                    </h2>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <Card>
+                        <CardHeader className="flex flex-row items-center justify-between pb-2">
+                          <CardTitle className="text-sm font-medium text-muted-foreground">Custo Total</CardTitle>
+                          <DollarSign className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold text-foreground">${metrics.totalCostUSD.toFixed(2)}</div>
+                          <p className="text-xs text-muted-foreground mt-1">{periodLabel}</p>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardHeader className="flex flex-row items-center justify-between pb-2">
+                          <CardTitle className="text-sm font-medium text-muted-foreground">Custo/Usuário Ativo</CardTitle>
+                          <Users className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold text-foreground">${metrics.avgCostPerActiveUser.toFixed(2)}</div>
+                          <p className="text-xs text-muted-foreground mt-1">{metrics.activeUsers} usuários ativos</p>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardHeader className="flex flex-row items-center justify-between pb-2">
+                          <CardTitle className="text-sm font-medium text-muted-foreground">Economia com Cache</CardTitle>
+                          <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-bold text-green-600">${metrics.totalCacheSavings.toFixed(2)}</div>
+                          <p className="text-xs text-muted-foreground mt-1">economia vs. sem cache</p>
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    {/* Cost breakdown by model */}
+                    {metrics.costBreakdownByModel && metrics.costBreakdownByModel.length > 0 && (
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-sm font-medium text-muted-foreground">Custo por Modelo</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-2">
+                            {metrics.costBreakdownByModel.map((m) => (
+                              <div key={m.model} className="flex items-center justify-between text-sm">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-mono text-xs text-muted-foreground">{m.model}</span>
+                                  <span className="text-xs text-muted-foreground">({m.calls} calls)</span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  {m.cacheSavings > 0 && (
+                                    <span className="text-xs text-green-600">-${m.cacheSavings.toFixed(2)}</span>
+                                  )}
+                                  <span className="font-semibold text-foreground">${m.cost.toFixed(2)}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
           </TabsContent>
 
           <TabsContent value="trial" className="mt-4 space-y-6">
             {loading && !metrics ? <SkeletonCards /> : (
               <>
-                {/* Funil de Conversão */}
+                {/* Simplified Funnel */}
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-base font-semibold flex items-center gap-2">
@@ -291,43 +367,13 @@ export default function AdminEngagement() {
                   <CardContent className="space-y-4">
                     {metrics && (
                       <>
-                        <FunnelStep label="Cadastraram (iniciaram trial)" value={metrics.totalTrialsEver} total={metrics.totalTrialsEver} color="bg-blue-500" />
+                        <FunnelStep label="Cadastraram (com cartão)" value={metrics.totalTrialsEver} total={metrics.totalTrialsEver} color="bg-blue-500" />
                         <FunnelStep label="Responderam (1+ mensagem)" value={metrics.trialRespondedCount} total={metrics.totalTrialsEver} color="bg-cyan-500" />
-                        <FunnelStep label="Valor Entregue (Aura entregou técnica/insight)" value={metrics.trialValueDeliveredCount} total={metrics.totalTrialsEver} color="bg-purple-500" />
-                        <FunnelStep label="Aha Moment (virada emocional)" value={metrics.trialAhaCount} total={metrics.totalTrialsEver} color="bg-amber-500" />
-                        <FunnelStep label="Engajaram (20+ msgs)" value={metrics.trialCompletedCount} total={metrics.totalTrialsEver} color="bg-orange-500" />
-                        <FunnelStep label="Assinaram" value={metrics.convertedCount} total={metrics.totalTrialsEver} color="bg-green-500" />
+                        <FunnelStep label="Assinaram (cobrança efetivada)" value={metrics.convertedCount} total={metrics.totalTrialsEver} color="bg-green-500" />
                       </>
                     )}
                   </CardContent>
                 </Card>
-                {/* Distribuição por Fase (trials ativos) */}
-                {metrics && metrics.phaseDistribution && Object.keys(metrics.phaseDistribution).length > 0 && (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-base font-semibold flex items-center gap-2">
-                        <BarChart3 className="h-4 w-4" />
-                        Distribuição por Fase (Trials Ativos)
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                        {[
-                          { key: 'listening', label: 'Escuta', color: 'bg-slate-100 text-slate-700' },
-                          { key: 'engaged', label: 'Engajado', color: 'bg-blue-100 text-blue-700' },
-                          { key: 'value_delivered', label: 'Valor Entregue', color: 'bg-purple-100 text-purple-700' },
-                          { key: 'aha_reached', label: 'Aha Moment', color: 'bg-amber-100 text-amber-700' },
-                          { key: 'converting', label: 'Convertendo', color: 'bg-green-100 text-green-700' },
-                        ].map(({ key, label, color }) => (
-                          <div key={key} className={`rounded-lg p-3 text-center ${color}`}>
-                            <div className="text-2xl font-bold">{metrics.phaseDistribution[key] || 0}</div>
-                            <div className="text-xs font-medium mt-1">{label}</div>
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
 
                 <Card>
                   <CardContent className="flex items-center justify-between py-4">
