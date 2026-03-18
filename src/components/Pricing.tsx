@@ -46,12 +46,12 @@ const plans = [{
   id: "direcao",
   name: "Direção",
   monthlyPrice: "49,90",
-  yearlyPrice: "419,16",
-  yearlyMonthlyEquivalent: "34,93",
-  yearlyDiscount: 30,
+  yearlyPrice: "359,90",
+  yearlyMonthlyEquivalent: "29,99",
+  yearlyDiscount: 40,
   dailyPrice: {
-    monthly: "~R$ 1,70 /dia",
-    yearly: "~R$1,15/dia"
+    monthly: "~R$ 1,70/dia",
+    yearly: "~R$0,99/dia"
   },
   period: {
     monthly: "/mês",
