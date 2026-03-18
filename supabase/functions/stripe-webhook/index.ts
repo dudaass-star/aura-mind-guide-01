@@ -91,6 +91,8 @@ Deno.serve(async (req) => {
       const customerPhone = session.metadata?.phone || session.customer_details?.phone;
       const customerEmail = session.metadata?.email || session.customer_details?.email;
       const customerPlan = session.metadata?.plan || 'essencial';
+      const isPixPayment = session.metadata?.payment_method === 'pix';
+      const sessionMode = session.mode; // 'payment' for PIX, 'subscription' for card
 
       if (!customerPhone) {
         console.error('❌ No phone number found in session');
@@ -109,17 +111,25 @@ Deno.serve(async (req) => {
         });
       }
 
-      console.log(`👤 Customer: ${customerName}, Plan: ${customerPlan}`);
+      console.log(`👤 Customer: ${customerName}, Plan: ${customerPlan}, PIX: ${isPixPayment}, Mode: ${sessionMode}`);
 
       const planName = PLAN_NAMES[customerPlan] || "Essencial";
       const sessionsCount = PLAN_SESSIONS[customerPlan] || 0;
       
       const cleanPhone = customerPhone.replace(/\D/g, '');
-      // Add country code for Brazilian numbers (10-11 digits without prefix)
       const formattedPhone = (cleanPhone.length === 10 || cleanPhone.length === 11)
         ? `55${cleanPhone}`
         : cleanPhone;
       const today = new Date().toISOString().split('T')[0];
+
+      // Calculate plan_expires_at for PIX payments (12 months from now)
+      let planExpiresAt: string | null = null;
+      if (isPixPayment || sessionMode === 'payment') {
+        const expirationDate = new Date();
+        expirationDate.setFullYear(expirationDate.getFullYear() + 1);
+        planExpiresAt = expirationDate.toISOString();
+        console.log(`📅 PIX payment — plan expires at: ${planExpiresAt}`);
+      }
 
       // Check if profile already exists BEFORE choosing the message
       const { data: existingProfile } = await supabase
@@ -137,7 +147,6 @@ Deno.serve(async (req) => {
       let welcomeMessage: string;
 
       if (isReturning) {
-        // RETURNING USER — canceled and resubscribed
         welcomeMessage = `Oi, ${customerName}! 💜
 
 Que bom ter você de volta! 🌟
@@ -146,14 +155,12 @@ Você escolheu o plano ${planName}.
 
 Vamos retomar de onde paramos?`;
       } else if (isUpgrade) {
-        // UPGRADE MESSAGE — user already knows AURA from trial
         welcomeMessage = `Oi, ${customerName}! 💜 Que notícia boa!
 
 Agora somos oficiais. Você escolheu o plano ${planName}.
 
 Vamos continuar de onde paramos?`;
       } else {
-        // NEW USER MESSAGE — standard welcome
         welcomeMessage = `Oi, ${customerName}! 🌟 Que bom te receber por aqui.
 
 Eu sou a AURA — e vou ficar com você nessa jornada.
@@ -223,7 +230,6 @@ Me diz: como você está hoje?`;
       // Create or update profile in database
       try {
         if (!existingProfile) {
-          // Allocate WhatsApp instance for new user
           const instanceId = await allocateInstance(supabase);
           console.log(`📱 Allocated WhatsApp instance: ${instanceId || 'none (will use env vars)'}`);
 
@@ -243,12 +249,13 @@ Me diz: como você está hoje?`;
               last_message_date: today,
               needs_schedule_setup: sessionsCount > 0,
               ...(instanceId && { whatsapp_instance_id: instanceId }),
+              ...(planExpiresAt && { plan_expires_at: planExpiresAt }),
             });
 
           if (insertError) {
             console.error('❌ Error creating profile:', insertError);
           } else {
-            console.log('✅ Profile created with plan:', customerPlan);
+            console.log('✅ Profile created with plan:', customerPlan, planExpiresAt ? `expires: ${planExpiresAt}` : '');
           }
         } else {
           const { error: updateError } = await supabase
@@ -262,14 +269,14 @@ Me diz: como você está hoje?`;
               sessions_reset_date: today,
               updated_at: new Date().toISOString(),
               needs_schedule_setup: sessionsCount > 0,
+              ...(planExpiresAt && { plan_expires_at: planExpiresAt }),
             })
             .eq('phone', formattedPhone);
 
           if (updateError) {
             console.error('❌ Error updating profile:', updateError);
           } else {
-            console.log('✅ Profile updated with plan:', customerPlan);
-            // Cancel any pending trial follow-up tasks
+            console.log('✅ Profile updated with plan:', customerPlan, planExpiresAt ? `expires: ${planExpiresAt}` : '');
             const { data: cancelled } = await supabase
               .from('scheduled_tasks')
               .update({ status: 'cancelled', executed_at: new Date().toISOString() })
