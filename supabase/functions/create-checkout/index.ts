@@ -44,9 +44,8 @@ serve(async (req) => {
 
     const { plan: requestedPlan, billing = "monthly", name, email, phone, trial, paymentMethod } = await req.json();
     
-    // When trial mode: force essencial monthly
-    const plan = trial ? "essencial" : requestedPlan;
-    const billingOverride = trial ? "monthly" : billing;
+    const plan = requestedPlan;
+    const billingOverride = billing;
     const isBoletoPayment = paymentMethod === "boleto" && billingOverride === "yearly";
     
     logStep("Request received", { plan, billing: billingOverride, name, email, phone, trial: !!trial, paymentMethod, isBoleto: isBoletoPayment });
@@ -146,7 +145,7 @@ serve(async (req) => {
       ],
       locale: "pt-BR",
       success_url: `${origin}/obrigado?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: trial ? `${origin}/experimentar` : `${origin}/checkout`,
+      cancel_url: `${origin}/checkout`,
       metadata: {
         phone: phoneClean,
         name: name,

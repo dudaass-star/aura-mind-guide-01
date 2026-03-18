@@ -198,7 +198,7 @@ const Testimonials = () => {
 
         {/* CTA */}
         <div className="text-center mt-10 animate-fade-up delay-600">
-          <a href="/experimentar">
+          <a href="/checkout">
             <button className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground shadow hover:bg-primary/90 h-14 rounded-xl px-10 text-lg min-w-[280px]">
               Começar Minha Jornada
             </button>

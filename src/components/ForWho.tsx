@@ -76,7 +76,7 @@ const ForWho = () => {
         {/* CTA */}
         <div className="text-center mt-12">
           <p className="text-lg text-muted-foreground mb-4">Se identificou?</p>
-          <a href="/experimentar">
+          <a href="/checkout">
             <button className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground shadow hover:bg-primary/90 h-12 rounded-xl px-8 text-base">
               Experimente Grátis
             </button>

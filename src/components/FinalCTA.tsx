@@ -24,7 +24,7 @@ const FinalCTA = () => {
             você vai dormir sabendo que alguém realmente te ouviu hoje.
           </p>
 
-          <Link to="/experimentar">
+          <Link to="/checkout">
             <Button variant="sage" size="xl" className="min-w-[280px] mb-6">
               Experimentar 7 dias grátis
             </Button>

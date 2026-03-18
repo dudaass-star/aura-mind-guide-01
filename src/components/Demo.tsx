@@ -505,7 +505,7 @@ const Demo = () => {
             <p className="font-display text-xl font-bold text-foreground mb-4">
               Pronta pra descobrir suas pistas?
             </p>
-            <a href="/experimentar">
+            <a href="/checkout">
               <Button variant="sage" size="xl">
                 Começar minha jornada
               </Button>
