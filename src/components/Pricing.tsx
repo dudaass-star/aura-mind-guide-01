@@ -7,12 +7,12 @@ const plans = [{
   id: "essencial",
   name: "Essencial",
   monthlyPrice: "29,90",
-  yearlyPrice: "269,10",
-  yearlyMonthlyEquivalent: "22,43",
-  yearlyDiscount: 25,
+  yearlyPrice: "214,90",
+  yearlyMonthlyEquivalent: "17,91",
+  yearlyDiscount: 40,
   dailyPrice: {
     monthly: "~R$ 1,00/dia",
-    yearly: "~R$0,74/dia"
+    yearly: "~R$0,59/dia"
   },
   period: {
     monthly: "/mês",
@@ -46,12 +46,12 @@ const plans = [{
   id: "direcao",
   name: "Direção",
   monthlyPrice: "49,90",
-  yearlyPrice: "419,16",
-  yearlyMonthlyEquivalent: "34,93",
-  yearlyDiscount: 30,
+  yearlyPrice: "359,90",
+  yearlyMonthlyEquivalent: "29,99",
+  yearlyDiscount: 40,
   dailyPrice: {
-    monthly: "~R$ 1,70 /dia",
-    yearly: "~R$1,15/dia"
+    monthly: "~R$ 1,70/dia",
+    yearly: "~R$0,99/dia"
   },
   period: {
     monthly: "/mês",
@@ -85,12 +85,12 @@ const plans = [{
   id: "transformacao",
   name: "Transformação",
   monthlyPrice: "79,90",
-  yearlyPrice: "671,16",
-  yearlyMonthlyEquivalent: "55,93",
-  yearlyDiscount: 30,
+  yearlyPrice: "574,90",
+  yearlyMonthlyEquivalent: "47,91",
+  yearlyDiscount: 40,
   dailyPrice: {
     monthly: "~R$2,70/dia",
-    yearly: "~R$1,84/dia"
+    yearly: "~R$1,57/dia"
   },
   period: {
     monthly: "/mês",
@@ -145,7 +145,7 @@ const Pricing = () => {
             <button onClick={() => setBillingPeriod("yearly")} className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all flex items-center gap-2 ${billingPeriod === "yearly" ? "bg-primary text-primary-foreground shadow-md" : "text-muted-foreground hover:text-foreground"}`}>
               Anual
               <span className={`text-xs px-2 py-0.5 rounded-full ${billingPeriod === "yearly" ? "bg-primary-foreground/20 text-primary-foreground" : "bg-primary/20 text-primary"}`}>
-                Economize até 30%
+                🔥 40% off
               </span>
             </button>
           </div>

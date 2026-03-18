@@ -1,50 +1,190 @@
+# Consolidação dos Frameworks Comportamentais ✅ Implementado
 
+## Resumo
+6 frameworks sobrepostos (Timer Emocional, Anti-Loop, Cenários A-D, etc.) consolidados em uma ESTRUTURA DE ATENDIMENTO hierárquica com 4 modos: Ping-Pong, Profundo, Direção, Emergência.
 
-## Plano: Desconto 40% nos anuais + PIX + badge de lançamento
+### O que foi feito
+1. **Timer Emocional** ✅ — Removido (redundante com fases do Modo Profundo), substituído por frase diretiva curta
+2. **Anti-Loop** ✅ — Reescrito com classificação contextual (confirmação vs evasão), proteção para trial/<20 trocas
+3. **Detecção de Travamento** ✅ — Dividida em 2 camadas:
+   - Intra-conversa: integrado ao prompt com reformulação por opções concretas
+   - Inter-conversas: contexto dinâmico via commitments (follow_up_count >= 2 ou >14 dias)
+4. **Cenários A/B/C/D** ✅ — Eliminados e consolidados na ESTRUTURA DE ATENDIMENTO (4 modos)
+5. **Protocolo de Condução** ✅ — Mantido (complementar, não conflitante)
+6. **Modo Direção** ✅ — Protocolo 4 etapas preservado dentro da estrutura consolidada
 
-### Preços corrigidos (40% off)
+### Resultado
+- ~120 linhas removidas do prompt
+- 1 árvore de decisão clara em vez de 6 frameworks concorrentes
+- Trial users protegidos contra encerramento prematuro
 
-| Plano | Mensal | Anual 12x | Anual -40% | Equiv/mês | Equiv/dia |
-|-------|--------|-----------|------------|-----------|-----------|
-| Essencial | R$ 29,90 | R$ 358,80 | **R$ 214,90** | R$ 17,91 | ~R$ 0,59 |
-| Direção | R$ 49,90 | R$ 598,80 | **R$ 359,90** | R$ 29,99 | ~R$ 0,99 |
-| Transformação | R$ 79,90 | R$ 958,80 | **R$ 574,90** | R$ 47,91 | ~R$ 1,57 |
+---
 
-### O que será feito
+# Limpeza Estrutural do Prompt ✅ Implementado
 
-**1. Stripe — criar 6 novos preços**
-- 3 preços recorrentes anuais (cartão, `mode: subscription`) com os valores acima
-- 3 preços one-time (PIX, `mode: payment`) com os mesmos valores
-- Atualizar secrets `STRIPE_PRICE_*_YEARLY` para os novos IDs de cartão
-- Criar novos secrets `STRIPE_PRICE_*_PIX_YEARLY` para os IDs PIX
+## Resumo
+Eliminação de seções duplicadas e deduplicação de regras repetidas após a consolidação dos frameworks.
 
-**2. `Pricing.tsx` — atualizar preços + badge**
-- Atualizar `yearlyPrice`, `yearlyMonthlyEquivalent`, `yearlyDiscount` (40), `dailyPrice.yearly` nos 3 planos
-- Adicionar badge "Oferta de lançamento" visível quando `billingPeriod === "yearly"`
+### O que foi feito
+1. **ESTILO AURA + MÓDULO DE PROFUNDIDADE** ✅ — Fundidos em "DNA DA AURA" (~40 linhas a menos)
+2. **PADRÕES DE RESPOSTA** ✅ — Eliminados (redundantes com Modo Profundo e Modo Direção, ~30 linhas)
+3. **LEITURA DO MOMENTO** ✅ — Eliminada (duplicata da ESTRUTURA DE ATENDIMENTO, ~30 linhas)
+4. **"1 pergunta por vez"** ✅ — Deduplicada: regra canônica na seção REGRA CRÍTICA, repetições convertidas em referências curtas (~20 linhas)
 
-**3. `Checkout.tsx` — atualizar preços + adicionar toggle PIX**
-- Espelhar os novos preços anuais (214,90 / 359,90 / 574,90)
-- Quando `billingPeriod === "yearly"`: mostrar toggle "Cartão" / "PIX"
-- Submit envia `paymentMethod: 'pix'` quando PIX selecionado
+### Resultado
+- ~120 linhas adicionais removidas do prompt
+- Sem perda de regras — apenas eliminação de redundância
 
-**4. `create-checkout` edge function — suportar PIX**
-- Aceitar parâmetro `paymentMethod: 'pix' | 'card'`
-- Quando PIX + yearly: `mode: 'payment'`, `payment_method_types: ['pix']`, usar Price IDs PIX
-- Quando cartão: fluxo atual sem mudanças
+---
 
-**5. `stripe-webhook` — tratar pagamento único PIX**
-- No `checkout.session.completed`: detectar `session.mode === 'payment'` e metadata `payment_method: 'pix'`
-- Criar/atualizar perfil com `status: 'active'` e `plan_expires_at` = hoje + 12 meses
-- Mesma lógica de boas-vindas
+# Trial "Primeira Jornada" — Detecção de Marcos de Valor ✅ Implementado
 
-**6. Migração de banco**
-- Adicionar coluna `plan_expires_at` (timestamp, nullable) na tabela `profiles`
+## Resumo
+Trial expandido de 10 para **50 mensagens ou 72h**, com detecção inteligente de "Aha Moment" em duas camadas para acionar nudges de conversão no momento certo.
 
-### Arquivos editados
-- `src/components/Pricing.tsx`
-- `src/pages/Checkout.tsx`
-- `supabase/functions/create-checkout/index.ts`
-- `supabase/functions/stripe-webhook/index.ts`
-- Migração SQL (nova coluna)
-- 6 novos preços Stripe + 3 novos secrets
+### Limites
+- Hard cap: 50 mensagens OU 72 horas (o que vier primeiro)
+- Fallback de nudges: msg 45 e 48 se Aha não detectado
 
+### Fases do Trial (`trial_phase`)
+- `listening` — Escuta ativa (msgs 1-7, sem intervenção)
+- `value_delivered` — Aura entregou valor real (tag `[VALOR_ENTREGUE]`)
+- `aha_reached` — Usuário reagiu positivamente ao valor (detectado por heurísticas)
+- `converting` — Nudges de conversão ativos
+
+### Detecção em Duas Camadas
+
+**Camada 1 — Tag da Aura: `[VALOR_ENTREGUE]`**
+- Aura marca quando entrega: reframe, técnica prática, insight estruturado
+- NÃO marca: validação simples, perguntas abertas, acolhimento genérico
+- Webhook detecta a tag → `trial_phase = 'value_delivered'`
+
+**Camada 2 — Resposta do Usuário**
+- Só avaliada quando `trial_phase = 'value_delivered'` E `count >= 8`
+- Detecta palavras-chave positivas sem "?" (lista de ~25 termos)
+- Ao detectar → `trial_phase = 'aha_reached'`, salva `trial_aha_at_count`
+
+### Sequência de Nudges
+- Aha + 2 msgs: nudge suave ("Tô adorando te conhecer...")
+- Aha + 4 msgs: nudge com link de checkout
+- Fallback msg 45: nudge se Aha não detectado
+- Fallback msg 48: nudge final
+- Msg 50 / 72h: bloqueio + follow-up sequence (5 touchpoints)
+
+### O que foi implementado
+1. **Migração SQL** ✅ — `trial_phase text` e `trial_aha_at_count integer` em `profiles`
+2. **`aura-agent/index.ts`** ✅ — Tag `[VALOR_ENTREGUE]` + contexto dinâmico por fase/aha
+3. **`webhook-zapi/index.ts`** ✅ — Limite 50/72h, detecção de tag, análise de Aha, strip de tag
+4. **`start-trial/index.ts`** ✅ — Mensagem de boas-vindas sem número fixo
+5. **Frontend** ✅ — `StartTrial.tsx`, `TrialStarted.tsx`, `AdminMessages.tsx`, `AdminEngagement.tsx`
+6. **`execute-scheduled-tasks/index.ts`** ✅ — Textos atualizados
+7. **`admin-engagement-metrics/index.ts`** ✅ — Funnel atualizado (20+ msgs = engajado)
+
+---
+
+# Memória Terapêutica da Aura ✅ Implementado
+
+## Resumo
+Aura agora rastreia técnicas terapêuticas usadas, captura compromissos de conversas livres, e usa tags de tema fora de sessões formais.
+
+### O que foi implementado
+1. **`tecnica` como categoria de insight** ✅ — Prioridade alta no prompt, exemplos: reframe_sofrimento, responsabilidade_radical, derreflexao, etc.
+2. **Tag `[COMPROMISSO_LIVRE:texto]`** ✅ — Parser no webhook insere na tabela `commitments` com `session_id: null`
+3. **Tags de tema em conversas livres** ✅ — Instrução explícita no prompt para usar `[TEMA_NOVO]`, `[TEMA_PROGREDINDO]` etc. fora de sessões
+4. **Contexto dinâmico `## Processo Terapêutico`** ✅ — Injeta técnicas já usadas e compromissos pendentes no contexto do modelo
+
+### O que NÃO foi feito (por design)
+- Detecção de fase terapêutica (Presença/Sentido/Movimento) — o modelo infere do histórico
+- Categoria `insight_chave` — `session_themes` já cobre
+- Migração de banco — `user_insights.category` é text livre, suporta `tecnica` nativamente
+
+---
+
+# Fase 3: Limpeza Cirúrgica do Prompt ✅ Implementado
+
+## Resumo
+4 problemas estruturais resolvidos para melhorar o fluxo conversacional e reduzir ruído no prompt.
+
+### O que foi feito
+
+1. **ENCERRAMENTO COM GANCHO relocado** ✅
+   - Removido do fluxo geral (onde causava ganchos forçados em conversas comuns)
+   - Movido para dentro da fase de Fechamento Suave (soft_closing) das sessões, onde faz sentido
+
+2. **CONTEXTO TEMPORAL duplicado removido** ✅
+   - Seção "# CONTEXTO TEMPORAL (MUITO IMPORTANTE!)" eliminada
+   - Os dados já são injetados automaticamente no bloco DADOS DINÂMICOS DO SISTEMA
+
+3. **Proibições consolidadas** ✅
+   - Convertidas de framing negativo para positivo onde possível:
+     - "PROIBIÇÃO DE PAPAGAIO" → "ANTI-PAPAGAIO" com exemplos positivos primeiro
+     - "Proibido Robolês" → "Fale como gente"
+     - "REGRA DE PROIBIÇÃO DE DISCLAIMER" → "REGRA DE IDENTIDADE"
+     - "PROIBIDO mini-palestras" → "Evite mini-palestras"
+     - "NUNCA agende no passado" → "Agende apenas no futuro"
+   - Regras de áudio simplificadas de 9 para 6 itens (removidas redundâncias)
+   - Proibições de segurança (Nível 1/2/3) mantidas intactas — são críticas
+
+4. **[VALOR_ENTREGUE] corrigido** ✅
+   - Adicionada instrução explícita: tag marca progresso PARCIAL
+   - "Entrega de valor é sinal para APROFUNDAR, não para encerrar"
+   - Instrução para continuar com pergunta de aprofundamento após a tag
+
+### Resultado
+- ~30 linhas removidas (ENCERRAMENTO COM GANCHO + CONTEXTO TEMPORAL)
+- Redução significativa de framing negativo no prompt
+- Ganchos de sessão agora aparecem apenas no contexto correto
+- [VALOR_ENTREGUE] não mais funciona como sinal de "missão cumprida"
+
+---
+
+# Fase 4: Refinamento Final ✅ Implementado
+
+## Resumo
+2 itens pendentes resolvidos: eliminação do módulo redundante SUPORTE À DECISÃO e varredura completa de proibições.
+
+### O que foi feito
+
+1. **SUPORTE À DECISÃO eliminado** ✅
+   - Seção "NOVO MÓDULO: SUPORTE À DECISÃO E VALIDAÇÃO" (19 linhas) removida
+   - Lógica já coberta: DNA DA AURA (observe > pergunte), Modo Profundo Fase 2, Modo Direção
+
+2. **Varredura de PROIBIDO/NUNCA/JAMAIS** ✅
+   - Conversões para framing positivo em ~20 ocorrências
+   - Consolidação de segurança Nível 1: 15 linhas → 5 linhas
+   - Fases de sessão: "PROIBIDO NESTA FASE" → framing de contexto temporal
+   - Proibições de segurança (crise) mantidas intactas
+
+### Resultado
+- ~40 linhas removidas/condensadas
+- Framing predominantemente positivo no prompt
+- Proibições restantes: apenas segurança, identidade e crise
+
+---
+
+# Fase 5: Eliminação de Redundância Estrutural ✅ Implementado
+
+## Resumo
+3 problemas estruturais resolvidos: seções duplicadas fundidas, referências ao bloco dinâmico eliminadas, protocolo de memória condensado.
+
+### O que foi feito
+
+1. **ESTRUTURA DA RESPOSTA + ESTRUTURA DE ATENDIMENTO fundidas** ✅
+   - Duas seções que classificavam mensagens → uma só: "ESTRUTURA DE ATENDIMENTO"
+   - Fases 1-3 do Modo Profundo integradas diretamente dentro do modo PROFUNDO
+   - Eliminada duplicação de Ping-Pong e instrução de sessão ativa
+
+2. **Seções "consulte bloco dinâmico" eliminadas** ✅
+   - 6 seções de referência (~25 linhas) reduzidas a 3 linhas (timestamps)
+   - "CONTEXTO DO USUÁRIO", "SOBRE SUA MEMÓRIA", "MEMÓRIA DE LONGO PRAZO", "REGRA DE ÁUDIO" — todas removidas
+   - O modelo já recebe o bloco dinâmico como segundo system message
+
+3. **PROTOCOLO DE CONTEXTO E MEMÓRIA condensado** ✅
+   - "Lei da Ancoragem" movida para DNA DA AURA (4 linhas)
+   - "Mostre que lembra" e "Continuidade de longo prazo" removidos (redundantes com ANTECIPE NÃO SONDE)
+   - Seção inteira (~19 linhas) eliminada
+
+### Resultado
+- ~50 linhas removidas
+- Uma única árvore de decisão para classificação de mensagens
+- Zero referências "consulte o bloco dinâmico"

@@ -5,12 +5,13 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { ArrowLeft, CreditCard, Check, Shield, Lock, MessageCircle, Calendar } from "lucide-react";
+import { ArrowLeft, CreditCard, Check, Shield, Lock, MessageCircle, Calendar, QrCode } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
 type PlanId = "essencial" | "direcao" | "transformacao";
 type BillingPeriod = "monthly" | "yearly";
+type PaymentMethod = "card" | "pix";
 
 interface PlanConfig {
   name: string;
@@ -26,27 +27,27 @@ const plans: Record<PlanId, PlanConfig> = {
   essencial: {
     name: "Essencial",
     monthlyPrice: "29,90",
-    yearlyPrice: "269,10",
-    yearlyMonthlyEquivalent: "22,43",
-    yearlyDiscount: 25,
+    yearlyPrice: "214,90",
+    yearlyMonthlyEquivalent: "17,91",
+    yearlyDiscount: 40,
     sessions: 0,
     highlights: ["Conversas ilimitadas 24/7", "Check-in diário", "Review semanal"],
   },
   direcao: {
     name: "Direção",
     monthlyPrice: "49,90",
-    yearlyPrice: "419,16",
-    yearlyMonthlyEquivalent: "34,93",
-    yearlyDiscount: 30,
+    yearlyPrice: "359,90",
+    yearlyMonthlyEquivalent: "29,99",
+    yearlyDiscount: 40,
     sessions: 4,
     highlights: ["Tudo do Essencial", "4 Sessões Especiais/mês", "Resumo após cada sessão"],
   },
   transformacao: {
     name: "Transformação",
     monthlyPrice: "79,90",
-    yearlyPrice: "671,16",
-    yearlyMonthlyEquivalent: "55,93",
-    yearlyDiscount: 30,
+    yearlyPrice: "574,90",
+    yearlyMonthlyEquivalent: "47,91",
+    yearlyDiscount: 40,
     sessions: 8,
     highlights: ["Tudo do Direção", "8 Sessões Especiais/mês", "Prioridade no agendamento"],
   },
@@ -55,7 +56,6 @@ const plans: Record<PlanId, PlanConfig> = {
 const Checkout = () => {
   const location = useLocation();
   
-  // Support both URL query param (?plan=direcao) and location state
   const searchParams = new URLSearchParams(location.search);
   const planFromUrl = searchParams.get('plan') as PlanId | null;
   const billingFromUrl = searchParams.get('billing') as BillingPeriod | null;
@@ -67,6 +67,7 @@ const Checkout = () => {
   
   const [selectedPlan, setSelectedPlan] = useState<PlanId>(initialPlan);
   const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>(initialBilling);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("card");
   const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -77,6 +78,13 @@ const Checkout = () => {
       (window as any).fbq('track', 'InitiateCheckout');
     }
   }, []);
+
+  // Reset payment method when switching to monthly
+  useEffect(() => {
+    if (billingPeriod === "monthly") {
+      setPaymentMethod("card");
+    }
+  }, [billingPeriod]);
 
   const currentPlan = plans[selectedPlan];
   const currentPrice = billingPeriod === "monthly" ? currentPlan.monthlyPrice : currentPlan.yearlyPrice;
@@ -122,6 +130,7 @@ const Checkout = () => {
           name: name.trim(),
           email: email.trim(),
           phone: phone,
+          ...(billingPeriod === "yearly" && paymentMethod === "pix" && { paymentMethod: "pix" }),
         },
       });
 
@@ -131,11 +140,7 @@ const Checkout = () => {
 
       if (data?.url) {
         const checkoutUrl = data.url as string;
-
-        // Store user info in localStorage for thank you page
         localStorage.setItem('aura_checkout', JSON.stringify({ name, phone, plan: selectedPlan, billing: billingPeriod }));
-
-        // Redirect to Stripe Checkout
         if (window.top) {
           window.top.location.href = checkoutUrl;
         } else {
@@ -160,7 +165,6 @@ const Checkout = () => {
       </Helmet>
 
       <div className="min-h-screen bg-gradient-hero">
-        {/* Header */}
         <header className="py-6 border-b border-border/50">
           <div className="container mx-auto px-4">
             <Link to="/" className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors">
@@ -172,7 +176,6 @@ const Checkout = () => {
 
         <div className="container mx-auto px-4 py-12">
           <div className="max-w-2xl mx-auto">
-            {/* Title */}
             <div className="text-center mb-10">
               <h1 className="font-display text-3xl md:text-4xl font-semibold text-foreground mb-3">
                 Finalizar assinatura
@@ -213,13 +216,53 @@ const Checkout = () => {
                     <span className={`text-xs px-2 py-0.5 rounded-full ${
                       billingPeriod === "yearly" 
                         ? "bg-primary-foreground/20 text-primary-foreground" 
-                        : "bg-green-500/20 text-green-600"
+                        : "bg-primary/20 text-primary"
                     }`}>
-                      -{currentPlan.yearlyDiscount}%
+                      🔥 -40%
                     </span>
                   </button>
                 </div>
               </div>
+
+              {/* Payment method toggle (only for yearly) */}
+              {billingPeriod === "yearly" && (
+                <div className="bg-card rounded-2xl p-6 border border-border/50">
+                  <h2 className="font-display text-lg font-semibold text-foreground mb-4">
+                    Método de pagamento
+                  </h2>
+                  <div className="flex items-center justify-center gap-3 p-1 bg-secondary/50 rounded-full">
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod("card")}
+                      className={`flex-1 px-4 py-2.5 rounded-full text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+                        paymentMethod === "card"
+                          ? "bg-primary text-primary-foreground shadow-md"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      <CreditCard className="w-4 h-4" />
+                      Cartão
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod("pix")}
+                      className={`flex-1 px-4 py-2.5 rounded-full text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+                        paymentMethod === "pix"
+                          ? "bg-primary text-primary-foreground shadow-md"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      <QrCode className="w-4 h-4" />
+                      PIX
+                    </button>
+                  </div>
+                  {paymentMethod === "pix" && (
+                    <p className="text-xs text-muted-foreground mt-3 text-center">
+                      Pagamento único anual. Não renova automaticamente.
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* Plan selection */}
               <div className="bg-card rounded-2xl p-6 border border-border/50">
@@ -251,7 +294,7 @@ const Checkout = () => {
                           </div>
                         )}
                         {billingPeriod === "yearly" && (
-                          <div className="absolute -top-2 right-4 px-2 py-0.5 bg-green-500 text-white text-xs font-medium rounded">
+                          <div className="absolute -top-2 right-4 px-2 py-0.5 bg-destructive text-destructive-foreground text-xs font-medium rounded">
                             -{plan.yearlyDiscount}%
                           </div>
                         )}
@@ -357,13 +400,16 @@ const Checkout = () => {
               {/* Summary */}
               <div className="bg-secondary/30 rounded-2xl p-6 border border-border/50">
                 <div className="flex justify-between items-center mb-4">
-                  <span className="text-muted-foreground">Plano {currentPlan.name} ({billingPeriod === "monthly" ? "mensal" : "anual"})</span>
+                  <span className="text-muted-foreground">
+                    Plano {currentPlan.name} ({billingPeriod === "monthly" ? "mensal" : "anual"})
+                    {billingPeriod === "yearly" && paymentMethod === "pix" && " — PIX"}
+                  </span>
                   <span className="font-semibold text-foreground">R$ {currentPrice}</span>
                 </div>
                 {billingPeriod === "yearly" && (
                   <div className="flex justify-between items-center mb-4 text-sm">
-                    <span className="text-green-600">Economia de {currentPlan.yearlyDiscount}%</span>
-                    <span className="text-green-600 font-medium">
+                    <span className="text-primary">Economia de {currentPlan.yearlyDiscount}%</span>
+                    <span className="text-primary font-medium">
                       equivale a R${currentPlan.yearlyMonthlyEquivalent}/mês
                     </span>
                   </div>
@@ -384,8 +430,12 @@ const Checkout = () => {
                 className="w-full"
                 disabled={isLoading}
               >
-                <CreditCard className="w-5 h-5 mr-2" />
-                {isLoading ? "Processando..." : "Continuar para pagamento"}
+                {paymentMethod === "pix" && billingPeriod === "yearly" ? (
+                  <QrCode className="w-5 h-5 mr-2" />
+                ) : (
+                  <CreditCard className="w-5 h-5 mr-2" />
+                )}
+                {isLoading ? "Processando..." : paymentMethod === "pix" && billingPeriod === "yearly" ? "Pagar com PIX" : "Continuar para pagamento"}
               </Button>
 
               {/* Trust badges */}

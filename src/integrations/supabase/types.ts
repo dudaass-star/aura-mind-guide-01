@@ -556,6 +556,7 @@ export type Database = {
           pending_capsule_audio_url: string | null
           phone: string | null
           plan: string | null
+          plan_expires_at: string | null
           preferred_session_time: string | null
           preferred_support_style: string | null
           primary_topic: string | null
@@ -601,6 +602,7 @@ export type Database = {
           pending_capsule_audio_url?: string | null
           phone?: string | null
           plan?: string | null
+          plan_expires_at?: string | null
           preferred_session_time?: string | null
           preferred_support_style?: string | null
           primary_topic?: string | null
@@ -646,6 +648,7 @@ export type Database = {
           pending_capsule_audio_url?: string | null
           phone?: string | null
           plan?: string | null
+          plan_expires_at?: string | null
           preferred_session_time?: string | null
           preferred_support_style?: string | null
           primary_topic?: string | null
