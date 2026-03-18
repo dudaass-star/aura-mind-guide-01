@@ -141,10 +141,14 @@ const Checkout = () => {
       if (data?.url) {
         const checkoutUrl = data.url as string;
         localStorage.setItem('aura_checkout', JSON.stringify({ name, phone, plan: selectedPlan, billing: billingPeriod }));
-        if (window.top) {
-          window.top.location.href = checkoutUrl;
-        } else {
-          window.location.href = checkoutUrl;
+        try {
+          if (window.top && window.top !== window) {
+            window.top.location.href = checkoutUrl;
+          } else {
+            window.location.href = checkoutUrl;
+          }
+        } catch {
+          window.open(checkoutUrl, '_blank');
         }
       } else {
         throw new Error('URL de checkout não recebida');
