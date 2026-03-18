@@ -122,13 +122,13 @@ Deno.serve(async (req) => {
         : cleanPhone;
       const today = new Date().toISOString().split('T')[0];
 
-      // Calculate plan_expires_at for PIX payments (12 months from now)
+      // Calculate plan_expires_at for boleto/one-time payments (12 months from now)
       let planExpiresAt: string | null = null;
-      if (isPixPayment || sessionMode === 'payment') {
+      if (isBoletoPayment || sessionMode === 'payment') {
         const expirationDate = new Date();
         expirationDate.setFullYear(expirationDate.getFullYear() + 1);
         planExpiresAt = expirationDate.toISOString();
-        console.log(`📅 PIX payment — plan expires at: ${planExpiresAt}`);
+        console.log(`📅 One-time payment — plan expires at: ${planExpiresAt}`);
       }
 
       // Check if profile already exists BEFORE choosing the message
