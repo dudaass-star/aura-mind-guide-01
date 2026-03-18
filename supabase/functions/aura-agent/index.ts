@@ -4051,15 +4051,44 @@ Exemplo com 4 sessões:
         }
       }
 
-      // TRAVA FINAL: se nenhum retry resolveu, usar fallback seguro
+      // TRAVA FINAL: se nenhum retry resolveu, usar fallback seguro contextual
       if (!echoFixed) {
-        console.error('🚫 ANTI-ECHO v2: TRAVA FINAL — todos os retries falharam, usando fallback seguro');
-        // Fallback contextual based on whether we're in a session or casual chat
-        if (sessionActive && currentSession) {
-          assistantMessage = 'Entendo o que você está dizendo… e isso me faz pensar em algo. Me conta mais sobre como isso aparece no seu dia a dia? Quero entender melhor a sua experiência com isso.';
-        } else {
-          assistantMessage = 'Fico feliz que isso faça sentido pra você 💛 Me conta: o que mais está passando pela sua cabeça agora? Tem algo que você gostaria de explorar mais?';
-        }
+        console.error('🚫 ANTI-ECHO v2: TRAVA FINAL — todos os retries falharam, usando fallback contextual');
+        const fallbackUserName = profile?.name?.split(' ')[0] || '';
+        const fallbackNamePrefix = fallbackUserName ? `${fallbackUserName}, ` : '';
+        
+        // Buscar tema recente das session_themes se disponível
+        let recentThemeName = '';
+        try {
+          const { data: recentTheme } = await supabase
+            .from('session_themes')
+            .select('theme_name')
+            .eq('user_id', user_id)
+            .order('last_mentioned_at', { ascending: false })
+            .limit(1)
+            .single();
+          if (recentTheme?.theme_name) recentThemeName = recentTheme.theme_name;
+        } catch (_) { /* ignore */ }
+
+        const sessionFallbacks = [
+          `${fallbackNamePrefix}isso ficou aqui comigo. O que tá por baixo disso?`,
+          `Hmm. Me conta mais sobre como isso aparece no seu dia a dia.`,
+          `${fallbackNamePrefix}isso é pesado. Fica comigo — o que mais tá rolando?`,
+          `Entendi. E como você tá com isso agora?`,
+          `${fallbackNamePrefix}isso importa. Me conta mais sobre ${recentThemeName || 'isso'}.`,
+          `Hmm... faz sentido. O que você tá sentindo agora?`,
+        ];
+        const casualFallbacks = [
+          `${fallbackNamePrefix}tô processando isso aqui. Me conta mais.`,
+          `Hmm... e o que mais tá passando pela sua cabeça?`,
+          `Entendi. E como você tá com isso agora?`,
+          `${fallbackNamePrefix}isso ficou aqui comigo. Me conta mais sobre ${recentThemeName || 'isso'}.`,
+          `Sério? Me fala mais.`,
+          `Hmm. Faz sentido. O que você tá sentindo agora?`,
+        ];
+        
+        const fallbacks = (sessionActive && currentSession) ? sessionFallbacks : casualFallbacks;
+        assistantMessage = fallbacks[Date.now() % fallbacks.length];
       }
     }
 
