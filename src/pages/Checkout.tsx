@@ -175,12 +175,22 @@ const Checkout = () => {
 
         <div className="container mx-auto px-4 py-12">
           <div className="max-w-2xl mx-auto">
+            {/* Trial banner */}
+            <div className="bg-primary/10 border border-primary/20 rounded-2xl p-4 mb-8 text-center">
+              <p className="font-display text-lg font-semibold text-foreground">
+                ✨ 7 dias grátis em todos os planos
+              </p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Primeira cobrança só no 8º dia. Cancele quando quiser.
+              </p>
+            </div>
+
             <div className="text-center mb-10">
               <h1 className="font-display text-3xl md:text-4xl font-semibold text-foreground mb-3">
-                Finalizar assinatura
+                Comece sua jornada
               </h1>
               <p className="text-muted-foreground">
-                Escolha seu plano e comece sua jornada
+                Escolha seu plano e experimente grátis por 7 dias
               </p>
             </div>
 
