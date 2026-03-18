@@ -215,8 +215,8 @@ const Checkout = () => {
                     Anual
                     <span className={`text-sm font-bold px-3 py-1 rounded-full transition-all ${
                       billingPeriod === "yearly" 
-                        ? "bg-primary-foreground/20 text-primary-foreground" 
-                        : "bg-primary text-primary-foreground shadow-sm"
+                        ? "bg-accent/30 text-primary-foreground" 
+                        : "bg-accent text-accent-foreground shadow-sm animate-pulse-soft"
                     }`}>
                       40% off
                     </span>

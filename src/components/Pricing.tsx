@@ -144,7 +144,7 @@ const Pricing = () => {
             </button>
             <button onClick={() => setBillingPeriod("yearly")} className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all flex items-center gap-2 ${billingPeriod === "yearly" ? "bg-primary text-primary-foreground shadow-md" : "text-muted-foreground hover:text-foreground"}`}>
               Anual
-              <span className={`text-sm font-bold px-3 py-1 rounded-full transition-all ${billingPeriod === "yearly" ? "bg-primary-foreground/20 text-primary-foreground" : "bg-primary text-primary-foreground shadow-sm"}`}>
+              <span className={`text-sm font-bold px-3 py-1 rounded-full transition-all ${billingPeriod === "yearly" ? "bg-accent/30 text-primary-foreground" : "bg-accent text-accent-foreground shadow-sm animate-pulse-soft"}`}>
                 40% off
               </span>
             </button>
