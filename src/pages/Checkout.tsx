@@ -430,12 +430,12 @@ const Checkout = () => {
                 className="w-full"
                 disabled={isLoading}
               >
-                {paymentMethod === "pix" && billingPeriod === "yearly" ? (
-                  <QrCode className="w-5 h-5 mr-2" />
+                {paymentMethod === "boleto" && billingPeriod === "yearly" ? (
+                  <FileText className="w-5 h-5 mr-2" />
                 ) : (
                   <CreditCard className="w-5 h-5 mr-2" />
                 )}
-                {isLoading ? "Processando..." : paymentMethod === "pix" && billingPeriod === "yearly" ? "Pagar com PIX" : "Continuar para pagamento"}
+                {isLoading ? "Processando..." : paymentMethod === "boleto" && billingPeriod === "yearly" ? "Gerar Boleto" : "Continuar para pagamento"}
               </Button>
 
               {/* Trust badges */}
