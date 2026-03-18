@@ -1,0 +1,1 @@
+ALTER TABLE public.token_usage_logs ADD COLUMN cached_tokens integer NOT NULL DEFAULT 0;
