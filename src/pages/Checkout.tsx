@@ -403,7 +403,7 @@ const Checkout = () => {
                 disabled={isLoading}
               >
                 <CreditCard className="w-5 h-5 mr-2" />
-                {isLoading ? "Processando..." : "Continuar para pagamento"}
+                {isLoading ? "Processando..." : "Começar 7 dias grátis"}
               </Button>
 
               {/* Trust badges */}
