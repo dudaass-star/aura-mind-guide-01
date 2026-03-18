@@ -118,12 +118,13 @@ async function logTokenUsage(
   userId: string | null,
   callType: string,
   model: string,
-  usage: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } | undefined
+  usage: any
 ) {
   if (!usage) {
     console.warn('TOKEN_USAGE: No usage data in API response for', callType);
     return;
   }
+  console.log(`TOKEN_USAGE_RAW [${callType}]:`, JSON.stringify(usage));
   console.log(`TOKEN_USAGE [${callType}]: prompt=${usage.prompt_tokens}, completion=${usage.completion_tokens}, total=${usage.total_tokens}`);
   
   try {
