@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { ArrowLeft, CreditCard, Check, Shield, Lock, MessageCircle, Calendar, QrCode } from "lucide-react";
+import { ArrowLeft, CreditCard, Check, Shield, Lock, MessageCircle, Calendar, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
