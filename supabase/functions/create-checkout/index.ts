@@ -172,6 +172,10 @@ serve(async (req) => {
       sessionConfig.mode = "subscription";
       sessionConfig.payment_method_types = ["card"];
       sessionConfig.subscription_data = {
+        ...(trial && { 
+          description: "7 dias grátis — a primeira cobrança será apenas no 8º dia.",
+          trial_period_days: 7,
+        }),
         metadata: {
           phone: phoneClean,
           name: name,
@@ -180,7 +184,6 @@ serve(async (req) => {
           billing: billingPeriod,
           ...(trial && { trial: "true" }),
         },
-        ...(trial && { trial_period_days: 7 }),
       };
     }
 
