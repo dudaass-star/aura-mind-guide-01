@@ -8,21 +8,21 @@ const corsHeaders = {
 };
 
 // Price IDs from environment variables
-const getPrices = (): Record<string, { monthly: string; yearly: string; pixYearly: string }> => ({
+const getPrices = (): Record<string, { monthly: string; yearly: string; boletoYearly: string }> => ({
   essencial: {
     monthly: Deno.env.get("STRIPE_PRICE_ESSENCIAL_MONTHLY") || "",
     yearly: Deno.env.get("STRIPE_PRICE_ESSENCIAL_YEARLY") || "",
-    pixYearly: Deno.env.get("STRIPE_PRICE_ESSENCIAL_PIX_YEARLY") || "",
+    boletoYearly: Deno.env.get("STRIPE_PRICE_ESSENCIAL_PIX_YEARLY") || "",
   },
   direcao: {
     monthly: Deno.env.get("STRIPE_PRICE_DIRECAO_MONTHLY") || "",
     yearly: Deno.env.get("STRIPE_PRICE_DIRECAO_YEARLY") || "",
-    pixYearly: Deno.env.get("STRIPE_PRICE_DIRECAO_PIX_YEARLY") || "",
+    boletoYearly: Deno.env.get("STRIPE_PRICE_DIRECAO_PIX_YEARLY") || "",
   },
   transformacao: {
     monthly: Deno.env.get("STRIPE_PRICE_TRANSFORMACAO_MONTHLY") || "",
     yearly: Deno.env.get("STRIPE_PRICE_TRANSFORMACAO_YEARLY") || "",
-    pixYearly: Deno.env.get("STRIPE_PRICE_TRANSFORMACAO_PIX_YEARLY") || "",
+    boletoYearly: Deno.env.get("STRIPE_PRICE_TRANSFORMACAO_PIX_YEARLY") || "",
   },
 });
 
