@@ -7,12 +7,12 @@ const plans = [{
   id: "essencial",
   name: "Essencial",
   monthlyPrice: "29,90",
-  yearlyPrice: "269,10",
-  yearlyMonthlyEquivalent: "22,43",
-  yearlyDiscount: 25,
+  yearlyPrice: "214,90",
+  yearlyMonthlyEquivalent: "17,91",
+  yearlyDiscount: 40,
   dailyPrice: {
     monthly: "~R$ 1,00/dia",
-    yearly: "~R$0,74/dia"
+    yearly: "~R$0,59/dia"
   },
   period: {
     monthly: "/mês",
