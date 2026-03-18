@@ -3926,6 +3926,12 @@ Exemplo com 4 sessões:
 6. NÃO faça perguntas ou prolongue a conversa`;
     }
 
+    // Lembrete anti-eco condicional — só para mensagens curtas (≤5 palavras)
+    const userWordCount = message.trim().split(/\s+/).length;
+    if (userWordCount <= 5) {
+      dynamicContext += `\nLEMBRETE ANTI-ECO: Mensagem curta detectada. Sua resposta NÃO pode começar reformulando o que o usuário disse. Reaja com emoção própria, observação nova ou pergunta que avança. Use reações como "Eita...", "Hmm...", "Sério?" ou faça uma pergunta direta.`;
+    }
+
     const apiMessages = [
       { role: "system", content: AURA_STATIC_INSTRUCTIONS },
       { role: "system", content: dynamicContext },
@@ -3937,7 +3943,10 @@ Exemplo com 4 sessões:
 
     let data: any;
     try {
-      data = await callAI(configuredModel, apiMessages, 4096, 0.8, LOVABLE_API_KEY);
+      // Temperature dinâmica: 0.9 para mensagens curtas (reduz tendência de eco do Gemini Flash)
+      // TODO: Revisar ao migrar de modelo — específico para Gemini 3 Flash Preview
+      const temperature = userWordCount <= 5 ? 0.9 : 0.8;
+      data = await callAI(configuredModel, apiMessages, 4096, temperature, LOVABLE_API_KEY);
     } catch (e: any) {
       if (e.status === 429) {
         return new Response(JSON.stringify({ 
