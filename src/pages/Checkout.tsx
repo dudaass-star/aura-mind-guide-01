@@ -130,7 +130,6 @@ const Checkout = () => {
           name: name.trim(),
           email: email.trim(),
           phone: phone,
-          ...(billingPeriod === "yearly" && paymentMethod === "boleto" && { paymentMethod: "boleto" }),
         },
       });
 
