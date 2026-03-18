@@ -245,20 +245,20 @@ const Checkout = () => {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setPaymentMethod("pix")}
+                      onClick={() => setPaymentMethod("boleto")}
                       className={`flex-1 px-4 py-2.5 rounded-full text-sm font-medium transition-all flex items-center justify-center gap-2 ${
-                        paymentMethod === "pix"
+                        paymentMethod === "boleto"
                           ? "bg-primary text-primary-foreground shadow-md"
                           : "text-muted-foreground hover:text-foreground"
                       }`}
                     >
-                      <QrCode className="w-4 h-4" />
-                      PIX
+                      <FileText className="w-4 h-4" />
+                      Boleto
                     </button>
                   </div>
-                  {paymentMethod === "pix" && (
+                  {paymentMethod === "boleto" && (
                     <p className="text-xs text-muted-foreground mt-3 text-center">
-                      Pagamento único anual. Não renova automaticamente.
+                      Pagamento único anual via boleto. Não renova automaticamente.
                     </p>
                   )}
                 </div>
