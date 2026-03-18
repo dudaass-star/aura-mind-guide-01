@@ -224,45 +224,6 @@ const Checkout = () => {
                 </div>
               </div>
 
-              {/* Payment method toggle (only for yearly) */}
-              {billingPeriod === "yearly" && (
-                <div className="bg-card rounded-2xl p-6 border border-border/50">
-                  <h2 className="font-display text-lg font-semibold text-foreground mb-4">
-                    Método de pagamento
-                  </h2>
-                  <div className="flex items-center justify-center gap-3 p-1 bg-secondary/50 rounded-full">
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMethod("card")}
-                      className={`flex-1 px-4 py-2.5 rounded-full text-sm font-medium transition-all flex items-center justify-center gap-2 ${
-                        paymentMethod === "card"
-                          ? "bg-primary text-primary-foreground shadow-md"
-                          : "text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      <CreditCard className="w-4 h-4" />
-                      Cartão
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMethod("boleto")}
-                      className={`flex-1 px-4 py-2.5 rounded-full text-sm font-medium transition-all flex items-center justify-center gap-2 ${
-                        paymentMethod === "boleto"
-                          ? "bg-primary text-primary-foreground shadow-md"
-                          : "text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      <FileText className="w-4 h-4" />
-                      Boleto
-                    </button>
-                  </div>
-                  {paymentMethod === "boleto" && (
-                    <p className="text-xs text-muted-foreground mt-3 text-center">
-                      Pagamento único anual via boleto. Não renova automaticamente.
-                    </p>
-                  )}
-                </div>
-              )}
 
               {/* Plan selection */}
               <div className="bg-card rounded-2xl p-6 border border-border/50">
