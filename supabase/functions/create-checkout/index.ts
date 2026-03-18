@@ -7,19 +7,22 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Price IDs from environment variables (configurable for sandbox/production)
-const getPrices = (): Record<string, { monthly: string; yearly: string }> => ({
+// Price IDs from environment variables
+const getPrices = (): Record<string, { monthly: string; yearly: string; pixYearly: string }> => ({
   essencial: {
     monthly: Deno.env.get("STRIPE_PRICE_ESSENCIAL_MONTHLY") || "",
     yearly: Deno.env.get("STRIPE_PRICE_ESSENCIAL_YEARLY") || "",
+    pixYearly: Deno.env.get("STRIPE_PRICE_ESSENCIAL_PIX_YEARLY") || "",
   },
   direcao: {
     monthly: Deno.env.get("STRIPE_PRICE_DIRECAO_MONTHLY") || "",
     yearly: Deno.env.get("STRIPE_PRICE_DIRECAO_YEARLY") || "",
+    pixYearly: Deno.env.get("STRIPE_PRICE_DIRECAO_PIX_YEARLY") || "",
   },
   transformacao: {
     monthly: Deno.env.get("STRIPE_PRICE_TRANSFORMACAO_MONTHLY") || "",
     yearly: Deno.env.get("STRIPE_PRICE_TRANSFORMACAO_YEARLY") || "",
+    pixYearly: Deno.env.get("STRIPE_PRICE_TRANSFORMACAO_PIX_YEARLY") || "",
   },
 });
 
@@ -39,13 +42,14 @@ serve(async (req) => {
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
 
-    const { plan: requestedPlan, billing = "monthly", name, email, phone, trial } = await req.json();
+    const { plan: requestedPlan, billing = "monthly", name, email, phone, trial, paymentMethod } = await req.json();
     
     // When trial mode: force essencial monthly
     const plan = trial ? "essencial" : requestedPlan;
     const billingOverride = trial ? "monthly" : billing;
+    const isPixPayment = paymentMethod === "pix" && billingOverride === "yearly";
     
-    logStep("Request received", { plan, billing: billingOverride, name, email, phone, trial: !!trial });
+    logStep("Request received", { plan, billing: billingOverride, name, email, phone, trial: !!trial, paymentMethod, isPixPayment });
 
     const PRICES = getPrices();
     
@@ -65,7 +69,14 @@ serve(async (req) => {
 
     // Validate billing period
     const billingPeriod = billingOverride === "yearly" ? "yearly" : "monthly";
-    const priceId = PRICES[plan][billingPeriod];
+    
+    // Select the correct price ID
+    let priceId: string;
+    if (isPixPayment) {
+      priceId = PRICES[plan].pixYearly;
+    } else {
+      priceId = PRICES[plan][billingPeriod];
+    }
 
     if (!priceId) {
       throw new Error("Price ID not configured for this plan. Check environment variables.");
@@ -76,7 +87,6 @@ serve(async (req) => {
     // Clean and validate phone number
     const phoneClean = phone.replace(/\D/g, "");
     
-    // Validate phone: 10-15 digits (E.164 standard, Brazil: 10-13 with country code)
     if (!/^[0-9]{10,15}$/.test(phoneClean)) {
       logStep("Invalid phone format", { phoneLength: phoneClean.length });
       return new Response(JSON.stringify({ error: "Número de telefone inválido" }), {
@@ -88,7 +98,6 @@ serve(async (req) => {
     // Always create or find a customer first
     let customerId: string;
     
-    // Buscar cliente com variações do telefone (com/sem 9)
     const phoneVariations = getPhoneVariations(phoneClean);
     logStep("Searching with phone variations", { phoneVariations });
     
@@ -108,13 +117,11 @@ serve(async (req) => {
       customerId = existingCustomer.id;
       logStep("Found existing customer", { customerId });
       
-      // Update existing customer with latest email if needed
       await stripe.customers.update(customerId, {
         email: email,
         name: name,
       });
     } else {
-      // Create a new customer with email
       const newCustomer = await stripe.customers.create({
         name: name,
         email: email,
@@ -128,8 +135,8 @@ serve(async (req) => {
 
     const origin = req.headers.get("origin") || "https://aura.lovable.app";
 
-    // Create checkout session
-    const sessionConfig: Stripe.Checkout.SessionCreateParams = {
+    // Build checkout session config
+    const sessionConfig: any = {
       customer: customerId,
       line_items: [
         {
@@ -137,7 +144,6 @@ serve(async (req) => {
           quantity: 1,
         },
       ],
-      mode: "subscription",
       locale: "pt-BR",
       success_url: `${origin}/obrigado?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: trial ? `${origin}/experimentar` : `${origin}/checkout`,
@@ -148,8 +154,19 @@ serve(async (req) => {
         plan: plan,
         billing: billingPeriod,
         ...(trial && { trial: "true" }),
+        ...(isPixPayment && { payment_method: "pix" }),
       },
-      subscription_data: {
+    };
+
+    if (isPixPayment) {
+      // PIX: one-time payment
+      sessionConfig.mode = "payment";
+      sessionConfig.payment_method_types = ["pix"];
+    } else {
+      // Card: subscription
+      sessionConfig.mode = "subscription";
+      sessionConfig.payment_method_types = ["card"];
+      sessionConfig.subscription_data = {
         metadata: {
           phone: phoneClean,
           name: name,
@@ -159,11 +176,10 @@ serve(async (req) => {
           ...(trial && { trial: "true" }),
         },
         ...(trial && { trial_period_days: 7 }),
-      },
-      payment_method_types: ["card"],
-    };
+      };
+    }
 
-    logStep("Creating checkout session", { plan, billing: billingPeriod, priceId });
+    logStep("Creating checkout session", { plan, billing: billingPeriod, priceId, mode: sessionConfig.mode });
     const session = await stripe.checkout.sessions.create(sessionConfig);
     logStep("Checkout session created", { sessionId: session.id });
 
