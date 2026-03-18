@@ -4007,12 +4007,14 @@ Exemplo com 4 sessões:
     };
 
     // Detect echo: exact match, startsWith, or high word overlap
+    // Mensagens curtas (≤5 palavras) são isentas — tratadas pelo prompt reforçado + temperature
     const userWords = extractWords(cleanUserMsg);
     const aiWords = extractWords(cleanAIResponse);
-    const isExactMatch = normalizedResponse === normalizedUserMsg;
-    const isStartsWith = normalizedUserMsg.length > 5 && normalizedResponse.startsWith(normalizedUserMsg);
+    const isShortMessage = userWords.length <= 5;
+    const isExactMatch = !isShortMessage && normalizedResponse === normalizedUserMsg;
+    const isStartsWith = !isShortMessage && normalizedUserMsg.length > 5 && normalizedResponse.startsWith(normalizedUserMsg);
     const overlapRatio = wordOverlapRatio(aiWords, userWords);
-    const isShortParaphrase = overlapRatio > 0.6 && cleanAIResponse.length < cleanUserMsg.length * 2.5;
+    const isShortParaphrase = !isShortMessage && overlapRatio > 0.65 && cleanAIResponse.length < cleanUserMsg.length * 2.5;
     const isEcho = isExactMatch || isStartsWith || isShortParaphrase;
 
     if (isEcho) {
