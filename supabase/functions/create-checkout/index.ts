@@ -145,7 +145,7 @@ serve(async (req) => {
       ],
       locale: "pt-BR",
       success_url: `${origin}/obrigado?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: trial ? `${origin}/experimentar` : `${origin}/checkout`,
+      cancel_url: `${origin}/checkout`,
       metadata: {
         phone: phoneClean,
         name: name,

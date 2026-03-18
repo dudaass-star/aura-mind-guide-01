@@ -108,7 +108,7 @@ const Hero = () => {
 
           {/* CTA */}
           <div className="flex flex-col items-center gap-4 animate-fade-up opacity-0 delay-300">
-            <Link to="/experimentar">
+            <Link to="/checkout">
               <Button variant="sage" size="xl" className="min-w-[280px]">
                 Experimentar 7 dias grátis
               </Button>

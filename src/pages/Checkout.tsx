@@ -127,6 +127,7 @@ const Checkout = () => {
         body: {
           plan: selectedPlan,
           billing: billingPeriod,
+          trial: true,
           name: name.trim(),
           email: email.trim(),
           phone: phone,
