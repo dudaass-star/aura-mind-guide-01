@@ -700,7 +700,7 @@ Deno.serve(async (req) => {
         await new Promise(resolve => setTimeout(resolve, actualDelay));
       }
 
-      let responseText = msg.text || msg.content || '';
+      let responseText = (msg.text || msg.content || '').replace(/\|\|\|/g, '').trim();
 
 
 
