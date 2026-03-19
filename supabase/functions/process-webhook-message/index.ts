@@ -281,9 +281,16 @@ Deno.serve(async (req) => {
     let inboundSaved = false;
     if (messageText) {
       try {
-        await supabase.from('messages').insert({ user_id: profile.user_id, role: 'user', content: messageText });
+        const { data: insertedMsg } = await supabase
+          .from('messages')
+          .insert({ user_id: profile.user_id, role: 'user', content: messageText })
+          .select('id')
+          .single();
         inboundSaved = true;
-        console.log(`💾 Inbound message persisted for user ${profile.user_id}`);
+        if (insertedMsg?.id) {
+          (globalThis as any).__inboundMessageDbId = insertedMsg.id;
+        }
+        console.log(`💾 Inbound message persisted for user ${profile.user_id} (id: ${insertedMsg?.id})`);
       } catch (persistErr) {
         console.warn('⚠️ Failed to persist inbound message:', persistErr);
       }
