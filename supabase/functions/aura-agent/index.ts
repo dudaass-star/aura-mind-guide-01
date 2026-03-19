@@ -252,8 +252,6 @@ async function callAI(
     const systemPrompt = systemMessages.map((m: any) => m.content).join('\n\n');
 
     // 2. Converter messages para formato Gemini nativo
-    // assistant → model, content → parts: [{ text }]
-    // Merge consecutive same-role messages
     const geminiContents: any[] = [];
     for (const msg of chatMessages) {
       const role = msg.role === 'assistant' ? 'model' : 'user';
@@ -274,15 +272,29 @@ async function callAI(
       generationConfig.temperature = temperature;
     }
 
+    // 4. Tentar usar Context Caching explícito para o system prompt
+    let cacheName: string | null = null;
+    if (systemPrompt && supabaseClient) {
+      try {
+        cacheName = await getOrCreateGeminiCache(supabaseClient, geminiModel, systemPrompt, GEMINI_API_KEY);
+      } catch (cacheErr) {
+        console.warn('⚠️ Cache creation failed, falling back to inline system_instruction:', cacheErr);
+      }
+    }
+
     const geminiBody: any = {
       contents: geminiContents,
       generationConfig,
     };
-    if (systemPrompt) {
+
+    if (cacheName) {
+      geminiBody.cachedContent = cacheName;
+      console.log('📦 Using explicit context cache:', cacheName);
+    } else if (systemPrompt) {
       geminiBody.system_instruction = { parts: [{ text: systemPrompt }] };
     }
 
-    // 4. Chamar endpoint nativo
+    // 5. Chamar endpoint nativo
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent`;
     const response = await fetch(url, {
       method: 'POST',
