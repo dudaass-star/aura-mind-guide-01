@@ -77,8 +77,8 @@ export default function AdminEngagement() {
       const { data, error } = await supabase.functions.invoke('admin-engagement-metrics', {
         headers: { Authorization: `Bearer ${session.access_token}` },
         body: {
-          dateFrom: startOfDay(from).toISOString(),
-          dateTo: endOfDay(to).toISOString(),
+          dateFrom: format(from, 'yyyy-MM-dd'),
+          dateTo: format(to, 'yyyy-MM-dd'),
         },
       });
 
