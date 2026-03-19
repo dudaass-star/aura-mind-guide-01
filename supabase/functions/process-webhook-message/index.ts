@@ -1,0 +1,932 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  sendTextMessage,
+  sendAudioMessage,
+  cleanPhoneNumber,
+  getPhoneVariations,
+  ZapiConfig,
+} from "../_shared/zapi-client.ts";
+import { getInstanceConfigForUser } from "../_shared/instance-helper.ts";
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+async function createShortLink(url: string, phone: string): Promise<string | null> {
+  const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
+  const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  try {
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/create-short-link`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+      body: JSON.stringify({ url, phone }),
+    });
+    const data = await response.json();
+    if (response.ok && data.shortUrl) return data.shortUrl;
+    return null;
+  } catch { return null; }
+}
+
+async function transcribeAudio(audioUrl: string): Promise<string | null> {
+  try {
+    console.log('🎙️ Downloading audio from:', audioUrl);
+    const audioResponse = await fetch(audioUrl);
+    if (!audioResponse.ok) {
+      console.error('❌ Failed to download audio:', audioResponse.status);
+      return null;
+    }
+    const audioBlob = await audioResponse.blob();
+    console.log('📦 Audio downloaded, size:', audioBlob.size, 'bytes');
+
+    const formData = new FormData();
+    formData.append('file', audioBlob, 'audio.ogg');
+    formData.append('model', 'whisper-1');
+    formData.append('language', 'pt');
+
+    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
+    if (!OPENAI_API_KEY) {
+      console.error('❌ OPENAI_API_KEY not configured');
+      return null;
+    }
+
+    console.log('🔄 Sending to Whisper API...');
+    const whisperResponse = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${OPENAI_API_KEY}` },
+      body: formData,
+    });
+
+    if (!whisperResponse.ok) {
+      const errorText = await whisperResponse.text();
+      console.error('❌ Whisper API error:', errorText);
+      return null;
+    }
+
+    const result = await whisperResponse.json();
+    console.log('✅ Transcription result:', result.text);
+    return result.text;
+  } catch (error) {
+    console.error('❌ Error transcribing audio:', error);
+    return null;
+  }
+}
+
+async function generateTTS(text: string): Promise<string | null> {
+  try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const response = await fetch(`${supabaseUrl}/functions/v1/aura-tts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseServiceKey}` },
+      body: JSON.stringify({ text, voice: 'shimmer' }),
+    });
+    if (!response.ok) {
+      console.error('❌ TTS error:', await response.text());
+      return null;
+    }
+    const data = await response.json();
+    return data.audioContent;
+  } catch (error) {
+    console.error('❌ TTS exception:', error);
+    return null;
+  }
+}
+
+async function handleSessionConfirmation(
+  supabase: any, userId: string, message: string
+): Promise<{ handled: boolean; response?: string }> {
+  const { data: pendingSession } = await supabase
+    .from('sessions')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('status', 'scheduled')
+    .eq('confirmation_requested', true)
+    .is('user_confirmed', null)
+    .order('scheduled_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (!pendingSession) return { handled: false };
+
+  const lowerMessage = message.toLowerCase().trim();
+
+  if (/^(sim|confirmo|confirmado|ok|pode ser|tá bom|ta bom|certo|fechado|confirma|confirmei)$/i.test(lowerMessage)) {
+    await supabase.from('sessions').update({ user_confirmed: true }).eq('id', pendingSession.id);
+    const sessionDate = new Date(pendingSession.scheduled_at);
+    const sessionTime = sessionDate.toLocaleString('pt-BR', {
+      day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo'
+    });
+    return { handled: true, response: `Perfeito! Sessão confirmada para ${sessionTime}. Mal posso esperar! 💜` };
+  }
+
+  if (/reagendar|remarcar|outro|mudar|não (posso|consigo|dá)|nao (posso|consigo|da)|cancelar/i.test(lowerMessage)) {
+    return { handled: false };
+  }
+
+  return { handled: false };
+}
+
+async function handleSessionRating(
+  supabase: any, userId: string, message: string
+): Promise<{ handled: boolean; response?: string }> {
+  const lowerMessage = message.toLowerCase().trim();
+  const ratingMatch = lowerMessage.match(/^([1-5])$/);
+  if (!ratingMatch) return { handled: false };
+
+  const rating = parseInt(ratingMatch[1]);
+  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+  const { data: ratedSession } = await supabase
+    .from('sessions')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('status', 'completed')
+    .eq('rating_requested', true)
+    .gte('ended_at', oneDayAgo)
+    .order('ended_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!ratedSession) return { handled: false };
+
+  const { data: existingRating } = await supabase
+    .from('session_ratings').select('id').eq('session_id', ratedSession.id).maybeSingle();
+  if (existingRating) return { handled: false };
+
+  const { error: insertError } = await supabase
+    .from('session_ratings').insert({ session_id: ratedSession.id, user_id: userId, rating });
+  if (insertError) { console.error('❌ Error saving session rating:', insertError); return { handled: false }; }
+
+  let response: string;
+  if (rating >= 4) response = `Que bom que você gostou! 💜 Fico muito feliz em saber. Obrigada pelo feedback!`;
+  else if (rating === 3) response = `Obrigada pelo feedback! 💜 Vou me esforçar pra melhorar cada vez mais.`;
+  else response = `Obrigada por me contar. 💜 Me desculpa se não foi tão bom quanto você esperava. Vou trabalhar pra melhorar!`;
+
+  console.log(`✅ Session rating saved: ${rating} stars for session ${ratedSession.id}`);
+  return { handled: true, response };
+}
+
+// ============================================================================
+// MAIN WORKER
+// ============================================================================
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  // ========================================================================
+  // AUTHENTICATION — Only accept internal calls
+  // ========================================================================
+  const internalSecret = req.headers.get('x-internal-secret');
+  const expectedSecret = Deno.env.get('INTERNAL_WEBHOOK_SECRET');
+
+  if (!internalSecret || !expectedSecret || internalSecret !== expectedSecret) {
+    console.warn('🚫 Unauthorized request to process-webhook-message');
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
+  // Track phone for contingency message
+  let contingencyPhone: string | null = null;
+  let contingencyInstanceConfig: ZapiConfig | undefined = undefined;
+
+  try {
+    const workerPayload = await req.json();
+    const {
+      phone, cleanPhone, messageId, text,
+      hasAudio, audioUrl, hasImage, imageCaption,
+    } = workerPayload;
+
+    contingencyPhone = cleanPhone;
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // ========================================================================
+    // PROCESS MESSAGE CONTENT
+    // ========================================================================
+    let messageText = text;
+    let isAudioMessage = false;
+
+    if (hasAudio && !messageText) {
+      console.log('🎤 Audio message detected, transcribing...');
+      const transcription = await transcribeAudio(audioUrl);
+      if (transcription) {
+        messageText = transcription;
+        isAudioMessage = true;
+        console.log('✅ Audio transcribed:', messageText);
+      }
+    }
+
+    if (hasImage && imageCaption) {
+      messageText = imageCaption;
+      console.log('🖼️ Image with caption:', messageText);
+    }
+
+    // ========================================================================
+    // USER LOOKUP
+    // ========================================================================
+    const phoneVariations = getPhoneVariations(cleanPhone);
+    console.log(`🔍 Searching for phone variations: ${phoneVariations.join(', ')}`);
+
+    const { data: profileResults, error: profileError } = await supabase
+      .from('profiles')
+      .select('*')
+      .in('phone', phoneVariations)
+      .order('status', { ascending: true })
+      .order('updated_at', { ascending: false })
+      .limit(1);
+
+    if (profileError) {
+      console.error('❌ Error looking up profile:', profileError);
+      return new Response(JSON.stringify({ status: 'profile_lookup_error' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const profile = profileResults?.[0];
+    if (!profile) {
+      console.log('⚠️ User not found for phone variations:', phoneVariations.join(', '));
+      return new Response(JSON.stringify({ status: 'user_not_found' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Get instance config for contingency
+    try {
+      contingencyInstanceConfig = await getInstanceConfigForUser(supabase, profile.user_id);
+    } catch {}
+
+    // Auto-correção de telefone
+    if (profile.phone !== cleanPhone) {
+      console.log(`📱 Auto-correcting phone: ${profile.phone} -> ${cleanPhone}`);
+      await supabase.from('profiles').update({ phone: cleanPhone }).eq('id', profile.id);
+      profile.phone = cleanPhone;
+    }
+
+    console.log(`👤 Found user: ${profile.name} (${profile.user_id}), status: ${profile.status}, instance: ${profile.whatsapp_instance_id || 'env-default'}`);
+
+    // ========================================================================
+    // PERSIST INBOUND MESSAGE
+    // ========================================================================
+    let inboundSaved = false;
+    if (messageText) {
+      try {
+        await supabase.from('messages').insert({ user_id: profile.user_id, role: 'user', content: messageText });
+        inboundSaved = true;
+        console.log(`💾 Inbound message persisted for user ${profile.user_id}`);
+      } catch (persistErr) {
+        console.warn('⚠️ Failed to persist inbound message:', persistErr);
+      }
+    }
+
+    // ========================================================================
+    // SUBSCRIPTION STATUS CHECK
+    // ========================================================================
+    const blockedStatuses = ['canceled', 'inactive', 'paused'];
+    if (blockedStatuses.includes(profile.status || '')) {
+      console.log(`🚫 User ${profile.user_id} blocked: status is '${profile.status}'`);
+
+      let instanceConfig = undefined;
+      if (profile.whatsapp_instance_id) {
+        const { data: inst } = await supabase
+          .from('whatsapp_instances')
+          .select('zapi_instance_id, zapi_token, zapi_client_token')
+          .eq('id', profile.whatsapp_instance_id).single();
+        if (inst) instanceConfig = { instanceId: inst.zapi_instance_id, token: inst.zapi_token, clientToken: inst.zapi_client_token };
+      }
+
+      const checkoutLink = await createShortLink('https://olaaura.com.br/checkout', cleanPhone || '') || 'https://olaaura.com.br/checkout';
+      const statusMessages: Record<string, string> = {
+        canceled: `Oi, ${profile.name || 'querido(a)'}! 💜\n\nSua assinatura foi encerrada. Sinto sua falta!\n\nSe quiser voltar a conversar comigo, é só assinar novamente:\n👉 ${checkoutLink}\n\nVou adorar te receber de volta! ✨`,
+        inactive: `Oi, ${profile.name || 'querido(a)'}! 💜\n\nSua conta está inativa no momento.\n\nPara continuarmos nossas conversas, assine um plano:\n👉 ${checkoutLink}\n\nEstou aqui te esperando! ✨`,
+        paused: `Oi, ${profile.name || 'querido(a)'}! 💜\n\nSua assinatura está pausada no momento.\n\nQuando estiver pronto(a) para voltar, é só reativar:\n👉 ${checkoutLink}\n\nEstarei aqui quando você precisar! ✨`,
+      };
+
+      await sendTextMessage(cleanPhone!, statusMessages[profile.status!], undefined, instanceConfig);
+      return new Response(JSON.stringify({ success: true, action: 'subscription_blocked', status: profile.status }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // ========================================================================
+    // INTERRUPTION SYSTEM
+    // ========================================================================
+    const currentMessageId = messageId || `msg_${Date.now()}`;
+
+    await supabase
+      .from('aura_response_state')
+      .upsert({ user_id: profile.user_id, last_user_message_id: currentMessageId, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
+
+    const { data: responseState } = await supabase
+      .from('aura_response_state')
+      .select('*')
+      .eq('user_id', profile.user_id)
+      .maybeSingle();
+
+    if (responseState?.is_responding) {
+      console.log('⏸️ AURA está respondendo - aguardando interrupção ser processada...');
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+
+    const pendingContent = responseState?.pending_content || null;
+    const pendingContext = responseState?.pending_context || null;
+
+    if (pendingContent) {
+      console.log(`📦 Found pending content from interrupted response: ${pendingContent.substring(0, 100)}...`);
+    }
+
+    // ========================================================================
+    // TRIAL LIMIT CHECK
+    // ========================================================================
+    if (profile.status === 'trial') {
+      const trialCount = profile.trial_conversations_count || 0;
+      const trialPhase = (profile as any).trial_phase || 'listening';
+      const trialAhaAtCount = (profile as any).trial_aha_at_count as number | null;
+      const trialStartedAt = profile.trial_started_at ? new Date(profile.trial_started_at).getTime() : null;
+      const hoursElapsed = trialStartedAt ? (Date.now() - trialStartedAt) / (1000 * 60 * 60) : 0;
+
+      const isNudgeResponse = profile.trial_nudge_active === true;
+
+      if (isNudgeResponse) {
+        const bonusCount = trialCount >= 3 ? trialCount - 3 : 0;
+        console.log(`🎁 Nudge response detected — applying 3-msg bonus (count ${trialCount} → ${bonusCount})`);
+        await supabase.from('profiles').update({ trial_nudge_active: false, trial_conversations_count: bonusCount }).eq('user_id', profile.user_id);
+        profile.trial_conversations_count = bonusCount;
+      }
+
+      const effectiveTrialCount = profile.trial_conversations_count || 0;
+
+      // AHA MOMENT DETECTION (Layer 2)
+      if (trialPhase === 'value_delivered' && effectiveTrialCount >= 8) {
+        const lowerMsg = messageText.toLowerCase().trim();
+        const ahaKeywords = [
+          'nossa', 'caramba', 'nunca pensei', 'nunca tinha pensado', 'é verdade',
+          'faz sentido', 'fez sentido', 'obrigad', 'to melhor', 'tô melhor',
+          'me ajudou', 'fez diferença', 'verdade mesmo', 'putz', 'uau',
+          'realmente', 'exatamente', 'isso mesmo', 'mudou', 'aliviou',
+          'incrível', 'não tinha visto', 'agora entendi', 'abriu minha mente',
+        ];
+        const hasPositiveSentiment = ahaKeywords.some(kw => lowerMsg.includes(kw));
+        const isNotQuestion = !lowerMsg.includes('?');
+        const isShortEnough = lowerMsg.length < 120;
+
+        if (hasPositiveSentiment && isNotQuestion && isShortEnough) {
+          console.log(`🎯 AHA MOMENT detected at msg ${effectiveTrialCount}! Phrase: "${lowerMsg.substring(0, 60)}"`);
+          await supabase.from('profiles').update({ trial_phase: 'aha_reached', trial_aha_at_count: effectiveTrialCount }).eq('user_id', profile.user_id);
+          (profile as any).trial_phase = 'aha_reached';
+          (profile as any).trial_aha_at_count = effectiveTrialCount;
+        } else {
+          console.log(`📊 Value delivered but no Aha yet (msg ${effectiveTrialCount}): positive=${hasPositiveSentiment}, noQuestion=${isNotQuestion}`);
+        }
+      }
+
+      // HARD LIMIT: 50 msgs or 72h
+      if (effectiveTrialCount >= 50 || hoursElapsed >= 72) {
+        console.log(`🚫 Trial hard limit reached for user ${profile.user_id}, count: ${effectiveTrialCount}, hours: ${hoursElapsed.toFixed(1)}`);
+
+        const trialCheckoutLink = await createShortLink('https://olaaura.com.br/checkout', cleanPhone || '') || 'https://olaaura.com.br/checkout';
+
+        const limitMessage = `${profile.name || 'Ei'}, 💜
+
+Nossa primeira jornada foi muito especial pra mim. O que você compartilhou comigo esses dias foi corajoso e bonito.
+
+Quando você quiser continuar, é só escolher um plano — por menos de R$1 por dia:
+
+👉 ${trialCheckoutLink}
+
+Tô aqui te esperando. 🤗`;
+
+        const instanceConfig = await getInstanceConfigForUser(supabase, profile.user_id);
+        await sendTextMessage(cleanPhone, limitMessage, undefined, instanceConfig);
+
+        // Schedule follow-up sequence
+        try {
+          let conversationTheme = '';
+          try {
+            const { data: recentMsgs } = await supabase
+              .from('messages').select('content, role').eq('user_id', profile.user_id).eq('role', 'user')
+              .order('created_at', { ascending: false }).limit(5);
+            if (recentMsgs && recentMsgs.length > 0) {
+              const userTexts = recentMsgs.map((m: any) => m.content || '').join('\n');
+              const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+              if (LOVABLE_API_KEY && userTexts.length > 10) {
+                try {
+                  const controller = new AbortController();
+                  const timeout = setTimeout(() => controller.abort(), 5000);
+                  const aiRes = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${LOVABLE_API_KEY}`, 'Content-Type': 'application/json' },
+                    signal: controller.signal,
+                    body: JSON.stringify({
+                      model: 'google/gemini-2.5-flash-lite',
+                      messages: [
+                        { role: 'system', content: 'Extraia o tema principal dessas mensagens em 3-6 palavras, em português informal. Retorne APENAS o tema, sem aspas nem pontuação final. Exemplos: "sua relação com a espiritualidade", "a ansiedade antes de dormir", "o luto pela sua mãe"' },
+                        { role: 'user', content: userTexts }
+                      ],
+                      max_tokens: 60,
+                    }),
+                  });
+                  clearTimeout(timeout);
+                  if (aiRes.ok) {
+                    const aiData = await aiRes.json();
+                    const extracted = (aiData.choices?.[0]?.message?.content || '').replace(/[\n\r"']/g, '').trim().substring(0, 100);
+                    if (extracted.length >= 3) conversationTheme = extracted;
+                  }
+                } catch (aiErr) {
+                  console.warn('⚠️ AI theme extraction failed:', aiErr);
+                }
+              }
+            }
+          } catch (themeErr) {
+            console.warn('⚠️ Failed to extract theme:', themeErr);
+          }
+
+          const { count: existingTasks } = await supabase
+            .from('scheduled_tasks')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', profile.user_id)
+            .in('task_type', ['trial_closing', 'trial_followup_15m', 'trial_followup_2h', 'trial_followup_morning', 'trial_followup_48h'])
+            .in('status', ['pending', 'executing']);
+
+          if ((existingTasks || 0) > 0) {
+            console.log(`⏭️ Trial follow-up tasks already exist for user ${profile.user_id}, skipping creation`);
+          } else {
+            const followupPayload = { theme: conversationTheme, name: profile.name || '' };
+            const now = new Date();
+            const tomorrow9hBRT = new Date(now);
+            tomorrow9hBRT.setUTCHours(12, 0, 0, 0);
+            if (tomorrow9hBRT.getTime() <= now.getTime()) {
+              tomorrow9hBRT.setUTCDate(tomorrow9hBRT.getUTCDate() + 1);
+            } else {
+              tomorrow9hBRT.setUTCDate(tomorrow9hBRT.getUTCDate() + 1);
+            }
+
+            await supabase.from('scheduled_tasks').insert([
+              { user_id: profile.user_id, task_type: 'trial_closing', execute_at: new Date(Date.now() + 2 * 60 * 1000).toISOString(), payload: followupPayload, status: 'pending' },
+              { user_id: profile.user_id, task_type: 'trial_followup_15m', execute_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(), payload: followupPayload, status: 'pending' },
+              { user_id: profile.user_id, task_type: 'trial_followup_2h', execute_at: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(), payload: followupPayload, status: 'pending' },
+              { user_id: profile.user_id, task_type: 'trial_followup_morning', execute_at: tomorrow9hBRT.toISOString(), payload: followupPayload, status: 'pending' },
+              { user_id: profile.user_id, task_type: 'trial_followup_48h', execute_at: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(), payload: followupPayload, status: 'pending' },
+            ]);
+            console.log(`⏰ Scheduled trial_closing + 4 follow-ups after hard limit`);
+          }
+        } catch (e) {
+          console.warn('⚠️ Failed to schedule trial follow-ups:', e);
+        }
+
+        return new Response(JSON.stringify({ status: 'trial_limit_reached' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // INCREMENT COUNTER
+      if (!isNudgeResponse) {
+        const newCount = effectiveTrialCount + 1;
+        await supabase.from('profiles').update({ trial_conversations_count: newCount }).eq('user_id', profile.user_id);
+        console.log(`📊 Trial conversation ${newCount}/50 for user ${profile.user_id} (phase: ${trialPhase})`);
+        profile.trial_conversations_count = newCount;
+      }
+    }
+
+    // ========================================================================
+    // RESET FOLLOW-UP COUNT
+    // ========================================================================
+    await supabase
+      .from('conversation_followups')
+      .update({ followup_count: 0, last_user_message_at: new Date().toISOString() })
+      .eq('user_id', profile.user_id);
+    console.log(`🔄 Follow-up count reset for user ${profile.user_id}`);
+
+    // ========================================================================
+    // HANDLE FAILED AUDIO TRANSCRIPTION
+    // ========================================================================
+    if (hasAudio && !messageText) {
+      const instanceConfig = await getInstanceConfigForUser(supabase, profile.user_id);
+      await sendTextMessage(
+        cleanPhone,
+        "Desculpa, não consegui ouvir seu áudio direito. 😅 Pode me mandar por texto ou tentar gravar de novo?",
+        undefined, instanceConfig
+      );
+      return new Response(JSON.stringify({ status: 'audio_transcription_failed' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // ========================================================================
+    // TIME CAPSULE HANDLING
+    // ========================================================================
+    const capsuleState = profile.awaiting_time_capsule;
+
+    if (capsuleState === 'awaiting_audio' || capsuleState === 'awaiting_confirmation') {
+      const instanceConfig = await getInstanceConfigForUser(supabase, profile.user_id);
+
+      if (capsuleState === 'awaiting_audio') {
+        if (hasAudio && audioUrl) {
+          await supabase.from('profiles').update({
+            awaiting_time_capsule: 'awaiting_confirmation',
+            pending_capsule_audio_url: audioUrl,
+          }).eq('user_id', profile.user_id);
+
+          const confirmMsg = `Recebi seu áudio! 🎙️ Ficou do jeito que você queria?\n\nSe quiser regravar, manda outro áudio. Se tiver bom, me diz "pode guardar" 💜`;
+          await sendTextMessage(cleanPhone, confirmMsg, undefined, instanceConfig);
+          await supabase.from('messages').insert([
+            ...(!inboundSaved ? [{ user_id: profile.user_id, role: 'user', content: messageText || '[áudio para cápsula do tempo]' }] : []),
+            { user_id: profile.user_id, role: 'assistant', content: confirmMsg },
+          ]);
+          inboundSaved = true;
+          return new Response(JSON.stringify({ status: 'capsule_audio_received' }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+        const reminderMsg = `Manda um áudio pra eu guardar sua voz! 🎙️ Quando quiser desistir, é só dizer "deixa pra lá" 💜`;
+        await sendTextMessage(cleanPhone, reminderMsg, undefined, instanceConfig);
+        await supabase.from('messages').insert([
+          ...(!inboundSaved ? [{ user_id: profile.user_id, role: 'user', content: messageText }] : []),
+          { user_id: profile.user_id, role: 'assistant', content: reminderMsg },
+        ]);
+        inboundSaved = true;
+        return new Response(JSON.stringify({ status: 'capsule_awaiting_audio_reminder' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (capsuleState === 'awaiting_confirmation') {
+        if (hasAudio && audioUrl) {
+          await supabase.from('profiles').update({ pending_capsule_audio_url: audioUrl }).eq('user_id', profile.user_id);
+          const replaceMsg = `Troquei o áudio! 🎙️ Esse ficou bom? Me diz "pode guardar" quando tiver certeza 💜`;
+          await sendTextMessage(cleanPhone, replaceMsg, undefined, instanceConfig);
+          await supabase.from('messages').insert([
+            ...(!inboundSaved ? [{ user_id: profile.user_id, role: 'user', content: messageText || '[novo áudio para cápsula]' }] : []),
+            { user_id: profile.user_id, role: 'assistant', content: replaceMsg },
+          ]);
+          inboundSaved = true;
+          return new Response(JSON.stringify({ status: 'capsule_audio_replaced' }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        const lowerMsg = (messageText || '').toLowerCase().trim();
+
+        if (/deixa|cancela|desist|não quero|nao quero|esquece|para|parar/i.test(lowerMsg)) {
+          await supabase.from('profiles').update({ awaiting_time_capsule: null, pending_capsule_audio_url: null }).eq('user_id', profile.user_id);
+          const cancelMsg = `Tudo bem! Quando quiser gravar uma cápsula do tempo, é só falar 💜`;
+          await sendTextMessage(cleanPhone, cancelMsg, undefined, instanceConfig);
+          await supabase.from('messages').insert([
+            ...(!inboundSaved ? [{ user_id: profile.user_id, role: 'user', content: messageText }] : []),
+            { user_id: profile.user_id, role: 'assistant', content: cancelMsg },
+          ]);
+          inboundSaved = true;
+          return new Response(JSON.stringify({ status: 'capsule_cancelled' }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        if (/sim|pode|guard|confirm|ficou|bom|bora|manda|salv|tá (bom|ótimo|perfeito)|ta (bom|otimo|perfeito)|perfeito|certeza|isso/i.test(lowerMsg)) {
+          const pendingUrl = profile.pending_capsule_audio_url;
+          if (!pendingUrl) {
+            await supabase.from('profiles').update({ awaiting_time_capsule: null, pending_capsule_audio_url: null }).eq('user_id', profile.user_id);
+          } else {
+            const deliverAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+            let transcription: string | null = null;
+            try { transcription = await transcribeAudio(pendingUrl); } catch (e) { console.warn('⚠️ Could not transcribe capsule audio:', e); }
+
+            await supabase.from('time_capsules').insert({
+              user_id: profile.user_id, audio_url: pendingUrl, transcription,
+              deliver_at: deliverAt.toISOString(),
+              context_message: `Cápsula gravada em ${new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`,
+            });
+            await supabase.from('profiles').update({ awaiting_time_capsule: null, pending_capsule_audio_url: null }).eq('user_id', profile.user_id);
+
+            const deliverDateStr = deliverAt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Sao_Paulo' });
+            const savedMsg = `Guardei sua mensagem com carinho! 💜✨\n\nVou te enviar de volta no dia ${deliverDateStr}. Vai ser uma surpresa especial do seu eu de hoje pro seu eu do futuro 🫶`;
+            await sendTextMessage(cleanPhone, savedMsg, undefined, instanceConfig);
+            await supabase.from('messages').insert([
+              ...(!inboundSaved ? [{ user_id: profile.user_id, role: 'user', content: messageText }] : []),
+              { user_id: profile.user_id, role: 'assistant', content: savedMsg },
+            ]);
+            inboundSaved = true;
+            console.log(`✅ Time capsule saved for user ${profile.user_id}, deliver_at: ${deliverDateStr}`);
+            return new Response(JSON.stringify({ status: 'capsule_saved' }), {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+          }
+        }
+
+        // Unrecognized response — clear capsule state, continue normal flow
+        await supabase.from('profiles').update({ awaiting_time_capsule: null, pending_capsule_audio_url: null }).eq('user_id', profile.user_id);
+        console.log('⚠️ Capsule confirmation state cleared - unrecognized response, continuing normal flow');
+      }
+    }
+
+    // Timeout: clear stale capsule flags (>24h)
+    if (capsuleState && profile.updated_at) {
+      const updatedAt = new Date(profile.updated_at).getTime();
+      const hoursAgo = (Date.now() - updatedAt) / (1000 * 60 * 60);
+      if (hoursAgo > 24) {
+        console.log(`🕐 Capsule timeout (${Math.round(hoursAgo)}h), clearing flags`);
+        await supabase.from('profiles').update({ awaiting_time_capsule: null, pending_capsule_audio_url: null }).eq('user_id', profile.user_id);
+      }
+    }
+
+    // ========================================================================
+    // SESSION RATING
+    // ========================================================================
+    const ratingResult = await handleSessionRating(supabase, profile.user_id, messageText);
+    if (ratingResult.handled && ratingResult.response) {
+      console.log(`✅ Session rating handled for user ${profile.user_id}`);
+      const instanceConfig = await getInstanceConfigForUser(supabase, profile.user_id);
+      await sendTextMessage(cleanPhone, ratingResult.response, undefined, instanceConfig);
+      if (!inboundSaved) {
+        await supabase.from('messages').insert({ user_id: profile.user_id, role: 'user', content: messageText });
+        inboundSaved = true;
+      }
+      await supabase.from('messages').insert({ user_id: profile.user_id, role: 'assistant', content: ratingResult.response });
+      return new Response(JSON.stringify({ status: 'rating_handled' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // ========================================================================
+    // SESSION CONFIRMATION
+    // ========================================================================
+    const confirmationResult = await handleSessionConfirmation(supabase, profile.user_id, messageText);
+    if (confirmationResult.handled && confirmationResult.response) {
+      console.log(`✅ Session confirmation handled for user ${profile.user_id}`);
+      const instanceConfig = await getInstanceConfigForUser(supabase, profile.user_id);
+      await sendTextMessage(cleanPhone, confirmationResult.response, undefined, instanceConfig);
+      if (!inboundSaved) {
+        await supabase.from('messages').insert({ user_id: profile.user_id, role: 'user', content: messageText });
+        inboundSaved = true;
+      }
+      await supabase.from('messages').insert({ user_id: profile.user_id, role: 'assistant', content: confirmationResult.response });
+      return new Response(JSON.stringify({ status: 'confirmation_handled' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // ========================================================================
+    // INITIAL DELAY — Simulates "reading" the message
+    // ========================================================================
+    const initialDelay = 1500 + Math.random() * 2000;
+    console.log(`⏳ Initial thinking delay: ${Math.round(initialDelay)}ms`);
+    await new Promise(resolve => setTimeout(resolve, initialDelay));
+
+    // ========================================================================
+    // DEBOUNCE CHECK
+    // ========================================================================
+    const { data: debounceCheck } = await supabase
+      .from('aura_response_state')
+      .select('last_user_message_id')
+      .eq('user_id', profile.user_id)
+      .maybeSingle();
+
+    if (debounceCheck?.last_user_message_id &&
+        debounceCheck.last_user_message_id !== currentMessageId) {
+      console.log(`⏭️ DEBOUNCE: Msg mais recente detectada (${debounceCheck.last_user_message_id} != ${currentMessageId}). Abortando.`);
+      return new Response(JSON.stringify({ status: 'debounced', reason: 'newer_message_exists' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // ========================================================================
+    // CALL AURA AGENT
+    // ========================================================================
+    console.log(`📱 Processing message from: ${cleanPhone.substring(0, 4)}***`);
+    console.log(`💬 Message length: ${messageText.length} chars`);
+    console.log(`🎤 Is audio message: ${isAudioMessage}`);
+
+    const agentResponse = await fetch(`${supabaseUrl}/functions/v1/aura-agent`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseServiceKey}` },
+      body: JSON.stringify({
+        message: messageText,
+        user_id: profile.user_id,
+        phone: cleanPhone,
+        is_audio_message: isAudioMessage,
+        trial_count: profile.status === 'trial' ? profile.trial_conversations_count : null,
+        trial_phase: profile.status === 'trial' ? ((profile as any).trial_phase || 'listening') : null,
+        trial_aha_at_count: profile.status === 'trial' ? ((profile as any).trial_aha_at_count || null) : null,
+        pending_content: pendingContent,
+        pending_context: pendingContext,
+      }),
+    });
+
+    // Clear pending content after passing to agent
+    if (pendingContent) {
+      await supabase.from('aura_response_state').update({ pending_content: null, pending_context: null }).eq('user_id', profile.user_id);
+    }
+
+    if (!agentResponse.ok) {
+      const errorText = await agentResponse.text();
+      console.error('❌ aura-agent error:', errorText);
+      throw new Error(`Agent error: ${errorText}`);
+    }
+
+    const agentData = await agentResponse.json();
+    console.log('🤖 Agent response:', JSON.stringify(agentData, null, 2));
+
+    // ========================================================================
+    // UPDATE CONVERSATION TRACKING
+    // ========================================================================
+    const now = new Date().toISOString();
+    const conversationStatus = agentData.conversation_status || 'neutral';
+    const isSessionActive = agentData.session_active === true;
+    const shouldEnableFollowup = conversationStatus === 'awaiting' || isSessionActive;
+
+    const { data: existingFollowup } = await supabase
+      .from('conversation_followups')
+      .select('conversation_context')
+      .eq('user_id', profile.user_id)
+      .maybeSingle();
+
+    const existingContext = existingFollowup?.conversation_context;
+    const hasGoodContext = existingContext && existingContext.length > 15 &&
+      !['ok', 'legal', 'beleza', 'sim', 'não'].includes(existingContext.toLowerCase());
+
+    await supabase
+      .from('conversation_followups')
+      .upsert({
+        user_id: profile.user_id,
+        last_user_message_at: shouldEnableFollowup ? now : null,
+        followup_count: shouldEnableFollowup ? 0 : 99,
+        conversation_context: shouldEnableFollowup
+          ? (hasGoodContext ? existingContext : messageText.substring(0, 200))
+          : null,
+      }, { onConflict: 'user_id' });
+    console.log(`📍 Conversation tracking updated - status: ${conversationStatus}, sessionActive: ${isSessionActive}, followup: ${shouldEnableFollowup}, preservedContext: ${hasGoodContext}`);
+
+    // ========================================================================
+    // SEND RESPONSE MESSAGES (with interruption check)
+    // ========================================================================
+    await supabase
+      .from('aura_response_state')
+      .upsert({
+        user_id: profile.user_id,
+        is_responding: true,
+        response_started_at: new Date().toISOString(),
+        last_user_message_id: currentMessageId
+      }, { onConflict: 'user_id' });
+
+    let wasInterrupted = false;
+    let interruptedAtIndex = -1;
+
+    for (let i = 0; i < (agentData.messages || []).length; i++) {
+      const msg = agentData.messages[i];
+
+      // Check for interruption before each bubble (except first)
+      if (i > 0) {
+        const { data: currentState } = await supabase
+          .from('aura_response_state')
+          .select('last_user_message_id')
+          .eq('user_id', profile.user_id)
+          .maybeSingle();
+
+        const hasNewMessage = currentState?.last_user_message_id &&
+                              currentState.last_user_message_id !== currentMessageId;
+
+        console.log(`🔍 Interruption check [${i}/${agentData.messages.length}]: local=${currentMessageId}, db=${currentState?.last_user_message_id}, match=${!hasNewMessage}`);
+
+        if (hasNewMessage) {
+          console.log(`🛑 INTERRUPÇÃO DETECTADA! Parando envio de ${agentData.messages.length - i} bubbles restantes.`);
+          wasInterrupted = true;
+          interruptedAtIndex = i;
+          break;
+        }
+      }
+
+      // Delay between bubbles
+      if (i > 0 && msg.delay) {
+        const actualDelay = Math.min(msg.delay, 5000);
+        console.log(`⏱️ Waiting ${actualDelay}ms before next message...`);
+        await new Promise(resolve => setTimeout(resolve, actualDelay));
+      }
+
+      let responseText = msg.text || msg.content || '';
+
+      // Detect tags BEFORE cleaning
+      const hadValorEntregue = /\[VALOR_ENTREGUE\]/i.test(responseText);
+
+      // Clean all known internal tags
+      responseText = responseText
+        .replace(/\[AGUARDANDO_RESPOSTA\]/gi, '')
+        .replace(/\[CONVERSA_CONCLUIDA\]/gi, '')
+        .replace(/\[MODO_AUDIO\]/gi, '')
+        .replace(/\[VALOR_ENTREGUE\]/gi, '')
+        .replace(/\[ENCERRAR_SESSAO\]/gi, '')
+        .replace(/\[INICIAR_SESSAO\]/gi, '')
+        .replace(/\[INSIGHTS\].*?\[\/INSIGHTS\]/gis, '')
+        .replace(/\[AGENDAR_TAREFA:.*?\]/gi, '')
+        .replace(/\[CANCELAR_TAREFA:\w+\]/gi, '')
+        .trim();
+
+      // Safety net: remove remaining [UPPERCASE_TAG] patterns
+      responseText = responseText
+        .replace(/\[\s*[A-Z_]{3,}(?::[^\]]*)?\s*\]/g, '')
+        .replace(/\[\s*\/[A-Z_]{3,}\s*\]/g, '')
+        .trim();
+
+      // VALOR_ENTREGUE detection (Layer 1)
+      if (hadValorEntregue && profile.status === 'trial' && i === 0) {
+        const currentPhase = (profile as any).trial_phase || 'listening';
+        if (currentPhase === 'listening' || currentPhase === 'engaged') {
+          console.log(`💎 [VALOR_ENTREGUE] detected — updating trial_phase to value_delivered`);
+          await supabase.from('profiles').update({ trial_phase: 'value_delivered' }).eq('user_id', profile.user_id);
+          (profile as any).trial_phase = 'value_delivered';
+        }
+      }
+
+      if (!responseText) {
+        console.log('⏭️ Skipping empty message');
+        continue;
+      }
+
+      // Audio messages
+      if (msg.isAudio) {
+        console.log(`🎙️ Generating audio for: ${responseText.substring(0, 50)}...`);
+        const audioContent = await generateTTS(responseText);
+        if (audioContent) {
+          const instanceConfig = await getInstanceConfigForUser(supabase, profile.user_id);
+          const audioResult = await sendAudioMessage(cleanPhone, audioContent, instanceConfig);
+          if (audioResult.success) continue;
+          console.log('⚠️ Audio send failed, falling back to text');
+        }
+      }
+
+      // Typing delay
+      let typingSeconds: number;
+      if (responseText.length < 50) typingSeconds = Math.max(1, Math.ceil(responseText.length / 30));
+      else if (responseText.length < 100) typingSeconds = Math.ceil(responseText.length / 40);
+      else typingSeconds = Math.min(Math.ceil(responseText.length / 35), 6);
+
+      console.log(`📤 Sending text (${responseText.length} chars, ${typingSeconds}s typing): ${responseText.substring(0, 50)}...`);
+      const instanceConfig2 = await getInstanceConfigForUser(supabase, profile.user_id);
+      await sendTextMessage(cleanPhone, responseText, typingSeconds, instanceConfig2);
+    }
+
+    // ========================================================================
+    // FINALIZATION
+    // ========================================================================
+    if (wasInterrupted && interruptedAtIndex > 0) {
+      const pendingMessages = agentData.messages
+        .slice(interruptedAtIndex)
+        .map((m: any) => m.text || m.content || '')
+        .filter((t: string) => t.trim())
+        .join('\n\n');
+
+      if (pendingMessages) {
+        console.log(`📦 Salvando ${agentData.messages.length - interruptedAtIndex} bubbles pendentes para avaliação posterior`);
+        await supabase
+          .from('aura_response_state')
+          .update({ is_responding: false, pending_content: pendingMessages, pending_context: messageText.substring(0, 200) })
+          .eq('user_id', profile.user_id);
+      }
+    } else {
+      await supabase
+        .from('aura_response_state')
+        .update({ is_responding: false })
+        .eq('user_id', profile.user_id);
+    }
+
+    return new Response(JSON.stringify({
+      status: wasInterrupted ? 'interrupted' : 'success',
+      messagesCount: wasInterrupted ? interruptedAtIndex : (agentData.messages?.length || 0),
+      wasAudioMessage: isAudioMessage,
+      wasInterrupted
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+
+  } catch (error: unknown) {
+    console.error('❌ Worker processing error:', error);
+
+    // CONTINGENCY: Send fallback message to user
+    if (contingencyPhone) {
+      try {
+        console.log('🆘 Sending contingency message to', contingencyPhone.substring(0, 4) + '***');
+        await sendTextMessage(
+          contingencyPhone,
+          "Tive um probleminha técnico, me desculpa! 😅 Pode repetir o que disse?",
+          undefined,
+          contingencyInstanceConfig
+        );
+      } catch (contingencyErr) {
+        console.error('❌ Failed to send contingency message:', contingencyErr);
+      }
+    }
+
+    return new Response(JSON.stringify({ error: 'processing_failed' }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+});
