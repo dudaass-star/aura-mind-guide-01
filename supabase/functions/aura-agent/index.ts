@@ -2470,7 +2470,7 @@ function formatThemeTrackingContext(themes: any[]): string {
    - Use tag: [TEMA_ESTAGNADO:nome_do_tema]
 
 2. Se usuário relata MELHORA em tema ativo:
-   - Celebre: "Que demais! Você evoluiu muito nisso!"
+   - Note o progresso: "Percebi que isso mudou. O que você acha que fez diferença?"
    - Pergunte: "Sente que podemos fechar esse capítulo ou quer continuar?"
    - Se for pra fechar, use tag: [TEMA_PROGREDINDO:nome_do_tema]
 
