@@ -48,12 +48,16 @@ Deno.serve(async (req) => {
       // Get all profiles with last message info
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
-        .select('user_id, name, phone, status, plan, trial_conversations_count, created_at')
+        .select('user_id, name, phone, status, plan, created_at')
         .order('created_at', { ascending: false });
 
       if (profilesError) throw profilesError;
 
-      // Get last message and count for each user
+      // First day of current month in ISO
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+
+      // Get last message, month count and total count for each user
       const usersWithMessages = await Promise.all(
         (profiles || []).map(async (profile) => {
           const { data: lastMsg } = await supabase
@@ -64,15 +68,22 @@ Deno.serve(async (req) => {
             .limit(1)
             .single();
 
-          const { count } = await supabase
+          const { count: totalCount } = await supabase
             .from('messages')
             .select('*', { count: 'exact', head: true })
             .eq('user_id', profile.user_id);
 
+          const { count: monthCount } = await supabase
+            .from('messages')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', profile.user_id)
+            .gte('created_at', monthStart);
+
           return {
             ...profile,
             last_message: lastMsg || null,
-            message_count: count || 0,
+            message_count: totalCount || 0,
+            month_message_count: monthCount || 0,
           };
         })
       );
