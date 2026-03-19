@@ -5540,7 +5540,9 @@ Responda apenas o resumo, sem formatação.`
     // Salvar mensagens no histórico
     if (profile?.user_id) {
       // User message already persisted by webhook-zapi — only save assistant response
-      const cleanAssistantMessage = stripAllInternalTags(assistantMessage);
+      const cleanAssistantMessage = stripAllInternalTags(assistantMessage)
+        .replace(/\|\|\|/g, '\n')
+        .trim();
       
       await supabase.from('messages').insert({
         user_id: profile.user_id,
