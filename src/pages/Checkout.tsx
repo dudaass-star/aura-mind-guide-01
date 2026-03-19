@@ -147,7 +147,7 @@ const Checkout = () => {
 
       if (data?.url) {
         const checkoutUrl = data.url as string;
-        localStorage.setItem('aura_checkout', JSON.stringify({ name, phone, plan: selectedPlan, billing: billingPeriod }));
+        localStorage.setItem('aura_checkout', JSON.stringify({ name, phone, plan: selectedPlan, billing: billingPeriod, event_id: eventId, price: currentPrice }));
         try {
           if (window.top && window.top !== window) {
             window.top.location.href = checkoutUrl;
