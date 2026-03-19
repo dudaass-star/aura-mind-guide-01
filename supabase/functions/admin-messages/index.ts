@@ -78,6 +78,7 @@ Deno.serve(async (req) => {
             .from('messages')
             .select('*', { count: 'exact', head: true })
             .eq('user_id', profile.user_id)
+            .eq('role', 'user')
             .gte('created_at', monthStart);
 
           return {
