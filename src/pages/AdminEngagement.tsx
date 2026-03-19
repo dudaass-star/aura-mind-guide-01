@@ -282,7 +282,7 @@ export default function AdminEngagement() {
                 <MetricCards cards={engagementCards} />
 
                 {/* Cost Section */}
-                {metrics && (
+                {metrics && metrics.totalCostUSD !== undefined && (
                   <div className="space-y-4">
                     <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
                       <DollarSign className="h-5 w-5" />
