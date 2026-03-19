@@ -4153,7 +4153,7 @@ Exemplo com 4 sessões:
       // Temperature dinâmica: 0.9 para mensagens curtas (reduz tendência de eco do Gemini Flash)
       // TODO: Revisar ao migrar de modelo — específico para Gemini 3 Flash Preview
       const temperature = userWordCount <= 5 ? 0.9 : 0.8;
-      data = await callAI(configuredModel, apiMessages, 4096, temperature, LOVABLE_API_KEY);
+      data = await callAI(configuredModel, apiMessages, 4096, temperature, LOVABLE_API_KEY, supabase);
     } catch (e: any) {
       if (e.status === 429) {
         return new Response(JSON.stringify({ 
