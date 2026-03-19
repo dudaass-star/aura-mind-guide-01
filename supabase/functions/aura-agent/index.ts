@@ -1368,6 +1368,7 @@ Exemplos:
 - Usuário diz "preciso marcar o médico" → [COMPROMISSO_LIVRE:marcar consulta médica]
 
 REGRA: Só use quando o compromisso for CLARO e CONCRETO (ação + prazo implícito). Não salve intenções vagas como "quero melhorar".
+REGRA DE DUPLICATA: Se o compromisso já aparece na lista de compromissos pendentes do contexto dinâmico, NÃO re-emita a tag. O sistema já registrou — emitir novamente cria duplicata no banco.
 
 # USO DE TAGS DE TEMA EM CONVERSAS LIVRES (IMPORTANTE!)
 
