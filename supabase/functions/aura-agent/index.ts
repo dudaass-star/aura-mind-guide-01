@@ -4632,16 +4632,29 @@ Exemplo com 4 sessões:
           .eq('user_id', profile.user_id)
           .ilike('title', `%${oldTitle}%`);
         
-        // Criar novo compromisso
-        await supabase
+        // Criar novo compromisso (com dedup)
+        const renegTitlePrefix = newTitle.substring(0, 40);
+        const { data: existingReneg } = await supabase
           .from('commitments')
-          .insert({
-            user_id: profile.user_id,
-            title: newTitle,
-            completed: false,
-            commitment_status: 'pending',
-            session_id: currentSession?.id
-          });
+          .select('id, title')
+          .eq('user_id', profile.user_id)
+          .eq('completed', false)
+          .ilike('title', `%${renegTitlePrefix}%`)
+          .limit(1);
+
+        if (existingReneg && existingReneg.length > 0) {
+          console.log('📋 Skipping duplicate renegotiated commitment:', newTitle, '(matches:', existingReneg[0].title, ')');
+        } else {
+          await supabase
+            .from('commitments')
+            .insert({
+              user_id: profile.user_id,
+              title: newTitle,
+              completed: false,
+              commitment_status: 'pending',
+              session_id: currentSession?.id
+            });
+        }
       }
     }
     
