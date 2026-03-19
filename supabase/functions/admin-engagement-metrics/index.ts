@@ -213,94 +213,78 @@ Deno.serve(async (req) => {
     const totalCacheSavings = Math.round(costBreakdownByModel.reduce((s, m) => s + m.cacheSavings, 0) * 100) / 100;
 
     // ========== TRIAL & CONVERSION METRICS ==========
+    // Only count trials with a plan (card required) — excludes 72 legacy trials without card
+    // Use COALESCE(trial_started_at, created_at) for trials that existed before we started setting trial_started_at
 
     const { count: activeTrials } = await supabase
       .from('profiles')
       .select('*', { count: 'exact', head: true })
       .eq('status', 'trial')
-      .not('trial_started_at', 'is', null)
-      .gte('trial_started_at', periodStart)
-      .lte('trial_started_at', periodEnd);
+      .not('plan', 'is', null);
 
-    const { count: trialsLast7Days } = await supabase
+    // Trials in period — use created_at as fallback date filter
+    const { data: allTrialProfiles } = await supabase
       .from('profiles')
-      .select('*', { count: 'exact', head: true })
-      .not('trial_started_at', 'is', null)
-      .gte('trial_started_at', periodStart)
-      .lte('trial_started_at', periodEnd);
+      .select('user_id, plan, status, trial_started_at, created_at, trial_conversations_count')
+      .not('plan', 'is', null)
+      .or('status.eq.trial,status.eq.active,status.eq.canceled,status.eq.canceling');
 
-    const { count: trialsLast30Days } = await supabase
-      .from('profiles')
-      .select('*', { count: 'exact', head: true })
-      .not('trial_started_at', 'is', null)
-      .gte('trial_started_at', thirtyDaysAgo);
+    // Filter by period using coalesced date
+    const trialsInPeriod = (allTrialProfiles || []).filter(p => {
+      const dt = p.trial_started_at || p.created_at;
+      return dt && dt >= periodStart && dt <= periodEnd;
+    });
 
-    const { count: totalTrialsEver } = await supabase
-      .from('profiles')
-      .select('*', { count: 'exact', head: true })
-      .not('trial_started_at', 'is', null)
-      .gte('trial_started_at', periodStart)
-      .lte('trial_started_at', periodEnd);
+    const trialsLast30 = (allTrialProfiles || []).filter(p => {
+      const dt = p.trial_started_at || p.created_at;
+      return dt && dt >= thirtyDaysAgo;
+    });
 
-    // Responded (1+ msg)
-    const { count: trialRespondedCount } = await supabase
-      .from('profiles')
-      .select('*', { count: 'exact', head: true })
-      .not('trial_started_at', 'is', null)
-      .gte('trial_started_at', periodStart)
-      .lte('trial_started_at', periodEnd)
-      .gte('trial_conversations_count', 1);
+    const totalTrialsInPeriod = trialsInPeriod.length;
+    const trialsLast7DaysCount = totalTrialsInPeriod;
+    const trialsLast30DaysCount = trialsLast30.length;
 
-    // Converted
-    const { data: convertedProfiles } = await supabase
-      .from('profiles')
-      .select('trial_started_at, created_at, trial_conversations_count')
-      .eq('status', 'active')
-      .not('trial_started_at', 'is', null)
-      .gte('trial_started_at', periodStart)
-      .lte('trial_started_at', periodEnd)
-      .gt('trial_conversations_count', 0);
+    const trialRespondedCount = trialsInPeriod.filter(p => (p.trial_conversations_count || 0) >= 1).length;
 
-    const convertedCount = convertedProfiles?.length || 0;
+    const convertedProfiles = trialsInPeriod.filter(p => p.status === 'active' && (p.trial_conversations_count || 0) > 0);
+    const convertedCount = convertedProfiles.length;
 
-    const conversionRate = totalTrialsEver && totalTrialsEver > 0
-      ? Math.round(convertedCount / totalTrialsEver * 1000) / 10
+    const conversionRate = totalTrialsInPeriod > 0
+      ? Math.round(convertedCount / totalTrialsInPeriod * 1000) / 10
       : 0;
 
     // Expired trials
     const sevenDaysAgoDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
-    const { count: expiredTrials } = await supabase
-      .from('profiles')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'trial')
-      .gte('trial_started_at', periodStart)
-      .lte('trial_started_at', periodEnd)
-      .lt('trial_started_at', sevenDaysAgoDate);
+    const expiredTrialsCount = trialsInPeriod.filter(p => {
+      const dt = p.trial_started_at || p.created_at;
+      return p.status === 'trial' && dt && dt < sevenDaysAgoDate;
+    }).length;
 
     // Avg days to conversion
     let avgDaysToConversion = 0;
-    if (convertedProfiles && convertedProfiles.length > 0) {
+    if (convertedProfiles.length > 0) {
       const totalDays = convertedProfiles.reduce((sum, p) => {
-        if (!p.trial_started_at || !p.created_at) return sum;
-        const trialStart = new Date(p.trial_started_at).getTime();
-        const conversionDate = new Date(p.created_at).getTime();
+        const trialStart = new Date(p.trial_started_at || p.created_at!).getTime();
+        const conversionDate = new Date(p.created_at!).getTime();
         return sum + Math.max(0, (conversionDate - trialStart) / (1000 * 60 * 60 * 24));
       }, 0);
       avgDaysToConversion = Math.round(totalDays / convertedProfiles.length * 10) / 10;
     }
 
     // Avg msgs converted vs non-converted
-    const avgMsgsConverted = convertedProfiles && convertedProfiles.length > 0
+    const avgMsgsConverted = convertedProfiles.length > 0
       ? Math.round(convertedProfiles.reduce((sum, p) => sum + (p.trial_conversations_count || 0), 0) / convertedProfiles.length * 10) / 10
       : 0;
 
-    const { data: nonConvertedProfiles } = await supabase
-      .from('profiles')
-      .select('trial_conversations_count')
-      .eq('status', 'trial')
-      .not('trial_started_at', 'is', null)
-      .gte('trial_started_at', periodStart)
-      .lte('trial_started_at', periodEnd);
+    const nonConvertedProfiles = trialsInPeriod.filter(p => p.status === 'trial');
+
+    // Trials by plan distribution
+    const planCounts: Record<string, number> = {};
+    for (const p of trialsInPeriod) {
+      const plan = p.plan || 'sem_plano';
+      planCounts[plan] = (planCounts[plan] || 0) + 1;
+    }
+    const trialsByPlan = Object.entries(planCounts).map(([plan, count]) => ({ plan, count })).sort((a, b) => b.count - a.count);
 
     const avgMsgsNonConverted = nonConvertedProfiles && nonConvertedProfiles.length > 0
       ? Math.round(nonConvertedProfiles.reduce((sum, p) => sum + (p.trial_conversations_count || 0), 0) / nonConvertedProfiles.length * 10) / 10
@@ -335,13 +319,14 @@ Deno.serve(async (req) => {
       totalCacheSavings,
       // Trial & Conversion
       activeTrials: activeTrials || 0,
-      trialsLast7Days: trialsLast7Days || 0,
-      trialsLast30Days: trialsLast30Days || 0,
-      totalTrialsEver: totalTrialsEver || 0,
-      trialRespondedCount: trialRespondedCount || 0,
+      trialsLast7Days: trialsLast7DaysCount,
+      trialsLast30Days: trialsLast30DaysCount,
+      totalTrialsEver: totalTrialsInPeriod,
+      trialRespondedCount,
       convertedCount,
       conversionRate,
-      expiredTrials: expiredTrials || 0,
+      expiredTrials: expiredTrialsCount,
+      trialsByPlan,
       avgDaysToConversion,
       avgMsgsConverted,
       avgMsgsNonConverted,
