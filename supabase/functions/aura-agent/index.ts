@@ -4674,15 +4674,30 @@ Exemplo com 4 sessões:
         const title = match[1].trim();
         console.log('📋 Free commitment detected:', title);
         
-        await supabase
+        // Dedup: verificar se já existe commitment pendente similar
+        const freeTitlePrefix = title.substring(0, 40);
+        const { data: existingFree } = await supabase
           .from('commitments')
-          .insert({
-            user_id: profile.user_id,
-            title: title,
-            completed: false,
-            commitment_status: 'pending',
-            session_id: null
-          });
+          .select('id, title')
+          .eq('user_id', profile.user_id)
+          .eq('completed', false)
+          .ilike('title', `%${freeTitlePrefix}%`)
+          .limit(1);
+
+        if (existingFree && existingFree.length > 0) {
+          console.log('📋 Skipping duplicate commitment:', title, '(matches:', existingFree[0].title, ')');
+        } else {
+          await supabase
+            .from('commitments')
+            .insert({
+              user_id: profile.user_id,
+              title: title,
+              completed: false,
+              commitment_status: 'pending',
+              session_id: null
+            });
+          console.log('📋 Free commitment created:', title);
+        }
       }
     }
     
