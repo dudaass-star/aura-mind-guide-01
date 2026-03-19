@@ -295,7 +295,7 @@ export default function AdminEngagement() {
                           <DollarSign className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
-                          <div className="text-2xl font-bold text-foreground">${metrics.totalCostUSD.toFixed(2)}</div>
+                          <div className="text-2xl font-bold text-foreground">${(metrics.totalCostUSD ?? 0).toFixed(2)}</div>
                           <p className="text-xs text-muted-foreground mt-1">{periodLabel}</p>
                         </CardContent>
                       </Card>
