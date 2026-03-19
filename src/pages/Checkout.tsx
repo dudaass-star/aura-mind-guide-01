@@ -74,8 +74,12 @@ const Checkout = () => {
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
+    // Generate event_id for deduplication across client/server
+    const eventId = crypto.randomUUID();
+    localStorage.setItem('aura_event_id', eventId);
+    
     if (typeof window !== 'undefined' && (window as any).fbq) {
-      (window as any).fbq('track', 'InitiateCheckout');
+      (window as any).fbq('track', 'InitiateCheckout', {}, { eventID: eventId });
     }
   }, []);
 
@@ -123,6 +127,8 @@ const Checkout = () => {
     setIsLoading(true);
 
     try {
+      const eventId = localStorage.getItem('aura_event_id') || crypto.randomUUID();
+      
       const { data, error } = await supabase.functions.invoke('create-checkout', {
         body: {
           plan: selectedPlan,
@@ -131,6 +137,7 @@ const Checkout = () => {
           name: name.trim(),
           email: email.trim(),
           phone: phone,
+          event_id: eventId,
         },
       });
 
@@ -140,7 +147,7 @@ const Checkout = () => {
 
       if (data?.url) {
         const checkoutUrl = data.url as string;
-        localStorage.setItem('aura_checkout', JSON.stringify({ name, phone, plan: selectedPlan, billing: billingPeriod }));
+        localStorage.setItem('aura_checkout', JSON.stringify({ name, phone, plan: selectedPlan, billing: billingPeriod, event_id: eventId, price: currentPrice }));
         try {
           if (window.top && window.top !== window) {
             window.top.location.href = checkoutUrl;

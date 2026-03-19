@@ -42,7 +42,7 @@ serve(async (req) => {
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
 
-    const { plan: requestedPlan, billing = "monthly", name, email, phone, trial, paymentMethod } = await req.json();
+    const { plan: requestedPlan, billing = "monthly", name, email, phone, trial, paymentMethod, event_id } = await req.json();
     
     const plan = requestedPlan;
     const billingOverride = billing;
@@ -154,6 +154,7 @@ serve(async (req) => {
         billing: billingPeriod,
         ...(trial && { trial: "true" }),
         ...(isBoletoPayment && { payment_method: "boleto" }),
+        ...(event_id && { event_id: event_id }),
       },
     };
 
@@ -189,6 +190,38 @@ serve(async (req) => {
     logStep("Creating checkout session", { plan, billing: billingPeriod, priceId, mode: sessionConfig.mode });
     const session = await stripe.checkout.sessions.create(sessionConfig);
     logStep("Checkout session created", { sessionId: session.id });
+
+    // Send CAPI InitiateCheckout event (non-blocking)
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (supabaseUrl && supabaseServiceKey) {
+      try {
+        await fetch(`${supabaseUrl}/functions/v1/meta-capi`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseServiceKey}`,
+          },
+          body: JSON.stringify({
+            event_name: 'InitiateCheckout',
+            ...(event_id && { event_id }),
+            event_source_url: `${origin}/checkout`,
+            user_data: {
+              email: email,
+              phone: phoneClean,
+              first_name: name.split(' ')[0],
+            },
+            custom_data: {
+              content_name: `Plano ${plan}`,
+              content_category: plan,
+            },
+          }),
+        });
+        logStep("CAPI InitiateCheckout sent");
+      } catch (capiErr) {
+        logStep("CAPI InitiateCheckout failed (non-blocking)", { error: String(capiErr) });
+      }
+    }
 
     return new Response(JSON.stringify({ url: session.url }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
