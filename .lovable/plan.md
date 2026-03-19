@@ -1,88 +1,33 @@
 
 
-# Correção do Debounce e `|||` no Histórico — Plano Revisado
+# Melhorias no Painel de Mensagens Admin
 
-## 4 Correções
+## Mudança Principal: Contador mensal em vez de trial
 
-### 1. Strip `|||` antes de salvar no banco — `aura-agent/index.ts`
-Na geração do `cleanAssistantMessage`, adicionar `.replace(/\|\|\|/g, '\n')` antes de salvar na tabela `messages`.
+**Problema**: A linha 322-324 mostra `trial: {user.trial_conversations_count}/50` — irrelevante agora.
 
-### 2. Debounce por query em `messages` — `process-webhook-message/index.ts`
+**Solução**: Substituir por contagem de mensagens do mês vigente. No edge function `admin-messages`, calcular `month_message_count` filtrando mensagens com `created_at >= primeiro dia do mês`. No frontend, exibir `"mês: {count} msgs"`.
 
-**Pré-requisito**: capturar o `id` da mensagem inserida (linha 284 atual não faz `.select('id')`):
-```typescript
-const { data: insertedMsg } = await supabase
-  .from('messages')
-  .insert({ user_id: profile.user_id, role: 'user', content: messageText })
-  .select('id')
-  .single();
-const inboundMessageDbId = insertedMsg?.id;
-```
+## Melhorias Adicionais Sugeridas
 
-Substituir o debounce check (linhas 535-547) por:
-```typescript
-const { data: latestUserMsg } = await supabase
-  .from('messages')
-  .select('id')
-  .eq('user_id', profile.user_id)
-  .eq('role', 'user')
-  .order('created_at', { ascending: false })
-  .limit(1)
-  .maybeSingle();
+1. **Filtros rápidos por status** — Chips clicáveis no topo da lista (Todos / Ativos / Trial / Cancelados) para filtrar rapidamente sem usar a busca de texto.
 
-if (latestUserMsg && latestUserMsg.id !== inboundMessageDbId) {
-  // Mensagem mais recente existe — abortar
-  return;
-}
-```
+2. **Contagem de mensagens do mês ao invés de total** — O badge `message_count` (linha 314-316) atualmente mostra o total all-time. Mostrar o total do mês é mais útil operacionalmente. Manter o total como tooltip.
 
-Manter o upsert em `aura_response_state` (linha 326) para o sistema de interrupção — ele serve outro propósito (sinalizar `is_responding`).
+3. **Indicador de "não lida"** — Destacar usuários cuja última mensagem é `role: 'user'` (ou seja, a Aura ainda não respondeu ou o admin não viu). Isso ajuda a priorizar quem precisa de atenção.
 
-### 3. Acúmulo de mensagens sequenciais — com contexto separado
+4. **Scroll automático melhorado** — Atualmente faz scroll ao carregar, mas se o admin está lendo mensagens antigas e uma nova chega, perde a posição. Só auto-scroll se já estiver no fundo.
 
-Quando o worker sobrevive ao debounce, buscar mensagens do usuário desde a última resposta do assistant e formatar com destaque na última:
+## Arquivos Alterados
 
-```typescript
-// Buscar última msg do assistant
-const { data: lastAssistant } = await supabase
-  .from('messages')
-  .select('created_at')
-  .eq('user_id', profile.user_id)
-  .eq('role', 'assistant')
-  .order('created_at', { ascending: false })
-  .limit(1)
-  .maybeSingle();
+- **`supabase/functions/admin-messages/index.ts`**: Adicionar query `month_message_count` (mensagens do mês) por usuário, remover `trial_conversations_count` do select (ou manter mas não usar).
+- **`src/pages/AdminMessages.tsx`**: 
+  - Substituir `trial: X/50` por `mês: X msgs`
+  - Adicionar filtros por status
+  - Destacar usuários com última msg do tipo `user`
+  - Badge principal = msgs do mês (tooltip = total)
 
-// Buscar todas as msgs do user desde então
-const query = supabase
-  .from('messages')
-  .select('content')
-  .eq('user_id', profile.user_id)
-  .eq('role', 'user')
-  .order('created_at', { ascending: true });
+## Complexidade
 
-if (lastAssistant) {
-  query.gt('created_at', lastAssistant.created_at);
-}
-
-const { data: recentUserMsgs } = await query;
-
-if (recentUserMsgs && recentUserMsgs.length > 1) {
-  const previous = recentUserMsgs.slice(0, -1).map(m => m.content).join(' / ');
-  const last = recentUserMsgs[recentUserMsgs.length - 1].content;
-  messageText = `[Mensagens anteriores do usuário: ${previous}]\n\n${last}`;
-}
-```
-
-Isso evita confusão do modelo — a Aura sabe que as anteriores são contexto e foca na última.
-
-### 4. Safety net para `|||` no envio — `process-webhook-message/index.ts`
-Antes de enviar cada mensagem ao WhatsApp, strip `|||`:
-```typescript
-responseText = responseText.replace(/\|\|\|/g, '').trim();
-```
-
-## Arquivos alterados
-- `supabase/functions/aura-agent/index.ts` — strip `|||` antes de salvar
-- `supabase/functions/process-webhook-message/index.ts` — capturar ID do insert, debounce por `messages`, acúmulo contextualizado, safety net `|||`
+Baixa-média. Mudanças concentradas em 2 arquivos. A query mensal é simples (`gte` no primeiro dia do mês).
 
