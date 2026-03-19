@@ -188,3 +188,34 @@ Aura agora rastreia técnicas terapêuticas usadas, captura compromissos de conv
 - ~50 linhas removidas
 - Uma única árvore de decisão para classificação de mensagens
 - Zero referências "consulte o bloco dinâmico"
+
+---
+
+# Webhook Split — Eliminar Mensagens Duplicadas ✅ Implementado
+
+## Resumo
+`webhook-zapi` dividido em receiver leve (<500ms) + worker pesado em background para eliminar retries do Z-API que causavam mensagens duplicadas.
+
+### O que foi feito
+
+1. **`webhook-zapi/index.ts` simplificado (~130 linhas)** ✅
+   - Apenas: CORS, auth Z-API, parse payload, early exits, dedup insert
+   - Fire-and-forget `fetch()` para `process-webhook-message`
+   - `EdgeRuntime.waitUntil()` com fallback gracioso
+   - Retorna 200 em <500ms (elimina timeout do Z-API)
+
+2. **`process-webhook-message/index.ts` criado (~700 linhas)** ✅
+   - Toda a lógica pesada movida: audio transcription (Whisper), user lookup, persist inbound, subscription check, interruption system, trial limits, Aha detection, time capsule, session rating/confirmation, aura-agent call, tag processing, bubble sending, conversation tracking
+   - Autenticação via `x-internal-secret` header
+   - Try/catch global com mensagem de contingência: "Tive um probleminha técnico, me desculpa! 😅"
+
+3. **Secret `INTERNAL_WEBHOOK_SECRET` criado** ✅
+   - Dedicado para autenticação inter-function (não usa service role key)
+
+4. **`config.toml` atualizado** ✅
+   - `[functions.process-webhook-message] verify_jwt = false`
+
+### Resultado
+- Z-API recebe 200 em <500ms → sem retries → sem mensagens duplicadas
+- Processamento pesado (~15-20s) acontece em background
+- Contingência automática se worker falhar
