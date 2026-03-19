@@ -2523,8 +2523,8 @@ function formatPendingCommitmentsForFollowup(commitments: any[]): string {
    - "E aí, como foi com aquilo que você ia tentar fazer?"
    - "Lembra que você combinou de X? Rolou?"
 
-2. Se CUMPRIDO: CELEBRE efusivamente!
-   - "Arrasou! Que orgulho de você! 💜"
+2. Se CUMPRIDO: Reconheça sem exagero
+    - "Boa, fez o que combinou! Como foi?"
    - Use tag: [COMPROMISSO_CUMPRIDO:titulo]
 
 3. Se NÃO CUMPRIDO: Explore o porquê SEM julgamento
