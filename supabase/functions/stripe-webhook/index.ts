@@ -270,6 +270,7 @@ Me diz: como você está hoje?`;
               sessions_reset_date: today,
               updated_at: new Date().toISOString(),
               needs_schedule_setup: sessionsCount > 0,
+              ...(isTrial && { trial_started_at: new Date().toISOString(), trial_phase: 'listening' }),
               ...(planExpiresAt && { plan_expires_at: planExpiresAt }),
             })
             .eq('phone', formattedPhone);

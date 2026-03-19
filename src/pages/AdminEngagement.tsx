@@ -389,6 +389,28 @@ export default function AdminEngagement() {
                   </CardContent>
                 </Card>
 
+                {/* Distribuição por Plano */}
+                {metrics?.trialsByPlan && metrics.trialsByPlan.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base font-semibold">Distribuição por Plano</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {metrics.trialsByPlan.map((item) => {
+                        const planNames: Record<string, string> = { essencial: 'Essencial', direcao: 'Direção', transformacao: 'Transformação', sem_plano: 'Sem plano' };
+                        const total = metrics.trialsByPlan!.reduce((s, i) => s + i.count, 0);
+                        const pct = total > 0 ? Math.round(item.count / total * 100) : 0;
+                        return (
+                          <div key={item.plan} className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">{planNames[item.plan] || item.plan}</span>
+                            <span className="font-semibold text-foreground">{item.count} <span className="text-muted-foreground font-normal">({pct}%)</span></span>
+                          </div>
+                        );
+                      })}
+                    </CardContent>
+                  </Card>
+                )}
+
                 {/* Cards detalhados */}
                 <MetricCards cards={trialCards} />
               </>
