@@ -55,8 +55,11 @@ Deno.serve(async (req) => {
     } catch { /* no body */ }
 
     const now = new Date();
-    const periodStart = dateFrom || new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
-    const periodEnd = dateTo || now.toISOString();
+    const defaultFrom = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const defaultTo = now.toISOString().slice(0, 10);
+    // Receive YYYY-MM-DD strings and build full UTC day boundaries
+    const periodStart = (dateFrom || defaultFrom) + 'T00:00:00Z';
+    const periodEnd = (dateTo || defaultTo) + 'T23:59:59.999Z';
     const periodLabel = `${periodStart.slice(0, 10)} – ${periodEnd.slice(0, 10)}`;
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
 

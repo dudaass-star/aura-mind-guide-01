@@ -10,7 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
-import { format, subDays, startOfDay, endOfDay } from 'date-fns';
+import { format, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 interface CostBreakdown {
@@ -77,8 +77,8 @@ export default function AdminEngagement() {
       const { data, error } = await supabase.functions.invoke('admin-engagement-metrics', {
         headers: { Authorization: `Bearer ${session.access_token}` },
         body: {
-          dateFrom: startOfDay(from).toISOString(),
-          dateTo: endOfDay(to).toISOString(),
+          dateFrom: format(from, 'yyyy-MM-dd'),
+          dateTo: format(to, 'yyyy-MM-dd'),
         },
       });
 
