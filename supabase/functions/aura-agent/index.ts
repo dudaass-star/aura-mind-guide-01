@@ -235,33 +235,59 @@ async function callAI(
     reasoningLevel = parts[1];
   }
 
-  // Google models → Gemini API direta (habilita prefix caching)
+  // Google models → Gemini API nativa (generateContent + x-goog-api-key)
   if (actualModel.startsWith('google/')) {
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
     if (!GEMINI_API_KEY) {
       throw new Error('GEMINI_API_KEY not configured');
     }
     console.log('🔑 GEMINI_API_KEY prefix:', GEMINI_API_KEY.substring(0, 12) + '...');
-    
+
     const geminiModel = actualModel.replace('google/', '');
-    console.log('🔀 Routing to Gemini API direct, model:', geminiModel, reasoningLevel ? `reasoning_effort: ${reasoningLevel}` : '');
+    console.log('🔀 Routing to Gemini native API, model:', geminiModel, reasoningLevel ? `reasoning: ${reasoningLevel}` : '');
 
-    const geminiBody: any = {
-      model: geminiModel,
-      messages,
-      max_tokens: maxTokens,
-    };
+    // 1. Extrair e concatenar system messages
+    const systemMessages = messages.filter((m: any) => m.role === 'system');
+    const chatMessages = messages.filter((m: any) => m.role !== 'system');
+    const systemPrompt = systemMessages.map((m: any) => m.content).join('\n\n');
 
-    if (reasoningLevel) {
-      geminiBody.reasoning_effort = reasoningLevel;
-    } else {
-      geminiBody.temperature = temperature;
+    // 2. Converter messages para formato Gemini nativo
+    // assistant → model, content → parts: [{ text }]
+    // Merge consecutive same-role messages
+    const geminiContents: any[] = [];
+    for (const msg of chatMessages) {
+      const role = msg.role === 'assistant' ? 'model' : 'user';
+      const part = { text: msg.content };
+      if (geminiContents.length > 0 && geminiContents[geminiContents.length - 1].role === role) {
+        geminiContents[geminiContents.length - 1].parts.push(part);
+      } else {
+        geminiContents.push({ role, parts: [part] });
+      }
     }
 
-    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', {
+    // 3. Montar body nativo
+    const generationConfig: any = { maxOutputTokens: maxTokens };
+    if (reasoningLevel) {
+      const budgetMap: Record<string, number> = { low: 1024, medium: 8192, high: 24576 };
+      generationConfig.thinkingConfig = { thinkingBudget: budgetMap[reasoningLevel] ?? 8192 };
+    } else {
+      generationConfig.temperature = temperature;
+    }
+
+    const geminiBody: any = {
+      contents: geminiContents,
+      generationConfig,
+    };
+    if (systemPrompt) {
+      geminiBody.system_instruction = { parts: [{ text: systemPrompt }] };
+    }
+
+    // 4. Chamar endpoint nativo
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent`;
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${GEMINI_API_KEY}`,
+        'x-goog-api-key': GEMINI_API_KEY,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(geminiBody),
@@ -273,8 +299,24 @@ async function callAI(
     }
 
     const result = await response.json();
-    console.log('✅ Gemini API direct success, cached_tokens:', result.usage?.prompt_tokens_details?.cached_tokens ?? 'N/A');
-    return result;
+
+    // 5. Converter resposta para formato interno (OpenAI-compatible)
+    const candidate = result.candidates?.[0];
+    const text = candidate?.content?.parts?.map((p: any) => p.text).join('') ?? '';
+    const usage = result.usageMetadata || {};
+    const cachedTokens = usage.cachedContentTokenCount || 0;
+
+    console.log('✅ Gemini native API success, cached_tokens:', cachedTokens, 'prompt:', usage.promptTokenCount, 'completion:', usage.candidatesTokenCount);
+
+    return {
+      choices: [{ message: { role: 'assistant', content: text }, finish_reason: candidate?.finishReason === 'STOP' ? 'stop' : (candidate?.finishReason || 'stop') }],
+      usage: {
+        prompt_tokens: usage.promptTokenCount || 0,
+        completion_tokens: usage.candidatesTokenCount || 0,
+        total_tokens: usage.totalTokenCount || 0,
+        prompt_tokens_details: { cached_tokens: cachedTokens },
+      },
+    };
   }
 
   // OpenAI models → Lovable AI Gateway
