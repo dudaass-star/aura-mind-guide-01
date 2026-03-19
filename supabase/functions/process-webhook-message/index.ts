@@ -658,8 +658,8 @@ Deno.serve(async (req) => {
 
       let responseText = msg.text || msg.content || '';
 
-      // Detect tags BEFORE cleaning
-      const hadValorEntregue = /\[VALOR_ENTREGUE\]/i.test(responseText);
+
+
 
       // Clean all known internal tags
       responseText = responseText
