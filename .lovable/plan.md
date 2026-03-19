@@ -1,43 +1,88 @@
 
 
-# Correção dos Eventos Meta Pixel/CAPI
+# Correção do Debounce e `|||` no Histórico — Plano Revisado
 
-## Situação Atual
+## 4 Correções
 
-O fluxo de trial agora vai direto para `/checkout` (Stripe), não usa mais o `start-trial` edge function. O mapa de eventos atual:
+### 1. Strip `|||` antes de salvar no banco — `aura-agent/index.ts`
+Na geração do `cleanAssistantMessage`, adicionar `.replace(/\|\|\|/g, '\n')` antes de salvar na tabela `messages`.
 
-| Evento | Client (Pixel) | Server (CAPI) | Problema |
-|--------|----------------|---------------|----------|
-| PageView | ✅ index.html | ❌ | OK para topo de funil |
-| InitiateCheckout | ✅ Checkout.tsx | ❌ | Sem CAPI — ad-blockers perdem o evento |
-| Purchase | ✅ ThankYou.tsx (sem value) | ✅ stripe-webhook (com value) | **Sem event_id compartilhado = duplicação no Meta** |
-| Lead | ❌ | ✅ start-trial (legado, não usado mais) | **Evento morto — nunca dispara** |
-| ViewContent | ❌ | ❌ | **Missing — Meta não otimiza topo de funil** |
+### 2. Debounce por query em `messages` — `process-webhook-message/index.ts`
 
-## Plano de Correção
+**Pré-requisito**: capturar o `id` da mensagem inserida (linha 284 atual não faz `.select('id')`):
+```typescript
+const { data: insertedMsg } = await supabase
+  .from('messages')
+  .insert({ user_id: profile.user_id, role: 'user', content: messageText })
+  .select('id')
+  .single();
+const inboundMessageDbId = insertedMsg?.id;
+```
 
-### 1. Remover evento Lead do `start-trial`
-O `start-trial` não é mais usado no fluxo principal. O evento Lead server-side é código morto.
+Substituir o debounce check (linhas 535-547) por:
+```typescript
+const { data: latestUserMsg } = await supabase
+  .from('messages')
+  .select('id')
+  .eq('user_id', profile.user_id)
+  .eq('role', 'user')
+  .order('created_at', { ascending: false })
+  .limit(1)
+  .maybeSingle();
 
-### 2. Adicionar ViewContent na landing page (`Index.tsx`)
-Disparar `fbq('track', 'ViewContent')` quando o usuário visita a página principal — permite ao Meta otimizar campanhas de awareness.
+if (latestUserMsg && latestUserMsg.id !== inboundMessageDbId) {
+  // Mensagem mais recente existe — abortar
+  return;
+}
+```
 
-### 3. Deduplicar Purchase com `event_id`
-- **Checkout.tsx**: gerar um `event_id` único (UUID) antes de redirecionar ao Stripe, salvar no `localStorage` junto com os dados do checkout
-- **ThankYou.tsx**: ler o `event_id` do localStorage e enviar no `fbq('track', 'Purchase', {...}, {eventID: id})`
-- **create-checkout**: passar o `event_id` no metadata da session Stripe
-- **stripe-webhook**: ler o `event_id` do metadata e enviar no CAPI Purchase
+Manter o upsert em `aura_response_state` (linha 326) para o sistema de interrupção — ele serve outro propósito (sinalizar `is_responding`).
 
-### 4. Adicionar `value` no Purchase client-side (`ThankYou.tsx`)
-Ler plano/billing do localStorage e incluir o valor correspondente no evento Purchase do Pixel.
+### 3. Acúmulo de mensagens sequenciais — com contexto separado
 
-### 5. Adicionar InitiateCheckout server-side (CAPI)
-No `create-checkout`, após criar a session Stripe, enviar um evento `InitiateCheckout` via meta-capi com os dados do usuário — garante tracking mesmo com ad-blockers.
+Quando o worker sobrevive ao debounce, buscar mensagens do usuário desde a última resposta do assistant e formatar com destaque na última:
 
-## Arquivos Alterados
-- `src/pages/Index.tsx` — ViewContent pixel event
-- `src/pages/Checkout.tsx` — gerar event_id, salvar no localStorage
-- `src/pages/ThankYou.tsx` — Purchase com event_id + value
-- `supabase/functions/create-checkout/index.ts` — event_id no metadata + CAPI InitiateCheckout
-- `supabase/functions/stripe-webhook/index.ts` — event_id no CAPI Purchase
+```typescript
+// Buscar última msg do assistant
+const { data: lastAssistant } = await supabase
+  .from('messages')
+  .select('created_at')
+  .eq('user_id', profile.user_id)
+  .eq('role', 'assistant')
+  .order('created_at', { ascending: false })
+  .limit(1)
+  .maybeSingle();
+
+// Buscar todas as msgs do user desde então
+const query = supabase
+  .from('messages')
+  .select('content')
+  .eq('user_id', profile.user_id)
+  .eq('role', 'user')
+  .order('created_at', { ascending: true });
+
+if (lastAssistant) {
+  query.gt('created_at', lastAssistant.created_at);
+}
+
+const { data: recentUserMsgs } = await query;
+
+if (recentUserMsgs && recentUserMsgs.length > 1) {
+  const previous = recentUserMsgs.slice(0, -1).map(m => m.content).join(' / ');
+  const last = recentUserMsgs[recentUserMsgs.length - 1].content;
+  messageText = `[Mensagens anteriores do usuário: ${previous}]\n\n${last}`;
+}
+```
+
+Isso evita confusão do modelo — a Aura sabe que as anteriores são contexto e foca na última.
+
+### 4. Safety net para `|||` no envio — `process-webhook-message/index.ts`
+Antes de enviar cada mensagem ao WhatsApp, strip `|||`:
+```typescript
+responseText = responseText.replace(/\|\|\|/g, '').trim();
+```
+
+## Arquivos alterados
+- `supabase/functions/aura-agent/index.ts` — strip `|||` antes de salvar
+- `supabase/functions/process-webhook-message/index.ts` — capturar ID do insert, debounce por `messages`, acúmulo contextualizado, safety net `|||`
 
