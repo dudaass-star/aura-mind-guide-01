@@ -315,7 +315,7 @@ export default function AdminEngagement() {
                           <TrendingUp className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
-                          <div className="text-2xl font-bold text-green-600">${metrics.totalCacheSavings.toFixed(2)}</div>
+                          <div className="text-2xl font-bold text-green-600">${(metrics.totalCacheSavings ?? 0).toFixed(2)}</div>
                           <p className="text-xs text-muted-foreground mt-1">economia vs. sem cache</p>
                         </CardContent>
                       </Card>
