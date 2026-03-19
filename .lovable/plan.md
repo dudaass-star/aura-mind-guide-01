@@ -1,37 +1,33 @@
 
 
-# Remoção Completa do Sistema de Trial Legado
+# Correção da Experiência da Ana Livia
 
-Entendi: o trial agora é simplesmente o plano normal com 7 dias grátis via cartão. O Stripe cuida da cobrança no 8o dia. A experiência do usuário é idêntica a um assinante ativo — sem limites, sem nudges, sem follow-ups de conversão.
+## Situação Atual
 
-## O que será removido
+Ana Livia está com `status = 'trial'`, `trial_conversations_count = 50`, plano `direcao`. Ela recebeu 3 CTAs automatizados (11:25, 11:40, 13:25) no meio de uma sessão terapêutica profunda sobre dinâmica familiar. Suas últimas mensagens (12:24 e 12:31) ficaram **sem resposta** — a Aura não respondeu porque o bloco de trial limitava o processamento.
 
-### 1. `process-webhook-message/index.ts`
-- **Remover bloco inteiro "TRIAL LIMIT CHECK"** (linhas 348-499): contagem de mensagens, AHA detection, nudge response bonus, hard limit 50/72h, agendamento de trial_closing + follow-ups, e o `return` que bloqueia o usuário
-- **Remover detecção de `[VALOR_ENTREGUE]`** (linhas 838-846): atualização de `trial_phase` baseada na tag
+O código já foi corrigido e deployado — o bloco de trial limit foi removido do `process-webhook-message`. Mas ela continua sem resposta.
 
-### 2. `aura-agent/index.ts`
-- **Remover bloco "Contexto de TRIAL Primeira Jornada"** (linhas 3757-3865): todos os nudges (msg 45, 48, 50, pós-AHA), notas internas de contagem, e instrução da tag `[VALOR_ENTREGUE]`
-- **Remover parâmetros** `trial_count`, `trial_phase`, `trial_aha_at_count` do destructuring do request body e de qualquer uso
+## Ações Necessárias
 
-### 3. `execute-scheduled-tasks/index.ts`
-- **Remover cases**: `trial_closing`, `trial_followup_15m`, `trial_followup_2h`, `trial_followup_morning`, `trial_followup_48h`, `trial_activation_audio`, `trial_ghost_nudge`
-- Manter os cases `reminder`, `meditation`, `message` intactos
+### 1. Enviar mensagem de recuperação manual
+Usar `admin-send-message` para enviar uma mensagem da Aura reconhecendo o erro técnico e retomando a conversa. Algo como:
 
-### 4. `start-trial/index.ts`
-- **Remover agendamento** de `trial_activation_audio` e `trial_ghost_nudge` (linhas ~218-235)
-- Manter: criação do perfil, mensagem de boas-vindas, CAPI event
+> "Ana, me desculpa por aquelas mensagens estranhas. Foi um erro técnico no meu sistema — aquilo não deveria ter acontecido, especialmente no meio da nossa conversa. Você estava me contando algo muito importante sobre sua família e o Gabriel, e eu quero muito continuar te ouvindo. Tá tudo certo com o seu acesso, pode falar comigo quando quiser 💜"
 
-### 5. `reactivation-blast/index.ts`
-- **Remover reset de campos trial** (`trial_conversations_count: 0`, `trial_phase: 'listening'`, `trial_aha_at_count: null`, `trial_nudge_active: false`)
-- Manter apenas `last_reactivation_sent` update
+### 2. Remover as mensagens de CTA do histórico
+Deletar as 3 mensagens de CTA do banco de dados (`messages` table) para que a Aura não veja esses CTAs como parte do histórico e fique confusa em respostas futuras. São as mensagens com `role = 'assistant'` contendo links de checkout nos horários 11:25, 11:40 e 13:25.
 
-### 6. Cleanup de dados (migration SQL)
-- Cancelar todos os `scheduled_tasks` pendentes com `task_type` em: `trial_closing`, `trial_followup_*`, `trial_activation_audio`, `trial_ghost_nudge`
+### 3. Salvar a mensagem de recuperação no histórico
+Inserir a mensagem de desculpas como `role = 'assistant'` no `messages` para que fique no contexto da Aura.
+
+## Detalhes Técnicos
+
+- Deletar mensagens requer uma migration (RLS não permite DELETE para users, e o service role precisa de um statement direto)
+- A mensagem será enviada via `admin-send-message` edge function
+- Não é necessário alterar `trial_conversations_count` ou `status` — o código já ignora esses campos
 
 ## O que NÃO muda
-- `status = 'trial'` continua existindo (Stripe gerencia a transição)
-- `trial_started_at` continua sendo salvo (referência para o período de 7 dias)
-- `start-trial` continua criando o perfil e enviando boas-vindas
-- Colunas `trial_conversations_count`, `trial_phase`, etc. ficam no banco sem uso (cleanup posterior)
+- O deploy do `process-webhook-message` sem trial limits já está feito
+- Quando ela mandar a próxima mensagem, será processada normalmente
 
