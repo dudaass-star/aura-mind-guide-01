@@ -182,20 +182,22 @@ async function getOrCreateGeminiCache(
   console.log('📦 Cache MISS for model:', geminiModel, 'hash:', promptHash.slice(0, 8), '— creating...');
 
   // 3. Create cache via Gemini API
+  const cacheBody = {
+    model: `models/${geminiModel}`,
+    system_instruction: { parts: [{ text: systemPrompt }] },
+    contents: [
+      { role: 'user', parts: [{ text: 'Olá' }] },
+      { role: 'model', parts: [{ text: 'Olá! Como posso te ajudar?' }] },
+    ],
+    ttl: '3600s',
+  };
+  console.log('📦 Cache request: model=', cacheBody.model, 'systemLen=', systemPrompt.length, 'chars');
   const cacheResponse = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/cachedContents?key=${apiKey}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: `models/${geminiModel}`,
-        systemInstruction: { parts: [{ text: systemPrompt }] },
-        contents: [
-          { role: 'user', parts: [{ text: 'Olá' }] },
-          { role: 'model', parts: [{ text: 'Olá! Como posso te ajudar?' }] },
-        ],
-        ttl: '3600s',
-      }),
+      body: JSON.stringify(cacheBody),
     }
   );
 
