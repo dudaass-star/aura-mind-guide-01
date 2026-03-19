@@ -9,30 +9,40 @@ const ThankYou = () => {
   const [userData, setUserData] = useState({ name: "", plan: "anual" });
 
   useEffect(() => {
-    // Track Purchase event
-    if (typeof window !== 'undefined' && (window as any).fbq) {
-      (window as any).fbq('track', 'Purchase', {
-        content_name: 'AURA Subscription',
-        currency: 'BRL',
-      });
-    }
-
     // Try to get data from location state first, then localStorage
+    let checkoutData = { name: "", plan: "anual", event_id: "", price: "" };
+    
     if (location.state?.name) {
-      setUserData({ name: location.state.name, plan: location.state.plan || "anual" });
+      checkoutData = { name: location.state.name, plan: location.state.plan || "anual", event_id: "", price: "" };
     } else {
-      // Get from localStorage (set during checkout)
       const stored = localStorage.getItem('aura_checkout');
       if (stored) {
         try {
           const parsed = JSON.parse(stored);
-          setUserData({ name: parsed.name || "", plan: parsed.plan || "anual" });
-          // Clear after reading
+          checkoutData = { name: parsed.name || "", plan: parsed.plan || "anual", event_id: parsed.event_id || "", price: parsed.price || "" };
           localStorage.removeItem('aura_checkout');
         } catch (e) {
           console.error('Error parsing checkout data:', e);
         }
       }
+    }
+
+    setUserData({ name: checkoutData.name, plan: checkoutData.plan });
+
+    // Get event_id for deduplication
+    const eventId = checkoutData.event_id || localStorage.getItem('aura_event_id') || undefined;
+    localStorage.removeItem('aura_event_id');
+
+    // Parse price to number (e.g., "49,90" → 49.90)
+    const priceValue = checkoutData.price ? parseFloat(checkoutData.price.replace('.', '').replace(',', '.')) : undefined;
+
+    // Track Purchase event with event_id for deduplication + value
+    if (typeof window !== 'undefined' && (window as any).fbq) {
+      (window as any).fbq('track', 'Purchase', {
+        content_name: 'AURA Subscription',
+        currency: 'BRL',
+        ...(priceValue && { value: priceValue }),
+      }, ...(eventId ? [{ eventID: eventId }] : []));
     }
   }, [location.state]);
 
