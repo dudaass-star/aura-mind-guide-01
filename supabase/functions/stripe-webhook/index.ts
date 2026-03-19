@@ -248,6 +248,7 @@ Me diz: como você está hoje?`;
               messages_today: 0,
               last_message_date: today,
               needs_schedule_setup: sessionsCount > 0,
+              ...(isTrial && { trial_started_at: new Date().toISOString(), trial_phase: 'listening' }),
               ...(instanceId && { whatsapp_instance_id: instanceId }),
               ...(planExpiresAt && { plan_expires_at: planExpiresAt }),
             });
