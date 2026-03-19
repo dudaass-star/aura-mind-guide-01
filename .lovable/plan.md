@@ -1,28 +1,78 @@
 
 
-# Correção da Experiência da Tânia
+# Correção de Duplicatas de Commitments — Plano Revisado
 
-## Situação
+## Mudanças vs plano anterior
 
-Tânia (`user_id: 0eb3f48b-2088-40d9-b1e0-f386338b4b05`, plano `essencial`, status `trial`, `trial_conversations_count: 49`) recebeu CTAs de conversão no meio de uma conversa terapêutica sobre fibromialgia e retorno aos estudos.
+1. **Match por 40 caracteres** em vez de 20 — evita falsos positivos em frases que começam igual ("conversar com a esposa sobre X" vs "conversar com a esposa sobre Y")
+2. **Verificação prévia antes da migration** — rodar SELECT de diagnóstico antes de deletar
+3. **Instrução de prompt específica** — texto exato para prevenir na origem
 
-Duas mensagens problemáticas em 19/03 às 11:58:
-1. `093bc075` — resposta legítima MAS com CTA de checkout colado no final ("Essa é uma das nossas últimas conversas grátis... 👉 https://olaaura.com.br/checkout")
-2. `df921310` — mensagem pura de CTA ("/assinar?plan=aura_direcao Te espero do outro lado 💜")
+## Implementação
 
-## Ações
+### 1. Deduplicação no backend — `aura-agent/index.ts`
 
-### 1. Deletar as 2 mensagens de CTA do histórico
-Remover as mensagens `093bc075` e `df921310` para que a Aura não veja CTAs no contexto.
+No bloco `COMPROMISSO_LIVRE` (linha ~4660), antes do insert:
 
-### 2. Enviar mensagem de recuperação manual
-Via `admin-send-message`, enviar uma mensagem da Aura retomando a conversa sobre o EJA e a escola, pedindo desculpas pelo erro técnico e confirmando que o acesso dela está normal.
+```typescript
+const titlePrefix = title.substring(0, 40);
+const { data: existing } = await supabase
+  .from('commitments')
+  .select('id, title')
+  .eq('user_id', profile.user_id)
+  .eq('completed', false)
+  .ilike('title', `%${titlePrefix}%`)
+  .limit(1);
 
-### 3. Salvar a mensagem de recuperação no histórico
-O `admin-send-message` já faz isso automaticamente quando `user_id` é fornecido.
+if (existing && existing.length > 0) {
+  console.log('📋 Skipping duplicate commitment:', title, '(matches:', existing[0].title, ')');
+} else {
+  await supabase.from('commitments').insert({...});
+  console.log('📋 Free commitment created:', title);
+}
+```
 
-## Detalhes técnicos
+Mesma lógica no bloco `COMPROMISSO_RENEGOCIADO` (linha ~4636).
 
-- Migration SQL para deletar: `DELETE FROM messages WHERE id IN ('093bc075-5afb-47e0-86c7-37c8e577b91a', 'df921310-cd84-4069-a6df-3d47e7d25126')`
-- Mensagem enviada via edge function `admin-send-message` com phone `5522997935808` e user_id `0eb3f48b-2088-40d9-b1e0-f386338b4b05`
+### 2. Instrução no prompt da Aura
+
+Adicionar ao bloco de instruções de tags:
+
+> Se `[COMPROMISSO_LIVRE:texto]` já aparece na lista de compromissos pendentes do contexto dinâmico, NÃO re-emita a tag. O sistema já registrou — emitir novamente cria duplicata.
+
+O contexto dinâmico já inclui `pendingCommitmentsDetailed.map(c => c.title).join(', ')` (linha 3640), então a Aura já tem a informação para decidir.
+
+### 3. Limpeza de duplicatas existentes
+
+Primeiro, verificar o que seria afetado (query de diagnóstico):
+
+```sql
+SELECT user_id, title, count(*), min(created_at), max(created_at)
+FROM commitments
+WHERE completed = false
+GROUP BY user_id, title
+HAVING count(*) > 1;
+```
+
+Depois, deletar mantendo o mais recente de cada grupo:
+
+```sql
+DELETE FROM commitments
+WHERE id NOT IN (
+  SELECT DISTINCT ON (user_id, title) id
+  FROM commitments
+  ORDER BY user_id, title, created_at DESC
+)
+AND completed = false
+AND title IN (
+  SELECT title FROM commitments
+  WHERE completed = false
+  GROUP BY user_id, title
+  HAVING count(*) > 1
+);
+```
+
+## Arquivos alterados
+- `supabase/functions/aura-agent/index.ts` — deduplicação backend + instrução no prompt
+- Operação de dados (insert tool) — limpeza de duplicatas
 
