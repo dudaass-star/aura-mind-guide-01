@@ -7,74 +7,67 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   const apiKey = Deno.env.get('GEMINI_API_KEY')!;
-  const results: any[] = [];
 
-  // Test: Minimal cache with gemini-2.5-flash (lower min token: 1024)
-  const bigText = 'This is test content for caching. '.repeat(200);
-
-  // Test A: gemini-2.5-flash
-  const bodyA = {
-    model: 'models/gemini-2.5-flash',
-    contents: [
-      { role: 'user', parts: [{ text: bigText }] },
-      { role: 'model', parts: [{ text: 'Understood.' }] },
-    ],
-    ttl: '60s',
-  };
-  const respA = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/cachedContents?key=${apiKey}`,
-    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bodyA) }
+  // Test 1: Confirm generateContent works
+  const genResp = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ role: 'user', parts: [{ text: 'Say hi' }] }],
+        generationConfig: { maxOutputTokens: 10 },
+      }),
+    }
   );
-  const txtA = await respA.text();
-  results.push({ test: 'flash-contents-only', status: respA.status, body: txtA.slice(0, 500) });
+  const genTxt = await genResp.text();
 
-  // Test B: Try with expire_time instead of ttl
-  const expireTime = new Date(Date.now() + 120000).toISOString();
-  const bodyB = {
-    model: 'models/gemini-2.5-flash',
-    contents: [
-      { role: 'user', parts: [{ text: bigText }] },
-      { role: 'model', parts: [{ text: 'Understood.' }] },
-    ],
-    expireTime: expireTime,
-  };
-  const respB = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/cachedContents?key=${apiKey}`,
-    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bodyB) }
-  );
-  const txtB = await respB.text();
-  results.push({ test: 'flash-expireTime', status: respB.status, body: txtB.slice(0, 500) });
+  // Test 2: Try caching with GOOGLE_CLOUD_API_KEY instead
+  const gcpKey = Deno.env.get('GOOGLE_CLOUD_API_KEY');
+  let gcpResult = 'no key';
+  let gcpStatus = 0;
+  if (gcpKey) {
+    const bigText = 'You are an expert assistant. '.repeat(300);
+    const cacheResp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/cachedContents?key=${gcpKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'models/gemini-2.5-flash',
+          contents: [
+            { role: 'user', parts: [{ text: bigText }] },
+            { role: 'model', parts: [{ text: 'OK' }] },
+          ],
+          ttl: '60s',
+        }),
+      }
+    );
+    gcpResult = await cacheResp.text();
+    gcpStatus = cacheResp.status;
 
-  // Test C: camelCase fields (maybe API wants camelCase for some fields?)
-  const bodyC = {
-    model: 'models/gemini-2.5-flash',
-    systemInstruction: { parts: [{ text: bigText }] },
-    contents: [
-      { role: 'user', parts: [{ text: 'Hello' }] },
-      { role: 'model', parts: [{ text: 'Hi' }] },
-    ],
-    ttl: '60s',
-  };
-  const respC = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/cachedContents?key=${apiKey}`,
-    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bodyC) }
-  );
-  const txtC = await respC.text();
-  results.push({ test: 'flash-camelCase-systemInstruction', status: respC.status, body: txtC.slice(0, 500) });
-
-  // Clean up any successful caches
-  for (const r of results) {
-    if (r.status === 200) {
+    // cleanup
+    if (cacheResp.ok) {
       try {
-        const parsed = JSON.parse(r.body);
-        if (parsed.name) {
-          await fetch(`https://generativelanguage.googleapis.com/v1beta/${parsed.name}?key=${apiKey}`, { method: 'DELETE' });
-        }
+        const name = JSON.parse(gcpResult).name;
+        await fetch(`https://generativelanguage.googleapis.com/v1beta/${name}?key=${gcpKey}`, { method: 'DELETE' });
       } catch {}
     }
   }
 
-  return new Response(JSON.stringify(results, null, 2), {
+  // Test 3: Try list existing caches (to see if API is accessible)
+  const listResp = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/cachedContents?key=${apiKey}`
+  );
+  const listTxt = await listResp.text();
+
+  return new Response(JSON.stringify({
+    generateContent: { status: genResp.status, works: genResp.ok },
+    cacheWithGCPKey: { status: gcpStatus, result: gcpResult.slice(0, 300) },
+    listCaches: { status: listResp.status, result: listTxt.slice(0, 300) },
+    keyPrefix: apiKey.slice(0, 10) + '...',
+    gcpKeyAvailable: !!gcpKey,
+  }, null, 2), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
 });
