@@ -1,33 +1,48 @@
 
 
-# Melhorias no Painel de Mensagens Admin
+# Plano Revisado — Posicionamento e Destaque do Teste Mental
 
-## Mudança Principal: Contador mensal em vez de trial
+## Mudanças em relação ao plano anterior
 
-**Problema**: A linha 322-324 mostra `trial: {user.trial_conversations_count}/50` — irrelevante agora.
+### 1. Mover REGRA ANTI-ACOLHIMENTO para logo após PERSONA E IDENTIDADE (linha 575)
 
-**Solução**: Substituir por contagem de mensagens do mês vigente. No edge function `admin-messages`, calcular `month_message_count` filtrando mensagens com `created_at >= primeiro dia do mês`. No frontend, exibir `"mês: {count} msgs"`.
+Em vez de inserir após linha 608 (dentro de "Personalidade e Calor Humano"), a nova seção entra **imediatamente após a linha 575** — antes de "Escopo e Limites" e antes de qualquer lista de celebração/afeto. Assim o modelo lê o princípio de proporcionalidade **primeiro**.
 
-## Melhorias Adicionais Sugeridas
+### 2. Destacar o teste mental como âncora visual
 
-1. **Filtros rápidos por status** — Chips clicáveis no topo da lista (Todos / Ativos / Trial / Cancelados) para filtrar rapidamente sem usar a busca de texto.
+O "teste mental" ganha formatação de destaque próprio dentro da regra, separado das instruções operacionais:
 
-2. **Contagem de mensagens do mês ao invés de total** — O badge `message_count` (linha 314-316) atualmente mostra o total all-time. Mostrar o total do mês é mais útil operacionalmente. Manter o total como tooltip.
+```
+⚠️ TESTE ANTES DE CADA RESPOSTA:
+"Uma amiga reagiria assim no WhatsApp?"
+Se pareceria estranho ou exagerado → corte.
+```
 
-3. **Indicador de "não lida"** — Destacar usuários cuja última mensagem é `role: 'user'` (ou seja, a Aura ainda não respondeu ou o admin não viu). Isso ajuda a priorizar quem precisa de atenção.
+### 3. Reformular linhas 600 e 608 (mesmo plano anterior)
 
-4. **Scroll automático melhorado** — Atualmente faz scroll ao carregar, mas se o admin está lendo mensagens antigas e uma nova chega, perde a posição. Só auto-scroll se já estiver no fundo.
+- Linha 600: "Celebre TUDO" → reação proporcional, celebração só para conquistas reais
+- Linha 608: "Varie SEMPRE afeto" → afeto só quando o usuário está vulnerável
 
-## Arquivos Alterados
+### 4. Reformular linha 712 e seções específicas (1429, 2509, 2456)
 
-- **`supabase/functions/admin-messages/index.ts`**: Adicionar query `month_message_count` (mensagens do mês) por usuário, remover `trial_conversations_count` do select (ou manter mas não usar).
-- **`src/pages/AdminMessages.tsx`**: 
-  - Substituir `trial: X/50` por `mês: X msgs`
-  - Adicionar filtros por status
-  - Destacar usuários com última msg do tipo `user`
-  - Badge principal = msgs do mês (tooltip = total)
+Mesmo do plano anterior — gradação emocional e atenuar celebrações automáticas.
+
+## Estrutura final do prompt (ordem)
+
+```text
+1. REGRA CRÍTICA DE DATA/HORA
+2. PERSONA E IDENTIDADE (linhas 564-575)
+3. ★ REGRA ANTI-ACOLHIMENTO AUTOMÁTICO (NOVA — inserida aqui)
+4. ESCOPO E LIMITES (linha 577+)
+5. PERSONALIDADE E CALOR HUMANO (linhas 598+ — reformuladas)
+6. ... resto do prompt
+```
+
+## Arquivo alterado
+
+- `supabase/functions/aura-agent/index.ts` — mesmas 6 edições + reposicionamento da regra anti-acolhimento
 
 ## Complexidade
 
-Baixa-média. Mudanças concentradas em 2 arquivos. A query mensal é simples (`gte` no primeiro dia do mês).
+Igual ao plano anterior. A mudança é apenas de posição e formatação.
 
