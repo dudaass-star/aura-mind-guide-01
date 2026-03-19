@@ -8,50 +8,64 @@ Deno.serve(async (req) => {
 
   const apiKey = Deno.env.get('GEMINI_API_KEY')!;
 
-  // First, list available models to find the exact name
-  const listResp = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
-  );
-  const models = await listResp.json();
-  const proModels = (models.models || [])
-    .filter((m: any) => m.name.includes('2.5-pro') || m.name.includes('2.5-flash'))
-    .map((m: any) => ({ name: m.name, displayName: m.displayName, supportedMethods: m.supportedGenerationMethods }));
+  // Generate a large enough text (~20K tokens)
+  const bigText = 'You are a therapeutic AI assistant called AURA. You help users with emotional support, self-discovery, and personal growth through empathetic conversation. You use evidence-based therapeutic techniques including CBT, ACT, logotherapy, and mindfulness. Your responses are warm, genuine, and deeply human. You never give generic advice. You always ask thoughtful follow-up questions. '.repeat(100);
 
-  console.log('Available models:', JSON.stringify(proModels, null, 2));
+  console.log('Text length:', bigText.length, 'chars');
 
-  // Try creating cache with the first 2.5-pro model found
-  const proModel = proModels.find((m: any) => m.name.includes('2.5-pro'));
-  const modelName = proModel?.name || 'models/gemini-2.5-pro';
-
-  console.log('Attempting cache with model:', modelName);
-
-  const cacheBody = {
-    model: modelName,
-    system_instruction: { parts: [{ text: 'You are a helpful assistant. '.repeat(500) }] },
+  // Test 1: system_instruction + contents
+  const body1 = {
+    model: 'models/gemini-2.5-pro',
+    system_instruction: { parts: [{ text: bigText }] },
     contents: [
       { role: 'user', parts: [{ text: 'Hello' }] },
-      { role: 'model', parts: [{ text: 'Hi there!' }] },
+      { role: 'model', parts: [{ text: 'Hi there! How are you feeling today?' }] },
     ],
     ttl: '60s',
   };
 
-  const cacheResp = await fetch(
+  const resp1 = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/cachedContents?key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(cacheBody),
-    }
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body1) }
   );
+  const result1 = await resp1.text();
+  console.log('Test 1 (system_instruction + contents):', resp1.status, result1);
 
-  const cacheResult = await cacheResp.text();
-  console.log('Cache response:', cacheResp.status, cacheResult);
+  // Test 2: everything in contents only
+  const body2 = {
+    model: 'models/gemini-2.5-pro',
+    contents: [
+      { role: 'user', parts: [{ text: bigText + '\n\nHello' }] },
+      { role: 'model', parts: [{ text: 'Hi there! How are you feeling today?' }] },
+    ],
+    ttl: '60s',
+  };
+
+  const resp2 = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/cachedContents?key=${apiKey}`,
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body2) }
+  );
+  const result2 = await resp2.text();
+  console.log('Test 2 (contents only):', resp2.status, result2);
+
+  // If test 1 succeeded, clean up
+  let cacheName1 = null;
+  if (resp1.ok) {
+    cacheName1 = JSON.parse(result1).name;
+    // Delete it
+    await fetch(`https://generativelanguage.googleapis.com/v1beta/${cacheName1}?key=${apiKey}`, { method: 'DELETE' });
+  }
+
+  let cacheName2 = null;
+  if (resp2.ok) {
+    cacheName2 = JSON.parse(result2).name;
+    await fetch(`https://generativelanguage.googleapis.com/v1beta/${cacheName2}?key=${apiKey}`, { method: 'DELETE' });
+  }
 
   return new Response(JSON.stringify({
-    proModels,
-    cacheModelUsed: modelName,
-    cacheStatus: cacheResp.status,
-    cacheResult: JSON.parse(cacheResult),
+    test1: { status: resp1.status, result: JSON.parse(result1), approach: 'system_instruction + contents' },
+    test2: { status: resp2.status, result: JSON.parse(result2), approach: 'contents only' },
+    textChars: bigText.length,
   }, null, 2), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
