@@ -266,7 +266,19 @@ async function callAI(
     throw Object.assign(new Error(`AI gateway error: ${response.status}`), { status: response.status, body: errorText });
   }
 
-  return response.json();
+  const result = await response.json();
+  
+  // DEBUG: Capturar estrutura completa do usage para investigar cache
+  console.log('GATEWAY_USAGE_RAW:', JSON.stringify(result.usage));
+  console.log('GATEWAY_KEYS:', Object.keys(result).join(','));
+  if (result.usage) {
+    console.log('GATEWAY_USAGE_KEYS:', Object.keys(result.usage).join(','));
+    if (result.usage.prompt_tokens_details) {
+      console.log('GATEWAY_PTD:', JSON.stringify(result.usage.prompt_tokens_details));
+    }
+  }
+  
+  return result;
 }
 
 // Mapeamento de dia da semana em português para getDay()
