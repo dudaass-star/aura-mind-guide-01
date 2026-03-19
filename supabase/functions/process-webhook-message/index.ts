@@ -539,18 +539,55 @@ Deno.serve(async (req) => {
     // ========================================================================
     // DEBOUNCE CHECK
     // ========================================================================
-    const { data: debounceCheck } = await supabase
-      .from('aura_response_state')
-      .select('last_user_message_id')
+    // --- DEBOUNCE: use messages table as source of truth ---
+    const inboundMessageDbId = (globalThis as any).__inboundMessageDbId;
+
+    if (inboundMessageDbId) {
+      const { data: latestUserMsg } = await supabase
+        .from('messages')
+        .select('id')
+        .eq('user_id', profile.user_id)
+        .eq('role', 'user')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (latestUserMsg && latestUserMsg.id !== inboundMessageDbId) {
+        console.log(`⏭️ DEBOUNCE: Msg mais recente no banco (${latestUserMsg.id} != ${inboundMessageDbId}). Abortando.`);
+        return new Response(JSON.stringify({ status: 'debounced', reason: 'newer_message_exists' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
+    // --- ACCUMULATE sequential user messages since last assistant response ---
+    const { data: lastAssistantMsg } = await supabase
+      .from('messages')
+      .select('created_at')
       .eq('user_id', profile.user_id)
+      .eq('role', 'assistant')
+      .order('created_at', { ascending: false })
+      .limit(1)
       .maybeSingle();
 
-    if (debounceCheck?.last_user_message_id &&
-        debounceCheck.last_user_message_id !== currentMessageId) {
-      console.log(`⏭️ DEBOUNCE: Msg mais recente detectada (${debounceCheck.last_user_message_id} != ${currentMessageId}). Abortando.`);
-      return new Response(JSON.stringify({ status: 'debounced', reason: 'newer_message_exists' }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+    let accumulatedQuery = supabase
+      .from('messages')
+      .select('content')
+      .eq('user_id', profile.user_id)
+      .eq('role', 'user')
+      .order('created_at', { ascending: true });
+
+    if (lastAssistantMsg?.created_at) {
+      accumulatedQuery = accumulatedQuery.gt('created_at', lastAssistantMsg.created_at);
+    }
+
+    const { data: recentUserMsgs } = await accumulatedQuery;
+
+    if (recentUserMsgs && recentUserMsgs.length > 1) {
+      const previous = recentUserMsgs.slice(0, -1).map(m => m.content).join(' / ');
+      const last = recentUserMsgs[recentUserMsgs.length - 1].content;
+      messageText = `[Mensagens anteriores do usuário: ${previous}]\n\n${last}`;
+      console.log(`📦 Accumulated ${recentUserMsgs.length} sequential messages into one`);
     }
 
     // ========================================================================
