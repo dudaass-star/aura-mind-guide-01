@@ -151,6 +151,88 @@ async function logTokenUsage(
 }
 
 // ============================================================
+// Gemini Explicit Context Caching
+// ============================================================
+async function getOrCreateGeminiCache(
+  supabase: any,
+  geminiModel: string,
+  systemPrompt: string,
+  apiKey: string
+): Promise<string | null> {
+  // 1. Hash the system prompt
+  const encoder = new TextEncoder();
+  const hashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(systemPrompt));
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const promptHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 32);
+
+  // 2. Check for existing valid cache
+  const { data: existing } = await supabase
+    .from('gemini_cache')
+    .select('cache_name, expires_at')
+    .eq('model', geminiModel)
+    .eq('prompt_hash', promptHash)
+    .gt('expires_at', new Date().toISOString())
+    .maybeSingle();
+
+  if (existing?.cache_name) {
+    console.log('📦 Cache HIT for model:', geminiModel, 'hash:', promptHash.slice(0, 8));
+    return existing.cache_name;
+  }
+
+  console.log('📦 Cache MISS for model:', geminiModel, 'hash:', promptHash.slice(0, 8), '— creating...');
+
+  // 3. Create cache via Gemini API
+  const cacheResponse = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/cachedContents?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: `models/${geminiModel}`,
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        contents: [],
+        ttl: '3600s',
+      }),
+    }
+  );
+
+  if (!cacheResponse.ok) {
+    const errText = await cacheResponse.text();
+    console.error('❌ Cache creation failed:', cacheResponse.status, errText);
+    return null;
+  }
+
+  const cacheResult = await cacheResponse.json();
+  const cacheName = cacheResult.name;
+  console.log('✅ Cache created:', cacheName);
+
+  // 4. Persist — ON CONFLICT handles race conditions
+  const expiresAt = new Date(Date.now() + 3600 * 1000).toISOString();
+  const { data: inserted, error: insertErr } = await supabase
+    .from('gemini_cache')
+    .insert({ model: geminiModel, cache_name: cacheName, prompt_hash: promptHash, expires_at: expiresAt })
+    .select('cache_name')
+    .maybeSingle();
+
+  if (insertErr) {
+    // Conflict — another instance won the race, fetch their cache
+    if (insertErr.code === '23505') {
+      console.log('📦 Race condition detected, fetching winner cache...');
+      const { data: winner } = await supabase
+        .from('gemini_cache')
+        .select('cache_name')
+        .eq('model', geminiModel)
+        .eq('prompt_hash', promptHash)
+        .maybeSingle();
+      return winner?.cache_name || cacheName;
+    }
+    console.warn('⚠️ Cache insert error:', insertErr.message);
+  }
+
+  return inserted?.cache_name || cacheName;
+}
+
+// ============================================================
 // callAI: Unified wrapper — routes to Gateway or Anthropic API
 // ============================================================
 async function callAI(
@@ -158,7 +240,8 @@ async function callAI(
   messages: Array<{ role: string; content: string }>,
   maxTokens: number,
   temperature: number,
-  LOVABLE_API_KEY: string
+  LOVABLE_API_KEY: string,
+  supabaseClient?: any
 ): Promise<{ choices: Array<{ message: { content: string }; finish_reason?: string }>; usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } }> {
   
   // Anthropic direct API
@@ -252,8 +335,6 @@ async function callAI(
     const systemPrompt = systemMessages.map((m: any) => m.content).join('\n\n');
 
     // 2. Converter messages para formato Gemini nativo
-    // assistant → model, content → parts: [{ text }]
-    // Merge consecutive same-role messages
     const geminiContents: any[] = [];
     for (const msg of chatMessages) {
       const role = msg.role === 'assistant' ? 'model' : 'user';
@@ -274,15 +355,29 @@ async function callAI(
       generationConfig.temperature = temperature;
     }
 
+    // 4. Tentar usar Context Caching explícito para o system prompt
+    let cacheName: string | null = null;
+    if (systemPrompt && supabaseClient) {
+      try {
+        cacheName = await getOrCreateGeminiCache(supabaseClient, geminiModel, systemPrompt, GEMINI_API_KEY);
+      } catch (cacheErr) {
+        console.warn('⚠️ Cache creation failed, falling back to inline system_instruction:', cacheErr);
+      }
+    }
+
     const geminiBody: any = {
       contents: geminiContents,
       generationConfig,
     };
-    if (systemPrompt) {
+
+    if (cacheName) {
+      geminiBody.cachedContent = cacheName;
+      console.log('📦 Using explicit context cache:', cacheName);
+    } else if (systemPrompt) {
       geminiBody.system_instruction = { parts: [{ text: systemPrompt }] };
     }
 
-    // 4. Chamar endpoint nativo
+    // 5. Chamar endpoint nativo
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent`;
     const response = await fetch(url, {
       method: 'POST',
@@ -4058,7 +4153,7 @@ Exemplo com 4 sessões:
       // Temperature dinâmica: 0.9 para mensagens curtas (reduz tendência de eco do Gemini Flash)
       // TODO: Revisar ao migrar de modelo — específico para Gemini 3 Flash Preview
       const temperature = userWordCount <= 5 ? 0.9 : 0.8;
-      data = await callAI(configuredModel, apiMessages, 4096, temperature, LOVABLE_API_KEY);
+      data = await callAI(configuredModel, apiMessages, 4096, temperature, LOVABLE_API_KEY, supabase);
     } catch (e: any) {
       if (e.status === 429) {
         return new Response(JSON.stringify({ 

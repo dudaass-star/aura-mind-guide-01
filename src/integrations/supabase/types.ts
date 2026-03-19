@@ -246,6 +246,33 @@ export type Database = {
           },
         ]
       }
+      gemini_cache: {
+        Row: {
+          cache_name: string
+          created_at: string | null
+          expires_at: string
+          id: string
+          model: string
+          prompt_hash: string
+        }
+        Insert: {
+          cache_name: string
+          created_at?: string | null
+          expires_at: string
+          id?: string
+          model: string
+          prompt_hash: string
+        }
+        Update: {
+          cache_name?: string
+          created_at?: string | null
+          expires_at?: string
+          id?: string
+          model?: string
+          prompt_hash?: string
+        }
+        Relationships: []
+      }
       instance_health_logs: {
         Row: {
           alert_sent: boolean
