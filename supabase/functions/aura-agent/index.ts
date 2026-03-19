@@ -225,7 +225,6 @@ async function callAI(
     };
   }
 
-  // Lovable AI Gateway (Google/OpenAI models)
   // Extrair modelo real e nível de reasoning (sufixo :low/:medium/:high)
   let actualModel = model;
   let reasoningLevel: string | null = null;
@@ -236,9 +235,48 @@ async function callAI(
     reasoningLevel = parts[1];
   }
 
+  // Google models → Gemini API direta (habilita prefix caching)
+  if (actualModel.startsWith('google/')) {
+    const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
+    if (!GEMINI_API_KEY) {
+      throw new Error('GEMINI_API_KEY não configurada — necessária para modelos Google (cache de prefixo)');
+    }
+
+    const geminiModel = actualModel.replace('google/', '');
+    console.log('🔀 Routing to Gemini API direct, model:', geminiModel, reasoningLevel ? `reasoning_effort: ${reasoningLevel}` : '');
+
+    const geminiBody: any = {
+      model: geminiModel,
+      messages,
+      max_tokens: maxTokens,
+    };
+
+    if (reasoningLevel) {
+      geminiBody.reasoning_effort = reasoningLevel;
+    } else {
+      geminiBody.temperature = temperature;
+    }
+
+    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${GEMINI_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(geminiBody),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw Object.assign(new Error(`Gemini API error: ${response.status}`), { status: response.status, body: errorText });
+    }
+
+    return await response.json();
+  }
+
+  // OpenAI models → Lovable AI Gateway
   console.log('🔀 Routing to Lovable AI Gateway, model:', actualModel, reasoningLevel ? `reasoning_effort: ${reasoningLevel}` : '');
 
-  // Montar payload — NÃO enviar temperature com reasoning_effort (causa 400)
   const gatewayBody: any = {
     model: actualModel,
     messages,
@@ -247,7 +285,6 @@ async function callAI(
 
   if (reasoningLevel) {
     gatewayBody.reasoning_effort = reasoningLevel;
-    // temperature omitida intencionalmente — modelos thinking exigem temp fixa
   } else {
     gatewayBody.temperature = temperature;
   }
@@ -266,19 +303,7 @@ async function callAI(
     throw Object.assign(new Error(`AI gateway error: ${response.status}`), { status: response.status, body: errorText });
   }
 
-  const result = await response.json();
-  
-  // DEBUG: Capturar estrutura completa do usage para investigar cache
-  console.log('GATEWAY_USAGE_RAW:', JSON.stringify(result.usage));
-  console.log('GATEWAY_KEYS:', Object.keys(result).join(','));
-  if (result.usage) {
-    console.log('GATEWAY_USAGE_KEYS:', Object.keys(result.usage).join(','));
-    if (result.usage.prompt_tokens_details) {
-      console.log('GATEWAY_PTD:', JSON.stringify(result.usage.prompt_tokens_details));
-    }
-  }
-  
-  return result;
+  return await response.json();
 }
 
 // Mapeamento de dia da semana em português para getDay()
