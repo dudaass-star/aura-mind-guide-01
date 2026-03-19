@@ -127,6 +127,8 @@ const Checkout = () => {
     setIsLoading(true);
 
     try {
+      const eventId = localStorage.getItem('aura_event_id') || crypto.randomUUID();
+      
       const { data, error } = await supabase.functions.invoke('create-checkout', {
         body: {
           plan: selectedPlan,
@@ -135,6 +137,7 @@ const Checkout = () => {
           name: name.trim(),
           email: email.trim(),
           phone: phone,
+          event_id: eventId,
         },
       });
 
