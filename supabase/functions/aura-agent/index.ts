@@ -1368,6 +1368,7 @@ Exemplos:
 - Usuário diz "preciso marcar o médico" → [COMPROMISSO_LIVRE:marcar consulta médica]
 
 REGRA: Só use quando o compromisso for CLARO e CONCRETO (ação + prazo implícito). Não salve intenções vagas como "quero melhorar".
+REGRA DE DUPLICATA: Se o compromisso já aparece na lista de compromissos pendentes do contexto dinâmico, NÃO re-emita a tag. O sistema já registrou — emitir novamente cria duplicata no banco.
 
 # USO DE TAGS DE TEMA EM CONVERSAS LIVRES (IMPORTANTE!)
 
@@ -4632,16 +4633,29 @@ Exemplo com 4 sessões:
           .eq('user_id', profile.user_id)
           .ilike('title', `%${oldTitle}%`);
         
-        // Criar novo compromisso
-        await supabase
+        // Criar novo compromisso (com dedup)
+        const renegTitlePrefix = newTitle.substring(0, 40);
+        const { data: existingReneg } = await supabase
           .from('commitments')
-          .insert({
-            user_id: profile.user_id,
-            title: newTitle,
-            completed: false,
-            commitment_status: 'pending',
-            session_id: currentSession?.id
-          });
+          .select('id, title')
+          .eq('user_id', profile.user_id)
+          .eq('completed', false)
+          .ilike('title', `%${renegTitlePrefix}%`)
+          .limit(1);
+
+        if (existingReneg && existingReneg.length > 0) {
+          console.log('📋 Skipping duplicate renegotiated commitment:', newTitle, '(matches:', existingReneg[0].title, ')');
+        } else {
+          await supabase
+            .from('commitments')
+            .insert({
+              user_id: profile.user_id,
+              title: newTitle,
+              completed: false,
+              commitment_status: 'pending',
+              session_id: currentSession?.id
+            });
+        }
       }
     }
     
@@ -4661,15 +4675,30 @@ Exemplo com 4 sessões:
         const title = match[1].trim();
         console.log('📋 Free commitment detected:', title);
         
-        await supabase
+        // Dedup: verificar se já existe commitment pendente similar
+        const freeTitlePrefix = title.substring(0, 40);
+        const { data: existingFree } = await supabase
           .from('commitments')
-          .insert({
-            user_id: profile.user_id,
-            title: title,
-            completed: false,
-            commitment_status: 'pending',
-            session_id: null
-          });
+          .select('id, title')
+          .eq('user_id', profile.user_id)
+          .eq('completed', false)
+          .ilike('title', `%${freeTitlePrefix}%`)
+          .limit(1);
+
+        if (existingFree && existingFree.length > 0) {
+          console.log('📋 Skipping duplicate commitment:', title, '(matches:', existingFree[0].title, ')');
+        } else {
+          await supabase
+            .from('commitments')
+            .insert({
+              user_id: profile.user_id,
+              title: title,
+              completed: false,
+              commitment_status: 'pending',
+              session_id: null
+            });
+          console.log('📋 Free commitment created:', title);
+        }
       }
     }
     
