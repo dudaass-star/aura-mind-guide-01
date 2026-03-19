@@ -49,6 +49,7 @@ interface Metrics {
   avgMsgsNonConverted: number;
   canceledUsers: number;
   cancelingUsers: number;
+  trialsByPlan?: { plan: string; count: number }[];
 }
 
 export default function AdminEngagement() {
