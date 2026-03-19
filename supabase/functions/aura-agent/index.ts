@@ -2777,9 +2777,9 @@ serve(async (req) => {
       console.warn('Failed to read AI model config, using default:', e);
     }
 
-    const { message, user_id, phone, trial_count, trial_phase, trial_aha_at_count, pending_content, pending_context } = await req.json();
+    const { message, user_id, phone, pending_content, pending_context } = await req.json();
 
-    console.log("AURA received:", { user_id, phone, message: message?.substring(0, 50), trial_count, hasPendingContent: !!pending_content });
+    console.log("AURA received:", { user_id, phone, message: message?.substring(0, 50), hasPendingContent: !!pending_content });
 
     // Buscar perfil do usuário
     let profile = null;
@@ -3754,115 +3754,6 @@ ${meditationCatalogSection}
     // Adicionar contextos condicionais ao bloco dinâmico
     dynamicContext += continuityContext;
     
-    // Contexto de TRIAL "Primeira Jornada" (50 msgs / 72h, detecção de marcos)
-    if (trial_count !== null && trial_count !== undefined) {
-      const userName = profile?.name || 'você';
-      const phase = trial_phase || 'listening';
-      const ahaAt = trial_aha_at_count as number | null;
-      
-      if (trial_count >= 50) {
-        // Limite hard atingido — encerramento emocional PURO (sem CTA)
-        dynamicContext += `\n\n💜 CONTEXTO DE TRIAL (ÚLTIMA CONVERSA):
-Esta é a ÚLTIMA conversa da primeira jornada de ${userName}.
-
-INSTRUÇÃO:
-- NÃO mencione planos, preços, links ou assinatura.
-- Faça um mini-resumo dos principais momentos da conversa (2-3 frases): o que ${userName} compartilhou, o que vocês trabalharam, e qualquer progresso ou insight que surgiu.
-- Depois do resumo, demonstre carinho e gratidão: "Foi muito especial te ouvir, ${userName}. O que você compartilhou comigo foi corajoso e bonito. Saiba que eu guardo tudo com carinho. 💜"
-- Seja genuína, emocional e calorosa. A despedida deve ser memorável.`;
-      } else if (ahaAt !== null && ahaAt !== undefined) {
-        // Aha Moment já detectado — nudges relativos
-        const msgsSinceAha = trial_count - ahaAt;
-        
-        if (msgsSinceAha === 2) {
-          dynamicContext += `\n\n💛 CONTEXTO DE TRIAL (NUDGE SUAVE PÓS-AHA):
-${userName} já teve um momento de virada na conversa ${ahaAt}. Agora é hora de um nudge suave.
-
-INSTRUÇÃO: No final da sua resposta, adicione naturalmente:
-- "Tô adorando te conhecer, ${userName}... e quero muito continuar com você. Se fizer sentido pra você também, a gente pode continuar caminhando por menos de R$1 por dia 💜"
-- Mantenha o tom genuíno e caloroso, NÃO comercial. Continue a conversa normalmente, o nudge vem no FINAL.
-- NÃO use tags [UPGRADE:]. NÃO substitua links por tags.`;
-        } else if (msgsSinceAha === 4) {
-          // Generate short link for checkout
-          let trialCheckoutLink = 'https://olaaura.com.br/checkout';
-          try {
-            const shortUrl = await createShortLink('https://olaaura.com.br/checkout', userPhone || '');
-            if (shortUrl) trialCheckoutLink = shortUrl;
-          } catch (e) { console.warn('⚠️ Short link generation failed, using fallback'); }
-          
-          dynamicContext += `\n\n💛 CONTEXTO DE TRIAL (NUDGE COM LINK PÓS-AHA):
-${userName} já teve seu momento de virada e já recebeu um nudge suave.
-
-INSTRUÇÃO: 
-- Primeiro, faça um mini-resumo do que vocês trabalharam na conversa (2-3 frases): temas, insights, progresso.
-- Depois, no final, reforce com carinho:
-- "Ei, ${userName}... nossa jornada grátis tá chegando ao fim, mas o que a gente construiu aqui não precisa parar. Quando quiser continuar: 👉 ${trialCheckoutLink}"
-- Continue a conversa normalmente, o resumo + nudge vem no FINAL.
-- IMPORTANTE: Use EXATAMENTE o link acima. NÃO substitua por tags [UPGRADE:].`;
-        } else {
-          // Outras mensagens após aha: nota interna apenas
-          dynamicContext += `\n\n(Nota interna: Conversa ${trial_count}/50 da primeira jornada. Aha detectado na msg ${ahaAt}. Continue normalmente.)`;
-        }
-      } else if (trial_count >= 45) {
-        // Fallback: nudge de segurança perto do limite, sem Aha detectado
-        if (trial_count === 45 || trial_count === 48) {
-          // Generate short link for checkout
-          let fallbackCheckoutLink = 'https://olaaura.com.br/checkout';
-          try {
-            const shortUrl = await createShortLink('https://olaaura.com.br/checkout', userPhone || '');
-            if (shortUrl) fallbackCheckoutLink = shortUrl;
-          } catch (e) { console.warn('⚠️ Short link generation failed, using fallback'); }
-          
-          if (trial_count === 45) {
-            dynamicContext += `\n\n💛 CONTEXTO DE TRIAL (NUDGE FALLBACK):
-Conversa ${trial_count}/50. O Aha Moment não foi detectado, mas estamos perto do limite.
-
-INSTRUÇÃO: 
-- Primeiro, faça um mini-resumo do que vocês trabalharam até aqui (2-3 frases): temas, insights, progresso.
-- Depois, no final, adicione naturalmente:
-- "Ei, ${userName}, nossa primeira jornada tá quase acabando... Mas tô adorando te conhecer e quero continuar com você. Se fizer sentido: 👉 ${fallbackCheckoutLink} 💜"
-- Tom genuíno e caloroso.
-- IMPORTANTE: Use EXATAMENTE o link acima. NÃO substitua por tags [UPGRADE:].`;
-          } else {
-            dynamicContext += `\n\n💛 CONTEXTO DE TRIAL (NUDGE FINAL):
-Conversa ${trial_count}/50. Penúltimas conversas.
-
-INSTRUÇÃO:
-- Primeiro, faça um mini-resumo do que vocês viveram na conversa (2-3 frases): o que foi compartilhado, o que mudou, o que ficou de aprendizado.
-- Depois, no final:
-- "Essa é uma das nossas últimas conversas grátis, ${userName}... O que a gente viveu aqui foi real e especial. Se quiser que continue: 👉 ${fallbackCheckoutLink}"
-- IMPORTANTE: Use EXATAMENTE o link acima. NÃO substitua por tags [UPGRADE:].`;
-          }
-        } else {
-          dynamicContext += `\n\n(Nota interna: Conversa ${trial_count}/50. Perto do limite. Continue normalmente.)`;
-        }
-      } else {
-        // Conversas 1-44 sem aha: nota interna + instrução de tag [VALOR_ENTREGUE]
-        dynamicContext += `\n\n(Nota interna: Conversa ${trial_count}/50 da primeira jornada de ${userName}. Fase: ${phase}. Não mencione limites, planos ou assinatura.)`;
-      }
-      
-      // Instrução da tag [VALOR_ENTREGUE] — sempre presente para trial
-      dynamicContext += `\n\n📋 TAG [VALOR_ENTREGUE]:
-Quando você entregar algo ACIONÁVEL e tangível ao usuário, adicione a tag [VALOR_ENTREGUE] no INÍCIO da sua resposta (antes do texto visível).
-
-USAR quando você oferecer:
-- Um reframe que muda a perspectiva do problema
-- Uma técnica prática (respiração, exercício mental, journaling)
-- Um insight estruturado sobre padrões emocionais
-- Uma conexão entre sentimentos que o usuário não tinha percebido
-
-NÃO USAR quando você fizer apenas:
-- Validação emocional simples ("Entendo como é difícil")
-- Perguntas abertas ("O que você acha?")
-- Acolhimento genérico
-- Resumos do que o usuário disse
-
-⚠️ IMPORTANTE: A tag marca PROGRESSO PARCIAL — a conversa CONTINUA normalmente após valor entregue.
-Entrega de valor é sinal para APROFUNDAR (explorar mais, conectar com outros temas), NÃO para encerrar.
-Após marcar [VALOR_ENTREGUE], faça uma pergunta que aprofunde ou conecte o insight com outro aspecto da vida do usuário.
-
-Exemplo: [VALOR_ENTREGUE] Sabe o que eu percebi? Quando você...`;
-    }
 
     // ========================================================================
     // CONTEXTO TEMPORAL SERVER-SIDE (determinístico)
