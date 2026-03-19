@@ -71,12 +71,14 @@ Deno.serve(async (req) => {
           const { count: totalCount } = await supabase
             .from('messages')
             .select('*', { count: 'exact', head: true })
-            .eq('user_id', profile.user_id);
+            .eq('user_id', profile.user_id)
+            .eq('role', 'user');
 
           const { count: monthCount } = await supabase
             .from('messages')
             .select('*', { count: 'exact', head: true })
             .eq('user_id', profile.user_id)
+            .eq('role', 'user')
             .gte('created_at', monthStart);
 
           return {
