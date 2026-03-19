@@ -336,10 +336,10 @@ export default function AdminEngagement() {
                                   <span className="text-xs text-muted-foreground">({m.calls} calls)</span>
                                 </div>
                                 <div className="flex items-center gap-3">
-                                  {m.cacheSavings > 0 && (
-                                    <span className="text-xs text-green-600">-${m.cacheSavings.toFixed(2)}</span>
+                                  {(m.cacheSavings ?? 0) > 0 && (
+                                    <span className="text-xs text-green-600">-${(m.cacheSavings ?? 0).toFixed(2)}</span>
                                   )}
-                                  <span className="font-semibold text-foreground">${m.cost.toFixed(2)}</span>
+                                  <span className="font-semibold text-foreground">${(m.cost ?? 0).toFixed(2)}</span>
                                 </div>
                               </div>
                             ))}
