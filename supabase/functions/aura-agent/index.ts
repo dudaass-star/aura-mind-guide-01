@@ -241,6 +241,7 @@ async function callAI(
     if (!GEMINI_API_KEY) {
       throw new Error('GEMINI_API_KEY not configured');
     }
+    console.log('🔑 GEMINI_API_KEY prefix:', GEMINI_API_KEY.substring(0, 12) + '...');
     
     const geminiModel = actualModel.replace('google/', '');
     console.log('🔀 Routing to Gemini API direct, model:', geminiModel, reasoningLevel ? `reasoning_effort: ${reasoningLevel}` : '');
