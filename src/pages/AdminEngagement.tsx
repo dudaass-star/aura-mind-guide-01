@@ -295,7 +295,7 @@ export default function AdminEngagement() {
                           <DollarSign className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
-                          <div className="text-2xl font-bold text-foreground">${metrics.totalCostUSD.toFixed(2)}</div>
+                          <div className="text-2xl font-bold text-foreground">${(metrics.totalCostUSD ?? 0).toFixed(2)}</div>
                           <p className="text-xs text-muted-foreground mt-1">{periodLabel}</p>
                         </CardContent>
                       </Card>
@@ -305,7 +305,7 @@ export default function AdminEngagement() {
                           <Users className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
-                          <div className="text-2xl font-bold text-foreground">${metrics.avgCostPerActiveUser.toFixed(2)}</div>
+                          <div className="text-2xl font-bold text-foreground">${(metrics.avgCostPerActiveUser ?? 0).toFixed(2)}</div>
                           <p className="text-xs text-muted-foreground mt-1">{metrics.activeUsers} usuários ativos</p>
                         </CardContent>
                       </Card>
@@ -315,7 +315,7 @@ export default function AdminEngagement() {
                           <TrendingUp className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
-                          <div className="text-2xl font-bold text-green-600">${metrics.totalCacheSavings.toFixed(2)}</div>
+                          <div className="text-2xl font-bold text-green-600">${(metrics.totalCacheSavings ?? 0).toFixed(2)}</div>
                           <p className="text-xs text-muted-foreground mt-1">economia vs. sem cache</p>
                         </CardContent>
                       </Card>
@@ -336,10 +336,10 @@ export default function AdminEngagement() {
                                   <span className="text-xs text-muted-foreground">({m.calls} calls)</span>
                                 </div>
                                 <div className="flex items-center gap-3">
-                                  {m.cacheSavings > 0 && (
-                                    <span className="text-xs text-green-600">-${m.cacheSavings.toFixed(2)}</span>
+                                  {(m.cacheSavings ?? 0) > 0 && (
+                                    <span className="text-xs text-green-600">-${(m.cacheSavings ?? 0).toFixed(2)}</span>
                                   )}
-                                  <span className="font-semibold text-foreground">${m.cost.toFixed(2)}</span>
+                                  <span className="font-semibold text-foreground">${(m.cost ?? 0).toFixed(2)}</span>
                                 </div>
                               </div>
                             ))}
