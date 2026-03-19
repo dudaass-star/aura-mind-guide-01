@@ -235,43 +235,51 @@ async function callAI(
     reasoningLevel = parts[1];
   }
 
-  // Google models → Gemini API direta (habilita prefix caching)
+  // Google models → tenta Gemini API direta (habilita prefix caching), fallback para Gateway
   if (actualModel.startsWith('google/')) {
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
-    if (!GEMINI_API_KEY) {
-      throw new Error('GEMINI_API_KEY não configurada — necessária para modelos Google (cache de prefixo)');
-    }
+    
+    if (GEMINI_API_KEY) {
+      try {
+        const geminiModel = actualModel.replace('google/', '');
+        console.log('🔀 Routing to Gemini API direct, model:', geminiModel, reasoningLevel ? `reasoning_effort: ${reasoningLevel}` : '');
 
-    const geminiModel = actualModel.replace('google/', '');
-    console.log('🔀 Routing to Gemini API direct, model:', geminiModel, reasoningLevel ? `reasoning_effort: ${reasoningLevel}` : '');
+        const geminiBody: any = {
+          model: geminiModel,
+          messages,
+          max_tokens: maxTokens,
+        };
 
-    const geminiBody: any = {
-      model: geminiModel,
-      messages,
-      max_tokens: maxTokens,
-    };
+        if (reasoningLevel) {
+          geminiBody.reasoning_effort = reasoningLevel;
+        } else {
+          geminiBody.temperature = temperature;
+        }
 
-    if (reasoningLevel) {
-      geminiBody.reasoning_effort = reasoningLevel;
+        const response = await fetch('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${GEMINI_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(geminiBody),
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          console.log('✅ Gemini API direct success, cached_tokens:', result.usage?.prompt_tokens_details?.cached_tokens ?? 'N/A');
+          return result;
+        }
+
+        const errorText = await response.text();
+        console.error(`⚠️ Gemini API direct failed (${response.status}), falling back to Gateway. Error:`, errorText);
+      } catch (directError) {
+        console.error('⚠️ Gemini API direct exception, falling back to Gateway:', directError);
+      }
     } else {
-      geminiBody.temperature = temperature;
+      console.log('⚠️ GEMINI_API_KEY not set, using Gateway for Google model');
     }
-
-    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${GEMINI_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(geminiBody),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw Object.assign(new Error(`Gemini API error: ${response.status}`), { status: response.status, body: errorText });
-    }
-
-    return await response.json();
+    // Fallback: continua para o Gateway abaixo
   }
 
   // OpenAI models → Lovable AI Gateway
