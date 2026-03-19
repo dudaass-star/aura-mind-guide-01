@@ -190,7 +190,10 @@ async function getOrCreateGeminiCache(
       body: JSON.stringify({
         model: `models/${geminiModel}`,
         systemInstruction: { parts: [{ text: systemPrompt }] },
-        contents: [],
+        contents: [
+          { role: 'user', parts: [{ text: 'Olá' }] },
+          { role: 'model', parts: [{ text: 'Olá! Como posso te ajudar?' }] },
+        ],
         ttl: '3600s',
       }),
     }
