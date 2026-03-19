@@ -212,30 +212,6 @@ Me conta: como você está se sentindo agora?`;
       console.error('⚠️ Z-API error (non-blocking):', zapiError);
     }
 
-    // Schedule activation audio for 15 minutes later + ghost nudge for 60 minutes
-    try {
-      const audioExecuteAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-      const ghostNudgeAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
-      await supabase.from('scheduled_tasks').insert([
-        {
-          user_id: userId,
-          task_type: 'trial_activation_audio',
-          execute_at: audioExecuteAt,
-          payload: { name: name.trim() },
-          status: 'pending',
-        },
-        {
-          user_id: userId,
-          task_type: 'trial_ghost_nudge',
-          execute_at: ghostNudgeAt,
-          payload: { name: name.trim() },
-          status: 'pending',
-        },
-      ]);
-      console.log('⏰ Scheduled trial_activation_audio (+15min) and trial_ghost_nudge (+60min)');
-    } catch (scheduleError) {
-      console.warn('⚠️ Failed to schedule trial tasks (non-blocking):', scheduleError);
-    }
 
     return new Response(JSON.stringify({ 
       success: true,

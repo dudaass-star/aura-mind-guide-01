@@ -680,15 +680,6 @@ Deno.serve(async (req) => {
         .replace(/\[\s*\/[A-Z_]{3,}\s*\]/g, '')
         .trim();
 
-      // VALOR_ENTREGUE detection (Layer 1)
-      if (hadValorEntregue && profile.status === 'trial' && i === 0) {
-        const currentPhase = (profile as any).trial_phase || 'listening';
-        if (currentPhase === 'listening' || currentPhase === 'engaged') {
-          console.log(`💎 [VALOR_ENTREGUE] detected — updating trial_phase to value_delivered`);
-          await supabase.from('profiles').update({ trial_phase: 'value_delivered' }).eq('user_id', profile.user_id);
-          (profile as any).trial_phase = 'value_delivered';
-        }
-      }
 
       if (!responseText) {
         console.log('⏭️ Skipping empty message');

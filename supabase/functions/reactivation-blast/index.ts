@@ -85,15 +85,9 @@ Deno.serve(async (req) => {
             );
 
             if (result.success) {
-              // Reset to new model: count back to 0, phase to listening, clear aha
               await supabase
                 .from("profiles")
                 .update({
-                  trial_conversations_count: 0,
-                  trial_phase: 'listening',
-                  trial_aha_at_count: null,
-                  trial_nudge_active: false,
-                  trial_started_at: new Date().toISOString(),
                   last_reactivation_sent: new Date().toISOString(),
                 })
                 .eq("user_id", user.user_id);
