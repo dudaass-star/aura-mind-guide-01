@@ -158,7 +158,8 @@ async function callAI(
   messages: Array<{ role: string; content: string }>,
   maxTokens: number,
   temperature: number,
-  LOVABLE_API_KEY: string
+  LOVABLE_API_KEY: string,
+  supabaseClient?: any
 ): Promise<{ choices: Array<{ message: { content: string }; finish_reason?: string }>; usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } }> {
   
   // Anthropic direct API
