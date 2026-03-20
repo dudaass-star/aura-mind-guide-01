@@ -452,6 +452,7 @@ Deno.serve(async (req) => {
           { user_id: profile.user_id, role: 'assistant', content: reminderMsg },
         ]);
         inboundSaved = true;
+        await releaseLock();
         return new Response(JSON.stringify({ status: 'capsule_awaiting_audio_reminder' }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
