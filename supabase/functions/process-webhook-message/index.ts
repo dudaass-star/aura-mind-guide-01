@@ -485,6 +485,7 @@ Deno.serve(async (req) => {
             { user_id: profile.user_id, role: 'assistant', content: cancelMsg },
           ]);
           inboundSaved = true;
+          await releaseLock();
           return new Response(JSON.stringify({ status: 'capsule_cancelled' }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
