@@ -36,13 +36,18 @@ const ThankYou = () => {
     // Parse price to number (e.g., "49,90" → 49.90)
     const priceValue = checkoutData.price ? parseFloat(checkoutData.price.replace('.', '').replace(',', '.')) : undefined;
 
-    // Track Purchase event with event_id for deduplication + value
-    if (typeof window !== 'undefined' && (window as any).fbq) {
+    // Track Purchase event ONCE per checkout session
+    const sessionId = searchParams.get('session_id');
+    const firedKey = sessionId ? `aura_purchase_fired_${sessionId}` : 'aura_purchase_fired';
+    const alreadyFired = localStorage.getItem(firedKey);
+
+    if (!alreadyFired && typeof window !== 'undefined' && (window as any).fbq) {
       (window as any).fbq('track', 'Purchase', {
         content_name: 'AURA Subscription',
         currency: 'BRL',
         ...(priceValue && { value: priceValue }),
       }, ...(eventId ? [{ eventID: eventId }] : []));
+      localStorage.setItem(firedKey, 'true');
     }
   }, [location.state]);
 
