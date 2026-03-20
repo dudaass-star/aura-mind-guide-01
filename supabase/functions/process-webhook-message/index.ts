@@ -341,8 +341,18 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (responseState?.is_responding) {
-      console.log('⏸️ AURA está respondendo - aguardando interrupção ser processada...');
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      const respondingAge = Date.now() - new Date(responseState.response_started_at || 0).getTime();
+      if (respondingAge < 60000) {
+        console.log(`🛑 ABORT: Outro worker já está respondendo (age: ${Math.round(respondingAge / 1000)}s). Mensagem será acumulada na próxima execução.`);
+        return new Response(JSON.stringify({ status: 'debounced_concurrent', reason: 'another_worker_responding' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      } else {
+        console.log(`⚠️ Lock stale detectado (${Math.round(respondingAge / 1000)}s), limpando e prosseguindo`);
+        await supabase.from('aura_response_state')
+          .update({ is_responding: false })
+          .eq('user_id', profile.user_id);
+      }
     }
 
     const pendingContent = responseState?.pending_content || null;
