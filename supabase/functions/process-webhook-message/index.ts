@@ -646,15 +646,7 @@ Deno.serve(async (req) => {
     console.log(`💬 Message length: ${messageText.length} chars`);
     console.log(`🎤 Is audio message: ${isAudioMessage}`);
 
-    // Set responding lock BEFORE calling agent
-    await supabase
-      .from('aura_response_state')
-      .update({
-        is_responding: true,
-        response_started_at: new Date().toISOString(),
-        last_user_message_id: currentMessageId
-      })
-      .eq('user_id', profile.user_id);
+    // Lock already acquired atomically at line ~338
 
     let wasInterrupted = false;
     let interruptedAtIndex = -1;
