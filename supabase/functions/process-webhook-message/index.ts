@@ -571,6 +571,7 @@ Deno.serve(async (req) => {
         inboundSaved = true;
       }
       await supabase.from('messages').insert({ user_id: profile.user_id, role: 'assistant', content: confirmationResult.response });
+      await releaseLock();
       return new Response(JSON.stringify({ status: 'confirmation_handled' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
