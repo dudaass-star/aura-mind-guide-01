@@ -1,59 +1,69 @@
 
 
-# Integrar correções anti-metáfora nas regras existentes (sem criar seção nova)
+# Fix: Lock Atômico Anti-Duplicação com Finally Resiliente
 
-## Abordagem
-Em vez de criar uma nova seção "REGRA ANTI-METÁFORA", vamos distribuir a orientação em **3 regras que já existem**, onde o contexto é natural:
+## Arquivo: `supabase/functions/process-webhook-message/index.ts`
 
----
+### Mudança 1 — Linhas 343-346: Abort se já respondendo (em vez de esperar 2s)
 
-## Edição 1: Seção "LINGUAGEM E TOM DE VOZ" (linha ~717-728)
-
-Já fala sobre naturalidade e "falar como gente". Adicionar após o item 3 (conectivos):
-
+Substituir o bloco atual:
 ```
-Prefira linguagem DIRETA a metáforas elaboradas. "Você tá colocando o poder na mão dele" é melhor que "É como entregar as chaves da felicidade e ficar do lado de fora no frio". Se a frase parece saída de livro de autoajuda → corte. Máximo 1 metáfora curta por conversa.
-```
-
-Encaixa perfeitamente no item 2 ("Fale como gente") — é a mesma ideia aplicada a metáforas.
-
-## Edição 2: Seção "REGRA DE OURO: RITMO DE WHATSAPP" — Exemplos do que evitar (linha ~796-798)
-
-Os exemplos ruins já mostram metáforas como problema! Apenas reforçar a instrução acima deles:
-
-Alterar a linha de contexto para:
-```
-**EXEMPLOS DO QUE EVITAR (metáfora elaborada + múltiplas perguntas):**
+if (responseState?.is_responding) {
+  console.log('⏸️ AURA está respondendo...');
+  await new Promise(resolve => setTimeout(resolve, 2000));
+}
 ```
 
-Isso já existe — só precisa ficar mais explícito que metáfora é parte do problema.
+Por um check atômico que **aborta** se o lock está ativo há menos de 60s, ou limpa lock stale se > 60s.
 
-## Edição 3: Seção "ANTI-ACOLHIMENTO AUTOMÁTICO" (linha ~577-591)
+### Mudança 2 — Linhas 660-667: Mover lock para ANTES do agent call (~linha 596)
 
-Adicionar um exemplo concreto no teste "Uma amiga reagiria assim?":
+O `is_responding = true` hoje é setado na linha 660, **depois** do agent call. Mover para antes da linha 600 (antes do fetch ao `aura-agent`), para que o lock esteja ativo quando um worker concorrente chegar.
 
+### Mudança 3 — Linhas 596-778: Envolver em try/finally com cleanup resiliente
+
+Envolver todo o bloco desde o set do lock até a finalização num `try { ... } finally { ... }`, onde o finally tem try/catch interno:
+
+```typescript
+// Set lock
+await supabase.from('aura_response_state').update({
+  is_responding: true,
+  response_started_at: new Date().toISOString(),
+  last_user_message_id: currentMessageId
+}).eq('user_id', profile.user_id);
+
+try {
+  // ... agent call (linha 600-611)
+  // ... conversation tracking (630-655)
+  // ... send loop (669-754)
+  // ... finalization com pending_content (759-778)
+} finally {
+  try {
+    await supabase
+      .from('aura_response_state')
+      .update({ is_responding: false })
+      .eq('user_id', profile.user_id)
+      .eq('is_responding', true);
+  } catch (cleanupError) {
+    console.error(`⚠️ Erro silencioso ao liberar lock para user ${profile.user_id}:`, cleanupError);
+  }
+}
 ```
-- Usuário diz "estou com dependência emocional" → NÃO diga "que coragem nomear isso". Diga: "Eita... me conta o que tá rolando". Nomear um problema é informação, não coragem.
-```
 
-## Edição 4: Reforço "UMA PERGUNTA POR VEZ" (linha ~819)
+O `.eq('is_responding', true)` garante que o finally não sobrescreve o estado se a finalização normal (linhas 759-778) já salvou `pending_content` e setou `false`.
 
-Após "Mantenha apenas a mais relevante", adicionar:
+### Mudança 4 — Linhas 759-778: Manter como está
 
-```
-Isso inclui perguntas retóricas. Se tem mais de 1 "?", reescreva.
-```
-
----
+A finalização normal (que salva `pending_content` quando interrompido) continua igual. O finally é só safety net — se a finalização rodou, o `.eq('is_responding', true)` no finally não faz nada.
 
 ## Resumo
 
-| Seção existente | O que adiciona |
-|---|---|
-| LINGUAGEM E TOM DE VOZ | Regra anti-metáfora (1 linha) |
-| RITMO DE WHATSAPP | Explicitar que exemplos ruins incluem metáforas |
-| ANTI-ACOLHIMENTO | Exemplo concreto anti-celebração |
-| UMA PERGUNTA POR VEZ | Reforço sobre perguntas retóricas |
+| O que muda | Antes | Depois |
+|---|---|---|
+| Worker concorrente (L343) | Espera 2s e continua | Aborta se lock < 60s |
+| Lock `is_responding` (L660) | Setado depois do agent call | Setado antes |
+| Proteção de erro | Nenhuma | try/finally com cleanup resiliente |
+| Cleanup no finally | N/A | try/catch interno para não mascarar erro original |
 
-**1 arquivo alterado** (`aura-agent/index.ts`), ~4-5 linhas adicionadas no total, zero seções novas.
+**1 arquivo, ~25 linhas alteradas.**
 
