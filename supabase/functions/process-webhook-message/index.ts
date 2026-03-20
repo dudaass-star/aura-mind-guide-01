@@ -516,6 +516,7 @@ Deno.serve(async (req) => {
             ]);
             inboundSaved = true;
             console.log(`✅ Time capsule saved for user ${profile.user_id}, deliver_at: ${deliverDateStr}`);
+            await releaseLock();
             return new Response(JSON.stringify({ status: 'capsule_saved' }), {
               headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             });
