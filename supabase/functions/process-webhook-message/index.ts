@@ -607,6 +607,20 @@ Deno.serve(async (req) => {
     console.log(`💬 Message length: ${messageText.length} chars`);
     console.log(`🎤 Is audio message: ${isAudioMessage}`);
 
+    // Set responding lock BEFORE calling agent
+    await supabase
+      .from('aura_response_state')
+      .update({
+        is_responding: true,
+        response_started_at: new Date().toISOString(),
+        last_user_message_id: currentMessageId
+      })
+      .eq('user_id', profile.user_id);
+
+    let wasInterrupted = false;
+    let interruptedAtIndex = -1;
+
+    try {
     const agentResponse = await fetch(`${supabaseUrl}/functions/v1/aura-agent`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseServiceKey}` },
@@ -667,17 +681,6 @@ Deno.serve(async (req) => {
     // ========================================================================
     // SEND RESPONSE MESSAGES (with interruption check)
     // ========================================================================
-    await supabase
-      .from('aura_response_state')
-      .upsert({
-        user_id: profile.user_id,
-        is_responding: true,
-        response_started_at: new Date().toISOString(),
-        last_user_message_id: currentMessageId
-      }, { onConflict: 'user_id' });
-
-    let wasInterrupted = false;
-    let interruptedAtIndex = -1;
 
     for (let i = 0; i < (agentData.messages || []).length; i++) {
       const msg = agentData.messages[i];
@@ -785,6 +788,19 @@ Deno.serve(async (req) => {
         .from('aura_response_state')
         .update({ is_responding: false })
         .eq('user_id', profile.user_id);
+    }
+
+    } finally {
+      // Safety net: garante liberação do lock mesmo em caso de erro
+      try {
+        await supabase
+          .from('aura_response_state')
+          .update({ is_responding: false })
+          .eq('user_id', profile.user_id)
+          .eq('is_responding', true);
+      } catch (cleanupError) {
+        console.error(`⚠️ Erro silencioso ao liberar lock para user ${profile.user_id}:`, cleanupError);
+      }
     }
 
     return new Response(JSON.stringify({
