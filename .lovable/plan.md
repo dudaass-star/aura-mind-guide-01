@@ -1,69 +1,59 @@
 
 
-# Fix: Lock Atômico Anti-Duplicação com Finally Resiliente
+# Lock Atômico + Cleanup nos Early Returns
 
 ## Arquivo: `supabase/functions/process-webhook-message/index.ts`
 
-### Mudança 1 — Linhas 343-346: Abort se já respondendo (em vez de esperar 2s)
+## Contexto
+O plano anterior (lock atômico com UPDATE condicional) move a aquisição do lock para a linha ~337. Isso cria um novo problema: os 8+ early returns entre as linhas 378-567 agora acontecem com o lock ativo, travando o usuário por 60s se não forem liberados.
 
-Substituir o bloco atual:
-```
-if (responseState?.is_responding) {
-  console.log('⏸️ AURA está respondendo...');
-  await new Promise(resolve => setTimeout(resolve, 2000));
-}
-```
+## Mudança 1 — Linhas 333-356: Lock atômico (do plano aprovado)
 
-Por um check atômico que **aborta** se o lock está ativo há menos de 60s, ou limpa lock stale se > 60s.
+Substituir o SELECT + check por UPDATE condicional `.eq('is_responding', false).select()`. Sem mudanças em relação ao plano anterior.
 
-### Mudança 2 — Linhas 660-667: Mover lock para ANTES do agent call (~linha 596)
+## Mudança 2 — Helper function para unlock + return
 
-O `is_responding = true` hoje é setado na linha 660, **depois** do agent call. Mover para antes da linha 600 (antes do fetch ao `aura-agent`), para que o lock esteja ativo quando um worker concorrente chegar.
-
-### Mudança 3 — Linhas 596-778: Envolver em try/finally com cleanup resiliente
-
-Envolver todo o bloco desde o set do lock até a finalização num `try { ... } finally { ... }`, onde o finally tem try/catch interno:
+Criar uma função auxiliar no início do handler para evitar repetição:
 
 ```typescript
-// Set lock
-await supabase.from('aura_response_state').update({
-  is_responding: true,
-  response_started_at: new Date().toISOString(),
-  last_user_message_id: currentMessageId
-}).eq('user_id', profile.user_id);
-
-try {
-  // ... agent call (linha 600-611)
-  // ... conversation tracking (630-655)
-  // ... send loop (669-754)
-  // ... finalization com pending_content (759-778)
-} finally {
-  try {
-    await supabase
-      .from('aura_response_state')
-      .update({ is_responding: false })
-      .eq('user_id', profile.user_id)
-      .eq('is_responding', true);
-  } catch (cleanupError) {
-    console.error(`⚠️ Erro silencioso ao liberar lock para user ${profile.user_id}:`, cleanupError);
-  }
-}
+const releaseLock = async () => {
+  await supabase
+    .from('aura_response_state')
+    .update({ is_responding: false })
+    .eq('user_id', profile.user_id);
+};
 ```
 
-O `.eq('is_responding', true)` garante que o finally não sobrescreve o estado se a finalização normal (linhas 759-778) já salvou `pending_content` e setou `false`.
+## Mudança 3 — Adicionar `releaseLock()` antes de cada early return
 
-### Mudança 4 — Linhas 759-778: Manter como está
+Cada return intermediário precisa liberar o lock antes de sair:
 
-A finalização normal (que salva `pending_content` quando interrompido) continua igual. O finally é só safety net — se a finalização rodou, o `.eq('is_responding', true)` no finally não faz nada.
+| Local | Linha aprox. | Motivo do return |
+|---|---|---|
+| Audio transcription failed | 385 | Áudio sem texto |
+| Capsule audio received | 412 | Recebeu áudio da cápsula |
+| Capsule awaiting audio reminder | 423 | Lembrete de cápsula |
+| Capsule audio replaced | 438 | Regravou áudio |
+| Capsule cancelled | 454 | Cancelou cápsula |
+| Capsule saved | 484 | Cápsula confirmada e salva |
+| Rating handled | 519 | Nota da sessão |
+| Confirmation handled | 537 | Confirmação de sessão |
+| Debounce | 567 | Mensagem mais recente existe |
+
+Em cada um, adicionar `await releaseLock();` na linha anterior ao `return`.
+
+## Mudança 4 — try/finally (do plano aprovado)
+
+O `try...finally` ao redor do agent call + send loop permanece como safety net, sem alterações.
 
 ## Resumo
 
-| O que muda | Antes | Depois |
+| Aspecto | Plano anterior | Plano atualizado |
 |---|---|---|
-| Worker concorrente (L343) | Espera 2s e continua | Aborta se lock < 60s |
-| Lock `is_responding` (L660) | Setado depois do agent call | Setado antes |
-| Proteção de erro | Nenhuma | try/finally com cleanup resiliente |
-| Cleanup no finally | N/A | try/catch interno para não mascarar erro original |
+| Lock atômico | Sim | Sim (sem mudança) |
+| Early returns | NÃO tratados | 9 returns com `releaseLock()` |
+| Helper function | N/A | `releaseLock()` para DRY |
+| try/finally | Sim | Sim (sem mudança) |
 
-**1 arquivo, ~25 linhas alteradas.**
+**1 arquivo, ~15 linhas adicionais** em relação ao plano anterior.
 
