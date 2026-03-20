@@ -330,31 +330,61 @@ Deno.serve(async (req) => {
     // ========================================================================
     const currentMessageId = messageId || `msg_${Date.now()}`;
 
+    // Ensure row exists for atomic lock
     await supabase
       .from('aura_response_state')
       .upsert({ user_id: profile.user_id, last_user_message_id: currentMessageId, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
 
-    const { data: responseState } = await supabase
+    // ATOMIC LOCK: single UPDATE that only succeeds if is_responding = false
+    const { data: lockResult } = await supabase
       .from('aura_response_state')
-      .select('*')
+      .update({
+        is_responding: true,
+        response_started_at: new Date().toISOString(),
+        last_user_message_id: currentMessageId
+      })
       .eq('user_id', profile.user_id)
-      .maybeSingle();
+      .eq('is_responding', false)
+      .select();
 
-    if (responseState?.is_responding) {
-      const respondingAge = Date.now() - new Date(responseState.response_started_at || 0).getTime();
+    if (!lockResult || lockResult.length === 0) {
+      // Lock not acquired — check if stale (>60s)
+      const { data: currentState } = await supabase
+        .from('aura_response_state')
+        .select('response_started_at')
+        .eq('user_id', profile.user_id)
+        .maybeSingle();
+
+      const respondingAge = Date.now() - new Date(currentState?.response_started_at || 0).getTime();
+
       if (respondingAge < 60000) {
-        console.log(`🛑 ABORT: Outro worker já está respondendo (age: ${Math.round(respondingAge / 1000)}s). Mensagem será acumulada na próxima execução.`);
+        console.log(`🛑 ABORT: Lock atômico — outro worker respondendo (age: ${Math.round(respondingAge / 1000)}s). Mensagem será acumulada.`);
         return new Response(JSON.stringify({ status: 'debounced_concurrent', reason: 'another_worker_responding' }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
-      } else {
-        console.log(`⚠️ Lock stale detectado (${Math.round(respondingAge / 1000)}s), limpando e prosseguindo`);
-        await supabase.from('aura_response_state')
-          .update({ is_responding: false })
-          .eq('user_id', profile.user_id);
       }
+
+      // Stale lock — force acquisition
+      console.log(`⚠️ Lock stale (${Math.round(respondingAge / 1000)}s), forçando aquisição`);
+      await supabase.from('aura_response_state')
+        .update({ is_responding: true, response_started_at: new Date().toISOString(), last_user_message_id: currentMessageId })
+        .eq('user_id', profile.user_id);
     }
 
+    // Helper to release lock on early returns
+    const releaseLock = async () => {
+      try {
+        await supabase
+          .from('aura_response_state')
+          .update({ is_responding: false })
+          .eq('user_id', profile.user_id);
+      } catch (e) {
+        console.error(`⚠️ Erro ao liberar lock para user ${profile.user_id}:`, e);
+      }
+    };
+
+    // Read pending content from lock result or fresh query
+    const responseState = lockResult?.[0] || (await supabase.from('aura_response_state').select('*').eq('user_id', profile.user_id).maybeSingle()).data;
     const pendingContent = responseState?.pending_content || null;
     const pendingContext = responseState?.pending_context || null;
 
@@ -382,6 +412,7 @@ Deno.serve(async (req) => {
         "Desculpa, não consegui ouvir seu áudio direito. 😅 Pode me mandar por texto ou tentar gravar de novo?",
         undefined, instanceConfig
       );
+      await releaseLock();
       return new Response(JSON.stringify({ status: 'audio_transcription_failed' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -409,6 +440,7 @@ Deno.serve(async (req) => {
             { user_id: profile.user_id, role: 'assistant', content: confirmMsg },
           ]);
           inboundSaved = true;
+          await releaseLock();
           return new Response(JSON.stringify({ status: 'capsule_audio_received' }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
@@ -420,6 +452,7 @@ Deno.serve(async (req) => {
           { user_id: profile.user_id, role: 'assistant', content: reminderMsg },
         ]);
         inboundSaved = true;
+        await releaseLock();
         return new Response(JSON.stringify({ status: 'capsule_awaiting_audio_reminder' }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
@@ -435,6 +468,7 @@ Deno.serve(async (req) => {
             { user_id: profile.user_id, role: 'assistant', content: replaceMsg },
           ]);
           inboundSaved = true;
+          await releaseLock();
           return new Response(JSON.stringify({ status: 'capsule_audio_replaced' }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
@@ -451,6 +485,7 @@ Deno.serve(async (req) => {
             { user_id: profile.user_id, role: 'assistant', content: cancelMsg },
           ]);
           inboundSaved = true;
+          await releaseLock();
           return new Response(JSON.stringify({ status: 'capsule_cancelled' }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
@@ -481,6 +516,7 @@ Deno.serve(async (req) => {
             ]);
             inboundSaved = true;
             console.log(`✅ Time capsule saved for user ${profile.user_id}, deliver_at: ${deliverDateStr}`);
+            await releaseLock();
             return new Response(JSON.stringify({ status: 'capsule_saved' }), {
               headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             });
@@ -516,6 +552,7 @@ Deno.serve(async (req) => {
         inboundSaved = true;
       }
       await supabase.from('messages').insert({ user_id: profile.user_id, role: 'assistant', content: ratingResult.response });
+      await releaseLock();
       return new Response(JSON.stringify({ status: 'rating_handled' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -534,6 +571,7 @@ Deno.serve(async (req) => {
         inboundSaved = true;
       }
       await supabase.from('messages').insert({ user_id: profile.user_id, role: 'assistant', content: confirmationResult.response });
+      await releaseLock();
       return new Response(JSON.stringify({ status: 'confirmation_handled' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -564,6 +602,7 @@ Deno.serve(async (req) => {
 
       if (latestUserMsg && latestUserMsg.id !== inboundMessageDbId) {
         console.log(`⏭️ DEBOUNCE: Msg mais recente no banco (${latestUserMsg.id} != ${inboundMessageDbId}). Abortando.`);
+        await releaseLock();
         return new Response(JSON.stringify({ status: 'debounced', reason: 'newer_message_exists' }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
@@ -607,15 +646,7 @@ Deno.serve(async (req) => {
     console.log(`💬 Message length: ${messageText.length} chars`);
     console.log(`🎤 Is audio message: ${isAudioMessage}`);
 
-    // Set responding lock BEFORE calling agent
-    await supabase
-      .from('aura_response_state')
-      .update({
-        is_responding: true,
-        response_started_at: new Date().toISOString(),
-        last_user_message_id: currentMessageId
-      })
-      .eq('user_id', profile.user_id);
+    // Lock already acquired atomically at line ~338
 
     let wasInterrupted = false;
     let interruptedAtIndex = -1;
