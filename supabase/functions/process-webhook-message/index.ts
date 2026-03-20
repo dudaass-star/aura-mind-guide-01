@@ -412,6 +412,7 @@ Deno.serve(async (req) => {
         "Desculpa, não consegui ouvir seu áudio direito. 😅 Pode me mandar por texto ou tentar gravar de novo?",
         undefined, instanceConfig
       );
+      await releaseLock();
       return new Response(JSON.stringify({ status: 'audio_transcription_failed' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
