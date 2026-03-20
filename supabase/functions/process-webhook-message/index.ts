@@ -552,6 +552,7 @@ Deno.serve(async (req) => {
         inboundSaved = true;
       }
       await supabase.from('messages').insert({ user_id: profile.user_id, role: 'assistant', content: ratingResult.response });
+      await releaseLock();
       return new Response(JSON.stringify({ status: 'rating_handled' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
