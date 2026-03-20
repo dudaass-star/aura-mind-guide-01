@@ -602,6 +602,7 @@ Deno.serve(async (req) => {
 
       if (latestUserMsg && latestUserMsg.id !== inboundMessageDbId) {
         console.log(`⏭️ DEBOUNCE: Msg mais recente no banco (${latestUserMsg.id} != ${inboundMessageDbId}). Abortando.`);
+        await releaseLock();
         return new Response(JSON.stringify({ status: 'debounced', reason: 'newer_message_exists' }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
