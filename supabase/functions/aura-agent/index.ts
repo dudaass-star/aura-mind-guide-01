@@ -4116,7 +4116,14 @@ Exemplo com 4 sessões:
     let assistantMessage = data.choices?.[0]?.message?.content;
 
     if (!assistantMessage) {
-      throw new Error("No response from AI");
+      console.warn('⚠️ Empty AI response, retrying once...');
+      const retryData = await callAI(allMessages, configuredModel, maxTokens, temperature, undefined, supabase);
+      await logTokenUsage(supabase, user_id || null, 'main_chat_retry', configuredModel, retryData.usage);
+      assistantMessage = retryData.choices?.[0]?.message?.content;
+      if (!assistantMessage) {
+        throw new Error("No response from AI after retry");
+      }
+      console.log(`✅ Retry succeeded, response length: ${assistantMessage.length} chars`);
     }
 
     // ========================================================================
