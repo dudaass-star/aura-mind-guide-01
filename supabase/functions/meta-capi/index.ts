@@ -21,6 +21,8 @@ interface CapiRequest {
     first_name?: string;
     client_ip_address?: string;
     client_user_agent?: string;
+    fbp?: string;
+    fbc?: string;
   };
   custom_data?: {
     value?: number;
