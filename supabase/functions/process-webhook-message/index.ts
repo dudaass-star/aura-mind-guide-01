@@ -650,6 +650,8 @@ Deno.serve(async (req) => {
 
     let wasInterrupted = false;
     let interruptedAtIndex = -1;
+    let agentData: any = null;
+    let sentAnyResponse = false;
 
     try {
     const agentResponse = await fetch(`${supabaseUrl}/functions/v1/aura-agent`, {
@@ -676,7 +678,7 @@ Deno.serve(async (req) => {
       throw new Error(`Agent error: ${errorText}`);
     }
 
-    const agentData = await agentResponse.json();
+    agentData = await agentResponse.json();
     console.log('🤖 Agent response:', JSON.stringify(agentData, null, 2));
 
     // ========================================================================
@@ -781,7 +783,13 @@ Deno.serve(async (req) => {
         if (audioContent) {
           const instanceConfig = await getInstanceConfigForUser(supabase, profile.user_id);
           const audioResult = await sendAudioMessage(cleanPhone, audioContent, instanceConfig);
-          if (audioResult.success) continue;
+          if (audioResult.success) {
+            sentAnyResponse = true;
+            try {
+              await supabase.from('messages').insert({ user_id: profile.user_id, role: 'assistant', content: responseText });
+            } catch {}
+            continue;
+          }
           console.log('⚠️ Audio send failed, falling back to text');
         }
       }
@@ -795,6 +803,14 @@ Deno.serve(async (req) => {
       console.log(`📤 Sending text (${responseText.length} chars, ${typingSeconds}s typing): ${responseText.substring(0, 50)}...`);
       const instanceConfig2 = await getInstanceConfigForUser(supabase, profile.user_id);
       await sendTextMessage(cleanPhone, responseText, typingSeconds, instanceConfig2);
+      sentAnyResponse = true;
+
+      // Persist assistant message to DB
+      try {
+        await supabase.from('messages').insert({ user_id: profile.user_id, role: 'assistant', content: responseText });
+      } catch (persistErr) {
+        console.warn('⚠️ Failed to persist assistant message:', persistErr);
+      }
     }
 
     // ========================================================================
@@ -846,8 +862,8 @@ Deno.serve(async (req) => {
   } catch (error: unknown) {
     console.error('❌ Worker processing error:', error);
 
-    // CONTINGENCY: Send fallback message to user
-    if (contingencyPhone) {
+    // CONTINGENCY: Send fallback message ONLY if no response was already sent
+    if (contingencyPhone && !sentAnyResponse) {
       try {
         console.log('🆘 Sending contingency message to', contingencyPhone.substring(0, 4) + '***');
         await sendTextMessage(
@@ -859,6 +875,8 @@ Deno.serve(async (req) => {
       } catch (contingencyErr) {
         console.error('❌ Failed to send contingency message:', contingencyErr);
       }
+    } else if (sentAnyResponse) {
+      console.log('ℹ️ Error after response already sent — suppressing contingency message');
     }
 
     return new Response(JSON.stringify({ error: 'processing_failed' }), {
