@@ -783,7 +783,13 @@ Deno.serve(async (req) => {
         if (audioContent) {
           const instanceConfig = await getInstanceConfigForUser(supabase, profile.user_id);
           const audioResult = await sendAudioMessage(cleanPhone, audioContent, instanceConfig);
-          if (audioResult.success) continue;
+          if (audioResult.success) {
+            sentAnyResponse = true;
+            try {
+              await supabase.from('messages').insert({ user_id: profile.user_id, role: 'assistant', content: responseText });
+            } catch {}
+            continue;
+          }
           console.log('⚠️ Audio send failed, falling back to text');
         }
       }
