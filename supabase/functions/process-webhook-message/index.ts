@@ -840,7 +840,7 @@ Deno.serve(async (req) => {
     } else {
       await supabase
         .from('aura_response_state')
-        .update({ is_responding: false })
+        .update({ is_responding: false, pending_content: null, pending_context: null })
         .eq('user_id', profile.user_id);
     }
 
