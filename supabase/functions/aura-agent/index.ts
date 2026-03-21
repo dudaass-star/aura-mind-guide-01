@@ -412,6 +412,10 @@ async function callAI(
     const usage = result.usageMetadata || {};
     const cachedTokens = usage.cachedContentTokenCount || 0;
 
+    if (!text && candidate?.finishReason) {
+      console.warn(`⚠️ Gemini returned empty response. finishReason: ${candidate.finishReason}, safetyRatings:`, JSON.stringify(candidate.safetyRatings));
+    }
+
     console.log('✅ Gemini native API success, cached_tokens:', cachedTokens, 'prompt:', usage.promptTokenCount, 'completion:', usage.candidatesTokenCount);
 
     return {
