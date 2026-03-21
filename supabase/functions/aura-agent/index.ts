@@ -5600,19 +5600,8 @@ Responda apenas o resumo, sem formatação.`
 
     console.log("Split into", messageChunks.length, "bubbles, plan:", userPlan);
 
-    // Salvar mensagens no histórico
-    if (profile?.user_id) {
-      // User message already persisted by webhook-zapi — only save assistant response
-      const cleanAssistantMessage = stripAllInternalTags(assistantMessage)
-        .replace(/\|\|\|/g, '\n')
-        .trim();
-      
-      await supabase.from('messages').insert({
-        user_id: profile.user_id,
-        role: 'assistant',
-        content: cleanAssistantMessage
-      });
-    }
+    // Persistência do assistant agora é feita por process-webhook-message (per-bubble)
+    // Removido para evitar duplicação no histórico
 
     return new Response(JSON.stringify({ 
       messages: messageChunks,
