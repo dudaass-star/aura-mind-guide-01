@@ -678,7 +678,7 @@ Deno.serve(async (req) => {
       throw new Error(`Agent error: ${errorText}`);
     }
 
-    const agentData = await agentResponse.json();
+    agentData = await agentResponse.json();
     console.log('🤖 Agent response:', JSON.stringify(agentData, null, 2));
 
     // ========================================================================
