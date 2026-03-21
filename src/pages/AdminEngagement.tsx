@@ -276,9 +276,10 @@ export default function AdminEngagement() {
         </div>
 
         <Tabs defaultValue="engagement" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="engagement">Engajamento</TabsTrigger>
             <TabsTrigger value="trial">Trial & Conversão</TabsTrigger>
+            <TabsTrigger value="cancellations">Cancelamentos</TabsTrigger>
           </TabsList>
 
           <TabsContent value="engagement" className="mt-4 space-y-6">
