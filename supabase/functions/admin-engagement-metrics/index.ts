@@ -301,6 +301,30 @@ Deno.serve(async (req) => {
       .select('*', { count: 'exact', head: true })
       .eq('status', 'canceling');
 
+    // ========== CANCELLATION METRICS ==========
+
+    const { data: cancelFeedbackInPeriod } = await supabase
+      .from('cancellation_feedback')
+      .select('reason, action_taken')
+      .gte('created_at', periodStart)
+      .lte('created_at', periodEnd);
+
+    const canceledInPeriod = cancelFeedbackInPeriod?.length || 0;
+    const churnRate = activeUsersBase && activeUsersBase > 0
+      ? Math.round(canceledInPeriod / activeUsersBase * 1000) / 10
+      : 0;
+
+    // Group by reason
+    const reasonCounts: Record<string, { reason: string; action_taken: string; count: number }> = {};
+    for (const fb of cancelFeedbackInPeriod || []) {
+      const key = fb.reason || 'unknown';
+      if (!reasonCounts[key]) {
+        reasonCounts[key] = { reason: key, action_taken: fb.action_taken || '', count: 0 };
+      }
+      reasonCounts[key].count++;
+    }
+    const cancellationReasons = Object.values(reasonCounts).sort((a, b) => b.count - a.count);
+
     return new Response(JSON.stringify({
       // Engagement
       activeUsers: activeUsersInPeriod,
@@ -332,6 +356,10 @@ Deno.serve(async (req) => {
       avgMsgsNonConverted,
       canceledUsers: canceledUsers || 0,
       cancelingUsers: cancelingUsers || 0,
+      // Cancellation
+      canceledInPeriod,
+      churnRate,
+      cancellationReasons,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

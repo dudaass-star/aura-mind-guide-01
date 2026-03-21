@@ -5,7 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Users, MessageSquare, Clock, BarChart3, RefreshCw, TrendingUp, UserPlus, Percent, Timer, XCircle, ArrowRightLeft, ArrowDown, Send, CalendarIcon, DollarSign } from 'lucide-react';
+import { ArrowLeft, Users, MessageSquare, Clock, BarChart3, RefreshCw, TrendingUp, UserPlus, Percent, Timer, XCircle, ArrowRightLeft, ArrowDown, Send, CalendarIcon, DollarSign, UserMinus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -50,6 +50,10 @@ interface Metrics {
   canceledUsers: number;
   cancelingUsers: number;
   trialsByPlan?: { plan: string; count: number }[];
+  // Cancellation
+  canceledInPeriod: number;
+  churnRate: number;
+  cancellationReasons: { reason: string; action_taken: string; count: number }[];
 }
 
 export default function AdminEngagement() {
@@ -272,9 +276,10 @@ export default function AdminEngagement() {
         </div>
 
         <Tabs defaultValue="engagement" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="engagement">Engajamento</TabsTrigger>
             <TabsTrigger value="trial">Trial & Conversão</TabsTrigger>
+            <TabsTrigger value="cancellations">Cancelamentos</TabsTrigger>
           </TabsList>
 
           <TabsContent value="engagement" className="mt-4 space-y-6">
@@ -413,6 +418,91 @@ export default function AdminEngagement() {
 
                 {/* Cards detalhados */}
                 <MetricCards cards={trialCards} />
+              </>
+            )}
+          </TabsContent>
+
+          <TabsContent value="cancellations" className="mt-4 space-y-6">
+            {loading && !metrics ? <SkeletonCards /> : metrics && (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between pb-2">
+                      <CardTitle className="text-sm font-medium text-muted-foreground">Cancelados no Período</CardTitle>
+                      <UserMinus className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-foreground">{metrics.canceledInPeriod}</div>
+                      <p className="text-xs text-muted-foreground mt-1">{periodLabel}</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between pb-2">
+                      <CardTitle className="text-sm font-medium text-muted-foreground">Churn Rate</CardTitle>
+                      <Percent className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-foreground">{metrics.churnRate}%</div>
+                      <p className="text-xs text-muted-foreground mt-1">cancelados / base ativa ({metrics.activeUsersBase})</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between pb-2">
+                      <CardTitle className="text-sm font-medium text-muted-foreground">Total Cancelados</CardTitle>
+                      <XCircle className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-foreground">{metrics.canceledUsers}</div>
+                      <p className="text-xs text-muted-foreground mt-1">acumulado histórico</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between pb-2">
+                      <CardTitle className="text-sm font-medium text-muted-foreground">Cancelando</CardTitle>
+                      <Clock className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-foreground">{metrics.cancelingUsers}</div>
+                      <p className="text-xs text-muted-foreground mt-1">aguardando fim do período</p>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Motivos de cancelamento */}
+                {metrics.cancellationReasons && metrics.cancellationReasons.length > 0 ? (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base font-semibold">Motivos de Cancelamento</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {metrics.cancellationReasons.map((item) => {
+                        const reasonNames: Record<string, string> = {
+                          not_using: 'Não está usando',
+                          too_expensive: 'Muito caro',
+                          not_helpful: 'Não ajudou',
+                          found_alternative: 'Encontrou alternativa',
+                          technical_issues: 'Problemas técnicos',
+                          other: 'Outro',
+                          unknown: 'Não informado',
+                        };
+                        const total = metrics.cancellationReasons.reduce((s, i) => s + i.count, 0);
+                        const pct = total > 0 ? Math.round(item.count / total * 100) : 0;
+                        return (
+                          <div key={item.reason} className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">{reasonNames[item.reason] || item.reason}</span>
+                            <span className="font-semibold text-foreground">{item.count} <span className="text-muted-foreground font-normal">({pct}%)</span></span>
+                          </div>
+                        );
+                      })}
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <Card>
+                    <CardContent className="py-8 text-center text-muted-foreground">
+                      Nenhum cancelamento registrado no período selecionado.
+                    </CardContent>
+                  </Card>
+                )}
               </>
             )}
           </TabsContent>
