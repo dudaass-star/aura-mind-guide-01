@@ -856,8 +856,8 @@ Deno.serve(async (req) => {
   } catch (error: unknown) {
     console.error('❌ Worker processing error:', error);
 
-    // CONTINGENCY: Send fallback message to user
-    if (contingencyPhone) {
+    // CONTINGENCY: Send fallback message ONLY if no response was already sent
+    if (contingencyPhone && !sentAnyResponse) {
       try {
         console.log('🆘 Sending contingency message to', contingencyPhone.substring(0, 4) + '***');
         await sendTextMessage(
@@ -869,6 +869,8 @@ Deno.serve(async (req) => {
       } catch (contingencyErr) {
         console.error('❌ Failed to send contingency message:', contingencyErr);
       }
+    } else if (sentAnyResponse) {
+      console.log('ℹ️ Error after response already sent — suppressing contingency message');
     }
 
     return new Response(JSON.stringify({ error: 'processing_failed' }), {
