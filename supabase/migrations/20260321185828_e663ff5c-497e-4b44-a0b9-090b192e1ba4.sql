@@ -1,0 +1,1 @@
+ALTER TABLE public.aura_response_state DROP CONSTRAINT aura_response_state_user_id_fkey;
