@@ -1,42 +1,44 @@
 
 
-# Fix: Escopo de `agentData` + Guard de Contingência Falsa
+# Diagnóstico: Aura parou de responder o Emerson Madruga
 
-## Análise
+## O que foi encontrado
 
-O problema das "mensagens em sequência respondidas uma vez só" **já está implementado** e funciona corretamente (linhas 612-640 do `process-webhook-message`). O sistema de debounce acumula mensagens sequenciais e as agrupa antes de chamar o agente.
+### Dados confirmados
+- **5 mensagens** do Emerson após 16:24 (a última resposta da Aura): 16:46, 16:48, 16:49, 17:02, 17:03
+- Todas registradas no `zapi_message_dedup` (webhook funcionou)
+- Todas salvas na tabela `messages` como `role: 'user'` (process-webhook-message rodou)
+- `conversation_followups` atualizado com `last_user_message_at: 17:03` (processamento chegou na linha ~400)
+- **Zero respostas `role: 'assistant'`** desde 16:24
+- Logs do edge function já rotacionaram (mensagens de 2h+ atrás)
 
-O que acontece é que **o bug de escopo mascara tudo**: a Aura responde corretamente às mensagens acumuladas, mas depois o código quebra ao tentar ler `agentData` fora do `try` interno, disparando a mensagem de "probleminha técnico" — o que dá a impressão de que algo está errado com o processamento em si.
+### Problema crítico descoberto
+A tabela `aura_response_state` tem **0 linhas** — para TODOS os usuários, não só o Emerson. Isso significa que o sistema de lock/interrupção está completamente inoperante. O upsert na linha 335 provavelmente está falhando silenciosamente (a tabela tem FK para `auth.users` com `ON DELETE CASCADE`).
 
-## Causa Raiz (única)
+Apesar disso, a Marcia recebeu respostas normalmente minutos atrás — o que indica que o código continua funcionando sem o lock (ele trata erros silenciosamente e prossegue).
 
-```text
-Linha 654:  try {                          ← agentData declarado aqui (L679)
-Linha 824:  } finally { ... }
-Linha 837:  return ... agentData.messages   ← FORA do try → ReferenceError
-Linha 846:  } catch {                       ← captura o erro → envia "probleminha técnico"
-```
+### Hipótese mais provável para o Emerson
+Como os logs já rotacionaram, não há como confirmar 100%, mas as evidências apontam para:
+1. A mensagem de 16:46 pode ter sido um **áudio** (ele depois diz "Quero q vc escute o áudio"), onde a transcrição falhou e o `messageText` ficou vazio — saindo pelo early return da linha 408 (áudio sem transcrição) 
+2. As mensagens seguintes (".", texto, ".", "Quero q vc escute o áudio") podem ter caído no **debounce** entre si
+3. A última mensagem (17:03) deveria ter passado, mas pode ter encontrado o lock stale de um processamento anterior que não limpou corretamente (já que `aura_response_state` não persiste)
 
-## Correção
+## Correção proposta
 
-### `supabase/functions/process-webhook-message/index.ts`
+### 1. Fix `aura_response_state` — remover FK desnecessária
+- A FK para `auth.users` não é necessária — o `user_id` já vem validado via `profiles`
+- Remover a constraint via migration para que o upsert funcione corretamente
+- Alternativamente, popular a tabela com todos os user_ids existentes
 
-1. **Mover declaração de `agentData`** para antes do `try` interno (escopo acessível pelo `return` final)
-   - `let agentData: any = null;` declarado junto com `wasInterrupted` (linha ~651)
+### 2. Adicionar logging no debounce e lock
+- Logar o resultado do upsert/lock para detectar falhas silenciosas
+- Logar quando o early return de áudio é acionado
 
-2. **Adicionar flag `sentAnyResponse`** para impedir contingência falsa
-   - Incrementar a cada `sendTextMessage` bem-sucedido no loop de envio
-   - No `catch` externo: só enviar "probleminha técnico" se `sentAnyResponse === false`
+### 3. Reprocessar mensagens do Emerson
+- Verificar se as mensagens pendentes dele serão processadas na próxima interação (o sistema de acumulação deveria agrupar tudo)
+- Ou enviar manualmente uma trigger para reprocessar
 
-3. **Persistir respostas normais** no banco
-   - Após enviar cada balão com sucesso, inserir na tabela `messages` com `role: 'assistant'`
-   - Garante que o painel admin mostra o que realmente foi entregue
-
-### Resultado
-- Zero mensagens fantasma de "probleminha técnico" após respostas bem-sucedidas
-- Mensagens em sequência continuam sendo agrupadas e respondidas de uma vez (já funciona)
-- Histórico de mensagens no painel fica completo
-
-### 1 arquivo editado
-- `supabase/functions/process-webhook-message/index.ts`
+### Arquivos afetados
+- `supabase/functions/process-webhook-message/index.ts` — adicionar logging
+- Migration SQL — remover FK de `aura_response_state` ou corrigir constraint
 
