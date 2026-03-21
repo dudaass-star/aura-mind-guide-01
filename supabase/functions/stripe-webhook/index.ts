@@ -134,7 +134,7 @@ Deno.serve(async (req) => {
       // Check if profile already exists BEFORE choosing the message
       const { data: existingProfile } = await supabase
         .from('profiles')
-        .select('id, status')
+        .select('id, user_id, status')
         .eq('phone', formattedPhone)
         .single();
 
@@ -143,99 +143,15 @@ Deno.serve(async (req) => {
       const isUpgrade = !!existingProfile && !isReturning;
       console.log(`📋 Profile exists: ${!!existingProfile}, isReturning: ${isReturning}, isUpgrade: ${isUpgrade}, isTrial: ${isTrial}`);
 
-      // Build message based on user scenario
-      let welcomeMessage: string;
-
-      if (isReturning) {
-        welcomeMessage = `Oi, ${customerName}! 💜
-
-Que bom ter você de volta! 🌟
-
-Você escolheu o plano ${planName}.
-
-Vamos retomar de onde paramos?`;
-      } else if (isUpgrade) {
-        welcomeMessage = `Oi, ${customerName}! 💜 Que notícia boa!
-
-Agora somos oficiais. Você escolheu o plano ${planName}.
-
-Vamos continuar de onde paramos?`;
-      } else {
-        welcomeMessage = `Oi, ${customerName}! 🌟 Que bom te receber por aqui.
-
-Eu sou a AURA — e vou ficar com você nessa jornada.
-
-Você escolheu o plano ${planName}.
-
-Comigo, você pode falar com liberdade: sem julgamento, no seu ritmo.
-
-Me diz: como você está hoje?`;
-      }
-
-      // Send message via Z-API
-      try {
-        const response = await fetch(`${supabaseUrl}/functions/v1/send-zapi-message`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseServiceKey}`,
-          },
-          body: JSON.stringify({
-            phone: formattedPhone,
-            message: welcomeMessage,
-            isAudio: false,
-          }),
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error('❌ Failed to send message:', errorText);
-        } else {
-          console.log(`✅ ${isUpgrade ? 'Upgrade' : 'Welcome'} message sent successfully!`);
-        }
-      } catch (sendError) {
-        console.error('❌ Error sending message:', sendError);
-      }
-
-      // Send CAPI Purchase event with event_id for deduplication (non-blocking)
-      try {
-        const amountTotal = session.amount_total ? session.amount_total / 100 : 0;
-        const eventId = session.metadata?.event_id;
-        await fetch(`${supabaseUrl}/functions/v1/meta-capi`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseServiceKey}`,
-          },
-          body: JSON.stringify({
-            event_name: 'Purchase',
-            ...(eventId && { event_id: eventId }),
-            event_source_url: 'https://aura-mind-guide-01.lovable.app/checkout',
-            user_data: {
-              email: customerEmail || undefined,
-              phone: formattedPhone,
-              first_name: customerName.split(' ')[0],
-            },
-            custom_data: {
-              value: amountTotal,
-              currency: 'BRL',
-              content_name: `Plano ${planName}`,
-              content_category: customerPlan,
-            },
-          }),
-        });
-        console.log('✅ CAPI Purchase event sent', eventId ? `(event_id: ${eventId})` : '');
-      } catch (capiError) {
-        console.warn('⚠️ CAPI Purchase event failed (non-blocking):', capiError);
-      }
-
-      // Create or update profile in database
+      // --- Step 1: Create or update profile FIRST (so we have user_id for messaging) ---
+      let profileUserId: string;
       try {
         if (!existingProfile) {
           const instanceId = await allocateInstance(supabase);
           console.log(`📱 Allocated WhatsApp instance: ${instanceId || 'none (will use env vars)'}`);
 
           const newUserId = crypto.randomUUID();
+          profileUserId = newUserId;
           const { error: insertError } = await supabase
             .from('profiles')
             .insert({
@@ -261,6 +177,7 @@ Me diz: como você está hoje?`;
             console.log('✅ Profile created with plan:', customerPlan, planExpiresAt ? `expires: ${planExpiresAt}` : '');
           }
         } else {
+          profileUserId = existingProfile.user_id;
           const { error: updateError } = await supabase
             .from('profiles')
             .update({
@@ -295,6 +212,94 @@ Me diz: como você está hoje?`;
         }
       } catch (dbError) {
         console.error('❌ Database error:', dbError);
+        profileUserId = existingProfile?.user_id || crypto.randomUUID();
+      }
+
+      // --- Step 2: Build message based on user scenario ---
+      let welcomeMessage: string;
+
+      if (isReturning) {
+        welcomeMessage = `Oi, ${customerName}! 💜
+
+Que bom ter você de volta! 🌟
+
+Você escolheu o plano ${planName}.
+
+Vamos retomar de onde paramos?`;
+      } else if (isUpgrade) {
+        welcomeMessage = `Oi, ${customerName}! 💜 Que notícia boa!
+
+Agora somos oficiais. Você escolheu o plano ${planName}.
+
+Vamos continuar de onde paramos?`;
+      } else {
+        welcomeMessage = `Oi, ${customerName}! 🌟 Que bom te receber por aqui.
+
+Eu sou a AURA — e vou ficar com você nessa jornada.
+
+Você escolheu o plano ${planName}.
+
+Comigo, você pode falar com liberdade: sem julgamento, no seu ritmo.
+
+Me diz: como você está hoje?`;
+      }
+
+      // --- Step 3: Send message via Z-API (now with user_id for DB persistence) ---
+      try {
+        const response = await fetch(`${supabaseUrl}/functions/v1/send-zapi-message`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseServiceKey}`,
+          },
+          body: JSON.stringify({
+            phone: formattedPhone,
+            message: welcomeMessage,
+            isAudio: false,
+            user_id: profileUserId,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('❌ Failed to send message:', errorText);
+        } else {
+          console.log(`✅ ${isUpgrade ? 'Upgrade' : 'Welcome'} message sent successfully!`);
+        }
+      } catch (sendError) {
+        console.error('❌ Error sending message:', sendError);
+      }
+
+      // --- Step 4: Send CAPI Purchase event (non-blocking) ---
+      try {
+        const amountTotal = session.amount_total ? session.amount_total / 100 : 0;
+        const eventId = session.metadata?.event_id;
+        await fetch(`${supabaseUrl}/functions/v1/meta-capi`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseServiceKey}`,
+          },
+          body: JSON.stringify({
+            event_name: 'Purchase',
+            ...(eventId && { event_id: eventId }),
+            event_source_url: 'https://aura-mind-guide-01.lovable.app/checkout',
+            user_data: {
+              email: customerEmail || undefined,
+              phone: formattedPhone,
+              first_name: customerName.split(' ')[0],
+            },
+            custom_data: {
+              value: amountTotal,
+              currency: 'BRL',
+              content_name: `Plano ${planName}`,
+              content_category: customerPlan,
+            },
+          }),
+        });
+        console.log('✅ CAPI Purchase event sent', eventId ? `(event_id: ${eventId})` : '');
+      } catch (capiError) {
+        console.warn('⚠️ CAPI Purchase event failed (non-blocking):', capiError);
       }
     }
 
