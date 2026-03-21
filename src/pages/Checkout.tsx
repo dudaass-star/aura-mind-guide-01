@@ -74,12 +74,8 @@ const Checkout = () => {
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    // Generate event_id for deduplication across client/server
-    const eventId = crypto.randomUUID();
-    localStorage.setItem('aura_event_id', eventId);
-    
     if (typeof window !== 'undefined' && (window as any).fbq) {
-      (window as any).fbq('track', 'InitiateCheckout', {}, { eventID: eventId });
+      (window as any).fbq('track', 'InitiateCheckout');
     }
   }, []);
 
