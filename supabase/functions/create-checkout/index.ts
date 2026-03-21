@@ -42,13 +42,13 @@ serve(async (req) => {
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
 
-    const { plan: requestedPlan, billing = "monthly", name, email, phone, trial, paymentMethod, event_id } = await req.json();
+    const { plan: requestedPlan, billing = "monthly", name, email, phone, trial, paymentMethod, fbp, fbc } = await req.json();
     
     const plan = requestedPlan;
     const billingOverride = billing;
     const isBoletoPayment = paymentMethod === "boleto" && billingOverride === "yearly";
     
-    logStep("Request received", { plan, billing: billingOverride, name, email, phone, trial: !!trial, paymentMethod, isBoleto: isBoletoPayment });
+    logStep("Request received", { plan, billing: billingOverride, name, email, phone, trial: !!trial, paymentMethod, isBoleto: isBoletoPayment, hasFbp: !!fbp, hasFbc: !!fbc });
 
     const PRICES = getPrices();
     
@@ -154,7 +154,8 @@ serve(async (req) => {
         billing: billingPeriod,
         ...(trial && { trial: "true" }),
         ...(isBoletoPayment && { payment_method: "boleto" }),
-        ...(event_id && { event_id: event_id }),
+        ...(fbp && { fbp }),
+        ...(fbc && { fbc }),
       },
     };
 
@@ -204,12 +205,13 @@ serve(async (req) => {
           },
           body: JSON.stringify({
             event_name: 'InitiateCheckout',
-            ...(event_id && { event_id }),
             event_source_url: `${origin}/checkout`,
             user_data: {
               email: email,
               phone: phoneClean,
               first_name: name.split(' ')[0],
+              ...(fbp && { fbp }),
+              ...(fbc && { fbc }),
             },
             custom_data: {
               content_name: `Plano ${plan}`,

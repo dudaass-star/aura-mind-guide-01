@@ -273,7 +273,10 @@ Me diz: como você está hoje?`;
       // --- Step 4: Send CAPI Purchase event (non-blocking) ---
       try {
         const amountTotal = session.amount_total ? session.amount_total / 100 : 0;
-        const eventId = session.metadata?.event_id;
+        // Use session.id as deterministic event_id for deduplication with browser Pixel
+        const eventId = session.id;
+        const fbp = session.metadata?.fbp;
+        const fbc = session.metadata?.fbc;
         await fetch(`${supabaseUrl}/functions/v1/meta-capi`, {
           method: 'POST',
           headers: {
@@ -282,12 +285,14 @@ Me diz: como você está hoje?`;
           },
           body: JSON.stringify({
             event_name: 'Purchase',
-            ...(eventId && { event_id: eventId }),
-            event_source_url: 'https://aura-mind-guide-01.lovable.app/checkout',
+            event_id: eventId,
+            event_source_url: 'https://aura-mind-guide-01.lovable.app/obrigado',
             user_data: {
               email: customerEmail || undefined,
               phone: formattedPhone,
               first_name: customerName.split(' ')[0],
+              ...(fbp && { fbp }),
+              ...(fbc && { fbc }),
             },
             custom_data: {
               value: amountTotal,
@@ -297,7 +302,7 @@ Me diz: como você está hoje?`;
             },
           }),
         });
-        console.log('✅ CAPI Purchase event sent', eventId ? `(event_id: ${eventId})` : '');
+        console.log(`✅ CAPI Purchase event sent (event_id: ${eventId}, fbp: ${!!fbp}, fbc: ${!!fbc})`);
       } catch (capiError) {
         console.warn('⚠️ CAPI Purchase event failed (non-blocking):', capiError);
       }
