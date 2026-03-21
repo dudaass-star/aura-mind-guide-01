@@ -650,6 +650,8 @@ Deno.serve(async (req) => {
 
     let wasInterrupted = false;
     let interruptedAtIndex = -1;
+    let agentData: any = null;
+    let sentAnyResponse = false;
 
     try {
     const agentResponse = await fetch(`${supabaseUrl}/functions/v1/aura-agent`, {
