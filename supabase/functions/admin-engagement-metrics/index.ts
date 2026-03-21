@@ -356,6 +356,10 @@ Deno.serve(async (req) => {
       avgMsgsNonConverted,
       canceledUsers: canceledUsers || 0,
       cancelingUsers: cancelingUsers || 0,
+      // Cancellation
+      canceledInPeriod,
+      churnRate,
+      cancellationReasons,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
