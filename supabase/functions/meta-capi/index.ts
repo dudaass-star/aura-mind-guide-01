@@ -74,6 +74,13 @@ Deno.serve(async (req) => {
     if (user_data.client_user_agent) {
       hashedUserData.client_user_agent = user_data.client_user_agent;
     }
+    // fbp and fbc are passed raw (not hashed) per Meta docs
+    if (user_data.fbp) {
+      hashedUserData.fbp = user_data.fbp;
+    }
+    if (user_data.fbc) {
+      hashedUserData.fbc = user_data.fbc;
+    }
 
     const eventData: Record<string, unknown> = {
       event_name,

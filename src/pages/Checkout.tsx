@@ -123,7 +123,13 @@ const Checkout = () => {
     setIsLoading(true);
 
     try {
-      const eventId = localStorage.getItem('aura_event_id') || crypto.randomUUID();
+      // Capture Meta cookies for Match Quality
+      const getCookie = (name: string) => {
+        const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+        return match ? match[2] : undefined;
+      };
+      const fbp = getCookie('_fbp');
+      const fbc = getCookie('_fbc');
       
       const { data, error } = await supabase.functions.invoke('create-checkout', {
         body: {
@@ -133,7 +139,8 @@ const Checkout = () => {
           name: name.trim(),
           email: email.trim(),
           phone: phone,
-          event_id: eventId,
+          ...(fbp && { fbp }),
+          ...(fbc && { fbc }),
         },
       });
 
@@ -143,7 +150,7 @@ const Checkout = () => {
 
       if (data?.url) {
         const checkoutUrl = data.url as string;
-        localStorage.setItem('aura_checkout', JSON.stringify({ name, phone, plan: selectedPlan, billing: billingPeriod, event_id: eventId, price: currentPrice }));
+        localStorage.setItem('aura_checkout', JSON.stringify({ name, phone, plan: selectedPlan, billing: billingPeriod, price: currentPrice }));
         try {
           if (window.top && window.top !== window) {
             window.top.location.href = checkoutUrl;

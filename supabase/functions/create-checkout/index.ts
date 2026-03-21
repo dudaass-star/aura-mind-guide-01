@@ -205,12 +205,13 @@ serve(async (req) => {
           },
           body: JSON.stringify({
             event_name: 'InitiateCheckout',
-            ...(event_id && { event_id }),
             event_source_url: `${origin}/checkout`,
             user_data: {
               email: email,
               phone: phoneClean,
               first_name: name.split(' ')[0],
+              ...(fbp && { fbp }),
+              ...(fbc && { fbc }),
             },
             custom_data: {
               content_name: `Plano ${plan}`,
