@@ -1,59 +1,32 @@
 
 
-# Lock Atômico + Cleanup nos Early Returns
+# Recuperar 6 Novos Usuários — Boas-Vindas Normal
 
-## Arquivo: `supabase/functions/process-webhook-message/index.ts`
+## Situação
+- 6 perfis trial criados hoje com `whatsapp_instance_id = NULL` e 0 mensagens no banco
+- Usuários antigos (Roberto, Juliane) foram respondidos normalmente — sem necessidade de ação
+- Instância "Aura #1" já está `active` (ID: `93011065-a424-4fce-877e-dc6999522368`)
 
-## Contexto
-O plano anterior (lock atômico com UPDATE condicional) move a aquisição do lock para a linha ~337. Isso cria um novo problema: os 8+ early returns entre as linhas 378-567 agora acontecem com o lock ativo, travando o usuário por 60s se não forem liberados.
+## Ações
 
-## Mudança 1 — Linhas 333-356: Lock atômico (do plano aprovado)
+### 1. Atribuir instância WhatsApp aos 6 perfis
+UPDATE nos 6 perfis para setar `whatsapp_instance_id` e incrementar `current_users` da instância.
 
-Substituir o SELECT + check por UPDATE condicional `.eq('is_responding', false).select()`. Sem mudanças em relação ao plano anterior.
+### 2. Enviar boas-vindas normal para cada um
+Chamar `send-zapi-message` com `user_id` para cada usuário, usando a mensagem de boas-vindas padrão do trial (conforme o memory: greeting + link do guia, depois mensagem sobre áudio/texto).
 
-## Mudança 2 — Helper function para unlock + return
-
-Criar uma função auxiliar no início do handler para evitar repetição:
-
-```typescript
-const releaseLock = async () => {
-  await supabase
-    .from('aura_response_state')
-    .update({ is_responding: false })
-    .eq('user_id', profile.user_id);
-};
-```
-
-## Mudança 3 — Adicionar `releaseLock()` antes de cada early return
-
-Cada return intermediário precisa liberar o lock antes de sair:
-
-| Local | Linha aprox. | Motivo do return |
+Usuários:
+| Nome | Telefone | Plano |
 |---|---|---|
-| Audio transcription failed | 385 | Áudio sem texto |
-| Capsule audio received | 412 | Recebeu áudio da cápsula |
-| Capsule awaiting audio reminder | 423 | Lembrete de cápsula |
-| Capsule audio replaced | 438 | Regravou áudio |
-| Capsule cancelled | 454 | Cancelou cápsula |
-| Capsule saved | 484 | Cápsula confirmada e salva |
-| Rating handled | 519 | Nota da sessão |
-| Confirmation handled | 537 | Confirmação de sessão |
-| Debounce | 567 | Mensagem mais recente existe |
+| Marcia Ribeiro | 5535999105709 | essencial |
+| Vinicius Pereira Moura | 5511979993271 | transformacao |
+| Simone matico Oliveira | 5541988181556 | direcao |
+| Menderson Madruga | 5547933865049 | essencial |
+| Neusa Maria dos Santos | 5531971007912 | essencial |
+| Bárbara Fernanda Cruz de Lacerda | 5571983931675 | transformacao |
 
-Em cada um, adicionar `await releaseLock();` na linha anterior ao `return`.
+### 3. Fix estrutural no `stripe-webhook`
+Reorganizar para criar perfil ANTES de enviar mensagem e passar `user_id` no body — prevenção para o futuro.
 
-## Mudança 4 — try/finally (do plano aprovado)
-
-O `try...finally` ao redor do agent call + send loop permanece como safety net, sem alterações.
-
-## Resumo
-
-| Aspecto | Plano anterior | Plano atualizado |
-|---|---|---|
-| Lock atômico | Sim | Sim (sem mudança) |
-| Early returns | NÃO tratados | 9 returns com `releaseLock()` |
-| Helper function | N/A | `releaseLock()` para DRY |
-| try/finally | Sim | Sim (sem mudança) |
-
-**1 arquivo, ~15 linhas adicionais** em relação ao plano anterior.
+**1 DB update + 6 chamadas API + 1 arquivo editado.**
 
