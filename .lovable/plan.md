@@ -1,42 +1,55 @@
 
 
-# Fix: Mensagens em sequência — race condition no lock + persistência duplicada
+# Fix: Aura assume peso emocional em mensagens leves
 
-## Problema
+## Correções (2 alterações no mesmo arquivo)
 
-Quando o usuário manda 2+ mensagens rápidas, Worker 2 faz `upsert` na linha 336 e sobrescreve `last_user_message_id`. Worker 1 (que tem o lock) detecta o ID diferente no loop de envio (linha 736) e para — achando que foi interrompido. Worker 2 já abortou porque não conseguiu o lock. Resultado: Aura envia 1 balão e para.
+### 1. Contexto temporal sem viés emocional (linha 3819)
 
-Adicionalmente, o `aura-agent` salva a resposta completa no banco (linha 5610) E o `process-webhook-message` salva cada balão individualmente (linha 817) — duplicando mensagens no histórico.
+A instrução para gap de 4-24h diz "Pergunte como o usuario esta AGORA" — o modelo interpreta como convite para sondagem emocional. Trocar para tom neutro:
 
-## Correções
-
-### 1. `process-webhook-message/index.ts` — Upsert sem sobrescrever o message ID
-
-**Linha 336**: Trocar o upsert para usar `ignoreDuplicates: true` e remover `last_user_message_id` do payload. O ID só deve ser setado pelo worker que ganhar o lock (linha 350).
-
-```typescript
-// ANTES (linha 336):
-.upsert({ user_id: profile.user_id, last_user_message_id: currentMessageId, updated_at: ... }, { onConflict: 'user_id' })
-
-// DEPOIS:
-.upsert({ user_id: profile.user_id, updated_at: ... }, { onConflict: 'user_id', ignoreDuplicates: true })
+**Antes:**
+```
+Passaram-se algumas horas. NAO retome o assunto anterior como se fosse continuacao imediata. Pergunte como o usuario esta AGORA.
 ```
 
-### 2. `aura-agent/index.ts` — Remover persistência duplicada
+**Depois:**
+```
+Passaram-se algumas horas. NAO retome o assunto anterior como se fosse continuacao imediata. Cumprimente de forma natural e leve. NAO assuma que algo esta errado — espere o usuario trazer o assunto.
+```
 
-**Linhas 5604-5614**: Remover o bloco que salva a mensagem do assistant no banco. A persistência agora é feita exclusivamente pelo `process-webhook-message` (linha 817), que salva cada balão conforme é enviado com sucesso.
+### 2. Neutralizar fallbacks emocionais (linhas 4240-4254)
 
-### 3. `process-webhook-message/index.ts` — Limpar `pending_content` após envio bem-sucedido
+Remover frases pesadas como "isso é pesado", "O que tá sentindo agora?", "o que tá por baixo disso?" dos arrays de fallback.
 
-**Linhas 840-844**: No bloco de finalização sem interrupção, garantir que `pending_content` e `pending_context` sejam limpos explicitamente.
+**Session fallbacks — substituir por:**
+```typescript
+const sessionFallbacks = [
+  `${fallbackNamePrefix}hmm, me conta mais sobre isso.`,
+  `Hmm. Me conta mais sobre como isso aparece no seu dia a dia.`,
+  `${fallbackNamePrefix}fica comigo — e o que mais tá rolando?`,
+  `Entendi. E aí, como você tá com isso?`,
+  `${fallbackNamePrefix}isso importa. Me conta mais sobre ${recentThemeName || 'isso'}.`,
+  `Hmm... faz sentido. Me fala mais.`,
+];
+```
+
+**Casual fallbacks — substituir por:**
+```typescript
+const casualFallbacks = [
+  `${fallbackNamePrefix}tô processando isso aqui. Me conta mais.`,
+  `Hmm... e o que mais tá passando pela sua cabeça?`,
+  `Entendi. E aí, tudo bem?`,
+  `${fallbackNamePrefix}isso ficou aqui comigo. Me conta mais sobre ${recentThemeName || 'isso'}.`,
+  `Sério? Me fala mais.`,
+  `Hmm. Faz sentido. E aí?`,
+];
+```
+
+## Arquivo editado
+- `supabase/functions/aura-agent/index.ts` (2 alterações)
 
 ## Resultado esperado
-- Worker que não ganha o lock **não** altera `last_user_message_id`
-- Worker ativo envia **todos** os balões sem falsa interrupção
-- Histórico sem mensagens duplicadas
-- Mensagens sequenciais continuam sendo acumuladas e respondidas de uma vez
-
-## Arquivos editados
-- `supabase/functions/process-webhook-message/index.ts` (2 alterações)
-- `supabase/functions/aura-agent/index.ts` (1 remoção)
+- Gap temporal não força sondagem emocional
+- Fallbacks usam tom neutro e curioso em vez de assumir peso
 
