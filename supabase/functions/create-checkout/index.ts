@@ -154,7 +154,8 @@ serve(async (req) => {
         billing: billingPeriod,
         ...(trial && { trial: "true" }),
         ...(isBoletoPayment && { payment_method: "boleto" }),
-        ...(event_id && { event_id: event_id }),
+        ...(fbp && { fbp }),
+        ...(fbc && { fbc }),
       },
     };
 
