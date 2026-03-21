@@ -3816,7 +3816,7 @@ ${meditationCatalogSection}
       } else if (temporalGapHours >= 24) {
         behaviorInstruction = `Faz mais de um dia. Cumprimente de forma fresca. Se quiser mencionar algo anterior, diga "da ultima vez" ou "outro dia". NAO continue o assunto anterior como se fosse agora.`;
       } else {
-        behaviorInstruction = `Passaram-se algumas horas. NAO retome o assunto anterior como se fosse continuacao imediata. Pergunte como o usuario esta AGORA.`;
+        behaviorInstruction = `Passaram-se algumas horas. NAO retome o assunto anterior como se fosse continuacao imediata. Cumprimente de forma natural e leve. NAO assuma que algo esta errado — espere o usuario trazer o assunto.`;
       }
 
       dynamicContext += `\n\n⏰ CONTEXTO TEMPORAL (CALCULADO PELO SISTEMA - SIGA OBRIGATORIAMENTE):
