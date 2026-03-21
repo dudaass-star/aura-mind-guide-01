@@ -331,9 +331,15 @@ Deno.serve(async (req) => {
     const currentMessageId = messageId || `msg_${Date.now()}`;
 
     // Ensure row exists for atomic lock
-    await supabase
+    const { error: upsertError } = await supabase
       .from('aura_response_state')
       .upsert({ user_id: profile.user_id, last_user_message_id: currentMessageId, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
+
+    if (upsertError) {
+      console.error(`❌ Lock upsert FAILED for user ${profile.user_id}:`, upsertError.message);
+    } else {
+      console.log(`🔒 Lock upsert OK for user ${profile.user_id}`);
+    }
 
     // ATOMIC LOCK: single UPDATE that only succeeds if is_responding = false
     const { data: lockResult } = await supabase
