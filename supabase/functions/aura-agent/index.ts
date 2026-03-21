@@ -4238,20 +4238,20 @@ Exemplo com 4 sessões:
         } catch (_) { /* ignore */ }
 
         const sessionFallbacks = [
-          `${fallbackNamePrefix}isso ficou aqui comigo. O que tá por baixo disso?`,
+          `${fallbackNamePrefix}hmm, me conta mais sobre isso.`,
           `Hmm. Me conta mais sobre como isso aparece no seu dia a dia.`,
-          `${fallbackNamePrefix}isso é pesado. Fica comigo — o que mais tá rolando?`,
-          `Entendi. E como você tá com isso agora?`,
+          `${fallbackNamePrefix}fica comigo — e o que mais tá rolando?`,
+          `Entendi. E aí, como você tá com isso?`,
           `${fallbackNamePrefix}isso importa. Me conta mais sobre ${recentThemeName || 'isso'}.`,
-          `Hmm... faz sentido. O que você tá sentindo agora?`,
+          `Hmm... faz sentido. Me fala mais.`,
         ];
         const casualFallbacks = [
           `${fallbackNamePrefix}tô processando isso aqui. Me conta mais.`,
           `Hmm... e o que mais tá passando pela sua cabeça?`,
-          `Entendi. E como você tá com isso agora?`,
+          `Entendi. E aí, tudo bem?`,
           `${fallbackNamePrefix}isso ficou aqui comigo. Me conta mais sobre ${recentThemeName || 'isso'}.`,
           `Sério? Me fala mais.`,
-          `Hmm. Faz sentido. O que você tá sentindo agora?`,
+          `Hmm. Faz sentido. E aí?`,
         ];
         
         const fallbacks = (sessionActive && currentSession) ? sessionFallbacks : casualFallbacks;
