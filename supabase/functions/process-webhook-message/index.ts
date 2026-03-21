@@ -333,7 +333,7 @@ Deno.serve(async (req) => {
     // Ensure row exists for atomic lock
     const { error: upsertError } = await supabase
       .from('aura_response_state')
-      .upsert({ user_id: profile.user_id, last_user_message_id: currentMessageId, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
+      .upsert({ user_id: profile.user_id, updated_at: new Date().toISOString() }, { onConflict: 'user_id', ignoreDuplicates: true });
 
     if (upsertError) {
       console.error(`❌ Lock upsert FAILED for user ${profile.user_id}:`, upsertError.message);
