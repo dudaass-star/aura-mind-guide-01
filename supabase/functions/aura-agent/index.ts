@@ -4122,13 +4122,28 @@ Exemplo com 4 sessões:
     let assistantMessage = data.choices?.[0]?.message?.content;
 
     if (!assistantMessage) {
-      console.warn('⚠️ Empty AI response, retrying once...');
+      console.warn('⚠️ Empty AI response — likely PROHIBITED_CONTENT block. Retrying with trimmed history...');
+      
+      // Keep only system messages + last 10 chat messages to avoid prohibited content in older history
+      const systemMsgs = apiMessages.filter((m: any) => m.role === 'system');
+      const chatMsgs = apiMessages.filter((m: any) => m.role !== 'system');
+      const trimmedMessages = [...systemMsgs, ...chatMsgs.slice(-10)];
+      
+      console.log(`🔄 Trimmed from ${apiMessages.length} to ${trimmedMessages.length} messages`);
       const retryTemperature = 0.9;
-      const retryData = await callAI(configuredModel, apiMessages, 4096, retryTemperature, LOVABLE_API_KEY, supabase);
+      const retryData = await callAI(configuredModel, trimmedMessages, 4096, retryTemperature, LOVABLE_API_KEY, supabase);
       await logTokenUsage(supabase, user_id || null, 'main_chat_retry', configuredModel, retryData.usage);
       assistantMessage = retryData.choices?.[0]?.message?.content;
       if (!assistantMessage) {
-        throw new Error("No response from AI after retry");
+        // Last resort: try with only the current message
+        console.warn('⚠️ Still blocked. Trying with minimal context (last 4 messages only)...');
+        const minimalMessages = [...systemMsgs, ...chatMsgs.slice(-4)];
+        const lastResortData = await callAI(configuredModel, minimalMessages, 4096, 0.9, LOVABLE_API_KEY, supabase);
+        await logTokenUsage(supabase, user_id || null, 'main_chat_minimal', configuredModel, lastResortData.usage);
+        assistantMessage = lastResortData.choices?.[0]?.message?.content;
+        if (!assistantMessage) {
+          throw new Error("No response from AI after all retries — content consistently blocked");
+        }
       }
       console.log(`✅ Retry succeeded, response length: ${assistantMessage.length} chars`);
     }
