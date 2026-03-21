@@ -1,44 +1,42 @@
 
 
-# Diagnóstico: Aura parou de responder o Emerson Madruga
+# Fix: Mensagens em sequência — race condition no lock + persistência duplicada
 
-## O que foi encontrado
+## Problema
 
-### Dados confirmados
-- **5 mensagens** do Emerson após 16:24 (a última resposta da Aura): 16:46, 16:48, 16:49, 17:02, 17:03
-- Todas registradas no `zapi_message_dedup` (webhook funcionou)
-- Todas salvas na tabela `messages` como `role: 'user'` (process-webhook-message rodou)
-- `conversation_followups` atualizado com `last_user_message_at: 17:03` (processamento chegou na linha ~400)
-- **Zero respostas `role: 'assistant'`** desde 16:24
-- Logs do edge function já rotacionaram (mensagens de 2h+ atrás)
+Quando o usuário manda 2+ mensagens rápidas, Worker 2 faz `upsert` na linha 336 e sobrescreve `last_user_message_id`. Worker 1 (que tem o lock) detecta o ID diferente no loop de envio (linha 736) e para — achando que foi interrompido. Worker 2 já abortou porque não conseguiu o lock. Resultado: Aura envia 1 balão e para.
 
-### Problema crítico descoberto
-A tabela `aura_response_state` tem **0 linhas** — para TODOS os usuários, não só o Emerson. Isso significa que o sistema de lock/interrupção está completamente inoperante. O upsert na linha 335 provavelmente está falhando silenciosamente (a tabela tem FK para `auth.users` com `ON DELETE CASCADE`).
+Adicionalmente, o `aura-agent` salva a resposta completa no banco (linha 5610) E o `process-webhook-message` salva cada balão individualmente (linha 817) — duplicando mensagens no histórico.
 
-Apesar disso, a Marcia recebeu respostas normalmente minutos atrás — o que indica que o código continua funcionando sem o lock (ele trata erros silenciosamente e prossegue).
+## Correções
 
-### Hipótese mais provável para o Emerson
-Como os logs já rotacionaram, não há como confirmar 100%, mas as evidências apontam para:
-1. A mensagem de 16:46 pode ter sido um **áudio** (ele depois diz "Quero q vc escute o áudio"), onde a transcrição falhou e o `messageText` ficou vazio — saindo pelo early return da linha 408 (áudio sem transcrição) 
-2. As mensagens seguintes (".", texto, ".", "Quero q vc escute o áudio") podem ter caído no **debounce** entre si
-3. A última mensagem (17:03) deveria ter passado, mas pode ter encontrado o lock stale de um processamento anterior que não limpou corretamente (já que `aura_response_state` não persiste)
+### 1. `process-webhook-message/index.ts` — Upsert sem sobrescrever o message ID
 
-## Correção proposta
+**Linha 336**: Trocar o upsert para usar `ignoreDuplicates: true` e remover `last_user_message_id` do payload. O ID só deve ser setado pelo worker que ganhar o lock (linha 350).
 
-### 1. Fix `aura_response_state` — remover FK desnecessária
-- A FK para `auth.users` não é necessária — o `user_id` já vem validado via `profiles`
-- Remover a constraint via migration para que o upsert funcione corretamente
-- Alternativamente, popular a tabela com todos os user_ids existentes
+```typescript
+// ANTES (linha 336):
+.upsert({ user_id: profile.user_id, last_user_message_id: currentMessageId, updated_at: ... }, { onConflict: 'user_id' })
 
-### 2. Adicionar logging no debounce e lock
-- Logar o resultado do upsert/lock para detectar falhas silenciosas
-- Logar quando o early return de áudio é acionado
+// DEPOIS:
+.upsert({ user_id: profile.user_id, updated_at: ... }, { onConflict: 'user_id', ignoreDuplicates: true })
+```
 
-### 3. Reprocessar mensagens do Emerson
-- Verificar se as mensagens pendentes dele serão processadas na próxima interação (o sistema de acumulação deveria agrupar tudo)
-- Ou enviar manualmente uma trigger para reprocessar
+### 2. `aura-agent/index.ts` — Remover persistência duplicada
 
-### Arquivos afetados
-- `supabase/functions/process-webhook-message/index.ts` — adicionar logging
-- Migration SQL — remover FK de `aura_response_state` ou corrigir constraint
+**Linhas 5604-5614**: Remover o bloco que salva a mensagem do assistant no banco. A persistência agora é feita exclusivamente pelo `process-webhook-message` (linha 817), que salva cada balão conforme é enviado com sucesso.
+
+### 3. `process-webhook-message/index.ts` — Limpar `pending_content` após envio bem-sucedido
+
+**Linhas 840-844**: No bloco de finalização sem interrupção, garantir que `pending_content` e `pending_context` sejam limpos explicitamente.
+
+## Resultado esperado
+- Worker que não ganha o lock **não** altera `last_user_message_id`
+- Worker ativo envia **todos** os balões sem falsa interrupção
+- Histórico sem mensagens duplicadas
+- Mensagens sequenciais continuam sendo acumuladas e respondidas de uma vez
+
+## Arquivos editados
+- `supabase/functions/process-webhook-message/index.ts` (2 alterações)
+- `supabase/functions/aura-agent/index.ts` (1 remoção)
 
