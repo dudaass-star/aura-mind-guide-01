@@ -797,6 +797,14 @@ Deno.serve(async (req) => {
       console.log(`📤 Sending text (${responseText.length} chars, ${typingSeconds}s typing): ${responseText.substring(0, 50)}...`);
       const instanceConfig2 = await getInstanceConfigForUser(supabase, profile.user_id);
       await sendTextMessage(cleanPhone, responseText, typingSeconds, instanceConfig2);
+      sentAnyResponse = true;
+
+      // Persist assistant message to DB
+      try {
+        await supabase.from('messages').insert({ user_id: profile.user_id, role: 'assistant', content: responseText });
+      } catch (persistErr) {
+        console.warn('⚠️ Failed to persist assistant message:', persistErr);
+      }
     }
 
     // ========================================================================
