@@ -48,7 +48,7 @@ serve(async (req) => {
     const billingOverride = billing;
     const isBoletoPayment = paymentMethod === "boleto" && billingOverride === "yearly";
     
-    logStep("Request received", { plan, billing: billingOverride, name, email, phone, trial: !!trial, paymentMethod, isBoleto: isBoletoPayment });
+    logStep("Request received", { plan, billing: billingOverride, name, email, phone, trial: !!trial, paymentMethod, isBoleto: isBoletoPayment, hasFbp: !!fbp, hasFbc: !!fbc });
 
     const PRICES = getPrices();
     
