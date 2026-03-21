@@ -412,6 +412,7 @@ Deno.serve(async (req) => {
     // HANDLE FAILED AUDIO TRANSCRIPTION
     // ========================================================================
     if (hasAudio && !messageText) {
+      console.log(`🎤 Audio transcription failed for user ${profile.user_id} — sending fallback and releasing lock`);
       const instanceConfig = await getInstanceConfigForUser(supabase, profile.user_id);
       await sendTextMessage(
         cleanPhone,
