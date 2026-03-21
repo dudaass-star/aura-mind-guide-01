@@ -1,44 +1,42 @@
 
 
-# Fix Deduplicação Meta Ads — Plano Revisado
+# Fix: Escopo de `agentData` + Guard de Contingência Falsa
 
-## Diagnóstico vs Sugestões do Gemini
+## Análise
 
-| Ponto do Gemini | Status Atual | Ação |
-|---|---|---|
-| `event_name` idêntico (`Purchase`) | ✅ Já correto — frontend e CAPI usam `'Purchase'` | Nenhuma |
-| `action_source: 'website'` na CAPI | ✅ Já correto em `meta-capi/index.ts` L79 | Nenhuma |
-| Sintaxe `eventID` no 4º parâmetro do `fbq` | ⚠️ Usa spread condicional — funciona mas é frágil | Simplificar para `{ eventID: sessionId }` fixo |
-| Guard contra refresh (`localStorage`) | ✅ Já implementado | Manter |
-| Cookies `_fbp`/`_fbc` para Match Quality | ❌ Não implementado | **Adicionar** — capturar no Checkout, passar via Stripe metadata, enviar na CAPI |
+O problema das "mensagens em sequência respondidas uma vez só" **já está implementado** e funciona corretamente (linhas 612-640 do `process-webhook-message`). O sistema de debounce acumula mensagens sequenciais e as agrupa antes de chamar o agente.
 
-## O que será feito
+O que acontece é que **o bug de escopo mascara tudo**: a Aura responde corretamente às mensagens acumuladas, mas depois o código quebra ao tentar ler `agentData` fora do `try` interno, disparando a mensagem de "probleminha técnico" — o que dá a impressão de que algo está errado com o processamento em si.
 
-### 1. `src/pages/ThankYou.tsx`
-- Usar `session_id` da URL como `eventID` (determinístico)
-- Remover dependência de `localStorage('aura_event_id')` e `aura_checkout.event_id`
-- Sintaxe limpa: `fbq('track', 'Purchase', {data}, { eventID: sessionId })`
+## Causa Raiz (única)
 
-### 2. `supabase/functions/stripe-webhook/index.ts`
-- Usar `session.id` como `event_id` na chamada CAPI (sempre disponível)
-- Remover leitura de `session.metadata?.event_id`
+```text
+Linha 654:  try {                          ← agentData declarado aqui (L679)
+Linha 824:  } finally { ... }
+Linha 837:  return ... agentData.messages   ← FORA do try → ReferenceError
+Linha 846:  } catch {                       ← captura o erro → envia "probleminha técnico"
+```
 
-### 3. `src/pages/Checkout.tsx`
-- Capturar cookies `_fbp` e `_fbc` do documento e enviá-los no body do `create-checkout`
-- Remover geração de UUID para `event_id` (não mais necessário)
+## Correção
 
-### 4. `supabase/functions/create-checkout/index.ts`
-- Receber `fbp` e `fbc` → salvar no `metadata` da session Stripe
+### `supabase/functions/process-webhook-message/index.ts`
 
-### 5. `supabase/functions/stripe-webhook/index.ts` (adicional)
-- Ler `fbp`/`fbc` do metadata → incluir no payload CAPI como `user_data.fbp` e `user_data.fbc`
+1. **Mover declaração de `agentData`** para antes do `try` interno (escopo acessível pelo `return` final)
+   - `let agentData: any = null;` declarado junto com `wasInterrupted` (linha ~651)
 
-### 6. `supabase/functions/meta-capi/index.ts`
-- Aceitar `fbp` e `fbc` em `user_data` e repassar no evento (sem hash — Meta espera raw)
+2. **Adicionar flag `sentAnyResponse`** para impedir contingência falsa
+   - Incrementar a cada `sendTextMessage` bem-sucedido no loop de envio
+   - No `catch` externo: só enviar "probleminha técnico" se `sentAnyResponse === false`
 
-## Resumo
-- **5 arquivos editados**
-- Deduplicação garantida via `session_id` determinístico
-- Match Quality melhorado com cookies `_fbp`/`_fbc`
-- Zero dependência de `localStorage` para IDs de evento
+3. **Persistir respostas normais** no banco
+   - Após enviar cada balão com sucesso, inserir na tabela `messages` com `role: 'assistant'`
+   - Garante que o painel admin mostra o que realmente foi entregue
+
+### Resultado
+- Zero mensagens fantasma de "probleminha técnico" após respostas bem-sucedidas
+- Mensagens em sequência continuam sendo agrupadas e respondidas de uma vez (já funciona)
+- Histórico de mensagens no painel fica completo
+
+### 1 arquivo editado
+- `supabase/functions/process-webhook-message/index.ts`
 
