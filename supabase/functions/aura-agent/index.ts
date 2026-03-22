@@ -5006,15 +5006,10 @@ Regras:
               const parsed = JSON.parse(cleanJson);
               
               sessionSummary = parsed.summary || sessionSummary;
-              // Tags extraídas têm prioridade sobre extração do Flash
-              if (keyInsights.length === 0) {
-                keyInsights = Array.isArray(parsed.insights) ? parsed.insights : [];
-              }
-              if (commitments.length === 0) {
-                commitments = Array.isArray(parsed.commitments) 
-                  ? parsed.commitments.map((c: string) => ({ title: c }))
-                  : [];
-              }
+              keyInsights = Array.isArray(parsed.insights) ? parsed.insights : [];
+              commitments = Array.isArray(parsed.commitments) 
+                ? parsed.commitments.map((c: string) => ({ title: c }))
+                : [];
               
               console.log('📝 Extracted session data:', {
                 summary: sessionSummary.substring(0, 50),
