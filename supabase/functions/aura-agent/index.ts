@@ -4526,7 +4526,7 @@ Exemplo com 4 sessões:
         evalSessionPhase = phaseCheck.phase;
         evalElapsedMin = Math.floor((Date.now() - new Date(currentSession.started_at).getTime()) / 60000);
       }
-      const phaseEval = evaluateTherapeuticPhase(messageHistory, sessionActive, evalSessionPhase, evalElapsedMin);
+      const phaseEval = evaluateTherapeuticPhase(messageHistory, sessionActive, evalSessionPhase, evalElapsedMin, last_user_context);
       if (phaseEval.guidance) {
         dynamicContext += phaseEval.guidance;
         console.log(`🔄 Phase evaluator: detected=${phaseEval.detectedPhase}, stagnation=${phaseEval.stagnationLevel}, context=${sessionActive ? 'session' : 'free'}`);
