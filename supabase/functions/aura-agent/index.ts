@@ -4960,37 +4960,16 @@ Exemplo com 4 sessões:
     // Verificar se a IA quer encerrar a sessão
     const aiWantsToEndSession = assistantMessage.includes('[ENCERRAR_SESSAO]');
 
-    // === EXTRAÇÃO DETERMINÍSTICA DE TAGS [INSIGHT:...] e [COMPROMISSO:...] ===
-    const insightTagRegex = /\[INSIGHT:(.*?)\]/gi;
-    const compromissoTagRegex = /\[COMPROMISSO:(.*?)\]/gi;
-    const extractedInsights: string[] = [];
-    const extractedCommitments: string[] = [];
-    
-    let tagMatch;
-    while ((tagMatch = insightTagRegex.exec(assistantMessage)) !== null) {
-      extractedInsights.push(tagMatch[1].trim());
-    }
-    while ((tagMatch = compromissoTagRegex.exec(assistantMessage)) !== null) {
-      extractedCommitments.push(tagMatch[1].trim());
-    }
-    
-    // Remover tags da mensagem visível ao usuário
+    // Strip legacy [INSIGHT:] and [COMPROMISSO:] tags if AI still generates them
     assistantMessage = assistantMessage.replace(/\[INSIGHT:.*?\]/gi, '').replace(/\[COMPROMISSO:.*?\]/gi, '').trim();
-    
-    if (extractedInsights.length > 0 || extractedCommitments.length > 0) {
-      console.log('🏷️ Tags extraídas:', { insights: extractedInsights.length, commitments: extractedCommitments.length });
-    }
 
     // Executar encerramento de sessão com resumo, insights e compromissos
     if ((shouldEndSession || aiWantsToEndSession) && currentSession && profile) {
       const endTime = new Date().toISOString();
 
-      // Usar tags extraídas se disponíveis, senão gerar via IA
       let sessionSummary = "Sessão concluída.";
-      let keyInsights: string[] = extractedInsights.length > 0 ? extractedInsights : [];
-      let commitments: any[] = extractedCommitments.length > 0 
-        ? extractedCommitments.map(c => ({ title: c })) 
-        : [];
+      let keyInsights: string[] = [];
+      let commitments: any[] = [];
       
       try {
         const summaryMessages = messageHistory.slice(-15); // Últimas 15 mensagens
