@@ -2611,24 +2611,8 @@ function splitIntoMessages(response: string, allowAudioThisTurn: boolean): Array
   return allChunks;
 }
 
-// Função para extrair insights da resposta
-function extractInsights(response: string): Array<{ category: string; key: string; value: string }> {
-  const insightsMatch = response.match(/\[INSIGHTS\](.*?)\[\/INSIGHTS\]/s);
-  if (!insightsMatch) return [];
+// extractInsights removed — postConversationAnalysis() handles this now (Phase 3)
 
-  const insightsStr = insightsMatch[1].trim();
-  const insights: Array<{ category: string; key: string; value: string }> = [];
-
-  const parts = insightsStr.split('|');
-  for (const part of parts) {
-    const [category, key, value] = part.split(':').map(s => s?.trim());
-    if (category && key && value) {
-      insights.push({ category, key, value });
-    }
-  }
-
-  return insights;
-}
 
 // Função para formatar insights para o contexto
 function formatInsightsForContext(insights: any[]): string {
