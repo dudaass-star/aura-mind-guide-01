@@ -32,6 +32,12 @@ interface Message {
   created_at: string;
 }
 
+interface UserContext {
+  user_emotional_state?: string;
+  topic_continuity?: string;
+  engagement_level?: string;
+  short_answer_streak?: number;
+}
 type StatusFilter = 'all' | 'active' | 'trial' | 'cancelled';
 
 export default function AdminMessages() {
