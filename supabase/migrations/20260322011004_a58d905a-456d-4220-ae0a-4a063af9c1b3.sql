@@ -1,0 +1,1 @@
+DELETE FROM gemini_cache;
