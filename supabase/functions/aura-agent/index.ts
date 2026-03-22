@@ -5913,7 +5913,7 @@ Responda apenas o resumo, sem formatação.`
             message, assistantMessage, GEMINI_API_KEY, supabase, profile.user_id, recentUserMsgs
           );
           if (Object.keys(actions).length > 0) {
-            await processExtractedActions(actions, supabase, profile, currentSession, dateTimeContext);
+            await processExtractedActions(actions, supabase, profile, currentSession, dateTimeContext, last_user_context);
           }
         } catch (err) {
           console.error('⚠️ Micro-agent async error:', err);
