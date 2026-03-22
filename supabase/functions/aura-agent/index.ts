@@ -266,68 +266,9 @@ async function callAI(
   cacheableSystemPrompt?: string
 ): Promise<{ choices: Array<{ message: { content: string }; finish_reason?: string }>; usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } }> {
   
-  // Anthropic direct API
+  // Anthropic direct API (deprecated)
   if (model.startsWith('anthropic/') || model.startsWith('claude-')) {
-    const anthropicModel = model.startsWith('anthropic/') ? model.replace('anthropic/', '') : model;
-    const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
-    if (!ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY not configured');
-
-    // Extract system messages
-    const systemMessages = messages.filter(m => m.role === 'system');
-    const chatMessages = messages.filter(m => m.role !== 'system');
-    const systemPrompt = systemMessages.map(m => m.content).join('\n\n');
-
-    // Merge consecutive messages of the same role (Anthropic requirement)
-    const merged: Array<{ role: string; content: string }> = [];
-    for (const msg of chatMessages) {
-      if (merged.length > 0 && merged[merged.length - 1].role === msg.role) {
-        merged[merged.length - 1].content += '\n\n' + msg.content;
-      } else {
-        merged.push({ role: msg.role, content: msg.content });
-      }
-    }
-
-    // Ensure first message is from user (Anthropic requirement)
-    if (merged.length === 0 || merged[0].role !== 'user') {
-      merged.unshift({ role: 'user', content: '...' });
-    }
-
-    console.log('🔀 Routing to Anthropic API, model:', anthropicModel);
-    console.log('🔑 ANTHROPIC_API_KEY prefix:', ANTHROPIC_API_KEY.substring(0, 12) + '...');
-    console.log('📦 Anthropic request: model=' + anthropicModel + ', messages=' + merged.length + ', max_tokens=' + maxTokens + ', system_length=' + systemPrompt.length);
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: anthropicModel,
-        system: systemPrompt,
-        messages: merged,
-        max_tokens: maxTokens,
-        temperature,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ Anthropic API error:', response.status, errorText);
-      throw new Error(`Anthropic API error: ${response.status} - ${errorText}`);
-    }
-
-    const data = await response.json();
-    // Convert Anthropic response to OpenAI-compatible format
-    const content = data.content?.map((c: any) => c.text).join('') || '';
-    return {
-      choices: [{ message: { content }, finish_reason: data.stop_reason === 'end_turn' ? 'stop' : data.stop_reason }],
-      usage: {
-        prompt_tokens: data.usage?.input_tokens,
-        completion_tokens: data.usage?.output_tokens,
-        total_tokens: (data.usage?.input_tokens || 0) + (data.usage?.output_tokens || 0),
-      },
-    };
+    throw new Error('Anthropic models are deprecated. Use Google Gemini models instead.');
   }
 
   // Extrair modelo real e nível de reasoning (sufixo :low/:medium/:high)
