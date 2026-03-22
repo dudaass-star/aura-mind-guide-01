@@ -976,7 +976,8 @@ ${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}`
           guidance: `\n\n🔄 AVALIAÇÃO DE FASE:
 Já passou da abertura (${sessionElapsedMin} min). Muitas perguntas exploratórias sem aprofundar.
 AÇÃO: Escolha O tema principal e vá fundo. Use investigação socrática.
-"De tudo que você trouxe, o que mais tá pesando? Vamos focar nisso."`
+"De tudo que você trouxe, o que mais tá pesando? Vamos focar nisso."
+${SESSION_PHASE_INSTRUCTIONS.stuck_in_opening}`
         };
       }
     }
