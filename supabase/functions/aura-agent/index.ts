@@ -5171,12 +5171,14 @@ Exemplo com 4 sessões:
     // ========================================================================
     // PROCESSAR TAG [NAO_PERTURBE:Xh]
     // ========================================================================
+    // DND: Tag-based (fallback) OR deterministic detection from user message
     const dndMatch = assistantMessage.match(/\[NAO_PERTURBE:(\d+)h?\]/i);
-    if (dndMatch && profile?.user_id) {
-      const hours = parseInt(dndMatch[1]);
-      const dndUntil = new Date(Date.now() + hours * 60 * 60 * 1000);
+    const deterministicDndHours = detectDoNotDisturb(message);
+    const dndHours = dndMatch ? parseInt(dndMatch[1]) : deterministicDndHours;
+    if (dndHours && profile?.user_id) {
+      const dndUntil = new Date(Date.now() + dndHours * 60 * 60 * 1000);
       
-      console.log(`🔇 Setting do_not_disturb_until for ${hours}h until ${dndUntil.toISOString()}`);
+      console.log(`🔇 Setting do_not_disturb_until for ${dndHours}h until ${dndUntil.toISOString()} (source: ${dndMatch ? 'tag' : 'deterministic'})`);
       
       await supabase
         .from('profiles')
