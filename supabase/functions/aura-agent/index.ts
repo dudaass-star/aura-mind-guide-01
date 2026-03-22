@@ -947,7 +947,8 @@ AÇÃO OBRIGATÓRIA AGORA:
 - Apresente UMA observação/insight sobre o que o usuário compartilhou
 - Use reframe: "Sabe o que eu percebo em tudo isso que você trouxe? [insight]"
 - Depois de reframear, conduza para compromisso/ação
-- NÃO volte para exploração`
+- NÃO volte para exploração
+${SESSION_PHASE_INSTRUCTIONS.exploration_to_reframe}`
         };
       }
       
