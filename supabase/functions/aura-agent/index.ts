@@ -889,6 +889,13 @@ Valide, dê espaço, mude o ângulo suavemente. Considere perguntar algo mais le
 ou simplesmente validar o silêncio/resistência como legítimo.`
       };
     }
+
+    // Priority 4: Short answer streak → soft nudge (not blocking)
+    const streak = lastUserContext.short_answer_streak || 0;
+    if (streak >= 2 && lastUserContext.engagement_level === 'short_answers') {
+      console.log(`🔄 Phase evaluator: short_answer_streak=${streak} → soft nudge`);
+      // Don't return — let normal evaluation continue, but we'll append a note later
+    }
   }
 
   const recentAssistant = messageHistory
