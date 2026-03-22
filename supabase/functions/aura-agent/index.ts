@@ -228,7 +228,7 @@ async function getOrCreateGeminiCache(
   }
 
   // 4. Persist — ON CONFLICT handles race conditions
-  const expiresAt = new Date(Date.now() + 3600 * 1000).toISOString();
+  const expiresAt = new Date(Date.now() + 600 * 1000).toISOString();
   const { data: inserted, error: insertErr } = await supabase
     .from('gemini_cache')
     .insert({ model: geminiModel, cache_name: cacheName, prompt_hash: promptHash, expires_at: expiresAt })
