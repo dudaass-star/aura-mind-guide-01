@@ -1,110 +1,65 @@
 
 
-# Análise Completa: Sistema de Fases e Contexto — Status e Melhorias
+# Análise Completa: Sistema de Fases e Contexto — Estado Atual
 
-## O que está implementado e funcionando ✅
+## Resultado: Sistema 95% Sólido
 
-### 1. Micro-agente extrator com 3 campos de contexto — ✅ OK
-- `user_emotional_state`, `topic_continuity`, `engagement_level` extraídos a cada turno
-- `recentUserMessages` (últimas 3 do usuário) passadas ao prompt para comparação de tema
-- Instrução anti-falso-positivo sobre usuários sucintos presente (linha 632)
-- Custo: apenas Flash-Lite, ~15 tokens extras
-
-### 2. Phase Evaluator com overrides de contexto — ✅ OK
-- 4 prioridades na ordem correta: Crise > Topic Shift > Resistência > Short Streak
-- Sessão: 3 cenários de stagnação + 1 transição natural (exploration > 20min + sentido detectado)
-- Livre: 2 cenários de stagnação (presença ≥5 trocas, sentido ≥8 trocas)
-- Short answer streak com nudge suave (não bloqueia)
-
-### 3. PHASE_INSTRUCTIONS táticas — ✅ OK
-- `SESSION_PHASE_INSTRUCTIONS`: 3 cenários (exploration_to_reframe, transition_to_closing, stuck_in_opening)
-- `FREE_PHASE_INSTRUCTIONS`: 2 cenários (presenca_to_sentido, sentido_to_movimento)
-- Cada um com exemplos Certo/Errado concretos
-- Concatenados corretamente nas guidance strings
-
-### 4. Persistência e fluxo de dados — ✅ OK
-- `last_user_context` salvo no `aura_response_state` (JSONB)
-- `process-webhook-message` lê e passa ao `aura-agent`
-- `aura-agent` usa no evaluator antes de gerar resposta
-- Streak calculado corretamente com leitura do estado anterior
-
-### 5. Admin badges — ✅ OK
-- Edge function retorna `user_context` na ação `conversation`
-- UI exibe badges coloridos
+As 4 correções da última iteração foram aplicadas corretamente. O sistema está funcional e robusto. Restam apenas ajustes menores de refinamento.
 
 ---
 
-## Problemas Encontrados 🔴
+## O que está 100% correto
 
-### Problema 1: Conflito de upsert no `last_user_context` (RACE CONDITION)
-**Onde**: Linha 1253-1257 do aura-agent
-**O que acontece**: O micro-agente faz `upsert` no `aura_response_state` com APENAS `user_id`, `last_user_context` e `updated_at`. Se o `process-webhook-message` está atualizando o mesmo registro simultaneamente (ex: `is_responding`, `pending_content`), o upsert pode sobrescrever esses campos com `null` porque não inclui os outros campos.
-
-**Correção**: Usar `UPDATE` parcial ao invés de `upsert` completo:
-```typescript
-await supabase.from('aura_response_state')
-  .update({ last_user_context: userContext, updated_at: new Date().toISOString() })
-  .eq('user_id', userId);
-```
-
-### Problema 2: Streak de short_answers lê DB duas vezes desnecessariamente
-**Onde**: Linha 1238-1244
-**O que acontece**: Para calcular o streak, o micro-agente faz uma query extra ao DB para ler o `last_user_context` anterior. Mas o `last_user_context` **já foi passado** ao `aura-agent` pelo `process-webhook-message` e está disponível no escopo.
-
-**Correção**: Passar `lastUserContext` ao `processExtractedActions` para evitar a query extra.
-
-### Problema 3: O topic shift pode "desligar" o evaluator permanentemente
-**Onde**: Linha 874-878
-**O que acontece**: Quando `topic_continuity === 'shifted'`, o evaluator retorna `guidance: null` e `detectedPhase: 'initial'`. Se o micro-agente classificar como `shifted` por 2+ turnos seguidos (ex: conversa exploratória natural), o evaluator nunca chega à análise de stagnação. O campo `topic_continuity` persiste do turno anterior — se o usuário muda de tema uma vez, o next-turn evaluator vê `shifted` e ignora tudo.
-
-**Correção**: Essa lógica está correta para 1 turno, mas o Flash-Lite deveria classificar `same_topic` no turno seguinte se o usuário continuou no novo tema. Verificar se o prompt do extrator deixa claro que `shifted` = "mudou NESTE turno vs o anterior", não "está falando de algo diferente do início da conversa". O prompt atual (linha 630) diz "compare o tema da mensagem ATUAL com as anteriores" — isso é ambíguo. 
-
-**Melhoria no prompt**: Adicionar: "shifted = mudou de tema em relação à mensagem IMEDIATAMENTE anterior. Se continua no novo tema, classifique como same_topic."
-
-### Problema 4: Priority 4 (short streak) faz log mas não injeta nada
-**Onde**: Linhas 893-898
-**O que acontece**: Quando `streak >= 2 && engagement_level === 'short_answers'`, o código faz `console.log` e tem um comentário "Don't return — let normal evaluation continue, but we'll append a note later". Porém, **nunca anexa** a nota — a lógica simplesmente cai na avaliação normal. A injeção de nudge só acontece mais abaixo (linhas 996-1001 para sessão, 1053-1061 para livre), mas **sem a condição** `engagement_level === 'short_answers'` — verifica apenas `streak >= 2`.
-
-**Impacto**: Baixo — o nudge é injetado de qualquer forma, mas a condição inicial (linha 895) é inútil. Isso não é um bug funcional, apenas código dead path.
-
-**Correção**: Remover o bloco das linhas 893-898 (é dead code).
+| Componente | Verificação |
+|------------|-------------|
+| Extrator Flash-Lite (3 campos + ações) | Prompt com `recentUserMessages`, anti-falso-positivo, `topic_continuity` clarificado |
+| Phase Evaluator (4 prioridades) | Crise > Topic Shift > Resistência > Análise normal — ordem correta |
+| PHASE_INSTRUCTIONS táticas | 3 cenários sessão + 2 cenários livre, todos com exemplos Certo/Errado |
+| Transição natural em sessão | Exploração > 20min + sentido detectado → guidance proativo |
+| Short answer streak | Calculado via `previousUserContext` (sem query extra), nudge suave injetado |
+| Upsert → UPDATE parcial | Race condition corrigida — `.update()` com `.eq('user_id')` |
+| Prompt `topic_continuity` | Clarificado: "shifted = relativo à mensagem IMEDIATAMENTE anterior" |
+| Dead code Priority 4 | Removido corretamente |
+| Fluxo de dados end-to-end | `process-webhook-message` lê → passa ao `aura-agent` → evaluator usa → micro-agente salva |
+| Admin badges | Edge function retorna `user_context`, UI exibe badges |
 
 ---
 
-## Melhorias Recomendadas 🟡
+## Melhorias Restantes (Refinamento)
 
-### Melhoria 1: Clarificar `topic_continuity` no prompt do extrator
-Adicionar ao prompt: `"shifted" = o usuário mudou de tema EM RELAÇÃO à mensagem imediatamente anterior. Se ele continua explorando o novo tema (mesmo diferente do início da conversa), classifique como "same_topic".`
+### 1. O evaluator retorna cedo demais no topic shift (risco baixo)
+**Linha 874-878**: Quando `topic_continuity === 'shifted'`, retorna `guidance: null` e `detectedPhase: 'initial'`. Isso impede qualquer outra análise nesse turno — inclusive o nudge de `short_answer_streak`. Se o usuário mudou de tema E está dando respostas curtas, o streak nudge é silenciado.
 
-### Melhoria 2: Evitar upsert destrutivo → usar UPDATE parcial
-Trocar o `upsert` por `update` no salvamento de `last_user_context` para evitar sobrescrita de campos.
+**Correção**: Mover o check de `short_answer_streak` para ANTES do topic shift return, ou fazer o topic shift não retornar imediatamente — apenas resetar `stagnationLevel` e deixar o resto da avaliação continuar.
 
-### Melhoria 3: Passar `lastUserContext` ao processExtractedActions
-Evitar query extra ao DB para calcular streak. O contexto anterior já está disponível.
+### 2. `recentPairs` conta mensagens do histórico inteiro, não do tema atual
+**Linha 926**: `recentPairs = messageHistory.filter(m => m.role === 'user').slice(-10).length` — conta as últimas 10 mensagens do usuário independente de mudança de tema. Após um topic shift, a contagem de "5+ trocas em Presença" deveria resetar, mas não reseta porque usa o histórico bruto.
 
-### Melhoria 4: Limpar dead code no Priority 4
-Remover bloco 893-898 que faz log mas nunca age.
+**Impacto**: Após o usuário mudar de tema, o evaluator pode detectar "estagnação em Presença" prematuramente (porque conta trocas do tema anterior).
+
+**Correção**: Usar o `short_answer_streak` como proxy de continuidade — se o streak foi resetado por um topic shift, o evaluator já não injeta guidance nesse turno. O problema só aparece no turno N+2 (quando `topic_continuity` volta a `same_topic` mas `recentPairs` ainda inclui mensagens do tema anterior). Solução ideal: resetar `recentPairs` quando o último `topic_continuity` salvo era `shifted` — ou seja, se o turno anterior teve shift, começar a contar do zero.
+
+### 3. `countIndicators` usa keywords — mesmo sistema que foi criticado antes
+**Linhas 905-913**: O `detectedPhase` é calculado via `PHASE_INDICATORS` (listas de palavras-chave como "como você se sente", "menor passo"). Esse é o MESMO tipo de detecção frágil que motivou a criação do micro-agente. O micro-agente extrai o estado do USUÁRIO corretamente, mas a detecção de fase da AURA (o que a assistente está fazendo) ainda usa keywords.
+
+**Impacto**: Médio. O evaluator pode detectar incorretamente que a Aura está em "presença" quando ela usou uma palavra-chave de sentido em outro contexto.
+
+**Correção futura**: Adicionar um campo `aura_detected_phase` ao micro-agente extrator para que o Flash-Lite classifique a fase da resposta da Aura semanticamente. Custo: ~5 tokens extras.
 
 ---
 
-## Resumo
+## Plano de Implementação
 
-| Componente | Status | Nota |
-|------------|--------|------|
-| Extrator Flash-Lite + 3 campos | ✅ OK | Prompt claro, anti-falso-positivo |
-| Phase Evaluator overrides | ✅ OK | 4 prioridades corretas |
-| PHASE_INSTRUCTIONS táticas | ✅ OK | Exemplos Certo/Errado concretos |
-| Persistência DB | ⚠️ Race condition | Upsert pode sobrescrever campos |
-| Streak calculation | ⚠️ Query extra desnecessária | Pode usar contexto já disponível |
-| Topic shift prompt | ⚠️ Ambíguo | Pode causar evaluator bypass prolongado |
-| Admin badges | ✅ OK | Funcionando |
+Arquivo: `supabase/functions/aura-agent/index.ts`
 
-### Implementação proposta
-4 correções pontuais no `supabase/functions/aura-agent/index.ts`:
-1. Upsert → UPDATE parcial (~2 linhas)
-2. Passar lastUserContext ao processExtractedActions (~5 linhas)
-3. Clarificar prompt de `topic_continuity` (~1 frase)
-4. Remover dead code Priority 4 (~5 linhas)
+### Correção 1: Topic shift não silenciar short_answer_streak
+Reorganizar a lógica no evaluator para que o check de `short_answer_streak >= 2` seja avaliado ANTES do early-return do topic shift.
 
-Custo: zero. Tokens: zero extras. Apenas correções de robustez.
+### Correção 2: Resetar contagem de trocas após topic shift
+Adicionar lógica: se `lastUserContext?.topic_continuity === 'shifted'`, reduzir o `recentPairs` efetivo (ou ignorar a análise de stagnação por 1 turno).
+
+### Correção 3: Adicionar `aura_detected_phase` ao extrator
+Adicionar campo ao schema do Flash-Lite: `"aura_phase": "presenca|sentido|movimento"` — substituir o `countIndicators` por essa classificação semântica. Custo: ~5 tokens extras.
+
+**Total**: 3 mudanças pontuais, zero chamadas LLM extras (a correção 3 reutiliza a chamada existente do extrator).
 
