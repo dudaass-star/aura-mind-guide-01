@@ -5558,42 +5558,21 @@ Responda apenas o resumo, sem formatação.`
     }
 
 
+    // LEGACY FALLBACK: Extract insights from [INSIGHTS]...[/INSIGHTS] tags if LLM still generates them
+    // Primary extraction is now handled by postConversationAnalysis() (async, Phase 3)
     const newInsights = extractInsights(assistantMessage);
     if (newInsights.length > 0 && profile?.user_id) {
-      console.log("Saving", newInsights.length, "new insights");
-      
-      // Mapeamento de importância por categoria
+      console.log("💾 [LEGACY] Saving", newInsights.length, "tag-based insights");
       const categoryImportance: Record<string, number> = {
-        'pessoa': 10,      // Máxima - nunca pode faltar
-        'identidade': 10,  // Máxima - dados básicos do usuário
-        'desafio': 8,      // Alta - problemas atuais
-        'trauma': 8,       // Alta - dores emocionais
-        'saude': 8,        // Alta - informações de saúde
-        'objetivo': 6,     // Média-alta
-        'conquista': 6,    // Média-alta
-        'padrao': 5,       // Média
-        'preferencia': 4,  // Normal
-        'rotina': 4,       // Normal
-        'contexto': 5      // Média
+        'pessoa': 10, 'identidade': 10, 'desafio': 8, 'trauma': 8, 'saude': 8,
+        'objetivo': 6, 'conquista': 6, 'padrao': 5, 'preferencia': 4, 'rotina': 4, 'contexto': 5
       };
-      
       for (const insight of newInsights) {
         const importance = categoryImportance[insight.category] || 5;
-        
-        await supabase
-          .from('user_insights')
-          .upsert({
-            user_id: profile.user_id,
-            category: insight.category,
-            key: insight.key,
-            value: insight.value,
-            importance: importance,
-            last_mentioned_at: new Date().toISOString()
-          }, {
-            onConflict: 'user_id,category,key'
-          });
-        
-        console.log(`💾 Saved insight: ${insight.category}:${insight.key} (importance: ${importance})`);
+        await supabase.from('user_insights').upsert({
+          user_id: profile.user_id, category: insight.category, key: insight.key,
+          value: insight.value, importance, last_mentioned_at: new Date().toISOString()
+        }, { onConflict: 'user_id,category,key' });
       }
     }
 
