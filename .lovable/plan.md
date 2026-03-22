@@ -1,48 +1,32 @@
 
+# Plano: Sistema de Fases e Contexto da Aura — IMPLEMENTADO ✅
 
-# Plano: Detecção de Contexto do Usuário via Micro-Agente (sem keywords)
+## Todas as 6 melhorias implementadas
 
-## Problema com a abordagem anterior
-Usar listas de palavras-chave (`"não aguento"`, `"mudando de assunto"`) é frágil — falsos positivos, falsos negativos, e não captura nuance. O usuário pode regredir emocionalmente sem usar nenhuma dessas palavras.
+### 1. ✅ PHASE_INSTRUCTIONS Táticas
+- `SESSION_PHASE_INSTRUCTIONS` com 3 cenários (exploration_to_reframe, transition_to_closing, stuck_in_opening)
+- `FREE_PHASE_INSTRUCTIONS` com 2 cenários (presenca_to_sentido, sentido_to_movimento)
+- Cada um com exemplos Certo/Errado concretos
+- Concatenados nas 5 guidance strings existentes
 
-## Solução: Reaproveitar o micro-agente extrator (custo zero extra)
+### 2. ✅ Contexto do Extrator Melhorado
+- `extractActionsFromResponse` agora recebe `recentUserMessages: string[]` (últimas 3 msgs do usuário)
+- Incluídas no prompt do Flash-Lite para melhor detecção de `topic_continuity`
 
-O micro-agente pós-resposta (`extractActionsFromResponse`) **já roda a cada turno** usando Flash-Lite. Basta adicionar 3 campos ao schema de extração:
+### 3. ✅ Anti-Falso-Positivo no Extrator
+- Instrução explícita: "Respostas curtas com conteúdo emocional genuíno = engaged, não short_answers"
+- Só classificar como `disengaged` com mudança clara de padrão ou evasão ativa
 
-```text
-Fluxo:
-  Turno N: Aura responde → micro-agente extrai ações + estado do usuário → salva no DB
-  Turno N+1: Phase evaluator lê o estado salvo → ajusta guidance
-```
+### 4. ✅ Short Answer Streak
+- `short_answer_streak` persistido no `last_user_context` (JSONB)
+- Incrementado quando `engagement_level === 'short_answers'`, resetado caso contrário
+- Se streak >= 2, injeta nota suave (não bloqueia avanço, mas sugere ângulos mais leves)
 
-### Campos adicionados ao extractor (sem chamada LLM extra)
+### 5. ✅ Transição Natural em Sessão
+- Se `sessionPhase === 'exploration'` + `sessionElapsedMin > 20` + `detectedPhase === 'sentido'`
+- Injeta guidance positiva: "Ótimo progresso, consolide com reframe"
 
-| Campo | Tipo | Valores |
-|-------|------|---------|
-| `user_emotional_state` | enum | `stable`, `vulnerable`, `crisis`, `resistant` |
-| `topic_continuity` | enum | `same_topic`, `shifted`, `new_topic` |
-| `engagement_level` | enum | `engaged`, `short_answers`, `disengaged` |
-
-### Como o Phase Evaluator usa esses dados
-
-1. **`vulnerable` ou `crisis`** → Reset para Presença, anular qualquer avanço de fase
-2. **`shifted` ou `new_topic`** → Resetar contagem de stagnation, deixar Aura responder naturalmente
-3. **`resistant` ou `disengaged`** → Anular guidance de avanço, injetar instrução de dar espaço
-
-### Mudanças no código
-
-**Arquivo: `supabase/functions/aura-agent/index.ts`**
-
-1. **Adicionar 3 campos ao schema do extractor** dentro de `extractActionsFromResponse()` — ~10 linhas
-2. **Salvar o resultado** no campo existente de metadados da conversa (ou em memória para o próximo turno)
-3. **No `evaluateTherapeuticPhase()`**: Ler o estado do turno anterior e aplicar os 3 early-returns (vulnerabilidade, mudança de tema, resistência) — ~15 linhas
-4. **Remover** as constantes `TOPIC_SHIFT_INDICATORS`, `EMOTIONAL_REGRESSION_INDICATORS`, `RESISTANCE_INDICATORS` se já existirem
-
-### Vantagens sobre keywords
-- Flash-Lite **entende contexto** — "tô cansada de tudo" pode ser exaustão ou desistência, o modelo distingue
-- Sem falsos positivos por palavras comuns ("não sei" pode ser reflexão genuína, não resistência)
-- Custo: **zero extra** — já paga pela chamada do extrator
-
-### Custo
-Adicionar 3 campos enum ao output do extractor soma ~15 tokens extras por chamada. Custo: ~$0.000002 por turno.
-
+### 6. ✅ Badges de Contexto no Admin
+- Edge function `admin-messages` agora retorna `user_context` na ação `conversation`
+- AdminMessages exibe badges coloridos: 🟢stable / 🟡vulnerable / 🔴crisis / ⚪resistant
+- Também mostra `engagement_level` e `topic_continuity` quando fora do normal
