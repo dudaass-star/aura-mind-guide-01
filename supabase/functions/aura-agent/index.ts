@@ -893,33 +893,8 @@ async function processExtractedActions(
       }
     }
 
-    // Theme tracking
-    if (actions.themes && actions.themes.length > 0) {
-      for (const theme of actions.themes) {
-        if (theme.status === 'new') {
-          await supabase.from('session_themes').upsert({
-            user_id: userId,
-            theme_name: theme.name,
-            status: 'active',
-            last_mentioned_at: new Date().toISOString(),
-            session_count: 1,
-          }, { onConflict: 'user_id,theme_name' });
-          console.log('✅ [MICRO-AGENT] Theme tracked:', theme.name);
-        } else if (theme.status === 'resolved') {
-          await supabase.from('session_themes')
-            .update({ status: 'resolved', last_mentioned_at: new Date().toISOString() })
-            .eq('user_id', userId)
-            .ilike('theme_name', `%${theme.name}%`);
-          console.log('✅ [MICRO-AGENT] Theme resolved:', theme.name);
-        } else if (theme.status === 'progressing') {
-          await supabase.from('session_themes')
-            .update({ status: 'progressing', last_mentioned_at: new Date().toISOString() })
-            .eq('user_id', userId)
-            .ilike('theme_name', `%${theme.name}%`);
-          console.log('✅ [MICRO-AGENT] Theme progressing:', theme.name);
-        }
-      }
-    }
+    // Theme tracking — handled by postConversationAnalysis() (deduplicated)
+    // Micro-agent themes are intentionally skipped to avoid race conditions
 
     // Journey management
     if (actions.journey_action === 'pause') {
@@ -5623,7 +5598,7 @@ Responda apenas o resumo, sem formatação.`
       sessions_available: sessionsAvailable,
       total_bubbles: messageChunks.length,
       has_audio: messageChunks.some(m => m.isAudio),
-      new_insights: newInsights.length,
+      new_insights: 0,
       conversation_status: isConversationComplete ? 'complete' : (isAwaitingResponse ? 'awaiting' : 'neutral'),
       session_active: sessionActive && !aiWantsToEndSession,
       session_started: shouldStartSession,
