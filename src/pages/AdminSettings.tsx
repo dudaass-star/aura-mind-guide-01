@@ -164,6 +164,12 @@ export default function AdminSettings() {
                 </SelectContent>
               </Select>
 
+              {AI_MODELS.find(m => m.value === selectedModel)?.costTier === 'expensive' && (
+                <div className="rounded-md bg-destructive/10 border border-destructive/30 p-3 text-sm text-destructive">
+                  ⚠️ <strong>Atenção:</strong> Este modelo custa até 20x mais que os modelos Google. Em 17/mar, 176 chamadas com Claude custaram $14.51 (43% do custo total do mês). Use apenas para testes pontuais.
+                </div>
+              )}
+
               <div className="flex items-center justify-between pt-2">
                 <p className="text-sm text-muted-foreground">
                   Modelo ativo: <span className="font-medium text-foreground">{AI_MODELS.find(m => m.value === currentModel)?.label || currentModel}</span>
