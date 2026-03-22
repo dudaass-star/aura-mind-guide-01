@@ -246,7 +246,8 @@ async function callAI(
   maxTokens: number,
   temperature: number,
   LOVABLE_API_KEY: string,
-  supabaseClient?: any
+  supabaseClient?: any,
+  cacheableSystemPrompt?: string
 ): Promise<{ choices: Array<{ message: { content: string }; finish_reason?: string }>; usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } }> {
   
   // Anthropic direct API
@@ -334,13 +335,31 @@ async function callAI(
     const geminiModel = actualModel.replace('google/', '');
     console.log('🔀 Routing to Gemini native API, model:', geminiModel, reasoningLevel ? `reasoning: ${reasoningLevel}` : '');
 
-    // 1. Extrair e concatenar system messages
+    // 1. Extrair system messages e separar estático vs dinâmico
     const systemMessages = messages.filter((m: any) => m.role === 'system');
     const chatMessages = messages.filter((m: any) => m.role !== 'system');
-    const systemPrompt = systemMessages.map((m: any) => m.content).join('\n\n');
+    
+    // Se cacheableSystemPrompt foi fornecido, cachear APENAS ele
+    // O restante dos system messages vai como conteúdo inline
+    const staticPrompt = cacheableSystemPrompt || '';
+    const dynamicSystemParts = cacheableSystemPrompt
+      ? systemMessages.filter(m => m.content !== cacheableSystemPrompt).map(m => m.content)
+      : [];
+    const fullSystemPrompt = cacheableSystemPrompt
+      ? staticPrompt  // apenas o estático vai pro cache
+      : systemMessages.map((m: any) => m.content).join('\n\n');
 
     // 2. Converter messages para formato Gemini nativo
     const geminiContents: any[] = [];
+    
+    // Se temos conteúdo dinâmico separado, incluir como primeiro "user" message
+    // para que não polua o hash do cache
+    if (dynamicSystemParts.length > 0) {
+      const dynamicText = `[CONTEXTO ATUAL DA CONVERSA]\n${dynamicSystemParts.join('\n\n')}`;
+      geminiContents.push({ role: 'user', parts: [{ text: dynamicText }] });
+      geminiContents.push({ role: 'model', parts: [{ text: 'Entendido, vou considerar esse contexto.' }] });
+    }
+    
     for (const msg of chatMessages) {
       const role = msg.role === 'assistant' ? 'model' : 'user';
       const part = { text: msg.content };
@@ -360,11 +379,12 @@ async function callAI(
       generationConfig.temperature = temperature;
     }
 
-    // 4. Tentar usar Context Caching explícito para o system prompt
+    // 4. Tentar usar Context Caching explícito — apenas para o prompt ESTÁTICO
     let cacheName: string | null = null;
-    if (systemPrompt && supabaseClient) {
+    const promptToCache = cacheableSystemPrompt || fullSystemPrompt;
+    if (promptToCache && supabaseClient) {
       try {
-        cacheName = await getOrCreateGeminiCache(supabaseClient, geminiModel, systemPrompt, GEMINI_API_KEY);
+        cacheName = await getOrCreateGeminiCache(supabaseClient, geminiModel, promptToCache, GEMINI_API_KEY);
       } catch (cacheErr) {
         console.warn('⚠️ Cache creation failed, falling back to inline system_instruction:', cacheErr);
       }
@@ -384,8 +404,16 @@ async function callAI(
     if (cacheName) {
       geminiBody.cachedContent = cacheName;
       console.log('📦 Using explicit context cache:', cacheName);
-    } else if (systemPrompt) {
-      geminiBody.system_instruction = { parts: [{ text: systemPrompt }] };
+    } else if (fullSystemPrompt) {
+      // Fallback: tudo junto como system_instruction
+      const fallbackPrompt = cacheableSystemPrompt
+        ? [staticPrompt, ...dynamicSystemParts].join('\n\n')
+        : fullSystemPrompt;
+      geminiBody.system_instruction = { parts: [{ text: fallbackPrompt }] };
+      // Remove dynamic content from contents since it's in system_instruction
+      if (dynamicSystemParts.length > 0) {
+        geminiContents.splice(0, 2); // remove the dynamic context pair
+      }
     }
 
     // 5. Chamar endpoint nativo
@@ -4104,7 +4132,7 @@ Exemplo com 4 sessões:
       // Temperature dinâmica: 0.9 para mensagens curtas (reduz tendência de eco do Gemini Flash)
       // TODO: Revisar ao migrar de modelo — específico para Gemini 3 Flash Preview
       const temperature = userWordCount <= 5 ? 0.9 : 0.8;
-      data = await callAI(configuredModel, apiMessages, 4096, temperature, LOVABLE_API_KEY, supabase);
+      data = await callAI(configuredModel, apiMessages, 4096, temperature, LOVABLE_API_KEY, supabase, AURA_STATIC_INSTRUCTIONS);
     } catch (e: any) {
       if (e.status === 429) {
         return new Response(JSON.stringify({ 
@@ -4145,14 +4173,14 @@ Exemplo com 4 sessões:
       
       console.log(`🔄 Trimmed from ${apiMessages.length} to ${trimmedMessages.length} messages`);
       const retryTemperature = 0.9;
-      const retryData = await callAI(configuredModel, trimmedMessages, 4096, retryTemperature, LOVABLE_API_KEY, supabase);
+      const retryData = await callAI(configuredModel, trimmedMessages, 4096, retryTemperature, LOVABLE_API_KEY, supabase, AURA_STATIC_INSTRUCTIONS);
       await logTokenUsage(supabase, user_id || null, 'main_chat_retry', configuredModel, retryData.usage);
       assistantMessage = retryData.choices?.[0]?.message?.content;
       if (!assistantMessage) {
         // Last resort: try with only the current message
         console.warn('⚠️ Still blocked. Trying with minimal context (last 4 messages only)...');
         const minimalMessages = [...systemMsgs, ...chatMsgs.slice(-4)];
-        const lastResortData = await callAI(configuredModel, minimalMessages, 4096, 0.9, LOVABLE_API_KEY, supabase);
+        const lastResortData = await callAI(configuredModel, minimalMessages, 4096, 0.9, LOVABLE_API_KEY, supabase, AURA_STATIC_INSTRUCTIONS);
         await logTokenUsage(supabase, user_id || null, 'main_chat_minimal', configuredModel, lastResortData.usage);
         assistantMessage = lastResortData.choices?.[0]?.message?.content;
         if (!assistantMessage) {
