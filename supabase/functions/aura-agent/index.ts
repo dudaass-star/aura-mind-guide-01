@@ -870,14 +870,21 @@ ${lastUserContext.user_emotional_state === 'crisis' ? 'Se houver risco, siga o p
       };
     }
 
-    // Priority 2: Topic shift → reset stagnation
+    // Priority 2: Short answer streak (check BEFORE topic shift so it's not silenced)
+    const earlyStreak = lastUserContext.short_answer_streak || 0;
+    const streakNudge = earlyStreak >= 2
+      ? `\n\n💡 NOTA: O usuário está respondendo de forma curta há ${earlyStreak} turnos. Não force aprofundamento — tente ângulos mais leves ou perguntas concretas.`
+      : null;
+
+    // Priority 3: Topic shift → reset stagnation (but still allow streak nudge)
     if (lastUserContext.topic_continuity === 'shifted' || lastUserContext.topic_continuity === 'new_topic') {
       console.log(`🔄 Phase evaluator: topic_continuity=${lastUserContext.topic_continuity} → resetting stagnation`);
-      // Don't inject guidance — let Aura respond naturally to the new topic
-      return { guidance: null, detectedPhase: 'initial', stagnationLevel: 0 };
+      // Don't inject stagnation guidance — let Aura respond naturally to the new topic
+      // But still inject streak nudge if applicable
+      return { guidance: streakNudge, detectedPhase: 'initial', stagnationLevel: 0 };
     }
 
-    // Priority 3: Resistance/disengagement → cancel advancement
+    // Priority 4: Resistance/disengagement → cancel advancement
     if (lastUserContext.user_emotional_state === 'resistant' || lastUserContext.engagement_level === 'disengaged') {
       console.log(`🔄 Phase evaluator: resistance/disengagement detected → canceling advancement`);
       return {
@@ -889,8 +896,6 @@ Valide, dê espaço, mude o ângulo suavemente. Considere perguntar algo mais le
 ou simplesmente validar o silêncio/resistência como legítimo.`
       };
     }
-
-    // short_answer_streak is used below in session/free evaluation for soft nudge injection
   }
 
   const recentAssistant = messageHistory
