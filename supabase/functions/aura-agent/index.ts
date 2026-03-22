@@ -2107,6 +2107,11 @@ function sanitizeMessageHistory(messages: { role: string; content: string; creat
     // O campo created_at do banco já guarda a data real da mensagem
     if (m.role === 'assistant') {
       content = content.replace(/^\[\d{2}\/\d{2}\/\d{4},?\s*\d{2}:\d{2}\]\s*/g, '').trim();
+      // Remove referências a "dose dupla" / "resposta dupla" que poluem o contexto
+      content = content.replace(/[,.]?\s*[Ee]m dose dupla[^.!?\n]*/g, '').trim();
+      content = content.replace(/[Oo]pa,?\s*(essa )?resposta dupla[^.!?\n]*/g, '').trim();
+      content = content.replace(/[Aa] mensagem (veio )?em dose dupla[^.!?\n]*/g, '').trim();
+      content = content.replace(/[Mm]ensagem dupla[^.!?\n]*/g, '').trim();
     }
     
     // Adicionar timestamp APENAS para mensagens do usuário
