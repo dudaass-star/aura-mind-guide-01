@@ -581,6 +581,7 @@ interface UserContextState {
   topic_continuity?: string;
   engagement_level?: string;
   short_answer_streak?: number;
+  aura_phase?: string;
 }
 
 async function extractActionsFromResponse(
