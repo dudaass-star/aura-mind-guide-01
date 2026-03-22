@@ -4813,72 +4813,8 @@ Exemplo com 4 sessões:
     // Clean up schedule creation tag from response
     assistantMessage = assistantMessage.replace(/\[CRIAR_AGENDA:[^\]]+\]/gi, '');
 
-    // ========================================================================
-    // LEGACY FALLBACK: Tag-based theme tracking (primary: postConversationAnalysis)
-    // ========================================================================
-    
-    const themeNewMatches = assistantMessage.matchAll(/\[TEMA_NOVO:([^\]]+)\]/gi);
-    const themeResolvedMatches = assistantMessage.matchAll(/\[TEMA_RESOLVIDO:([^\]]+)\]/gi);
-    const themeProgressingMatches = assistantMessage.matchAll(/\[TEMA_PROGREDINDO:([^\]]+)\]/gi);
-    const themeStagnatedMatches = assistantMessage.matchAll(/\[TEMA_ESTAGNADO:([^\]]+)\]/gi);
-    
-    if (profile?.user_id) {
-      // Processar temas novos
-      for (const match of themeNewMatches) {
-        const themeName = match[1].trim();
-        console.log('🎯 New theme detected:', themeName);
-        
-        await supabase
-          .from('session_themes')
-          .upsert({
-            user_id: profile.user_id,
-            theme_name: themeName,
-            status: 'active',
-            last_mentioned_at: new Date().toISOString(),
-            session_count: 1
-          }, {
-            onConflict: 'user_id,theme_name'
-          });
-      }
-      
-      // Processar temas resolvidos
-      for (const match of themeResolvedMatches) {
-        const themeName = match[1].trim();
-        console.log('✅ Theme resolved:', themeName);
-        
-        await supabase
-          .from('session_themes')
-          .update({ 
-            status: 'resolved',
-            last_mentioned_at: new Date().toISOString()
-          })
-          .eq('user_id', profile.user_id)
-          .ilike('theme_name', `%${themeName}%`);
-      }
-      
-      // Processar temas em progresso
-      for (const match of themeProgressingMatches) {
-        const themeName = match[1].trim();
-        console.log('🟡 Theme progressing:', themeName);
-        
-        await supabase
-          .from('session_themes')
-          .update({ 
-            status: 'progressing',
-            last_mentioned_at: new Date().toISOString()
-          })
-          .eq('user_id', profile.user_id)
-          .ilike('theme_name', `%${themeName}%`);
-      }
-      
-      // Processar temas estagnados (para análise futura)
-      for (const match of themeStagnatedMatches) {
-        const themeName = match[1].trim();
-        console.log('🔴 Theme stagnated:', themeName);
-      }
-    }
-    
-    // Limpar tags de tema da resposta
+    // Theme tracking — handled by postConversationAnalysis() (Phase 3)
+    // Legacy tags still stripped for safety
     assistantMessage = assistantMessage.replace(/\[TEMA_NOVO:[^\]]+\]/gi, '');
     assistantMessage = assistantMessage.replace(/\[TEMA_RESOLVIDO:[^\]]+\]/gi, '');
     assistantMessage = assistantMessage.replace(/\[TEMA_PROGREDINDO:[^\]]+\]/gi, '');
