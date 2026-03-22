@@ -797,6 +797,56 @@ const PHASE_INDICATORS = {
   ]
 };
 
+// ============================================================
+// PHASE_INSTRUCTIONS: Tactical guidance with Certo/Errado examples
+// Injected ONLY during stagnation (zero cost otherwise)
+// ============================================================
+const SESSION_PHASE_INSTRUCTIONS: Record<string, string> = {
+  exploration_to_reframe: `
+INSTRUÇÕES TÁTICAS — Exploração → Reframe:
+❌ ERRADO: "E como isso te faz sentir?" / "Me conta mais sobre isso"
+✅ CERTO: "Sabe o que eu percebo em tudo isso que você trouxe? [nomeie o padrão/insight]. O que você acha?"
+❌ ERRADO: Continuar fazendo perguntas abertas sem sintetizar
+✅ CERTO: Apresentar UMA observação concreta e depois UMA pergunta de reframe
+TÉCNICA: Nomeie o que está por baixo, não o que está na superfície.`,
+
+  transition_to_closing: `
+INSTRUÇÕES TÁTICAS — Sentido → Fechamento:
+❌ ERRADO: "E o que mais você acha sobre isso?" / Continuar explorando sentido
+✅ CERTO: "Com base nisso que a gente explorou, o que o menor passo pareceria pra você?"
+❌ ERRADO: Dar conselho direto ou lista de tarefas
+✅ CERTO: Extrair do próprio usuário o compromisso. Perguntar, não prescrever.
+REGRA DE OURO: Ação sem sentido não sustenta. O compromisso precisa estar conectado ao insight.`,
+
+  stuck_in_opening: `
+INSTRUÇÕES TÁTICAS — Preso na Abertura:
+❌ ERRADO: "Entendo, e mais alguma coisa?" / Aceitar cada novo tema como igual
+✅ CERTO: "De tudo que você trouxe, o que mais pesa? Vamos focar nisso."
+❌ ERRADO: Tentar abordar 3 assuntos ao mesmo tempo
+✅ CERTO: Escolher O tema que tem mais carga emocional e aprofundar com investigação socrática.`
+};
+
+const FREE_PHASE_INSTRUCTIONS: Record<string, string> = {
+  presenca_to_sentido: `
+INSTRUÇÕES TÁTICAS — Presença → Sentido:
+❌ ERRADO: "Me conta mais" / "Como assim?" / "O que você sentiu?"
+✅ CERTO: "Sabe o que eu percebo por baixo disso? [observação]. O que essa situação mostra sobre o que importa pra você?"
+❌ ERRADO: Repetir validação emocional sem avançar ("Eu entendo", "Faz sentido sentir assim" pela 5ª vez)
+✅ CERTO: Validar brevemente + trazer UMA pergunta-âncora da Logoterapia:
+  • "O que essa situação mostra sobre o que importa pra você?"
+  • "Qual seria sua resposta mais autêntica a isso?"
+  • "Quem você quer ser do outro lado disso?"
+ESCOLHA UMA. Não faça checklist.`,
+
+  sentido_to_movimento: `
+INSTRUÇÕES TÁTICAS — Sentido → Movimento:
+❌ ERRADO: "E o que mais isso significa?" / Continuar filosofando
+✅ CERTO: "Com tudo isso que a gente explorou... o que o menor passo em direção a isso pareceria pra você?"
+❌ ERRADO: Dar conselho ("Você deveria fazer X")
+✅ CERTO: Extrair do usuário: "Se você pudesse mudar UMA coisa pequena essa semana, o que faria sentido?"
+REGRA DE OURO: Ação sem sentido não sustenta. Só proponha movimento se o sentido já apareceu.`
+};
+
 function evaluateTherapeuticPhase(
   messageHistory: Array<{ role: string; content: string }>,
   sessionActive: boolean,
