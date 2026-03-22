@@ -4180,7 +4180,7 @@ Exemplo com 4 sessões:
         // Last resort: try with only the current message
         console.warn('⚠️ Still blocked. Trying with minimal context (last 4 messages only)...');
         const minimalMessages = [...systemMsgs, ...chatMsgs.slice(-4)];
-        const lastResortData = await callAI(configuredModel, minimalMessages, 4096, 0.9, LOVABLE_API_KEY, supabase);
+        const lastResortData = await callAI(configuredModel, minimalMessages, 4096, 0.9, LOVABLE_API_KEY, supabase, AURA_STATIC_INSTRUCTIONS);
         await logTokenUsage(supabase, user_id || null, 'main_chat_minimal', configuredModel, lastResortData.usage);
         assistantMessage = lastResortData.choices?.[0]?.message?.content;
         if (!assistantMessage) {
