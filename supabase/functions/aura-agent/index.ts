@@ -4480,7 +4480,6 @@ Exemplo com 4 sessões:
     try {
       // Dynamic temperature: higher for short messages to reduce echo tendency
       const temperature = userWordCount <= 5 ? 0.9 : 0.8;
-      const temperature = userWordCount <= 5 ? 0.9 : 0.8;
       data = await callAI(configuredModel, apiMessages, 4096, temperature, LOVABLE_API_KEY, supabase, AURA_STATIC_INSTRUCTIONS);
     } catch (e: any) {
       if (e.status === 429) {
