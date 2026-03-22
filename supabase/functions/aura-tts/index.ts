@@ -294,6 +294,26 @@ serve(async (req) => {
       blocked = result.blocked;
     }
 
+    // Log TTS usage to token_usage_logs (fire-and-forget)
+    const logModel = ttsModel === 'inworld/aura' ? 'inworld/aura' : 'google/gemini-2.5-pro-tts';
+    const charCount = truncatedText.length;
+    try {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      const logSupabase = createClient(supabaseUrl, supabaseKey);
+      await logSupabase.from('token_usage_logs').insert({
+        function_name: 'aura-tts',
+        call_type: 'tts',
+        model: logModel,
+        prompt_tokens: charCount,
+        completion_tokens: audioBytes ? audioBytes.byteLength : 0,
+        total_tokens: charCount,
+        cached_tokens: 0,
+      });
+    } catch (logErr) {
+      console.error('Failed to log TTS usage:', logErr);
+    }
+
     if (!audioBytes) {
       console.log('📝 Returning fallback to text signal');
       return new Response(JSON.stringify({ audioContent: null, fallbackToText: true, reason: blocked ? "safety_filter" : "generation_failed" }), {

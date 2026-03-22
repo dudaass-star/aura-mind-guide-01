@@ -211,6 +211,22 @@ async function getOrCreateGeminiCache(
   const cacheName = cacheResult.name;
   console.log('✅ Cache created:', cacheName);
 
+  // Log cache creation cost (full input tokens charged at creation)
+  try {
+    const estimatedTokens = Math.round(systemPrompt.length / 4);
+    await supabase.from('token_usage_logs').insert({
+      function_name: 'aura-agent',
+      call_type: 'cache-creation',
+      model: geminiModel,
+      prompt_tokens: estimatedTokens,
+      completion_tokens: 0,
+      total_tokens: estimatedTokens,
+      cached_tokens: 0,
+    });
+  } catch (logErr) {
+    console.error('Failed to log cache creation:', logErr);
+  }
+
   // 4. Persist — ON CONFLICT handles race conditions
   const expiresAt = new Date(Date.now() + 3600 * 1000).toISOString();
   const { data: inserted, error: insertErr } = await supabase
