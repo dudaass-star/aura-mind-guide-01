@@ -4931,9 +4931,10 @@ Exemplo com 4 sessões:
     // ========================================================================
     // PROCESSAR TAG [NAO_PERTURBE:Xh]
     // ========================================================================
-    // DND: Tag-based (fallback) OR deterministic detection from user message
+    // DND: Tag-based (fallback) OR deterministic detection from user message + time-of-day
     const dndMatch = assistantMessage.match(/\[NAO_PERTURBE:(\d+)h?\]/i);
-    const deterministicDndHours = detectDoNotDisturb(message);
+    const brtHour = ((new Date().getUTCHours() - 3 + 24) % 24);
+    const deterministicDndHours = detectDoNotDisturb(message, brtHour);
     const dndHours = dndMatch ? parseInt(dndMatch[1]) : deterministicDndHours;
     if (dndHours && profile?.user_id) {
       const dndUntil = new Date(Date.now() + dndHours * 60 * 60 * 1000);
