@@ -811,7 +811,16 @@ Deno.serve(async (req) => {
           if (audioResult.success) {
             sentAnyResponse = true;
             try {
-              await supabase.from('messages').insert({ user_id: profile.user_id, role: 'assistant', content: responseText });
+              const { data: existingAssistant } = await supabase
+                .from('messages').select('id')
+                .eq('user_id', profile.user_id).eq('role', 'assistant').eq('content', responseText)
+                .gte('created_at', new Date(Date.now() - 30000).toISOString())
+                .limit(1).maybeSingle();
+              if (!existingAssistant) {
+                await supabase.from('messages').insert({ user_id: profile.user_id, role: 'assistant', content: responseText });
+              } else {
+                console.log('⏭️ DEDUP: Assistant audio message already exists, skipping persist');
+              }
             } catch {}
             continue;
           }
