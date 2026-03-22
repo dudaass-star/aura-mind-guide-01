@@ -609,7 +609,10 @@ Retorne um JSON com APENAS os campos relevantes (omita campos vazios/null):
   "session_pause_until_text": "expressão temporal",
   "journey_action": "list|switch|pause",
   "journey_id": "id_da_jornada",
-  "themes": [{"name": "nome do tema emocional", "status": "new|progressing|resolved|stagnated"}]
+  "themes": [{"name": "nome do tema emocional", "status": "new|progressing|resolved|stagnated"}],
+  "user_emotional_state": "stable|vulnerable|crisis|resistant",
+  "topic_continuity": "same_topic|shifted|new_topic",
+  "engagement_level": "engaged|short_answers|disengaged"
 }
 
 REGRAS:
@@ -618,7 +621,11 @@ REGRAS:
 - commitments: apenas compromissos CONCRETOS com ação clara (não intenções vagas)
 - themes: temas emocionais significativos discutidos (não triviais)
 - session_action: só se houve pedido explícito de agendamento/reagendamento/pausa
-- Se nada relevante, retorne {}
+- user_emotional_state: avalie o estado emocional do USUÁRIO (não da assistente). "crisis" = risco/desespero, "vulnerable" = fragilidade emocional, "resistant" = evitando aprofundamento, "stable" = normal
+- topic_continuity: compare o tema da mensagem do USUÁRIO com o fluxo anterior. "shifted" = mudou de assunto parcialmente, "new_topic" = tema completamente novo
+- engagement_level: "disengaged" = respostas evasivas/monossilábicas sem conteúdo, "short_answers" = respostas curtas mas com conteúdo, "engaged" = participando ativamente
+- SEMPRE inclua user_emotional_state, topic_continuity e engagement_level
+- Se nada mais for relevante, retorne apenas esses 3 campos
 Apenas o JSON, sem markdown.`;
 
     const extractionBody = {
