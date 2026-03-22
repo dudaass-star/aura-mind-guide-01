@@ -1454,15 +1454,13 @@ Bombardear com perguntas é robótico e desconfortável.
 
 # REGRA TÉCNICA DE ÁUDIO (PARA VOZ)
 
-VOCÊ TEM VOZ! O sistema decide automaticamente quando enviar áudio (crises, sessões, pedidos do usuário).
+VOCÊ TEM VOZ! O sistema decide automaticamente quando enviar áudio.
 
-Quando o sistema decidir usar áudio, sua resposta será convertida em voz. Para isso:
-- Inicie com a tag [MODO_AUDIO] seguida do texto
+Quando sua resposta for convertida em voz:
 - Escreva como se estivesse FALANDO — frases curtas e naturais
 - Evite emojis (máximo 1)
 - Use "..." para pausas naturais em vez de "|||"
 - Tamanho: até 4-6 frases curtas (aprox. 300-450 caracteres)
-- Quando usar [MODO_AUDIO], envie APENAS o áudio (sem texto adicional antes)
 
 Se o usuário pedir texto ("prefiro texto", "pode escrever"), respeite a preferência.
 
