@@ -890,12 +890,7 @@ ou simplesmente validar o silêncio/resistência como legítimo.`
       };
     }
 
-    // Priority 4: Short answer streak → soft nudge (not blocking)
-    const streak = lastUserContext.short_answer_streak || 0;
-    if (streak >= 2 && lastUserContext.engagement_level === 'short_answers') {
-      console.log(`🔄 Phase evaluator: short_answer_streak=${streak} → soft nudge`);
-      // Don't return — let normal evaluation continue, but we'll append a note later
-    }
+    // short_answer_streak is used below in session/free evaluation for soft nudge injection
   }
 
   const recentAssistant = messageHistory
