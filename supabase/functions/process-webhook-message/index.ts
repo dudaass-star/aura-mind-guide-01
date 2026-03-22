@@ -658,9 +658,7 @@ Deno.serve(async (req) => {
     const { data: recentUserMsgs } = await accumulatedQuery;
 
     if (recentUserMsgs && recentUserMsgs.length > 1) {
-      const previous = recentUserMsgs.slice(0, -1).map(m => m.content).join(' / ');
-      const last = recentUserMsgs[recentUserMsgs.length - 1].content;
-      messageText = `[Mensagens anteriores do usuário: ${previous}]\n\n${last}`;
+      messageText = recentUserMsgs.map(m => m.content).join('\n');
       console.log(`📦 Accumulated ${recentUserMsgs.length} sequential messages into one`);
     }
 
