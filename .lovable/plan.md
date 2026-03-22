@@ -1,55 +1,71 @@
 
 
-# Fix: Aura assume peso emocional em mensagens leves
+# Por que as mensagens duplicam e como corrigir de vez
 
-## Correções (2 alterações no mesmo arquivo)
+## Por que é difícil
 
-### 1. Contexto temporal sem viés emocional (linha 3819)
+O problema de duplicação tem **múltiplas causas simultâneas**, o que faz parecer que cada correção resolve, mas a duplicação reaparece por outro caminho. Aqui estão as 3 brechas que encontrei:
 
-A instrução para gap de 4-24h diz "Pergunte como o usuario esta AGORA" — o modelo interpreta como convite para sondagem emocional. Trocar para tom neutro:
+### Brecha 1: Mensagem salva ANTES do lock
 
-**Antes:**
-```
-Passaram-se algumas horas. NAO retome o assunto anterior como se fosse continuacao imediata. Pergunte como o usuario esta AGORA.
-```
+No `process-webhook-message`, a mensagem do usuário é inserida na tabela `messages` na **linha 284** (antes do lock na linha 345). Se dois workers chegam quase ao mesmo tempo:
+- Worker A salva a mensagem no banco, adquire o lock, processa
+- Worker B salva a MESMA mensagem no banco de novo, tenta o lock, falha, aborta
+- Resultado: mensagem do usuário duplicada no banco → o agente vê 2x a mesma mensagem no contexto → pode gerar resposta "dupla" no próximo turno
 
-**Depois:**
-```
-Passaram-se algumas horas. NAO retome o assunto anterior como se fosse continuacao imediata. Cumprimente de forma natural e leve. NAO assuma que algo esta errado — espere o usuario trazer o assunto.
-```
+### Brecha 2: Sem dedup quando messageId é nulo
 
-### 2. Neutralizar fallbacks emocionais (linhas 4240-4254)
+No `webhook-zapi`, o dedup só funciona se `payload.messageId` existe (linha 80: `if (payload.messageId)`). Se o Z-API manda algum evento sem messageId, o dedup é completamente ignorado e dois workers podem ser disparados.
 
-Remover frases pesadas como "isso é pesado", "O que tá sentindo agora?", "o que tá por baixo disso?" dos arrays de fallback.
+### Brecha 3: Z-API manda múltiplos eventos para a mesma mensagem
 
-**Session fallbacks — substituir por:**
+O Z-API pode enviar diferentes tipos de callback (received, delivered, read) para a mesma mensagem. O payload pode ter estrutura similar e passar por todos os filtros. Mesmo com dedup por messageId, se o ID for diferente entre callbacks, ambos passam.
+
+## Correções
+
+### 1. Mover persistência DEPOIS do lock (`process-webhook-message`)
+
+Mover o bloco de insert da mensagem do usuário (linhas 281-297) para DEPOIS da aquisição do lock (após linha 378). Assim, só o worker que ganha o lock persiste a mensagem. Workers abortados não poluem o banco.
+
+### 2. Dedup por conteúdo quando messageId é nulo (`process-webhook-message`)
+
+Após adquirir o lock, antes de processar, verificar se já existe uma mensagem idêntica do usuário nos últimos 30 segundos:
+
 ```typescript
-const sessionFallbacks = [
-  `${fallbackNamePrefix}hmm, me conta mais sobre isso.`,
-  `Hmm. Me conta mais sobre como isso aparece no seu dia a dia.`,
-  `${fallbackNamePrefix}fica comigo — e o que mais tá rolando?`,
-  `Entendi. E aí, como você tá com isso?`,
-  `${fallbackNamePrefix}isso importa. Me conta mais sobre ${recentThemeName || 'isso'}.`,
-  `Hmm... faz sentido. Me fala mais.`,
-];
+const { data: recentDup } = await supabase
+  .from('messages')
+  .select('id')
+  .eq('user_id', profile.user_id)
+  .eq('role', 'user')
+  .eq('content', messageText)
+  .gte('created_at', new Date(Date.now() - 30000).toISOString())
+  .limit(1)
+  .maybeSingle();
+
+if (recentDup) {
+  console.log('⏭️ DEDUP: Mensagem idêntica encontrada nos últimos 30s, abortando');
+  await releaseLock();
+  return ...;
+}
 ```
 
-**Casual fallbacks — substituir por:**
+### 3. Filtrar eventos irrelevantes no webhook-zapi
+
+Adicionar early exit no `webhook-zapi` para ignorar payloads que não têm texto, áudio nem imagem (são apenas status updates):
+
 ```typescript
-const casualFallbacks = [
-  `${fallbackNamePrefix}tô processando isso aqui. Me conta mais.`,
-  `Hmm... e o que mais tá passando pela sua cabeça?`,
-  `Entendi. E aí, tudo bem?`,
-  `${fallbackNamePrefix}isso ficou aqui comigo. Me conta mais sobre ${recentThemeName || 'isso'}.`,
-  `Sério? Me fala mais.`,
-  `Hmm. Faz sentido. E aí?`,
-];
+if (!payload.text && !payload.hasAudio && !payload.hasImage) {
+  console.log('⏭️ Ignoring status-only event (no content)');
+  return new Response(...);
+}
 ```
 
-## Arquivo editado
-- `supabase/functions/aura-agent/index.ts` (2 alterações)
+## Arquivos editados
+- `supabase/functions/process-webhook-message/index.ts` — mover persistência + dedup por conteúdo
+- `supabase/functions/webhook-zapi/index.ts` — filtrar eventos sem conteúdo
 
 ## Resultado esperado
-- Gap temporal não força sondagem emocional
-- Fallbacks usam tom neutro e curioso em vez de assumir peso
+- Mesmo que Z-API envie o webhook 2x, apenas 1 mensagem é salva e 1 resposta é gerada
+- Workers que perdem o lock não deixam lixo no banco
+- Eventos de status (sem conteúdo) são descartados antes de disparar o worker
 
