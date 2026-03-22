@@ -627,7 +627,7 @@ REGRAS:
 - themes: temas emocionais significativos discutidos (não triviais)
 - session_action: só se houve pedido explícito de agendamento/reagendamento/pausa
 - user_emotional_state: avalie o estado emocional do USUÁRIO (não da assistente). "crisis" = risco/desespero, "vulnerable" = fragilidade emocional, "resistant" = evitando aprofundamento, "stable" = normal
-- topic_continuity: compare o tema da mensagem ATUAL do USUÁRIO com as mensagens anteriores (se disponíveis). "shifted" = mudou de assunto parcialmente, "new_topic" = tema completamente novo, "same_topic" = continuação do mesmo tema
+- topic_continuity: compare o tema da mensagem ATUAL do USUÁRIO com a mensagem IMEDIATAMENTE anterior dele (não com o início da conversa). "shifted" = mudou de assunto parcialmente em relação à última mensagem, "new_topic" = tema completamente novo vs a última mensagem, "same_topic" = continuação do mesmo tema da última mensagem. IMPORTANTE: se o usuário mudou de tema no turno anterior e agora CONTINUA nesse novo tema, classifique como "same_topic" (ele está aprofundando o novo assunto).
 - engagement_level: "disengaged" = respostas evasivas/monossilábicas sem conteúdo, "short_answers" = respostas curtas mas com conteúdo, "engaged" = participando ativamente
 - IMPORTANTE sobre engagement_level: Alguns usuários são naturalmente sucintos. Só classifique como "disengaged" se houver mudança clara de padrão OU evasão ativa (ex: "tanto faz", "sei lá", "ok"). Respostas curtas com conteúdo emocional genuíno = "engaged", não "short_answers".
 - SEMPRE inclua user_emotional_state, topic_continuity e engagement_level
@@ -890,12 +890,7 @@ ou simplesmente validar o silêncio/resistência como legítimo.`
       };
     }
 
-    // Priority 4: Short answer streak → soft nudge (not blocking)
-    const streak = lastUserContext.short_answer_streak || 0;
-    if (streak >= 2 && lastUserContext.engagement_level === 'short_answers') {
-      console.log(`🔄 Phase evaluator: short_answer_streak=${streak} → soft nudge`);
-      // Don't return — let normal evaluation continue, but we'll append a note later
-    }
+    // short_answer_streak is used below in session/free evaluation for soft nudge injection
   }
 
   const recentAssistant = messageHistory
@@ -1125,7 +1120,8 @@ async function processExtractedActions(
   supabase: any,
   profile: any,
   currentSession: any,
-  dateTimeContext: { currentDate: string; currentTime: string; isoDate: string }
+  dateTimeContext: { currentDate: string; currentTime: string; isoDate: string },
+  previousUserContext?: UserContextState | null
 ): Promise<void> {
   if (!profile?.user_id) return;
   const userId = profile.user_id;
@@ -1231,17 +1227,10 @@ async function processExtractedActions(
 
     // Save user context state for next turn's phase evaluator
     if (actions.user_emotional_state || actions.topic_continuity || actions.engagement_level) {
-      // Calculate short_answer_streak
+      // Calculate short_answer_streak using previousUserContext (no extra DB query)
       let shortAnswerStreak = 0;
       if (actions.engagement_level === 'short_answers') {
-        // Read previous context to increment streak
-        const { data: prevState } = await supabase
-          .from('aura_response_state')
-          .select('last_user_context')
-          .eq('user_id', userId)
-          .single();
-        const prevContext = prevState?.last_user_context as UserContextState | null;
-        shortAnswerStreak = (prevContext?.short_answer_streak || 0) + 1;
+        shortAnswerStreak = (previousUserContext?.short_answer_streak || 0) + 1;
       }
 
       const userContext: UserContextState = {
@@ -1250,11 +1239,10 @@ async function processExtractedActions(
         engagement_level: actions.engagement_level,
         short_answer_streak: shortAnswerStreak,
       };
-      await supabase.from('aura_response_state').upsert({
-        user_id: userId,
-        last_user_context: userContext,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'user_id' });
+      // Use partial UPDATE to avoid overwriting concurrent fields (is_responding, pending_content, etc.)
+      await supabase.from('aura_response_state')
+        .update({ last_user_context: userContext, updated_at: new Date().toISOString() })
+        .eq('user_id', userId);
       console.log('✅ [MICRO-AGENT] User context saved:', JSON.stringify(userContext));
     }
 
@@ -5925,7 +5913,7 @@ Responda apenas o resumo, sem formatação.`
             message, assistantMessage, GEMINI_API_KEY, supabase, profile.user_id, recentUserMsgs
           );
           if (Object.keys(actions).length > 0) {
-            await processExtractedActions(actions, supabase, profile, currentSession, dateTimeContext);
+            await processExtractedActions(actions, supabase, profile, currentSession, dateTimeContext, last_user_context);
           }
         } catch (err) {
           console.error('⚠️ Micro-agent async error:', err);
