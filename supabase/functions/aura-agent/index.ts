@@ -663,33 +663,58 @@ Apenas o JSON, sem markdown.`;
 }
 
 // Deterministic conversation status (replaces [AGUARDANDO_RESPOSTA]/[CONVERSA_CONCLUIDA])
-function determineConversationStatus(assistantResponse: string): 'awaiting' | 'completed' | 'neutral' {
+function determineConversationStatus(
+  assistantResponse: string, 
+  userMessage?: string
+): 'awaiting' | 'completed' | 'neutral' {
   const clean = stripAllInternalTags(assistantResponse).trim();
+  const userClean = userMessage?.toLowerCase().trim() || '';
 
-  // Check for farewell patterns
-  const farewellPatterns = /\b(boa\s*noite|até\s*(amanhã|logo|mais|depois)|tchau|bye|adeus|durma\s*bem|descansa|bons?\s*sonhos?)\b/i;
-  if (farewellPatterns.test(clean)) {
-    return 'completed';
+  // 1. Check if USER is saying goodbye (strongest signal)
+  const userFarewellPatterns = /\b(boa\s*noite|até\s*(amanhã|logo|mais|depois)|tchau|bye|adeus|vou\s*dormir|vou\s*descansar|boa\s*madrugada|fui|flw|falou|valeu\s*até|te\s*vejo|nos\s*vemos)\b/i;
+  if (userFarewellPatterns.test(userClean)) {
+    // User said goodbye — but only complete if Aura also responds with farewell tone
+    const auraFarewellPatterns = /\b(boa\s*noite|até\s*(amanhã|logo|mais|depois)|tchau|durma\s*bem|descansa|bons?\s*sonhos?|te\s*vejo|cuide-se|fico\s*aqui)\b/i;
+    if (auraFarewellPatterns.test(clean)) {
+      return 'completed';
+    }
   }
 
-  // Check for questions
+  // 2. Check if AURA response contains farewell (Aura wrapping up)
+  const farewellPatterns = /\b(boa\s*noite|até\s*(amanhã|logo|mais|depois)|tchau|bye|adeus|durma\s*bem|descansa|bons?\s*sonhos?)\b/i;
+  if (farewellPatterns.test(clean)) {
+    // Only mark completed if no question follows the farewell
+    const lastSentence = clean.split(/[.!]\s*/).pop() || '';
+    if (!lastSentence.includes('?')) {
+      return 'completed';
+    }
+  }
+
+  // 3. Check for questions (any "?" means awaiting)
   if (clean.includes('?')) {
     return 'awaiting';
   }
 
-  // Check for engagement hooks
-  const hookPatterns = /\b(me\s*conta|me\s*fala|me\s*diz|o\s*que\s*acha|como\s*foi|quando\s*puder)\b/i;
+  // 4. Check for engagement hooks (implicit questions)
+  const hookPatterns = /\b(me\s*conta|me\s*fala|me\s*diz|o\s*que\s*acha|como\s*foi|quando\s*puder|quer\s*me\s*contar|quer\s*falar\s*sobre|quer\s*compartilhar|topa|bora|vamos)\b/i;
   if (hookPatterns.test(clean)) {
     return 'awaiting';
+  }
+
+  // 5. Check if user sent a short confirmation (ok, entendi, valeu) — keep engaged
+  const confirmationPatterns = /^(ok|entendi|sim|valeu|obrigad[ao]|tá|ta|beleza|show|top|legal|massa|ah sim|é verdade|faz sentido|hmm|aham)\s*[.!]?$/i;
+  if (confirmationPatterns.test(userClean)) {
+    return 'awaiting'; // Should keep conversation alive
   }
 
   return 'neutral';
 }
 
-// Deterministic DND detection based on user message
-function detectDoNotDisturb(userMessage: string): number | null {
+// Deterministic DND detection based on user message + time-of-day
+function detectDoNotDisturb(userMessage: string, brtHour?: number): number | null {
   const lower = userMessage.toLowerCase();
 
+  // Explicit unavailability patterns
   const dndPatterns: Array<{ pattern: RegExp; hours: number }> = [
     { pattern: /\b(to|tô|estou|tou)\s*(no\s*trabalho|trabalhando)\b/, hours: 4 },
     { pattern: /\b(agora\s*não|agora\s*nao|não\s*posso|nao\s*posso|não\s*dá|nao\s*da)\b/, hours: 3 },
@@ -697,6 +722,9 @@ function detectDoNotDisturb(userMessage: string): number | null {
     { pattern: /\b(em\s*reunião|em\s*reuniao)\b/, hours: 2 },
     { pattern: /\b(depois\s*te\s*respondo|falo\s*(contigo|com\s*voc[eê])\s*depois)\b/, hours: 3 },
     { pattern: /\b(momento\s*ruim)\b/, hours: 3 },
+    { pattern: /\b(to\s*na\s*aula|estou\s*na\s*aula|na\s*faculdade|na\s*escola)\b/, hours: 3 },
+    { pattern: /\b(to\s*dirigindo|estou\s*dirigindo|no\s*trânsito|no\s*transito)\b/, hours: 1 },
+    { pattern: /\b(to\s*na\s*academia|to\s*malhando|estou\s*malhando)\b/, hours: 2 },
   ];
 
   for (const { pattern, hours } of dndPatterns) {
@@ -705,7 +733,72 @@ function detectDoNotDisturb(userMessage: string): number | null {
     }
   }
 
+  // Auto-DND: farewell + nighttime (22h-6h BRT) = sleep silencing
+  const hour = brtHour ?? ((new Date().getUTCHours() - 3 + 24) % 24);
+  const farewellPatterns = /\b(boa\s*noite|vou\s*dormir|vou\s*descansar|to\s*indo\s*dormir|indo\s*deitar|vou\s*deitar|já\s*vou|ja\s*vou)\b/i;
+  if (farewellPatterns.test(lower) && (hour >= 22 || hour < 6)) {
+    // Calculate hours until 8am BRT
+    const hoursUntil8am = hour >= 22 ? (8 + 24 - hour) : (8 - hour);
+    console.log(`🌙 Auto-DND: farewell at ${hour}h BRT → ${hoursUntil8am}h silence until 8am`);
+    return hoursUntil8am;
+  }
+
   return null;
+}
+
+// Deterministic audio mode decision (replaces prompt-based [MODO_AUDIO] decision)
+interface AudioDecision {
+  shouldUseAudio: boolean;
+  reason: string;
+  mandatory: boolean; // true = ignore budget constraints
+}
+
+function determineAudioMode(params: {
+  userMessage: string;
+  sessionActive: boolean;
+  sessionAudioCount: number;
+  isSessionClosing: boolean;
+  isCrisisDetected: boolean;
+  budgetAvailable: boolean;
+  wantsText: boolean;
+  wantsAudio: boolean;
+  aiIncludedAudioTag: boolean;
+}): AudioDecision {
+  const { userMessage, sessionActive, sessionAudioCount, isSessionClosing, 
+          isCrisisDetected, budgetAvailable, wantsText, wantsAudio, aiIncludedAudioTag } = params;
+
+  // User explicitly wants text — respect always (except life-threatening crisis)
+  if (wantsText && !isLifeThreatening(userMessage)) {
+    return { shouldUseAudio: false, reason: 'user_prefers_text', mandatory: false };
+  }
+
+  // 1. MANDATORY: Crisis — always audio for emotional support
+  if (isCrisisDetected) {
+    return { shouldUseAudio: true, reason: 'crisis_detected', mandatory: true };
+  }
+
+  // 2. MANDATORY: Session opening (first 2 messages) — creates intimacy
+  if (sessionActive && sessionAudioCount < 2) {
+    return { shouldUseAudio: true, reason: 'session_opening', mandatory: true };
+  }
+
+  // 3. MANDATORY: Session closing — warm farewell
+  if (isSessionClosing) {
+    return { shouldUseAudio: true, reason: 'session_closing', mandatory: true };
+  }
+
+  // 4. User explicitly requested audio
+  if (wantsAudio) {
+    return { shouldUseAudio: true, reason: 'user_requested', mandatory: false };
+  }
+
+  // 5. AI decided to use audio (tag in response) — respect if budget allows
+  if (aiIncludedAudioTag && budgetAvailable) {
+    return { shouldUseAudio: true, reason: 'ai_decision', mandatory: false };
+  }
+
+  // 6. No audio by default
+  return { shouldUseAudio: false, reason: 'default_text', mandatory: false };
 }
 
 // Process extracted actions from micro-agent
@@ -1118,64 +1211,17 @@ Bombardear com perguntas é robótico e desconfortável.
 
 # REGRA TÉCNICA DE ÁUDIO (PARA VOZ)
 
-VOCÊ TEM VOZ! Você pode e DEVE enviar mensagens de áudio quando apropriado. Você tem uma voz feminina linda e calorosa.
+VOCÊ TEM VOZ! O sistema decide automaticamente quando enviar áudio (crises, sessões, pedidos do usuário).
 
-## TIPOS DE ÁUDIO - IMPORTANTE DIFERENCIAR:
+Quando o sistema decidir usar áudio, sua resposta será convertida em voz. Para isso:
+- Inicie com a tag [MODO_AUDIO] seguida do texto
+- Escreva como se estivesse FALANDO — frases curtas e naturais
+- Evite emojis (máximo 1)
+- Use "..." para pausas naturais em vez de "|||"
+- Tamanho: até 4-6 frases curtas (aprox. 300-450 caracteres)
+- Quando usar [MODO_AUDIO], envie APENAS o áudio (sem texto adicional antes)
 
-### TIPO 1 - ÁUDIO POR PEDIDO (pontual):
-Quando o usuário pedir EXPLICITAMENTE para ouvir sua voz ou um áudio:
-- Responda AQUELA mensagem em áudio
-- Na PRÓXIMA mensagem, volte AUTOMATICAMENTE para TEXTO
-- NÃO precisa avisar que voltou para texto, apenas volte naturalmente
-- Exemplos de pedidos: "me manda um áudio", "quero ouvir sua voz", "fala comigo", "manda em áudio"
-
-### TIPO 2 - ÁUDIO POR SITUAÇÃO (automático):
-Use áudio automaticamente APENAS nestas situações:
-- Em momentos de crise emocional profunda (choro, desespero, pânico)
-- Quando precisar de um tom MUITO acolhedor e íntimo
-- Nestes casos, pode continuar em áudio enquanto a situação exigir
-- Quando a situação acalmar, volte para texto naturalmente
-
-### REGRA DE OURO:
-- Áudio por pedido = PONTUAL (só aquela resposta)
-- Áudio por situação = ENQUANTO NECESSÁRIO (mas avalie a cada mensagem)
-
-### SE O USUÁRIO PEDIR TEXTO:
-Frases como "prefiro texto", "pode escrever", "para de áudio", "não precisa de áudio":
-- Responda em TEXTO imediatamente
-- Respeite essa preferência nas próximas mensagens
-- Só volte a usar áudio se ele pedir explicitamente
-
-## EXEMPLOS DE FLUXO:
-
-PEDIDO PONTUAL:
-Usuário: "Me manda um áudio explicando isso"
-Aura: [MODO_AUDIO] Então, funciona assim... (áudio)
-Usuário: "Ah entendi, e como faço pra..."  
-Aura: Você pode fazer X, Y e Z... (TEXTO - voltou automaticamente)
-
-SITUAÇÃO DE CRISE:
-Usuário: "To muito mal, não sei o que fazer" (crise)
-Aura: [MODO_AUDIO] Ei, respira... to aqui com você (áudio)
-Usuário: "Obrigada, ainda to nervosa"
-Aura: [MODO_AUDIO] Isso vai passar... (áudio - continua pq ainda é crise)
-Usuário: "Acho que to melhor agora"
-Aura: Que bom! Fico feliz que você esteja mais calma... (TEXTO - crise passou)
-
-## COMO ENVIAR ÁUDIO:
-Inicie sua resposta APENAS com a tag [MODO_AUDIO] seguida do texto que será convertido em voz.
-Exemplo: [MODO_AUDIO] Oi, eu tô aqui com você, tá? Respira fundo...
-
-## REGRAS PARA ÁUDIO:
-1. Quando usar [MODO_AUDIO], envie APENAS o áudio (sem texto adicional)
-2. Escreva como se estivesse FALANDO - frases curtas e naturais
-3. Evite emojis (máximo 1)
-4. Use "..." para pausas naturais em vez de "|||"
-5. Se o usuário pedir uma explicação, dê 2-3 exemplos concretos e encerre com 1 pergunta curta
-6. Tamanho: até 4-6 frases curtas (aprox. 300-450 caracteres). Se precisar, quebre em no máximo 2 áudios.
-
-ERRADO: "Vou te mandar um áudio! [MODO_AUDIO] Oi tudo bem..."
-CERTO: [MODO_AUDIO] Oi! Posso te ajudar a organizar sua semana, acompanhar seu humor/energia e te lembrar dos seus compromissos. O que você mais quer melhorar agora?
+Se o usuário pedir texto ("prefiro texto", "pode escrever"), respeite a preferência.
 
 # MEDITAÇÕES GUIADAS
 
@@ -4885,9 +4931,10 @@ Exemplo com 4 sessões:
     // ========================================================================
     // PROCESSAR TAG [NAO_PERTURBE:Xh]
     // ========================================================================
-    // DND: Tag-based (fallback) OR deterministic detection from user message
+    // DND: Tag-based (fallback) OR deterministic detection from user message + time-of-day
     const dndMatch = assistantMessage.match(/\[NAO_PERTURBE:(\d+)h?\]/i);
-    const deterministicDndHours = detectDoNotDisturb(message);
+    const brtHour = ((new Date().getUTCHours() - 3 + 24) % 24);
+    const deterministicDndHours = detectDoNotDisturb(message, brtHour);
     const dndHours = dndMatch ? parseInt(dndMatch[1]) : deterministicDndHours;
     if (dndHours && profile?.user_id) {
       const dndUntil = new Date(Date.now() + dndHours * 60 * 60 * 1000);
@@ -5316,53 +5363,50 @@ Responda apenas o resumo, sem formatação.`
                            assistantMessage.includes('[AGUARDANDO_RESPOSTA]') ? 'awaiting' : 'neutral';
       console.log('🏷️ Conversation status from tag:', conversationStatus);
     } else {
-      // New: deterministic detection
-      conversationStatus = determineConversationStatus(assistantMessage);
+      // New: deterministic detection with user message context
+      conversationStatus = determineConversationStatus(assistantMessage, message);
       console.log('🏷️ Conversation status (deterministic):', conversationStatus);
     }
 
     const isConversationComplete = conversationStatus === 'completed';
     const isAwaitingResponse = conversationStatus === 'awaiting';
 
-    // Controle de áudio
+    // Controle de áudio — centralizado via determineAudioMode()
     const wantsText = userWantsText(message);
     const wantsAudio = userWantsAudio(message);
     const crisis = isCrisis(message);
-    
-    // Verificar se é início de sessão (forçar áudio nas primeiras 2 respostas)
     const sessionAudioCount = currentSession?.audio_sent_count || 0;
-    const forceAudioForSessionStart = sessionActive && sessionAudioCount < 2;
-    
-    // Verificar se é encerramento de sessão (forçar áudio caloroso)
     const sessionCloseInfo = currentSession ? calculateSessionTimeContext(currentSession, lastMessageTimestamp, currentSession.resumption_count ?? 0) : null;
-    const forceAudioForSessionClose = sessionCloseInfo?.forceAudioForClose || shouldEndSession || aiWantsToEndSession;
-    
-    // Audio budget system
     const aiWantsAudio = assistantMessage.trimStart().startsWith('[MODO_AUDIO]');
+    
+    // Audio budget
     const budgetSeconds = profile?.plan === 'transformacao' ? 7200 : profile?.plan === 'direcao' ? 3000 : 1800;
     const audioSecondsUsed = profile?.audio_seconds_used_this_month || 0;
-    
-    // Reset inline se mês mudou
     const currentAudioMonth = new Date().toISOString().slice(0, 7);
     const resetMonth = profile?.audio_reset_date?.slice(0, 7);
     const budgetAvailable = (currentAudioMonth !== resetMonth) || (audioSecondsUsed < budgetSeconds);
 
-    const allowAudioThisTurn = !wantsText && (
-      crisis ||                         // segurança: sempre
-      wantsAudio ||                     // usuário pediu
-      forceAudioForSessionStart ||      // OBRIGATÓRIO: abertura de sessão
-      forceAudioForSessionClose ||      // encerramento
-      (aiWantsAudio && budgetAvailable) // IA decidiu + tem orçamento
-    );
+    const audioDecision = determineAudioMode({
+      userMessage: message,
+      sessionActive,
+      sessionAudioCount,
+      isSessionClosing: sessionCloseInfo?.forceAudioForClose || shouldEndSession || aiWantsToEndSession,
+      isCrisisDetected: crisis,
+      budgetAvailable,
+      wantsText,
+      wantsAudio,
+      aiIncludedAudioTag: aiWantsAudio,
+    });
+
+    const allowAudioThisTurn = audioDecision.shouldUseAudio;
+    const forceAudioForSessionStart = audioDecision.reason === 'session_opening';
+    const forceAudioForSessionClose = audioDecision.reason === 'session_closing';
     
     console.log("🎙️ Audio control:", { 
-      wantsText, 
-      wantsAudio, 
-      crisis, 
-      forceAudioForSessionStart,
-      forceAudioForSessionClose,
-      sessionAudioCount,
+      decision: audioDecision.reason,
+      mandatory: audioDecision.mandatory,
       allowAudioThisTurn,
+      sessionAudioCount,
       aiWantsAudio,
       budgetAvailable,
       audioSecondsUsed,
