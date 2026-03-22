@@ -839,9 +839,18 @@ Deno.serve(async (req) => {
       await sendTextMessage(cleanPhone, responseText, typingSeconds, instanceConfig2);
       sentAnyResponse = true;
 
-      // Persist assistant message to DB
+      // Persist assistant message to DB (with dedup check)
       try {
-        await supabase.from('messages').insert({ user_id: profile.user_id, role: 'assistant', content: responseText });
+        const { data: existingAssistant2 } = await supabase
+          .from('messages').select('id')
+          .eq('user_id', profile.user_id).eq('role', 'assistant').eq('content', responseText)
+          .gte('created_at', new Date(Date.now() - 30000).toISOString())
+          .limit(1).maybeSingle();
+        if (!existingAssistant2) {
+          await supabase.from('messages').insert({ user_id: profile.user_id, role: 'assistant', content: responseText });
+        } else {
+          console.log('⏭️ DEDUP: Assistant text message already exists, skipping persist');
+        }
       } catch (persistErr) {
         console.warn('⚠️ Failed to persist assistant message:', persistErr);
       }
