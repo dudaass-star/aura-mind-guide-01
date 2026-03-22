@@ -580,6 +580,7 @@ interface UserContextState {
   user_emotional_state?: string;
   topic_continuity?: string;
   engagement_level?: string;
+  short_answer_streak?: number;
 }
 
 async function extractActionsFromResponse(
