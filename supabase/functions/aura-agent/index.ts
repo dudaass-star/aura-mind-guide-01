@@ -1045,7 +1045,8 @@ O usuário já explorou o sentido por ${recentPairs}+ trocas. Conduza para MOVIM
 
 AÇÃO:
 - "Com tudo isso que a gente explorou... o que o menor passo em direção a isso pareceria pra você?"
-- Se o sentido ainda não apareceu, mude o ângulo da pergunta.`
+- Se o sentido ainda não apareceu, mude o ângulo da pergunta.
+${FREE_PHASE_INSTRUCTIONS.sentido_to_movimento}`
     };
   }
 
