@@ -9,15 +9,15 @@ import { ArrowLeft, Save, Brain, Mic } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const AI_MODELS = [
-  { value: 'google/gemini-2.5-pro', label: 'Google Gemini 2.5 Pro', description: 'Default — melhor custo-benefício via Gateway' },
-  { value: 'google/gemini-2.5-flash', label: 'Google Gemini 2.5 Flash', description: 'Mais rápido e barato, menos preciso' },
-  { value: 'google/gemini-3-flash-preview', label: 'Gemini 3 Flash', description: 'Nova geração — padrão, sem thinking extra' },
-  { value: 'google/gemini-3-flash-preview:low', label: 'Gemini 3 Flash (Low)', description: 'Thinking mínimo — mais rápido' },
-  { value: 'google/gemini-3-flash-preview:medium', label: 'Gemini 3 Flash (Medium)', description: 'Thinking moderado — equilíbrio' },
-  { value: 'google/gemini-3-flash-preview:high', label: 'Gemini 3 Flash (High)', description: 'Thinking máximo — mais preciso' },
-  { value: 'anthropic/claude-sonnet-4-6', label: 'Claude Sonnet 4.6', description: 'API Anthropic direta — maior custo' },
-  { value: 'anthropic/claude-haiku-4-5', label: 'Claude Haiku 4.5', description: 'Anthropic rápido e barato — bom para alto volume' },
-  { value: 'openai/gpt-5', label: 'OpenAI GPT-5', description: 'Potente, custo mais alto via Gateway' },
+  { value: 'google/gemini-2.5-pro', label: 'Google Gemini 2.5 Pro', description: 'Default — melhor custo-benefício via Gateway', costTier: 'normal' },
+  { value: 'google/gemini-2.5-flash', label: 'Google Gemini 2.5 Flash', description: 'Mais rápido e barato, menos preciso', costTier: 'normal' },
+  { value: 'google/gemini-3-flash-preview', label: 'Gemini 3 Flash', description: 'Nova geração — padrão, sem thinking extra', costTier: 'normal' },
+  { value: 'google/gemini-3-flash-preview:low', label: 'Gemini 3 Flash (Low)', description: 'Thinking mínimo — mais rápido', costTier: 'normal' },
+  { value: 'google/gemini-3-flash-preview:medium', label: 'Gemini 3 Flash (Medium)', description: 'Thinking moderado — equilíbrio', costTier: 'normal' },
+  { value: 'google/gemini-3-flash-preview:high', label: 'Gemini 3 Flash (High)', description: 'Thinking máximo — mais preciso', costTier: 'normal' },
+  { value: 'anthropic/claude-sonnet-4-6', label: 'Claude Sonnet 4.6', description: '⚠️ CUSTO 20x MAIOR — API Anthropic direta', costTier: 'expensive' },
+  { value: 'anthropic/claude-haiku-4-5', label: 'Claude Haiku 4.5', description: '⚠️ Custo alto — Anthropic rápido', costTier: 'expensive' },
+  { value: 'openai/gpt-5', label: 'OpenAI GPT-5', description: '⚠️ Custo alto via Gateway', costTier: 'expensive' },
 ];
 
 const TTS_MODELS = [
