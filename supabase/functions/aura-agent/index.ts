@@ -905,25 +905,31 @@ ou simplesmente validar o silêncio/resistência como legítimo.`
     .slice(-6)
     .map(m => m.content.toLowerCase());
 
-  if (recentAssistant.length < 2) {
+  if (recentAssistant.length < 2 && !lastUserContext?.aura_phase) {
     return { guidance: null, detectedPhase: 'initial', stagnationLevel: 0 };
   }
 
-  function countIndicators(messages: string[], keywords: string[]): number {
-    return messages.reduce((sum, msg) => 
-      sum + keywords.filter(kw => msg.includes(kw)).length, 0
-    );
-  }
-
-  const presencaScore = countIndicators(recentAssistant, PHASE_INDICATORS.presenca);
-  const sentidoScore = countIndicators(recentAssistant, PHASE_INDICATORS.sentido);
-  const movimentoScore = countIndicators(recentAssistant, PHASE_INDICATORS.movimento);
-
+  // Use semantic aura_phase from micro-agent when available (preferred over keyword detection)
   let detectedPhase = 'presenca';
-  if (movimentoScore > sentidoScore && movimentoScore > presencaScore) {
-    detectedPhase = 'movimento';
-  } else if (sentidoScore > presencaScore) {
-    detectedPhase = 'sentido';
+  if (lastUserContext?.aura_phase) {
+    detectedPhase = lastUserContext.aura_phase;
+    console.log(`🔄 Phase evaluator: using semantic aura_phase="${detectedPhase}" from micro-agent`);
+  } else {
+    // Fallback to keyword-based detection only if micro-agent didn't provide aura_phase
+    function countIndicators(messages: string[], keywords: string[]): number {
+      return messages.reduce((sum, msg) => 
+        sum + keywords.filter(kw => msg.includes(kw)).length, 0
+      );
+    }
+    const presencaScore = countIndicators(recentAssistant, PHASE_INDICATORS.presenca);
+    const sentidoScore = countIndicators(recentAssistant, PHASE_INDICATORS.sentido);
+    const movimentoScore = countIndicators(recentAssistant, PHASE_INDICATORS.movimento);
+    if (movimentoScore > sentidoScore && movimentoScore > presencaScore) {
+      detectedPhase = 'movimento';
+    } else if (sentidoScore > presencaScore) {
+      detectedPhase = 'sentido';
+    }
+    console.log(`🔄 Phase evaluator: fallback keyword detection → detectedPhase="${detectedPhase}"`);
   }
 
   const questionCount = recentAssistant.reduce((sum, msg) => 
