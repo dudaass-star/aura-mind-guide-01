@@ -593,10 +593,13 @@ async function extractActionsFromResponse(
 ): Promise<ExtractedActions> {
   try {
     const cleanResponse = stripAllInternalTags(assistantResponse);
+    const recentContext = recentUserMessages && recentUserMessages.length > 0
+      ? `\nCONTEXTO (mensagens anteriores do usuário para comparação de tema):\n${recentUserMessages.map(m => `- "${m.substring(0, 150)}"`).join('\n')}\n`
+      : '';
     const prompt = `Analise esta troca de mensagens entre um usuário e uma assistente emocional.
 Extraia APENAS ações concretas que o sistema precisa executar.
-
-USUÁRIO: "${userMessage}"
+${recentContext}
+MENSAGEM ATUAL DO USUÁRIO: "${userMessage}"
 ASSISTENTE: "${cleanResponse.substring(0, 800)}"
 
 Retorne um JSON com APENAS os campos relevantes (omita campos vazios/null):
