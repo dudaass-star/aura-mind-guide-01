@@ -1050,6 +1050,16 @@ ${FREE_PHASE_INSTRUCTIONS.sentido_to_movimento}`
     };
   }
 
+  // Short answer streak soft nudge for free conversation
+  const freeStreak = lastUserContext?.short_answer_streak || 0;
+  if (freeStreak >= 2) {
+    return {
+      detectedPhase,
+      stagnationLevel: 0,
+      guidance: `\n\n💡 NOTA: O usuário está respondendo de forma curta há ${freeStreak} turnos. Não force aprofundamento — tente ângulos mais leves ou perguntas concretas.`
+    };
+  }
+
   return { guidance: null, detectedPhase, stagnationLevel: 0 };
 }
 
