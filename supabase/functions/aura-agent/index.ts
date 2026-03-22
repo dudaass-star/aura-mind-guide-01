@@ -1030,7 +1030,8 @@ AÇÃO OBRIGATÓRIA:
   • "O que essa situação mostra sobre o que importa pra você?"
   • "Qual seria sua resposta mais autêntica a isso?"
   • "Quem você quer ser do outro lado disso?"
-- ESCOLHA UMA. Não faça checklist.`
+- ESCOLHA UMA. Não faça checklist.
+${FREE_PHASE_INSTRUCTIONS.presenca_to_sentido}`
     };
   }
 
