@@ -746,7 +746,174 @@ function detectDoNotDisturb(userMessage: string, brtHour?: number): number | nul
   return null;
 }
 
+// ========================================================================
+// Phase Evaluator — detecta estagnação terapêutica e injeta guidance
+// Para sessões: detecta se Aura está presa em exploração quando deveria avançar
+// Para conversas livres: conta trocas em Modo Profundo e sugere avanço de fase
+// ========================================================================
+interface PhaseEvaluation {
+  guidance: string | null;
+  detectedPhase: string;
+  stagnationLevel: number; // 0 = ok, 1 = alerta leve, 2 = intervenção forte
+}
+
+const PHASE_INDICATORS = {
+  presenca: [
+    'entendo', 'imagino', 'deve ser', 'difícil', 'pesado', 'forte isso', 'tô aqui',
+    'conta mais', 'como assim', 'o que aconteceu', 'faz sentido', 'sinto que'
+  ],
+  sentido: [
+    'o que isso mostra', 'o que importa', 'por baixo disso', 'significado',
+    'sentido', 'por que isso te', 'o que você não quer perder', 'autêntic',
+    'quem você quer ser', 'perspectiva', 'refletir', 'possibilidade',
+    'outro lado', 'diferente', 'padrão', 'reframe', 'insight'
+  ],
+  movimento: [
+    'menor passo', 'o que você pode', 'ação', 'compromisso', 'próximo passo',
+    'quando', 'como seria', 'experimenta', 'tenta', 'pratica', 'faz sentido tentar',
+    'que tal', 'poderia', 'comece por'
+  ]
+};
+
+function evaluateTherapeuticPhase(
+  messageHistory: Array<{ role: string; content: string }>,
+  sessionActive: boolean,
+  sessionPhase?: string,
+  sessionElapsedMin?: number
+): PhaseEvaluation {
+  const recentAssistant = messageHistory
+    .filter(m => m.role === 'assistant')
+    .slice(-6)
+    .map(m => m.content.toLowerCase());
+
+  if (recentAssistant.length < 2) {
+    return { guidance: null, detectedPhase: 'initial', stagnationLevel: 0 };
+  }
+
+  function countIndicators(messages: string[], keywords: string[]): number {
+    return messages.reduce((sum, msg) => 
+      sum + keywords.filter(kw => msg.includes(kw)).length, 0
+    );
+  }
+
+  const presencaScore = countIndicators(recentAssistant, PHASE_INDICATORS.presenca);
+  const sentidoScore = countIndicators(recentAssistant, PHASE_INDICATORS.sentido);
+  const movimentoScore = countIndicators(recentAssistant, PHASE_INDICATORS.movimento);
+
+  let detectedPhase = 'presenca';
+  if (movimentoScore > sentidoScore && movimentoScore > presencaScore) {
+    detectedPhase = 'movimento';
+  } else if (sentidoScore > presencaScore) {
+    detectedPhase = 'sentido';
+  }
+
+  const questionCount = recentAssistant.reduce((sum, msg) => 
+    sum + (msg.match(/\?/g) || []).length, 0
+  );
+
+  const recentPairs = messageHistory.filter(m => m.role === 'user').slice(-10).length;
+
+  // ======== SESSION MODE ========
+  if (sessionActive && sessionPhase && sessionElapsedMin !== undefined) {
+    // Time says reframe+ but content is still exploration
+    if (['reframe', 'development', 'transition'].includes(sessionPhase)) {
+      if (detectedPhase === 'presenca' && presencaScore > sentidoScore * 2) {
+        return {
+          detectedPhase: 'presenca',
+          stagnationLevel: 2,
+          guidance: `\n\n🔄 AVALIAÇÃO AUTOMÁTICA DE FASE:
+O sistema detectou que suas últimas respostas ainda estão no modo PRESENÇA/EXPLORAÇÃO (muitas perguntas, pouca síntese).
+⏱️ Já se passaram ${sessionElapsedMin} minutos. Você deveria estar em REFRAME.
+
+AÇÃO OBRIGATÓRIA AGORA:
+- PARE de fazer perguntas exploratórias
+- Apresente UMA observação/insight sobre o que o usuário compartilhou
+- Use reframe: "Sabe o que eu percebo em tudo isso que você trouxe? [insight]"
+- Depois de reframear, conduza para compromisso/ação
+- NÃO volte para exploração`
+        };
+      }
+      
+      if (detectedPhase === 'sentido' && sessionPhase === 'transition') {
+        return {
+          detectedPhase: 'sentido',
+          stagnationLevel: 1,
+          guidance: `\n\n🔄 AVALIAÇÃO DE FASE:
+Você está trazendo boas reflexões, mas já é hora de MOVIMENTO.
+⏱️ Restam poucos minutos.
+
+AÇÃO: Converta o insight em compromisso concreto.
+"Então, com base nisso que a gente explorou... o que faria sentido como próximo passo pra você?"`
+        };
+      }
+    }
+
+    // Still in opening pattern after 8+ min
+    if (sessionPhase === 'exploration' && sessionElapsedMin > 8 && detectedPhase === 'presenca') {
+      if (questionCount > 4) {
+        return {
+          detectedPhase: 'presenca',
+          stagnationLevel: 1,
+          guidance: `\n\n🔄 AVALIAÇÃO DE FASE:
+Já passou da abertura (${sessionElapsedMin} min). Muitas perguntas exploratórias sem aprofundar.
+AÇÃO: Escolha O tema principal e vá fundo. Use investigação socrática.
+"De tudo que você trouxe, o que mais tá pesando? Vamos focar nisso."`
+        };
+      }
+    }
+
+    return { guidance: null, detectedPhase, stagnationLevel: 0 };
+  }
+
+  // ======== FREE CONVERSATION (Modo Profundo) ========
+  const hasEmotionalDepth = recentAssistant.some(msg => 
+    PHASE_INDICATORS.presenca.some(kw => msg.includes(kw)) ||
+    PHASE_INDICATORS.sentido.some(kw => msg.includes(kw))
+  );
+
+  if (!hasEmotionalDepth) {
+    return { guidance: null, detectedPhase: 'ping-pong', stagnationLevel: 0 };
+  }
+
+  // Stuck in Presença after 5+ exchanges
+  if (recentPairs >= 5 && detectedPhase === 'presenca') {
+    return {
+      detectedPhase: 'presenca',
+      stagnationLevel: 2,
+      guidance: `\n\n🔄 AVALIAÇÃO DE FASE (CONVERSA PROFUNDA):
+Você já trocou ${recentPairs}+ mensagens neste tema e ainda está na FASE 1 (Presença).
+O usuário já se sentiu ouvido. Agora é hora de trazer SENTIDO (Fase 2).
+
+AÇÃO OBRIGATÓRIA:
+- NÃO faça mais perguntas exploratórias ("como assim?", "me conta mais")
+- Traga UMA observação profunda: "Sabe o que eu percebo? [nomeie o que está por baixo]"
+- Use UMA pergunta-âncora da Logoterapia:
+  • "O que essa situação mostra sobre o que importa pra você?"
+  • "Qual seria sua resposta mais autêntica a isso?"
+  • "Quem você quer ser do outro lado disso?"
+- ESCOLHA UMA. Não faça checklist.`
+    };
+  }
+
+  // Stuck in Sentido after 8+ exchanges
+  if (recentPairs >= 8 && detectedPhase === 'sentido') {
+    return {
+      detectedPhase: 'sentido',
+      stagnationLevel: 1,
+      guidance: `\n\n🔄 AVALIAÇÃO DE FASE (CONVERSA PROFUNDA):
+O usuário já explorou o sentido por ${recentPairs}+ trocas. Conduza para MOVIMENTO (Fase 3).
+
+AÇÃO:
+- "Com tudo isso que a gente explorou... o que o menor passo em direção a isso pareceria pra você?"
+- Se o sentido ainda não apareceu, mude o ângulo da pergunta.`
+    };
+  }
+
+  return { guidance: null, detectedPhase, stagnationLevel: 0 };
+}
+
 // Deterministic audio mode decision (replaces prompt-based [MODO_AUDIO] decision)
+
 interface AudioDecision {
   shouldUseAudio: boolean;
   reason: string;
@@ -1196,6 +1363,7 @@ Não celebre ações rotineiras (comer, dormir, ir ao trabalho, fazer o básico)
 Se pareceria estranho ou exagerado → corte.
 
 - Usuário diz "estou com dependência emocional" → NÃO diga "que coragem nomear isso". Diga: "Eita... me conta o que tá rolando". Nomear um problema é informação, não coragem.
+
 
 
 # ESCOPO E LIMITES (O QUE VOCÊ NÃO FAZ)
@@ -4278,7 +4446,28 @@ Exemplo com 4 sessões:
       dynamicContext += `\nLEMBRETE ANTI-ECO: Mensagem curta detectada. Sua resposta NÃO pode começar reformulando o que o usuário disse. Reaja com emoção própria, observação nova ou pergunta que avança. Use reações como "Eita...", "Hmm...", "Sério?" ou faça uma pergunta direta.`;
     }
 
+    // ========================================================================
+    // PHASE EVALUATOR — detecta estagnação e injeta guidance de transição
+    // ========================================================================
+    {
+      let evalSessionPhase: string | undefined;
+      let evalElapsedMin: number | undefined;
+      if (sessionActive && currentSession?.started_at) {
+        const phaseCheck = calculateSessionTimeContext(currentSession, lastMessageTimestamp, currentSession.resumption_count ?? 0);
+        evalSessionPhase = phaseCheck.phase;
+        evalElapsedMin = Math.floor((Date.now() - new Date(currentSession.started_at).getTime()) / 60000);
+      }
+      const phaseEval = evaluateTherapeuticPhase(messageHistory, sessionActive, evalSessionPhase, evalElapsedMin);
+      if (phaseEval.guidance) {
+        dynamicContext += phaseEval.guidance;
+        console.log(`🔄 Phase evaluator: detected=${phaseEval.detectedPhase}, stagnation=${phaseEval.stagnationLevel}, context=${sessionActive ? 'session' : 'free'}`);
+      } else {
+        console.log(`🔄 Phase evaluator: detected=${phaseEval.detectedPhase}, no intervention needed`);
+      }
+    }
+
     const apiMessages = [
+
       { role: "system", content: AURA_STATIC_INSTRUCTIONS },
       { role: "system", content: dynamicContext },
       ...messageHistory,
@@ -4290,7 +4479,6 @@ Exemplo com 4 sessões:
     let data: any;
     try {
       // Dynamic temperature: higher for short messages to reduce echo tendency
-      const temperature = userWordCount <= 5 ? 0.9 : 0.8;
       const temperature = userWordCount <= 5 ? 0.9 : 0.8;
       data = await callAI(configuredModel, apiMessages, 4096, temperature, LOVABLE_API_KEY, supabase, AURA_STATIC_INSTRUCTIONS);
     } catch (e: any) {
