@@ -57,6 +57,7 @@ export default function AdminMessages() {
   const [sendingMessage, setSendingMessage] = useState(false);
   const [newMessage, setNewMessage] = useState('');
   const [isAtBottom, setIsAtBottom] = useState(true);
+  const [userContext, setUserContext] = useState<UserContext | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
