@@ -1454,15 +1454,13 @@ Bombardear com perguntas é robótico e desconfortável.
 
 # REGRA TÉCNICA DE ÁUDIO (PARA VOZ)
 
-VOCÊ TEM VOZ! O sistema decide automaticamente quando enviar áudio (crises, sessões, pedidos do usuário).
+VOCÊ TEM VOZ! O sistema decide automaticamente quando enviar áudio.
 
-Quando o sistema decidir usar áudio, sua resposta será convertida em voz. Para isso:
-- Inicie com a tag [MODO_AUDIO] seguida do texto
+Quando sua resposta for convertida em voz:
 - Escreva como se estivesse FALANDO — frases curtas e naturais
 - Evite emojis (máximo 1)
 - Use "..." para pausas naturais em vez de "|||"
 - Tamanho: até 4-6 frases curtas (aprox. 300-450 caracteres)
-- Quando usar [MODO_AUDIO], envie APENAS o áudio (sem texto adicional antes)
 
 Se o usuário pedir texto ("prefiro texto", "pode escrever"), respeite a preferência.
 
@@ -2300,20 +2298,7 @@ IMPORTANTE: Se a exploração ainda estava rasa (respostas curtas, sem emoções
 3. PERGUNTA DE ESCALA: "De 0 a 10, como você está saindo dessa sessão comparado a quando chegou?"
 4. DESPEDIDA: Agradeça de forma genuína e sugira próxima sessão
 
-⚠️ OBRIGATÓRIO — TAGS DE EXTRAÇÃO (inclua no final da sua resposta, o usuário NÃO verá):
-- Inclua 2-3 tags [INSIGHT:texto do insight aqui] com os principais aprendizados da sessão
-- Inclua 1-2 tags [COMPROMISSO:texto do compromisso aqui] com as ações combinadas
-- Se não houve ação prática clara, registre a intenção emocional (ex: [COMPROMISSO:Me permitir sentir isso sem culpa])
-- Nunca invente ações que o usuário não mencionou
-
-EXEMPLO:
-"[nome], foi uma sessão intensa! 💜 Passamos pelo [tema] e você teve um insight importante sobre [X].
-Seu compromisso pra semana: [ação]. Me conta depois como foi!
-De 0 a 10, como você sai agora? Vou adorar ouvir! ✨
-[INSIGHT:Percebeu que o medo de rejeição vem da infância]
-[INSIGHT:Reconheceu que evita conflitos para não perder pessoas]
-[COMPROMISSO:Ter uma conversa honesta com o parceiro essa semana]"
-
+O sistema captura automaticamente os insights e compromissos da sessão — converse naturalmente sem usar tags.
 - Inclua [ENCERRAR_SESSAO] quando finalizar
 `;
   } else if (phase === 'overtime' && !isResuming) {
@@ -2353,45 +2338,11 @@ De 0 a 10, como você sai agora? Vou adorar ouvir! ✨
 // Remove tags de controle do histórico e adiciona timestamps
 function sanitizeMessageHistory(messages: { role: string; content: string; created_at?: string }[]): { role: string; content: string }[] {
   return messages.map(m => {
-    let content = m.content
-      .replace(/\[MODO_AUDIO\]/gi, '')
-      .replace(/\[INSIGHTS\].*?\[\/INSIGHTS\]/gis, '')
-      .replace(/\[AGUARDANDO_RESPOSTA\]/gi, '')
-      .replace(/\[CONVERSA_CONCLUIDA\]/gi, '')
-      .replace(/\[ENCERRAR_SESSAO\]/gi, '')
-      .replace(/\[INICIAR_SESSAO\]/gi, '')
-      .replace(/\[AGENDAR_SESSAO:[^\]]+\]/gi, '')
-      .replace(/\[REAGENDAR_SESSAO:[^\]]+\]/gi, '')
-      .replace(/\[SESSAO_PERDIDA_RECUSADA\]/gi, '')
-      .replace(/\[TEMA_NOVO:[^\]]+\]/gi, '')
-      .replace(/\[TEMA_RESOLVIDO:[^\]]+\]/gi, '')
-      .replace(/\[TEMA_PROGREDINDO:[^\]]+\]/gi, '')
-      .replace(/\[TEMA_ESTAGNADO:[^\]]+\]/gi, '')
-      .replace(/\[COMPROMISSO_CUMPRIDO:[^\]]+\]/gi, '')
-      .replace(/\[COMPROMISSO_ABANDONADO:[^\]]+\]/gi, '')
-      .replace(/\[COMPROMISSO_RENEGOCIADO:[^\]]+\]/gi, '')
-      .replace(/\[LISTAR_JORNADAS\]/gi, '')
-      .replace(/\[TROCAR_JORNADA:[^\]]+\]/gi, '')
-      .replace(/\[PAUSAR_JORNADAS\]/gi, '')
-      .replace(/\[NAO_PERTURBE:\d+h?\]/gi, '')
-      .replace(/\[PAUSAR_SESSOES[^\]]*\]/gi, '')
-      .replace(/\[AGENDAR_TAREFA:[^\]]+\]/gi, '')
-      .replace(/\[CANCELAR_TAREFA:[^\]]+\]/gi, '')
-      .replace(/\[CAPSULA_DO_TEMPO\]/gi, '')
-      .replace(/\[MEDITACAO:[^\]]+\]/gi, '')
-      .replace(/\[UPGRADE:[^\]]+\]/gi, '')
-      .replace(/\[INSIGHT:[^\]]+\]/gi, '')
-      .replace(/\[COMPROMISSO:[^\]]+\]/gi, '')
-      .replace(/\[CRIAR_AGENDA:[^\]]+\]/gi, '')
-      .replace(/\[REATIVAR_SESSAO\]/gi, '')
-      .trim();
+    // Reutiliza stripAllInternalTags (DRY — fonte única de remoção de tags)
+    let content = stripAllInternalTags(m.content);
     
-    // CORREÇÃO: Remover timestamps antigos das mensagens do assistente
-    // A AURA gerava timestamps redundantes no início das respostas, causando confusão de datas
-    // O campo created_at do banco já guarda a data real da mensagem
+    // CORREÇÃO: Remover artefatos de "dose dupla" que poluem o contexto
     if (m.role === 'assistant') {
-      content = content.replace(/^\[\d{2}\/\d{2}\/\d{4},?\s*\d{2}:\d{2}\]\s*/g, '').trim();
-      // Remove referências a "dose dupla" / "resposta dupla" que poluem o contexto
       content = content.replace(/[,.]?\s*[Ee]m dose dupla[^.!?\n]*/g, '').trim();
       content = content.replace(/[Oo]pa,?\s*(essa )?resposta dupla[^.!?\n]*/g, '').trim();
       content = content.replace(/[Aa] mensagem (veio )?em dose dupla[^.!?\n]*/g, '').trim();
@@ -3914,12 +3865,9 @@ REGRAS GERAIS DO ONBOARDING:
 
     const dateTimeContext = getCurrentDateTimeContext();
 
-    const sessionAudioCountForContext = currentSession?.audio_sent_count || 0;
     const audioSessionContext = sessionActive
-      ? (sessionAudioCountForContext < 2
-        ? `SESSÃO ATIVA — OBRIGATÓRIO usar [MODO_AUDIO] nas primeiras 2 respostas da sessão (áudios enviados: ${sessionAudioCountForContext}). Cria intimidade e presença.`
-        : `SESSÃO ATIVA — Áudio já foi usado no início. Use texto normalmente, exceto em momentos de encerramento ou crise.`)
-      : 'Fora de sessão — use áudio apenas quando o usuário pedir ou em situações de crise emocional.';
+      ? 'SESSÃO ATIVA — O sistema decide automaticamente quando usar áudio (abertura, encerramento, crise). Escreva sempre como se estivesse falando quando estiver em sessão.'
+      : 'Fora de sessão — o sistema usa áudio apenas quando necessário (crise, pedido do usuário).';
 
     // Construir bloco de contexto dinâmico (separado do template estático para cache implícito do Gemini)
     let dynamicContext = `# DADOS DINÂMICOS DO SISTEMA
