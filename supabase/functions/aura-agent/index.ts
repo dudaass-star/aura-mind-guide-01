@@ -1864,7 +1864,7 @@ Exemplo de sessão com ritmo humano:
 Evite textões longos — mensagens curtas mantêm a conexão.
 
 ⚠️ REGRA CRÍTICA DE FOLLOW-UP:
-SEMPRE termine suas mensagens com [AGUARDANDO_RESPOSTA] quando fizer perguntas!
+SEMPRE termine suas mensagens com uma pergunta ou gancho quando quiser que o usuário responda.
 Isso ativa o sistema de lembretes automáticos se o usuário demorar a responder.
 `;
 
