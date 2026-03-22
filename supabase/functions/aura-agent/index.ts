@@ -5023,7 +5023,7 @@ Exemplo com 4 sessões:
     assistantMessage = assistantMessage.replace(/\[COMPROMISSO_RENEGOCIADO:[^\]]+\]/gi, '');
 
     // ========================================================================
-    // PROCESSAR TAGS DE COMPROMISSO LIVRE (conversas fora de sessão)
+    // LEGACY FALLBACK: Free commitments from tags (primary: postConversationAnalysis)
     // ========================================================================
     
     const commitmentFreeMatches = assistantMessage.matchAll(/\[COMPROMISSO_LIVRE:([^\]]+)\]/gi);
