@@ -70,6 +70,16 @@ Deno.serve(async (req) => {
     }
 
     // ========================================================================
+    // FILTER STATUS-ONLY EVENTS (no content)
+    // ========================================================================
+    if (!payload.text && !payload.hasAudio && !payload.hasImage) {
+      console.log('⏭️ Ignoring status-only event (no text, audio, or image content)');
+      return new Response(JSON.stringify({ status: 'ignored', reason: 'status_only_event' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // ========================================================================
     // DEDUPLICATION
     // ========================================================================
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;

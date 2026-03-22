@@ -276,27 +276,6 @@ Deno.serve(async (req) => {
     console.log(`👤 Found user: ${profile.name} (${profile.user_id}), status: ${profile.status}, instance: ${profile.whatsapp_instance_id || 'env-default'}`);
 
     // ========================================================================
-    // PERSIST INBOUND MESSAGE
-    // ========================================================================
-    let inboundSaved = false;
-    if (messageText) {
-      try {
-        const { data: insertedMsg } = await supabase
-          .from('messages')
-          .insert({ user_id: profile.user_id, role: 'user', content: messageText })
-          .select('id')
-          .single();
-        inboundSaved = true;
-        if (insertedMsg?.id) {
-          (globalThis as any).__inboundMessageDbId = insertedMsg.id;
-        }
-        console.log(`💾 Inbound message persisted for user ${profile.user_id} (id: ${insertedMsg?.id})`);
-      } catch (persistErr) {
-        console.warn('⚠️ Failed to persist inbound message:', persistErr);
-      }
-    }
-
-    // ========================================================================
     // SUBSCRIPTION STATUS CHECK
     // ========================================================================
     const blockedStatuses = ['canceled', 'inactive', 'paused'];
