@@ -1231,10 +1231,24 @@ async function processExtractedActions(
 
     // Save user context state for next turn's phase evaluator
     if (actions.user_emotional_state || actions.topic_continuity || actions.engagement_level) {
+      // Calculate short_answer_streak
+      let shortAnswerStreak = 0;
+      if (actions.engagement_level === 'short_answers') {
+        // Read previous context to increment streak
+        const { data: prevState } = await supabase
+          .from('aura_response_state')
+          .select('last_user_context')
+          .eq('user_id', userId)
+          .single();
+        const prevContext = prevState?.last_user_context as UserContextState | null;
+        shortAnswerStreak = (prevContext?.short_answer_streak || 0) + 1;
+      }
+
       const userContext: UserContextState = {
         user_emotional_state: actions.user_emotional_state,
         topic_continuity: actions.topic_continuity,
         engagement_level: actions.engagement_level,
+        short_answer_streak: shortAnswerStreak,
       };
       await supabase.from('aura_response_state').upsert({
         user_id: userId,
