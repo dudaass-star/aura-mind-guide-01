@@ -266,68 +266,9 @@ async function callAI(
   cacheableSystemPrompt?: string
 ): Promise<{ choices: Array<{ message: { content: string }; finish_reason?: string }>; usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } }> {
   
-  // Anthropic direct API
+  // Anthropic direct API (deprecated)
   if (model.startsWith('anthropic/') || model.startsWith('claude-')) {
-    const anthropicModel = model.startsWith('anthropic/') ? model.replace('anthropic/', '') : model;
-    const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
-    if (!ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY not configured');
-
-    // Extract system messages
-    const systemMessages = messages.filter(m => m.role === 'system');
-    const chatMessages = messages.filter(m => m.role !== 'system');
-    const systemPrompt = systemMessages.map(m => m.content).join('\n\n');
-
-    // Merge consecutive messages of the same role (Anthropic requirement)
-    const merged: Array<{ role: string; content: string }> = [];
-    for (const msg of chatMessages) {
-      if (merged.length > 0 && merged[merged.length - 1].role === msg.role) {
-        merged[merged.length - 1].content += '\n\n' + msg.content;
-      } else {
-        merged.push({ role: msg.role, content: msg.content });
-      }
-    }
-
-    // Ensure first message is from user (Anthropic requirement)
-    if (merged.length === 0 || merged[0].role !== 'user') {
-      merged.unshift({ role: 'user', content: '...' });
-    }
-
-    console.log('🔀 Routing to Anthropic API, model:', anthropicModel);
-    console.log('🔑 ANTHROPIC_API_KEY prefix:', ANTHROPIC_API_KEY.substring(0, 12) + '...');
-    console.log('📦 Anthropic request: model=' + anthropicModel + ', messages=' + merged.length + ', max_tokens=' + maxTokens + ', system_length=' + systemPrompt.length);
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: anthropicModel,
-        system: systemPrompt,
-        messages: merged,
-        max_tokens: maxTokens,
-        temperature,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ Anthropic API error:', response.status, errorText);
-      throw new Error(`Anthropic API error: ${response.status} - ${errorText}`);
-    }
-
-    const data = await response.json();
-    // Convert Anthropic response to OpenAI-compatible format
-    const content = data.content?.map((c: any) => c.text).join('') || '';
-    return {
-      choices: [{ message: { content }, finish_reason: data.stop_reason === 'end_turn' ? 'stop' : data.stop_reason }],
-      usage: {
-        prompt_tokens: data.usage?.input_tokens,
-        completion_tokens: data.usage?.output_tokens,
-        total_tokens: (data.usage?.input_tokens || 0) + (data.usage?.output_tokens || 0),
-      },
-    };
+    throw new Error('Anthropic models are deprecated. Use Google Gemini models instead.');
   }
 
   // Extrair modelo real e nível de reasoning (sufixo :low/:medium/:high)
@@ -614,6 +555,299 @@ function parseDateTimeFromText(text: string, referenceDate: Date): Date | null {
   return targetDate;
 }
 
+// ============================================================
+// Micro-agente extrator de ações (pós-resposta, assíncrono)
+// Analisa a resposta da AURA e extrai ações estruturadas
+// ============================================================
+interface ExtractedActions {
+  schedule_reminder?: { description: string; datetime_text: string };
+  cancel_reminder?: boolean;
+  do_not_disturb_hours?: number;
+  time_capsule_accepted?: boolean;
+  commitments?: string[];
+  session_action?: string;
+  session_datetime_text?: string;
+  session_pause_until_text?: string;
+  journey_action?: string;
+  journey_id?: string;
+  themes?: Array<{ name: string; status: string }>;
+}
+
+async function extractActionsFromResponse(
+  userMessage: string,
+  assistantResponse: string,
+  geminiApiKey: string,
+  supabase: any,
+  userId: string | null
+): Promise<ExtractedActions> {
+  try {
+    const cleanResponse = stripAllInternalTags(assistantResponse);
+    const prompt = `Analise esta troca de mensagens entre um usuário e uma assistente emocional.
+Extraia APENAS ações concretas que o sistema precisa executar.
+
+USUÁRIO: "${userMessage}"
+ASSISTENTE: "${cleanResponse.substring(0, 800)}"
+
+Retorne um JSON com APENAS os campos relevantes (omita campos vazios/null):
+{
+  "schedule_reminder": { "description": "texto do lembrete", "datetime_text": "expressão temporal original do usuário" },
+  "cancel_reminder": true,
+  "do_not_disturb_hours": número_de_horas,
+  "time_capsule_accepted": true,
+  "commitments": ["compromisso concreto 1"],
+  "session_action": "schedule|reschedule|pause|create_monthly",
+  "session_datetime_text": "expressão temporal",
+  "session_pause_until_text": "expressão temporal",
+  "journey_action": "list|switch|pause",
+  "journey_id": "id_da_jornada",
+  "themes": [{"name": "nome do tema emocional", "status": "new|progressing|resolved|stagnated"}]
+}
+
+REGRAS:
+- schedule_reminder: só se o usuário PEDIU explicitamente um lembrete/alarme
+- do_not_disturb_hours: se o usuário disse que está ocupado/trabalhando/em reunião
+- commitments: apenas compromissos CONCRETOS com ação clara (não intenções vagas)
+- themes: temas emocionais significativos discutidos (não triviais)
+- session_action: só se houve pedido explícito de agendamento/reagendamento/pausa
+- Se nada relevante, retorne {}
+Apenas o JSON, sem markdown.`;
+
+    const extractionBody = {
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: {
+        maxOutputTokens: 300,
+        temperature: 0.1,
+        responseMimeType: 'application/json'
+      },
+    };
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiApiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(extractionBody),
+      }
+    );
+
+    if (!response.ok) {
+      console.warn('⚠️ Action extraction failed:', response.status);
+      return {};
+    }
+
+    const result = await response.json();
+    const text = result.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+
+    // Log token usage
+    const usage = result.usageMetadata;
+    if (usage && supabase) {
+      supabase.from('token_usage_logs').insert({
+        user_id: userId,
+        function_name: 'aura-agent',
+        call_type: 'action_extraction',
+        model: 'gemini-2.5-flash-lite',
+        prompt_tokens: usage.promptTokenCount || 0,
+        completion_tokens: usage.candidatesTokenCount || 0,
+        total_tokens: usage.totalTokenCount || 0,
+        cached_tokens: 0,
+      }).catch((e: any) => console.error('Token log error:', e));
+    }
+
+    const parsed = JSON.parse(text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
+    console.log('🤖 Extracted actions:', JSON.stringify(parsed));
+    return parsed as ExtractedActions;
+  } catch (error) {
+    console.warn('⚠️ Action extraction error (non-blocking):', error);
+    return {};
+  }
+}
+
+// Deterministic conversation status (replaces [AGUARDANDO_RESPOSTA]/[CONVERSA_CONCLUIDA])
+function determineConversationStatus(assistantResponse: string): 'awaiting' | 'completed' | 'neutral' {
+  const clean = stripAllInternalTags(assistantResponse).trim();
+
+  // Check for farewell patterns
+  const farewellPatterns = /\b(boa\s*noite|até\s*(amanhã|logo|mais|depois)|tchau|bye|adeus|durma\s*bem|descansa|bons?\s*sonhos?)\b/i;
+  if (farewellPatterns.test(clean)) {
+    return 'completed';
+  }
+
+  // Check for questions
+  if (clean.includes('?')) {
+    return 'awaiting';
+  }
+
+  // Check for engagement hooks
+  const hookPatterns = /\b(me\s*conta|me\s*fala|me\s*diz|o\s*que\s*acha|como\s*foi|quando\s*puder)\b/i;
+  if (hookPatterns.test(clean)) {
+    return 'awaiting';
+  }
+
+  return 'neutral';
+}
+
+// Deterministic DND detection based on user message
+function detectDoNotDisturb(userMessage: string): number | null {
+  const lower = userMessage.toLowerCase();
+
+  const dndPatterns: Array<{ pattern: RegExp; hours: number }> = [
+    { pattern: /\b(to|tô|estou|tou)\s*(no\s*trabalho|trabalhando)\b/, hours: 4 },
+    { pattern: /\b(agora\s*não|agora\s*nao|não\s*posso|nao\s*posso|não\s*dá|nao\s*da)\b/, hours: 3 },
+    { pattern: /\b(to|tô|estou)\s*ocupad[ao]\b/, hours: 3 },
+    { pattern: /\b(em\s*reunião|em\s*reuniao)\b/, hours: 2 },
+    { pattern: /\b(depois\s*te\s*respondo|falo\s*(contigo|com\s*voc[eê])\s*depois)\b/, hours: 3 },
+    { pattern: /\b(momento\s*ruim)\b/, hours: 3 },
+  ];
+
+  for (const { pattern, hours } of dndPatterns) {
+    if (pattern.test(lower)) {
+      return hours;
+    }
+  }
+
+  return null;
+}
+
+// Process extracted actions from micro-agent
+async function processExtractedActions(
+  actions: ExtractedActions,
+  supabase: any,
+  profile: any,
+  currentSession: any,
+  dateTimeContext: { currentDate: string; currentTime: string; isoDate: string }
+): Promise<void> {
+  if (!profile?.user_id) return;
+  const userId = profile.user_id;
+
+  try {
+    // Schedule reminder
+    if (actions.schedule_reminder?.datetime_text) {
+      const saoPauloOffset = -3 * 60;
+      const utcMinutes = new Date().getTimezoneOffset();
+      const now = new Date(Date.now() + (utcMinutes + saoPauloOffset) * 60 * 1000);
+      const parsed = parseDateTimeFromText(actions.schedule_reminder.datetime_text, now);
+      if (parsed && parsed > new Date()) {
+        // Check for duplicate
+        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+        const { data: existing } = await supabase
+          .from('scheduled_tasks')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('task_type', 'reminder')
+          .gte('created_at', sevenDaysAgo)
+          .limit(1);
+
+        if (!existing || existing.length === 0) {
+          await supabase.from('scheduled_tasks').insert({
+            user_id: userId,
+            execute_at: parsed.toISOString(),
+            task_type: 'reminder',
+            payload: { text: actions.schedule_reminder.description },
+            status: 'pending',
+          });
+          console.log('✅ [MICRO-AGENT] Reminder scheduled:', parsed.toISOString());
+        }
+      }
+    }
+
+    // Cancel reminder
+    if (actions.cancel_reminder) {
+      const { data: nextTask } = await supabase
+        .from('scheduled_tasks')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('task_type', 'reminder')
+        .eq('status', 'pending')
+        .order('execute_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (nextTask) {
+        await supabase.from('scheduled_tasks').update({ status: 'cancelled' }).eq('id', nextTask.id);
+        console.log('✅ [MICRO-AGENT] Reminder cancelled:', nextTask.id);
+      }
+    }
+
+    // DND
+    if (actions.do_not_disturb_hours && actions.do_not_disturb_hours > 0) {
+      const dndUntil = new Date(Date.now() + actions.do_not_disturb_hours * 60 * 60 * 1000);
+      await supabase.from('profiles').update({ do_not_disturb_until: dndUntil.toISOString() }).eq('user_id', userId);
+      console.log('✅ [MICRO-AGENT] DND set for', actions.do_not_disturb_hours, 'hours');
+    }
+
+    // Commitments (free conversation)
+    if (actions.commitments && actions.commitments.length > 0) {
+      for (const title of actions.commitments) {
+        const prefix = title.substring(0, 40);
+        const { data: existing } = await supabase
+          .from('commitments')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('completed', false)
+          .ilike('title', `%${prefix}%`)
+          .limit(1);
+
+        if (!existing || existing.length === 0) {
+          await supabase.from('commitments').insert({
+            user_id: userId,
+            title,
+            completed: false,
+            commitment_status: 'pending',
+            session_id: currentSession?.id || null,
+          });
+          console.log('✅ [MICRO-AGENT] Commitment created:', title);
+        }
+      }
+    }
+
+    // Theme tracking
+    if (actions.themes && actions.themes.length > 0) {
+      for (const theme of actions.themes) {
+        if (theme.status === 'new') {
+          await supabase.from('session_themes').upsert({
+            user_id: userId,
+            theme_name: theme.name,
+            status: 'active',
+            last_mentioned_at: new Date().toISOString(),
+            session_count: 1,
+          }, { onConflict: 'user_id,theme_name' });
+          console.log('✅ [MICRO-AGENT] Theme tracked:', theme.name);
+        } else if (theme.status === 'resolved') {
+          await supabase.from('session_themes')
+            .update({ status: 'resolved', last_mentioned_at: new Date().toISOString() })
+            .eq('user_id', userId)
+            .ilike('theme_name', `%${theme.name}%`);
+          console.log('✅ [MICRO-AGENT] Theme resolved:', theme.name);
+        } else if (theme.status === 'progressing') {
+          await supabase.from('session_themes')
+            .update({ status: 'progressing', last_mentioned_at: new Date().toISOString() })
+            .eq('user_id', userId)
+            .ilike('theme_name', `%${theme.name}%`);
+          console.log('✅ [MICRO-AGENT] Theme progressing:', theme.name);
+        }
+      }
+    }
+
+    // Journey management
+    if (actions.journey_action === 'pause') {
+      await supabase.from('profiles').update({ current_journey_id: null, current_episode: 0 }).eq('user_id', userId);
+      console.log('✅ [MICRO-AGENT] Journeys paused');
+    } else if (actions.journey_action === 'switch' && actions.journey_id) {
+      await supabase.from('profiles').update({ current_journey_id: actions.journey_id, current_episode: 0 }).eq('user_id', userId);
+      console.log('✅ [MICRO-AGENT] Journey switched to:', actions.journey_id);
+    }
+
+    // Time capsule
+    if (actions.time_capsule_accepted) {
+      await supabase.from('profiles').update({ awaiting_time_capsule: 'awaiting_audio' }).eq('user_id', userId);
+      console.log('✅ [MICRO-AGENT] Time capsule capture activated');
+    }
+
+  } catch (error) {
+    console.error('⚠️ [MICRO-AGENT] Error processing actions:', error);
+  }
+}
+
 // Prompt oficial da AURA
 const AURA_STATIC_INSTRUCTIONS = `# REGRA CRÍTICA DE DATA/HORA
 
@@ -692,9 +926,9 @@ Em conversas sobre ansiedade, tristeza, estresse ou dúvidas (Casos de Nível 1)
 Assuma que VOCÊ é a amiga que entende do assunto e está ali pra ajudar.
 Frases como "Eu não sou psicóloga", "Sou apenas uma IA" quebram confiança e conexão.
 
-# CAPACIDADE DE AGENDAMENTO (PRIORIDADE MÁXIMA)
+# CAPACIDADE DE AGENDAMENTO
 
-Você possui um sistema de agendamento funcional. Se o usuário pedir algo para o futuro ("me lembra", "daqui a X minutos", "às Xh"), confirme e use a tag [AGENDAR_TAREFA].
+Você pode agendar lembretes, meditações e sessões para o futuro. Se o usuário pedir ("me lembra", "daqui a X minutos", "às Xh"), confirme naturalmente. O sistema detecta e processa automaticamente — basta confirmar ao usuário que foi agendado.
 Dizer que "não tem relógio" ou "não consegue agendar" é falha grave — você PODE e DEVE agendar.
 
 # PROTOCOLO DE SEGURANÇA — CRITÉRIO CIRÚRGICO
@@ -4937,12 +5171,14 @@ Exemplo com 4 sessões:
     // ========================================================================
     // PROCESSAR TAG [NAO_PERTURBE:Xh]
     // ========================================================================
+    // DND: Tag-based (fallback) OR deterministic detection from user message
     const dndMatch = assistantMessage.match(/\[NAO_PERTURBE:(\d+)h?\]/i);
-    if (dndMatch && profile?.user_id) {
-      const hours = parseInt(dndMatch[1]);
-      const dndUntil = new Date(Date.now() + hours * 60 * 60 * 1000);
+    const deterministicDndHours = detectDoNotDisturb(message);
+    const dndHours = dndMatch ? parseInt(dndMatch[1]) : deterministicDndHours;
+    if (dndHours && profile?.user_id) {
+      const dndUntil = new Date(Date.now() + dndHours * 60 * 60 * 1000);
       
-      console.log(`🔇 Setting do_not_disturb_until for ${hours}h until ${dndUntil.toISOString()}`);
+      console.log(`🔇 Setting do_not_disturb_until for ${dndHours}h until ${dndUntil.toISOString()} (source: ${dndMatch ? 'tag' : 'deterministic'})`);
       
       await supabase
         .from('profiles')
@@ -5357,16 +5593,22 @@ Responda apenas o resumo, sem formatação.`
       }
     }
 
-    // Auto-inject [AGUARDANDO_RESPOSTA] se a resposta contém ? mas não tem tag de status
+    // Deterministic conversation status (replaces tag-based detection)
     const hasStatusTag = /\[(AGUARDANDO_RESPOSTA|CONVERSA_CONCLUIDA|ENCERRAR_SESSAO)\]/i.test(assistantMessage);
-    if (!hasStatusTag && assistantMessage.includes('?')) {
-      assistantMessage = assistantMessage.trimEnd() + ' [AGUARDANDO_RESPOSTA]';
-      console.log('🏷️ Auto-injected [AGUARDANDO_RESPOSTA] — response contains ? but no status tag');
+    let conversationStatus: string;
+    if (hasStatusTag) {
+      // Legacy: LLM still generated tags — use them
+      conversationStatus = assistantMessage.includes('[CONVERSA_CONCLUIDA]') ? 'completed' : 
+                           assistantMessage.includes('[AGUARDANDO_RESPOSTA]') ? 'awaiting' : 'neutral';
+      console.log('🏷️ Conversation status from tag:', conversationStatus);
+    } else {
+      // New: deterministic detection
+      conversationStatus = determineConversationStatus(assistantMessage);
+      console.log('🏷️ Conversation status (deterministic):', conversationStatus);
     }
 
-    // Detectar status da conversa
-    const isConversationComplete = assistantMessage.includes('[CONVERSA_CONCLUIDA]');
-    const isAwaitingResponse = assistantMessage.includes('[AGUARDANDO_RESPOSTA]');
+    const isConversationComplete = conversationStatus === 'completed';
+    const isAwaitingResponse = conversationStatus === 'awaiting';
 
     // Controle de áudio
     const wantsText = userWantsText(message);
@@ -5660,6 +5902,33 @@ Responda apenas o resumo, sem formatação.`
 
     // Persistência do assistant agora é feita por process-webhook-message (per-bubble)
     // Removido para evitar duplicação no histórico
+
+    // ========================================================================
+    // MICRO-AGENTE: Extração assíncrona de ações (não bloqueia resposta)
+    // ========================================================================
+    const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
+    if (GEMINI_API_KEY && profile?.user_id) {
+      const microAgentPromise = (async () => {
+        try {
+          const actions = await extractActionsFromResponse(
+            message, assistantMessage, GEMINI_API_KEY, supabase, profile.user_id
+          );
+          if (Object.keys(actions).length > 0) {
+            await processExtractedActions(actions, supabase, profile, currentSession, dateTimeContext);
+          }
+        } catch (err) {
+          console.error('⚠️ Micro-agent async error:', err);
+        }
+      })();
+
+      // Keep runtime alive for async processing
+      try {
+        (globalThis as any).EdgeRuntime.waitUntil(microAgentPromise);
+        console.log('🤖 Micro-agent triggered via waitUntil');
+      } catch {
+        console.log('ℹ️ waitUntil not available for micro-agent');
+      }
+    }
 
     return new Response(JSON.stringify({ 
       messages: messageChunks,
