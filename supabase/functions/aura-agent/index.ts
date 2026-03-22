@@ -941,7 +941,250 @@ async function processExtractedActions(
   }
 }
 
-// Prompt oficial da AURA
+// ============================================================
+// Análise assíncrona pós-conversa (Phase 3)
+// Extrai temas, insights e compromissos sem bloquear resposta
+// ============================================================
+interface ConversationAnalysis {
+  themes: Array<{
+    name: string;
+    status: 'new' | 'progressing' | 'resolved' | 'stagnated';
+  }>;
+  insights: Array<{
+    category: string;
+    key: string;
+    value: string;
+  }>;
+  commitments: string[];
+}
+
+async function postConversationAnalysis(
+  userMessage: string,
+  assistantResponse: string,
+  recentHistory: Array<{ role: string; content: string }>,
+  geminiApiKey: string,
+  supabase: any,
+  userId: string,
+  sessionId: string | null
+): Promise<void> {
+  try {
+    const cleanResponse = stripAllInternalTags(assistantResponse);
+    const cleanUser = userMessage.substring(0, 500);
+    
+    // Build compact conversation context from recent history (last 6 messages)
+    const recentContext = recentHistory.slice(-6).map(m => 
+      `${m.role === 'user' ? 'USUÁRIO' : 'AURA'}: ${stripAllInternalTags(m.content).substring(0, 200)}`
+    ).join('\n');
+
+    const analysisPrompt = `Analise esta conversa entre um usuário e uma mentora emocional.
+Extraia informações relevantes para memória de longo prazo.
+
+CONTEXTO RECENTE:
+${recentContext}
+
+ÚLTIMA TROCA:
+USUÁRIO: "${cleanUser}"
+AURA: "${cleanResponse.substring(0, 600)}"
+
+Use a função extract_analysis para retornar os dados.`;
+
+    const analysisBody = {
+      contents: [{ role: 'user', parts: [{ text: analysisPrompt }] }],
+      tools: [{
+        functionDeclarations: [{
+          name: 'extract_analysis',
+          description: 'Extrai temas emocionais, insights sobre o usuário e compromissos da conversa',
+          parameters: {
+            type: 'OBJECT',
+            properties: {
+              themes: {
+                type: 'ARRAY',
+                description: 'Temas emocionais significativos discutidos (não triviais). Omita se não houver.',
+                items: {
+                  type: 'OBJECT',
+                  properties: {
+                    name: { type: 'STRING', description: 'Nome curto do tema (ex: ansiedade no trabalho, conflito com mãe)' },
+                    status: { type: 'STRING', enum: ['new', 'progressing', 'resolved', 'stagnated'], description: 'Status do tema na conversa' }
+                  },
+                  required: ['name', 'status']
+                }
+              },
+              insights: {
+                type: 'ARRAY',
+                description: 'Informações pessoais relevantes mencionadas pelo usuário (nomes de pessoas, profissão, cidade, desafios, conquistas, preferências)',
+                items: {
+                  type: 'OBJECT',
+                  properties: {
+                    category: { type: 'STRING', enum: ['pessoa', 'identidade', 'desafio', 'trauma', 'saude', 'objetivo', 'conquista', 'padrao', 'preferencia', 'rotina', 'contexto', 'tecnica'], description: 'Categoria do insight' },
+                    key: { type: 'STRING', description: 'Chave descritiva (ex: filha, profissao, principal)' },
+                    value: { type: 'STRING', description: 'Valor extraído (ex: Bella, engenheiro, ansiedade)' }
+                  },
+                  required: ['category', 'key', 'value']
+                }
+              },
+              commitments: {
+                type: 'ARRAY',
+                description: 'Compromissos concretos assumidos pelo usuário (ações com prazo implícito). Omita intenções vagas.',
+                items: { type: 'STRING' }
+              }
+            }
+          }
+        }]
+      }],
+      toolConfig: {
+        functionCallingConfig: {
+          mode: 'ANY',
+          allowedFunctionNames: ['extract_analysis']
+        }
+      },
+      generationConfig: {
+        maxOutputTokens: 400,
+        temperature: 0.1,
+      },
+    };
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${geminiApiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(analysisBody),
+      }
+    );
+
+    if (!response.ok) {
+      console.warn('⚠️ [POST-ANALYSIS] API call failed:', response.status);
+      return;
+    }
+
+    const result = await response.json();
+    
+    // Log token usage
+    const usage = result.usageMetadata;
+    if (usage) {
+      supabase.from('token_usage_logs').insert({
+        user_id: userId,
+        function_name: 'aura-agent',
+        call_type: 'post_conversation_analysis',
+        model: 'gemini-2.5-flash-lite',
+        prompt_tokens: usage.promptTokenCount || 0,
+        completion_tokens: usage.candidatesTokenCount || 0,
+        total_tokens: usage.totalTokenCount || 0,
+        cached_tokens: 0,
+      }).catch((e: any) => console.error('Token log error:', e));
+    }
+
+    // Extract tool call result
+    const candidate = result.candidates?.[0];
+    const functionCall = candidate?.content?.parts?.find((p: any) => p.functionCall)?.functionCall;
+    
+    if (!functionCall || functionCall.name !== 'extract_analysis') {
+      console.log('ℹ️ [POST-ANALYSIS] No structured output returned');
+      return;
+    }
+
+    const analysis: ConversationAnalysis = functionCall.args || { themes: [], insights: [], commitments: [] };
+    
+    const themesCount = analysis.themes?.length || 0;
+    const insightsCount = analysis.insights?.length || 0;
+    const commitmentsCount = analysis.commitments?.length || 0;
+    
+    if (themesCount === 0 && insightsCount === 0 && commitmentsCount === 0) {
+      console.log('ℹ️ [POST-ANALYSIS] Nothing to save');
+      return;
+    }
+
+    console.log(`🔍 [POST-ANALYSIS] Extracted: ${themesCount} themes, ${insightsCount} insights, ${commitmentsCount} commitments`);
+
+    // Save themes
+    if (analysis.themes && analysis.themes.length > 0) {
+      for (const theme of analysis.themes) {
+        if (!theme.name) continue;
+        const themeName = theme.name.substring(0, 100);
+        
+        if (theme.status === 'new') {
+          await supabase.from('session_themes').upsert({
+            user_id: userId,
+            theme_name: themeName,
+            status: 'active',
+            last_mentioned_at: new Date().toISOString(),
+            session_count: 1
+          }, { onConflict: 'user_id,theme_name' });
+          console.log(`🎯 [POST-ANALYSIS] Theme new: ${themeName}`);
+        } else if (theme.status === 'resolved') {
+          await supabase.from('session_themes')
+            .update({ status: 'resolved', last_mentioned_at: new Date().toISOString() })
+            .eq('user_id', userId)
+            .ilike('theme_name', `%${themeName}%`);
+          console.log(`✅ [POST-ANALYSIS] Theme resolved: ${themeName}`);
+        } else if (theme.status === 'progressing') {
+          await supabase.from('session_themes')
+            .update({ status: 'progressing', last_mentioned_at: new Date().toISOString() })
+            .eq('user_id', userId)
+            .ilike('theme_name', `%${themeName}%`);
+          console.log(`🟡 [POST-ANALYSIS] Theme progressing: ${themeName}`);
+        }
+      }
+    }
+
+    // Save insights with importance mapping
+    const categoryImportance: Record<string, number> = {
+      'pessoa': 10, 'identidade': 10, 'desafio': 8, 'trauma': 8, 'saude': 8,
+      'objetivo': 6, 'conquista': 6, 'padrao': 5, 'preferencia': 4, 'rotina': 4,
+      'contexto': 5, 'tecnica': 7
+    };
+
+    if (analysis.insights && analysis.insights.length > 0) {
+      for (const insight of analysis.insights) {
+        if (!insight.category || !insight.key || !insight.value) continue;
+        const importance = categoryImportance[insight.category] || 5;
+        
+        await supabase.from('user_insights').upsert({
+          user_id: userId,
+          category: insight.category,
+          key: insight.key,
+          value: insight.value,
+          importance,
+          last_mentioned_at: new Date().toISOString()
+        }, { onConflict: 'user_id,category,key' });
+        
+        console.log(`💾 [POST-ANALYSIS] Insight: ${insight.category}:${insight.key}=${insight.value}`);
+      }
+    }
+
+    // Save commitments (dedup)
+    if (analysis.commitments && analysis.commitments.length > 0) {
+      for (const title of analysis.commitments) {
+        if (!title || title.length < 3) continue;
+        
+        const titlePrefix = title.substring(0, 40);
+        const { data: existing } = await supabase
+          .from('commitments')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('completed', false)
+          .ilike('title', `%${titlePrefix}%`)
+          .limit(1);
+
+        if (!existing || existing.length === 0) {
+          await supabase.from('commitments').insert({
+            user_id: userId,
+            title,
+            completed: false,
+            commitment_status: 'pending',
+            session_id: sessionId
+          });
+          console.log(`📋 [POST-ANALYSIS] Commitment: ${title}`);
+        }
+      }
+    }
+
+    console.log('✅ [POST-ANALYSIS] Complete');
+  } catch (error) {
+    console.error('⚠️ [POST-ANALYSIS] Error (non-blocking):', error);
+  }
+}
+
 const AURA_STATIC_INSTRUCTIONS = `# REGRA CRÍTICA DE DATA/HORA
 
 - A data e hora ATUAIS serão fornecidas no contexto da conversa
