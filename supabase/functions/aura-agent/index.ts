@@ -1094,6 +1094,21 @@ async function processExtractedActions(
       console.log('✅ [MICRO-AGENT] Time capsule capture activated');
     }
 
+    // Save user context state for next turn's phase evaluator
+    if (actions.user_emotional_state || actions.topic_continuity || actions.engagement_level) {
+      const userContext: UserContextState = {
+        user_emotional_state: actions.user_emotional_state,
+        topic_continuity: actions.topic_continuity,
+        engagement_level: actions.engagement_level,
+      };
+      await supabase.from('aura_response_state').upsert({
+        user_id: userId,
+        last_user_context: userContext,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id' });
+      console.log('✅ [MICRO-AGENT] User context saved:', JSON.stringify(userContext));
+    }
+
   } catch (error) {
     console.error('⚠️ [MICRO-AGENT] Error processing actions:', error);
   }
