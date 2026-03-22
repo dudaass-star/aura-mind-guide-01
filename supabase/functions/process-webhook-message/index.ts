@@ -372,6 +372,7 @@ Deno.serve(async (req) => {
     const responseState = lockResult?.[0] || (await supabase.from('aura_response_state').select('*').eq('user_id', profile.user_id).maybeSingle()).data;
     const pendingContent = responseState?.pending_content || null;
     const pendingContext = responseState?.pending_context || null;
+    const lastUserContext = responseState?.last_user_context || null;
 
     if (pendingContent) {
       console.log(`📦 Found pending content from interrupted response: ${pendingContent.substring(0, 100)}...`);
