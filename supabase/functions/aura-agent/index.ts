@@ -189,7 +189,7 @@ async function getOrCreateGeminiCache(
       { role: 'user', parts: [{ text: 'Olá' }] },
       { role: 'model', parts: [{ text: 'Olá! Como posso te ajudar?' }] },
     ],
-    ttl: '3600s',
+    ttl: '600s',
   };
   console.log('📦 Cache request: model=', cacheBody.model, 'systemLen=', systemPrompt.length, 'chars');
   const cacheResponse = await fetch(
