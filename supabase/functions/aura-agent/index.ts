@@ -961,7 +961,8 @@ Você está trazendo boas reflexões, mas já é hora de MOVIMENTO.
 ⏱️ Restam poucos minutos.
 
 AÇÃO: Converta o insight em compromisso concreto.
-"Então, com base nisso que a gente explorou... o que faria sentido como próximo passo pra você?"`
+"Então, com base nisso que a gente explorou... o que faria sentido como próximo passo pra você?"
+${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}`
         };
       }
     }
