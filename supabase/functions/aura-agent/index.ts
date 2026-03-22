@@ -5409,53 +5409,50 @@ Responda apenas o resumo, sem formatação.`
                            assistantMessage.includes('[AGUARDANDO_RESPOSTA]') ? 'awaiting' : 'neutral';
       console.log('🏷️ Conversation status from tag:', conversationStatus);
     } else {
-      // New: deterministic detection
-      conversationStatus = determineConversationStatus(assistantMessage);
+      // New: deterministic detection with user message context
+      conversationStatus = determineConversationStatus(assistantMessage, message);
       console.log('🏷️ Conversation status (deterministic):', conversationStatus);
     }
 
     const isConversationComplete = conversationStatus === 'completed';
     const isAwaitingResponse = conversationStatus === 'awaiting';
 
-    // Controle de áudio
+    // Controle de áudio — centralizado via determineAudioMode()
     const wantsText = userWantsText(message);
     const wantsAudio = userWantsAudio(message);
     const crisis = isCrisis(message);
-    
-    // Verificar se é início de sessão (forçar áudio nas primeiras 2 respostas)
     const sessionAudioCount = currentSession?.audio_sent_count || 0;
-    const forceAudioForSessionStart = sessionActive && sessionAudioCount < 2;
-    
-    // Verificar se é encerramento de sessão (forçar áudio caloroso)
     const sessionCloseInfo = currentSession ? calculateSessionTimeContext(currentSession, lastMessageTimestamp, currentSession.resumption_count ?? 0) : null;
-    const forceAudioForSessionClose = sessionCloseInfo?.forceAudioForClose || shouldEndSession || aiWantsToEndSession;
-    
-    // Audio budget system
     const aiWantsAudio = assistantMessage.trimStart().startsWith('[MODO_AUDIO]');
+    
+    // Audio budget
     const budgetSeconds = profile?.plan === 'transformacao' ? 7200 : profile?.plan === 'direcao' ? 3000 : 1800;
     const audioSecondsUsed = profile?.audio_seconds_used_this_month || 0;
-    
-    // Reset inline se mês mudou
     const currentAudioMonth = new Date().toISOString().slice(0, 7);
     const resetMonth = profile?.audio_reset_date?.slice(0, 7);
     const budgetAvailable = (currentAudioMonth !== resetMonth) || (audioSecondsUsed < budgetSeconds);
 
-    const allowAudioThisTurn = !wantsText && (
-      crisis ||                         // segurança: sempre
-      wantsAudio ||                     // usuário pediu
-      forceAudioForSessionStart ||      // OBRIGATÓRIO: abertura de sessão
-      forceAudioForSessionClose ||      // encerramento
-      (aiWantsAudio && budgetAvailable) // IA decidiu + tem orçamento
-    );
+    const audioDecision = determineAudioMode({
+      userMessage: message,
+      sessionActive,
+      sessionAudioCount,
+      isSessionClosing: sessionCloseInfo?.forceAudioForClose || shouldEndSession || aiWantsToEndSession,
+      isCrisisDetected: crisis,
+      budgetAvailable,
+      wantsText,
+      wantsAudio,
+      aiIncludedAudioTag: aiWantsAudio,
+    });
+
+    const allowAudioThisTurn = audioDecision.shouldUseAudio;
+    const forceAudioForSessionStart = audioDecision.reason === 'session_opening';
+    const forceAudioForSessionClose = audioDecision.reason === 'session_closing';
     
     console.log("🎙️ Audio control:", { 
-      wantsText, 
-      wantsAudio, 
-      crisis, 
-      forceAudioForSessionStart,
-      forceAudioForSessionClose,
-      sessionAudioCount,
+      decision: audioDecision.reason,
+      mandatory: audioDecision.mandatory,
       allowAudioThisTurn,
+      sessionAudioCount,
       aiWantsAudio,
       budgetAvailable,
       audioSecondsUsed,
