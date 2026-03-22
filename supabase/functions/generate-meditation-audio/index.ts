@@ -260,6 +260,22 @@ serve(async (req) => {
     const finalAudio = concatenateAudioBuffers(audioBuffers);
     console.log(`✅ Final audio: ${finalAudio.byteLength} bytes`);
 
+    // Log consolidated TTS usage for the entire meditation
+    try {
+      const totalChars = meditation.script.length;
+      await supabase.from('token_usage_logs').insert({
+        function_name: 'generate-meditation-audio',
+        call_type: 'tts-meditation',
+        model: 'google/gemini-2.5-pro-tts',
+        prompt_tokens: totalChars,
+        completion_tokens: finalAudio.byteLength,
+        total_tokens: totalChars,
+        cached_tokens: 0,
+      });
+    } catch (logErr) {
+      console.error('Failed to log TTS usage:', logErr);
+    }
+
     // Upload para Storage
     const storagePath = `${meditation_id}/audio.mp3`;
     
