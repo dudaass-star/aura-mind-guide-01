@@ -4173,7 +4173,7 @@ Exemplo com 4 sessões:
       
       console.log(`🔄 Trimmed from ${apiMessages.length} to ${trimmedMessages.length} messages`);
       const retryTemperature = 0.9;
-      const retryData = await callAI(configuredModel, trimmedMessages, 4096, retryTemperature, LOVABLE_API_KEY, supabase);
+      const retryData = await callAI(configuredModel, trimmedMessages, 4096, retryTemperature, LOVABLE_API_KEY, supabase, AURA_STATIC_INSTRUCTIONS);
       await logTokenUsage(supabase, user_id || null, 'main_chat_retry', configuredModel, retryData.usage);
       assistantMessage = retryData.choices?.[0]?.message?.content;
       if (!assistantMessage) {
