@@ -1257,6 +1257,7 @@ async function processExtractedActions(
         topic_continuity: actions.topic_continuity,
         engagement_level: actions.engagement_level,
         short_answer_streak: shortAnswerStreak,
+        aura_phase: actions.aura_phase,
       };
       // Use partial UPDATE to avoid overwriting concurrent fields (is_responding, pending_content, etc.)
       await supabase.from('aura_response_state')
