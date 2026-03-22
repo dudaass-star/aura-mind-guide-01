@@ -5901,10 +5901,14 @@ Responda apenas o resumo, sem formatação.`
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
     if (GEMINI_API_KEY && profile?.user_id) {
       // 1. Micro-agente: extração de ações (lembretes, DND, sessões)
+      const recentUserMsgs = messageHistory
+        .filter(m => m.role === 'user')
+        .slice(-3)
+        .map(m => m.content);
       const microAgentPromise = (async () => {
         try {
           const actions = await extractActionsFromResponse(
-            message, assistantMessage, GEMINI_API_KEY, supabase, profile.user_id
+            message, assistantMessage, GEMINI_API_KEY, supabase, profile.user_id, recentUserMsgs
           );
           if (Object.keys(actions).length > 0) {
             await processExtractedActions(actions, supabase, profile, currentSession, dateTimeContext);
