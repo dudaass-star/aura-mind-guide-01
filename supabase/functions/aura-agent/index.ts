@@ -4935,27 +4935,16 @@ Exemplo com 4 sessões:
       assistantMessage = assistantMessage.replace(/\[PAUSAR_SESSOES[^\]]*\]/gi, '');
     }
 
-    // ========================================================================
-    // PROCESSAR TAG [NAO_PERTURBE:Xh]
-    // ========================================================================
-    // DND: Tag-based (fallback) OR deterministic detection from user message + time-of-day
-    const dndMatch = assistantMessage.match(/\[NAO_PERTURBE:(\d+)h?\]/i);
+    // DND: Deterministic detection from user message + time-of-day
     const brtHour = ((new Date().getUTCHours() - 3 + 24) % 24);
-    const deterministicDndHours = detectDoNotDisturb(message, brtHour);
-    const dndHours = dndMatch ? parseInt(dndMatch[1]) : deterministicDndHours;
+    const dndHours = detectDoNotDisturb(message, brtHour);
     if (dndHours && profile?.user_id) {
       const dndUntil = new Date(Date.now() + dndHours * 60 * 60 * 1000);
-      
-      console.log(`🔇 Setting do_not_disturb_until for ${dndHours}h until ${dndUntil.toISOString()} (source: ${dndMatch ? 'tag' : 'deterministic'})`);
-      
-      await supabase
-        .from('profiles')
-        .update({ do_not_disturb_until: dndUntil.toISOString() })
-        .eq('user_id', profile.user_id);
-      
-      // Limpar tag da resposta
-      assistantMessage = assistantMessage.replace(/\[NAO_PERTURBE:\d+h?\]/gi, '');
+      console.log(`🔇 DND: ${dndHours}h until ${dndUntil.toISOString()}`);
+      await supabase.from('profiles').update({ do_not_disturb_until: dndUntil.toISOString() }).eq('user_id', profile.user_id);
     }
+    // Strip legacy DND tags
+    assistantMessage = assistantMessage.replace(/\[NAO_PERTURBE:\d+h?\]/gi, '');
 
     // Verificar se a IA quer encerrar a sessão
     const aiWantsToEndSession = assistantMessage.includes('[ENCERRAR_SESSAO]');
