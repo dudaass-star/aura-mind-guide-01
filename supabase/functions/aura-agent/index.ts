@@ -571,6 +571,15 @@ interface ExtractedActions {
   journey_action?: string;
   journey_id?: string;
   themes?: Array<{ name: string; status: string }>;
+  user_emotional_state?: 'stable' | 'vulnerable' | 'crisis' | 'resistant';
+  topic_continuity?: 'same_topic' | 'shifted' | 'new_topic';
+  engagement_level?: 'engaged' | 'short_answers' | 'disengaged';
+}
+
+interface UserContextState {
+  user_emotional_state?: string;
+  topic_continuity?: string;
+  engagement_level?: string;
 }
 
 async function extractActionsFromResponse(
@@ -600,7 +609,10 @@ Retorne um JSON com APENAS os campos relevantes (omita campos vazios/null):
   "session_pause_until_text": "expressão temporal",
   "journey_action": "list|switch|pause",
   "journey_id": "id_da_jornada",
-  "themes": [{"name": "nome do tema emocional", "status": "new|progressing|resolved|stagnated"}]
+  "themes": [{"name": "nome do tema emocional", "status": "new|progressing|resolved|stagnated"}],
+  "user_emotional_state": "stable|vulnerable|crisis|resistant",
+  "topic_continuity": "same_topic|shifted|new_topic",
+  "engagement_level": "engaged|short_answers|disengaged"
 }
 
 REGRAS:
@@ -609,7 +621,11 @@ REGRAS:
 - commitments: apenas compromissos CONCRETOS com ação clara (não intenções vagas)
 - themes: temas emocionais significativos discutidos (não triviais)
 - session_action: só se houve pedido explícito de agendamento/reagendamento/pausa
-- Se nada relevante, retorne {}
+- user_emotional_state: avalie o estado emocional do USUÁRIO (não da assistente). "crisis" = risco/desespero, "vulnerable" = fragilidade emocional, "resistant" = evitando aprofundamento, "stable" = normal
+- topic_continuity: compare o tema da mensagem do USUÁRIO com o fluxo anterior. "shifted" = mudou de assunto parcialmente, "new_topic" = tema completamente novo
+- engagement_level: "disengaged" = respostas evasivas/monossilábicas sem conteúdo, "short_answers" = respostas curtas mas com conteúdo, "engaged" = participando ativamente
+- SEMPRE inclua user_emotional_state, topic_continuity e engagement_level
+- Se nada mais for relevante, retorne apenas esses 3 campos
 Apenas o JSON, sem markdown.`;
 
     const extractionBody = {
@@ -779,8 +795,46 @@ function evaluateTherapeuticPhase(
   messageHistory: Array<{ role: string; content: string }>,
   sessionActive: boolean,
   sessionPhase?: string,
-  sessionElapsedMin?: number
+  sessionElapsedMin?: number,
+  lastUserContext?: UserContextState | null
 ): PhaseEvaluation {
+  // ======== USER CONTEXT OVERRIDES (from micro-agent, previous turn) ========
+  if (lastUserContext) {
+    // Priority 1: Emotional regression → force Presença
+    if (lastUserContext.user_emotional_state === 'crisis' || lastUserContext.user_emotional_state === 'vulnerable') {
+      console.log(`🔄 Phase evaluator: user_emotional_state=${lastUserContext.user_emotional_state} → forcing presenca`);
+      return {
+        detectedPhase: 'presenca',
+        stagnationLevel: 0,
+        guidance: `\n\n🔄 RESET DE FASE (DETECÇÃO AUTOMÁTICA):
+O sistema detectou que o usuário está em estado ${lastUserContext.user_emotional_state === 'crisis' ? 'de CRISE' : 'VULNERÁVEL'}.
+PRIORIDADE ABSOLUTA: Acolhimento e presença. NÃO avance fase. NÃO faça perguntas profundas agora.
+Apenas esteja presente, valide o que ele sente, e ofereça segurança emocional.
+${lastUserContext.user_emotional_state === 'crisis' ? 'Se houver risco, siga o protocolo de segurança.' : ''}`
+      };
+    }
+
+    // Priority 2: Topic shift → reset stagnation
+    if (lastUserContext.topic_continuity === 'shifted' || lastUserContext.topic_continuity === 'new_topic') {
+      console.log(`🔄 Phase evaluator: topic_continuity=${lastUserContext.topic_continuity} → resetting stagnation`);
+      // Don't inject guidance — let Aura respond naturally to the new topic
+      return { guidance: null, detectedPhase: 'initial', stagnationLevel: 0 };
+    }
+
+    // Priority 3: Resistance/disengagement → cancel advancement
+    if (lastUserContext.user_emotional_state === 'resistant' || lastUserContext.engagement_level === 'disengaged') {
+      console.log(`🔄 Phase evaluator: resistance/disengagement detected → canceling advancement`);
+      return {
+        detectedPhase: 'presenca',
+        stagnationLevel: 0,
+        guidance: `\n\n🔄 RESISTÊNCIA DETECTADA (DETECÇÃO AUTOMÁTICA):
+O usuário não está engajando no aprofundamento. NÃO force avanço de fase.
+Valide, dê espaço, mude o ângulo suavemente. Considere perguntar algo mais leve
+ou simplesmente validar o silêncio/resistência como legítimo.`
+      };
+    }
+  }
+
   const recentAssistant = messageHistory
     .filter(m => m.role === 'assistant')
     .slice(-6)
@@ -1076,6 +1130,21 @@ async function processExtractedActions(
     if (actions.time_capsule_accepted) {
       await supabase.from('profiles').update({ awaiting_time_capsule: 'awaiting_audio' }).eq('user_id', userId);
       console.log('✅ [MICRO-AGENT] Time capsule capture activated');
+    }
+
+    // Save user context state for next turn's phase evaluator
+    if (actions.user_emotional_state || actions.topic_continuity || actions.engagement_level) {
+      const userContext: UserContextState = {
+        user_emotional_state: actions.user_emotional_state,
+        topic_continuity: actions.topic_continuity,
+        engagement_level: actions.engagement_level,
+      };
+      await supabase.from('aura_response_state').upsert({
+        user_id: userId,
+        last_user_context: userContext,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'user_id' });
+      console.log('✅ [MICRO-AGENT] User context saved:', JSON.stringify(userContext));
     }
 
   } catch (error) {
@@ -3191,7 +3260,7 @@ serve(async (req) => {
       console.warn('Failed to read AI model config, using default:', e);
     }
 
-    const { message, user_id, phone, pending_content, pending_context } = await req.json();
+    const { message, user_id, phone, pending_content, pending_context, last_user_context } = await req.json();
 
     console.log("AURA received:", { user_id, phone, message: message?.substring(0, 50), hasPendingContent: !!pending_content });
 
@@ -4457,7 +4526,7 @@ Exemplo com 4 sessões:
         evalSessionPhase = phaseCheck.phase;
         evalElapsedMin = Math.floor((Date.now() - new Date(currentSession.started_at).getTime()) / 60000);
       }
-      const phaseEval = evaluateTherapeuticPhase(messageHistory, sessionActive, evalSessionPhase, evalElapsedMin);
+      const phaseEval = evaluateTherapeuticPhase(messageHistory, sessionActive, evalSessionPhase, evalElapsedMin, last_user_context);
       if (phaseEval.guidance) {
         dynamicContext += phaseEval.guidance;
         console.log(`🔄 Phase evaluator: detected=${phaseEval.detectedPhase}, stagnation=${phaseEval.stagnationLevel}, context=${sessionActive ? 'session' : 'free'}`);

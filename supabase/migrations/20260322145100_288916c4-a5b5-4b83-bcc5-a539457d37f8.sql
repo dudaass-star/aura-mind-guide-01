@@ -1,0 +1,1 @@
+ALTER TABLE public.aura_response_state ADD COLUMN IF NOT EXISTS last_user_context jsonb DEFAULT NULL;

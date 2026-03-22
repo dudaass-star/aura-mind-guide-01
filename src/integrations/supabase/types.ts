@@ -17,6 +17,7 @@ export type Database = {
       aura_response_state: {
         Row: {
           is_responding: boolean | null
+          last_user_context: Json | null
           last_user_message_id: string | null
           pending_content: string | null
           pending_context: string | null
@@ -26,6 +27,7 @@ export type Database = {
         }
         Insert: {
           is_responding?: boolean | null
+          last_user_context?: Json | null
           last_user_message_id?: string | null
           pending_content?: string | null
           pending_context?: string | null
@@ -35,6 +37,7 @@ export type Database = {
         }
         Update: {
           is_responding?: boolean | null
+          last_user_context?: Json | null
           last_user_message_id?: string | null
           pending_content?: string | null
           pending_context?: string | null
