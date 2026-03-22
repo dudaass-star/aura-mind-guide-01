@@ -146,6 +146,7 @@ export default function AdminMessages() {
       if (!response.ok) throw new Error('Failed to fetch conversation');
       const data = await response.json();
       setMessages(data.messages || []);
+      setUserContext(data.user_context || null);
       setIsAtBottom(true);
     } catch (err) {
       console.error(err);
