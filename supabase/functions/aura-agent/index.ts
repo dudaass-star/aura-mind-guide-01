@@ -266,9 +266,9 @@ async function callAI(
   cacheableSystemPrompt?: string
 ): Promise<{ choices: Array<{ message: { content: string }; finish_reason?: string }>; usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } }> {
   
-  // Anthropic direct API (deprecated)
+  // Anthropic models not supported
   if (model.startsWith('anthropic/') || model.startsWith('claude-')) {
-    throw new Error('Anthropic models are deprecated. Use Google Gemini models instead.');
+    throw new Error('Use Google Gemini models instead.');
   }
 
   // Extrair modelo real e nível de reasoning (sufixo :low/:medium/:high)
@@ -2611,24 +2611,8 @@ function splitIntoMessages(response: string, allowAudioThisTurn: boolean): Array
   return allChunks;
 }
 
-// Função para extrair insights da resposta
-function extractInsights(response: string): Array<{ category: string; key: string; value: string }> {
-  const insightsMatch = response.match(/\[INSIGHTS\](.*?)\[\/INSIGHTS\]/s);
-  if (!insightsMatch) return [];
+// extractInsights removed — postConversationAnalysis() handles this now (Phase 3)
 
-  const insightsStr = insightsMatch[1].trim();
-  const insights: Array<{ category: string; key: string; value: string }> = [];
-
-  const parts = insightsStr.split('|');
-  for (const part of parts) {
-    const [category, key, value] = part.split(':').map(s => s?.trim());
-    if (category && key && value) {
-      insights.push({ category, key, value });
-    }
-  }
-
-  return insights;
-}
 
 // Função para formatar insights para o contexto
 function formatInsightsForContext(insights: any[]): string {
@@ -4330,8 +4314,8 @@ Exemplo com 4 sessões:
 
     let data: any;
     try {
-      // Temperature dinâmica: 0.9 para mensagens curtas (reduz tendência de eco do Gemini Flash)
-      // TODO: Revisar ao migrar de modelo — específico para Gemini 3 Flash Preview
+      // Dynamic temperature: higher for short messages to reduce echo tendency
+      const temperature = userWordCount <= 5 ? 0.9 : 0.8;
       const temperature = userWordCount <= 5 ? 0.9 : 0.8;
       data = await callAI(configuredModel, apiMessages, 4096, temperature, LOVABLE_API_KEY, supabase, AURA_STATIC_INSTRUCTIONS);
     } catch (e: any) {
@@ -4813,201 +4797,17 @@ Exemplo com 4 sessões:
     // Clean up schedule creation tag from response
     assistantMessage = assistantMessage.replace(/\[CRIAR_AGENDA:[^\]]+\]/gi, '');
 
-    // ========================================================================
-    // LEGACY FALLBACK: Tag-based theme tracking (primary: postConversationAnalysis)
-    // ========================================================================
-    
-    const themeNewMatches = assistantMessage.matchAll(/\[TEMA_NOVO:([^\]]+)\]/gi);
-    const themeResolvedMatches = assistantMessage.matchAll(/\[TEMA_RESOLVIDO:([^\]]+)\]/gi);
-    const themeProgressingMatches = assistantMessage.matchAll(/\[TEMA_PROGREDINDO:([^\]]+)\]/gi);
-    const themeStagnatedMatches = assistantMessage.matchAll(/\[TEMA_ESTAGNADO:([^\]]+)\]/gi);
-    
-    if (profile?.user_id) {
-      // Processar temas novos
-      for (const match of themeNewMatches) {
-        const themeName = match[1].trim();
-        console.log('🎯 New theme detected:', themeName);
-        
-        await supabase
-          .from('session_themes')
-          .upsert({
-            user_id: profile.user_id,
-            theme_name: themeName,
-            status: 'active',
-            last_mentioned_at: new Date().toISOString(),
-            session_count: 1
-          }, {
-            onConflict: 'user_id,theme_name'
-          });
-      }
-      
-      // Processar temas resolvidos
-      for (const match of themeResolvedMatches) {
-        const themeName = match[1].trim();
-        console.log('✅ Theme resolved:', themeName);
-        
-        await supabase
-          .from('session_themes')
-          .update({ 
-            status: 'resolved',
-            last_mentioned_at: new Date().toISOString()
-          })
-          .eq('user_id', profile.user_id)
-          .ilike('theme_name', `%${themeName}%`);
-      }
-      
-      // Processar temas em progresso
-      for (const match of themeProgressingMatches) {
-        const themeName = match[1].trim();
-        console.log('🟡 Theme progressing:', themeName);
-        
-        await supabase
-          .from('session_themes')
-          .update({ 
-            status: 'progressing',
-            last_mentioned_at: new Date().toISOString()
-          })
-          .eq('user_id', profile.user_id)
-          .ilike('theme_name', `%${themeName}%`);
-      }
-      
-      // Processar temas estagnados (para análise futura)
-      for (const match of themeStagnatedMatches) {
-        const themeName = match[1].trim();
-        console.log('🔴 Theme stagnated:', themeName);
-      }
-    }
-    
-    // Limpar tags de tema da resposta
+    // Theme tracking — handled by postConversationAnalysis() (Phase 3)
+    // Legacy tags still stripped for safety
     assistantMessage = assistantMessage.replace(/\[TEMA_NOVO:[^\]]+\]/gi, '');
     assistantMessage = assistantMessage.replace(/\[TEMA_RESOLVIDO:[^\]]+\]/gi, '');
     assistantMessage = assistantMessage.replace(/\[TEMA_PROGREDINDO:[^\]]+\]/gi, '');
     assistantMessage = assistantMessage.replace(/\[TEMA_ESTAGNADO:[^\]]+\]/gi, '');
 
-    // ========================================================================
-    // PROCESSAR TAGS DE COMPROMISSOS
-    // ========================================================================
-    
-    const commitmentCompletedMatches = assistantMessage.matchAll(/\[COMPROMISSO_CUMPRIDO:([^\]]+)\]/gi);
-    const commitmentAbandonedMatches = assistantMessage.matchAll(/\[COMPROMISSO_ABANDONADO:([^\]]+)\]/gi);
-    const commitmentRenegotiatedMatches = assistantMessage.matchAll(/\[COMPROMISSO_RENEGOCIADO:([^\]:]+):([^\]]+)\]/gi);
-    
-    if (profile?.user_id) {
-      // Processar compromissos cumpridos
-      for (const match of commitmentCompletedMatches) {
-        const title = match[1].trim();
-        console.log('✅ Commitment completed:', title);
-        
-        await supabase
-          .from('commitments')
-          .update({ 
-            completed: true,
-            commitment_status: 'completed'
-          })
-          .eq('user_id', profile.user_id)
-          .ilike('title', `%${title}%`);
-      }
-      
-      // Processar compromissos abandonados
-      for (const match of commitmentAbandonedMatches) {
-        const title = match[1].trim();
-        console.log('❌ Commitment abandoned:', title);
-        
-        await supabase
-          .from('commitments')
-          .update({ 
-            completed: true,  // Marca como "resolvido" para não aparecer mais
-            commitment_status: 'abandoned'
-          })
-          .eq('user_id', profile.user_id)
-          .ilike('title', `%${title}%`);
-      }
-      
-      // Processar compromissos renegociados
-      for (const match of commitmentRenegotiatedMatches) {
-        const oldTitle = match[1].trim();
-        const newTitle = match[2].trim();
-        console.log('🔄 Commitment renegotiated:', oldTitle, '->', newTitle);
-        
-        // Marcar antigo como renegociado
-        await supabase
-          .from('commitments')
-          .update({ 
-            completed: true,
-            commitment_status: 'renegotiated'
-          })
-          .eq('user_id', profile.user_id)
-          .ilike('title', `%${oldTitle}%`);
-        
-        // Criar novo compromisso (com dedup)
-        const renegTitlePrefix = newTitle.substring(0, 40);
-        const { data: existingReneg } = await supabase
-          .from('commitments')
-          .select('id, title')
-          .eq('user_id', profile.user_id)
-          .eq('completed', false)
-          .ilike('title', `%${renegTitlePrefix}%`)
-          .limit(1);
-
-        if (existingReneg && existingReneg.length > 0) {
-          console.log('📋 Skipping duplicate renegotiated commitment:', newTitle, '(matches:', existingReneg[0].title, ')');
-        } else {
-          await supabase
-            .from('commitments')
-            .insert({
-              user_id: profile.user_id,
-              title: newTitle,
-              completed: false,
-              commitment_status: 'pending',
-              session_id: currentSession?.id
-            });
-        }
-      }
-    }
-    
-    // Limpar tags de compromisso da resposta
+    // Commitment status tags — strip for safety (postConversationAnalysis handles tracking)
     assistantMessage = assistantMessage.replace(/\[COMPROMISSO_CUMPRIDO:[^\]]+\]/gi, '');
     assistantMessage = assistantMessage.replace(/\[COMPROMISSO_ABANDONADO:[^\]]+\]/gi, '');
     assistantMessage = assistantMessage.replace(/\[COMPROMISSO_RENEGOCIADO:[^\]]+\]/gi, '');
-
-    // ========================================================================
-    // LEGACY FALLBACK: Free commitments from tags (primary: postConversationAnalysis)
-    // ========================================================================
-    
-    const commitmentFreeMatches = assistantMessage.matchAll(/\[COMPROMISSO_LIVRE:([^\]]+)\]/gi);
-    
-    if (profile?.user_id) {
-      for (const match of commitmentFreeMatches) {
-        const title = match[1].trim();
-        console.log('📋 Free commitment detected:', title);
-        
-        // Dedup: verificar se já existe commitment pendente similar
-        const freeTitlePrefix = title.substring(0, 40);
-        const { data: existingFree } = await supabase
-          .from('commitments')
-          .select('id, title')
-          .eq('user_id', profile.user_id)
-          .eq('completed', false)
-          .ilike('title', `%${freeTitlePrefix}%`)
-          .limit(1);
-
-        if (existingFree && existingFree.length > 0) {
-          console.log('📋 Skipping duplicate commitment:', title, '(matches:', existingFree[0].title, ')');
-        } else {
-          await supabase
-            .from('commitments')
-            .insert({
-              user_id: profile.user_id,
-              title: title,
-              completed: false,
-              commitment_status: 'pending',
-              session_id: null
-            });
-          console.log('📋 Free commitment created:', title);
-        }
-      }
-    }
-    
     assistantMessage = assistantMessage.replace(/\[COMPROMISSO_LIVRE:[^\]]+\]/gi, '');
 
     // ========================================================================
@@ -5119,62 +4919,30 @@ Exemplo com 4 sessões:
       assistantMessage = assistantMessage.replace(/\[PAUSAR_SESSOES[^\]]*\]/gi, '');
     }
 
-    // ========================================================================
-    // PROCESSAR TAG [NAO_PERTURBE:Xh]
-    // ========================================================================
-    // DND: Tag-based (fallback) OR deterministic detection from user message + time-of-day
-    const dndMatch = assistantMessage.match(/\[NAO_PERTURBE:(\d+)h?\]/i);
+    // DND: Deterministic detection from user message + time-of-day
     const brtHour = ((new Date().getUTCHours() - 3 + 24) % 24);
-    const deterministicDndHours = detectDoNotDisturb(message, brtHour);
-    const dndHours = dndMatch ? parseInt(dndMatch[1]) : deterministicDndHours;
+    const dndHours = detectDoNotDisturb(message, brtHour);
     if (dndHours && profile?.user_id) {
       const dndUntil = new Date(Date.now() + dndHours * 60 * 60 * 1000);
-      
-      console.log(`🔇 Setting do_not_disturb_until for ${dndHours}h until ${dndUntil.toISOString()} (source: ${dndMatch ? 'tag' : 'deterministic'})`);
-      
-      await supabase
-        .from('profiles')
-        .update({ do_not_disturb_until: dndUntil.toISOString() })
-        .eq('user_id', profile.user_id);
-      
-      // Limpar tag da resposta
-      assistantMessage = assistantMessage.replace(/\[NAO_PERTURBE:\d+h?\]/gi, '');
+      console.log(`🔇 DND: ${dndHours}h until ${dndUntil.toISOString()}`);
+      await supabase.from('profiles').update({ do_not_disturb_until: dndUntil.toISOString() }).eq('user_id', profile.user_id);
     }
+    // Strip legacy DND tags
+    assistantMessage = assistantMessage.replace(/\[NAO_PERTURBE:\d+h?\]/gi, '');
 
     // Verificar se a IA quer encerrar a sessão
     const aiWantsToEndSession = assistantMessage.includes('[ENCERRAR_SESSAO]');
 
-    // === EXTRAÇÃO DETERMINÍSTICA DE TAGS [INSIGHT:...] e [COMPROMISSO:...] ===
-    const insightTagRegex = /\[INSIGHT:(.*?)\]/gi;
-    const compromissoTagRegex = /\[COMPROMISSO:(.*?)\]/gi;
-    const extractedInsights: string[] = [];
-    const extractedCommitments: string[] = [];
-    
-    let tagMatch;
-    while ((tagMatch = insightTagRegex.exec(assistantMessage)) !== null) {
-      extractedInsights.push(tagMatch[1].trim());
-    }
-    while ((tagMatch = compromissoTagRegex.exec(assistantMessage)) !== null) {
-      extractedCommitments.push(tagMatch[1].trim());
-    }
-    
-    // Remover tags da mensagem visível ao usuário
+    // Strip legacy [INSIGHT:] and [COMPROMISSO:] tags if AI still generates them
     assistantMessage = assistantMessage.replace(/\[INSIGHT:.*?\]/gi, '').replace(/\[COMPROMISSO:.*?\]/gi, '').trim();
-    
-    if (extractedInsights.length > 0 || extractedCommitments.length > 0) {
-      console.log('🏷️ Tags extraídas:', { insights: extractedInsights.length, commitments: extractedCommitments.length });
-    }
 
     // Executar encerramento de sessão com resumo, insights e compromissos
     if ((shouldEndSession || aiWantsToEndSession) && currentSession && profile) {
       const endTime = new Date().toISOString();
 
-      // Usar tags extraídas se disponíveis, senão gerar via IA
       let sessionSummary = "Sessão concluída.";
-      let keyInsights: string[] = extractedInsights.length > 0 ? extractedInsights : [];
-      let commitments: any[] = extractedCommitments.length > 0 
-        ? extractedCommitments.map(c => ({ title: c })) 
-        : [];
+      let keyInsights: string[] = [];
+      let commitments: any[] = [];
       
       try {
         const summaryMessages = messageHistory.slice(-15); // Últimas 15 mensagens
@@ -5211,15 +4979,10 @@ Regras:
               const parsed = JSON.parse(cleanJson);
               
               sessionSummary = parsed.summary || sessionSummary;
-              // Tags extraídas têm prioridade sobre extração do Flash
-              if (keyInsights.length === 0) {
-                keyInsights = Array.isArray(parsed.insights) ? parsed.insights : [];
-              }
-              if (commitments.length === 0) {
-                commitments = Array.isArray(parsed.commitments) 
-                  ? parsed.commitments.map((c: string) => ({ title: c }))
-                  : [];
-              }
+              keyInsights = Array.isArray(parsed.insights) ? parsed.insights : [];
+              commitments = Array.isArray(parsed.commitments) 
+                ? parsed.commitments.map((c: string) => ({ title: c }))
+                : [];
               
               console.log('📝 Extracted session data:', {
                 summary: sessionSummary.substring(0, 50),
@@ -5506,37 +5269,9 @@ Responda apenas o resumo, sem formatação.`
     }
 
 
-    // LEGACY FALLBACK: Extract insights from [INSIGHTS]...[/INSIGHTS] tags if LLM still generates them
-    // Primary extraction is now handled by postConversationAnalysis() (async, Phase 3)
-    const newInsights = extractInsights(assistantMessage);
-    if (newInsights.length > 0 && profile?.user_id) {
-      console.log("💾 [LEGACY] Saving", newInsights.length, "tag-based insights");
-      const categoryImportance: Record<string, number> = {
-        'pessoa': 10, 'identidade': 10, 'desafio': 8, 'trauma': 8, 'saude': 8,
-        'objetivo': 6, 'conquista': 6, 'padrao': 5, 'preferencia': 4, 'rotina': 4, 'contexto': 5
-      };
-      for (const insight of newInsights) {
-        const importance = categoryImportance[insight.category] || 5;
-        await supabase.from('user_insights').upsert({
-          user_id: profile.user_id, category: insight.category, key: insight.key,
-          value: insight.value, importance, last_mentioned_at: new Date().toISOString()
-        }, { onConflict: 'user_id,category,key' });
-      }
-    }
-
-    // Deterministic conversation status (replaces tag-based detection)
-    const hasStatusTag = /\[(AGUARDANDO_RESPOSTA|CONVERSA_CONCLUIDA|ENCERRAR_SESSAO)\]/i.test(assistantMessage);
-    let conversationStatus: string;
-    if (hasStatusTag) {
-      // Legacy: LLM still generated tags — use them
-      conversationStatus = assistantMessage.includes('[CONVERSA_CONCLUIDA]') ? 'completed' : 
-                           assistantMessage.includes('[AGUARDANDO_RESPOSTA]') ? 'awaiting' : 'neutral';
-      console.log('🏷️ Conversation status from tag:', conversationStatus);
-    } else {
-      // New: deterministic detection with user message context
-      conversationStatus = determineConversationStatus(assistantMessage, message);
-      console.log('🏷️ Conversation status (deterministic):', conversationStatus);
-    }
+    // Deterministic conversation status
+    const conversationStatus = determineConversationStatus(assistantMessage, message);
+    console.log('🏷️ Conversation status:', conversationStatus);
 
     const isConversationComplete = conversationStatus === 'completed';
     const isAwaitingResponse = conversationStatus === 'awaiting';
