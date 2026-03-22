@@ -2499,12 +2499,10 @@ function formatThemeTrackingContext(themes: any[]): string {
 
 1. Se tema está ATIVO há mais de 3 sessões sem progresso:
    - Confronte gentilmente: "Já falamos disso algumas vezes... O que está travando?"
-   - Use tag: [TEMA_ESTAGNADO:nome_do_tema]
 
 2. Se usuário relata MELHORA em tema ativo:
    - Note o progresso: "Percebi que isso mudou. O que você acha que fez diferença?"
    - Pergunte: "Sente que podemos fechar esse capítulo ou quer continuar?"
-   - Se for pra fechar, use tag: [TEMA_PROGREDINDO:nome_do_tema]
 
 3. Se tema foi RESOLVIDO:
    - Mencione brevemente como vitória
@@ -2514,7 +2512,6 @@ function formatThemeTrackingContext(themes: any[]): string {
 4. Se é tema NOVO:
    - Investigue profundamente antes de dar direção
    - Conecte com temas anteriores se houver relação
-   - Use tag: [TEMA_NOVO:nome_do_tema]
 
 5. Se tema está RECORRENTE (voltou após resolvido):
    - "Percebi que esse tema voltou... vamos olhar de um ângulo diferente?"
