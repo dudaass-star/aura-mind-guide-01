@@ -631,8 +631,9 @@ REGRAS:
 - topic_continuity: compare o tema da mensagem ATUAL do USUÁRIO com a mensagem IMEDIATAMENTE anterior dele (não com o início da conversa). "shifted" = mudou de assunto parcialmente em relação à última mensagem, "new_topic" = tema completamente novo vs a última mensagem, "same_topic" = continuação do mesmo tema da última mensagem. IMPORTANTE: se o usuário mudou de tema no turno anterior e agora CONTINUA nesse novo tema, classifique como "same_topic" (ele está aprofundando o novo assunto).
 - engagement_level: "disengaged" = respostas evasivas/monossilábicas sem conteúdo, "short_answers" = respostas curtas mas com conteúdo, "engaged" = participando ativamente
 - IMPORTANTE sobre engagement_level: Alguns usuários são naturalmente sucintos. Só classifique como "disengaged" se houver mudança clara de padrão OU evasão ativa (ex: "tanto faz", "sei lá", "ok"). Respostas curtas com conteúdo emocional genuíno = "engaged", não "short_answers".
-- SEMPRE inclua user_emotional_state, topic_continuity e engagement_level
-- Se nada mais for relevante, retorne apenas esses 3 campos
+- aura_phase: classifique a fase terapêutica da RESPOSTA DA ASSISTENTE (não do usuário). "presenca" = acolhimento, perguntas exploratórias, validação. "sentido" = reflexões profundas, reframes, nomeação de padrões. "movimento" = compromissos, próximos passos, ações concretas.
+- SEMPRE inclua user_emotional_state, topic_continuity, engagement_level e aura_phase
+- Se nada mais for relevante, retorne apenas esses 4 campos
 Apenas o JSON, sem markdown.`;
 
     const extractionBody = {
