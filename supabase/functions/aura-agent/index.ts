@@ -663,33 +663,58 @@ Apenas o JSON, sem markdown.`;
 }
 
 // Deterministic conversation status (replaces [AGUARDANDO_RESPOSTA]/[CONVERSA_CONCLUIDA])
-function determineConversationStatus(assistantResponse: string): 'awaiting' | 'completed' | 'neutral' {
+function determineConversationStatus(
+  assistantResponse: string, 
+  userMessage?: string
+): 'awaiting' | 'completed' | 'neutral' {
   const clean = stripAllInternalTags(assistantResponse).trim();
+  const userClean = userMessage?.toLowerCase().trim() || '';
 
-  // Check for farewell patterns
-  const farewellPatterns = /\b(boa\s*noite|até\s*(amanhã|logo|mais|depois)|tchau|bye|adeus|durma\s*bem|descansa|bons?\s*sonhos?)\b/i;
-  if (farewellPatterns.test(clean)) {
-    return 'completed';
+  // 1. Check if USER is saying goodbye (strongest signal)
+  const userFarewellPatterns = /\b(boa\s*noite|até\s*(amanhã|logo|mais|depois)|tchau|bye|adeus|vou\s*dormir|vou\s*descansar|boa\s*madrugada|fui|flw|falou|valeu\s*até|te\s*vejo|nos\s*vemos)\b/i;
+  if (userFarewellPatterns.test(userClean)) {
+    // User said goodbye — but only complete if Aura also responds with farewell tone
+    const auraFarewellPatterns = /\b(boa\s*noite|até\s*(amanhã|logo|mais|depois)|tchau|durma\s*bem|descansa|bons?\s*sonhos?|te\s*vejo|cuide-se|fico\s*aqui)\b/i;
+    if (auraFarewellPatterns.test(clean)) {
+      return 'completed';
+    }
   }
 
-  // Check for questions
+  // 2. Check if AURA response contains farewell (Aura wrapping up)
+  const farewellPatterns = /\b(boa\s*noite|até\s*(amanhã|logo|mais|depois)|tchau|bye|adeus|durma\s*bem|descansa|bons?\s*sonhos?)\b/i;
+  if (farewellPatterns.test(clean)) {
+    // Only mark completed if no question follows the farewell
+    const lastSentence = clean.split(/[.!]\s*/).pop() || '';
+    if (!lastSentence.includes('?')) {
+      return 'completed';
+    }
+  }
+
+  // 3. Check for questions (any "?" means awaiting)
   if (clean.includes('?')) {
     return 'awaiting';
   }
 
-  // Check for engagement hooks
-  const hookPatterns = /\b(me\s*conta|me\s*fala|me\s*diz|o\s*que\s*acha|como\s*foi|quando\s*puder)\b/i;
+  // 4. Check for engagement hooks (implicit questions)
+  const hookPatterns = /\b(me\s*conta|me\s*fala|me\s*diz|o\s*que\s*acha|como\s*foi|quando\s*puder|quer\s*me\s*contar|quer\s*falar\s*sobre|quer\s*compartilhar|topa|bora|vamos)\b/i;
   if (hookPatterns.test(clean)) {
     return 'awaiting';
+  }
+
+  // 5. Check if user sent a short confirmation (ok, entendi, valeu) — keep engaged
+  const confirmationPatterns = /^(ok|entendi|sim|valeu|obrigad[ao]|tá|ta|beleza|show|top|legal|massa|ah sim|é verdade|faz sentido|hmm|aham)\s*[.!]?$/i;
+  if (confirmationPatterns.test(userClean)) {
+    return 'awaiting'; // Should keep conversation alive
   }
 
   return 'neutral';
 }
 
-// Deterministic DND detection based on user message
-function detectDoNotDisturb(userMessage: string): number | null {
+// Deterministic DND detection based on user message + time-of-day
+function detectDoNotDisturb(userMessage: string, brtHour?: number): number | null {
   const lower = userMessage.toLowerCase();
 
+  // Explicit unavailability patterns
   const dndPatterns: Array<{ pattern: RegExp; hours: number }> = [
     { pattern: /\b(to|tô|estou|tou)\s*(no\s*trabalho|trabalhando)\b/, hours: 4 },
     { pattern: /\b(agora\s*não|agora\s*nao|não\s*posso|nao\s*posso|não\s*dá|nao\s*da)\b/, hours: 3 },
@@ -697,6 +722,9 @@ function detectDoNotDisturb(userMessage: string): number | null {
     { pattern: /\b(em\s*reunião|em\s*reuniao)\b/, hours: 2 },
     { pattern: /\b(depois\s*te\s*respondo|falo\s*(contigo|com\s*voc[eê])\s*depois)\b/, hours: 3 },
     { pattern: /\b(momento\s*ruim)\b/, hours: 3 },
+    { pattern: /\b(to\s*na\s*aula|estou\s*na\s*aula|na\s*faculdade|na\s*escola)\b/, hours: 3 },
+    { pattern: /\b(to\s*dirigindo|estou\s*dirigindo|no\s*trânsito|no\s*transito)\b/, hours: 1 },
+    { pattern: /\b(to\s*na\s*academia|to\s*malhando|estou\s*malhando)\b/, hours: 2 },
   ];
 
   for (const { pattern, hours } of dndPatterns) {
@@ -705,7 +733,72 @@ function detectDoNotDisturb(userMessage: string): number | null {
     }
   }
 
+  // Auto-DND: farewell + nighttime (22h-6h BRT) = sleep silencing
+  const hour = brtHour ?? ((new Date().getUTCHours() - 3 + 24) % 24);
+  const farewellPatterns = /\b(boa\s*noite|vou\s*dormir|vou\s*descansar|to\s*indo\s*dormir|indo\s*deitar|vou\s*deitar|já\s*vou|ja\s*vou)\b/i;
+  if (farewellPatterns.test(lower) && (hour >= 22 || hour < 6)) {
+    // Calculate hours until 8am BRT
+    const hoursUntil8am = hour >= 22 ? (8 + 24 - hour) : (8 - hour);
+    console.log(`🌙 Auto-DND: farewell at ${hour}h BRT → ${hoursUntil8am}h silence until 8am`);
+    return hoursUntil8am;
+  }
+
   return null;
+}
+
+// Deterministic audio mode decision (replaces prompt-based [MODO_AUDIO] decision)
+interface AudioDecision {
+  shouldUseAudio: boolean;
+  reason: string;
+  mandatory: boolean; // true = ignore budget constraints
+}
+
+function determineAudioMode(params: {
+  userMessage: string;
+  sessionActive: boolean;
+  sessionAudioCount: number;
+  isSessionClosing: boolean;
+  isCrisisDetected: boolean;
+  budgetAvailable: boolean;
+  wantsText: boolean;
+  wantsAudio: boolean;
+  aiIncludedAudioTag: boolean;
+}): AudioDecision {
+  const { userMessage, sessionActive, sessionAudioCount, isSessionClosing, 
+          isCrisisDetected, budgetAvailable, wantsText, wantsAudio, aiIncludedAudioTag } = params;
+
+  // User explicitly wants text — respect always (except life-threatening crisis)
+  if (wantsText && !isLifeThreatening(userMessage)) {
+    return { shouldUseAudio: false, reason: 'user_prefers_text', mandatory: false };
+  }
+
+  // 1. MANDATORY: Crisis — always audio for emotional support
+  if (isCrisisDetected) {
+    return { shouldUseAudio: true, reason: 'crisis_detected', mandatory: true };
+  }
+
+  // 2. MANDATORY: Session opening (first 2 messages) — creates intimacy
+  if (sessionActive && sessionAudioCount < 2) {
+    return { shouldUseAudio: true, reason: 'session_opening', mandatory: true };
+  }
+
+  // 3. MANDATORY: Session closing — warm farewell
+  if (isSessionClosing) {
+    return { shouldUseAudio: true, reason: 'session_closing', mandatory: true };
+  }
+
+  // 4. User explicitly requested audio
+  if (wantsAudio) {
+    return { shouldUseAudio: true, reason: 'user_requested', mandatory: false };
+  }
+
+  // 5. AI decided to use audio (tag in response) — respect if budget allows
+  if (aiIncludedAudioTag && budgetAvailable) {
+    return { shouldUseAudio: true, reason: 'ai_decision', mandatory: false };
+  }
+
+  // 6. No audio by default
+  return { shouldUseAudio: false, reason: 'default_text', mandatory: false };
 }
 
 // Process extracted actions from micro-agent
