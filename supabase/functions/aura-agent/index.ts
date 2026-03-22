@@ -571,6 +571,15 @@ interface ExtractedActions {
   journey_action?: string;
   journey_id?: string;
   themes?: Array<{ name: string; status: string }>;
+  user_emotional_state?: 'stable' | 'vulnerable' | 'crisis' | 'resistant';
+  topic_continuity?: 'same_topic' | 'shifted' | 'new_topic';
+  engagement_level?: 'engaged' | 'short_answers' | 'disengaged';
+}
+
+interface UserContextState {
+  user_emotional_state?: string;
+  topic_continuity?: string;
+  engagement_level?: string;
 }
 
 async function extractActionsFromResponse(
