@@ -2124,6 +2124,15 @@ function sanitizeMessageHistory(messages: { role: string; content: string; creat
     }
     
     return { role: m.role, content };
+  }).filter((m, i, arr) => {
+    // Remove mensagens consecutivas duplicadas (mesmo role + mesmo conteúdo)
+    if (i === 0) return true;
+    const prev = arr[i - 1];
+    if (prev.role === m.role && prev.content === m.content) {
+      console.log(`⏭️ DEDUP histórico: removendo mensagem duplicada consecutiva (role=${m.role}, content=${m.content.substring(0, 50)}...)`);
+      return false;
+    }
+    return true;
   });
 }
 
