@@ -2340,45 +2340,11 @@ O sistema captura automaticamente os insights e compromissos da sessão — conv
 // Remove tags de controle do histórico e adiciona timestamps
 function sanitizeMessageHistory(messages: { role: string; content: string; created_at?: string }[]): { role: string; content: string }[] {
   return messages.map(m => {
-    let content = m.content
-      .replace(/\[MODO_AUDIO\]/gi, '')
-      .replace(/\[INSIGHTS\].*?\[\/INSIGHTS\]/gis, '')
-      .replace(/\[AGUARDANDO_RESPOSTA\]/gi, '')
-      .replace(/\[CONVERSA_CONCLUIDA\]/gi, '')
-      .replace(/\[ENCERRAR_SESSAO\]/gi, '')
-      .replace(/\[INICIAR_SESSAO\]/gi, '')
-      .replace(/\[AGENDAR_SESSAO:[^\]]+\]/gi, '')
-      .replace(/\[REAGENDAR_SESSAO:[^\]]+\]/gi, '')
-      .replace(/\[SESSAO_PERDIDA_RECUSADA\]/gi, '')
-      .replace(/\[TEMA_NOVO:[^\]]+\]/gi, '')
-      .replace(/\[TEMA_RESOLVIDO:[^\]]+\]/gi, '')
-      .replace(/\[TEMA_PROGREDINDO:[^\]]+\]/gi, '')
-      .replace(/\[TEMA_ESTAGNADO:[^\]]+\]/gi, '')
-      .replace(/\[COMPROMISSO_CUMPRIDO:[^\]]+\]/gi, '')
-      .replace(/\[COMPROMISSO_ABANDONADO:[^\]]+\]/gi, '')
-      .replace(/\[COMPROMISSO_RENEGOCIADO:[^\]]+\]/gi, '')
-      .replace(/\[LISTAR_JORNADAS\]/gi, '')
-      .replace(/\[TROCAR_JORNADA:[^\]]+\]/gi, '')
-      .replace(/\[PAUSAR_JORNADAS\]/gi, '')
-      .replace(/\[NAO_PERTURBE:\d+h?\]/gi, '')
-      .replace(/\[PAUSAR_SESSOES[^\]]*\]/gi, '')
-      .replace(/\[AGENDAR_TAREFA:[^\]]+\]/gi, '')
-      .replace(/\[CANCELAR_TAREFA:[^\]]+\]/gi, '')
-      .replace(/\[CAPSULA_DO_TEMPO\]/gi, '')
-      .replace(/\[MEDITACAO:[^\]]+\]/gi, '')
-      .replace(/\[UPGRADE:[^\]]+\]/gi, '')
-      .replace(/\[INSIGHT:[^\]]+\]/gi, '')
-      .replace(/\[COMPROMISSO:[^\]]+\]/gi, '')
-      .replace(/\[CRIAR_AGENDA:[^\]]+\]/gi, '')
-      .replace(/\[REATIVAR_SESSAO\]/gi, '')
-      .trim();
+    // Reutiliza stripAllInternalTags (DRY — fonte única de remoção de tags)
+    let content = stripAllInternalTags(m.content);
     
-    // CORREÇÃO: Remover timestamps antigos das mensagens do assistente
-    // A AURA gerava timestamps redundantes no início das respostas, causando confusão de datas
-    // O campo created_at do banco já guarda a data real da mensagem
+    // CORREÇÃO: Remover artefatos de "dose dupla" que poluem o contexto
     if (m.role === 'assistant') {
-      content = content.replace(/^\[\d{2}\/\d{2}\/\d{4},?\s*\d{2}:\d{2}\]\s*/g, '').trim();
-      // Remove referências a "dose dupla" / "resposta dupla" que poluem o contexto
       content = content.replace(/[,.]?\s*[Ee]m dose dupla[^.!?\n]*/g, '').trim();
       content = content.replace(/[Oo]pa,?\s*(essa )?resposta dupla[^.!?\n]*/g, '').trim();
       content = content.replace(/[Aa] mensagem (veio )?em dose dupla[^.!?\n]*/g, '').trim();
