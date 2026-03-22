@@ -5296,37 +5296,9 @@ Responda apenas o resumo, sem formatação.`
     }
 
 
-    // LEGACY FALLBACK: Extract insights from [INSIGHTS]...[/INSIGHTS] tags if LLM still generates them
-    // Primary extraction is now handled by postConversationAnalysis() (async, Phase 3)
-    const newInsights = extractInsights(assistantMessage);
-    if (newInsights.length > 0 && profile?.user_id) {
-      console.log("💾 [LEGACY] Saving", newInsights.length, "tag-based insights");
-      const categoryImportance: Record<string, number> = {
-        'pessoa': 10, 'identidade': 10, 'desafio': 8, 'trauma': 8, 'saude': 8,
-        'objetivo': 6, 'conquista': 6, 'padrao': 5, 'preferencia': 4, 'rotina': 4, 'contexto': 5
-      };
-      for (const insight of newInsights) {
-        const importance = categoryImportance[insight.category] || 5;
-        await supabase.from('user_insights').upsert({
-          user_id: profile.user_id, category: insight.category, key: insight.key,
-          value: insight.value, importance, last_mentioned_at: new Date().toISOString()
-        }, { onConflict: 'user_id,category,key' });
-      }
-    }
-
-    // Deterministic conversation status (replaces tag-based detection)
-    const hasStatusTag = /\[(AGUARDANDO_RESPOSTA|CONVERSA_CONCLUIDA|ENCERRAR_SESSAO)\]/i.test(assistantMessage);
-    let conversationStatus: string;
-    if (hasStatusTag) {
-      // Legacy: LLM still generated tags — use them
-      conversationStatus = assistantMessage.includes('[CONVERSA_CONCLUIDA]') ? 'completed' : 
-                           assistantMessage.includes('[AGUARDANDO_RESPOSTA]') ? 'awaiting' : 'neutral';
-      console.log('🏷️ Conversation status from tag:', conversationStatus);
-    } else {
-      // New: deterministic detection with user message context
-      conversationStatus = determineConversationStatus(assistantMessage, message);
-      console.log('🏷️ Conversation status (deterministic):', conversationStatus);
-    }
+    // Deterministic conversation status
+    const conversationStatus = determineConversationStatus(assistantMessage, message);
+    console.log('🏷️ Conversation status:', conversationStatus);
 
     const isConversationComplete = conversationStatus === 'completed';
     const isAwaitingResponse = conversationStatus === 'awaiting';
