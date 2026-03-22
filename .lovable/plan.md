@@ -1,42 +1,18 @@
 
+# Otimização de Cache do Gemini — Implementado ✅
 
-# Fix: Aura interpreta mensagens acumuladas como "duplicadas"
+## Mudanças
 
-## Diagnóstico real
+### 1. Cache separado: estático vs dinâmico (`aura-agent/index.ts`)
+- `callAI` agora aceita `cacheableSystemPrompt` opcional
+- Apenas `AURA_STATIC_INSTRUCTIONS` é cacheado (hash estável = 1 cache por modelo)
+- `dynamicContext` vai como conteúdo inline no array `contents`
+- Resultado: cache hit rate deve subir de ~73% para ~95%+
 
-O problema **não é duplicação real no banco**. O dedup está funcionando. O que acontece:
+### 2. Guardrail de custo no admin (`AdminSettings.tsx`)
+- Modelos Anthropic e OpenAI agora mostram ⚠️ no label
+- Alerta vermelho aparece ao selecionar modelo caro
+- Referência ao incidente do dia 17/mar ($14.51 em 1 dia)
 
-1. Eduardo manda 3 mensagens rápidas: "Ainda naooo", "Esse find", "Eu acho kkkk"
-2. O debounce funciona corretamente — apenas 1 worker processa
-3. A acumulação formata assim: `[Mensagens anteriores do usuário: Ainda naooo / Esse find]\n\nEu acho kkkk`
-4. O modelo de IA vê esse formato e **interpreta como "resposta dupla"**, comentando: "essa resposta dupla..."
-
-O problema é que o formato `[Mensagens anteriores do usuário: ...]` confunde o modelo. Ele acha que são mensagens repetidas em vez de mensagens sequenciais naturais (comportamento normal no WhatsApp).
-
-## Correção (1 alteração)
-
-### `supabase/functions/process-webhook-message/index.ts` (linhas 660-664)
-
-Mudar o formato de acumulação para algo que o modelo entenda como mensagens sequenciais naturais, sem o rótulo que sugere duplicação:
-
-**Antes:**
-```typescript
-messageText = `[Mensagens anteriores do usuário: ${previous}]\n\n${last}`;
-```
-
-**Depois:**
-```typescript
-// Concatenar como uma mensagem natural — o modelo não precisa saber que foram msgs separadas
-messageText = recentUserMsgs.map(m => m.content).join('\n');
-```
-
-Isso junta as mensagens com quebra de linha simples, como se o usuário tivesse escrito tudo junto. O modelo não tem motivo para comentar sobre "duplicação" ou "resposta dupla".
-
-## Arquivo editado
-- `supabase/functions/process-webhook-message/index.ts` — formato de acumulação
-
-## Resultado esperado
-- Aura recebe "Ainda naooo\nEsse find\nEu acho kkkk" como texto único
-- Nunca mais comenta sobre "mensagem dupla" ou "resposta dupla"
-- Debounce continua funcionando normalmente
-
+### 3. Limpeza de caches antigos (migration)
+- 425 caches antigos removidos (tinham hash dinâmico, inúteis)
