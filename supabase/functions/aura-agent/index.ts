@@ -4446,7 +4446,28 @@ Exemplo com 4 sessões:
       dynamicContext += `\nLEMBRETE ANTI-ECO: Mensagem curta detectada. Sua resposta NÃO pode começar reformulando o que o usuário disse. Reaja com emoção própria, observação nova ou pergunta que avança. Use reações como "Eita...", "Hmm...", "Sério?" ou faça uma pergunta direta.`;
     }
 
+    // ========================================================================
+    // PHASE EVALUATOR — detecta estagnação e injeta guidance de transição
+    // ========================================================================
+    {
+      let evalSessionPhase: string | undefined;
+      let evalElapsedMin: number | undefined;
+      if (sessionActive && currentSession?.started_at) {
+        const phaseCheck = calculateSessionTimeContext(currentSession, lastMessageTimestamp, currentSession.resumption_count ?? 0);
+        evalSessionPhase = phaseCheck.phase;
+        evalElapsedMin = Math.floor((Date.now() - new Date(currentSession.started_at).getTime()) / 60000);
+      }
+      const phaseEval = evaluateTherapeuticPhase(messageHistory, sessionActive, evalSessionPhase, evalElapsedMin);
+      if (phaseEval.guidance) {
+        dynamicContext += phaseEval.guidance;
+        console.log(`🔄 Phase evaluator: detected=${phaseEval.detectedPhase}, stagnation=${phaseEval.stagnationLevel}, context=${sessionActive ? 'session' : 'free'}`);
+      } else {
+        console.log(`🔄 Phase evaluator: detected=${phaseEval.detectedPhase}, no intervention needed`);
+      }
+    }
+
     const apiMessages = [
+
       { role: "system", content: AURA_STATIC_INSTRUCTIONS },
       { role: "system", content: dynamicContext },
       ...messageHistory,
