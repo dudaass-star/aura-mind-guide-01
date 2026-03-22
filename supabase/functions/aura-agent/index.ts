@@ -627,7 +627,7 @@ REGRAS:
 - themes: temas emocionais significativos discutidos (não triviais)
 - session_action: só se houve pedido explícito de agendamento/reagendamento/pausa
 - user_emotional_state: avalie o estado emocional do USUÁRIO (não da assistente). "crisis" = risco/desespero, "vulnerable" = fragilidade emocional, "resistant" = evitando aprofundamento, "stable" = normal
-- topic_continuity: compare o tema da mensagem ATUAL do USUÁRIO com as mensagens anteriores (se disponíveis). "shifted" = mudou de assunto parcialmente, "new_topic" = tema completamente novo, "same_topic" = continuação do mesmo tema
+- topic_continuity: compare o tema da mensagem ATUAL do USUÁRIO com a mensagem IMEDIATAMENTE anterior dele (não com o início da conversa). "shifted" = mudou de assunto parcialmente em relação à última mensagem, "new_topic" = tema completamente novo vs a última mensagem, "same_topic" = continuação do mesmo tema da última mensagem. IMPORTANTE: se o usuário mudou de tema no turno anterior e agora CONTINUA nesse novo tema, classifique como "same_topic" (ele está aprofundando o novo assunto).
 - engagement_level: "disengaged" = respostas evasivas/monossilábicas sem conteúdo, "short_answers" = respostas curtas mas com conteúdo, "engaged" = participando ativamente
 - IMPORTANTE sobre engagement_level: Alguns usuários são naturalmente sucintos. Só classifique como "disengaged" se houver mudança clara de padrão OU evasão ativa (ex: "tanto faz", "sei lá", "ok"). Respostas curtas com conteúdo emocional genuíno = "engaged", não "short_answers".
 - SEMPRE inclua user_emotional_state, topic_continuity e engagement_level
