@@ -581,6 +581,7 @@ interface UserContextState {
   topic_continuity?: string;
   engagement_level?: string;
   short_answer_streak?: number;
+  aura_phase?: string;
 }
 
 async function extractActionsFromResponse(
@@ -617,7 +618,8 @@ Retorne um JSON com APENAS os campos relevantes (omita campos vazios/null):
   "themes": [{"name": "nome do tema emocional", "status": "new|progressing|resolved|stagnated"}],
   "user_emotional_state": "stable|vulnerable|crisis|resistant",
   "topic_continuity": "same_topic|shifted|new_topic",
-  "engagement_level": "engaged|short_answers|disengaged"
+  "engagement_level": "engaged|short_answers|disengaged",
+  "aura_phase": "presenca|sentido|movimento"
 }
 
 REGRAS:
@@ -630,8 +632,9 @@ REGRAS:
 - topic_continuity: compare o tema da mensagem ATUAL do USUÁRIO com a mensagem IMEDIATAMENTE anterior dele (não com o início da conversa). "shifted" = mudou de assunto parcialmente em relação à última mensagem, "new_topic" = tema completamente novo vs a última mensagem, "same_topic" = continuação do mesmo tema da última mensagem. IMPORTANTE: se o usuário mudou de tema no turno anterior e agora CONTINUA nesse novo tema, classifique como "same_topic" (ele está aprofundando o novo assunto).
 - engagement_level: "disengaged" = respostas evasivas/monossilábicas sem conteúdo, "short_answers" = respostas curtas mas com conteúdo, "engaged" = participando ativamente
 - IMPORTANTE sobre engagement_level: Alguns usuários são naturalmente sucintos. Só classifique como "disengaged" se houver mudança clara de padrão OU evasão ativa (ex: "tanto faz", "sei lá", "ok"). Respostas curtas com conteúdo emocional genuíno = "engaged", não "short_answers".
-- SEMPRE inclua user_emotional_state, topic_continuity e engagement_level
-- Se nada mais for relevante, retorne apenas esses 3 campos
+- aura_phase: classifique a fase terapêutica da RESPOSTA DA ASSISTENTE (não do usuário). "presenca" = acolhimento, perguntas exploratórias, validação. "sentido" = reflexões profundas, reframes, nomeação de padrões. "movimento" = compromissos, próximos passos, ações concretas.
+- SEMPRE inclua user_emotional_state, topic_continuity, engagement_level e aura_phase
+- Se nada mais for relevante, retorne apenas esses 4 campos
 Apenas o JSON, sem markdown.`;
 
     const extractionBody = {
@@ -870,14 +873,21 @@ ${lastUserContext.user_emotional_state === 'crisis' ? 'Se houver risco, siga o p
       };
     }
 
-    // Priority 2: Topic shift → reset stagnation
+    // Priority 2: Short answer streak (check BEFORE topic shift so it's not silenced)
+    const earlyStreak = lastUserContext.short_answer_streak || 0;
+    const streakNudge = earlyStreak >= 2
+      ? `\n\n💡 NOTA: O usuário está respondendo de forma curta há ${earlyStreak} turnos. Não force aprofundamento — tente ângulos mais leves ou perguntas concretas.`
+      : null;
+
+    // Priority 3: Topic shift → reset stagnation (but still allow streak nudge)
     if (lastUserContext.topic_continuity === 'shifted' || lastUserContext.topic_continuity === 'new_topic') {
       console.log(`🔄 Phase evaluator: topic_continuity=${lastUserContext.topic_continuity} → resetting stagnation`);
-      // Don't inject guidance — let Aura respond naturally to the new topic
-      return { guidance: null, detectedPhase: 'initial', stagnationLevel: 0 };
+      // Don't inject stagnation guidance — let Aura respond naturally to the new topic
+      // But still inject streak nudge if applicable
+      return { guidance: streakNudge, detectedPhase: 'initial', stagnationLevel: 0 };
     }
 
-    // Priority 3: Resistance/disengagement → cancel advancement
+    // Priority 4: Resistance/disengagement → cancel advancement
     if (lastUserContext.user_emotional_state === 'resistant' || lastUserContext.engagement_level === 'disengaged') {
       console.log(`🔄 Phase evaluator: resistance/disengagement detected → canceling advancement`);
       return {
@@ -889,8 +899,6 @@ Valide, dê espaço, mude o ângulo suavemente. Considere perguntar algo mais le
 ou simplesmente validar o silêncio/resistência como legítimo.`
       };
     }
-
-    // short_answer_streak is used below in session/free evaluation for soft nudge injection
   }
 
   const recentAssistant = messageHistory
@@ -898,32 +906,43 @@ ou simplesmente validar o silêncio/resistência como legítimo.`
     .slice(-6)
     .map(m => m.content.toLowerCase());
 
-  if (recentAssistant.length < 2) {
+  if (recentAssistant.length < 2 && !lastUserContext?.aura_phase) {
     return { guidance: null, detectedPhase: 'initial', stagnationLevel: 0 };
   }
 
-  function countIndicators(messages: string[], keywords: string[]): number {
-    return messages.reduce((sum, msg) => 
-      sum + keywords.filter(kw => msg.includes(kw)).length, 0
-    );
-  }
-
-  const presencaScore = countIndicators(recentAssistant, PHASE_INDICATORS.presenca);
-  const sentidoScore = countIndicators(recentAssistant, PHASE_INDICATORS.sentido);
-  const movimentoScore = countIndicators(recentAssistant, PHASE_INDICATORS.movimento);
-
+  // Use semantic aura_phase from micro-agent when available (preferred over keyword detection)
   let detectedPhase = 'presenca';
-  if (movimentoScore > sentidoScore && movimentoScore > presencaScore) {
-    detectedPhase = 'movimento';
-  } else if (sentidoScore > presencaScore) {
-    detectedPhase = 'sentido';
+  if (lastUserContext?.aura_phase) {
+    detectedPhase = lastUserContext.aura_phase;
+    console.log(`🔄 Phase evaluator: using semantic aura_phase="${detectedPhase}" from micro-agent`);
+  } else {
+    // Fallback to keyword-based detection only if micro-agent didn't provide aura_phase
+    function countIndicators(messages: string[], keywords: string[]): number {
+      return messages.reduce((sum, msg) => 
+        sum + keywords.filter(kw => msg.includes(kw)).length, 0
+      );
+    }
+    const presencaScore = countIndicators(recentAssistant, PHASE_INDICATORS.presenca);
+    const sentidoScore = countIndicators(recentAssistant, PHASE_INDICATORS.sentido);
+    const movimentoScore = countIndicators(recentAssistant, PHASE_INDICATORS.movimento);
+    if (movimentoScore > sentidoScore && movimentoScore > presencaScore) {
+      detectedPhase = 'movimento';
+    } else if (sentidoScore > presencaScore) {
+      detectedPhase = 'sentido';
+    }
+    console.log(`🔄 Phase evaluator: fallback keyword detection → detectedPhase="${detectedPhase}"`);
   }
 
   const questionCount = recentAssistant.reduce((sum, msg) => 
     sum + (msg.match(/\?/g) || []).length, 0
   );
 
-  const recentPairs = messageHistory.filter(m => m.role === 'user').slice(-10).length;
+  let recentPairs = messageHistory.filter(m => m.role === 'user').slice(-10).length;
+  // If previous turn had a topic shift, reduce effective count to avoid premature stagnation detection
+  if (lastUserContext?.topic_continuity === 'shifted' || lastUserContext?.topic_continuity === 'new_topic') {
+    recentPairs = Math.min(recentPairs, 2); // Treat as early conversation on new topic
+    console.log(`🔄 Phase evaluator: previous turn had topic shift → recentPairs capped at ${recentPairs}`);
+  }
 
   // ======== SESSION MODE ========
   if (sessionActive && sessionPhase && sessionElapsedMin !== undefined) {
@@ -1238,6 +1257,7 @@ async function processExtractedActions(
         topic_continuity: actions.topic_continuity,
         engagement_level: actions.engagement_level,
         short_answer_streak: shortAnswerStreak,
+        aura_phase: actions.aura_phase,
       };
       // Use partial UPDATE to avoid overwriting concurrent fields (is_responding, pending_content, etc.)
       await supabase.from('aura_response_state')
