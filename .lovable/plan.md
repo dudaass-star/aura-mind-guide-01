@@ -1,38 +1,42 @@
 
 
-# Fix: Mensagens duplicadas que a Aura "vê" no contexto
+# Fix: Aura interpreta mensagens acumuladas como "duplicadas"
 
-## Diagnóstico
+## Diagnóstico real
 
-A correção anterior (mover persistência do user após lock + dedup por conteúdo) **está funcionando** — não há mensagens de usuário duplicadas desde a implantação. Porém:
+O problema **não é duplicação real no banco**. O dedup está funcionando. O que acontece:
 
-1. **Mensagens de assistant ainda duplicam**: O `process-webhook-message` persiste cada bubble do assistant (linhas 814 e 835), mas não tem proteção contra duplicação. Se um worker adquire o lock via "stale lock recovery" (linha 352-356), ele pode gerar e salvar uma segunda resposta completa.
+1. Eduardo manda 3 mensagens rápidas: "Ainda naooo", "Esse find", "Eu acho kkkk"
+2. O debounce funciona corretamente — apenas 1 worker processa
+3. A acumulação formata assim: `[Mensagens anteriores do usuário: Ainda naooo / Esse find]\n\nEu acho kkkk`
+4. O modelo de IA vê esse formato e **interpreta como "resposta dupla"**, comentando: "essa resposta dupla..."
 
-2. **Duplicatas antigas ainda existem no banco**: Mensagens duplicadas de antes da correção continuam na tabela `messages` e poluem o contexto das últimas 40 mensagens que a Aura carrega.
+O problema é que o formato `[Mensagens anteriores do usuário: ...]` confunde o modelo. Ele acha que são mensagens repetidas em vez de mensagens sequenciais naturais (comportamento normal no WhatsApp).
 
-3. **`aura-agent` não desduplicada ao carregar histórico**: A query em `aura-agent` (linha 3314-3319) carrega as últimas 40 mensagens sem qualquer filtro de duplicatas. Se existem 2x a mesma mensagem, a Aura as vê como mensagens separadas.
+## Correção (1 alteração)
 
-## Correções (3 alterações)
+### `supabase/functions/process-webhook-message/index.ts` (linhas 660-664)
 
-### 1. Dedup no carregamento do histórico (`aura-agent/index.ts`)
+Mudar o formato de acumulação para algo que o modelo entenda como mensagens sequenciais naturais, sem o rótulo que sugere duplicação:
 
-Na função `sanitizeMessageHistory` (linha 2070), adicionar lógica para remover mensagens consecutivas com conteúdo idêntico e mesmo role. Isso protege contra duplicatas existentes E futuras.
+**Antes:**
+```typescript
+messageText = `[Mensagens anteriores do usuário: ${previous}]\n\n${last}`;
+```
 
-### 2. Dedup de assistant messages (`process-webhook-message/index.ts`)
+**Depois:**
+```typescript
+// Concatenar como uma mensagem natural — o modelo não precisa saber que foram msgs separadas
+messageText = recentUserMsgs.map(m => m.content).join('\n');
+```
 
-Antes de persistir cada bubble do assistant (linhas 814 e 835), verificar se já existe uma mensagem idêntica do assistant nos últimos 30s para o mesmo user.
+Isso junta as mensagens com quebra de linha simples, como se o usuário tivesse escrito tudo junto. O modelo não tem motivo para comentar sobre "duplicação" ou "resposta dupla".
 
-### 3. Limpeza de duplicatas antigas (migration SQL)
-
-Executar uma migration que remove mensagens duplicadas existentes, mantendo apenas a mais antiga de cada par.
-
-## Arquivos editados
-- `supabase/functions/aura-agent/index.ts` — dedup no carregamento do histórico
-- `supabase/functions/process-webhook-message/index.ts` — dedup antes de persistir assistant messages
-- Nova migration SQL — limpar duplicatas históricas
+## Arquivo editado
+- `supabase/functions/process-webhook-message/index.ts` — formato de acumulação
 
 ## Resultado esperado
-- Aura nunca mais "vê" mensagens duplicadas no contexto
-- Novas respostas do assistant não são salvas em duplicata
-- Banco limpo de duplicatas passadas
+- Aura recebe "Ainda naooo\nEsse find\nEu acho kkkk" como texto único
+- Nunca mais comenta sobre "mensagem dupla" ou "resposta dupla"
+- Debounce continua funcionando normalmente
 
