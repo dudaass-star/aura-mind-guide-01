@@ -5593,16 +5593,22 @@ Responda apenas o resumo, sem formatação.`
       }
     }
 
-    // Auto-inject [AGUARDANDO_RESPOSTA] se a resposta contém ? mas não tem tag de status
+    // Deterministic conversation status (replaces tag-based detection)
     const hasStatusTag = /\[(AGUARDANDO_RESPOSTA|CONVERSA_CONCLUIDA|ENCERRAR_SESSAO)\]/i.test(assistantMessage);
-    if (!hasStatusTag && assistantMessage.includes('?')) {
-      assistantMessage = assistantMessage.trimEnd() + ' [AGUARDANDO_RESPOSTA]';
-      console.log('🏷️ Auto-injected [AGUARDANDO_RESPOSTA] — response contains ? but no status tag');
+    let conversationStatus: string;
+    if (hasStatusTag) {
+      // Legacy: LLM still generated tags — use them
+      conversationStatus = assistantMessage.includes('[CONVERSA_CONCLUIDA]') ? 'completed' : 
+                           assistantMessage.includes('[AGUARDANDO_RESPOSTA]') ? 'awaiting' : 'neutral';
+      console.log('🏷️ Conversation status from tag:', conversationStatus);
+    } else {
+      // New: deterministic detection
+      conversationStatus = determineConversationStatus(assistantMessage);
+      console.log('🏷️ Conversation status (deterministic):', conversationStatus);
     }
 
-    // Detectar status da conversa
-    const isConversationComplete = assistantMessage.includes('[CONVERSA_CONCLUIDA]');
-    const isAwaitingResponse = assistantMessage.includes('[AGUARDANDO_RESPOSTA]');
+    const isConversationComplete = conversationStatus === 'completed';
+    const isAwaitingResponse = conversationStatus === 'awaiting';
 
     // Controle de áudio
     const wantsText = userWantsText(message);
