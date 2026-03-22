@@ -249,6 +249,21 @@ async function processChunkAsync(
     const audioBytes = await generateAudio(chunkText, accessToken, serviceAccount.project_id);
     console.log(`✅ Audio generated: ${audioBytes.byteLength} bytes`);
 
+    // Log TTS usage for meditation chunk
+    try {
+      await supabase.from('token_usage_logs').insert({
+        function_name: 'generate-chunk',
+        call_type: 'tts-meditation',
+        model: 'google/gemini-2.5-pro-tts',
+        prompt_tokens: chunkText.length,
+        completion_tokens: audioBytes.byteLength,
+        total_tokens: chunkText.length,
+        cached_tokens: 0,
+      });
+    } catch (logErr) {
+      console.error('Failed to log TTS usage:', logErr);
+    }
+
     // Upload para Storage
     const storagePath = `${meditation_id}/chunks/chunk_${chunk_index}.mp3`;
     
