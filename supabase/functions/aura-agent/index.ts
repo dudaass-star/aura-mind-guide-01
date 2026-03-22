@@ -928,7 +928,12 @@ ou simplesmente validar o silêncio/resistência como legítimo.`
     sum + (msg.match(/\?/g) || []).length, 0
   );
 
-  const recentPairs = messageHistory.filter(m => m.role === 'user').slice(-10).length;
+  let recentPairs = messageHistory.filter(m => m.role === 'user').slice(-10).length;
+  // If previous turn had a topic shift, reduce effective count to avoid premature stagnation detection
+  if (lastUserContext?.topic_continuity === 'shifted' || lastUserContext?.topic_continuity === 'new_topic') {
+    recentPairs = Math.min(recentPairs, 2); // Treat as early conversation on new topic
+    console.log(`🔄 Phase evaluator: previous turn had topic shift → recentPairs capped at ${recentPairs}`);
+  }
 
   // ======== SESSION MODE ========
   if (sessionActive && sessionPhase && sessionElapsedMin !== undefined) {
