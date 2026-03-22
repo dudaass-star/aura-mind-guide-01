@@ -109,16 +109,26 @@ Deno.serve(async (req) => {
         return new Response(JSON.stringify({ error: 'user_id required' }), { status: 400, headers: corsHeaders });
       }
 
-      const { data: messages, error: messagesError } = await supabase
-        .from('messages')
-        .select('id, role, content, created_at')
-        .eq('user_id', targetUserId)
-        .order('created_at', { ascending: true })
-        .limit(500);
+      const [messagesResult, contextResult] = await Promise.all([
+        supabase
+          .from('messages')
+          .select('id, role, content, created_at')
+          .eq('user_id', targetUserId)
+          .order('created_at', { ascending: true })
+          .limit(500),
+        supabase
+          .from('aura_response_state')
+          .select('last_user_context')
+          .eq('user_id', targetUserId)
+          .single()
+      ]);
 
-      if (messagesError) throw messagesError;
+      if (messagesResult.error) throw messagesResult.error;
 
-      return new Response(JSON.stringify({ messages: messages || [] }), {
+      return new Response(JSON.stringify({ 
+        messages: messagesResult.data || [],
+        user_context: contextResult.data?.last_user_context || null,
+      }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }

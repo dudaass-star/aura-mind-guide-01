@@ -32,6 +32,12 @@ interface Message {
   created_at: string;
 }
 
+interface UserContext {
+  user_emotional_state?: string;
+  topic_continuity?: string;
+  engagement_level?: string;
+  short_answer_streak?: number;
+}
 type StatusFilter = 'all' | 'active' | 'trial' | 'cancelled';
 
 export default function AdminMessages() {
@@ -51,6 +57,7 @@ export default function AdminMessages() {
   const [sendingMessage, setSendingMessage] = useState(false);
   const [newMessage, setNewMessage] = useState('');
   const [isAtBottom, setIsAtBottom] = useState(true);
+  const [userContext, setUserContext] = useState<UserContext | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -139,6 +146,7 @@ export default function AdminMessages() {
       if (!response.ok) throw new Error('Failed to fetch conversation');
       const data = await response.json();
       setMessages(data.messages || []);
+      setUserContext(data.user_context || null);
       setIsAtBottom(true);
     } catch (err) {
       console.error(err);
@@ -409,7 +417,7 @@ export default function AdminMessages() {
                     <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
                       <User className="h-4 w-4 text-muted-foreground" />
                     </div>
-                    <div>
+                    <div className="flex-1">
                       <p className="font-medium text-sm text-foreground">
                         {selectedUser.name || 'Sem nome'}
                       </p>
@@ -417,6 +425,32 @@ export default function AdminMessages() {
                         {selectedUser.phone} · {selectedUser.status} · {selectedUser.plan || 'trial'}
                       </p>
                     </div>
+                    {userContext && (
+                      <div className="flex items-center gap-1.5 ml-auto">
+                        {userContext.user_emotional_state && (
+                          <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${
+                            userContext.user_emotional_state === 'stable' ? 'border-green-400 text-green-600' :
+                            userContext.user_emotional_state === 'vulnerable' ? 'border-yellow-400 text-yellow-600' :
+                            userContext.user_emotional_state === 'crisis' ? 'border-red-400 text-red-600' :
+                            'border-muted-foreground text-muted-foreground'
+                          }`}>
+                            {userContext.user_emotional_state === 'stable' ? '🟢' :
+                             userContext.user_emotional_state === 'vulnerable' ? '🟡' :
+                             userContext.user_emotional_state === 'crisis' ? '🔴' : '⚪'} {userContext.user_emotional_state}
+                          </Badge>
+                        )}
+                        {userContext.engagement_level && userContext.engagement_level !== 'engaged' && (
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-muted-foreground text-muted-foreground">
+                            {userContext.engagement_level}
+                          </Badge>
+                        )}
+                        {userContext.topic_continuity && userContext.topic_continuity !== 'same_topic' && (
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-blue-400 text-blue-600">
+                            {userContext.topic_continuity}
+                          </Badge>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Messages */}

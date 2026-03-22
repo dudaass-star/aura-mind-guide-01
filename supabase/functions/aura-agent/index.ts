@@ -580,6 +580,7 @@ interface UserContextState {
   user_emotional_state?: string;
   topic_continuity?: string;
   engagement_level?: string;
+  short_answer_streak?: number;
 }
 
 async function extractActionsFromResponse(
@@ -587,14 +588,18 @@ async function extractActionsFromResponse(
   assistantResponse: string,
   geminiApiKey: string,
   supabase: any,
-  userId: string | null
+  userId: string | null,
+  recentUserMessages?: string[]
 ): Promise<ExtractedActions> {
   try {
     const cleanResponse = stripAllInternalTags(assistantResponse);
+    const recentContext = recentUserMessages && recentUserMessages.length > 0
+      ? `\nCONTEXTO (mensagens anteriores do usuário para comparação de tema):\n${recentUserMessages.map(m => `- "${m.substring(0, 150)}"`).join('\n')}\n`
+      : '';
     const prompt = `Analise esta troca de mensagens entre um usuário e uma assistente emocional.
 Extraia APENAS ações concretas que o sistema precisa executar.
-
-USUÁRIO: "${userMessage}"
+${recentContext}
+MENSAGEM ATUAL DO USUÁRIO: "${userMessage}"
 ASSISTENTE: "${cleanResponse.substring(0, 800)}"
 
 Retorne um JSON com APENAS os campos relevantes (omita campos vazios/null):
@@ -622,8 +627,9 @@ REGRAS:
 - themes: temas emocionais significativos discutidos (não triviais)
 - session_action: só se houve pedido explícito de agendamento/reagendamento/pausa
 - user_emotional_state: avalie o estado emocional do USUÁRIO (não da assistente). "crisis" = risco/desespero, "vulnerable" = fragilidade emocional, "resistant" = evitando aprofundamento, "stable" = normal
-- topic_continuity: compare o tema da mensagem do USUÁRIO com o fluxo anterior. "shifted" = mudou de assunto parcialmente, "new_topic" = tema completamente novo
+- topic_continuity: compare o tema da mensagem ATUAL do USUÁRIO com as mensagens anteriores (se disponíveis). "shifted" = mudou de assunto parcialmente, "new_topic" = tema completamente novo, "same_topic" = continuação do mesmo tema
 - engagement_level: "disengaged" = respostas evasivas/monossilábicas sem conteúdo, "short_answers" = respostas curtas mas com conteúdo, "engaged" = participando ativamente
+- IMPORTANTE sobre engagement_level: Alguns usuários são naturalmente sucintos. Só classifique como "disengaged" se houver mudança clara de padrão OU evasão ativa (ex: "tanto faz", "sei lá", "ok"). Respostas curtas com conteúdo emocional genuíno = "engaged", não "short_answers".
 - SEMPRE inclua user_emotional_state, topic_continuity e engagement_level
 - Se nada mais for relevante, retorne apenas esses 3 campos
 Apenas o JSON, sem markdown.`;
@@ -791,6 +797,56 @@ const PHASE_INDICATORS = {
   ]
 };
 
+// ============================================================
+// PHASE_INSTRUCTIONS: Tactical guidance with Certo/Errado examples
+// Injected ONLY during stagnation (zero cost otherwise)
+// ============================================================
+const SESSION_PHASE_INSTRUCTIONS: Record<string, string> = {
+  exploration_to_reframe: `
+INSTRUÇÕES TÁTICAS — Exploração → Reframe:
+❌ ERRADO: "E como isso te faz sentir?" / "Me conta mais sobre isso"
+✅ CERTO: "Sabe o que eu percebo em tudo isso que você trouxe? [nomeie o padrão/insight]. O que você acha?"
+❌ ERRADO: Continuar fazendo perguntas abertas sem sintetizar
+✅ CERTO: Apresentar UMA observação concreta e depois UMA pergunta de reframe
+TÉCNICA: Nomeie o que está por baixo, não o que está na superfície.`,
+
+  transition_to_closing: `
+INSTRUÇÕES TÁTICAS — Sentido → Fechamento:
+❌ ERRADO: "E o que mais você acha sobre isso?" / Continuar explorando sentido
+✅ CERTO: "Com base nisso que a gente explorou, o que o menor passo pareceria pra você?"
+❌ ERRADO: Dar conselho direto ou lista de tarefas
+✅ CERTO: Extrair do próprio usuário o compromisso. Perguntar, não prescrever.
+REGRA DE OURO: Ação sem sentido não sustenta. O compromisso precisa estar conectado ao insight.`,
+
+  stuck_in_opening: `
+INSTRUÇÕES TÁTICAS — Preso na Abertura:
+❌ ERRADO: "Entendo, e mais alguma coisa?" / Aceitar cada novo tema como igual
+✅ CERTO: "De tudo que você trouxe, o que mais pesa? Vamos focar nisso."
+❌ ERRADO: Tentar abordar 3 assuntos ao mesmo tempo
+✅ CERTO: Escolher O tema que tem mais carga emocional e aprofundar com investigação socrática.`
+};
+
+const FREE_PHASE_INSTRUCTIONS: Record<string, string> = {
+  presenca_to_sentido: `
+INSTRUÇÕES TÁTICAS — Presença → Sentido:
+❌ ERRADO: "Me conta mais" / "Como assim?" / "O que você sentiu?"
+✅ CERTO: "Sabe o que eu percebo por baixo disso? [observação]. O que essa situação mostra sobre o que importa pra você?"
+❌ ERRADO: Repetir validação emocional sem avançar ("Eu entendo", "Faz sentido sentir assim" pela 5ª vez)
+✅ CERTO: Validar brevemente + trazer UMA pergunta-âncora da Logoterapia:
+  • "O que essa situação mostra sobre o que importa pra você?"
+  • "Qual seria sua resposta mais autêntica a isso?"
+  • "Quem você quer ser do outro lado disso?"
+ESCOLHA UMA. Não faça checklist.`,
+
+  sentido_to_movimento: `
+INSTRUÇÕES TÁTICAS — Sentido → Movimento:
+❌ ERRADO: "E o que mais isso significa?" / Continuar filosofando
+✅ CERTO: "Com tudo isso que a gente explorou... o que o menor passo em direção a isso pareceria pra você?"
+❌ ERRADO: Dar conselho ("Você deveria fazer X")
+✅ CERTO: Extrair do usuário: "Se você pudesse mudar UMA coisa pequena essa semana, o que faria sentido?"
+REGRA DE OURO: Ação sem sentido não sustenta. Só proponha movimento se o sentido já apareceu.`
+};
+
 function evaluateTherapeuticPhase(
   messageHistory: Array<{ role: string; content: string }>,
   sessionActive: boolean,
@@ -832,6 +888,13 @@ O usuário não está engajando no aprofundamento. NÃO force avanço de fase.
 Valide, dê espaço, mude o ângulo suavemente. Considere perguntar algo mais leve
 ou simplesmente validar o silêncio/resistência como legítimo.`
       };
+    }
+
+    // Priority 4: Short answer streak → soft nudge (not blocking)
+    const streak = lastUserContext.short_answer_streak || 0;
+    if (streak >= 2 && lastUserContext.engagement_level === 'short_answers') {
+      console.log(`🔄 Phase evaluator: short_answer_streak=${streak} → soft nudge`);
+      // Don't return — let normal evaluation continue, but we'll append a note later
     }
   }
 
@@ -884,7 +947,8 @@ AÇÃO OBRIGATÓRIA AGORA:
 - Apresente UMA observação/insight sobre o que o usuário compartilhou
 - Use reframe: "Sabe o que eu percebo em tudo isso que você trouxe? [insight]"
 - Depois de reframear, conduza para compromisso/ação
-- NÃO volte para exploração`
+- NÃO volte para exploração
+${SESSION_PHASE_INSTRUCTIONS.exploration_to_reframe}`
         };
       }
       
@@ -897,7 +961,8 @@ Você está trazendo boas reflexões, mas já é hora de MOVIMENTO.
 ⏱️ Restam poucos minutos.
 
 AÇÃO: Converta o insight em compromisso concreto.
-"Então, com base nisso que a gente explorou... o que faria sentido como próximo passo pra você?"`
+"Então, com base nisso que a gente explorou... o que faria sentido como próximo passo pra você?"
+${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}`
         };
       }
     }
@@ -911,9 +976,29 @@ AÇÃO: Converta o insight em compromisso concreto.
           guidance: `\n\n🔄 AVALIAÇÃO DE FASE:
 Já passou da abertura (${sessionElapsedMin} min). Muitas perguntas exploratórias sem aprofundar.
 AÇÃO: Escolha O tema principal e vá fundo. Use investigação socrática.
-"De tudo que você trouxe, o que mais tá pesando? Vamos focar nisso."`
+"De tudo que você trouxe, o que mais tá pesando? Vamos focar nisso."
+${SESSION_PHASE_INSTRUCTIONS.stuck_in_opening}`
         };
       }
+    }
+
+    // Natural transition: exploration going well, model already bringing sentido after 20+ min
+    if (sessionPhase === 'exploration' && sessionElapsedMin && sessionElapsedMin > 20 && detectedPhase === 'sentido') {
+      return {
+        detectedPhase: 'sentido',
+        stagnationLevel: 0,
+        guidance: `\n\n🔄 TRANSIÇÃO NATURAL DETECTADA:
+Ótimo progresso — o insight está aparecendo naturalmente. Agora consolide com reframe e conduza para compromisso.
+${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}`
+      };
+    }
+
+    // Short answer streak soft nudge for sessions
+    const sessionStreak = lastUserContext?.short_answer_streak || 0;
+    if (sessionStreak >= 2) {
+      const baseResult = { guidance: null as string | null, detectedPhase, stagnationLevel: 0 };
+      baseResult.guidance = `\n\n💡 NOTA: O usuário está respondendo de forma curta há ${sessionStreak} turnos. Não force aprofundamento — tente ângulos mais leves ou perguntas concretas.`;
+      return baseResult;
     }
 
     return { guidance: null, detectedPhase, stagnationLevel: 0 };
@@ -945,7 +1030,8 @@ AÇÃO OBRIGATÓRIA:
   • "O que essa situação mostra sobre o que importa pra você?"
   • "Qual seria sua resposta mais autêntica a isso?"
   • "Quem você quer ser do outro lado disso?"
-- ESCOLHA UMA. Não faça checklist.`
+- ESCOLHA UMA. Não faça checklist.
+${FREE_PHASE_INSTRUCTIONS.presenca_to_sentido}`
     };
   }
 
@@ -959,7 +1045,18 @@ O usuário já explorou o sentido por ${recentPairs}+ trocas. Conduza para MOVIM
 
 AÇÃO:
 - "Com tudo isso que a gente explorou... o que o menor passo em direção a isso pareceria pra você?"
-- Se o sentido ainda não apareceu, mude o ângulo da pergunta.`
+- Se o sentido ainda não apareceu, mude o ângulo da pergunta.
+${FREE_PHASE_INSTRUCTIONS.sentido_to_movimento}`
+    };
+  }
+
+  // Short answer streak soft nudge for free conversation
+  const freeStreak = lastUserContext?.short_answer_streak || 0;
+  if (freeStreak >= 2) {
+    return {
+      detectedPhase,
+      stagnationLevel: 0,
+      guidance: `\n\n💡 NOTA: O usuário está respondendo de forma curta há ${freeStreak} turnos. Não force aprofundamento — tente ângulos mais leves ou perguntas concretas.`
     };
   }
 
@@ -1134,10 +1231,24 @@ async function processExtractedActions(
 
     // Save user context state for next turn's phase evaluator
     if (actions.user_emotional_state || actions.topic_continuity || actions.engagement_level) {
+      // Calculate short_answer_streak
+      let shortAnswerStreak = 0;
+      if (actions.engagement_level === 'short_answers') {
+        // Read previous context to increment streak
+        const { data: prevState } = await supabase
+          .from('aura_response_state')
+          .select('last_user_context')
+          .eq('user_id', userId)
+          .single();
+        const prevContext = prevState?.last_user_context as UserContextState | null;
+        shortAnswerStreak = (prevContext?.short_answer_streak || 0) + 1;
+      }
+
       const userContext: UserContextState = {
         user_emotional_state: actions.user_emotional_state,
         topic_continuity: actions.topic_continuity,
         engagement_level: actions.engagement_level,
+        short_answer_streak: shortAnswerStreak,
       };
       await supabase.from('aura_response_state').upsert({
         user_id: userId,
@@ -5804,10 +5915,14 @@ Responda apenas o resumo, sem formatação.`
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
     if (GEMINI_API_KEY && profile?.user_id) {
       // 1. Micro-agente: extração de ações (lembretes, DND, sessões)
+      const recentUserMsgs = messageHistory
+        .filter(m => m.role === 'user')
+        .slice(-3)
+        .map(m => m.content);
       const microAgentPromise = (async () => {
         try {
           const actions = await extractActionsFromResponse(
-            message, assistantMessage, GEMINI_API_KEY, supabase, profile.user_id
+            message, assistantMessage, GEMINI_API_KEY, supabase, profile.user_id, recentUserMsgs
           );
           if (Object.keys(actions).length > 0) {
             await processExtractedActions(actions, supabase, profile, currentSession, dateTimeContext);
