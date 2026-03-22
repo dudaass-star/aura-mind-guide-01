@@ -5623,7 +5623,7 @@ Responda apenas o resumo, sem formatação.`
       sessions_available: sessionsAvailable,
       total_bubbles: messageChunks.length,
       has_audio: messageChunks.some(m => m.isAudio),
-      new_insights: newInsights.length,
+      new_insights: 0,
       conversation_status: isConversationComplete ? 'complete' : (isAwaitingResponse ? 'awaiting' : 'neutral'),
       session_active: sessionActive && !aiWantsToEndSession,
       session_started: shouldStartSession,
