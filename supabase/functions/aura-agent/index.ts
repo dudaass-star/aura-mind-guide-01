@@ -5905,10 +5905,11 @@ Responda apenas o resumo, sem formatação.`
     // Removido para evitar duplicação no histórico
 
     // ========================================================================
-    // MICRO-AGENTE: Extração assíncrona de ações (não bloqueia resposta)
+    // ASYNC PROCESSING: Micro-agente + Análise pós-conversa (não bloqueia resposta)
     // ========================================================================
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
     if (GEMINI_API_KEY && profile?.user_id) {
+      // 1. Micro-agente: extração de ações (lembretes, DND, sessões)
       const microAgentPromise = (async () => {
         try {
           const actions = await extractActionsFromResponse(
@@ -5922,12 +5923,33 @@ Responda apenas o resumo, sem formatação.`
         }
       })();
 
+      // 2. Análise pós-conversa: temas, insights, compromissos (Phase 3)
+      const postAnalysisPromise = (async () => {
+        try {
+          await postConversationAnalysis(
+            message,
+            assistantMessage,
+            messageHistory,
+            GEMINI_API_KEY,
+            supabase,
+            profile.user_id,
+            currentSession?.id || null
+          );
+        } catch (err) {
+          console.error('⚠️ Post-analysis async error:', err);
+        }
+      })();
+
+      // Combine both async tasks
+      const combinedPromise = Promise.all([microAgentPromise, postAnalysisPromise]);
+
       // Keep runtime alive for async processing
       try {
-        (globalThis as any).EdgeRuntime.waitUntil(microAgentPromise);
-        console.log('🤖 Micro-agent triggered via waitUntil');
+        (globalThis as any).EdgeRuntime.waitUntil(combinedPromise);
+        console.log('🤖 Micro-agent + Post-analysis triggered via waitUntil');
       } catch {
-        console.log('ℹ️ waitUntil not available for micro-agent');
+        console.log('ℹ️ waitUntil not available, running inline');
+        await combinedPromise;
       }
     }
 
