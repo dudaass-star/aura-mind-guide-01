@@ -1120,7 +1120,8 @@ async function processExtractedActions(
   supabase: any,
   profile: any,
   currentSession: any,
-  dateTimeContext: { currentDate: string; currentTime: string; isoDate: string }
+  dateTimeContext: { currentDate: string; currentTime: string; isoDate: string },
+  previousUserContext?: UserContextState | null
 ): Promise<void> {
   if (!profile?.user_id) return;
   const userId = profile.user_id;
