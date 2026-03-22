@@ -4866,7 +4866,7 @@ Exemplo com 4 sessões:
     assistantMessage = assistantMessage.replace(/\[CRIAR_AGENDA:[^\]]+\]/gi, '');
 
     // ========================================================================
-    // PROCESSAR TAGS DE TRACKING DE TEMAS
+    // LEGACY FALLBACK: Tag-based theme tracking (primary: postConversationAnalysis)
     // ========================================================================
     
     const themeNewMatches = assistantMessage.matchAll(/\[TEMA_NOVO:([^\]]+)\]/gi);
