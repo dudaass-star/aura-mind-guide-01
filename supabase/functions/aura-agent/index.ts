@@ -795,8 +795,46 @@ function evaluateTherapeuticPhase(
   messageHistory: Array<{ role: string; content: string }>,
   sessionActive: boolean,
   sessionPhase?: string,
-  sessionElapsedMin?: number
+  sessionElapsedMin?: number,
+  lastUserContext?: UserContextState | null
 ): PhaseEvaluation {
+  // ======== USER CONTEXT OVERRIDES (from micro-agent, previous turn) ========
+  if (lastUserContext) {
+    // Priority 1: Emotional regression → force Presença
+    if (lastUserContext.user_emotional_state === 'crisis' || lastUserContext.user_emotional_state === 'vulnerable') {
+      console.log(`🔄 Phase evaluator: user_emotional_state=${lastUserContext.user_emotional_state} → forcing presenca`);
+      return {
+        detectedPhase: 'presenca',
+        stagnationLevel: 0,
+        guidance: `\n\n🔄 RESET DE FASE (DETECÇÃO AUTOMÁTICA):
+O sistema detectou que o usuário está em estado ${lastUserContext.user_emotional_state === 'crisis' ? 'de CRISE' : 'VULNERÁVEL'}.
+PRIORIDADE ABSOLUTA: Acolhimento e presença. NÃO avance fase. NÃO faça perguntas profundas agora.
+Apenas esteja presente, valide o que ele sente, e ofereça segurança emocional.
+${lastUserContext.user_emotional_state === 'crisis' ? 'Se houver risco, siga o protocolo de segurança.' : ''}`
+      };
+    }
+
+    // Priority 2: Topic shift → reset stagnation
+    if (lastUserContext.topic_continuity === 'shifted' || lastUserContext.topic_continuity === 'new_topic') {
+      console.log(`🔄 Phase evaluator: topic_continuity=${lastUserContext.topic_continuity} → resetting stagnation`);
+      // Don't inject guidance — let Aura respond naturally to the new topic
+      return { guidance: null, detectedPhase: 'initial', stagnationLevel: 0 };
+    }
+
+    // Priority 3: Resistance/disengagement → cancel advancement
+    if (lastUserContext.user_emotional_state === 'resistant' || lastUserContext.engagement_level === 'disengaged') {
+      console.log(`🔄 Phase evaluator: resistance/disengagement detected → canceling advancement`);
+      return {
+        detectedPhase: 'presenca',
+        stagnationLevel: 0,
+        guidance: `\n\n🔄 RESISTÊNCIA DETECTADA (DETECÇÃO AUTOMÁTICA):
+O usuário não está engajando no aprofundamento. NÃO force avanço de fase.
+Valide, dê espaço, mude o ângulo suavemente. Considere perguntar algo mais leve
+ou simplesmente validar o silêncio/resistência como legítimo.`
+      };
+    }
+  }
+
   const recentAssistant = messageHistory
     .filter(m => m.role === 'assistant')
     .slice(-6)
