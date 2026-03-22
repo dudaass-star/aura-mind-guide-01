@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX IF NOT EXISTS session_themes_user_theme_unique ON public.session_themes (user_id, theme_name);
