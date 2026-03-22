@@ -266,9 +266,9 @@ async function callAI(
   cacheableSystemPrompt?: string
 ): Promise<{ choices: Array<{ message: { content: string }; finish_reason?: string }>; usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } }> {
   
-  // Anthropic direct API (deprecated)
+  // Anthropic models not supported
   if (model.startsWith('anthropic/') || model.startsWith('claude-')) {
-    throw new Error('Anthropic models are deprecated. Use Google Gemini models instead.');
+    throw new Error('Use Google Gemini models instead.');
   }
 
   // Extrair modelo real e nível de reasoning (sufixo :low/:medium/:high)
