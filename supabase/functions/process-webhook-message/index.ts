@@ -377,6 +377,45 @@ Deno.serve(async (req) => {
       console.log(`📦 Found pending content from interrupted response: ${pendingContent.substring(0, 100)}...`);
     }
 
+    // ========================================================================
+    // PERSIST INBOUND MESSAGE (after lock — prevents duplicates from competing workers)
+    // ========================================================================
+    let inboundSaved = false;
+    if (messageText) {
+      // Content-based dedup: check for identical message in last 30s
+      const { data: recentDup } = await supabase
+        .from('messages')
+        .select('id')
+        .eq('user_id', profile.user_id)
+        .eq('role', 'user')
+        .eq('content', messageText)
+        .gte('created_at', new Date(Date.now() - 30000).toISOString())
+        .limit(1)
+        .maybeSingle();
+
+      if (recentDup) {
+        console.log(`⏭️ DEDUP: Mensagem idêntica encontrada nos últimos 30s (id: ${recentDup.id}), abortando`);
+        await releaseLock();
+        return new Response(JSON.stringify({ status: 'ignored', reason: 'content_duplicate' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      try {
+        const { data: insertedMsg } = await supabase
+          .from('messages')
+          .insert({ user_id: profile.user_id, role: 'user', content: messageText })
+          .select('id')
+          .single();
+        inboundSaved = true;
+        if (insertedMsg?.id) {
+          (globalThis as any).__inboundMessageDbId = insertedMsg.id;
+        }
+        console.log(`💾 Inbound message persisted for user ${profile.user_id} (id: ${insertedMsg?.id})`);
+      } catch (persistErr) {
+        console.warn('⚠️ Failed to persist inbound message:', persistErr);
+      }
+    }
 
     // ========================================================================
     // RESET FOLLOW-UP COUNT
