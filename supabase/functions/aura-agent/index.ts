@@ -588,7 +588,8 @@ async function extractActionsFromResponse(
   assistantResponse: string,
   geminiApiKey: string,
   supabase: any,
-  userId: string | null
+  userId: string | null,
+  recentUserMessages?: string[]
 ): Promise<ExtractedActions> {
   try {
     const cleanResponse = stripAllInternalTags(assistantResponse);
