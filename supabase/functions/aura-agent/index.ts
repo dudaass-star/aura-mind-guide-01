@@ -5903,6 +5903,33 @@ Responda apenas o resumo, sem formatação.`
     // Persistência do assistant agora é feita por process-webhook-message (per-bubble)
     // Removido para evitar duplicação no histórico
 
+    // ========================================================================
+    // MICRO-AGENTE: Extração assíncrona de ações (não bloqueia resposta)
+    // ========================================================================
+    const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
+    if (GEMINI_API_KEY && profile?.user_id) {
+      const microAgentPromise = (async () => {
+        try {
+          const actions = await extractActionsFromResponse(
+            message, assistantMessage, GEMINI_API_KEY, supabase, profile.user_id
+          );
+          if (Object.keys(actions).length > 0) {
+            await processExtractedActions(actions, supabase, profile, currentSession, dateTimeContext);
+          }
+        } catch (err) {
+          console.error('⚠️ Micro-agent async error:', err);
+        }
+      })();
+
+      // Keep runtime alive for async processing
+      try {
+        (globalThis as any).EdgeRuntime.waitUntil(microAgentPromise);
+        console.log('🤖 Micro-agent triggered via waitUntil');
+      } catch {
+        console.log('ℹ️ waitUntil not available for micro-agent');
+      }
+    }
+
     return new Response(JSON.stringify({ 
       messages: messageChunks,
       user_name: profile?.name,
