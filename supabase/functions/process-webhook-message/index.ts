@@ -688,6 +688,7 @@ Deno.serve(async (req) => {
         is_audio_message: isAudioMessage,
         pending_content: pendingContent,
         pending_context: pendingContext,
+        last_user_context: lastUserContext,
       }),
     });
 
