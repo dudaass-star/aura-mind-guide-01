@@ -982,6 +982,25 @@ ${SESSION_PHASE_INSTRUCTIONS.stuck_in_opening}`
       }
     }
 
+    // Natural transition: exploration going well, model already bringing sentido after 20+ min
+    if (sessionPhase === 'exploration' && sessionElapsedMin && sessionElapsedMin > 20 && detectedPhase === 'sentido') {
+      return {
+        detectedPhase: 'sentido',
+        stagnationLevel: 0,
+        guidance: `\n\n🔄 TRANSIÇÃO NATURAL DETECTADA:
+Ótimo progresso — o insight está aparecendo naturalmente. Agora consolide com reframe e conduza para compromisso.
+${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}`
+      };
+    }
+
+    // Short answer streak soft nudge for sessions
+    const sessionStreak = lastUserContext?.short_answer_streak || 0;
+    if (sessionStreak >= 2) {
+      const baseResult = { guidance: null as string | null, detectedPhase, stagnationLevel: 0 };
+      baseResult.guidance = `\n\n💡 NOTA: O usuário está respondendo de forma curta há ${sessionStreak} turnos. Não force aprofundamento — tente ângulos mais leves ou perguntas concretas.`;
+      return baseResult;
+    }
+
     return { guidance: null, detectedPhase, stagnationLevel: 0 };
   }
 
