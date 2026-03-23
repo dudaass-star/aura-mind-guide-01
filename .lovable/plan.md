@@ -1,45 +1,30 @@
 
+# Garantir Resposta da Aura — Implementado ✅
 
-# Bug: `minimal_context` não é tratado no aura-agent
+## Correções Aplicadas
 
-## Problema
+### 1. Timeout + 3 Retries no aura-agent ✅
+- `AbortController` com 50s de timeout em cada chamada
+- 3 tentativas: normal → normal → minimal_context
+- 2s de espera entre retries
+- Se todas falharem: erro propagado para catch (sem fallback)
 
-O `process-webhook-message` envia `minimal_context: true` no 3º retry, mas o `aura-agent`:
-1. **Não lê** esse campo do `req.json()` (linha 3390)
-2. **Sempre carrega** 40 mensagens + 50 insights + 10 temas + 5 compromissos + 3 sessões + meditações
+### 2. Guard contra mensagens vazias ✅
+- Após o loop de envio, se `!sentAnyResponse && !wasInterrupted`: retry com `minimal_context: true`
+- Envia pelo menos 1 mensagem do retry
+- Se retry também vazio: loga CRITICAL, conversation-followup CRON cuida
 
-Resultado: o retry "minimal" é idêntico ao normal — mesma latência, mesmo risco de timeout.
+### 3. Mensagem de contingência removida ✅
+- Removido "Tive um probleminha técnico" do catch
+- Sem mensagens genéricas — conversation-followup faz follow-up natural
 
-## Plano
+### 4. Persistência pré-lock ✅
+- Mensagem do usuário salva ANTES de abortar no debounce
+- Worker vencedor acumula todas as mensagens via query de acumulação
+- Zero mensagens perdidas em cenário de concorrência
 
-**Arquivo**: `supabase/functions/aura-agent/index.ts`
-
-### 1. Extrair `minimal_context` do request body
-Na linha 3390, adicionar `minimal_context` ao destructuring:
-```typescript
-const { message, user_id, phone, pending_content, pending_context, last_user_context, minimal_context } = await req.json();
-```
-
-### 2. Reduzir queries quando `minimal_context === true`
-Na seção de carregamento paralelo (linhas 3881-3957), quando `minimal_context`:
-- Mensagens: `limit(10)` em vez de `limit(40)`
-- Insights críticos: `limit(5)` em vez de `limit(15)`
-- Insights gerais: **pular** (não carregar)
-- Sessões completadas: **pular**
-- Temas: `limit(3)` em vez de `limit(10)`
-- Compromissos: `limit(2)` em vez de `limit(5)`
-- Meditações: **pular**
-- Jornada: **pular**
-
-### 3. Pular fase evaluator e pós-análise quando minimal
-- Pular `evaluateTherapeuticPhase` (não precisa detectar estagnação no retry)
-- Pular `postConversationAnalysis` via `waitUntil` (economia de tempo)
-- Pular detecção de repetição (não há histórico suficiente para comparar)
-
-### 4. Log para rastreabilidade
-Adicionar log: `📉 minimal_context mode: reduced history and skipped analysis`
-
-**Impacto**: O 3º retry terá ~70% menos dados para carregar e menos processamento, reduzindo drasticamente a chance de timeout. O modelo ainda recebe as últimas 10 mensagens + perfil + insights essenciais — suficiente para uma resposta coerente.
-
-**Total**: ~20 linhas de condicionais, zero mudança na lógica principal.
-
+### 5. `minimal_context` tratado no aura-agent ✅
+- Campo extraído do request body
+- Queries reduzidas: 10 msgs, 5 insights críticos, 3 temas, 2 compromissos
+- Skip: insights gerais, sessões completadas, meditações, jornada
+- Log de rastreabilidade adicionado
