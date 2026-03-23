@@ -1031,8 +1031,25 @@ ${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}`
 
   // ======== FREE CONVERSATION (Modo Profundo) ========
 
-  // New user without context: skip stagnation detection to allow situational mapping
+  // New user without context: check if they already provided detailed situational context
   if ((totalMessageCount ?? Infinity) < 15 && (insightsCount ?? Infinity) === 0) {
+    const userMsgs = recentUser;
+    const totalChars = userMsgs.reduce((sum, m) => sum + m.length, 0);
+    const hasDetailedContext = totalChars > 250 || userMsgs.some(m => m.length > 150);
+
+    if (hasDetailedContext) {
+      console.log(`🆕 Phase evaluator: new user WITH detailed context (chars=${totalChars}) — confirming understanding`);
+      return { 
+        guidance: `🆕 USUÁRIO NOVO COM CONTEXTO:
+O usuário já trouxe detalhes sobre a situação. NÃO pergunte "o que está acontecendo".
+1. Mostre que entendeu, resumindo brevemente o que ele trouxe
+2. Valide o ato de compartilhar
+3. Aprofunde a partir do que ele JÁ disse`, 
+        detectedPhase: 'initial', 
+        stagnationLevel: 0 
+      };
+    }
+
     console.log(`🆕 Phase evaluator: new user (msgs=${totalMessageCount}, insights=${insightsCount}) — skipping free conversation phase evaluation`);
     return { guidance: null, detectedPhase: 'initial', stagnationLevel: 0 };
   }
