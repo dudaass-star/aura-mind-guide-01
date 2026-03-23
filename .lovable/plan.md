@@ -1,42 +1,67 @@
 
 
-# Plano: Ressalva de contexto no bloco USUÁRIO NOVO (sem conflito com Topic Shift)
+# Diagnóstico: AURA não responde — Análise completa
 
-## Análise do risco levantado
+## O que encontrei nos dados
 
-O risco de "achar que tem contexto por causa de mensagens antigas" **não se aplica** porque:
+### Evidências concretas
+1. **Ana Livia** (11:31 UTC): Mensagem "Oi" registrada na dedup e na tabela messages. Lock adquirido (`response_started_at: 11:31:13`) e liberado (`is_responding: false`). **Nenhuma mensagem assistant salva após.**
+2. **Juliane** (12:54 UTC): Mensagem "Vc cuida de mim" registrada. Lock adquirido (`response_started_at: 12:54:38`) e liberado. **Nenhuma mensagem assistant salva após.**
+3. **Logs**: Os logs de `process-webhook-message` e `aura-agent` para o horário das mensagens (~11:31 e ~12:54) **não estão mais disponíveis** (rotação de logs). O único log visível é um boot de teste às 13:22 com "Unauthorized".
+4. **Modelo configurado**: `google/gemini-2.5-pro` — modelo padrão, sem erro de configuração.
 
-- **Topic Shift** (L886-894) faz early return antes de chegar ao bloco de usuário novo — usuários existentes que mudam de tema **sempre** recebem guidance de mapeamento
-- **Bloco Usuário Novo** (L1034) só executa para `<15 msgs` e `0 insights` — são usuários na primeira conversa, sem temas anteriores
-- A heurística de caracteres mediria apenas mensagens da conversa atual
+### Cenário mais provável
+O `aura-agent` está falhando em todas as 3 tentativas (timeout de 50s cada = até 150s total). Quando isso acontece:
+- L748-750: `throw lastError` é executado
+- L992-1003: O `catch` externo é atingido
+- **Bug de scoping**: `supabase` e `profile` são `const` declarados dentro do `try` (L213, L257), mas referenciados no `catch` (L997-999)
+- Em JavaScript, `const` dentro de um bloco `try` **NÃO é acessível** no `catch` correspondente
+- Isso causa um `ReferenceError` **silencioso** — o lock deveria ser liberado pelo finally interno (L970-981), mas o erro real nunca é logado
 
-## Implementação (sem mudança no plano original)
+### O que NÃO é a causa
+- O bug de scoping **não impede** a liberação do lock (o `finally` interno em L970 já cuida disso)
+- O bug **impede** a visibilidade do erro — sem logs úteis, não sabemos se é timeout do AI gateway, 429, 402, ou erro de modelo
 
-### Arquivo: `supabase/functions/aura-agent/index.ts` (~L1034-1038)
+## Plano de correção
 
-Substituir o return simples do bloco de usuário novo por lógica condicional:
+### 1. Fix do scoping no catch externo (~10 linhas)
+**Arquivo**: `supabase/functions/process-webhook-message/index.ts`
+
+Mover `supabase` e `profile` para fora do `try`, trocando `const` por `let`:
 
 ```typescript
-if ((totalMessageCount ?? Infinity) < 15 && (insightsCount ?? Infinity) === 0) {
-  const userMsgs = recentUser; // já disponível no escopo
-  const totalChars = userMsgs.reduce((sum, m) => sum + m.length, 0);
-  const hasDetailedContext = totalChars > 250 || userMsgs.some(m => m.length > 150);
-  
-  if (hasDetailedContext) {
-    return { 
-      guidance: `🆕 USUÁRIO NOVO COM CONTEXTO:
-O usuário já trouxe detalhes sobre a situação. NÃO pergunte "o que está acontecendo".
-1. Mostre que entendeu, resumindo brevemente o que ele trouxe
-2. Valide o ato de compartilhar
-3. Aprofunde a partir do que ele JÁ disse`, 
-      detectedPhase: 'initial', 
-      stagnationLevel: 0 
-    };
-  }
-  
-  return { guidance: null, detectedPhase: 'initial', stagnationLevel: 0 };
+// L198 (antes do try)
+let supabase: any = null;
+let profile: any = null;
+
+// L213: trocar 'const supabase' → 'supabase'
+// L257: trocar 'const profile' → 'profile'
+```
+
+E no catch (L996-1003), adicionar guard:
+
+```typescript
+if (supabase && profile?.user_id) {
+  // release lock
 }
 ```
 
-**Impacto**: ~12 linhas alteradas no bloco existente. Sem risco de conflito com Topic Shift.
+### 2. Logging detalhado no catch externo
+Adicionar log com detalhes do erro para que da próxima vez que o agent falhe, possamos ver a causa exata:
+
+```typescript
+console.error('❌ Worker processing error:', {
+  message: error instanceof Error ? error.message : String(error),
+  name: error instanceof Error ? error.name : 'unknown',
+  phone: contingencyPhone,
+});
+```
+
+### 3. Investigar causa raiz do timeout do agent
+Após o deploy do fix de logging, a próxima falha revelará se é:
+- Timeout do AI gateway (Lovable AI)
+- Rate limit (429) ou créditos (402)
+- Bug introduzido na última edição do `aura-agent` (a mudança do bloco USUÁRIO NOVO)
+
+**Impacto**: ~15 linhas alteradas. Fix crítico para diagnóstico — sem ele, ficamos às cegas quando o agent falha.
 
