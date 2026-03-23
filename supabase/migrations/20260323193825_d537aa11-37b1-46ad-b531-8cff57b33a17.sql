@@ -1,0 +1,1 @@
+UPDATE profiles SET status = 'trial_expired' WHERE status = 'trial';
