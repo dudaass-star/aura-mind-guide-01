@@ -284,8 +284,10 @@ Deno.serve(async (req) => {
     // ========================================================================
     // SUBSCRIPTION STATUS CHECK
     // ========================================================================
+    // trial_expired with a valid plan = legitimate Stripe trial, do NOT block
+    const isLegitTrial = profile.status === 'trial_expired' && profile.plan;
     const blockedStatuses = ['canceled', 'inactive', 'paused', 'trial_expired'];
-    if (blockedStatuses.includes(profile.status || '')) {
+    if (blockedStatuses.includes(profile.status || '') && !isLegitTrial) {
       console.log(`🚫 User ${profile.user_id} blocked: status is '${profile.status}'`);
 
       let instanceConfig = undefined;
