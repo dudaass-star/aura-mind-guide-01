@@ -856,7 +856,9 @@ function evaluateTherapeuticPhase(
   sessionActive: boolean,
   sessionPhase?: string,
   sessionElapsedMin?: number,
-  lastUserContext?: UserContextState | null
+  lastUserContext?: UserContextState | null,
+  totalMessageCount?: number,
+  insightsCount?: number
 ): PhaseEvaluation {
   // ======== USER CONTEXT OVERRIDES (from micro-agent, previous turn) ========
   if (lastUserContext) {
