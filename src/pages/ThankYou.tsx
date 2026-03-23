@@ -1,5 +1,5 @@
 import { Helmet } from "react-helmet-async";
-import { useLocation, Link, useSearchParams } from "react-router-dom";
+import { useLocation, Link } from "react-router-dom";
 import { CheckCircle, Smartphone, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 
