@@ -1049,8 +1049,8 @@ ${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}`
     }
   }
 
-  // Stuck in Presença after 5+ exchanges
-  if (recentPairs >= 5 && detectedPhase === 'presenca') {
+  // Stuck in Presença after 7+ exchanges (gives more room for situational exploration)
+  if (recentPairs >= 7 && detectedPhase === 'presenca') {
     return {
       detectedPhase: 'presenca',
       stagnationLevel: 2,
