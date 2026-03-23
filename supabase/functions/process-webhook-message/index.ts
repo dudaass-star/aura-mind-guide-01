@@ -895,6 +895,35 @@ Deno.serve(async (req) => {
     }
 
     // ========================================================================
+    // GUARD: If no response was sent and no interruption, RETRY the agent once
+    // ========================================================================
+    if (!sentAnyResponse && !wasInterrupted && agentData) {
+      console.warn(`⚠️ EMPTY RESPONSE GUARD: Agent returned but 0 messages sent. Retrying once...`);
+      try {
+        const retryData = await callAuraAgent(true); // minimal context for speed
+        if (retryData?.messages?.length) {
+          for (const msg of retryData.messages) {
+            let retryText = (msg.text || msg.content || '').replace(/\|\|\|/g, '').trim();
+            retryText = retryText.replace(/\[\s*[A-Z_]{3,}(?::[^\]]*)?\s*\]/g, '').replace(/\[\s*\/[A-Z_]{3,}\s*\]/g, '').trim();
+            if (!retryText) continue;
+            const instanceConfig = await getInstanceConfigForUser(supabase, profile.user_id);
+            await sendTextMessage(cleanPhone, retryText, undefined, instanceConfig);
+            sentAnyResponse = true;
+            try {
+              await supabase.from('messages').insert({ user_id: profile.user_id, role: 'assistant', content: retryText });
+            } catch {}
+            break; // send at least one message
+          }
+        }
+        if (!sentAnyResponse) {
+          console.error(`🚨 CRITICAL: Agent returned empty on retry too. User ${profile.user_id} got no response. conversation-followup will handle.`);
+        }
+      } catch (retryErr) {
+        console.error(`🚨 CRITICAL: Empty response retry failed:`, retryErr);
+      }
+    }
+
+    // ========================================================================
     // FINALIZATION
     // ========================================================================
     if (wasInterrupted && interruptedAtIndex > 0) {
