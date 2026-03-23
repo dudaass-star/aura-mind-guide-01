@@ -1,11 +1,18 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendTextMessage, cleanPhoneNumber } from "../_shared/zapi-client.ts";
-import { getInstanceConfigForUser, antiBurstDelayForInstance, groupByInstance } from "../_shared/instance-helper.ts";
+import { getInstanceConfigForUser } from "../_shared/instance-helper.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+const BATCH_SIZE_DEFAULT = 10;
+const INTER_MESSAGE_DELAY_MS = 3000; // 3 seconds between sends (was 25-45s)
+
+// ============================================================================
+// METRICS
+// ============================================================================
 
 interface UserMetrics {
   totalMessages: number;
@@ -25,27 +32,13 @@ async function fetchUserMetrics(
   currentEpisode: number,
   journeysCompleted: number
 ): Promise<UserMetrics> {
-  const { count: totalMessages } = await supabase
-    .from('messages')
-    .select('*', { count: 'exact', head: true })
-    .eq('user_id', userId);
-
-  const { count: weekMessages } = await supabase
-    .from('messages')
-    .select('*', { count: 'exact', head: true })
-    .eq('user_id', userId)
-    .gte('created_at', weekStart.toISOString());
-
-  const { count: insightsCount } = await supabase
-    .from('user_insights')
-    .select('*', { count: 'exact', head: true })
-    .eq('user_id', userId);
-
-  const { count: sessionsCount } = await supabase
-    .from('sessions')
-    .select('*', { count: 'exact', head: true })
-    .eq('user_id', userId)
-    .eq('status', 'completed');
+  // Run all counts in parallel
+  const [totalRes, weekRes, insightsRes, sessionsRes] = await Promise.all([
+    supabase.from('messages').select('*', { count: 'exact', head: true }).eq('user_id', userId),
+    supabase.from('messages').select('*', { count: 'exact', head: true }).eq('user_id', userId).gte('created_at', weekStart.toISOString()),
+    supabase.from('user_insights').select('*', { count: 'exact', head: true }).eq('user_id', userId),
+    supabase.from('sessions').select('*', { count: 'exact', head: true }).eq('user_id', userId).eq('status', 'completed'),
+  ]);
 
   let journeyTitle: string | null = null;
   if (currentJourneyId) {
@@ -58,25 +51,26 @@ async function fetchUserMetrics(
   }
 
   return {
-    totalMessages: totalMessages || 0,
-    weekMessages: weekMessages || 0,
-    insightsCount: insightsCount || 0,
-    sessionsCount: sessionsCount || 0,
+    totalMessages: totalRes.count || 0,
+    weekMessages: weekRes.count || 0,
+    insightsCount: insightsRes.count || 0,
+    sessionsCount: sessionsRes.count || 0,
     journeyTitle,
     currentEpisode: currentEpisode || 0,
     journeysCompleted: journeysCompleted || 0,
   };
 }
 
+// ============================================================================
+// AI ANALYSIS
+// ============================================================================
+
 async function analyzeWeekConversations(
   messages: any[],
   userName: string
 ): Promise<string> {
   const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
-  
-  if (!lovableApiKey || messages.length === 0) {
-    return '';
-  }
+  if (!lovableApiKey || messages.length === 0) return '';
 
   const conversationSummary = messages
     .slice(-50)
@@ -84,6 +78,9 @@ async function analyzeWeekConversations(
     .join('\n');
 
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000); // 15s timeout
+
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -107,10 +104,13 @@ Seja específica sobre o que foi discutido. Use linguagem acolhedora e direta. N
             content: `Analise as conversas desta semana com ${userName}:\n\n${conversationSummary}`
           }
         ],
-        max_tokens: 200,
+        max_tokens: 150,
         temperature: 0.8,
       }),
+      signal: controller.signal,
     });
+
+    clearTimeout(timeout);
 
     if (!response.ok) {
       console.error('AI analysis error:', await response.text());
@@ -124,6 +124,10 @@ Seja específica sobre o que foi discutido. Use linguagem acolhedora e direta. N
     return '';
   }
 }
+
+// ============================================================================
+// REPORT GENERATION
+// ============================================================================
 
 function generateProgressBar(current: number, total: number): string {
   const filled = Math.min(Math.floor((current / total) * 8), 8);
@@ -183,9 +187,59 @@ function generateWeeklyReport(
   return report;
 }
 
+// ============================================================================
+// HELPERS
+// ============================================================================
+
 function getBrtHour(): number {
   return (new Date().getUTCHours() - 3 + 24) % 24;
 }
+
+async function shortDelay(): Promise<void> {
+  await new Promise(resolve => setTimeout(resolve, INTER_MESSAGE_DELAY_MS));
+}
+
+// ============================================================================
+// SELF-INVOCATION FOR NEXT BATCH
+// ============================================================================
+
+async function invokeNextBatch(
+  offset: number,
+  batchSize: number,
+  weekStartStr: string,
+  dryRun: boolean
+): Promise<void> {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+  const url = `${supabaseUrl}/functions/v1/weekly-report`;
+  console.log(`🔄 Invoking next batch: offset=${offset}, batch_size=${batchSize}`);
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${serviceKey}`,
+      },
+      body: JSON.stringify({
+        offset,
+        batch_size: batchSize,
+        week_start_override: weekStartStr,
+        dry_run: dryRun,
+      }),
+    });
+    // Fire-and-forget: just consume the body
+    await res.text();
+  } catch (error) {
+    console.error('❌ Error invoking next batch:', error);
+  }
+}
+
+// ============================================================================
+// MAIN HANDLER
+// ============================================================================
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -201,16 +255,24 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-    // Parse body for dry_run and target_user_id
+
+    // Parse body
     let dryRun = false;
     let targetUserId: string | null = null;
+    let offset = 0;
+    let batchSize = BATCH_SIZE_DEFAULT;
+    let weekStartOverride: string | null = null;
+
     try {
       const body = await req.json();
       dryRun = body?.dry_run === true;
       targetUserId = body?.target_user_id || null;
+      offset = body?.offset || 0;
+      batchSize = body?.batch_size || BATCH_SIZE_DEFAULT;
+      weekStartOverride = body?.week_start_override || null;
     } catch { /* no body */ }
 
-    console.log(`📅 Starting weekly report generation... (dry_run=${dryRun})`);
+    console.log(`📅 Weekly report batch: offset=${offset}, batch_size=${batchSize}, dry_run=${dryRun}`);
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -218,21 +280,26 @@ Deno.serve(async (req) => {
 
     // Calculate week range
     const now = new Date();
-    const weekStart = new Date(now);
-    weekStart.setDate(now.getDate() - 7);
-    weekStart.setHours(0, 0, 0, 0);
+    const weekStart = new Date(weekStartOverride || now);
+    if (!weekStartOverride) {
+      weekStart.setDate(now.getDate() - 7);
+      weekStart.setHours(0, 0, 0, 0);
+    }
+    const weekStartStr = weekStart.toISOString();
 
-    // Get active users (or a specific user in dry_run mode)
+    // Build query
     let profilesQuery = supabase
       .from('profiles')
       .select('*')
       .eq('status', 'active')
-      .not('phone', 'is', null);
+      .not('phone', 'is', null)
+      .order('created_at', { ascending: true });
 
     if (targetUserId) {
       profilesQuery = profilesQuery.eq('user_id', targetUserId);
     } else {
       profilesQuery = profilesQuery.or('do_not_disturb_until.is.null,do_not_disturb_until.lte.' + new Date().toISOString());
+      profilesQuery = profilesQuery.range(offset, offset + batchSize - 1);
     }
 
     const { data: profiles, error: profilesError } = await profilesQuery;
@@ -241,137 +308,132 @@ Deno.serve(async (req) => {
       throw new Error(`Error fetching profiles: ${profilesError.message}`);
     }
 
-    console.log(`📋 Generating reports for ${profiles?.length || 0} users`);
+    const profileCount = profiles?.length || 0;
+    console.log(`📋 Batch has ${profileCount} users (offset=${offset})`);
+
+    if (profileCount === 0) {
+      console.log('✅ No more users to process. Batch complete.');
+      return new Response(JSON.stringify({ status: 'complete', offset, reportsSent: 0 }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     let sentCount = 0;
     const dryRunResults: any[] = [];
-    // Group by WhatsApp instance for parallel processing
-    const instanceGroups = groupByInstance(profiles || []);
 
-    await Promise.all(
-      Array.from(instanceGroups.entries()).map(async ([instanceId, groupProfiles]) => {
-        for (const profile of groupProfiles) {
-          try {
-            const userName = profile.name?.split(' ')[0] || 'usuário';
+    for (const profile of profiles!) {
+      try {
+        const userName = profile.name?.split(' ')[0] || 'usuário';
 
-            // Skip if user has an active session (bypass in dry_run)
-            if (!dryRun && profile.current_session_id) {
-              const { data: activeSession } = await supabase
-                .from('sessions')
-                .select('status')
-                .eq('id', profile.current_session_id)
-                .eq('status', 'in_progress')
-                .maybeSingle();
-              
-              if (activeSession) {
-                console.log(`🧘 Skipping ${userName} - session in progress`);
-                continue;
-              }
-            }
+        // Skip if already received this week's report (dedup via weekly_plans)
+        if (!dryRun && !targetUserId) {
+          const weekStartDate = weekStart.toISOString().split('T')[0];
+          const { data: existingPlan } = await supabase
+            .from('weekly_plans')
+            .select('id')
+            .eq('user_id', profile.user_id)
+            .eq('week_start', weekStartDate)
+            .maybeSingle();
 
-            // Skip if user sent a message in the last 10 minutes (bypass in dry_run)
-            if (!dryRun) {
-              const recentCutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-              const { count: recentUserMessages } = await supabase
-                .from('messages')
-                .select('*', { count: 'exact', head: true })
-                .eq('user_id', profile.user_id)
-                .eq('role', 'user')
-                .gte('created_at', recentCutoff);
-
-              if ((recentUserMessages || 0) > 0) {
-                console.log(`💬 Skipping ${userName} - active conversation (message in last 10min)`);
-                continue;
-              }
-            }
-            
-            console.log(`📊 Fetching metrics for ${userName}...`);
-            const metrics = await fetchUserMetrics(
-              supabase,
-              profile.user_id,
-              weekStart,
-              profile.current_journey_id,
-              profile.current_episode,
-              profile.journeys_completed
-            );
-            
-            console.log(`📈 Metrics for ${userName}: ${metrics.totalMessages} msgs, ${metrics.insightsCount} insights, ${metrics.sessionsCount} sessions`);
-
-            const { data: weekMsgs } = await supabase
-              .from('messages')
-              .select('*')
-              .eq('user_id', profile.user_id)
-              .gte('created_at', weekStart.toISOString())
-              .order('created_at', { ascending: true });
-
-            console.log(`🧠 Analyzing ${weekMsgs?.length || 0} messages for ${userName}...`);
-            
-            const evolutionAnalysis = await analyzeWeekConversations(
-              weekMsgs || [],
-              userName
-            );
-            
-            if (evolutionAnalysis) {
-              console.log(`✅ Evolution analysis generated for ${userName}`);
-            }
-
-            const report = generateWeeklyReport(profile, evolutionAnalysis, metrics);
-
-            if (dryRun) {
-              dryRunResults.push({
-                user_id: profile.user_id,
-                name: profile.name,
-                report,
-                metrics,
-                evolutionAnalysis,
-              });
-              sentCount++;
-              continue;
-            }
-
-            // Get instance config for this user
-            const zapiConfig = await getInstanceConfigForUser(supabase, profile.user_id);
-
-            const cleanPhone = cleanPhoneNumber(profile.phone);
-            const result = await sendTextMessage(cleanPhone, report, undefined, zapiConfig);
-
-            if (result.success) {
-              console.log(`✅ Report sent to ${profile.name} (${profile.phone})`);
-              sentCount++;
-
-              await supabase.from('messages').insert({
-                user_id: profile.user_id,
-                role: 'assistant',
-                content: report,
-              });
-
-              await supabase.from('weekly_plans').upsert({
-                user_id: profile.user_id,
-                week_start: weekStart.toISOString().split('T')[0],
-                reflections: evolutionAnalysis || `Relatório enviado em ${now.toISOString()}`,
-              }, {
-                onConflict: 'user_id,week_start'
-              });
-            } else {
-              console.error(`❌ Failed to send report to ${profile.phone}: ${result.error}`);
-            }
-
-            // Per-instance anti-burst delay
-            await antiBurstDelayForInstance(instanceId);
-
-          } catch (userError) {
-            console.error(`❌ Error processing user ${profile.user_id}:`, userError);
+          if (existingPlan) {
+            console.log(`⏭️ Skipping ${userName} - already received report this week`);
+            continue;
           }
         }
-      })
-    );
 
-    console.log(`📊 Weekly reports complete: ${sentCount}/${profiles?.length || 0} sent`);
+        // Skip if user has an active session
+        if (!dryRun && profile.current_session_id) {
+          const { data: activeSession } = await supabase
+            .from('sessions')
+            .select('status')
+            .eq('id', profile.current_session_id)
+            .eq('status', 'in_progress')
+            .maybeSingle();
+          
+          if (activeSession) {
+            console.log(`🧘 Skipping ${userName} - session in progress`);
+            continue;
+          }
+        }
 
-    const responsePayload: any = { 
-      status: 'success', 
-      totalUsers: profiles?.length || 0,
+        // Skip if user sent a message in the last 10 minutes
+        if (!dryRun) {
+          const recentCutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+          const { count: recentUserMessages } = await supabase
+            .from('messages')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', profile.user_id)
+            .eq('role', 'user')
+            .gte('created_at', recentCutoff);
+
+          if ((recentUserMessages || 0) > 0) {
+            console.log(`💬 Skipping ${userName} - active conversation`);
+            continue;
+          }
+        }
+
+        // Fetch metrics and week messages in parallel
+        const [metrics, weekMsgsRes] = await Promise.all([
+          fetchUserMetrics(supabase, profile.user_id, weekStart, profile.current_journey_id, profile.current_episode, profile.journeys_completed),
+          supabase.from('messages').select('*').eq('user_id', profile.user_id).gte('created_at', weekStartStr).order('created_at', { ascending: true }),
+        ]);
+
+        const evolutionAnalysis = await analyzeWeekConversations(weekMsgsRes.data || [], userName);
+        const report = generateWeeklyReport(profile, evolutionAnalysis, metrics);
+
+        if (dryRun) {
+          dryRunResults.push({ user_id: profile.user_id, name: profile.name, report, metrics, evolutionAnalysis });
+          sentCount++;
+          continue;
+        }
+
+        // Send via WhatsApp
+        const zapiConfig = await getInstanceConfigForUser(supabase, profile.user_id);
+        const cleanPhone = cleanPhoneNumber(profile.phone);
+        const result = await sendTextMessage(cleanPhone, report, undefined, zapiConfig);
+
+        if (result.success) {
+          console.log(`✅ Report sent to ${profile.name} (${profile.phone})`);
+          sentCount++;
+
+          // Save message and mark as sent (dedup)
+          await Promise.all([
+            supabase.from('messages').insert({
+              user_id: profile.user_id,
+              role: 'assistant',
+              content: report,
+            }),
+            supabase.from('weekly_plans').upsert({
+              user_id: profile.user_id,
+              week_start: weekStart.toISOString().split('T')[0],
+              reflections: evolutionAnalysis || `Relatório enviado em ${now.toISOString()}`,
+            }, { onConflict: 'user_id,week_start' }),
+          ]);
+        } else {
+          console.error(`❌ Failed to send report to ${profile.phone}: ${result.error}`);
+        }
+
+        // Short delay between sends
+        await shortDelay();
+
+      } catch (userError) {
+        console.error(`❌ Error processing user ${profile.user_id}:`, userError);
+      }
+    }
+
+    console.log(`📊 Batch complete: ${sentCount}/${profileCount} sent (offset=${offset})`);
+
+    // If we got a full batch, there may be more users — invoke next batch
+    if (!targetUserId && profileCount === batchSize) {
+      // Don't await — fire and forget so this invocation can return
+      invokeNextBatch(offset + batchSize, batchSize, weekStartStr, dryRun);
+    }
+
+    const responsePayload: any = {
+      status: 'success',
+      batch: { offset, batchSize, profilesInBatch: profileCount },
       reportsSent: sentCount,
+      hasMore: profileCount === batchSize,
     };
     if (dryRun) {
       responsePayload.dry_run = true;
