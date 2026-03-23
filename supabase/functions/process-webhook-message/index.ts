@@ -380,6 +380,8 @@ Deno.serve(async (req) => {
       }
     };
 
+    try { // try/finally covers ALL code after lock acquisition to guarantee lock release
+
     // Read pending content from lock result or fresh query
     const responseState = lockResult?.[0] || (await supabase.from('aura_response_state').select('*').eq('user_id', profile.user_id).maybeSingle()).data;
     const pendingContent = responseState?.pending_content || null;
