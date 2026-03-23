@@ -194,9 +194,10 @@ Deno.serve(async (req) => {
     });
   }
 
-  // Track phone for contingency message
+  // Track phone for contingency — no longer sends fallback messages
   let contingencyPhone: string | null = null;
   let contingencyInstanceConfig: ZapiConfig | undefined = undefined;
+  let sentAnyResponse = false;
 
   try {
     const workerPayload = await req.json();
@@ -343,6 +344,17 @@ Deno.serve(async (req) => {
       const respondingAge = Date.now() - new Date(currentState?.response_started_at || 0).getTime();
 
       if (respondingAge < 60000) {
+        // PERSIST message BEFORE aborting so the winning worker can accumulate it
+        if (messageText) {
+          const { data: recentDup } = await supabase
+            .from('messages').select('id').eq('user_id', profile.user_id).eq('role', 'user')
+            .eq('content', messageText).gte('created_at', new Date(Date.now() - 30000).toISOString())
+            .limit(1).maybeSingle();
+          if (!recentDup) {
+            await supabase.from('messages').insert({ user_id: profile.user_id, role: 'user', content: messageText });
+            console.log(`💾 Pre-lock: persisted message for accumulation by winning worker`);
+          }
+        }
         console.log(`🛑 ABORT: Lock atômico — outro worker respondendo (age: ${Math.round(respondingAge / 1000)}s). Mensagem será acumulada.`);
         return new Response(JSON.stringify({ status: 'debounced_concurrent', reason: 'another_worker_responding' }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -675,35 +687,72 @@ Deno.serve(async (req) => {
     let wasInterrupted = false;
     let interruptedAtIndex = -1;
     let agentData: any = null;
-    let sentAnyResponse = false;
+
+    // Helper: call aura-agent with timeout and optional minimal context
+    async function callAuraAgent(useMinimalContext = false): Promise<any> {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 50000); // 50s timeout
+      try {
+        const body: any = {
+          message: messageText,
+          user_id: profile.user_id,
+          phone: cleanPhone,
+          is_audio_message: isAudioMessage,
+          pending_content: pendingContent,
+          pending_context: pendingContext,
+          last_user_context: lastUserContext,
+        };
+        if (useMinimalContext) {
+          body.minimal_context = true;
+        }
+        const resp = await fetch(`${supabaseUrl}/functions/v1/aura-agent`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseServiceKey}` },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+        if (!resp.ok) {
+          const errorText = await resp.text();
+          throw new Error(`Agent HTTP ${resp.status}: ${errorText}`);
+        }
+        return await resp.json();
+      } catch (err) {
+        clearTimeout(timeoutId);
+        throw err;
+      }
+    }
 
     try {
-    const agentResponse = await fetch(`${supabaseUrl}/functions/v1/aura-agent`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseServiceKey}` },
-      body: JSON.stringify({
-        message: messageText,
-        user_id: profile.user_id,
-        phone: cleanPhone,
-        is_audio_message: isAudioMessage,
-        pending_content: pendingContent,
-        pending_context: pendingContext,
-        last_user_context: lastUserContext,
-      }),
-    });
+    // RETRY STRATEGY: attempt 1 (normal) → attempt 2 (normal) → attempt 3 (minimal context)
+    let lastError: any = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const useMinimal = attempt === 3;
+        console.log(`🔄 aura-agent attempt ${attempt}/3${useMinimal ? ' (minimal_context)' : ''}...`);
+        agentData = await callAuraAgent(useMinimal);
+        lastError = null;
+        break;
+      } catch (err: any) {
+        lastError = err;
+        const isTimeout = err.name === 'AbortError';
+        console.error(`❌ aura-agent attempt ${attempt} failed (${isTimeout ? 'TIMEOUT 50s' : err.message})`);
+        if (attempt < 3) {
+          console.log(`⏳ Waiting 2s before retry...`);
+          await new Promise(r => setTimeout(r, 2000));
+        }
+      }
+    }
+
+    if (lastError || !agentData) {
+      throw lastError || new Error('All 3 aura-agent attempts failed');
+    }
 
     // Clear pending content after passing to agent
     if (pendingContent) {
       await supabase.from('aura_response_state').update({ pending_content: null, pending_context: null }).eq('user_id', profile.user_id);
     }
 
-    if (!agentResponse.ok) {
-      const errorText = await agentResponse.text();
-      console.error('❌ aura-agent error:', errorText);
-      throw new Error(`Agent error: ${errorText}`);
-    }
-
-    agentData = await agentResponse.json();
     console.log('🤖 Agent response:', JSON.stringify(agentData, null, 2));
 
     // ========================================================================
@@ -857,6 +906,35 @@ Deno.serve(async (req) => {
     }
 
     // ========================================================================
+    // GUARD: If no response was sent and no interruption, RETRY the agent once
+    // ========================================================================
+    if (!sentAnyResponse && !wasInterrupted && agentData) {
+      console.warn(`⚠️ EMPTY RESPONSE GUARD: Agent returned but 0 messages sent. Retrying once...`);
+      try {
+        const retryData = await callAuraAgent(true); // minimal context for speed
+        if (retryData?.messages?.length) {
+          for (const msg of retryData.messages) {
+            let retryText = (msg.text || msg.content || '').replace(/\|\|\|/g, '').trim();
+            retryText = retryText.replace(/\[\s*[A-Z_]{3,}(?::[^\]]*)?\s*\]/g, '').replace(/\[\s*\/[A-Z_]{3,}\s*\]/g, '').trim();
+            if (!retryText) continue;
+            const instanceConfig = await getInstanceConfigForUser(supabase, profile.user_id);
+            await sendTextMessage(cleanPhone, retryText, undefined, instanceConfig);
+            sentAnyResponse = true;
+            try {
+              await supabase.from('messages').insert({ user_id: profile.user_id, role: 'assistant', content: retryText });
+            } catch {}
+            break; // send at least one message
+          }
+        }
+        if (!sentAnyResponse) {
+          console.error(`🚨 CRITICAL: Agent returned empty on retry too. User ${profile.user_id} got no response. conversation-followup will handle.`);
+        }
+      } catch (retryErr) {
+        console.error(`🚨 CRITICAL: Empty response retry failed:`, retryErr);
+      }
+    }
+
+    // ========================================================================
     // FINALIZATION
     // ========================================================================
     if (wasInterrupted && interruptedAtIndex > 0) {
@@ -905,21 +983,11 @@ Deno.serve(async (req) => {
   } catch (error: unknown) {
     console.error('❌ Worker processing error:', error);
 
-    // CONTINGENCY: Send fallback message ONLY if no response was already sent
-    if (contingencyPhone && !sentAnyResponse) {
-      try {
-        console.log('🆘 Sending contingency message to', contingencyPhone.substring(0, 4) + '***');
-        await sendTextMessage(
-          contingencyPhone,
-          "Tive um probleminha técnico, me desculpa! 😅 Pode repetir o que disse?",
-          undefined,
-          contingencyInstanceConfig
-        );
-      } catch (contingencyErr) {
-        console.error('❌ Failed to send contingency message:', contingencyErr);
-      }
-    } else if (sentAnyResponse) {
-      console.log('ℹ️ Error after response already sent — suppressing contingency message');
+    // NO FALLBACK MESSAGE — conversation-followup CRON will handle naturally
+    if (!sentAnyResponse) {
+      console.error(`🚨 CRITICAL: User got NO response at all. conversation-followup will detect and re-engage naturally.`);
+    } else {
+      console.log('ℹ️ Error after response already sent — no action needed');
     }
 
     return new Response(JSON.stringify({ error: 'processing_failed' }), {
