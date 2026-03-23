@@ -198,6 +198,8 @@ Deno.serve(async (req) => {
   let contingencyPhone: string | null = null;
   let contingencyInstanceConfig: ZapiConfig | undefined = undefined;
   let sentAnyResponse = false;
+  let supabase: ReturnType<typeof createClient> | null = null;
+  let profile: any = null;
 
   try {
     const workerPayload = await req.json();
@@ -210,7 +212,7 @@ Deno.serve(async (req) => {
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // ========================================================================
     // PROCESS MESSAGE CONTENT
@@ -254,7 +256,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const profile = profileResults?.[0];
+    profile = profileResults?.[0];
     if (!profile) {
       console.log('⚠️ User not found for phone variations:', phoneVariations.join(', '));
       return new Response(JSON.stringify({ status: 'user_not_found' }), {
@@ -990,16 +992,25 @@ Deno.serve(async (req) => {
     });
 
   } catch (error: unknown) {
-    console.error('❌ Worker processing error:', error);
+    console.error('❌ Worker processing error:', {
+      message: error instanceof Error ? error.message : String(error),
+      name: error instanceof Error ? error.name : 'unknown',
+      stack: error instanceof Error ? error.stack?.slice(0, 500) : undefined,
+      phone: contingencyPhone,
+      hasProfile: !!profile,
+      hasSupabase: !!supabase,
+    });
 
     // Release lock in outer catch (covers errors between lock acquisition and inner try)
-    try {
-      await supabase.from('aura_response_state')
-        .update({ is_responding: false })
-        .eq('user_id', profile?.user_id)
-        .eq('is_responding', true);
-    } catch (lockErr) {
-      console.error('⚠️ Failed to release lock in outer catch:', lockErr);
+    if (supabase && profile?.user_id) {
+      try {
+        await supabase.from('aura_response_state')
+          .update({ is_responding: false })
+          .eq('user_id', profile.user_id)
+          .eq('is_responding', true);
+      } catch (lockErr) {
+        console.error('⚠️ Failed to release lock in outer catch:', lockErr);
+      }
     }
 
     // NO FALLBACK MESSAGE — conversation-followup CRON will handle naturally
