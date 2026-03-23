@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, MessageSquare, Search, Send, User, Circle } from 'lucide-react';
+import { ArrowLeft, MessageSquare, Search, Send, User, Circle, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { format } from 'date-fns';
@@ -52,6 +52,8 @@ export default function AdminMessages() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [selectedUser, setSelectedUser] = useState<UserWithMessages | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sendingMessage, setSendingMessage] = useState(false);
@@ -128,32 +130,50 @@ export default function AdminMessages() {
     }
   };
 
-  const fetchConversation = async (userId: string) => {
-    setLoadingMessages(true);
+  const fetchConversation = async (userId: string, before?: string) => {
+    if (before) {
+      setLoadingOlder(true);
+    } else {
+      setLoadingMessages(true);
+    }
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/admin-messages?action=conversation&user_id=${userId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${session?.access_token}`,
-            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-          },
-        }
-      );
+      let url = `https://${projectId}.supabase.co/functions/v1/admin-messages?action=conversation&user_id=${userId}`;
+      if (before) url += `&before=${encodeURIComponent(before)}`;
+
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${session?.access_token}`,
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        },
+      });
 
       if (!response.ok) throw new Error('Failed to fetch conversation');
       const data = await response.json();
-      setMessages(data.messages || []);
-      setUserContext(data.user_context || null);
-      setIsAtBottom(true);
+      setHasMore(data.has_more || false);
+
+      if (before) {
+        // Prepend older messages
+        setMessages(prev => [...(data.messages || []), ...prev]);
+      } else {
+        setMessages(data.messages || []);
+        setUserContext(data.user_context || null);
+        setIsAtBottom(true);
+      }
     } catch (err) {
       console.error(err);
       toast({ title: 'Erro ao carregar conversa', variant: 'destructive' });
     } finally {
       setLoadingMessages(false);
+      setLoadingOlder(false);
     }
+  };
+
+  const loadOlderMessages = () => {
+    if (!selectedUser || messages.length === 0 || loadingOlder) return;
+    const oldestTimestamp = messages[0].created_at;
+    fetchConversation(selectedUser.user_id, oldestTimestamp);
   };
 
   const handleSelectUser = (user: UserWithMessages) => {
@@ -465,6 +485,23 @@ export default function AdminMessages() {
                       </div>
                     ) : (
                       <div className="space-y-2">
+                        {hasMore && (
+                          <div className="flex justify-center py-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={loadOlderMessages}
+                              disabled={loadingOlder}
+                              className="text-xs text-muted-foreground"
+                            >
+                              {loadingOlder ? (
+                                <><Loader2 className="h-3 w-3 animate-spin mr-1" /> Carregando...</>
+                              ) : (
+                                '⬆ Carregar anteriores'
+                              )}
+                            </Button>
+                          </div>
+                        )}
                         {messages.map(msg => {
                           const isAutoMessage = msg.role === 'assistant' && isAutomatedMessage(msg.content);
                           return (

@@ -109,14 +109,25 @@ Deno.serve(async (req) => {
         return new Response(JSON.stringify({ error: 'user_id required' }), { status: 400, headers: corsHeaders });
       }
 
+      const before = url.searchParams.get('before');
+      const limit = Math.min(parseInt(url.searchParams.get('limit') || '200'), 500);
+
+      let messagesQuery = supabase
+        .from('messages')
+        .select('id, role, content, created_at')
+        .eq('user_id', targetUserId);
+
+      if (before) {
+        messagesQuery = messagesQuery.lt('created_at', before);
+      }
+
+      messagesQuery = messagesQuery
+        .order('created_at', { ascending: false })
+        .limit(limit + 1); // fetch 1 extra to check has_more
+
       const [messagesResult, contextResult] = await Promise.all([
-        supabase
-          .from('messages')
-          .select('id, role, content, created_at')
-          .eq('user_id', targetUserId)
-          .order('created_at', { ascending: true })
-          .limit(500),
-        supabase
+        messagesQuery,
+        before ? Promise.resolve({ data: null }) : supabase
           .from('aura_response_state')
           .select('last_user_context')
           .eq('user_id', targetUserId)
@@ -125,9 +136,16 @@ Deno.serve(async (req) => {
 
       if (messagesResult.error) throw messagesResult.error;
 
+      const rows = messagesResult.data || [];
+      const has_more = rows.length > limit;
+      const trimmed = has_more ? rows.slice(0, limit) : rows;
+      // Reverse to chronological order
+      trimmed.reverse();
+
       return new Response(JSON.stringify({ 
-        messages: messagesResult.data || [],
+        messages: trimmed,
         user_context: contextResult.data?.last_user_context || null,
+        has_more,
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
