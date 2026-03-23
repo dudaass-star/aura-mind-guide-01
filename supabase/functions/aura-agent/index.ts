@@ -912,6 +912,10 @@ ou simplesmente validar o silêncio/resistência como legítimo.`
 
   // Use semantic aura_phase from micro-agent when available (preferred over keyword detection)
   let detectedPhase = 'presenca';
+  let presencaScore = 0;
+  let sentidoScore = 0;
+  let movimentoScore = 0;
+  
   if (lastUserContext?.aura_phase) {
     detectedPhase = lastUserContext.aura_phase;
     console.log(`🔄 Phase evaluator: using semantic aura_phase="${detectedPhase}" from micro-agent`);
@@ -922,9 +926,9 @@ ou simplesmente validar o silêncio/resistência como legítimo.`
         sum + keywords.filter(kw => msg.includes(kw)).length, 0
       );
     }
-    const presencaScore = countIndicators(recentAssistant, PHASE_INDICATORS.presenca);
-    const sentidoScore = countIndicators(recentAssistant, PHASE_INDICATORS.sentido);
-    const movimentoScore = countIndicators(recentAssistant, PHASE_INDICATORS.movimento);
+    presencaScore = countIndicators(recentAssistant, PHASE_INDICATORS.presenca);
+    sentidoScore = countIndicators(recentAssistant, PHASE_INDICATORS.sentido);
+    movimentoScore = countIndicators(recentAssistant, PHASE_INDICATORS.movimento);
     if (movimentoScore > sentidoScore && movimentoScore > presencaScore) {
       detectedPhase = 'movimento';
     } else if (sentidoScore > presencaScore) {
