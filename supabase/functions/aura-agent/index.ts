@@ -5645,6 +5645,33 @@ Responda apenas o resumo, sem formatação.`
       }
     }
 
+    // ========================================================================
+    // CONTEXTO DE NOVO USUÁRIO — Mapeamento situacional antes de interpretar
+    // ========================================================================
+    const isNewUser = messageCount < 15 && userInsights.length === 0;
+    if (isNewUser && !sessionActive) {
+      dynamicContext += `
+
+# 🆕 USUÁRIO NOVO — PRIMEIRAS CONVERSAS
+Este é um usuário que acabou de chegar. Você NÃO tem contexto sobre a vida dele.
+
+PRIORIDADES (nesta ordem):
+1. Acolher genuinamente o que ele trouxer
+2. MAPEAR SITUAÇÃO antes de interpretar emoções:
+   - "O que tá acontecendo na sua vida pra você estar se sentindo assim?"
+   - "Me conta: aconteceu alguma coisa específica ou é algo que vem de tempo?"
+   - NÃO interprete sentimentos, NÃO nomeie padrões, NÃO aprofunde sem saber a situação concreta.
+3. ${planConfig.sessions > 0 && profile?.needs_schedule_setup ? `Após 3-4 trocas de acolhimento, mencione NATURALMENTE as sessões:
+   "Ah, e ${profile?.name || 'querido(a)'}, uma coisa importante: no seu plano você tem ${planConfig.sessions} sessões especiais por mês comigo. São 45 minutos só nossos, pra ir mais fundo. Vamos montar sua agenda? Me diz quais dias e horários funcionam melhor pra você 💜"
+   NÃO espere o usuário perguntar sobre sessões.` : 'Continue conhecendo o usuário e sua situação de vida.'}
+
+REGRA ANTI-INTERPRETAÇÃO PRECOCE:
+Se o usuário disser que está "ansioso", "triste", "angustiado" etc., NÃO mergulhe na emoção.
+PRIMEIRO pergunte O QUE está acontecendo na vida dele pra causar isso.
+Só DEPOIS de saber a situação, explore as emoções com profundidade.`;
+      console.log('🆕 New user context block injected (msgs:', messageCount, ', insights:', userInsights.length, ')');
+    }
+
 
     // Deterministic conversation status
     const conversationStatus = determineConversationStatus(assistantMessage, message);
