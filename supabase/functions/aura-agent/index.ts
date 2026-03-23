@@ -856,7 +856,9 @@ function evaluateTherapeuticPhase(
   sessionActive: boolean,
   sessionPhase?: string,
   sessionElapsedMin?: number,
-  lastUserContext?: UserContextState | null
+  lastUserContext?: UserContextState | null,
+  totalMessageCount?: number,
+  insightsCount?: number
 ): PhaseEvaluation {
   // ======== USER CONTEXT OVERRIDES (from micro-agent, previous turn) ========
   if (lastUserContext) {
@@ -1024,6 +1026,13 @@ ${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}`
   }
 
   // ======== FREE CONVERSATION (Modo Profundo) ========
+
+  // New user without context: skip stagnation detection to allow situational mapping
+  if ((totalMessageCount ?? Infinity) < 15 && (insightsCount ?? Infinity) === 0) {
+    console.log(`🆕 Phase evaluator: new user (msgs=${totalMessageCount}, insights=${insightsCount}) — skipping free conversation phase evaluation`);
+    return { guidance: null, detectedPhase: 'initial', stagnationLevel: 0 };
+  }
+
   // Skip keyword depth check if micro-agent already provided semantic phase
   if (!lastUserContext?.aura_phase) {
     const hasEmotionalDepth = recentAssistant.some(msg => 
@@ -4662,7 +4671,7 @@ Exemplo com 4 sessões:
         evalSessionPhase = phaseCheck.phase;
         evalElapsedMin = Math.floor((Date.now() - new Date(currentSession.started_at).getTime()) / 60000);
       }
-      const phaseEval = evaluateTherapeuticPhase(messageHistory, sessionActive, evalSessionPhase, evalElapsedMin, last_user_context);
+      const phaseEval = evaluateTherapeuticPhase(messageHistory, sessionActive, evalSessionPhase, evalElapsedMin, last_user_context, messageCount, userInsights.length);
       if (phaseEval.guidance) {
         dynamicContext += phaseEval.guidance;
         console.log(`🔄 Phase evaluator: detected=${phaseEval.detectedPhase}, stagnation=${phaseEval.stagnationLevel}, context=${sessionActive ? 'session' : 'free'}`);
@@ -5634,6 +5643,33 @@ Responda apenas o resumo, sem formatação.`
       } catch (pauseError) {
         console.error('⚠️ Error saving pause context:', pauseError);
       }
+    }
+
+    // ========================================================================
+    // CONTEXTO DE NOVO USUÁRIO — Mapeamento situacional antes de interpretar
+    // ========================================================================
+    const isNewUser = messageCount < 15 && userInsights.length === 0;
+    if (isNewUser && !sessionActive) {
+      dynamicContext += `
+
+# 🆕 USUÁRIO NOVO — PRIMEIRAS CONVERSAS
+Este é um usuário que acabou de chegar. Você NÃO tem contexto sobre a vida dele.
+
+PRIORIDADES (nesta ordem):
+1. Acolher genuinamente o que ele trouxer
+2. MAPEAR SITUAÇÃO antes de interpretar emoções:
+   - "O que tá acontecendo na sua vida pra você estar se sentindo assim?"
+   - "Me conta: aconteceu alguma coisa específica ou é algo que vem de tempo?"
+   - NÃO interprete sentimentos, NÃO nomeie padrões, NÃO aprofunde sem saber a situação concreta.
+3. ${planConfig.sessions > 0 && profile?.needs_schedule_setup ? `Após 3-4 trocas de acolhimento, mencione NATURALMENTE as sessões:
+   "Ah, e ${profile?.name || 'querido(a)'}, uma coisa importante: no seu plano você tem ${planConfig.sessions} sessões especiais por mês comigo. São 45 minutos só nossos, pra ir mais fundo. Vamos montar sua agenda? Me diz quais dias e horários funcionam melhor pra você 💜"
+   NÃO espere o usuário perguntar sobre sessões.` : 'Continue conhecendo o usuário e sua situação de vida.'}
+
+REGRA ANTI-INTERPRETAÇÃO PRECOCE:
+Se o usuário disser que está "ansioso", "triste", "angustiado" etc., NÃO mergulhe na emoção.
+PRIMEIRO pergunte O QUE está acontecendo na vida dele pra causar isso.
+Só DEPOIS de saber a situação, explore as emoções com profundidade.`;
+      console.log('🆕 New user context block injected (msgs:', messageCount, ', insights:', userInsights.length, ')');
     }
 
 
