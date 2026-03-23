@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 
 const ThankYou = () => {
   const location = useLocation();
-  const [searchParams] = useSearchParams();
+  const [userData, setUserData] = useState({ name: "", plan: "anual" });
   const [userData, setUserData] = useState({ name: "", plan: "anual" });
 
   useEffect(() => {
