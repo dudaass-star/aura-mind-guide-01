@@ -380,6 +380,8 @@ Deno.serve(async (req) => {
       }
     };
 
+    try { // try/finally covers ALL code after lock acquisition to guarantee lock release
+
     // Read pending content from lock result or fresh query
     const responseState = lockResult?.[0] || (await supabase.from('aura_response_state').select('*').eq('user_id', profile.user_id).maybeSingle()).data;
     const pendingContent = responseState?.pending_content || null;
@@ -723,7 +725,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    try {
     // RETRY STRATEGY: attempt 1 (normal) → attempt 2 (normal) → attempt 3 (minimal context)
     let lastError: any = null;
     for (let attempt = 1; attempt <= 3; attempt++) {
@@ -921,7 +922,15 @@ Deno.serve(async (req) => {
             await sendTextMessage(cleanPhone, retryText, undefined, instanceConfig);
             sentAnyResponse = true;
             try {
-              await supabase.from('messages').insert({ user_id: profile.user_id, role: 'assistant', content: retryText });
+              const { data: retryDedupCheck } = await supabase
+                .from('messages').select('id').eq('user_id', profile.user_id).eq('role', 'assistant')
+                .eq('content', retryText).gte('created_at', new Date(Date.now() - 30000).toISOString())
+                .limit(1).maybeSingle();
+              if (!retryDedupCheck) {
+                await supabase.from('messages').insert({ user_id: profile.user_id, role: 'assistant', content: retryText });
+              } else {
+                console.log('⚠️ Retry dedup: skipped duplicate assistant message');
+              }
             } catch {}
             break; // send at least one message
           }
@@ -982,6 +991,16 @@ Deno.serve(async (req) => {
 
   } catch (error: unknown) {
     console.error('❌ Worker processing error:', error);
+
+    // Release lock in outer catch (covers errors between lock acquisition and inner try)
+    try {
+      await supabase.from('aura_response_state')
+        .update({ is_responding: false })
+        .eq('user_id', profile?.user_id)
+        .eq('is_responding', true);
+    } catch (lockErr) {
+      console.error('⚠️ Failed to release lock in outer catch:', lockErr);
+    }
 
     // NO FALLBACK MESSAGE — conversation-followup CRON will handle naturally
     if (!sentAnyResponse) {
