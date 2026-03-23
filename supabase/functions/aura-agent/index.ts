@@ -3882,39 +3882,43 @@ serve(async (req) => {
         journeyResult,
         meditationsResult,
       ] = await Promise.allSettled([
-        // 1. Últimas 40 mensagens
+        // 1. Últimas mensagens (10 em minimal, 40 normal)
         supabase
           .from('messages')
           .select('role, content, created_at', { count: 'exact' })
           .eq('user_id', userId)
           .order('created_at', { ascending: false })
-          .limit(40),
-        // 2. Insights críticos (pessoa, identidade)
+          .limit(minimal_context ? 10 : 40),
+        // 2. Insights críticos (pessoa, identidade) - reduzido em minimal
         supabase
           .from('user_insights')
           .select('category, key, value, importance')
           .eq('user_id', userId)
           .in('category', ['pessoa', 'identidade'])
           .order('importance', { ascending: false })
-          .limit(15),
-        // 3. Insights gerais
-        supabase
-          .from('user_insights')
-          .select('category, key, value, importance')
-          .eq('user_id', userId)
-          .not('category', 'in', '("pessoa","identidade")')
-          .order('importance', { ascending: false })
-          .order('last_mentioned_at', { ascending: false })
-          .limit(35),
-        // 4. Últimas 3 sessões completadas
-        supabase
-          .from('sessions')
-          .select('session_summary, key_insights, focus_topic, ended_at, commitments', { count: 'exact' })
-          .eq('user_id', userId)
-          .eq('status', 'completed')
-          .not('session_summary', 'is', null)
-          .order('ended_at', { ascending: false })
-          .limit(3),
+          .limit(minimal_context ? 5 : 15),
+        // 3. Insights gerais - skip em minimal
+        minimal_context
+          ? Promise.resolve({ data: [], error: null })
+          : supabase
+              .from('user_insights')
+              .select('category, key, value, importance')
+              .eq('user_id', userId)
+              .not('category', 'in', '("pessoa","identidade")')
+              .order('importance', { ascending: false })
+              .order('last_mentioned_at', { ascending: false })
+              .limit(35),
+        // 4. Sessões completadas - skip em minimal
+        minimal_context
+          ? Promise.resolve({ data: [], error: null })
+          : supabase
+              .from('sessions')
+              .select('session_summary, key_insights, focus_topic, ended_at, commitments', { count: 'exact' })
+              .eq('user_id', userId)
+              .eq('status', 'completed')
+              .not('session_summary', 'is', null)
+              .order('ended_at', { ascending: false })
+              .limit(3),
         // 5. Último check-in
         supabase
           .from('checkins')
@@ -3923,40 +3927,42 @@ serve(async (req) => {
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle(),
-        // 6. Temas ativos
+        // 6. Temas ativos - reduzido em minimal
         supabase
           .from('session_themes')
           .select('*')
           .eq('user_id', userId)
           .order('last_mentioned_at', { ascending: false })
-          .limit(10),
-        // 7. Compromissos pendentes
+          .limit(minimal_context ? 3 : 10),
+        // 7. Compromissos pendentes - reduzido em minimal
         supabase
           .from('commitments')
           .select('*')
           .eq('user_id', userId)
           .eq('completed', false)
           .order('created_at', { ascending: false })
-          .limit(5),
+          .limit(minimal_context ? 2 : 5),
         // 8. Count de sessões completadas
         supabase
           .from('sessions')
           .select('*', { count: 'exact', head: true })
           .eq('user_id', userId)
           .eq('status', 'completed'),
-        // 9. Jornada atual (condicional)
-        profile?.current_journey_id
+        // 9. Jornada atual - skip em minimal
+        (!minimal_context && profile?.current_journey_id)
           ? supabase
               .from('content_journeys')
               .select('title, total_episodes')
               .eq('id', profile.current_journey_id)
               .single()
           : Promise.resolve({ data: null, error: null }),
-        // 10. Catálogo de meditações ativas
-        supabase
-          .from('meditations')
-          .select('category, title, best_for, triggers')
-          .eq('is_active', true),
+        // 10. Catálogo de meditações - skip em minimal
+        minimal_context
+          ? Promise.resolve({ data: [], error: null })
+          : supabase
+              .from('meditations')
+              .select('category, title, best_for, triggers')
+              .eq('is_active', true),
       ]);
 
       console.log('⚡ All context queries completed in parallel');
