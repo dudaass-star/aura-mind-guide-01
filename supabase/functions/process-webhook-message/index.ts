@@ -725,7 +725,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    try {
     // RETRY STRATEGY: attempt 1 (normal) → attempt 2 (normal) → attempt 3 (minimal context)
     let lastError: any = null;
     for (let attempt = 1; attempt <= 3; attempt++) {
