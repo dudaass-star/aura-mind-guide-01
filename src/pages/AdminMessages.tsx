@@ -130,32 +130,50 @@ export default function AdminMessages() {
     }
   };
 
-  const fetchConversation = async (userId: string) => {
-    setLoadingMessages(true);
+  const fetchConversation = async (userId: string, before?: string) => {
+    if (before) {
+      setLoadingOlder(true);
+    } else {
+      setLoadingMessages(true);
+    }
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/admin-messages?action=conversation&user_id=${userId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${session?.access_token}`,
-            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-          },
-        }
-      );
+      let url = `https://${projectId}.supabase.co/functions/v1/admin-messages?action=conversation&user_id=${userId}`;
+      if (before) url += `&before=${encodeURIComponent(before)}`;
+
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${session?.access_token}`,
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        },
+      });
 
       if (!response.ok) throw new Error('Failed to fetch conversation');
       const data = await response.json();
-      setMessages(data.messages || []);
-      setUserContext(data.user_context || null);
-      setIsAtBottom(true);
+      setHasMore(data.has_more || false);
+
+      if (before) {
+        // Prepend older messages
+        setMessages(prev => [...(data.messages || []), ...prev]);
+      } else {
+        setMessages(data.messages || []);
+        setUserContext(data.user_context || null);
+        setIsAtBottom(true);
+      }
     } catch (err) {
       console.error(err);
       toast({ title: 'Erro ao carregar conversa', variant: 'destructive' });
     } finally {
       setLoadingMessages(false);
+      setLoadingOlder(false);
     }
+  };
+
+  const loadOlderMessages = () => {
+    if (!selectedUser || messages.length === 0 || loadingOlder) return;
+    const oldestTimestamp = messages[0].created_at;
+    fetchConversation(selectedUser.user_id, oldestTimestamp);
   };
 
   const handleSelectUser = (user: UserWithMessages) => {
