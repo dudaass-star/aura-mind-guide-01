@@ -22,3 +22,9 @@
 - Mensagem do usuário salva ANTES de abortar no debounce
 - Worker vencedor acumula todas as mensagens via query de acumulação
 - Zero mensagens perdidas em cenário de concorrência
+
+### 5. `minimal_context` tratado no aura-agent ✅
+- Campo extraído do request body
+- Queries reduzidas: 10 msgs, 5 insights críticos, 3 temas, 2 compromissos
+- Skip: insights gerais, sessões completadas, meditações, jornada
+- Log de rastreabilidade adicionado
