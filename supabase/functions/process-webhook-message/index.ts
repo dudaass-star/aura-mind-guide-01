@@ -284,7 +284,7 @@ Deno.serve(async (req) => {
     // ========================================================================
     // SUBSCRIPTION STATUS CHECK
     // ========================================================================
-    const blockedStatuses = ['canceled', 'inactive', 'paused'];
+    const blockedStatuses = ['canceled', 'inactive', 'paused', 'trial_expired'];
     if (blockedStatuses.includes(profile.status || '')) {
       console.log(`🚫 User ${profile.user_id} blocked: status is '${profile.status}'`);
 
@@ -297,14 +297,29 @@ Deno.serve(async (req) => {
         if (inst) instanceConfig = { instanceId: inst.zapi_instance_id, token: inst.zapi_token, clientToken: inst.zapi_client_token };
       }
 
-      const checkoutLink = await createShortLink('https://olaaura.com.br/checkout', cleanPhone || '') || 'https://olaaura.com.br/checkout';
-      const statusMessages: Record<string, string> = {
-        canceled: `Oi, ${profile.name || 'querido(a)'}! 💜\n\nSua assinatura foi encerrada. Sinto sua falta!\n\nSe quiser voltar a conversar comigo, é só assinar novamente:\n👉 ${checkoutLink}\n\nVou adorar te receber de volta! ✨`,
-        inactive: `Oi, ${profile.name || 'querido(a)'}! 💜\n\nSua conta está inativa no momento.\n\nPara continuarmos nossas conversas, assine um plano:\n👉 ${checkoutLink}\n\nEstou aqui te esperando! ✨`,
-        paused: `Oi, ${profile.name || 'querido(a)'}! 💜\n\nSua assinatura está pausada no momento.\n\nQuando estiver pronto(a) para voltar, é só reativar:\n👉 ${checkoutLink}\n\nEstarei aqui quando você precisar! ✨`,
-      };
+      // Save user message to history before blocking
+      if (messageText) {
+        await supabase.from('messages').insert({
+          user_id: profile.user_id,
+          role: 'user',
+          content: messageText,
+        });
+      }
 
-      await sendTextMessage(cleanPhone!, statusMessages[profile.status!], undefined, instanceConfig);
+      let blockMessage: string;
+      if (profile.status === 'trial_expired') {
+        blockMessage = `Oi, ${profile.name || 'querido(a)'}! 💜\n\nSeu período de experiência terminou, mas não precisa ser um adeus.\n\nPra continuar conversando comigo, é só escolher o plano que faz sentido pra você:\n👉 https://olaaura.com.br/checkout\n\nTô aqui te esperando. ✨`;
+      } else {
+        const checkoutLink = await createShortLink('https://olaaura.com.br/checkout', cleanPhone || '') || 'https://olaaura.com.br/checkout';
+        const statusMessages: Record<string, string> = {
+          canceled: `Oi, ${profile.name || 'querido(a)'}! 💜\n\nSua assinatura foi encerrada. Sinto sua falta!\n\nSe quiser voltar a conversar comigo, é só assinar novamente:\n👉 ${checkoutLink}\n\nVou adorar te receber de volta! ✨`,
+          inactive: `Oi, ${profile.name || 'querido(a)'}! 💜\n\nSua conta está inativa no momento.\n\nPara continuarmos nossas conversas, assine um plano:\n👉 ${checkoutLink}\n\nEstou aqui te esperando! ✨`,
+          paused: `Oi, ${profile.name || 'querido(a)'}! 💜\n\nSua assinatura está pausada no momento.\n\nQuando estiver pronto(a) para voltar, é só reativar:\n👉 ${checkoutLink}\n\nEstarei aqui quando você precisar! ✨`,
+        };
+        blockMessage = statusMessages[profile.status!];
+      }
+
+      await sendTextMessage(cleanPhone!, blockMessage, undefined, instanceConfig);
       return new Response(JSON.stringify({ success: true, action: 'subscription_blocked', status: profile.status }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
