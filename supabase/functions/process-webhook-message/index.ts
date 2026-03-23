@@ -344,6 +344,17 @@ Deno.serve(async (req) => {
       const respondingAge = Date.now() - new Date(currentState?.response_started_at || 0).getTime();
 
       if (respondingAge < 60000) {
+        // PERSIST message BEFORE aborting so the winning worker can accumulate it
+        if (messageText) {
+          const { data: recentDup } = await supabase
+            .from('messages').select('id').eq('user_id', profile.user_id).eq('role', 'user')
+            .eq('content', messageText).gte('created_at', new Date(Date.now() - 30000).toISOString())
+            .limit(1).maybeSingle();
+          if (!recentDup) {
+            await supabase.from('messages').insert({ user_id: profile.user_id, role: 'user', content: messageText });
+            console.log(`💾 Pre-lock: persisted message for accumulation by winning worker`);
+          }
+        }
         console.log(`🛑 ABORT: Lock atômico — outro worker respondendo (age: ${Math.round(respondingAge / 1000)}s). Mensagem será acumulada.`);
         return new Response(JSON.stringify({ status: 'debounced_concurrent', reason: 'another_worker_responding' }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
