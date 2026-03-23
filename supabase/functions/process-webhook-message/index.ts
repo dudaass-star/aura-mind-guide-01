@@ -198,6 +198,8 @@ Deno.serve(async (req) => {
   let contingencyPhone: string | null = null;
   let contingencyInstanceConfig: ZapiConfig | undefined = undefined;
   let sentAnyResponse = false;
+  let supabase: ReturnType<typeof createClient> | null = null;
+  let profile: any = null;
 
   try {
     const workerPayload = await req.json();
@@ -210,7 +212,7 @@ Deno.serve(async (req) => {
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // ========================================================================
     // PROCESS MESSAGE CONTENT
