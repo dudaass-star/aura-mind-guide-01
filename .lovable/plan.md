@@ -1,37 +1,32 @@
 
 
-# Avaliação: A consideração faz sentido?
+# Plano: Guidance de mapeamento situacional após Topic Shift
 
-## Veredicto: Faz sentido como princípio, mas já está coberta pelo plano atual.
+## Problema
+Quando um usuário existente muda de tema, o Phase Evaluator reseta para Presença (L886-891) mas não injeta nenhuma guidance de mapeamento. Após 5 trocas, o evaluator empurra para Sentido — mesmo que a AURA não tenha explorado o que está por trás do novo tema.
 
-A preocupação é legítima — um early return que desliga o evaluator **antes** da verificação de crise seria um bug grave. Porém, olhando o código real, o plano já está correto:
+## Solução
+Modificar o return do Topic Shift (L890) para injetar uma guidance leve de mapeamento, além do streak nudge já existente.
 
-### Ordem atual do `evaluateTherapeuticPhase` (linhas 862-1086):
+### Arquivo: `supabase/functions/aura-agent/index.ts`
 
-```text
-L862  → Priority 1: CRISE (crisis/vulnerable) → return forçando presença ✅
-L877  → Priority 2: Short answer streak (detecta, não retorna ainda)
-L884  → Priority 3: TOPIC SHIFT → return resetando estagnação ✅
-L891  → Priority 4: RESISTÊNCIA → return cancelando avanço ✅
-L903  → Fim dos overrides de contexto
+**Mudança no bloco Topic Shift (L886-891):**
 
-L905-950 → Detecção de fase (keyword/semantic)
-L952-1023 → SESSION MODE (se sessão ativa)
+Adicionar guidance ao return quando topic_continuity é `shifted` ou `new_topic`:
 
-L1026 → ======== FREE CONVERSATION ======== ← AQUI entra o early return
+```typescript
+const topicShiftGuidance = `\n\n🔄 MUDANÇA DE TEMA DETECTADA:
+O usuário trouxe um assunto novo. Antes de interpretar ou aprofundar emocionalmente:
+1. Acolha brevemente o que ele trouxe
+2. Pergunte sobre a SITUAÇÃO concreta: "O que tá acontecendo?" / "Me conta mais sobre isso"
+3. Só após entender o contexto, aplique as fases normais`;
+
+return { 
+  guidance: (streakNudge || '') + topicShiftGuidance, 
+  detectedPhase: 'initial', 
+  stagnationLevel: 0 
+};
 ```
 
-O plano propõe o early return **na linha 1026** (início de FREE CONVERSATION), que é **depois** de todas as verificações de segurança (crise L862, topic shift L884, resistência L891).
-
-### Conclusão
-
-A consideração está **correta como princípio de segurança**, mas **não requer mudança no plano** — o posicionamento já respeita a hierarquia:
-
-1. ✅ Crise (Priority 1) — L862
-2. ✅ Topic Shift (Priority 2/3) — L884  
-3. ✅ Resistência (Priority 4) — L891
-4. ✅ **[NOVO]** Early return novo usuário — L1026
-5. ✅ Estagnação normal (5+ trocas) — L1039
-
-O plano pode prosseguir sem alteração. A observação serve como checklist de QA na implementação.
+**Impacto**: ~5 linhas alteradas. Sem mudança estrutural. A guidance é injetada apenas na troca imediata após a detecção de mudança de tema — nas trocas seguintes, o evaluator volta ao fluxo normal.
 
