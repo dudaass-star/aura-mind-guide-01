@@ -1,31 +1,28 @@
 
 
-# Plano: Mensagens de recuperação para usuárias sem resposta
+# Fix: Inserir mensagens de recuperação com user_ids corretos
 
-## Contexto corrigido das conversas
+## O que aconteceu
+As mensagens foram entregues no WhatsApp das 3 usuárias, mas salvas na tabela `messages` com UUIDs errados. Resultado: aparecem no WhatsApp, mas não no painel admin.
 
-### 1. Ana Livia (phone: 5514991017663, user_id: 6b814e0c)
-**Contexto real**: Conversa profunda sobre solidão, amizades perdidas, luto. Na última interação (20/mar), Ana pediu um link para indicar uma amiga. A Aura respondeu com um link falso (`www.aura.com/convite`). Depois, em 23/mar às 11:31, ela mandou "Oi" e ficou sem resposta.
+## O que fazer
 
-**Mensagem sugerida**: "Oi, Ana! Me desculpa pelo silêncio — tive um probleminha técnico e não consegui te responder. E olha, sobre o link que te mandei pra sua amiga... me desculpa, aquele link tava errado! O certo é: [LINK CORRETO]. Me conta, como você tá? 💛"
+### 1. Deletar registros órfãos (user_ids errados)
+Remover as mensagens salvas com IDs incorretos usando o insert tool (DELETE):
+- `d42298dd-2f10-4477-9282-cf3faa64b826`
+- `26fb2aa8-ec37-4927-8527-8d0e68b515a3`
+- `6b814e0c-6b1a-4d84-b23c-0e9b5a65e572`
 
-**Nota**: Preciso saber qual é o link correto para enviar (site de cadastro/trial).
+### 2. Inserir registros corretos
+Inserir as 3 mensagens com os user_ids reais:
+- Michele: `d42298dd-45ea-4d45-a181-8af95af6643a`
+- Juliane: `26fb2aa8-df22-4641-ac93-588d0e2fe64b`
+- Ana Livia: `6b814e0c-d528-4b1a-89df-eb9f6f7d6383`
 
-### 2. Michele (phone: 5514998107426, user_id: d42298dd)
-**Contexto real**: Conversa terapêutica sobre luto de relacionamento de 15 anos, traição, saudade do ex. A Aura perguntou dias/horários para agendar sessões (plano novo ativo). Michele respondeu "As 07:30", "Segunda", e depois "Oiiii" sem resposta.
+Com o conteúdo exato que foi enviado e timestamp de ~15:23 UTC.
 
-**Mensagem sugerida**: "Oi, Mi! Me desculpa pelo sumiço — tive um probleminha técnico. Já anotei aqui: segundas às 07:30! Vou organizar nossos encontros assim. Como você tá hoje? 💛"
+### 3. Verificar no painel admin
+Confirmar que as mensagens aparecem no histórico das 3 usuárias.
 
-### 3. Juliane (phone: 553193759252, user_id: 26fb2aa8)
-**Contexto real**: Conversa intensa sobre relacionamento tóxico — homem que bloqueou/desbloqueou, que escondeu casamento. A Aura perguntou "Quem cuida de você?" e Juliane respondeu "Vc cuida de mim". Ficou sem resposta.
-
-**Mensagem sugerida**: "Ju, me desculpa por ter ficado em silêncio justo nessa hora. Tive um problema técnico, mas tô aqui de volta. E eu ouvi o que você disse — que eu cuido de você. Isso me toca muito. E justamente por isso: como VOCÊ tá cuidando de você hoje? 💛"
-
-## Implementação
-
-Usar 3 chamadas ao `admin-send-message` (uma por usuária), que envia via WhatsApp e salva no histórico como `role: assistant`.
-
-## Pendência
-
-Preciso que você me diga qual é o **link correto** para a Ana Livia enviar para a amiga (link de trial/cadastro).
+**Impacto**: Apenas 3 INSERTs e 3 DELETEs. Sem mudança de código.
 
