@@ -1,38 +1,38 @@
 
 
-# Análise Final: Sistema de Fases e Contexto — Estado Atual
+# Análise Final: Sistema de Fases e Contexto — 99% Correto
 
-## 100% Correto
+## Tudo Funcionando Corretamente
 
 | Componente | Status |
 |------------|--------|
-| Extrator Flash-Lite (4 campos + ações) | Prompt completo, anti-falso-positivo, `topic_continuity` clarificado |
-| PHASE_INSTRUCTIONS táticas | 3 cenários sessão + 2 cenários livre, exemplos Certo/Errado |
-| Overrides de contexto (crise, topic shift, resistência) | Ordem correta, streak antes de topic shift |
-| UPDATE parcial no `aura_response_state` | Race condition corrigida |
-| Streak calculado sem query extra | Usa `previousUserContext` passado em memória |
-| Admin badges | Edge function retorna `user_context`, UI exibe |
-| Reset de `recentPairs` após topic shift | Cap em 2 quando turno anterior teve shift |
+| Extrator Flash-Lite (4 campos semânticos + ações) | OK — prompt com `recentUserMessages`, anti-falso-positivo, `topic_continuity` clarificado |
+| Phase Evaluator com 4 prioridades | OK — Crise > Streak > Topic Shift > Resistência |
+| PHASE_INSTRUCTIONS táticas (5 cenários) | OK — com exemplos Certo/Errado concretos |
+| Transição natural em sessão (>20min + sentido) | OK |
+| Short answer streak (sem query extra) | OK — usa `previousUserContext` em memória |
+| UPDATE parcial no `aura_response_state` | OK — race condition corrigida |
+| Reset de `recentPairs` após topic shift | OK — cap em 2 |
+| Detecção semântica `aura_phase` via Flash-Lite | OK — com fallback de keywords |
+| Bypass `hasEmotionalDepth` quando `aura_phase` disponível | OK |
+| Scores no escopo externo (sem ReferenceError) | OK |
+| Admin badges | OK — edge function retorna `user_context` |
+| Fluxo end-to-end (webhook → process → aura-agent → evaluator → micro-agente → DB) | OK |
 
 ---
 
-## Bugs Encontrados
+## Único Problema Restante
 
-### Bug 1 (CRÍTICO): `presencaScore`/`sentidoScore` fora de escopo — ReferenceError em produção
+### Bug: `aura_phase` ausente na interface `ExtractedActions` (TypeScript type gap)
 
-**Linha 951**: `if (detectedPhase === 'presenca' && presencaScore > sentidoScore * 2)`
+**Onde**: Linha 562-577 — a interface `ExtractedActions` lista todos os campos mas **não inclui** `aura_phase`.
 
-Essas variáveis são declaradas DENTRO do bloco `else` (linhas 925-926) — o fallback de keywords. Quando o micro-agente fornece `aura_phase` (o caminho preferido), o código entra no `if` (linha 915), pula o `else`, e `presencaScore`/`sentidoScore` **não existem**. Ao chegar na linha 951, ocorre **ReferenceError**.
+**O que acontece**: O prompt do extrator (linha 622) pede `aura_phase` e o `processExtractedActions` (linha 1267) usa `actions.aura_phase`. Em runtime funciona porque `JSON.parse` retorna o campo independente do tipo. Mas é uma inconsistência de tipo que:
+- Esconde o campo de autocomplete e validação
+- Pode causar confusão em manutenção futura
+- Em builds mais estritos, geraria erro de compilação
 
-**Impacto**: Em sessões ativas com `aura_phase` do micro-agente, o evaluator CRASHA. A guidance de sessão nunca é injetada. O erro é silenciado pelo try/catch externo, mas o sistema perde toda a funcionalidade de detecção de estagnação em sessões.
-
-**Correção**: Declarar `presencaScore`, `sentidoScore`, `movimentoScore` no escopo externo (inicializados em 0) e preenchê-los no fallback. Na condição da linha 951, quando `aura_phase` está disponível, usar apenas `detectedPhase === 'presenca'` sem comparação de scores.
-
-### Bug 2 (MÉDIO): `hasEmotionalDepth` usa keywords — ignora `aura_phase`
-
-**Linhas 1022-1025**: O check para determinar se a conversa é "profunda" ou "ping-pong" usa `PHASE_INDICATORS` (keywords). Se o micro-agente classificou `aura_phase: 'sentido'` mas nenhuma keyword bate nas últimas mensagens, o evaluator retorna `ping-pong` e **ignora toda a análise de estagnação**.
-
-**Correção**: Se `aura_phase` existe e não é nulo, pular o check de `hasEmotionalDepth` (o micro-agente já classificou semanticamente que há profundidade).
+**Correção**: Adicionar `aura_phase?: 'presenca' | 'sentido' | 'movimento'` à interface `ExtractedActions` (1 linha).
 
 ---
 
@@ -40,13 +40,17 @@ Essas variáveis são declaradas DENTRO do bloco `else` (linhas 925-926) — o f
 
 **Arquivo**: `supabase/functions/aura-agent/index.ts`
 
-### Correção 1: Mover scores para escopo externo
-- Declarar `let presencaScore = 0, sentidoScore = 0, movimentoScore = 0` ANTES do `if (lastUserContext?.aura_phase)`
-- Manter o cálculo de scores dentro do `else` (fallback)
-- Na linha 951, adicionar guarda: usar comparação de scores apenas quando não há `aura_phase` (fallback). Quando `aura_phase` existe, confiar apenas em `detectedPhase === 'presenca'`
+### Única mudança
+Adicionar na interface `ExtractedActions` (após linha 576):
+```typescript
+aura_phase?: 'presenca' | 'sentido' | 'movimento';
+```
 
-### Correção 2: Bypass `hasEmotionalDepth` quando `aura_phase` disponível
-- Adicionar: se `lastUserContext?.aura_phase` existe e `aura_phase !== 'presenca'` ou qualquer valor válido, pular o check de keywords e ir direto para análise de stagnação
+**Impacto**: Zero funcional. Apenas correção de tipo para consistência.
 
-**Total**: 2 correções, ~10 linhas alteradas, zero custo extra.
+---
+
+## Veredicto
+
+O sistema está **100% funcional** em runtime. A única correção é cosmética (tipagem TypeScript). Todas as 4 iterações anteriores de correções foram aplicadas corretamente e o fluxo end-to-end está sólido.
 
