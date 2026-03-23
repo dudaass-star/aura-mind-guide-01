@@ -1,25 +1,24 @@
 import { Helmet } from "react-helmet-async";
-import { useLocation, Link, useSearchParams } from "react-router-dom";
+import { useLocation, Link } from "react-router-dom";
 import { CheckCircle, Smartphone, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 
 const ThankYou = () => {
   const location = useLocation();
-  const [searchParams] = useSearchParams();
   const [userData, setUserData] = useState({ name: "", plan: "anual" });
 
   useEffect(() => {
     // Try to get data from location state first, then localStorage
-    let checkoutData = { name: "", plan: "anual", price: "" };
+    let checkoutData = { name: "", plan: "anual" };
     
     if (location.state?.name) {
-      checkoutData = { name: location.state.name, plan: location.state.plan || "anual", price: "" };
+      checkoutData = { name: location.state.name, plan: location.state.plan || "anual" };
     } else {
       const stored = localStorage.getItem('aura_checkout');
       if (stored) {
         try {
           const parsed = JSON.parse(stored);
-          checkoutData = { name: parsed.name || "", plan: parsed.plan || "anual", price: parsed.price || "" };
+          checkoutData = { name: parsed.name || "", plan: parsed.plan || "anual" };
           localStorage.removeItem('aura_checkout');
         } catch (e) {
           console.error('Error parsing checkout data:', e);
@@ -28,24 +27,9 @@ const ThankYou = () => {
     }
 
     setUserData({ name: checkoutData.name, plan: checkoutData.plan });
-
-    // Parse price to number (e.g., "49,90" → 49.90)
-    const priceValue = checkoutData.price ? parseFloat(checkoutData.price.replace('.', '').replace(',', '.')) : undefined;
-
-    // Use Stripe session_id as deterministic event_id for Meta deduplication
-    const sessionId = searchParams.get('session_id');
-    const firedKey = sessionId ? `aura_purchase_fired_${sessionId}` : 'aura_purchase_fired';
-    const alreadyFired = localStorage.getItem(firedKey);
-
-    if (!alreadyFired && sessionId && typeof window !== 'undefined' && (window as any).fbq) {
-      (window as any).fbq('track', 'Purchase', {
-        content_name: 'AURA Subscription',
-        currency: 'BRL',
-        ...(priceValue && { value: priceValue }),
-      }, { eventID: sessionId });
-      localStorage.setItem(firedKey, 'true');
-    }
-  }, [location.state, searchParams]);
+    // Purchase event is sent server-side only (CAPI via stripe-webhook)
+    // to avoid double-counting by Meta
+  }, [location.state]);
 
   const firstName = userData.name?.split(" ")[0] || "você";
 
