@@ -676,35 +676,72 @@ Deno.serve(async (req) => {
     let wasInterrupted = false;
     let interruptedAtIndex = -1;
     let agentData: any = null;
-    let sentAnyResponse = false;
+
+    // Helper: call aura-agent with timeout and optional minimal context
+    async function callAuraAgent(useMinimalContext = false): Promise<any> {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 50000); // 50s timeout
+      try {
+        const body: any = {
+          message: messageText,
+          user_id: profile.user_id,
+          phone: cleanPhone,
+          is_audio_message: isAudioMessage,
+          pending_content: pendingContent,
+          pending_context: pendingContext,
+          last_user_context: lastUserContext,
+        };
+        if (useMinimalContext) {
+          body.minimal_context = true;
+        }
+        const resp = await fetch(`${supabaseUrl}/functions/v1/aura-agent`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseServiceKey}` },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+        if (!resp.ok) {
+          const errorText = await resp.text();
+          throw new Error(`Agent HTTP ${resp.status}: ${errorText}`);
+        }
+        return await resp.json();
+      } catch (err) {
+        clearTimeout(timeoutId);
+        throw err;
+      }
+    }
 
     try {
-    const agentResponse = await fetch(`${supabaseUrl}/functions/v1/aura-agent`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseServiceKey}` },
-      body: JSON.stringify({
-        message: messageText,
-        user_id: profile.user_id,
-        phone: cleanPhone,
-        is_audio_message: isAudioMessage,
-        pending_content: pendingContent,
-        pending_context: pendingContext,
-        last_user_context: lastUserContext,
-      }),
-    });
+    // RETRY STRATEGY: attempt 1 (normal) → attempt 2 (normal) → attempt 3 (minimal context)
+    let lastError: any = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const useMinimal = attempt === 3;
+        console.log(`🔄 aura-agent attempt ${attempt}/3${useMinimal ? ' (minimal_context)' : ''}...`);
+        agentData = await callAuraAgent(useMinimal);
+        lastError = null;
+        break;
+      } catch (err: any) {
+        lastError = err;
+        const isTimeout = err.name === 'AbortError';
+        console.error(`❌ aura-agent attempt ${attempt} failed (${isTimeout ? 'TIMEOUT 50s' : err.message})`);
+        if (attempt < 3) {
+          console.log(`⏳ Waiting 2s before retry...`);
+          await new Promise(r => setTimeout(r, 2000));
+        }
+      }
+    }
+
+    if (lastError || !agentData) {
+      throw lastError || new Error('All 3 aura-agent attempts failed');
+    }
 
     // Clear pending content after passing to agent
     if (pendingContent) {
       await supabase.from('aura_response_state').update({ pending_content: null, pending_context: null }).eq('user_id', profile.user_id);
     }
 
-    if (!agentResponse.ok) {
-      const errorText = await agentResponse.text();
-      console.error('❌ aura-agent error:', errorText);
-      throw new Error(`Agent error: ${errorText}`);
-    }
-
-    agentData = await agentResponse.json();
     console.log('🤖 Agent response:', JSON.stringify(agentData, null, 2));
 
     // ========================================================================
