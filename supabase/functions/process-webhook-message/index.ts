@@ -922,7 +922,15 @@ Deno.serve(async (req) => {
             await sendTextMessage(cleanPhone, retryText, undefined, instanceConfig);
             sentAnyResponse = true;
             try {
-              await supabase.from('messages').insert({ user_id: profile.user_id, role: 'assistant', content: retryText });
+              const { data: retryDedupCheck } = await supabase
+                .from('messages').select('id').eq('user_id', profile.user_id).eq('role', 'assistant')
+                .eq('content', retryText).gte('created_at', new Date(Date.now() - 30000).toISOString())
+                .limit(1).maybeSingle();
+              if (!retryDedupCheck) {
+                await supabase.from('messages').insert({ user_id: profile.user_id, role: 'assistant', content: retryText });
+              } else {
+                console.log('⚠️ Retry dedup: skipped duplicate assistant message');
+              }
             } catch {}
             break; // send at least one message
           }
