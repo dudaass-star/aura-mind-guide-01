@@ -28,3 +28,14 @@
 - Queries reduzidas: 10 msgs, 5 insights críticos, 3 temas, 2 compromissos
 - Skip: insights gerais, sessões completadas, meditações, jornada
 - Log de rastreabilidade adicionado
+
+### 6. try/finally expandido para cobrir todo código pós-lock ✅
+- `try` movido para logo após aquisição do lock (linha 383)
+- `finally` cobre TODO o código entre lock e response
+- Outer catch também libera lock explicitamente
+- Zero chance de lock preso por 60s em erros intermediários
+
+### 7. Dedup no retry guard ✅
+- Verificação de duplicata de 30s antes de inserir mensagem do assistente no retry
+- Mesmo padrão do loop principal de envio
+- Previne histórico poluído em cenários de retry
