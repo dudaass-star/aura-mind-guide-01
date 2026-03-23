@@ -885,9 +885,13 @@ ${lastUserContext.user_emotional_state === 'crisis' ? 'Se houver risco, siga o p
     // Priority 3: Topic shift → reset stagnation (but still allow streak nudge)
     if (lastUserContext.topic_continuity === 'shifted' || lastUserContext.topic_continuity === 'new_topic') {
       console.log(`🔄 Phase evaluator: topic_continuity=${lastUserContext.topic_continuity} → resetting stagnation`);
-      // Don't inject stagnation guidance — let Aura respond naturally to the new topic
-      // But still inject streak nudge if applicable
-      return { guidance: streakNudge, detectedPhase: 'initial', stagnationLevel: 0 };
+      // Inject situational mapping guidance so Aura explores the new topic before interpreting
+      const topicShiftGuidance = `\n\n🔄 MUDANÇA DE TEMA DETECTADA:
+O usuário trouxe um assunto novo. Antes de interpretar ou aprofundar emocionalmente:
+1. Acolha brevemente o que ele trouxe
+2. Pergunte sobre a SITUAÇÃO concreta: "O que tá acontecendo?" / "Me conta mais sobre isso"
+3. Só após entender o contexto, aplique as fases normais`;
+      return { guidance: (streakNudge || '') + topicShiftGuidance, detectedPhase: 'initial', stagnationLevel: 0 };
     }
 
     // Priority 4: Resistance/disengagement → cancel advancement
