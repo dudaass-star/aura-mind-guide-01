@@ -236,7 +236,7 @@ async function getOrCreateGeminiCache(
     .maybeSingle();
 
   if (insertErr) {
-    // Conflict — another instance won the race, fetch their cache
+    // Conflict — another instance won the race, fetch their cache (only if not expired)
     if (insertErr.code === '23505') {
       console.log('📦 Race condition detected, fetching winner cache...');
       const { data: winner } = await supabase
@@ -244,8 +244,26 @@ async function getOrCreateGeminiCache(
         .select('cache_name')
         .eq('model', geminiModel)
         .eq('prompt_hash', promptHash)
+        .gt('expires_at', new Date().toISOString())
         .maybeSingle();
-      return winner?.cache_name || cacheName;
+      
+      if (winner?.cache_name) {
+        return winner.cache_name;
+      }
+      
+      // Winner is expired — delete stale row and upsert our fresh cache
+      console.log('📦 Winner cache expired, cleaning up and using our fresh cache');
+      await supabase
+        .from('gemini_cache')
+        .delete()
+        .eq('model', geminiModel)
+        .eq('prompt_hash', promptHash);
+      
+      await supabase
+        .from('gemini_cache')
+        .insert({ model: geminiModel, cache_name: cacheName, prompt_hash: promptHash, expires_at: expiresAt });
+      
+      return cacheName;
     }
     console.warn('⚠️ Cache insert error:', insertErr.message);
   }
@@ -386,6 +404,59 @@ async function callAI(
 
     if (!response.ok) {
       const errorText = await response.text();
+      
+      // Fallback: if cache-related 403, retry WITHOUT cache using inline system_instruction
+      if (response.status === 403 && cacheName && errorText.includes('CachedContent')) {
+        console.warn('⚠️ Cache 403 detected, retrying WITHOUT cache (inline fallback)...');
+        
+        // Invalidate the stale cache entry
+        if (supabaseClient) {
+          await supabaseClient.from('gemini_cache').delete().eq('cache_name', cacheName);
+        }
+        
+        // Rebuild body without cachedContent, using system_instruction instead
+        delete geminiBody.cachedContent;
+        const fallbackPrompt = cacheableSystemPrompt
+          ? [staticPrompt, ...dynamicSystemParts].join('\n\n')
+          : fullSystemPrompt;
+        geminiBody.system_instruction = { parts: [{ text: fallbackPrompt }] };
+        // Remove dynamic context pair if it was added
+        if (dynamicSystemParts.length > 0 && geminiBody.contents.length >= 2) {
+          const first = geminiBody.contents[0];
+          if (first?.parts?.[0]?.text?.startsWith('[CONTEXTO ATUAL')) {
+            geminiBody.contents.splice(0, 2);
+          }
+        }
+        
+        const retryResponse = await fetch(url, {
+          method: 'POST',
+          headers: { 'x-goog-api-key': GEMINI_API_KEY, 'Content-Type': 'application/json' },
+          body: JSON.stringify(geminiBody),
+        });
+        
+        if (!retryResponse.ok) {
+          const retryErr = await retryResponse.text();
+          throw Object.assign(new Error(`Gemini API error (retry): ${retryResponse.status}`), { status: retryResponse.status, body: retryErr });
+        }
+        
+        // Use retry response going forward
+        const retryResult = await retryResponse.json();
+        const retryCandidate = retryResult.candidates?.[0];
+        const retryText = retryCandidate?.content?.parts?.map((p: any) => p.text).join('') ?? '';
+        const retryUsage = retryResult.usageMetadata || {};
+        console.log('✅ Gemini inline fallback success, prompt:', retryUsage.promptTokenCount, 'completion:', retryUsage.candidatesTokenCount);
+        
+        return {
+          choices: [{ message: { role: 'assistant', content: retryText }, finish_reason: retryCandidate?.finishReason === 'STOP' ? 'stop' : (retryCandidate?.finishReason || 'stop') }],
+          usage: {
+            prompt_tokens: retryUsage.promptTokenCount || 0,
+            completion_tokens: retryUsage.candidatesTokenCount || 0,
+            total_tokens: retryUsage.totalTokenCount || 0,
+            prompt_tokens_details: { cached_tokens: 0 },
+          },
+        };
+      }
+      
       throw Object.assign(new Error(`Gemini API error: ${response.status}`), { status: response.status, body: errorText });
     }
 
