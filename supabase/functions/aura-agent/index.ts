@@ -952,7 +952,7 @@ ou simplesmente validar o silêncio/resistência como legítimo.`
   if (sessionActive && sessionPhase && sessionElapsedMin !== undefined) {
     // Time says reframe+ but content is still exploration
     if (['reframe', 'development', 'transition'].includes(sessionPhase)) {
-      if (detectedPhase === 'presenca' && presencaScore > sentidoScore * 2) {
+      if (detectedPhase === 'presenca' && (!lastUserContext?.aura_phase ? presencaScore > sentidoScore * 2 : true)) {
         return {
           detectedPhase: 'presenca',
           stagnationLevel: 2,
