@@ -1,56 +1,49 @@
 
 
-# Plano: Conversão de trials antigos + bloqueio
+# Fix: Trials legítimos de hoje foram bloqueados pela migração
 
-## Contexto
+## Problema
 
-Existem ~15 usuários com `status = 'trial'` do modelo antigo (sem cartão). Alguns com 100+ mensagens trocadas, outros nunca responderam. O sistema **não tem nenhum mecanismo** para bloquear conversa de trial — o `process-webhook-message` e `aura-agent` processam qualquer usuário independente do status.
+A migração `UPDATE profiles SET status = 'trial_expired' WHERE status = 'trial'` não distinguiu entre trials antigos (sem plano/cartão) e trials novos (via Stripe, com plano). Resultado:
 
-## Solução em 3 partes
+- **Tania Benites** (plano essencial, criada 16:51 hoje) → `trial_expired` ❌
+- **Tatiana Santana** (plano direção, criada 00:20 hoje) → `trial_expired` ❌
 
-### 1. Criar status `trial_expired` e lógica de bloqueio no `process-webhook-message`
+Ambas pagaram via Stripe e estão com `plan` preenchido. São clientes legítimas bloqueadas por engano.
 
-No início do processamento (após identificar o perfil), verificar se `status = 'trial_expired'`. Se sim:
-- Responder com mensagem fixa de conversão (link para checkout)
-- **Não** chamar o `aura-agent`
-- Salvar a mensagem do usuário normalmente (para histórico)
+## Solução
 
-Mensagem de bloqueio (quando tentarem falar):
-> "Oi, [nome]! 💜 Seu período de experiência terminou, mas não precisa ser um adeus. Pra continuar conversando comigo, é só escolher o plano que faz sentido pra você: https://olaaura.com.br/checkout"
+### 1. Corrigir status das duas usuárias (migração SQL)
 
-### 2. Enviar mensagem de alta conversão para todos os trials ativos
-
-Via `admin-send-message`, enviar mensagem personalizada para cada trial que teve engajamento real (>5 mensagens). Mensagem sugerida:
-
-> "[Nome], nos últimos dias conversamos sobre muita coisa importante. 💜
->
-> Pra continuar tendo esse espaço comigo — com sessões guiadas, meditações personalizadas e acompanhamento contínuo — escolhe o plano que faz sentido pra você:
->
-> https://olaaura.com.br/checkout
->
-> Tô aqui te esperando. ✨"
-
-### 3. Atualizar status de todos os trials para `trial_expired`
-
-Após enviar as mensagens, atualizar o status via query:
 ```sql
-UPDATE profiles SET status = 'trial_expired' WHERE status = 'trial';
+UPDATE profiles SET status = 'trial' 
+WHERE plan IS NOT NULL 
+  AND status = 'trial_expired'
+  AND created_at >= '2026-03-23T00:00:00Z';
 ```
 
-## Detalhes técnicos
+### 2. Corrigir a lógica de bloqueio no `process-webhook-message`
 
-**Arquivo modificado**: `supabase/functions/process-webhook-message/index.ts`
-- Adicionar check logo após buscar o perfil (~linha 200-250)
-- Se `status === 'trial_expired'`: enviar mensagem fixa, salvar no histórico, retornar sem processar
+Adicionar verificação: se `status = 'trial_expired'` **E** `plan IS NOT NULL`, tratar como trial válido (não bloquear). Ou melhor: a lógica de expiração futura deve checar `plan IS NULL` antes de expirar.
 
-**Migração SQL**: Nenhuma mudança de schema necessária — `status` é campo texto livre
+Alterar o check de bloqueio:
+```
+// Antes: blockedStatuses = ['trial_expired', ...]
+// Depois: só bloquear trial_expired se plan IS NULL
+if (profile.status === 'trial_expired' && profile.plan) {
+  // Trial legítimo via Stripe — não bloquear, restaurar status
+}
+```
 
-**Usuários sem engajamento** (0-2 msgs, nunca responderam): atualizar para `trial_expired` silenciosamente, sem enviar mensagem
+### 3. Ajustar o funil de conversão no dashboard
 
-## Resumo de ações
+Incluir `trial_expired` (sem plano) na query para não perder visibilidade dos trials antigos expirados. Mas o filtro principal `.not('plan', 'is', null)` já garante que só trials via Stripe aparecem no funil.
 
-| Grupo | Quantidade | Ação |
-|-------|-----------|------|
-| Trials engajados (>5 msgs) | ~10 | Mensagem de conversão + bloquear |
-| Trials sem engajamento (≤5 msgs) | ~5 | Bloquear silenciosamente |
+## Resumo
+
+| Ação | Detalhe |
+|------|---------|
+| Restaurar Tania e Tatiana | `status = 'trial'` via migração |
+| Proteger futuros trials com plano | Check no `process-webhook-message` |
+| Dashboard já funciona | Filtro `plan IS NOT NULL` estava correto, problema era o status |
 
