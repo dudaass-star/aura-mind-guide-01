@@ -3387,9 +3387,12 @@ serve(async (req) => {
       console.warn('Failed to read AI model config, using default:', e);
     }
 
-    const { message, user_id, phone, pending_content, pending_context, last_user_context } = await req.json();
+    const { message, user_id, phone, pending_content, pending_context, last_user_context, minimal_context } = await req.json();
 
-    console.log("AURA received:", { user_id, phone, message: message?.substring(0, 50), hasPendingContent: !!pending_content });
+    if (minimal_context) {
+      console.log('📉 minimal_context mode: reduced history and skipped analysis');
+    }
+    console.log("AURA received:", { user_id, phone, message: message?.substring(0, 50), hasPendingContent: !!pending_content, minimal_context: !!minimal_context });
 
     // Buscar perfil do usuário
     let profile = null;
