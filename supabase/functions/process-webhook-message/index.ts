@@ -992,6 +992,16 @@ Deno.serve(async (req) => {
   } catch (error: unknown) {
     console.error('❌ Worker processing error:', error);
 
+    // Release lock in outer catch (covers errors between lock acquisition and inner try)
+    try {
+      await supabase.from('aura_response_state')
+        .update({ is_responding: false })
+        .eq('user_id', profile?.user_id)
+        .eq('is_responding', true);
+    } catch (lockErr) {
+      console.error('⚠️ Failed to release lock in outer catch:', lockErr);
+    }
+
     // NO FALLBACK MESSAGE — conversation-followup CRON will handle naturally
     if (!sentAnyResponse) {
       console.error(`🚨 CRITICAL: User got NO response at all. conversation-followup will detect and re-engage naturally.`);
