@@ -992,16 +992,25 @@ Deno.serve(async (req) => {
     });
 
   } catch (error: unknown) {
-    console.error('❌ Worker processing error:', error);
+    console.error('❌ Worker processing error:', {
+      message: error instanceof Error ? error.message : String(error),
+      name: error instanceof Error ? error.name : 'unknown',
+      stack: error instanceof Error ? error.stack?.slice(0, 500) : undefined,
+      phone: contingencyPhone,
+      hasProfile: !!profile,
+      hasSupabase: !!supabase,
+    });
 
     // Release lock in outer catch (covers errors between lock acquisition and inner try)
-    try {
-      await supabase.from('aura_response_state')
-        .update({ is_responding: false })
-        .eq('user_id', profile?.user_id)
-        .eq('is_responding', true);
-    } catch (lockErr) {
-      console.error('⚠️ Failed to release lock in outer catch:', lockErr);
+    if (supabase && profile?.user_id) {
+      try {
+        await supabase.from('aura_response_state')
+          .update({ is_responding: false })
+          .eq('user_id', profile.user_id)
+          .eq('is_responding', true);
+      } catch (lockErr) {
+        console.error('⚠️ Failed to release lock in outer catch:', lockErr);
+      }
     }
 
     // NO FALLBACK MESSAGE — conversation-followup CRON will handle naturally
