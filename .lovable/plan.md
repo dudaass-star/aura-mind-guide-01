@@ -1,41 +1,24 @@
 
-# Garantir Resposta da Aura — Implementado ✅
 
-## Correções Aplicadas
+# Fix: Meta contabilizando Purchase 2x
 
-### 1. Timeout + 3 Retries no aura-agent ✅
-- `AbortController` com 50s de timeout em cada chamada
-- 3 tentativas: normal → normal → minimal_context
-- 2s de espera entre retries
-- Se todas falharem: erro propagado para catch (sem fallback)
+## Problema
+Dois sinais de Purchase idênticos sendo enviados:
+1. **Browser** (ThankYou.tsx L41): `fbq('track', 'Purchase')` com `eventID: session_id`
+2. **Servidor** (stripe-webhook L287): CAPI `Purchase` com `event_id: session.id`
 
-### 2. Guard contra mensagens vazias ✅
-- Após o loop de envio, se `!sentAnyResponse && !wasInterrupted`: retry com `minimal_context: true`
-- Envia pelo menos 1 mensagem do retry
-- Se retry também vazio: loga CRITICAL, conversation-followup CRON cuida
+Ambos usam o mesmo `event_id`, mas Meta não deduplica corretamente (diferença nos dados de usuário entre browser e servidor).
 
-### 3. Mensagem de contingência removida ✅
-- Removido "Tive um probleminha técnico" do catch
-- Sem mensagens genéricas — conversation-followup faz follow-up natural
+## Solução: Remover Purchase do browser, manter apenas CAPI
 
-### 4. Persistência pré-lock ✅
-- Mensagem do usuário salva ANTES de abortar no debounce
-- Worker vencedor acumula todas as mensagens via query de acumulação
-- Zero mensagens perdidas em cenário de concorrência
+### Arquivo: `src/pages/ThankYou.tsx`
+- Remover linhas 32-47 (todo o bloco do `fbq('track', 'Purchase', ...)`)
+- Manter o resto do `useEffect` (parsing de nome/plano para exibição)
 
-### 5. `minimal_context` tratado no aura-agent ✅
-- Campo extraído do request body
-- Queries reduzidas: 10 msgs, 5 insights críticos, 3 temas, 2 compromissos
-- Skip: insights gerais, sessões completadas, meditações, jornada
-- Log de rastreabilidade adicionado
+O CAPI no `stripe-webhook` já dispara o Purchase no `checkout.session.completed` — mesmo durante trial, com valor R$0 ou o valor correto. Isso garante 1 único evento por checkout.
 
-### 6. try/finally expandido para cobrir todo código pós-lock ✅
-- `try` movido para logo após aquisição do lock (linha 383)
-- `finally` cobre TODO o código entre lock e response
-- Outer catch também libera lock explicitamente
-- Zero chance de lock preso por 60s em erros intermediários
+### Nenhuma mudança no stripe-webhook
+O evento CAPI já está correto e já dispara no momento do checkout (trial ou não).
 
-### 7. Dedup no retry guard ✅
-- Verificação de duplicata de 30s antes de inserir mensagem do assistente no retry
-- Mesmo padrão do loop principal de envio
-- Previne histórico poluído em cenários de retry
+**Resultado**: 1 Purchase por checkout, via CAPI server-side, sem duplicação.
+
