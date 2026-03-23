@@ -912,6 +912,10 @@ ou simplesmente validar o silêncio/resistência como legítimo.`
 
   // Use semantic aura_phase from micro-agent when available (preferred over keyword detection)
   let detectedPhase = 'presenca';
+  let presencaScore = 0;
+  let sentidoScore = 0;
+  let movimentoScore = 0;
+  
   if (lastUserContext?.aura_phase) {
     detectedPhase = lastUserContext.aura_phase;
     console.log(`🔄 Phase evaluator: using semantic aura_phase="${detectedPhase}" from micro-agent`);
@@ -922,9 +926,9 @@ ou simplesmente validar o silêncio/resistência como legítimo.`
         sum + keywords.filter(kw => msg.includes(kw)).length, 0
       );
     }
-    const presencaScore = countIndicators(recentAssistant, PHASE_INDICATORS.presenca);
-    const sentidoScore = countIndicators(recentAssistant, PHASE_INDICATORS.sentido);
-    const movimentoScore = countIndicators(recentAssistant, PHASE_INDICATORS.movimento);
+    presencaScore = countIndicators(recentAssistant, PHASE_INDICATORS.presenca);
+    sentidoScore = countIndicators(recentAssistant, PHASE_INDICATORS.sentido);
+    movimentoScore = countIndicators(recentAssistant, PHASE_INDICATORS.movimento);
     if (movimentoScore > sentidoScore && movimentoScore > presencaScore) {
       detectedPhase = 'movimento';
     } else if (sentidoScore > presencaScore) {
@@ -948,7 +952,7 @@ ou simplesmente validar o silêncio/resistência como legítimo.`
   if (sessionActive && sessionPhase && sessionElapsedMin !== undefined) {
     // Time says reframe+ but content is still exploration
     if (['reframe', 'development', 'transition'].includes(sessionPhase)) {
-      if (detectedPhase === 'presenca' && presencaScore > sentidoScore * 2) {
+      if (detectedPhase === 'presenca' && (!lastUserContext?.aura_phase ? presencaScore > sentidoScore * 2 : true)) {
         return {
           detectedPhase: 'presenca',
           stagnationLevel: 2,
@@ -1019,13 +1023,16 @@ ${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}`
   }
 
   // ======== FREE CONVERSATION (Modo Profundo) ========
-  const hasEmotionalDepth = recentAssistant.some(msg => 
-    PHASE_INDICATORS.presenca.some(kw => msg.includes(kw)) ||
-    PHASE_INDICATORS.sentido.some(kw => msg.includes(kw))
-  );
+  // Skip keyword depth check if micro-agent already provided semantic phase
+  if (!lastUserContext?.aura_phase) {
+    const hasEmotionalDepth = recentAssistant.some(msg => 
+      PHASE_INDICATORS.presenca.some(kw => msg.includes(kw)) ||
+      PHASE_INDICATORS.sentido.some(kw => msg.includes(kw))
+    );
 
-  if (!hasEmotionalDepth) {
-    return { guidance: null, detectedPhase: 'ping-pong', stagnationLevel: 0 };
+    if (!hasEmotionalDepth) {
+      return { guidance: null, detectedPhase: 'ping-pong', stagnationLevel: 0 };
+    }
   }
 
   // Stuck in Presença after 5+ exchanges
