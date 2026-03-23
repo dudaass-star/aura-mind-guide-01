@@ -485,6 +485,23 @@ export default function AdminMessages() {
                       </div>
                     ) : (
                       <div className="space-y-2">
+                        {hasMore && (
+                          <div className="flex justify-center py-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={loadOlderMessages}
+                              disabled={loadingOlder}
+                              className="text-xs text-muted-foreground"
+                            >
+                              {loadingOlder ? (
+                                <><Loader2 className="h-3 w-3 animate-spin mr-1" /> Carregando...</>
+                              ) : (
+                                '⬆ Carregar anteriores'
+                              )}
+                            </Button>
+                          </div>
+                        )}
                         {messages.map(msg => {
                           const isAutoMessage = msg.role === 'assistant' && isAutomatedMessage(msg.content);
                           return (
