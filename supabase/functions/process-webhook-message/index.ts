@@ -256,7 +256,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const profile = profileResults?.[0];
+    profile = profileResults?.[0];
     if (!profile) {
       console.log('⚠️ User not found for phone variations:', phoneVariations.join(', '));
       return new Response(JSON.stringify({ status: 'user_not_found' }), {
