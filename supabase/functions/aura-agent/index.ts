@@ -1023,13 +1023,16 @@ ${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}`
   }
 
   // ======== FREE CONVERSATION (Modo Profundo) ========
-  const hasEmotionalDepth = recentAssistant.some(msg => 
-    PHASE_INDICATORS.presenca.some(kw => msg.includes(kw)) ||
-    PHASE_INDICATORS.sentido.some(kw => msg.includes(kw))
-  );
+  // Skip keyword depth check if micro-agent already provided semantic phase
+  if (!lastUserContext?.aura_phase) {
+    const hasEmotionalDepth = recentAssistant.some(msg => 
+      PHASE_INDICATORS.presenca.some(kw => msg.includes(kw)) ||
+      PHASE_INDICATORS.sentido.some(kw => msg.includes(kw))
+    );
 
-  if (!hasEmotionalDepth) {
-    return { guidance: null, detectedPhase: 'ping-pong', stagnationLevel: 0 };
+    if (!hasEmotionalDepth) {
+      return { guidance: null, detectedPhase: 'ping-pong', stagnationLevel: 0 };
+    }
   }
 
   // Stuck in Presença after 5+ exchanges
