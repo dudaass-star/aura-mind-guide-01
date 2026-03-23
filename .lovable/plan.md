@@ -1,33 +1,47 @@
 
 
-# Diagnóstico: Aura sem resposta para Tania (e potencialmente outros)
+# Análise: O plano resolve o problema?
 
-## Causa Raiz
+## Veredicto: PARCIALMENTE. O plano tem o diagnóstico certo mas incompleto.
 
-As funções `aura-agent` e `process-webhook-message` deployadas estão **desatualizadas** em relação ao código fonte atual. Os erros nos logs confirmam isso:
+## Bug 1 — Escopo do `wasInterrupted` (CONFIRMADO no código fonte)
 
-1. **aura-agent**: `ReferenceError: recentUser is not defined` na função `evaluateTherapeuticPhase` - essa função nem existe mais no código fonte atual. O deploy está com versão antiga.
+O plano está **correto** sobre isso. Verifiquei a estrutura real:
 
-2. **process-webhook-message**: `ReferenceError: wasInterrupted is not defined` - o código fonte atual já declara essa variável (linha 691), mas a versão deployada não tem.
+```text
+Linha 204:  try {                          ← outer try
+Linha 385:    try {                        ← inner try (após lock)
+Linha 691:      let wasInterrupted = false  ← declarado AQUI
+Linha 972:    } finally { ... }            ← inner finally
+Linha 983:    }                            ← fecha inner try/finally
+Linha 986:    return { wasInterrupted }     ← FORA do inner try → ReferenceError!
+Linha 994:  } catch { ... }                ← outer catch
+```
 
-3. **aura-agent** (não-bloqueante): `supabase.from(...).insert(...).catch is not a function` - também código antigo.
+`wasInterrupted` é declarado na linha 691 (dentro do inner try) mas usado na linha 986 (fora do inner try, após o `finally`). Como `let` tem escopo de bloco, isso causa `ReferenceError`. O fix proposto (mover para linha ~200) é correto.
 
-## Impacto
+## Bug 2 — `.catch()` no aura-agent (JÁ CORRIGIDO no fonte)
 
-- A Tania mandou 3 mensagens e **nenhuma foi respondida** na última ("Meu nome é Tânia..."). O aura-agent retornou HTTP 500 três vezes seguidas.
-- Qualquer outro usuário que acionar o `evaluateTherapeuticPhase` também vai ficar sem resposta.
+O plano menciona corrigir `.catch()` no aura-agent, mas **o código fonte atual já não tem `.catch()`**. O erro nos logs vem do deploy desatualizado. Esse item do plano é desnecessário.
 
-## Solução
+## O que o plano NÃO resolve — o problema real da Tania
 
-### 1. Redeployar ambas as funções
-Redeployar `aura-agent` e `process-webhook-message` com o código fonte atual. Não é necessário alterar código — o código fonte já tem os fixes, apenas o deploy está desatualizado.
+A Tania não recebeu resposta porque o `aura-agent` **deployado** ainda tem código antigo (com `evaluateTherapeuticPhase` e `recentUser`). O fix de escopo não resolve isso — é necessário que o **redeploy realmente funcione**.
 
-### 2. Enviar mensagem de recuperação para Tania
-Após o redeploy, enviar uma mensagem manual via `admin-send-message` para Tania (phone: `556699116369`, user_id: `756e41cb-1503-4736-bd7f-fa6ca5c44a06`) retomando a conversa naturalmente.
+O redeploy anterior aparentemente **não pegou**. Possíveis causas:
+- `deno.lock` incompatível bloqueando o deploy
+- O arquivo de 6144 linhas pode exceder limites de compilação
+- Cache do edge-runtime servindo versão antiga
 
-## Detalhes Técnicos
+## Plano corrigido necessário
 
-- `aura-agent/index.ts`: 6144 linhas, código fonte correto (sem `evaluateTherapeuticPhase`, sem `recentUser`)
-- `process-webhook-message/index.ts`: 1028 linhas, `wasInterrupted` declarado na linha 691
-- Deploy via ferramenta `supabase--deploy_edge_functions`
+1. **Fix escopo** — mover `wasInterrupted`, `interruptedAtIndex`, `agentData` para antes da linha 385 (junto com `sentAnyResponse` na linha 200). Isso é necessário e correto.
+
+2. **Remover item `.catch()`** — já está corrigido no fonte, não precisa de mudança.
+
+3. **Investigar falha de deploy** — verificar se existe `deno.lock` no projeto que possa bloquear o deploy. Deletar se existir. Tentar redeploy de `aura-agent` e `process-webhook-message` e verificar nos logs se o código novo está realmente rodando (ex: procurar por logs que só existem no código novo).
+
+4. **Validação pós-deploy** — após redeploy, enviar mensagem teste e verificar nos logs se `evaluateTherapeuticPhase` NÃO aparece mais.
+
+5. **Mensagem de recuperação para Tania** — após confirmar que o deploy funcionou.
 
