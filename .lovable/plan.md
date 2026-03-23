@@ -1,45 +1,33 @@
 
 
-# Correção: Relatório semanal escalável (batch processing)
+# Diagnóstico: Aura sem resposta para Tania (e potencialmente outros)
 
-## Problema
+## Causa Raiz
 
-A função `weekly-report` processa TODOS os usuários em uma única execução. Com o anti-burst delay de 25-45s por envio, 18 usuários já causaram timeout (~150s limite). Com 250 usuários por instância (e múltiplas instâncias), isso é inviável.
+As funções `aura-agent` e `process-webhook-message` deployadas estão **desatualizadas** em relação ao código fonte atual. Os erros nos logs confirmam isso:
 
-## Solução: Processamento em lotes (batch)
+1. **aura-agent**: `ReferenceError: recentUser is not defined` na função `evaluateTherapeuticPhase` - essa função nem existe mais no código fonte atual. O deploy está com versão antiga.
 
-Em vez de processar todos os usuários de uma vez, a função aceita parâmetros `batch_size` e `offset`, processando apenas um lote por invocação. Um cron job dispara a função várias vezes, ou a própria função se re-invoca para o próximo lote.
+2. **process-webhook-message**: `ReferenceError: wasInterrupted is not defined` - o código fonte atual já declara essa variável (linha 691), mas a versão deployada não tem.
 
-### Arquitetura
+3. **aura-agent** (não-bloqueante): `supabase.from(...).insert(...).catch is not a function` - também código antigo.
 
-```text
-Cron (19h domingo)
-  └─> weekly-report (offset=0, batch_size=10)
-        ├─ Processa usuários 0-9
-        ├─ Envia relatórios (delay 3s entre cada)
-        └─ Se há mais usuários → chama a si mesma (offset=10)
-              ├─ Processa usuários 10-19
-              └─ Se há mais → chama a si mesma (offset=20)
-                    └─ ... até acabar
-```
+## Impacto
 
-### Detalhes técnicos
+- A Tania mandou 3 mensagens e **nenhuma foi respondida** na última ("Meu nome é Tânia..."). O aura-agent retornou HTTP 500 três vezes seguidas.
+- Qualquer outro usuário que acionar o `evaluateTherapeuticPhase` também vai ficar sem resposta.
 
-**Arquivo**: `supabase/functions/weekly-report/index.ts`
+## Solução
 
-1. **Novos parâmetros no body**: `batch_size` (default 10), `offset` (default 0)
-2. **Query paginada**: `.range(offset, offset + batchSize - 1).order('created_at')`
-3. **Anti-burst reduzido**: 3 segundos entre envios (suficiente para não sobrecarregar Z-API, mas rápido para caber no timeout)
-4. **Auto-invocação**: Se ainda há usuários restantes, a função faz um `fetch()` para si mesma com `offset + batchSize`, disparando o próximo lote
-5. **Tracking**: Registrar na tabela `weekly_plans` quem já recebeu para evitar duplicatas em caso de re-execução
+### 1. Redeployar ambas as funções
+Redeployar `aura-agent` e `process-webhook-message` com o código fonte atual. Não é necessário alterar código — o código fonte já tem os fixes, apenas o deploy está desatualizado.
 
-### Capacidade estimada
+### 2. Enviar mensagem de recuperação para Tania
+Após o redeploy, enviar uma mensagem manual via `admin-send-message` para Tania (phone: `556699116369`, user_id: `756e41cb-1503-4736-bd7f-fa6ca5c44a06`) retomando a conversa naturalmente.
 
-- 10 usuários por lote × ~3s delay = ~30s de envio + ~5s AI analysis = ~50s por lote (bem dentro do timeout de 150s)
-- 250 usuários = 25 lotes encadeados, processados sequencialmente
-- Múltiplas instâncias com 250 cada = escala linearmente
+## Detalhes Técnicos
 
-### Ação imediata
-
-Depois de implementar o fix, reenviar os relatórios para os ~11 usuários que não receberam no domingo.
+- `aura-agent/index.ts`: 6144 linhas, código fonte correto (sem `evaluateTherapeuticPhase`, sem `recentUser`)
+- `process-webhook-message/index.ts`: 1028 linhas, `wasInterrupted` declarado na linha 691
+- Deploy via ferramenta `supabase--deploy_edge_functions`
 
