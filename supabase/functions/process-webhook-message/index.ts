@@ -194,9 +194,10 @@ Deno.serve(async (req) => {
     });
   }
 
-  // Track phone for contingency message
+  // Track phone for contingency — no longer sends fallback messages
   let contingencyPhone: string | null = null;
   let contingencyInstanceConfig: ZapiConfig | undefined = undefined;
+  let sentAnyResponse = false;
 
   try {
     const workerPayload = await req.json();
