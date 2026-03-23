@@ -52,6 +52,8 @@ export default function AdminMessages() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [selectedUser, setSelectedUser] = useState<UserWithMessages | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sendingMessage, setSendingMessage] = useState(false);
