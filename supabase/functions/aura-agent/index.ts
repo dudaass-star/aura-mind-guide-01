@@ -1026,6 +1026,13 @@ ${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}`
   }
 
   // ======== FREE CONVERSATION (Modo Profundo) ========
+
+  // New user without context: skip stagnation detection to allow situational mapping
+  if ((totalMessageCount ?? Infinity) < 15 && (insightsCount ?? Infinity) === 0) {
+    console.log(`🆕 Phase evaluator: new user (msgs=${totalMessageCount}, insights=${insightsCount}) — skipping free conversation phase evaluation`);
+    return { guidance: null, detectedPhase: 'initial', stagnationLevel: 0 };
+  }
+
   // Skip keyword depth check if micro-agent already provided semantic phase
   if (!lastUserContext?.aura_phase) {
     const hasEmotionalDepth = recentAssistant.some(msg => 
