@@ -574,6 +574,7 @@ interface ExtractedActions {
   user_emotional_state?: 'stable' | 'vulnerable' | 'crisis' | 'resistant';
   topic_continuity?: 'same_topic' | 'shifted' | 'new_topic';
   engagement_level?: 'engaged' | 'short_answers' | 'disengaged';
+  aura_phase?: 'presenca' | 'sentido' | 'movimento';
 }
 
 interface UserContextState {
