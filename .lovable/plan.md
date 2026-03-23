@@ -1,47 +1,32 @@
 
 
-# Análise: O plano resolve o problema?
+# Fix: Mensagens truncadas na tela de admin
 
-## Veredicto: PARCIALMENTE. O plano tem o diagnóstico certo mas incompleto.
+## Problema
 
-## Bug 1 — Escopo do `wasInterrupted` (CONFIRMADO no código fonte)
+A query de conversas no `admin-messages` tem `.limit(500)`. A Juliane tem 324 msgs só neste mês — o total histórico certamente ultrapassa 500, então as mensagens mais recentes ficam cortadas.
 
-O plano está **correto** sobre isso. Verifiquei a estrutura real:
+## Solução
 
-```text
-Linha 204:  try {                          ← outer try
-Linha 385:    try {                        ← inner try (após lock)
-Linha 691:      let wasInterrupted = false  ← declarado AQUI
-Linha 972:    } finally { ... }            ← inner finally
-Linha 983:    }                            ← fecha inner try/finally
-Linha 986:    return { wasInterrupted }     ← FORA do inner try → ReferenceError!
-Linha 994:  } catch { ... }                ← outer catch
-```
+Duas mudanças complementares:
 
-`wasInterrupted` é declarado na linha 691 (dentro do inner try) mas usado na linha 986 (fora do inner try, após o `finally`). Como `let` tem escopo de bloco, isso causa `ReferenceError`. O fix proposto (mover para linha ~200) é correto.
+### 1. Carregar apenas mensagens recentes + paginação para trás
 
-## Bug 2 — `.catch()` no aura-agent (JÁ CORRIGIDO no fonte)
+Em vez de tentar carregar TODAS as mensagens (que vai piorar com o tempo), carregar as **últimas 200** por padrão e adicionar um botão "Carregar anteriores" no topo.
 
-O plano menciona corrigir `.catch()` no aura-agent, mas **o código fonte atual já não tem `.catch()`**. O erro nos logs vem do deploy desatualizado. Esse item do plano é desnecessário.
+**Arquivo**: `supabase/functions/admin-messages/index.ts`
+- Aceitar parâmetros `before` (timestamp) e `limit` (default 200)
+- Query: `.lt('created_at', before)` quando fornecido, `.order('created_at', { ascending: false }).limit(200)` e reverter a ordem no retorno
+- Retornar flag `has_more` para o frontend saber se há mais mensagens
 
-## O que o plano NÃO resolve — o problema real da Tania
+**Arquivo**: `src/pages/AdminMessages.tsx`
+- Adicionar botão "Carregar anteriores" no topo da lista de mensagens
+- Ao clicar, fazer fetch com `before=` timestamp da mensagem mais antiga atual
+- Preservar posição de scroll ao inserir mensagens anteriores
 
-A Tania não recebeu resposta porque o `aura-agent` **deployado** ainda tem código antigo (com `evaluateTherapeuticPhase` e `recentUser`). O fix de escopo não resolve isso — é necessário que o **redeploy realmente funcione**.
+### 2. Detalhes técnicos
 
-O redeploy anterior aparentemente **não pegou**. Possíveis causas:
-- `deno.lock` incompatível bloqueando o deploy
-- O arquivo de 6144 linhas pode exceder limites de compilação
-- Cache do edge-runtime servindo versão antiga
-
-## Plano corrigido necessário
-
-1. **Fix escopo** — mover `wasInterrupted`, `interruptedAtIndex`, `agentData` para antes da linha 385 (junto com `sentAnyResponse` na linha 200). Isso é necessário e correto.
-
-2. **Remover item `.catch()`** — já está corrigido no fonte, não precisa de mudança.
-
-3. **Investigar falha de deploy** — verificar se existe `deno.lock` no projeto que possa bloquear o deploy. Deletar se existir. Tentar redeploy de `aura-agent` e `process-webhook-message` e verificar nos logs se o código novo está realmente rodando (ex: procurar por logs que só existem no código novo).
-
-4. **Validação pós-deploy** — após redeploy, enviar mensagem teste e verificar nos logs se `evaluateTherapeuticPhase` NÃO aparece mais.
-
-5. **Mensagem de recuperação para Tania** — após confirmar que o deploy funcionou.
+- A query inicial carrega as 200 mensagens mais recentes (suficiente para contexto imediato)
+- Cada clique em "Carregar anteriores" busca mais 200
+- Sem limite máximo — o admin pode navegar todo o histórico
 
