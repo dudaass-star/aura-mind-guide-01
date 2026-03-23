@@ -236,7 +236,7 @@ async function getOrCreateGeminiCache(
     .maybeSingle();
 
   if (insertErr) {
-    // Conflict — another instance won the race, fetch their cache
+    // Conflict — another instance won the race, fetch their cache (only if not expired)
     if (insertErr.code === '23505') {
       console.log('📦 Race condition detected, fetching winner cache...');
       const { data: winner } = await supabase
@@ -244,8 +244,26 @@ async function getOrCreateGeminiCache(
         .select('cache_name')
         .eq('model', geminiModel)
         .eq('prompt_hash', promptHash)
+        .gt('expires_at', new Date().toISOString())
         .maybeSingle();
-      return winner?.cache_name || cacheName;
+      
+      if (winner?.cache_name) {
+        return winner.cache_name;
+      }
+      
+      // Winner is expired — delete stale row and upsert our fresh cache
+      console.log('📦 Winner cache expired, cleaning up and using our fresh cache');
+      await supabase
+        .from('gemini_cache')
+        .delete()
+        .eq('model', geminiModel)
+        .eq('prompt_hash', promptHash);
+      
+      await supabase
+        .from('gemini_cache')
+        .insert({ model: geminiModel, cache_name: cacheName, prompt_hash: promptHash, expires_at: expiresAt });
+      
+      return cacheName;
     }
     console.warn('⚠️ Cache insert error:', insertErr.message);
   }
