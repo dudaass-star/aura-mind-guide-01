@@ -6,7 +6,6 @@ import { useEffect, useState } from "react";
 const ThankYou = () => {
   const location = useLocation();
   const [userData, setUserData] = useState({ name: "", plan: "anual" });
-  const [userData, setUserData] = useState({ name: "", plan: "anual" });
 
   useEffect(() => {
     // Try to get data from location state first, then localStorage
