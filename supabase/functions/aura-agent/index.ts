@@ -747,7 +747,7 @@ Apenas o JSON, sem markdown.`;
         completion_tokens: usage.candidatesTokenCount || 0,
         total_tokens: usage.totalTokenCount || 0,
         cached_tokens: 0,
-      }).catch((e: any) => console.error('Token log error:', e));
+      }).then(null, (e: any) => console.error('Token log error:', e));
     }
 
     const parsed = JSON.parse(text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
@@ -1510,7 +1510,7 @@ Use a função extract_analysis para retornar os dados.`;
         completion_tokens: usage.candidatesTokenCount || 0,
         total_tokens: usage.totalTokenCount || 0,
         cached_tokens: 0,
-      }).catch((e: any) => console.error('Token log error:', e));
+      }).then(null, (e: any) => console.error('Token log error:', e));
     }
 
     // Extract tool call result

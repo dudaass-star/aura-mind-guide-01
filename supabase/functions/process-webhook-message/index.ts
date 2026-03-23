@@ -200,6 +200,9 @@ Deno.serve(async (req) => {
   let sentAnyResponse = false;
   let supabase: ReturnType<typeof createClient> | null = null;
   let profile: any = null;
+  let wasInterrupted = false;
+  let interruptedAtIndex = -1;
+  let agentData: any = null;
 
   try {
     const workerPayload = await req.json();
@@ -688,9 +691,7 @@ Deno.serve(async (req) => {
 
     // Lock already acquired atomically at line ~338
 
-    let wasInterrupted = false;
-    let interruptedAtIndex = -1;
-    let agentData: any = null;
+    // wasInterrupted, interruptedAtIndex, agentData declared at outer scope (line ~200)
 
     // Helper: call aura-agent with timeout and optional minimal context
     async function callAuraAgent(useMinimalContext = false): Promise<any> {
