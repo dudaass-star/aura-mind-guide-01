@@ -972,21 +972,11 @@ Deno.serve(async (req) => {
   } catch (error: unknown) {
     console.error('❌ Worker processing error:', error);
 
-    // CONTINGENCY: Send fallback message ONLY if no response was already sent
-    if (contingencyPhone && !sentAnyResponse) {
-      try {
-        console.log('🆘 Sending contingency message to', contingencyPhone.substring(0, 4) + '***');
-        await sendTextMessage(
-          contingencyPhone,
-          "Tive um probleminha técnico, me desculpa! 😅 Pode repetir o que disse?",
-          undefined,
-          contingencyInstanceConfig
-        );
-      } catch (contingencyErr) {
-        console.error('❌ Failed to send contingency message:', contingencyErr);
-      }
-    } else if (sentAnyResponse) {
-      console.log('ℹ️ Error after response already sent — suppressing contingency message');
+    // NO FALLBACK MESSAGE — conversation-followup CRON will handle naturally
+    if (!sentAnyResponse) {
+      console.error(`🚨 CRITICAL: User got NO response at all. conversation-followup will detect and re-engage naturally.`);
+    } else {
+      console.log('ℹ️ Error after response already sent — no action needed');
     }
 
     return new Response(JSON.stringify({ error: 'processing_failed' }), {
