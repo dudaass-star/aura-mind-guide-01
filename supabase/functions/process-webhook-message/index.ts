@@ -507,6 +507,24 @@ Deno.serve(async (req) => {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
         }
+
+        // Check for cancellation intent before sending reminder
+        const lowerMsgAudio = (messageText || '').toLowerCase().trim();
+        if (/deixa|cancela|desist|não quero|nao quero|esquece|para|parar/i.test(lowerMsgAudio)) {
+          await supabase.from('profiles').update({ awaiting_time_capsule: null, pending_capsule_audio_url: null }).eq('user_id', profile.user_id);
+          const cancelMsg = `Tudo bem! Quando quiser gravar uma cápsula do tempo, é só falar 💜`;
+          await sendTextMessage(cleanPhone, cancelMsg, undefined, instanceConfig);
+          await supabase.from('messages').insert([
+            ...(!inboundSaved ? [{ user_id: profile.user_id, role: 'user', content: messageText }] : []),
+            { user_id: profile.user_id, role: 'assistant', content: cancelMsg },
+          ]);
+          inboundSaved = true;
+          await releaseLock();
+          return new Response(JSON.stringify({ status: 'capsule_cancelled' }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
         const reminderMsg = `Manda um áudio pra eu guardar sua voz! 🎙️ Quando quiser desistir, é só dizer "deixa pra lá" 💜`;
         await sendTextMessage(cleanPhone, reminderMsg, undefined, instanceConfig);
         await supabase.from('messages').insert([
