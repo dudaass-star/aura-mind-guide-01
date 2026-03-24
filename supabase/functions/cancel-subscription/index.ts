@@ -263,10 +263,18 @@ serve(async (req) => {
         cancel_at_period_end: true,
       });
 
+      // Get user_id from profile
+      const { data: cancelProfileData } = await supabase
+        .from('profiles')
+        .select('user_id')
+        .eq('phone', phoneClean)
+        .maybeSingle();
+
       // Save feedback
       if (reason) {
         await supabase.from('cancellation_feedback').insert({
           phone: phoneClean,
+          user_id: cancelProfileData?.user_id || null,
           reason: reason,
           reason_detail: reason_detail || null,
           action_taken: 'canceled',

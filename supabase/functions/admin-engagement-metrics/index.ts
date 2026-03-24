@@ -366,6 +366,7 @@ Deno.serve(async (req) => {
       cancelingUsers: cancelingUsers || 0,
       // Cancellation
       canceledInPeriod,
+      pausedInPeriod: pausedInPeriodCount || 0,
       churnRate,
       cancellationReasons,
     }), {

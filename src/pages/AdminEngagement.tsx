@@ -476,12 +476,12 @@ export default function AdminEngagement() {
                     </CardHeader>
                     <CardContent className="space-y-3">
                       {metrics.cancellationReasons.map((item) => {
-                        const reasonNames: Record<string, string> = {
-                          not_using: 'Não está usando',
-                          too_expensive: 'Muito caro',
-                          not_helpful: 'Não ajudou',
-                          found_alternative: 'Encontrou alternativa',
-                          technical_issues: 'Problemas técnicos',
+                         const reasonNames: Record<string, string> = {
+                          expensive: 'Está caro pra mim',
+                          not_using: 'Não estou usando',
+                          not_satisfied: 'Não gostei do serviço',
+                          come_back_later: 'Vou voltar depois',
+                          pause_requested: 'Pausa solicitada',
                           other: 'Outro',
                           unknown: 'Não informado',
                         };
