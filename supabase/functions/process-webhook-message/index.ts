@@ -454,6 +454,19 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Increment trial_conversations_count for trial users
+    if (profile.status === 'trial' && inboundSaved) {
+      try {
+        await supabase
+          .from('profiles')
+          .update({ trial_conversations_count: (profile.trial_conversations_count || 0) + 1 })
+          .eq('id', profile.id);
+        console.log(`📊 Trial counter incremented for ${profile.user_id}: ${(profile.trial_conversations_count || 0) + 1}`);
+      } catch (e) {
+        console.warn('⚠️ Failed to increment trial counter:', e);
+      }
+    }
+
     // ========================================================================
     // RESET FOLLOW-UP COUNT
     // ========================================================================
