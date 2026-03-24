@@ -42,6 +42,9 @@ interface Metrics {
   totalTrialsEver: number;
   trialRespondedCount: number;
   convertedCount: number;
+  funnelTotal: number;
+  funnelResponded: number;
+  funnelConverted: number;
   conversionRate: number;
   expiredTrials: number;
   avgDaysToConversion: number;
@@ -374,9 +377,9 @@ export default function AdminEngagement() {
                   <CardContent className="space-y-4">
                     {metrics && (
                       <>
-                        <FunnelStep label="Cadastraram (com cartão)" value={metrics.totalTrialsEver} total={metrics.totalTrialsEver} color="bg-blue-500" />
-                        <FunnelStep label="Responderam (1+ mensagem)" value={metrics.trialRespondedCount} total={metrics.totalTrialsEver} color="bg-cyan-500" />
-                        <FunnelStep label="Assinaram (cobrança efetivada)" value={metrics.convertedCount} total={metrics.totalTrialsEver} color="bg-green-500" />
+                        <FunnelStep label="Cadastraram (com cartão)" value={metrics.funnelTotal} total={metrics.funnelTotal} color="bg-blue-500" />
+                        <FunnelStep label="Responderam (1+ mensagem)" value={metrics.funnelResponded} total={metrics.funnelTotal} color="bg-cyan-500" />
+                        <FunnelStep label="Assinaram (cobrança efetivada)" value={metrics.funnelConverted} total={metrics.funnelTotal} color="bg-green-500" />
                       </>
                     )}
                   </CardContent>

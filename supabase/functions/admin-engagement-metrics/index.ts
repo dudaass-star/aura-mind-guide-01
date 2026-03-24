@@ -290,6 +290,16 @@ Deno.serve(async (req) => {
       ? Math.round(nonConvertedProfiles.reduce((sum, p) => sum + (p.trial_conversations_count || 0), 0) / nonConvertedProfiles.length * 10) / 10
       : 0;
 
+    // ========== ALL-TIME FUNNEL (not filtered by period) ==========
+    const { data: allTimeFunnelProfiles } = await supabase
+      .from('profiles')
+      .select('user_id, status, trial_conversations_count')
+      .not('plan', 'is', null);
+
+    const funnelTotal = allTimeFunnelProfiles?.length || 0;
+    const funnelResponded = allTimeFunnelProfiles?.filter(p => (p.trial_conversations_count || 0) >= 1).length || 0;
+    const funnelConverted = allTimeFunnelProfiles?.filter(p => p.status === 'active').length || 0;
+
     // Cancellation counts
     const { count: canceledUsers } = await supabase
       .from('profiles')
@@ -364,6 +374,10 @@ Deno.serve(async (req) => {
       avgMsgsNonConverted,
       canceledUsers: canceledUsers || 0,
       cancelingUsers: cancelingUsers || 0,
+      // All-time funnel
+      funnelTotal,
+      funnelResponded,
+      funnelConverted,
       // Cancellation
       canceledInPeriod,
       pausedInPeriod: pausedInPeriodCount || 0,
