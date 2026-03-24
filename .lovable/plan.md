@@ -1,49 +1,72 @@
 
 
-# Análise: Métricas de Cancelamento no Painel de Engajamento
+# Validação: Correção de mensagem duplicada no contexto da Aura
 
-## Resultado: Funcionando, mas com 3 problemas
+## Diagnóstico confirmado
 
-### O que está correto
-- **Pipeline completo**: Usuário cancela → `cancel-subscription` salva feedback em `cancellation_feedback` → `admin-engagement-metrics` consulta e agrupa → frontend exibe na aba "Cancelamentos"
-- **4 cards**: Cancelados no Período, Churn Rate, Total Cancelados, Cancelando — todos conectados corretamente
-- **Motivos agrupados**: Exibidos com barra de progresso e percentual
-- **Filtro de data**: Funciona corretamente para `canceledInPeriod` e `cancellationReasons`
+O bug é real e a causa raiz está validada:
 
-### Problema 1: `user_id` nunca é salvo no feedback
-A tabela `cancellation_feedback` tem coluna `user_id`, mas o `cancel-subscription` **nunca passa o `user_id`** no insert. Busca o perfil pelo telefone, mas não inclui o `user_id` no registro de feedback. Isso impossibilita cruzar cancelamentos com dados do perfil no futuro.
+### Fluxo atual (com duplicação)
 
-**Correção**: No `cancel-subscription`, após encontrar o perfil pelo telefone, incluir `user_id` no insert do `cancellation_feedback`.
+```text
+process-webhook-message (linha 442):
+  → salva "Oi tudo bem?" na tabela messages
 
-### Problema 2: Mapeamento de motivos incompleto no frontend
-Os motivos definidos no `cancel-subscription` são:
-- `expensive`, `not_using`, `not_satisfied`, `come_back_later`, `other`
+aura-agent (linha 4003):
+  → carrega últimas 40 mensagens do banco
+  → inclui "Oi tudo bem?" (já salva)
 
-Mas o frontend mapeia:
-- `not_using`, `too_expensive`, `not_helpful`, `found_alternative`, `technical_issues`, `other`, `unknown`
+sanitizeMessageHistory (linha 2819):
+  → adiciona timestamp: "[24/03/2026 19:15] Oi tudo bem?"
 
-**Mismatch**: `expensive` ≠ `too_expensive`, `not_satisfied` ≠ `not_helpful`. Motivos reais aparecem como texto cru (ex: "expensive" em vez de "Está caro pra mim").
+aura-agent (linha 4796):
+  → adiciona NOVAMENTE: "Oi tudo bem?" (sem timestamp)
 
-**Correção**: Atualizar o mapeamento no frontend para corresponder aos IDs reais usados no `cancel-subscription`.
+apiMessages final:
+  [system] instruções
+  [system] contexto dinâmico
+  ...histórico (inclui "[24/03/2026 19:15] Oi tudo bem?")
+  [user] "Oi tudo bem?"   ← DUPLICATA
+```
 
-### Problema 3: `canceledInPeriod` conta pausas também
-A query filtra `cancellation_feedback` por data, mas **não filtra por `action_taken`**. Pausas (`action_taken: 'paused'`) são contadas junto com cancelamentos reais (`action_taken: 'canceled'`). Isso infla o número de cancelamentos e o churn rate.
+O dedup do `sanitizeMessageHistory` (linha 2823) não pega porque:
+1. Ele roda **antes** da montagem final do `apiMessages`
+2. O timestamp `[DD/MM/YYYY HH:MM]` torna as strings diferentes
 
-**Correção**: Filtrar apenas `action_taken = 'canceled'` para `canceledInPeriod` e `churnRate`. Opcionalmente, mostrar pausas como métrica separada.
+O modelo recebe a mesma mensagem duas vezes e responde "você repetiu a pergunta".
 
-### Mudanças
+## Correção proposta (validada)
 
-**Arquivo 1**: `supabase/functions/cancel-subscription/index.ts`
-- Nos 2 inserts do `cancellation_feedback` (linhas 212 e 260), adicionar `user_id` do perfil encontrado
+**Arquivo**: `supabase/functions/aura-agent/index.ts` (linha ~4791)
 
-**Arquivo 2**: `supabase/functions/admin-engagement-metrics/index.ts`
-- Na query de `cancelFeedbackInPeriod` (linha 306), adicionar filtro `.eq('action_taken', 'canceled')`
-- Adicionar query separada para pausas no período
+Antes de montar `apiMessages`, remover a última mensagem do `messageHistory` se ela for do usuário e tiver o mesmo conteúdo (ignorando o prefixo de timestamp):
 
-**Arquivo 3**: `src/pages/AdminEngagement.tsx`
-- Corrigir o mapeamento de motivos: `expensive` → "Está caro pra mim", `not_satisfied` → "Não gostei do serviço", `come_back_later` → "Vou voltar depois", `pause_requested` → "Pausa solicitada"
-- Adicionar card de "Pausas no Período" (opcional)
+```typescript
+// Deduplicate: remove last history entry if it's the same user message
+const dedupedHistory = [...messageHistory];
+if (dedupedHistory.length > 0) {
+  const last = dedupedHistory[dedupedHistory.length - 1];
+  if (last.role === 'user') {
+    // Strip timestamp prefix [DD/MM/YYYY HH:MM] for comparison
+    const cleanContent = last.content.replace(/^\[\d{2}\/\d{2}\/\d{4},?\s*\d{2}:\d{2}\]\s*/, '');
+    if (cleanContent === message) {
+      dedupedHistory.pop();
+    }
+  }
+}
 
-### Custo
-Zero. Apenas correções de dados e mapeamento.
+const apiMessages = [
+  { role: "system", content: AURA_STATIC_INSTRUCTIONS },
+  { role: "system", content: dynamicContext },
+  ...dedupedHistory,
+  { role: "user", content: message }
+];
+```
+
+### Por que não simplesmente remover a linha 4796?
+
+Porque a mensagem explícita na linha 4796 garante que o texto chega **sem timestamp** e **sem sanitização**, exatamente como o usuário digitou. Remover a duplicata do histórico (que tem timestamp) é mais seguro.
+
+### Risco
+Zero. A mensagem do usuário continua presente uma vez no contexto. Nenhuma outra funcionalidade é afetada.
 
