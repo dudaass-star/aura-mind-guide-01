@@ -4788,11 +4788,24 @@ Exemplo com 4 sessões:
       }
     }
 
-    const apiMessages = [
+    // Deduplicate: remove last history entry if it's the same user message
+    // (already saved to DB before aura-agent is called, so it appears in messageHistory WITH timestamp)
+    const dedupedHistory = [...messageHistory];
+    if (dedupedHistory.length > 0) {
+      const last = dedupedHistory[dedupedHistory.length - 1];
+      if (last.role === 'user') {
+        const cleanContent = last.content.replace(/^\[\d{2}\/\d{2}\/\d{4},?\s*\d{2}:\d{2}\]\s*/, '');
+        if (cleanContent === message) {
+          dedupedHistory.pop();
+          console.log('🔄 Dedup: removed duplicate user message from history');
+        }
+      }
+    }
 
+    const apiMessages = [
       { role: "system", content: AURA_STATIC_INSTRUCTIONS },
       { role: "system", content: dynamicContext },
-      ...messageHistory,
+      ...dedupedHistory,
       { role: "user", content: message }
     ];
 
