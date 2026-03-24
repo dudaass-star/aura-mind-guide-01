@@ -1,49 +1,36 @@
 
 
-# Fix: Trials legítimos de hoje foram bloqueados pela migração
+# Fix: Cancelamento da Cápsula do Tempo no estado `awaiting_audio`
 
 ## Problema
 
-A migração `UPDATE profiles SET status = 'trial_expired' WHERE status = 'trial'` não distinguiu entre trials antigos (sem plano/cartão) e trials novos (via Stripe, com plano). Resultado:
+No estado `awaiting_audio` (linhas 491-520), o código tem apenas dois caminhos:
+1. Recebeu áudio → aceitar
+2. Qualquer outra coisa → enviar reminder
 
-- **Tania Benites** (plano essencial, criada 16:51 hoje) → `trial_expired` ❌
-- **Tatiana Santana** (plano direção, criada 00:20 hoje) → `trial_expired` ❌
-
-Ambas pagaram via Stripe e estão com `plan` preenchido. São clientes legítimas bloqueadas por engano.
+Não há verificação de cancelamento. O usuário fica preso em loop infinito de reminders. A verificação de cancelamento (`deixa|cancela|desist...`) só existe no estado `awaiting_confirmation` (linha 541).
 
 ## Solução
 
-### 1. Corrigir status das duas usuárias (migração SQL)
+**Arquivo**: `supabase/functions/process-webhook-message/index.ts`
 
-```sql
-UPDATE profiles SET status = 'trial' 
-WHERE plan IS NOT NULL 
-  AND status = 'trial_expired'
-  AND created_at >= '2026-03-23T00:00:00Z';
+Adicionar check de cancelamento **antes** do reminder no bloco `awaiting_audio` (entre linhas 509 e 510):
+
 ```
+if (capsuleState === 'awaiting_audio') {
+  if (hasAudio && audioUrl) { ... }  // já existe
 
-### 2. Corrigir a lógica de bloqueio no `process-webhook-message`
+  // NOVO: Check de cancelamento
+  const lowerMsg = (messageText || '').toLowerCase().trim();
+  if (/deixa|cancela|desist|não quero|nao quero|esquece|para|parar/i.test(lowerMsg)) {
+    // Limpar estado, enviar confirmação de cancelamento, retornar
+  }
 
-Adicionar verificação: se `status = 'trial_expired'` **E** `plan IS NOT NULL`, tratar como trial válido (não bloquear). Ou melhor: a lógica de expiração futura deve checar `plan IS NULL` antes de expirar.
-
-Alterar o check de bloqueio:
-```
-// Antes: blockedStatuses = ['trial_expired', ...]
-// Depois: só bloquear trial_expired se plan IS NULL
-if (profile.status === 'trial_expired' && profile.plan) {
-  // Trial legítimo via Stripe — não bloquear, restaurar status
+  // Reminder (já existe) — só chega aqui se não for cancelamento
 }
 ```
 
-### 3. Ajustar o funil de conversão no dashboard
+A lógica de cancelamento é idêntica à que já existe no `awaiting_confirmation` (linhas 541-553): limpa o perfil, envia mensagem amigável, salva no histórico, libera lock.
 
-Incluir `trial_expired` (sem plano) na query para não perder visibilidade dos trials antigos expirados. Mas o filtro principal `.not('plan', 'is', null)` já garante que só trials via Stripe aparecem no funil.
-
-## Resumo
-
-| Ação | Detalhe |
-|------|---------|
-| Restaurar Tania e Tatiana | `status = 'trial'` via migração |
-| Proteger futuros trials com plano | Check no `process-webhook-message` |
-| Dashboard já funciona | Filtro `plan IS NOT NULL` estava correto, problema era o status |
+Redeploy da função após a alteração.
 
