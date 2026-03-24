@@ -374,6 +374,10 @@ Deno.serve(async (req) => {
       avgMsgsNonConverted,
       canceledUsers: canceledUsers || 0,
       cancelingUsers: cancelingUsers || 0,
+      // All-time funnel
+      funnelTotal,
+      funnelResponded,
+      funnelConverted,
       // Cancellation
       canceledInPeriod,
       pausedInPeriod: pausedInPeriodCount || 0,
