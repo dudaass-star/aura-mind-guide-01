@@ -1,58 +1,49 @@
 
 
-# Análise: Fases Sentido e Movimento estão funcionando bem?
+# Análise: Métricas de Cancelamento no Painel de Engajamento
 
-## Resultado: Sim, estão bem implementadas
+## Resultado: Funcionando, mas com 3 problemas
 
-### Fase 2 — Sentido (Busca de Significado)
+### O que está correto
+- **Pipeline completo**: Usuário cancela → `cancel-subscription` salva feedback em `cancellation_feedback` → `admin-engagement-metrics` consulta e agrupa → frontend exibe na aba "Cancelamentos"
+- **4 cards**: Cancelados no Período, Churn Rate, Total Cancelados, Cancelando — todos conectados corretamente
+- **Motivos agrupados**: Exibidos com barra de progresso e percentual
+- **Filtro de data**: Funciona corretamente para `canceledInPeriod` e `cancellationReasons`
 
-**Trigger**: Ativa quando a Aura fica 7+ trocas em Presença sem avançar.
+### Problema 1: `user_id` nunca é salvo no feedback
+A tabela `cancellation_feedback` tem coluna `user_id`, mas o `cancel-subscription` **nunca passa o `user_id`** no insert. Busca o perfil pelo telefone, mas não inclui o `user_id` no registro de feedback. Isso impossibilita cruzar cancelamentos com dados do perfil no futuro.
 
-**O que faz quando ativa**:
-- Injeta instruções táticas com exemplos de Certo/Errado
-- Proíbe perguntas exploratórias ("me conta mais", "como assim")
-- Obriga a trazer UMA observação profunda + UMA pergunta-âncora da Logoterapia
-- Exemplos: "O que essa situação mostra sobre o que importa pra você?" / "Quem você quer ser do outro lado disso?"
+**Correção**: No `cancel-subscription`, após encontrar o perfil pelo telefone, incluir `user_id` no insert do `cancellation_feedback`.
 
-**Safeguard**: Se o usuário entra em crise ou vulnerabilidade durante Sentido, o sistema reseta para Presença automaticamente.
+### Problema 2: Mapeamento de motivos incompleto no frontend
+Os motivos definidos no `cancel-subscription` são:
+- `expensive`, `not_using`, `not_satisfied`, `come_back_later`, `other`
 
-**Avaliação**: Bem implementada. O threshold de 7 trocas dá espaço suficiente para exploração sem ficar preso.
+Mas o frontend mapeia:
+- `not_using`, `too_expensive`, `not_helpful`, `found_alternative`, `technical_issues`, `other`, `unknown`
 
----
+**Mismatch**: `expensive` ≠ `too_expensive`, `not_satisfied` ≠ `not_helpful`. Motivos reais aparecem como texto cru (ex: "expensive" em vez de "Está caro pra mim").
 
-### Fase 3 — Movimento (Ação com Sentido)
+**Correção**: Atualizar o mapeamento no frontend para corresponder aos IDs reais usados no `cancel-subscription`.
 
-**Trigger**: Ativa quando a Aura fica 8+ trocas em Sentido sem avançar.
+### Problema 3: `canceledInPeriod` conta pausas também
+A query filtra `cancellation_feedback` por data, mas **não filtra por `action_taken`**. Pausas (`action_taken: 'paused'`) são contadas junto com cancelamentos reais (`action_taken: 'canceled'`). Isso infla o número de cancelamentos e o churn rate.
 
-**O que faz quando ativa**:
-- Proíbe continuar "filosofando" sem ação
-- Extrai compromisso DO usuário (não dá conselho)
-- Regra de ouro implementada: "Ação sem sentido não sustenta"
-- Exemplo: "Se você pudesse mudar UMA coisa pequena essa semana, o que faria sentido?"
+**Correção**: Filtrar apenas `action_taken = 'canceled'` para `canceledInPeriod` e `churnRate`. Opcionalmente, mostrar pausas como métrica separada.
 
-**Safeguard**: Mesma proteção de crise/resistência — se detectado, volta para Presença.
+### Mudanças
 
-**Avaliação**: Bem implementada. A regra de ouro protege contra conselhos prematuros.
+**Arquivo 1**: `supabase/functions/cancel-subscription/index.ts`
+- Nos 2 inserts do `cancellation_feedback` (linhas 212 e 260), adicionar `user_id` do perfil encontrado
 
----
+**Arquivo 2**: `supabase/functions/admin-engagement-metrics/index.ts`
+- Na query de `cancelFeedbackInPeriod` (linha 306), adicionar filtro `.eq('action_taken', 'canceled')`
+- Adicionar query separada para pausas no período
 
-### Resumo dos safeguards (todas as fases)
+**Arquivo 3**: `src/pages/AdminEngagement.tsx`
+- Corrigir o mapeamento de motivos: `expensive` → "Está caro pra mim", `not_satisfied` → "Não gostei do serviço", `come_back_later` → "Vou voltar depois", `pause_requested` → "Pausa solicitada"
+- Adicionar card de "Pausas no Período" (opcional)
 
-| Situação | Ação automática | Status |
-|----------|----------------|--------|
-| Crise/vulnerabilidade | Reset para Presença | ✅ |
-| Mudança de tema | Reset + guidance de mapeamento | ✅ |
-| Resistência/desengajamento | Cancela avanço, valida | ✅ |
-| Respostas curtas (2+ turnos) | Nudge para ângulo mais leve | ✅ |
-| Sessão > 20min com sentido natural | Transição para fechamento | ✅ |
-
----
-
-### Único problema: Presença sem freio de saída
-
-As fases 2 e 3 têm triggers para **forçar avanço** quando a Aura fica presa demais (7 e 8 trocas). Mas não existe o inverso — nada impede a Aura de **pular** Presença e ir direto para Sentido na primeira resposta.
-
-Esse é o ajuste que já discutimos: adicionar o "freio de Presença" para garantir no mínimo 4 trocas antes de permitir avanço.
-
-Fora isso, as fases 2 e 3 estão sólidas.
+### Custo
+Zero. Apenas correções de dados e mapeamento.
 
