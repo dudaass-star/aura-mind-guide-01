@@ -306,6 +306,14 @@ Deno.serve(async (req) => {
     const { data: cancelFeedbackInPeriod } = await supabase
       .from('cancellation_feedback')
       .select('reason, action_taken')
+      .eq('action_taken', 'canceled')
+      .gte('created_at', periodStart)
+      .lte('created_at', periodEnd);
+
+    const { count: pausedInPeriodCount } = await supabase
+      .from('cancellation_feedback')
+      .select('*', { count: 'exact', head: true })
+      .eq('action_taken', 'paused')
       .gte('created_at', periodStart)
       .lte('created_at', periodEnd);
 
@@ -358,6 +366,7 @@ Deno.serve(async (req) => {
       cancelingUsers: cancelingUsers || 0,
       // Cancellation
       canceledInPeriod,
+      pausedInPeriod: pausedInPeriodCount || 0,
       churnRate,
       cancellationReasons,
     }), {

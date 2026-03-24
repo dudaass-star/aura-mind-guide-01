@@ -52,6 +52,7 @@ interface Metrics {
   trialsByPlan?: { plan: string; count: number }[];
   // Cancellation
   canceledInPeriod: number;
+  pausedInPeriod: number;
   churnRate: number;
   cancellationReasons: { reason: string; action_taken: string; count: number }[];
 }
@@ -466,6 +467,16 @@ export default function AdminEngagement() {
                       <p className="text-xs text-muted-foreground mt-1">aguardando fim do período</p>
                     </CardContent>
                   </Card>
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between pb-2">
+                      <CardTitle className="text-sm font-medium text-muted-foreground">Pausas no Período</CardTitle>
+                      <Timer className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-foreground">{metrics.pausedInPeriod}</div>
+                      <p className="text-xs text-muted-foreground mt-1">assinaturas pausadas</p>
+                    </CardContent>
+                  </Card>
                 </div>
 
                 {/* Motivos de cancelamento */}
@@ -476,12 +487,12 @@ export default function AdminEngagement() {
                     </CardHeader>
                     <CardContent className="space-y-3">
                       {metrics.cancellationReasons.map((item) => {
-                        const reasonNames: Record<string, string> = {
-                          not_using: 'Não está usando',
-                          too_expensive: 'Muito caro',
-                          not_helpful: 'Não ajudou',
-                          found_alternative: 'Encontrou alternativa',
-                          technical_issues: 'Problemas técnicos',
+                         const reasonNames: Record<string, string> = {
+                          expensive: 'Está caro pra mim',
+                          not_using: 'Não estou usando',
+                          not_satisfied: 'Não gostei do serviço',
+                          come_back_later: 'Vou voltar depois',
+                          pause_requested: 'Pausa solicitada',
                           other: 'Outro',
                           unknown: 'Não informado',
                         };
