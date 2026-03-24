@@ -467,6 +467,16 @@ export default function AdminEngagement() {
                       <p className="text-xs text-muted-foreground mt-1">aguardando fim do período</p>
                     </CardContent>
                   </Card>
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between pb-2">
+                      <CardTitle className="text-sm font-medium text-muted-foreground">Pausas no Período</CardTitle>
+                      <Timer className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-foreground">{metrics.pausedInPeriod}</div>
+                      <p className="text-xs text-muted-foreground mt-1">assinaturas pausadas</p>
+                    </CardContent>
+                  </Card>
                 </div>
 
                 {/* Motivos de cancelamento */}
