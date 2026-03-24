@@ -52,6 +52,7 @@ interface Metrics {
   trialsByPlan?: { plan: string; count: number }[];
   // Cancellation
   canceledInPeriod: number;
+  pausedInPeriod: number;
   churnRate: number;
   cancellationReasons: { reason: string; action_taken: string; count: number }[];
 }
