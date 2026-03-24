@@ -208,9 +208,17 @@ serve(async (req) => {
         },
       });
 
+      // Get user_id from profile
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('user_id')
+        .eq('phone', phoneClean)
+        .maybeSingle();
+
       // Save feedback
       await supabase.from('cancellation_feedback').insert({
         phone: phoneClean,
+        user_id: profileData?.user_id || null,
         reason: reason || 'pause_requested',
         reason_detail: reason_detail || null,
         action_taken: 'paused',
