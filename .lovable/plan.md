@@ -1,57 +1,36 @@
 
 
-# Diagnóstico: Meditação não chega para o Jhonatan
+# Diagnóstico: Aura não está respondendo
 
-## O que aconteceu
+## Situação
 
-Na conversa de hoje (23:29 BRT), a Aura ofereceu uma meditação guiada ao Jhonatan (momento emocional intenso — separação do filho). Ele aceitou, ela disse "Tô te mandando agora", mas o áudio **nunca chegou**. Ela tentou 2 vezes e desistiu, fazendo um fallback para respiração guiada por texto (boa decisão).
+**NENHUMA** edge function está gerando logs — nem `webhook-zapi`, nem `process-webhook-message`, nem `aura-agent`, nem funções não relacionadas como `start-trial` e `create-checkout`. Isso indica um **problema global de deploy**, não um bug em uma função específica.
 
-## Causa raiz
+## Causa provável
 
-No `aura-agent/index.ts` (linha 5857), a chamada ao `send-meditation` é **fire-and-forget**:
+O último deploy (correção do `await` no `send-meditation` dentro do `aura-agent`) pode ter causado uma falha no deploy de todas as funções. Como as edge functions do Supabase são deployadas como um conjunto, um erro em uma pode afetar todas.
 
-```text
-fetch(`${supabaseUrl}/functions/v1/send-meditation`, { ... })
-  .then(res => console.log(...))
-  .catch(err => console.error(...));
-```
+## Solução
 
-O `fetch` não é `await`-ado nem envolto em `EdgeRuntime.waitUntil`. Quando a edge function do aura-agent termina de processar e retorna a resposta, o runtime mata o fetch pendente. O `send-meditation` nunca é executado de fato.
+### 1. Re-deploy de todas as funções críticas
 
-Evidência: a tabela `user_meditation_history` está **vazia** para o Jhonatan, e os logs do `send-meditation` não mostram nenhuma invocação.
+Fazer redeploy imediato das 3 funções do pipeline de mensagens:
 
-## Correção
+- `webhook-zapi` (receptor)
+- `process-webhook-message` (worker)
+- `aura-agent` (IA)
 
-**Arquivo**: `supabase/functions/aura-agent/index.ts`
+### 2. Verificar logs após redeploy
 
-Substituir o fire-and-forget por `await` no fetch do `send-meditation`:
+Após o deploy, verificar se os logs voltam a aparecer e se as mensagens estão sendo processadas normalmente.
 
-```typescript
-// ANTES (fire-and-forget - QUEBRADO)
-fetch(`${supabaseUrl}/functions/v1/send-meditation`, { ... })
-  .then(...)
-  .catch(...);
+### 3. Se o redeploy falhar
 
-// DEPOIS (aguardar resposta)
-try {
-  const medRes = await fetch(`${supabaseUrl}/functions/v1/send-meditation`, {
-    method: 'POST',
-    headers: { ... },
-    body: JSON.stringify({ ... }),
-  });
-  console.log(`🧘 send-meditation response: ${medRes.status}`);
-  if (!medRes.ok) {
-    console.error(`🧘 send-meditation error: ${await medRes.text()}`);
-  }
-} catch (err) {
-  console.error(`🧘 send-meditation error:`, err);
-}
-```
+Se alguma função falhar no deploy, o problema pode estar em imports quebrados ou incompatibilidades. Nesse caso, verificar:
+- O `aura-agent/index.ts` (6148 linhas) — a última edição pode ter introduzido um erro de sintaxe
+- Shared imports (`_shared/zapi-client.ts`, `_shared/instance-helper.ts`)
 
-Isso garante que o `send-meditation` seja chamado e tenha tempo de executar antes do aura-agent encerrar.
+## Ação imediata
 
-## Impacto
-
-- Corrige o envio de meditações para **todos os usuários**, não só o Jhonatan
-- Sem efeito colateral na latência percebida pelo usuário (a mensagem de texto já foi enviada antes da tag de meditação ser processada)
+Redeploy das funções. Sem mudança de código — apenas forçar um novo deploy para restaurar o serviço.
 
