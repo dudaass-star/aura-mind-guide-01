@@ -5854,23 +5854,27 @@ Só DEPOIS de saber a situação, explore as emoções com profundidade.`;
         const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
         const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
         
-        fetch(`${supabaseUrl}/functions/v1/send-meditation`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseServiceKey}`,
-          },
-          body: JSON.stringify({
-            category: meditationCategory,
-            user_id: profile?.user_id || null,
-            phone: userPhone,
-            context: `aura-agent-tag`,
-          }),
-        }).then(res => {
-          console.log(`🧘 send-meditation response: ${res.status}`);
-        }).catch(err => {
+        try {
+          const medRes = await fetch(`${supabaseUrl}/functions/v1/send-meditation`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${supabaseServiceKey}`,
+            },
+            body: JSON.stringify({
+              category: meditationCategory,
+              user_id: profile?.user_id || null,
+              phone: userPhone,
+              context: `aura-agent-tag`,
+            }),
+          });
+          console.log(`🧘 send-meditation response: ${medRes.status}`);
+          if (!medRes.ok) {
+            console.error(`🧘 send-meditation error: ${await medRes.text()}`);
+          }
+        } catch (err) {
           console.error(`🧘 send-meditation error:`, err);
-        });
+        }
       }
     }
 
