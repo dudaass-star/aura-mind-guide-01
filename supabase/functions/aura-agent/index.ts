@@ -1015,6 +1015,22 @@ ou simplesmente validar o silêncio/resistência como legítimo.`
     console.log(`🔄 Phase evaluator: fallback keyword detection → detectedPhase="${detectedPhase}"`);
   }
 
+  // Anti-skip: force Presença if fewer than 4 pairs on current topic
+  // This prevents the model from jumping to Sentido/Movimento prematurely
+  const recentUserCount = messageHistory.filter(m => m.role === 'user').slice(-10).length;
+  if (recentUserCount < 4 && detectedPhase !== 'presenca' && detectedPhase !== 'initial') {
+    console.log(`🔄 Phase evaluator: recentPairs=${recentUserCount} < 4, forcing presenca (was ${detectedPhase})`);
+    return {
+      detectedPhase: 'presenca',
+      stagnationLevel: 0,
+      guidance: `\n\n⚠️ FREIO DE PRESENÇA:
+Ainda estamos nas primeiras trocas sobre este tema (${recentUserCount} pares).
+NÃO avance para interpretação ou sentido ainda.
+AÇÃO: Valide o que o usuário trouxe, pergunte sobre a situação concreta, mostre que está ouvindo.
+Reframes e perguntas-âncora só DEPOIS de mapear o contexto.`
+    };
+  }
+
   const questionCount = recentAssistant.reduce((sum, msg) => 
     sum + (msg.match(/\?/g) || []).length, 0
   );
