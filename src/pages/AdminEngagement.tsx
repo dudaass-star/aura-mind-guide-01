@@ -42,6 +42,9 @@ interface Metrics {
   totalTrialsEver: number;
   trialRespondedCount: number;
   convertedCount: number;
+  funnelTotal: number;
+  funnelResponded: number;
+  funnelConverted: number;
   conversionRate: number;
   expiredTrials: number;
   avgDaysToConversion: number;
