@@ -1,36 +1,55 @@
 
 
-# Fix: Cancelamento da Cápsula do Tempo no estado `awaiting_audio`
+# Diagnóstico: 3 problemas encontrados
 
-## Problema
+## 1. Contagem errada de mensagens
 
-No estado `awaiting_audio` (linhas 491-520), o código tem apenas dois caminhos:
-1. Recebeu áudio → aceitar
-2. Qualquer outra coisa → enviar reminder
+**Causa raiz**: Não é bug de código — foi erro meu na query SQL. O `admin-messages` está correto (paginação de 200 com "carregar anteriores" funciona). O problema foi que nas minhas queries ad-hoc eu usei filtros de timezone errados (UTC em vez de BRT), o que cortou mensagens do dia. O código da aplicação em si **não tem bug** aqui.
 
-Não há verificação de cancelamento. O usuário fica preso em loop infinito de reminders. A verificação de cancelamento (`deixa|cancela|desist...`) só existe no estado `awaiting_confirmation` (linha 541).
+**Ação**: Nenhuma mudança de código necessária. Apenas disciplina nas queries manuais.
 
-## Solução
+---
 
-**Arquivo**: `supabase/functions/process-webhook-message/index.ts`
+## 2. `trial_conversations_count` sempre em 0
 
-Adicionar check de cancelamento **antes** do reminder no bloco `awaiting_audio` (entre linhas 509 e 510):
+**Causa raiz**: O campo `trial_conversations_count` é setado para `0` na criação do trial (`start-trial/index.ts` linha 115), mas **nunca é incrementado em lugar nenhum**. Nem o `process-webhook-message` nem o `aura-agent` fazem `UPDATE profiles SET trial_conversations_count = trial_conversations_count + 1`.
 
-```
-if (capsuleState === 'awaiting_audio') {
-  if (hasAudio && audioUrl) { ... }  // já existe
+Isso explica por que a Maria Jacqueline apareceu com `trial_conversations_count = 0` mesmo tendo 132+ mensagens, e por que o dashboard de engajamento mostra dados de conversão incorretos (depende desse campo para calcular `trialRespondedCount`, `avgMsgsConverted`, etc.).
 
-  // NOVO: Check de cancelamento
-  const lowerMsg = (messageText || '').toLowerCase().trim();
-  if (/deixa|cancela|desist|não quero|nao quero|esquece|para|parar/i.test(lowerMsg)) {
-    // Limpar estado, enviar confirmação de cancelamento, retornar
-  }
+**Correção**: Adicionar incremento no `process-webhook-message`, logo após salvar a mensagem inbound do usuário. Só incrementar se `profile.status === 'trial'`:
 
-  // Reminder (já existe) — só chega aqui se não for cancelamento
+```typescript
+// Após persistir mensagem inbound, se trial, incrementar contador
+if (profile.status === 'trial') {
+  await supabase
+    .from('profiles')
+    .update({ trial_conversations_count: (profile.trial_conversations_count || 0) + 1 })
+    .eq('id', profile.id);
 }
 ```
 
-A lógica de cancelamento é idêntica à que já existe no `awaiting_confirmation` (linhas 541-553): limpa o perfil, envia mensagem amigável, salva no histórico, libera lock.
+**Arquivo**: `supabase/functions/process-webhook-message/index.ts`
 
-Redeploy da função após a alteração.
+---
+
+## 3. Preço do plano Direção errado
+
+**Causa raiz**: Não há nenhum lugar no código que defina os preços dos planos de forma centralizada para uso em análises. Os preços corretos estão no `aura-agent` (R$ 49,90/mês para Direção), mas a tabela `plan_configs` pode ter valores desatualizados no campo `price_monthly_cents`.
+
+O erro foi meu ao citar R$ 149/mês — esse valor não existe em nenhum lugar do código. Os preços reais são:
+- **Essencial**: R$ 29,90/mês
+- **Direção**: R$ 49,90/mês  
+- **Transformação**: R$ 79,90/mês
+
+**Correção**: Verificar e atualizar a tabela `plan_configs` com os valores corretos de `price_monthly_cents` para garantir que qualquer futuro cálculo de viabilidade econômica use os preços certos.
+
+---
+
+## Resumo de ações
+
+| Problema | Tipo | Ação |
+|----------|------|------|
+| Contagem de mensagens errada | Erro operacional meu | Nenhuma mudança de código |
+| `trial_conversations_count` sempre 0 | Bug real | Adicionar incremento no `process-webhook-message` |
+| Preço do Direção errado | Erro operacional meu + possível dado desatualizado | Verificar/atualizar `plan_configs` |
 
