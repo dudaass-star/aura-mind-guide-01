@@ -74,9 +74,37 @@ const Checkout = () => {
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
+    // Generate a unique event_id for deduplication between browser pixel and CAPI
+    const eventId = `ic_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+
+    // Browser pixel event with event_id
     if (typeof window !== 'undefined' && (window as any).fbq) {
-      (window as any).fbq('track', 'InitiateCheckout');
+      (window as any).fbq('track', 'InitiateCheckout', {}, { eventID: eventId });
     }
+
+    // Send matching CAPI event (non-blocking)
+    const fbp = document.cookie.match(/_fbp=([^;]+)/)?.[1];
+    const fbc = document.cookie.match(/_fbc=([^;]+)/)?.[1] || 
+      (new URLSearchParams(window.location.search).get('fbclid') 
+        ? `fb.1.${Date.now()}.${new URLSearchParams(window.location.search).get('fbclid')}` 
+        : undefined);
+
+    supabase.functions.invoke('meta-capi', {
+      body: {
+        event_name: 'InitiateCheckout',
+        event_id: eventId,
+        event_source_url: window.location.href,
+        user_data: {
+          client_user_agent: navigator.userAgent,
+          ...(fbp && { fbp }),
+          ...(fbc && { fbc }),
+        },
+        custom_data: {
+          content_name: `Checkout Page`,
+          content_category: 'checkout',
+        },
+      },
+    }).catch(() => {}); // non-blocking
   }, []);
 
   // Reset payment method when switching to monthly
