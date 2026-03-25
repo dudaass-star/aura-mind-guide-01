@@ -115,6 +115,48 @@ export type Database = {
           },
         ]
       }
+      checkout_sessions: {
+        Row: {
+          billing: string | null
+          completed_at: string | null
+          created_at: string
+          email: string | null
+          id: string
+          name: string | null
+          payment_method: string | null
+          phone: string
+          plan: string | null
+          status: string
+          stripe_session_id: string | null
+        }
+        Insert: {
+          billing?: string | null
+          completed_at?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          name?: string | null
+          payment_method?: string | null
+          phone: string
+          plan?: string | null
+          status?: string
+          stripe_session_id?: string | null
+        }
+        Update: {
+          billing?: string | null
+          completed_at?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          name?: string | null
+          payment_method?: string | null
+          phone?: string
+          plan?: string | null
+          status?: string
+          stripe_session_id?: string | null
+        }
+        Relationships: []
+      }
       commitments: {
         Row: {
           commitment_status: string | null
