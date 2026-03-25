@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Nunito:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;0,9..144,900;1,9..144,400;1,9..144,700&family=Nunito:wght@300;400;500;600;700&display=swap');
 
 @import url("https://fonts.googleapis.com/css2?family=Poppins&display=swap");
 
@@ -70,7 +70,7 @@
     --shadow-card: 0 8px 32px hsl(220 25% 20% / 0.08);
 
     /* Typography */
-    --font-display: 'Libre Baskerville', serif;
+    --font-display: 'Fraunces', serif;
     --font-body: 'Nunito', sans-serif;
 
     --sidebar-background: 30 25% 96%;

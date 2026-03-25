@@ -14,10 +14,10 @@ export default {
   	},
   	extend: {
   		fontFamily: {
-  			display: [
-  				'Libre Baskerville',
-  				'serif'
-  			],
+			display: [
+				'Fraunces',
+				'serif'
+			],
   			body: [
   				'Nunito',
   				'sans-serif'
