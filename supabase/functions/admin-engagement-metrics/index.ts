@@ -436,8 +436,11 @@ Deno.serve(async (req) => {
       avgCostPerActiveUser,
       costBreakdownByModel,
       totalCacheSavings,
-      // Trial & Conversion (period-filtered, card-only)
-      activeTrials: activeTrials || 0,
+      // Trial & Conversion
+      activeTrials,
+      activeSubscribers: activeSubscribers || 0,
+      paymentFailedCount: paymentFailedCount || 0,
+      expiredTrialsAwaitingPayment: expiredTrialsNoFailure || 0,
       trialsInPeriod: totalTrialsInPeriod,
       trialsWithCardInPeriod: trialsWithCardInPeriodCount,
       totalTrialsAllTime: (allTrialProfiles || []).length,
