@@ -5515,7 +5515,7 @@ Regras:
         // Tentar extrair descobertas do onboarding da conversa
         try {
           const onboardingMessages = messageHistory.slice(-20);
-          const onboardingData = await callAI('google/gemini-2.5-flash', [
+          const onboardingData = await callAI(configuredModel, [
                 { 
                   role: "system", 
                   content: `Analise esta conversa de onboarding e extraia informações do usuário.
@@ -5538,7 +5538,7 @@ Regras:
               ], 300, 0.5, LOVABLE_API_KEY);
 
           if (onboardingData) {
-            await logTokenUsage(supabase, user_id || null, 'onboarding_extraction', 'google/gemini-2.5-flash', onboardingData.usage);
+            await logTokenUsage(supabase, user_id || null, 'onboarding_extraction', configuredModel, onboardingData.usage);
             const aiContent = onboardingData.choices?.[0]?.message?.content?.trim();
             if (aiContent) {
               try {
@@ -5553,7 +5553,7 @@ Regras:
                   
                   // Extrair primary_topic e atribuir jornada inicial
                   try {
-                    const topicData = await callAI('google/gemini-2.5-flash', [
+                    const topicData = await callAI(configuredModel, [
                           { 
                             role: "system", 
                             content: `Baseado nos desafios mencionados, identifique o TEMA PRINCIPAL.
@@ -5565,7 +5565,7 @@ Apenas o tema, nada mais.`
                         ], 50, 0.5, LOVABLE_API_KEY);
                     
                     if (topicData) {
-                      await logTokenUsage(supabase, user_id || null, 'topic_extraction', 'google/gemini-2.5-flash', topicData.usage);
+                      await logTokenUsage(supabase, user_id || null, 'topic_extraction', configuredModel, topicData.usage);
                       const topic = topicData.choices?.[0]?.message?.content?.trim()?.toLowerCase();
                       if (topic && topic.length < 50) {
                         profileUpdate.primary_topic = topic;
@@ -5721,7 +5721,7 @@ Estou aqui sempre que precisar! 💜`;
       try {
         // Gerar resumo breve do que foi discutido até agora
         const pauseMessages = messageHistory.slice(-10);
-        const pauseData = await callAI('google/gemini-2.5-flash', [
+        const pauseData = await callAI(configuredModel, [
           { 
             role: "system", 
             content: `Resuma em 2-3 frases o que estava sendo discutido nesta sessão de mentoria emocional. 
@@ -5735,7 +5735,7 @@ Responda apenas o resumo, sem formatação.`
         
         let pauseSummary = 'Sessão pausada pelo usuário.';
         if (pauseData?.choices?.[0]?.message?.content) {
-          await logTokenUsage(supabase, user_id || null, 'session_pause_summary', 'google/gemini-2.5-flash', pauseData.usage);
+          await logTokenUsage(supabase, user_id || null, 'session_pause_summary', configuredModel, pauseData.usage);
           pauseSummary = pauseData.choices[0].message.content.trim();
         }
         
