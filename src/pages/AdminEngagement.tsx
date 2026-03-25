@@ -58,6 +58,13 @@ interface Metrics {
   canceledUsers: number;
   cancelingUsers: number;
   trialsByPlan?: { plan: string; count: number }[];
+  // Checkout funnel
+  checkoutCreatedInPeriod: number;
+  checkoutCompletedInPeriod: number;
+  checkoutDropoffInPeriod: number;
+  checkoutCompletionRate: number;
+  checkoutCreatedAllTime: number;
+  checkoutCompletedAllTime: number;
   // Cancellation
   canceledInPeriod: number;
   pausedInPeriod: number;
