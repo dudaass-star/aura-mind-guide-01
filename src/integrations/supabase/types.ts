@@ -565,6 +565,7 @@ export type Database = {
           audio_reset_date: string | null
           audio_seconds_used_this_month: number | null
           awaiting_time_capsule: string | null
+          converted_at: string | null
           created_at: string | null
           current_episode: number | null
           current_journey_id: string | null
@@ -611,6 +612,7 @@ export type Database = {
           audio_reset_date?: string | null
           audio_seconds_used_this_month?: number | null
           awaiting_time_capsule?: string | null
+          converted_at?: string | null
           created_at?: string | null
           current_episode?: number | null
           current_journey_id?: string | null
@@ -657,6 +659,7 @@ export type Database = {
           audio_reset_date?: string | null
           audio_seconds_used_this_month?: number | null
           awaiting_time_capsule?: string | null
+          converted_at?: string | null
           created_at?: string | null
           current_episode?: number | null
           current_journey_id?: string | null
