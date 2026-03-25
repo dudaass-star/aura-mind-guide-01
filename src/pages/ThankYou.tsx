@@ -8,6 +8,12 @@ const ThankYou = () => {
   const [userData, setUserData] = useState({ name: "", plan: "anual" });
 
   useEffect(() => {
+    // Disable Meta Pixel automatic event detection on this page
+    // This prevents Meta from auto-detecting "Purchase" events based on page content
+    if (typeof window !== 'undefined' && (window as any).fbq) {
+      (window as any).fbq('set', 'autoConfig', 'false', '939366085297921');
+    }
+
     // Try to get data from location state first, then localStorage
     let checkoutData = { name: "", plan: "anual" };
     
