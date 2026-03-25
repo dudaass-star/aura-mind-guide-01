@@ -178,6 +178,7 @@ Deno.serve(async (req) => {
           }
         } else {
           profileUserId = existingProfile.user_id;
+          const isConverting = !isTrial && (existingProfile.status === 'trial');
           const { error: updateError } = await supabase
             .from('profiles')
             .update({
@@ -190,6 +191,7 @@ Deno.serve(async (req) => {
               updated_at: new Date().toISOString(),
               needs_schedule_setup: sessionsCount > 0,
               ...(isTrial && { trial_started_at: new Date().toISOString(), trial_phase: 'listening' }),
+              ...(isConverting && { converted_at: new Date().toISOString() }),
               ...(planExpiresAt && { plan_expires_at: planExpiresAt }),
             })
             .eq('phone', formattedPhone);

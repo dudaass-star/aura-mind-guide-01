@@ -23,7 +23,8 @@ interface CostBreakdown {
 interface Metrics {
   activeUsers: number;
   activeUsersBase: number;
-  weeklyMessages: number;
+  userMessagesInPeriod: number;
+  totalMessagesInPeriod: number;
   weeklySessionsCount: number;
   avgSessionMinutes: number;
   messagesPerSession: number;
@@ -38,7 +39,9 @@ interface Metrics {
   // Trial & Conversion
   activeTrials: number;
   trialsInPeriod: number;
+  trialsWithCardInPeriod: number;
   totalTrialsAllTime: number;
+  totalTrialsWithCardAllTime: number;
   trialRespondedCount: number;
   convertedCount: number;
   funnelTotal: number;
@@ -153,25 +156,25 @@ export default function AdminEngagement() {
 
   const engagementCards = metrics ? [
     { title: 'Usuários Ativos no Período', value: metrics.activeUsers, icon: Users, subtitle: `${metrics.activeUsersBase} ativos na base` },
-    { title: 'Mensagens no Período', value: metrics.weeklyMessages, icon: MessageSquare, subtitle: periodLabel },
-    { title: 'Sessões Completadas', value: metrics.weeklySessionsCount, icon: BarChart3, subtitle: periodLabel },
+    { title: 'Msgs do Usuário no Período', value: metrics.userMessagesInPeriod, icon: MessageSquare, subtitle: `${metrics.totalMessagesInPeriod} total (user+assistant)` },
+    { title: 'Sessões Completadas', value: metrics.weeklySessionsCount, icon: BarChart3, subtitle: `finalizadas no período (${periodLabel})` },
     { title: 'Tempo Médio de Sessão', value: `${metrics.avgSessionMinutes} min`, icon: Clock, subtitle: 'sessões completadas no período' },
-    { title: 'Mensagens por Sessão', value: metrics.messagesPerSession, icon: MessageSquare, subtitle: 'média nas sessões do período' },
+    { title: 'Mensagens por Sessão', value: metrics.messagesPerSession, icon: MessageSquare, subtitle: 'média do usuário por sessão' },
     { title: 'Média Msgs/Dia por Usuário', value: metrics.avgDailyMessagesPerUser, icon: TrendingUp, subtitle: periodLabel },
     { title: 'Taxa de Retorno', value: `${metrics.returnRate}%`, icon: TrendingUp, subtitle: `${metrics.uniqueRecentUsers} de ${metrics.activeUsersBase} ativos da base` },
   ] : [];
 
   const trialCards = metrics ? [
-    { title: 'Trials Ativos Agora', value: metrics.activeTrials, icon: UserPlus, subtitle: 'status = trial com trial_started_at' },
-    { title: 'Trials no Período', value: metrics.trialsInPeriod, icon: UserPlus, subtitle: periodLabel },
-    { title: 'Total Trials (all-time)', value: metrics.totalTrialsAllTime, icon: Users, subtitle: 'todos com trial_started_at' },
-    { title: 'Convertidos no Período', value: metrics.convertedCount, icon: ArrowRightLeft, subtitle: 'trial → ativo no período' },
-    { title: 'Taxa de Conversão', value: `${metrics.conversionRate}%`, icon: Percent, subtitle: `${metrics.convertedCount} de ${metrics.trialsInPeriod} trials no período` },
+    { title: 'Trials Ativos Agora', value: metrics.activeTrials, icon: UserPlus, subtitle: 'status = trial (all-time)' },
+    { title: 'Trials no Período (total)', value: metrics.trialsInPeriod, icon: UserPlus, subtitle: `com e sem cartão — ${periodLabel}` },
+    { title: 'Trials com Cartão (período)', value: metrics.trialsWithCardInPeriod, icon: UserPlus, subtitle: `checkout iniciado — ${periodLabel}` },
+    { title: 'Convertidos no Período', value: metrics.convertedCount, icon: ArrowRightLeft, subtitle: 'trial → ativo (com cartão)' },
+    { title: 'Taxa de Conversão', value: `${metrics.conversionRate}%`, icon: Percent, subtitle: `${metrics.convertedCount} de ${metrics.trialsWithCardInPeriod} com cartão` },
     { title: 'Trials Expirados', value: metrics.expiredTrials, icon: XCircle, subtitle: 'trial há +7 dias sem converter (all-time)' },
-    { title: 'Tempo Médio até Conversão', value: `${metrics.avgDaysToConversion} dias`, icon: Timer, subtitle: 'trial_started_at → ativação' },
-    { title: 'Msgs Trial (Convertidos)', value: metrics.avgMsgsConverted, icon: MessageSquare, subtitle: 'média de msgs durante trial' },
-    { title: 'Msgs Trial (Não Convertidos)', value: metrics.avgMsgsNonConverted, icon: MessageSquare, subtitle: 'média de msgs durante trial' },
-    { title: 'Cancelados', value: metrics.canceledUsers, icon: XCircle, subtitle: 'status = canceled' },
+    { title: 'Tempo Médio até Conversão', value: `${metrics.avgDaysToConversion} dias`, icon: Timer, subtitle: 'trial → ativação (com cartão)' },
+    { title: 'Msgs Trial (Convertidos)', value: metrics.avgMsgsConverted, icon: MessageSquare, subtitle: 'média durante trial' },
+    { title: 'Msgs Trial (Não Convertidos)', value: metrics.avgMsgsNonConverted, icon: MessageSquare, subtitle: 'média durante trial' },
+    { title: 'Cancelados', value: metrics.canceledUsers, icon: XCircle, subtitle: 'status = canceled (all-time)' },
     { title: 'Cancelando', value: metrics.cancelingUsers, icon: Clock, subtitle: 'aguardando fim do período' },
   ] : [];
 
@@ -364,21 +367,23 @@ export default function AdminEngagement() {
           <TabsContent value="trial" className="mt-4 space-y-6">
             {loading && !metrics ? <SkeletonCards /> : (
               <>
-                {/* Simplified Funnel — ALL-TIME, independent of period filter */}
+                {/* ALL-TIME FUNNEL — card-only */}
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-base font-semibold flex items-center gap-2">
                       <ArrowDown className="h-4 w-4" />
-                      Funil de Conversão (all-time)
+                      Funil de Conversão (all-time — somente com cartão)
                     </CardTitle>
-                    <p className="text-xs text-muted-foreground">Baseado em trial_started_at — exclui perfis legados. Não filtrado por período.</p>
+                    <p className="text-xs text-muted-foreground">
+                      Apenas usuários que iniciaram checkout (plan ≠ null). Total all-time: {metrics?.totalTrialsAllTime ?? 0} trials, {metrics?.totalTrialsWithCardAllTime ?? 0} com cartão.
+                    </p>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     {metrics && (
                       <>
-                        <FunnelStep label="Iniciaram Trial" value={metrics.funnelTotal} total={metrics.funnelTotal} color="bg-blue-500" />
+                        <FunnelStep label="Iniciaram Trial (com cartão)" value={metrics.funnelTotal} total={metrics.funnelTotal} color="bg-blue-500" />
                         <FunnelStep label="Responderam (1+ mensagem)" value={metrics.funnelResponded} total={metrics.funnelTotal} color="bg-cyan-500" />
-                        <FunnelStep label="Ativos (status = active)" value={metrics.funnelConverted} total={metrics.funnelTotal} color="bg-green-500" />
+                        <FunnelStep label="Converteram (assinaram)" value={metrics.funnelConverted} total={metrics.funnelTotal} color="bg-green-500" />
                       </>
                     )}
                   </CardContent>
@@ -401,7 +406,7 @@ export default function AdminEngagement() {
                 {metrics?.trialsByPlan && metrics.trialsByPlan.length > 0 && (
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-base font-semibold">Distribuição por Plano (período)</CardTitle>
+                      <CardTitle className="text-base font-semibold">Distribuição por Plano (com cartão, período)</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3">
                       {metrics.trialsByPlan.map((item) => {

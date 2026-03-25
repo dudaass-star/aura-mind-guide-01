@@ -23,8 +23,22 @@ function getModelPricing(model: string) {
 }
 
 /**
+ * Convert a date string (yyyy-MM-dd) to BRT (UTC-3) boundaries in ISO format.
+ * e.g. "2026-03-25" → start: "2026-03-25T03:00:00.000Z", end: "2026-03-26T02:59:59.999Z"
+ */
+function toBRTInterval(dateFrom: string, dateTo: string): { periodStart: string; periodEnd: string } {
+  // BRT = UTC-3, so midnight BRT = 03:00 UTC
+  const periodStart = `${dateFrom}T03:00:00.000Z`;
+  // End of day in BRT = next day 02:59:59.999 UTC
+  const endDate = new Date(`${dateTo}T00:00:00Z`);
+  endDate.setUTCDate(endDate.getUTCDate() + 1);
+  const nextDay = endDate.toISOString().slice(0, 10);
+  const periodEnd = `${nextDay}T02:59:59.999Z`;
+  return { periodStart, periodEnd };
+}
+
+/**
  * Paginated fetch to bypass Supabase 1000-row limit.
- * Returns all rows matching the query within the period.
  */
 async function fetchAllPaginated(
   supabase: ReturnType<typeof createClient>,
@@ -41,6 +55,7 @@ async function fetchAllPaginated(
       if (f.op === 'eq') query = query.eq(f.column, f.value);
       else if (f.op === 'gte') query = query.gte(f.column, f.value);
       else if (f.op === 'lte') query = query.lte(f.column, f.value);
+      else if (f.op === 'lt') query = query.lt(f.column, f.value);
       else if (f.op === 'not.is') query = query.not(f.column, 'is', f.value);
     }
     query = query.range(page * pageSize, (page + 1) * pageSize - 1);
@@ -87,8 +102,11 @@ Deno.serve(async (req) => {
     const now = new Date();
     const defaultFrom = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const defaultTo = now.toISOString().slice(0, 10);
-    const periodStart = (dateFrom || defaultFrom) + 'T00:00:00Z';
-    const periodEnd = (dateTo || defaultTo) + 'T23:59:59.999Z';
+
+    // BRT-aligned period boundaries
+    const { periodStart, periodEnd } = toBRTInterval(dateFrom || defaultFrom, dateTo || defaultTo);
+
+    console.log(`📊 Period: ${periodStart} → ${periodEnd} (BRT-aligned)`);
 
     // ========== ENGAGEMENT METRICS ==========
 
@@ -97,65 +115,54 @@ Deno.serve(async (req) => {
       .select('*', { count: 'exact', head: true })
       .eq('status', 'active');
 
-    // FIX: Paginated fetch to avoid 1000-row truncation
-    const periodMessages = await fetchAllPaginated(supabase, 'messages', 'user_id', [
+    // Paginated fetch — only user messages for active users count
+    const periodUserMessages = await fetchAllPaginated(supabase, 'messages', 'user_id', [
       { column: 'role', op: 'eq', value: 'user' },
       { column: 'created_at', op: 'gte', value: periodStart },
-      { column: 'created_at', op: 'lte', value: periodEnd },
+      { column: 'created_at', op: 'lt', value: periodEnd },
     ]);
 
-    const uniqueUsersInPeriod = new Set(periodMessages.map(m => m.user_id as string));
+    const uniqueUsersInPeriod = new Set(periodUserMessages.map(m => m.user_id as string));
     const activeUsersInPeriod = uniqueUsersInPeriod.size;
 
-    const { count: weeklyMessages } = await supabase
+    // Total user messages in period (count only user role for consistency)
+    const userMessagesInPeriod = periodUserMessages.length;
+
+    // Total all messages (user + assistant) for display if needed
+    const { count: totalMessagesInPeriod } = await supabase
       .from('messages')
       .select('*', { count: 'exact', head: true })
       .gte('created_at', periodStart)
-      .lte('created_at', periodEnd);
+      .lt('created_at', periodEnd);
 
-    const { data: weeklySessions } = await supabase
+    // Sessions completed in period — filter by ended_at, not created_at
+    const { data: completedSessions } = await supabase
       .from('sessions')
-      .select('started_at, ended_at')
-      .eq('status', 'completed')
-      .gte('created_at', periodStart)
-      .lte('created_at', periodEnd);
-
-    const weeklySessionsCount = weeklySessions?.length || 0;
-
-    // Avg session duration
-    const { data: allCompletedSessions } = await supabase
-      .from('sessions')
-      .select('started_at, ended_at')
+      .select('started_at, ended_at, user_id')
       .eq('status', 'completed')
       .not('started_at', 'is', null)
       .not('ended_at', 'is', null)
-      .gte('created_at', periodStart)
-      .lte('created_at', periodEnd);
+      .gte('ended_at', periodStart)
+      .lt('ended_at', periodEnd);
 
+    const weeklySessionsCount = completedSessions?.length || 0;
+
+    // Avg session duration (from sessions that ended in period)
     let avgSessionMinutes = 0;
-    if (allCompletedSessions && allCompletedSessions.length > 0) {
-      const totalMinutes = allCompletedSessions.reduce((sum, s) => {
+    if (completedSessions && completedSessions.length > 0) {
+      const totalMinutes = completedSessions.reduce((sum, s) => {
         const start = new Date(s.started_at!).getTime();
         const end = new Date(s.ended_at!).getTime();
         return sum + (end - start) / 60000;
       }, 0);
-      avgSessionMinutes = Math.round(totalMinutes / allCompletedSessions.length);
+      avgSessionMinutes = Math.round(totalMinutes / completedSessions.length);
     }
 
-    // Messages per session
-    const { data: completedSessionsForMsg } = await supabase
-      .from('sessions')
-      .select('id, user_id, started_at, ended_at')
-      .eq('status', 'completed')
-      .not('started_at', 'is', null)
-      .not('ended_at', 'is', null)
-      .gte('created_at', periodStart)
-      .lte('created_at', periodEnd);
-
+    // Messages per session (sessions that ended in period)
     let messagesPerSession = 0;
-    if (completedSessionsForMsg && completedSessionsForMsg.length > 0) {
-      const sessionsByUser = new Map<string, typeof completedSessionsForMsg>();
-      for (const s of completedSessionsForMsg) {
+    if (completedSessions && completedSessions.length > 0) {
+      const sessionsByUser = new Map<string, typeof completedSessions>();
+      for (const s of completedSessions) {
         if (!sessionsByUser.has(s.user_id)) sessionsByUser.set(s.user_id, []);
         sessionsByUser.get(s.user_id)!.push(s);
       }
@@ -186,16 +193,17 @@ Deno.serve(async (req) => {
       ? Math.round(activeUsersInPeriod / activeUsersBase * 100)
       : 0;
 
-    const periodDays = Math.max(1, Math.round((new Date(periodEnd).getTime() - new Date(periodStart).getTime()) / (1000 * 60 * 60 * 24))) || 1;
+    const periodMs = new Date(periodEnd).getTime() - new Date(periodStart).getTime();
+    const periodDays = Math.max(1, Math.round(periodMs / (1000 * 60 * 60 * 24)));
     const avgDailyMessagesPerUser = activeUsersInPeriod > 0
-      ? Math.round((weeklyMessages || 0) / periodDays / activeUsersInPeriod * 10) / 10
+      ? Math.round(userMessagesInPeriod / periodDays / activeUsersInPeriod * 10) / 10
       : 0;
 
     // ========== COST METRICS ==========
 
     const tokenLogs = await fetchAllPaginated(supabase, 'token_usage_logs', 'model, prompt_tokens, completion_tokens, cached_tokens', [
       { column: 'created_at', op: 'gte', value: periodStart },
-      { column: 'created_at', op: 'lte', value: periodEnd },
+      { column: 'created_at', op: 'lt', value: periodEnd },
     ]);
 
     let totalCostUSD = 0;
@@ -241,8 +249,8 @@ Deno.serve(async (req) => {
     const totalCacheSavings = Math.round(costBreakdownByModel.reduce((s, m) => s + m.cacheSavings, 0) * 100) / 100;
 
     // ========== TRIAL & CONVERSION METRICS ==========
-    // Real trials = profiles with trial_started_at (went through actual trial flow)
-    // Excludes legacy profiles with plan='essencial' default who never registered a card
+    // Real trials = profiles with trial_started_at AND plan IS NOT NULL (had card registered)
+    // This excludes: legacy profiles and trials without card
 
     const { count: activeTrials } = await supabase
       .from('profiles')
@@ -250,27 +258,46 @@ Deno.serve(async (req) => {
       .eq('status', 'trial')
       .not('trial_started_at', 'is', null);
 
-    // All trial profiles (with trial_started_at = real trial users)
+    // ALL trial profiles with card (plan not null + trial_started_at not null)
+    const { data: allTrialWithCard } = await supabase
+      .from('profiles')
+      .select('user_id, plan, status, trial_started_at, created_at, trial_conversations_count, converted_at')
+      .not('trial_started_at', 'is', null)
+      .not('plan', 'is', null);
+
+    // ALL trial profiles (with or without card) for "total trials" context
     const { data: allTrialProfiles } = await supabase
       .from('profiles')
-      .select('user_id, plan, status, trial_started_at, created_at, trial_conversations_count')
+      .select('user_id, plan, status, trial_started_at, trial_conversations_count, converted_at')
       .not('trial_started_at', 'is', null);
 
-    // Filter by period using trial_started_at
+    // Filter by period using trial_started_at (card-only for funnel)
+    const trialsWithCardInPeriod = (allTrialWithCard || []).filter(p => {
+      const dt = p.trial_started_at!;
+      return dt >= periodStart && dt < periodEnd;
+    });
+
     const trialsInPeriod = (allTrialProfiles || []).filter(p => {
       const dt = p.trial_started_at!;
-      return dt >= periodStart && dt <= periodEnd;
+      return dt >= periodStart && dt < periodEnd;
     });
 
     const totalTrialsInPeriod = trialsInPeriod.length;
+    const trialsWithCardInPeriodCount = trialsWithCardInPeriod.length;
 
-    const trialRespondedCount = trialsInPeriod.filter(p => (p.trial_conversations_count || 0) >= 1).length;
+    const trialRespondedCount = trialsWithCardInPeriod.filter(p => (p.trial_conversations_count || 0) >= 1).length;
 
-    const convertedProfiles = trialsInPeriod.filter(p => p.status === 'active');
-    const convertedCount = convertedProfiles.length;
+    // Converted = status active OR has converted_at
+    const convertedInPeriodByConvertedAt = trialsWithCardInPeriod.filter(p => {
+      if (p.converted_at) {
+        return (p.converted_at as string) >= periodStart && (p.converted_at as string) < periodEnd;
+      }
+      return p.status === 'active';
+    });
+    const convertedCount = convertedInPeriodByConvertedAt.length;
 
-    const conversionRate = totalTrialsInPeriod > 0
-      ? Math.round(convertedCount / totalTrialsInPeriod * 1000) / 10
+    const conversionRate = trialsWithCardInPeriodCount > 0
+      ? Math.round(convertedCount / trialsWithCardInPeriodCount * 1000) / 10
       : 0;
 
     // Expired trials (trial_started_at > 7 days ago and still trial status)
@@ -279,42 +306,42 @@ Deno.serve(async (req) => {
       return p.status === 'trial' && p.trial_started_at! < sevenDaysAgoDate;
     }).length;
 
-    // Avg days to conversion (for converted profiles in period)
+    // Avg days to conversion
     let avgDaysToConversion = 0;
+    const convertedProfiles = (allTrialWithCard || []).filter(p => p.status === 'active' || p.converted_at);
     if (convertedProfiles.length > 0) {
       const totalDays = convertedProfiles.reduce((sum, p) => {
         const trialStart = new Date(p.trial_started_at!).getTime();
-        const now = Date.now();
-        return sum + Math.max(0, (now - trialStart) / (1000 * 60 * 60 * 24));
+        const convEnd = p.converted_at ? new Date(p.converted_at as string).getTime() : Date.now();
+        return sum + Math.max(0, (convEnd - trialStart) / (1000 * 60 * 60 * 24));
       }, 0);
       avgDaysToConversion = Math.round(totalDays / convertedProfiles.length * 10) / 10;
     }
 
-    // Avg msgs converted vs non-converted
-    const avgMsgsConverted = convertedProfiles.length > 0
-      ? Math.round(convertedProfiles.reduce((sum, p) => sum + (p.trial_conversations_count || 0), 0) / convertedProfiles.length * 10) / 10
+    // Avg msgs converted vs non-converted (card-only in period)
+    const convertedForMsgs = trialsWithCardInPeriod.filter(p => p.status === 'active' || p.converted_at);
+    const avgMsgsConverted = convertedForMsgs.length > 0
+      ? Math.round(convertedForMsgs.reduce((sum, p) => sum + (p.trial_conversations_count || 0), 0) / convertedForMsgs.length * 10) / 10
       : 0;
 
-    const nonConvertedProfiles = trialsInPeriod.filter(p => p.status === 'trial');
+    const nonConvertedProfiles = trialsWithCardInPeriod.filter(p => p.status === 'trial');
+    const avgMsgsNonConverted = nonConvertedProfiles.length > 0
+      ? Math.round(nonConvertedProfiles.reduce((sum, p) => sum + (p.trial_conversations_count || 0), 0) / nonConvertedProfiles.length * 10) / 10
+      : 0;
 
-    // Trials by plan distribution
+    // Trials by plan distribution (card-only in period)
     const planCounts: Record<string, number> = {};
-    for (const p of trialsInPeriod) {
+    for (const p of trialsWithCardInPeriod) {
       const plan = p.plan || 'sem_plano';
       planCounts[plan] = (planCounts[plan] || 0) + 1;
     }
     const trialsByPlan = Object.entries(planCounts).map(([plan, count]) => ({ plan, count })).sort((a, b) => b.count - a.count);
 
-    const avgMsgsNonConverted = nonConvertedProfiles.length > 0
-      ? Math.round(nonConvertedProfiles.reduce((sum, p) => sum + (p.trial_conversations_count || 0), 0) / nonConvertedProfiles.length * 10) / 10
-      : 0;
-
-    // ========== ALL-TIME FUNNEL (not filtered by period) ==========
-    // Uses trial_started_at to identify real trial users (excludes legacy)
-    const allTimeFunnelProfiles = allTrialProfiles || [];
-    const funnelTotal = allTimeFunnelProfiles.length;
-    const funnelResponded = allTimeFunnelProfiles.filter(p => (p.trial_conversations_count || 0) >= 1).length;
-    const funnelConverted = allTimeFunnelProfiles.filter(p => p.status === 'active').length;
+    // ========== ALL-TIME FUNNEL (card-only) ==========
+    const allTimeFunnel = allTrialWithCard || [];
+    const funnelTotal = allTimeFunnel.length;
+    const funnelResponded = allTimeFunnel.filter(p => (p.trial_conversations_count || 0) >= 1).length;
+    const funnelConverted = allTimeFunnel.filter(p => p.status === 'active' || p.converted_at).length;
 
     // Cancellation counts
     const { count: canceledUsers } = await supabase
@@ -334,14 +361,14 @@ Deno.serve(async (req) => {
       .select('reason, action_taken')
       .eq('action_taken', 'canceled')
       .gte('created_at', periodStart)
-      .lte('created_at', periodEnd);
+      .lt('created_at', periodEnd);
 
     const { count: pausedInPeriodCount } = await supabase
       .from('cancellation_feedback')
       .select('*', { count: 'exact', head: true })
       .eq('action_taken', 'paused')
       .gte('created_at', periodStart)
-      .lte('created_at', periodEnd);
+      .lt('created_at', periodEnd);
 
     const canceledInPeriod = cancelFeedbackInPeriod?.length || 0;
     const churnRate = activeUsersBase && activeUsersBase > 0
@@ -363,7 +390,8 @@ Deno.serve(async (req) => {
       // Engagement
       activeUsers: activeUsersInPeriod,
       activeUsersBase: activeUsersBase || 0,
-      weeklyMessages: weeklyMessages || 0,
+      userMessagesInPeriod,
+      totalMessagesInPeriod: totalMessagesInPeriod || 0,
       weeklySessionsCount,
       avgSessionMinutes,
       messagesPerSession,
@@ -375,10 +403,12 @@ Deno.serve(async (req) => {
       avgCostPerActiveUser,
       costBreakdownByModel,
       totalCacheSavings,
-      // Trial & Conversion (period-filtered)
+      // Trial & Conversion (period-filtered, card-only)
       activeTrials: activeTrials || 0,
       trialsInPeriod: totalTrialsInPeriod,
-      totalTrialsAllTime: funnelTotal,
+      trialsWithCardInPeriod: trialsWithCardInPeriodCount,
+      totalTrialsAllTime: (allTrialProfiles || []).length,
+      totalTrialsWithCardAllTime: funnelTotal,
       trialRespondedCount,
       convertedCount,
       conversionRate,
@@ -389,7 +419,7 @@ Deno.serve(async (req) => {
       avgMsgsNonConverted,
       canceledUsers: canceledUsers || 0,
       cancelingUsers: cancelingUsers || 0,
-      // All-time funnel
+      // All-time funnel (card-only)
       funnelTotal,
       funnelResponded,
       funnelConverted,
