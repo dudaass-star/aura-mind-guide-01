@@ -5,7 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Users, MessageSquare, Clock, BarChart3, RefreshCw, TrendingUp, UserPlus, Percent, Timer, XCircle, ArrowRightLeft, ArrowDown, Send, CalendarIcon, DollarSign, UserMinus } from 'lucide-react';
+import { ArrowLeft, Users, MessageSquare, Clock, BarChart3, RefreshCw, TrendingUp, UserPlus, Percent, Timer, XCircle, ArrowRightLeft, ArrowDown, Send, CalendarIcon, DollarSign, UserMinus, ShoppingCart } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -58,6 +58,13 @@ interface Metrics {
   canceledUsers: number;
   cancelingUsers: number;
   trialsByPlan?: { plan: string; count: number }[];
+  // Checkout funnel
+  checkoutCreatedInPeriod: number;
+  checkoutCompletedInPeriod: number;
+  checkoutDropoffInPeriod: number;
+  checkoutCompletionRate: number;
+  checkoutCreatedAllTime: number;
+  checkoutCompletedAllTime: number;
   // Cancellation
   canceledInPeriod: number;
   pausedInPeriod: number;
@@ -372,6 +379,35 @@ export default function AdminEngagement() {
           <TabsContent value="trial" className="mt-4 space-y-6">
             {loading && !metrics ? <SkeletonCards /> : (
               <>
+                {/* CHECKOUT FUNNEL */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base font-semibold flex items-center gap-2">
+                      <ShoppingCart className="h-4 w-4" />
+                      Funil de Checkout (período)
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground">
+                      {periodLabel} — All-time: {metrics?.checkoutCreatedAllTime ?? 0} criados, {metrics?.checkoutCompletedAllTime ?? 0} finalizados
+                    </p>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {metrics && (
+                      <>
+                        <FunnelStep label="Clicaram para Pagar (sessão criada)" value={metrics.checkoutCreatedInPeriod} total={metrics.checkoutCreatedInPeriod} color="bg-blue-500" />
+                        <FunnelStep label="Finalizaram Pagamento" value={metrics.checkoutCompletedInPeriod} total={metrics.checkoutCreatedInPeriod} color="bg-green-500" />
+                        <div className="flex justify-between text-sm pt-2 border-t border-border">
+                          <span className="text-muted-foreground">Desistiram no pagamento</span>
+                          <span className="font-semibold text-destructive">{metrics.checkoutDropoffInPeriod} <span className="text-muted-foreground font-normal">({metrics.checkoutCreatedInPeriod > 0 ? Math.round(metrics.checkoutDropoffInPeriod / metrics.checkoutCreatedInPeriod * 100) : 0}%)</span></span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Taxa de finalização</span>
+                          <span className="font-semibold text-foreground">{metrics.checkoutCompletionRate}%</span>
+                        </div>
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+
                 {/* PERIOD FUNNEL — card-only */}
                 <Card>
                   <CardHeader>

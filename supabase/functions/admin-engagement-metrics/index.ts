@@ -419,6 +419,37 @@ Deno.serve(async (req) => {
     }
     const cancellationReasons = Object.values(reasonCounts).sort((a, b) => b.count - a.count);
 
+    // ========== CHECKOUT FUNNEL METRICS ==========
+
+    // All checkout sessions in period
+    const { count: checkoutCreatedInPeriod } = await supabase
+      .from('checkout_sessions')
+      .select('*', { count: 'exact', head: true })
+      .gte('created_at', periodStart)
+      .lt('created_at', periodEnd);
+
+    const { count: checkoutCompletedInPeriod } = await supabase
+      .from('checkout_sessions')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'completed')
+      .gte('created_at', periodStart)
+      .lt('created_at', periodEnd);
+
+    // All-time checkout funnel
+    const { count: checkoutCreatedAllTime } = await supabase
+      .from('checkout_sessions')
+      .select('*', { count: 'exact', head: true });
+
+    const { count: checkoutCompletedAllTime } = await supabase
+      .from('checkout_sessions')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'completed');
+
+    const checkoutDropoffInPeriod = (checkoutCreatedInPeriod || 0) - (checkoutCompletedInPeriod || 0);
+    const checkoutCompletionRate = (checkoutCreatedInPeriod || 0) > 0
+      ? Math.round((checkoutCompletedInPeriod || 0) / (checkoutCreatedInPeriod || 0) * 1000) / 10
+      : 0;
+
     return new Response(JSON.stringify({
       // Engagement
       activeUsers: activeUsersInPeriod,
@@ -459,6 +490,13 @@ Deno.serve(async (req) => {
       funnelTotal,
       funnelResponded,
       funnelConverted,
+      // Checkout funnel
+      checkoutCreatedInPeriod: checkoutCreatedInPeriod || 0,
+      checkoutCompletedInPeriod: checkoutCompletedInPeriod || 0,
+      checkoutDropoffInPeriod,
+      checkoutCompletionRate,
+      checkoutCreatedAllTime: checkoutCreatedAllTime || 0,
+      checkoutCompletedAllTime: checkoutCompletedAllTime || 0,
       // Cancellation
       canceledInPeriod,
       pausedInPeriod: pausedInPeriodCount || 0,

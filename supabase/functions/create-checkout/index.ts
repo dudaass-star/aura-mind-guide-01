@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getPhoneVariations } from "../_shared/zapi-client.ts";
 
 const corsHeaders = {
@@ -192,8 +193,26 @@ serve(async (req) => {
     const session = await stripe.checkout.sessions.create(sessionConfig);
     logStep("Checkout session created", { sessionId: session.id });
 
-    // CAPI InitiateCheckout is now sent from the frontend with event_id deduplication
-    // (removed server-side duplicate to avoid inflating Meta event counts)
+    // Log checkout session for funnel tracking
+    try {
+      const supabase = createClient(
+        Deno.env.get("SUPABASE_URL") ?? "",
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+      );
+      await supabase.from("checkout_sessions").insert({
+        phone: phoneClean,
+        email: email || null,
+        name: name,
+        plan: plan,
+        billing: billingPeriod,
+        payment_method: isBoletoPayment ? "boleto" : "card",
+        stripe_session_id: session.id,
+        status: "created",
+      });
+      logStep("Checkout session logged to DB");
+    } catch (dbErr) {
+      console.warn("⚠️ Failed to log checkout session (non-blocking):", dbErr);
+    }
 
     return new Response(JSON.stringify({ url: session.url }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
