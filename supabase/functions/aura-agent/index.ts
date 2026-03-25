@@ -5703,13 +5703,35 @@ Estou aqui sempre que precisar! 💜`;
               .eq('id', currentSession.id);
               
             console.log('📨 Session summary sent immediately to client');
+
+            // ========== ENVIO IMEDIATO DO RATING ==========
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            
+            const ratingMessage = `Antes de terminar, me conta: 🌟
+
+*De 0 a 10, como você se sente agora comparado a quando começamos a sessão?*
+
+(Só o número tá ótimo! E se quiser me dizer o que mais gostou ou o que posso melhorar, adoraria ouvir! 💜)`;
+
+            const ratingResult = await sendTextMessage(cleanPhone, ratingMessage, undefined, instanceConfig);
+            
+            if (ratingResult.success) {
+              await supabase
+                .from('sessions')
+                .update({ rating_requested: true })
+                .eq('id', currentSession.id);
+              console.log('✅ Rating request sent immediately for session', currentSession.id);
+            } else {
+              console.error('⚠️ Failed to send immediate rating:', ratingResult.error);
+              // session-reminder will retry as safety net
+            }
           } else {
             console.error('⚠️ Failed to send immediate summary:', sendResult.error);
-            // Se falhar, o session-reminder ainda pode enviar depois como fallback
+            // session-reminder will retry as safety net
           }
         } catch (sendError) {
           console.error('⚠️ Error sending immediate session summary:', sendError);
-          // Se falhar, o session-reminder ainda pode enviar depois como fallback
+          // session-reminder will retry as safety net
         }
       }
     }
