@@ -375,6 +375,9 @@ Cuide-se. 🌟`;
         // Update profile status
         
         const cleanPhone = customerPhone.replace(/\D/g, '');
+        const formattedPhone = (cleanPhone.length === 10 || cleanPhone.length === 11)
+          ? `55${cleanPhone}`
+          : cleanPhone;
 
         const { error: updateError } = await supabase
           .from('profiles')
@@ -382,7 +385,7 @@ Cuide-se. 🌟`;
             status: 'canceled',
             updated_at: new Date().toISOString(),
           })
-          .eq('phone', cleanPhone);
+          .eq('phone', formattedPhone);
 
         if (updateError) {
           console.error('❌ Error updating profile status:', updateError);
