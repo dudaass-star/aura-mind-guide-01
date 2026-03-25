@@ -552,7 +552,7 @@ Me conta: como você está hoje?`;
       }
     }
 
-    // ========== invoice.payment_failed — payment failed ==========
+    // ========== invoice.payment_failed — payment failed + WhatsApp dunning ==========
     if (event.type === 'invoice.payment_failed') {
       const invoice = event.data.object as Stripe.Invoice;
       const customerId = invoice.customer as string;
@@ -566,18 +566,99 @@ Me conta: como você está hoje?`;
             const customerPhone = customer.metadata?.phone;
             if (customerPhone) {
               const cleanPhone = customerPhone.replace(/\D/g, '');
+              const formattedPhone = (cleanPhone.length === 10 || cleanPhone.length === 11)
+                ? `55${cleanPhone}`
+                : cleanPhone;
+
+              // Step 1: Record payment failure
               const { error: updateError } = await supabase
                 .from('profiles')
                 .update({
                   payment_failed_at: new Date().toISOString(),
                   updated_at: new Date().toISOString(),
                 })
-                .eq('phone', cleanPhone);
+                .eq('phone', formattedPhone);
 
               if (updateError) {
                 console.error('❌ Error updating profile on payment_failed:', updateError);
               } else {
-                console.log('✅ payment_failed_at recorded for phone:', cleanPhone);
+                console.log('✅ payment_failed_at recorded for phone:', formattedPhone);
+              }
+
+              // Step 2: Get profile for user_id and name
+              const { data: profile } = await supabase
+                .from('profiles')
+                .select('user_id, name')
+                .eq('phone', formattedPhone)
+                .maybeSingle();
+
+              const userName = profile?.name || customer.name || 'Cliente';
+
+              // Step 3: Create Billing Portal link for card update
+              try {
+                const portalSession = await stripe2.billingPortal.sessions.create({
+                  customer: customerId,
+                  return_url: 'https://olaaura.com.br',
+                });
+
+                console.log('🔗 Billing portal session created:', portalSession.url);
+
+                // Step 4: Shorten the portal URL via create-short-link
+                let paymentLink = portalSession.url;
+                try {
+                  const shortLinkResponse = await fetch(`${supabaseUrl}/functions/v1/create-short-link`, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${supabaseServiceKey}`,
+                    },
+                    body: JSON.stringify({
+                      url: portalSession.url,
+                      phone: formattedPhone,
+                    }),
+                  });
+
+                  if (shortLinkResponse.ok) {
+                    const shortLinkData = await shortLinkResponse.json();
+                    paymentLink = shortLinkData.shortUrl;
+                    console.log('🔗 Short link created:', paymentLink);
+                  } else {
+                    console.warn('⚠️ Short link creation failed, using full URL');
+                  }
+                } catch (shortLinkErr) {
+                  console.warn('⚠️ Short link error, using full URL:', shortLinkErr);
+                }
+
+                // Step 5: Send WhatsApp dunning message
+                const dunningMessage = `Oi, ${userName}! 💜
+
+Não conseguimos processar seu pagamento da AURA.
+
+Você pode atualizar seu cartão aqui: ${paymentLink}
+
+Se preferir cancelar, é só me avisar. Sem problemas. 💜`;
+
+                const msgResponse = await fetch(`${supabaseUrl}/functions/v1/send-zapi-message`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${supabaseServiceKey}`,
+                  },
+                  body: JSON.stringify({
+                    phone: formattedPhone,
+                    message: dunningMessage,
+                    isAudio: false,
+                    ...(profile?.user_id && { user_id: profile.user_id }),
+                  }),
+                });
+
+                if (!msgResponse.ok) {
+                  console.error('❌ Failed to send dunning WhatsApp:', await msgResponse.text());
+                } else {
+                  console.log('✅ Dunning WhatsApp sent to:', formattedPhone);
+                }
+              } catch (portalErr) {
+                console.error('❌ Error creating billing portal or sending dunning:', portalErr);
               }
             }
           }
