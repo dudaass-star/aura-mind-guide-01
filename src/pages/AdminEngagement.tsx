@@ -38,6 +38,9 @@ interface Metrics {
   totalCacheSavings: number;
   // Trial & Conversion
   activeTrials: number;
+  activeSubscribers: number;
+  paymentFailedCount: number;
+  expiredTrialsAwaitingPayment: number;
   trialsInPeriod: number;
   trialsWithCardInPeriod: number;
   totalTrialsAllTime: number;
