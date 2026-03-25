@@ -367,23 +367,23 @@ export default function AdminEngagement() {
           <TabsContent value="trial" className="mt-4 space-y-6">
             {loading && !metrics ? <SkeletonCards /> : (
               <>
-                {/* ALL-TIME FUNNEL — card-only */}
+                {/* PERIOD FUNNEL — card-only */}
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-base font-semibold flex items-center gap-2">
                       <ArrowDown className="h-4 w-4" />
-                      Funil de Conversão (all-time — somente com cartão)
+                      Funil de Conversão (período — somente com cartão)
                     </CardTitle>
                     <p className="text-xs text-muted-foreground">
-                      Apenas usuários que iniciaram checkout (plan ≠ null). Total all-time: {metrics?.totalTrialsAllTime ?? 0} trials, {metrics?.totalTrialsWithCardAllTime ?? 0} com cartão.
+                      Período selecionado: {periodLabel}. Contexto all-time: {metrics?.totalTrialsAllTime ?? 0} trials, {metrics?.totalTrialsWithCardAllTime ?? 0} com cartão.
                     </p>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     {metrics && (
                       <>
-                        <FunnelStep label="Iniciaram Trial (com cartão)" value={metrics.funnelTotal} total={metrics.funnelTotal} color="bg-blue-500" />
-                        <FunnelStep label="Responderam (1+ mensagem)" value={metrics.funnelResponded} total={metrics.funnelTotal} color="bg-cyan-500" />
-                        <FunnelStep label="Converteram (assinaram)" value={metrics.funnelConverted} total={metrics.funnelTotal} color="bg-green-500" />
+                        <FunnelStep label="Iniciaram Trial (com cartão)" value={metrics.trialsWithCardInPeriod} total={metrics.trialsWithCardInPeriod} color="bg-blue-500" />
+                        <FunnelStep label="Responderam (1+ mensagem)" value={metrics.trialRespondedCount} total={metrics.trialsWithCardInPeriod} color="bg-cyan-500" />
+                        <FunnelStep label="Converteram (assinaram)" value={metrics.convertedCount} total={metrics.trialsWithCardInPeriod} color="bg-green-500" />
                       </>
                     )}
                   </CardContent>
