@@ -1,58 +1,38 @@
 
 
-# Corrigir Dados de Sessão: Diagnóstico + Correções Definitivas
+## Diagnóstico: Por que Meta mostra 6 Purchase em vez de 3
 
-## Causa Raiz Confirmada
+### Causa raiz
 
-Analisando o código (linha 5451), o **summary usa `google/gemini-2.5-flash` hardcoded**, enquanto a conversa principal usa o modelo configurado (geralmente 2.5 Pro). O Flash tem problemas conhecidos de instruction-following — é provavelmente a causa dos JSONs inválidos que levam ao fallback "Sessão concluída."
+O Meta Pixel tem o recurso **"Eventos Automáticos" (Automatic Events)** ativado. Ele detecta automaticamente eventos de compra na página `/obrigado` baseado no conteúdo da página (palavras como "assinatura confirmada", "plano", "parabéns"). Isso gera **3 eventos de Purchase do browser** que não existem no seu código.
 
-## Alterações
+**Evidências:**
+- Banco de dados: exatamente 3 `checkout.session.completed` hoje
+- Código: `ThankYou.tsx` NÃO envia `fbq('track', 'Purchase')` — confirmado
+- Meta Events Manager mostra: 3 browser + 6 servidor (inflado pela falta de deduplicação)
+- Desduplicação: "Não atende às melhores práticas" — porque os eventos automáticos do browser não têm o mesmo `event_id` que os do CAPI
 
-### 1. Usar o mesmo modelo da conversa para o summary
+### Solução (2 passos)
 
-**Arquivo**: `supabase/functions/aura-agent/index.ts`
+**Passo 1 — Desativar Eventos Automáticos no Meta (ação no dashboard do Meta)**
+1. Acesse **Meta Events Manager** → Selecione o Pixel `939366085297921`
+2. Vá em **Configurações** → **Eventos Automáticos**
+3. **Desative** a detecção automática de eventos de compra
 
-Na linha 5451, trocar o modelo hardcoded `google/gemini-2.5-flash` pelo modelo principal que já está sendo usado na conversa (variável que contém o modelo selecionado via `system_config`). O custo é irrelevante: é 1 chamada por sessão, não por mensagem.
+Isso elimina os 3 eventos fantasma do browser imediatamente.
 
-Fazer o mesmo para as chamadas de onboarding extraction (linha 5535) e topic extraction (linha 5573) que também usam Flash hardcoded.
+**Passo 2 — Adicionar `event_id` no PageView da página de obrigado (mudança de código, segurança extra)**
 
-### 2. Retry com log de diagnóstico (3 tentativas)
+Mesmo após desativar Automatic Events, vamos adicionar uma camada extra de proteção: impedir que o Meta Pixel faça qualquer tracking na página `/obrigado` além do PageView básico.
 
-**Arquivo**: `supabase/functions/aura-agent/index.ts` (linhas ~5449-5508)
+Arquivo: `src/pages/ThankYou.tsx`
+- Adicionar um `useEffect` que desativa o tracking automático do pixel nessa página específica via `fbq('dataProcessingOptions', ['LDU'], 0, 0)` ou simplesmente garantindo que nenhum evento de conversão seja detectado.
 
-- Loop de 3 tentativas na chamada de summary
-- Cada tentativa loga o raw response ANTES do parse para diagnóstico
-- Na 2ª tentativa: adicionar instrução extra "Responda APENAS o JSON"
-- Na 3ª tentativa: reduzir contexto para últimas 8 mensagens
-- Limpeza agressiva do JSON: extrair conteúdo entre primeiro `{` e último `}`
-- Validação estrutural: `summary` >20 chars, `insights` ≥2, `commitments` ≥1
-- Se falhar após 3 tentativas: logar `🚨 CRITICAL` com raw completo — sem fallback genérico, usar o raw text como summary
-- Remover as funções `extractKeyInsightsFromConversation` e `extractCommitmentsFromConversation`
+**Alternativa mais robusta:** Modificar o `index.html` para NÃO carregar o Meta Pixel na rota `/obrigado`, usando um check de rota antes do `fbq('track', 'PageView')`.
 
-### 3. Rating direto no encerramento
-
-**Arquivo**: `supabase/functions/aura-agent/index.ts` (após linha ~5520)
-
-- Após salvar a sessão como `completed`, enviar a mensagem de rating diretamente (delay 3s)
-- Marcar `rating_requested: true` no mesmo update de status
-- Elimina dependência do cron `session-reminder`
-
-### 4. Corrigir bug de retry do rating no session-reminder
-
-**Arquivo**: `supabase/functions/session-reminder/index.ts`
-
-- O `post_session_sent = true` é marcado ANTES do rating ser enviado (linha 822)
-- Se o rating falha, nunca mais é retentado
-- Solução: só marcar `post_session_sent = true` APÓS o rating ser enviado com sucesso
-- Ou: separar a query de rating para buscar `rating_requested = false` independentemente
-- Manter como safety net para sessões encerradas por timeout
-
-## Resumo
-
-| Mudança | Impacto |
-|---------|---------|
-| Modelo Pro no summary | Elimina a causa raiz dos JSONs inválidos |
-| Retry 3x + validação | Garante extração mesmo em edge cases |
-| Rating no aura-agent | Rating enviado imediatamente, sem depender do cron |
-| Fix session-reminder | Safety net funcional para timeouts |
+### Resultado esperado
+- Meta recebe **apenas** os 3 Purchase do CAPI (server-side)
+- Zero eventos de Purchase do browser
+- Desduplicação deixa de ser problema (apenas uma fonte)
+- Contagem no Meta Ads = contagem real no banco de dados
 
