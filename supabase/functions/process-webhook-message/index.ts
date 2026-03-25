@@ -282,10 +282,23 @@ Deno.serve(async (req) => {
     console.log(`👤 Found user: ${profile.name} (${profile.user_id}), status: ${profile.status}, instance: ${profile.whatsapp_instance_id || 'env-default'}`);
 
     // ========================================================================
+    // INLINE TRIAL EXPIRATION — expire trials automatically at message time
+    // ========================================================================
+    if (profile.status === 'trial' && profile.trial_started_at) {
+      const trialAge = Date.now() - new Date(profile.trial_started_at).getTime();
+      const sevenDays = 7 * 24 * 60 * 60 * 1000;
+      if (trialAge > sevenDays) {
+        console.log(`⏰ Trial expired inline for ${profile.user_id} — started ${profile.trial_started_at}`);
+        await supabase.from('profiles').update({ status: 'trial_expired', updated_at: new Date().toISOString() }).eq('user_id', profile.user_id);
+        profile.status = 'trial_expired';
+      }
+    }
+
+    // ========================================================================
     // SUBSCRIPTION STATUS CHECK
     // ========================================================================
-    // trial_expired with a valid plan = legitimate Stripe trial, do NOT block
-    const isLegitTrial = profile.status === 'trial_expired' && profile.plan;
+    // trial_expired with trial_started_at = Stripe trial user, do NOT block (webhook will convert them)
+    const isLegitTrial = profile.status === 'trial_expired' && !!profile.trial_started_at;
     const blockedStatuses = ['canceled', 'inactive', 'paused', 'trial_expired'];
     if (blockedStatuses.includes(profile.status || '') && !isLegitTrial) {
       console.log(`🚫 User ${profile.user_id} blocked: status is '${profile.status}'`);
