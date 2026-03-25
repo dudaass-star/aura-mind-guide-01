@@ -5384,16 +5384,27 @@ Exemplo com 4 sessões:
     if ((shouldEndSession || aiWantsToEndSession) && currentSession && profile) {
       const endTime = new Date().toISOString();
 
-      let sessionSummary = "Sessão concluída.";
+      let sessionSummary = "";
       let keyInsights: string[] = [];
       let commitments: any[] = [];
       
-      try {
-        const summaryMessages = messageHistory.slice(-15); // Últimas 15 mensagens
-        const summaryData = await callAI('google/gemini-2.5-flash', [
-              { 
-                role: "system", 
-                content: `Você é um assistente que analisa sessões de mentoria emocional.
+      // ========== DETERMINISTIC SUMMARY: 3 attempts, no generic fallback ==========
+      const maxSummaryAttempts = 3;
+      for (let attempt = 1; attempt <= maxSummaryAttempts; attempt++) {
+        try {
+          // Attempt 3: reduce context to avoid token issues
+          const contextSize = attempt === 3 ? 8 : 15;
+          const summaryMessages = messageHistory.slice(-contextSize);
+          
+          let extraInstruction = '';
+          if (attempt >= 2) {
+            extraInstruction = '\n\nATENÇÃO CRÍTICA: Responda APENAS o JSON puro. Sem texto antes, sem texto depois, sem markdown. APENAS o objeto JSON.';
+          }
+
+          const summaryData = await callAI(configuredModel, [
+                { 
+                  role: "system", 
+                  content: `Você é um assistente que analisa sessões de mentoria emocional.
 Retorne EXATAMENTE neste formato JSON (sem markdown, apenas o JSON):
 {
   "summary": "Resumo de 2-3 frases sobre o tema principal discutido",
@@ -5406,47 +5417,77 @@ Regras:
 - insights: SEMPRE extraia pelo menos 2 insights/aprendizados da sessão. Busque mudanças de perspectiva, reconhecimentos e percepções do usuário.
 - commitments: Se houver ação prática combinada, registre-a. Se NÃO houver ação clara, registre a intenção emocional da sessão (ex: "Me permitir sentir isso hoje sem culpa", "Reconhecer que essa dor é válida"). Nunca invente ações que o usuário não mencionou.
 - NUNCA retorne arrays vazios — sempre extraia ou infira pelo menos 2 insights e 1 compromisso/intenção.
-- Escreva em português brasileiro, de forma clara e objetiva`
-              },
-              ...summaryMessages,
-              { role: "user", content: message },
-              { role: "assistant", content: assistantMessage }
-            ], 400, 0.5, LOVABLE_API_KEY);
+- Escreva em português brasileiro, de forma clara e objetiva${extraInstruction}`
+                },
+                ...summaryMessages,
+                { role: "user", content: message },
+                { role: "assistant", content: assistantMessage }
+              ], 400, 0.5, LOVABLE_API_KEY);
 
-        if (summaryData) {
-          await logTokenUsage(supabase, user_id || null, 'session_summary', 'google/gemini-2.5-flash', summaryData.usage);
-          const aiResponse = summaryData.choices?.[0]?.message?.content?.trim();
-          if (aiResponse) {
-            try {
-              // Limpar possíveis markdown code blocks
-              const cleanJson = aiResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-              const parsed = JSON.parse(cleanJson);
+          if (summaryData) {
+            await logTokenUsage(supabase, user_id || null, 'session_summary', configuredModel, summaryData.usage);
+            const aiResponse = summaryData.choices?.[0]?.message?.content?.trim();
+            
+            if (aiResponse) {
+              console.log(`📝 [Summary attempt ${attempt}/${maxSummaryAttempts}] Raw response (first 300):`, aiResponse.substring(0, 300));
               
-              sessionSummary = parsed.summary || sessionSummary;
-              keyInsights = Array.isArray(parsed.insights) ? parsed.insights : [];
-              commitments = Array.isArray(parsed.commitments) 
-                ? parsed.commitments.map((c: string) => ({ title: c }))
-                : [];
-              
-              console.log('📝 Extracted session data:', {
-                summary: sessionSummary.substring(0, 50),
-                insightsCount: keyInsights.length,
-                commitmentsCount: commitments.length
-              });
-            } catch (parseError) {
-              console.log('⚠️ Could not parse AI summary as JSON, using raw text');
-              sessionSummary = aiResponse.substring(0, 500);
-              // Fallback: extrair insights e compromissos manualmente
-              keyInsights = extractKeyInsightsFromConversation(messageHistory, assistantMessage);
-              commitments = extractCommitmentsFromConversation(assistantMessage);
+              try {
+                // Aggressive JSON cleaning: strip everything outside { }
+                let cleanJson = aiResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+                const firstBrace = cleanJson.indexOf('{');
+                const lastBrace = cleanJson.lastIndexOf('}');
+                if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+                  cleanJson = cleanJson.substring(firstBrace, lastBrace + 1);
+                }
+                
+                const parsed = JSON.parse(cleanJson);
+                
+                // Structural validation
+                const validSummary = typeof parsed.summary === 'string' && parsed.summary.length > 20;
+                const validInsights = Array.isArray(parsed.insights) && parsed.insights.length >= 2;
+                const validCommitments = Array.isArray(parsed.commitments) && parsed.commitments.length >= 1;
+                
+                if (!validSummary || !validInsights) {
+                  console.warn(`⚠️ [Summary attempt ${attempt}] Validation failed: summary=${validSummary}, insights=${validInsights}, commitments=${validCommitments}`);
+                  if (attempt < maxSummaryAttempts) continue; // retry
+                }
+                
+                sessionSummary = parsed.summary || '';
+                keyInsights = Array.isArray(parsed.insights) ? parsed.insights : [];
+                commitments = Array.isArray(parsed.commitments) 
+                  ? parsed.commitments.map((c: string) => ({ title: c }))
+                  : [];
+                
+                console.log(`✅ [Summary attempt ${attempt}] Extracted:`, {
+                  summary: sessionSummary.substring(0, 50),
+                  insightsCount: keyInsights.length,
+                  commitmentsCount: commitments.length
+                });
+                break; // Success — exit retry loop
+                
+              } catch (parseError) {
+                console.error(`❌ [Summary attempt ${attempt}] JSON parse failed:`, parseError);
+                if (attempt === maxSummaryAttempts) {
+                  // Last attempt: use raw text as summary rather than nothing
+                  sessionSummary = aiResponse.substring(0, 500);
+                  console.log(`🚨 CRITICAL: Using raw text as summary after ${maxSummaryAttempts} failed attempts`);
+                }
+              }
+            } else {
+              console.error(`❌ [Summary attempt ${attempt}] Empty AI response`);
             }
           }
+        } catch (summaryError) {
+          console.error(`❌ [Summary attempt ${attempt}/${maxSummaryAttempts}] Error:`, summaryError);
+          if (attempt === maxSummaryAttempts) {
+            console.log('🚨 CRITICAL: Session summary generation failed after all attempts');
+          }
         }
-      } catch (summaryError) {
-        console.error('⚠️ Error generating session summary:', summaryError);
-        // Fallback: extrair manualmente
-        keyInsights = extractKeyInsightsFromConversation(messageHistory, assistantMessage);
-        commitments = extractCommitmentsFromConversation(assistantMessage);
+        
+        // Wait 1s between retries
+        if (attempt < maxSummaryAttempts) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
       }
 
       // Atualizar sessão para completed com todos os dados
