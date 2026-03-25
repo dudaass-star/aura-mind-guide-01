@@ -15,13 +15,43 @@ const MODEL_PRICING: Record<string, { input: number; inputCached: number; output
 };
 
 function getModelPricing(model: string) {
-  // Try exact match first, then partial match
   if (MODEL_PRICING[model]) return MODEL_PRICING[model];
   for (const [key, pricing] of Object.entries(MODEL_PRICING)) {
     if (model.includes(key)) return pricing;
   }
-  // Default fallback (gemini flash pricing)
   return { input: 0.15, inputCached: 0.0375, output: 0.60 };
+}
+
+/**
+ * Paginated fetch to bypass Supabase 1000-row limit.
+ * Returns all rows matching the query within the period.
+ */
+async function fetchAllPaginated(
+  supabase: ReturnType<typeof createClient>,
+  table: string,
+  select: string,
+  filters: { column: string; op: string; value: string | number | boolean | null }[],
+  pageSize = 1000
+): Promise<Record<string, unknown>[]> {
+  const allRows: Record<string, unknown>[] = [];
+  let page = 0;
+  while (true) {
+    let query = supabase.from(table).select(select);
+    for (const f of filters) {
+      if (f.op === 'eq') query = query.eq(f.column, f.value);
+      else if (f.op === 'gte') query = query.gte(f.column, f.value);
+      else if (f.op === 'lte') query = query.lte(f.column, f.value);
+      else if (f.op === 'not.is') query = query.not(f.column, 'is', f.value);
+    }
+    query = query.range(page * pageSize, (page + 1) * pageSize - 1);
+    const { data, error } = await query;
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+    allRows.push(...data);
+    if (data.length < pageSize) break;
+    page++;
+  }
+  return allRows;
 }
 
 Deno.serve(async (req) => {
@@ -57,11 +87,8 @@ Deno.serve(async (req) => {
     const now = new Date();
     const defaultFrom = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const defaultTo = now.toISOString().slice(0, 10);
-    // Receive YYYY-MM-DD strings and build full UTC day boundaries
     const periodStart = (dateFrom || defaultFrom) + 'T00:00:00Z';
     const periodEnd = (dateTo || defaultTo) + 'T23:59:59.999Z';
-    const periodLabel = `${periodStart.slice(0, 10)} – ${periodEnd.slice(0, 10)}`;
-    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
     // ========== ENGAGEMENT METRICS ==========
 
@@ -70,14 +97,14 @@ Deno.serve(async (req) => {
       .select('*', { count: 'exact', head: true })
       .eq('status', 'active');
 
-    const { data: periodMessages } = await supabase
-      .from('messages')
-      .select('user_id')
-      .eq('role', 'user')
-      .gte('created_at', periodStart)
-      .lte('created_at', periodEnd);
+    // FIX: Paginated fetch to avoid 1000-row truncation
+    const periodMessages = await fetchAllPaginated(supabase, 'messages', 'user_id', [
+      { column: 'role', op: 'eq', value: 'user' },
+      { column: 'created_at', op: 'gte', value: periodStart },
+      { column: 'created_at', op: 'lte', value: periodEnd },
+    ]);
 
-    const uniqueUsersInPeriod = new Set(periodMessages?.map(m => m.user_id) || []);
+    const uniqueUsersInPeriod = new Set(periodMessages.map(m => m.user_id as string));
     const activeUsersInPeriod = uniqueUsersInPeriod.size;
 
     const { count: weeklyMessages } = await supabase
@@ -166,35 +193,37 @@ Deno.serve(async (req) => {
 
     // ========== COST METRICS ==========
 
-    // Fetch all token usage logs in period (up to 1000)
-    const { data: tokenLogs } = await supabase
-      .from('token_usage_logs')
-      .select('model, prompt_tokens, completion_tokens, cached_tokens')
-      .gte('created_at', periodStart)
-      .lte('created_at', periodEnd);
+    const tokenLogs = await fetchAllPaginated(supabase, 'token_usage_logs', 'model, prompt_tokens, completion_tokens, cached_tokens', [
+      { column: 'created_at', op: 'gte', value: periodStart },
+      { column: 'created_at', op: 'lte', value: periodEnd },
+    ]);
 
     let totalCostUSD = 0;
     const costByModel: Record<string, { calls: number; inputCost: number; outputCost: number; cacheSavings: number }> = {};
 
-    for (const log of tokenLogs || []) {
-      const pricing = getModelPricing(log.model);
-      const cached = log.cached_tokens || 0;
-      const nonCachedInput = Math.max(0, (log.prompt_tokens || 0) - cached);
-      
-      const inputCost = (nonCachedInput / 1_000_000) * pricing.input + (cached / 1_000_000) * pricing.inputCached;
-      const outputCost = ((log.completion_tokens || 0) / 1_000_000) * pricing.output;
-      const fullInputCost = ((log.prompt_tokens || 0) / 1_000_000) * pricing.input;
+    for (const log of tokenLogs) {
+      const model = log.model as string;
+      const promptTokens = (log.prompt_tokens as number) || 0;
+      const completionTokens = (log.completion_tokens as number) || 0;
+      const cachedTokens = (log.cached_tokens as number) || 0;
+
+      const pricing = getModelPricing(model);
+      const nonCachedInput = Math.max(0, promptTokens - cachedTokens);
+
+      const inputCost = (nonCachedInput / 1_000_000) * pricing.input + (cachedTokens / 1_000_000) * pricing.inputCached;
+      const outputCost = (completionTokens / 1_000_000) * pricing.output;
+      const fullInputCost = (promptTokens / 1_000_000) * pricing.input;
       const savings = fullInputCost - inputCost;
 
       totalCostUSD += inputCost + outputCost;
 
-      if (!costByModel[log.model]) {
-        costByModel[log.model] = { calls: 0, inputCost: 0, outputCost: 0, cacheSavings: 0 };
+      if (!costByModel[model]) {
+        costByModel[model] = { calls: 0, inputCost: 0, outputCost: 0, cacheSavings: 0 };
       }
-      costByModel[log.model].calls++;
-      costByModel[log.model].inputCost += inputCost;
-      costByModel[log.model].outputCost += outputCost;
-      costByModel[log.model].cacheSavings += savings;
+      costByModel[model].calls++;
+      costByModel[model].inputCost += inputCost;
+      costByModel[model].outputCost += outputCost;
+      costByModel[model].cacheSavings += savings;
     }
 
     totalCostUSD = Math.round(totalCostUSD * 100) / 100;
@@ -202,7 +231,6 @@ Deno.serve(async (req) => {
       ? Math.round(totalCostUSD / activeUsersInPeriod * 100) / 100
       : 0;
 
-    // Format breakdown
     const costBreakdownByModel = Object.entries(costByModel).map(([model, data]) => ({
       model,
       calls: data.calls,
@@ -213,60 +241,51 @@ Deno.serve(async (req) => {
     const totalCacheSavings = Math.round(costBreakdownByModel.reduce((s, m) => s + m.cacheSavings, 0) * 100) / 100;
 
     // ========== TRIAL & CONVERSION METRICS ==========
-    // Only count trials with a plan (card required) — excludes 72 legacy trials without card
-    // Use COALESCE(trial_started_at, created_at) for trials that existed before we started setting trial_started_at
+    // Real trials = profiles with trial_started_at (went through actual trial flow)
+    // Excludes legacy profiles with plan='essencial' default who never registered a card
 
     const { count: activeTrials } = await supabase
       .from('profiles')
       .select('*', { count: 'exact', head: true })
       .eq('status', 'trial')
-      .not('plan', 'is', null);
+      .not('trial_started_at', 'is', null);
 
-    // Trials in period — use created_at as fallback date filter
+    // All trial profiles (with trial_started_at = real trial users)
     const { data: allTrialProfiles } = await supabase
       .from('profiles')
       .select('user_id, plan, status, trial_started_at, created_at, trial_conversations_count')
-      .not('plan', 'is', null)
-      .or('status.eq.trial,status.eq.active,status.eq.canceled,status.eq.canceling');
+      .not('trial_started_at', 'is', null);
 
-    // Filter by period using coalesced date
+    // Filter by period using trial_started_at
     const trialsInPeriod = (allTrialProfiles || []).filter(p => {
-      const dt = p.trial_started_at || p.created_at;
-      return dt && dt >= periodStart && dt <= periodEnd;
-    });
-
-    const trialsLast30 = (allTrialProfiles || []).filter(p => {
-      const dt = p.trial_started_at || p.created_at;
-      return dt && dt >= thirtyDaysAgo;
+      const dt = p.trial_started_at!;
+      return dt >= periodStart && dt <= periodEnd;
     });
 
     const totalTrialsInPeriod = trialsInPeriod.length;
-    const trialsLast7DaysCount = totalTrialsInPeriod;
-    const trialsLast30DaysCount = trialsLast30.length;
 
     const trialRespondedCount = trialsInPeriod.filter(p => (p.trial_conversations_count || 0) >= 1).length;
 
-    const convertedProfiles = trialsInPeriod.filter(p => p.status === 'active' && (p.trial_conversations_count || 0) > 0);
+    const convertedProfiles = trialsInPeriod.filter(p => p.status === 'active');
     const convertedCount = convertedProfiles.length;
 
     const conversionRate = totalTrialsInPeriod > 0
       ? Math.round(convertedCount / totalTrialsInPeriod * 1000) / 10
       : 0;
 
-    // Expired trials
+    // Expired trials (trial_started_at > 7 days ago and still trial status)
     const sevenDaysAgoDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
-    const expiredTrialsCount = trialsInPeriod.filter(p => {
-      const dt = p.trial_started_at || p.created_at;
-      return p.status === 'trial' && dt && dt < sevenDaysAgoDate;
+    const expiredTrialsCount = (allTrialProfiles || []).filter(p => {
+      return p.status === 'trial' && p.trial_started_at! < sevenDaysAgoDate;
     }).length;
 
-    // Avg days to conversion
+    // Avg days to conversion (for converted profiles in period)
     let avgDaysToConversion = 0;
     if (convertedProfiles.length > 0) {
       const totalDays = convertedProfiles.reduce((sum, p) => {
-        const trialStart = new Date(p.trial_started_at || p.created_at!).getTime();
-        const conversionDate = new Date(p.created_at!).getTime();
-        return sum + Math.max(0, (conversionDate - trialStart) / (1000 * 60 * 60 * 24));
+        const trialStart = new Date(p.trial_started_at!).getTime();
+        const now = Date.now();
+        return sum + Math.max(0, (now - trialStart) / (1000 * 60 * 60 * 24));
       }, 0);
       avgDaysToConversion = Math.round(totalDays / convertedProfiles.length * 10) / 10;
     }
@@ -286,19 +305,16 @@ Deno.serve(async (req) => {
     }
     const trialsByPlan = Object.entries(planCounts).map(([plan, count]) => ({ plan, count })).sort((a, b) => b.count - a.count);
 
-    const avgMsgsNonConverted = nonConvertedProfiles && nonConvertedProfiles.length > 0
+    const avgMsgsNonConverted = nonConvertedProfiles.length > 0
       ? Math.round(nonConvertedProfiles.reduce((sum, p) => sum + (p.trial_conversations_count || 0), 0) / nonConvertedProfiles.length * 10) / 10
       : 0;
 
     // ========== ALL-TIME FUNNEL (not filtered by period) ==========
-    const { data: allTimeFunnelProfiles } = await supabase
-      .from('profiles')
-      .select('user_id, status, trial_conversations_count')
-      .not('plan', 'is', null);
-
-    const funnelTotal = allTimeFunnelProfiles?.length || 0;
-    const funnelResponded = allTimeFunnelProfiles?.filter(p => (p.trial_conversations_count || 0) >= 1).length || 0;
-    const funnelConverted = allTimeFunnelProfiles?.filter(p => p.status === 'active').length || 0;
+    // Uses trial_started_at to identify real trial users (excludes legacy)
+    const allTimeFunnelProfiles = allTrialProfiles || [];
+    const funnelTotal = allTimeFunnelProfiles.length;
+    const funnelResponded = allTimeFunnelProfiles.filter(p => (p.trial_conversations_count || 0) >= 1).length;
+    const funnelConverted = allTimeFunnelProfiles.filter(p => p.status === 'active').length;
 
     // Cancellation counts
     const { count: canceledUsers } = await supabase
@@ -359,11 +375,10 @@ Deno.serve(async (req) => {
       avgCostPerActiveUser,
       costBreakdownByModel,
       totalCacheSavings,
-      // Trial & Conversion
+      // Trial & Conversion (period-filtered)
       activeTrials: activeTrials || 0,
-      trialsLast7Days: trialsLast7DaysCount,
-      trialsLast30Days: trialsLast30DaysCount,
-      totalTrialsEver: totalTrialsInPeriod,
+      trialsInPeriod: totalTrialsInPeriod,
+      totalTrialsAllTime: funnelTotal,
       trialRespondedCount,
       convertedCount,
       conversionRate,

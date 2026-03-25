@@ -37,9 +37,8 @@ interface Metrics {
   totalCacheSavings: number;
   // Trial & Conversion
   activeTrials: number;
-  trialsLast7Days: number;
-  trialsLast30Days: number;
-  totalTrialsEver: number;
+  trialsInPeriod: number;
+  totalTrialsAllTime: number;
   trialRespondedCount: number;
   convertedCount: number;
   funnelTotal: number;
@@ -163,13 +162,12 @@ export default function AdminEngagement() {
   ] : [];
 
   const trialCards = metrics ? [
-    { title: 'Trials Ativos', value: metrics.activeTrials, icon: UserPlus, subtitle: 'status = trial agora' },
-    { title: 'Trials (período)', value: metrics.trialsLast7Days, icon: UserPlus, subtitle: periodLabel },
-    { title: 'Trials (30 dias)', value: metrics.trialsLast30Days, icon: UserPlus, subtitle: 'iniciados nos últimos 30 dias' },
-    { title: 'Total Trials (histórico)', value: metrics.totalTrialsEver, icon: Users, subtitle: 'todos os trials já criados' },
-    { title: 'Convertidos', value: metrics.convertedCount, icon: ArrowRightLeft, subtitle: 'trial → assinante' },
-    { title: 'Taxa de Conversão', value: `${metrics.conversionRate}%`, icon: Percent, subtitle: `${metrics.convertedCount} de ${metrics.totalTrialsEver} trials` },
-    { title: 'Trials Expirados', value: metrics.expiredTrials, icon: XCircle, subtitle: 'trial há mais de 7 dias sem converter' },
+    { title: 'Trials Ativos Agora', value: metrics.activeTrials, icon: UserPlus, subtitle: 'status = trial com trial_started_at' },
+    { title: 'Trials no Período', value: metrics.trialsInPeriod, icon: UserPlus, subtitle: periodLabel },
+    { title: 'Total Trials (all-time)', value: metrics.totalTrialsAllTime, icon: Users, subtitle: 'todos com trial_started_at' },
+    { title: 'Convertidos no Período', value: metrics.convertedCount, icon: ArrowRightLeft, subtitle: 'trial → ativo no período' },
+    { title: 'Taxa de Conversão', value: `${metrics.conversionRate}%`, icon: Percent, subtitle: `${metrics.convertedCount} de ${metrics.trialsInPeriod} trials no período` },
+    { title: 'Trials Expirados', value: metrics.expiredTrials, icon: XCircle, subtitle: 'trial há +7 dias sem converter (all-time)' },
     { title: 'Tempo Médio até Conversão', value: `${metrics.avgDaysToConversion} dias`, icon: Timer, subtitle: 'trial_started_at → ativação' },
     { title: 'Msgs Trial (Convertidos)', value: metrics.avgMsgsConverted, icon: MessageSquare, subtitle: 'média de msgs durante trial' },
     { title: 'Msgs Trial (Não Convertidos)', value: metrics.avgMsgsNonConverted, icon: MessageSquare, subtitle: 'média de msgs durante trial' },
@@ -366,20 +364,21 @@ export default function AdminEngagement() {
           <TabsContent value="trial" className="mt-4 space-y-6">
             {loading && !metrics ? <SkeletonCards /> : (
               <>
-                {/* Simplified Funnel */}
+                {/* Simplified Funnel — ALL-TIME, independent of period filter */}
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-base font-semibold flex items-center gap-2">
                       <ArrowDown className="h-4 w-4" />
-                      Funil de Conversão do Trial
+                      Funil de Conversão (all-time)
                     </CardTitle>
+                    <p className="text-xs text-muted-foreground">Baseado em trial_started_at — exclui perfis legados. Não filtrado por período.</p>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     {metrics && (
                       <>
-                        <FunnelStep label="Cadastraram (com cartão)" value={metrics.funnelTotal} total={metrics.funnelTotal} color="bg-blue-500" />
+                        <FunnelStep label="Iniciaram Trial" value={metrics.funnelTotal} total={metrics.funnelTotal} color="bg-blue-500" />
                         <FunnelStep label="Responderam (1+ mensagem)" value={metrics.funnelResponded} total={metrics.funnelTotal} color="bg-cyan-500" />
-                        <FunnelStep label="Assinaram (cobrança efetivada)" value={metrics.funnelConverted} total={metrics.funnelTotal} color="bg-green-500" />
+                        <FunnelStep label="Ativos (status = active)" value={metrics.funnelConverted} total={metrics.funnelTotal} color="bg-green-500" />
                       </>
                     )}
                   </CardContent>
@@ -402,7 +401,7 @@ export default function AdminEngagement() {
                 {metrics?.trialsByPlan && metrics.trialsByPlan.length > 0 && (
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-base font-semibold">Distribuição por Plano</CardTitle>
+                      <CardTitle className="text-base font-semibold">Distribuição por Plano (período)</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3">
                       {metrics.trialsByPlan.map((item) => {
@@ -429,14 +428,24 @@ export default function AdminEngagement() {
           <TabsContent value="cancellations" className="mt-4 space-y-6">
             {loading && !metrics ? <SkeletonCards /> : metrics && (
               <>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <Card>
                     <CardHeader className="flex flex-row items-center justify-between pb-2">
-                      <CardTitle className="text-sm font-medium text-muted-foreground">Cancelados no Período</CardTitle>
+                      <CardTitle className="text-sm font-medium text-muted-foreground">Cancelamentos no Período</CardTitle>
                       <UserMinus className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl font-bold text-foreground">{metrics.canceledInPeriod}</div>
+                      <p className="text-xs text-muted-foreground mt-1">{periodLabel}</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between pb-2">
+                      <CardTitle className="text-sm font-medium text-muted-foreground">Pausaram no Período</CardTitle>
+                      <Clock className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-2xl font-bold text-foreground">{metrics.pausedInPeriod}</div>
                       <p className="text-xs text-muted-foreground mt-1">{periodLabel}</p>
                     </CardContent>
                   </Card>
@@ -447,56 +456,25 @@ export default function AdminEngagement() {
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl font-bold text-foreground">{metrics.churnRate}%</div>
-                      <p className="text-xs text-muted-foreground mt-1">cancelados / base ativa ({metrics.activeUsersBase})</p>
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                      <CardTitle className="text-sm font-medium text-muted-foreground">Total Cancelados</CardTitle>
-                      <XCircle className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold text-foreground">{metrics.canceledUsers}</div>
-                      <p className="text-xs text-muted-foreground mt-1">acumulado histórico</p>
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                      <CardTitle className="text-sm font-medium text-muted-foreground">Cancelando</CardTitle>
-                      <Clock className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold text-foreground">{metrics.cancelingUsers}</div>
-                      <p className="text-xs text-muted-foreground mt-1">aguardando fim do período</p>
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                      <CardTitle className="text-sm font-medium text-muted-foreground">Pausas no Período</CardTitle>
-                      <Timer className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold text-foreground">{metrics.pausedInPeriod}</div>
-                      <p className="text-xs text-muted-foreground mt-1">assinaturas pausadas</p>
+                      <p className="text-xs text-muted-foreground mt-1">cancelados / ativos na base</p>
                     </CardContent>
                   </Card>
                 </div>
 
-                {/* Motivos de cancelamento */}
-                {metrics.cancellationReasons && metrics.cancellationReasons.length > 0 ? (
+                {/* Cancellation reasons */}
+                {metrics.cancellationReasons && metrics.cancellationReasons.length > 0 && (
                   <Card>
                     <CardHeader>
                       <CardTitle className="text-base font-semibold">Motivos de Cancelamento</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3">
                       {metrics.cancellationReasons.map((item) => {
-                         const reasonNames: Record<string, string> = {
+                        const reasonNames: Record<string, string> = {
                           expensive: 'Está caro pra mim',
-                          not_using: 'Não estou usando',
-                          not_satisfied: 'Não gostei do serviço',
-                          come_back_later: 'Vou voltar depois',
-                          pause_requested: 'Pausa solicitada',
-                          other: 'Outro',
+                          not_useful: 'Não achei útil',
+                          prefer_human: 'Prefiro terapia humana',
+                          no_time: 'Não tenho tempo',
+                          other: 'Outro motivo',
                           unknown: 'Não informado',
                         };
                         const total = metrics.cancellationReasons.reduce((s, i) => s + i.count, 0);
@@ -508,12 +486,6 @@ export default function AdminEngagement() {
                           </div>
                         );
                       })}
-                    </CardContent>
-                  </Card>
-                ) : (
-                  <Card>
-                    <CardContent className="py-8 text-center text-muted-foreground">
-                      Nenhum cancelamento registrado no período selecionado.
                     </CardContent>
                   </Card>
                 )}
