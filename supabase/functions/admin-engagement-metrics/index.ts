@@ -336,11 +336,8 @@ Deno.serve(async (req) => {
       ? Math.round(convertedCount / trialsWithCardInPeriodCount * 1000) / 10
       : 0;
 
-    // Expired trials (trial_started_at > 7 days ago and still trial status)
-    const sevenDaysAgoDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
-    const expiredTrialsCount = (allTrialProfiles || []).filter(p => {
-      return p.status === 'trial' && p.trial_started_at! < sevenDaysAgoDate;
-    }).length;
+    // Use pre-computed expired trials counts from above
+    const expiredTrialsCount = (expiredTrialsNoFailure || 0) + (paymentFailedCount || 0);
 
     // Avg days to conversion
     let avgDaysToConversion = 0;
