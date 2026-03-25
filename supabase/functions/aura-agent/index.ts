@@ -3286,66 +3286,8 @@ Essa é uma oportunidade de celebrar o progresso e reorientar o trabalho.
 }
 
 // Função para extrair key_insights da conversa
-function extractKeyInsightsFromConversation(messageHistory: any[], finalMessage: string): string[] {
-  const insights: string[] = [];
-  
-  // Combinar mensagens recentes com a mensagem final
-  const allContent = messageHistory
-    .slice(-10)
-    .map(m => m.content)
-    .join(' ') + ' ' + finalMessage;
-  
-  // Padrões que indicam insights/aprendizados
-  const insightPatterns = [
-    /perceb[ei].*que\s+(.{10,80})/gi,
-    /entend[ei].*que\s+(.{10,80})/gi,
-    /aprend[ei].*que\s+(.{10,80})/gi,
-    /o importante é\s+(.{10,80})/gi,
-    /a verdade é que\s+(.{10,80})/gi,
-    /agora sei que\s+(.{10,80})/gi,
-  ];
-  
-  for (const pattern of insightPatterns) {
-    const matches = allContent.matchAll(pattern);
-    for (const match of matches) {
-      if (match[1] && match[1].length > 10) {
-        const insight = match[1].replace(/[.!?,;:]+$/, '').trim();
-        if (insight && !insights.includes(insight) && insights.length < 5) {
-          insights.push(insight);
-        }
-      }
-    }
-  }
-  
-  return insights;
-}
-
-// Função para extrair compromissos da conversa
-function extractCommitmentsFromConversation(finalMessage: string): any[] {
-  const commitments: any[] = [];
-  
-  // Padrões que indicam compromissos
-  const commitmentPatterns = [
-    /vou\s+(.{10,60})/gi,
-    /prometo\s+(.{10,60})/gi,
-    /combinei de\s+(.{10,60})/gi,
-    /me comprometo a\s+(.{10,60})/gi,
-  ];
-  
-  for (const pattern of commitmentPatterns) {
-    const matches = finalMessage.matchAll(pattern);
-    for (const match of matches) {
-      if (match[1] && match[1].length > 10) {
-        const title = match[1].replace(/[.!?,;:]+$/, '').trim();
-        if (title && commitments.length < 3) {
-          commitments.push({ title });
-        }
-      }
-    }
-  }
-  
-  return commitments;
-}
+// [REMOVED] extractKeyInsightsFromConversation and extractCommitmentsFromConversation
+// These regex-based fallbacks were unreliable. Summary extraction now uses retry with the primary model.
 
 // Função para criar um link curto
 async function createShortLink(url: string, phone: string): Promise<string | null> {
