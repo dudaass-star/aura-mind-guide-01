@@ -817,15 +817,10 @@ Me conta durante a semana como está seu progresso! Estou aqui por você. ✨`;
           const result = await sendTextMessage(cleanPhone, message, undefined, instanceConfig);
 
           if (result.success) {
-            await supabase
-              .from('sessions')
-              .update({ post_session_sent: true })
-              .eq('id', session.id);
-            
-            postSessionSent++;
-            console.log(`✅ Post-session summary sent for session ${session.id}`);
+            // Only mark post_session_sent AFTER rating is also sent successfully
+            let ratingSuccess = false;
 
-            // Enviar pesquisa de satisfação MELHORADA após 2 segundos
+            // Enviar pesquisa de satisfação após 2 segundos
             await new Promise(resolve => setTimeout(resolve, 2000));
             
             const ratingMessage = `Antes de terminar, me conta: 🌟
@@ -837,10 +832,7 @@ Me conta durante a semana como está seu progresso! Estou aqui por você. ✨`;
             const ratingResult = await sendTextMessage(cleanPhone, ratingMessage, undefined, instanceConfig);
             
             if (ratingResult.success) {
-              await supabase
-                .from('sessions')
-                .update({ rating_requested: true })
-                .eq('id', session.id);
+              ratingSuccess = true;
               console.log(`✅ Rating request sent for session ${session.id}`);
               
               // Agendar follow-up de 24h para compromissos
@@ -863,6 +855,18 @@ Me conta durante a semana como está seu progresso! Estou aqui por você. ✨`;
                 console.log(`✅ Created ${commitments.length} commitment follow-ups for session ${session.id}`);
               }
             }
+
+            // Mark post_session_sent and rating_requested atomically
+            await supabase
+              .from('sessions')
+              .update({ 
+                post_session_sent: true,
+                ...(ratingSuccess && { rating_requested: true })
+              })
+              .eq('id', session.id);
+            
+            postSessionSent++;
+            console.log(`✅ Post-session complete for session ${session.id} (rating: ${ratingSuccess})`);
           } else {
             console.error(`❌ Failed to send post-session summary for session ${session.id}:`, result.error);
           }

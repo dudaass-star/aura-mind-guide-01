@@ -3286,66 +3286,8 @@ Essa é uma oportunidade de celebrar o progresso e reorientar o trabalho.
 }
 
 // Função para extrair key_insights da conversa
-function extractKeyInsightsFromConversation(messageHistory: any[], finalMessage: string): string[] {
-  const insights: string[] = [];
-  
-  // Combinar mensagens recentes com a mensagem final
-  const allContent = messageHistory
-    .slice(-10)
-    .map(m => m.content)
-    .join(' ') + ' ' + finalMessage;
-  
-  // Padrões que indicam insights/aprendizados
-  const insightPatterns = [
-    /perceb[ei].*que\s+(.{10,80})/gi,
-    /entend[ei].*que\s+(.{10,80})/gi,
-    /aprend[ei].*que\s+(.{10,80})/gi,
-    /o importante é\s+(.{10,80})/gi,
-    /a verdade é que\s+(.{10,80})/gi,
-    /agora sei que\s+(.{10,80})/gi,
-  ];
-  
-  for (const pattern of insightPatterns) {
-    const matches = allContent.matchAll(pattern);
-    for (const match of matches) {
-      if (match[1] && match[1].length > 10) {
-        const insight = match[1].replace(/[.!?,;:]+$/, '').trim();
-        if (insight && !insights.includes(insight) && insights.length < 5) {
-          insights.push(insight);
-        }
-      }
-    }
-  }
-  
-  return insights;
-}
-
-// Função para extrair compromissos da conversa
-function extractCommitmentsFromConversation(finalMessage: string): any[] {
-  const commitments: any[] = [];
-  
-  // Padrões que indicam compromissos
-  const commitmentPatterns = [
-    /vou\s+(.{10,60})/gi,
-    /prometo\s+(.{10,60})/gi,
-    /combinei de\s+(.{10,60})/gi,
-    /me comprometo a\s+(.{10,60})/gi,
-  ];
-  
-  for (const pattern of commitmentPatterns) {
-    const matches = finalMessage.matchAll(pattern);
-    for (const match of matches) {
-      if (match[1] && match[1].length > 10) {
-        const title = match[1].replace(/[.!?,;:]+$/, '').trim();
-        if (title && commitments.length < 3) {
-          commitments.push({ title });
-        }
-      }
-    }
-  }
-  
-  return commitments;
-}
+// [REMOVED] extractKeyInsightsFromConversation and extractCommitmentsFromConversation
+// These regex-based fallbacks were unreliable. Summary extraction now uses retry with the primary model.
 
 // Função para criar um link curto
 async function createShortLink(url: string, phone: string): Promise<string | null> {
@@ -5442,16 +5384,27 @@ Exemplo com 4 sessões:
     if ((shouldEndSession || aiWantsToEndSession) && currentSession && profile) {
       const endTime = new Date().toISOString();
 
-      let sessionSummary = "Sessão concluída.";
+      let sessionSummary = "";
       let keyInsights: string[] = [];
       let commitments: any[] = [];
       
-      try {
-        const summaryMessages = messageHistory.slice(-15); // Últimas 15 mensagens
-        const summaryData = await callAI('google/gemini-2.5-flash', [
-              { 
-                role: "system", 
-                content: `Você é um assistente que analisa sessões de mentoria emocional.
+      // ========== DETERMINISTIC SUMMARY: 3 attempts, no generic fallback ==========
+      const maxSummaryAttempts = 3;
+      for (let attempt = 1; attempt <= maxSummaryAttempts; attempt++) {
+        try {
+          // Attempt 3: reduce context to avoid token issues
+          const contextSize = attempt === 3 ? 8 : 15;
+          const summaryMessages = messageHistory.slice(-contextSize);
+          
+          let extraInstruction = '';
+          if (attempt >= 2) {
+            extraInstruction = '\n\nATENÇÃO CRÍTICA: Responda APENAS o JSON puro. Sem texto antes, sem texto depois, sem markdown. APENAS o objeto JSON.';
+          }
+
+          const summaryData = await callAI(configuredModel, [
+                { 
+                  role: "system", 
+                  content: `Você é um assistente que analisa sessões de mentoria emocional.
 Retorne EXATAMENTE neste formato JSON (sem markdown, apenas o JSON):
 {
   "summary": "Resumo de 2-3 frases sobre o tema principal discutido",
@@ -5464,47 +5417,77 @@ Regras:
 - insights: SEMPRE extraia pelo menos 2 insights/aprendizados da sessão. Busque mudanças de perspectiva, reconhecimentos e percepções do usuário.
 - commitments: Se houver ação prática combinada, registre-a. Se NÃO houver ação clara, registre a intenção emocional da sessão (ex: "Me permitir sentir isso hoje sem culpa", "Reconhecer que essa dor é válida"). Nunca invente ações que o usuário não mencionou.
 - NUNCA retorne arrays vazios — sempre extraia ou infira pelo menos 2 insights e 1 compromisso/intenção.
-- Escreva em português brasileiro, de forma clara e objetiva`
-              },
-              ...summaryMessages,
-              { role: "user", content: message },
-              { role: "assistant", content: assistantMessage }
-            ], 400, 0.5, LOVABLE_API_KEY);
+- Escreva em português brasileiro, de forma clara e objetiva${extraInstruction}`
+                },
+                ...summaryMessages,
+                { role: "user", content: message },
+                { role: "assistant", content: assistantMessage }
+              ], 400, 0.5, LOVABLE_API_KEY);
 
-        if (summaryData) {
-          await logTokenUsage(supabase, user_id || null, 'session_summary', 'google/gemini-2.5-flash', summaryData.usage);
-          const aiResponse = summaryData.choices?.[0]?.message?.content?.trim();
-          if (aiResponse) {
-            try {
-              // Limpar possíveis markdown code blocks
-              const cleanJson = aiResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-              const parsed = JSON.parse(cleanJson);
+          if (summaryData) {
+            await logTokenUsage(supabase, user_id || null, 'session_summary', configuredModel, summaryData.usage);
+            const aiResponse = summaryData.choices?.[0]?.message?.content?.trim();
+            
+            if (aiResponse) {
+              console.log(`📝 [Summary attempt ${attempt}/${maxSummaryAttempts}] Raw response (first 300):`, aiResponse.substring(0, 300));
               
-              sessionSummary = parsed.summary || sessionSummary;
-              keyInsights = Array.isArray(parsed.insights) ? parsed.insights : [];
-              commitments = Array.isArray(parsed.commitments) 
-                ? parsed.commitments.map((c: string) => ({ title: c }))
-                : [];
-              
-              console.log('📝 Extracted session data:', {
-                summary: sessionSummary.substring(0, 50),
-                insightsCount: keyInsights.length,
-                commitmentsCount: commitments.length
-              });
-            } catch (parseError) {
-              console.log('⚠️ Could not parse AI summary as JSON, using raw text');
-              sessionSummary = aiResponse.substring(0, 500);
-              // Fallback: extrair insights e compromissos manualmente
-              keyInsights = extractKeyInsightsFromConversation(messageHistory, assistantMessage);
-              commitments = extractCommitmentsFromConversation(assistantMessage);
+              try {
+                // Aggressive JSON cleaning: strip everything outside { }
+                let cleanJson = aiResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+                const firstBrace = cleanJson.indexOf('{');
+                const lastBrace = cleanJson.lastIndexOf('}');
+                if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+                  cleanJson = cleanJson.substring(firstBrace, lastBrace + 1);
+                }
+                
+                const parsed = JSON.parse(cleanJson);
+                
+                // Structural validation
+                const validSummary = typeof parsed.summary === 'string' && parsed.summary.length > 20;
+                const validInsights = Array.isArray(parsed.insights) && parsed.insights.length >= 2;
+                const validCommitments = Array.isArray(parsed.commitments) && parsed.commitments.length >= 1;
+                
+                if (!validSummary || !validInsights) {
+                  console.warn(`⚠️ [Summary attempt ${attempt}] Validation failed: summary=${validSummary}, insights=${validInsights}, commitments=${validCommitments}`);
+                  if (attempt < maxSummaryAttempts) continue; // retry
+                }
+                
+                sessionSummary = parsed.summary || '';
+                keyInsights = Array.isArray(parsed.insights) ? parsed.insights : [];
+                commitments = Array.isArray(parsed.commitments) 
+                  ? parsed.commitments.map((c: string) => ({ title: c }))
+                  : [];
+                
+                console.log(`✅ [Summary attempt ${attempt}] Extracted:`, {
+                  summary: sessionSummary.substring(0, 50),
+                  insightsCount: keyInsights.length,
+                  commitmentsCount: commitments.length
+                });
+                break; // Success — exit retry loop
+                
+              } catch (parseError) {
+                console.error(`❌ [Summary attempt ${attempt}] JSON parse failed:`, parseError);
+                if (attempt === maxSummaryAttempts) {
+                  // Last attempt: use raw text as summary rather than nothing
+                  sessionSummary = aiResponse.substring(0, 500);
+                  console.log(`🚨 CRITICAL: Using raw text as summary after ${maxSummaryAttempts} failed attempts`);
+                }
+              }
+            } else {
+              console.error(`❌ [Summary attempt ${attempt}] Empty AI response`);
             }
           }
+        } catch (summaryError) {
+          console.error(`❌ [Summary attempt ${attempt}/${maxSummaryAttempts}] Error:`, summaryError);
+          if (attempt === maxSummaryAttempts) {
+            console.log('🚨 CRITICAL: Session summary generation failed after all attempts');
+          }
         }
-      } catch (summaryError) {
-        console.error('⚠️ Error generating session summary:', summaryError);
-        // Fallback: extrair manualmente
-        keyInsights = extractKeyInsightsFromConversation(messageHistory, assistantMessage);
-        commitments = extractCommitmentsFromConversation(assistantMessage);
+        
+        // Wait 1s between retries
+        if (attempt < maxSummaryAttempts) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
       }
 
       // Atualizar sessão para completed com todos os dados
@@ -5532,7 +5515,7 @@ Regras:
         // Tentar extrair descobertas do onboarding da conversa
         try {
           const onboardingMessages = messageHistory.slice(-20);
-          const onboardingData = await callAI('google/gemini-2.5-flash', [
+          const onboardingData = await callAI(configuredModel, [
                 { 
                   role: "system", 
                   content: `Analise esta conversa de onboarding e extraia informações do usuário.
@@ -5555,7 +5538,7 @@ Regras:
               ], 300, 0.5, LOVABLE_API_KEY);
 
           if (onboardingData) {
-            await logTokenUsage(supabase, user_id || null, 'onboarding_extraction', 'google/gemini-2.5-flash', onboardingData.usage);
+            await logTokenUsage(supabase, user_id || null, 'onboarding_extraction', configuredModel, onboardingData.usage);
             const aiContent = onboardingData.choices?.[0]?.message?.content?.trim();
             if (aiContent) {
               try {
@@ -5570,7 +5553,7 @@ Regras:
                   
                   // Extrair primary_topic e atribuir jornada inicial
                   try {
-                    const topicData = await callAI('google/gemini-2.5-flash', [
+                    const topicData = await callAI(configuredModel, [
                           { 
                             role: "system", 
                             content: `Baseado nos desafios mencionados, identifique o TEMA PRINCIPAL.
@@ -5582,7 +5565,7 @@ Apenas o tema, nada mais.`
                         ], 50, 0.5, LOVABLE_API_KEY);
                     
                     if (topicData) {
-                      await logTokenUsage(supabase, user_id || null, 'topic_extraction', 'google/gemini-2.5-flash', topicData.usage);
+                      await logTokenUsage(supabase, user_id || null, 'topic_extraction', configuredModel, topicData.usage);
                       const topic = topicData.choices?.[0]?.message?.content?.trim()?.toLowerCase();
                       if (topic && topic.length < 50) {
                         profileUpdate.primary_topic = topic;
@@ -5720,13 +5703,35 @@ Estou aqui sempre que precisar! 💜`;
               .eq('id', currentSession.id);
               
             console.log('📨 Session summary sent immediately to client');
+
+            // ========== ENVIO IMEDIATO DO RATING ==========
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            
+            const ratingMessage = `Antes de terminar, me conta: 🌟
+
+*De 0 a 10, como você se sente agora comparado a quando começamos a sessão?*
+
+(Só o número tá ótimo! E se quiser me dizer o que mais gostou ou o que posso melhorar, adoraria ouvir! 💜)`;
+
+            const ratingResult = await sendTextMessage(cleanPhone, ratingMessage, undefined, instanceConfig);
+            
+            if (ratingResult.success) {
+              await supabase
+                .from('sessions')
+                .update({ rating_requested: true })
+                .eq('id', currentSession.id);
+              console.log('✅ Rating request sent immediately for session', currentSession.id);
+            } else {
+              console.error('⚠️ Failed to send immediate rating:', ratingResult.error);
+              // session-reminder will retry as safety net
+            }
           } else {
             console.error('⚠️ Failed to send immediate summary:', sendResult.error);
-            // Se falhar, o session-reminder ainda pode enviar depois como fallback
+            // session-reminder will retry as safety net
           }
         } catch (sendError) {
           console.error('⚠️ Error sending immediate session summary:', sendError);
-          // Se falhar, o session-reminder ainda pode enviar depois como fallback
+          // session-reminder will retry as safety net
         }
       }
     }
@@ -5738,7 +5743,7 @@ Estou aqui sempre que precisar! 💜`;
       try {
         // Gerar resumo breve do que foi discutido até agora
         const pauseMessages = messageHistory.slice(-10);
-        const pauseData = await callAI('google/gemini-2.5-flash', [
+        const pauseData = await callAI(configuredModel, [
           { 
             role: "system", 
             content: `Resuma em 2-3 frases o que estava sendo discutido nesta sessão de mentoria emocional. 
@@ -5752,7 +5757,7 @@ Responda apenas o resumo, sem formatação.`
         
         let pauseSummary = 'Sessão pausada pelo usuário.';
         if (pauseData?.choices?.[0]?.message?.content) {
-          await logTokenUsage(supabase, user_id || null, 'session_pause_summary', 'google/gemini-2.5-flash', pauseData.usage);
+          await logTokenUsage(supabase, user_id || null, 'session_pause_summary', configuredModel, pauseData.usage);
           pauseSummary = pauseData.choices[0].message.content.trim();
         }
         
