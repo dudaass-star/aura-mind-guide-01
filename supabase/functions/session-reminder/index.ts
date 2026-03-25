@@ -855,6 +855,18 @@ Me conta durante a semana como está seu progresso! Estou aqui por você. ✨`;
                 console.log(`✅ Created ${commitments.length} commitment follow-ups for session ${session.id}`);
               }
             }
+
+            // Mark post_session_sent and rating_requested atomically
+            await supabase
+              .from('sessions')
+              .update({ 
+                post_session_sent: true,
+                ...(ratingSuccess && { rating_requested: true })
+              })
+              .eq('id', session.id);
+            
+            postSessionSent++;
+            console.log(`✅ Post-session complete for session ${session.id} (rating: ${ratingSuccess})`);
           } else {
             console.error(`❌ Failed to send post-session summary for session ${session.id}:`, result.error);
           }
