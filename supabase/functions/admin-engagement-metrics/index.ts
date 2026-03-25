@@ -252,11 +252,47 @@ Deno.serve(async (req) => {
     // Real trials = profiles with trial_started_at AND plan IS NOT NULL (had card registered)
     // This excludes: legacy profiles and trials without card
 
-    const { count: activeTrials } = await supabase
+    // Active subscribers (paying) — status='active' with trial_started_at (excludes legacy)
+    const { count: activeSubscribers } = await supabase
+      .from('profiles')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'active')
+      .not('trial_started_at', 'is', null);
+
+    // Payment failed count — trial with payment_failed_at set
+    const { count: paymentFailedCount } = await supabase
+      .from('profiles')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'trial')
+      .not('trial_started_at', 'is', null)
+      .not('payment_failed_at', 'is', null);
+
+    // All trials with trial_started_at
+    const { count: allTrialsCount } = await supabase
       .from('profiles')
       .select('*', { count: 'exact', head: true })
       .eq('status', 'trial')
       .not('trial_started_at', 'is', null);
+
+    // Active trials (< 7 days)
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const { count: activeTrialsReal } = await supabase
+      .from('profiles')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'trial')
+      .not('trial_started_at', 'is', null)
+      .gte('trial_started_at', sevenDaysAgo);
+
+    // Expired trials (>= 7 days, no payment failure)
+    const { count: expiredTrialsNoFailure } = await supabase
+      .from('profiles')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'trial')
+      .not('trial_started_at', 'is', null)
+      .lt('trial_started_at', sevenDaysAgo)
+      .is('payment_failed_at', null);
+
+    const activeTrials = activeTrialsReal || 0;
 
     // ALL trial profiles with card (plan not null + trial_started_at not null)
     const { data: allTrialWithCard } = await supabase
@@ -300,11 +336,8 @@ Deno.serve(async (req) => {
       ? Math.round(convertedCount / trialsWithCardInPeriodCount * 1000) / 10
       : 0;
 
-    // Expired trials (trial_started_at > 7 days ago and still trial status)
-    const sevenDaysAgoDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
-    const expiredTrialsCount = (allTrialProfiles || []).filter(p => {
-      return p.status === 'trial' && p.trial_started_at! < sevenDaysAgoDate;
-    }).length;
+    // Use pre-computed expired trials counts from above
+    const expiredTrialsCount = (expiredTrialsNoFailure || 0) + (paymentFailedCount || 0);
 
     // Avg days to conversion
     let avgDaysToConversion = 0;
@@ -403,8 +436,11 @@ Deno.serve(async (req) => {
       avgCostPerActiveUser,
       costBreakdownByModel,
       totalCacheSavings,
-      // Trial & Conversion (period-filtered, card-only)
-      activeTrials: activeTrials || 0,
+      // Trial & Conversion
+      activeTrials,
+      activeSubscribers: activeSubscribers || 0,
+      paymentFailedCount: paymentFailedCount || 0,
+      expiredTrialsAwaitingPayment: expiredTrialsNoFailure || 0,
       trialsInPeriod: totalTrialsInPeriod,
       trialsWithCardInPeriod: trialsWithCardInPeriodCount,
       totalTrialsAllTime: (allTrialProfiles || []).length,

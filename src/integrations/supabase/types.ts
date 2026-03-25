@@ -584,6 +584,7 @@ export type Database = {
           name: string | null
           needs_schedule_setup: boolean | null
           onboarding_completed: boolean | null
+          payment_failed_at: string | null
           pending_capsule_audio_url: string | null
           phone: string | null
           plan: string | null
@@ -631,6 +632,7 @@ export type Database = {
           name?: string | null
           needs_schedule_setup?: boolean | null
           onboarding_completed?: boolean | null
+          payment_failed_at?: string | null
           pending_capsule_audio_url?: string | null
           phone?: string | null
           plan?: string | null
@@ -678,6 +680,7 @@ export type Database = {
           name?: string | null
           needs_schedule_setup?: boolean | null
           onboarding_completed?: boolean | null
+          payment_failed_at?: string | null
           pending_capsule_audio_url?: string | null
           phone?: string | null
           plan?: string | null
