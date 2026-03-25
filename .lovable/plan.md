@@ -1,63 +1,61 @@
 
 
-# Correção: Rastrear Pagamento Pós-Trial via Stripe Webhook
+# Correção: 11 Perfis Marcados Prematuramente como `trial_expired`
 
-## Problema central
+## Diagnóstico
 
-Quando um usuário cadastra cartão e inicia um trial de 7 dias no Stripe, ao final do trial o Stripe tenta cobrar automaticamente. Hoje o webhook **não trata** os eventos `invoice.paid` nem `invoice.payment_failed`. Resultado:
+A migração `20260323193825` (23 de março) executou:
+```sql
+UPDATE profiles SET status = 'trial_expired' WHERE status = 'trial';
+```
 
-- Se o pagamento **funciona**: o perfil fica como `trial` para sempre (nunca vira `active`)
-- Se o pagamento **falha**: ninguém sabe — o usuário continua como `trial` sem acesso real
-- Os 13 "trials expirados com cartão" provavelmente incluem usuários que **já pagaram** mas o sistema nunca atualizou
+Isso mudou **todos** os perfis com `status = 'trial'` para `trial_expired` — incluindo 11 usuários que tinham acabado de cadastrar cartão e estavam dentro dos 7 dias de trial. Não existe nenhuma função periódica fazendo isso; foi um update manual que atingiu todo mundo.
+
+**Consequência**: Quando o Stripe cobrar esses usuários ao final do trial, o webhook `invoice.paid` vai procurar o perfil pelo phone e atualizar para `active` — isso ainda vai funcionar. Porém, enquanto estão como `trial_expired`, eles estão sendo **bloqueados** no `process-webhook-message` (recebem mensagem de "trial expirado" em vez de conversar com a Aura).
+
+Os 2 com `past_due` no Stripe provavelmente foram bloqueados por esse motivo também.
 
 ## Plano
 
-### 1. Adicionar campo `payment_failed_at` na tabela `profiles`
-Migração SQL para adicionar `payment_failed_at timestamptz` — permite identificar e medir falhas de pagamento.
+### 1. Corrigir os 11 perfis via SQL (insert tool, não migração)
+Restaurar para `status = 'trial'` os perfis que:
+- Têm `status = 'trial_expired'`
+- Têm `trial_started_at` nos últimos 7 dias (trial ainda válido)
 
-### 2. Tratar novos eventos no `stripe-webhook/index.ts`
+```sql
+UPDATE profiles 
+SET status = 'trial', updated_at = now()
+WHERE status = 'trial_expired' 
+  AND trial_started_at IS NOT NULL 
+  AND trial_started_at > now() - interval '7 days';
+```
 
-**`invoice.paid`** (primeiro pagamento pós-trial):
-- Buscar customer pelo `customer` ID → pegar phone dos metadata
-- Atualizar profile: `status = 'active'`, `converted_at = now()`, `payment_failed_at = null`
-- Logar conversão real
+### 2. Adicionar lógica automática de expiração no `process-webhook-message`
+Em vez de depender de migrações manuais, verificar **no momento da mensagem** se o trial expirou:
 
-**`invoice.payment_failed`**:
-- Buscar customer → phone
-- Atualizar profile: `payment_failed_at = now()`, manter status `trial`
-- Logar falha para visibilidade no painel
+- Se `status = 'trial'` e `trial_started_at + 7 dias < now()`:
+  - Atualizar status para `trial_expired` naquele momento
+  - Enviar mensagem de bloqueio
 
-**`customer.subscription.updated`** (trial_end → active):
-- Quando `status` muda de `trialing` para `active`, atualizar profile como ativo
+Isso garante que trials expiram naturalmente sem precisar de migrações ou cron jobs.
 
-### 3. Atualizar métricas no `admin-engagement-metrics/index.ts`
+### 3. Manter `process-webhook-message` compatível
+A salvaguarda existente (`isLegitTrial`) já permite que perfis `trial_expired` com `plan` definido continuem conversando. Mas como novos trials via Stripe sempre têm `plan = 'essencial'` (default), **todos** seriam considerados "legítimos". Precisamos ajustar:
 
-Adicionar novas métricas:
-- `paymentFailedCount`: perfis com `payment_failed_at IS NOT NULL` e `status = 'trial'`
-- `activeSubscribers`: perfis com `status = 'active'` e `trial_started_at IS NOT NULL` (assinantes reais)
-- Corrigir `expiredTrials`: separar "expirado aguardando cobrança" de "falha de pagamento"
+- `isLegitTrial` deve verificar `trial_started_at IS NOT NULL` em vez de apenas `plan IS NOT NULL`
+- Ou melhor: a expiração inline (passo 2) elimina a ambiguidade — o perfil é verificado e expirado no momento certo
 
-### 4. Atualizar UI no `AdminEngagement.tsx`
-
-Adicionar cards:
-- **Assinantes Ativos** (pagando agora)
-- **Falha de Pagamento** (trial expirado + pagamento falhou)
-- Ajustar funil all-time para refletir conversões reais via `converted_at`
-
-### 5. Registrar webhook events no Stripe Dashboard
-
-Garantir que os eventos `invoice.paid`, `invoice.payment_failed` e `customer.subscription.updated` estejam habilitados no endpoint do webhook no Stripe.
+### 4. Não criar mais migrações de UPDATE em massa no status
+A migração que causou o problema foi um atalho. A expiração inline resolve o caso de forma sustentável.
 
 ## Resultado esperado
-
-- Trials que pagaram com sucesso → automaticamente viram `active` com `converted_at`
-- Trials com falha de pagamento → visíveis no painel com data da falha
-- Funil mostra números reais: 25 cadastraram → X pagaram → Y falharam
-- Os 13 "expirados" serão reclassificados corretamente
+- 11 trials ativos restaurados imediatamente — param de ser bloqueados
+- Trials passam a expirar automaticamente quando o usuário manda mensagem após 7 dias
+- Webhook `invoice.paid` funciona normalmente quando Stripe cobrar ao final do trial
+- Sem dependência de cron jobs ou migrações manuais para gerenciar expiração
 
 ## Detalhes técnicos
-
-- Arquivos: `supabase/functions/stripe-webhook/index.ts`, `supabase/functions/admin-engagement-metrics/index.ts`, `src/pages/AdminEngagement.tsx`
-- Migração: adicionar `payment_failed_at` em `profiles`
-- Nota: o usuário precisa verificar no Stripe Dashboard se os eventos `invoice.paid` e `invoice.payment_failed` estão configurados no endpoint do webhook
+- SQL de correção via insert tool (dados, não schema)
+- Arquivo: `supabase/functions/process-webhook-message/index.ts` — adicionar verificação inline de expiração de trial
+- Linhas 285-315: ajustar bloco de subscription status check
 
