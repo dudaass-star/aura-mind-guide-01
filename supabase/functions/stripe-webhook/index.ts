@@ -496,6 +496,150 @@ Me conta: como você está hoje?`;
       }
     }
 
+    // ========== invoice.paid — trial converted to paid ==========
+    if (event.type === 'invoice.paid') {
+      const invoice = event.data.object as Stripe.Invoice;
+      const customerId = invoice.customer as string;
+      console.log('💰 Invoice paid:', invoice.id, 'customer:', customerId);
+
+      // Only process subscription invoices (not one-time)
+      if (invoice.subscription) {
+        try {
+          const stripe2 = new Stripe(stripeSecretKey, { apiVersion: '2023-10-16' });
+          const customer = await stripe2.customers.retrieve(customerId);
+          if (!customer.deleted) {
+            const customerPhone = customer.metadata?.phone;
+            if (customerPhone) {
+              const cleanPhone = customerPhone.replace(/\D/g, '');
+              // Check if profile is in trial status — this means first payment after trial
+              const { data: profile } = await supabase
+                .from('profiles')
+                .select('user_id, status, trial_started_at')
+                .eq('phone', cleanPhone)
+                .maybeSingle();
+
+              if (profile && profile.status === 'trial' && profile.trial_started_at) {
+                const { error: updateError } = await supabase
+                  .from('profiles')
+                  .update({
+                    status: 'active',
+                    converted_at: new Date().toISOString(),
+                    payment_failed_at: null,
+                    updated_at: new Date().toISOString(),
+                  })
+                  .eq('phone', cleanPhone);
+
+                if (updateError) {
+                  console.error('❌ Error updating profile on invoice.paid:', updateError);
+                } else {
+                  console.log('✅ Trial converted to active via invoice.paid for phone:', cleanPhone);
+                  // Cancel pending trial tasks
+                  await supabase
+                    .from('scheduled_tasks')
+                    .update({ status: 'cancelled', executed_at: new Date().toISOString() })
+                    .eq('user_id', profile.user_id)
+                    .in('status', ['pending'])
+                    .like('task_type', 'trial_%');
+                }
+              } else {
+                console.log('ℹ️ invoice.paid but profile not in trial status, skipping conversion');
+              }
+            }
+          }
+        } catch (err) {
+          console.error('❌ Error processing invoice.paid:', err);
+        }
+      }
+    }
+
+    // ========== invoice.payment_failed — payment failed ==========
+    if (event.type === 'invoice.payment_failed') {
+      const invoice = event.data.object as Stripe.Invoice;
+      const customerId = invoice.customer as string;
+      console.log('❌ Invoice payment failed:', invoice.id, 'customer:', customerId);
+
+      if (invoice.subscription) {
+        try {
+          const stripe2 = new Stripe(stripeSecretKey, { apiVersion: '2023-10-16' });
+          const customer = await stripe2.customers.retrieve(customerId);
+          if (!customer.deleted) {
+            const customerPhone = customer.metadata?.phone;
+            if (customerPhone) {
+              const cleanPhone = customerPhone.replace(/\D/g, '');
+              const { error: updateError } = await supabase
+                .from('profiles')
+                .update({
+                  payment_failed_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('phone', cleanPhone);
+
+              if (updateError) {
+                console.error('❌ Error updating profile on payment_failed:', updateError);
+              } else {
+                console.log('✅ payment_failed_at recorded for phone:', cleanPhone);
+              }
+            }
+          }
+        } catch (err) {
+          console.error('❌ Error processing invoice.payment_failed:', err);
+        }
+      }
+    }
+
+    // ========== customer.subscription.updated — trialing → active ==========
+    if (event.type === 'customer.subscription.updated') {
+      const subscription = event.data.object as Stripe.Subscription;
+      const previousAttributes = (event.data as any).previous_attributes;
+      console.log('🔄 Subscription updated:', subscription.id, 'status:', subscription.status);
+
+      // Only act when transitioning from trialing to active
+      if (previousAttributes?.status === 'trialing' && subscription.status === 'active') {
+        const customerId = subscription.customer as string;
+        try {
+          const stripe2 = new Stripe(stripeSecretKey, { apiVersion: '2023-10-16' });
+          const customer = await stripe2.customers.retrieve(customerId);
+          if (!customer.deleted) {
+            const customerPhone = customer.metadata?.phone;
+            if (customerPhone) {
+              const cleanPhone = customerPhone.replace(/\D/g, '');
+              const { data: profile } = await supabase
+                .from('profiles')
+                .select('user_id, status')
+                .eq('phone', cleanPhone)
+                .maybeSingle();
+
+              if (profile && profile.status === 'trial') {
+                const { error: updateError } = await supabase
+                  .from('profiles')
+                  .update({
+                    status: 'active',
+                    converted_at: new Date().toISOString(),
+                    payment_failed_at: null,
+                    updated_at: new Date().toISOString(),
+                  })
+                  .eq('phone', cleanPhone);
+
+                if (updateError) {
+                  console.error('❌ Error updating profile on subscription.updated:', updateError);
+                } else {
+                  console.log('✅ Trial → Active via subscription.updated for phone:', cleanPhone);
+                  await supabase
+                    .from('scheduled_tasks')
+                    .update({ status: 'cancelled', executed_at: new Date().toISOString() })
+                    .eq('user_id', profile.user_id)
+                    .in('status', ['pending'])
+                    .like('task_type', 'trial_%');
+                }
+              }
+            }
+          }
+        } catch (err) {
+          console.error('❌ Error processing subscription.updated:', err);
+        }
+      }
+    }
+
     return new Response(JSON.stringify({ received: true }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
