@@ -87,6 +87,17 @@ Deno.serve(async (req) => {
       console.log('✅ Checkout session completed:', session.id);
       console.log('📋 Session metadata:', session.metadata);
 
+      // Mark checkout_session as completed for funnel tracking
+      try {
+        await supabase
+          .from('checkout_sessions')
+          .update({ status: 'completed', completed_at: new Date().toISOString() })
+          .eq('stripe_session_id', session.id);
+        console.log('✅ Checkout session marked as completed in DB');
+      } catch (csErr) {
+        console.warn('⚠️ Failed to update checkout_session status (non-blocking):', csErr);
+      }
+
       const customerName = session.metadata?.name || session.customer_details?.name || 'Cliente';
       const customerPhone = session.metadata?.phone || session.customer_details?.phone;
       const customerEmail = session.metadata?.email || session.customer_details?.email;
