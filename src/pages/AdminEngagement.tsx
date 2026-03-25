@@ -168,12 +168,14 @@ export default function AdminEngagement() {
   ] : [];
 
   const trialCards = metrics ? [
-    { title: 'Trials Ativos Agora', value: metrics.activeTrials, icon: UserPlus, subtitle: 'status = trial (all-time)' },
+    { title: 'Assinantes Ativos', value: metrics.activeSubscribers, icon: Users, subtitle: 'pagando agora (status = active)' },
+    { title: 'Trials Ativos (< 7d)', value: metrics.activeTrials, icon: UserPlus, subtitle: 'trial iniciado há menos de 7 dias' },
+    { title: 'Trials Expirados (aguardando)', value: metrics.expiredTrialsAwaitingPayment, icon: Clock, subtitle: 'trial > 7d, sem falha de pagamento' },
+    { title: '⚠️ Falha de Pagamento', value: metrics.paymentFailedCount, icon: XCircle, subtitle: 'trial expirado + pagamento falhou' },
     { title: 'Trials no Período (total)', value: metrics.trialsInPeriod, icon: UserPlus, subtitle: `com e sem cartão — ${periodLabel}` },
     { title: 'Trials com Cartão (período)', value: metrics.trialsWithCardInPeriod, icon: UserPlus, subtitle: `checkout iniciado — ${periodLabel}` },
     { title: 'Convertidos no Período', value: metrics.convertedCount, icon: ArrowRightLeft, subtitle: 'trial → ativo (com cartão)' },
     { title: 'Taxa de Conversão', value: `${metrics.conversionRate}%`, icon: Percent, subtitle: `${metrics.convertedCount} de ${metrics.trialsWithCardInPeriod} com cartão` },
-    { title: 'Trials Expirados', value: metrics.expiredTrials, icon: XCircle, subtitle: 'trial há +7 dias sem converter (all-time)' },
     { title: 'Tempo Médio até Conversão', value: `${metrics.avgDaysToConversion} dias`, icon: Timer, subtitle: 'trial → ativação (com cartão)' },
     { title: 'Msgs Trial (Convertidos)', value: metrics.avgMsgsConverted, icon: MessageSquare, subtitle: 'média durante trial' },
     { title: 'Msgs Trial (Não Convertidos)', value: metrics.avgMsgsNonConverted, icon: MessageSquare, subtitle: 'média durante trial' },
