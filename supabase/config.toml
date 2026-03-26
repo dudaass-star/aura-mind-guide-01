@@ -114,3 +114,6 @@ verify_jwt = false
 
 [functions.process-webhook-message]
 verify_jwt = false
+
+[functions.recover-abandoned-checkout]
+verify_jwt = false
