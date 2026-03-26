@@ -5,7 +5,9 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Users, MessageSquare, Clock, BarChart3, RefreshCw, TrendingUp, UserPlus, Percent, Timer, XCircle, ArrowRightLeft, ArrowDown, Send, CalendarIcon, DollarSign, UserMinus, ShoppingCart } from 'lucide-react';
+import { ArrowLeft, Users, MessageSquare, Clock, BarChart3, RefreshCw, TrendingUp, UserPlus, Percent, Timer, XCircle, ArrowRightLeft, ArrowDown, Send, CalendarIcon, DollarSign, UserMinus, ShoppingCart, RotateCcw, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
 import { useNavigate } from 'react-router-dom';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -72,6 +74,17 @@ interface Metrics {
   cancellationReasons: { reason: string; action_taken: string; count: number }[];
 }
 
+interface RecoverySession {
+  id: string;
+  name: string | null;
+  phone: string;
+  plan: string | null;
+  created_at: string;
+  status: string;
+  recovery_sent: boolean;
+  converted: boolean;
+}
+
 export default function AdminEngagement() {
   const { isLoading, isAdmin, redirectIfNotAdmin } = useAdminAuth();
   const [metrics, setMetrics] = useState<Metrics | null>(null);
@@ -79,6 +92,7 @@ export default function AdminEngagement() {
   const [blasting, setBlasting] = useState(false);
   const [dateFrom, setDateFrom] = useState<Date>(new Date());
   const [dateTo, setDateTo] = useState<Date>(new Date());
+  const [recoverySessions, setRecoverySessions] = useState<RecoverySession[]>([]);
   const { toast } = useToast();
   const navigate = useNavigate();
   const requestIdRef = useRef(0);
@@ -126,6 +140,40 @@ export default function AdminEngagement() {
   useEffect(() => {
     if (isAdmin) fetchMetrics();
   }, [isAdmin, dateFrom, dateTo]);
+
+  const fetchRecoverySessions = async () => {
+    try {
+      const { data: abandoned, error } = await supabase
+        .from('checkout_sessions')
+        .select('id, name, phone, plan, created_at, status, recovery_sent')
+        .eq('recovery_sent', true)
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (error) throw error;
+
+      // Check which phones later completed a checkout
+      const phones = (abandoned || []).map(s => s.phone);
+      const { data: completed } = await supabase
+        .from('checkout_sessions')
+        .select('phone')
+        .eq('status', 'completed')
+        .in('phone', phones);
+
+      const completedPhones = new Set((completed || []).map(c => c.phone));
+
+      setRecoverySessions((abandoned || []).map(s => ({
+        ...s,
+        converted: completedPhones.has(s.phone),
+      })));
+    } catch (err) {
+      console.error('Error fetching recovery sessions:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (isAdmin) fetchRecoverySessions();
+  }, [isAdmin]);
 
   const handleReactivationBlast = async () => {
     if (!confirm('Enviar mensagem de reativação para todos os trials finalizados?')) return;
@@ -408,7 +456,55 @@ export default function AdminEngagement() {
                   </CardContent>
                 </Card>
 
-                {/* PERIOD FUNNEL — card-only */}
+                {/* RECOVERY TABLE */}
+                {recoverySessions.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base font-semibold flex items-center gap-2">
+                        <RotateCcw className="h-4 w-4" />
+                        Recuperação de Checkout Abandonado
+                      </CardTitle>
+                      <p className="text-xs text-muted-foreground">
+                        {recoverySessions.length} mensagens de recuperação enviadas — {recoverySessions.filter(s => s.converted).length} converteram depois
+                      </p>
+                    </CardHeader>
+                    <CardContent>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Nome</TableHead>
+                            <TableHead>Telefone</TableHead>
+                            <TableHead>Plano</TableHead>
+                            <TableHead>Abandono</TableHead>
+                            <TableHead>Status</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {recoverySessions.map((s) => {
+                            const planNames: Record<string, string> = { essencial: 'Essencial', direcao: 'Direção', transformacao: 'Transformação' };
+                            const maskedPhone = s.phone ? `${s.phone.substring(0, 6)}***` : '—';
+                            return (
+                              <TableRow key={s.id}>
+                                <TableCell className="font-medium">{s.name || '—'}</TableCell>
+                                <TableCell className="font-mono text-xs">{maskedPhone}</TableCell>
+                                <TableCell>{planNames[s.plan || ''] || s.plan || '—'}</TableCell>
+                                <TableCell className="text-xs">{format(new Date(s.created_at), 'dd/MM HH:mm')}</TableCell>
+                                <TableCell>
+                                  {s.converted ? (
+                                    <Badge className="bg-green-600 text-white"><CheckCircle2 className="h-3 w-3 mr-1" />Converteu</Badge>
+                                  ) : (
+                                    <Badge variant="secondary"><AlertCircle className="h-3 w-3 mr-1" />Não voltou</Badge>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </CardContent>
+                  </Card>
+                )}
+
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-base font-semibold flex items-center gap-2">
