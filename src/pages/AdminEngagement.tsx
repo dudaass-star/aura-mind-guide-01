@@ -456,7 +456,55 @@ export default function AdminEngagement() {
                   </CardContent>
                 </Card>
 
-                {/* PERIOD FUNNEL — card-only */}
+                {/* RECOVERY TABLE */}
+                {recoverySessions.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base font-semibold flex items-center gap-2">
+                        <RotateCcw className="h-4 w-4" />
+                        Recuperação de Checkout Abandonado
+                      </CardTitle>
+                      <p className="text-xs text-muted-foreground">
+                        {recoverySessions.length} mensagens de recuperação enviadas — {recoverySessions.filter(s => s.converted).length} converteram depois
+                      </p>
+                    </CardHeader>
+                    <CardContent>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Nome</TableHead>
+                            <TableHead>Telefone</TableHead>
+                            <TableHead>Plano</TableHead>
+                            <TableHead>Abandono</TableHead>
+                            <TableHead>Status</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {recoverySessions.map((s) => {
+                            const planNames: Record<string, string> = { essencial: 'Essencial', direcao: 'Direção', transformacao: 'Transformação' };
+                            const maskedPhone = s.phone ? `${s.phone.substring(0, 6)}***` : '—';
+                            return (
+                              <TableRow key={s.id}>
+                                <TableCell className="font-medium">{s.name || '—'}</TableCell>
+                                <TableCell className="font-mono text-xs">{maskedPhone}</TableCell>
+                                <TableCell>{planNames[s.plan || ''] || s.plan || '—'}</TableCell>
+                                <TableCell className="text-xs">{format(new Date(s.created_at), 'dd/MM HH:mm')}</TableCell>
+                                <TableCell>
+                                  {s.converted ? (
+                                    <Badge className="bg-green-600 text-white"><CheckCircle2 className="h-3 w-3 mr-1" />Converteu</Badge>
+                                  ) : (
+                                    <Badge variant="secondary"><AlertCircle className="h-3 w-3 mr-1" />Não voltou</Badge>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </CardContent>
+                  </Card>
+                )}
+
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-base font-semibold flex items-center gap-2">
