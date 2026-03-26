@@ -141,6 +141,40 @@ export default function AdminEngagement() {
     if (isAdmin) fetchMetrics();
   }, [isAdmin, dateFrom, dateTo]);
 
+  const fetchRecoverySessions = async () => {
+    try {
+      const { data: abandoned, error } = await supabase
+        .from('checkout_sessions')
+        .select('id, name, phone, plan, created_at, status, recovery_sent')
+        .eq('recovery_sent', true)
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (error) throw error;
+
+      // Check which phones later completed a checkout
+      const phones = (abandoned || []).map(s => s.phone);
+      const { data: completed } = await supabase
+        .from('checkout_sessions')
+        .select('phone')
+        .eq('status', 'completed')
+        .in('phone', phones);
+
+      const completedPhones = new Set((completed || []).map(c => c.phone));
+
+      setRecoverySessions((abandoned || []).map(s => ({
+        ...s,
+        converted: completedPhones.has(s.phone),
+      })));
+    } catch (err) {
+      console.error('Error fetching recovery sessions:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (isAdmin) fetchRecoverySessions();
+  }, [isAdmin]);
+
   const handleReactivationBlast = async () => {
     if (!confirm('Enviar mensagem de reativação para todos os trials finalizados?')) return;
     setBlasting(true);
