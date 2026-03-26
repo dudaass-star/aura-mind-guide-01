@@ -74,6 +74,17 @@ interface Metrics {
   cancellationReasons: { reason: string; action_taken: string; count: number }[];
 }
 
+interface RecoverySession {
+  id: string;
+  name: string | null;
+  phone: string;
+  plan: string | null;
+  created_at: string;
+  status: string;
+  recovery_sent: boolean;
+  converted: boolean;
+}
+
 export default function AdminEngagement() {
   const { isLoading, isAdmin, redirectIfNotAdmin } = useAdminAuth();
   const [metrics, setMetrics] = useState<Metrics | null>(null);
@@ -81,6 +92,7 @@ export default function AdminEngagement() {
   const [blasting, setBlasting] = useState(false);
   const [dateFrom, setDateFrom] = useState<Date>(new Date());
   const [dateTo, setDateTo] = useState<Date>(new Date());
+  const [recoverySessions, setRecoverySessions] = useState<RecoverySession[]>([]);
   const { toast } = useToast();
   const navigate = useNavigate();
   const requestIdRef = useRef(0);
