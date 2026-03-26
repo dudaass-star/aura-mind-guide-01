@@ -1,0 +1,1 @@
+ALTER TABLE public.checkout_sessions ADD COLUMN recovery_sent boolean NOT NULL DEFAULT false;

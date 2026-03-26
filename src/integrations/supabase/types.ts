@@ -126,6 +126,7 @@ export type Database = {
           payment_method: string | null
           phone: string
           plan: string | null
+          recovery_sent: boolean
           status: string
           stripe_session_id: string | null
         }
@@ -139,6 +140,7 @@ export type Database = {
           payment_method?: string | null
           phone: string
           plan?: string | null
+          recovery_sent?: boolean
           status?: string
           stripe_session_id?: string | null
         }
@@ -152,6 +154,7 @@ export type Database = {
           payment_method?: string | null
           phone?: string
           plan?: string | null
+          recovery_sent?: boolean
           status?: string
           stripe_session_id?: string | null
         }
