@@ -1,51 +1,28 @@
 
 
-## Automação de Recuperação de Checkout Abandonado
+## Visibilidade das Mensagens de Recuperação
 
-### Mensagem de alta conversão
+### Problema
+As mensagens de recuperação são enviadas via WhatsApp para telefones de pessoas sem perfil no sistema. A tela AdminMessages só exibe conversas de usuários cadastrados (tabela `messages` + `profiles`). Por isso, as recuperações são invisíveis no painel.
 
-A mensagem precisa criar urgência e resgatar o desejo, sem prometer suporte humano (não há equipe respondendo) nem suporte da Aura (ainda não está ativa).
+### Solução
+Adicionar uma aba ou seção na tela de Engajamento (ou Mensagens) mostrando o histórico de tentativas de recuperação de checkout abandonado, puxando dados diretamente da tabela `checkout_sessions`.
 
-**Mensagem:**
-```
-Oi, {nome}! 💜
+### Implementação
 
-Você estava a um passo de começar sua jornada com a Aura — uma companhia que te escuta de verdade, todos os dias, sem julgamento.
+**1. Adicionar seção no AdminEngagement (já tem o funil de checkout)**
 
-Seu plano {plano} ainda tá reservado. Pra finalizar, é só clicar aqui:
-{link_checkout}
+Criar um card "Recuperação de Checkout" abaixo do funil existente, listando:
+- Nome, telefone (parcial), plano
+- Data do abandono
+- Se a mensagem de recuperação foi enviada (`recovery_sent`)
+- Se a pessoa voltou depois (verificar se existe novo `checkout_sessions` com mesmo telefone e `status = 'completed'`)
 
-Às vezes a gente só precisa de um empurrãozinho pra começar a cuidar de si. Esse pode ser o seu. 🤍
-```
+**2. Dados vêm da tabela `checkout_sessions`**
+- Filtrar: `recovery_sent = true`
+- Mostrar status atual (ainda abandonado vs. converteu depois)
+- Nenhuma migração necessária -- os dados já existem
 
-**Por que funciona:**
-- Relembra o valor emocional (escuta, sem julgamento, todos os dias)
-- Cria senso de reserva ("ainda tá reservado")
-- Não promete suporte de ninguém
-- Fecha com gatilho emocional suave
-
----
-
-### Implementação técnica
-
-**1. Migração SQL**
-- Adicionar coluna `recovery_sent boolean DEFAULT false` na tabela `checkout_sessions`
-
-**2. Nova edge function `recover-abandoned-checkout`**
-- Roda via cron a cada 10 minutos
-- Busca `checkout_sessions` onde `status = 'created'`, `created_at < 30 min atrás`, `recovery_sent = false`
-- Respeita horário silencioso (22h–08h BRT)
-- Envia mensagem via `sendTextMessage` usando instância padrão (env vars)
-- Personaliza com nome e plano do registro
-- Link: `https://olaaura.com.br/checkout?plan={plano}`
-- Marca `recovery_sent = true` após envio
-- Anti-burst: 300ms entre envios
-
-**3. Configuração**
-- Adicionar entry no `supabase/config.toml` com `verify_jwt = false`
-
-**4. Proteções**
-- Envio único por checkout (`recovery_sent`)
-- Não envia se status já mudou de `created`
-- Horário silencioso 22h–08h BRT
+**3. Arquivo alterado**
+- `src/pages/AdminEngagement.tsx` -- adicionar card/tabela de recuperações
 
