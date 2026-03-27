@@ -1,0 +1,1 @@
+UPDATE public.stripe_webhook_events SET amount = 0 WHERE amount IS NULL AND event_type IN ('invoice.paid', 'invoice.payment_failed');
