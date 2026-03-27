@@ -376,6 +376,27 @@ Deno.serve(async (req) => {
     const funnelResponded = allTimeFunnel.filter(p => (p.trial_conversations_count || 0) >= 1).length;
     const funnelConverted = allTimeFunnel.filter(p => p.status === 'active' || p.converted_at).length;
 
+    // ========== BILLING METRICS ==========
+    const { count: billingPaidInPeriod } = await supabase
+      .from('stripe_webhook_events')
+      .select('*', { count: 'exact', head: true })
+      .eq('event_type', 'invoice.paid')
+      .gte('processed_at', periodStart)
+      .lt('processed_at', periodEnd);
+
+    const { count: billingFailedInPeriod } = await supabase
+      .from('stripe_webhook_events')
+      .select('*', { count: 'exact', head: true })
+      .eq('event_type', 'invoice.payment_failed')
+      .gte('processed_at', periodStart)
+      .lt('processed_at', periodEnd);
+
+    const billingSuccessInPeriod = billingPaidInPeriod || 0;
+    const billingTotalInPeriod = (billingPaidInPeriod || 0) + (billingFailedInPeriod || 0);
+    const billingSuccessRate = billingTotalInPeriod > 0
+      ? Math.round(billingSuccessInPeriod / billingTotalInPeriod * 1000) / 10
+      : 0;
+
     // Cancellation counts
     const { count: canceledUsers } = await supabase
       .from('profiles')
@@ -497,6 +518,10 @@ Deno.serve(async (req) => {
       checkoutCompletionRate,
       checkoutCreatedAllTime: checkoutCreatedAllTime || 0,
       checkoutCompletedAllTime: checkoutCompletedAllTime || 0,
+      // Billing
+      billingSuccessInPeriod,
+      billingTotalInPeriod,
+      billingSuccessRate,
       // Cancellation
       canceledInPeriod,
       pausedInPeriod: pausedInPeriodCount || 0,
