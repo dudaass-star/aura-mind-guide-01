@@ -294,6 +294,57 @@ export type Database = {
           },
         ]
       }
+      dunning_attempts: {
+        Row: {
+          created_at: string
+          customer_id: string
+          error_message: string | null
+          error_stage: string | null
+          event_id: string
+          id: string
+          invoice_id: string | null
+          link_generated: boolean
+          phone_raw: string | null
+          phone_resolved: string | null
+          profile_found: boolean
+          profile_user_id: string | null
+          subscription_id: string | null
+          whatsapp_sent: boolean
+        }
+        Insert: {
+          created_at?: string
+          customer_id: string
+          error_message?: string | null
+          error_stage?: string | null
+          event_id: string
+          id?: string
+          invoice_id?: string | null
+          link_generated?: boolean
+          phone_raw?: string | null
+          phone_resolved?: string | null
+          profile_found?: boolean
+          profile_user_id?: string | null
+          subscription_id?: string | null
+          whatsapp_sent?: boolean
+        }
+        Update: {
+          created_at?: string
+          customer_id?: string
+          error_message?: string | null
+          error_stage?: string | null
+          event_id?: string
+          id?: string
+          invoice_id?: string | null
+          link_generated?: boolean
+          phone_raw?: string | null
+          phone_resolved?: string | null
+          profile_found?: boolean
+          profile_user_id?: string | null
+          subscription_id?: string | null
+          whatsapp_sent?: boolean
+        }
+        Relationships: []
+      }
       gemini_cache: {
         Row: {
           cache_name: string
