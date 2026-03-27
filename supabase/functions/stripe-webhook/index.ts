@@ -522,7 +522,7 @@ Me conta: como você está hoje?`;
           if (!customer.deleted) {
             const { profile } = await resolveProfileFromCustomer(supabase, customer as Stripe.Customer);
 
-            if (profile && profile.status === 'trial' && profile.trial_started_at) {
+            if (profile && ['trial', 'trial_expired'].includes(profile.status) && profile.trial_started_at) {
               const { error: updateError } = await supabase
                 .from('profiles')
                 .update({
