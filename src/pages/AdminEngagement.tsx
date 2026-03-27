@@ -5,7 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Users, MessageSquare, Clock, BarChart3, RefreshCw, TrendingUp, UserPlus, Percent, Timer, XCircle, ArrowRightLeft, ArrowDown, Send, CalendarIcon, DollarSign, UserMinus, ShoppingCart, RotateCcw, CheckCircle2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Users, MessageSquare, Clock, BarChart3, RefreshCw, TrendingUp, UserPlus, Percent, Timer, XCircle, ArrowRightLeft, ArrowDown, Send, CalendarIcon, DollarSign, UserMinus, ShoppingCart, RotateCcw, CheckCircle2, AlertCircle, CreditCard } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { useNavigate } from 'react-router-dom';
@@ -85,6 +85,21 @@ interface RecoverySession {
   converted: boolean;
 }
 
+interface DunningAttempt {
+  id: string;
+  event_id: string;
+  customer_id: string;
+  invoice_id: string | null;
+  phone_raw: string | null;
+  phone_resolved: string | null;
+  profile_found: boolean;
+  link_generated: boolean;
+  whatsapp_sent: boolean;
+  error_stage: string | null;
+  error_message: string | null;
+  created_at: string;
+}
+
 export default function AdminEngagement() {
   const { isLoading, isAdmin, redirectIfNotAdmin } = useAdminAuth();
   const [metrics, setMetrics] = useState<Metrics | null>(null);
@@ -93,6 +108,7 @@ export default function AdminEngagement() {
   const [dateFrom, setDateFrom] = useState<Date>(new Date());
   const [dateTo, setDateTo] = useState<Date>(new Date());
   const [recoverySessions, setRecoverySessions] = useState<RecoverySession[]>([]);
+  const [dunningAttempts, setDunningAttempts] = useState<DunningAttempt[]>([]);
   const { toast } = useToast();
   const navigate = useNavigate();
   const requestIdRef = useRef(0);
@@ -171,8 +187,26 @@ export default function AdminEngagement() {
     }
   };
 
+  const fetchDunningAttempts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('dunning_attempts')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (error) throw error;
+      setDunningAttempts((data || []) as unknown as DunningAttempt[]);
+    } catch (err) {
+      console.error('Error fetching dunning attempts:', err);
+    }
+  };
+
   useEffect(() => {
-    if (isAdmin) fetchRecoverySessions();
+    if (isAdmin) {
+      fetchRecoverySessions();
+      fetchDunningAttempts();
+    }
   }, [isAdmin]);
 
   const handleReactivationBlast = async () => {
@@ -504,6 +538,76 @@ export default function AdminEngagement() {
                     </CardContent>
                   </Card>
                 )}
+
+                {/* DUNNING ATTEMPTS TABLE */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base font-semibold flex items-center gap-2">
+                      <CreditCard className="h-4 w-4" />
+                      Tentativas de Dunning (Pagamento Falhou)
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground">
+                      {dunningAttempts.length} tentativas registradas — {dunningAttempts.filter(d => d.whatsapp_sent).length} WhatsApp enviados, {dunningAttempts.filter(d => !d.profile_found).length} sem perfil
+                    </p>
+                  </CardHeader>
+                  <CardContent>
+                    {dunningAttempts.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-4">Nenhuma tentativa de dunning registrada ainda.</p>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Data</TableHead>
+                            <TableHead>Telefone</TableHead>
+                            <TableHead>Perfil</TableHead>
+                            <TableHead>Link</TableHead>
+                            <TableHead>WhatsApp</TableHead>
+                            <TableHead>Erro</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {dunningAttempts.map((d) => {
+                            const maskedPhone = d.phone_resolved ? `${d.phone_resolved.substring(0, 6)}***` : d.phone_raw ? `${d.phone_raw.substring(0, 6)}***` : '—';
+                            return (
+                              <TableRow key={d.id}>
+                                <TableCell className="text-xs">{format(new Date(d.created_at), 'dd/MM HH:mm')}</TableCell>
+                                <TableCell className="font-mono text-xs">{maskedPhone}</TableCell>
+                                <TableCell>
+                                  {d.profile_found ? (
+                                    <Badge className="bg-green-600 text-white text-xs">Sim</Badge>
+                                  ) : (
+                                    <Badge variant="destructive" className="text-xs">Não</Badge>
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  {d.link_generated ? (
+                                    <Badge className="bg-green-600 text-white text-xs">✓</Badge>
+                                  ) : (
+                                    <Badge variant="secondary" className="text-xs">—</Badge>
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  {d.whatsapp_sent ? (
+                                    <Badge className="bg-green-600 text-white text-xs">Enviado</Badge>
+                                  ) : (
+                                    <Badge variant="secondary" className="text-xs">Não</Badge>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-xs max-w-[200px] truncate" title={d.error_message || ''}>
+                                  {d.error_stage ? (
+                                    <span className="text-destructive">{d.error_stage}</span>
+                                  ) : (
+                                    <span className="text-muted-foreground">—</span>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </CardContent>
+                </Card>
 
                 <Card>
                   <CardHeader>
