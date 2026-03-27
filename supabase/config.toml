@@ -117,3 +117,6 @@ verify_jwt = false
 
 [functions.recover-abandoned-checkout]
 verify_jwt = false
+
+[functions.reprocess-dunning]
+verify_jwt = false
