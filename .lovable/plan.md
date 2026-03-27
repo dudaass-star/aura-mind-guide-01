@@ -1,38 +1,36 @@
 
 
-## Adicionar métricas de cobrança (billing) no painel de engajamento
+## Filtrar métricas de cobrança para incluir apenas pagamentos reais (excluir trials)
 
-### O que será feito
+### Problema
 
-Adicionar 3 indicadores na aba "Trial & Conversão" que mostram, **filtrados pelo período selecionado**:
+A tabela `stripe_webhook_events` registra apenas `id`, `event_type` e `processed_at` — sem valor do invoice. Isso significa que `invoice.paid` de trials com valor $0 (primeira cobrança do trial) também é contada, inflando os números.
 
-1. **Cobrados no período** — quantos `invoice.payment_failed` + `invoice.paid` ocorreram (total de tentativas de cobrança)
-2. **Cobranças com sucesso** — quantos `invoice.paid` ocorreram
-3. **Taxa de sucesso** — % de sucesso
+### Solução
 
-### Fonte de dados
-
-A tabela `stripe_webhook_events` já registra todos os eventos com `event_type` e `processed_at`. Basta contar:
-- `event_type = 'invoice.paid'` no período → sucesso
-- `event_type = 'invoice.payment_failed'` no período → falha
-- Total cobrados = paid + failed
-- Taxa = paid / total * 100
+**Adicionar coluna `amount` na tabela `stripe_webhook_events`** e salvar o valor do invoice no momento do webhook. Depois, filtrar no edge function de métricas por `amount > 0`.
 
 ### Mudanças
 
-**1. Edge function `admin-engagement-metrics/index.ts`**
-- Adicionar 2 queries contando `stripe_webhook_events` filtradas por `processed_at` no período:
-  - `invoice.paid` → `billingSuccessInPeriod`
-  - `invoice.payment_failed` → `billingFailedInPeriod`
-- Calcular `billingTotalInPeriod` e `billingSuccessRate`
-- Retornar os 3 campos no JSON de resposta
+**1. Migration: adicionar coluna `amount` à `stripe_webhook_events`**
+```sql
+ALTER TABLE public.stripe_webhook_events 
+ADD COLUMN amount integer DEFAULT NULL;
+```
+(Stripe usa centavos, então `integer` é suficiente)
 
-**2. Frontend `src/pages/AdminEngagement.tsx`**
-- Adicionar os 3 campos na interface `Metrics`
-- Renderizar um card/seção com os 3 indicadores na aba "Trial & Conversão", antes do funil de checkout
-- Usar ícones `CreditCard` / `CheckCircle2` / `Percent` já importados
+**2. `supabase/functions/stripe-webhook/index.ts`**
+- No insert de idempotência (linha ~96), passar `amount: invoice.amount_paid` quando o evento for `invoice.paid` ou `invoice.payment_failed`
+- Para outros tipos de evento, `amount` fica `null`
 
-### Posição no layout
+**3. `supabase/functions/admin-engagement-metrics/index.ts`**
+- Nas queries de billing, adicionar filtro `.gt('amount', 0)` para contar apenas cobranças reais com dinheiro
 
-Os 3 indicadores aparecerão como cards em grid (3 colunas) no topo da aba "Trial & Conversão", antes do "Funil de Checkout".
+**4. Backfill dos eventos existentes (opcional)**
+- Os eventos já registrados ficarão com `amount = null`. Podemos tratar `null` como "desconhecido" e incluí-los nos contadores para não perder histórico, OU excluí-los. Recomendo incluir `null` no filtro temporariamente: `.or('amount.gt.0,amount.is.null')` até que novos eventos populem o campo.
+
+### Resultado
+
+- Cobranças de trial ($0) serão excluídas das métricas
+- Apenas pagamentos reais (renovações, conversões pós-trial) serão contados
 
