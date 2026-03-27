@@ -377,19 +377,23 @@ Deno.serve(async (req) => {
     const funnelConverted = allTimeFunnel.filter(p => p.status === 'active' || p.converted_at).length;
 
     // ========== BILLING METRICS ==========
+    // Only count real charges (amount > 0) — exclude $0 trial invoices
+    // Include amount IS NULL for historical events before we started tracking amount
     const { count: billingPaidInPeriod } = await supabase
       .from('stripe_webhook_events')
       .select('*', { count: 'exact', head: true })
       .eq('event_type', 'invoice.paid')
       .gte('processed_at', periodStart)
-      .lt('processed_at', periodEnd);
+      .lt('processed_at', periodEnd)
+      .or('amount.gt.0,amount.is.null');
 
     const { count: billingFailedInPeriod } = await supabase
       .from('stripe_webhook_events')
       .select('*', { count: 'exact', head: true })
       .eq('event_type', 'invoice.payment_failed')
       .gte('processed_at', periodStart)
-      .lt('processed_at', periodEnd);
+      .lt('processed_at', periodEnd)
+      .or('amount.gt.0,amount.is.null');
 
     const billingSuccessInPeriod = billingPaidInPeriod || 0;
     const billingTotalInPeriod = (billingPaidInPeriod || 0) + (billingFailedInPeriod || 0);
