@@ -128,7 +128,7 @@ Deno.serve(async (req) => {
           const shortData = await shortResp.json();
           paymentLink = shortData.shortUrl;
         } else {
-          await shortResp.text(); // consume body
+          await shortResp.text(); // consume body to prevent resource leak
         }
       } catch (_) { /* use full URL */ }
 
