@@ -187,8 +187,26 @@ export default function AdminEngagement() {
     }
   };
 
+  const fetchDunningAttempts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('dunning_attempts')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (error) throw error;
+      setDunningAttempts((data || []) as unknown as DunningAttempt[]);
+    } catch (err) {
+      console.error('Error fetching dunning attempts:', err);
+    }
+  };
+
   useEffect(() => {
-    if (isAdmin) fetchRecoverySessions();
+    if (isAdmin) {
+      fetchRecoverySessions();
+      fetchDunningAttempts();
+    }
   }, [isAdmin]);
 
   const handleReactivationBlast = async () => {
