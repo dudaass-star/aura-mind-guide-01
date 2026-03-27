@@ -608,6 +608,14 @@ Me conta: como você está hoje?`;
             });
           }
 
+          // Insert early audit trail (fail-safe: survives crashes)
+          const { data: insertedDunning } = await supabase
+            .from('dunning_attempts')
+            .insert({ ...dunningRecord, error_stage: 'in_progress' })
+            .select('id')
+            .single();
+          console.log('📝 Dunning audit record created (in_progress):', insertedDunning?.id);
+
           // Step 1: Record payment failure on profile
           const { error: updateError } = await supabase
             .from('profiles')
@@ -621,7 +629,9 @@ Me conta: como você está hoje?`;
             console.error('❌ Error updating profile on payment_failed:', updateError);
             dunningRecord.error_stage = 'profile_update_failed';
             dunningRecord.error_message = updateError.message;
-            await supabase.from('dunning_attempts').insert(dunningRecord);
+            if (insertedDunning?.id) {
+              await supabase.from('dunning_attempts').update({ error_stage: dunningRecord.error_stage, error_message: dunningRecord.error_message }).eq('id', insertedDunning.id);
+            }
             return new Response(JSON.stringify({ received: true }), {
               status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             });
@@ -660,6 +670,7 @@ Me conta: como você está hoje?`;
                 paymentLink = shortLinkData.shortUrl;
                 console.log('🔗 Short link created:', paymentLink);
               } else {
+                await shortLinkResponse.text(); // consume body to prevent resource leak
                 console.warn('⚠️ Short link creation failed, using full URL');
               }
             } catch (shortLinkErr) {
@@ -695,6 +706,7 @@ Se preferir cancelar, é só me avisar. Sem problemas. 💜`;
               dunningRecord.error_stage = 'whatsapp_send_failed';
               dunningRecord.error_message = errText;
             } else {
+              await msgResponse.text(); // consume body to prevent resource leak
               dunningRecord.whatsapp_sent = true;
               console.log('✅ Dunning WhatsApp sent to:', profile.phone);
             }
@@ -705,8 +717,20 @@ Se preferir cancelar, é só me avisar. Sem problemas. 💜`;
             dunningRecord.error_message = errMsg;
           }
 
-          // Save audit trail
-          await supabase.from('dunning_attempts').insert(dunningRecord);
+          // Update audit trail with final result
+          if (insertedDunning?.id) {
+            await supabase.from('dunning_attempts')
+              .update({
+                whatsapp_sent: dunningRecord.whatsapp_sent || false,
+                link_generated: dunningRecord.link_generated || false,
+                error_stage: dunningRecord.error_stage || null,
+                error_message: dunningRecord.error_message || null,
+              })
+              .eq('id', insertedDunning.id);
+          } else {
+            // Fallback: insert if early insert failed
+            await supabase.from('dunning_attempts').insert(dunningRecord);
+          }
 
         } catch (err) {
           const errMsg = err instanceof Error ? err.message : String(err);
