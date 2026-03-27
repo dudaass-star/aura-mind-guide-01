@@ -1,6 +1,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import Stripe from "https://esm.sh/stripe@14.21.0";
 import { allocateInstance } from "../_shared/instance-helper.ts";
+import { resolveProfile } from "../_shared/profile-resolver.ts";
+import { getPhoneVariations } from "../_shared/zapi-client.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -20,6 +22,26 @@ const PLAN_SESSIONS: Record<string, number> = {
   direcao: 4,
   transformacao: 8,
 };
+
+/**
+ * Helper: resolve profile from Stripe customer using phone variations + email fallback
+ * Returns { profile, phone } where phone is the matched phone for messaging
+ */
+async function resolveProfileFromCustomer(
+  supabase: any,
+  customer: Stripe.Customer,
+): Promise<{ profile: any | null; phone: string | null; variationsTried: string[] }> {
+  const result = await resolveProfile(
+    supabase,
+    customer.metadata?.phone,
+    customer.email,
+  );
+  return {
+    profile: result.profile,
+    phone: result.profile?.phone || result.phoneUsed,
+    variationsTried: result.variationsTried,
+  };
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -68,7 +90,7 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Idempotency check — prevent duplicate processing on Stripe retries
+    // Idempotency check
     const { error: dedupError } = await supabase
       .from('stripe_webhook_events')
       .insert({ id: event.id, event_type: event.type });
@@ -81,7 +103,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Process checkout.session.completed
+    // ========== checkout.session.completed ==========
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object as Stripe.Checkout.Session;
       console.log('✅ Checkout session completed:', session.id);
@@ -103,7 +125,7 @@ Deno.serve(async (req) => {
       const customerEmail = session.metadata?.email || session.customer_details?.email;
       const customerPlan = session.metadata?.plan || 'essencial';
       const isBoletoPayment = session.metadata?.payment_method === 'boleto' || session.metadata?.payment_method === 'pix';
-      const sessionMode = session.mode; // 'payment' for boleto/pix, 'subscription' for card
+      const sessionMode = session.mode;
 
       if (!customerPhone) {
         console.error('❌ No phone number found in session');
@@ -133,7 +155,6 @@ Deno.serve(async (req) => {
         : cleanPhone;
       const today = new Date().toISOString().split('T')[0];
 
-      // Calculate plan_expires_at for boleto/one-time payments (12 months from now)
       let planExpiresAt: string | null = null;
       if (isBoletoPayment || sessionMode === 'payment') {
         const expirationDate = new Date();
@@ -142,19 +163,15 @@ Deno.serve(async (req) => {
         console.log(`📅 One-time payment — plan expires at: ${planExpiresAt}`);
       }
 
-      // Check if profile already exists BEFORE choosing the message
-      const { data: existingProfile } = await supabase
-        .from('profiles')
-        .select('id, user_id, status')
-        .eq('phone', formattedPhone)
-        .single();
+      // Check if profile already exists using resolver for better matching
+      const resolveResult = await resolveProfile(supabase, customerPhone, customerEmail);
+      const existingProfile = resolveResult.profile;
 
       const isTrial = session.metadata?.trial === 'true';
       const isReturning = existingProfile?.status === 'canceled';
       const isUpgrade = !!existingProfile && !isReturning;
       console.log(`📋 Profile exists: ${!!existingProfile}, isReturning: ${isReturning}, isUpgrade: ${isUpgrade}, isTrial: ${isTrial}`);
 
-      // --- Step 1: Create or update profile FIRST (so we have user_id for messaging) ---
       let profileUserId: string;
       try {
         if (!existingProfile) {
@@ -205,7 +222,7 @@ Deno.serve(async (req) => {
               ...(isConverting && { converted_at: new Date().toISOString() }),
               ...(planExpiresAt && { plan_expires_at: planExpiresAt }),
             })
-            .eq('phone', formattedPhone);
+            .eq('id', existingProfile.id);
 
           if (updateError) {
             console.error('❌ Error updating profile:', updateError);
@@ -228,7 +245,7 @@ Deno.serve(async (req) => {
         profileUserId = existingProfile?.user_id || crypto.randomUUID();
       }
 
-      // --- Step 2: Build message based on user scenario ---
+      // Build message based on user scenario
       let welcomeMessage: string;
 
       if (isReturning) {
@@ -257,7 +274,7 @@ Comigo, você pode falar com liberdade: sem julgamento, no seu ritmo.
 Me diz: como você está hoje?`;
       }
 
-      // --- Step 3: Send message via Z-API (now with user_id for DB persistence) ---
+      // Send message via Z-API
       try {
         const response = await fetch(`${supabaseUrl}/functions/v1/send-zapi-message`, {
           method: 'POST',
@@ -283,10 +300,9 @@ Me diz: como você está hoje?`;
         console.error('❌ Error sending message:', sendError);
       }
 
-      // --- Step 4: Send CAPI Purchase event (non-blocking) ---
+      // Send CAPI Purchase event (non-blocking)
       try {
         const amountTotal = session.amount_total ? session.amount_total / 100 : 0;
-        // Use session.id as deterministic event_id for deduplication with browser Pixel
         const eventId = session.id;
         const fbp = session.metadata?.fbp;
         const fbc = session.metadata?.fbc;
@@ -321,7 +337,7 @@ Me diz: como você está hoje?`;
       }
     }
 
-    // Process customer.subscription.deleted
+    // ========== customer.subscription.deleted ==========
     if (event.type === 'customer.subscription.deleted') {
       const subscription = event.data.object as Stripe.Subscription;
       console.log('🔴 Subscription deleted:', subscription.id);
@@ -329,7 +345,6 @@ Me diz: como você está hoje?`;
       const customerId = subscription.customer as string;
       
       try {
-        const stripe = new Stripe(stripeSecretKey, { apiVersion: '2023-10-16' });
         const customer = await stripe.customers.retrieve(customerId);
         
         if (customer.deleted) {
@@ -340,11 +355,11 @@ Me diz: como você está hoje?`;
           });
         }
 
-        const customerPhone = customer.metadata?.phone;
+        const { profile, phone } = await resolveProfileFromCustomer(supabase, customer as Stripe.Customer);
         const customerName = customer.name || 'Cliente';
 
-        if (!customerPhone) {
-          console.error('❌ No phone number found for customer');
+        if (!phone) {
+          console.error('❌ No phone resolved for customer', customerId);
           return new Response(JSON.stringify({ received: true }), {
             status: 200,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -370,38 +385,33 @@ Cuide-se. 🌟`;
             'Authorization': `Bearer ${supabaseServiceKey}`,
           },
           body: JSON.stringify({
-            phone: customerPhone,
+            phone: phone,
             message: farewellMessage,
             isAudio: false,
+            ...(profile?.user_id && { user_id: profile.user_id }),
           }),
         });
 
         if (!response.ok) {
-          const errorText = await response.text();
-          console.error('❌ Failed to send farewell message:', errorText);
+          console.error('❌ Failed to send farewell message:', await response.text());
         } else {
           console.log('✅ Farewell message sent successfully!');
         }
 
         // Update profile status
-        
-        const cleanPhone = customerPhone.replace(/\D/g, '');
-        const formattedPhone = (cleanPhone.length === 10 || cleanPhone.length === 11)
-          ? `55${cleanPhone}`
-          : cleanPhone;
+        if (profile) {
+          const { error: updateError } = await supabase
+            .from('profiles')
+            .update({ status: 'canceled', updated_at: new Date().toISOString() })
+            .eq('id', profile.id);
 
-        const { error: updateError } = await supabase
-          .from('profiles')
-          .update({
-            status: 'canceled',
-            updated_at: new Date().toISOString(),
-          })
-          .eq('phone', formattedPhone);
-
-        if (updateError) {
-          console.error('❌ Error updating profile status:', updateError);
+          if (updateError) {
+            console.error('❌ Error updating profile status:', updateError);
+          } else {
+            console.log('✅ Profile status updated to canceled');
+          }
         } else {
-          console.log('✅ Profile status updated to canceled');
+          console.warn('⚠️ No profile found to update status to canceled');
         }
 
       } catch (customerError) {
@@ -409,7 +419,7 @@ Cuide-se. 🌟`;
       }
     }
 
-    // Process customer.subscription.resumed
+    // ========== customer.subscription.resumed ==========
     if (event.type === 'customer.subscription.resumed') {
       const subscription = event.data.object as Stripe.Subscription;
       console.log('🟢 Subscription resumed:', subscription.id);
@@ -417,7 +427,6 @@ Cuide-se. 🌟`;
       const customerId = subscription.customer as string;
       
       try {
-        const stripe = new Stripe(stripeSecretKey, { apiVersion: '2023-10-16' });
         const customer = await stripe.customers.retrieve(customerId);
         
         if (customer.deleted) {
@@ -428,11 +437,11 @@ Cuide-se. 🌟`;
           });
         }
 
-        const customerPhone = customer.metadata?.phone;
+        const { profile, phone } = await resolveProfileFromCustomer(supabase, customer as Stripe.Customer);
         const customerName = customer.name || 'Cliente';
 
-        if (!customerPhone) {
-          console.error('❌ No phone number found for customer');
+        if (!phone) {
+          console.error('❌ No phone resolved for customer', customerId);
           return new Response(JSON.stringify({ received: true }), {
             status: 200,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -456,46 +465,35 @@ Me conta: como você está hoje?`;
             'Authorization': `Bearer ${supabaseServiceKey}`,
           },
           body: JSON.stringify({
-            phone: customerPhone,
+            phone: phone,
             message: welcomeBackMessage,
             isAudio: false,
+            ...(profile?.user_id && { user_id: profile.user_id }),
           }),
         });
 
         if (!response.ok) {
-          const errorText = await response.text();
-          console.error('❌ Failed to send welcome back message:', errorText);
+          console.error('❌ Failed to send welcome back message:', await response.text());
         } else {
           console.log('✅ Welcome back message sent successfully!');
         }
 
         // Update profile status back to active
-        
-        const cleanPhone = customerPhone.replace(/\D/g, '');
-
-        const { error: updateError } = await supabase
-          .from('profiles')
-          .update({
-            status: 'active',
-            updated_at: new Date().toISOString(),
-          })
-          .eq('phone', cleanPhone);
-
-        if (updateError) {
-          console.error('❌ Error updating profile status:', updateError);
-        } else {
-          console.log('✅ Profile status updated to active');
-          // Cancel any pending trial follow-up tasks for this user
-          const { data: profileForCancel } = await supabase
+        if (profile) {
+          const { error: updateError } = await supabase
             .from('profiles')
-            .select('user_id')
-            .eq('phone', cleanPhone)
-            .maybeSingle();
-          if (profileForCancel) {
+            .update({ status: 'active', updated_at: new Date().toISOString() })
+            .eq('id', profile.id);
+
+          if (updateError) {
+            console.error('❌ Error updating profile status:', updateError);
+          } else {
+            console.log('✅ Profile status updated to active');
+            // Cancel pending trial tasks
             const { data: cancelledTasks } = await supabase
               .from('scheduled_tasks')
               .update({ status: 'cancelled', executed_at: new Date().toISOString() })
-              .eq('user_id', profileForCancel.user_id)
+              .eq('user_id', profile.user_id)
               .in('status', ['pending'])
               .like('task_type', 'trial_%')
               .select('id');
@@ -503,6 +501,8 @@ Me conta: como você está hoje?`;
               console.log(`🗑️ Cancelled ${cancelledTasks.length} pending trial tasks (subscription resumed)`);
             }
           }
+        } else {
+          console.warn('⚠️ No profile found to update status to active');
         }
 
       } catch (customerError) {
@@ -516,48 +516,46 @@ Me conta: como você está hoje?`;
       const customerId = invoice.customer as string;
       console.log('💰 Invoice paid:', invoice.id, 'customer:', customerId);
 
-      // Only process subscription invoices (not one-time)
       if (invoice.subscription) {
         try {
-          const stripe2 = new Stripe(stripeSecretKey, { apiVersion: '2023-10-16' });
-          const customer = await stripe2.customers.retrieve(customerId);
+          const customer = await stripe.customers.retrieve(customerId);
           if (!customer.deleted) {
-            const customerPhone = customer.metadata?.phone;
-            if (customerPhone) {
-              const cleanPhone = customerPhone.replace(/\D/g, '');
-              // Check if profile is in trial status — this means first payment after trial
-              const { data: profile } = await supabase
+            const { profile } = await resolveProfileFromCustomer(supabase, customer as Stripe.Customer);
+
+            if (profile && profile.status === 'trial' && profile.trial_started_at) {
+              const { error: updateError } = await supabase
                 .from('profiles')
-                .select('user_id, status, trial_started_at')
-                .eq('phone', cleanPhone)
-                .maybeSingle();
+                .update({
+                  status: 'active',
+                  converted_at: new Date().toISOString(),
+                  payment_failed_at: null,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('id', profile.id);
 
-              if (profile && profile.status === 'trial' && profile.trial_started_at) {
-                const { error: updateError } = await supabase
-                  .from('profiles')
-                  .update({
-                    status: 'active',
-                    converted_at: new Date().toISOString(),
-                    payment_failed_at: null,
-                    updated_at: new Date().toISOString(),
-                  })
-                  .eq('phone', cleanPhone);
-
-                if (updateError) {
-                  console.error('❌ Error updating profile on invoice.paid:', updateError);
-                } else {
-                  console.log('✅ Trial converted to active via invoice.paid for phone:', cleanPhone);
-                  // Cancel pending trial tasks
-                  await supabase
-                    .from('scheduled_tasks')
-                    .update({ status: 'cancelled', executed_at: new Date().toISOString() })
-                    .eq('user_id', profile.user_id)
-                    .in('status', ['pending'])
-                    .like('task_type', 'trial_%');
-                }
+              if (updateError) {
+                console.error('❌ Error updating profile on invoice.paid:', updateError);
               } else {
-                console.log('ℹ️ invoice.paid but profile not in trial status, skipping conversion');
+                console.log('✅ Trial converted to active via invoice.paid for:', profile.phone);
+                await supabase
+                  .from('scheduled_tasks')
+                  .update({ status: 'cancelled', executed_at: new Date().toISOString() })
+                  .eq('user_id', profile.user_id)
+                  .in('status', ['pending'])
+                  .like('task_type', 'trial_%');
               }
+            } else if (profile) {
+              // Clear payment_failed_at on successful payment regardless of status
+              await supabase
+                .from('profiles')
+                .update({
+                  payment_failed_at: null,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('id', profile.id);
+              console.log('ℹ️ invoice.paid — cleared payment_failed_at for:', profile.phone);
+            } else {
+              console.warn('⚠️ invoice.paid but no profile found for customer:', customerId);
             }
           }
         } catch (err) {
@@ -566,85 +564,110 @@ Me conta: como você está hoje?`;
       }
     }
 
-    // ========== invoice.payment_failed — payment failed + WhatsApp dunning ==========
+    // ========== invoice.payment_failed — dunning with audit trail ==========
     if (event.type === 'invoice.payment_failed') {
       const invoice = event.data.object as Stripe.Invoice;
       const customerId = invoice.customer as string;
       console.log('❌ Invoice payment failed:', invoice.id, 'customer:', customerId);
 
+      // Audit trail record
+      const dunningRecord: Record<string, any> = {
+        event_id: event.id,
+        customer_id: customerId,
+        invoice_id: invoice.id,
+        subscription_id: invoice.subscription as string || null,
+      };
+
       if (invoice.subscription) {
         try {
-          const stripe2 = new Stripe(stripeSecretKey, { apiVersion: '2023-10-16' });
-          const customer = await stripe2.customers.retrieve(customerId);
-          if (!customer.deleted) {
-            const customerPhone = customer.metadata?.phone;
-            if (customerPhone) {
-              const cleanPhone = customerPhone.replace(/\D/g, '');
-              const formattedPhone = (cleanPhone.length === 10 || cleanPhone.length === 11)
-                ? `55${cleanPhone}`
-                : cleanPhone;
+          const customer = await stripe.customers.retrieve(customerId);
+          if (customer.deleted) {
+            dunningRecord.error_stage = 'customer_deleted';
+            dunningRecord.error_message = 'Stripe customer was deleted';
+            await supabase.from('dunning_attempts').insert(dunningRecord);
+            return new Response(JSON.stringify({ received: true }), {
+              status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+          }
 
-              // Step 1: Record payment failure
-              const { error: updateError } = await supabase
-                .from('profiles')
-                .update({
-                  payment_failed_at: new Date().toISOString(),
-                  updated_at: new Date().toISOString(),
-                })
-                .eq('phone', formattedPhone);
+          const rawPhone = (customer as Stripe.Customer).metadata?.phone;
+          dunningRecord.phone_raw = rawPhone || null;
 
-              if (updateError) {
-                console.error('❌ Error updating profile on payment_failed:', updateError);
+          const { profile, phone, variationsTried } = await resolveProfileFromCustomer(supabase, customer as Stripe.Customer);
+          dunningRecord.phone_resolved = phone;
+          dunningRecord.profile_found = !!profile;
+          dunningRecord.profile_user_id = profile?.user_id || null;
+
+          if (!profile) {
+            dunningRecord.error_stage = 'profile_not_found';
+            dunningRecord.error_message = `No profile found. Phone raw: ${rawPhone}, email: ${(customer as Stripe.Customer).email}, variations tried: ${variationsTried.join(',')}`;
+            console.error(`❌ [DUNNING] Profile not found for customer ${customerId}. Raw phone: ${rawPhone}, variations: ${variationsTried.join(',')}`);
+            await supabase.from('dunning_attempts').insert(dunningRecord);
+            return new Response(JSON.stringify({ received: true }), {
+              status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+          }
+
+          // Step 1: Record payment failure on profile
+          const { error: updateError } = await supabase
+            .from('profiles')
+            .update({
+              payment_failed_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', profile.id);
+
+          if (updateError) {
+            console.error('❌ Error updating profile on payment_failed:', updateError);
+            dunningRecord.error_stage = 'profile_update_failed';
+            dunningRecord.error_message = updateError.message;
+            await supabase.from('dunning_attempts').insert(dunningRecord);
+            return new Response(JSON.stringify({ received: true }), {
+              status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+          }
+
+          console.log('✅ payment_failed_at recorded for:', profile.phone);
+          const userName = profile.name || (customer as Stripe.Customer).name || 'Cliente';
+
+          // Step 2: Create Billing Portal link
+          try {
+            const portalSession = await stripe.billingPortal.sessions.create({
+              customer: customerId,
+              return_url: 'https://olaaura.com.br',
+            });
+
+            console.log('🔗 Billing portal session created:', portalSession.url);
+            dunningRecord.link_generated = true;
+
+            // Step 3: Shorten URL
+            let paymentLink = portalSession.url;
+            try {
+              const shortLinkResponse = await fetch(`${supabaseUrl}/functions/v1/create-short-link`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${supabaseServiceKey}`,
+                },
+                body: JSON.stringify({
+                  url: portalSession.url,
+                  phone: profile.phone,
+                }),
+              });
+
+              if (shortLinkResponse.ok) {
+                const shortLinkData = await shortLinkResponse.json();
+                paymentLink = shortLinkData.shortUrl;
+                console.log('🔗 Short link created:', paymentLink);
               } else {
-                console.log('✅ payment_failed_at recorded for phone:', formattedPhone);
+                console.warn('⚠️ Short link creation failed, using full URL');
               }
+            } catch (shortLinkErr) {
+              console.warn('⚠️ Short link error, using full URL:', shortLinkErr);
+            }
 
-              // Step 2: Get profile for user_id and name
-              const { data: profile } = await supabase
-                .from('profiles')
-                .select('user_id, name')
-                .eq('phone', formattedPhone)
-                .maybeSingle();
-
-              const userName = profile?.name || customer.name || 'Cliente';
-
-              // Step 3: Create Billing Portal link for card update
-              try {
-                const portalSession = await stripe2.billingPortal.sessions.create({
-                  customer: customerId,
-                  return_url: 'https://olaaura.com.br',
-                });
-
-                console.log('🔗 Billing portal session created:', portalSession.url);
-
-                // Step 4: Shorten the portal URL via create-short-link
-                let paymentLink = portalSession.url;
-                try {
-                  const shortLinkResponse = await fetch(`${supabaseUrl}/functions/v1/create-short-link`, {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                      'Authorization': `Bearer ${supabaseServiceKey}`,
-                    },
-                    body: JSON.stringify({
-                      url: portalSession.url,
-                      phone: formattedPhone,
-                    }),
-                  });
-
-                  if (shortLinkResponse.ok) {
-                    const shortLinkData = await shortLinkResponse.json();
-                    paymentLink = shortLinkData.shortUrl;
-                    console.log('🔗 Short link created:', paymentLink);
-                  } else {
-                    console.warn('⚠️ Short link creation failed, using full URL');
-                  }
-                } catch (shortLinkErr) {
-                  console.warn('⚠️ Short link error, using full URL:', shortLinkErr);
-                }
-
-                // Step 5: Send WhatsApp dunning message
-                const dunningMessage = `Oi, ${userName}! 💜
+            // Step 4: Send WhatsApp dunning message
+            const dunningMessage = `Oi, ${userName}! 💜
 
 Não conseguimos processar seu pagamento da AURA.
 
@@ -652,32 +675,45 @@ Você pode atualizar seu cartão aqui: ${paymentLink}
 
 Se preferir cancelar, é só me avisar. Sem problemas. 💜`;
 
-                const msgResponse = await fetch(`${supabaseUrl}/functions/v1/send-zapi-message`, {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${supabaseServiceKey}`,
-                  },
-                  body: JSON.stringify({
-                    phone: formattedPhone,
-                    message: dunningMessage,
-                    isAudio: false,
-                    ...(profile?.user_id && { user_id: profile.user_id }),
-                  }),
-                });
+            const msgResponse = await fetch(`${supabaseUrl}/functions/v1/send-zapi-message`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${supabaseServiceKey}`,
+              },
+              body: JSON.stringify({
+                phone: profile.phone,
+                message: dunningMessage,
+                isAudio: false,
+                user_id: profile.user_id,
+              }),
+            });
 
-                if (!msgResponse.ok) {
-                  console.error('❌ Failed to send dunning WhatsApp:', await msgResponse.text());
-                } else {
-                  console.log('✅ Dunning WhatsApp sent to:', formattedPhone);
-                }
-              } catch (portalErr) {
-                console.error('❌ Error creating billing portal or sending dunning:', portalErr);
-              }
+            if (!msgResponse.ok) {
+              const errText = await msgResponse.text();
+              console.error('❌ Failed to send dunning WhatsApp:', errText);
+              dunningRecord.error_stage = 'whatsapp_send_failed';
+              dunningRecord.error_message = errText;
+            } else {
+              dunningRecord.whatsapp_sent = true;
+              console.log('✅ Dunning WhatsApp sent to:', profile.phone);
             }
+          } catch (portalErr) {
+            const errMsg = portalErr instanceof Error ? portalErr.message : String(portalErr);
+            console.error('❌ Error creating billing portal or sending dunning:', errMsg);
+            dunningRecord.error_stage = 'portal_or_send_failed';
+            dunningRecord.error_message = errMsg;
           }
+
+          // Save audit trail
+          await supabase.from('dunning_attempts').insert(dunningRecord);
+
         } catch (err) {
-          console.error('❌ Error processing invoice.payment_failed:', err);
+          const errMsg = err instanceof Error ? err.message : String(err);
+          console.error('❌ Error processing invoice.payment_failed:', errMsg);
+          dunningRecord.error_stage = 'unhandled_exception';
+          dunningRecord.error_message = errMsg;
+          try { await supabase.from('dunning_attempts').insert(dunningRecord); } catch (_) {}
         }
       }
     }
@@ -688,45 +724,37 @@ Se preferir cancelar, é só me avisar. Sem problemas. 💜`;
       const previousAttributes = (event.data as any).previous_attributes;
       console.log('🔄 Subscription updated:', subscription.id, 'status:', subscription.status);
 
-      // Only act when transitioning from trialing to active
       if (previousAttributes?.status === 'trialing' && subscription.status === 'active') {
         const customerId = subscription.customer as string;
         try {
-          const stripe2 = new Stripe(stripeSecretKey, { apiVersion: '2023-10-16' });
-          const customer = await stripe2.customers.retrieve(customerId);
+          const customer = await stripe.customers.retrieve(customerId);
           if (!customer.deleted) {
-            const customerPhone = customer.metadata?.phone;
-            if (customerPhone) {
-              const cleanPhone = customerPhone.replace(/\D/g, '');
-              const { data: profile } = await supabase
+            const { profile } = await resolveProfileFromCustomer(supabase, customer as Stripe.Customer);
+
+            if (profile && profile.status === 'trial') {
+              const { error: updateError } = await supabase
                 .from('profiles')
-                .select('user_id, status')
-                .eq('phone', cleanPhone)
-                .maybeSingle();
+                .update({
+                  status: 'active',
+                  converted_at: new Date().toISOString(),
+                  payment_failed_at: null,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('id', profile.id);
 
-              if (profile && profile.status === 'trial') {
-                const { error: updateError } = await supabase
-                  .from('profiles')
-                  .update({
-                    status: 'active',
-                    converted_at: new Date().toISOString(),
-                    payment_failed_at: null,
-                    updated_at: new Date().toISOString(),
-                  })
-                  .eq('phone', cleanPhone);
-
-                if (updateError) {
-                  console.error('❌ Error updating profile on subscription.updated:', updateError);
-                } else {
-                  console.log('✅ Trial → Active via subscription.updated for phone:', cleanPhone);
-                  await supabase
-                    .from('scheduled_tasks')
-                    .update({ status: 'cancelled', executed_at: new Date().toISOString() })
-                    .eq('user_id', profile.user_id)
-                    .in('status', ['pending'])
-                    .like('task_type', 'trial_%');
-                }
+              if (updateError) {
+                console.error('❌ Error updating profile on subscription.updated:', updateError);
+              } else {
+                console.log('✅ Trial → Active via subscription.updated for:', profile.phone);
+                await supabase
+                  .from('scheduled_tasks')
+                  .update({ status: 'cancelled', executed_at: new Date().toISOString() })
+                  .eq('user_id', profile.user_id)
+                  .in('status', ['pending'])
+                  .like('task_type', 'trial_%');
               }
+            } else {
+              console.warn('⚠️ subscription.updated trialing→active but no trial profile found for customer:', customerId);
             }
           }
         } catch (err) {

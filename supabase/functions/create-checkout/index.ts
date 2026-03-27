@@ -120,6 +120,9 @@ serve(async (req) => {
       await stripe.customers.update(customerId, {
         email: email,
         name: name,
+        metadata: {
+          phone: phoneClean,
+        },
       });
     } else {
       const newCustomer = await stripe.customers.create({
