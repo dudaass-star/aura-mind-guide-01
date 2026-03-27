@@ -206,7 +206,7 @@ Deno.serve(async (req) => {
           }
         } else {
           profileUserId = existingProfile.user_id;
-          const isConverting = !isTrial && (existingProfile.status === 'trial');
+          const isConverting = !isTrial && ['trial', 'trial_expired'].includes(existingProfile.status);
           const { error: updateError } = await supabase
             .from('profiles')
             .update({
@@ -522,7 +522,7 @@ Me conta: como você está hoje?`;
           if (!customer.deleted) {
             const { profile } = await resolveProfileFromCustomer(supabase, customer as Stripe.Customer);
 
-            if (profile && profile.status === 'trial' && profile.trial_started_at) {
+            if (profile && ['trial', 'trial_expired'].includes(profile.status) && profile.trial_started_at) {
               const { error: updateError } = await supabase
                 .from('profiles')
                 .update({
@@ -731,7 +731,7 @@ Se preferir cancelar, é só me avisar. Sem problemas. 💜`;
           if (!customer.deleted) {
             const { profile } = await resolveProfileFromCustomer(supabase, customer as Stripe.Customer);
 
-            if (profile && profile.status === 'trial') {
+            if (profile && ['trial', 'trial_expired'].includes(profile.status)) {
               const { error: updateError } = await supabase
                 .from('profiles')
                 .update({
