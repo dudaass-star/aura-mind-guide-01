@@ -731,7 +731,7 @@ Se preferir cancelar, é só me avisar. Sem problemas. 💜`;
           if (!customer.deleted) {
             const { profile } = await resolveProfileFromCustomer(supabase, customer as Stripe.Customer);
 
-            if (profile && profile.status === 'trial') {
+            if (profile && ['trial', 'trial_expired'].includes(profile.status)) {
               const { error: updateError } = await supabase
                 .from('profiles')
                 .update({
