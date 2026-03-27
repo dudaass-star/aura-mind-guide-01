@@ -60,6 +60,10 @@ interface Metrics {
   canceledUsers: number;
   cancelingUsers: number;
   trialsByPlan?: { plan: string; count: number }[];
+  // Billing
+  billingSuccessInPeriod: number;
+  billingTotalInPeriod: number;
+  billingSuccessRate: number;
   // Checkout funnel
   checkoutCreatedInPeriod: number;
   checkoutCompletedInPeriod: number;
