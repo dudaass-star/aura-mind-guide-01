@@ -518,6 +518,10 @@ Deno.serve(async (req) => {
       checkoutCompletionRate,
       checkoutCreatedAllTime: checkoutCreatedAllTime || 0,
       checkoutCompletedAllTime: checkoutCompletedAllTime || 0,
+      // Billing
+      billingSuccessInPeriod,
+      billingTotalInPeriod,
+      billingSuccessRate,
       // Cancellation
       canceledInPeriod,
       pausedInPeriod: pausedInPeriodCount || 0,
