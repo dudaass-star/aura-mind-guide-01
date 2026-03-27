@@ -206,7 +206,7 @@ Deno.serve(async (req) => {
           }
         } else {
           profileUserId = existingProfile.user_id;
-          const isConverting = !isTrial && (existingProfile.status === 'trial');
+          const isConverting = !isTrial && ['trial', 'trial_expired'].includes(existingProfile.status);
           const { error: updateError } = await supabase
             .from('profiles')
             .update({
