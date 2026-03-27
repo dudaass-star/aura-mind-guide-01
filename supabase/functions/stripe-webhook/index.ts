@@ -90,10 +90,18 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Idempotency check
+    // Idempotency check — include amount for invoice events
+    let eventAmount: number | null = null;
+    if (event.type === 'invoice.paid' || event.type === 'invoice.payment_failed') {
+      const invoice = event.data.object as Stripe.Invoice;
+      eventAmount = event.type === 'invoice.paid'
+        ? (invoice.amount_paid ?? 0)
+        : (invoice.amount_due ?? 0);
+    }
+
     const { error: dedupError } = await supabase
       .from('stripe_webhook_events')
-      .insert({ id: event.id, event_type: event.type });
+      .insert({ id: event.id, event_type: event.type, ...(eventAmount !== null && { amount: eventAmount }) });
 
     if (dedupError?.code === '23505') {
       console.log(`⚠️ Event ${event.id} already processed, skipping`);
