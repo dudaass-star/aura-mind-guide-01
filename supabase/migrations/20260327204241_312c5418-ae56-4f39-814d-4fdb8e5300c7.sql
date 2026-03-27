@@ -1,0 +1,1 @@
+ALTER TABLE public.stripe_webhook_events ADD COLUMN amount integer DEFAULT NULL;

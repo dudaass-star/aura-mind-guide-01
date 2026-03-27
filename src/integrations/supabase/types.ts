@@ -1036,16 +1036,19 @@ export type Database = {
       }
       stripe_webhook_events: {
         Row: {
+          amount: number | null
           event_type: string
           id: string
           processed_at: string
         }
         Insert: {
+          amount?: number | null
           event_type: string
           id: string
           processed_at?: string
         }
         Update: {
+          amount?: number | null
           event_type?: string
           id?: string
           processed_at?: string
