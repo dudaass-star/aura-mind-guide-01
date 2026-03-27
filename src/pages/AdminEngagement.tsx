@@ -85,6 +85,21 @@ interface RecoverySession {
   converted: boolean;
 }
 
+interface DunningAttempt {
+  id: string;
+  event_id: string;
+  customer_id: string;
+  invoice_id: string | null;
+  phone_raw: string | null;
+  phone_resolved: string | null;
+  profile_found: boolean;
+  link_generated: boolean;
+  whatsapp_sent: boolean;
+  error_stage: string | null;
+  error_message: string | null;
+  created_at: string;
+}
+
 export default function AdminEngagement() {
   const { isLoading, isAdmin, redirectIfNotAdmin } = useAdminAuth();
   const [metrics, setMetrics] = useState<Metrics | null>(null);
