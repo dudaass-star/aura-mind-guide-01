@@ -1,26 +1,30 @@
 
 
-## Retentar cobrança das invoices abertas
+## Validação R$1 + bloqueio débito/pré-pago — IMPLEMENTADO ✅
 
-### Situação atual
-6 invoices com status `open` no Stripe, totalizando ~R$ 299,30:
-- `in_1TFt9A` — R$ 79,90 (cus_UBjE0k)
-- `in_1TFsye` — R$ 29,90 (cus_UBiy)
-- `in_1TFqgj` — R$ 29,90 (cus_UBgZ)
-- `in_1TFqbs` — R$ 29,90 (cus_UBgZ) — mesmo cliente, invoice duplicada
-- `in_1TFqEi` — R$ 49,90 (cus_UBgF)
-- `in_1TFqBG` — R$ 79,90 (cus_UBgB)
-- `in_1TFYWW` — R$ 49,90 (cus_UBNp)
+### O que foi feito
 
-### Ação
-Rodar novamente a função `attach-checkout-payment-methods` com `dry_run=false` e `include_past_due=true`. Ela vai:
-1. Verificar que os cartões já estão anexados (etapa anterior já resolveu isso)
-2. Para cada subscription `past_due`, buscar a invoice aberta e chamar `stripe.invoices.pay()` com o payment method
+1. **Produto Stripe criado**: "Validação de cartão AURA" — R$1,00 one-time (price_1TG3zEQU15XnZ7Vv75qpmBf8)
 
-### Expectativa realista
-Na execução anterior, os cartões foram anexados com sucesso, mas as retentativas de cobrança falharam por **recusa do emissor** (saldo insuficiente, cartão bloqueado, etc.). É possível que o resultado seja o mesmo. Se falhar novamente, a alternativa é enviar mensagem de dunning via WhatsApp com link do Billing Portal para o cliente atualizar o cartão.
+2. **create-checkout/index.ts** — quando `trial === true`:
+   - Usa `mode: "payment"` com price de R$1
+   - `setup_future_usage: 'off_session'` para forçar 3DS e salvar cartão
+   - Metadata inclui `trial_validation: "true"`, `plan`, `billing`
+   - Checkout não-trial permanece inalterado
 
-### Implementação
-- Chamar a edge function existente `attach-checkout-payment-methods` via curl com `{ "dry_run": false, "include_past_due": true }`
-- Analisar os resultados e reportar quais cobraram e quais falharam
+3. **stripe-webhook/index.ts** — novo bloco `trial_validation`:
+   - Detecta `metadata.trial_validation === "true"` + `mode === "payment"`
+   - Sempre estorna o R$1 via `stripe.refunds.create()`
+   - Verifica `card.funding` do PaymentMethod
+   - **Se credit**: cria subscription com `trial_period_days: 7` + `default_payment_method`, cria perfil, envia boas-vindas, CAPI StartTrial
+   - **Se debit/prepaid**: marca `rejected_card_type`, envia WhatsApp com link curto para tentar de novo com crédito, NÃO cria perfil/subscription
+   - Idempotência via `stripe_webhook_events` (já existia)
+   - Customer passado no checkout (já existia)
 
+### Fluxo
+
+```text
+Usuário escolhe trial → Checkout R$1 (3DS) → Webhook:
+  ├── Cartão crédito → estorna R$1 → cria subscription trial 7d → perfil + boas-vindas
+  └── Débito/pré-pago → estorna R$1 → WhatsApp com link retry → rejeita
+```
