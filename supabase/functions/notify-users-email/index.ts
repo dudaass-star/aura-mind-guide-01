@@ -1,9 +1,13 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sendLovableEmail } from "npm:@lovable.dev/email-js";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+const SENDER_DOMAIN = 'notify.olaaura.com.br';
+const FROM_EMAIL = 'noreply@olaaura.com.br';
 
 function buildEmailHTML(name: string | null): string {
   const greeting = name ? `Olá, ${name}!` : 'Olá!';
@@ -83,7 +87,7 @@ Deno.serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const resendApiKey = Deno.env.get('RESEND_API_KEY')!;
+    const apiKey = Deno.env.get('LOVABLE_API_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Fetch active/trial users with email
@@ -114,35 +118,29 @@ Deno.serve(async (req) => {
 
     for (const profile of uniqueProfiles) {
       try {
-        const res = await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${resendApiKey}`,
-          },
-          body: JSON.stringify({
-            from: 'Aura <onboarding@resend.dev>',
-            to: [profile.email],
+        await sendLovableEmail(
+          {
+            to: profile.email,
+            from: `Aura <${FROM_EMAIL}>`,
+            sender_domain: SENDER_DOMAIN,
             subject: 'Aura em manutenção — voltamos em breve 💚',
             html: buildEmailHTML(profile.name),
-          }),
-        });
+            purpose: 'transactional',
+            idempotency_key: `maintenance-notify-${profile.email}-${new Date().toISOString().slice(0, 10)}`,
+          },
+          { apiKey, sendUrl: Deno.env.get('LOVABLE_SEND_URL') }
+        );
 
-        if (res.ok) {
-          sent++;
-          console.log(`✅ Sent to ${profile.email}`);
-        } else {
-          const errBody = await res.text();
-          failed++;
-          errors.push(`${profile.email}: ${errBody}`);
-          console.error(`❌ Failed ${profile.email}: ${errBody}`);
-        }
+        sent++;
+        console.log(`✅ Sent to ${profile.email}`);
 
         // Small delay to avoid rate limits
         await new Promise(r => setTimeout(r, 200));
       } catch (e) {
         failed++;
-        errors.push(`${profile.email}: ${e instanceof Error ? e.message : 'unknown'}`);
+        const errMsg = e instanceof Error ? e.message : 'unknown';
+        errors.push(`${profile.email}: ${errMsg}`);
+        console.error(`❌ Failed ${profile.email}: ${errMsg}`);
       }
     }
 
