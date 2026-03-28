@@ -433,7 +433,7 @@ const Checkout = () => {
                   </span>
                 </div>
                 <p className="text-sm text-muted-foreground mt-3 text-center">
-                  Primeira cobrança em 7 dias: R$ {currentPrice}/{periodLabel}
+                  Primeira cobrança em 5 dias: R$ {currentPrice}/{periodLabel}
                 </p>
               </div>
 
