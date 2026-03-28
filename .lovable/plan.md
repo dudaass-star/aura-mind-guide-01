@@ -1,30 +1,42 @@
 
 
-## Validação R$1 + bloqueio débito/pré-pago — IMPLEMENTADO ✅
+## Reduzir Trial de 7 para 5 dias — Implementação
 
-### O que foi feito
+### Backend (4 arquivos)
 
-1. **Produto Stripe criado**: "Validação de cartão AURA" — R$1,00 one-time (price_1TG3zEQU15XnZ7Vv75qpmBf8)
+**1. `supabase/functions/stripe-webhook/index.ts`**
+- Linha 269: comment `7-day` → `5-day`
+- Linha 273: `trial_period_days: 7` → `trial_period_days: 5`
+- Linha 283: `"7 dias grátis — a primeira cobrança será apenas no 8º dia."` → `"5 dias grátis — a primeira cobrança será apenas no 6º dia."`
 
-2. **create-checkout/index.ts** — quando `trial === true`:
-   - Usa `mode: "payment"` com price de R$1
-   - `setup_future_usage: 'off_session'` para forçar 3DS e salvar cartão
-   - Metadata inclui `trial_validation: "true"`, `plan`, `billing`
-   - Checkout não-trial permanece inalterado
+**2. `supabase/functions/process-webhook-message/index.ts`**
+- Linha 289: `const sevenDays = 7 * 24 * 60 * 60 * 1000` → `const fiveDays = 5 * 24 * 60 * 60 * 1000`
+- Linha 290: `if (trialAge > sevenDays)` → `if (trialAge > fiveDays)`
 
-3. **stripe-webhook/index.ts** — novo bloco `trial_validation`:
-   - Detecta `metadata.trial_validation === "true"` + `mode === "payment"`
-   - Sempre estorna o R$1 via `stripe.refunds.create()`
-   - Verifica `card.funding` do PaymentMethod
-   - **Se credit**: cria subscription com `trial_period_days: 7` + `default_payment_method`, cria perfil, envia boas-vindas, CAPI StartTrial
-   - **Se debit/prepaid**: marca `rejected_card_type`, envia WhatsApp com link curto para tentar de novo com crédito, NÃO cria perfil/subscription
-   - Idempotência via `stripe_webhook_events` (já existia)
-   - Customer passado no checkout (já existia)
+**3. `supabase/functions/cleanup-inactive-users/index.ts`**
+- Linha 28-29: Ghost trials cutoff `7 * 24 * 60 * 60 * 1000` → `5 * 24 * 60 * 60 * 1000`, comment atualizado
 
-### Fluxo
+**4. `supabase/functions/admin-engagement-metrics/index.ts`**
+- Linha 277-278: `7 * 24 * 60 * 60 * 1000` → `5 * 24 * 60 * 60 * 1000`, comment `< 7 days` → `< 5 days`
 
-```text
-Usuário escolhe trial → Checkout R$1 (3DS) → Webhook:
-  ├── Cartão crédito → estorna R$1 → cria subscription trial 7d → perfil + boas-vindas
-  └── Débito/pré-pago → estorna R$1 → WhatsApp com link retry → rejeita
-```
+**5. `supabase/functions/schedule-setup-reminder/index.ts`**
+- Linhas 81-83: Segundo lembrete `5-7 days (120-168h)` → `3-5 days (72-120h)`
+
+### Frontend (7 arquivos) — substituição de texto
+
+| Arquivo | De | Para |
+|---|---|---|
+| `Hero.tsx` | "7 dias grátis", "primeiros 7 dias" | "5 dias grátis", "primeiros 5 dias" |
+| `FinalCTA.tsx` | "7 dias grátis" (×2) | "5 dias grátis" |
+| `FAQ.tsx` | "7 dias grátis", "primeiros 7 dias", "8º dia" | "5 dias grátis", "primeiros 5 dias", "6º dia" |
+| `Demo.tsx` | "7 dias grátis" | "5 dias grátis" |
+| `ForWho.tsx` | "7 dias grátis" | "5 dias grátis" |
+| `Pricing.tsx` | "7 dias grátis" | "5 dias grátis" |
+| `Checkout.tsx` | "7 dias" (×4) | "5 dias" |
+| `AdminEngagement.tsx` | "< 7d", "> 7d", "7 dias" | "< 5d", "> 5d", "5 dias" |
+
+### Não alterar
+- `conversation-followup` (reengajamento semanal — funcionalidade diferente)
+- `aura-agent` (dedup de tarefas — funcionalidade diferente)
+- `admin-engagement-metrics` default date range de 7 dias (filtro do dashboard)
+
