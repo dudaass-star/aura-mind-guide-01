@@ -128,6 +128,292 @@ Deno.serve(async (req) => {
         console.warn('⚠️ Failed to update checkout_session status (non-blocking):', csErr);
       }
 
+      // ========== TRIAL VALIDATION (R$1 charge) ==========
+      if (session.metadata?.trial_validation === 'true' && session.mode === 'payment') {
+        console.log('🔐 Trial validation flow detected');
+        const customerName = session.metadata?.name || session.customer_details?.name || 'Cliente';
+        const customerPhone = session.metadata?.phone;
+        const customerEmail = session.metadata?.email || session.customer_details?.email;
+        const customerPlan = session.metadata?.plan || 'essencial';
+        const customerBilling = session.metadata?.billing || 'monthly';
+        const customerId = session.customer as string;
+        const paymentIntentId = session.payment_intent as string;
+
+        if (!customerPhone) {
+          console.error('❌ No phone in trial validation session');
+          return new Response(JSON.stringify({ received: true }), {
+            status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        const cleanPhone = customerPhone.replace(/\D/g, '');
+        const formattedPhone = (cleanPhone.length === 10 || cleanPhone.length === 11)
+          ? `55${cleanPhone}` : cleanPhone;
+
+        try {
+          // Step 1: Retrieve PaymentIntent to check card funding type
+          const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId, {
+            expand: ['payment_method'],
+          });
+          const paymentMethod = paymentIntent.payment_method as Stripe.PaymentMethod;
+          const cardFunding = paymentMethod?.card?.funding;
+          console.log(`💳 Card funding type: ${cardFunding}`);
+
+          // Step 2: Always refund the R$1
+          try {
+            await stripe.refunds.create({ payment_intent: paymentIntentId });
+            console.log('💸 R$1 refunded successfully');
+          } catch (refundErr) {
+            console.error('❌ Refund failed (continuing):', refundErr);
+          }
+
+          // Step 3: Check if card is credit
+          if (cardFunding !== 'credit') {
+            // === REJECT: debit/prepaid card ===
+            console.log(`🚫 Rejected card type: ${cardFunding}`);
+
+            // Update checkout_session status
+            await supabase
+              .from('checkout_sessions')
+              .update({ status: 'rejected_card_type' })
+              .eq('stripe_session_id', session.id);
+
+            // Send WhatsApp rejection message with retry link
+            const origin = 'https://aura-mind-guide-01.lovable.app';
+            const retryUrl = `${origin}/checkout?plan=${customerPlan}&billing=${customerBilling}`;
+
+            let shortRetryUrl = retryUrl;
+            try {
+              const shortLinkResponse = await fetch(`${supabaseUrl}/functions/v1/create-short-link`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${supabaseServiceKey}`,
+                },
+                body: JSON.stringify({ url: retryUrl, phone: formattedPhone }),
+              });
+              if (shortLinkResponse.ok) {
+                const shortLinkData = await shortLinkResponse.json();
+                shortRetryUrl = shortLinkData.shortUrl;
+              } else {
+                await shortLinkResponse.text(); // consume body
+              }
+            } catch (_) {}
+
+            const rejectionMessage = `Oi, ${customerName}! 💜
+
+Infelizmente não aceitamos cartão de débito ou pré-pago para o período de teste.
+
+Você pode tentar novamente com um cartão de crédito aqui: ${shortRetryUrl}
+
+Se precisar de ajuda, é só me avisar! 💜`;
+
+            try {
+              const msgResponse = await fetch(`${supabaseUrl}/functions/v1/send-zapi-message`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${supabaseServiceKey}`,
+                },
+                body: JSON.stringify({
+                  phone: formattedPhone,
+                  message: rejectionMessage,
+                  isAudio: false,
+                }),
+              });
+              if (msgResponse.ok) {
+                await msgResponse.text(); // consume body
+                console.log('✅ Card rejection WhatsApp sent');
+              } else {
+                console.error('❌ Failed to send rejection WhatsApp:', await msgResponse.text());
+              }
+            } catch (sendErr) {
+              console.error('❌ Error sending rejection WhatsApp:', sendErr);
+            }
+
+            return new Response(JSON.stringify({ received: true }), {
+              status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+          }
+
+          // === ACCEPT: credit card — create subscription with trial ===
+          console.log('✅ Credit card validated, creating trial subscription');
+
+          // Get the payment methods for this customer
+          const paymentMethods = await stripe.paymentMethods.list({
+            customer: customerId,
+            type: 'card',
+            limit: 1,
+          });
+
+          const defaultPm = paymentMethods.data[0]?.id;
+          if (!defaultPm) {
+            console.error('❌ No payment method found after R$1 charge');
+          }
+
+          // Get the correct price for the subscription
+          const PRICES: Record<string, Record<string, string>> = {
+            essencial: { monthly: Deno.env.get("STRIPE_PRICE_ESSENCIAL_MONTHLY") || "", yearly: Deno.env.get("STRIPE_PRICE_ESSENCIAL_YEARLY") || "" },
+            direcao: { monthly: Deno.env.get("STRIPE_PRICE_DIRECAO_MONTHLY") || "", yearly: Deno.env.get("STRIPE_PRICE_DIRECAO_YEARLY") || "" },
+            transformacao: { monthly: Deno.env.get("STRIPE_PRICE_TRANSFORMACAO_MONTHLY") || "", yearly: Deno.env.get("STRIPE_PRICE_TRANSFORMACAO_YEARLY") || "" },
+          };
+
+          const subscriptionPriceId = PRICES[customerPlan]?.[customerBilling];
+          if (!subscriptionPriceId) {
+            console.error(`❌ No price ID found for plan=${customerPlan}, billing=${customerBilling}`);
+            return new Response(JSON.stringify({ received: true }), {
+              status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+          }
+
+          // Create subscription with 7-day trial
+          const subscription = await stripe.subscriptions.create({
+            customer: customerId,
+            items: [{ price: subscriptionPriceId }],
+            trial_period_days: 7,
+            ...(defaultPm && { default_payment_method: defaultPm }),
+            metadata: {
+              phone: cleanPhone,
+              name: customerName,
+              email: customerEmail || '',
+              plan: customerPlan,
+              billing: customerBilling,
+              trial: "true",
+            },
+            description: "7 dias grátis — a primeira cobrança será apenas no 8º dia.",
+          });
+          console.log('✅ Trial subscription created:', subscription.id);
+
+          // Now create/update profile (same logic as normal checkout)
+          const planName = PLAN_NAMES[customerPlan] || "Essencial";
+          const sessionsCount = PLAN_SESSIONS[customerPlan] || 0;
+          const today = new Date().toISOString().split('T')[0];
+
+          const resolveResult = await resolveProfile(supabase, customerPhone, customerEmail);
+          const existingProfile = resolveResult.profile;
+          const isReturning = existingProfile?.status === 'canceled';
+          const isUpgrade = !!existingProfile && !isReturning;
+
+          let profileUserId: string;
+          try {
+            if (!existingProfile) {
+              const instanceId = await allocateInstance(supabase);
+              const newUserId = crypto.randomUUID();
+              profileUserId = newUserId;
+              await supabase.from('profiles').insert({
+                user_id: newUserId,
+                name: customerName,
+                phone: formattedPhone,
+                email: customerEmail,
+                plan: customerPlan,
+                status: 'trial',
+                sessions_used_this_month: 0,
+                sessions_reset_date: today,
+                messages_today: 0,
+                last_message_date: today,
+                needs_schedule_setup: sessionsCount > 0,
+                trial_started_at: new Date().toISOString(),
+                trial_phase: 'listening',
+                ...(instanceId && { whatsapp_instance_id: instanceId }),
+              });
+              console.log('✅ Trial profile created');
+            } else {
+              profileUserId = existingProfile.user_id;
+              await supabase.from('profiles').update({
+                name: customerName,
+                email: customerEmail,
+                plan: customerPlan,
+                status: 'trial',
+                sessions_used_this_month: 0,
+                sessions_reset_date: today,
+                updated_at: new Date().toISOString(),
+                needs_schedule_setup: sessionsCount > 0,
+                trial_started_at: new Date().toISOString(),
+                trial_phase: 'listening',
+              }).eq('id', existingProfile.id);
+              console.log('✅ Trial profile updated');
+            }
+          } catch (dbError) {
+            console.error('❌ Database error:', dbError);
+            profileUserId = existingProfile?.user_id || crypto.randomUUID();
+          }
+
+          // Send welcome message
+          let welcomeMessage: string;
+          if (isReturning) {
+            welcomeMessage = `Oi, ${customerName}! 💜\n\nQue bom ter você de volta! 🌟\n\nVocê escolheu o plano ${planName}.\n\nVamos retomar de onde paramos?`;
+          } else if (isUpgrade) {
+            welcomeMessage = `Oi, ${customerName}! 💜 Que notícia boa!\n\nAgora somos oficiais. Você escolheu o plano ${planName}.\n\nVamos continuar de onde paramos?`;
+          } else {
+            welcomeMessage = `Oi, ${customerName}! 🌟 Que bom te receber por aqui.\n\nEu sou a AURA — e vou ficar com você nessa jornada.\n\nVocê escolheu o plano ${planName}.\n\nComigo, você pode falar com liberdade: sem julgamento, no seu ritmo.\n\nMe diz: como você está hoje?`;
+          }
+
+          try {
+            const response = await fetch(`${supabaseUrl}/functions/v1/send-zapi-message`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${supabaseServiceKey}`,
+              },
+              body: JSON.stringify({
+                phone: formattedPhone,
+                message: welcomeMessage,
+                isAudio: false,
+                user_id: profileUserId,
+              }),
+            });
+            if (!response.ok) {
+              console.error('❌ Failed to send welcome:', await response.text());
+            } else {
+              await response.text();
+              console.log('✅ Welcome message sent');
+            }
+          } catch (sendError) {
+            console.error('❌ Error sending welcome:', sendError);
+          }
+
+          // CAPI event
+          try {
+            const fbp = session.metadata?.fbp;
+            const fbc = session.metadata?.fbc;
+            await fetch(`${supabaseUrl}/functions/v1/meta-capi`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseServiceKey}` },
+              body: JSON.stringify({
+                event_name: 'StartTrial',
+                event_id: session.id,
+                event_source_url: 'https://aura-mind-guide-01.lovable.app/obrigado',
+                user_data: {
+                  email: customerEmail || undefined,
+                  phone: formattedPhone,
+                  first_name: customerName.split(' ')[0],
+                  ...(fbp && { fbp }),
+                  ...(fbc && { fbc }),
+                },
+                custom_data: {
+                  content_name: `Trial ${planName}`,
+                  content_category: customerPlan,
+                },
+              }),
+            });
+            console.log('✅ CAPI StartTrial event sent');
+          } catch (capiError) {
+            console.warn('⚠️ CAPI StartTrial failed (non-blocking):', capiError);
+          }
+
+          return new Response(JSON.stringify({ received: true }), {
+            status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+
+        } catch (trialError) {
+          console.error('❌ Error in trial validation flow:', trialError);
+          return new Response(JSON.stringify({ received: true }), {
+            status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+      }
+
+      // ========== NORMAL CHECKOUT (non-trial) ==========
       const customerName = session.metadata?.name || session.customer_details?.name || 'Cliente';
       const customerPhone = session.metadata?.phone || session.customer_details?.phone;
       const customerEmail = session.metadata?.email || session.customer_details?.email;
