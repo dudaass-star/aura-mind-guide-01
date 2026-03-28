@@ -54,6 +54,22 @@ Deno.serve(async (req) => {
 
     console.log(`📊 CAPI: Sending ${event_name} event`);
 
+    // Check if we have at least one strong PII parameter for matching
+    const hasStrongPII = !!(user_data.email || user_data.phone || user_data.first_name);
+    if (!hasStrongPII) {
+      // Meta requires at least one hashed PII param for effective matching.
+      // Without it, the API returns error 2804050. Skip gracefully.
+      console.log(`⚠️ CAPI: Skipping ${event_name} — no strong PII (email/phone/name). Browser Pixel handles this event.`);
+      return new Response(JSON.stringify({ 
+        success: true, 
+        skipped: true, 
+        reason: 'no_strong_pii',
+        message: 'Event skipped server-side — browser Pixel covers this event without PII.'
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // Hash user data as required by Meta
     const hashedUserData: Record<string, string> = {};
 
