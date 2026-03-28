@@ -281,9 +281,9 @@ Deno.serve(async (req) => {
       .select('*', { count: 'exact', head: true })
       .eq('status', 'trial')
       .not('trial_started_at', 'is', null)
-      .gte('trial_started_at', sevenDaysAgo);
+      .gte('trial_started_at', fiveDaysAgo);
 
-    // Expired trials (>= 7 days, no payment failure)
+    // Expired trials (>= 5 days, no payment failure)
     const { count: expiredTrialsNoFailure } = await supabase
       .from('profiles')
       .select('*', { count: 'exact', head: true })

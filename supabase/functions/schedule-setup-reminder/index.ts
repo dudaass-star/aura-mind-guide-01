@@ -158,7 +158,7 @@ Fico esperando! 🌟`;
       }
     }
 
-    // --- Second reminder batch (5-7 days) - URGENT ---
+    // --- Second reminder batch (3-5 days) - URGENT ---
     const { data: urgentReminderUsers, error: error2 } = await supabase
       .from('profiles')
       .select('*')
@@ -167,8 +167,8 @@ Fico esperando! 🌟`;
       .eq('status', 'active')
       .or('sessions_paused_until.is.null,sessions_paused_until.lt.' + today)
       .is('schedule_reminder_urgent_sent_at', null) // DEDUP: not yet sent
-      .lt('updated_at', fiveDaysAgo)
-      .gt('updated_at', sevenDaysAgo);
+      .lt('updated_at', threeDaysAgo)
+      .gt('updated_at', fiveDaysAgoReminder);
 
     if (error2) {
       console.error('❌ Error fetching urgent reminder users:', error2);
