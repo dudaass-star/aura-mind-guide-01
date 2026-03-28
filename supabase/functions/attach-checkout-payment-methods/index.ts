@@ -154,6 +154,32 @@ Deno.serve(async (req) => {
       const custHasCorrectDefault = report.cust_default_pm === paymentMethodId;
 
       if (subHasCorrectDefault && custHasCorrectDefault && pmAttached) {
+        // If force_retry and past_due, still retry the invoice
+        if (force_retry_invoices && sub.status === 'past_due') {
+          report.status = 'already_correct_retrying';
+          try {
+            const invoices = await stripe.invoices.list({
+              subscription: sub.id,
+              status: 'open',
+              limit: 1,
+            });
+            if (invoices.data.length > 0) {
+              await stripe.invoices.pay(invoices.data[0].id, {
+                payment_method: paymentMethodId,
+              });
+              report.invoice_retried = true;
+              report.invoice_id = invoices.data[0].id;
+              report.reason = 'Already correct, invoice retry succeeded';
+            } else {
+              report.reason = 'Already correct, no open invoice to retry';
+            }
+          } catch (retryErr: any) {
+            report.invoice_retry_error = retryErr.message;
+            report.reason = `Already correct, invoice retry failed: ${retryErr.message}`;
+          }
+          results.push(report);
+          continue;
+        }
         report.status = 'already_correct';
         report.reason = 'PM attached and set as default everywhere';
         results.push(report);
