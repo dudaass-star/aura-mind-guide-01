@@ -241,6 +241,33 @@ export default function AdminEngagement() {
     }
   };
 
+  const handleSendEmailNotification = async () => {
+    if (!confirm('Enviar email de aviso de manutenção para todos os usuários ativos/trial com email cadastrado?')) return;
+    setSendingEmail(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('No session');
+
+      const { data, error } = await supabase.functions.invoke('notify-users-email', {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+
+      if (error) throw error;
+      toast({
+        title: 'Emails enviados!',
+        description: `${data.sent} enviados, ${data.failed} falhas (de ${data.total} total).`,
+      });
+    } catch (err: unknown) {
+      toast({
+        title: 'Erro no envio',
+        description: err instanceof Error ? err.message : 'Erro desconhecido',
+        variant: 'destructive',
+      });
+    } finally {
+      setSendingEmail(false);
+    }
+  };
+
   if (isLoading || !isAdmin) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
