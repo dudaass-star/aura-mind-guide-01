@@ -233,7 +233,7 @@ const Checkout = () => {
                 Comece sua jornada
               </h1>
               <p className="text-muted-foreground">
-                Escolha seu plano e experimente grátis por 7 dias
+                Escolha seu plano e experimente grátis por 5 dias
               </p>
             </div>
 
