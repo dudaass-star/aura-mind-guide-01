@@ -8,6 +8,9 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Trial validation price (R$1 one-time, refunded after card validation)
+const TRIAL_VALIDATION_PRICE_ID = "price_1TG3zEQU15XnZ7Vv75qpmBf8";
+
 // Price IDs from environment variables
 const getPrices = (): Record<string, { monthly: string; yearly: string; boletoYearly: string }> => ({
   essencial: {
