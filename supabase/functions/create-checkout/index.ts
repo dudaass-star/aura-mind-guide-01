@@ -179,6 +179,11 @@ serve(async (req) => {
       // Card: subscription
       sessionConfig.mode = "subscription";
       sessionConfig.payment_method_types = ["card"];
+      sessionConfig.payment_method_options = {
+        card: {
+          setup_future_usage: 'off_session',
+        },
+      };
       sessionConfig.subscription_data = {
         ...(trial && { 
           description: "7 dias grátis — a primeira cobrança será apenas no 8º dia.",
