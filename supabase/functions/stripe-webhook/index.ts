@@ -266,11 +266,11 @@ Se precisar de ajuda, é só me avisar! 💜`;
             });
           }
 
-          // Create subscription with 7-day trial
+          // Create subscription with 5-day trial
           const subscription = await stripe.subscriptions.create({
             customer: customerId,
             items: [{ price: subscriptionPriceId }],
-            trial_period_days: 7,
+            trial_period_days: 5,
             ...(defaultPm && { default_payment_method: defaultPm }),
             metadata: {
               phone: cleanPhone,
