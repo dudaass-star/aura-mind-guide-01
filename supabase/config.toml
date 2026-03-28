@@ -120,3 +120,6 @@ verify_jwt = false
 
 [functions.reprocess-dunning]
 verify_jwt = false
+
+[functions.notify-users-email]
+verify_jwt = false
