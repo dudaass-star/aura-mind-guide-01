@@ -1,40 +1,35 @@
 
 
-## Corrigir salvamento de cartão no checkout com trial
+## Corrigir cobrança dos clientes em trial existentes
 
-### Problema identificado
-Todos os 6 pagamentos que falharam hoje mostram status `requires_payment_method` no Stripe. Isso significa que quando o trial de 7 dias termina e o Stripe tenta cobrar a primeira mensalidade, **não existe nenhum cartão salvo no cliente**. O Stripe não consegue cobrar porque não tem método de pagamento.
+### Diagnóstico confirmado
+- **Todos os 9 clientes past_due** têm payment intents com status `requires_payment_method` — o cartão NÃO foi salvo durante o checkout com trial
+- **10+ clientes em trial** que serão cobrados nos próximos dias têm o mesmo problema potencial — passaram pelo checkout antigo (sem `setup_future_usage: 'off_session'`)
+- A função `fix-subscription-payment-methods` reportou "ok" porque o Stripe mostra `default_payment_method` na subscription, mas esse PM pode estar vazio/inválido na prática
 
-Isso NÃO é recusa de cartão por saldo insuficiente - é ausência total de cartão.
+### Plano de ação
 
-### Causa raiz
-No `create-checkout/index.ts`, quando o checkout é criado com `trial_period_days: 7`, o Stripe Checkout coleta o cartão mas pode não salvá-lo como método de pagamento padrão para o customer. É necessário instruir o Stripe explicitamente.
+#### 1. Criar função `attach-checkout-payment-methods`
+Nova edge function que:
+- Lista todas as subscriptions `trialing` (e opcionalmente `past_due`)
+- Para cada subscription, busca o **Checkout Session original** via `stripe.checkout.sessions.list({ subscription })`
+- Do checkout session, extrai o `setup_intent` que contém o payment method coletado
+- Verifica se esse payment method está **realmente anexado** ao customer
+- Se não estiver, **anexa o payment method** e define como default na subscription E no customer
+- Para clientes `past_due`, tenta retry da invoice após anexar o cartão
 
-### Correção
-Atualizar `supabase/functions/create-checkout/index.ts` adicionando duas configurações ao bloco de subscription com trial:
+#### 2. Rodar a função em modo diagnóstico primeiro
+- Modo `dry_run=true` para ver quais clientes realmente estão sem cartão válido
+- Depois `dry_run=false` para corrigir
 
-1. **`payment_method_collection: 'always'`** - Garante que o cartão é coletado mesmo em trials
-2. **`subscription_data.default_payment_method`** - Stripe Checkout automaticamente define o método como padrão quando configurado corretamente
+### Detalhes técnicos
+- Usar `stripe.checkout.sessions.list({ subscription: sub.id })` para encontrar a sessão original
+- Expandir `setup_intent.payment_method` para obter o PM real
+- Usar `stripe.paymentMethods.attach()` se o PM existir mas não estiver anexado
+- Definir `default_payment_method` na subscription e `invoice_settings.default_payment_method` no customer
 
-Especificamente, adicionar ao `sessionConfig` (antes do bloco `if/else`):
-```typescript
-sessionConfig.payment_method_collection = 'always';
-```
-
-E no bloco de card/subscription, adicionar `payment_method_options`:
-```typescript
-sessionConfig.payment_method_options = {
-  card: {
-    setup_future_usage: 'off_session',
-  },
-};
-```
-
-### Sobre os clientes atuais
-Os 9 clientes com assinatura `past_due` precisarão atualizar o cartão manualmente via Billing Portal. O processo de dunning pode enviar o link para eles.
-
-### Impacto
-- Novos checkouts com trial passarão a salvar o cartão corretamente
-- Cobranças pós-trial serão processadas automaticamente
-- Sem impacto em checkouts sem trial (já funcionam)
+### Resultado esperado
+- Clientes em trial terão o cartão corretamente salvo antes da cobrança
+- Clientes past_due poderão ter a invoice retentada automaticamente
+- Sem impacto em clientes que já estão pagando normalmente
 
