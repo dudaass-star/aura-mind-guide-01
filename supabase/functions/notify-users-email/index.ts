@@ -125,6 +125,7 @@ Deno.serve(async (req) => {
             sender_domain: SENDER_DOMAIN,
             subject: 'Aura em manutenção — voltamos em breve 💚',
             html: buildEmailHTML(profile.name),
+            text: `${profile.name ? `Olá, ${profile.name}!` : 'Olá!'} Estamos passando por uma manutenção programada para melhorar sua experiência com a Aura. Durante esse período, nossas conversas pelo WhatsApp estão temporariamente pausadas. A previsão é que tudo volte ao normal ainda hoje. Fique tranquilo(a): todas as suas conversas, insights e dados estão completamente seguros. Nada será perdido. Com carinho, Equipe Aura`,
             purpose: 'transactional',
             idempotency_key: `maintenance-notify-${profile.email}-${new Date().toISOString().slice(0, 10)}`,
           },
