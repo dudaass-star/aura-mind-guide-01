@@ -221,7 +221,7 @@ const Checkout = () => {
             {/* Trial banner */}
             <div className="bg-primary/10 border border-primary/20 rounded-2xl p-4 mb-8 text-center">
               <p className="font-display text-lg font-semibold text-foreground">
-                ✨ 7 dias grátis em todos os planos
+                ✨ 5 dias grátis em todos os planos
               </p>
               <p className="text-sm text-muted-foreground mt-1">
                 Primeira cobrança só no 8º dia. Cancele quando quiser.
