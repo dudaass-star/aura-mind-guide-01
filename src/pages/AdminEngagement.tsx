@@ -403,6 +403,10 @@ export default function AdminEngagement() {
               <RefreshCw className={`h-4 w-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
               Atualizar
             </Button>
+            <Button variant="outline" size="sm" onClick={handleSendEmailNotification} disabled={sendingEmail} className="h-8 border-primary/30 text-primary hover:bg-primary/10">
+              <Mail className={`h-4 w-4 mr-1 ${sendingEmail ? 'animate-pulse' : ''}`} />
+              {sendingEmail ? 'Enviando...' : 'Aviso por Email'}
+            </Button>
           </div>
         </div>
 
