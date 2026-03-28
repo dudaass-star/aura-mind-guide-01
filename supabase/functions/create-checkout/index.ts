@@ -163,6 +163,9 @@ serve(async (req) => {
       },
     };
 
+    // Ensure payment method is always collected (critical for trials)
+    sessionConfig.payment_method_collection = 'always';
+
     if (isBoletoPayment) {
       // Boleto: one-time payment
       sessionConfig.mode = "payment";
