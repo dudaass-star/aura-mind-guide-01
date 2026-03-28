@@ -1,4 +1,4 @@
-
+## Trial reduzido de 7 para 5 dias — IMPLEMENTADO ✅
 
 ## Validação R$1 + bloqueio débito/pré-pago — IMPLEMENTADO ✅
 
