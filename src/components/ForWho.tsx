@@ -82,7 +82,7 @@ const ForWho = () => {
             </button>
           </a>
           <p className="text-sm text-muted-foreground mt-2">
-            7 dias grátis. Cancele quando quiser.
+            5 dias grátis. Cancele quando quiser.
           </p>
         </div>
       </div>

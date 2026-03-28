@@ -280,7 +280,7 @@ Se precisar de ajuda, é só me avisar! 💜`;
               billing: customerBilling,
               trial: "true",
             },
-            description: "7 dias grátis — a primeira cobrança será apenas no 8º dia.",
+            description: "5 dias grátis — a primeira cobrança será apenas no 6º dia.",
           });
           console.log('✅ Trial subscription created:', subscription.id);
 

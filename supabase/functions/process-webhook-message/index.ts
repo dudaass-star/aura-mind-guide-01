@@ -286,8 +286,8 @@ Deno.serve(async (req) => {
     // ========================================================================
     if (profile.status === 'trial' && profile.trial_started_at) {
       const trialAge = Date.now() - new Date(profile.trial_started_at).getTime();
-      const sevenDays = 7 * 24 * 60 * 60 * 1000;
-      if (trialAge > sevenDays) {
+      const fiveDays = 5 * 24 * 60 * 60 * 1000;
+      if (trialAge > fiveDays) {
         console.log(`⏰ Trial expired inline for ${profile.user_id} — started ${profile.trial_started_at}`);
         await supabase.from('profiles').update({ status: 'trial_expired', updated_at: new Date().toISOString() }).eq('user_id', profile.user_id);
         profile.status = 'trial_expired';

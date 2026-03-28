@@ -78,9 +78,9 @@ Deno.serve(async (req) => {
     const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
     const ninetySixHoursAgo = new Date(Date.now() - 96 * 60 * 60 * 1000).toISOString();
 
-    // === SECOND REMINDER (URGENT): 5-7 days (120-168 hours) ===
-    const fiveDaysAgo = new Date(Date.now() - 120 * 60 * 60 * 1000).toISOString();
-    const sevenDaysAgo = new Date(Date.now() - 168 * 60 * 60 * 1000).toISOString();
+    // === SECOND REMINDER (URGENT): 3-5 days (72-120 hours) ===
+    const threeDaysAgo = new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString();
+    const fiveDaysAgoReminder = new Date(Date.now() - 120 * 60 * 60 * 1000).toISOString();
 
     let sentCount = 0;
     let skippedCount = 0;

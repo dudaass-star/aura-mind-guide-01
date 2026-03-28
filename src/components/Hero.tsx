@@ -114,7 +114,7 @@ const Hero = () => {
               </Button>
             </Link>
             <p className="text-sm text-muted-foreground">
-              Sem cobrança nos primeiros 7 dias. Cancele quando quiser.
+              Sem cobrança nos primeiros 5 dias. Cancele quando quiser.
             </p>
           </div>
 

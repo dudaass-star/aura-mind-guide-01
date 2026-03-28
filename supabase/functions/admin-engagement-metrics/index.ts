@@ -274,8 +274,8 @@ Deno.serve(async (req) => {
       .eq('status', 'trial')
       .not('trial_started_at', 'is', null);
 
-    // Active trials (< 7 days)
-    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    // Active trials (< 5 days)
+    const fiveDaysAgo = new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString();
     const { count: activeTrialsReal } = await supabase
       .from('profiles')
       .select('*', { count: 'exact', head: true })
