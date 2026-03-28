@@ -18,7 +18,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { dry_run = true, include_past_due = true } = await req.json().catch(() => ({ dry_run: true, include_past_due: true }));
+    const { dry_run = true, include_past_due = true, force_retry_invoices = false } = await req.json().catch(() => ({ dry_run: true, include_past_due: true, force_retry_invoices: false }));
     const stripe = new Stripe(stripeKey, { apiVersion: '2025-08-27.basil' });
 
     console.log(`🔧 [AttachPM] Starting (dry_run=${dry_run}, include_past_due=${include_past_due})`);
