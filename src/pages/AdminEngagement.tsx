@@ -290,8 +290,8 @@ export default function AdminEngagement() {
 
   const trialCards = metrics ? [
     { title: 'Assinantes Ativos', value: metrics.activeSubscribers, icon: Users, subtitle: 'pagando agora (status = active)' },
-    { title: 'Trials Ativos (< 7d)', value: metrics.activeTrials, icon: UserPlus, subtitle: 'trial iniciado há menos de 7 dias' },
-    { title: 'Trials Expirados (aguardando)', value: metrics.expiredTrialsAwaitingPayment, icon: Clock, subtitle: 'trial > 7d, sem falha de pagamento' },
+    { title: 'Trials Ativos (< 5d)', value: metrics.activeTrials, icon: UserPlus, subtitle: 'trial iniciado há menos de 5 dias' },
+    { title: 'Trials Expirados (aguardando)', value: metrics.expiredTrialsAwaitingPayment, icon: Clock, subtitle: 'trial > 5d, sem falha de pagamento' },
     { title: '⚠️ Falha de Pagamento', value: metrics.paymentFailedCount, icon: XCircle, subtitle: 'trial expirado + pagamento falhou' },
     { title: 'Trials no Período (total)', value: metrics.trialsInPeriod, icon: UserPlus, subtitle: `com e sem cartão — ${periodLabel}` },
     { title: 'Trials com Cartão (período)', value: metrics.trialsWithCardInPeriod, icon: UserPlus, subtitle: `checkout iniciado — ${periodLabel}` },

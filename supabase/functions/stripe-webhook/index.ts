@@ -266,11 +266,11 @@ Se precisar de ajuda, é só me avisar! 💜`;
             });
           }
 
-          // Create subscription with 7-day trial
+          // Create subscription with 5-day trial
           const subscription = await stripe.subscriptions.create({
             customer: customerId,
             items: [{ price: subscriptionPriceId }],
-            trial_period_days: 7,
+            trial_period_days: 5,
             ...(defaultPm && { default_payment_method: defaultPm }),
             metadata: {
               phone: cleanPhone,
@@ -280,7 +280,7 @@ Se precisar de ajuda, é só me avisar! 💜`;
               billing: customerBilling,
               trial: "true",
             },
-            description: "7 dias grátis — a primeira cobrança será apenas no 8º dia.",
+            description: "5 dias grátis — a primeira cobrança será apenas no 6º dia.",
           });
           console.log('✅ Trial subscription created:', subscription.id);
 

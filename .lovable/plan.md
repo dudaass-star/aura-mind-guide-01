@@ -1,4 +1,4 @@
-
+## Trial reduzido de 7 para 5 dias — IMPLEMENTADO ✅
 
 ## Reduzir Trial de 7 para 5 dias — Implementação
 

@@ -221,7 +221,7 @@ const Checkout = () => {
             {/* Trial banner */}
             <div className="bg-primary/10 border border-primary/20 rounded-2xl p-4 mb-8 text-center">
               <p className="font-display text-lg font-semibold text-foreground">
-                ✨ 7 dias grátis em todos os planos
+                ✨ 5 dias grátis em todos os planos
               </p>
               <p className="text-sm text-muted-foreground mt-1">
                 Primeira cobrança só no 8º dia. Cancele quando quiser.
@@ -233,7 +233,7 @@ const Checkout = () => {
                 Comece sua jornada
               </h1>
               <p className="text-muted-foreground">
-                Escolha seu plano e experimente grátis por 7 dias
+                Escolha seu plano e experimente grátis por 5 dias
               </p>
             </div>
 
@@ -433,7 +433,7 @@ const Checkout = () => {
                   </span>
                 </div>
                 <p className="text-sm text-muted-foreground mt-3 text-center">
-                  Primeira cobrança em 7 dias: R$ {currentPrice}/{periodLabel}
+                  Primeira cobrança em 5 dias: R$ {currentPrice}/{periodLabel}
                 </p>
               </div>
 
@@ -446,7 +446,7 @@ const Checkout = () => {
                 disabled={isLoading}
               >
                 <CreditCard className="w-5 h-5 mr-2" />
-                {isLoading ? "Processando..." : "Começar 7 dias grátis"}
+                {isLoading ? "Processando..." : "Começar 5 dias grátis"}
               </Button>
 
               {/* Trust badges */}
