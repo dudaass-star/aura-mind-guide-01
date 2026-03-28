@@ -118,6 +118,7 @@ Deno.serve(async (req) => {
 
     for (const profile of uniqueProfiles) {
       try {
+        const unsubToken = crypto.randomUUID();
         await sendLovableEmail(
           {
             to: profile.email,
@@ -127,7 +128,8 @@ Deno.serve(async (req) => {
             html: buildEmailHTML(profile.name),
             text: `${profile.name ? `Olá, ${profile.name}!` : 'Olá!'} Estamos passando por uma manutenção programada para melhorar sua experiência com a Aura. Durante esse período, nossas conversas pelo WhatsApp estão temporariamente pausadas. A previsão é que tudo volte ao normal ainda hoje. Fique tranquilo(a): todas as suas conversas, insights e dados estão completamente seguros. Nada será perdido. Com carinho, Equipe Aura`,
             purpose: 'transactional',
-            idempotency_key: `maintenance-notify-${profile.email}-${new Date().toISOString().slice(0, 10)}`,
+            idempotency_key: `maintenance-notify-${profile.email}-${new Date().toISOString().slice(0, 10)}-v2`,
+            unsubscribe_token: unsubToken,
           },
           { apiKey, sendUrl: Deno.env.get('LOVABLE_SEND_URL') }
         );
