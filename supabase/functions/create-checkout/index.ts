@@ -8,6 +8,9 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Trial validation price (R$1 one-time, refunded after card validation)
+const TRIAL_VALIDATION_PRICE_ID = "price_1TG3zEQU15XnZ7Vv75qpmBf8";
+
 // Price IDs from environment variables
 const getPrices = (): Record<string, { monthly: string; yearly: string; boletoYearly: string }> => ({
   essencial: {
@@ -141,66 +144,85 @@ serve(async (req) => {
     // Build checkout session config
     const sessionConfig: any = {
       customer: customerId,
-      line_items: [
-        {
-          price: priceId,
-          quantity: 1,
-        },
-      ],
       locale: "pt-BR",
       success_url: `${origin}/obrigado?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/checkout`,
-      metadata: {
-        phone: phoneClean,
-        name: name,
-        email: email,
-        plan: plan,
-        billing: billingPeriod,
-        ...(trial && { trial: "true" }),
-        ...(isBoletoPayment && { payment_method: "boleto" }),
-        ...(fbp && { fbp }),
-        ...(fbc && { fbc }),
-      },
     };
 
-    // Ensure payment method is always collected (critical for trials)
+    // Ensure payment method is always collected
     sessionConfig.payment_method_collection = 'always';
 
-    if (isBoletoPayment) {
-      // Boleto: one-time payment
+    if (trial) {
+      // === TRIAL: R$1 validation charge (refunded after card check) ===
       sessionConfig.mode = "payment";
-      sessionConfig.payment_method_types = ["boleto"];
-      sessionConfig.payment_method_options = {
-        boleto: {
-          expires_after_days: 3,
-        },
-      };
-    } else {
-      // Card: subscription
-      sessionConfig.mode = "subscription";
+      sessionConfig.line_items = [{ price: TRIAL_VALIDATION_PRICE_ID, quantity: 1 }];
       sessionConfig.payment_method_types = ["card"];
       sessionConfig.payment_method_options = {
         card: {
           setup_future_usage: 'off_session',
         },
       };
+      sessionConfig.metadata = {
+        phone: phoneClean,
+        name: name,
+        email: email,
+        plan: plan,
+        billing: billingPeriod,
+        trial_validation: "true",
+        ...(fbp && { fbp }),
+        ...(fbc && { fbc }),
+      };
+    } else if (isBoletoPayment) {
+      // Boleto: one-time payment
+      sessionConfig.mode = "payment";
+      sessionConfig.line_items = [{ price: priceId, quantity: 1 }];
+      sessionConfig.payment_method_types = ["boleto"];
+      sessionConfig.payment_method_options = {
+        boleto: {
+          expires_after_days: 3,
+        },
+      };
+      sessionConfig.metadata = {
+        phone: phoneClean,
+        name: name,
+        email: email,
+        plan: plan,
+        billing: billingPeriod,
+        payment_method: "boleto",
+        ...(fbp && { fbp }),
+        ...(fbc && { fbc }),
+      };
+    } else {
+      // Card: subscription
+      sessionConfig.mode = "subscription";
+      sessionConfig.line_items = [{ price: priceId, quantity: 1 }];
+      sessionConfig.payment_method_types = ["card"];
+      sessionConfig.payment_method_options = {
+        card: {
+          setup_future_usage: 'off_session',
+        },
+      };
+      sessionConfig.metadata = {
+        phone: phoneClean,
+        name: name,
+        email: email,
+        plan: plan,
+        billing: billingPeriod,
+        ...(fbp && { fbp }),
+        ...(fbc && { fbc }),
+      };
       sessionConfig.subscription_data = {
-        ...(trial && { 
-          description: "7 dias grátis — a primeira cobrança será apenas no 8º dia.",
-          trial_period_days: 7,
-        }),
         metadata: {
           phone: phoneClean,
           name: name,
           email: email,
           plan: plan,
           billing: billingPeriod,
-          ...(trial && { trial: "true" }),
         },
       };
     }
 
-    logStep("Creating checkout session", { plan, billing: billingPeriod, priceId, mode: sessionConfig.mode });
+    logStep("Creating checkout session", { plan, billing: billingPeriod, priceId: trial ? TRIAL_VALIDATION_PRICE_ID : priceId, mode: sessionConfig.mode, trial: !!trial });
     const session = await stripe.checkout.sessions.create(sessionConfig);
     logStep("Checkout session created", { sessionId: session.id });
 
