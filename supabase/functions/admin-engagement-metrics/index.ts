@@ -289,7 +289,7 @@ Deno.serve(async (req) => {
       .select('*', { count: 'exact', head: true })
       .eq('status', 'trial')
       .not('trial_started_at', 'is', null)
-      .lt('trial_started_at', sevenDaysAgo)
+      .lt('trial_started_at', fiveDaysAgo)
       .is('payment_failed_at', null);
 
     const activeTrials = activeTrialsReal || 0;
