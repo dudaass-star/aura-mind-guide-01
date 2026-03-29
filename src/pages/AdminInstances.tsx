@@ -283,6 +283,17 @@ export default function AdminInstances() {
                       <TableCell className="text-sm text-muted-foreground">
                         {inst.last_disconnected_at ? formatTimeAgo(inst.last_disconnected_at) : '—'}
                       </TableCell>
+                      <TableCell>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={notifying.has(inst.id)}
+                          onClick={() => notifyReconnect(inst.id)}
+                        >
+                          {notifying.has(inst.id) ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <MessageSquare className="h-3 w-3 mr-1" />}
+                          Notificar
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
