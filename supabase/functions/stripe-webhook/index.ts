@@ -246,9 +246,25 @@ Se precisar de ajuda, é só me avisar! 💜`;
             limit: 1,
           });
 
-          const defaultPm = paymentMethods.data[0]?.id;
+          let defaultPm = paymentMethods.data[0]?.id;
+          if (!defaultPm && paymentMethod?.id) {
+            // Fallback: attach PM directly from PaymentIntent
+            try {
+              await stripe.paymentMethods.attach(paymentMethod.id, { customer: customerId });
+              defaultPm = paymentMethod.id;
+              console.log('✅ PM attached from PaymentIntent fallback:', defaultPm);
+            } catch (attachErr: any) {
+              // If already attached, just use it
+              if (attachErr.code === 'resource_already_exists') {
+                defaultPm = paymentMethod.id;
+                console.log('✅ PM already attached, using it:', defaultPm);
+              } else {
+                console.error('❌ Failed to attach PM from PaymentIntent:', attachErr.message);
+              }
+            }
+          }
           if (!defaultPm) {
-            console.error('❌ No payment method found after R$1 charge');
+            console.error('❌ No payment method found after R$1 charge — subscription will have no PM');
           }
 
           // Get the correct price for the subscription
