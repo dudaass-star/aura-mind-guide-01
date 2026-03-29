@@ -287,6 +287,7 @@ Se precisar de ajuda, é só me avisar! 💜`;
             customer: customerId,
             items: [{ price: subscriptionPriceId }],
             trial_period_days: 5,
+            payment_behavior: 'default_incomplete',
             ...(defaultPm && { default_payment_method: defaultPm }),
             metadata: {
               phone: cleanPhone,
