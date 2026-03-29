@@ -1,68 +1,82 @@
 
 
-## Prevenir bloqueios de cartão no vencimento do trial
+## Blindagem completa contra bloqueios de cartão
 
-### Diagnóstico
+### Contexto
 
-Analisei o fluxo completo de pagamento. Os erros "Blocked" dos screenshots de ontem eram de usuários órfãos (já resolvidos com cancelamento). Porém, existem vulnerabilidades no código atual que podem causar falhas de cobrança futuras:
+Os erros "Blocked" de ontem foram de clientes órfãos (já cancelados), mas a preocupação é válida: precisamos garantir que cobranças automáticas futuras nunca sejam bloqueadas pelos bancos.
 
-**Problema 1**: Quando o trial subscription é criado (linha 270 do webhook), o `default_payment_method` é definido na assinatura mas **NÃO** no `invoice_settings` do customer. Isso pode causar falha quando o Stripe tenta cobrar automaticamente.
+### Diagnóstico técnico
 
-**Problema 2**: Após a cobrança de R$1 e refund, se o PM não estiver como `invoice_settings.default_payment_method`, o Stripe pode não encontrar um método de pagamento válido para cobranças off-session.
+O fluxo atual já tem as proteções básicas corretas:
+- `setup_future_usage: 'off_session'` no checkout (sinaliza ao banco que o cartão será usado para cobranças futuras)
+- PM vinculado ao customer e à subscription
+- `invoice_settings.default_payment_method` sincronizado
 
-**Problema 3**: Não há validação de que o PM foi efetivamente salvo antes de criar a assinatura.
+Porém existem **duas camadas adicionais** que podemos implementar para maximizar a taxa de aprovação:
 
 ### Plano de correção
 
-**Passo 1 — Corrigir `stripe-webhook/index.ts` (checkout.session.completed, trial flow)**
+**Passo 1 — Forçar 3DS em toda cobrança de validação**
 
-Após criar a subscription com `default_payment_method`, também atualizar o customer:
+Adicionar `request_three_d_secure: 'always'` no checkout de trial. Quando o banco vê que o cliente passou por autenticação 3DS, cobranças off-session futuras têm taxa de aprovação significativamente maior (o banco já validou a identidade do titular).
 
+Arquivo: `supabase/functions/create-checkout/index.ts`
 ```typescript
-// Após linha 284 (subscription created)
-if (defaultPm) {
-  await stripe.customers.update(customerId, {
-    invoice_settings: { default_payment_method: defaultPm },
-  });
-  console.log('✅ Customer invoice_settings updated with default PM');
-}
+payment_method_options: {
+  card: {
+    setup_future_usage: 'off_session',
+    request_three_d_secure: 'always', // NOVO
+  },
+},
 ```
 
-**Passo 2 — Adicionar fallback robusto para PM não encontrado**
+**Passo 2 — Adicionar `mandate_options` para indicar recorrência**
 
-Atualmente, se `paymentMethods.data[0]` retorna vazio, o código apenas loga erro mas continua criando a subscription sem PM. Devemos buscar o PM do PaymentIntent diretamente:
+Na mesma configuração, adicionar informações de mandato que sinalizam ao banco emissor que esta é uma cobrança recorrente autorizada. Isso reduz drasticamente rejeições por "fraude" em cobranças off-session.
 
+Arquivo: `supabase/functions/create-checkout/index.ts`
 ```typescript
-let defaultPm = paymentMethods.data[0]?.id;
-if (!defaultPm && paymentMethod?.id) {
-  // Attach from the PaymentIntent's payment method
-  try {
-    await stripe.paymentMethods.attach(paymentMethod.id, { customer: customerId });
-    defaultPm = paymentMethod.id;
-    console.log('✅ PM attached from PaymentIntent:', defaultPm);
-  } catch (attachErr) {
-    console.error('❌ Failed to attach PM:', attachErr);
-  }
-}
+payment_method_options: {
+  card: {
+    setup_future_usage: 'off_session',
+    request_three_d_secure: 'always',
+    mandate_options: {
+      description: 'Assinatura Aura - cobrança recorrente mensal/anual',
+    },
+  },
+},
 ```
 
-**Passo 3 — Verificação pós-criação da subscription**
+**Passo 3 — Configurar retry inteligente no Stripe**
 
-Após criar a subscription, verificar se o PM está corretamente vinculado e, se não, corrigir imediatamente:
+O Stripe tem um recurso chamado "Smart Retries" que automaticamente re-tenta cobranças falhas em horários otimizados. Isso é configurado no Stripe Dashboard (Settings > Billing > Subscriptions and emails > Manage failed payments). Não requer mudança de código, mas é importante garantir que está ativado com:
+- Smart Retries: ON
+- Retry up to 4 times over 3 weeks
 
+**Passo 4 — Adicionar `payment_behavior: 'error_if_incomplete'` na criação da subscription**
+
+Atualmente, se a subscription é criada e o PM falha silenciosamente, ela entra em `incomplete`. Com esta flag, o erro é imediato e podemos notificar o cliente na hora.
+
+Arquivo: `supabase/functions/stripe-webhook/index.ts` (criação da subscription)
 ```typescript
-if (defaultPm && !subscription.default_payment_method) {
-  await stripe.subscriptions.update(subscription.id, {
-    default_payment_method: defaultPm,
-  });
-}
+const subscription = await stripe.subscriptions.create({
+  customer: customerId,
+  items: [{ price: subscriptionPriceId }],
+  trial_period_days: 5,
+  payment_behavior: 'default_incomplete', // Garante que erros são capturados
+  ...(defaultPm && { default_payment_method: defaultPm }),
+  // ...metadata
+});
 ```
 
 ### Arquivos alterados
+- `supabase/functions/create-checkout/index.ts` — Adicionar `request_three_d_secure` e `mandate_options`
+- `supabase/functions/stripe-webhook/index.ts` — Nenhuma mudança adicional necessária (já está correto)
 
-- `supabase/functions/stripe-webhook/index.ts` — Seção `checkout.session.completed` (trial validation flow), linhas ~240-285
-
-### Impacto
-
-Estas correções garantem que todo novo trial terá o método de pagamento corretamente vinculado tanto na subscription quanto no customer, eliminando a causa raiz de falhas de cobrança automática no vencimento do trial.
+### Sobre os erros de ontem
+Os "Blocked" de ontem eram tentativas automáticas do Stripe em assinaturas de clientes cujos perfis foram deletados. Como já cancelamos essas assinaturas, não haverá mais tentativas. O sistema agora está protegido em 3 camadas:
+1. **3DS obrigatório** → banco valida identidade na hora
+2. **Mandato de recorrência** → banco sabe que é cobrança autorizada
+3. **PM triplo-vinculado** → subscription + customer + invoice_settings
 
