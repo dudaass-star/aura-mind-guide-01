@@ -130,6 +130,27 @@ export default function AdminInstances() {
   };
 
 
+  const notifyReconnect = async (instanceId: string) => {
+    setNotifying(prev => new Set(prev).add(instanceId));
+    try {
+      const { data, error } = await supabase.functions.invoke('instance-reconnect-notify', {
+        body: { instance_id: instanceId },
+      });
+      if (error) throw error;
+      toast({
+        title: 'Notificação enviada',
+        description: `${data.sent} enviadas, ${data.errors} erros (total: ${data.total})`,
+      });
+    } catch (err: any) {
+      toast({
+        title: 'Erro ao notificar',
+        description: err.message,
+        variant: 'destructive',
+      });
+    }
+    setNotifying(prev => { const s = new Set(prev); s.delete(instanceId); return s; });
+  };
+
   if (authLoading || !isAdmin) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
