@@ -1,52 +1,68 @@
 
 
-## Reenviar dunning para clientes com falha de pagamento
+## Prevenir bloqueios de cartão no vencimento do trial
 
-### Problema
-A instância WhatsApp ficou fora por 24h+. O Stripe disparou `invoice.payment_failed` para os trials que venceram, mas as mensagens de dunning via WhatsApp falharam porque a instância estava desconectada.
+### Diagnóstico
 
-### Análise
-- **5 clientes** tiveram trial expirando em **28/03** (ontem) com pagamento falho
-- **3 clientes** tiveram trial expirando em **29/03** (hoje) com pagamento falho
-- Total: **8 clientes** com assinaturas `past_due` que precisam receber dunning
+Analisei o fluxo completo de pagamento. Os erros "Blocked" dos screenshots de ontem eram de usuários órfãos (já resolvidos com cancelamento). Porém, existem vulnerabilidades no código atual que podem causar falhas de cobrança futuras:
 
-**Risco**: Muitos perfis foram deletados na limpeza anterior. Precisamos verificar quais desses customer_ids ainda têm perfil no banco antes de enviar.
+**Problema 1**: Quando o trial subscription é criado (linha 270 do webhook), o `default_payment_method` é definido na assinatura mas **NÃO** no `invoice_settings` do customer. Isso pode causar falha quando o Stripe tenta cobrar automaticamente.
 
-### Plano de execução
+**Problema 2**: Após a cobrança de R$1 e refund, se o PM não estiver como `invoice_settings.default_payment_method`, o Stripe pode não encontrar um método de pagamento válido para cobranças off-session.
 
-**Passo 1**: Verificar no banco quais desses 8 customer_ids (via phone/email no Stripe metadata) ainda têm perfil ativo
+**Problema 3**: Não há validação de que o PM foi efetivamente salvo antes de criar a assinatura.
 
-**Passo 2**: Para os que têm perfil, chamar a Edge Function `reprocess-dunning` com os customer_ids:
-```
-POST /functions/v1/reprocess-dunning
-{
-  "customer_ids": [
-    "cus_UBjE0k0TFU8AGy",
-    "cus_UBiymuDEw5Stun", 
-    "cus_UBgZfYd2kwvZJw",
-    "cus_UBgFkGccEBATZH",
-    "cus_UBgBqfe46V5h2k",
-    "cus_UCDNwa9wsSJ4Wl",
-    "cus_UC1F3pMntQcTmh",
-    "cus_UC0e608yJyTITc"
-  ]
+### Plano de correção
+
+**Passo 1 — Corrigir `stripe-webhook/index.ts` (checkout.session.completed, trial flow)**
+
+Após criar a subscription com `default_payment_method`, também atualizar o customer:
+
+```typescript
+// Após linha 284 (subscription created)
+if (defaultPm) {
+  await stripe.customers.update(customerId, {
+    invoice_settings: { default_payment_method: defaultPm },
+  });
+  console.log('✅ Customer invoice_settings updated with default PM');
 }
 ```
 
-A função `reprocess-dunning` já faz:
-1. Busca o customer no Stripe
-2. Resolve o perfil via phone/email (profile-resolver)
-3. Atualiza `payment_failed_at` no perfil
-4. Gera link do Billing Portal
-5. Encurta o link
-6. Envia WhatsApp com mensagem de dunning empática + link
+**Passo 2 — Adicionar fallback robusto para PM não encontrado**
 
-**Passo 3**: Para os que NÃO têm perfil (deletados), cancelar as assinaturas `past_due` no Stripe para evitar cobranças fantasma
+Atualmente, se `paymentMethods.data[0]` retorna vazio, o código apenas loga erro mas continua criando a subscription sem PM. Devemos buscar o PM do PaymentIntent diretamente:
 
-**Passo 4**: Para `cus_UBgZfYd2kwvZJw` que tem 2 assinaturas duplicadas, cancelar a duplicata
+```typescript
+let defaultPm = paymentMethods.data[0]?.id;
+if (!defaultPm && paymentMethod?.id) {
+  // Attach from the PaymentIntent's payment method
+  try {
+    await stripe.paymentMethods.attach(paymentMethod.id, { customer: customerId });
+    defaultPm = paymentMethod.id;
+    console.log('✅ PM attached from PaymentIntent:', defaultPm);
+  } catch (attachErr) {
+    console.error('❌ Failed to attach PM:', attachErr);
+  }
+}
+```
 
-### Detalhes técnicos
-- A função `reprocess-dunning` já existe e lida com todos os cenários (perfil não encontrado, falha de envio, etc.)
-- Registra tudo na tabela `dunning_attempts` para auditoria
-- Precisa apenas ser invocada via `curl` ou `supabase.functions.invoke()`
+**Passo 3 — Verificação pós-criação da subscription**
+
+Após criar a subscription, verificar se o PM está corretamente vinculado e, se não, corrigir imediatamente:
+
+```typescript
+if (defaultPm && !subscription.default_payment_method) {
+  await stripe.subscriptions.update(subscription.id, {
+    default_payment_method: defaultPm,
+  });
+}
+```
+
+### Arquivos alterados
+
+- `supabase/functions/stripe-webhook/index.ts` — Seção `checkout.session.completed` (trial validation flow), linhas ~240-285
+
+### Impacto
+
+Estas correções garantem que todo novo trial terá o método de pagamento corretamente vinculado tanto na subscription quanto no customer, eliminando a causa raiz de falhas de cobrança automática no vencimento do trial.
 
