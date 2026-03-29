@@ -1,35 +1,52 @@
 
 
-## Cancelar e deletar usuários
+## Reenviar dunning para clientes com falha de pagamento
 
-### Situação encontrada
+### Problema
+A instância WhatsApp ficou fora por 24h+. O Stripe disparou `invoice.payment_failed` para os trials que venceram, mas as mensagens de dunning via WhatsApp falharam porque a instância estava desconectada.
 
-**7 usuários específicos** (Dais Palagi, Luciana, Fabio Oliveira, Felipe, Daniela, Richard, Dimas) — todos com status `active` no banco, mas **nenhum deles tem cliente ou assinatura no Stripe**. Isso significa que são perfis sem cobrança ativa.
+### Análise
+- **5 clientes** tiveram trial expirando em **28/03** (ontem) com pagamento falho
+- **3 clientes** tiveram trial expirando em **29/03** (hoje) com pagamento falho
+- Total: **8 clientes** com assinaturas `past_due` que precisam receber dunning
 
-**Usuários em trial** — há 35 perfis com status `trial` no banco. Preciso cruzar com as ~25 assinaturas `trialing` no Stripe para identificar quais trial users não têm cartão (não completaram checkout).
+**Risco**: Muitos perfis foram deletados na limpeza anterior. Precisamos verificar quais desses customer_ids ainda têm perfil no banco antes de enviar.
 
 ### Plano de execução
 
-**Etapa 1 — Deletar os 7 usuários específicos**
+**Passo 1**: Verificar no banco quais desses 8 customer_ids (via phone/email no Stripe metadata) ainda têm perfil ativo
 
-Deletar diretamente da tabela `profiles` via migration (DELETE):
-- Dais Palagi (phone: 555199531705)
-- Luciana (phone: 555180321023)  
-- Fabio Oliveira (phone: 555181417690)
-- Felipe (phone: 14159108243)
-- Daniela (phone: 555181519706)
-- Richard (phone: 555196359846)
-- Dimas (phone: 555193223515)
+**Passo 2**: Para os que têm perfil, chamar a Edge Function `reprocess-dunning` com os customer_ids:
+```
+POST /functions/v1/reprocess-dunning
+{
+  "customer_ids": [
+    "cus_UBjE0k0TFU8AGy",
+    "cus_UBiymuDEw5Stun", 
+    "cus_UBgZfYd2kwvZJw",
+    "cus_UBgFkGccEBATZH",
+    "cus_UBgBqfe46V5h2k",
+    "cus_UCDNwa9wsSJ4Wl",
+    "cus_UC1F3pMntQcTmh",
+    "cus_UC0e608yJyTITc"
+  ]
+}
+```
 
-Também limpar dados relacionados (messages, sessions, checkins, etc.) para esses `user_id`s.
+A função `reprocess-dunning` já faz:
+1. Busca o customer no Stripe
+2. Resolve o perfil via phone/email (profile-resolver)
+3. Atualiza `payment_failed_at` no perfil
+4. Gera link do Billing Portal
+5. Encurta o link
+6. Envia WhatsApp com mensagem de dunning empática + link
 
-**Etapa 2 — Identificar e deletar trial users sem cartão**
+**Passo 3**: Para os que NÃO têm perfil (deletados), cancelar as assinaturas `past_due` no Stripe para evitar cobranças fantasma
 
-Buscar os phones/emails dos customers com assinatura `trialing` no Stripe, cruzar com os 35 perfis `trial` no banco. Os que não tiverem match no Stripe = sem cartão → deletar.
+**Passo 4**: Para `cus_UBgZfYd2kwvZJw` que tem 2 assinaturas duplicadas, cancelar a duplicata
 
 ### Detalhes técnicos
-
-- Usar edge function `cleanup-inactive-users` ou script SQL direto para deletar
-- Tabelas a limpar por user_id: `profiles`, `messages`, `sessions`, `checkins`, `user_insights`, `session_themes`, `commitments`, `conversation_followups`, `aura_response_state`, `scheduled_tasks`
-- Como não há assinaturas no Stripe para os 7 específicos, não precisa cancelar nada lá
+- A função `reprocess-dunning` já existe e lida com todos os cenários (perfil não encontrado, falha de envio, etc.)
+- Registra tudo na tabela `dunning_attempts` para auditoria
+- Precisa apenas ser invocada via `curl` ou `supabase.functions.invoke()`
 
