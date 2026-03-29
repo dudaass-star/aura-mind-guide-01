@@ -300,6 +300,26 @@ Se precisar de ajuda, é só me avisar! 💜`;
           });
           console.log('✅ Trial subscription created:', subscription.id);
 
+          // Ensure PM is set on subscription (verify post-creation)
+          if (defaultPm && !subscription.default_payment_method) {
+            await stripe.subscriptions.update(subscription.id, {
+              default_payment_method: defaultPm,
+            });
+            console.log('✅ Subscription default_payment_method set post-creation');
+          }
+
+          // Sync PM to customer invoice_settings for automatic off-session charges
+          if (defaultPm) {
+            try {
+              await stripe.customers.update(customerId, {
+                invoice_settings: { default_payment_method: defaultPm },
+              });
+              console.log('✅ Customer invoice_settings.default_payment_method updated');
+            } catch (custErr: any) {
+              console.error('❌ Failed to update customer invoice_settings:', custErr.message);
+            }
+          }
+
           // Now create/update profile (same logic as normal checkout)
           const planName = PLAN_NAMES[customerPlan] || "Essencial";
           const sessionsCount = PLAN_SESSIONS[customerPlan] || 0;
