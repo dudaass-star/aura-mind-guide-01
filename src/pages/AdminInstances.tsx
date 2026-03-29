@@ -51,6 +51,7 @@ export default function AdminInstances() {
   const [reconciling, setReconciling] = useState(false);
   const [reconcileResult, setReconcileResult] = useState<any>(null);
   const [showReconcileDialog, setShowReconcileDialog] = useState(false);
+  const [notifying, setNotifying] = useState<Set<string>>(new Set());
   const { toast } = useToast();
   const navigate = useNavigate();
 
