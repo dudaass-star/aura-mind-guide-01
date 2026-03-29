@@ -124,5 +124,8 @@ verify_jwt = false
 [functions.notify-users-email]
 verify_jwt = false
 
+[functions.instance-reconnect-notify]
+verify_jwt = false
+
 [functions.process-email-queue]
 verify_jwt = true
