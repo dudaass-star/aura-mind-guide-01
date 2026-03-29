@@ -251,6 +251,7 @@ export default function AdminInstances() {
                     <TableHead>Usuários</TableHead>
                     <TableHead>Último Check</TableHead>
                     <TableHead>Última Queda</TableHead>
+                    <TableHead>Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
