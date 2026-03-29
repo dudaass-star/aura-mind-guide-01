@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-import { RefreshCw, Wifi, WifiOff, Clock, Users, ArrowLeft, Loader2, CreditCard } from 'lucide-react';
+import { RefreshCw, Wifi, WifiOff, Clock, Users, ArrowLeft, Loader2, CreditCard, MessageSquare } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useNavigate } from 'react-router-dom';
 
@@ -51,6 +51,7 @@ export default function AdminInstances() {
   const [reconciling, setReconciling] = useState(false);
   const [reconcileResult, setReconcileResult] = useState<any>(null);
   const [showReconcileDialog, setShowReconcileDialog] = useState(false);
+  const [notifying, setNotifying] = useState<Set<string>>(new Set());
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -128,6 +129,27 @@ export default function AdminInstances() {
     setReconciling(false);
   };
 
+
+  const notifyReconnect = async (instanceId: string) => {
+    setNotifying(prev => new Set(prev).add(instanceId));
+    try {
+      const { data, error } = await supabase.functions.invoke('instance-reconnect-notify', {
+        body: { instance_id: instanceId },
+      });
+      if (error) throw error;
+      toast({
+        title: 'Notificação enviada',
+        description: `${data.sent} enviadas, ${data.errors} erros (total: ${data.total})`,
+      });
+    } catch (err: any) {
+      toast({
+        title: 'Erro ao notificar',
+        description: err.message,
+        variant: 'destructive',
+      });
+    }
+    setNotifying(prev => { const s = new Set(prev); s.delete(instanceId); return s; });
+  };
 
   if (authLoading || !isAdmin) {
     return (
@@ -229,6 +251,7 @@ export default function AdminInstances() {
                     <TableHead>Usuários</TableHead>
                     <TableHead>Último Check</TableHead>
                     <TableHead>Última Queda</TableHead>
+                    <TableHead>Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -259,6 +282,17 @@ export default function AdminInstances() {
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {inst.last_disconnected_at ? formatTimeAgo(inst.last_disconnected_at) : '—'}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={notifying.has(inst.id)}
+                          onClick={() => notifyReconnect(inst.id)}
+                        >
+                          {notifying.has(inst.id) ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <MessageSquare className="h-3 w-3 mr-1" />}
+                          Notificar
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}
