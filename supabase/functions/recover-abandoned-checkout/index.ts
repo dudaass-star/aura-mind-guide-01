@@ -60,6 +60,7 @@ Deno.serve(async (req) => {
       .select('id, phone, name, plan, email, stripe_session_id')
       .eq('status', 'created')
       .eq('recovery_sent', false)
+      .eq('recovery_attempts_count', 0)
       .lt('created_at', thirtyMinAgo)
       .limit(50);
 
