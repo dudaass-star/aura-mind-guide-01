@@ -9,7 +9,7 @@ const corsHeaders = {
 };
 
 // Trial validation price (R$1 one-time, refunded after card validation)
-const TRIAL_VALIDATION_PRICE_ID = "price_1TG3zEQU15XnZ7Vv75qpmBf8";
+const TRIAL_VALIDATION_PRICE_ID = "price_1TGUu5QU15XnZ7VvyjCmhaIv";
 
 // Price IDs from environment variables
 const getPrices = (): Record<string, { monthly: string; yearly: string; boletoYearly: string }> => ({
