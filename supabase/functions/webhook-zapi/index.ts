@@ -101,6 +101,25 @@ Deno.serve(async (req) => {
     }
 
     // ========================================================================
+    // TRACK last_user_message_at (for 24h window detection - Official API)
+    // ========================================================================
+    if (payload.cleanPhone) {
+      const { getPhoneVariations } = await import("../_shared/zapi-client.ts");
+      const phoneVariations = getPhoneVariations(payload.cleanPhone);
+      
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ last_user_message_at: new Date().toISOString() })
+        .in('phone', phoneVariations);
+      
+      if (updateError) {
+        console.warn('⚠️ Could not update last_user_message_at:', updateError.message);
+      } else {
+        console.log('✅ Updated last_user_message_at for phone variations');
+      }
+    }
+
+    // ========================================================================
     // FIRE-AND-FORGET: Trigger worker for heavy processing
     // ========================================================================
     const workerPayload = {
