@@ -86,7 +86,11 @@ interface RecoverySession {
   created_at: string;
   status: string;
   recovery_sent: boolean;
+  recovery_sent_at: string | null;
+  recovery_last_error: string | null;
+  recovery_attempts_count: number;
   converted: boolean;
+  attempt_status: string | null;
 }
 
 interface DunningAttempt {
