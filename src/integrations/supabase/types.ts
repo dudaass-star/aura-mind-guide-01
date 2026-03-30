@@ -812,6 +812,7 @@ export type Database = {
           last_message_date: string | null
           last_proactive_insight_at: string | null
           last_reactivation_sent: string | null
+          last_user_message_at: string | null
           main_challenges: string[] | null
           messages_today: number | null
           name: string | null
@@ -860,6 +861,7 @@ export type Database = {
           last_message_date?: string | null
           last_proactive_insight_at?: string | null
           last_reactivation_sent?: string | null
+          last_user_message_at?: string | null
           main_challenges?: string[] | null
           messages_today?: number | null
           name?: string | null
@@ -908,6 +910,7 @@ export type Database = {
           last_message_date?: string | null
           last_proactive_insight_at?: string | null
           last_reactivation_sent?: string | null
+          last_user_message_at?: string | null
           main_challenges?: string[] | null
           messages_today?: number | null
           name?: string | null
