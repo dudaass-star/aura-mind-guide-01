@@ -1,91 +1,59 @@
 
+Objetivo: corrigir o fluxo de recuperação de checkout para garantir envio real (e rastreável), porque hoje o sistema marca como enviado sem prova de entrega no WhatsApp.
 
-## Auditoria Completa — Fluxo de Trial R$1 + Cobrança Após 5 Dias
+1) Diagnóstico consolidado (já confirmado)
+- O job automático está ativo e rodando a cada 10 min (`cron.job` id 21, status succeeded).
+- Seus 2 checkouts aparecem como `recovery_sent = true`.
+- A função atual (`recover-abandoned-checkout`) marca `recovery_sent = true` logo após `sendTextMessage` retornar sucesso HTTP.
+- Não existe trilha de auditoria de entrega (só flag booleana).
+- Forte indício técnico: a maioria dos telefones em `checkout_sessions` está sem DDI 55, o que pode causar “aceito pela API” mas não entregue.
 
-### Resultado: ✅ Tudo correto. Nenhum problema encontrado.
+2) Implementação proposta
+- Endurecer normalização de telefone no módulo compartilhado:
+  - Garantir padrão WhatsApp Brasil (`55 + DDD + número`) antes de qualquer envio.
+  - Usar essa normalização dentro de `sendTextMessage` (e áudio também, para consistência).
+- Melhorar `recover-abandoned-checkout`:
+  - Não tratar apenas `response.ok` como “entregue”.
+  - Registrar tentativa com status detalhado (`api_accepted`, `failed`, erro retornado).
+  - Atualizar `checkout_sessions.recovery_sent = true` somente quando houver confirmação mínima válida do provider (ack de envio, não só ausência de erro).
+  - Salvar `recovery_sent_at` e último erro para diagnóstico.
+- Adicionar observabilidade:
+  - Nova tabela de tentativas de recuperação por sessão (histórico completo de cada tentativa, payload de resposta, erro).
+  - Sem isso, hoje não dá para provar “foi enviado de fato” vs “requisição apenas aceita”.
+- Ajustar dashboard admin:
+  - Separar “Tentou enviar”, “Aceito pela API”, “Falhou”.
+  - Exibir motivo de falha por linha (telefone inválido, erro provider, etc).
+- Proteção opcional recomendada:
+  - Bloquear recuperação para quem já está `active/trial` (via match de telefone por variações), para evitar disparo indevido em cliente já ativo.
 
----
+3) Banco de dados (migração)
+- Alterar `checkout_sessions`:
+  - `recovery_sent_at timestamptz null`
+  - `recovery_last_error text null`
+  - `recovery_attempts_count int default 0`
+- Criar `checkout_recovery_attempts` com:
+  - `id`, `checkout_session_id`, `phone_raw`, `phone_normalized`, `status`, `provider_response`, `error_message`, `created_at`
+- RLS:
+  - Service role full access
+  - Admin leitura (como já é feito em outras tabelas de monitoramento)
 
-### FLUXO 1: Checkout de R$1
+4) Arquivos que serão alterados
+- `supabase/functions/_shared/zapi-client.ts`
+- `supabase/functions/recover-abandoned-checkout/index.ts`
+- `src/pages/AdminEngagement.tsx`
+- `supabase/migrations/*` (nova migração para tabela/colunas/RLS)
 
-**Status: ✅ Correto**
+5) Validação (fim-a-fim)
+- Criar 2 checkouts de teste:
+  - Um com telefone sem 55 e outro com 55.
+- Aguardar janela de abandono e execução do job.
+- Confirmar no admin:
+  - tentativa registrada,
+  - status correto por tentativa,
+  - `recovery_sent_at` preenchido quando aplicável.
+- Validar especificamente seu número de teste com evidência de tentativa + resposta do provider.
 
-- `create-checkout/index.ts` linha 157: `mode: "payment"`, `unit_amount: 100` (R$1)
-- Linha 163: Nome dinâmico `AURA — Ativação do Plano ${planDisplayName}` (Essencial/Direção/Transformação)
-- Linha 164: Descrição "Verificação de segurança. Valor estornado automaticamente."
-- Linha 172: `setup_future_usage: 'off_session'` — salva cartão para cobranças futuras
-- Linha 173: `request_three_d_secure: 'any'` — força 3DS
-- Linha 182: `trial_validation: "true"` no metadata — identifica o fluxo no webhook
-
-### FLUXO 2: Webhook processa trial validation
-
-**Status: ✅ Correto**
-
-- Linha 132: Detecta `trial_validation === 'true'` e `mode === 'payment'`
-- Linha 155-159: Recupera PaymentIntent expandido com payment_method, verifica `card.funding`
-- Linha 163-168: **Sempre estorna o R$1** — independente do tipo do cartão
-- Linha 171: Se `cardFunding !== 'credit'` → rejeita, envia WhatsApp com link de retry
-- Linha 239+: Se crédito → cria assinatura com trial
-
-### FLUXO 3: Cenários de falha na validação
-
-**Status: ✅ Correto**
-
-| Cenário | O que acontece |
-|---------|---------------|
-| Cartão sem saldo | Stripe Checkout bloqueia. Nenhum webhook disparado. |
-| Cartão débito/pré-pago | R$1 cobrado → estornado → WhatsApp de rejeição com retry link |
-| 3DS falha | Stripe Checkout bloqueia. Nenhum webhook disparado. |
-
-### FLUXO 4: Criação da assinatura trial
-
-**Status: ✅ Correto**
-
-- Linha 243-247: Busca payment methods do customer
-- Linha 249-265: Fallback — se lista vazia, attach PM direto do PaymentIntent
-- Linha 286-301: Cria subscription com:
-  - `trial_period_days: 5`
-  - `payment_behavior: 'allow_incomplete'` ✅ (corrigido na última alteração)
-  - `default_payment_method` setado
-- Linha 313-322: Seta `invoice_settings.default_payment_method` no customer (triple-link)
-- Linha 329+: Cria/atualiza profile com `status: 'trial'`
-- Linha 388+: Envia mensagem de boas-vindas via WhatsApp
-
-### FLUXO 5: Cobrança após 5 dias
-
-**Status: ✅ Correto**
-
-Dois handlers capturam a conversão (redundância intencional):
-
-1. **`customer.subscription.updated`** (linha 1076-1119): Detecta `trialing → active`, seta `status: 'active'`, `converted_at`, limpa `payment_failed_at`, cancela tasks de trial pendentes
-2. **`invoice.paid`** (linha 844-896): Backup — se profile ainda em `trial` ou `trial_expired`, converte para `active`
-
-### FLUXO 6: Falha no pagamento do dia 5
-
-**Status: ✅ Correto**
-
-- **`invoice.payment_failed`** (linha 898-1073):
-  - Audit trail fail-safe: insere `dunning_attempts` com `error_stage: 'in_progress'` antes de qualquer ação
-  - Seta `payment_failed_at` no profile
-  - Gera link do Billing Portal + encurta via `create-short-link`
-  - Envia WhatsApp empático com link para atualizar cartão
-  - Atualiza audit trail com resultado final
-
-### FLUXO 7: Cancelamento
-
-**Status: ✅ Correto**
-
-- `customer.subscription.deleted` (linha 672-751): Envia mensagem de despedida, atualiza profile para `status: 'canceled'`
-
-### FLUXO 8: Reativação
-
-**Status: ✅ Correto**
-
-- `customer.subscription.resumed` (linha 754-841): Envia mensagem de boas-vindas, atualiza para `status: 'active'`, cancela tasks de trial pendentes
-
----
-
-### Resumo
-
-Todos os 8 fluxos estão corretamente implementados. A correção do `payment_behavior: 'allow_incomplete'` (feita anteriormente) garante que o dunning funcione corretamente após o trial. Nenhuma alteração necessária.
-
+6) Resultado esperado
+- Se a mensagem não chegar, passaremos a saber exatamente “onde” falhou.
+- Se o problema for formato de telefone, ele será corrigido na origem.
+- O painel deixa de dar falso positivo de “mensagem enviada” sem rastreabilidade real.
