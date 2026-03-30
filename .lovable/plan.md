@@ -1,36 +1,52 @@
 
 
-## Opções para resolver UX sem perder validação de saldo
+## Mostrar o nome do plano na página de checkout do Stripe
 
-### Contexto
-A cobrança de R$1 existe para pegar cartões sem saldo antes do trial começar. O trial nativo do Stripe (R$0) não faz isso. Precisamos de uma solução que mantenha a validação de saldo mas melhore a UX.
+### Problema
+Hoje o checkout de trial mostra apenas "AURA — Ativação do Plano — R$1,00". O usuário não vê qual plano escolheu (Essencial, Direção ou Transformação).
 
-### Opção recomendada: Manter R$1, melhorar a apresentação no Stripe
+### Solução
+Em vez de usar o `price` fixo (`TRIAL_VALIDATION_PRICE_ID`), usar `price_data` inline no `line_items`. Isso permite personalizar o nome do produto dinamicamente com o plano escolhido.
 
-Em vez de mudar toda a arquitetura, podemos simplesmente renomear o produto/preço no Stripe para algo menos estranho.
-
-**O que mudar:**
-1. Criar um novo Price no Stripe com nome do produto mais amigável, por exemplo:
-   - Nome do produto: "AURA — Ativação do Plano"
-   - Descrição: "Verificação de segurança. Valor estornado automaticamente."
-2. Atualizar o `TRIAL_VALIDATION_PRICE_ID` no `create-checkout/index.ts` com o novo price ID
-
-**Resultado para o cliente:**
-Em vez de ver "Validação de cartão AURA — R$1,00", veria algo como:
-```
-AURA — Ativação do Plano
+O cliente verá algo como:
+```text
+AURA — Ativação do Plano Direção
 R$1,00
 Verificação de segurança. Valor estornado automaticamente.
 ```
 
-### Alternativa: Cobrar o valor real do primeiro mês com trial embutido
+### Detalhes técnicos
 
-Outra opção seria cobrar o valor cheio (ex: R$49,90) na hora, e dar os 5 dias de trial como "período de garantia" — se cancelar em 5 dias, estorna tudo. Mas isso muda bastante a lógica e o apelo comercial do trial grátis.
+**Arquivo:** `supabase/functions/create-checkout/index.ts`
 
-### Recomendação
+No bloco `if (trial)`, trocar:
+```js
+line_items: [{ price: TRIAL_VALIDATION_PRICE_ID, quantity: 1 }]
+```
 
-Manter o R$1 + estorno (validação forte) e apenas melhorar o nome/descrição do produto no Stripe. É a mudança mais simples e preserva toda a blindagem que já construímos.
+Por:
+```js
+line_items: [{
+  price_data: {
+    currency: 'brl',
+    unit_amount: 100, // R$1,00
+    product_data: {
+      name: `AURA — Ativação do Plano ${planDisplayName}`,
+      description: 'Verificação de segurança. Valor estornado automaticamente.',
+    },
+  },
+  quantity: 1,
+}]
+```
+
+Onde `planDisplayName` é um mapa simples:
+```js
+const planNames = { essencial: "Essencial", direcao: "Direção", transformacao: "Transformação" };
+const planDisplayName = planNames[plan] || plan;
+```
+
+A constante `TRIAL_VALIDATION_PRICE_ID` pode ser mantida como referência mas não será mais usada no `line_items` do trial.
 
 ### Arquivos alterados
-- `supabase/functions/create-checkout/index.ts` — trocar o `TRIAL_VALIDATION_PRICE_ID` pelo novo price ID (após criar o produto no Stripe)
+1. `supabase/functions/create-checkout/index.ts` — usar `price_data` com nome dinâmico do plano
 
