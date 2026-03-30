@@ -149,10 +149,23 @@ serve(async (req) => {
       cancel_url: `${origin}/checkout`,
     };
 
+    const planNames: Record<string, string> = { essencial: "Essencial", direcao: "Direção", transformacao: "Transformação" };
+    const planDisplayName = planNames[plan] || plan;
+
     if (trial) {
       // === TRIAL: R$1 validation charge (refunded after card check) ===
       sessionConfig.mode = "payment";
-      sessionConfig.line_items = [{ price: TRIAL_VALIDATION_PRICE_ID, quantity: 1 }];
+      sessionConfig.line_items = [{
+        price_data: {
+          currency: 'brl',
+          unit_amount: 100,
+          product_data: {
+            name: `AURA — Ativação do Plano ${planDisplayName}`,
+            description: 'Verificação de segurança. Valor estornado automaticamente.',
+          },
+        },
+        quantity: 1,
+      }];
       sessionConfig.payment_method_types = ["card"];
       sessionConfig.payment_method_options = {
         card: {
