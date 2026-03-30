@@ -56,6 +56,31 @@ export function cleanPhoneNumber(phone: string): string {
   return phone.replace('@c.us', '').replace(/\D/g, '');
 }
 
+/**
+ * Normalize a Brazilian phone number to WhatsApp-compatible format: 55 + DDD + 9 + 8 digits
+ * Handles cases where DDI 55 is missing or the 9th digit is absent.
+ */
+export function normalizeBrazilianPhone(phone: string): string {
+  let clean = cleanPhoneNumber(phone);
+
+  // If it's 10 or 11 digits, it's missing country code 55
+  if (clean.length === 10 || clean.length === 11) {
+    clean = '55' + clean;
+  }
+
+  // Now should be 12 or 13 digits starting with 55
+  if (clean.startsWith('55') && clean.length === 12) {
+    // 55 + DDD(2) + 8 digits → add 9th digit
+    const ddd = clean.substring(2, 4);
+    const rest = clean.substring(4);
+    if (rest.length === 8) {
+      clean = '55' + ddd + '9' + rest;
+    }
+  }
+
+  return clean;
+}
+
 export function isValidPhoneNumber(phone: string): boolean {
   const clean = cleanPhoneNumber(phone);
   return /^[0-9]{10,15}$/.test(clean);
