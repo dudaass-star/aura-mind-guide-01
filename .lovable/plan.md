@@ -1,71 +1,82 @@
 
 
-# Fase 1: Preparação para API Oficial do WhatsApp
+# Análise do TEMPLATE_MAP atual vs. realidade
 
-## Resumo
+## Problemas encontrados
 
-Mudanças preparatórias que **não alteram** o comportamento atual. A Aura continua via Z-API até a flag `WHATSAPP_PROVIDER` ser mudada manualmente para `'official'`.
+### 1. Templates que NÃO deveriam existir (remover)
 
-## Alterações
+| Template atual | Por quê remover |
+|---|---|
+| `followup` | `conversation-followup` acontece dentro da janela 24h — texto livre, sem custo |
+| `generic` | Sem uso real — qualquer envio tem uma categoria específica |
 
-### 1. Migration: adicionar `last_user_message_at` na tabela `profiles`
+### 2. Template que FALTA
 
-```sql
-ALTER TABLE public.profiles 
-ADD COLUMN IF NOT EXISTS last_user_message_at timestamptz;
-```
+| Template faltando | Função que usa | Tipo |
+|---|---|---|
+| `checkout_recovery` | `recover-abandoned-checkout` | **Marketing** |
 
-### 2. Atualizar `webhook-zapi/index.ts`
+O `checkout_recovery` foi listado como "remover" na conversa anterior, mas ele é necessário. A função `recover-abandoned-checkout` envia mensagem para quem **abandonou o checkout** — esse usuário nunca conversou com a Aura, então está **fora da janela de 24h**. Precisa de template.
 
-Após a deduplicação bem-sucedida, adicionar update do campo `last_user_message_at` no profile do usuário (lookup por phone). Isso não interfere no fluxo existente — é apenas um `UPDATE` extra.
+### 3. Por que `reactivation` e `checkout_recovery` são Marketing?
 
-### 3. Criar `supabase/functions/_shared/whatsapp-official.ts`
+A Meta classifica templates em duas categorias:
 
-Funções para a API oficial (usadas apenas no futuro):
-- `isWithin24hWindow(lastUserMessageAt)` — verifica se janela está aberta
-- `splitMessageForTemplate(text, prefixLength)` — divide msgs >980 chars
-- `sendTemplateMessage(phone, templateName, variables, config)` — placeholder que retorna erro "not configured" por enquanto
-- `sendProactiveMessage(phone, text, templateName, config)` — lógica de decisão janela aberta/fechada + split
+- **Utility**: mensagens relacionadas a uma **transação ou serviço ativo** do usuário (ex: lembrete de sessão, relatório semanal, conteúdo da jornada que ele assina)
+- **Marketing**: mensagens para **reconquistar, vender ou promover** — enviadas a quem não tem relação ativa ou para estimular ação comercial
 
-Template mapping:
-```typescript
-const TEMPLATE_MAP = {
-  followup: { name: 'aura_followup', prefix: 'Sua Aura 💜\n\n' },
-  insight: { name: 'aura_insight', prefix: 'Insight da Aura ✨\n\n' },
-  checkin: { name: 'aura_checkin', prefix: 'Seu check-in 🌿\n\n' },
-  session_reminder: { name: 'aura_session_reminder', prefix: 'Lembrete de sessão 🕐\n\n' },
-  weekly_report: { name: 'aura_weekly_report', prefix: 'Seu resumo semanal 📊\n\n' },
-  content: { name: 'aura_content', prefix: 'Conteúdo da jornada 🌱\n\n' },
-  reactivation: { name: 'aura_reactivation', prefix: 'Oi, sentimos sua falta 💜\n\n' },
-  checkout_recovery: { name: 'aura_checkout_recovery', prefix: 'Seu acesso está esperando ✨\n\n' },
-};
-```
+| Template | Por que é Marketing |
+|---|---|
+| `reactivation` | Tenta trazer de volta um usuário **inativo/cancelado** — promoção, não serviço |
+| `checkout_recovery` | Tenta converter alguém que **abandonou compra** — venda direta |
 
-### 4. Criar `supabase/functions/_shared/whatsapp-provider.ts`
+Se esses dois fossem classificados como Utility, a Meta **rejeitaria** os templates na revisão. É regra da plataforma.
 
-Camada de abstração:
-- `getProvider()` — lê `system_config` key `whatsapp_provider`, default `'zapi'`
-- `sendMessage(phone, text, templateName?, config?)` — se provider=zapi, chama `sendTextMessage` atual; se provider=official, chama `sendProactiveMessage`
+**Custo da diferença**: Utility ~R$ 0.05/msg vs Marketing ~R$ 0.35/msg (Brasil 2026).
 
-### 5. Inserir config padrão
+## TEMPLATE_MAP correto (7 templates)
 
-Inserir na `system_config`:
-```sql
-INSERT INTO system_config (key, value) 
-VALUES ('whatsapp_provider', '"zapi"')
-ON CONFLICT (key) DO NOTHING;
-```
+| Categoria | Template | Prefixo | Meta | Função |
+|---|---|---|---|---|
+| `checkin` | `aura_checkin` | `Seu check-in 🌿\n\n` | Utility | `scheduled-checkin` (7 dias inativo) |
+| `content` | `aura_content` | `Conteúdo da jornada 🌱\n\n` | Utility | `periodic-content` (Ter/Sex) |
+| `weekly_report` | `aura_weekly_report` | `Seu resumo semanal 📊\n\n` | Utility | `weekly-report` (Dom 19h) |
+| `insight` | `aura_insight` | `Insight da Aura ✨\n\n` | Utility | `pattern-analysis` (Qui/Sáb) |
+| `session_reminder` | `aura_session_reminder` | `Lembrete de sessão 🕐\n\n` | Utility | `session-reminder` |
+| `reactivation` | `aura_reactivation` | `Oi, sentimos sua falta 💜\n\n` | Marketing | `reactivation-check`, `reactivation-blast` |
+| `checkout_recovery` | `aura_checkout_recovery` | `Seu acesso está esperando ✨\n\n` | Marketing | `recover-abandoned-checkout` |
 
-## Arquivos criados/modificados
+## O que NÃO precisa de template (janela 24h)
 
-| Arquivo | Ação |
-|---------|------|
-| Migration SQL | Novo — adiciona coluna `last_user_message_at` |
-| `_shared/whatsapp-official.ts` | Novo |
-| `_shared/whatsapp-provider.ts` | Novo |
-| `webhook-zapi/index.ts` | Modificar — gravar `last_user_message_at` |
+| Função | Motivo |
+|---|---|
+| `conversation-followup` | Reage a conversa recente (dentro da janela) |
+| `send-meditation` | Usuário pede → reativo (dentro da janela) |
+| `aura-agent` (respostas) | Resposta direta à mensagem do usuário |
+| `deliver-time-capsule` | Agendada pelo usuário em conversa ativa |
+| `scheduled-followup` (commitments) | Follow-up de compromissos recentes |
 
-## Impacto no sistema atual
+## Alteração necessária no código
 
-**Zero.** A flag `whatsapp_provider` default é `'zapi'`. Nenhuma função proativa é alterada nesta fase. As 13 funções proativas continuam chamando `sendTextMessage` diretamente até a Fase 3.
+Atualizar `whatsapp-official.ts`:
+- Remover `followup` e `generic` do `TemplateCategory` e `TEMPLATE_MAP`
+- Manter `checkout_recovery` (estava marcado para remover, mas é necessário)
+- Total: 7 templates (5 utility + 2 marketing)
+
+## Simulação de custo corrigida (por usuário/mês)
+
+| Tipo | Freq/mês | Meta | Custo |
+|---|---|---|---|
+| Jornada (1º template) | ~8 | Utility | R$ 0.40 |
+| Relatório semanal | ~4 | Utility | R$ 0.20 |
+| Insight proativo | ~8 | Utility | R$ 0.40 |
+| Lembrete de sessão | ~4 | Utility | R$ 0.20 |
+| Check-in 7 dias | ~1 | Utility | R$ 0.05 |
+| **Subtotal Utility** | ~25 | | **R$ 1.25** |
+| Reativação | ~0-1 | Marketing | R$ 0.35 |
+| Checkout recovery | ~0-1 | Marketing | R$ 0.35 |
+| **Total Meta** | ~27 | | **~R$ 1.95** |
+| Twilio markup | 27 × $0.005 | | ~R$ 0.78 |
+| **Total/usuário/mês** | | | **~R$ 2.73** |
 
