@@ -193,6 +193,7 @@ serve(async (req) => {
     } else {
       // Card: subscription
       sessionConfig.mode = "subscription";
+      sessionConfig.payment_method_collection = 'always';
       sessionConfig.line_items = [{ price: priceId, quantity: 1 }];
       sessionConfig.payment_method_types = ["card"];
       sessionConfig.payment_method_options = {
