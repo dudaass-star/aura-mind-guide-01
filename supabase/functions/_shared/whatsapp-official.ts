@@ -174,7 +174,7 @@ export interface ProactiveMessageResult {
 export async function sendProactiveMessage(
   phone: string,
   text: string,
-  templateCategory: TemplateCategory = 'generic',
+  templateCategory: TemplateCategory = 'checkin',
   userId?: string,
 ): Promise<ProactiveMessageResult> {
   try {

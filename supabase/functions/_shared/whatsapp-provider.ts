@@ -98,7 +98,7 @@ export async function sendMessage(
 export async function sendProactive(
   phone: string,
   text: string,
-  templateCategory: TemplateCategory = 'generic',
+  templateCategory: TemplateCategory = 'checkin',
   userId?: string,
   configOverride?: ZapiConfig,
 ): Promise<SendResult> {
