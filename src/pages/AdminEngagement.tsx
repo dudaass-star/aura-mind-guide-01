@@ -599,7 +599,7 @@ export default function AdminEngagement() {
                         Recuperação de Checkout Abandonado
                       </CardTitle>
                       <p className="text-xs text-muted-foreground">
-                        {recoverySessions.length} mensagens de recuperação enviadas — {recoverySessions.filter(s => s.converted).length} converteram depois
+                        {recoverySessions.length} tentativas — {recoverySessions.filter(s => s.attempt_status === 'api_accepted').length} aceitas pela API — {recoverySessions.filter(s => s.converted).length} converteram
                       </p>
                     </CardHeader>
                     <CardContent>
@@ -610,19 +610,29 @@ export default function AdminEngagement() {
                             <TableHead>Telefone</TableHead>
                             <TableHead>Plano</TableHead>
                             <TableHead>Abandono</TableHead>
-                            <TableHead>Status</TableHead>
+                            <TableHead>Envio</TableHead>
+                            <TableHead>Resultado</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {recoverySessions.map((s) => {
                             const planNames: Record<string, string> = { essencial: 'Essencial', direcao: 'Direção', transformacao: 'Transformação' };
                             const maskedPhone = s.phone ? `${s.phone.substring(0, 6)}***` : '—';
+                            const attemptStatus = s.attempt_status;
+                            const sendBadge = attemptStatus === 'api_accepted'
+                              ? <Badge className="bg-emerald-600 text-white text-[10px]"><CheckCircle2 className="h-3 w-3 mr-1" />Aceito</Badge>
+                              : attemptStatus === 'failed' || attemptStatus === 'error'
+                              ? <Badge variant="destructive" className="text-[10px]"><AlertCircle className="h-3 w-3 mr-1" />{s.recovery_last_error?.substring(0, 30) || 'Falhou'}</Badge>
+                              : attemptStatus === 'skipped' || attemptStatus === 'skipped_active_customer'
+                              ? <Badge variant="outline" className="text-[10px]">{attemptStatus === 'skipped_active_customer' ? 'Cliente ativo' : 'Sem telefone'}</Badge>
+                              : <Badge variant="secondary" className="text-[10px]">Legado</Badge>;
                             return (
                               <TableRow key={s.id}>
                                 <TableCell className="font-medium">{s.name || '—'}</TableCell>
                                 <TableCell className="font-mono text-xs">{maskedPhone}</TableCell>
                                 <TableCell>{planNames[s.plan || ''] || s.plan || '—'}</TableCell>
                                 <TableCell className="text-xs">{format(new Date(s.created_at), 'dd/MM HH:mm')}</TableCell>
+                                <TableCell>{sendBadge}</TableCell>
                                 <TableCell>
                                   {s.converted ? (
                                     <Badge className="bg-green-600 text-white"><CheckCircle2 className="h-3 w-3 mr-1" />Converteu</Badge>
