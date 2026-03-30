@@ -1,73 +1,36 @@
 
-## Diagnóstico
 
-Verifiquei o código atual de `supabase/functions/create-checkout/index.ts` e os logs do backend. O erro atual não é mais o 3DS.
+## Opções para resolver UX sem perder validação de saldo
 
-O bloqueio agora é este:
-```text
-You can only set `payment_method_collection` if there are recurring prices.
+### Contexto
+A cobrança de R$1 existe para pegar cartões sem saldo antes do trial começar. O trial nativo do Stripe (R$0) não faz isso. Precisamos de uma solução que mantenha a validação de saldo mas melhore a UX.
+
+### Opção recomendada: Manter R$1, melhorar a apresentação no Stripe
+
+Em vez de mudar toda a arquitetura, podemos simplesmente renomear o produto/preço no Stripe para algo menos estranho.
+
+**O que mudar:**
+1. Criar um novo Price no Stripe com nome do produto mais amigável, por exemplo:
+   - Nome do produto: "AURA — Ativação do Plano"
+   - Descrição: "Verificação de segurança. Valor estornado automaticamente."
+2. Atualizar o `TRIAL_VALIDATION_PRICE_ID` no `create-checkout/index.ts` com o novo price ID
+
+**Resultado para o cliente:**
+Em vez de ver "Validação de cartão AURA — R$1,00", veria algo como:
+```
+AURA — Ativação do Plano
+R$1,00
+Verificação de segurança. Valor estornado automaticamente.
 ```
 
-Isso bate exatamente com o código atual:
-- `sessionConfig.payment_method_collection = 'always'` está sendo definido antes do `if (trial)`.
-- No fluxo de trial, o checkout usa `mode = "payment"` com preço único de R$1.
-- O frontend (`src/pages/Checkout.tsx`) sempre chama `create-checkout` com `trial: true`, então o usuário está sempre caindo nesse fluxo de pagamento avulso.
-- Em sessões `payment` com preço único, esse parâmetro não é aceito.
+### Alternativa: Cobrar o valor real do primeiro mês com trial embutido
 
-## Plano
+Outra opção seria cobrar o valor cheio (ex: R$49,90) na hora, e dar os 5 dias de trial como "período de garantia" — se cancelar em 5 dias, estorna tudo. Mas isso muda bastante a lógica e o apelo comercial do trial grátis.
 
-1. Ajustar `supabase/functions/create-checkout/index.ts` para parar de definir `payment_method_collection` de forma global.
-2. Manter `payment_method_collection = 'always'` apenas no fluxo `mode = "subscription"` se ainda quisermos esse comportamento para assinaturas recorrentes.
-3. Remover esse parâmetro dos fluxos:
-   - `trial` (`mode = "payment"`)
-   - `boleto` (`mode = "payment"`)
-4. Preservar no trial o que já está correto:
-   - `setup_future_usage: 'off_session'`
-   - `request_three_d_secure: 'any'`
-5. Não mexer no webhook de trial, porque ele já faz a lógica de:
-   - validar cartão
-   - estornar R$1
-   - recuperar/anexar o método de pagamento
-   - criar a assinatura com trial
+### Recomendação
 
-## Impacto esperado
+Manter o R$1 + estorno (validação forte) e apenas melhorar o nome/descrição do produto no Stripe. É a mudança mais simples e preserva toda a blindagem que já construímos.
 
-Essa correção é a menor mudança possível e resolve o erro atual do checkout sem desmontar a blindagem que foi montada.
+### Arquivos alterados
+- `supabase/functions/create-checkout/index.ts` — trocar o `TRIAL_VALIDATION_PRICE_ID` pelo novo price ID (após criar o produto no Stripe)
 
-O motivo é:
-- o erro atual vem de um parâmetro incompatível com `mode="payment"`;
-- o salvamento do cartão para uso futuro continua vindo de `setup_future_usage: 'off_session'`;
-- o resto do fluxo de trial no webhook continua intacto.
-
-## Arquivo a alterar
-
-- `supabase/functions/create-checkout/index.ts`
-
-## Detalhe técnico
-
-Hoje a estrutura correta deve ficar conceitualmente assim:
-
-```text
-sessionConfig = base config
-
-if trial:
-  mode = payment
-  NÃO definir payment_method_collection
-  manter setup_future_usage + 3DS
-
-else if boleto:
-  mode = payment
-  NÃO definir payment_method_collection
-
-else:
-  mode = subscription
-  pode definir payment_method_collection = 'always'
-```
-
-## Observação adicional
-
-Também confirmei pelos logs que os erros anteriores foram resolvidos:
-- `mandate_options` inválido
-- `request_three_d_secure: 'always'` inválido
-
-O único erro persistente agora é mesmo o `payment_method_collection` aplicado ao trial.
