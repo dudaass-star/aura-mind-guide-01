@@ -149,9 +149,6 @@ serve(async (req) => {
       cancel_url: `${origin}/checkout`,
     };
 
-    // Ensure payment method is always collected
-    sessionConfig.payment_method_collection = 'always';
-
     if (trial) {
       // === TRIAL: R$1 validation charge (refunded after card check) ===
       sessionConfig.mode = "payment";
