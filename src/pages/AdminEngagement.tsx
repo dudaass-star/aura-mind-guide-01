@@ -170,7 +170,7 @@ export default function AdminEngagement() {
     try {
       const { data: abandoned, error } = await supabase
         .from('checkout_sessions')
-        .select('id, name, phone, plan, created_at, status, recovery_sent')
+        .select('id, name, phone, plan, created_at, status, recovery_sent, recovery_sent_at, recovery_last_error, recovery_attempts_count')
         .eq('recovery_sent', true)
         .order('created_at', { ascending: false })
         .limit(50);
@@ -187,9 +187,27 @@ export default function AdminEngagement() {
 
       const completedPhones = new Set((completed || []).map(c => c.phone));
 
+      // Fetch latest attempt status for each session
+      const sessionIds = (abandoned || []).map(s => s.id);
+      const { data: attempts } = await supabase
+        .from('checkout_recovery_attempts')
+        .select('checkout_session_id, status')
+        .in('checkout_session_id', sessionIds)
+        .order('created_at', { ascending: false });
+
+      const attemptMap = new Map<string, string>();
+      if (attempts) {
+        for (const a of attempts) {
+          if (!attemptMap.has(a.checkout_session_id)) {
+            attemptMap.set(a.checkout_session_id, a.status);
+          }
+        }
+      }
+
       setRecoverySessions((abandoned || []).map(s => ({
         ...s,
         converted: completedPhones.has(s.phone),
+        attempt_status: attemptMap.get(s.id) || null,
       })));
     } catch (err) {
       console.error('Error fetching recovery sessions:', err);
