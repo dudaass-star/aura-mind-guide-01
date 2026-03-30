@@ -115,6 +115,47 @@ export type Database = {
           },
         ]
       }
+      checkout_recovery_attempts: {
+        Row: {
+          checkout_session_id: string
+          created_at: string
+          error_message: string | null
+          id: string
+          phone_normalized: string | null
+          phone_raw: string | null
+          provider_response: Json | null
+          status: string
+        }
+        Insert: {
+          checkout_session_id: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          phone_normalized?: string | null
+          phone_raw?: string | null
+          provider_response?: Json | null
+          status?: string
+        }
+        Update: {
+          checkout_session_id?: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          phone_normalized?: string | null
+          phone_raw?: string | null
+          provider_response?: Json | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checkout_recovery_attempts_checkout_session_id_fkey"
+            columns: ["checkout_session_id"]
+            isOneToOne: false
+            referencedRelation: "checkout_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       checkout_sessions: {
         Row: {
           billing: string | null
@@ -126,7 +167,10 @@ export type Database = {
           payment_method: string | null
           phone: string
           plan: string | null
+          recovery_attempts_count: number
+          recovery_last_error: string | null
           recovery_sent: boolean
+          recovery_sent_at: string | null
           status: string
           stripe_session_id: string | null
         }
@@ -140,7 +184,10 @@ export type Database = {
           payment_method?: string | null
           phone: string
           plan?: string | null
+          recovery_attempts_count?: number
+          recovery_last_error?: string | null
           recovery_sent?: boolean
+          recovery_sent_at?: string | null
           status?: string
           stripe_session_id?: string | null
         }
@@ -154,7 +201,10 @@ export type Database = {
           payment_method?: string | null
           phone?: string
           plan?: string | null
+          recovery_attempts_count?: number
+          recovery_last_error?: string | null
           recovery_sent?: boolean
+          recovery_sent_at?: string | null
           status?: string
           stripe_session_id?: string | null
         }

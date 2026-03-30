@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { sendTextMessage, cleanPhoneNumber } from "../_shared/zapi-client.ts";
+import { sendTextMessage, normalizeBrazilianPhone, getPhoneVariations } from "../_shared/zapi-client.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -77,40 +77,133 @@ Deno.serve(async (req) => {
 
     console.log(`📋 [RECOVERY] Found ${abandoned.length} abandoned checkouts.`);
 
+    // Pre-fetch active/trial profiles to skip existing customers
+    const { data: activeProfiles } = await supabase
+      .from('profiles')
+      .select('phone')
+      .in('status', ['active', 'trial'])
+      .not('phone', 'is', null);
+
+    const activePhoneSet = new Set<string>();
+    if (activeProfiles) {
+      for (const p of activeProfiles) {
+        if (p.phone) {
+          const variations = getPhoneVariations(p.phone);
+          for (const v of variations) activePhoneSet.add(v);
+        }
+      }
+    }
+
     let sent = 0;
     let failed = 0;
+    let skipped = 0;
 
     for (const session of abandoned) {
       try {
         if (!session.phone) {
           console.warn(`⚠️ [RECOVERY] No phone for session ${session.id}, skipping.`);
+
+          // Log attempt with error
+          await supabase.from('checkout_recovery_attempts').insert({
+            checkout_session_id: session.id,
+            phone_raw: null,
+            phone_normalized: null,
+            status: 'skipped',
+            error_message: 'No phone number',
+          });
+
+          await supabase.from('checkout_sessions').update({
+            recovery_sent: true,
+            recovery_last_error: 'No phone number',
+            recovery_attempts_count: 1,
+          }).eq('id', session.id);
+
+          skipped++;
+          continue;
+        }
+
+        const normalizedPhone = normalizeBrazilianPhone(session.phone);
+
+        // Check if this phone belongs to an active customer
+        const phoneVariations = getPhoneVariations(session.phone);
+        const isActiveCustomer = phoneVariations.some(v => activePhoneSet.has(v));
+
+        if (isActiveCustomer) {
+          console.log(`⏭️ [RECOVERY] Phone ${normalizedPhone.substring(0, 6)}*** is active customer, skipping.`);
+
+          await supabase.from('checkout_recovery_attempts').insert({
+            checkout_session_id: session.id,
+            phone_raw: session.phone,
+            phone_normalized: normalizedPhone,
+            status: 'skipped_active_customer',
+            error_message: 'Phone belongs to active/trial customer',
+          });
+
+          await supabase.from('checkout_sessions').update({
+            recovery_sent: true,
+            recovery_last_error: 'Active customer - skipped',
+            recovery_attempts_count: 1,
+          }).eq('id', session.id);
+
+          skipped++;
           continue;
         }
 
         const name = session.name || 'você';
         const plan = session.plan || 'essencial';
         const message = buildRecoveryMessage(name, plan);
-        const cleanPhone = cleanPhoneNumber(session.phone);
 
-        console.log(`📤 [RECOVERY] Sending to ${cleanPhone.substring(0, 4)}*** for plan ${plan}`);
+        console.log(`📤 [RECOVERY] Sending to ${normalizedPhone.substring(0, 6)}*** (raw: ${session.phone.substring(0, 4)}***) for plan ${plan}`);
 
-        const result = await sendTextMessage(cleanPhone, message);
+        const result = await sendTextMessage(normalizedPhone, message);
+
+        // Log the attempt with full details
+        await supabase.from('checkout_recovery_attempts').insert({
+          checkout_session_id: session.id,
+          phone_raw: session.phone,
+          phone_normalized: normalizedPhone,
+          status: result.success ? 'api_accepted' : 'failed',
+          provider_response: result.response ? JSON.parse(JSON.stringify(result.response)) : null,
+          error_message: result.error || null,
+        });
 
         if (result.success) {
-          // Mark as recovery sent
-          await supabase
-            .from('checkout_sessions')
-            .update({ recovery_sent: true })
-            .eq('id', session.id);
+          await supabase.from('checkout_sessions').update({
+            recovery_sent: true,
+            recovery_sent_at: new Date().toISOString(),
+            recovery_last_error: null,
+            recovery_attempts_count: 1,
+          }).eq('id', session.id);
 
           sent++;
-          console.log(`✅ [RECOVERY] Sent to ${cleanPhone.substring(0, 4)}***`);
+          console.log(`✅ [RECOVERY] Sent to ${normalizedPhone.substring(0, 6)}***`);
         } else {
-          console.error(`❌ [RECOVERY] Failed to send to ${cleanPhone.substring(0, 4)}***:`, result.error);
+          await supabase.from('checkout_sessions').update({
+            recovery_sent: true,
+            recovery_last_error: result.error || 'Unknown error',
+            recovery_attempts_count: 1,
+          }).eq('id', session.id);
+
+          console.error(`❌ [RECOVERY] Failed to send to ${normalizedPhone.substring(0, 6)}***:`, result.error);
           failed++;
         }
       } catch (err) {
         console.error(`❌ [RECOVERY] Error processing session ${session.id}:`, err);
+
+        await supabase.from('checkout_recovery_attempts').insert({
+          checkout_session_id: session.id,
+          phone_raw: session.phone || null,
+          phone_normalized: null,
+          status: 'error',
+          error_message: err instanceof Error ? err.message : 'Unknown error',
+        }).catch(() => {});
+
+        await supabase.from('checkout_sessions').update({
+          recovery_sent: true,
+          recovery_last_error: err instanceof Error ? err.message : 'Unknown error',
+          recovery_attempts_count: 1,
+        }).eq('id', session.id).catch(() => {});
+
         failed++;
       }
 
@@ -118,9 +211,9 @@ Deno.serve(async (req) => {
       await new Promise(resolve => setTimeout(resolve, 300));
     }
 
-    console.log(`✅ [RECOVERY] Done: ${sent} sent, ${failed} failed out of ${abandoned.length}`);
+    console.log(`✅ [RECOVERY] Done: ${sent} sent, ${failed} failed, ${skipped} skipped out of ${abandoned.length}`);
 
-    return new Response(JSON.stringify({ status: 'completed', sent, failed, total: abandoned.length }), {
+    return new Response(JSON.stringify({ status: 'completed', sent, failed, skipped, total: abandoned.length }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
