@@ -1,16 +1,21 @@
 
 
-## Corrigir erro no checkout — parâmetro inválido
+## Corrigir erro `request_three_d_secure: 'always'`
 
 ### Problema
-O parâmetro `mandate_options` que adicionamos não é suportado pela API de Checkout Sessions do Stripe. O erro exato é:
+Os logs mostram claramente:
 ```
-Received unknown parameter: payment_method_options[card][mandate_options]
+Invalid payment_method_options[card][request_three_d_secure]: must be one of any, challenge, or automatic
 ```
 
-### Correção
-Remover `mandate_options` da configuração de checkout em `supabase/functions/create-checkout/index.ts`. O `request_three_d_secure: 'always'` e `setup_future_usage: 'off_session'` continuam funcionando e são suficientes para blindar as cobranças.
+O valor `'always'` nao e valido para Checkout Sessions. Os valores aceitos sao: `any`, `challenge`, ou `automatic`.
+
+### Correcao
+No arquivo `supabase/functions/create-checkout/index.ts`, linha 163:
+- Trocar `request_three_d_secure: 'always'` por `request_three_d_secure: 'any'`
+
+O valor `'any'` forca o 3DS sempre que o banco suportar, que e o comportamento desejado.
 
 ### Arquivo alterado
-- `supabase/functions/create-checkout/index.ts` — Remover `mandate_options` dos blocos trial e subscription
+- `supabase/functions/create-checkout/index.ts` -- linha 163: `'always'` -> `'any'`
 
