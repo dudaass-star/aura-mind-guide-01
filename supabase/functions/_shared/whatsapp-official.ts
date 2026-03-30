@@ -16,15 +16,13 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 // ============================================================================
 
 export type TemplateCategory =
-  | 'followup'
-  | 'insight'
   | 'checkin'
-  | 'session_reminder'
-  | 'weekly_report'
   | 'content'
+  | 'weekly_report'
+  | 'insight'
+  | 'session_reminder'
   | 'reactivation'
-  | 'checkout_recovery'
-  | 'generic';
+  | 'checkout_recovery';
 
 interface TemplateConfig {
   name: string;
@@ -33,15 +31,13 @@ interface TemplateConfig {
 }
 
 export const TEMPLATE_MAP: Record<TemplateCategory, TemplateConfig> = {
-  followup:          { name: 'aura_followup',          prefix: 'Sua Aura 💜\n\n',                    category: 'utility' },
-  insight:           { name: 'aura_insight',            prefix: 'Insight da Aura ✨\n\n',              category: 'utility' },
   checkin:           { name: 'aura_checkin',             prefix: 'Seu check-in 🌿\n\n',                category: 'utility' },
-  session_reminder:  { name: 'aura_session_reminder',   prefix: 'Lembrete de sessão 🕐\n\n',          category: 'utility' },
-  weekly_report:     { name: 'aura_weekly_report',      prefix: 'Seu resumo semanal 📊\n\n',          category: 'utility' },
   content:           { name: 'aura_content',             prefix: 'Conteúdo da jornada 🌱\n\n',         category: 'utility' },
-  reactivation:      { name: 'aura_reactivation',       prefix: 'Oi, sentimos sua falta 💜\n\n',      category: 'marketing' },
-  checkout_recovery: { name: 'aura_checkout_recovery',  prefix: 'Seu acesso está esperando ✨\n\n',   category: 'marketing' },
-  generic:           { name: 'aura_generic',             prefix: 'Aura 💜\n\n',                        category: 'utility' },
+  weekly_report:     { name: 'aura_weekly_report',       prefix: 'Seu resumo semanal 📊\n\n',          category: 'utility' },
+  insight:           { name: 'aura_insight',             prefix: 'Insight da Aura ✨\n\n',              category: 'utility' },
+  session_reminder:  { name: 'aura_session_reminder',    prefix: 'Lembrete de sessão 🕐\n\n',          category: 'utility' },
+  reactivation:      { name: 'aura_reactivation',        prefix: 'Oi, sentimos sua falta 💜\n\n',      category: 'marketing' },
+  checkout_recovery: { name: 'aura_checkout_recovery',   prefix: 'Seu acesso está esperando ✨\n\n',   category: 'marketing' },
 };
 
 // ============================================================================
@@ -178,7 +174,7 @@ export interface ProactiveMessageResult {
 export async function sendProactiveMessage(
   phone: string,
   text: string,
-  templateCategory: TemplateCategory = 'generic',
+  templateCategory: TemplateCategory = 'checkin',
   userId?: string,
 ): Promise<ProactiveMessageResult> {
   try {
