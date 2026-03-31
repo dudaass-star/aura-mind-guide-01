@@ -92,7 +92,7 @@ async function analyzeWeekConversations(
         messages: [
           {
             role: 'system',
-            content: `Você é a Aura, uma coach de vida empática. Analise as conversas da semana e gere um parágrafo curto (máximo 3 frases) sobre:
+            content: `Você é a Aura, uma coach de vida empática. Analise as conversas do mês e gere um parágrafo curto (máximo 3 frases) sobre:
 - Os principais temas/questões trabalhados
 - A evolução ou progresso percebido
 - Um insight ou observação importante
