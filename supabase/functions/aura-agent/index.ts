@@ -5694,7 +5694,7 @@ Guarde esse resumo! Vou te lembrar dos compromissos nos próximos dias.
 Estou aqui sempre que precisar! 💜`;
 
           const instanceConfig = await getInstanceConfigForUser(supabase, profile.user_id);
-          const sendResult = await sendTextMessage(cleanPhone, summaryMessage, undefined, instanceConfig);
+          const sendResult = await sendMessage(cleanPhone, summaryMessage);
           
           if (sendResult.success) {
             // Marcar como enviado para evitar duplicação pelo session-reminder
@@ -5714,7 +5714,7 @@ Estou aqui sempre que precisar! 💜`;
 
 (Só o número tá ótimo! E se quiser me dizer o que mais gostou ou o que posso melhorar, adoraria ouvir! 💜)`;
 
-            const ratingResult = await sendTextMessage(cleanPhone, ratingMessage, undefined, instanceConfig);
+            const ratingResult = await sendMessage(cleanPhone, ratingMessage);
             
             if (ratingResult.success) {
               await supabase
