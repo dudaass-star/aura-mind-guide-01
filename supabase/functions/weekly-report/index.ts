@@ -445,7 +445,7 @@ Deno.serve(async (req) => {
     });
 
   } catch (error: unknown) {
-    console.error('❌ Weekly report error:', error);
+    console.error('❌ Monthly report error:', error);
     const message = error instanceof Error ? error.message : 'Unknown error';
     return new Response(JSON.stringify({ error: message }), {
       status: 500,
