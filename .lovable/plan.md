@@ -1,52 +1,81 @@
 
 
-# Plan: Auto-Silenciar Envios Proativos Após 7 Dias Sem Resposta
+# Plan: Página de Leitura de Episódios (Teaser + Link)
 
 ## Conceito
 
-Se `last_message_date` do usuário for anterior a 7 dias, **todos os envios proativos são bloqueados**, exceto o check-in mensal (que já filtra por 7+ dias de inatividade). Quando o usuário responde, `last_message_date` é atualizado automaticamente pelo `aura-agent`, reativando tudo.
+Uma **única página dinâmica** (`/episodio/:id`) que carrega o conteúdo do episódio pelo ID. Não é uma página por episódio — é uma rota parametrizada que busca o `essay_content` da tabela `journey_episodes`.
 
-## O que já funciona (sem mudança)
+O fluxo fica assim:
 
-- `aura-agent` já atualiza `last_message_date` a cada mensagem recebida
-- `scheduled-checkin` já filtra por 7+ dias sem mensagem (é o único que deve funcionar durante o silêncio)
-- `do_not_disturb_until` continua funcionando independentemente
+```text
+Fora da janela 24h:
+  Template WhatsApp (teaser ~200 chars + link curto)
+  → Usuário clica no link
+  → Página /episodio/:id com conteúdo completo
 
-## Funções que precisam do guard de silêncio
-
-Adicionar no início do loop de cada usuário:
-
-```typescript
-// Auto-silence: skip if user hasn't messaged in 7+ days
-const lastMsg = profile.last_message_date ? new Date(profile.last_message_date) : null;
-if (lastMsg && (Date.now() - lastMsg.getTime()) > 7 * 24 * 60 * 60 * 1000) {
-  console.log(`🔇 Auto-silenced: ${profile.name} (7+ days inactive)`);
-  continue;
-}
+Dentro da janela 24h:
+  Texto livre completo (como funciona hoje)
 ```
 
-| Função | Onde adicionar |
-|---|---|
-| `periodic-content` | No loop de users, antes do DND check |
-| `pattern-analysis` | No loop de users, antes do DND check |
-| `conversation-followup` | Nos dois loops (followups pendentes + sessões ativas) |
-| `scheduled-followup` | No loop de commitments |
-| `weekly-report` | No loop de profiles |
-| `session-reminder` | No loop de sessions |
+## Mudanças
 
-## O que NÃO é silenciado
+### 1. Nova página `src/pages/Episode.tsx`
 
-- `scheduled-checkin` — é justamente o mecanismo de recontato
-- `deliver-time-capsule` — o usuário agendou explicitamente
-- `execute-scheduled-tasks` — tarefas agendadas pelo próprio usuário
-- `stripe-webhook` / `dunning` — billing é crítico
-- `instance-reconnect-notify` — operacional
+- Rota: `/episodio/:id`
+- Busca `journey_episodes` pelo ID (tabela já tem RLS pública para SELECT)
+- Renderiza: título da jornada, número do episódio, stage_title, essay_content formatado
+- Design alinhado com a identidade visual da Aura (roxo, minimalista)
+- Sem necessidade de autenticação (link público, conteúdo não é sensível)
 
-## Nenhuma migração necessária
+### 2. Rota no `App.tsx`
 
-Usa `last_message_date` que já existe na tabela `profiles`.
+- Adicionar `<Route path="/episodio/:id" element={<Episode />} />`
 
-## Total: 6 arquivos editados
+### 3. Atualizar `generate-episode-manifesto/index.ts`
 
-Cada edição é a adição de ~4 linhas de guard no loop existente. Sem novos crons, sem novas colunas.
+- Quando fora da janela de 24h, gerar **duas versões**:
+  - `teaser`: mensagem curta (~150 chars) com gancho do episódio + link
+  - `fullMessage`: mensagem completa (como hoje, para uso dentro da janela)
+- O teaser usa `create-short-link` para gerar link curto apontando para `/episodio/:id`
+
+### 4. Atualizar `whatsapp-official.ts` → `sendProactiveMessage`
+
+- Quando fora da janela e a mensagem é de conteúdo/jornada: usar o teaser em vez do texto completo
+- O teaser cabe em um único template (< 900 chars), eliminando o problema do split
+
+### 5. Domínio no allowlist de `create-short-link` e `redirect-link`
+
+- Adicionar `aura-mind-guide-01.lovable.app` (já está na lista, confirmado)
+
+### Exemplo de teaser no WhatsApp
+
+```
+Conteúdo da Aura 🌿
+
+Oi Maria. 💜
+
+📍 EP 3/8 — O Peso do Perfeccionismo
+Jornada: Ansiedade
+
+Seu episódio está pronto. Toque para ler:
+👉 https://link.curto/abc123
+
+— Aura
+```
+
+## Arquivos
+
+1. `src/pages/Episode.tsx` — nova página dinâmica
+2. `src/App.tsx` — adicionar rota
+3. `supabase/functions/generate-episode-manifesto/index.ts` — gerar teaser + link
+4. `supabase/functions/_shared/whatsapp-official.ts` — usar teaser quando fora da janela
+
+## Benefícios
+
+- **Uma única página** para todos os episódios de todas as jornadas
+- Template curto que cabe facilmente no limite de 1024 chars
+- Sem split de mensagem, sem partes extras
+- Conteúdo completo disponível na web com visual bonito
+- Link curto com expiração de 24h (já implementado)
 
