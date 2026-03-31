@@ -325,7 +325,7 @@ Deno.serve(async (req) => {
         blockMessage = statusMessages[profile.status!];
       }
 
-      await sendTextMessage(cleanPhone!, blockMessage, undefined, instanceConfig);
+      await sendMessage(cleanPhone!, blockMessage);
       return new Response(JSON.stringify({ success: true, action: 'subscription_blocked', status: profile.status }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
