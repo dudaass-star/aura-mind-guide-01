@@ -142,11 +142,9 @@ serve(async (req) => {
     if (audioError || !audioData) {
       console.error(`Audio not found for meditation: ${selectedMeditationId}`, audioError);
       
-      await sendTextMessage(
+      await sendMessage(
         userPhone,
-        "🧘 Ops, parece que essa meditação ainda não está pronta. Me perdoa! Vou providenciar e te aviso quando estiver disponível. 💜",
-        undefined,
-        zapiConfig
+        "🧘 Ops, parece que essa meditação ainda não está pronta. Me perdoa! Vou providenciar e te aviso quando estiver disponível. 💜"
       );
       
       return new Response(JSON.stringify({ 
