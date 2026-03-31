@@ -1,42 +1,41 @@
 
 
-# Admin WhatsApp Templates Page
+# Templates Faltantes no Twilio
 
-New page at `/admin/templates` to manage the `whatsapp_templates` table.
+## Análise
 
-## Features
-- Table listing all 7 templates with columns: Category, Template Name, Content SID, Meta Category, Status (active/inactive)
-- Inline edit Content SID via click-to-edit input
-- Toggle `is_active` via Switch component
-- Visual indicator: "PENDING_APPROVAL" SIDs shown in red badge
-- Back button to admin navigation (same pattern as other admin pages)
+Comparando os 7 templates criados com todos os cenários de envio proativo no sistema:
 
-## Implementation
+### Templates que existem (7):
+`checkin`, `content`, `weekly_report`, `insight`, `session_reminder`, `reactivation`, `checkout_recovery`
 
-### 1. Create `src/pages/AdminTemplates.tsx`
-- Follow same auth pattern as `AdminInstances.tsx` (useAdminAuth + redirectIfNotAdmin)
-- Fetch from `supabase.from('whatsapp_templates').select('*').order('category')`
-- For editing Content SID: click cell → show Input, save on blur/Enter via edge function or direct update
-- For toggling active: Switch component, update via edge function
-- Since RLS only allows SELECT for admins, updates need a small edge function
+### Templates que faltam:
 
-### 2. Create `supabase/functions/admin-update-template/index.ts`
-- Accepts `{ id, twilio_content_sid?, is_active? }`
-- Validates admin auth via JWT
-- Updates `whatsapp_templates` row using service role client
-- Returns updated row
+| # | Categoria | Cenário | Função que usa |
+|---|-----------|---------|----------------|
+| 1 | **welcome** | Saudação ao novo assinante (3 variantes: novo, upgrade, retorno) | `stripe-webhook` |
+| 2 | **welcome_trial** | Saudação quando inicia trial | `start-trial` |
+| 3 | **reconnect** | Aviso de volta após erro/queda técnica | `instance-reconnect-notify` |
+| 4 | **dunning** | Falha de pagamento com link para atualizar cartão | `stripe-webhook` + `reprocess-dunning` |
+| 5 | **followup** | Follow-up de conversa diário | `scheduled-followup` |
+| 6 | **access_blocked** | Mensagem de reativação quando usuário cancelado tenta falar | `webhook-zapi` (acesso bloqueado) |
 
-### 3. Add route in `App.tsx`
-- `<Route path="/admin/templates" element={<AdminTemplates />} />`
-- Import `AdminTemplates` component
+## Plano de Implementação
 
-### 4. Add navigation link
-- Add "Templates" link in existing admin pages' back/nav area (consistent with other admin pages)
+### Passo 1: Migration — adicionar 6 novos templates
+Inserir na tabela `whatsapp_templates` os 6 templates faltantes com `is_active = false` e `twilio_content_sid = 'PENDING_APPROVAL'`.
 
-## Files
-| File | Action |
+### Passo 2: Atualizar `TemplateCategory` type
+Adicionar os novos tipos em `whatsapp-official.ts`.
+
+### Passo 3: Atualizar `.lovable/plan.md`
+
+## Arquivos modificados
+
+| Arquivo | Ação |
 |---|---|
-| `src/pages/AdminTemplates.tsx` | Create |
-| `supabase/functions/admin-update-template/index.ts` | Create |
-| `src/App.tsx` | Add route |
+| Migration SQL | Novo — seed 6 templates |
+| `_shared/whatsapp-official.ts` | Adicionar novos tipos ao `TemplateCategory` |
+
+Depois de criar os templates no banco, você pode criar os Content Templates correspondentes no Twilio Console seguindo o mesmo processo já explicado.
 
