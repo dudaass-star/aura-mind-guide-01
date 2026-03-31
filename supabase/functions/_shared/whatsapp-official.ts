@@ -326,8 +326,10 @@ export async function sendProactiveMessage(
       return { success: result.success, parts: 1, type: 'freetext', error: result.error };
     }
 
-    const parts = splitMessageForTemplate(text, templateConfig.prefix.length);
-    console.log(`📨 [Twilio] Sending ${parts.length} part(s) via template "${templateConfig.template_name}"`);
+    // Use teaser if provided (short message with link, avoids split issues)
+    const messageToSend = teaserText || text;
+    const parts = splitMessageForTemplate(messageToSend, templateConfig.prefix.length);
+    console.log(`📨 [Twilio] Sending ${parts.length} part(s) via template "${templateConfig.template_name}"${teaserText ? ' (teaser mode)' : ''}`);
 
     // Part 1: Template
     const templateResult = await sendTemplateMessage(phone, templateConfig.template_name, [parts[0]]);
@@ -336,7 +338,8 @@ export async function sendProactiveMessage(
       return { success: false, parts: 0, type: 'template', error: templateResult.error };
     }
 
-    // Parts 2+: Free text (window opened by template)
+    // Parts 2+: Free text (NOTE: only works if user has responded, 
+    // templates do NOT open 24h window. Teaser mode avoids this.)
     for (let i = 1; i < parts.length; i++) {
       await new Promise(resolve => setTimeout(resolve, 1500));
       console.log(`📨 [Twilio] Sending part ${i + 1}/${parts.length} as free text`);
