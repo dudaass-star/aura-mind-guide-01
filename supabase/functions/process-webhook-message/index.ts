@@ -265,9 +265,9 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Get instance config for contingency
+    // Get instance config for legacy reference
     try {
-      contingencyInstanceConfig = await getInstanceConfigForUser(supabase, profile.user_id);
+      await getInstanceConfigForUser(supabase, profile.user_id);
     } catch {}
 
     // Auto-correção de telefone
