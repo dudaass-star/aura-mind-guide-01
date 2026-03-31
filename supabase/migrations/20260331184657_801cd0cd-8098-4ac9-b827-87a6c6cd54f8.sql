@@ -1,0 +1,1 @@
+ALTER TABLE public.profiles ADD COLUMN last_checkin_sent_at timestamptz;

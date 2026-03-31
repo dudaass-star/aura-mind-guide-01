@@ -41,7 +41,6 @@ Deno.serve(async (req) => {
     const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
     const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-    let reactivationsSent = 0;
     let missedSessionsSent = 0;
     let trialNudgesSent = 0;
 
@@ -228,116 +227,14 @@ Estou aqui por você. ✨`;
       }
     }
 
-    // ========================================================================
-    // 2. DETECTAR USUÁRIOS INATIVOS (3+ dias sem mensagem)
-    // ========================================================================
-    const { data: inactiveProfiles, error: inactiveError } = await supabase
-      .from('profiles')
-      .select('user_id, name, phone, last_message_date, last_reactivation_sent, do_not_disturb_until, whatsapp_instance_id')
-      .eq('status', 'active')
-      .lt('last_message_date', threeDaysAgo.toISOString().split('T')[0])
-      .not('phone', 'is', null);
+    // Section 2 (inactive user re-engagement) removed — now handled by scheduled-checkin (1x/month after 7 days inactive)
 
-    if (inactiveError) {
-      logStep("Error fetching inactive profiles", { error: inactiveError.message });
-    }
-
-    if (inactiveProfiles && inactiveProfiles.length > 0) {
-      logStep(`Found ${inactiveProfiles.length} potentially inactive profiles`);
-
-      for (const profile of inactiveProfiles) {
-        if (profile.do_not_disturb_until && new Date(profile.do_not_disturb_until) > now) {
-          logStep(`Skipping user ${profile.user_id} - do not disturb until ${profile.do_not_disturb_until}`);
-          continue;
-        }
-
-        if (profile.last_reactivation_sent) {
-          const lastSent = new Date(profile.last_reactivation_sent);
-          if (lastSent > oneDayAgo) {
-            logStep(`Skipping user ${profile.user_id} - already sent reactivation recently`);
-            continue;
-          }
-        }
-
-        const { data: upcomingSessions } = await supabase
-          .from('sessions')
-          .select('id')
-          .eq('user_id', profile.user_id)
-          .eq('status', 'scheduled')
-          .gt('scheduled_at', now.toISOString())
-          .limit(1);
-
-        if (upcomingSessions && upcomingSessions.length > 0) {
-          logStep(`Skipping user ${profile.user_id} - has upcoming session`);
-          continue;
-        }
-
-        // Check for pending scheduled tasks (return already planned)
-        const { data: pendingTasksInactive } = await supabase
-          .from('scheduled_tasks')
-          .select('id')
-          .eq('user_id', profile.user_id)
-          .eq('status', 'pending')
-          .limit(1);
-
-        if (pendingTasksInactive && pendingTasksInactive.length > 0) {
-          logStep(`Skipping user ${profile.user_id} - has pending scheduled task`);
-          continue;
-        }
-
-        const userName = profile.name || 'você';
-        const lastMessageDate = profile.last_message_date ? new Date(profile.last_message_date) : null;
-        const daysSinceMessage = lastMessageDate 
-          ? Math.floor((now.getTime() - lastMessageDate.getTime()) / (24 * 60 * 60 * 1000))
-          : 0;
-
-        let message: string;
-
-        if (daysSinceMessage >= 7) {
-          message = `${userName}, tô pensando em você! 💜
-
-Sei que a vida fica corrida às vezes. Quer marcar uma sessão pra gente colocar o papo em dia?
-
-Estou aqui quando você precisar. ✨`;
-        } else {
-          message = `Ei, ${userName}! Faz uns dias que a gente não se fala... 💜
-
-Como você está? Tô aqui se precisar conversar!
-
-Qualquer coisa, é só me mandar uma mensagem. ✨`;
-        }
-
-        try {
-          // Get instance config for this user
-          const zapiConfig = await getInstanceConfigForUser(supabase, profile.user_id);
-          const cleanPhone = cleanPhoneNumber(profile.phone!);
-          const result = await sendTextMessage(cleanPhone, message, undefined, zapiConfig);
-
-          if (result.success) {
-            await supabase
-              .from('profiles')
-              .update({ last_reactivation_sent: now.toISOString() })
-              .eq('user_id', profile.user_id);
-
-            reactivationsSent++;
-            logStep(`Sent reactivation message for user ${profile.user_id} (${daysSinceMessage} days inactive)`);
-          }
-        } catch (sendError) {
-          logStep(`Error sending reactivation message`, { error: sendError });
-        }
-
-        // Per-instance anti-burst delay
-        await antiBurstDelayForInstance(profile.whatsapp_instance_id || 'default');
-      }
-    }
-
-    logStep(`Completed: ${trialNudgesSent} trial nudges, ${missedSessionsSent} missed session messages, ${reactivationsSent} reactivation messages`);
+    logStep(`Completed: ${trialNudgesSent} trial nudges, ${missedSessionsSent} missed session messages`);
 
     return new Response(JSON.stringify({
       success: true,
       trial_nudges_sent: trialNudgesSent,
       missed_sessions_sent: missedSessionsSent,
-      reactivations_sent: reactivationsSent,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

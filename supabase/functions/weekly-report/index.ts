@@ -92,7 +92,7 @@ async function analyzeWeekConversations(
         messages: [
           {
             role: 'system',
-            content: `Você é a Aura, uma coach de vida empática. Analise as conversas da semana e gere um parágrafo curto (máximo 3 frases) sobre:
+            content: `Você é a Aura, uma coach de vida empática. Analise as conversas do mês e gere um parágrafo curto (máximo 3 frases) sobre:
 - Os principais temas/questões trabalhados
 - A evolução ou progresso percebido
 - Um insight ou observação importante
@@ -101,7 +101,7 @@ Seja específica sobre o que foi discutido. Use linguagem acolhedora e direta. N
           },
           {
             role: 'user',
-            content: `Analise as conversas desta semana com ${userName}:\n\n${conversationSummary}`
+            content: `Analise as conversas deste mês com ${userName}:\n\n${conversationSummary}`
           }
         ],
         max_tokens: 150,
@@ -135,20 +135,20 @@ function generateProgressBar(current: number, total: number): string {
   return '▓'.repeat(filled) + '░'.repeat(empty);
 }
 
-function generateWeeklyReport(
+function generateMonthlyReport(
   profile: any,
   evolutionAnalysis: string,
   metrics: UserMetrics
 ): string {
   const name = profile.name?.split(' ')[0] || 'você';
   
-  let report = `📊 *Seu Relatório Semanal, ${name}!*\n\n`;
+  let report = `📊 *Seu Relatório Mensal, ${name}!*\n\n`;
   report += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
   
-  report += `📈 *Seus Números*\n`;
+  report += `📈 *Seus Números do Mês*\n`;
   report += `💬 ${metrics.totalMessages} ${metrics.totalMessages === 1 ? 'mensagem' : 'mensagens'}`;
   if (metrics.weekMessages > 0) {
-    report += ` (↑${metrics.weekMessages} esta semana)`;
+    report += ` (↑${metrics.weekMessages} este mês)`;
   }
   report += `\n`;
   
@@ -250,7 +250,7 @@ Deno.serve(async (req) => {
     // Quiet hours guard: no messages between 22h and 8h BRT
     const brtHour = getBrtHour();
     if (brtHour < 8 || brtHour >= 22) {
-      console.log(`🌙 Quiet hours (${brtHour}h BRT) - skipping weekly report`);
+      console.log(`🌙 Quiet hours (${brtHour}h BRT) - skipping monthly report`);
       return new Response(JSON.stringify({ status: 'skipped', reason: 'quiet_hours', brt_hour: brtHour }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -272,7 +272,7 @@ Deno.serve(async (req) => {
       weekStartOverride = body?.week_start_override || null;
     } catch { /* no body */ }
 
-    console.log(`📅 Weekly report batch: offset=${offset}, batch_size=${batchSize}, dry_run=${dryRun}`);
+    console.log(`📅 Monthly report batch: offset=${offset}, batch_size=${batchSize}, dry_run=${dryRun}`);
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -282,7 +282,7 @@ Deno.serve(async (req) => {
     const now = new Date();
     const weekStart = new Date(weekStartOverride || now);
     if (!weekStartOverride) {
-      weekStart.setDate(now.getDate() - 7);
+      weekStart.setDate(now.getDate() - 30);
       weekStart.setHours(0, 0, 0, 0);
     }
     const weekStartStr = weekStart.toISOString();
@@ -336,7 +336,7 @@ Deno.serve(async (req) => {
             .maybeSingle();
 
           if (existingPlan) {
-            console.log(`⏭️ Skipping ${userName} - already received report this week`);
+            console.log(`⏭️ Skipping ${userName} - already received report this month`);
             continue;
           }
         }
@@ -379,7 +379,7 @@ Deno.serve(async (req) => {
         ]);
 
         const evolutionAnalysis = await analyzeWeekConversations(weekMsgsRes.data || [], userName);
-        const report = generateWeeklyReport(profile, evolutionAnalysis, metrics);
+        const report = generateMonthlyReport(profile, evolutionAnalysis, metrics);
 
         if (dryRun) {
           dryRunResults.push({ user_id: profile.user_id, name: profile.name, report, metrics, evolutionAnalysis });
@@ -445,7 +445,7 @@ Deno.serve(async (req) => {
     });
 
   } catch (error: unknown) {
-    console.error('❌ Weekly report error:', error);
+    console.error('❌ Monthly report error:', error);
     const message = error instanceof Error ? error.message : 'Unknown error';
     return new Response(JSON.stringify({ error: message }), {
       status: 500,

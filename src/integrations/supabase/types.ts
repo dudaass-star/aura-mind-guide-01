@@ -808,6 +808,7 @@ export type Database = {
           expectations: string | null
           id: string
           journeys_completed: number | null
+          last_checkin_sent_at: string | null
           last_content_sent_at: string | null
           last_message_date: string | null
           last_proactive_insight_at: string | null
@@ -857,6 +858,7 @@ export type Database = {
           expectations?: string | null
           id?: string
           journeys_completed?: number | null
+          last_checkin_sent_at?: string | null
           last_content_sent_at?: string | null
           last_message_date?: string | null
           last_proactive_insight_at?: string | null
@@ -906,6 +908,7 @@ export type Database = {
           expectations?: string | null
           id?: string
           journeys_completed?: number | null
+          last_checkin_sent_at?: string | null
           last_content_sent_at?: string | null
           last_message_date?: string | null
           last_proactive_insight_at?: string | null

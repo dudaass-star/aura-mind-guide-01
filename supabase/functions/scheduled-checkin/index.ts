@@ -7,38 +7,23 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Check-in message templates based on context
-function getCheckinMessage(profile: any, lastCheckin: any, pendingCommitments: any[]): string {
+function getCheckinMessage(profile: any): string {
   const name = profile.name?.split(' ')[0] || 'você';
   const hour = new Date().getHours();
-  
+
   let greeting = '';
   if (hour < 12) greeting = 'Bom dia';
   else if (hour < 18) greeting = 'Boa tarde';
   else greeting = 'Boa noite';
 
-  if (pendingCommitments.length > 0) {
-    const commitment = pendingCommitments[0];
-    return `${greeting}, ${name}! 💫\n\nLembrei de você e do seu compromisso: "${commitment.title}"\n\nComo está indo com isso? Me conta como posso te ajudar hoje.`;
-  }
-
-  if (lastCheckin) {
-    if (lastCheckin.mood && lastCheckin.mood < 5) {
-      return `${greeting}, ${name}! 💜\n\nOntem percebi que você não estava se sentindo tão bem. Como você está hoje? Estou aqui pra te ouvir.`;
-    }
-    if (lastCheckin.energy && lastCheckin.energy < 5) {
-      return `${greeting}, ${name}! ✨\n\nVi que sua energia estava baixa ontem. Conseguiu descansar? Como está se sentindo agora?`;
-    }
-  }
-
-  const defaultMessages = [
-    `${greeting}, ${name}! 🌟\n\nComo você está começando o dia? Estou aqui pra te ouvir e te ajudar em qualquer coisa.`,
-    `${greeting}, ${name}! 💫\n\nPassei pra saber como você está. Tem algo na sua mente hoje?`,
-    `${greeting}, ${name}! 🌸\n\nEstou aqui pensando em você. Como está seu dia? Posso te ajudar com algo?`,
-    `${greeting}, ${name}! ✨\n\nQueria saber como você está se sentindo. Vamos conversar?`,
+  const messages = [
+    `${greeting}, ${name}! 🌟\n\nFaz um tempinho que a gente não se fala... como você está? Estou aqui pra te ouvir.`,
+    `${greeting}, ${name}! 💫\n\nPassei pra saber como você está. Tem algo na sua mente? Adoraria conversar com você.`,
+    `${greeting}, ${name}! 🌸\n\nEstou aqui pensando em você. Como estão as coisas? Posso te ajudar com algo?`,
+    `${greeting}, ${name}! ✨\n\nSenti sua falta! Como você está se sentindo? Vamos conversar?`,
   ];
 
-  return defaultMessages[Math.floor(Math.random() * defaultMessages.length)];
+  return messages[Math.floor(Math.random() * messages.length)];
 }
 
 function getBrtHour(): number {
@@ -51,7 +36,6 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Quiet hours guard: no messages between 22h and 8h BRT
     const brtHour = getBrtHour();
     if (brtHour < 8 || brtHour >= 22) {
       console.log(`🌙 Quiet hours (${brtHour}h BRT) - skipping scheduled check-in`);
@@ -59,6 +43,7 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
     let dryRun = false;
     let targetUserId: string | null = null;
     try {
@@ -67,23 +52,30 @@ Deno.serve(async (req) => {
       targetUserId = body?.target_user_id || null;
     } catch { /* no body */ }
 
-    console.log(`🕐 Starting scheduled check-in... (dry_run=${dryRun})`);
+    console.log(`🕐 Starting monthly check-in... (dry_run=${dryRun})`);
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get active users with phone numbers
+    const now = new Date();
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    // Query: active users, 7+ days without message, no check-in in last 30 days
     let profilesQuery = supabase
       .from('profiles')
       .select('*')
       .eq('status', 'active')
-      .not('phone', 'is', null);
+      .not('phone', 'is', null)
+      .lt('last_message_date', sevenDaysAgo.toISOString().split('T')[0]);
 
     if (targetUserId) {
       profilesQuery = profilesQuery.eq('user_id', targetUserId);
     } else {
-      profilesQuery = profilesQuery.or('do_not_disturb_until.is.null,do_not_disturb_until.lte.' + new Date().toISOString());
+      profilesQuery = profilesQuery
+        .or('do_not_disturb_until.is.null,do_not_disturb_until.lte.' + now.toISOString())
+        .or('last_checkin_sent_at.is.null,last_checkin_sent_at.lte.' + thirtyDaysAgo.toISOString());
     }
 
     const { data: profiles, error: profilesError } = await profilesQuery;
@@ -92,66 +84,32 @@ Deno.serve(async (req) => {
       throw new Error(`Error fetching profiles: ${profilesError.message}`);
     }
 
-    console.log(`📋 Found ${profiles?.length || 0} active users`);
+    console.log(`📋 Found ${profiles?.length || 0} eligible users (7+ days inactive, no check-in in 30 days)`);
 
     let sentCount = 0;
     const dryRunResults: any[] = [];
 
-    // Group by WhatsApp instance for parallel processing
     const instanceGroups = groupByInstance(profiles || []);
 
     await Promise.all(
       Array.from(instanceGroups.entries()).map(async ([instanceId, groupProfiles]) => {
         for (const profile of groupProfiles) {
           try {
-            // Skip if user has a session scheduled in the next 7 days
-            const sevenDaysFromNow = new Date();
-            sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
-
-            const { data: upcomingSessions } = await supabase
-              .from('sessions')
-              .select('id')
-              .eq('user_id', profile.user_id)
-              .eq('status', 'scheduled')
-              .gte('scheduled_at', new Date().toISOString())
-              .lte('scheduled_at', sevenDaysFromNow.toISOString())
-              .limit(1);
-
-            if (upcomingSessions && upcomingSessions.length > 0) {
-              console.log(`📅 Skipping check-in for ${profile.name} - session scheduled in next 7 days`);
-              continue;
-            }
-
-            const { data: lastCheckin } = await supabase
-              .from('checkins')
-              .select('*')
-              .eq('user_id', profile.user_id)
-              .order('created_at', { ascending: false })
-              .limit(1)
-              .single();
-
-            const { data: pendingCommitments } = await supabase
-              .from('commitments')
-              .select('*')
-              .eq('user_id', profile.user_id)
-              .eq('completed', false)
-              .order('due_date', { ascending: true });
-
-            const message = getCheckinMessage(profile, lastCheckin, pendingCommitments || []);
+            const message = getCheckinMessage(profile);
 
             if (dryRun) {
               dryRunResults.push({
                 user_id: profile.user_id,
                 name: profile.name,
+                last_message_date: profile.last_message_date,
+                last_checkin_sent_at: profile.last_checkin_sent_at,
                 message,
               });
               sentCount++;
               continue;
             }
 
-            // Get instance config for this user
             const zapiConfig = await getInstanceConfigForUser(supabase, profile.user_id);
-
             const cleanPhone = cleanPhoneNumber(profile.phone);
             const result = await sendTextMessage(cleanPhone, message, undefined, zapiConfig);
 
@@ -159,18 +117,21 @@ Deno.serve(async (req) => {
               console.log(`✅ Check-in sent to ${profile.name} (${profile.phone})`);
               sentCount++;
 
-              await supabase.from('messages').insert({
-                user_id: profile.user_id,
-                role: 'assistant',
-                content: message,
-              });
+              await Promise.all([
+                supabase.from('messages').insert({
+                  user_id: profile.user_id,
+                  role: 'assistant',
+                  content: message,
+                }),
+                supabase.from('profiles').update({
+                  last_checkin_sent_at: now.toISOString(),
+                }).eq('user_id', profile.user_id),
+              ]);
             } else {
               console.error(`❌ Failed to send to ${profile.phone}: ${result.error}`);
             }
 
-            // Per-instance anti-burst delay
             await antiBurstDelayForInstance(instanceId);
-
           } catch (userError) {
             console.error(`❌ Error processing user ${profile.user_id}:`, userError);
           }
@@ -180,8 +141,8 @@ Deno.serve(async (req) => {
 
     console.log(`📊 Check-in complete: ${sentCount}/${profiles?.length || 0} messages sent`);
 
-    const responsePayload: any = { 
-      status: 'success', 
+    const responsePayload: any = {
+      status: 'success',
       totalUsers: profiles?.length || 0,
       messagesSent: sentCount,
     };
