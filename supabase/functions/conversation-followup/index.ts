@@ -376,7 +376,7 @@ Deno.serve(async (req) => {
         // Buscar profile
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
-          .select('name, phone, status, plan, current_session_id, do_not_disturb_until, whatsapp_instance_id')
+          .select('name, phone, status, plan, current_session_id, do_not_disturb_until, whatsapp_instance_id, last_message_date')
           .eq('user_id', followup.user_id)
           .maybeSingle();
         
