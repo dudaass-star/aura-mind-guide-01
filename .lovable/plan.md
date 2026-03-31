@@ -10,6 +10,19 @@
 - `webhook-zapi` atualizado para gravar `last_user_message_at`
 - Config `whatsapp_provider = 'zapi'` inserida
 
+# Fase 2: Implementação Twilio Gateway
+
+## Status: ✅ Completo
+
+- Tabela `whatsapp_templates` criada com 7 templates seedados (is_active = false)
+- RLS: service_role full access + admins read
+- `sendFreeText()` implementado via Twilio Gateway `/Messages.json`
+- `sendTemplateMessage()` implementado com ContentSid + ContentVariables
+- `sendProactiveMessage()` atualizado: janela aberta → freetext, fechada → template + split
+- `sendAudioFromUrl()` implementado via MediaUrl
+- `whatsapp-provider.ts` atualizado: todos os placeholders substituídos
+- Secret `TWILIO_WHATSAPP_FROM` configurado
+
 ## TEMPLATE_MAP Final (7 templates)
 
 | Categoria | Template | Meta | Função |
@@ -28,6 +41,9 @@
 
 ## Custo estimado: ~R$ 2.73/usuário/mês
 
-# Fase 2: Implementação Twilio (pendente)
+# Fase 3: Ativação (pendente)
 
-Próximo passo: implementar `sendTemplateMessage` com Twilio API real.
+Para ativar a API Oficial:
+1. Cadastrar templates no Twilio Console e obter Content SIDs
+2. Atualizar `twilio_content_sid` e `is_active = true` na tabela `whatsapp_templates`
+3. Mudar `whatsapp_provider` para `'official'` em `system_config`
