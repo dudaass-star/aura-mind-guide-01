@@ -41,7 +41,6 @@ Deno.serve(async (req) => {
     const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
     const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-    let reactivationsSent = 0;
     let missedSessionsSent = 0;
     let trialNudgesSent = 0;
 
