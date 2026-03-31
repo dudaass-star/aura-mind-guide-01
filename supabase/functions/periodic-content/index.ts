@@ -150,7 +150,7 @@ _Se preferir pausar, é só dizer "pausar jornadas" 🌿_
 Qual vai ser?`;
 
                 const cleanPhone = cleanPhoneNumber(user.phone);
-                await sendTextMessage(cleanPhone, completionMessage, undefined, zapiConfig);
+                await sendProactive(cleanPhone, completionMessage, 'content', user.user_id, zapiConfig);
                 
                 await supabase
                   .from('profiles')
