@@ -266,13 +266,17 @@ export async function sendAudioFromUrl(phone: string, audioUrl: string): Promise
  * Envia uma mensagem proativa (fora da conversa iniciada pelo usuário).
  * 
  * 1. Verifica janela de 24h → texto livre (grátis)
- * 2. Janela fechada → template envelope (pago) + partes extras como texto livre
+ * 2. Janela fechada → template envelope (pago)
+ * 
+ * For content/journey messages outside 24h window, pass `teaserText` 
+ * (short version with link) to avoid splitting long messages.
  */
 export async function sendProactiveMessage(
   phone: string,
   text: string,
   templateCategory: TemplateCategory = 'checkin',
   userId?: string,
+  teaserText?: string,
 ): Promise<ProactiveMessageResult> {
   try {
     // Check 24h window
