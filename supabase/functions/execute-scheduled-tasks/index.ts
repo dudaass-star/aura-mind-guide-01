@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { sendTextMessage, sendAudioMessage, cleanPhoneNumber } from "../_shared/zapi-client.ts";
+import { cleanPhoneNumber } from "../_shared/zapi-client.ts";
+import { sendMessage, sendAudio } from "../_shared/whatsapp-provider.ts";
 import { getInstanceConfigForUser } from "../_shared/instance-helper.ts";
 
 // Helper to create short links for checkout URLs
@@ -115,7 +116,7 @@ Deno.serve(async (req) => {
         switch (task.task_type) {
           case 'reminder': {
             const reminderText = payload.text || 'Ei, aqui é a Aura! Você me pediu pra te lembrar disso 💜';
-            await sendTextMessage(profile.phone, reminderText, undefined, instanceConfig);
+            await sendMessage(profile.phone, reminderText);
             console.log(`✅ Reminder sent to ${profile.phone.substring(0, 4)}***`);
             break;
           }
@@ -144,7 +145,7 @@ Deno.serve(async (req) => {
           case 'message': {
             const messageText = payload.text || '';
             if (messageText) {
-              await sendTextMessage(profile.phone, messageText, undefined, instanceConfig);
+              await sendMessage(profile.phone, messageText);
               console.log(`✅ Scheduled message sent to ${profile.phone.substring(0, 4)}***`);
             }
             break;
