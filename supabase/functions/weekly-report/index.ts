@@ -135,20 +135,20 @@ function generateProgressBar(current: number, total: number): string {
   return '▓'.repeat(filled) + '░'.repeat(empty);
 }
 
-function generateWeeklyReport(
+function generateMonthlyReport(
   profile: any,
   evolutionAnalysis: string,
   metrics: UserMetrics
 ): string {
   const name = profile.name?.split(' ')[0] || 'você';
   
-  let report = `📊 *Seu Relatório Semanal, ${name}!*\n\n`;
+  let report = `📊 *Seu Relatório Mensal, ${name}!*\n\n`;
   report += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
   
-  report += `📈 *Seus Números*\n`;
+  report += `📈 *Seus Números do Mês*\n`;
   report += `💬 ${metrics.totalMessages} ${metrics.totalMessages === 1 ? 'mensagem' : 'mensagens'}`;
   if (metrics.weekMessages > 0) {
-    report += ` (↑${metrics.weekMessages} esta semana)`;
+    report += ` (↑${metrics.weekMessages} este mês)`;
   }
   report += `\n`;
   
