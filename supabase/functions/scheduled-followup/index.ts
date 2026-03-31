@@ -47,7 +47,8 @@ Deno.serve(async (req) => {
           phone,
           user_id,
           do_not_disturb_until,
-          whatsapp_instance_id
+          whatsapp_instance_id,
+          last_message_date
         )
       `)
       .eq('completed', false)
