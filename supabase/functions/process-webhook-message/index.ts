@@ -486,10 +486,9 @@ Deno.serve(async (req) => {
     if (hasAudio && !messageText) {
       console.log(`🎤 Audio transcription failed for user ${profile.user_id} — sending fallback and releasing lock`);
       
-      await sendTextMessage(
+      await sendMessage(
         cleanPhone,
-        "Desculpa, não consegui ouvir seu áudio direito. 😅 Pode me mandar por texto ou tentar gravar de novo?",
-        undefined, instanceConfig
+        "Desculpa, não consegui ouvir seu áudio direito. 😅 Pode me mandar por texto ou tentar gravar de novo?"
       );
       await releaseLock();
       return new Response(JSON.stringify({ status: 'audio_transcription_failed' }), {
