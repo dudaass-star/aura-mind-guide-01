@@ -282,7 +282,7 @@ Deno.serve(async (req) => {
     const now = new Date();
     const weekStart = new Date(weekStartOverride || now);
     if (!weekStartOverride) {
-      weekStart.setDate(now.getDate() - 7);
+      weekStart.setDate(now.getDate() - 30);
       weekStart.setHours(0, 0, 0, 0);
     }
     const weekStartStr = weekStart.toISOString();
