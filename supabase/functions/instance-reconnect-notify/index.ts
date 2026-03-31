@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { sendTextMessage, cleanPhoneNumber } from "../_shared/zapi-client.ts";
+import { cleanPhoneNumber } from "../_shared/zapi-client.ts";
+import { sendMessage, sendProactive } from "../_shared/whatsapp-provider.ts";
 import {
   getInstanceConfigById,
   antiBurstDelayForInstance,
@@ -75,7 +76,7 @@ Deno.serve(async (req) => {
         const message = `Oi, ${nome}! Tive um probleminha técnico, mas já voltei. 💚 Se você me mandou algo e eu não respondi, pode mandar de novo que estou aqui!`;
 
         const cleanPhone = cleanPhoneNumber(user.phone);
-        const result = await sendTextMessage(cleanPhone, message, undefined, zapiConfig);
+        const result = await sendProactive(cleanPhone, message);
 
         if (result.success) {
           totalSent++;

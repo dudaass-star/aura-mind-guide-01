@@ -1,11 +1,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
-  sendTextMessage,
-  sendAudioMessage,
   cleanPhoneNumber,
   getPhoneVariations,
-  ZapiConfig,
 } from "../_shared/zapi-client.ts";
+import { sendMessage, sendAudio } from "../_shared/whatsapp-provider.ts";
 import { getInstanceConfigForUser } from "../_shared/instance-helper.ts";
 
 const corsHeaders = {
@@ -196,7 +194,7 @@ Deno.serve(async (req) => {
 
   // Track phone for contingency — no longer sends fallback messages
   let contingencyPhone: string | null = null;
-  let contingencyInstanceConfig: ZapiConfig | undefined = undefined;
+  let sentAnyResponse = false;
   let sentAnyResponse = false;
   let supabase: ReturnType<typeof createClient> | null = null;
   let profile: any = null;
@@ -267,9 +265,9 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Get instance config for contingency
+    // Get instance config for legacy reference
     try {
-      contingencyInstanceConfig = await getInstanceConfigForUser(supabase, profile.user_id);
+      await getInstanceConfigForUser(supabase, profile.user_id);
     } catch {}
 
     // Auto-correção de telefone
@@ -303,14 +301,7 @@ Deno.serve(async (req) => {
     if (blockedStatuses.includes(profile.status || '') && !isLegitTrial) {
       console.log(`🚫 User ${profile.user_id} blocked: status is '${profile.status}'`);
 
-      let instanceConfig = undefined;
-      if (profile.whatsapp_instance_id) {
-        const { data: inst } = await supabase
-          .from('whatsapp_instances')
-          .select('zapi_instance_id, zapi_token, zapi_client_token')
-          .eq('id', profile.whatsapp_instance_id).single();
-        if (inst) instanceConfig = { instanceId: inst.zapi_instance_id, token: inst.zapi_token, clientToken: inst.zapi_client_token };
-      }
+      // Instance config no longer needed — provider handles routing
 
       // Save user message to history before blocking
       if (messageText) {
@@ -334,7 +325,7 @@ Deno.serve(async (req) => {
         blockMessage = statusMessages[profile.status!];
       }
 
-      await sendTextMessage(cleanPhone!, blockMessage, undefined, instanceConfig);
+      await sendMessage(cleanPhone!, blockMessage);
       return new Response(JSON.stringify({ success: true, action: 'subscription_blocked', status: profile.status }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -494,11 +485,10 @@ Deno.serve(async (req) => {
     // ========================================================================
     if (hasAudio && !messageText) {
       console.log(`🎤 Audio transcription failed for user ${profile.user_id} — sending fallback and releasing lock`);
-      const instanceConfig = await getInstanceConfigForUser(supabase, profile.user_id);
-      await sendTextMessage(
+      
+      await sendMessage(
         cleanPhone,
-        "Desculpa, não consegui ouvir seu áudio direito. 😅 Pode me mandar por texto ou tentar gravar de novo?",
-        undefined, instanceConfig
+        "Desculpa, não consegui ouvir seu áudio direito. 😅 Pode me mandar por texto ou tentar gravar de novo?"
       );
       await releaseLock();
       return new Response(JSON.stringify({ status: 'audio_transcription_failed' }), {
@@ -512,7 +502,7 @@ Deno.serve(async (req) => {
     const capsuleState = profile.awaiting_time_capsule;
 
     if (capsuleState === 'awaiting_audio' || capsuleState === 'awaiting_confirmation') {
-      const instanceConfig = await getInstanceConfigForUser(supabase, profile.user_id);
+      
 
       if (capsuleState === 'awaiting_audio') {
         if (hasAudio && audioUrl) {
@@ -522,7 +512,7 @@ Deno.serve(async (req) => {
           }).eq('user_id', profile.user_id);
 
           const confirmMsg = `Recebi seu áudio! 🎙️ Ficou do jeito que você queria?\n\nSe quiser regravar, manda outro áudio. Se tiver bom, me diz "pode guardar" 💜`;
-          await sendTextMessage(cleanPhone, confirmMsg, undefined, instanceConfig);
+          await sendMessage(cleanPhone, confirmMsg);
           await supabase.from('messages').insert([
             ...(!inboundSaved ? [{ user_id: profile.user_id, role: 'user', content: messageText || '[áudio para cápsula do tempo]' }] : []),
             { user_id: profile.user_id, role: 'assistant', content: confirmMsg },
@@ -539,7 +529,7 @@ Deno.serve(async (req) => {
         if (/deixa|cancela|desist|não quero|nao quero|esquece|para|parar/i.test(lowerMsgAudio)) {
           await supabase.from('profiles').update({ awaiting_time_capsule: null, pending_capsule_audio_url: null }).eq('user_id', profile.user_id);
           const cancelMsg = `Tudo bem! Quando quiser gravar uma cápsula do tempo, é só falar 💜`;
-          await sendTextMessage(cleanPhone, cancelMsg, undefined, instanceConfig);
+          await sendMessage(cleanPhone, cancelMsg);
           await supabase.from('messages').insert([
             ...(!inboundSaved ? [{ user_id: profile.user_id, role: 'user', content: messageText }] : []),
             { user_id: profile.user_id, role: 'assistant', content: cancelMsg },
@@ -552,7 +542,7 @@ Deno.serve(async (req) => {
         }
 
         const reminderMsg = `Manda um áudio pra eu guardar sua voz! 🎙️ Quando quiser desistir, é só dizer "deixa pra lá" 💜`;
-        await sendTextMessage(cleanPhone, reminderMsg, undefined, instanceConfig);
+        await sendMessage(cleanPhone, reminderMsg);
         await supabase.from('messages').insert([
           ...(!inboundSaved ? [{ user_id: profile.user_id, role: 'user', content: messageText }] : []),
           { user_id: profile.user_id, role: 'assistant', content: reminderMsg },
@@ -568,7 +558,7 @@ Deno.serve(async (req) => {
         if (hasAudio && audioUrl) {
           await supabase.from('profiles').update({ pending_capsule_audio_url: audioUrl }).eq('user_id', profile.user_id);
           const replaceMsg = `Troquei o áudio! 🎙️ Esse ficou bom? Me diz "pode guardar" quando tiver certeza 💜`;
-          await sendTextMessage(cleanPhone, replaceMsg, undefined, instanceConfig);
+          await sendMessage(cleanPhone, replaceMsg);
           await supabase.from('messages').insert([
             ...(!inboundSaved ? [{ user_id: profile.user_id, role: 'user', content: messageText || '[novo áudio para cápsula]' }] : []),
             { user_id: profile.user_id, role: 'assistant', content: replaceMsg },
@@ -585,7 +575,7 @@ Deno.serve(async (req) => {
         if (/deixa|cancela|desist|não quero|nao quero|esquece|para|parar/i.test(lowerMsg)) {
           await supabase.from('profiles').update({ awaiting_time_capsule: null, pending_capsule_audio_url: null }).eq('user_id', profile.user_id);
           const cancelMsg = `Tudo bem! Quando quiser gravar uma cápsula do tempo, é só falar 💜`;
-          await sendTextMessage(cleanPhone, cancelMsg, undefined, instanceConfig);
+          await sendMessage(cleanPhone, cancelMsg);
           await supabase.from('messages').insert([
             ...(!inboundSaved ? [{ user_id: profile.user_id, role: 'user', content: messageText }] : []),
             { user_id: profile.user_id, role: 'assistant', content: cancelMsg },
@@ -615,7 +605,7 @@ Deno.serve(async (req) => {
 
             const deliverDateStr = deliverAt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Sao_Paulo' });
             const savedMsg = `Guardei sua mensagem com carinho! 💜✨\n\nVou te enviar de volta no dia ${deliverDateStr}. Vai ser uma surpresa especial do seu eu de hoje pro seu eu do futuro 🫶`;
-            await sendTextMessage(cleanPhone, savedMsg, undefined, instanceConfig);
+            await sendMessage(cleanPhone, savedMsg);
             await supabase.from('messages').insert([
               ...(!inboundSaved ? [{ user_id: profile.user_id, role: 'user', content: messageText }] : []),
               { user_id: profile.user_id, role: 'assistant', content: savedMsg },
@@ -651,8 +641,8 @@ Deno.serve(async (req) => {
     const ratingResult = await handleSessionRating(supabase, profile.user_id, messageText);
     if (ratingResult.handled && ratingResult.response) {
       console.log(`✅ Session rating handled for user ${profile.user_id}`);
-      const instanceConfig = await getInstanceConfigForUser(supabase, profile.user_id);
-      await sendTextMessage(cleanPhone, ratingResult.response, undefined, instanceConfig);
+      
+      await sendMessage(cleanPhone, ratingResult.response);
       if (!inboundSaved) {
         await supabase.from('messages').insert({ user_id: profile.user_id, role: 'user', content: messageText });
         inboundSaved = true;
@@ -670,8 +660,8 @@ Deno.serve(async (req) => {
     const confirmationResult = await handleSessionConfirmation(supabase, profile.user_id, messageText);
     if (confirmationResult.handled && confirmationResult.response) {
       console.log(`✅ Session confirmation handled for user ${profile.user_id}`);
-      const instanceConfig = await getInstanceConfigForUser(supabase, profile.user_id);
-      await sendTextMessage(cleanPhone, confirmationResult.response, undefined, instanceConfig);
+      
+      await sendMessage(cleanPhone, confirmationResult.response);
       if (!inboundSaved) {
         await supabase.from('messages').insert({ user_id: profile.user_id, role: 'user', content: messageText });
         inboundSaved = true;
@@ -920,8 +910,8 @@ Deno.serve(async (req) => {
         console.log(`🎙️ Generating audio for: ${responseText.substring(0, 50)}...`);
         const audioContent = await generateTTS(responseText);
         if (audioContent) {
-          const instanceConfig = await getInstanceConfigForUser(supabase, profile.user_id);
-          const audioResult = await sendAudioMessage(cleanPhone, audioContent, instanceConfig);
+          
+          const audioResult = await sendAudio(cleanPhone, audioContent);
           if (audioResult.success) {
             sentAnyResponse = true;
             try {
@@ -949,8 +939,8 @@ Deno.serve(async (req) => {
       else typingSeconds = Math.min(Math.ceil(responseText.length / 35), 6);
 
       console.log(`📤 Sending text (${responseText.length} chars, ${typingSeconds}s typing): ${responseText.substring(0, 50)}...`);
-      const instanceConfig2 = await getInstanceConfigForUser(supabase, profile.user_id);
-      await sendTextMessage(cleanPhone, responseText, typingSeconds, instanceConfig2);
+      
+      await sendMessage(cleanPhone, responseText);
       sentAnyResponse = true;
 
       // Persist assistant message to DB (with dedup check)
@@ -982,8 +972,8 @@ Deno.serve(async (req) => {
             let retryText = (msg.text || msg.content || '').replace(/\|\|\|/g, '').trim();
             retryText = retryText.replace(/\[\s*[A-Z_]{3,}(?::[^\]]*)?\s*\]/g, '').replace(/\[\s*\/[A-Z_]{3,}\s*\]/g, '').trim();
             if (!retryText) continue;
-            const instanceConfig = await getInstanceConfigForUser(supabase, profile.user_id);
-            await sendTextMessage(cleanPhone, retryText, undefined, instanceConfig);
+            
+            await sendMessage(cleanPhone, retryText);
             sentAnyResponse = true;
             try {
               const { data: retryDedupCheck } = await supabase

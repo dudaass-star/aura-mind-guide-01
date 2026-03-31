@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { sendTextMessage, cleanPhoneNumber } from "../_shared/zapi-client.ts";
+import { cleanPhoneNumber } from "../_shared/zapi-client.ts";
+import { sendMessage, sendProactive } from "../_shared/whatsapp-provider.ts";
 import { allocateInstance, getInstanceConfigById } from "../_shared/instance-helper.ts";
 
 async function createShortLink(supabaseUrl: string, serviceKey: string, url: string, phone?: string): Promise<string | null> {
@@ -155,7 +156,7 @@ Dá uma olhada no que você vai ter acesso: ${guideLinkText} ✨
 Me conta: como você está se sentindo agora?`;
 
     try {
-      const result = await sendTextMessage(formattedPhone, welcomeMessage, undefined, zapiConfig);
+      const result = await sendMessage(formattedPhone, welcomeMessage);
       if (result.success) {
         console.log('✅ Welcome message sent');
 
@@ -169,7 +170,7 @@ Me conta: como você está se sentindo agora?`;
         // Segunda mensagem: informar sobre funcionalidade de áudio
         try {
           const audioMsg = `Ah, e se preferir, pode me mandar áudio também! 🎙️ Eu ouço e respondo — por texto ou por voz, como você preferir.`;
-          await sendTextMessage(formattedPhone, audioMsg, 3, zapiConfig);
+          await sendMessage(formattedPhone, audioMsg);
           console.log('✅ Audio info message sent');
 
           await supabase.from('messages').insert({

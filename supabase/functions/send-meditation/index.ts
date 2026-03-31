@@ -1,10 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import {
-  sendAudioFromUrl,
-  sendTextMessage,
-  cleanPhoneNumber,
-} from "../_shared/zapi-client.ts";
+import { cleanPhoneNumber } from "../_shared/zapi-client.ts";
+import { sendMessage, sendAudioUrl } from "../_shared/whatsapp-provider.ts";
 import { getInstanceConfigForUser, getInstanceConfigForPhone } from "../_shared/instance-helper.ts";
 
 const corsHeaders = {
@@ -145,11 +142,9 @@ serve(async (req) => {
     if (audioError || !audioData) {
       console.error(`Audio not found for meditation: ${selectedMeditationId}`, audioError);
       
-      await sendTextMessage(
+      await sendMessage(
         userPhone,
-        "🧘 Ops, parece que essa meditação ainda não está pronta. Me perdoa! Vou providenciar e te aviso quando estiver disponível. 💜",
-        undefined,
-        zapiConfig
+        "🧘 Ops, parece que essa meditação ainda não está pronta. Me perdoa! Vou providenciar e te aviso quando estiver disponível. 💜"
       );
       
       return new Response(JSON.stringify({ 
@@ -171,7 +166,7 @@ serve(async (req) => {
     const durationMinutes = Math.round((audioData.duration_seconds || meditation?.duration_seconds || 300) / 60);
     const introMessage = `🧘 *${meditation?.title || 'Meditação Guiada'}*\n\nDuração: ~${durationMinutes} minutos\n\nEncontre um lugar tranquilo, feche os olhos e me deixe te guiar... 💜`;
     
-    await sendTextMessage(userPhone, introMessage, undefined, zapiConfig);
+    await sendMessage(userPhone, introMessage);
 
     // Register intro message in messages table for admin visibility
     if (userId) {
@@ -185,13 +180,13 @@ serve(async (req) => {
     await new Promise(resolve => setTimeout(resolve, 1500));
 
     console.log(`🎧 Sending audio from URL: ${audioData.public_url}`);
-    const audioResult = await sendAudioFromUrl(userPhone, audioData.public_url, zapiConfig);
+    const audioResult = await sendAudioUrl(userPhone, audioData.public_url);
 
     if (!audioResult.success) {
       console.error('Failed to send audio:', audioResult.error);
       
       const fallbackMsg = `🎧 Tive um probleminha para enviar o áudio direto. Você pode ouvir aqui: ${audioData.public_url}`;
-      await sendTextMessage(userPhone, fallbackMsg, undefined, zapiConfig);
+      await sendMessage(userPhone, fallbackMsg);
       
       if (userId) {
         await supabase.from('messages').insert({

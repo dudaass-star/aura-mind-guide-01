@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { sendTextMessage, normalizeBrazilianPhone, getPhoneVariations } from "../_shared/zapi-client.ts";
+import { normalizeBrazilianPhone, getPhoneVariations } from "../_shared/zapi-client.ts";
+import { sendProactive } from "../_shared/whatsapp-provider.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -156,7 +157,7 @@ Deno.serve(async (req) => {
 
         console.log(`📤 [RECOVERY] Sending to ${normalizedPhone.substring(0, 6)}*** (raw: ${session.phone.substring(0, 4)}***) for plan ${plan}`);
 
-        const result = await sendTextMessage(normalizedPhone, message);
+        const result = await sendProactive(normalizedPhone, message);
 
         // Log the attempt with full details
         await supabase.from('checkout_recovery_attempts').insert({

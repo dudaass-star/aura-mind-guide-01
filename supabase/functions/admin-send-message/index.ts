@@ -1,7 +1,5 @@
-import {
-  sendTextMessage,
-  cleanPhoneNumber,
-} from "../_shared/zapi-client.ts";
+import { cleanPhoneNumber } from "../_shared/zapi-client.ts";
+import { sendMessage } from "../_shared/whatsapp-provider.ts";
 import { getInstanceConfigForUser } from "../_shared/instance-helper.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -36,7 +34,7 @@ Deno.serve(async (req) => {
     }
 
     const cleanPhone = cleanPhoneNumber(phone);
-    const result = await sendTextMessage(cleanPhone, message, undefined, zapiConfig);
+    const result = await sendMessage(cleanPhone, message);
 
     if (!result.success) {
       throw new Error(result.error || 'Failed to send message');

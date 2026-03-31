@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { sendTextMessage, sendAudioFromUrl } from "../_shared/zapi-client.ts";
+import { sendMessage, sendAudioUrl } from "../_shared/whatsapp-provider.ts";
 import { getInstanceConfigForUser } from "../_shared/instance-helper.ts";
 
 const corsHeaders = {
@@ -69,27 +69,27 @@ Deno.serve(async (req) => {
         // Mensagem introdutória
         const introMsg = `${userName}, lembra daquela cápsula do tempo que você gravou? 💜✨\n\nChegou a hora! Aqui está a mensagem que o seu eu do passado deixou pra você. Escuta com carinho 🫶`;
         
-        await sendTextMessage(profile.phone, introMsg, undefined, instanceConfig);
+        await sendMessage(profile.phone, introMsg);
 
         // Pequeno delay antes de enviar o áudio
         await new Promise(resolve => setTimeout(resolve, 3000));
 
         // Enviar áudio original
-        const audioResult = await sendAudioFromUrl(profile.phone, capsule.audio_url, instanceConfig);
+        const audioResult = await sendAudioUrl(profile.phone, capsule.audio_url);
         
         if (!audioResult.success) {
           console.error(`❌ Failed to send capsule audio for ${capsule.id}:`, audioResult.error);
           // Enviar transcrição como fallback
           if (capsule.transcription) {
             const fallbackMsg = `Não consegui enviar o áudio original, mas aqui está o que você disse:\n\n"${capsule.transcription}" 💜`;
-            await sendTextMessage(profile.phone, fallbackMsg, undefined, instanceConfig);
+            await sendMessage(profile.phone, fallbackMsg);
           }
         }
 
         // Mensagem de encerramento
         await new Promise(resolve => setTimeout(resolve, 2000));
         const closingMsg = `E aí, como é ouvir isso agora? 💜 Mudou muita coisa desde então?`;
-        await sendTextMessage(profile.phone, closingMsg, undefined, instanceConfig);
+        await sendMessage(profile.phone, closingMsg);
 
         // Marcar como entregue
         await supabase.from('time_capsules').update({

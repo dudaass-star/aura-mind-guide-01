@@ -1,9 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import {
-  sendTextMessage,
-  sendAudioMessage,
-  cleanPhoneNumber,
-} from "../_shared/zapi-client.ts";
+import { cleanPhoneNumber } from "../_shared/zapi-client.ts";
+import { sendMessage, sendAudio } from "../_shared/whatsapp-provider.ts";
 import { getInstanceConfigForUser } from "../_shared/instance-helper.ts";
 
 const corsHeaders = {
@@ -89,7 +86,7 @@ Deno.serve(async (req) => {
       
       if (audioBase64) {
         // Enviar como áudio
-        const audioResult = await sendAudioMessage(cleanPhone, audioBase64, zapiConfig);
+        const audioResult = await sendAudio(cleanPhone, audioBase64);
         if (audioResult.success) {
           result = audioResult.response;
           sentType = 'audio';
@@ -97,18 +94,18 @@ Deno.serve(async (req) => {
         } else {
           // Fallback para texto se falhar
           console.log('⚠️ Audio send failed, falling back to text');
-          const textResult = await sendTextMessage(cleanPhone, message, undefined, zapiConfig);
+          const textResult = await sendMessage(cleanPhone, message);
           result = textResult.response;
         }
       } else {
         // Fallback para texto se falhar a geração de áudio
         console.log('⚠️ Audio generation failed, falling back to text');
-        const textResult = await sendTextMessage(cleanPhone, message, undefined, zapiConfig);
+        const textResult = await sendMessage(cleanPhone, message);
         result = textResult.response;
       }
     } else {
       // Enviar como texto
-      const textResult = await sendTextMessage(cleanPhone, message, undefined, zapiConfig);
+      const textResult = await sendMessage(cleanPhone, message);
       if (!textResult.success) {
         throw new Error(textResult.error || 'Failed to send text message');
       }

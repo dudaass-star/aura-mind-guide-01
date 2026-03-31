@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { sendTextMessage, cleanPhoneNumber } from "../_shared/zapi-client.ts";
+import { cleanPhoneNumber } from "../_shared/zapi-client.ts";
+import { sendMessage, sendProactive } from "../_shared/whatsapp-provider.ts";
 import { getInstanceConfigForUser, antiBurstDelayForInstance, groupByInstance } from "../_shared/instance-helper.ts";
 
 const corsHeaders = {
@@ -372,7 +373,7 @@ serve(async (req) => {
             // Get instance config and send
             const zapiConfig = await getInstanceConfigForUser(supabase, user.user_id);
             const cleanPhone = cleanPhoneNumber(user.phone);
-            const sendResult = await sendTextMessage(cleanPhone, analysis.whatsapp_message, undefined, zapiConfig);
+            const sendResult = await sendProactive(cleanPhone, analysis.whatsapp_message);
 
             if (sendResult.success) {
               console.log(`✅ [${user.name || 'Unknown'}] Insight sent`);

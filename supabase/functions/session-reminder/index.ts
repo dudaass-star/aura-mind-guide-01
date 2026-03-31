@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { sendTextMessage, cleanPhoneNumber } from "../_shared/zapi-client.ts";
+import { cleanPhoneNumber } from "../_shared/zapi-client.ts";
+import { sendMessage, sendProactive } from "../_shared/whatsapp-provider.ts";
 import { getInstanceConfigForUser, antiBurstDelay } from "../_shared/instance-helper.ts";
 
 const corsHeaders = {
@@ -245,7 +246,7 @@ Confirma que tá tudo certo? Me responde com "confirmo" ou me avisa se precisar 
         try {
           const cleanPhone = cleanPhoneNumber(profile.phone);
           const instanceConfig = await getInstanceConfigForUser(supabase, session.user_id);
-          const result = await sendTextMessage(cleanPhone, message, undefined, instanceConfig);
+          const result = await sendProactive(cleanPhone, message);
 
           if (result.success) {
             await supabase
@@ -316,7 +317,7 @@ Separa um cantinho tranquilo pra gente conversar com calma. Te espero lá! 💜`
         try {
           const cleanPhone = cleanPhoneNumber(profile.phone);
           const instanceConfig = await getInstanceConfigForUser(supabase, session.user_id);
-          const result = await sendTextMessage(cleanPhone, message, undefined, instanceConfig);
+          const result = await sendProactive(cleanPhone, message);
 
           if (result.success) {
             await supabase
@@ -377,7 +378,7 @@ Já estou aqui te esperando. Quando estiver pronta, é só me mandar uma mensage
         try {
           const cleanPhone = cleanPhoneNumber(profile.phone);
           const instanceConfig = await getInstanceConfigForUser(supabase, session.user_id);
-          const result = await sendTextMessage(cleanPhone, message, undefined, instanceConfig);
+          const result = await sendProactive(cleanPhone, message);
 
           if (result.success) {
             await supabase
@@ -454,7 +455,7 @@ Você está pronta(o) pra começar? Me responde um "vamos" ou "bora" quando quis
         try {
           const cleanPhone = cleanPhoneNumber(profile.phone);
           const instanceConfig = await getInstanceConfigForUser(supabase, session.user_id);
-          const result = await sendTextMessage(cleanPhone, message, undefined, instanceConfig);
+          const result = await sendProactive(cleanPhone, message);
 
           if (result.success) {
             // CORREÇÃO: APENAS marca como notificado, NÃO muda status para in_progress
@@ -536,7 +537,7 @@ Pra gente começar, me manda um "vamos" ou "bora" - ou me avisa se quer reagenda
           try {
             const cleanPhone = cleanPhoneNumber(profile.phone);
             const instanceConfig = await getInstanceConfigForUser(supabase, session.user_id);
-            const result = await sendTextMessage(cleanPhone, reminderMessage, undefined, instanceConfig);
+            const result = await sendProactive(cleanPhone, reminderMessage);
             
             if (result.success) {
               reminder10mSent++;
@@ -600,7 +601,7 @@ Quer remarcar pra outro horário? É só me dizer quando fica bom pra você. ✨
           try {
             const cleanPhone = cleanPhoneNumber(profile.phone);
             const instanceConfig = await getInstanceConfigForUser(supabase, session.user_id);
-            await sendTextMessage(cleanPhone, message, undefined, instanceConfig);
+            await sendProactive(cleanPhone, message);
             console.log(`✅ Missed session message sent for session ${session.id}`);
           } catch (sendError) {
             console.error(`❌ Error sending missed session message for session ${session.id}:`, sendError);
@@ -726,7 +727,7 @@ Se quiser remarcar uma nova sessão, é só me dizer!`;
           try {
             const cleanPhone = cleanPhoneNumber(profile.phone);
             const instanceConfig = await getInstanceConfigForUser(supabase, session.user_id);
-            await sendTextMessage(cleanPhone, messageToSend, undefined, instanceConfig);
+            await sendProactive(cleanPhone, messageToSend);
             console.log(`✅ Closure message sent for session ${session.id}`);
           } catch (sendError) {
             console.error(`❌ Error sending closure message for session ${session.id}:`, sendError);
@@ -821,7 +822,7 @@ Me conta durante a semana como está seu progresso! Estou aqui por você. ✨`;
         try {
           const cleanPhone = cleanPhoneNumber(profile.phone);
           const instanceConfig = await getInstanceConfigForUser(supabase, session.user_id);
-          const result = await sendTextMessage(cleanPhone, message, undefined, instanceConfig);
+          const result = await sendProactive(cleanPhone, message);
 
           if (result.success) {
             // Only mark post_session_sent AFTER rating is also sent successfully
@@ -836,7 +837,7 @@ Me conta durante a semana como está seu progresso! Estou aqui por você. ✨`;
 
 (Só o número tá ótimo! E se quiser me dizer o que mais gostou ou o que posso melhorar, adoraria ouvir! 💜)`;
 
-            const ratingResult = await sendTextMessage(cleanPhone, ratingMessage, undefined, instanceConfig);
+            const ratingResult = await sendProactive(cleanPhone, ratingMessage);
             
             if (ratingResult.success) {
               ratingSuccess = true;
