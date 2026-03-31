@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendTextMessage, cleanPhoneNumber } from "../_shared/zapi-client.ts";
+import { sendProactive } from "../_shared/whatsapp-provider.ts";
 import { getInstanceConfigForUser, antiBurstDelayForInstance, groupByInstance } from "../_shared/instance-helper.ts";
 
 const corsHeaders = {
@@ -149,7 +150,7 @@ _Se preferir pausar, é só dizer "pausar jornadas" 🌿_
 Qual vai ser?`;
 
                 const cleanPhone = cleanPhoneNumber(user.phone);
-                await sendTextMessage(cleanPhone, completionMessage, undefined, zapiConfig);
+                await sendProactive(cleanPhone, completionMessage, 'content', user.user_id, zapiConfig);
                 
                 await supabase
                   .from('profiles')
@@ -185,7 +186,8 @@ Qual vai ser?`;
               {
                 body: {
                   user_id: user.user_id,
-                  episode_id: episode.id
+                  episode_id: episode.id,
+                  generate_teaser: true
                 }
               }
             );
@@ -200,7 +202,14 @@ Qual vai ser?`;
             const message = manifestoResult.message;
 
             const cleanPhone = cleanPhoneNumber(user.phone);
-            const sendResult = await sendTextMessage(cleanPhone, message, undefined, zapiConfig);
+            const sendResult = await sendProactive(
+              cleanPhone,
+              message,
+              'content',
+              user.user_id,
+              zapiConfig,
+              manifestoResult.teaser || undefined
+            );
 
             if (sendResult.success) {
               console.log(`✅ Manifesto sent to ${user.name?.split(' ')[0] || 'user'}`);

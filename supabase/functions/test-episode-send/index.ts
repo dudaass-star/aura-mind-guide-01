@@ -1,5 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sendProactive } from "../_shared/whatsapp-provider.ts";
+import { cleanPhoneNumber } from "../_shared/zapi-client.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -24,37 +26,36 @@ serve(async (req) => {
 
     console.log(`🧪 Test: Generating episode for user ${user_id}`);
 
-    // Invoke generate-episode-manifesto
+    // Invoke generate-episode-manifesto with teaser enabled
     const { data: manifestoData, error: manifestoError } = await supabase.functions.invoke('generate-episode-manifesto', {
-      body: { user_id, episode_id }
+      body: { user_id, episode_id, generate_teaser: true }
     });
 
     if (manifestoError || !manifestoData?.success) {
       throw new Error(`Manifesto generation failed: ${manifestoError?.message || manifestoData?.error}`);
     }
 
-    console.log('✅ Episode generated, sending via Z-API...');
+    console.log(`✅ Episode generated (teaser: ${manifestoData.teaser ? 'yes' : 'no'}), sending via provider...`);
 
-    // Send via send-zapi-message
-    const { data: sendData, error: sendError } = await supabase.functions.invoke('send-zapi-message', {
-      body: { 
-        phone, 
-        message: manifestoData.message,
-        user_id 
-      }
-    });
+    const cleanPhone = cleanPhoneNumber(phone);
+    const sendResult = await sendProactive(
+      cleanPhone,
+      manifestoData.message,
+      'content',
+      user_id,
+      undefined,
+      manifestoData.teaser || undefined
+    );
 
-    if (sendError) {
-      throw new Error(`Send failed: ${sendError.message}`);
-    }
-
-    console.log('✅ Message sent successfully');
+    console.log(`✅ Message sent via ${sendResult.provider}`);
 
     return new Response(JSON.stringify({ 
       success: true,
+      provider: sendResult.provider,
       episode: manifestoData.stage_title,
       episode_number: manifestoData.episode_number,
-      send_result: sendData
+      had_teaser: !!manifestoData.teaser,
+      send_result: sendResult
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

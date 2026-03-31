@@ -84,6 +84,7 @@ export async function sendProactive(
   templateCategory: TemplateCategory = 'checkin',
   userId?: string,
   configOverride?: ZapiConfig,
+  teaserText?: string,
 ): Promise<SendResult> {
   const provider = await getProvider();
 
@@ -92,8 +93,8 @@ export async function sendProactive(
     return { success: result.success, provider: 'zapi', error: result.error };
   }
 
-  // Official API: template envelope + split
-  const result: ProactiveMessageResult = await sendProactiveMessage(phone, text, templateCategory, userId);
+  // Official API: template envelope + split (teaser avoids split)
+  const result: ProactiveMessageResult = await sendProactiveMessage(phone, text, templateCategory, userId, teaserText);
   return { success: result.success, provider: 'official', error: result.error };
 }
 
