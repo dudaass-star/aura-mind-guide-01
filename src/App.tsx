@@ -21,6 +21,7 @@ import AdminEngagement from "./pages/AdminEngagement";
 import AdminMessages from "./pages/AdminMessages";
 import AdminTemplates from "./pages/AdminTemplates";
 import UserGuide from "./pages/UserGuide";
+import Episode from "./pages/Episode";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
