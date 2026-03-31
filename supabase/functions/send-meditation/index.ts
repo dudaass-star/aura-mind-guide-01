@@ -168,7 +168,7 @@ serve(async (req) => {
     const durationMinutes = Math.round((audioData.duration_seconds || meditation?.duration_seconds || 300) / 60);
     const introMessage = `🧘 *${meditation?.title || 'Meditação Guiada'}*\n\nDuração: ~${durationMinutes} minutos\n\nEncontre um lugar tranquilo, feche os olhos e me deixe te guiar... 💜`;
     
-    await sendTextMessage(userPhone, introMessage, undefined, zapiConfig);
+    await sendMessage(userPhone, introMessage);
 
     // Register intro message in messages table for admin visibility
     if (userId) {
@@ -182,13 +182,13 @@ serve(async (req) => {
     await new Promise(resolve => setTimeout(resolve, 1500));
 
     console.log(`🎧 Sending audio from URL: ${audioData.public_url}`);
-    const audioResult = await sendAudioFromUrl(userPhone, audioData.public_url, zapiConfig);
+    const audioResult = await sendAudioUrl(userPhone, audioData.public_url);
 
     if (!audioResult.success) {
       console.error('Failed to send audio:', audioResult.error);
       
       const fallbackMsg = `🎧 Tive um probleminha para enviar o áudio direto. Você pode ouvir aqui: ${audioData.public_url}`;
-      await sendTextMessage(userPhone, fallbackMsg, undefined, zapiConfig);
+      await sendMessage(userPhone, fallbackMsg);
       
       if (userId) {
         await supabase.from('messages').insert({
