@@ -235,7 +235,6 @@ Estou aqui por você. ✨`;
       success: true,
       trial_nudges_sent: trialNudgesSent,
       missed_sessions_sent: missedSessionsSent,
-      reactivations_sent: reactivationsSent,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
