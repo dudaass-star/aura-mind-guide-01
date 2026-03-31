@@ -78,12 +78,7 @@ Deno.serve(async (req) => {
             );
 
             const cleanPhone = cleanPhoneNumber(user.phone);
-            const result = await sendTextMessage(
-              cleanPhone,
-              message,
-              undefined,
-              zapiConfig
-            );
+            const result = await sendProactive(cleanPhone, message);
 
             if (result.success) {
               await supabase
