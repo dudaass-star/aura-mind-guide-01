@@ -1,37 +1,49 @@
 
 
-# Fase 2: Implementação Twilio WhatsApp API
+# Fase 1: Preparação para API Oficial do WhatsApp
 
-O connector Twilio ja esta conectado (`TWILIO_API_KEY` disponivel). Voce tem o numero pronto.
+## Status: ✅ Completo
 
-## Passo 1: Solicitar secret `TWILIO_WHATSAPP_FROM`
+- Migration `last_user_message_at` aplicada
+- `whatsapp-official.ts` criado com 7 templates (5 utility + 2 marketing)
+- `whatsapp-provider.ts` criado com abstração zapi/official
+- `webhook-zapi` atualizado para gravar `last_user_message_at`
+- Config `whatsapp_provider = 'zapi'` inserida
 
-Usar `add_secret` para voce inserir o numero no formato `whatsapp:+55XXXXXXXXXXX`.
+# Fase 2: Implementação Twilio Gateway
 
-## Passo 2: Migration — tabela `whatsapp_templates`
+## Status: ✅ Completo
 
-Criar tabela com 7 templates seedados (`is_active = false`), RLS para service_role + admins.
+- Tabela `whatsapp_templates` criada com 7 templates seedados (is_active = false)
+- RLS: service_role full access + admins read
+- `sendFreeText()` implementado via Twilio Gateway `/Messages.json`
+- `sendTemplateMessage()` implementado com ContentSid + ContentVariables
+- `sendProactiveMessage()` atualizado: janela aberta → freetext, fechada → template + split
+- `sendAudioFromUrl()` implementado via MediaUrl
+- `whatsapp-provider.ts` atualizado: todos os placeholders substituídos
+- Secret `TWILIO_WHATSAPP_FROM` configurado
 
-## Passo 3: Implementar `whatsapp-official.ts`
+## TEMPLATE_MAP Final (7 templates)
 
-- `sendFreeText(phone, text)` — POST `/Messages.json` via gateway com `Body`
-- `sendTemplateMessage(phone, templateName, variables)` — POST com `ContentSid` + `ContentVariables`
-- Atualizar `sendProactiveMessage` para usar as funcoes reais
+| Categoria | Template | Meta | Função |
+|---|---|---|---|
+| `checkin` | `aura_checkin` | Utility | `scheduled-checkin` (7 dias inativo) |
+| `content` | `aura_content` | Utility | `periodic-content` (Ter/Sex) |
+| `weekly_report` | `aura_weekly_report` | Utility | `weekly-report` (Dom 19h) |
+| `insight` | `aura_insight` | Utility | `pattern-analysis` (Qui/Sáb) |
+| `session_reminder` | `aura_session_reminder` | Utility | `session-reminder` |
+| `reactivation` | `aura_reactivation` | Marketing | `reactivation-check`, `reactivation-blast` |
+| `checkout_recovery` | `aura_checkout_recovery` | Marketing | `recover-abandoned-checkout` |
 
-## Passo 4: Atualizar `whatsapp-provider.ts`
+## Sem template (janela 24h)
 
-- `sendMessage` oficial → `sendFreeText`
-- `sendAudio` oficial → log warning (base64 nao suportado)
-- `sendAudioUrl` oficial → POST com `MediaUrl`
+- `conversation-followup`, `send-meditation`, `aura-agent`, `deliver-time-capsule`, `scheduled-followup`
 
-## Passo 5: Atualizar `.lovable/plan.md`
+## Custo estimado: ~R$ 2.73/usuário/mês
 
-## Arquivos modificados
+# Fase 3: Ativação (pendente)
 
-| Arquivo | Acao |
-|---|---|
-| Migration SQL | Novo — tabela `whatsapp_templates` + seed |
-| `_shared/whatsapp-official.ts` | Reescrever com Twilio Gateway |
-| `_shared/whatsapp-provider.ts` | Substituir placeholders |
-| `.lovable/plan.md` | Marcar Fase 2 completa |
-
+Para ativar a API Oficial:
+1. Cadastrar templates no Twilio Console e obter Content SIDs
+2. Atualizar `twilio_content_sid` e `is_active = true` na tabela `whatsapp_templates`
+3. Mudar `whatsapp_provider` para `'official'` em `system_config`
