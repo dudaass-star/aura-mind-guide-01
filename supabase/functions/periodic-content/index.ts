@@ -202,7 +202,14 @@ Qual vai ser?`;
             const message = manifestoResult.message;
 
             const cleanPhone = cleanPhoneNumber(user.phone);
-            const sendResult = await sendTextMessage(cleanPhone, message, undefined, zapiConfig);
+            const sendResult = await sendProactive(
+              cleanPhone,
+              message,
+              'content',
+              user.user_id,
+              zapiConfig,
+              manifestoResult.teaser || undefined
+            );
 
             if (sendResult.success) {
               console.log(`✅ Manifesto sent to ${user.name?.split(' ')[0] || 'user'}`);
