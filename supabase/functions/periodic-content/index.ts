@@ -79,6 +79,13 @@ serve(async (req) => {
       Array.from(instanceGroups.entries()).map(async ([instanceId, groupUsers]) => {
         for (const user of groupUsers) {
           try {
+            // Auto-silence: skip if user hasn't messaged in 7+ days
+            const lastMsg = user.last_message_date ? new Date(user.last_message_date) : null;
+            if (lastMsg && (Date.now() - lastMsg.getTime()) > 7 * 24 * 60 * 60 * 1000) {
+              console.log(`🔇 Auto-silenced: ${user.name || 'Unknown'} (7+ days inactive)`);
+              continue;
+            }
+
             // Skip if do_not_disturb is active
             if (user.do_not_disturb_until && new Date(user.do_not_disturb_until) > new Date()) {
               console.log(`🔇 Skipping user ${user.name || 'Unknown'} - do not disturb until ${user.do_not_disturb_until}`);

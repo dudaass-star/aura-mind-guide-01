@@ -323,6 +323,13 @@ Deno.serve(async (req) => {
 
     for (const profile of profiles!) {
       try {
+        // Auto-silence: skip if user hasn't messaged in 7+ days
+        const lastMsg = profile.last_message_date ? new Date(profile.last_message_date) : null;
+        if (lastMsg && (Date.now() - lastMsg.getTime()) > 7 * 24 * 60 * 60 * 1000) {
+          console.log(`🔇 Auto-silenced: ${profile.name} (7+ days inactive)`);
+          continue;
+        }
+
         const userName = profile.name?.split(' ')[0] || 'usuário';
 
         // Skip if already received this week's report (dedup via weekly_plans)

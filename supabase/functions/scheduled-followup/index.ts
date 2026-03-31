@@ -70,6 +70,13 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        // Auto-silence: skip if user hasn't messaged in 7+ days
+        const lastMsg = (profile as any).last_message_date ? new Date((profile as any).last_message_date) : null;
+        if (lastMsg && (Date.now() - lastMsg.getTime()) > 7 * 24 * 60 * 60 * 1000) {
+          console.log(`🔇 Auto-silenced commitment ${commitment.id}: ${profile.name} (7+ days inactive)`);
+          continue;
+        }
+
         // Skip if do_not_disturb is active
         if (profile.do_not_disturb_until && new Date(profile.do_not_disturb_until) > new Date()) {
           console.log(`🔇 Skipping commitment ${commitment.id} - do not disturb until ${profile.do_not_disturb_until}`);
