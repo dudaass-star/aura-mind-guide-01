@@ -156,7 +156,7 @@ Dá uma olhada no que você vai ter acesso: ${guideLinkText} ✨
 Me conta: como você está se sentindo agora?`;
 
     try {
-      const result = await sendProactive(formattedPhone, welcomeMessage);
+      const result = await sendMessage(formattedPhone, welcomeMessage);
       if (result.success) {
         console.log('✅ Welcome message sent');
 
