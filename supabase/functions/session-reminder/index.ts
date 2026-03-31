@@ -171,12 +171,19 @@ Deno.serve(async (req) => {
       for (const session of sessions24h) {
         const { data: profile } = await supabase
           .from('profiles')
-          .select('name, phone, whatsapp_instance_id')
+          .select('name, phone, whatsapp_instance_id, last_message_date')
           .eq('user_id', session.user_id)
           .maybeSingle();
 
         if (!profile?.phone) {
           console.log(`⚠️ No phone for session ${session.id}`);
+          continue;
+        }
+
+        // Auto-silence: skip 24h reminder if user hasn't messaged in 7+ days
+        const lastMsg = profile.last_message_date ? new Date(profile.last_message_date) : null;
+        if (lastMsg && (Date.now() - lastMsg.getTime()) > 7 * 24 * 60 * 60 * 1000) {
+          console.log(`🔇 Auto-silenced 24h reminder for session ${session.id}: ${profile.name} (7+ days inactive)`);
           continue;
         }
 
