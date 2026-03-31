@@ -1,81 +1,57 @@
 
 
-# Plan: Página de Leitura de Episódios (Teaser + Link)
+# Análise da Implementação Teaser + Link — Problemas Encontrados
 
-## Conceito
+## O que está OK
 
-Uma **única página dinâmica** (`/episodio/:id`) que carrega o conteúdo do episódio pelo ID. Não é uma página por episódio — é uma rota parametrizada que busca o `essay_content` da tabela `journey_episodes`.
+1. **Página `/episodio/:id`** — Criada corretamente, rota registrada no App.tsx, HelmetProvider configurado, RLS de `journey_episodes` permite SELECT público.
+2. **`generate-episode-manifesto`** — Gera teaser + short link quando `generate_teaser: true` é passado. Lógica correta.
+3. **`whatsapp-official.ts`** — `sendProactiveMessage` aceita `teaserText` e usa no template quando fora da janela.
+4. **Domínio no allowlist** — `aura-mind-guide-01.lovable.app` já está na lista do `create-short-link`.
 
-O fluxo fica assim:
+---
 
-```text
-Fora da janela 24h:
-  Template WhatsApp (teaser ~200 chars + link curto)
-  → Usuário clica no link
-  → Página /episodio/:id com conteúdo completo
+## Problemas Encontrados (3 itens)
 
-Dentro da janela 24h:
-  Texto livre completo (como funciona hoje)
-```
+### 1. `periodic-content` NÃO usa o teaser (CRÍTICO)
 
-## Mudanças
+O `periodic-content/index.ts` (que é quem realmente envia os episódios) **não passa `generate_teaser: true`** na chamada ao `generate-episode-manifesto` e **não passa o teaser** para o envio. Além disso, ele usa diretamente `sendTextMessage` (Z-API) em vez de `sendProactive` do provider abstrato.
 
-### 1. Nova página `src/pages/Episode.tsx`
+**Correção:**
+- Passar `generate_teaser: true` na chamada ao `generate-episode-manifesto`
+- Quando o provider for `official`, usar `sendProactive` passando o teaser como parâmetro
+- Atualizar `sendProactive` em `whatsapp-provider.ts` para aceitar e repassar `teaserText`
 
-- Rota: `/episodio/:id`
-- Busca `journey_episodes` pelo ID (tabela já tem RLS pública para SELECT)
-- Renderiza: título da jornada, número do episódio, stage_title, essay_content formatado
-- Design alinhado com a identidade visual da Aura (roxo, minimalista)
-- Sem necessidade de autenticação (link público, conteúdo não é sensível)
+### 2. `whatsapp-provider.ts` → `sendProactive` NÃO repassa o `teaserText`
 
-### 2. Rota no `App.tsx`
+A função `sendProactive` chama `sendProactiveMessage` mas **não aceita nem repassa** o parâmetro `teaserText`. O teaser ficaria perdido.
 
-- Adicionar `<Route path="/episodio/:id" element={<Episode />} />`
+**Correção:**
+- Adicionar parâmetro `teaserText?: string` à assinatura de `sendProactive`
+- Repassar para `sendProactiveMessage(phone, text, templateCategory, userId, teaserText)`
 
-### 3. Atualizar `generate-episode-manifesto/index.ts`
+### 3. `test-episode-send` não testa o fluxo teaser
 
-- Quando fora da janela de 24h, gerar **duas versões**:
-  - `teaser`: mensagem curta (~150 chars) com gancho do episódio + link
-  - `fullMessage`: mensagem completa (como hoje, para uso dentro da janela)
-- O teaser usa `create-short-link` para gerar link curto apontando para `/episodio/:id`
+O `test-episode-send/index.ts` não passa `generate_teaser` e usa Z-API diretamente. Deveria ter a opção de testar o fluxo oficial também.
 
-### 4. Atualizar `whatsapp-official.ts` → `sendProactiveMessage`
+**Correção:** Menor prioridade, mas adicionar suporte a `generate_teaser` e provider selection.
 
-- Quando fora da janela e a mensagem é de conteúdo/jornada: usar o teaser em vez do texto completo
-- O teaser cabe em um único template (< 900 chars), eliminando o problema do split
+---
 
-### 5. Domínio no allowlist de `create-short-link` e `redirect-link`
+## Plano de Correção
 
-- Adicionar `aura-mind-guide-01.lovable.app` (já está na lista, confirmado)
+### Arquivo 1: `supabase/functions/_shared/whatsapp-provider.ts`
+- Adicionar `teaserText?: string` como parâmetro de `sendProactive`
+- Repassar para `sendProactiveMessage(..., teaserText)`
 
-### Exemplo de teaser no WhatsApp
+### Arquivo 2: `supabase/functions/periodic-content/index.ts`
+- Importar `sendProactive` do `whatsapp-provider.ts`
+- Na chamada a `generate-episode-manifesto`, passar `generate_teaser: true`
+- Usar `sendProactive` em vez de `sendTextMessage` para envio de episódios
+- Passar `manifestoResult.teaser` como `teaserText` quando disponível
+- Manter fallback para Z-API quando necessário (já tratado pelo provider)
 
-```
-Conteúdo da Aura 🌿
-
-Oi Maria. 💜
-
-📍 EP 3/8 — O Peso do Perfeccionismo
-Jornada: Ansiedade
-
-Seu episódio está pronto. Toque para ler:
-👉 https://link.curto/abc123
-
-— Aura
-```
-
-## Arquivos
-
-1. `src/pages/Episode.tsx` — nova página dinâmica
-2. `src/App.tsx` — adicionar rota
-3. `supabase/functions/generate-episode-manifesto/index.ts` — gerar teaser + link
-4. `supabase/functions/_shared/whatsapp-official.ts` — usar teaser quando fora da janela
-
-## Benefícios
-
-- **Uma única página** para todos os episódios de todas as jornadas
-- Template curto que cabe facilmente no limite de 1024 chars
-- Sem split de mensagem, sem partes extras
-- Conteúdo completo disponível na web com visual bonito
-- Link curto com expiração de 24h (já implementado)
+### Arquivo 3: `supabase/functions/test-episode-send/index.ts` (opcional)
+- Adicionar parâmetro `generate_teaser` no body
+- Permitir teste via provider oficial
 
