@@ -72,7 +72,7 @@ Deno.serve(async (req) => {
         }
 
         // Auto-silence: skip if user hasn't messaged in 7+ days
-        const lastMsg = (profile as any).last_message_date ? new Date((profile as any).last_message_date) : null;
+        const lastMsg = profile.last_message_date ? new Date(profile.last_message_date) : null;
         if (lastMsg && (Date.now() - lastMsg.getTime()) > 7 * 24 * 60 * 60 * 1000) {
           console.log(`🔇 Auto-silenced commitment ${commitment.id}: ${profile.name} (7+ days inactive)`);
           continue;
