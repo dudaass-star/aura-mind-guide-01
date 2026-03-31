@@ -376,7 +376,7 @@ Deno.serve(async (req) => {
         // Buscar profile
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
-          .select('name, phone, status, plan, current_session_id, do_not_disturb_until, whatsapp_instance_id')
+          .select('name, phone, status, plan, current_session_id, do_not_disturb_until, whatsapp_instance_id, last_message_date')
           .eq('user_id', followup.user_id)
           .maybeSingle();
         
@@ -388,6 +388,13 @@ Deno.serve(async (req) => {
         // Skip if no phone or user is not active
         if (!profile?.phone || profile?.status !== 'active') {
           console.log(`⏭️ Skipping user ${followup.user_id}: no phone or inactive`);
+          continue;
+        }
+
+        // Auto-silence: skip if user hasn't messaged in 7+ days
+        const lastMsg = profile.last_message_date ? new Date(profile.last_message_date) : null;
+        if (lastMsg && (Date.now() - lastMsg.getTime()) > 7 * 24 * 60 * 60 * 1000) {
+          console.log(`🔇 Auto-silenced: ${profile.name} (7+ days inactive)`);
           continue;
         }
 
