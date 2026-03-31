@@ -336,7 +336,7 @@ Deno.serve(async (req) => {
             .maybeSingle();
 
           if (existingPlan) {
-            console.log(`⏭️ Skipping ${userName} - already received report this week`);
+            console.log(`⏭️ Skipping ${userName} - already received report this month`);
             continue;
           }
         }
