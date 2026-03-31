@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { sendTextMessage, cleanPhoneNumber } from "../_shared/zapi-client.ts";
+import { cleanPhoneNumber } from "../_shared/zapi-client.ts";
+import { sendMessage, sendProactive } from "../_shared/whatsapp-provider.ts";
 import { getInstanceConfigForUser, antiBurstDelayForInstance } from "../_shared/instance-helper.ts";
 
 const corsHeaders = {
@@ -111,7 +112,7 @@ Deno.serve(async (req) => {
         try {
           const zapiConfig = await getInstanceConfigForUser(supabase, tp.user_id);
           const cleanPhone = cleanPhoneNumber(tp.phone!);
-          const result = await sendTextMessage(cleanPhone, nudgeMessage, undefined, zapiConfig);
+          const result = await sendProactive(cleanPhone, nudgeMessage);
 
           if (result.success) {
             await supabase
@@ -202,7 +203,7 @@ Estou aqui por você. ✨`;
           // Get instance config for this user
           const zapiConfig = await getInstanceConfigForUser(supabase, session.user_id);
           const cleanPhone = cleanPhoneNumber(profile.phone);
-          const result = await sendTextMessage(cleanPhone, message, undefined, zapiConfig);
+          const result = await sendProactive(cleanPhone, message);
 
           if (result.success) {
             await supabase

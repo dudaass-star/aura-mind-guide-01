@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { sendTextMessage, cleanPhoneNumber } from "../_shared/zapi-client.ts";
+import { cleanPhoneNumber } from "../_shared/zapi-client.ts";
+import { sendMessage, sendProactive } from "../_shared/whatsapp-provider.ts";
 import {
   getInstanceConfigForUser,
   groupByInstance,

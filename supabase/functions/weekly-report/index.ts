@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { sendTextMessage, cleanPhoneNumber } from "../_shared/zapi-client.ts";
+import { cleanPhoneNumber } from "../_shared/zapi-client.ts";
+import { sendMessage, sendProactive } from "../_shared/whatsapp-provider.ts";
 import { getInstanceConfigForUser } from "../_shared/instance-helper.ts";
 
 const corsHeaders = {
@@ -397,7 +398,7 @@ Deno.serve(async (req) => {
         // Send via WhatsApp
         const zapiConfig = await getInstanceConfigForUser(supabase, profile.user_id);
         const cleanPhone = cleanPhoneNumber(profile.phone);
-        const result = await sendTextMessage(cleanPhone, report, undefined, zapiConfig);
+        const result = await sendProactive(cleanPhone, report);
 
         if (result.success) {
           console.log(`✅ Report sent to ${profile.name} (${profile.phone})`);
