@@ -51,6 +51,7 @@ const App = () => (
             <Route path="/admin/mensagens" element={<AdminMessages />} />
             <Route path="/admin/templates" element={<AdminTemplates />} />
             <Route path="/guia" element={<UserGuide />} />
+            <Route path="/episodio/:id" element={<Episode />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
