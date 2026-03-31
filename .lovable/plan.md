@@ -1,49 +1,42 @@
 
 
-# Fase 1: Preparação para API Oficial do WhatsApp
+# Admin WhatsApp Templates Page
 
-## Status: ✅ Completo
+New page at `/admin/templates` to manage the `whatsapp_templates` table.
 
-- Migration `last_user_message_at` aplicada
-- `whatsapp-official.ts` criado com 7 templates (5 utility + 2 marketing)
-- `whatsapp-provider.ts` criado com abstração zapi/official
-- `webhook-zapi` atualizado para gravar `last_user_message_at`
-- Config `whatsapp_provider = 'zapi'` inserida
+## Features
+- Table listing all 7 templates with columns: Category, Template Name, Content SID, Meta Category, Status (active/inactive)
+- Inline edit Content SID via click-to-edit input
+- Toggle `is_active` via Switch component
+- Visual indicator: "PENDING_APPROVAL" SIDs shown in red badge
+- Back button to admin navigation (same pattern as other admin pages)
 
-# Fase 2: Implementação Twilio Gateway
+## Implementation
 
-## Status: ✅ Completo
+### 1. Create `src/pages/AdminTemplates.tsx`
+- Follow same auth pattern as `AdminInstances.tsx` (useAdminAuth + redirectIfNotAdmin)
+- Fetch from `supabase.from('whatsapp_templates').select('*').order('category')`
+- For editing Content SID: click cell → show Input, save on blur/Enter via edge function or direct update
+- For toggling active: Switch component, update via edge function
+- Since RLS only allows SELECT for admins, updates need a small edge function
 
-- Tabela `whatsapp_templates` criada com 7 templates seedados (is_active = false)
-- RLS: service_role full access + admins read
-- `sendFreeText()` implementado via Twilio Gateway `/Messages.json`
-- `sendTemplateMessage()` implementado com ContentSid + ContentVariables
-- `sendProactiveMessage()` atualizado: janela aberta → freetext, fechada → template + split
-- `sendAudioFromUrl()` implementado via MediaUrl
-- `whatsapp-provider.ts` atualizado: todos os placeholders substituídos
-- Secret `TWILIO_WHATSAPP_FROM` configurado
+### 2. Create `supabase/functions/admin-update-template/index.ts`
+- Accepts `{ id, twilio_content_sid?, is_active? }`
+- Validates admin auth via JWT
+- Updates `whatsapp_templates` row using service role client
+- Returns updated row
 
-## TEMPLATE_MAP Final (7 templates)
+### 3. Add route in `App.tsx`
+- `<Route path="/admin/templates" element={<AdminTemplates />} />`
+- Import `AdminTemplates` component
 
-| Categoria | Template | Meta | Função |
-|---|---|---|---|
-| `checkin` | `aura_checkin` | Utility | `scheduled-checkin` (7 dias inativo) |
-| `content` | `aura_content` | Utility | `periodic-content` (Ter/Sex) |
-| `weekly_report` | `aura_weekly_report` | Utility | `weekly-report` (Dom 19h) |
-| `insight` | `aura_insight` | Utility | `pattern-analysis` (Qui/Sáb) |
-| `session_reminder` | `aura_session_reminder` | Utility | `session-reminder` |
-| `reactivation` | `aura_reactivation` | Marketing | `reactivation-check`, `reactivation-blast` |
-| `checkout_recovery` | `aura_checkout_recovery` | Marketing | `recover-abandoned-checkout` |
+### 4. Add navigation link
+- Add "Templates" link in existing admin pages' back/nav area (consistent with other admin pages)
 
-## Sem template (janela 24h)
+## Files
+| File | Action |
+|---|---|
+| `src/pages/AdminTemplates.tsx` | Create |
+| `supabase/functions/admin-update-template/index.ts` | Create |
+| `src/App.tsx` | Add route |
 
-- `conversation-followup`, `send-meditation`, `aura-agent`, `deliver-time-capsule`, `scheduled-followup`
-
-## Custo estimado: ~R$ 2.73/usuário/mês
-
-# Fase 3: Ativação (pendente)
-
-Para ativar a API Oficial:
-1. Cadastrar templates no Twilio Console e obter Content SIDs
-2. Atualizar `twilio_content_sid` e `is_active = true` na tabela `whatsapp_templates`
-3. Mudar `whatsapp_provider` para `'official'` em `system_config`
