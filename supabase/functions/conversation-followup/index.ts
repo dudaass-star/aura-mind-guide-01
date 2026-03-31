@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { sendTextMessage } from "../_shared/zapi-client.ts";
+import { sendProactive } from "../_shared/whatsapp-provider.ts";
 import { getInstanceConfigForUser, antiBurstDelayForInstance } from "../_shared/instance-helper.ts";
 
 const corsHeaders = {
@@ -582,7 +582,7 @@ Deno.serve(async (req) => {
 
         // Send via Z-API with instance routing
         const instanceConfig = await getInstanceConfigForUser(supabase, followup.user_id);
-        const sendResult = await sendTextMessage(profile.phone, message, undefined, instanceConfig);
+        const sendResult = await sendProactive(profile.phone, message);
 
         if (sendResult.success) {
           console.log(`✅ Follow-up sent successfully`);

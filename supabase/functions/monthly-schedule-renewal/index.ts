@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { sendTextMessage } from "../_shared/zapi-client.ts";
+import { sendProactive } from "../_shared/whatsapp-provider.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -82,7 +82,7 @@ Me conta: quais dias e horários funcionam pra você esse mês?
 
 Por exemplo: "segundas e quintas às 19h" ou "quartas às 20h"`;
 
-        const result = await sendTextMessage(user.phone, message);
+        const result = await sendProactive(user.phone, message);
         
         if (result.success) {
           console.log(`✅ Monthly renewal message sent to ${user.name}`);

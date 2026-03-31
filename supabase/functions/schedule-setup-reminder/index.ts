@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { sendTextMessage } from "../_shared/zapi-client.ts";
+import { sendProactive } from "../_shared/whatsapp-provider.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -128,7 +128,7 @@ Por exemplo: "segundas e quintas às 19h" ou "quartas às 20h"
 
 Fico esperando! 🌟`;
 
-        const result = await sendTextMessage(user.phone, message);
+        const result = await sendProactive(user.phone, message);
         
         if (result.success) {
           console.log(`✅ First reminder sent to ${user.name}`);
@@ -200,7 +200,7 @@ Me responde agora: qual dia e horário funciona pra você? Pode ser algo simples
 
 Estou aqui esperando! 💜`;
 
-        const result = await sendTextMessage(user.phone, urgentMessage);
+        const result = await sendProactive(user.phone, urgentMessage);
         
         if (result.success) {
           console.log(`🚨 Urgent reminder sent to ${user.name}`);
