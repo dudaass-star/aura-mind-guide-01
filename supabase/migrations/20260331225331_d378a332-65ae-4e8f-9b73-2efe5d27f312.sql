@@ -1,0 +1,1 @@
+UPDATE public.whatsapp_templates SET template_name = 'aura_session_reminde' WHERE category = 'session_reminder';
