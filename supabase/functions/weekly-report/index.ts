@@ -250,7 +250,7 @@ Deno.serve(async (req) => {
     // Quiet hours guard: no messages between 22h and 8h BRT
     const brtHour = getBrtHour();
     if (brtHour < 8 || brtHour >= 22) {
-      console.log(`🌙 Quiet hours (${brtHour}h BRT) - skipping weekly report`);
+      console.log(`🌙 Quiet hours (${brtHour}h BRT) - skipping monthly report`);
       return new Response(JSON.stringify({ status: 'skipped', reason: 'quiet_hours', brt_hour: brtHour }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
