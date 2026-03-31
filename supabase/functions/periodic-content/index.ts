@@ -186,7 +186,8 @@ Qual vai ser?`;
               {
                 body: {
                   user_id: user.user_id,
-                  episode_id: episode.id
+                  episode_id: episode.id,
+                  generate_teaser: true
                 }
               }
             );
