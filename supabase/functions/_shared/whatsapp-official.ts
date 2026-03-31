@@ -18,7 +18,13 @@ export type TemplateCategory =
   | 'insight'
   | 'session_reminder'
   | 'reactivation'
-  | 'checkout_recovery';
+  | 'checkout_recovery'
+  | 'welcome'
+  | 'welcome_trial'
+  | 'reconnect'
+  | 'dunning'
+  | 'followup'
+  | 'access_blocked';
 
 export interface TwilioSendResult {
   success: boolean;
