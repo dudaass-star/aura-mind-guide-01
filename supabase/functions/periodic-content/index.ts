@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { sendTextMessage, cleanPhoneNumber } from "../_shared/zapi-client.ts";
+import { cleanPhoneNumber } from "../_shared/zapi-client.ts";
 import { sendProactive } from "../_shared/whatsapp-provider.ts";
 import { getInstanceConfigForUser, antiBurstDelayForInstance, groupByInstance } from "../_shared/instance-helper.ts";
 
