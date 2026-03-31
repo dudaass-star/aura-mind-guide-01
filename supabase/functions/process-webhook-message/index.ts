@@ -1,11 +1,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
-  sendTextMessage,
-  sendAudioMessage,
   cleanPhoneNumber,
   getPhoneVariations,
-  ZapiConfig,
 } from "../_shared/zapi-client.ts";
+import { sendMessage, sendAudio } from "../_shared/whatsapp-provider.ts";
 import { getInstanceConfigForUser } from "../_shared/instance-helper.ts";
 
 const corsHeaders = {
