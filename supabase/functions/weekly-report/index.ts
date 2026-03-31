@@ -101,7 +101,7 @@ Seja específica sobre o que foi discutido. Use linguagem acolhedora e direta. N
           },
           {
             role: 'user',
-            content: `Analise as conversas desta semana com ${userName}:\n\n${conversationSummary}`
+            content: `Analise as conversas deste mês com ${userName}:\n\n${conversationSummary}`
           }
         ],
         max_tokens: 150,
