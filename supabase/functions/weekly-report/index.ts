@@ -379,7 +379,7 @@ Deno.serve(async (req) => {
         ]);
 
         const evolutionAnalysis = await analyzeWeekConversations(weekMsgsRes.data || [], userName);
-        const report = generateWeeklyReport(profile, evolutionAnalysis, metrics);
+        const report = generateMonthlyReport(profile, evolutionAnalysis, metrics);
 
         if (dryRun) {
           dryRunResults.push({ user_id: profile.user_id, name: profile.name, report, metrics, evolutionAnalysis });
