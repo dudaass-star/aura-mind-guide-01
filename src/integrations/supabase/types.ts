@@ -1507,6 +1507,39 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_templates: {
+        Row: {
+          category: string
+          created_at: string | null
+          id: string
+          is_active: boolean
+          meta_category: string
+          prefix: string
+          template_name: string
+          twilio_content_sid: string
+        }
+        Insert: {
+          category: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean
+          meta_category?: string
+          prefix: string
+          template_name: string
+          twilio_content_sid?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean
+          meta_category?: string
+          prefix?: string
+          template_name?: string
+          twilio_content_sid?: string
+        }
+        Relationships: []
+      }
       zapi_message_dedup: {
         Row: {
           created_at: string

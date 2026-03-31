@@ -1,20 +1,15 @@
 /**
  * WhatsApp Provider Abstraction Layer
  * 
- * Camada que decide entre Z-API (atual) e API Oficial do WhatsApp.
+ * Camada que decide entre Z-API (atual) e API Oficial do WhatsApp (Twilio).
  * O provider ativo é controlado pela key `whatsapp_provider` em `system_config`.
  * 
  * Default: 'zapi' — nenhuma mudança no comportamento existente.
- * 
- * Quando WHATSAPP_PROVIDER = 'official':
- * - Mensagens proativas usam templates envelope
- * - Mensagens dentro da janela de 24h usam texto livre
- * - Mensagens de resposta (dentro de conversa) usam texto livre
  */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { sendTextMessage, sendAudioMessage, sendAudioFromUrl, type ZapiConfig } from "./zapi-client.ts";
-import { sendProactiveMessage, type TemplateCategory, type ProactiveMessageResult } from "./whatsapp-official.ts";
+import { sendTextMessage, sendAudioMessage, sendAudioFromUrl as zapiSendAudioFromUrl, type ZapiConfig } from "./zapi-client.ts";
+import { sendFreeText, sendAudioFromUrl as twilioSendAudioFromUrl, sendProactiveMessage, type TemplateCategory, type ProactiveMessageResult } from "./whatsapp-official.ts";
 
 // ============================================================================
 // PROVIDER DETECTION
@@ -39,11 +34,7 @@ export async function getProvider(): Promise<WhatsAppProvider> {
       .single();
 
     const provider = data?.value as string | undefined;
-    
-    if (provider === 'official') {
-      return 'official';
-    }
-    
+    if (provider === 'official') return 'official';
     return 'zapi';
   } catch (error) {
     console.warn('⚠️ [WhatsApp Provider] Could not read provider config, defaulting to zapi:', error);
@@ -63,9 +54,7 @@ export interface SendResult {
 
 /**
  * Envia uma mensagem de texto usando o provider ativo.
- * 
  * Para mensagens proativas (fora da janela de 24h), usar `sendProactive()`.
- * Esta função é para respostas diretas dentro de uma conversa ativa.
  */
 export async function sendMessage(
   phone: string,
@@ -79,19 +68,13 @@ export async function sendMessage(
     return { success: result.success, provider: 'zapi', error: result.error };
   }
 
-  // Official API: direct message (dentro da janela ou como resposta)
-  // Placeholder — será implementado na Fase 2
-  console.error('❌ [WhatsApp Provider] Official API direct message not implemented yet');
-  return {
-    success: false,
-    provider: 'official',
-    error: 'Official API not configured yet',
-  };
+  // Official API: texto livre via Twilio Gateway
+  const result = await sendFreeText(phone, text);
+  return { success: result.success, provider: 'official', error: result.error };
 }
 
 /**
  * Envia uma mensagem proativa (sem conversa ativa do usuário).
- * 
  * - Z-API: envia texto direto (sem restrição de janela)
  * - Official: usa template envelope se fora da janela de 24h
  */
@@ -105,29 +88,18 @@ export async function sendProactive(
   const provider = await getProvider();
 
   if (provider === 'zapi') {
-    // Z-API não tem restrição de janela — envia direto
     const result = await sendTextMessage(phone, text, undefined, configOverride);
     return { success: result.success, provider: 'zapi', error: result.error };
   }
 
   // Official API: template envelope + split
-  const result: ProactiveMessageResult = await sendProactiveMessage(
-    phone,
-    text,
-    templateCategory,
-    userId,
-  );
-  
-  return {
-    success: result.success,
-    provider: 'official',
-    error: result.error,
-  };
+  const result: ProactiveMessageResult = await sendProactiveMessage(phone, text, templateCategory, userId);
+  return { success: result.success, provider: 'official', error: result.error };
 }
 
 /**
  * Envia áudio usando o provider ativo.
- * Na API oficial, áudio pode ser enviado como mídia dentro da janela de 24h.
+ * API oficial NÃO suporta base64 — apenas URLs públicas.
  */
 export async function sendAudio(
   phone: string,
@@ -141,12 +113,12 @@ export async function sendAudio(
     return { success: result.success, provider: 'zapi', error: result.error };
   }
 
-  // Official API: placeholder
-  console.error('❌ [WhatsApp Provider] Official API audio not implemented yet');
+  // Official API: base64 não suportado
+  console.warn('⚠️ [WhatsApp Provider] Official API does not support base64 audio. Use sendAudioUrl() with a public URL instead.');
   return {
     success: false,
     provider: 'official',
-    error: 'Official API audio not configured yet',
+    error: 'Official API does not support base64 audio. Upload to storage and use sendAudioUrl() instead.',
   };
 }
 
@@ -161,15 +133,11 @@ export async function sendAudioUrl(
   const provider = await getProvider();
 
   if (provider === 'zapi') {
-    const result = await sendAudioFromUrl(phone, audioUrl, configOverride);
+    const result = await zapiSendAudioFromUrl(phone, audioUrl, configOverride);
     return { success: result.success, provider: 'zapi', error: result.error };
   }
 
-  // Official API: placeholder
-  console.error('❌ [WhatsApp Provider] Official API audio URL not implemented yet');
-  return {
-    success: false,
-    provider: 'official',
-    error: 'Official API audio URL not configured yet',
-  };
+  // Official API: MediaUrl via Twilio Gateway
+  const result = await twilioSendAudioFromUrl(phone, audioUrl);
+  return { success: result.success, provider: 'official', error: result.error };
 }
