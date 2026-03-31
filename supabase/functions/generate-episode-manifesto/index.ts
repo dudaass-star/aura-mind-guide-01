@@ -12,7 +12,7 @@ serve(async (req) => {
   }
 
   try {
-    const { user_id, episode_id } = await req.json();
+    const { user_id, episode_id, generate_teaser } = await req.json();
 
     if (!user_id || !episode_id) {
       throw new Error('user_id and episode_id are required');
@@ -53,14 +53,13 @@ serve(async (req) => {
     const stageTitle = episode.stage_title || episode.title;
     const isLastEpisode = episode.episode_number === totalEpisodes;
 
-    // Montar mensagem do episódio
+    // Montar mensagem completa do episódio
     const essayContent = episode.essay_content || episode.content_prompt || '';
     const hookToNext = episode.hook_to_next || '';
 
     let message: string;
 
     if (isLastEpisode) {
-      // Último episódio: inclui fechamento de jornada + hook para próxima
       message = `Oi ${userName}. 💜
 
 📍 *EP ${episode.episode_number}/${totalEpisodes} — ${stageTitle}*
@@ -84,7 +83,6 @@ ${hookToNext}
 
 Te espero. 💜`;
     } else {
-      // Episódios 1-7: formato padrão com cliffhanger
       const optOutNotice = episode.episode_number === 1 
         ? "\n\n_Se preferir pausar os episódios, é só me dizer \"pausar jornadas\" 🌿_"
         : "";
@@ -106,11 +104,62 @@ ${hookToNext}
 Te espero. 💜${optOutNotice}`;
     }
 
+    // Generate teaser + short link if requested (for outside 24h window)
+    let teaser: string | null = null;
+    let shortUrl: string | null = null;
+
+    if (generate_teaser) {
+      console.log('📎 Generating teaser + short link for episode');
+
+      // Build the page URL
+      const siteUrl = 'https://aura-mind-guide-01.lovable.app';
+      const episodePageUrl = `${siteUrl}/episodio/${episode_id}`;
+
+      // Create short link
+      try {
+        const shortLinkResponse = await fetch(`${supabaseUrl}/functions/v1/create-short-link`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseKey}`,
+          },
+          body: JSON.stringify({
+            url: episodePageUrl,
+            phone: profile.phone,
+          }),
+        });
+
+        const shortLinkData = await shortLinkResponse.json();
+
+        if (shortLinkData.shortUrl) {
+          shortUrl = shortLinkData.shortUrl;
+        } else {
+          console.warn('⚠️ Short link creation failed, using direct URL');
+          shortUrl = episodePageUrl;
+        }
+      } catch (e) {
+        console.warn('⚠️ Short link error, using direct URL:', e);
+        shortUrl = episodePageUrl;
+      }
+
+      teaser = `Oi ${userName}. 💜
+
+📍 *EP ${episode.episode_number}/${totalEpisodes} — ${stageTitle}*
+_${journeyTitle}_
+
+Seu episódio está pronto. Toque para ler:
+👉 ${shortUrl}
+
+— Aura`;
+    }
+
     console.log('✅ Episode message built successfully');
 
     return new Response(JSON.stringify({ 
       success: true,
       message,
+      teaser,
+      shortUrl,
       episode_number: episode.episode_number,
       stage_title: stageTitle,
       is_last_episode: isLastEpisode
