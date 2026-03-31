@@ -301,14 +301,7 @@ Deno.serve(async (req) => {
     if (blockedStatuses.includes(profile.status || '') && !isLegitTrial) {
       console.log(`🚫 User ${profile.user_id} blocked: status is '${profile.status}'`);
 
-      let instanceConfig = undefined;
-      if (profile.whatsapp_instance_id) {
-        const { data: inst } = await supabase
-          .from('whatsapp_instances')
-          .select('zapi_instance_id, zapi_token, zapi_client_token')
-          .eq('id', profile.whatsapp_instance_id).single();
-        if (inst) instanceConfig = { instanceId: inst.zapi_instance_id, token: inst.zapi_token, clientToken: inst.zapi_client_token };
-      }
+      // Instance config no longer needed — provider handles routing
 
       // Save user message to history before blocking
       if (messageText) {
