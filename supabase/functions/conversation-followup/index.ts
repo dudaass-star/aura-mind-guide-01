@@ -625,7 +625,6 @@ Deno.serve(async (req) => {
       totalConversations: followups?.length || 0,
       followupsSent: sentCount,
       skippedNaturalEnd,
-      reengagementSent,
     };
     if (dryRun) {
       responsePayload.dry_run = true;
