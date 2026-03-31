@@ -170,7 +170,7 @@ Me conta: como você está se sentindo agora?`;
         // Segunda mensagem: informar sobre funcionalidade de áudio
         try {
           const audioMsg = `Ah, e se preferir, pode me mandar áudio também! 🎙️ Eu ouço e respondo — por texto ou por voz, como você preferir.`;
-          await sendProactive(formattedPhone, audioMsg, 3, zapiConfig);
+          await sendMessage(formattedPhone, audioMsg);
           console.log('✅ Audio info message sent');
 
           await supabase.from('messages').insert({
