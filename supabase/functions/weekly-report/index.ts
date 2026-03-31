@@ -272,7 +272,7 @@ Deno.serve(async (req) => {
       weekStartOverride = body?.week_start_override || null;
     } catch { /* no body */ }
 
-    console.log(`📅 Weekly report batch: offset=${offset}, batch_size=${batchSize}, dry_run=${dryRun}`);
+    console.log(`📅 Monthly report batch: offset=${offset}, batch_size=${batchSize}, dry_run=${dryRun}`);
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
