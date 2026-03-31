@@ -19,6 +19,7 @@ import AdminLogin from "./pages/AdminLogin";
 import AdminSettings from "./pages/AdminSettings";
 import AdminEngagement from "./pages/AdminEngagement";
 import AdminMessages from "./pages/AdminMessages";
+import AdminTemplates from "./pages/AdminTemplates";
 import UserGuide from "./pages/UserGuide";
 import NotFound from "./pages/NotFound";
 
