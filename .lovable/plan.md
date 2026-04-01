@@ -1,78 +1,62 @@
 
 
-# Auditoria: Trial Pago — Problemas Encontrados e Correções
+# Auditoria Final: Trial Pago — Problemas Restantes
 
-## Problemas Identificados
+## Status Geral
 
-### 1. BUG CRITICO: `TRIAL_VALIDATION_PRICE_ID` indefinido (runtime crash)
-**Arquivo:** `supabase/functions/create-checkout/index.ts` (linha 235)
+A maioria das mudanças foi aplicada corretamente. Restam **3 problemas**, sendo 1 crítico.
 
-O log usa `TRIAL_VALIDATION_PRICE_ID` que **nunca foi declarado** — é um resquício do código antigo. Isso causa um `ReferenceError` no runtime e **impede a criação de qualquer checkout de trial**.
+## Problemas Encontrados
 
-**Fix:** Trocar por `trialPriceId` (variável correta definida na linha 162).
+### 1. BUG CRITICO: `trialPriceId` fora de escopo (create-checkout)
+**Arquivo:** `supabase/functions/create-checkout/index.ts`, linha 235
 
-### 2. Log desatualizado no webhook: "No payment method found after R$1 charge"
-**Arquivo:** `supabase/functions/stripe-webhook/index.ts` (linha 186)
+`trialPriceId` é declarado com `const` dentro do bloco `if (trial) { ... }` (linha 162), mas referenciado na linha 235 que está **fora** desse bloco. Isso causa `ReferenceError` em runtime quando `trial` é true, impedindo a criação de qualquer checkout de trial.
 
-Mensagem de log ainda menciona "R$1 charge". Não causa erro, mas confunde na depuração.
+**Fix:** Mover a declaração de `trialPriceId` para antes do `if/else`, ou ajustar o log para não referenciar a variável fora do escopo. A abordagem mais limpa: declarar `let trialPriceId: string | undefined;` antes do `if (trial)` e atribuir dentro do bloco.
 
-**Fix:** Atualizar texto para "after paid trial charge".
+### 2. Backend: admin-engagement-metrics ainda usa 5 dias
+**Arquivo:** `supabase/functions/admin-engagement-metrics/index.ts`, linhas 277-292
 
-### 3. Textos antigos no frontend (4 arquivos)
+A lógica de "Active trials" e "Expired trials" usa `5 * 24 * 60 * 60 * 1000` (5 dias). O frontend já mostra "< 7d", mas o backend calcula com 5 dias — os números estão errados.
 
-| Arquivo | Linha | Texto atual | Correção |
-|---|---|---|---|
-| `src/components/ForWho.tsx` | 81 | "Experimente Grátis" | "Começar por R$ 6,90" |
-| `src/components/ForWho.tsx` | 85 | "5 dias grátis. Cancele quando quiser." | "7 dias por R$ 6,90. Cancele quando quiser." |
-| `src/components/Demo.tsx` | 514 | "5 dias grátis • Cancele quando quiser" | "7 dias por R$ 6,90 • Cancele quando quiser" |
-| `src/pages/UserGuide.tsx` | 609-613 | "5 conversas grátis... Começar Grátis" | "7 dias por R$ 6,90... Começar agora" |
-| `src/pages/Index.tsx` | 34 | meta description com "Comece grátis" | "Experimente por 7 dias" |
+**Fix:** Trocar `5` por `7` nas linhas 278 e no comentário das linhas 277/286.
 
-### 4. AdminEngagement com referência "5d"
-**Arquivo:** `src/pages/AdminEngagement.tsx` (linha 315-316)
+### 3. Texto: schedule-setup-reminder menciona "5 dias"
+**Arquivo:** `supabase/functions/schedule-setup-reminder/index.ts`, linha 195
 
-Texto "< 5d" e "trial > 5d" nas métricas do admin. Deve refletir 7 dias.
-
-### 5. Webhook e backend: lógica de 5 dias em outras funções
-Preciso verificar `cleanup-inactive-users`, `session-reminder`, e `scheduled-checkin` para referências ao trial de 5 dias.
+Mensagem de WhatsApp diz "Já se passaram 5 dias". Este texto não é sobre trial (é sobre agendamento de sessões), mas a lógica do lembrete compara 3-5 dias de inatividade no agendamento. Este caso é **cosmético e não relacionado ao trial** — a janela 3-5 dias aqui se refere ao tempo sem agendar sessões, não ao período de trial. Pode manter como está.
 
 ## O que está correto
 
-- `create-checkout`: lógica de trial usa `mode: "payment"` com price IDs por plano
-- `stripe-webhook`: sem refund, sem filtro de funding, `trial_period_days: 7`
-- `Checkout.tsx`: preços dinâmicos, depoimento, garantia, tudo ok
-- `Pricing.tsx`: trust badges atualizados para "7 dias a partir de R$ 6,90"
-- `Hero.tsx` e `FinalCTA.tsx`: textos atualizados
-- `FAQ.tsx`: atualizado
-- Secrets configurados: `STRIPE_PRICE_ESSENCIAL_TRIAL`, `STRIPE_PRICE_DIRECAO_TRIAL`, `STRIPE_PRICE_TRANSFORMACAO_TRIAL`
+- `create-checkout`: lógica de trial com `mode: "payment"` e price IDs por plano
+- `stripe-webhook`: sem refund, sem filtro de funding, `trial_period_days: 7`, log atualizado
+- `cleanup-inactive-users`: já usa 7 dias
+- Frontend (`Checkout.tsx`, `Pricing.tsx`, `Hero.tsx`, `FinalCTA.tsx`, `FAQ.tsx`, `ForWho.tsx`, `Demo.tsx`, `UserGuide.tsx`, `Index.tsx`): todos atualizados
+- `AdminEngagement.tsx`: labels corretas (< 7d)
+- Secrets configurados corretamente
 
-## Plano de Correção
+## Plano de Correção (2 mudanças)
 
-### Passo 1 — Fix crítico no `create-checkout`
-Linha 235: trocar `TRIAL_VALIDATION_PRICE_ID` por `trialPriceId`. Redeploy da função.
+### Passo 1 — Fix crítico: trialPriceId scoping
+Em `create-checkout/index.ts`:
+- Declarar `let trialPriceId: string | undefined;` antes da linha 159
+- Dentro do `if (trial)`, atribuir `trialPriceId = TRIAL_PRICES[plan];`
+- A referência na linha 235 passa a funcionar
 
-### Passo 2 — Atualizar textos antigos nos 4 componentes
-`ForWho.tsx`, `Demo.tsx`, `UserGuide.tsx`, `Index.tsx` — substituir "grátis/5 dias" por "7 dias por R$ 6,90".
+### Passo 2 — admin-engagement-metrics: 5 → 7 dias
+Em `admin-engagement-metrics/index.ts`:
+- Linha 278: `5 * 24 * 60 * 60 * 1000` → `7 * 24 * 60 * 60 * 1000`
+- Renomear variável `fiveDaysAgo` → `sevenDaysAgo`
+- Atualizar comentários nas linhas 277 e 286
 
-### Passo 3 — Atualizar AdminEngagement
-Trocar "< 5d" por "< 7d" nas métricas de trial.
-
-### Passo 4 — Limpar log no webhook
-Atualizar mensagem "R$1 charge" na linha 186.
-
-### Passo 5 — Verificar e atualizar funções de backend
-Checar `cleanup-inactive-users`, `session-reminder`, `schedule-setup-reminder` para referências de 5 dias e atualizar para 7.
+### Deploy
+Redeploy das funções `create-checkout` e `admin-engagement-metrics`.
 
 ## Arquivos modificados
 
-| Arquivo | Tipo |
+| Arquivo | Mudança |
 |---|---|
-| `supabase/functions/create-checkout/index.ts` | Bug fix + redeploy |
-| `supabase/functions/stripe-webhook/index.ts` | Log text cleanup |
-| `src/components/ForWho.tsx` | Texto trial |
-| `src/components/Demo.tsx` | Texto trial |
-| `src/pages/UserGuide.tsx` | Texto trial |
-| `src/pages/Index.tsx` | Meta description |
-| `src/pages/AdminEngagement.tsx` | Métricas trial |
-| Backend functions (verificar) | Período 5→7 dias |
+| `supabase/functions/create-checkout/index.ts` | Fix scoping de trialPriceId |
+| `supabase/functions/admin-engagement-metrics/index.ts` | 5 → 7 dias na lógica de trial |
 
