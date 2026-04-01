@@ -163,7 +163,7 @@ serve(async (req) => {
       cancel_url: `${origin}/checkout`,
       custom_text: {
         submit: {
-          message: `CANCELE QUANDO QUISER.\n"Eu estava cética, mas em 3 dias já senti que alguém finalmente me ouvia." — Ana C.`,
+          message: `Pagamento único de teste. Sem compromisso.`,
         },
       },
     };
@@ -187,8 +187,8 @@ serve(async (req) => {
           currency: 'brl',
           unit_amount: trialAmounts[plan],
           product_data: {
-            name: `AURA ${planDisplayName} — 7 dias`,
-            description: `Após o período de teste: R$ ${displayPrice}/${periodLabel}. CANCELE QUANDO QUISER.`,
+          name: `AURA ${planDisplayName} — 7 dias | Após: R$ ${displayPrice}/${periodLabel}`,
+          description: `CANCELE QUANDO QUISER. "Eu estava cética, mas em 3 dias já senti que alguém finalmente me ouvia." — Ana C.`,
           },
         },
         quantity: 1,
