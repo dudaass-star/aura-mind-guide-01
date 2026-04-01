@@ -113,7 +113,9 @@ Te espero. 💜${optOutNotice}`;
 
       // Build the page URL using the custom domain
       const siteUrl = 'https://olaaura.com.br';
-      const episodePageUrl = `${siteUrl}/episodio/${episode_id}`;
+      const episodePageUrl = isLastEpisode && user_id
+        ? `${siteUrl}/episodio/${episode_id}?u=${user_id}`
+        : `${siteUrl}/episodio/${episode_id}`;
       shortUrl = episodePageUrl;
 
       teaser = `Oi ${userName}. 💜
