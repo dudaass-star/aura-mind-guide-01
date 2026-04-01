@@ -171,7 +171,7 @@ serve(async (req) => {
     const planNames: Record<string, string> = { essencial: "Essencial", direcao: "Direção", transformacao: "Transformação" };
     const planDisplayName = planNames[plan] || plan;
 
-    let trialPriceId: string | undefined;
+    
 
     if (trial) {
       // === TRIAL: Paid trial (R$6,90 / R$9,90 / R$19,90) ===
