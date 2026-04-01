@@ -1,24 +1,39 @@
 
 
-# Fix: `process-webhook-message` boot failure (duplicate variable declaration)
+# Fix: Remover debounce self-abort no `process-webhook-message`
 
-## Problem
-The `process-webhook-message` edge function is completely down due to a syntax error:
-```
-Identifier 'sentAnyResponse' has already been declared (line 202)
-```
+## Problema
 
-Lines 197-198 in `process-webhook-message/index.ts` have a duplicate declaration:
+Quando o usuário envia 2 mensagens rápidas:
+1. Worker 1 pega o lock, persiste msg A, espera o delay
+2. Worker 2 vê lock ocupado, persiste msg B no banco, aborta
+3. Worker 1 termina o delay → debounce check (linha 688-704) vê que msg B é mais nova → **aborta também**
+4. Ninguém responde
+
+A lógica de acumulação (linhas 707-733) já resolve isso — ela junta todas as msgs do usuário desde a última resposta. Mas o debounce impede que o código chegue até ela.
+
+## Correção
+
+**Arquivo:** `supabase/functions/process-webhook-message/index.ts`
+
+Substituir linhas 682-705 por:
+
 ```typescript
-let sentAnyResponse = false;  // line 197
-let sentAnyResponse = false;  // line 198 — DUPLICATE
+// ========================================================================
+// DEBOUNCE REMOVIDO
+// ========================================================================
+// O bloco de debounce foi removido porque causava deadlock:
+// o Worker 1 (com lock) via a msg do Worker 2 no banco e se auto-abortava,
+// enquanto o Worker 2 já tinha abortado por não ter o lock.
+// A lógica de acumulação abaixo já resolve o caso de msgs sequenciais —
+// ela junta todas as msgs do usuário desde a última resposta da Aura.
+// O lock atômico garante que apenas 1 worker processa por vez.
+// ========================================================================
 ```
 
-This prevents the function from booting, meaning **no incoming WhatsApp messages are being processed** (the Aura cannot respond to anyone).
+Nenhuma outra mudança. A acumulação (linhas 707-733) continua funcionando normalmente.
 
-## Fix
-Remove line 198 (the duplicate `let sentAnyResponse = false;`).
+## Deploy
 
-## Impact
-This is a critical fix — the entire inbound message processing pipeline is broken until this is deployed.
+Fazer deploy da function `process-webhook-message` após a alteração.
 
