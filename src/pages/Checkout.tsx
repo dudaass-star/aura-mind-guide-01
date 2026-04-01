@@ -411,7 +411,7 @@ const Checkout = () => {
                   <span className="text-muted-foreground">
                     Plano {currentPlan.name} ({billingPeriod === "monthly" ? "mensal" : "anual"})
                   </span>
-                  <span className="font-semibold text-foreground">R$ {currentPrice}</span>
+                  <span className="font-semibold text-foreground">R$ {currentPrice}/{periodLabel}</span>
                 </div>
                 {billingPeriod === "yearly" && (
                   <div className="flex justify-between items-center mb-4 text-sm">
@@ -424,12 +424,29 @@ const Checkout = () => {
                 <div className="flex justify-between items-center pt-4 border-t border-border/50">
                   <span className="font-medium text-foreground">Hoje</span>
                   <span className="font-display text-2xl font-semibold text-primary">
-                    R$ 0,00
+                    R$ {currentPlan.trialPrice}
                   </span>
                 </div>
                 <p className="text-sm text-muted-foreground mt-3 text-center">
-                  Primeira cobrança em 5 dias: R$ {currentPrice}/{periodLabel}
+                  7 dias de acesso • Após: R$ {currentPrice}/{periodLabel}
                 </p>
+              </div>
+
+              {/* Social proof + guarantee */}
+              <div className="bg-sage-soft/20 rounded-2xl p-6 border border-primary/20 space-y-4">
+                <p className="text-foreground italic text-sm leading-relaxed">
+                  "Eu estava cética, mas em 3 dias já senti que alguém finalmente me ouvia. Hoje não consigo imaginar meu dia sem a AURA."
+                </p>
+                <p className="text-sm font-medium text-muted-foreground">— Ana C.</p>
+                <div className="border-t border-border/50 pt-4">
+                  <p className="text-sm text-foreground font-medium flex items-center gap-2">
+                    <Shield className="w-4 h-4 text-primary" />
+                    Garantia de satisfação
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Se nos primeiros 7 dias você não sentir diferença, devolvemos seu dinheiro. Sem perguntas.
+                  </p>
+                </div>
               </div>
 
               {/* Submit */}
