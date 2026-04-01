@@ -241,6 +241,9 @@ export async function sendTemplateMessage(
 
 export async function sendAudioFromUrl(phone: string, audioUrl: string): Promise<TwilioSendResult> {
   try {
+    if (!phone || !phone.replace(/\D/g, '')) {
+      return { success: false, error: `Invalid phone number: "${phone}"` };
+    }
     const headers = getGatewayHeaders();
     const from = getFromNumber();
     const to = formatWhatsAppNumber(phone);
