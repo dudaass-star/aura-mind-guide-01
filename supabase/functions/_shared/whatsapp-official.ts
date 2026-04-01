@@ -314,7 +314,8 @@ export async function sendProactiveMessage(
     // Window open → free text
     if (windowOpen) {
       console.log('✅ [Twilio] 24h window open, sending as free text');
-      const result = await sendFreeText(phone, text);
+      const messageToSend = teaserText || text;
+      const result = await sendFreeText(phone, messageToSend);
       return { success: result.success, parts: 1, type: 'freetext', error: result.error };
     }
 
