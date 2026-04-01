@@ -1,50 +1,34 @@
 
 
-# Fix: Aura fixando em tema na conversa livre — Plano Final
+# Diagnóstico: Link do episódio abrindo 404
 
-## 3 mudanças cirúrgicas no prompt estático de `aura-agent/index.ts`
+## Causa raiz
 
-### 1. Delimitar PROTOCOLO DE CONDUÇÃO (linhas ~2012-2027)
+O 404 acontece porque a rota `/episodio/:id` existe no código mas **o frontend ainda não foi publicado** com essa mudança. O app publicado em `aura-mind-guide-01.lovable.app` está numa versão anterior que não contém a rota `/episodio/:id` — então o catch-all `*` captura e mostra a página NotFound.
 
-Alterar título e adicionar qualificador de escopo:
+Mudanças de backend (edge functions) deployam automaticamente, mas mudanças de frontend precisam de clique manual em **Publish → Update**.
 
-```
-# PROTOCOLO DE CONDUÇÃO E COERÊNCIA (APENAS EM SESSÃO ATIVA OU MODO PROFUNDO)
+## Sobre "não parecia uma página da Aura"
 
-Estas regras se aplicam SOMENTE quando: (a) a sessão está ativa, ou (b) a conversa entrou no MODO PROFUNDO.
-Em conversa leve (MODO PING-PONG), NÃO aplique ancoragem, fechamento de loop ou redirecionamento — siga o fluxo natural do usuário.
-```
+A página `Episode.tsx` usa classes genéricas do Tailwind (`bg-background`, `text-foreground`, `text-accent`) sem branding visual da Aura (logo, cores roxas, identidade). Para o usuário que recebe o link, parece uma página qualquer.
 
-Itens 1 e 4 recebem qualificador:
-- `1. ANCORAGEM NO TEMA CENTRAL (sessão ativa ou modo profundo): ...`
-- `4. VOCÊ DECIDE O RUMO (em sessão ativa ou conversas profundas): ...`
+## Plano de correção
 
-### 2. Regra de uso passivo de insights (após linha ~2298)
+### 1. Publicar o frontend
+Clicar em **Publish → Update** para que a rota `/episodio/:id` fique acessível no domínio publicado.
 
-Inserir após a explicação de como insights funcionam:
+### 2. Melhorar a identidade visual da página Episode
+Ajustar `src/pages/Episode.tsx` para incluir:
+- Logo da Aura no topo (ou pelo menos o nome "Aura" com a cor roxa da marca)
+- Cores consistentes com o site principal (roxo `#9b87f5` como accent)
+- Um rodapé com link para o site da Aura (`olaaura.com.br`)
+- Design mobile-first (a maioria vem do WhatsApp no celular)
 
-```
-IMPORTANTE: Insights da memória são contexto PASSIVO — use para personalizar (saber o nome, a rotina, preferências), NÃO para pautar a conversa. Se o usuário fala de filme, fale de filme. Se fala de comida, fale de comida. Não puxe temas da memória que o usuário não trouxe. Os insights existem para você CONHECER o usuário, não para redirecionar o assunto.
-```
+### 3. Re-testar o fluxo completo
+Após publicar, resetar `current_episode` e disparar novamente para validar: short link → redirect → página com conteúdo renderizado e branding correto.
 
-### 3. Ajustar DETECÇÃO DE PADRÕES (linhas ~2029-2039)
-
-Adicionar qualificador com a formulação revisada:
-
-```
-# DETECÇÃO DE PADRÕES (ESPELHO) — aplique em sessão ativa ou modo profundo
-
-Em conversa leve (PING-PONG), NÃO confronte padrões proativamente. Só ative detecção de padrões quando a conversa migrar organicamente para MODO PROFUNDO.
-```
-
-### O que NÃO muda
-
-- Nenhum bloco de código novo no `dynamicContext`
-- Insights continuam sendo injetados para personalização
-- Regras de sessão intactas
-- Continuity context (temas, compromissos) já está dentro de `if (sessionActive)`
-
-### Deploy
-
-Deploy da function `aura-agent` após as alterações.
+## Detalhes técnicos
+- Rota já existe em `App.tsx` linha 54: `<Route path="/episodio/:id" element={<Episode />} />`
+- Edge functions (`redirect-link`, `create-short-link`, `generate-episode-manifesto`) estão funcionando corretamente nos logs
+- O redirect apontou para `https://aura-mind-guide-01.lovable.app/episodio/d8...` — URL correta, mas o frontend publicado não reconhece a rota
 
