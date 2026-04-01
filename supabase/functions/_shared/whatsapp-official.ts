@@ -131,6 +131,9 @@ export function splitMessageForTemplate(text: string, prefixLength: number): str
 
 export async function sendFreeText(phone: string, text: string): Promise<TwilioSendResult> {
   try {
+    if (!phone || !phone.replace(/\D/g, '')) {
+      return { success: false, error: `Invalid phone number: "${phone}"` };
+    }
     const headers = getGatewayHeaders();
     const from = getFromNumber();
     const to = formatWhatsAppNumber(phone);
