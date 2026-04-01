@@ -565,7 +565,7 @@ Me diz: como você está hoje?`;
           body: JSON.stringify({
             event_name: 'Purchase',
             event_id: eventId,
-            event_source_url: 'https://aura-mind-guide-01.lovable.app/obrigado',
+            event_source_url: 'https://olaaura.com.br/obrigado',
             user_data: {
               email: customerEmail || undefined,
               phone: formattedPhone,

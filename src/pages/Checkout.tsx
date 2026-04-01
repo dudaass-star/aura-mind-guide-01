@@ -86,29 +86,6 @@ const Checkout = () => {
       (window as any).fbq('track', 'InitiateCheckout', {}, { eventID: eventId });
     }
 
-    // Send matching CAPI event (non-blocking)
-    const fbp = document.cookie.match(/_fbp=([^;]+)/)?.[1];
-    const fbc = document.cookie.match(/_fbc=([^;]+)/)?.[1] || 
-      (new URLSearchParams(window.location.search).get('fbclid') 
-        ? `fb.1.${Date.now()}.${new URLSearchParams(window.location.search).get('fbclid')}` 
-        : undefined);
-
-    supabase.functions.invoke('meta-capi', {
-      body: {
-        event_name: 'InitiateCheckout',
-        event_id: eventId,
-        event_source_url: window.location.href,
-        user_data: {
-          client_user_agent: navigator.userAgent,
-          ...(fbp && { fbp }),
-          ...(fbc && { fbc }),
-        },
-        custom_data: {
-          content_name: `Checkout Page`,
-          content_category: 'checkout',
-        },
-      },
-    }).catch(() => {}); // non-blocking
   }, []);
 
   // Reset payment method when switching to monthly
