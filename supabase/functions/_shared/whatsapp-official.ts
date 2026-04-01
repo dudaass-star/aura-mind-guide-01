@@ -172,6 +172,9 @@ export async function sendTemplateMessage(
   templateName: string,
   variables: string[],
 ): Promise<TwilioSendResult> {
+  if (!phone || !phone.replace(/\D/g, '')) {
+    return { success: false, error: `Invalid phone number: "${phone}"` };
+  }
   try {
     // Look up template in DB
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
