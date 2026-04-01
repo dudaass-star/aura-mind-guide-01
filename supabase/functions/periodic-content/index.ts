@@ -25,9 +25,16 @@ serve(async (req) => {
   }
 
   try {
+    // Parse request body for force flag
+    let force = false;
+    try {
+      const body = await req.json();
+      force = body?.force === true;
+    } catch { /* no body is fine */ }
+
     // Quiet hours guard: no messages between 22h and 8h BRT
     const brtHour = getBrtHour();
-    if (brtHour < 8 || brtHour >= 22) {
+    if (!force && (brtHour < 8 || brtHour >= 22)) {
       console.log(`🌙 Quiet hours (${brtHour}h BRT) - skipping periodic content`);
       return new Response(JSON.stringify({ status: 'skipped', reason: 'quiet_hours', brt_hour: brtHour }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
