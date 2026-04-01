@@ -1,44 +1,42 @@
 
 
-# Fix: Welcome message para novos usuários na API oficial
+# Reconciliação: 4 clientes ativos sem perfil
 
-## Problema identificado
+## Diagnóstico
 
-No `start-trial/index.ts`, a mensagem de boas-vindas usa `sendMessage()` (texto livre). Com a API oficial, texto livre **só funciona dentro da janela de 24h** — mas o usuário novo nunca mandou mensagem no WhatsApp, então **não existe janela aberta**. A mensagem vai falhar silenciosamente.
+Apenas **4 clientes** têm assinatura ativa no Stripe sem perfil correspondente no banco:
 
-O mesmo vale para a segunda mensagem (sobre áudio).
+| Cliente | Stripe ID | Plano | Situação |
+|---|---|---|---|
+| Felype Gonçalves | cus_UD2qdZvYGBomSS | essencial | Sem perfil |
+| Rafaela Gomes | cus_UClcvkXNsa2pcd | direção | Sem perfil |
+| Ana Luiza (nome Stripe) | cus_UCkGunlzA2sQIr | direção | Sem perfil |
+| Márcia Ferraz | cus_UBe6wbdZDjIDeL | essencial | Sem perfil |
 
-## Solução
+Os outros 3 clientes ativos (Camila, Nilda, Letícia) estão corretos no banco.
 
-**Arquivo: `supabase/functions/start-trial/index.ts`**
+Há também **10 assinaturas `past_due`** — trials cujo primeiro pagamento falhou. Esses não são "ativos" e precisam de dunning (processo separado).
 
-1. Trocar `sendMessage()` por `sendProactive()` com categoria `'welcome_trial'` para a mensagem de boas-vindas — isso faz o sistema usar template quando a janela está fechada (caso de 100% dos novos usuários)
-2. Remover a segunda mensagem de áudio (ou incorporá-la no template de welcome) — enviar duas mensagens template seguidas é caro e redundante
-3. Remover a busca de `zapiConfig` (instância Z-API) que não é usada quando provider é 'official'
+## Plano de ação
 
-**Mudança principal (~5 linhas):**
-```typescript
-// ANTES:
-const result = await sendMessage(formattedPhone, welcomeMessage);
+### 1. Criar perfis para os 4 clientes (migration SQL)
 
-// DEPOIS:
-const result = await sendProactive(
-  formattedPhone,
-  welcomeMessage,
-  'welcome_trial',
-  userId
-);
-```
+Para cada um, buscar phone/email/name dos metadados do Stripe e criar o perfil com `status = 'active'`, `plan` correto, e `converted_at = now()`.
 
-**Segunda mensagem de áudio:** incorporar no texto do welcome ou enviar como `sendProactive` com `'welcome'` category (verificar se o template existe e está ativo).
+Precisamos primeiro buscar os metadados (phone) de cada customer no Stripe para inserir corretamente.
 
-## Verificação necessária
+### 2. Enviar template `aura_reconnect` para os 4
 
-Confirmar que o template `welcome_trial` existe e está ativo na tabela `whatsapp_templates`. Se não estiver, o sistema fará fallback para texto livre (que vai falhar para novos usuários).
+Após criar os perfis, disparar o template via a edge function existente ou criar um script ad-hoc.
+
+### 3. Fix no `stripe-webhook` (prevenção)
+
+Robustecer o handler de `invoice.paid` para criar perfil automaticamente quando não encontrar match, usando dados do customer + subscription metadata. Isso previne reincidência.
 
 ## Arquivos modificados
 
 | Arquivo | Mudança |
 |---|---|
-| `supabase/functions/start-trial/index.ts` | Trocar `sendMessage` por `sendProactive` com template category |
+| Migration SQL | INSERT dos 4 perfis faltantes |
+| `supabase/functions/stripe-webhook/index.ts` | Fallback de criação de perfil no `invoice.paid` |
 
