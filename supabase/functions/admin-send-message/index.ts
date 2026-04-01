@@ -1,4 +1,4 @@
-// v2: normalized From number fix
+// v3: phone guard clauses + correct user test
 import { cleanPhoneNumber } from "../_shared/zapi-client.ts";
 import { sendProactive } from "../_shared/whatsapp-provider.ts";
 import { getInstanceConfigForUser } from "../_shared/instance-helper.ts";
