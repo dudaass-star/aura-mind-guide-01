@@ -72,6 +72,7 @@ function getFromNumber(): string {
 
 function formatWhatsAppNumber(phone: string): string {
   const clean = phone.replace(/\D/g, '');
+  if (!clean) throw new Error(`Invalid phone number (no digits): "${phone}"`);
   return `whatsapp:+${clean}`;
 }
 
@@ -130,6 +131,9 @@ export function splitMessageForTemplate(text: string, prefixLength: number): str
 
 export async function sendFreeText(phone: string, text: string): Promise<TwilioSendResult> {
   try {
+    if (!phone || !phone.replace(/\D/g, '')) {
+      return { success: false, error: `Invalid phone number: "${phone}"` };
+    }
     const headers = getGatewayHeaders();
     const from = getFromNumber();
     const to = formatWhatsAppNumber(phone);
@@ -168,6 +172,9 @@ export async function sendTemplateMessage(
   templateName: string,
   variables: string[],
 ): Promise<TwilioSendResult> {
+  if (!phone || !phone.replace(/\D/g, '')) {
+    return { success: false, error: `Invalid phone number: "${phone}"` };
+  }
   try {
     // Look up template in DB
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -234,6 +241,9 @@ export async function sendTemplateMessage(
 
 export async function sendAudioFromUrl(phone: string, audioUrl: string): Promise<TwilioSendResult> {
   try {
+    if (!phone || !phone.replace(/\D/g, '')) {
+      return { success: false, error: `Invalid phone number: "${phone}"` };
+    }
     const headers = getGatewayHeaders();
     const from = getFromNumber();
     const to = formatWhatsAppNumber(phone);
