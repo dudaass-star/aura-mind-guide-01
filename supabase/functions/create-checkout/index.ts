@@ -153,7 +153,7 @@ serve(async (req) => {
     };
     const displayPrice = planPrices[plan]?.[billingPeriod] || "";
     const periodLabel = billingPeriod === "yearly" ? "ano" : "mês";
-    const priceInfoLine = displayPrice ? `Após os 7 dias: R$ ${displayPrice}/${periodLabel}. CANCELE QUANDO QUISER.\n` : "";
+    
 
     // Build checkout session config
     const sessionConfig: any = {
@@ -163,7 +163,7 @@ serve(async (req) => {
       cancel_url: `${origin}/checkout`,
       custom_text: {
         submit: {
-          message: `${priceInfoLine}"Eu estava cética, mas em 3 dias já senti que alguém finalmente me ouvia." — Ana C.`,
+          message: `CANCELE QUANDO QUISER.\n"Eu estava cética, mas em 3 dias já senti que alguém finalmente me ouvia." — Ana C.`,
         },
       },
     };
@@ -171,18 +171,28 @@ serve(async (req) => {
     const planNames: Record<string, string> = { essencial: "Essencial", direcao: "Direção", transformacao: "Transformação" };
     const planDisplayName = planNames[plan] || plan;
 
-    let trialPriceId: string | undefined;
+    
 
     if (trial) {
       // === TRIAL: Paid trial (R$6,90 / R$9,90 / R$19,90) ===
-      const TRIAL_PRICES = getTrialPrices();
-      trialPriceId = TRIAL_PRICES[plan];
-      if (!trialPriceId) {
-        throw new Error("Trial price ID not configured for this plan.");
-      }
+      const trialAmounts: Record<string, number> = {
+        essencial: 690,
+        direcao: 990,
+        transformacao: 1990,
+      };
 
       sessionConfig.mode = "payment";
-      sessionConfig.line_items = [{ price: trialPriceId, quantity: 1 }];
+      sessionConfig.line_items = [{
+        price_data: {
+          currency: 'brl',
+          unit_amount: trialAmounts[plan],
+          product_data: {
+            name: `AURA ${planDisplayName} — 7 dias`,
+            description: `Após o período de teste: R$ ${displayPrice}/${periodLabel}. CANCELE QUANDO QUISER.`,
+          },
+        },
+        quantity: 1,
+      }];
       sessionConfig.payment_method_options = {
         card: {
           setup_future_usage: 'off_session',
@@ -249,7 +259,7 @@ serve(async (req) => {
       };
     }
 
-    logStep("Creating checkout session", { plan, billing: billingPeriod, priceId: trial ? trialPriceId : priceId, mode: sessionConfig.mode, trial: !!trial });
+    logStep("Creating checkout session", { plan, billing: billingPeriod, priceId: trial ? 'price_data' : priceId, mode: sessionConfig.mode, trial: !!trial });
     const session = await stripe.checkout.sessions.create(sessionConfig);
     logStep("Checkout session created", { sessionId: session.id });
 
