@@ -1,7 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { cleanPhoneNumber } from "../_shared/zapi-client.ts";
-import { sendMessage, sendProactive } from "../_shared/whatsapp-provider.ts";
-import { allocateInstance, getInstanceConfigById } from "../_shared/instance-helper.ts";
+import { sendProactive } from "../_shared/whatsapp-provider.ts";
+import { allocateInstance } from "../_shared/instance-helper.ts";
 
 async function createShortLink(supabaseUrl: string, serviceKey: string, url: string, phone?: string): Promise<string | null> {
   try {
