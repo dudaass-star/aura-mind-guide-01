@@ -1,11 +1,28 @@
-import { useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useParams, useSearchParams } from "react-router-dom";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Helmet } from "react-helmet-async";
+import { useState } from "react";
 import logoOlaAura from "@/assets/logo-ola-aura.png";
+
+const topicEmoji: Record<string, string> = {
+  ansiedade: "🌊",
+  autoconfianca: "💪",
+  procrastinacao: "⏳",
+  relacionamentos: "💞",
+  estresse: "🧘",
+  luto: "🕊️",
+  medo_mudanca: "🦋",
+  inteligencia_emocional: "🧠",
+};
 
 const Episode = () => {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
+  const userId = searchParams.get("u");
+
+  const [confirmed, setConfirmed] = useState(false);
+  const [chosenJourneyId, setChosenJourneyId] = useState<string | null>(null);
 
   const { data: episode, isLoading, error } = useQuery({
     queryKey: ["episode", id],
@@ -19,6 +36,46 @@ const Episode = () => {
       return data;
     },
     enabled: !!id,
+  });
+
+  const journeyTitle = episode?.content_journeys?.title || "Jornada";
+  const totalEpisodes = episode?.content_journeys?.total_episodes || 8;
+  const isLastEpisode = episode ? episode.episode_number === totalEpisodes : false;
+  const journeyId = episode?.content_journeys?.id;
+
+  const { data: availableJourneys } = useQuery({
+    queryKey: ["journeys-available-ep", journeyId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("content_journeys")
+        .select("id, title, description, topic")
+        .eq("is_active", true)
+        .neq("id", journeyId!)
+        .order("id");
+      if (error) throw error;
+      return data;
+    },
+    enabled: isLastEpisode && !!journeyId && !!userId,
+  });
+
+  const chooseMutation = useMutation({
+    mutationFn: async (chosenId: string) => {
+      setChosenJourneyId(chosenId);
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/choose-next-journey`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ user_id: userId, journey_id: chosenId }),
+        }
+      );
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || "Erro ao selecionar jornada");
+      }
+      return response.json();
+    },
+    onSuccess: () => setConfirmed(true),
   });
 
   if (isLoading) {
@@ -46,11 +103,8 @@ const Episode = () => {
     );
   }
 
-  const journeyTitle = episode.content_journeys?.title || "Jornada";
-  const totalEpisodes = episode.content_journeys?.total_episodes || 8;
   const stageTitle = episode.stage_title || episode.title;
   const essayContent = episode.essay_content || episode.content_prompt || "";
-
   const paragraphs = essayContent.split(/\n\n+/).filter((p: string) => p.trim());
 
   return (
@@ -120,6 +174,91 @@ const Episode = () => {
               );
             })}
           </div>
+
+          {/* Journey completion section — only on last episode with userId */}
+          {isLastEpisode && userId && !confirmed && (
+            <div className="mt-16 pt-8 border-t border-border/50 space-y-6">
+              <div className="text-center space-y-3">
+                <p className="text-5xl">🎉</p>
+                <h2 className="font-['Fraunces'] text-2xl font-semibold text-foreground">
+                  Parabéns! Você concluiu a jornada
+                </h2>
+                <p className="text-accent font-['Fraunces'] text-xl font-medium">
+                  {journeyTitle}
+                </p>
+                <p className="text-muted-foreground font-['Nunito'] text-base max-w-md mx-auto">
+                  Foram {totalEpisodes} episódios de reflexão e crescimento.
+                  Cada manifesto que você leu plantou uma semente. 💜
+                </p>
+              </div>
+
+              <div>
+                <h3 className="font-['Fraunces'] text-lg font-semibold text-foreground mb-4 text-center">
+                  Toque na sua próxima jornada
+                </h3>
+
+                <div className="space-y-3">
+                  {availableJourneys?.map((journey) => {
+                    const emoji = topicEmoji[journey.topic] || "✨";
+                    const isSelecting = chooseMutation.isPending && chosenJourneyId === journey.id;
+                    return (
+                      <button
+                        key={journey.id}
+                        onClick={() => chooseMutation.mutate(journey.id)}
+                        disabled={chooseMutation.isPending}
+                        className={`w-full text-left rounded-xl border-2 p-4 transition-all duration-200 ${
+                          isSelecting
+                            ? "border-accent bg-accent/10 shadow-md opacity-70"
+                            : "border-border bg-card hover:border-accent/40 hover:bg-card/80"
+                        } disabled:opacity-50`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <span className="text-2xl mt-0.5">{emoji}</span>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-['Fraunces'] font-semibold text-foreground text-base">
+                              {journey.title}
+                            </p>
+                            {journey.description && (
+                              <p className="text-sm text-muted-foreground font-['Nunito'] mt-1 line-clamp-2">
+                                {journey.description}
+                              </p>
+                            )}
+                          </div>
+                          {isSelecting && (
+                            <span className="text-accent text-sm font-['Nunito']">Salvando...</span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {chooseMutation.isError && (
+                  <p className="text-destructive text-sm text-center mt-3 font-['Nunito']">
+                    {chooseMutation.error?.message || "Erro ao selecionar. Tente novamente."}
+                  </p>
+                )}
+
+                <p className="text-xs text-muted-foreground font-['Nunito'] text-center mt-6">
+                  Se não escolher, a próxima jornada será selecionada automaticamente em 48h.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Success state after choosing */}
+          {isLastEpisode && confirmed && (
+            <div className="mt-16 pt-8 border-t border-border/50 text-center space-y-4">
+              <p className="text-5xl">🎯</p>
+              <h2 className="font-['Fraunces'] text-2xl font-semibold text-foreground">Pronto!</h2>
+              <p className="text-foreground/80 font-['Nunito'] text-lg">
+                Sua próxima jornada será <strong>{availableJourneys?.find(j => j.id === chosenJourneyId)?.title || "a escolhida"}</strong>.
+              </p>
+              <p className="text-muted-foreground font-['Nunito'] text-sm">
+                O primeiro episódio chegará em breve no seu WhatsApp. 💜
+              </p>
+            </div>
+          )}
 
           {/* Footer */}
           <footer className="mt-16 pt-8 border-t border-border/50 text-center space-y-3">
