@@ -40,6 +40,49 @@ serve(async (req) => {
     console.log('🚀 Starting periodic content delivery (Manifesto System)');
     console.log(`🇧🇷 Horário de Brasília: ${getBrasiliaTimeString()}`);
 
+    // =========================================================================
+    // FALLBACK: Auto-assign journey for users who didn't choose in 48h
+    // =========================================================================
+    const fallbackThreshold = new Date();
+    fallbackThreshold.setTime(fallbackThreshold.getTime() - (48 * 60 * 60 * 1000));
+
+    const { data: pendingUsers } = await supabase
+      .from('profiles')
+      .select('id, user_id, name, journeys_completed, last_content_sent_at')
+      .in('status', ['active', 'trial'])
+      .is('current_journey_id', null)
+      .not('phone', 'is', null)
+      .lte('last_content_sent_at', fallbackThreshold.toISOString());
+
+    if (pendingUsers && pendingUsers.length > 0) {
+      console.log(`⏰ Found ${pendingUsers.length} users pending journey choice (48h+ elapsed)`);
+
+      // Get all active journeys to pick a default
+      const { data: allJourneys } = await supabase
+        .from('content_journeys')
+        .select('id, title, next_journey_id')
+        .eq('is_active', true)
+        .order('id');
+
+      for (const pu of pendingUsers) {
+        // Pick first available journey as fallback
+        const fallbackJourney = allJourneys?.[0];
+        if (fallbackJourney) {
+          await supabase
+            .from('profiles')
+            .update({
+              current_journey_id: fallbackJourney.id,
+              current_episode: 0,
+              last_content_sent_at: null, // allow immediate content
+            })
+            .eq('id', pu.id);
+          console.log(`🔄 Auto-assigned ${pu.name || 'user'} to journey: ${fallbackJourney.title}`);
+        }
+      }
+    }
+
+    // =========================================================================
+
     const eligibilityThreshold = new Date();
     eligibilityThreshold.setTime(eligibilityThreshold.getTime() - (2.5 * 24 * 60 * 60 * 1000));
 
