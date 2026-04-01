@@ -60,9 +60,13 @@ function getGatewayHeaders(): { Authorization: string; 'X-Connection-Api-Key': s
 }
 
 function getFromNumber(): string {
-  const from = Deno.env.get('TWILIO_WHATSAPP_FROM');
-  if (!from) throw new Error('TWILIO_WHATSAPP_FROM is not configured');
-  return from;
+  const raw = Deno.env.get('TWILIO_WHATSAPP_FROM');
+  if (!raw) throw new Error('TWILIO_WHATSAPP_FROM is not configured');
+  // Already has whatsapp: prefix
+  if (raw.startsWith('whatsapp:')) return raw;
+  // Just digits or +digits — normalize
+  const digits = raw.replace(/\D/g, '');
+  return `whatsapp:+${digits}`;
 }
 
 function formatWhatsAppNumber(phone: string): string {
