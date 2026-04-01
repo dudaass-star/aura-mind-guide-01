@@ -5,10 +5,21 @@ import { Helmet } from "react-helmet-async";
 import { useState } from "react";
 import logoOlaAura from "@/assets/logo-ola-aura.png";
 
+const topicEmoji: Record<string, string> = {
+  ansiedade: "🌊",
+  autoconfianca: "💪",
+  procrastinacao: "⏳",
+  relacionamentos: "💞",
+  estresse: "🧘",
+  luto: "🕊️",
+  medo_mudanca: "🦋",
+  inteligencia_emocional: "🧠",
+};
+
 const JourneyComplete = () => {
   const { journeyId, userId } = useParams<{ journeyId: string; userId: string }>();
-  const [selectedJourney, setSelectedJourney] = useState<string | null>(null);
   const [confirmed, setConfirmed] = useState(false);
+  const [chosenJourneyId, setChosenJourneyId] = useState<string | null>(null);
 
   const { data: completedJourney, isLoading: loadingJourney } = useQuery({
     queryKey: ["journey", journeyId],
@@ -40,13 +51,14 @@ const JourneyComplete = () => {
   });
 
   const chooseMutation = useMutation({
-    mutationFn: async (chosenJourneyId: string) => {
+    mutationFn: async (chosenId: string) => {
+      setChosenJourneyId(chosenId);
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/choose-next-journey`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ user_id: userId, journey_id: chosenJourneyId }),
+          body: JSON.stringify({ user_id: userId, journey_id: chosenId }),
         }
       );
       if (!response.ok) {
@@ -57,17 +69,6 @@ const JourneyComplete = () => {
     },
     onSuccess: () => setConfirmed(true),
   });
-
-  const topicEmoji: Record<string, string> = {
-    ansiedade: "🌊",
-    autoconfianca: "💪",
-    procrastinacao: "⏳",
-    relacionamentos: "💞",
-    estresse: "🧘",
-    luto: "🕊️",
-    medo_mudanca: "🦋",
-    inteligencia_emocional: "🧠",
-  };
 
   const isLoading = loadingJourney || loadingAll;
 
@@ -97,7 +98,7 @@ const JourneyComplete = () => {
   }
 
   if (confirmed) {
-    const chosen = availableJourneys?.find(j => j.id === selectedJourney);
+    const chosen = availableJourneys?.find(j => j.id === chosenJourneyId);
     return (
       <div className="min-h-screen bg-background flex flex-col">
         <div className="bg-card border-b border-border/50">
@@ -108,9 +109,7 @@ const JourneyComplete = () => {
         <div className="flex-1 flex items-center justify-center px-6">
           <div className="text-center max-w-md space-y-4">
             <p className="text-5xl">🎯</p>
-            <h1 className="font-['Fraunces'] text-2xl font-semibold text-foreground">
-              Pronto!
-            </h1>
+            <h1 className="font-['Fraunces'] text-2xl font-semibold text-foreground">Pronto!</h1>
             <p className="text-foreground/80 font-['Nunito'] text-lg">
               Sua próxima jornada será <strong>{chosen?.title || "a escolhida"}</strong>.
             </p>
@@ -131,7 +130,6 @@ const JourneyComplete = () => {
       </Helmet>
 
       <div className="min-h-screen bg-background flex flex-col">
-        {/* Top bar */}
         <div className="bg-card border-b border-border/50">
           <div className="max-w-2xl mx-auto px-5 py-3 flex items-center justify-between">
             <img src={logoOlaAura} alt="Olá AURA" className="h-14 w-auto" />
@@ -141,7 +139,6 @@ const JourneyComplete = () => {
           </div>
         </div>
 
-        {/* Congratulations */}
         <div className="max-w-2xl mx-auto w-full px-5 py-8 text-center space-y-4">
           <p className="text-5xl">🎉</p>
           <h1 className="font-['Fraunces'] text-2xl md:text-3xl font-semibold text-foreground leading-tight">
@@ -156,25 +153,25 @@ const JourneyComplete = () => {
           </p>
         </div>
 
-        {/* Journey selection */}
         <div className="max-w-2xl mx-auto w-full px-5 pb-8">
           <h2 className="font-['Fraunces'] text-lg font-semibold text-foreground mb-4 text-center">
-            Escolha sua próxima jornada
+            Toque na sua próxima jornada
           </h2>
 
           <div className="space-y-3">
             {availableJourneys?.map((journey) => {
               const emoji = topicEmoji[journey.topic] || "✨";
-              const isSelected = selectedJourney === journey.id;
+              const isSelecting = chooseMutation.isPending && chosenJourneyId === journey.id;
               return (
                 <button
                   key={journey.id}
-                  onClick={() => setSelectedJourney(journey.id)}
+                  onClick={() => chooseMutation.mutate(journey.id)}
+                  disabled={chooseMutation.isPending}
                   className={`w-full text-left rounded-xl border-2 p-4 transition-all duration-200 ${
-                    isSelected
-                      ? "border-accent bg-accent/10 shadow-md"
+                    isSelecting
+                      ? "border-accent bg-accent/10 shadow-md opacity-70"
                       : "border-border bg-card hover:border-accent/40 hover:bg-card/80"
-                  }`}
+                  } disabled:opacity-50`}
                 >
                   <div className="flex items-start gap-3">
                     <span className="text-2xl mt-0.5">{emoji}</span>
@@ -188,25 +185,14 @@ const JourneyComplete = () => {
                         </p>
                       )}
                     </div>
-                    {isSelected && (
-                      <span className="text-accent text-xl">✓</span>
+                    {isSelecting && (
+                      <span className="text-accent text-sm font-['Nunito']">Salvando...</span>
                     )}
                   </div>
                 </button>
               );
             })}
           </div>
-
-          {/* Confirm button */}
-          {selectedJourney && (
-            <button
-              onClick={() => chooseMutation.mutate(selectedJourney)}
-              disabled={chooseMutation.isPending}
-              className="mt-6 w-full rounded-xl py-4 bg-accent text-accent-foreground font-['Nunito'] font-semibold text-lg transition-all hover:opacity-90 disabled:opacity-50"
-            >
-              {chooseMutation.isPending ? "Salvando..." : "Começar esta jornada →"}
-            </button>
-          )}
 
           {chooseMutation.isError && (
             <p className="text-destructive text-sm text-center mt-3 font-['Nunito']">
@@ -219,7 +205,6 @@ const JourneyComplete = () => {
           </p>
         </div>
 
-        {/* Footer */}
         <footer className="mt-auto py-6 border-t border-border/50 text-center space-y-2">
           <p className="text-accent text-lg">💜</p>
           <a
