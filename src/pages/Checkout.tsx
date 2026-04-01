@@ -19,6 +19,7 @@ interface PlanConfig {
   yearlyPrice: string;
   yearlyMonthlyEquivalent: string;
   yearlyDiscount: number;
+  trialPrice: string;
   sessions: number;
   highlights: string[];
 }
