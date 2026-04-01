@@ -163,7 +163,7 @@ serve(async (req) => {
       cancel_url: `${origin}/checkout`,
       custom_text: {
         submit: {
-          message: `${priceInfoLine}"Eu estava cética, mas em 3 dias já senti que alguém finalmente me ouvia." — Ana C.`,
+          message: `CANCELE QUANDO QUISER.\n"Eu estava cética, mas em 3 dias já senti que alguém finalmente me ouvia." — Ana C.`,
         },
       },
     };
