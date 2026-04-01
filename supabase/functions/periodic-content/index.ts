@@ -158,59 +158,7 @@ serve(async (req) => {
             const zapiConfig = await getInstanceConfigForUser(supabase, user.user_id);
 
             if (episodeError || !episode) {
-              console.log(`⚠️ Episode ${currentEpisode} not found for journey ${user.current_journey_id}`);
-              
-              const { data: journey } = await supabase
-                .from('content_journeys')
-                .select('*')
-                .eq('id', user.current_journey_id)
-                .single();
-
-              if (journey && currentEpisode > journey.total_episodes) {
-                console.log(`🎉 Journey completed! Sending teaser + link`);
-                
-                const userName = user.name?.split(' ')[0] || 'você';
-                
-                // Create short link to journey completion page
-                const appUrl = 'https://olaaura.com.br';
-                const completionPageUrl = `${appUrl}/jornada-completa/${journey.id}/${user.user_id}`;
-                
-                const { data: shortLinkResult } = await supabase.functions.invoke(
-                  'create-short-link',
-                  { body: { url: completionPageUrl, phone: user.phone } }
-                );
-                
-                const link = shortLinkResult?.short_url || completionPageUrl;
-                
-                const teaserMessage = `🎉 ${userName}, você completou a jornada *${journey.title}*! Foram ${journey.total_episodes} episódios de crescimento. 💜\n\nEscolha sua próxima jornada:`;
-                const completionMessage = `🎉 Parabéns, ${userName}!\n\nVocê concluiu a jornada *${journey.title}* — ${journey.total_episodes} episódios de reflexão e crescimento.\n\nAgora é hora de escolher o próximo passo. Acesse o link e descubra as jornadas disponíveis:\n\n${link}\n\n_Se não escolher em 48h, a próxima será selecionada automaticamente 🌿_`;
-                
-                const cleanPhone = cleanPhoneNumber(user.phone);
-                await sendProactive(cleanPhone, completionMessage, 'content', user.user_id, zapiConfig, teaserMessage);
-                
-                // Set current_journey_id to null — user must choose (or fallback in 48h)
-                await supabase
-                  .from('profiles')
-                  .update({
-                    current_journey_id: null,
-                    current_episode: 0,
-                    journeys_completed: (user.journeys_completed || 0) + 1,
-                    last_content_sent_at: new Date().toISOString()
-                  })
-                  .eq('id', user.id);
-                
-                await supabase
-                  .from('messages')
-                  .insert({
-                    user_id: user.user_id,
-                    role: 'assistant',
-                    content: completionMessage
-                  });
-                
-                successCount++;
-              }
-
-              // Per-instance anti-burst delay
+              console.log(`⚠️ Episode ${currentEpisode} not found for journey ${user.current_journey_id} — skipping`);
               await antiBurstDelayForInstance(instanceId);
               continue;
             }

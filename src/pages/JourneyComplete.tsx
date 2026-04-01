@@ -7,8 +7,8 @@ import logoOlaAura from "@/assets/logo-ola-aura.png";
 
 const JourneyComplete = () => {
   const { journeyId, userId } = useParams<{ journeyId: string; userId: string }>();
-  const [selectedJourney, setSelectedJourney] = useState<string | null>(null);
   const [confirmed, setConfirmed] = useState(false);
+  const [chosenJourneyId, setChosenJourneyId] = useState<string | null>(null);
 
   const { data: completedJourney, isLoading: loadingJourney } = useQuery({
     queryKey: ["journey", journeyId],
