@@ -37,7 +37,7 @@ Deno.serve(async (req) => {
     const cleanPhone = cleanPhoneNumber(phone);
     
     // Use sendProactive to handle 24h window automatically (templates when outside window)
-    const result = await sendProactive(cleanPhone, message, 'checkin', user_id, zapiConfig);
+    const result = await sendProactive(cleanPhone, message, template_category || 'checkin', user_id, zapiConfig);
 
     if (!result.success) {
       console.error(`❌ [Admin] Send failed: provider=${result.provider}, error=${result.error}`);
