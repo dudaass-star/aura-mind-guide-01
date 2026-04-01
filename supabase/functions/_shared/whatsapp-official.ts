@@ -133,7 +133,7 @@ export async function sendFreeText(phone: string, text: string): Promise<TwilioS
     const from = getFromNumber();
     const to = formatWhatsAppNumber(phone);
 
-    console.log(`📨 [Twilio] Sending free text to ${to}`);
+    console.log(`📨 [Twilio] Sending free text | From: ${from} | To: ${to} | Body length: ${text.length}`);
 
     const response = await fetch(`${GATEWAY_URL}/Messages.json`, {
       method: 'POST',
