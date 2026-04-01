@@ -62,11 +62,12 @@ function getGatewayHeaders(): { Authorization: string; 'X-Connection-Api-Key': s
 function getFromNumber(): string {
   const raw = Deno.env.get('TWILIO_WHATSAPP_FROM');
   if (!raw) throw new Error('TWILIO_WHATSAPP_FROM is not configured');
-  // Already has whatsapp: prefix
-  if (raw.startsWith('whatsapp:')) return raw;
-  // Just digits or +digits — normalize
+  // Always extract digits and rebuild to avoid whitespace/formatting issues
   const digits = raw.replace(/\D/g, '');
-  return `whatsapp:+${digits}`;
+  if (!digits) throw new Error(`TWILIO_WHATSAPP_FROM has no digits: "${raw}"`);
+  const formatted = `whatsapp:+${digits}`;
+  console.log(`📱 [Twilio] From number normalized: "${raw}" → "${formatted}"`);
+  return formatted;
 }
 
 function formatWhatsAppNumber(phone: string): string {
