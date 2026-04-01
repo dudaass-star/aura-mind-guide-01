@@ -1,38 +1,70 @@
 
 
-# Destacar Trial + Preço Mensal no Stripe
+# Ajustes na Tela do Stripe Checkout
 
-## Duas mudanças solicitadas:
+## Problema
+1. O painel verde (esquerdo) do Stripe mostra apenas "R$ 9,90 — 7 dias de acesso ao plano Direção da AURA" mas **não mostra o valor mensal** que será cobrado após o trial.
+2. O depoimento da Ana C. aparece no rodapé (cinza, pouco visível) e deveria aparecer no **painel verde** para ter mais destaque.
 
-### 1. Cards de plano (Checkout.tsx) — Inverter destaque
-Atualmente o preço grande no canto direito é o mensal (R$ 29,90/mês). O usuário quer que o preço do trial (7 dias) seja o mais destacado, e o mensal fique menor/secundário.
+## Solução
 
-**Arquivo:** `src/pages/Checkout.tsx`
+### Arquivo: `supabase/functions/create-checkout/index.ts`
 
-- **Preço grande (canto direito):** Trocar de `R$ {price}/{period}` para `R$ {plan.trialPrice}` com label "7 dias"
-- **Preço pequeno abaixo:** Mostrar `Após: R$ {price}/{period}` em texto menor e cinza
-- **Remover** as linhas 332-337 (trial price e "Após" duplicados no bloco da esquerda), já que essa info vai para o lado direito
+**Mudança 1 — Adicionar preço mensal na descrição do produto (painel verde)**
 
-Resultado visual:
-```text
-Essencial                    R$ 6,90
-  Chat ilimitado              7 dias
-                         Após: R$ 29,90/mês
+Atualmente a linha 185 usa `{ price: trialPriceId, quantity: 1 }` que puxa a descrição do produto cadastrado no Stripe. Para adicionar o preço mensal, vamos usar `price_data` com `product_data` que permite customizar a descrição exibida no painel verde:
+
+```typescript
+sessionConfig.line_items = [{
+  price_data: {
+    currency: 'brl',
+    unit_amount: trialAmounts[plan], // 690, 990, 1990
+    product_data: {
+      name: `AURA — 7 dias ${planDisplayName}`,
+      description: `7 dias de acesso ao plano ${planDisplayName} da AURA. Após o trial: R$ ${displayPrice}/${periodLabel}.`,
+    },
+  },
+  quantity: 1,
+}];
 ```
 
-### 2. Tela do Stripe (create-checkout) — Já tem o preço mensal
-A linha 156 já inclui `"Após os 7 dias: R$ 29,90/mês. Cancele quando quiser."` no `custom_text.submit.message`. Os preços na linha 149-152 podem estar desatualizados vs. os planos reais. Vou verificar e corrigir se necessário (Transformação mostra 99,90 mas no frontend é 79,90).
+Isso faz o painel verde mostrar o preço recorrente junto com a descrição do trial.
 
-**Arquivo:** `supabase/functions/create-checkout/index.ts`
-- Corrigir `transformacao.monthly` de `"99,90"` para `"79,90"`
-- Corrigir `transformacao.yearly` de `"958,80"` para `"574,90"`
-- Corrigir `essencial.yearly` de `"286,80"` para `"214,90"`
-- Corrigir `direcao.yearly` de `"478,80"` para `"359,90"`
+**Mudança 2 — Mover depoimento para o painel verde**
+
+O Stripe Checkout `custom_text.submit` aparece acima do botão "Pagar" (na área branca). Para colocar o depoimento no painel verde, usamos `custom_text.after_submit` não — na verdade, não existe opção nativa para texto no painel verde.
+
+A alternativa é incluir o depoimento na `description` do `product_data`, que aparece no painel verde:
+
+```typescript
+description: `7 dias de acesso ao plano ${planDisplayName}. Após: R$ ${displayPrice}/${periodLabel}.\n\n"Eu estava cética, mas em 3 dias já senti que alguém finalmente me ouvia." — Ana C.`,
+```
+
+E simplificar o `custom_text.submit` para mostrar apenas a garantia:
+
+```typescript
+custom_text: {
+  submit: {
+    message: `Garantia de 7 dias. Cancele quando quiser.`,
+  },
+},
+```
+
+**Mudança 3 — Mapear valores do trial em centavos**
+
+Adicionar um mapa de valores em centavos para usar com `price_data`:
+
+```typescript
+const trialAmounts: Record<string, number> = {
+  essencial: 690,
+  direcao: 990,
+  transformacao: 1990,
+};
+```
 
 ## Arquivos modificados
 
 | Arquivo | Mudança |
 |---|---|
-| `src/pages/Checkout.tsx` | Destacar preço trial como principal, mensal como secundário |
-| `supabase/functions/create-checkout/index.ts` | Corrigir preços no `custom_text` |
+| `supabase/functions/create-checkout/index.ts` | Usar `price_data` com `product_data.description` para mostrar preço mensal e depoimento no painel verde |
 
