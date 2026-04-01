@@ -1,53 +1,45 @@
 
 
-# Ativar API Oficial do WhatsApp — Análise de Prontidão
+# Fix: Outbound WhatsApp messages not being delivered via Twilio
 
-## Situação Atual
+## Root Cause
 
-A infraestrutura de **envio** via API oficial está pronta (provider abstraction, templates, teaser+link). Porém há **lacunas críticas** que impedem a ativação imediata.
+Two issues preventing message delivery:
 
-## Problemas que Bloqueiam a Ativação
+1. **`getFromNumber()` has no normalization** — If `TWILIO_WHATSAPP_FROM` is stored as `whatsapp:+12604684990` (which you confirmed), the `whatsapp:+` prefix is already there. But the function just returns it raw. This is likely fine, but fragile — any variation in how it was stored could break things.
 
-### 1. NÃO EXISTE webhook de recebimento Twilio (BLOQUEADOR)
+2. **`admin-send-message` uses `sendMessage()` which calls `sendFreeText()`** — Free text only works inside the 24h window. Since Eduardo hasn't messaged Aura recently via the Twilio number, the window is closed and Twilio silently drops the message. It should use `sendProactive()` which falls back to templates when outside the window.
 
-O sistema só tem `webhook-zapi` para receber mensagens dos usuários. Não existe um `webhook-twilio` que:
-- Receba o payload do Twilio (formato diferente do Z-API)
-- Parse os campos (`Body`, `From`, `MediaUrl0`, `MessageSid`)
-- Faça deduplicação
-- Atualize `last_user_message_at`
-- Encaminhe para `process-webhook-message`
+## Changes
 
-**Sem isso, a Aura não consegue receber mensagens dos usuários.**
+### 1. Normalize `getFromNumber()` in `whatsapp-official.ts`
+Make it robust regardless of how the secret was stored:
+```typescript
+function getFromNumber(): string {
+  const raw = Deno.env.get('TWILIO_WHATSAPP_FROM');
+  if (!raw) throw new Error('TWILIO_WHATSAPP_FROM is not configured');
+  // Already has whatsapp: prefix
+  if (raw.startsWith('whatsapp:')) return raw;
+  // Just digits or +digits — normalize
+  const digits = raw.replace(/\D/g, '');
+  return `whatsapp:+${digits}`;
+}
+```
 
-### 2. `process-webhook-message` usa Z-API diretamente (BLOQUEADOR)
+### 2. Update `admin-send-message` to use `sendProactive()`
+Replace `sendMessage` with `sendProactive` so it automatically uses templates when outside the 24h window:
+```typescript
+import { sendProactive } from "../_shared/whatsapp-provider.ts";
+// ...
+const result = await sendProactive(cleanPhone, message, 'checkin', user_id);
+```
+Also improve error handling to surface the actual provider error in the response.
 
-O worker principal (1090 linhas) que processa mensagens e chama o `aura-agent` usa `sendTextMessage` do `zapi-client.ts` diretamente — não passa pelo provider abstraction. As respostas da Aura seriam enviadas via Z-API mesmo com provider = official.
+### 3. Add detailed logging to `sendFreeText()`
+Log the full request params (From, To) before sending so failures can be diagnosed from logs.
 
-### 3. ~20 funções ainda usam Z-API diretamente (IMPORTANTE)
-
-Funções como `conversation-followup`, `scheduled-checkin`, `session-reminder`, `reactivation-check`, `start-trial`, `aura-agent`, `pattern-analysis`, etc. todas importam `sendTextMessage` do `zapi-client.ts`.
-
-## Plano de Ativação (por prioridade)
-
-### Fase 1 — Recebimento (OBRIGATÓRIO)
-- Criar `webhook-twilio/index.ts` — recebe mensagens Twilio, normaliza payload, encaminha para `process-webhook-message`
-- Configurar webhook URL no Twilio para apontar para esta função
-
-### Fase 2 — Respostas (OBRIGATÓRIO)
-- Atualizar `process-webhook-message` para usar `sendMessage` do `whatsapp-provider.ts` em vez de `sendTextMessage` do `zapi-client.ts`
-- Atualizar `aura-agent` para usar o provider abstrato
-
-### Fase 3 — Proatividade (IMPORTANTE)
-- Migrar as ~15 funções proativas para usar `sendProactive`/`sendMessage` do provider
-- Inclui: `conversation-followup`, `scheduled-checkin`, `session-reminder`, `weekly-report`, `reactivation-check`, `start-trial`, `pattern-analysis`, etc.
-
-### Fase 4 — Ativação
-- Inserir `whatsapp_provider = 'official'` na `system_config`
-- Configurar webhook Twilio apontando para a nova edge function
-
-## Recomendação
-
-Começar pela **Fase 1** (criar `webhook-twilio`) e **Fase 2** (migrar `process-webhook-message` e `aura-agent`). Isso garante que o fluxo principal (receber → processar → responder) funcione via API oficial. As funções proativas podem ser migradas incrementalmente.
-
-Quer que eu comece pela Fase 1 (criar o webhook de recebimento Twilio)?
+## Expected Result
+- `From` number always correctly formatted regardless of secret format
+- Admin messages use templates when outside 24h window
+- Clearer error messages when delivery fails
 
