@@ -1,5 +1,5 @@
 import { cleanPhoneNumber } from "../_shared/zapi-client.ts";
-import { sendMessage } from "../_shared/whatsapp-provider.ts";
+import { sendProactive } from "../_shared/whatsapp-provider.ts";
 import { getInstanceConfigForUser } from "../_shared/instance-helper.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -34,9 +34,12 @@ Deno.serve(async (req) => {
     }
 
     const cleanPhone = cleanPhoneNumber(phone);
-    const result = await sendMessage(cleanPhone, message);
+    
+    // Use sendProactive to handle 24h window automatically (templates when outside window)
+    const result = await sendProactive(cleanPhone, message, 'checkin', user_id, zapiConfig);
 
     if (!result.success) {
+      console.error(`❌ [Admin] Send failed: provider=${result.provider}, error=${result.error}`);
       throw new Error(result.error || 'Failed to send message');
     }
 
@@ -49,9 +52,9 @@ Deno.serve(async (req) => {
       });
     }
 
-    console.log('✅ Message sent successfully');
+    console.log(`✅ [Admin] Message sent via ${result.provider}`);
 
-    return new Response(JSON.stringify({ status: 'sent', zapiResponse: result.response }), {
+    return new Response(JSON.stringify({ status: 'sent', provider: result.provider }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
