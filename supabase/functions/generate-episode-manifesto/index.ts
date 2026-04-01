@@ -111,36 +111,10 @@ Te espero. 💜${optOutNotice}`;
     if (generate_teaser) {
       console.log('📎 Generating teaser + short link for episode');
 
-      // Build the page URL
-      const siteUrl = 'https://aura-mind-guide-01.lovable.app';
+      // Build the page URL using the custom domain
+      const siteUrl = 'https://olaaura.com.br';
       const episodePageUrl = `${siteUrl}/episodio/${episode_id}`;
-
-      // Create short link
-      try {
-        const shortLinkResponse = await fetch(`${supabaseUrl}/functions/v1/create-short-link`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseKey}`,
-          },
-          body: JSON.stringify({
-            url: episodePageUrl,
-            phone: profile.phone,
-          }),
-        });
-
-        const shortLinkData = await shortLinkResponse.json();
-
-        if (shortLinkData.shortUrl) {
-          shortUrl = shortLinkData.shortUrl;
-        } else {
-          console.warn('⚠️ Short link creation failed, using direct URL');
-          shortUrl = episodePageUrl;
-        }
-      } catch (e) {
-        console.warn('⚠️ Short link error, using direct URL:', e);
-        shortUrl = episodePageUrl;
-      }
+      shortUrl = episodePageUrl;
 
       teaser = `Oi ${userName}. 💜
 

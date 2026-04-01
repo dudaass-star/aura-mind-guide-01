@@ -1,0 +1,1 @@
+UPDATE profiles SET current_episode = 7 WHERE phone LIKE '%51981519708%';
