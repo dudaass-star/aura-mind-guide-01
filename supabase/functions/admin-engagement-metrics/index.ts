@@ -274,22 +274,22 @@ Deno.serve(async (req) => {
       .eq('status', 'trial')
       .not('trial_started_at', 'is', null);
 
-    // Active trials (< 5 days)
-    const fiveDaysAgo = new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString();
+    // Active trials (< 7 days)
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
     const { count: activeTrialsReal } = await supabase
       .from('profiles')
       .select('*', { count: 'exact', head: true })
       .eq('status', 'trial')
       .not('trial_started_at', 'is', null)
-      .gte('trial_started_at', fiveDaysAgo);
+      .gte('trial_started_at', sevenDaysAgo);
 
-    // Expired trials (>= 5 days, no payment failure)
+    // Expired trials (>= 7 days, no payment failure)
     const { count: expiredTrialsNoFailure } = await supabase
       .from('profiles')
       .select('*', { count: 'exact', head: true })
       .eq('status', 'trial')
       .not('trial_started_at', 'is', null)
-      .lt('trial_started_at', fiveDaysAgo)
+      .lt('trial_started_at', sevenDaysAgo)
       .is('payment_failed_at', null);
 
     const activeTrials = activeTrialsReal || 0;
