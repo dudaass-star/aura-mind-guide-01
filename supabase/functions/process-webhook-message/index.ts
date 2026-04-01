@@ -680,29 +680,15 @@ Deno.serve(async (req) => {
     await new Promise(resolve => setTimeout(resolve, initialDelay));
 
     // ========================================================================
-    // DEBOUNCE CHECK
+    // DEBOUNCE REMOVIDO
     // ========================================================================
-    // --- DEBOUNCE: use messages table as source of truth ---
-    const inboundMessageDbId = (globalThis as any).__inboundMessageDbId;
-
-    if (inboundMessageDbId) {
-      const { data: latestUserMsg } = await supabase
-        .from('messages')
-        .select('id')
-        .eq('user_id', profile.user_id)
-        .eq('role', 'user')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (latestUserMsg && latestUserMsg.id !== inboundMessageDbId) {
-        console.log(`⏭️ DEBOUNCE: Msg mais recente no banco (${latestUserMsg.id} != ${inboundMessageDbId}). Abortando.`);
-        await releaseLock();
-        return new Response(JSON.stringify({ status: 'debounced', reason: 'newer_message_exists' }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-    }
+    // O bloco de debounce foi removido porque causava deadlock:
+    // o Worker 1 (com lock) via a msg do Worker 2 no banco e se auto-abortava,
+    // enquanto o Worker 2 já tinha abortado por não ter o lock.
+    // A lógica de acumulação abaixo já resolve o caso de msgs sequenciais —
+    // ela junta todas as msgs do usuário desde a última resposta da Aura.
+    // O lock atômico garante que apenas 1 worker processa por vez.
+    // ========================================================================
 
     // --- ACCUMULATE sequential user messages since last assistant response ---
     const { data: lastAssistantMsg } = await supabase
