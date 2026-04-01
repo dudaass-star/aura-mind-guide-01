@@ -1,41 +1,37 @@
 
 
-# Melhorias no Checkout: Trial visível + Depoimento no Stripe
+# Melhorias: Preço recorrente visível + Info no Stripe
 
-## Mudança 1 — Mostrar preço do trial junto ao preço do plano
+## Contexto
+O depoimento da Ana C. **está aparecendo** na tela do Stripe (visível no rodapé do screenshot). O que falta é informação sobre o preço recorrente após os 7 dias, tanto nos cards de plano quanto na tela do Stripe.
 
-Na seção "Escolha seu plano" do `Checkout.tsx`, adicionar abaixo de cada plano uma linha mostrando o preço do trial de 7 dias. Exemplo:
+## Mudança 1 — Mostrar preço recorrente nos cards de plano (Checkout.tsx)
+Atualmente a linha 332-334 mostra apenas "7 dias por R$ 6,90". Vamos adicionar logo abaixo o preço que será cobrado após o trial:
 
 ```
-Essencial          R$ 29,90/mês
-  7 dias por R$ 6,90
+7 dias por R$ 6,90
+Após: R$ 29,90/mês
 ```
 
-Isso deixa claro que o usuário paga pouco para experimentar antes do preço cheio.
+**Arquivo:** `src/pages/Checkout.tsx` (linhas 332-334)
+- Abaixo da linha "7 dias por R$ {plan.trialPrice}", adicionar texto em cinza: `Após: R$ {price}/{period}`
 
-**Arquivo:** `src/pages/Checkout.tsx` (linhas 314-336)
-- Após o nome do plano e badges, adicionar uma linha com texto como "7 dias por R$ {plan.trialPrice}" em destaque (cor primary, texto pequeno)
+## Mudança 2 — Mostrar preço recorrente na tela do Stripe
+Atualizar o `custom_text.submit.message` no `create-checkout` para incluir o preço pós-trial junto com o depoimento:
 
-## Mudança 2 — Depoimento da Ana C. na página do Stripe Checkout
-
-O Stripe Checkout permite `custom_text.submit.message` para exibir uma mensagem personalizada acima do botão de pagamento. Vamos usar o depoimento da Ana C. como social proof direto na tela de pagamento do Stripe.
-
-**Arquivo:** `supabase/functions/create-checkout/index.ts` (dentro de `sessionConfig`, ~linha 149)
-- Adicionar:
-```typescript
-custom_text: {
-  submit: {
-    message: '"Eu estava cética, mas em 3 dias já senti que alguém finalmente me ouvia." — Ana C.'
-  }
-}
+```
+Após os 7 dias: R$ 29,90/mês. Cancele quando quiser.
+"Eu estava cética, mas em 3 dias já senti que alguém finalmente me ouvia." — Ana C.
 ```
 
-Isso aparece na última etapa do Stripe, acima do botão de pagar.
+**Arquivo:** `supabase/functions/create-checkout/index.ts` (linhas 154-158)
+- Tornar a mensagem dinâmica, incluindo o preço recorrente do plano + período
+- Requer mapear os preços dentro da edge function para montar a string
 
 ## Arquivos modificados
 
 | Arquivo | Mudança |
 |---|---|
-| `src/pages/Checkout.tsx` | Adicionar preço do trial abaixo de cada plano |
-| `supabase/functions/create-checkout/index.ts` | Adicionar `custom_text.submit.message` com depoimento |
+| `src/pages/Checkout.tsx` | Adicionar "Após: R$ X/mês" abaixo do preço trial nos cards |
+| `supabase/functions/create-checkout/index.ts` | Incluir preço recorrente no `custom_text.submit.message` |
 
