@@ -329,17 +329,17 @@ const Checkout = () => {
                                 equivale a R${plan.yearlyMonthlyEquivalent}/mês
                               </p>
                             )}
-                            <p className="text-xs font-medium text-primary mt-1">
-                              7 dias por R$ {plan.trialPrice}
-                            </p>
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              Após: R$ {price}/{period}
-                            </p>
                           </div>
                         </div>
-                        <p className="font-display text-xl font-semibold text-foreground whitespace-nowrap">
-                          R$ {price}<span className="text-sm text-muted-foreground">/{period}</span>
-                        </p>
+                        <div className="text-right">
+                          <p className="font-display text-xl font-semibold text-primary whitespace-nowrap">
+                            R$ {plan.trialPrice}
+                          </p>
+                          <p className="text-xs font-medium text-primary">7 dias</p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Após: R$ {price}/{period}
+                          </p>
+                        </div>
                       </label>
                     );
                   })}
