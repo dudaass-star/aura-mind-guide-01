@@ -153,7 +153,7 @@ serve(async (req) => {
     };
     const displayPrice = planPrices[plan]?.[billingPeriod] || "";
     const periodLabel = billingPeriod === "yearly" ? "ano" : "mês";
-    const priceInfoLine = displayPrice ? `Após os 7 dias: R$ ${displayPrice}/${periodLabel}. CANCELE QUANDO QUISER.\n` : "";
+    
 
     // Build checkout session config
     const sessionConfig: any = {
