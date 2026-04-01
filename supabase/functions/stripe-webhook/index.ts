@@ -151,93 +151,12 @@ Deno.serve(async (req) => {
           ? `55${cleanPhone}` : cleanPhone;
 
         try {
-          // Step 1: Retrieve PaymentIntent to check card funding type
+          // Retrieve PaymentIntent to get the payment method for future charges
           const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId, {
             expand: ['payment_method'],
           });
           const paymentMethod = paymentIntent.payment_method as Stripe.PaymentMethod;
-          const cardFunding = paymentMethod?.card?.funding;
-          console.log(`💳 Card funding type: ${cardFunding}`);
-
-          // Step 2: Always refund the R$1
-          try {
-            await stripe.refunds.create({ payment_intent: paymentIntentId });
-            console.log('💸 R$1 refunded successfully');
-          } catch (refundErr) {
-            console.error('❌ Refund failed (continuing):', refundErr);
-          }
-
-          // Step 3: Check if card is credit
-          if (cardFunding !== 'credit') {
-            // === REJECT: debit/prepaid card ===
-            console.log(`🚫 Rejected card type: ${cardFunding}`);
-
-            // Update checkout_session status
-            await supabase
-              .from('checkout_sessions')
-              .update({ status: 'rejected_card_type' })
-              .eq('stripe_session_id', session.id);
-
-            // Send WhatsApp rejection message with retry link
-            const origin = 'https://aura-mind-guide-01.lovable.app';
-            const retryUrl = `${origin}/checkout?plan=${customerPlan}&billing=${customerBilling}`;
-
-            let shortRetryUrl = retryUrl;
-            try {
-              const shortLinkResponse = await fetch(`${supabaseUrl}/functions/v1/create-short-link`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${supabaseServiceKey}`,
-                },
-                body: JSON.stringify({ url: retryUrl, phone: formattedPhone }),
-              });
-              if (shortLinkResponse.ok) {
-                const shortLinkData = await shortLinkResponse.json();
-                shortRetryUrl = shortLinkData.shortUrl;
-              } else {
-                await shortLinkResponse.text(); // consume body
-              }
-            } catch (_) {}
-
-            const rejectionMessage = `Oi, ${customerName}! 💜
-
-Infelizmente não aceitamos cartão de débito ou pré-pago para o período de teste.
-
-Você pode tentar novamente com um cartão de crédito aqui: ${shortRetryUrl}
-
-Se precisar de ajuda, é só me avisar! 💜`;
-
-            try {
-              const msgResponse = await fetch(`${supabaseUrl}/functions/v1/send-zapi-message`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${supabaseServiceKey}`,
-                },
-                body: JSON.stringify({
-                  phone: formattedPhone,
-                  message: rejectionMessage,
-                  isAudio: false,
-                }),
-              });
-              if (msgResponse.ok) {
-                await msgResponse.text(); // consume body
-                console.log('✅ Card rejection WhatsApp sent');
-              } else {
-                console.error('❌ Failed to send rejection WhatsApp:', await msgResponse.text());
-              }
-            } catch (sendErr) {
-              console.error('❌ Error sending rejection WhatsApp:', sendErr);
-            }
-
-            return new Response(JSON.stringify({ received: true }), {
-              status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            });
-          }
-
-          // === ACCEPT: credit card — create subscription with trial ===
-          console.log('✅ Credit card validated, creating trial subscription');
+          console.log('✅ Paid trial accepted, creating trial subscription');
 
           // Get the payment methods for this customer
           const paymentMethods = await stripe.paymentMethods.list({
