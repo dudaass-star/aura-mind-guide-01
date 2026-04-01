@@ -72,6 +72,7 @@ function getFromNumber(): string {
 
 function formatWhatsAppNumber(phone: string): string {
   const clean = phone.replace(/\D/g, '');
+  if (!clean) throw new Error(`Invalid phone number (no digits): "${phone}"`);
   return `whatsapp:+${clean}`;
 }
 
