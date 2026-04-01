@@ -195,7 +195,6 @@ Deno.serve(async (req) => {
   // Track phone for contingency — no longer sends fallback messages
   let contingencyPhone: string | null = null;
   let sentAnyResponse = false;
-  let sentAnyResponse = false;
   let supabase: ReturnType<typeof createClient> | null = null;
   let profile: any = null;
   let wasInterrupted = false;
