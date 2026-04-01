@@ -1,35 +1,28 @@
 
 
-# Colocar o preço mensal no painel verde do Stripe
+# Separar depoimento do "CANCELE QUANDO QUISER"
 
 ## Problema
-O `product_data.description` não está aparecendo no painel verde como esperado. Apenas o `name` aparece de forma confiável no sidebar do Stripe Checkout.
+Na `description` do produto, "CANCELE QUANDO QUISER" e o depoimento estão na mesma linha, ficando visualmente confuso.
 
 ## Solução
-Incluir o preço mensal diretamente no campo `product_data.name`, que é o texto garantido no painel verde. E mover o depoimento + "CANCELE QUANDO QUISER" para a `description` (que aparece logo abaixo).
+Separar em dois parágrafos usando `\n\n` no campo `description`. O Stripe renderiza quebras de linha em descrições de produto.
 
-**Arquivo:** `supabase/functions/create-checkout/index.ts`
+**Arquivo:** `supabase/functions/create-checkout/index.ts` (linha 191)
 
-Linha 190-191, trocar:
+De:
 ```typescript
-name: `AURA ${planDisplayName} — 7 dias`,
-description: `Após o período de teste: R$ ${displayPrice}/${periodLabel}. CANCELE QUANDO QUISER.`,
+description: `CANCELE QUANDO QUISER. "Eu estava cética, mas em 3 dias já senti que alguém finalmente me ouvia." — Ana C.`,
 ```
 
 Para:
 ```typescript
-name: `AURA ${planDisplayName} — 7 dias | Após: R$ ${displayPrice}/${periodLabel}`,
-description: `CANCELE QUANDO QUISER. "Eu estava cética, mas em 3 dias já senti que alguém finalmente me ouvia." — Ana C.`,
+description: `CANCELE QUANDO QUISER.\n\n"Eu estava cética, mas em 3 dias já senti que alguém finalmente me ouvia." — Ana C.`,
 ```
 
-Resultado no painel verde:
-- **Nome**: "AURA Direção — 7 dias | Após: R$ 49,90/mês"
-- **Descrição**: "CANCELE QUANDO QUISER..." + depoimento
-- **Preço**: R$ 9,90
-
-E simplificar o `custom_text.submit.message` (rodapé branco) para algo curto como "Pagamento único de teste. Sem compromisso." — ou removê-lo completamente, já que toda a informação importante estará no verde.
+**Nota:** O Stripe Checkout renderiza texto puro — não suporta negrito/bold em `description`. A separação por parágrafo (`\n\n`) e as aspas do depoimento já criam destaque visual suficiente. Se o Stripe não renderizar a quebra de linha, a alternativa é mover o depoimento para o `custom_text.submit.message` (rodapé branco) e deixar apenas "CANCELE QUANDO QUISER." na description.
 
 | Arquivo | Mudança |
 |---|---|
-| `supabase/functions/create-checkout/index.ts` | Mover preço mensal para o `name` do produto, depoimento para `description`, simplificar rodapé |
+| `supabase/functions/create-checkout/index.ts` | Adicionar `\n\n` entre "CANCELE QUANDO QUISER" e o depoimento |
 
