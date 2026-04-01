@@ -3,26 +3,35 @@
 # Separar depoimento do "CANCELE QUANDO QUISER"
 
 ## Problema
-Na `description` do produto, "CANCELE QUANDO QUISER" e o depoimento estão na mesma linha, ficando visualmente confuso.
+O Stripe Checkout ignora `\n\n` no campo `description` do `product_data` — tudo continua na mesma linha no painel verde.
 
 ## Solução
-Separar em dois parágrafos usando `\n\n` no campo `description`. O Stripe renderiza quebras de linha em descrições de produto.
+Separar os dois textos em locais diferentes do Stripe Checkout:
 
-**Arquivo:** `supabase/functions/create-checkout/index.ts` (linha 191)
+- **`product_data.description`** (painel verde): apenas `"CANCELE QUANDO QUISER."`
+- **`custom_text.submit.message`** (rodapé branco, acima do botão Pagar): o depoimento `"Eu estava cética, mas em 3 dias já senti que alguém finalmente me ouvia." — Ana C.`
 
-De:
+Isso garante separação visual real, já que são áreas distintas da página.
+
+## Mudança técnica
+
+**Arquivo:** `supabase/functions/create-checkout/index.ts`
+
+1. **Linha 166** — trocar o `custom_text.submit.message`:
 ```typescript
-description: `CANCELE QUANDO QUISER. "Eu estava cética, mas em 3 dias já senti que alguém finalmente me ouvia." — Ana C.`,
+message: `"Eu estava cética, mas em 3 dias já senti que alguém finalmente me ouvia." — Ana C.`,
 ```
 
-Para:
+2. **Linha 191** — simplificar a `description`:
 ```typescript
-description: `CANCELE QUANDO QUISER.\n\n"Eu estava cética, mas em 3 dias já senti que alguém finalmente me ouvia." — Ana C.`,
+description: `CANCELE QUANDO QUISER.`,
 ```
 
-**Nota:** O Stripe Checkout renderiza texto puro — não suporta negrito/bold em `description`. A separação por parágrafo (`\n\n`) e as aspas do depoimento já criam destaque visual suficiente. Se o Stripe não renderizar a quebra de linha, a alternativa é mover o depoimento para o `custom_text.submit.message` (rodapé branco) e deixar apenas "CANCELE QUANDO QUISER." na description.
+**Resultado visual:**
+- Painel verde: Nome do plano + preço + "CANCELE QUANDO QUISER."
+- Rodapé branco (acima do botão Pagar): depoimento da Ana C.
 
 | Arquivo | Mudança |
 |---|---|
-| `supabase/functions/create-checkout/index.ts` | Adicionar `\n\n` entre "CANCELE QUANDO QUISER" e o depoimento |
+| `supabase/functions/create-checkout/index.ts` | Depoimento vai pro `custom_text.submit`, description fica só com "CANCELE QUANDO QUISER." |
 
