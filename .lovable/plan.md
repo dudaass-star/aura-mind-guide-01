@@ -1,33 +1,32 @@
 
 
-# Fix: Espaço no número `From` do Twilio
+# Fix: Testar envio para Eduardo com dados corretos + corrigir bug de phone vazio
 
-## Problema encontrado
+## Diagnóstico
 
-O erro do Twilio é explícito:
-```text
-The 'From' number whatsapp: +12604684990 is not a valid phone number
-```
+O envio anterior usou o `user_id` errado (`965f2428...`). O Eduardo real é:
+- **user_id**: `329ebadd-07eb-4e1e-88db-d8974b2ea3e5`  
+- **phone**: `555181519708`
+- **last_user_message_at**: `2026-03-31 23:45:03` (dentro da janela de 24h!)
 
-O secret `TWILIO_WHATSAPP_FROM` foi salvo com um **espaço** após `whatsapp:`. A função `getFromNumber()` detecta o prefixo `whatsapp:` e retorna o valor bruto sem limpar o espaço.
+Como a janela de 24h está aberta, o sistema vai enviar como **free text** (grátis), não template.
 
-## Correção
+## Plano
 
-Atualizar `getFromNumber()` em `whatsapp-official.ts` para extrair apenas os dígitos e reconstruir o formato correto, independentemente de espaços ou formatação do secret:
-
-```typescript
-function getFromNumber(): string {
-  const raw = Deno.env.get('TWILIO_WHATSAPP_FROM');
-  if (!raw) throw new Error('TWILIO_WHATSAPP_FROM is not configured');
-  // Always extract digits and rebuild to avoid whitespace/formatting issues
-  const digits = raw.replace(/\D/g, '');
-  return `whatsapp:+${digits}`;
+### 1. Reenviar teste com user_id correto
+Invocar `admin-send-message` com:
+```json
+{
+  "phone": "555181519708",
+  "message": "Oi Eduardo! Esta é uma mensagem de teste da Aura via API oficial. 🌟",
+  "user_id": "329ebadd-07eb-4e1e-88db-d8974b2ea3e5"
 }
 ```
 
-Isso garante que qualquer variação (`whatsapp: +123`, `whatsapp:+123`, `+123`, `123`) seja normalizada para `whatsapp:+123`.
+### 2. Bug secundário: `session-reminder` enviando para phone vazio
+Os logs mostram `Sending template to whatsapp:+` (sem dígitos) + erro 21656 de Content Variables inválido. Isso indica um usuário com phone nulo/vazio na tabela profiles. Precisamos adicionar guard clause nas funções que enviam mensagens para pular usuários sem phone válido.
 
-## Teste
-
-Após o deploy, invocar `admin-send-message` novamente para confirmar a entrega.
+## Resultado Esperado
+- Eduardo recebe a mensagem no WhatsApp
+- Confirma que o fluxo outbound via Twilio funciona end-to-end
 
