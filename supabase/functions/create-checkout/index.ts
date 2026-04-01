@@ -156,10 +156,12 @@ serve(async (req) => {
     const planNames: Record<string, string> = { essencial: "Essencial", direcao: "Direção", transformacao: "Transformação" };
     const planDisplayName = planNames[plan] || plan;
 
+    let trialPriceId: string | undefined;
+
     if (trial) {
       // === TRIAL: Paid trial (R$6,90 / R$9,90 / R$19,90) ===
       const TRIAL_PRICES = getTrialPrices();
-      const trialPriceId = TRIAL_PRICES[plan];
+      trialPriceId = TRIAL_PRICES[plan];
       if (!trialPriceId) {
         throw new Error("Trial price ID not configured for this plan.");
       }
