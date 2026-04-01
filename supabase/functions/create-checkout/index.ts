@@ -151,6 +151,11 @@ serve(async (req) => {
       locale: "pt-BR",
       success_url: `${origin}/obrigado?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/checkout`,
+      custom_text: {
+        submit: {
+          message: '"Eu estava cética, mas em 3 dias já senti que alguém finalmente me ouvia." — Ana C.',
+        },
+      },
     };
 
     const planNames: Record<string, string> = { essencial: "Essencial", direcao: "Direção", transformacao: "Transformação" };
