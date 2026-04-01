@@ -201,11 +201,11 @@ Deno.serve(async (req) => {
             });
           }
 
-          // Create subscription with 5-day trial
+          // Create subscription with 7-day trial
           const subscription = await stripe.subscriptions.create({
             customer: customerId,
             items: [{ price: subscriptionPriceId }],
-            trial_period_days: 5,
+            trial_period_days: 7,
             payment_behavior: 'allow_incomplete',
             ...(defaultPm && { default_payment_method: defaultPm }),
             metadata: {
@@ -216,7 +216,7 @@ Deno.serve(async (req) => {
               billing: customerBilling,
               trial: "true",
             },
-            description: "5 dias grátis — a primeira cobrança será apenas no 6º dia.",
+            description: "7 dias de acesso incluídos — a primeira cobrança será no 8º dia.",
           });
           console.log('✅ Trial subscription created:', subscription.id);
 

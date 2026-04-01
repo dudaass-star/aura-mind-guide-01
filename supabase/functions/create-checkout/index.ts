@@ -157,24 +157,18 @@ serve(async (req) => {
     const planDisplayName = planNames[plan] || plan;
 
     if (trial) {
-      // === TRIAL: R$1 validation charge (refunded after card check) ===
+      // === TRIAL: Paid trial (R$6,90 / R$9,90 / R$19,90) ===
+      const TRIAL_PRICES = getTrialPrices();
+      const trialPriceId = TRIAL_PRICES[plan];
+      if (!trialPriceId) {
+        throw new Error("Trial price ID not configured for this plan.");
+      }
+
       sessionConfig.mode = "payment";
-      sessionConfig.line_items = [{
-        price_data: {
-          currency: 'brl',
-          unit_amount: 100,
-          product_data: {
-            name: `AURA — Ativação do Plano ${planDisplayName}`,
-            description: 'Verificação de segurança. Valor estornado automaticamente.',
-          },
-        },
-        quantity: 1,
-      }];
-      sessionConfig.payment_method_types = ["card"];
+      sessionConfig.line_items = [{ price: trialPriceId, quantity: 1 }];
       sessionConfig.payment_method_options = {
         card: {
           setup_future_usage: 'off_session',
-          request_three_d_secure: 'any',
         },
       };
       sessionConfig.metadata = {
