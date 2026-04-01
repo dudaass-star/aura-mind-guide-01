@@ -145,6 +145,16 @@ serve(async (req) => {
 
     const origin = req.headers.get("origin") || "https://aura.lovable.app";
 
+    // Plan display prices for custom_text
+    const planPrices: Record<string, { monthly: string; yearly: string }> = {
+      essencial: { monthly: "29,90", yearly: "286,80" },
+      direcao: { monthly: "49,90", yearly: "478,80" },
+      transformacao: { monthly: "99,90", yearly: "958,80" },
+    };
+    const displayPrice = planPrices[plan]?.[billingPeriod] || "";
+    const periodLabel = billingPeriod === "yearly" ? "ano" : "mês";
+    const priceInfoLine = displayPrice ? `Após os 7 dias: R$ ${displayPrice}/${periodLabel}. Cancele quando quiser.\n` : "";
+
     // Build checkout session config
     const sessionConfig: any = {
       customer: customerId,
@@ -153,7 +163,7 @@ serve(async (req) => {
       cancel_url: `${origin}/checkout`,
       custom_text: {
         submit: {
-          message: '"Eu estava cética, mas em 3 dias já senti que alguém finalmente me ouvia." — Ana C.',
+          message: `${priceInfoLine}"Eu estava cética, mas em 3 dias já senti que alguém finalmente me ouvia." — Ana C.`,
         },
       },
     };
