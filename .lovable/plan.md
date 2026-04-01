@@ -1,32 +1,55 @@
 
 
-# Ajustar mensagem no Stripe Checkout
+# Ajuste limpo no Stripe Checkout
 
-## Mudança
+## Estratégia
+- **Painel verde**: Mostrar nome do plano + preço mensal na descrição (limpo, informativo)
+- **Rodapé (submit)**: Depoimento da Ana C. + "CANCELE QUANDO QUISER" (prova social + segurança)
 
-**Arquivo:** `supabase/functions/create-checkout/index.ts` (linha 156 e 164-168)
+## Mudança técnica
 
-Trocar a mensagem do `custom_text.submit.message` de:
+**Arquivo:** `supabase/functions/create-checkout/index.ts`
 
+Na seção de trial (linha ~184-185), trocar de price ID estático para `price_data` com descrição customizada:
+
+```typescript
+const trialAmounts: Record<string, number> = {
+  essencial: 690,
+  direcao: 990,
+  transformacao: 1990,
+};
+
+sessionConfig.line_items = [{
+  price_data: {
+    currency: 'brl',
+    unit_amount: trialAmounts[plan],
+    product_data: {
+      name: `AURA ${planDisplayName} — 7 dias`,
+      description: `Após o período de teste: R$ ${displayPrice}/${periodLabel}`,
+    },
+  },
+  quantity: 1,
+}];
 ```
-Após os 7 dias: R$ 29,90/mês. Cancele quando quiser.
-"Eu estava cética, mas em 3 dias já senti que alguém finalmente me ouvia." — Ana C.
+
+E simplificar o `custom_text.submit.message`:
+```typescript
+custom_text: {
+  submit: {
+    message: `CANCELE QUANDO QUISER.\n"Eu estava cética, mas em 3 dias já senti que alguém finalmente me ouvia." — Ana C.`,
+  },
+},
 ```
 
-Para:
+Resultado visual no Stripe:
+- **Painel verde**: "AURA Direção — 7 dias" + "Após o período de teste: R$ 49,90/mês" + R$ 9,90
+- **Rodapé**: "CANCELE QUANDO QUISER" + depoimento
 
-```
-Após os 7 dias: R$ 29,90/mês. CANCELE QUANDO QUISER.
-"Eu estava cética, mas em 3 dias já senti que alguém finalmente me ouvia." — Ana C.
-```
-
-- Remover "Garantia de 7 dias" (se existir em qualquer parte)
-- Destacar "CANCELE QUANDO QUISER" em caixa alta para dar ênfase
-- Manter o depoimento da Ana C. e o preço recorrente
+Também preciso corrigir o build error atual antes de aplicar.
 
 ## Arquivo modificado
 
 | Arquivo | Mudança |
 |---|---|
-| `supabase/functions/create-checkout/index.ts` | Remover "garantia" e destacar "CANCELE QUANDO QUISER" em caixa alta |
+| `supabase/functions/create-checkout/index.ts` | `price_data` com descrição do preço mensal no painel verde, rodapé simplificado |
 
