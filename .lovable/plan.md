@@ -1,79 +1,78 @@
 
 
-# Trial Pago + Checkout com Prova Social
+# Auditoria: Trial Pago — Problemas Encontrados e Correções
 
-## Estratégia
+## Problemas Identificados
 
-Substituir o modelo atual (R$1 validação + reembolso + filtro de cartão) por um **trial pago de 7 dias** com preços por plano. Isso elimina a fricção do reembolso e filtra cartões sem saldo naturalmente. Além disso, aquecer a página de checkout com depoimento e garantia antes do botão de pagamento.
+### 1. BUG CRITICO: `TRIAL_VALIDATION_PRICE_ID` indefinido (runtime crash)
+**Arquivo:** `supabase/functions/create-checkout/index.ts` (linha 235)
 
-## Preços do Trial
+O log usa `TRIAL_VALIDATION_PRICE_ID` que **nunca foi declarado** — é um resquício do código antigo. Isso causa um `ReferenceError` no runtime e **impede a criação de qualquer checkout de trial**.
 
-| Plano | Trial 7 dias | Após trial |
-|---|---|---|
-| Essencial | R$ 6,90 | R$ 29,90/mês ou R$ 214,90/ano |
-| Direção | R$ 9,90 | R$ 49,90/mês ou R$ 359,90/ano |
-| Transformação | R$ 19,90 | R$ 79,90/mês ou R$ 574,90/ano |
+**Fix:** Trocar por `trialPriceId` (variável correta definida na linha 162).
 
-## Mudanças
+### 2. Log desatualizado no webhook: "No payment method found after R$1 charge"
+**Arquivo:** `supabase/functions/stripe-webhook/index.ts` (linha 186)
 
-### 1. Criar 3 produtos/prices no Stripe (one-time)
-- "AURA — 7 dias Essencial" → R$ 6,90 (BRL, one-time)
-- "AURA — 7 dias Direção" → R$ 9,90
-- "AURA — 7 dias Transformação" → R$ 19,90
+Mensagem de log ainda menciona "R$1 charge". Não causa erro, mas confunde na depuração.
 
-### 2. `create-checkout/index.ts`
-- Quando `trial: true`, usar `mode: "payment"` com o price_id do trial correspondente ao plano
-- Remover a lógica de `price_data` com R$1,00 hardcoded
-- Manter `setup_future_usage: 'off_session'` para salvar o cartão
-- **Remover filtro de cartão de crédito** — aceitar qualquer cartão (a cobrança real já filtra saldo)
-- Manter metadata com `trial_validation: "true"` para o webhook saber que é trial
+**Fix:** Atualizar texto para "after paid trial charge".
 
-### 3. `stripe-webhook/index.ts`
-- Na seção `trial_validation`:
-  - **Remover** toda a lógica de reembolso do R$1
-  - **Remover** a verificação de `card.funding` (crédito vs débito) — não é mais necessário pois a cobrança real já valida saldo
-  - Manter a criação da subscription com `trial_period_days: 7` (mudar de 5 para 7)
-  - Manter criação de perfil, welcome message, CAPI event
+### 3. Textos antigos no frontend (4 arquivos)
 
-### 4. `src/pages/Checkout.tsx` — Prova social + garantia
-- Adicionar **bloco de depoimento** acima do botão de pagamento:
-  > *"Eu estava cética, mas em 3 dias já senti que alguém finalmente me ouvia. Hoje não consigo imaginar meu dia sem a AURA."* — Ana C.
-- Adicionar **garantia de satisfação**: "Se nos primeiros 7 dias você não sentir diferença, devolvemos seu dinheiro. Sem perguntas."
-- Atualizar textos:
-  - "Começar 5 dias grátis" → "Começar por R$ X,XX"
-  - "Hoje: R$ 0,00" → "Hoje: R$ X,XX"
-  - "Primeira cobrança em 5 dias" → "Após 7 dias: R$ {preço}/{período}"
-  - Remover menções a "grátis" no checkout
-- Mostrar preço do trial dinamicamente conforme o plano selecionado
+| Arquivo | Linha | Texto atual | Correção |
+|---|---|---|---|
+| `src/components/ForWho.tsx` | 81 | "Experimente Grátis" | "Começar por R$ 6,90" |
+| `src/components/ForWho.tsx` | 85 | "5 dias grátis. Cancele quando quiser." | "7 dias por R$ 6,90. Cancele quando quiser." |
+| `src/components/Demo.tsx` | 514 | "5 dias grátis • Cancele quando quiser" | "7 dias por R$ 6,90 • Cancele quando quiser" |
+| `src/pages/UserGuide.tsx` | 609-613 | "5 conversas grátis... Começar Grátis" | "7 dias por R$ 6,90... Começar agora" |
+| `src/pages/Index.tsx` | 34 | meta description com "Comece grátis" | "Experimente por 7 dias" |
 
-### 5. `src/components/Pricing.tsx` + `FinalCTA.tsx` + `Hero.tsx`
-- Atualizar referências de "5 dias grátis" → "7 dias por R$ 6,90" (ou preço dinâmico)
-- Trust badges: "5 dias grátis pra começar" → "Experimente por 7 dias"
-- CTA do FinalCTA: "Experimentar 5 dias grátis" → "Começar por R$ 6,90"
+### 4. AdminEngagement com referência "5d"
+**Arquivo:** `src/pages/AdminEngagement.tsx` (linha 315-316)
 
-### 6. Secrets
-- Salvar os 3 price IDs do trial como secrets:
-  - `STRIPE_PRICE_ESSENCIAL_TRIAL`
-  - `STRIPE_PRICE_DIRECAO_TRIAL`
-  - `STRIPE_PRICE_TRANSFORMACAO_TRIAL`
+Texto "< 5d" e "trial > 5d" nas métricas do admin. Deve refletir 7 dias.
+
+### 5. Webhook e backend: lógica de 5 dias em outras funções
+Preciso verificar `cleanup-inactive-users`, `session-reminder`, e `scheduled-checkin` para referências ao trial de 5 dias.
+
+## O que está correto
+
+- `create-checkout`: lógica de trial usa `mode: "payment"` com price IDs por plano
+- `stripe-webhook`: sem refund, sem filtro de funding, `trial_period_days: 7`
+- `Checkout.tsx`: preços dinâmicos, depoimento, garantia, tudo ok
+- `Pricing.tsx`: trust badges atualizados para "7 dias a partir de R$ 6,90"
+- `Hero.tsx` e `FinalCTA.tsx`: textos atualizados
+- `FAQ.tsx`: atualizado
+- Secrets configurados: `STRIPE_PRICE_ESSENCIAL_TRIAL`, `STRIPE_PRICE_DIRECAO_TRIAL`, `STRIPE_PRICE_TRANSFORMACAO_TRIAL`
+
+## Plano de Correção
+
+### Passo 1 — Fix crítico no `create-checkout`
+Linha 235: trocar `TRIAL_VALIDATION_PRICE_ID` por `trialPriceId`. Redeploy da função.
+
+### Passo 2 — Atualizar textos antigos nos 4 componentes
+`ForWho.tsx`, `Demo.tsx`, `UserGuide.tsx`, `Index.tsx` — substituir "grátis/5 dias" por "7 dias por R$ 6,90".
+
+### Passo 3 — Atualizar AdminEngagement
+Trocar "< 5d" por "< 7d" nas métricas de trial.
+
+### Passo 4 — Limpar log no webhook
+Atualizar mensagem "R$1 charge" na linha 186.
+
+### Passo 5 — Verificar e atualizar funções de backend
+Checar `cleanup-inactive-users`, `session-reminder`, `schedule-setup-reminder` para referências de 5 dias e atualizar para 7.
 
 ## Arquivos modificados
 
-| Arquivo | Mudança |
+| Arquivo | Tipo |
 |---|---|
-| `supabase/functions/create-checkout/index.ts` | Usar price do trial, remover hardcoded R$1 |
-| `supabase/functions/stripe-webhook/index.ts` | Remover reembolso e filtro de funding, trial 7 dias |
-| `src/pages/Checkout.tsx` | Depoimento, garantia, preços trial dinâmicos |
-| `src/components/Pricing.tsx` | Textos "7 dias por R$6,90" |
-| `src/components/FinalCTA.tsx` | CTA atualizado |
-| `src/components/Hero.tsx` | Textos trial atualizados |
-| `src/components/FAQ.tsx` | Atualizar FAQ sobre trial |
-
-## Detalhes técnicos
-
-- O fluxo permanece `mode: "payment"` com `setup_future_usage` para salvar o cartão
-- A subscription com `trial_period_days: 7` continua sendo criada no webhook após o pagamento
-- A diferença é que o pagamento agora é **real** (R$6,90-19,90) e **não é reembolsado**
-- Cartões sem saldo falham naturalmente no Stripe — sem necessidade de filtro manual
-- O trial de 7 dias começa após a subscription ser criada (a primeira cobrança real do plano acontece no 8º dia)
+| `supabase/functions/create-checkout/index.ts` | Bug fix + redeploy |
+| `supabase/functions/stripe-webhook/index.ts` | Log text cleanup |
+| `src/components/ForWho.tsx` | Texto trial |
+| `src/components/Demo.tsx` | Texto trial |
+| `src/pages/UserGuide.tsx` | Texto trial |
+| `src/pages/Index.tsx` | Meta description |
+| `src/pages/AdminEngagement.tsx` | Métricas trial |
+| Backend functions (verificar) | Período 5→7 dias |
 
