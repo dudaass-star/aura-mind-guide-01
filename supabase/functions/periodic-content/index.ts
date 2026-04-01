@@ -160,45 +160,32 @@ serve(async (req) => {
                 .single();
 
               if (journey && currentEpisode > journey.total_episodes) {
-                console.log(`🎉 Journey completed! Sending choice message`);
-                
-                const { data: allJourneys } = await supabase
-                  .from('content_journeys')
-                  .select('id, title, description')
-                  .eq('is_active', true)
-                  .neq('id', user.current_journey_id)
-                  .order('id');
+                console.log(`🎉 Journey completed! Sending teaser + link`);
                 
                 const userName = user.name?.split(' ')[0] || 'você';
                 
-                let journeyOptions = '';
-                if (allJourneys && allJourneys.length > 0) {
-                  journeyOptions = allJourneys.map((j, idx) => 
-                    `${idx + 1}. *${j.title}*`
-                  ).join('\n');
-                }
+                // Create short link to journey completion page
+                const appUrl = 'https://olaaura.com.br';
+                const completionPageUrl = `${appUrl}/jornada-completa/${journey.id}/${user.user_id}`;
                 
-                const completionMessage = `🎉 ${userName}, você completou a jornada *${journey.title}*!
-
-Foram ${journey.total_episodes} episódios. Cada manifesto que você leu em voz alta plantou uma semente. 💜
-
-Agora você pode escolher sua próxima jornada:
-
-${journeyOptions}
-
-Ou posso continuar com a próxima automaticamente.
-
-_Se preferir pausar, é só dizer "pausar jornadas" 🌿_
-
-Qual vai ser?`;
-
+                const { data: shortLinkResult } = await supabase.functions.invoke(
+                  'create-short-link',
+                  { body: { url: completionPageUrl, phone: user.phone } }
+                );
+                
+                const link = shortLinkResult?.short_url || completionPageUrl;
+                
+                const teaserMessage = `🎉 ${userName}, você completou a jornada *${journey.title}*! Foram ${journey.total_episodes} episódios de crescimento. 💜\n\nEscolha sua próxima jornada:`;
+                const completionMessage = `🎉 Parabéns, ${userName}!\n\nVocê concluiu a jornada *${journey.title}* — ${journey.total_episodes} episódios de reflexão e crescimento.\n\nAgora é hora de escolher o próximo passo. Acesse o link e descubra as jornadas disponíveis:\n\n${link}\n\n_Se não escolher em 48h, a próxima será selecionada automaticamente 🌿_`;
+                
                 const cleanPhone = cleanPhoneNumber(user.phone);
-                await sendProactive(cleanPhone, completionMessage, 'content', user.user_id, zapiConfig);
+                await sendProactive(cleanPhone, completionMessage, 'content', user.user_id, zapiConfig, teaserMessage);
                 
+                // Set current_journey_id to null — user must choose (or fallback in 48h)
                 await supabase
                   .from('profiles')
                   .update({
-                    current_journey_id: journey.next_journey_id,
+                    current_journey_id: null,
                     current_episode: 0,
                     journeys_completed: (user.journeys_completed || 0) + 1,
                     last_content_sent_at: new Date().toISOString()
