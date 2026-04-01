@@ -796,6 +796,31 @@ Deno.serve(async (req) => {
     console.log('🤖 Agent response:', JSON.stringify(agentData, null, 2));
 
     // ========================================================================
+    // RE-ACUMULAÇÃO PÓS-AGENTE
+    // ========================================================================
+    // Verifica se novas msgs do usuário chegaram enquanto o agente processava.
+    // Se sim, re-acumula e re-chama o agente com o texto completo.
+    // ========================================================================
+    const { data: postAgentMsgs } = await supabase
+      .from('messages')
+      .select('content, created_at')
+      .eq('user_id', profile.user_id)
+      .eq('role', 'user')
+      .gt('created_at', lastAssistantMsg?.created_at || '1970-01-01')
+      .order('created_at', { ascending: true });
+
+    if (postAgentMsgs && postAgentMsgs.length > (recentUserMsgs?.length || 1)) {
+      const newAccumulatedText = postAgentMsgs.map(m => m.content).join('\n');
+      if (newAccumulatedText !== messageText) {
+        console.log(`📦 Re-acumulação: ${postAgentMsgs.length} msgs (antes: ${recentUserMsgs?.length || 1}). Re-chamando agente...`);
+        messageText = newAccumulatedText;
+        agentData = await callAuraAgent(false);
+        console.log('🤖 Agent re-response:', JSON.stringify(agentData, null, 2));
+      }
+    }
+
+
+    // ========================================================================
     // UPDATE CONVERSATION TRACKING
     // ========================================================================
     const now = new Date().toISOString();
