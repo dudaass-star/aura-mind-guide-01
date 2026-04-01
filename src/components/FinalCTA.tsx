@@ -15,18 +15,18 @@ const FinalCTA = () => {
           </h2>
           
           <p className="font-body text-lg md:text-xl text-muted-foreground mb-6 leading-relaxed">
-            5 dias grátis — cancele antes de ser cobrado.
+            7 dias por R$ 6,90 — cancele antes de ser cobrado.
           </p>
 
           <p className="font-body text-base text-muted-foreground/80 mb-8 leading-relaxed italic max-w-2xl mx-auto">
             Você pode continuar tentando resolver tudo sozinho, remoendo os mesmos pensamentos amanhã. 
-            Ou pode dar 5 minutos de atenção para si mesmo agora. É grátis, não pede cartão e, no mínimo, 
+            Ou pode dar 5 minutos de atenção para si mesmo agora. Custa menos que um café e, no mínimo, 
             você vai dormir sabendo que alguém realmente te ouviu hoje.
           </p>
 
           <Link to="/checkout">
             <Button variant="sage" size="xl" className="min-w-[280px] mb-6">
-              Experimentar 5 dias grátis
+              Começar por R$ 6,90
             </Button>
           </Link>
 
