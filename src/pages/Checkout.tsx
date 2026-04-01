@@ -332,6 +332,9 @@ const Checkout = () => {
                             <p className="text-xs font-medium text-primary mt-1">
                               7 dias por R$ {plan.trialPrice}
                             </p>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              Após: R$ {price}/{period}
+                            </p>
                           </div>
                         </div>
                         <p className="font-display text-xl font-semibold text-foreground whitespace-nowrap">
