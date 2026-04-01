@@ -31,7 +31,7 @@ const Index = () => {
         <title>AURA - Acompanhamento Emocional Acessível no WhatsApp</title>
         <meta
           name="description"
-          content="Acompanhamento emocional profundo por menos de R$2/dia. Suporte 24/7 no WhatsApp com memória de longo prazo, sessões estruturadas e metodologia. Comece grátis."
+          content="Acompanhamento emocional profundo por menos de R$2/dia. Suporte 24/7 no WhatsApp com memória de longo prazo, sessões estruturadas e metodologia. Experimente por 7 dias."
         />
         <meta
           name="keywords"

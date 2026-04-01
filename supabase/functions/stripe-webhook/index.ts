@@ -183,7 +183,7 @@ Deno.serve(async (req) => {
             }
           }
           if (!defaultPm) {
-            console.error('❌ No payment method found after R$1 charge — subscription will have no PM');
+            console.error('❌ No payment method found after paid trial charge — subscription will have no PM');
           }
 
           // Get the correct price for the subscription
