@@ -188,7 +188,7 @@ serve(async (req) => {
           unit_amount: trialAmounts[plan],
           product_data: {
           name: `AURA ${planDisplayName} — 7 dias | Após: R$ ${displayPrice}/${periodLabel}`,
-          description: `CANCELE QUANDO QUISER. "Eu estava cética, mas em 3 dias já senti que alguém finalmente me ouvia." — Ana C.`,
+          description: `CANCELE QUANDO QUISER.\n\n"Eu estava cética, mas em 3 dias já senti que alguém finalmente me ouvia." — Ana C.`,
           },
         },
         quantity: 1,
