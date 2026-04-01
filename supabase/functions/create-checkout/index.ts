@@ -163,7 +163,7 @@ serve(async (req) => {
       cancel_url: `${origin}/checkout`,
       custom_text: {
         submit: {
-          message: `Pagamento único de teste. Sem compromisso.`,
+          message: `"Eu estava cética, mas em 3 dias já senti que alguém finalmente me ouvia." — Ana C.`,
         },
       },
     };
