@@ -606,11 +606,11 @@ const UserGuide = () => {
               Quer experimentar tudo isso?
             </h2>
             <p className="text-muted-foreground mb-8 text-lg">
-              5 conversas grátis. Sem cartão. Sem compromisso.
+              7 dias por R$ 6,90. Cancele quando quiser.
             </p>
             <Button variant="sage" size="xl" asChild>
-              <Link to="/experimentar">
-                Começar Grátis
+              <Link to="/checkout">
+                Começar agora
               </Link>
             </Button>
           </div>

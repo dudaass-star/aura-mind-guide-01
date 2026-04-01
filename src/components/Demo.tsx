@@ -511,7 +511,7 @@ const Demo = () => {
               </Button>
             </a>
             <p className="text-sm text-muted-foreground mt-2">
-              5 dias grátis • Cancele quando quiser
+              7 dias por R$ 6,90 • Cancele quando quiser
             </p>
           </div>
         )}

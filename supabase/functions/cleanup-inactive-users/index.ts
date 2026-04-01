@@ -25,8 +25,8 @@ Deno.serve(async (req) => {
       errors: [] as string[],
     };
 
-    // ── 1. Ghost trials: never interacted + >5 days since trial_started_at ──
-    const ghostCutoff = new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString();
+    // ── 1. Ghost trials: never interacted + >7 days since trial_started_at ──
+    const ghostCutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
     const { data: ghostTrials, error: ghostErr } = await supabase
       .from('profiles')
       .select('user_id, name, phone, whatsapp_instance_id, trial_started_at')
