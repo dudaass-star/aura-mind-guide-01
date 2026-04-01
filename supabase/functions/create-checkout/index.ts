@@ -147,9 +147,9 @@ serve(async (req) => {
 
     // Plan display prices for custom_text
     const planPrices: Record<string, { monthly: string; yearly: string }> = {
-      essencial: { monthly: "29,90", yearly: "286,80" },
-      direcao: { monthly: "49,90", yearly: "478,80" },
-      transformacao: { monthly: "99,90", yearly: "958,80" },
+      essencial: { monthly: "29,90", yearly: "214,90" },
+      direcao: { monthly: "49,90", yearly: "359,90" },
+      transformacao: { monthly: "79,90", yearly: "574,90" },
     };
     const displayPrice = planPrices[plan]?.[billingPeriod] || "";
     const periodLabel = billingPeriod === "yearly" ? "ano" : "mês";
