@@ -15,9 +15,9 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { phone, message, user_id } = await req.json();
+    const { phone, message, user_id, template_category } = await req.json();
     
-    console.log(`📤 [Admin] Sending message to ${phone}${user_id ? ` (user: ${user_id})` : ''}`);
+    console.log(`📤 [Admin] Sending message to ${phone}${user_id ? ` (user: ${user_id})` : ''} [category: ${template_category || 'checkin'}]`);
 
     if (!phone || !message) {
       throw new Error('Phone and message are required');
