@@ -1,7 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { cleanPhoneNumber } from "../_shared/zapi-client.ts";
-import { sendMessage, sendProactive } from "../_shared/whatsapp-provider.ts";
-import { allocateInstance, getInstanceConfigById } from "../_shared/instance-helper.ts";
+import { sendProactive } from "../_shared/whatsapp-provider.ts";
+import { allocateInstance } from "../_shared/instance-helper.ts";
 
 async function createShortLink(supabaseUrl: string, serviceKey: string, url: string, phone?: string): Promise<string | null> {
   try {
@@ -132,17 +131,7 @@ Deno.serve(async (req) => {
     // Lead CAPI event removed — trial flow now goes directly to /checkout (Stripe)
     // The start-trial function is only used as a legacy fallback
 
-    // Obter config da instância alocada para enviar mensagem de boas-vindas
-    let zapiConfig = undefined;
-    if (instanceId) {
-      try {
-        zapiConfig = await getInstanceConfigById(supabase, instanceId);
-      } catch (e) {
-        console.warn('⚠️ Could not get instance config, using env vars');
-      }
-    }
-
-    // Link direto para o guia (sem short link para manter URL amigável no WhatsApp)
+    // Link direto para o guia
     const guideLinkText = 'https://olaaura.com.br/guia';
 
     const welcomeMessage = `Oi, ${name.trim()}! 💜
@@ -151,41 +140,27 @@ Que bom que você decidiu me conhecer! Eu sou a AURA.
 
 Vou estar com você nessa primeira jornada. Pode falar comigo sobre qualquer coisa — sem julgamento, no seu ritmo.
 
+Se preferir, pode me mandar áudio também! 🎙️
+
 Dá uma olhada no que você vai ter acesso: ${guideLinkText} ✨
 
 Me conta: como você está se sentindo agora?`;
 
     try {
-      const result = await sendMessage(formattedPhone, welcomeMessage);
+      const result = await sendProactive(formattedPhone, welcomeMessage, 'welcome_trial', userId);
       if (result.success) {
-        console.log('✅ Welcome message sent');
+        console.log('✅ Welcome message sent via', result.provider);
 
-        // Save welcome message to history so it appears in admin panel
         await supabase.from('messages').insert({
           user_id: userId,
           role: 'assistant',
           content: welcomeMessage,
         });
-
-        // Segunda mensagem: informar sobre funcionalidade de áudio
-        try {
-          const audioMsg = `Ah, e se preferir, pode me mandar áudio também! 🎙️ Eu ouço e respondo — por texto ou por voz, como você preferir.`;
-          await sendMessage(formattedPhone, audioMsg);
-          console.log('✅ Audio info message sent');
-
-          await supabase.from('messages').insert({
-            user_id: userId,
-            role: 'assistant',
-            content: audioMsg,
-          });
-        } catch (audioMsgError) {
-          console.warn('⚠️ Audio info message failed (non-blocking):', audioMsgError);
-        }
       } else {
         console.error('⚠️ Welcome message error:', result.error);
       }
-    } catch (zapiError) {
-      console.error('⚠️ Z-API error (non-blocking):', zapiError);
+    } catch (msgError) {
+      console.error('⚠️ Welcome message error (non-blocking):', msgError);
     }
 
 
