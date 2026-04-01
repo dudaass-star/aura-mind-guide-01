@@ -1,3 +1,4 @@
+// v2: normalized From number fix
 import { cleanPhoneNumber } from "../_shared/zapi-client.ts";
 import { sendProactive } from "../_shared/whatsapp-provider.ts";
 import { getInstanceConfigForUser } from "../_shared/instance-helper.ts";
