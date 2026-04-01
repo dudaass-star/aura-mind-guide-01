@@ -17,9 +17,9 @@ const faqs = [
       "AURA é acompanhamento emocional e direção prática — não substitui atendimento psicológico profissional. Muita gente usa como complemento entre sessões ou como ponto de partida para quem não tem acesso à terapia. Se você está em crise severa, procure ajuda especializada.",
   },
   {
-    question: "Como funciona o teste grátis?",
+    question: "Como funciona o período de teste?",
     answer:
-      "Você experimenta a AURA por 5 dias grátis com acesso completo ao plano Essencial. Basta cadastrar um cartão — nenhuma cobrança é feita nos primeiros 5 dias. Se não fizer sentido, cancele a qualquer momento antes do 6º dia e não será cobrado nada.",
+      "Você experimenta a AURA por 7 dias com acesso completo ao plano escolhido, pagando apenas uma taxa simbólica (a partir de R$ 6,90). Se não fizer sentido, cancele a qualquer momento antes do 8º dia e não será cobrado mais nada. Se nos primeiros 7 dias você não sentir diferença, devolvemos seu dinheiro — sem perguntas.",
   },
   {
     question: "Posso pausar minha assinatura?",

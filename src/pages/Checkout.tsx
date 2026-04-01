@@ -458,7 +458,7 @@ const Checkout = () => {
                 disabled={isLoading}
               >
                 <CreditCard className="w-5 h-5 mr-2" />
-                {isLoading ? "Processando..." : "Começar 5 dias grátis"}
+                {isLoading ? "Processando..." : `Começar por R$ ${currentPlan.trialPrice}`}
               </Button>
 
               {/* Trust badges */}

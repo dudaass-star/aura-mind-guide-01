@@ -110,11 +110,11 @@ const Hero = () => {
           <div className="flex flex-col items-center gap-4 animate-fade-up opacity-0 delay-300">
             <Link to="/checkout">
               <Button variant="sage" size="xl" className="min-w-[280px]">
-                Experimentar 5 dias grátis
+                Começar por R$ 6,90
               </Button>
             </Link>
             <p className="text-sm text-muted-foreground">
-              Sem cobrança nos primeiros 5 dias. Cancele quando quiser.
+              7 dias por R$ 6,90 • Cancele quando quiser.
             </p>
           </div>
 
