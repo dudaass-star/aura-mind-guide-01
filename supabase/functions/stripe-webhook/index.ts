@@ -886,7 +886,52 @@ Me conta: como você está hoje?`;
                 .eq('id', profile.id);
               console.log('ℹ️ invoice.paid — cleared payment_failed_at for:', profile.phone);
             } else {
-              console.warn('⚠️ invoice.paid but no profile found for customer:', customerId);
+              // === Fallback: create profile from Stripe customer data ===
+              console.warn('⚠️ invoice.paid — no profile found, attempting auto-create for customer:', customerId);
+              try {
+                const custForCreate = customer as Stripe.Customer;
+                const rawPhone = custForCreate.metadata?.phone;
+                if (rawPhone) {
+                  const cleanPhone = rawPhone.replace(/\D/g, '');
+                  const formattedPhone = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
+                  
+                  // Determine plan from subscription price
+                  const sub = await stripe.subscriptions.retrieve(invoice.subscription as string);
+                  const priceId = sub.items.data[0]?.price?.id;
+                  let plan = 'essencial';
+                  const priceEssencial = Deno.env.get('STRIPE_PRICE_ESSENCIAL_MONTHLY') || '';
+                  const priceEssencialYearly = Deno.env.get('STRIPE_PRICE_ESSENCIAL_YEARLY') || '';
+                  const priceDirecao = Deno.env.get('STRIPE_PRICE_DIRECAO_MONTHLY') || '';
+                  const priceDirecaoYearly = Deno.env.get('STRIPE_PRICE_DIRECAO_YEARLY') || '';
+                  const priceTransformacao = Deno.env.get('STRIPE_PRICE_TRANSFORMACAO_MONTHLY') || '';
+                  const priceTransformacaoYearly = Deno.env.get('STRIPE_PRICE_TRANSFORMACAO_YEARLY') || '';
+                  if (priceId === priceDirecao || priceId === priceDirecaoYearly) plan = 'direcao';
+                  if (priceId === priceTransformacao || priceId === priceTransformacaoYearly) plan = 'transformacao';
+
+                  const newUserId = crypto.randomUUID();
+                  const { error: insertError } = await supabase
+                    .from('profiles')
+                    .insert({
+                      user_id: newUserId,
+                      name: custForCreate.name || custForCreate.metadata?.name || 'Usuário',
+                      phone: formattedPhone,
+                      email: custForCreate.email || null,
+                      status: 'active',
+                      plan,
+                      converted_at: new Date().toISOString(),
+                    });
+
+                  if (insertError) {
+                    console.error('❌ Failed to auto-create profile:', insertError);
+                  } else {
+                    console.log(`✅ Auto-created profile for ${formattedPhone} (plan: ${plan}) from invoice.paid`);
+                  }
+                } else {
+                  console.warn('⚠️ Cannot auto-create profile: no phone in customer metadata');
+                }
+              } catch (autoCreateErr) {
+                console.error('❌ Error in auto-create profile fallback:', autoCreateErr);
+              }
             }
           }
         } catch (err) {
