@@ -132,3 +132,6 @@ verify_jwt = true
 
 [functions.webhook-twilio]
 verify_jwt = false
+
+[functions.choose-next-journey]
+verify_jwt = false

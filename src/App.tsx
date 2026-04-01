@@ -22,6 +22,7 @@ import AdminMessages from "./pages/AdminMessages";
 import AdminTemplates from "./pages/AdminTemplates";
 import UserGuide from "./pages/UserGuide";
 import Episode from "./pages/Episode";
+import JourneyComplete from "./pages/JourneyComplete";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -52,6 +53,7 @@ const App = () => (
             <Route path="/admin/templates" element={<AdminTemplates />} />
             <Route path="/guia" element={<UserGuide />} />
             <Route path="/episodio/:id" element={<Episode />} />
+            <Route path="/jornada-completa/:journeyId/:userId" element={<JourneyComplete />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
