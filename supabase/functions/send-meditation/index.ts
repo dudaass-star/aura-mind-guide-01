@@ -188,7 +188,7 @@ serve(async (req) => {
       console.error('Failed to send audio:', audioResult.error);
       
       const fallbackMsg = `🎧 Tive um probleminha para enviar o áudio direto. Você pode ouvir aqui: ${audioData.public_url}`;
-      await sendMessage(userPhone, fallbackMsg);
+      await sendProactive(userPhone, fallbackMsg, 'content', userId);
       
       if (userId) {
         await supabase.from('messages').insert({

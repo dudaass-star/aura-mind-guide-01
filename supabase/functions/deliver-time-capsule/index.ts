@@ -89,7 +89,7 @@ Deno.serve(async (req) => {
         // Mensagem de encerramento
         await new Promise(resolve => setTimeout(resolve, 2000));
         const closingMsg = `E aí, como é ouvir isso agora? 💜 Mudou muita coisa desde então?`;
-        await sendMessage(profile.phone, closingMsg);
+        await sendProactive(profile.phone, closingMsg, 'checkin', profile.user_id);
 
         // Marcar como entregue
         await supabase.from('time_capsules').update({
