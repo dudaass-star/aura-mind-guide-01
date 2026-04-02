@@ -69,7 +69,7 @@ Deno.serve(async (req) => {
         // Mensagem introdutória
         const introMsg = `${userName}, lembra daquela cápsula do tempo que você gravou? 💜✨\n\nChegou a hora! Aqui está a mensagem que o seu eu do passado deixou pra você. Escuta com carinho 🫶`;
         
-        await sendMessage(profile.phone, introMsg);
+        await sendProactive(profile.phone, introMsg, 'checkin', profile.user_id);
 
         // Pequeno delay antes de enviar o áudio
         await new Promise(resolve => setTimeout(resolve, 3000));
