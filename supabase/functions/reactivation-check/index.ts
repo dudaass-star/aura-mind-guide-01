@@ -112,7 +112,7 @@ Deno.serve(async (req) => {
         try {
           const zapiConfig = await getInstanceConfigForUser(supabase, tp.user_id);
           const cleanPhone = cleanPhoneNumber(tp.phone!);
-          const result = await sendProactive(cleanPhone, nudgeMessage);
+          const result = await sendProactive(cleanPhone, nudgeMessage, 'reactivation', tp.user_id);
 
           if (result.success) {
             await supabase
