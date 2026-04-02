@@ -127,16 +127,18 @@ export async function sendProactive(
   teaserText?: string,
   templateVariables?: string[],
 ): Promise<SendResult> {
-  const provider = await getProvider();
+  return withRetry(async () => {
+    const provider = await getProvider();
 
-  if (provider === 'zapi') {
-    const result = await sendTextMessage(phone, text, undefined, configOverride);
-    return { success: result.success, provider: 'zapi', error: result.error };
-  }
+    if (provider === 'zapi') {
+      const result = await sendTextMessage(phone, text, undefined, configOverride);
+      return { success: result.success, provider: 'zapi', error: result.error };
+    }
 
-  // Official API: template envelope + split (teaser avoids split)
-  const result: ProactiveMessageResult = await sendProactiveMessage(phone, text, templateCategory, userId, teaserText, templateVariables);
-  return { success: result.success, provider: 'official', error: result.error };
+    // Official API: template envelope + split (teaser avoids split)
+    const result: ProactiveMessageResult = await sendProactiveMessage(phone, text, templateCategory, userId, teaserText, templateVariables);
+    return { success: result.success, provider: 'official', error: result.error };
+  }, `sendProactive(${phone.substring(0, 4)}***)`);
 }
 
 /**
