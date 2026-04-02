@@ -1,48 +1,36 @@
 
 
-## Correção: Newlines em ContentVariables Quebram Twilio Content API
+## Correção do Dunning Falhado — 3 Clientes de 02/04
 
-### Causa Raiz Confirmada
+### Problema
 
-Através de testes diretos, confirmei que:
-- Texto simples sem `\n` → funciona
-- Texto com emojis (💜, 🤍) → funciona
-- Texto com URL → funciona
-- Texto com `\n` (newlines) → **FALHA com erro 21656**
+O webhook do Stripe processou 3 eventos `invoice.payment_failed` hoje, mas **não executou o fluxo de dunning** para nenhum deles. Zero registros em `dunning_attempts`, zero atualizações de `payment_failed_at` nos perfis. Os logs foram rotacionados, impedindo diagnóstico exato.
 
-O Twilio Content API rejeita ContentVariables cujo valor contém caracteres de newline. Isso afeta **todas as mensagens proativas** que contêm quebras de linha — não apenas checkout_recovery.
+### Plano em 2 Passos
 
-### Impacto
+**Passo 1: Recuperação imediata**
 
-Qualquer mensagem enviada via template (fora da janela de 24h) que contenha `\n` no texto está falhando silenciosamente. Isso inclui:
-- Checkout recovery (confirmado falhando)
-- Check-ins, insights, relatórios semanais, session reminders — todos potencialmente afetados quando contêm newlines
+Usar a função `reprocess-dunning` já existente para enviar as mensagens de dunning manualmente para os 3 customers:
+- `cus_UDWIwTAvUFRlO2` (Niédja Alcântara)
+- `cus_UDUaYL9Yg9vXP1` (Rafaella Gomes)
+- Identificar o 3º customer via Stripe invoice e incluir
 
-### Correção
+Chamar a edge function `reprocess-dunning` com os 3 customer_ids.
 
-Uma única mudança em `whatsapp-official.ts`, na função `sendTemplateMessage`: sanitizar os valores das variáveis antes de enviá-las, substituindo newlines por espaços.
+**Passo 2: Diagnóstico e correção do webhook**
 
-**Arquivo**: `supabase/functions/_shared/whatsapp-official.ts`
+Adicionar logging extra no início do bloco `invoice.payment_failed` do stripe-webhook para capturar:
+- Se o bloco está sendo alcançado
+- Se `invoice.subscription` está null (o que pularia todo o dunning)
+- O customer_id e email sendo usado na resolução
 
-Na função `sendTemplateMessage`, após construir `contentVars`, sanitizar:
-```typescript
-// Sanitize: Twilio Content API rejects newlines in ContentVariables
-const sanitizedVars: Record<string, string> = {};
-for (const [key, val] of Object.entries(contentVars)) {
-  sanitizedVars[key] = val.replace(/\n+/g, ' ');
-}
-```
+Adicionar um log de entrada no início do bloco de dunning e um try/catch mais robusto para garantir que ao menos o registro de auditoria seja criado mesmo em caso de crash.
 
-E usar `sanitizedVars` no `JSON.stringify` em vez de `contentVars`.
-
-### Passo 2: Resetar checkouts falhados
-
-Após o deploy, resetar os registros que falharam hoje para permitir reenvio:
-- Executar migration para resetar `recovery_sent = false` e `recovery_attempts_count = 0` para os 4-5 checkouts que falharam em 02/04 com erro 21656
+**Arquivo**: `supabase/functions/stripe-webhook/index.ts` — adicionar console.log de entrada no bloco payment_failed e garantir fallback de audit trail.
 
 ### Detalhes Técnicos
 
-- **Arquivo alterado**: `supabase/functions/_shared/whatsapp-official.ts` — sanitização de newlines na função `sendTemplateMessage`
-- **Migration**: Reset dos `checkout_sessions` falhados por 21656 em 02/04
-- **Deploy**: `whatsapp-official.ts` é shared, então qualquer função que importe dele será automaticamente atualizada no próximo deploy. Vamos deployar `recover-abandoned-checkout` para validar.
+- O bloco de dunning (linha 876) verifica `if (invoice.subscription)` — se for null, pula silenciosamente sem criar nenhum registro de auditoria. Este é um possível gap.
+- O `reprocess-dunning` resolve perfis independentemente, então pode funcionar mesmo quando o webhook falha.
+- Deploy necessário: `stripe-webhook` (com logs extras) + execução manual de `reprocess-dunning`.
 
