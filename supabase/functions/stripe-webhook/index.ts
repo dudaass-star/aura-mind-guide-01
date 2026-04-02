@@ -644,6 +644,9 @@ Cuide-se. 🌟`;
           console.error('❌ Failed to send farewell message:', farewellResult.error);
         } else {
           console.log('✅ Farewell message sent via', farewellResult.provider);
+          if (profile?.user_id) {
+            await supabase.from('messages').insert({ user_id: profile.user_id, role: 'assistant', content: farewellMessage });
+          }
         }
 
         // Update profile status
