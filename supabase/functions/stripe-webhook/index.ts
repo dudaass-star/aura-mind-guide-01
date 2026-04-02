@@ -936,29 +936,15 @@ Você pode atualizar seu cartão aqui: ${paymentLink}
 
 Se preferir cancelar, é só me avisar. Sem problemas. 💜`;
 
-            const msgResponse = await fetch(`${supabaseUrl}/functions/v1/send-zapi-message`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${supabaseServiceKey}`,
-              },
-              body: JSON.stringify({
-                phone: profile.phone,
-                message: dunningMessage,
-                isAudio: false,
-                user_id: profile.user_id,
-              }),
-            });
+            const dunningResult = await sendProactive(profile.phone, dunningMessage, 'dunning', profile.user_id);
 
-            if (!msgResponse.ok) {
-              const errText = await msgResponse.text();
-              console.error('❌ Failed to send dunning WhatsApp:', errText);
+            if (!dunningResult.success) {
+              console.error('❌ Failed to send dunning WhatsApp:', dunningResult.error);
               dunningRecord.error_stage = 'whatsapp_send_failed';
-              dunningRecord.error_message = errText;
+              dunningRecord.error_message = dunningResult.error;
             } else {
-              await msgResponse.text(); // consume body to prevent resource leak
               dunningRecord.whatsapp_sent = true;
-              console.log('✅ Dunning WhatsApp sent to:', profile.phone);
+              console.log('✅ Dunning WhatsApp sent via', dunningResult.provider, 'to:', profile.phone);
             }
           } catch (portalErr) {
             const errMsg = portalErr instanceof Error ? portalErr.message : String(portalErr);
