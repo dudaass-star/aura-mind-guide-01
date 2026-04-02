@@ -514,25 +514,11 @@ Me diz: como você está hoje?`;
 
       // Send message via Z-API
       try {
-        const response = await fetch(`${supabaseUrl}/functions/v1/send-zapi-message`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseServiceKey}`,
-          },
-          body: JSON.stringify({
-            phone: formattedPhone,
-            message: welcomeMessage,
-            isAudio: false,
-            user_id: profileUserId,
-          }),
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error('❌ Failed to send message:', errorText);
+        const result = await sendProactive(formattedPhone, welcomeMessage, 'welcome', profileUserId);
+        if (!result.success) {
+          console.error('❌ Failed to send message:', result.error);
         } else {
-          console.log(`✅ ${isUpgrade ? 'Upgrade' : 'Welcome'} message sent successfully!`);
+          console.log(`✅ ${isUpgrade ? 'Upgrade' : 'Welcome'} message sent via ${result.provider}!`);
         }
       } catch (sendError) {
         console.error('❌ Error sending message:', sendError);
