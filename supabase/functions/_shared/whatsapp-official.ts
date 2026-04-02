@@ -201,7 +201,10 @@ export async function sendTemplateMessage(
 
     // Build ContentVariables: {"1": "value1", "2": "value2", ...}
     const contentVars: Record<string, string> = {};
-    variables.forEach((v, i) => { contentVars[String(i + 1)] = v; });
+    variables.forEach((v, i) => {
+      // Sanitize: Twilio Content API rejects newlines in ContentVariables (error 21656)
+      contentVars[String(i + 1)] = v.replace(/\n+/g, ' ');
+    });
 
     console.log(`📨 [Twilio] Sending template "${templateName}" (SID: ${template.twilio_content_sid}) to ${to}`);
 
