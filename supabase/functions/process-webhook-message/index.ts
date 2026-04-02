@@ -345,7 +345,11 @@ Deno.serve(async (req) => {
         blockMessage = statusMessages[profile.status!];
       }
 
-      await sendMessage(cleanPhone!, blockMessage);
+      const blockResult = await sendMessage(cleanPhone!, blockMessage);
+      if (!blockResult.success) {
+        console.error(`❌ Failed to send block message: ${blockResult.error}`);
+        await logFailedMessage(supabase, profile.user_id, cleanPhone, blockMessage, blockResult.error);
+      }
       return new Response(JSON.stringify({ success: true, action: 'subscription_blocked', status: profile.status }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

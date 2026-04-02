@@ -731,8 +731,12 @@ Se quiser remarcar uma nova sessão, é só me dizer!`;
           try {
             const cleanPhone = cleanPhoneNumber(profile.phone);
             const instanceConfig = await getInstanceConfigForUser(supabase, session.user_id);
-            await sendProactive(cleanPhone, messageToSend, 'session_reminder', session.user_id);
-            console.log(`✅ Closure message sent for session ${session.id}`);
+            const sendResult = await sendProactive(cleanPhone, messageToSend, 'session_reminder', session.user_id);
+            if (sendResult.success) {
+              console.log(`✅ Closure message sent for session ${session.id}`);
+            } else {
+              console.error(`❌ Failed to send closure message for session ${session.id}: ${sendResult.error}`);
+            }
           } catch (sendError) {
             console.error(`❌ Error sending closure message for session ${session.id}:`, sendError);
           }
