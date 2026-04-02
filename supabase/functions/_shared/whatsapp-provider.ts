@@ -176,14 +176,16 @@ export async function sendAudioUrl(
   audioUrl: string,
   configOverride?: ZapiConfig,
 ): Promise<SendResult> {
-  const provider = await getProvider();
+  return withRetry(async () => {
+    const provider = await getProvider();
 
-  if (provider === 'zapi') {
-    const result = await zapiSendAudioFromUrl(phone, audioUrl, configOverride);
-    return { success: result.success, provider: 'zapi', error: result.error };
-  }
+    if (provider === 'zapi') {
+      const result = await zapiSendAudioFromUrl(phone, audioUrl, configOverride);
+      return { success: result.success, provider: 'zapi', error: result.error };
+    }
 
-  // Official API: MediaUrl via Twilio Gateway
-  const result = await twilioSendAudioFromUrl(phone, audioUrl);
-  return { success: result.success, provider: 'official', error: result.error };
+    // Official API: MediaUrl via Twilio Gateway
+    const result = await twilioSendAudioFromUrl(phone, audioUrl);
+    return { success: result.success, provider: 'official', error: result.error };
+  }, `sendAudioUrl(${phone.substring(0, 4)}***)`);
 }
