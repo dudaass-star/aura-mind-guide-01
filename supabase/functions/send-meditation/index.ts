@@ -168,7 +168,7 @@ serve(async (req) => {
     const durationMinutes = Math.round((audioData.duration_seconds || meditation?.duration_seconds || 300) / 60);
     const introMessage = `🧘 *${meditation?.title || 'Meditação Guiada'}*\n\nDuração: ~${durationMinutes} minutos\n\nEncontre um lugar tranquilo, feche os olhos e me deixe te guiar... 💜`;
     
-    await sendMessage(userPhone, introMessage);
+    await sendProactive(userPhone, introMessage, 'content', userId);
 
     // Register intro message in messages table for admin visibility
     if (userId) {
