@@ -142,9 +142,11 @@ serve(async (req) => {
     if (audioError || !audioData) {
       console.error(`Audio not found for meditation: ${selectedMeditationId}`, audioError);
       
-      await sendMessage(
+      await sendProactive(
         userPhone,
-        "🧘 Ops, parece que essa meditação ainda não está pronta. Me perdoa! Vou providenciar e te aviso quando estiver disponível. 💜"
+        "🧘 Ops, parece que essa meditação ainda não está pronta. Me perdoa! Vou providenciar e te aviso quando estiver disponível. 💜",
+        'content',
+        userId
       );
       
       return new Response(JSON.stringify({ 
