@@ -3,6 +3,7 @@ import Stripe from "https://esm.sh/stripe@14.21.0";
 import { allocateInstance } from "../_shared/instance-helper.ts";
 import { resolveProfile } from "../_shared/profile-resolver.ts";
 import { getPhoneVariations } from "../_shared/zapi-client.ts";
+import { sendProactive } from "../_shared/whatsapp-provider.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -305,24 +306,11 @@ Deno.serve(async (req) => {
           }
 
           try {
-            const response = await fetch(`${supabaseUrl}/functions/v1/send-zapi-message`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${supabaseServiceKey}`,
-              },
-              body: JSON.stringify({
-                phone: formattedPhone,
-                message: welcomeMessage,
-                isAudio: false,
-                user_id: profileUserId,
-              }),
-            });
-            if (!response.ok) {
-              console.error('❌ Failed to send welcome:', await response.text());
+            const result = await sendProactive(formattedPhone, welcomeMessage, 'welcome', profileUserId);
+            if (!result.success) {
+              console.error('❌ Failed to send welcome:', result.error);
             } else {
-              await response.text();
-              console.log('✅ Welcome message sent');
+              console.log('✅ Welcome message sent via', result.provider);
             }
           } catch (sendError) {
             console.error('❌ Error sending welcome:', sendError);
@@ -526,25 +514,11 @@ Me diz: como você está hoje?`;
 
       // Send message via Z-API
       try {
-        const response = await fetch(`${supabaseUrl}/functions/v1/send-zapi-message`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseServiceKey}`,
-          },
-          body: JSON.stringify({
-            phone: formattedPhone,
-            message: welcomeMessage,
-            isAudio: false,
-            user_id: profileUserId,
-          }),
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error('❌ Failed to send message:', errorText);
+        const result = await sendProactive(formattedPhone, welcomeMessage, 'welcome', profileUserId);
+        if (!result.success) {
+          console.error('❌ Failed to send message:', result.error);
         } else {
-          console.log(`✅ ${isUpgrade ? 'Upgrade' : 'Welcome'} message sent successfully!`);
+          console.log(`✅ ${isUpgrade ? 'Upgrade' : 'Welcome'} message sent via ${result.provider}!`);
         }
       } catch (sendError) {
         console.error('❌ Error sending message:', sendError);
@@ -628,24 +602,11 @@ Lembre-se: o caminho do autoconhecimento não para. Se precisar de mim, estarei 
 
 Cuide-se. 🌟`;
 
-        const response = await fetch(`${supabaseUrl}/functions/v1/send-zapi-message`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseServiceKey}`,
-          },
-          body: JSON.stringify({
-            phone: phone,
-            message: farewellMessage,
-            isAudio: false,
-            ...(profile?.user_id && { user_id: profile.user_id }),
-          }),
-        });
-
-        if (!response.ok) {
-          console.error('❌ Failed to send farewell message:', await response.text());
+        const farewellResult = await sendProactive(phone, farewellMessage, 'checkin', profile?.user_id);
+        if (!farewellResult.success) {
+          console.error('❌ Failed to send farewell message:', farewellResult.error);
         } else {
-          console.log('✅ Farewell message sent successfully!');
+          console.log('✅ Farewell message sent via', farewellResult.provider);
         }
 
         // Update profile status
@@ -708,24 +669,11 @@ Sua assinatura AURA foi reativada e estou aqui, pronta pra continuar nossa jorna
 
 Me conta: como você está hoje?`;
 
-        const response = await fetch(`${supabaseUrl}/functions/v1/send-zapi-message`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseServiceKey}`,
-          },
-          body: JSON.stringify({
-            phone: phone,
-            message: welcomeBackMessage,
-            isAudio: false,
-            ...(profile?.user_id && { user_id: profile.user_id }),
-          }),
-        });
-
-        if (!response.ok) {
-          console.error('❌ Failed to send welcome back message:', await response.text());
+        const welcomeBackResult = await sendProactive(phone, welcomeBackMessage, 'welcome', profile?.user_id);
+        if (!welcomeBackResult.success) {
+          console.error('❌ Failed to send welcome back message:', welcomeBackResult.error);
         } else {
-          console.log('✅ Welcome back message sent successfully!');
+          console.log('✅ Welcome back message sent via', welcomeBackResult.provider);
         }
 
         // Update profile status back to active
@@ -988,29 +936,15 @@ Você pode atualizar seu cartão aqui: ${paymentLink}
 
 Se preferir cancelar, é só me avisar. Sem problemas. 💜`;
 
-            const msgResponse = await fetch(`${supabaseUrl}/functions/v1/send-zapi-message`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${supabaseServiceKey}`,
-              },
-              body: JSON.stringify({
-                phone: profile.phone,
-                message: dunningMessage,
-                isAudio: false,
-                user_id: profile.user_id,
-              }),
-            });
+            const dunningResult = await sendProactive(profile.phone, dunningMessage, 'dunning', profile.user_id);
 
-            if (!msgResponse.ok) {
-              const errText = await msgResponse.text();
-              console.error('❌ Failed to send dunning WhatsApp:', errText);
+            if (!dunningResult.success) {
+              console.error('❌ Failed to send dunning WhatsApp:', dunningResult.error);
               dunningRecord.error_stage = 'whatsapp_send_failed';
-              dunningRecord.error_message = errText;
+              dunningRecord.error_message = dunningResult.error;
             } else {
-              await msgResponse.text(); // consume body to prevent resource leak
               dunningRecord.whatsapp_sent = true;
-              console.log('✅ Dunning WhatsApp sent to:', profile.phone);
+              console.log('✅ Dunning WhatsApp sent via', dunningResult.provider, 'to:', profile.phone);
             }
           } catch (portalErr) {
             const errMsg = portalErr instanceof Error ? portalErr.message : String(portalErr);
