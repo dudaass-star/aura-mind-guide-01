@@ -373,7 +373,7 @@ serve(async (req) => {
             // Get instance config and send
             const zapiConfig = await getInstanceConfigForUser(supabase, user.user_id);
             const cleanPhone = cleanPhoneNumber(user.phone);
-            const sendResult = await sendProactive(cleanPhone, analysis.whatsapp_message);
+            const sendResult = await sendProactive(cleanPhone, analysis.whatsapp_message, 'insight', user.user_id);
 
             if (sendResult.success) {
               console.log(`✅ [${user.name || 'Unknown'}] Insight sent`);

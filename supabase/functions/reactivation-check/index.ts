@@ -203,7 +203,7 @@ Estou aqui por você. ✨`;
           // Get instance config for this user
           const zapiConfig = await getInstanceConfigForUser(supabase, session.user_id);
           const cleanPhone = cleanPhoneNumber(profile.phone);
-          const result = await sendProactive(cleanPhone, message);
+          const result = await sendProactive(cleanPhone, message, 'reactivation', session.user_id);
 
           if (result.success) {
             await supabase

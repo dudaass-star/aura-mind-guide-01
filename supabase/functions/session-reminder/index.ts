@@ -822,7 +822,7 @@ Me conta durante a semana como está seu progresso! Estou aqui por você. ✨`;
         try {
           const cleanPhone = cleanPhoneNumber(profile.phone);
           const instanceConfig = await getInstanceConfigForUser(supabase, session.user_id);
-          const result = await sendProactive(cleanPhone, message);
+          const result = await sendProactive(cleanPhone, message, 'session_reminder', session.user_id);
 
           if (result.success) {
             // Only mark post_session_sent AFTER rating is also sent successfully
@@ -837,7 +837,7 @@ Me conta durante a semana como está seu progresso! Estou aqui por você. ✨`;
 
 (Só o número tá ótimo! E se quiser me dizer o que mais gostou ou o que posso melhorar, adoraria ouvir! 💜)`;
 
-            const ratingResult = await sendProactive(cleanPhone, ratingMessage);
+            const ratingResult = await sendProactive(cleanPhone, ratingMessage, 'session_reminder', session.user_id);
             
             if (ratingResult.success) {
               ratingSuccess = true;

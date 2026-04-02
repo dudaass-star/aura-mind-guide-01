@@ -115,7 +115,7 @@ Deno.serve(async (req) => {
         const zapiConfig = await getInstanceConfigForUser(supabase, profile.user_id);
 
         const cleanPhone = cleanPhoneNumber(profile.phone);
-        const result = await sendProactive(cleanPhone, message);
+        const result = await sendProactive(cleanPhone, message, 'followup', profile.user_id);
 
         if (result.success) {
           console.log(`✅ Follow-up sent for commitment: ${commitment.title}`);

@@ -200,7 +200,7 @@ Me responde agora: qual dia e horário funciona pra você? Pode ser algo simples
 
 Estou aqui esperando! 💜`;
 
-        const result = await sendProactive(user.phone, urgentMessage);
+        const result = await sendProactive(user.phone, urgentMessage, 'checkin', user.user_id);
         
         if (result.success) {
           console.log(`🚨 Urgent reminder sent to ${user.name}`);
