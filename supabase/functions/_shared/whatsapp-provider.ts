@@ -52,6 +52,44 @@ export interface SendResult {
   error?: string;
 }
 
+// ============================================================================
+// TRANSIENT ERROR RETRY
+// ============================================================================
+
+const TRANSIENT_ERROR_PATTERNS = [
+  /429/i, /rate.?limit/i, /too many/i,
+  /500/i, /502/i, /503/i, /504/i,
+  /timeout/i, /timed.?out/i, /econnreset/i, /econnrefused/i,
+  /network/i, /fetch.?failed/i,
+];
+
+function isTransientError(error?: string): boolean {
+  if (!error) return false;
+  return TRANSIENT_ERROR_PATTERNS.some(p => p.test(error));
+}
+
+async function withRetry<T extends SendResult>(
+  fn: () => Promise<T>,
+  label: string,
+): Promise<T> {
+  const result = await fn();
+  if (result.success) return result;
+
+  if (isTransientError(result.error)) {
+    console.warn(`⚠️ [WhatsApp Provider] Transient error on ${label}: ${result.error}. Retrying in 2s...`);
+    await new Promise(r => setTimeout(r, 2000));
+    const retry = await fn();
+    if (retry.success) {
+      console.log(`✅ [WhatsApp Provider] Retry succeeded for ${label}`);
+    } else {
+      console.error(`❌ [WhatsApp Provider] Retry also failed for ${label}: ${retry.error}`);
+    }
+    return retry;
+  }
+
+  return result;
+}
+
 /**
  * Envia uma mensagem de texto usando o provider ativo.
  * Para mensagens proativas (fora da janela de 24h), usar `sendProactive()`.
@@ -61,16 +99,18 @@ export async function sendMessage(
   text: string,
   configOverride?: ZapiConfig,
 ): Promise<SendResult> {
-  const provider = await getProvider();
+  return withRetry(async () => {
+    const provider = await getProvider();
 
-  if (provider === 'zapi') {
-    const result = await sendTextMessage(phone, text, undefined, configOverride);
-    return { success: result.success, provider: 'zapi', error: result.error };
-  }
+    if (provider === 'zapi') {
+      const result = await sendTextMessage(phone, text, undefined, configOverride);
+      return { success: result.success, provider: 'zapi', error: result.error };
+    }
 
-  // Official API: texto livre via Twilio Gateway
-  const result = await sendFreeText(phone, text);
-  return { success: result.success, provider: 'official', error: result.error };
+    // Official API: texto livre via Twilio Gateway
+    const result = await sendFreeText(phone, text);
+    return { success: result.success, provider: 'official', error: result.error };
+  }, `sendMessage(${phone.substring(0, 4)}***)`);
 }
 
 /**
@@ -87,16 +127,18 @@ export async function sendProactive(
   teaserText?: string,
   templateVariables?: string[],
 ): Promise<SendResult> {
-  const provider = await getProvider();
+  return withRetry(async () => {
+    const provider = await getProvider();
 
-  if (provider === 'zapi') {
-    const result = await sendTextMessage(phone, text, undefined, configOverride);
-    return { success: result.success, provider: 'zapi', error: result.error };
-  }
+    if (provider === 'zapi') {
+      const result = await sendTextMessage(phone, text, undefined, configOverride);
+      return { success: result.success, provider: 'zapi', error: result.error };
+    }
 
-  // Official API: template envelope + split (teaser avoids split)
-  const result: ProactiveMessageResult = await sendProactiveMessage(phone, text, templateCategory, userId, teaserText, templateVariables);
-  return { success: result.success, provider: 'official', error: result.error };
+    // Official API: template envelope + split (teaser avoids split)
+    const result: ProactiveMessageResult = await sendProactiveMessage(phone, text, templateCategory, userId, teaserText, templateVariables);
+    return { success: result.success, provider: 'official', error: result.error };
+  }, `sendProactive(${phone.substring(0, 4)}***)`);
 }
 
 /**
@@ -108,20 +150,22 @@ export async function sendAudio(
   audioBase64: string,
   configOverride?: ZapiConfig,
 ): Promise<SendResult> {
-  const provider = await getProvider();
+  return withRetry(async () => {
+    const provider = await getProvider();
 
-  if (provider === 'zapi') {
-    const result = await sendAudioMessage(phone, audioBase64, configOverride);
-    return { success: result.success, provider: 'zapi', error: result.error };
-  }
+    if (provider === 'zapi') {
+      const result = await sendAudioMessage(phone, audioBase64, configOverride);
+      return { success: result.success, provider: 'zapi', error: result.error };
+    }
 
-  // Official API: base64 não suportado
-  console.warn('⚠️ [WhatsApp Provider] Official API does not support base64 audio. Use sendAudioUrl() with a public URL instead.');
-  return {
-    success: false,
-    provider: 'official',
-    error: 'Official API does not support base64 audio. Upload to storage and use sendAudioUrl() instead.',
-  };
+    // Official API: base64 não suportado
+    console.warn('⚠️ [WhatsApp Provider] Official API does not support base64 audio. Use sendAudioUrl() with a public URL instead.');
+    return {
+      success: false,
+      provider: 'official',
+      error: 'Official API does not support base64 audio. Upload to storage and use sendAudioUrl() instead.',
+    };
+  }, `sendAudio(${phone.substring(0, 4)}***)`);
 }
 
 /**
@@ -132,14 +176,16 @@ export async function sendAudioUrl(
   audioUrl: string,
   configOverride?: ZapiConfig,
 ): Promise<SendResult> {
-  const provider = await getProvider();
+  return withRetry(async () => {
+    const provider = await getProvider();
 
-  if (provider === 'zapi') {
-    const result = await zapiSendAudioFromUrl(phone, audioUrl, configOverride);
-    return { success: result.success, provider: 'zapi', error: result.error };
-  }
+    if (provider === 'zapi') {
+      const result = await zapiSendAudioFromUrl(phone, audioUrl, configOverride);
+      return { success: result.success, provider: 'zapi', error: result.error };
+    }
 
-  // Official API: MediaUrl via Twilio Gateway
-  const result = await twilioSendAudioFromUrl(phone, audioUrl);
-  return { success: result.success, provider: 'official', error: result.error };
+    // Official API: MediaUrl via Twilio Gateway
+    const result = await twilioSendAudioFromUrl(phone, audioUrl);
+    return { success: result.success, provider: 'official', error: result.error };
+  }, `sendAudioUrl(${phone.substring(0, 4)}***)`);
 }

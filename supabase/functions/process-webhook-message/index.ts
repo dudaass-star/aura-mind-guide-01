@@ -3,7 +3,7 @@ import {
   cleanPhoneNumber,
   getPhoneVariations,
 } from "../_shared/zapi-client.ts";
-import { sendMessage, sendAudio } from "../_shared/whatsapp-provider.ts";
+import { sendMessage, sendAudio, type SendResult } from "../_shared/whatsapp-provider.ts";
 import { getInstanceConfigForUser } from "../_shared/instance-helper.ts";
 
 const corsHeaders = {
@@ -14,6 +14,27 @@ const corsHeaders = {
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
+
+async function logFailedMessage(
+  supabase: any,
+  userId: string | undefined,
+  phone: string | undefined,
+  content: string,
+  error: string | undefined,
+  functionName: string = 'process-webhook-message',
+) {
+  try {
+    await supabase.from('failed_message_log').insert({
+      user_id: userId,
+      phone,
+      content: content.substring(0, 2000),
+      error,
+      function_name: functionName,
+    });
+  } catch (e) {
+    console.error('❌ Failed to log failed message:', e);
+  }
+}
 
 async function createShortLink(url: string, phone: string): Promise<string | null> {
   const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
@@ -324,7 +345,11 @@ Deno.serve(async (req) => {
         blockMessage = statusMessages[profile.status!];
       }
 
-      await sendMessage(cleanPhone!, blockMessage);
+      const blockResult = await sendMessage(cleanPhone!, blockMessage);
+      if (!blockResult.success) {
+        console.error(`❌ Failed to send block message: ${blockResult.error}`);
+        await logFailedMessage(supabase, profile.user_id, cleanPhone, blockMessage, blockResult.error);
+      }
       return new Response(JSON.stringify({ success: true, action: 'subscription_blocked', status: profile.status }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -950,7 +975,12 @@ Deno.serve(async (req) => {
 
       console.log(`📤 Sending text (${responseText.length} chars, ${typingSeconds}s typing): ${responseText.substring(0, 50)}...`);
       
-      await sendMessage(cleanPhone, responseText);
+      const sendResult = await sendMessage(cleanPhone, responseText);
+      if (!sendResult.success) {
+        console.error(`❌ CRITICAL: Failed to send main response to ${cleanPhone?.substring(0, 4)}***: ${sendResult.error}`);
+        await logFailedMessage(supabase, profile.user_id, cleanPhone, responseText, sendResult.error);
+        // Still persist to DB so context is not lost, but log the failure
+      }
       sentAnyResponse = true;
 
       // Persist assistant message to DB (with dedup check)
