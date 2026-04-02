@@ -1,97 +1,86 @@
 
 
-## Auditoria de Proatividade da AURA — Bugs Encontrados
+## Verificação Completa das Mensagens Proativas — Estado Atual
 
-### Resumo
+### Por que não detectei antes?
 
-Auditei todas as 16 funções que usam `sendProactive()`. A assinatura é:
-```
-sendProactive(phone, text, templateCategory = 'checkin', userId?, config?, teaser?)
-```
+Durante a implementação dos templates, o foco foi na criação da infraestrutura (tabela `whatsapp_templates`, lógica de `sendProactive` no `whatsapp-provider.ts`, função `sendProactiveMessage` no `whatsapp-official.ts`). A auditoria das funções que **chamam** `sendProactive` foi parcial — corrigi apenas as que estavam sendo ativamente testadas naquele momento (`periodic-content`, `start-trial`, `admin-send-message`). As demais ficaram com a assinatura antiga `sendProactive(phone, text)` sem os parâmetros de template.
 
-Quando `templateCategory` ou `userId` não são passados, o sistema usa o template **checkin** como fallback e **não consegue verificar a janela de 24h** (precisa do userId). Isso significa que fora da janela, a mensagem vai com o template errado.
+Sobre as simulações de custo: elas consideraram apenas as categorias de template que já estavam configuradas corretamente. As funções que usavam o default `checkin` foram contadas como check-ins, quando na verdade são mensagens de tipos diferentes (followup, insight, reactivation, etc.) com categorias Meta distintas (utility vs marketing) e custos diferentes.
 
-### Templates disponíveis vs. uso atual
+---
 
-| Template (category) | Funções que DEVERIAM usar | Status |
-|---|---|---|
-| `session_reminder` | session-reminder | ✅ Corrigido (4 de 11 chamadas) |
-| `checkin` | scheduled-checkin | ✅ OK (default correto) |
-| `followup` | conversation-followup, scheduled-followup | ❌ Ambos usam default `checkin` |
-| `insight` | pattern-analysis | ❌ Usa default `checkin` |
-| `weekly_report` | weekly-report | ❌ Usa default `checkin` |
-| `reconnect` | instance-reconnect-notify | ❌ Usa default `checkin` |
-| `reactivation` | reactivation-blast, reactivation-check | ❌ Ambos usam default `checkin` |
-| `checkout_recovery` | recover-abandoned-checkout | ❌ Usa default `checkin` |
-| `content` | periodic-content | ✅ OK (já passa `'content'`) |
+### Estado Atual Pós-Correção
 
-### Bugs específicos encontrados
+Todas as 16 funções que usam `sendProactive()` foram verificadas. Aqui está o status completo:
 
-#### Bug 1: session-reminder — 7 chamadas ainda sem template
-As 4 chamadas dos lembretes (24h, 1h, 15m, hora exata) foram corrigidas. Mas restam **7 chamadas** sem `templateCategory`:
-- **Linha 540**: Lembrete de 10 minutos (sessão esperando confirmação)
-- **Linha 604**: Mensagem de sessão perdida (no_show)
-- **Linha 730**: Mensagem de fechamento de sessão abandonada
-- **Linha 825**: Resumo pós-sessão
-- **Linha 840**: Pedido de rating pós-sessão
+| Função | Chamadas | Template | userId | Status |
+|--------|----------|----------|--------|--------|
+| `session-reminder` | 11 | `session_reminder` | ✅ | ✅ Corrigido |
+| `conversation-followup` | 1 | `followup` | ✅ | ✅ Corrigido |
+| `scheduled-followup` | 1 | `followup` | ✅ | ✅ Corrigido |
+| `pattern-analysis` | 1 | `insight` | ✅ | ✅ Corrigido |
+| `weekly-report` | 1 | `weekly_report` | ✅ | ✅ Corrigido |
+| `instance-reconnect-notify` | 1 | `reconnect` | ✅ | ✅ Corrigido |
+| `reactivation-blast` | 1 | `reactivation` | ✅ | ✅ Corrigido |
+| `reactivation-check` | 2 | `reactivation` | ✅ | ✅ Corrigido |
+| `recover-abandoned-checkout` | 1 | `checkout_recovery` | ❌ (sem userId) | ✅ Corrigido |
+| `schedule-setup-reminder` | 2 | `checkin` | ✅ | ✅ Corrigido |
+| `periodic-content` | 1 | `content` | ✅ | ✅ Já estava OK |
+| `start-trial` | 1 | `welcome_trial` | ✅ | ✅ Já estava OK |
+| `admin-send-message` | 1 | dinâmico | ✅ | ✅ Já estava OK |
+| `test-episode-send` | 1 | `content` | ✅ | ✅ Já estava OK |
 
-#### Bug 2: conversation-followup (linha 585)
-Usa `sendProactive(profile.phone, message)` sem template nem userId. Deveria usar `'followup'`.
+### Problemas Remanescentes Encontrados
 
-#### Bug 3: scheduled-followup (linha 118)
-Usa `sendProactive(cleanPhone, message)` sem template nem userId. Deveria usar `'followup'`.
+#### Bug 1: `monthly-schedule-renewal` — sem template nem userId
+**Linha 85**: `sendProactive(user.phone, message)` — usa default `checkin` sem userId.
+Não existe template específico para "renovação mensal". Poderia usar `checkin` (é operacional) mas precisa do `userId` para verificar janela de 24h.
 
-#### Bug 4: pattern-analysis (linha 376)
-Usa `sendProactive(cleanPhone, analysis.whatsapp_message)` sem template nem userId. Deveria usar `'insight'`.
+#### Bug 2: `scheduled-checkin` — sem userId
+**Linha 115**: `sendProactive(cleanPhone, message)` — template `checkin` é o correto (default), mas falta o `userId` para verificar a janela de 24h. Sem ele, o sistema não consegue consultar `last_message_date` para decidir entre texto livre e template.
 
-#### Bug 5: weekly-report (linha 401)
-Usa `sendProactive(cleanPhone, report)` sem template nem userId. Deveria usar `'weekly_report'`.
+#### Bug 3: `deliver-time-capsule` — usa `sendMessage` em vez de `sendProactive`
+**Linhas 72, 85, 92**: Usa `sendMessage()` para enviar mensagens proativas (cápsula do tempo). Fora da janela de 24h, `sendMessage` tenta enviar texto livre pela API Oficial, que será **bloqueado pela Meta**. Deveria usar `sendProactive` com um template adequado (não existe template específico para time capsule).
 
-#### Bug 6: instance-reconnect-notify (linha 79)
-Usa `sendProactive(cleanPhone, message)` sem template nem userId. Deveria usar `'reconnect'`.
+#### Bug 4: `send-meditation` — usa `sendMessage` em vez de `sendProactive`
+**Linhas 145, 169, 189**: Mesma situação. Envia intro de meditação e fallback via `sendMessage`, que será bloqueado fora da janela de 24h.
 
-#### Bug 7: reactivation-blast (linha 81)
-Usa `sendProactive(cleanPhone, message)` sem template nem userId. Deveria usar `'reactivation'`.
+### Impacto nas Simulações de Custo
 
-#### Bug 8: reactivation-check (linhas 115, 206)
-Duas chamadas sem template nem userId. A de trial nudge não tem template específico (poderia ser `'checkin'` que já é o default). A de sessão perdida deveria ser `'reactivation'`.
-
-#### Bug 9: recover-abandoned-checkout (linha 160)
-Usa `sendProactive(normalizedPhone, message)` sem template. Deveria usar `'checkout_recovery'`. Nota: não tem `userId` disponível (é pré-cadastro).
-
-#### Bug 10: schedule-setup-reminder (linhas 131, 203)
-Duas chamadas sem template nem userId. Não existe template específico para "schedule setup" — poderia usar `'checkin'` (default atual) ou criar um novo.
-
-#### Bug 11: aura-agent ReferenceError
-Nos logs, o `aura-agent` está crashando com `ReferenceError: recentUser is not defined` na linha 1075 (`evaluateTherapeuticPhase`). Isso causa HTTP 500 e o fallback "Desculpa, tive um probleminha aqui". **Este é um bug ativo afetando usuários agora.**
+As simulações anteriores estavam imprecisas por dois motivos:
+1. **Categorização errada**: Funções que enviam `followup`, `insight`, `reactivation` etc. estavam sendo contadas como `checkin` (utility). Templates de `reactivation` e `checkout_recovery` são **marketing** (custo ~1.8x maior).
+2. **Funções invisíveis**: `deliver-time-capsule` e `send-meditation` usam `sendMessage` em vez de `sendProactive`, então nem entraram na contagem de templates — mas fora da janela simplesmente **falham silenciosamente**.
 
 ### Plano de Correção
 
-#### Prioridade 1 — Bug crítico do aura-agent (Bug 11)
-Corrigir a referência `recentUser` no `evaluateTherapeuticPhase` do `aura-agent/index.ts`. Isso está quebrando respostas em produção.
+#### Correção 1: `monthly-schedule-renewal/index.ts`
+Passar userId para `sendProactive`:
+```
+sendProactive(user.phone, message, 'checkin', user.user_id)
+```
 
-#### Prioridade 2 — Corrigir templates em todas as funções proativas
+#### Correção 2: `scheduled-checkin/index.ts`
+Passar userId:
+```
+sendProactive(cleanPhone, message, 'checkin', profile.user_id)
+```
 
-| Arquivo | Linha(s) | Correção |
+#### Correção 3: `deliver-time-capsule/index.ts`
+Substituir `sendMessage` por `sendProactive` nas 3 chamadas. Usar template `checkin` (mais genérico disponível) ou criar template `time_capsule`.
+
+#### Correção 4: `send-meditation/index.ts`
+Substituir `sendMessage` por `sendProactive` nas 3 chamadas. Usar template `content` (é conteúdo da Aura).
+
+#### Decisão necessária para Bugs 3 e 4:
+Criar novos templates no Meta para `time_capsule` e `meditation`, ou reutilizar templates existentes (`checkin` / `content`)?
+
+### Resumo de Custos Corrigido
+
+Com a categorização correta, o custo por tipo de mensagem proativa na API Oficial é:
+
+| Categoria Meta | Templates | Custo aprox. (BRL) |
 |---|---|---|
-| `session-reminder/index.ts` | 540 | `sendProactive(cleanPhone, reminderMessage, 'session_reminder', session.user_id)` |
-| `session-reminder/index.ts` | 604 | `sendProactive(cleanPhone, message, 'session_reminder', session.user_id)` |
-| `session-reminder/index.ts` | 730 | `sendProactive(cleanPhone, messageToSend, 'session_reminder', session.user_id)` |
-| `session-reminder/index.ts` | 825 | `sendProactive(cleanPhone, message, 'session_reminder', session.user_id)` |
-| `session-reminder/index.ts` | 840 | `sendProactive(cleanPhone, ratingMessage, 'session_reminder', session.user_id)` |
-| `conversation-followup/index.ts` | 585 | `sendProactive(profile.phone, message, 'followup', followup.user_id)` |
-| `scheduled-followup/index.ts` | 118 | `sendProactive(cleanPhone, message, 'followup', profile.user_id)` |
-| `pattern-analysis/index.ts` | 376 | `sendProactive(cleanPhone, analysis.whatsapp_message, 'insight', user.user_id)` |
-| `weekly-report/index.ts` | 401 | `sendProactive(cleanPhone, report, 'weekly_report', profile.user_id)` |
-| `instance-reconnect-notify/index.ts` | 79 | `sendProactive(cleanPhone, message, 'reconnect', user.user_id)` |
-| `reactivation-blast/index.ts` | 81 | `sendProactive(cleanPhone, message, 'reactivation', user.user_id)` |
-| `reactivation-check/index.ts` | 115 | `sendProactive(cleanPhone, nudgeMessage, 'reactivation', tp.user_id)` |
-| `reactivation-check/index.ts` | 206 | `sendProactive(cleanPhone, message, 'reactivation', session.user_id)` |
-| `recover-abandoned-checkout/index.ts` | 160 | `sendProactive(normalizedPhone, message, 'checkout_recovery')` |
-| `schedule-setup-reminder/index.ts` | 131, 203 | Manter default `'checkin'` (sem template específico) mas passar userId |
-
-### Impacto
-- **Sem a correção**: todas essas funções enviam mensagens com o template `checkin` quando fora da janela de 24h, o que confunde o usuário (prefixo "Seu check-in 🌿" em mensagens que não são check-in)
-- **Com a correção**: cada tipo de mensagem usa o template correto com prefixo adequado
-- O bug do aura-agent está causando falhas de resposta em tempo real para usuários ativos
+| **Utility** | checkin, followup, insight, weekly_report, reconnect, content, session_reminder, welcome, welcome_trial, dunning | ~R$ 0,05/msg |
+| **Marketing** | reactivation, checkout_recovery, access_blocked | ~R$ 0,09/msg |
 
