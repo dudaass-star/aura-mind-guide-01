@@ -669,24 +669,11 @@ Sua assinatura AURA foi reativada e estou aqui, pronta pra continuar nossa jorna
 
 Me conta: como você está hoje?`;
 
-        const response = await fetch(`${supabaseUrl}/functions/v1/send-zapi-message`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseServiceKey}`,
-          },
-          body: JSON.stringify({
-            phone: phone,
-            message: welcomeBackMessage,
-            isAudio: false,
-            ...(profile?.user_id && { user_id: profile.user_id }),
-          }),
-        });
-
-        if (!response.ok) {
-          console.error('❌ Failed to send welcome back message:', await response.text());
+        const welcomeBackResult = await sendProactive(phone, welcomeBackMessage, 'welcome', profile?.user_id);
+        if (!welcomeBackResult.success) {
+          console.error('❌ Failed to send welcome back message:', welcomeBackResult.error);
         } else {
-          console.log('✅ Welcome back message sent successfully!');
+          console.log('✅ Welcome back message sent via', welcomeBackResult.provider);
         }
 
         // Update profile status back to active
