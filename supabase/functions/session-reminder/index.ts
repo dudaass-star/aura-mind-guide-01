@@ -246,7 +246,7 @@ Confirma que tá tudo certo? Me responde com "confirmo" ou me avisa se precisar 
         try {
           const cleanPhone = cleanPhoneNumber(profile.phone);
           const instanceConfig = await getInstanceConfigForUser(supabase, session.user_id);
-          const result = await sendProactive(cleanPhone, message);
+          const result = await sendProactive(cleanPhone, message, 'session_reminder', session.user_id);
 
           if (result.success) {
             await supabase
@@ -317,7 +317,7 @@ Separa um cantinho tranquilo pra gente conversar com calma. Te espero lá! 💜`
         try {
           const cleanPhone = cleanPhoneNumber(profile.phone);
           const instanceConfig = await getInstanceConfigForUser(supabase, session.user_id);
-          const result = await sendProactive(cleanPhone, message);
+          const result = await sendProactive(cleanPhone, message, 'session_reminder', session.user_id);
 
           if (result.success) {
             await supabase
@@ -378,7 +378,7 @@ Já estou aqui te esperando. Quando estiver pronta, é só me mandar uma mensage
         try {
           const cleanPhone = cleanPhoneNumber(profile.phone);
           const instanceConfig = await getInstanceConfigForUser(supabase, session.user_id);
-          const result = await sendProactive(cleanPhone, message);
+          const result = await sendProactive(cleanPhone, message, 'session_reminder', session.user_id);
 
           if (result.success) {
             await supabase
@@ -455,7 +455,7 @@ Você está pronta(o) pra começar? Me responde um "vamos" ou "bora" quando quis
         try {
           const cleanPhone = cleanPhoneNumber(profile.phone);
           const instanceConfig = await getInstanceConfigForUser(supabase, session.user_id);
-          const result = await sendProactive(cleanPhone, message);
+          const result = await sendProactive(cleanPhone, message, 'session_reminder', session.user_id);
 
           if (result.success) {
             // CORREÇÃO: APENAS marca como notificado, NÃO muda status para in_progress
