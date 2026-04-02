@@ -306,24 +306,11 @@ Deno.serve(async (req) => {
           }
 
           try {
-            const response = await fetch(`${supabaseUrl}/functions/v1/send-zapi-message`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${supabaseServiceKey}`,
-              },
-              body: JSON.stringify({
-                phone: formattedPhone,
-                message: welcomeMessage,
-                isAudio: false,
-                user_id: profileUserId,
-              }),
-            });
-            if (!response.ok) {
-              console.error('❌ Failed to send welcome:', await response.text());
+            const result = await sendProactive(formattedPhone, welcomeMessage, 'welcome', profileUserId);
+            if (!result.success) {
+              console.error('❌ Failed to send welcome:', result.error);
             } else {
-              await response.text();
-              console.log('✅ Welcome message sent');
+              console.log('✅ Welcome message sent via', result.provider);
             }
           } catch (sendError) {
             console.error('❌ Error sending welcome:', sendError);
