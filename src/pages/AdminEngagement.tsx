@@ -204,7 +204,17 @@ export default function AdminEngagement() {
         }
       }
 
-      setRecoverySessions((abandoned || []).map(s => ({
+      // Deduplicate by phone: keep only the most recent session per phone
+      const byPhone = new Map<string, typeof abandoned[number]>();
+      for (const s of (abandoned || [])) {
+        const existing = byPhone.get(s.phone);
+        if (!existing || new Date(s.created_at) > new Date(existing.created_at)) {
+          byPhone.set(s.phone, s);
+        }
+      }
+      const uniqueSessions = Array.from(byPhone.values());
+
+      setRecoverySessions(uniqueSessions.map(s => ({
         ...s,
         converted: completedPhones.has(s.phone),
         attempt_status: attemptMap.get(s.id) || null,
