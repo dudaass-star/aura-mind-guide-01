@@ -143,7 +143,7 @@ Deno.serve(async (req) => {
     let failed = 0;
     let skipped = 0;
 
-    for (const session of abandoned) {
+    for (const session of uniqueSessions) {
       try {
         if (!session.phone) {
           console.warn(`⚠️ [RECOVERY] No phone for session ${session.id}, skipping.`);
