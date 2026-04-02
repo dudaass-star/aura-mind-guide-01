@@ -82,7 +82,7 @@ Deno.serve(async (req) => {
           // Enviar transcrição como fallback
           if (capsule.transcription) {
             const fallbackMsg = `Não consegui enviar o áudio original, mas aqui está o que você disse:\n\n"${capsule.transcription}" 💜`;
-            await sendMessage(profile.phone, fallbackMsg);
+            await sendProactive(profile.phone, fallbackMsg, 'checkin', profile.user_id);
           }
         }
 
