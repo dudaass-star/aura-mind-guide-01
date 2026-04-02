@@ -531,16 +531,34 @@ Comigo, você pode falar com liberdade: sem julgamento, no seu ritmo.
 Me diz: como você está hoje?`;
       }
 
-      // Send message via Z-API
+      // Send welcome message with retry + persistence
       try {
-        const result = await sendProactive(formattedPhone, welcomeMessage, 'welcome', profileUserId);
+        let result = await sendProactive(formattedPhone, welcomeMessage, 'welcome', profileUserId);
         if (!result.success) {
-          console.error('❌ Failed to send message:', result.error);
-        } else {
+          console.warn('⚠️ First welcome attempt failed, retrying in 3s:', result.error);
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          result = await sendProactive(formattedPhone, welcomeMessage, 'welcome', profileUserId);
+        }
+        if (result.success) {
           console.log(`✅ ${isUpgrade ? 'Upgrade' : 'Welcome'} message sent via ${result.provider}!`);
+          await supabase.from('messages').insert({ user_id: profileUserId, role: 'assistant', content: welcomeMessage });
+        } else {
+          console.error('❌ Failed to send welcome after retry:', result.error);
         }
       } catch (sendError) {
-        console.error('❌ Error sending message:', sendError);
+        console.error('❌ Error sending welcome:', sendError);
+        try {
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          const retryResult = await sendProactive(formattedPhone, welcomeMessage, 'welcome', profileUserId);
+          if (retryResult.success) {
+            console.log('✅ Welcome sent on retry via', retryResult.provider);
+            await supabase.from('messages').insert({ user_id: profileUserId, role: 'assistant', content: welcomeMessage });
+          } else {
+            console.error('❌ Welcome retry also failed:', retryResult.error);
+          }
+        } catch (retryErr) {
+          console.error('❌ Welcome retry exception:', retryErr);
+        }
       }
 
       // Send CAPI Purchase event (non-blocking)
