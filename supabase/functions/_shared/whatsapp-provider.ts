@@ -99,16 +99,18 @@ export async function sendMessage(
   text: string,
   configOverride?: ZapiConfig,
 ): Promise<SendResult> {
-  const provider = await getProvider();
+  return withRetry(async () => {
+    const provider = await getProvider();
 
-  if (provider === 'zapi') {
-    const result = await sendTextMessage(phone, text, undefined, configOverride);
-    return { success: result.success, provider: 'zapi', error: result.error };
-  }
+    if (provider === 'zapi') {
+      const result = await sendTextMessage(phone, text, undefined, configOverride);
+      return { success: result.success, provider: 'zapi', error: result.error };
+    }
 
-  // Official API: texto livre via Twilio Gateway
-  const result = await sendFreeText(phone, text);
-  return { success: result.success, provider: 'official', error: result.error };
+    // Official API: texto livre via Twilio Gateway
+    const result = await sendFreeText(phone, text);
+    return { success: result.success, provider: 'official', error: result.error };
+  }, `sendMessage(${phone.substring(0, 4)}***)`);
 }
 
 /**
