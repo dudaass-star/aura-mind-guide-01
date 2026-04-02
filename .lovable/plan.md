@@ -1,37 +1,26 @@
 
 
-# Separar depoimento do "CANCELE QUANDO QUISER"
+## Corrigir template dos lembretes de sessão
 
-## Problema
-O Stripe Checkout ignora `\n\n` no campo `description` do `product_data` — tudo continua na mesma linha no painel verde.
+### Problema
+A função `session-reminder` chama `sendProactive(cleanPhone, message)` sem passar o `templateCategory`, fazendo default para `'checkin'`. Quando o usuário está fora da janela de 24h da Meta, o lembrete é enviado pelo template errado (`checkin` em vez de `session_reminder`).
 
-## Solução
-Separar os dois textos em locais diferentes do Stripe Checkout:
+### Correção
+**Arquivo:** `supabase/functions/session-reminder/index.ts`
 
-- **`product_data.description`** (painel verde): apenas `"CANCELE QUANDO QUISER."`
-- **`custom_text.submit.message`** (rodapé branco, acima do botão Pagar): o depoimento `"Eu estava cética, mas em 3 dias já senti que alguém finalmente me ouvia." — Ana C.`
+Atualizar as 4 chamadas `sendProactive` para incluir a categoria correta e o userId:
 
-Isso garante separação visual real, já que são áreas distintas da página.
+| Linha | De | Para |
+|-------|-----|------|
+| 249 | `sendProactive(cleanPhone, message)` | `sendProactive(cleanPhone, message, 'session_reminder', session.user_id)` |
+| 320 | `sendProactive(cleanPhone, message)` | `sendProactive(cleanPhone, message, 'session_reminder', session.user_id)` |
+| 381 | `sendProactive(cleanPhone, message)` | `sendProactive(cleanPhone, message, 'session_reminder', session.user_id)` |
+| 458 | `sendProactive(cleanPhone, message)` | `sendProactive(cleanPhone, message, 'session_reminder', session.user_id)` |
 
-## Mudança técnica
+Isso garante que fora da janela de 24h, o template aprovado `aura_session_reminde` (ContentSid ativo) será usado em vez do template genérico de check-in.
 
-**Arquivo:** `supabase/functions/create-checkout/index.ts`
-
-1. **Linha 166** — trocar o `custom_text.submit.message`:
-```typescript
-message: `"Eu estava cética, mas em 3 dias já senti que alguém finalmente me ouvia." — Ana C.`,
-```
-
-2. **Linha 191** — simplificar a `description`:
-```typescript
-description: `CANCELE QUANDO QUISER.`,
-```
-
-**Resultado visual:**
-- Painel verde: Nome do plano + preço + "CANCELE QUANDO QUISER."
-- Rodapé branco (acima do botão Pagar): depoimento da Ana C.
-
-| Arquivo | Mudança |
-|---|---|
-| `supabase/functions/create-checkout/index.ts` | Depoimento vai pro `custom_text.submit`, description fica só com "CANCELE QUANDO QUISER." |
+### Impacto
+- Nenhuma mudança de comportamento dentro da janela de 24h (continua texto livre)
+- Fora da janela: usa o template correto de `session_reminder`
+- O `userId` permite verificar a janela de 24h antes de decidir entre texto livre e template
 
