@@ -3,7 +3,7 @@ import {
   cleanPhoneNumber,
   getPhoneVariations,
 } from "../_shared/zapi-client.ts";
-import { sendMessage, sendAudio } from "../_shared/whatsapp-provider.ts";
+import { sendMessage, sendAudio, type SendResult } from "../_shared/whatsapp-provider.ts";
 import { getInstanceConfigForUser } from "../_shared/instance-helper.ts";
 
 const corsHeaders = {
