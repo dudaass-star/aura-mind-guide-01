@@ -145,7 +145,7 @@ Deno.serve(async (req) => {
           case 'message': {
             const messageText = payload.text || '';
             if (messageText) {
-              await sendMessage(profile.phone, messageText);
+              await sendProactive(profile.phone, messageText, 'checkin', task.user_id);
               console.log(`✅ Scheduled message sent to ${profile.phone.substring(0, 4)}***`);
             }
             break;
