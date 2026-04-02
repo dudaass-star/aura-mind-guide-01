@@ -258,9 +258,9 @@ Deno.serve(async (req) => {
       await new Promise(resolve => setTimeout(resolve, 300));
     }
 
-    console.log(`✅ [RECOVERY] Done: ${sent} sent, ${failed} failed, ${skipped} skipped out of ${abandoned.length}`);
+    console.log(`✅ [RECOVERY] Done: ${sent} sent, ${failed} failed, ${skipped} skipped out of ${uniqueSessions.length} unique (${duplicates.length} duplicates auto-skipped)`);
 
-    return new Response(JSON.stringify({ status: 'completed', sent, failed, skipped, total: abandoned.length }), {
+    return new Response(JSON.stringify({ status: 'completed', sent, failed, skipped, duplicates_skipped: duplicates.length, total: abandoned.length }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
