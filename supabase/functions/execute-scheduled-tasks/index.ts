@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { cleanPhoneNumber } from "../_shared/zapi-client.ts";
-import { sendMessage, sendAudio } from "../_shared/whatsapp-provider.ts";
+import { sendMessage, sendAudio, sendProactive } from "../_shared/whatsapp-provider.ts";
 import { getInstanceConfigForUser } from "../_shared/instance-helper.ts";
 
 // Helper to create short links for checkout URLs
