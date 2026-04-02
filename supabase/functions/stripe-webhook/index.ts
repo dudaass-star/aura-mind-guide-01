@@ -360,8 +360,33 @@ Deno.serve(async (req) => {
               }),
             });
             console.log('✅ CAPI StartTrial event sent');
+
+            // Also send Purchase event for the trial payment
+            await fetch(`${supabaseUrl}/functions/v1/meta-capi`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseServiceKey}` },
+              body: JSON.stringify({
+                event_name: 'Purchase',
+                event_id: session.id + '_purchase',
+                event_source_url: 'https://olaaura.com.br/obrigado',
+                user_data: {
+                  email: customerEmail || undefined,
+                  phone: formattedPhone,
+                  first_name: customerName.split(' ')[0],
+                  ...(fbp && { fbp }),
+                  ...(fbc && { fbc }),
+                },
+                custom_data: {
+                  value: (session.amount_total || 0) / 100,
+                  currency: 'BRL',
+                  content_name: `Trial ${planName}`,
+                  content_category: customerPlan,
+                },
+              }),
+            });
+            console.log('✅ CAPI Purchase event sent (trial payment)');
           } catch (capiError) {
-            console.warn('⚠️ CAPI StartTrial failed (non-blocking):', capiError);
+            console.warn('⚠️ CAPI events failed (non-blocking):', capiError);
           }
 
           return new Response(JSON.stringify({ received: true }), {
