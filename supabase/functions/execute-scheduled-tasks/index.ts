@@ -116,7 +116,7 @@ Deno.serve(async (req) => {
         switch (task.task_type) {
           case 'reminder': {
             const reminderText = payload.text || 'Ei, aqui é a Aura! Você me pediu pra te lembrar disso 💜';
-            await sendMessage(profile.phone, reminderText);
+            await sendProactive(profile.phone, reminderText, 'checkin', task.user_id);
             console.log(`✅ Reminder sent to ${profile.phone.substring(0, 4)}***`);
             break;
           }
