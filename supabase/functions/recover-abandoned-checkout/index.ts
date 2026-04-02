@@ -79,6 +79,49 @@ Deno.serve(async (req) => {
 
     console.log(`📋 [RECOVERY] Found ${abandoned.length} abandoned checkouts.`);
 
+    // Deduplicate by phone: keep only the most recent session per phone
+    const byPhone = new Map<string, typeof abandoned[number]>();
+    const duplicates: typeof abandoned = [];
+
+    for (const s of abandoned) {
+      if (!s.phone) {
+        // no-phone sessions pass through individually
+        byPhone.set(`__no_phone_${s.id}`, s);
+        continue;
+      }
+      const existing = byPhone.get(s.phone);
+      if (!existing) {
+        byPhone.set(s.phone, s);
+      } else {
+        // keep the newer one (higher id from ordered query, but compare created_at via id order)
+        duplicates.push(existing.id > s.id ? s : existing);
+        byPhone.set(s.phone, existing.id > s.id ? existing : s);
+      }
+    }
+
+    // Mark duplicates as sent without actually sending
+    if (duplicates.length > 0) {
+      console.log(`🔄 [RECOVERY] Marking ${duplicates.length} duplicate sessions as skipped.`);
+      for (const dup of duplicates) {
+        await supabase.from('checkout_sessions').update({
+          recovery_sent: true,
+          recovery_last_error: 'Duplicate - grouped by phone',
+          recovery_attempts_count: 1,
+        }).eq('id', dup.id);
+
+        await supabase.from('checkout_recovery_attempts').insert({
+          checkout_session_id: dup.id,
+          phone_raw: dup.phone,
+          phone_normalized: null,
+          status: 'skipped_duplicate',
+          error_message: 'Duplicate session for same phone',
+        });
+      }
+    }
+
+    const uniqueSessions = Array.from(byPhone.values());
+    console.log(`📋 [RECOVERY] Processing ${uniqueSessions.length} unique sessions (${duplicates.length} duplicates skipped).`);
+
     // Pre-fetch active/trial profiles to skip existing customers
     const { data: activeProfiles } = await supabase
       .from('profiles')
@@ -100,7 +143,7 @@ Deno.serve(async (req) => {
     let failed = 0;
     let skipped = 0;
 
-    for (const session of abandoned) {
+    for (const session of uniqueSessions) {
       try {
         if (!session.phone) {
           console.warn(`⚠️ [RECOVERY] No phone for session ${session.id}, skipping.`);
@@ -215,9 +258,9 @@ Deno.serve(async (req) => {
       await new Promise(resolve => setTimeout(resolve, 300));
     }
 
-    console.log(`✅ [RECOVERY] Done: ${sent} sent, ${failed} failed, ${skipped} skipped out of ${abandoned.length}`);
+    console.log(`✅ [RECOVERY] Done: ${sent} sent, ${failed} failed, ${skipped} skipped out of ${uniqueSessions.length} unique (${duplicates.length} duplicates auto-skipped)`);
 
-    return new Response(JSON.stringify({ status: 'completed', sent, failed, skipped, total: abandoned.length }), {
+    return new Response(JSON.stringify({ status: 'completed', sent, failed, skipped, duplicates_skipped: duplicates.length, total: abandoned.length }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
