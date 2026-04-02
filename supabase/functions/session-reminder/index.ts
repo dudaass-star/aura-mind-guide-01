@@ -537,7 +537,7 @@ Pra gente começar, me manda um "vamos" ou "bora" - ou me avisa se quer reagenda
           try {
             const cleanPhone = cleanPhoneNumber(profile.phone);
             const instanceConfig = await getInstanceConfigForUser(supabase, session.user_id);
-            const result = await sendProactive(cleanPhone, reminderMessage);
+            const result = await sendProactive(cleanPhone, reminderMessage, 'session_reminder', session.user_id);
             
             if (result.success) {
               reminder10mSent++;
