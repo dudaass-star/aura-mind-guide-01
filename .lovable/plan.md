@@ -1,36 +1,81 @@
 
 
-## Correção do Dunning Falhado — 3 Clientes de 02/04
+## Auditoria Completa: Mensagens Proativas — Problemas Encontrados
 
-### Problema
+### Resumo
 
-O webhook do Stripe processou 3 eventos `invoice.payment_failed` hoje, mas **não executou o fluxo de dunning** para nenhum deles. Zero registros em `dunning_attempts`, zero atualizações de `payment_failed_at` nos perfis. Os logs foram rotacionados, impedindo diagnóstico exato.
+Analisei **todas as 18+ funções** que enviam mensagens proativas. A maioria está correta, mas encontrei **2 problemas críticos** e **1 menor**.
 
-### Plano em 2 Passos
+---
 
-**Passo 1: Recuperação imediata**
+### Problema 1 (CRÍTICO): `stripe-webhook` usa `send-zapi-message` em vez de `sendProactive`
 
-Usar a função `reprocess-dunning` já existente para enviar as mensagens de dunning manualmente para os 3 customers:
-- `cus_UDWIwTAvUFRlO2` (Niédja Alcântara)
-- `cus_UDUaYL9Yg9vXP1` (Rafaella Gomes)
-- Identificar o 3º customer via Stripe invoice e incluir
+O `stripe-webhook/index.ts` faz **5 chamadas diretas** a `send-zapi-message`, que usa `sendMessage` (texto livre). Isso significa que essas mensagens **falham silenciosamente quando o usuário não está dentro da janela de 24h**, porque não usam templates.
 
-Chamar a edge function `reprocess-dunning` com os 3 customer_ids.
+**Mensagens afetadas:**
+1. **Welcome após checkout.session.completed** (linha ~308) — `welcome`
+2. **Welcome após invoice.payment_succeeded** (linha ~529) — `welcome`  
+3. **Farewell após customer.subscription.deleted** (linha ~631) — mensagem de despedida
+4. **Welcome back após reativação** (linha ~711) — `welcome`
+5. **Dunning após invoice.payment_failed** (linha ~991) — `dunning`
 
-**Passo 2: Diagnóstico e correção do webhook**
+**Correção:** Substituir as 5 chamadas `send-zapi-message` por `sendProactive()` direto, com as categorias de template corretas (`welcome`, `dunning`, etc.).
 
-Adicionar logging extra no início do bloco `invoice.payment_failed` do stripe-webhook para capturar:
-- Se o bloco está sendo alcançado
-- Se `invoice.subscription` está null (o que pularia todo o dunning)
-- O customer_id e email sendo usado na resolução
+---
 
-Adicionar um log de entrada no início do bloco de dunning e um try/catch mais robusto para garantir que ao menos o registro de auditoria seja criado mesmo em caso de crash.
+### Problema 2 (CRÍTICO): `reprocess-dunning` usa `send-zapi-message` em vez de `sendProactive`
 
-**Arquivo**: `supabase/functions/stripe-webhook/index.ts` — adicionar console.log de entrada no bloco payment_failed e garantir fallback de audit trail.
+O `reprocess-dunning/index.ts` (linha ~145) também chama `send-zapi-message` diretamente. Mesma consequência: falha fora da janela de 24h.
+
+**Correção:** Substituir por `sendProactive(phone, dunningMessage, 'dunning', profile.user_id)`.
+
+---
+
+### Problema 3 (Menor): `recover-abandoned-checkout` não passa `userId`
+
+O `recover-abandoned-checkout` chama `sendProactive(phone, message, 'checkout_recovery')` sem `userId`. Como checkouts abandonados são de usuários que ainda não estão na base, isso é **comportamento correto** — sempre vai para template, que é o esperado. Sem ação necessária.
+
+---
+
+### Funções Corretas (sem alteração necessária)
+
+Todas as demais funções já usam `sendProactive` corretamente com `userId` e `templateCategory`:
+- `scheduled-checkin` ✅
+- `conversation-followup` ✅  
+- `weekly-report` ✅
+- `session-reminder` ✅
+- `periodic-content` ✅ (com teaser)
+- `send-meditation` ✅
+- `deliver-time-capsule` ✅
+- `reactivation-check` ✅
+- `start-trial` ✅
+- `instance-reconnect-notify` ✅
+- `schedule-setup-reminder` ✅
+- `monthly-schedule-renewal` ✅
+- `admin-send-message` ✅
+- `reactivation-blast` ✅
+
+---
+
+### Plano de Implementação
+
+**Arquivo 1: `supabase/functions/stripe-webhook/index.ts`**
+- Importar `sendProactive` de `whatsapp-provider.ts`
+- Substituir as 5 chamadas `fetch(send-zapi-message)` por:
+  - Welcome messages → `sendProactive(phone, msg, 'welcome', userId)`
+  - Farewell → `sendProactive(phone, msg, 'checkin', userId)` (ou criar categoria dedicada se não houver)
+  - Welcome back → `sendProactive(phone, msg, 'welcome', userId)`
+  - Dunning → `sendProactive(phone, msg, 'dunning', userId)`
+
+**Arquivo 2: `supabase/functions/reprocess-dunning/index.ts`**
+- Importar `sendProactive` de `whatsapp-provider.ts`
+- Substituir a chamada `fetch(send-zapi-message)` por `sendProactive(phone, msg, 'dunning', userId)`
+
+**Deploy:** `stripe-webhook` + `reprocess-dunning`
 
 ### Detalhes Técnicos
 
-- O bloco de dunning (linha 876) verifica `if (invoice.subscription)` — se for null, pula silenciosamente sem criar nenhum registro de auditoria. Este é um possível gap.
-- O `reprocess-dunning` resolve perfis independentemente, então pode funcionar mesmo quando o webhook falha.
-- Deploy necessário: `stripe-webhook` (com logs extras) + execução manual de `reprocess-dunning`.
+- Cada substituição simplifica o código (remove ~10 linhas de fetch/headers/body/error handling por chamada)
+- O `sendProactive` já faz: verificação de janela 24h → texto livre se aberta, template se fechada
+- Nenhuma mudança de schema ou migration necessária
 
