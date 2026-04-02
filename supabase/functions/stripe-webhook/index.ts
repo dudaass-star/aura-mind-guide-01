@@ -863,7 +863,7 @@ Me conta: como você está hoje?`;
     if (event.type === 'invoice.payment_failed') {
       const invoice = event.data.object as Stripe.Invoice;
       const customerId = invoice.customer as string;
-      console.log('❌ Invoice payment failed:', invoice.id, 'customer:', customerId);
+      console.log('🚨 [DUNNING-ENTRY] invoice.payment_failed BLOCK REACHED. invoice:', invoice.id, 'customer:', customerId, 'subscription:', invoice.subscription, 'amount:', invoice.amount_due);
 
       // Audit trail record
       const dunningRecord: Record<string, any> = {
@@ -872,6 +872,13 @@ Me conta: como você está hoje?`;
         invoice_id: invoice.id,
         subscription_id: invoice.subscription as string || null,
       };
+
+      if (!invoice.subscription) {
+        console.warn('⚠️ [DUNNING] invoice.subscription is NULL/falsy — skipping dunning but recording audit trail');
+        dunningRecord.error_stage = 'no_subscription_on_invoice';
+        dunningRecord.error_message = `invoice.subscription was ${String(invoice.subscription)}. billing_reason: ${invoice.billing_reason}`;
+        try { await supabase.from('dunning_attempts').insert(dunningRecord); } catch (_) {}
+      }
 
       if (invoice.subscription) {
         try {
