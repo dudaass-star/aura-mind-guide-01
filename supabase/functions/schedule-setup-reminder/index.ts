@@ -128,7 +128,7 @@ Por exemplo: "segundas e quintas às 19h" ou "quartas às 20h"
 
 Fico esperando! 🌟`;
 
-        const result = await sendProactive(user.phone, message);
+        const result = await sendProactive(user.phone, message, 'checkin', user.user_id);
         
         if (result.success) {
           console.log(`✅ First reminder sent to ${user.name}`);
