@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { cleanPhoneNumber } from "../_shared/zapi-client.ts";
-import { sendMessage, sendAudioUrl } from "../_shared/whatsapp-provider.ts";
+import { sendMessage, sendAudioUrl, sendProactive } from "../_shared/whatsapp-provider.ts";
 import { getInstanceConfigForUser, getInstanceConfigForPhone } from "../_shared/instance-helper.ts";
 
 const corsHeaders = {
@@ -142,9 +142,11 @@ serve(async (req) => {
     if (audioError || !audioData) {
       console.error(`Audio not found for meditation: ${selectedMeditationId}`, audioError);
       
-      await sendMessage(
+      await sendProactive(
         userPhone,
-        "🧘 Ops, parece que essa meditação ainda não está pronta. Me perdoa! Vou providenciar e te aviso quando estiver disponível. 💜"
+        "🧘 Ops, parece que essa meditação ainda não está pronta. Me perdoa! Vou providenciar e te aviso quando estiver disponível. 💜",
+        'content',
+        userId
       );
       
       return new Response(JSON.stringify({ 
@@ -166,7 +168,7 @@ serve(async (req) => {
     const durationMinutes = Math.round((audioData.duration_seconds || meditation?.duration_seconds || 300) / 60);
     const introMessage = `🧘 *${meditation?.title || 'Meditação Guiada'}*\n\nDuração: ~${durationMinutes} minutos\n\nEncontre um lugar tranquilo, feche os olhos e me deixe te guiar... 💜`;
     
-    await sendMessage(userPhone, introMessage);
+    await sendProactive(userPhone, introMessage, 'content', userId);
 
     // Register intro message in messages table for admin visibility
     if (userId) {
@@ -186,7 +188,7 @@ serve(async (req) => {
       console.error('Failed to send audio:', audioResult.error);
       
       const fallbackMsg = `🎧 Tive um probleminha para enviar o áudio direto. Você pode ouvir aqui: ${audioData.public_url}`;
-      await sendMessage(userPhone, fallbackMsg);
+      await sendProactive(userPhone, fallbackMsg, 'content', userId);
       
       if (userId) {
         await supabase.from('messages').insert({

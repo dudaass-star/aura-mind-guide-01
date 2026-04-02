@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { sendMessage, sendAudioUrl } from "../_shared/whatsapp-provider.ts";
+import { sendMessage, sendAudioUrl, sendProactive } from "../_shared/whatsapp-provider.ts";
 import { getInstanceConfigForUser } from "../_shared/instance-helper.ts";
 
 const corsHeaders = {
@@ -69,7 +69,7 @@ Deno.serve(async (req) => {
         // Mensagem introdutória
         const introMsg = `${userName}, lembra daquela cápsula do tempo que você gravou? 💜✨\n\nChegou a hora! Aqui está a mensagem que o seu eu do passado deixou pra você. Escuta com carinho 🫶`;
         
-        await sendMessage(profile.phone, introMsg);
+        await sendProactive(profile.phone, introMsg, 'checkin', profile.user_id);
 
         // Pequeno delay antes de enviar o áudio
         await new Promise(resolve => setTimeout(resolve, 3000));
@@ -82,14 +82,14 @@ Deno.serve(async (req) => {
           // Enviar transcrição como fallback
           if (capsule.transcription) {
             const fallbackMsg = `Não consegui enviar o áudio original, mas aqui está o que você disse:\n\n"${capsule.transcription}" 💜`;
-            await sendMessage(profile.phone, fallbackMsg);
+            await sendProactive(profile.phone, fallbackMsg, 'checkin', profile.user_id);
           }
         }
 
         // Mensagem de encerramento
         await new Promise(resolve => setTimeout(resolve, 2000));
         const closingMsg = `E aí, como é ouvir isso agora? 💜 Mudou muita coisa desde então?`;
-        await sendMessage(profile.phone, closingMsg);
+        await sendProactive(profile.phone, closingMsg, 'checkin', profile.user_id);
 
         // Marcar como entregue
         await supabase.from('time_capsules').update({
