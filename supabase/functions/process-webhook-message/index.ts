@@ -15,6 +15,27 @@ const corsHeaders = {
 // HELPER FUNCTIONS
 // ============================================================================
 
+async function logFailedMessage(
+  supabase: any,
+  userId: string | undefined,
+  phone: string | undefined,
+  content: string,
+  error: string | undefined,
+  functionName: string = 'process-webhook-message',
+) {
+  try {
+    await supabase.from('failed_message_log').insert({
+      user_id: userId,
+      phone,
+      content: content.substring(0, 2000),
+      error,
+      function_name: functionName,
+    });
+  } catch (e) {
+    console.error('❌ Failed to log failed message:', e);
+  }
+}
+
 async function createShortLink(url: string, phone: string): Promise<string | null> {
   const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
