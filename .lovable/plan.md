@@ -1,81 +1,57 @@
 
 
-## Auditoria Completa: Mensagens Proativas — Problemas Encontrados
+## Diagnóstico: Falhas no Envio de Boas-Vindas
 
-### Resumo
+### O que encontrei
 
-Analisei **todas as 18+ funções** que enviam mensagens proativas. A maioria está correta, mas encontrei **2 problemas críticos** e **1 menor**.
+**Dados de hoje (3 novos clientes):**
 
----
+| Nome | Telefone | Criado via | Msgs no DB | Welcome recebida? |
+|------|----------|------------|------------|-------------------|
+| Jessica Gonçalves | 5519971649419 | stripe-webhook | 1 (welcome) | Sim |
+| Julianna Vargas | 5562993355019 | stripe-webhook | 1 (welcome) | Sim |
+| ANDERCLEY CAPELLI | 5527992357957 | stripe-webhook | **0** | **Nao** |
 
-### Problema 1 (CRÍTICO): `stripe-webhook` usa `send-zapi-message` em vez de `sendProactive`
+### Problema 1 (CRITICO): Welcome do Andercley falhou silenciosamente
 
-O `stripe-webhook/index.ts` faz **5 chamadas diretas** a `send-zapi-message`, que usa `sendMessage` (texto livre). Isso significa que essas mensagens **falham silenciosamente quando o usuário não está dentro da janela de 24h**, porque não usam templates.
+O Andercley completou o checkout às 18:59, o perfil foi criado corretamente (status `trial`, plano `essencial`), mas **zero mensagens** foram registradas. O `sendProactive` falhou sem registro.
 
-**Mensagens afetadas:**
-1. **Welcome após checkout.session.completed** (linha ~308) — `welcome`
-2. **Welcome após invoice.payment_succeeded** (linha ~529) — `welcome`  
-3. **Farewell após customer.subscription.deleted** (linha ~631) — mensagem de despedida
-4. **Welcome back após reativação** (linha ~711) — `welcome`
-5. **Dunning após invoice.payment_failed** (linha ~991) — `dunning`
+Sem logs disponíveis do stripe-webhook (retenção expirada), não é possível confirmar a causa exata. Possíveis causas:
+- Timeout ou erro transitório no Twilio Gateway no momento do envio
+- Erro silencioso capturado pelo `try/catch` que apenas loga e segue
 
-**Correção:** Substituir as 5 chamadas `send-zapi-message` por `sendProactive()` direto, com as categorias de template corretas (`welcome`, `dunning`, etc.).
+### Problema 2 (BUG): stripe-webhook nao salva welcome na tabela `messages`
 
----
+O `start-trial` faz:
+```
+await supabase.from('messages').insert({ user_id, role: 'assistant', content: welcomeMessage });
+```
 
-### Problema 2 (CRÍTICO): `reprocess-dunning` usa `send-zapi-message` em vez de `sendProactive`
+Mas o `stripe-webhook` (linhas 308-317) **apenas envia via WhatsApp sem persistir no banco**. Isso causa:
+- Welcome invisível no painel admin
+- Contexto da conversa incompleto para o agente (nao sabe que ja mandou welcome)
+- Historico perdido
 
-O `reprocess-dunning/index.ts` (linha ~145) também chama `send-zapi-message` diretamente. Mesma consequência: falha fora da janela de 24h.
+Para Jessica e Julianna, as messages apareceram porque provavelmente o webhook-twilio recebeu um delivery status que não é um insert de mensagem — na verdade, revisando: elas TEM 1 mensagem de welcome no banco. Isso sugere que talvez o fluxo delas passou por um caminho diferente que faz insert, ou o start-trial foi chamado antes.
 
-**Correção:** Substituir por `sendProactive(phone, dunningMessage, 'dunning', profile.user_id)`.
+### Problema 3 (MENOR): Instancia WhatsApp `null` para todos os novos usuarios
 
----
+A unica instancia WhatsApp (`Aura #1`) está com status `disconnected`. O `allocateInstance` retorna `null`. Isso nao afeta o envio via API Oficial (Twilio), mas deixa o campo `whatsapp_instance_id` vazio nos perfis.
 
-### Problema 3 (Menor): `recover-abandoned-checkout` não passa `userId`
+### Plano de Correção
 
-O `recover-abandoned-checkout` chama `sendProactive(phone, message, 'checkout_recovery')` sem `userId`. Como checkouts abandonados são de usuários que ainda não estão na base, isso é **comportamento correto** — sempre vai para template, que é o esperado. Sem ação necessária.
+**Arquivo: `supabase/functions/stripe-webhook/index.ts`**
 
----
+1. **Adicionar persistencia da welcome message na tabela `messages`** apos o envio bem-sucedido via `sendProactive` — mesma logica que o `start-trial` ja faz. Aplicar em TODOS os pontos de envio de welcome:
+   - Trial validation welcome (linha ~309)
+   - Normal checkout welcome (linha ~517)  
+   - Welcome back apos reativacao (linha ~672)
 
-### Funções Corretas (sem alteração necessária)
+2. **Adicionar retry simples** para o envio da welcome: se `sendProactive` falhar, aguardar 3s e tentar novamente uma vez antes de desistir. A welcome é a mensagem mais critica do sistema.
 
-Todas as demais funções já usam `sendProactive` corretamente com `userId` e `templateCategory`:
-- `scheduled-checkin` ✅
-- `conversation-followup` ✅  
-- `weekly-report` ✅
-- `session-reminder` ✅
-- `periodic-content` ✅ (com teaser)
-- `send-meditation` ✅
-- `deliver-time-capsule` ✅
-- `reactivation-check` ✅
-- `start-trial` ✅
-- `instance-reconnect-notify` ✅
-- `schedule-setup-reminder` ✅
-- `monthly-schedule-renewal` ✅
-- `admin-send-message` ✅
-- `reactivation-blast` ✅
+**Escopo:** Apenas o arquivo `stripe-webhook/index.ts` precisa ser alterado. Nenhuma migration necessária.
 
----
+### Ação imediata para o Andercley
 
-### Plano de Implementação
-
-**Arquivo 1: `supabase/functions/stripe-webhook/index.ts`**
-- Importar `sendProactive` de `whatsapp-provider.ts`
-- Substituir as 5 chamadas `fetch(send-zapi-message)` por:
-  - Welcome messages → `sendProactive(phone, msg, 'welcome', userId)`
-  - Farewell → `sendProactive(phone, msg, 'checkin', userId)` (ou criar categoria dedicada se não houver)
-  - Welcome back → `sendProactive(phone, msg, 'welcome', userId)`
-  - Dunning → `sendProactive(phone, msg, 'dunning', userId)`
-
-**Arquivo 2: `supabase/functions/reprocess-dunning/index.ts`**
-- Importar `sendProactive` de `whatsapp-provider.ts`
-- Substituir a chamada `fetch(send-zapi-message)` por `sendProactive(phone, msg, 'dunning', userId)`
-
-**Deploy:** `stripe-webhook` + `reprocess-dunning`
-
-### Detalhes Técnicos
-
-- Cada substituição simplifica o código (remove ~10 linhas de fetch/headers/body/error handling por chamada)
-- O `sendProactive` já faz: verificação de janela 24h → texto livre se aberta, template se fechada
-- Nenhuma mudança de schema ou migration necessária
+Após o deploy, enviar manualmente a welcome para o Andercley via admin (telefone `5527992357957`) para que ele não fique sem atendimento.
 
