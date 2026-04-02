@@ -154,10 +154,12 @@ Deno.serve(async (req) => {
         const name = session.name || 'você';
         const plan = session.plan || 'essencial';
         const message = buildRecoveryMessage(name, plan);
+        const planLabel = PLAN_LABELS[plan] || plan;
+        const checkoutLink = `https://olaaura.com.br/checkout?plan=${plan}`;
 
         console.log(`📤 [RECOVERY] Sending to ${normalizedPhone.substring(0, 6)}*** (raw: ${session.phone.substring(0, 4)}***) for plan ${plan}`);
 
-        const result = await sendProactive(normalizedPhone, message, 'checkout_recovery');
+        const result = await sendProactive(normalizedPhone, message, 'checkout_recovery', undefined, undefined, undefined, [name, planLabel, checkoutLink]);
 
         // Log the attempt with full details
         await supabase.from('checkout_recovery_attempts').insert({

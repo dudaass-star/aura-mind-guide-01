@@ -292,6 +292,7 @@ export async function sendProactiveMessage(
   templateCategory: TemplateCategory = 'checkin',
   userId?: string,
   teaserText?: string,
+  templateVariables?: string[],
 ): Promise<ProactiveMessageResult> {
   try {
     // Check 24h window
@@ -340,6 +341,13 @@ export async function sendProactiveMessage(
       console.warn(`⚠️ [Twilio] Template "${templateCategory}" not active, attempting free text fallback`);
       const result = await sendFreeText(phone, text);
       return { success: result.success, parts: 1, type: 'freetext', error: result.error };
+    }
+
+    // If structured template variables provided, use them directly
+    if (templateVariables && templateVariables.length > 0) {
+      console.log(`📨 [Twilio] Sending template "${templateConfig.template_name}" with ${templateVariables.length} structured variable(s)`);
+      const templateResult = await sendTemplateMessage(phone, templateConfig.template_name, templateVariables);
+      return { success: templateResult.success, parts: 1, type: 'template', error: templateResult.error };
     }
 
     // Use teaser if provided (short message with link, avoids split issues)

@@ -85,6 +85,7 @@ export async function sendProactive(
   userId?: string,
   configOverride?: ZapiConfig,
   teaserText?: string,
+  templateVariables?: string[],
 ): Promise<SendResult> {
   const provider = await getProvider();
 
@@ -94,7 +95,7 @@ export async function sendProactive(
   }
 
   // Official API: template envelope + split (teaser avoids split)
-  const result: ProactiveMessageResult = await sendProactiveMessage(phone, text, templateCategory, userId, teaserText);
+  const result: ProactiveMessageResult = await sendProactiveMessage(phone, text, templateCategory, userId, teaserText, templateVariables);
   return { success: result.success, provider: 'official', error: result.error };
 }
 
