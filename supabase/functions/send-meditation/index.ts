@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { cleanPhoneNumber } from "../_shared/zapi-client.ts";
-import { sendMessage, sendAudioUrl } from "../_shared/whatsapp-provider.ts";
+import { sendMessage, sendAudioUrl, sendProactive } from "../_shared/whatsapp-provider.ts";
 import { getInstanceConfigForUser, getInstanceConfigForPhone } from "../_shared/instance-helper.ts";
 
 const corsHeaders = {
