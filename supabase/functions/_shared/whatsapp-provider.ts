@@ -52,6 +52,44 @@ export interface SendResult {
   error?: string;
 }
 
+// ============================================================================
+// TRANSIENT ERROR RETRY
+// ============================================================================
+
+const TRANSIENT_ERROR_PATTERNS = [
+  /429/i, /rate.?limit/i, /too many/i,
+  /500/i, /502/i, /503/i, /504/i,
+  /timeout/i, /timed.?out/i, /econnreset/i, /econnrefused/i,
+  /network/i, /fetch.?failed/i,
+];
+
+function isTransientError(error?: string): boolean {
+  if (!error) return false;
+  return TRANSIENT_ERROR_PATTERNS.some(p => p.test(error));
+}
+
+async function withRetry<T extends SendResult>(
+  fn: () => Promise<T>,
+  label: string,
+): Promise<T> {
+  const result = await fn();
+  if (result.success) return result;
+
+  if (isTransientError(result.error)) {
+    console.warn(`⚠️ [WhatsApp Provider] Transient error on ${label}: ${result.error}. Retrying in 2s...`);
+    await new Promise(r => setTimeout(r, 2000));
+    const retry = await fn();
+    if (retry.success) {
+      console.log(`✅ [WhatsApp Provider] Retry succeeded for ${label}`);
+    } else {
+      console.error(`❌ [WhatsApp Provider] Retry also failed for ${label}: ${retry.error}`);
+    }
+    return retry;
+  }
+
+  return result;
+}
+
 /**
  * Envia uma mensagem de texto usando o provider ativo.
  * Para mensagens proativas (fora da janela de 24h), usar `sendProactive()`.
