@@ -582,7 +582,7 @@ Deno.serve(async (req) => {
 
         // Send via Z-API with instance routing
         const instanceConfig = await getInstanceConfigForUser(supabase, followup.user_id);
-        const sendResult = await sendProactive(profile.phone, message);
+        const sendResult = await sendProactive(profile.phone, message, 'followup', followup.user_id);
 
         if (sendResult.success) {
           console.log(`✅ Follow-up sent successfully`);

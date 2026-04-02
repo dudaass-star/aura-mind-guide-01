@@ -398,7 +398,7 @@ Deno.serve(async (req) => {
         // Send via WhatsApp
         const zapiConfig = await getInstanceConfigForUser(supabase, profile.user_id);
         const cleanPhone = cleanPhoneNumber(profile.phone);
-        const result = await sendProactive(cleanPhone, report);
+        const result = await sendProactive(cleanPhone, report, 'weekly_report', profile.user_id);
 
         if (result.success) {
           console.log(`✅ Report sent to ${profile.name} (${profile.phone})`);

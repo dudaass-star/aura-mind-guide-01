@@ -78,7 +78,7 @@ Deno.serve(async (req) => {
             );
 
             const cleanPhone = cleanPhoneNumber(user.phone);
-            const result = await sendProactive(cleanPhone, message);
+            const result = await sendProactive(cleanPhone, message, 'reactivation', user.user_id);
 
             if (result.success) {
               await supabase

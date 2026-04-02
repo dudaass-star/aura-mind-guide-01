@@ -537,7 +537,7 @@ Pra gente começar, me manda um "vamos" ou "bora" - ou me avisa se quer reagenda
           try {
             const cleanPhone = cleanPhoneNumber(profile.phone);
             const instanceConfig = await getInstanceConfigForUser(supabase, session.user_id);
-            const result = await sendProactive(cleanPhone, reminderMessage);
+            const result = await sendProactive(cleanPhone, reminderMessage, 'session_reminder', session.user_id);
             
             if (result.success) {
               reminder10mSent++;
@@ -601,7 +601,7 @@ Quer remarcar pra outro horário? É só me dizer quando fica bom pra você. ✨
           try {
             const cleanPhone = cleanPhoneNumber(profile.phone);
             const instanceConfig = await getInstanceConfigForUser(supabase, session.user_id);
-            await sendProactive(cleanPhone, message);
+            await sendProactive(cleanPhone, message, 'session_reminder', session.user_id);
             console.log(`✅ Missed session message sent for session ${session.id}`);
           } catch (sendError) {
             console.error(`❌ Error sending missed session message for session ${session.id}:`, sendError);
@@ -727,7 +727,7 @@ Se quiser remarcar uma nova sessão, é só me dizer!`;
           try {
             const cleanPhone = cleanPhoneNumber(profile.phone);
             const instanceConfig = await getInstanceConfigForUser(supabase, session.user_id);
-            await sendProactive(cleanPhone, messageToSend);
+            await sendProactive(cleanPhone, messageToSend, 'session_reminder', session.user_id);
             console.log(`✅ Closure message sent for session ${session.id}`);
           } catch (sendError) {
             console.error(`❌ Error sending closure message for session ${session.id}:`, sendError);
@@ -822,7 +822,7 @@ Me conta durante a semana como está seu progresso! Estou aqui por você. ✨`;
         try {
           const cleanPhone = cleanPhoneNumber(profile.phone);
           const instanceConfig = await getInstanceConfigForUser(supabase, session.user_id);
-          const result = await sendProactive(cleanPhone, message);
+          const result = await sendProactive(cleanPhone, message, 'session_reminder', session.user_id);
 
           if (result.success) {
             // Only mark post_session_sent AFTER rating is also sent successfully
@@ -837,7 +837,7 @@ Me conta durante a semana como está seu progresso! Estou aqui por você. ✨`;
 
 (Só o número tá ótimo! E se quiser me dizer o que mais gostou ou o que posso melhorar, adoraria ouvir! 💜)`;
 
-            const ratingResult = await sendProactive(cleanPhone, ratingMessage);
+            const ratingResult = await sendProactive(cleanPhone, ratingMessage, 'session_reminder', session.user_id);
             
             if (ratingResult.success) {
               ratingSuccess = true;

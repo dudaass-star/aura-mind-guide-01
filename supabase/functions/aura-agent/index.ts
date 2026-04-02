@@ -1121,7 +1121,7 @@ ${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}`
 
   // New user without context: check if they already provided detailed situational context
   if ((totalMessageCount ?? Infinity) < 15 && (insightsCount ?? Infinity) === 0) {
-    const userMsgs = recentUser;
+    const userMsgs = messageHistory.filter(m => m.role === 'user').slice(-5).map(m => m.content);
     const totalChars = userMsgs.reduce((sum, m) => sum + m.length, 0);
     const hasDetailedContext = totalChars > 250 || userMsgs.some(m => m.length > 150);
 

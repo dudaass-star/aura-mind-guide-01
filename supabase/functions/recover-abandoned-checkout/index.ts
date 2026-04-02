@@ -157,7 +157,7 @@ Deno.serve(async (req) => {
 
         console.log(`📤 [RECOVERY] Sending to ${normalizedPhone.substring(0, 6)}*** (raw: ${session.phone.substring(0, 4)}***) for plan ${plan}`);
 
-        const result = await sendProactive(normalizedPhone, message);
+        const result = await sendProactive(normalizedPhone, message, 'checkout_recovery');
 
         // Log the attempt with full details
         await supabase.from('checkout_recovery_attempts').insert({

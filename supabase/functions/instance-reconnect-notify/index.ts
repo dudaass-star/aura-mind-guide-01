@@ -76,7 +76,7 @@ Deno.serve(async (req) => {
         const message = `Oi, ${nome}! Tive um probleminha técnico, mas já voltei. 💚 Se você me mandou algo e eu não respondi, pode mandar de novo que estou aqui!`;
 
         const cleanPhone = cleanPhoneNumber(user.phone);
-        const result = await sendProactive(cleanPhone, message);
+        const result = await sendProactive(cleanPhone, message, 'reconnect', user.user_id);
 
         if (result.success) {
           totalSent++;
