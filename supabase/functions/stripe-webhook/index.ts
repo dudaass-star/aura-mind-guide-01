@@ -709,11 +709,19 @@ Sua assinatura AURA foi reativada e estou aqui, pronta pra continuar nossa jorna
 
 Me conta: como você está hoje?`;
 
-        const welcomeBackResult = await sendProactive(phone, welcomeBackMessage, 'welcome', profile?.user_id);
+        let welcomeBackResult = await sendProactive(phone, welcomeBackMessage, 'welcome', profile?.user_id);
         if (!welcomeBackResult.success) {
-          console.error('❌ Failed to send welcome back message:', welcomeBackResult.error);
-        } else {
+          console.warn('⚠️ First welcome back attempt failed, retrying in 3s:', welcomeBackResult.error);
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          welcomeBackResult = await sendProactive(phone, welcomeBackMessage, 'welcome', profile?.user_id);
+        }
+        if (welcomeBackResult.success) {
           console.log('✅ Welcome back message sent via', welcomeBackResult.provider);
+          if (profile?.user_id) {
+            await supabase.from('messages').insert({ user_id: profile.user_id, role: 'assistant', content: welcomeBackMessage });
+          }
+        } else {
+          console.error('❌ Failed to send welcome back after retry:', welcomeBackResult.error);
         }
 
         // Update profile status back to active
