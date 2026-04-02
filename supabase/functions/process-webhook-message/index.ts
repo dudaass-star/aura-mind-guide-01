@@ -971,7 +971,12 @@ Deno.serve(async (req) => {
 
       console.log(`📤 Sending text (${responseText.length} chars, ${typingSeconds}s typing): ${responseText.substring(0, 50)}...`);
       
-      await sendMessage(cleanPhone, responseText);
+      const sendResult = await sendMessage(cleanPhone, responseText);
+      if (!sendResult.success) {
+        console.error(`❌ CRITICAL: Failed to send main response to ${cleanPhone?.substring(0, 4)}***: ${sendResult.error}`);
+        await logFailedMessage(supabase, profile.user_id, cleanPhone, responseText, sendResult.error);
+        // Still persist to DB so context is not lost, but log the failure
+      }
       sentAnyResponse = true;
 
       // Persist assistant message to DB (with dedup check)
