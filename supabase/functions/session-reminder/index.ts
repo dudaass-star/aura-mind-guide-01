@@ -246,7 +246,7 @@ Confirma que tá tudo certo? Me responde com "confirmo" ou me avisa se precisar 
         try {
           const cleanPhone = cleanPhoneNumber(profile.phone);
           const instanceConfig = await getInstanceConfigForUser(supabase, session.user_id);
-          const result = await sendProactive(cleanPhone, message);
+          const result = await sendProactive(cleanPhone, message, 'session_reminder', session.user_id);
 
           if (result.success) {
             await supabase
