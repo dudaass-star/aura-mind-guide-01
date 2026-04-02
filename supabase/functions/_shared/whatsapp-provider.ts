@@ -150,20 +150,22 @@ export async function sendAudio(
   audioBase64: string,
   configOverride?: ZapiConfig,
 ): Promise<SendResult> {
-  const provider = await getProvider();
+  return withRetry(async () => {
+    const provider = await getProvider();
 
-  if (provider === 'zapi') {
-    const result = await sendAudioMessage(phone, audioBase64, configOverride);
-    return { success: result.success, provider: 'zapi', error: result.error };
-  }
+    if (provider === 'zapi') {
+      const result = await sendAudioMessage(phone, audioBase64, configOverride);
+      return { success: result.success, provider: 'zapi', error: result.error };
+    }
 
-  // Official API: base64 não suportado
-  console.warn('⚠️ [WhatsApp Provider] Official API does not support base64 audio. Use sendAudioUrl() with a public URL instead.');
-  return {
-    success: false,
-    provider: 'official',
-    error: 'Official API does not support base64 audio. Upload to storage and use sendAudioUrl() instead.',
-  };
+    // Official API: base64 não suportado
+    console.warn('⚠️ [WhatsApp Provider] Official API does not support base64 audio. Use sendAudioUrl() with a public URL instead.');
+    return {
+      success: false,
+      provider: 'official',
+      error: 'Official API does not support base64 audio. Upload to storage and use sendAudioUrl() instead.',
+    };
+  }, `sendAudio(${phone.substring(0, 4)}***)`);
 }
 
 /**
