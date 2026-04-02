@@ -601,7 +601,7 @@ Quer remarcar pra outro horário? É só me dizer quando fica bom pra você. ✨
           try {
             const cleanPhone = cleanPhoneNumber(profile.phone);
             const instanceConfig = await getInstanceConfigForUser(supabase, session.user_id);
-            await sendProactive(cleanPhone, message);
+            await sendProactive(cleanPhone, message, 'session_reminder', session.user_id);
             console.log(`✅ Missed session message sent for session ${session.id}`);
           } catch (sendError) {
             console.error(`❌ Error sending missed session message for session ${session.id}:`, sendError);
