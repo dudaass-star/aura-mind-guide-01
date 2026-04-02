@@ -482,6 +482,42 @@ export type Database = {
         }
         Relationships: []
       }
+      failed_message_log: {
+        Row: {
+          content: string
+          created_at: string
+          error: string | null
+          function_name: string
+          id: string
+          phone: string | null
+          resolved: boolean
+          retry_count: number
+          user_id: string | null
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          error?: string | null
+          function_name?: string
+          id?: string
+          phone?: string | null
+          resolved?: boolean
+          retry_count?: number
+          user_id?: string | null
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          error?: string | null
+          function_name?: string
+          id?: string
+          phone?: string | null
+          resolved?: boolean
+          retry_count?: number
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       gemini_cache: {
         Row: {
           cache_name: string
