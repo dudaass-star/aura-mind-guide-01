@@ -602,24 +602,11 @@ Lembre-se: o caminho do autoconhecimento não para. Se precisar de mim, estarei 
 
 Cuide-se. 🌟`;
 
-        const response = await fetch(`${supabaseUrl}/functions/v1/send-zapi-message`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseServiceKey}`,
-          },
-          body: JSON.stringify({
-            phone: phone,
-            message: farewellMessage,
-            isAudio: false,
-            ...(profile?.user_id && { user_id: profile.user_id }),
-          }),
-        });
-
-        if (!response.ok) {
-          console.error('❌ Failed to send farewell message:', await response.text());
+        const farewellResult = await sendProactive(phone, farewellMessage, 'checkin', profile?.user_id);
+        if (!farewellResult.success) {
+          console.error('❌ Failed to send farewell message:', farewellResult.error);
         } else {
-          console.log('✅ Farewell message sent successfully!');
+          console.log('✅ Farewell message sent via', farewellResult.provider);
         }
 
         // Update profile status
