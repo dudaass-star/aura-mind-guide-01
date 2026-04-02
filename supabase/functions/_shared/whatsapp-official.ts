@@ -292,6 +292,7 @@ export async function sendProactiveMessage(
   templateCategory: TemplateCategory = 'checkin',
   userId?: string,
   teaserText?: string,
+  templateVariables?: string[],
 ): Promise<ProactiveMessageResult> {
   try {
     // Check 24h window
