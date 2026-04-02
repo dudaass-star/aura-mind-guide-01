@@ -306,14 +306,33 @@ Deno.serve(async (req) => {
           }
 
           try {
-            const result = await sendProactive(formattedPhone, welcomeMessage, 'welcome', profileUserId);
+            let result = await sendProactive(formattedPhone, welcomeMessage, 'welcome', profileUserId);
             if (!result.success) {
-              console.error('❌ Failed to send welcome:', result.error);
-            } else {
+              console.warn('⚠️ First welcome attempt failed, retrying in 3s:', result.error);
+              await new Promise(resolve => setTimeout(resolve, 3000));
+              result = await sendProactive(formattedPhone, welcomeMessage, 'welcome', profileUserId);
+            }
+            if (result.success) {
               console.log('✅ Welcome message sent via', result.provider);
+              await supabase.from('messages').insert({ user_id: profileUserId, role: 'assistant', content: welcomeMessage });
+            } else {
+              console.error('❌ Failed to send welcome after retry:', result.error);
             }
           } catch (sendError) {
             console.error('❌ Error sending welcome:', sendError);
+            // Retry once on exception
+            try {
+              await new Promise(resolve => setTimeout(resolve, 3000));
+              const retryResult = await sendProactive(formattedPhone, welcomeMessage, 'welcome', profileUserId);
+              if (retryResult.success) {
+                console.log('✅ Welcome sent on retry via', retryResult.provider);
+                await supabase.from('messages').insert({ user_id: profileUserId, role: 'assistant', content: welcomeMessage });
+              } else {
+                console.error('❌ Welcome retry also failed:', retryResult.error);
+              }
+            } catch (retryErr) {
+              console.error('❌ Welcome retry exception:', retryErr);
+            }
           }
 
           // CAPI event
