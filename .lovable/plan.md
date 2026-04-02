@@ -1,91 +1,48 @@
 
 
-## Verificação Completa — Mensagens Proativas da AURA
+## Correção: Newlines em ContentVariables Quebram Twilio Content API
 
-### Status Geral: 18 funções auditadas, 2 bugs ativos
+### Causa Raiz Confirmada
 
----
+Através de testes diretos, confirmei que:
+- Texto simples sem `\n` → funciona
+- Texto com emojis (💜, 🤍) → funciona
+- Texto com URL → funciona
+- Texto com `\n` (newlines) → **FALHA com erro 21656**
 
-### Tabela de Conformidade — sendProactive()
+O Twilio Content API rejeita ContentVariables cujo valor contém caracteres de newline. Isso afeta **todas as mensagens proativas** que contêm quebras de linha — não apenas checkout_recovery.
 
-Todas as funções que usam `sendProactive()` estão corretas com template e userId:
+### Impacto
 
-| Função | Template | userId | Status |
-|--------|----------|--------|--------|
-| `session-reminder` (11 chamadas) | `session_reminder` | ✅ | ✅ OK |
-| `conversation-followup` | `followup` | ✅ | ✅ OK |
-| `scheduled-followup` | `followup` | ✅ | ✅ OK |
-| `pattern-analysis` | `insight` | ✅ | ✅ OK |
-| `weekly-report` | `weekly_report` | ✅ | ✅ OK |
-| `instance-reconnect-notify` | `reconnect` | ✅ | ✅ OK |
-| `reactivation-blast` | `reactivation` | ✅ | ✅ OK |
-| `reactivation-check` (2 chamadas) | `reactivation` | ✅ | ✅ OK |
-| `recover-abandoned-checkout` | `checkout_recovery` | ❌ (esperado) | ⚠️ Bug 21656 |
-| `schedule-setup-reminder` (2 chamadas) | `checkin` | ✅ | ✅ OK |
-| `scheduled-checkin` | `checkin` | ✅ | ✅ OK |
-| `monthly-schedule-renewal` | `checkin` | ✅ | ✅ OK |
-| `periodic-content` | `content` | ✅ | ✅ OK |
-| `start-trial` | `welcome_trial` | ✅ | ✅ OK |
-| `admin-send-message` | dinâmico | ✅ | ✅ OK |
-| `test-episode-send` | `content` | ✅ | ✅ OK |
-| `deliver-time-capsule` (3 chamadas) | `checkin` | ✅ | ✅ OK |
-| `send-meditation` (3 chamadas) | `content` | ✅ | ✅ OK |
+Qualquer mensagem enviada via template (fora da janela de 24h) que contenha `\n` no texto está falhando silenciosamente. Isso inclui:
+- Checkout recovery (confirmado falhando)
+- Check-ins, insights, relatórios semanais, session reminders — todos potencialmente afetados quando contêm newlines
 
-Todos os usos de `sendMessage()` estão em contextos corretos:
-- `process-webhook-message`: respostas reativas (dentro da janela de 24h) ✅
-- `send-zapi-message`: envio manual de admin ✅
+### Correção
 
----
+Uma única mudança em `whatsapp-official.ts`, na função `sendTemplateMessage`: sanitizar os valores das variáveis antes de enviá-las, substituindo newlines por espaços.
 
-### Bug 1 (ATIVO): Erro 21656 no `checkout_recovery`
+**Arquivo**: `supabase/functions/_shared/whatsapp-official.ts`
 
-**Evidência no banco** (últimas 3 dias):
-- 01/04 23:40 — `failed` com erro 21656
-- 01/04 11:00 — `failed` com erro 21656
-
-**Causa**: O `recover-abandoned-checkout` envia **3 variáveis** (`name`, `planLabel`, `checkoutLink`) como `{"1": "nome", "2": "Plano Essencial", "3": "https://..."}`. Mas o template `aura_checkout_recovery` no Twilio Content segue o mesmo padrão dos demais templates — **uma única variável** `{{1}}`. O Twilio rejeita porque recebe 3 variáveis onde espera 1.
-
-**Correção**: Reverter para o padrão de variável única. Em vez de 3 variáveis estruturadas, enviar o texto completo da mensagem como uma única variável (como todos os outros templates fazem). Remover o parâmetro `templateVariables` da chamada em `recover-abandoned-checkout`.
-
+Na função `sendTemplateMessage`, após construir `contentVars`, sanitizar:
 ```typescript
-// ANTES (quebrado):
-const result = await sendProactive(normalizedPhone, message, 'checkout_recovery', undefined, undefined, undefined, [name, planLabel, checkoutLink]);
-
-// DEPOIS (correto):
-const result = await sendProactive(normalizedPhone, message, 'checkout_recovery');
+// Sanitize: Twilio Content API rejects newlines in ContentVariables
+const sanitizedVars: Record<string, string> = {};
+for (const [key, val] of Object.entries(contentVars)) {
+  sanitizedVars[key] = val.replace(/\n+/g, ' ');
+}
 ```
 
----
+E usar `sanitizedVars` no `JSON.stringify` em vez de `contentVars`.
 
-### Bug 2 (MENOR): `execute-scheduled-tasks` usa `sendMessage` para lembretes e mensagens agendadas
+### Passo 2: Resetar checkouts falhados
 
-**Linhas 119 e 148**: As tarefas do tipo `reminder` e `message` usam `sendMessage()` em vez de `sendProactive()`. Estas são mensagens proativas (iniciadas pelo sistema, não em resposta ao usuário), então fora da janela de 24h serão bloqueadas pela Meta.
+Após o deploy, resetar os registros que falharam hoje para permitir reenvio:
+- Executar migration para resetar `recovery_sent = false` e `recovery_attempts_count = 0` para os 4-5 checkouts que falharam em 02/04 com erro 21656
 
-**Correção**: Substituir por `sendProactive()` com template `checkin` e `userId`:
-```typescript
-// reminder (linha 119)
-await sendProactive(cleanPhoneNumber(profile.phone), reminderText, 'checkin', task.user_id);
+### Detalhes Técnicos
 
-// message (linha 148)
-await sendProactive(cleanPhoneNumber(profile.phone), messageText, 'checkin', task.user_id);
-```
-
-Isso requer importar `sendProactive` e `cleanPhoneNumber` no `execute-scheduled-tasks`.
-
----
-
-### Outros Alertas (não são bugs de proatividade)
-
-**Domínio de email não verificado**: O `check-instance-health` está falhando ao enviar alertas por email com erro `"The olaaura.com.br domain is not verified"` no Resend. Isso não afeta mensagens proativas do WhatsApp, mas os alertas de instância desconectada por email não estão chegando.
-
----
-
-### Templates no Banco
-
-Todos os 13 templates estão `is_active: true` com ContentSid configurados. Nenhum está pendente.
-
-### Impacto das Correções
-
-1. **Bug 1**: Corrige falhas de checkout recovery que estão perdendo conversões desde 01/04
-2. **Bug 2**: Garante que lembretes e mensagens agendadas pelo usuário funcionem fora da janela de 24h
+- **Arquivo alterado**: `supabase/functions/_shared/whatsapp-official.ts` — sanitização de newlines na função `sendTemplateMessage`
+- **Migration**: Reset dos `checkout_sessions` falhados por 21656 em 02/04
+- **Deploy**: `whatsapp-official.ts` é shared, então qualquer função que importe dele será automaticamente atualizada no próximo deploy. Vamos deployar `recover-abandoned-checkout` para validar.
 
