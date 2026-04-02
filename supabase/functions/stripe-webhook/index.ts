@@ -306,14 +306,33 @@ Deno.serve(async (req) => {
           }
 
           try {
-            const result = await sendProactive(formattedPhone, welcomeMessage, 'welcome', profileUserId);
+            let result = await sendProactive(formattedPhone, welcomeMessage, 'welcome', profileUserId);
             if (!result.success) {
-              console.error('❌ Failed to send welcome:', result.error);
-            } else {
+              console.warn('⚠️ First welcome attempt failed, retrying in 3s:', result.error);
+              await new Promise(resolve => setTimeout(resolve, 3000));
+              result = await sendProactive(formattedPhone, welcomeMessage, 'welcome', profileUserId);
+            }
+            if (result.success) {
               console.log('✅ Welcome message sent via', result.provider);
+              await supabase.from('messages').insert({ user_id: profileUserId, role: 'assistant', content: welcomeMessage });
+            } else {
+              console.error('❌ Failed to send welcome after retry:', result.error);
             }
           } catch (sendError) {
             console.error('❌ Error sending welcome:', sendError);
+            // Retry once on exception
+            try {
+              await new Promise(resolve => setTimeout(resolve, 3000));
+              const retryResult = await sendProactive(formattedPhone, welcomeMessage, 'welcome', profileUserId);
+              if (retryResult.success) {
+                console.log('✅ Welcome sent on retry via', retryResult.provider);
+                await supabase.from('messages').insert({ user_id: profileUserId, role: 'assistant', content: welcomeMessage });
+              } else {
+                console.error('❌ Welcome retry also failed:', retryResult.error);
+              }
+            } catch (retryErr) {
+              console.error('❌ Welcome retry exception:', retryErr);
+            }
           }
 
           // CAPI event
@@ -512,16 +531,34 @@ Comigo, você pode falar com liberdade: sem julgamento, no seu ritmo.
 Me diz: como você está hoje?`;
       }
 
-      // Send message via Z-API
+      // Send welcome message with retry + persistence
       try {
-        const result = await sendProactive(formattedPhone, welcomeMessage, 'welcome', profileUserId);
+        let result = await sendProactive(formattedPhone, welcomeMessage, 'welcome', profileUserId);
         if (!result.success) {
-          console.error('❌ Failed to send message:', result.error);
-        } else {
+          console.warn('⚠️ First welcome attempt failed, retrying in 3s:', result.error);
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          result = await sendProactive(formattedPhone, welcomeMessage, 'welcome', profileUserId);
+        }
+        if (result.success) {
           console.log(`✅ ${isUpgrade ? 'Upgrade' : 'Welcome'} message sent via ${result.provider}!`);
+          await supabase.from('messages').insert({ user_id: profileUserId, role: 'assistant', content: welcomeMessage });
+        } else {
+          console.error('❌ Failed to send welcome after retry:', result.error);
         }
       } catch (sendError) {
-        console.error('❌ Error sending message:', sendError);
+        console.error('❌ Error sending welcome:', sendError);
+        try {
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          const retryResult = await sendProactive(formattedPhone, welcomeMessage, 'welcome', profileUserId);
+          if (retryResult.success) {
+            console.log('✅ Welcome sent on retry via', retryResult.provider);
+            await supabase.from('messages').insert({ user_id: profileUserId, role: 'assistant', content: welcomeMessage });
+          } else {
+            console.error('❌ Welcome retry also failed:', retryResult.error);
+          }
+        } catch (retryErr) {
+          console.error('❌ Welcome retry exception:', retryErr);
+        }
       }
 
       // Send CAPI Purchase event (non-blocking)
@@ -607,6 +644,9 @@ Cuide-se. 🌟`;
           console.error('❌ Failed to send farewell message:', farewellResult.error);
         } else {
           console.log('✅ Farewell message sent via', farewellResult.provider);
+          if (profile?.user_id) {
+            await supabase.from('messages').insert({ user_id: profile.user_id, role: 'assistant', content: farewellMessage });
+          }
         }
 
         // Update profile status
@@ -669,11 +709,19 @@ Sua assinatura AURA foi reativada e estou aqui, pronta pra continuar nossa jorna
 
 Me conta: como você está hoje?`;
 
-        const welcomeBackResult = await sendProactive(phone, welcomeBackMessage, 'welcome', profile?.user_id);
+        let welcomeBackResult = await sendProactive(phone, welcomeBackMessage, 'welcome', profile?.user_id);
         if (!welcomeBackResult.success) {
-          console.error('❌ Failed to send welcome back message:', welcomeBackResult.error);
-        } else {
+          console.warn('⚠️ First welcome back attempt failed, retrying in 3s:', welcomeBackResult.error);
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          welcomeBackResult = await sendProactive(phone, welcomeBackMessage, 'welcome', profile?.user_id);
+        }
+        if (welcomeBackResult.success) {
           console.log('✅ Welcome back message sent via', welcomeBackResult.provider);
+          if (profile?.user_id) {
+            await supabase.from('messages').insert({ user_id: profile.user_id, role: 'assistant', content: welcomeBackMessage });
+          }
+        } else {
+          console.error('❌ Failed to send welcome back after retry:', welcomeBackResult.error);
         }
 
         // Update profile status back to active
