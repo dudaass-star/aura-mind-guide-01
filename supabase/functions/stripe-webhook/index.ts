@@ -3,6 +3,7 @@ import Stripe from "https://esm.sh/stripe@14.21.0";
 import { allocateInstance } from "../_shared/instance-helper.ts";
 import { resolveProfile } from "../_shared/profile-resolver.ts";
 import { getPhoneVariations } from "../_shared/zapi-client.ts";
+import { sendProactive } from "../_shared/whatsapp-provider.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
