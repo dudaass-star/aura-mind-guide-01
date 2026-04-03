@@ -97,6 +97,34 @@ const Checkout = () => {
     }
   }, [billingPeriod]);
 
+  // Exit-intent detection
+  useEffect(() => {
+    const exitShown = sessionStorage.getItem('aura_exit_popup_shown');
+    if (exitShown) return;
+
+    const handleMouseLeave = (e: MouseEvent) => {
+      if (e.clientY <= 0 && !hasRedirected && !sessionStorage.getItem('aura_exit_popup_shown')) {
+        sessionStorage.setItem('aura_exit_popup_shown', 'true');
+        setShowExitPopup(true);
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden' && !hasRedirected && !sessionStorage.getItem('aura_exit_popup_shown')) {
+        sessionStorage.setItem('aura_exit_popup_shown', 'true');
+        setShowExitPopup(true);
+      }
+    };
+
+    document.addEventListener('mouseleave', handleMouseLeave);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('mouseleave', handleMouseLeave);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [hasRedirected]);
+
   const currentPlan = plans[selectedPlan];
   const currentPrice = billingPeriod === "monthly" ? currentPlan.monthlyPrice : currentPlan.yearlyPrice;
   const periodLabel = billingPeriod === "monthly" ? "mês" : "ano";
