@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { ArrowLeft, CreditCard, Check, Shield, Lock, MessageCircle, Calendar, FileText } from "lucide-react";
 import { toast } from "sonner";
@@ -76,6 +76,8 @@ const Checkout = () => {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [showExitPopup, setShowExitPopup] = useState(false);
+  const [hasRedirected, setHasRedirected] = useState(false);
 
   useEffect(() => {
     // Generate a unique event_id for deduplication between browser pixel and CAPI
@@ -94,6 +96,34 @@ const Checkout = () => {
       setPaymentMethod("card");
     }
   }, [billingPeriod]);
+
+  // Exit-intent detection
+  useEffect(() => {
+    const exitShown = sessionStorage.getItem('aura_exit_popup_shown');
+    if (exitShown) return;
+
+    const handleMouseLeave = (e: MouseEvent) => {
+      if (e.clientY <= 0 && !hasRedirected && !sessionStorage.getItem('aura_exit_popup_shown')) {
+        sessionStorage.setItem('aura_exit_popup_shown', 'true');
+        setShowExitPopup(true);
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden' && !hasRedirected && !sessionStorage.getItem('aura_exit_popup_shown')) {
+        sessionStorage.setItem('aura_exit_popup_shown', 'true');
+        setShowExitPopup(true);
+      }
+    };
+
+    document.addEventListener('mouseleave', handleMouseLeave);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('mouseleave', handleMouseLeave);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [hasRedirected]);
 
   const currentPlan = plans[selectedPlan];
   const currentPrice = billingPeriod === "monthly" ? currentPlan.monthlyPrice : currentPlan.yearlyPrice;
@@ -185,6 +215,7 @@ const Checkout = () => {
       if (data?.url) {
         const checkoutUrl = data.url as string;
         localStorage.setItem('aura_checkout', JSON.stringify({ name, phone, plan: selectedPlan, billing: billingPeriod, price: currentPrice }));
+        setHasRedirected(true);
         try {
           if (window.top && window.top !== window) {
             window.top.location.href = checkoutUrl;
@@ -487,6 +518,35 @@ const Checkout = () => {
             </form>
           </div>
         </div>
+
+        {/* Exit-intent popup */}
+        {showExitPopup && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/50 backdrop-blur-sm px-4">
+            <div className="bg-card rounded-2xl p-8 max-w-md w-full shadow-xl border border-border/50 text-center space-y-5 animate-in fade-in zoom-in-95 duration-300">
+              <p className="text-4xl">💜</p>
+              <h2 className="font-display text-xl font-semibold text-foreground">
+                Ei, não vai embora!
+              </h2>
+              <p className="text-muted-foreground text-sm leading-relaxed">
+                Você estava tão perto de começar sua jornada de autocuidado. A AURA está aqui pra te escutar — sem julgamento, no seu ritmo.
+              </p>
+              <Button
+                variant="sage"
+                size="lg"
+                className="w-full"
+                onClick={() => setShowExitPopup(false)}
+              >
+                Continuar minha jornada
+              </Button>
+              <button
+                onClick={() => setShowExitPopup(false)}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Não, obrigado
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </>
   );

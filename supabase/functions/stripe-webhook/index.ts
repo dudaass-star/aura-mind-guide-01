@@ -1000,24 +1000,42 @@ Me conta: como você está hoje?`;
               console.warn('⚠️ Short link error, using full URL:', shortLinkErr);
             }
 
-            // Step 4: Send WhatsApp dunning message
-            const dunningMessage = `Oi, ${userName}! 💜
-
-Não conseguimos processar seu pagamento da AURA.
-
-Você pode atualizar seu cartão aqui: ${paymentLink}
-
-Se preferir cancelar, é só me avisar. Sem problemas. 💜`;
-
-            const dunningResult = await sendProactive(profile.phone, dunningMessage, 'dunning', profile.user_id);
-
-            if (!dunningResult.success) {
-              console.error('❌ Failed to send dunning WhatsApp:', dunningResult.error);
-              dunningRecord.error_stage = 'whatsapp_send_failed';
-              dunningRecord.error_message = dunningResult.error;
+            // Step 4: Send dunning email
+            const recipientEmail = profile.email || (customer as Stripe.Customer).email;
+            if (recipientEmail) {
+              try {
+                const emailResult = await fetch(`${supabaseUrl}/functions/v1/send-transactional-email`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${supabaseServiceKey}`,
+                  },
+                  body: JSON.stringify({
+                    templateName: 'dunning-payment-failed',
+                    recipientEmail,
+                    idempotencyKey: `dunning-${event.id}`,
+                    templateData: { name: userName, paymentLink },
+                  }),
+                });
+                if (emailResult.ok) {
+                  dunningRecord.whatsapp_sent = true; // reusing field as "notification_sent"
+                  console.log('✅ Dunning email enqueued to:', recipientEmail);
+                } else {
+                  const errBody = await emailResult.text();
+                  dunningRecord.error_stage = 'email_send_failed';
+                  dunningRecord.error_message = errBody;
+                  console.error('❌ Failed to send dunning email:', errBody);
+                }
+              } catch (emailErr) {
+                const errMsg = emailErr instanceof Error ? emailErr.message : String(emailErr);
+                dunningRecord.error_stage = 'email_send_failed';
+                dunningRecord.error_message = errMsg;
+                console.error('❌ Error sending dunning email:', errMsg);
+              }
             } else {
-              dunningRecord.whatsapp_sent = true;
-              console.log('✅ Dunning WhatsApp sent via', dunningResult.provider, 'to:', profile.phone);
+              dunningRecord.error_stage = 'no_email';
+              dunningRecord.error_message = 'No email found for dunning notification';
+              console.warn('⚠️ No email available for dunning, skipping notification');
             }
           } catch (portalErr) {
             const errMsg = portalErr instanceof Error ? portalErr.message : String(portalErr);
