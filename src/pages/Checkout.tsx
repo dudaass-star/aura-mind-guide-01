@@ -518,6 +518,35 @@ const Checkout = () => {
             </form>
           </div>
         </div>
+
+        {/* Exit-intent popup */}
+        {showExitPopup && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/50 backdrop-blur-sm px-4">
+            <div className="bg-card rounded-2xl p-8 max-w-md w-full shadow-xl border border-border/50 text-center space-y-5 animate-in fade-in zoom-in-95 duration-300">
+              <p className="text-4xl">💜</p>
+              <h2 className="font-display text-xl font-semibold text-foreground">
+                Ei, não vai embora!
+              </h2>
+              <p className="text-muted-foreground text-sm leading-relaxed">
+                Você estava tão perto de começar sua jornada de autocuidado. A AURA está aqui pra te escutar — sem julgamento, no seu ritmo.
+              </p>
+              <Button
+                variant="sage"
+                size="lg"
+                className="w-full"
+                onClick={() => setShowExitPopup(false)}
+              >
+                Continuar minha jornada
+              </Button>
+              <button
+                onClick={() => setShowExitPopup(false)}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Não, obrigado
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </>
   );
