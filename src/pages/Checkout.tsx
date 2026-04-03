@@ -76,6 +76,8 @@ const Checkout = () => {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [showExitPopup, setShowExitPopup] = useState(false);
+  const [hasRedirected, setHasRedirected] = useState(false);
 
   useEffect(() => {
     // Generate a unique event_id for deduplication between browser pixel and CAPI
