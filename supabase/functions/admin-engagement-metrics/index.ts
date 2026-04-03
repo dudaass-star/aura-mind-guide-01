@@ -443,31 +443,37 @@ Deno.serve(async (req) => {
     }
     const cancellationReasons = Object.values(reasonCounts).sort((a, b) => b.count - a.count);
 
-    // ========== CHECKOUT FUNNEL METRICS ==========
+    // ========== CHECKOUT FUNNEL METRICS (deduplicated by phone) ==========
 
-    // All checkout sessions in period
-    const { count: checkoutCreatedInPeriod } = await supabase
+    // Fetch sessions in period and deduplicate by phone
+    const { data: periodSessions } = await supabase
       .from('checkout_sessions')
-      .select('*', { count: 'exact', head: true })
+      .select('phone, status')
       .gte('created_at', periodStart)
       .lt('created_at', periodEnd);
 
-    const { count: checkoutCompletedInPeriod } = await supabase
-      .from('checkout_sessions')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'completed')
-      .gte('created_at', periodStart)
-      .lt('created_at', periodEnd);
+    const uniquePhonesCreated = new Set<string>();
+    const uniquePhonesCompleted = new Set<string>();
+    for (const s of (periodSessions || [])) {
+      if (s.phone) uniquePhonesCreated.add(s.phone);
+      if (s.phone && s.status === 'completed') uniquePhonesCompleted.add(s.phone);
+    }
+    const checkoutCreatedInPeriod = uniquePhonesCreated.size;
+    const checkoutCompletedInPeriod = uniquePhonesCompleted.size;
 
-    // All-time checkout funnel
-    const { count: checkoutCreatedAllTime } = await supabase
+    // All-time checkout funnel (deduplicated)
+    const { data: allTimeSessions } = await supabase
       .from('checkout_sessions')
-      .select('*', { count: 'exact', head: true });
+      .select('phone, status');
 
-    const { count: checkoutCompletedAllTime } = await supabase
-      .from('checkout_sessions')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'completed');
+    const allPhonesCreated = new Set<string>();
+    const allPhonesCompleted = new Set<string>();
+    for (const s of (allTimeSessions || [])) {
+      if (s.phone) allPhonesCreated.add(s.phone);
+      if (s.phone && s.status === 'completed') allPhonesCompleted.add(s.phone);
+    }
+    const checkoutCreatedAllTime = allPhonesCreated.size;
+    const checkoutCompletedAllTime = allPhonesCompleted.size;
 
     const checkoutDropoffInPeriod = (checkoutCreatedInPeriod || 0) - (checkoutCompletedInPeriod || 0);
     const checkoutCompletionRate = (checkoutCreatedInPeriod || 0) > 0
