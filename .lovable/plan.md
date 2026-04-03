@@ -1,22 +1,19 @@
 
 
-## Correção: Deduplicar recuperação de checkout por telefone
+## Migração: Dunning e Checkout Recovery → Email
 
-### Problema
+### Status: ✅ Concluído
 
-Quando um cliente cria múltiplas sessões de checkout (double-click, refresh, volta depois), cada sessão gera uma entrada separada na tabela `checkout_sessions`. A função `recover-abandoned-checkout` busca todas com `recovery_sent = false` e envia uma mensagem para cada uma — resultado: o cliente recebe 2, 3, ou até 6 mensagens iguais de recuperação.
+### O que foi feito
 
-### Correção
-
-**Arquivo: `supabase/functions/recover-abandoned-checkout/index.ts`**
-
-Após buscar as sessões abandonadas (linha 59-66), agrupar por telefone e processar apenas a sessão **mais recente** de cada número. As demais sessões do mesmo telefone são marcadas como `recovery_sent = true` sem enviar mensagem (status "skipped_duplicate").
-
-Lógica:
-1. Buscar sessões abandonadas (como já faz)
-2. Agrupar por `phone` — manter apenas a mais recente de cada telefone
-3. Marcar as duplicatas como `recovery_sent = true` com `recovery_last_error = 'Duplicate - grouped by phone'`
-4. Processar normalmente apenas 1 sessão por telefone
-
-**Escopo**: ~15 linhas alteradas em 1 arquivo. Sem migration.
-
+1. **Infraestrutura de email transacional** configurada (filas pgmq, cron job, funções de envio)
+2. **Templates de email criados**:
+   - `dunning-payment-failed`: Email empático para falha de pagamento com link para Billing Portal
+   - `checkout-recovery`: Email de recuperação de checkout abandonado com link direto
+3. **Edge functions migradas de WhatsApp para email**:
+   - `stripe-webhook` (bloco invoice.payment_failed)
+   - `recover-abandoned-checkout`
+   - `reprocess-dunning`
+4. **Popup de exit-intent** adicionado na página de Checkout (desktop: mouse leave, mobile: visibilitychange)
+5. **Página de unsubscribe** criada em `/unsubscribe`
+6. Todas as funções deployadas com sucesso
