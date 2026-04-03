@@ -1,6 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { normalizeBrazilianPhone, getPhoneVariations } from "../_shared/zapi-client.ts";
-import { sendProactive } from "../_shared/whatsapp-provider.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -13,26 +12,6 @@ const PLAN_LABELS: Record<string, string> = {
   transformacao: 'Transformação',
 };
 
-function isQuietHoursBRT(): boolean {
-  const now = new Date();
-  const brtHour = new Date(now.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' })).getHours();
-  return brtHour >= 22 || brtHour < 8;
-}
-
-function buildRecoveryMessage(name: string, plan: string): string {
-  const planLabel = PLAN_LABELS[plan] || plan;
-  const checkoutLink = `https://olaaura.com.br/checkout?plan=${plan}`;
-
-  return `Oi, ${name}! 💜
-
-Você estava a um passo de começar sua jornada com a Aura — uma companhia que te escuta de verdade, todos os dias, sem julgamento.
-
-Seu plano ${planLabel} ainda tá reservado. Pra finalizar, é só clicar aqui:
-${checkoutLink}
-
-Às vezes a gente só precisa de um empurrãozinho pra começar a cuidar de si. Esse pode ser o seu. 🤍`;
-}
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -43,15 +22,7 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    console.log('🛒 [RECOVERY] Starting abandoned checkout recovery...');
-
-    // Respect quiet hours (22h-08h BRT)
-    if (isQuietHoursBRT()) {
-      console.log('🌙 [RECOVERY] Quiet hours (22h-08h BRT), skipping.');
-      return new Response(JSON.stringify({ status: 'quiet_hours', sent: 0 }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
+    console.log('🛒 [RECOVERY] Starting abandoned checkout recovery (email)...');
 
     // Find abandoned checkouts: created > 30 min ago, not completed, not yet recovered
     const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
@@ -79,23 +50,18 @@ Deno.serve(async (req) => {
 
     console.log(`📋 [RECOVERY] Found ${abandoned.length} abandoned checkouts.`);
 
-    // Deduplicate by phone: keep only the most recent session per phone
-    const byPhone = new Map<string, typeof abandoned[number]>();
+    // Deduplicate by email (primary) and phone (secondary)
+    const byKey = new Map<string, typeof abandoned[number]>();
     const duplicates: typeof abandoned = [];
 
     for (const s of abandoned) {
-      if (!s.phone) {
-        // no-phone sessions pass through individually
-        byPhone.set(`__no_phone_${s.id}`, s);
-        continue;
-      }
-      const existing = byPhone.get(s.phone);
+      const dedupeKey = s.email || s.phone || `__no_key_${s.id}`;
+      const existing = byKey.get(dedupeKey);
       if (!existing) {
-        byPhone.set(s.phone, s);
+        byKey.set(dedupeKey, s);
       } else {
-        // keep the newer one (higher id from ordered query, but compare created_at via id order)
         duplicates.push(existing.id > s.id ? s : existing);
-        byPhone.set(s.phone, existing.id > s.id ? existing : s);
+        byKey.set(dedupeKey, existing.id > s.id ? existing : s);
       }
     }
 
@@ -105,7 +71,7 @@ Deno.serve(async (req) => {
       for (const dup of duplicates) {
         await supabase.from('checkout_sessions').update({
           recovery_sent: true,
-          recovery_last_error: 'Duplicate - grouped by phone',
+          recovery_last_error: 'Duplicate - grouped by email/phone',
           recovery_attempts_count: 1,
         }).eq('id', dup.id);
 
@@ -114,28 +80,30 @@ Deno.serve(async (req) => {
           phone_raw: dup.phone,
           phone_normalized: null,
           status: 'skipped_duplicate',
-          error_message: 'Duplicate session for same phone',
+          error_message: 'Duplicate session for same email/phone',
         });
       }
     }
 
-    const uniqueSessions = Array.from(byPhone.values());
+    const uniqueSessions = Array.from(byKey.values());
     console.log(`📋 [RECOVERY] Processing ${uniqueSessions.length} unique sessions (${duplicates.length} duplicates skipped).`);
 
     // Pre-fetch active/trial profiles to skip existing customers
     const { data: activeProfiles } = await supabase
       .from('profiles')
-      .select('phone')
+      .select('phone, email')
       .in('status', ['active', 'trial'])
       .not('phone', 'is', null);
 
     const activePhoneSet = new Set<string>();
+    const activeEmailSet = new Set<string>();
     if (activeProfiles) {
       for (const p of activeProfiles) {
         if (p.phone) {
           const variations = getPhoneVariations(p.phone);
           for (const v of variations) activePhoneSet.add(v);
         }
+        if (p.email) activeEmailSet.add(p.email.toLowerCase());
       }
     }
 
@@ -145,21 +113,21 @@ Deno.serve(async (req) => {
 
     for (const session of uniqueSessions) {
       try {
-        if (!session.phone) {
-          console.warn(`⚠️ [RECOVERY] No phone for session ${session.id}, skipping.`);
+        // Must have email for email-based recovery
+        if (!session.email) {
+          console.warn(`⚠️ [RECOVERY] No email for session ${session.id}, skipping.`);
 
-          // Log attempt with error
           await supabase.from('checkout_recovery_attempts').insert({
             checkout_session_id: session.id,
-            phone_raw: null,
+            phone_raw: session.phone || null,
             phone_normalized: null,
             status: 'skipped',
-            error_message: 'No phone number',
+            error_message: 'No email address',
           });
 
           await supabase.from('checkout_sessions').update({
             recovery_sent: true,
-            recovery_last_error: 'No phone number',
+            recovery_last_error: 'No email address',
             recovery_attempts_count: 1,
           }).eq('id', session.id);
 
@@ -167,21 +135,16 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        const normalizedPhone = normalizeBrazilianPhone(session.phone);
-
-        // Check if this phone belongs to an active customer
-        const phoneVariations = getPhoneVariations(session.phone);
-        const isActiveCustomer = phoneVariations.some(v => activePhoneSet.has(v));
-
-        if (isActiveCustomer) {
-          console.log(`⏭️ [RECOVERY] Phone ${normalizedPhone.substring(0, 6)}*** is active customer, skipping.`);
+        // Check if this email belongs to an active customer
+        if (activeEmailSet.has(session.email.toLowerCase())) {
+          console.log(`⏭️ [RECOVERY] Email ${session.email.substring(0, 3)}*** is active customer, skipping.`);
 
           await supabase.from('checkout_recovery_attempts').insert({
             checkout_session_id: session.id,
-            phone_raw: session.phone,
-            phone_normalized: normalizedPhone,
+            phone_raw: session.phone || null,
+            phone_normalized: session.phone ? normalizeBrazilianPhone(session.phone) : null,
             status: 'skipped_active_customer',
-            error_message: 'Phone belongs to active/trial customer',
+            error_message: 'Email belongs to active/trial customer',
           });
 
           await supabase.from('checkout_sessions').update({
@@ -194,27 +157,66 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        const name = session.name || 'você';
+        // Also check phone if available
+        if (session.phone) {
+          const phoneVariations = getPhoneVariations(session.phone);
+          const isActiveByPhone = phoneVariations.some(v => activePhoneSet.has(v));
+          if (isActiveByPhone) {
+            console.log(`⏭️ [RECOVERY] Phone is active customer, skipping.`);
+
+            await supabase.from('checkout_recovery_attempts').insert({
+              checkout_session_id: session.id,
+              phone_raw: session.phone,
+              phone_normalized: normalizeBrazilianPhone(session.phone),
+              status: 'skipped_active_customer',
+              error_message: 'Phone belongs to active/trial customer',
+            });
+
+            await supabase.from('checkout_sessions').update({
+              recovery_sent: true,
+              recovery_last_error: 'Active customer (phone) - skipped',
+              recovery_attempts_count: 1,
+            }).eq('id', session.id);
+
+            skipped++;
+            continue;
+          }
+        }
+
+        const customerName = session.name || 'você';
         const plan = session.plan || 'essencial';
-        const message = buildRecoveryMessage(name, plan);
-        const planLabel = PLAN_LABELS[plan] || plan;
         const checkoutLink = `https://olaaura.com.br/checkout?plan=${plan}`;
 
-        console.log(`📤 [RECOVERY] Sending to ${normalizedPhone.substring(0, 6)}*** (raw: ${session.phone.substring(0, 4)}***) for plan ${plan}`);
+        console.log(`📤 [RECOVERY] Sending email to ${session.email.substring(0, 3)}*** for plan ${plan}`);
 
-        const result = await sendProactive(normalizedPhone, message, 'checkout_recovery');
-
-        // Log the attempt with full details
-        await supabase.from('checkout_recovery_attempts').insert({
-          checkout_session_id: session.id,
-          phone_raw: session.phone,
-          phone_normalized: normalizedPhone,
-          status: result.success ? 'api_accepted' : 'failed',
-          provider_response: result.response ? JSON.parse(JSON.stringify(result.response)) : null,
-          error_message: result.error || null,
+        // Send recovery email
+        const emailResult = await fetch(`${supabaseUrl}/functions/v1/send-transactional-email`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseServiceKey}`,
+          },
+          body: JSON.stringify({
+            templateName: 'checkout-recovery',
+            recipientEmail: session.email,
+            idempotencyKey: `checkout-recovery-${session.id}`,
+            templateData: { name: customerName, plan, checkoutLink },
+          }),
         });
 
-        if (result.success) {
+        const emailOk = emailResult.ok;
+        const emailBody = await emailResult.text();
+
+        // Log the attempt
+        await supabase.from('checkout_recovery_attempts').insert({
+          checkout_session_id: session.id,
+          phone_raw: session.phone || null,
+          phone_normalized: session.phone ? normalizeBrazilianPhone(session.phone) : null,
+          status: emailOk ? 'api_accepted' : 'failed',
+          error_message: emailOk ? null : emailBody,
+        });
+
+        if (emailOk) {
           await supabase.from('checkout_sessions').update({
             recovery_sent: true,
             recovery_sent_at: new Date().toISOString(),
@@ -223,15 +225,15 @@ Deno.serve(async (req) => {
           }).eq('id', session.id);
 
           sent++;
-          console.log(`✅ [RECOVERY] Sent to ${normalizedPhone.substring(0, 6)}***`);
+          console.log(`✅ [RECOVERY] Email sent to ${session.email.substring(0, 3)}***`);
         } else {
           await supabase.from('checkout_sessions').update({
             recovery_sent: true,
-            recovery_last_error: result.error || 'Unknown error',
+            recovery_last_error: emailBody || 'Unknown error',
             recovery_attempts_count: 1,
           }).eq('id', session.id);
 
-          console.error(`❌ [RECOVERY] Failed to send to ${normalizedPhone.substring(0, 6)}***:`, result.error);
+          console.error(`❌ [RECOVERY] Failed to send email:`, emailBody);
           failed++;
         }
       } catch (err) {

@@ -1,7 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import Stripe from "https://esm.sh/stripe@14.21.0";
 import { resolveProfile } from "../_shared/profile-resolver.ts";
-import { sendProactive } from "../_shared/whatsapp-provider.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -15,8 +14,6 @@ Deno.serve(async (req) => {
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-
-  // Note: This is a one-time manual function. Auth is handled by verify_jwt=false + internal use only.
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
   const stripeKey = Deno.env.get('STRIPE_SECRET_KEY')!;
@@ -129,29 +126,49 @@ Deno.serve(async (req) => {
           const shortData = await shortResp.json();
           paymentLink = shortData.shortUrl;
         } else {
-          await shortResp.text(); // consume body to prevent resource leak
+          await shortResp.text();
         }
       } catch (_) { /* use full URL */ }
 
-      // 7. Send WhatsApp
+      // 7. Send dunning email instead of WhatsApp
       const userName = profile.name || cust.name || 'Cliente';
-      const dunningMessage = `Oi, ${userName}! 💜
+      const recipientEmail = profile.email || cust.email;
 
-Não conseguimos processar seu pagamento da AURA.
+      if (recipientEmail) {
+        try {
+          const emailResult = await fetch(`${supabaseUrl}/functions/v1/send-transactional-email`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${supabaseServiceKey}`,
+            },
+            body: JSON.stringify({
+              templateName: 'dunning-payment-failed',
+              recipientEmail,
+              idempotencyKey: `reprocess-dunning-${customerId}-${Date.now()}`,
+              templateData: { name: userName, paymentLink },
+            }),
+          });
 
-Você pode atualizar seu cartão aqui: ${paymentLink}
-
-Se preferir cancelar, é só me avisar. Sem problemas. 💜`;
-
-      const msgResult = await sendProactive(profile.phone, dunningMessage, 'dunning', profile.user_id);
-
-      if (!msgResult.success) {
-        dunningRecord.error_stage = 'whatsapp_send_failed';
-        dunningRecord.error_message = msgResult.error;
-        report.whatsapp_sent = false;
+          if (emailResult.ok) {
+            dunningRecord.whatsapp_sent = true; // reusing field as notification_sent
+            report.email_sent = true;
+          } else {
+            const errBody = await emailResult.text();
+            dunningRecord.error_stage = 'email_send_failed';
+            dunningRecord.error_message = errBody;
+            report.email_sent = false;
+          }
+        } catch (emailErr) {
+          const errMsg = emailErr instanceof Error ? emailErr.message : String(emailErr);
+          dunningRecord.error_stage = 'email_send_failed';
+          dunningRecord.error_message = errMsg;
+          report.email_sent = false;
+        }
       } else {
-        dunningRecord.whatsapp_sent = true;
-        report.whatsapp_sent = true;
+        dunningRecord.error_stage = 'no_email';
+        dunningRecord.error_message = 'No email found for dunning';
+        report.email_sent = false;
       }
 
       report.status = dunningRecord.whatsapp_sent ? 'success' : 'partial';
