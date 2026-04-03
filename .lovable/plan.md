@@ -1,19 +1,28 @@
 
 
-## Migração: Dunning e Checkout Recovery → Email
+## Plano: Migrar para o Novo Número WhatsApp +16625255005
 
-### Status: ✅ Concluído
+### Contexto
+O novo WhatsApp Sender está ativo no Twilio. O sistema já lê o número de envio do secret `TWILIO_WHATSAPP_FROM`, então **a única mudança necessária é atualizar esse secret**.
 
-### O que foi feito
+Nenhum código precisa ser alterado — a função `getFromNumber()` em `whatsapp-official.ts` já normaliza qualquer formato de número automaticamente.
 
-1. **Infraestrutura de email transacional** configurada (filas pgmq, cron job, funções de envio)
-2. **Templates de email criados**:
-   - `dunning-payment-failed`: Email empático para falha de pagamento com link para Billing Portal
-   - `checkout-recovery`: Email de recuperação de checkout abandonado com link direto
-3. **Edge functions migradas de WhatsApp para email**:
-   - `stripe-webhook` (bloco invoice.payment_failed)
-   - `recover-abandoned-checkout`
-   - `reprocess-dunning`
-4. **Popup de exit-intent** adicionado na página de Checkout (desktop: mouse leave, mobile: visibilitychange)
-5. **Página de unsubscribe** criada em `/unsubscribe`
-6. Todas as funções deployadas com sucesso
+### O que será feito
+
+**1. Atualizar o secret `TWILIO_WHATSAPP_FROM`**
+- Valor atual: `+12604684990` (banido)
+- Novo valor: `+16625255005`
+
+**2. Templates oficiais**
+- Como os templates ainda não foram criados na Meta, o sistema vai operar em **modo free-text** (mensagens dentro da janela de 24h) para usuários que já iniciaram conversa.
+- Mensagens proativas fora da janela de 24h **não funcionarão** até os templates serem aprovados pela Meta — isso é esperado e não causa erro (o sistema já trata esse cenário com graceful fallback).
+
+### O que NÃO muda
+- Nenhum código alterado
+- Webhook do Twilio (`webhook-twilio`) permanece o mesmo — basta configurar o webhook no Twilio Console para o novo sender apontar para a mesma URL
+- Toda a infraestrutura (provider abstraction, instance helper, anti-burst) continua funcionando
+
+### Checklist para você (no Twilio Console)
+- ✅ Novo sender ativo
+- ⬜ Configurar webhook de mensagens recebidas no novo sender para: `https://uhyogifgmutfmbyhzzyo.supabase.co/functions/v1/webhook-twilio` (POST)
+
