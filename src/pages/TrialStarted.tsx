@@ -48,9 +48,17 @@ const TrialStarted = () => {
             <h1 className="font-display text-2xl md:text-3xl font-bold text-foreground mb-3">
               Prontinho{name ? `, ${name}` : ""}!
             </h1>
-            <p className="text-muted-foreground mb-8">
+            <p className="text-muted-foreground mb-6">
               Olha seu WhatsApp — a AURA já te mandou uma mensagem de boas-vindas.
             </p>
+
+            {/* WhatsApp CTA */}
+            <a href="https://wa.me/16625255005?text=Oi%20AURA" target="_blank" rel="noopener noreferrer" className="mb-8 inline-block">
+              <Button variant="whatsapp" size="lg" className="gap-2">
+                <MessageCircle className="w-5 h-5" />
+                Chamar a AURA no WhatsApp
+              </Button>
+            </a>
 
             {/* What to expect */}
             <div className="bg-card rounded-2xl p-6 text-left mb-8 border border-border/50">

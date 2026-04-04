@@ -1,6 +1,7 @@
 import { Helmet } from "react-helmet-async";
 import { useLocation, Link } from "react-router-dom";
-import { CheckCircle, Smartphone, Sparkles } from "lucide-react";
+import { CheckCircle, Smartphone, Sparkles, MessageSquare } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
 
 const ThankYou = () => {
