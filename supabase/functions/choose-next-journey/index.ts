@@ -50,7 +50,7 @@ serve(async (req) => {
     // Validate user exists
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('id, user_id, name')
+      .select('id, user_id, name, current_journey_id')
       .eq('user_id', user_id)
       .single();
 
