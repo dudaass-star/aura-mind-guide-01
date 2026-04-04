@@ -15,9 +15,13 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { phone, message, user_id, template_category } = await req.json();
-    
-    console.log(`📤 [Admin] Sending message to ${phone}${user_id ? ` (user: ${user_id})` : ''} [category: ${template_category || 'checkin'}]`);
+    const payload = await req.json();
+    const phone = payload.phone;
+    const message = payload.message;
+    const userId = payload.user_id ?? payload.userId;
+    const templateCategory = payload.template_category ?? payload.templateCategory ?? 'checkin';
+
+    console.log(`📤 [Admin] Sending message to ${phone}${userId ? ` (user: ${userId})` : ''} [category: ${templateCategory}]`);
 
     if (!phone || !message) {
       throw new Error('Phone and message are required');
@@ -27,27 +31,23 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Resolve instance-specific Z-API config if user_id provided
     let zapiConfig = undefined;
-    if (user_id) {
-      zapiConfig = await getInstanceConfigForUser(supabase, user_id);
-      console.log(`📡 [Admin] Using instance config for user ${user_id}`);
+    if (userId) {
+      zapiConfig = await getInstanceConfigForUser(supabase, userId);
+      console.log(`📡 [Admin] Using instance config for user ${userId}`);
     }
 
     const cleanPhone = cleanPhoneNumber(phone);
-    
-    // Use sendProactive to handle 24h window automatically (templates when outside window)
-    const result = await sendProactive(cleanPhone, message, template_category || 'checkin', user_id, zapiConfig);
+    const result = await sendProactive(cleanPhone, message, templateCategory, userId, zapiConfig);
 
     if (!result.success) {
       console.error(`❌ [Admin] Send failed: provider=${result.provider}, error=${result.error}`);
       throw new Error(result.error || 'Failed to send message');
     }
 
-    // Save message to history if user_id provided
-    if (user_id) {
+    if (userId) {
       await supabase.from('messages').insert({
-        user_id: user_id,
+        user_id: userId,
         role: 'assistant',
         content: message,
       });
