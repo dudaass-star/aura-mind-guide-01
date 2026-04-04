@@ -205,6 +205,14 @@ serve(async (req) => {
 
               if (isLastEpisode) {
                 console.log(`🎉 Last episode — updating profile (journey complete). Choice via episode page.`);
+                // Record journey completion in history
+                await supabase
+                  .from('user_journey_history')
+                  .insert({
+                    user_id: user.user_id,
+                    journey_id: user.current_journey_id,
+                  });
+                console.log(`📜 Recorded journey ${user.current_journey_id} in history for ${user.name || 'user'}`);
                 // No separate completion message — the episode page includes parabéns + journey choice
                 await supabase
                   .from('profiles')

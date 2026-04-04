@@ -50,7 +50,7 @@ serve(async (req) => {
     // Validate user exists
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('id, user_id, name')
+      .select('id, user_id, name, current_journey_id')
       .eq('user_id', user_id)
       .single();
 
@@ -59,6 +59,17 @@ serve(async (req) => {
         JSON.stringify({ error: 'Perfil não encontrado' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+
+    // Record the previous journey as completed if user had one
+    if (profile.current_journey_id) {
+      await supabase
+        .from('user_journey_history')
+        .insert({
+          user_id: profile.user_id,
+          journey_id: profile.current_journey_id,
+        });
+      console.log(`📜 Recorded journey ${profile.current_journey_id} in history`);
     }
 
     // Update profile with chosen journey
