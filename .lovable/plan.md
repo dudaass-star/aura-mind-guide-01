@@ -1,30 +1,29 @@
 
-## Plano: Página Admin para visualizar templates de e-mail
 
-### Ideia
-Em vez de abas simples, a melhor experiência é uma página no painel admin com uma **lista lateral dos templates** e um **preview visual do e-mail renderizado** ao lado. Funciona como um "email viewer" — clica no template à esquerda e vê o e-mail completo à direita, exatamente como ele chega na caixa de entrada do usuário.
-
-Com apenas 3 templates hoje, isso é mais limpo que abas e escala melhor quando novos templates forem adicionados.
+## Plano: Ativar templates aprovados e testar envio
 
 ### O que será feito
 
-**1. Nova edge function `admin-preview-emails`**
-- Valida que o chamador é admin (JWT + verificação via `has_role`)
-- Renderiza todos os templates registrados com seus `previewData`
-- Retorna JSON com nome, assunto, displayName e HTML renderizado de cada template
+**1. Atualizar os 3 templates aprovados no banco de dados**
 
-**2. Nova página `/admin/emails`**
-- Protegida por autenticação admin (mesmo padrão das outras páginas admin)
-- Layout: lista de templates à esquerda, preview HTML à direita
-- Cada card na lista mostra: nome do template, assunto, status (renderizado/erro)
-- Ao clicar, exibe o HTML renderizado em um iframe seguro (sandbox)
-- Botão de atualizar para recarregar
+Usando a página `/admin/templates` (ou via migração), atualizar o `twilio_content_sid` e `is_active = true` para:
 
-**3. Adicionar rota no App.tsx e link no AdminSettings**
-- Nova rota `/admin/emails`
-- Link de acesso na página de configurações admin
+| Template | Content SID |
+|---|---|
+| `aura_welcome_v2` | `HXa5ef9baff62dd1648c8e37f0ca03b054` |
+| `aura_welcome_trial_v2` | `HXba985652a6a517aac0f9732321398dee` |
+| `aura_reconnect_v2` | `HX824b3f789beb78ace2a1f38d8527c718` |
+
+Será feito via migração SQL (`UPDATE whatsapp_templates SET twilio_content_sid = '...', is_active = true WHERE category = '...'`) para garantir que os 3 sejam atualizados de uma vez.
+
+**2. Testar envio de welcome para Eduardo**
+
+Após ativar os templates, invocar a edge function `start-trial` ou chamar diretamente `sendProactive` para o número `5551981519708` com a categoria `welcome` para validar que o template está funcionando corretamente no Twilio/Meta.
+
+Vou usar a edge function `test-episode-send` como referência para criar uma chamada de teste rápida, ou invocar diretamente via curl a lógica de envio.
 
 ### Detalhes técnicos
-- A edge function usa `createClient` com o JWT do usuário para verificar a role admin
-- O HTML é exibido via iframe com `srcdoc` (sandbox) para isolamento seguro
-- Reutiliza o registry de templates existente (`TEMPLATES` + `previewData`)
+- A migração atualiza apenas os 3 templates que aparecem como aprovados na screenshot
+- Os outros 8 templates continuam com `PENDING_APPROVAL` e `is_active = false`
+- O teste envia uma mensagem real via Twilio para o número informado
+
