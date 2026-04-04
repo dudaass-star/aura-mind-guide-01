@@ -438,6 +438,14 @@ Deno.serve(async (req) => {
           continue;
         }
         
+        // 24h WINDOW GUARD: Don't send follow-up if WhatsApp 24h window is closed
+        const lastUserMsgTime = new Date(followup.last_user_message_at).getTime();
+        const hoursSinceLastMsg = (Date.now() - lastUserMsgTime) / (1000 * 60 * 60);
+        if (hoursSinceLastMsg > 24) {
+          console.log(`🔒 Skipping user ${followup.user_id}: WhatsApp 24h window closed (${Math.round(hoursSinceLastMsg)}h ago)`);
+          continue;
+        }
+
         const effectiveLastUserMessageAt = followup.last_user_message_at;
         
         // Calcular tempo desde última mensagem
