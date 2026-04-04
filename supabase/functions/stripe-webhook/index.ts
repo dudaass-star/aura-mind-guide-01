@@ -335,6 +335,23 @@ Deno.serve(async (req) => {
             }
           }
 
+          // Send welcome email as backup (in case WhatsApp template is pending)
+          if (customerEmail) {
+            try {
+              await supabase.functions.invoke('send-transactional-email', {
+                body: {
+                  templateName: 'welcome',
+                  recipientEmail: customerEmail,
+                  idempotencyKey: `welcome-${session.id}`,
+                  templateData: { name: customerName },
+                },
+              });
+              console.log('✅ Welcome email enqueued');
+            } catch (emailErr) {
+              console.warn('⚠️ Welcome email failed (non-blocking):', emailErr);
+            }
+          }
+
           // CAPI event
           try {
             const fbp = session.metadata?.fbp;
