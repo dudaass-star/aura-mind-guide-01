@@ -740,14 +740,12 @@ Me conta durante a semana como está seu progresso! Estou aqui por você. ✨`;
       }
     }
 
-    console.log(`📊 Session reminders completed: ${reminders24hSent} 24h, ${reminders1hSent} 1h, ${reminders15mSent} 15m, ${sessionStartsSent} starts, ${reminder10mSent} 10m reminders, ${missedSessionsClosed} missed, ${abandonedSessionsClosed} abandoned, ${postSessionSent} post-session`);
+    console.log(`📊 Session reminders completed: ${reminders24hSent} 24h, ${reminders5mSent} 5m, ${sessionStartsSent} starts, ${missedSessionsClosed} missed, ${abandonedSessionsClosed} abandoned, ${postSessionSent} post-session`);
 
     return new Response(JSON.stringify({ 
       success: true,
       reminders_24h_sent: reminders24hSent,
-      reminders_1h_sent: reminders1hSent,
-      reminders_15m_sent: reminders15mSent,
-      reminders_10m_sent: reminder10mSent,
+      reminders_5m_sent: reminders5mSent,
       session_starts_sent: sessionStartsSent,
       missed_sessions_closed: missedSessionsClosed,
       abandoned_sessions_closed: abandonedSessionsClosed,
