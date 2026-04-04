@@ -42,7 +42,27 @@ Deno.serve(async (req) => {
     const accountData = await accountRes.json();
     console.log('🔍 Account info:', JSON.stringify(accountData));
 
-    // Step 2: Try sending a simple template message
+    // Step 2: Check if ContentSid exists in this account
+    const contentRes = await fetch(`https://connector-gateway.lovable.dev/twilio/../../../Content/v1/Content/HXa5ef9baff62dd1648c8e37f0ca03b054`, {
+      headers: {
+        'Authorization': `Bearer ${lovableKey}`,
+        'X-Connection-Api-Key': twilioKey,
+      },
+    });
+    const contentData = await contentRes.json();
+    console.log('📋 Content template info:', JSON.stringify(contentData));
+
+    // Step 3: List content templates
+    const listRes = await fetch(`https://connector-gateway.lovable.dev/twilio/../../../Content/v1/Content?PageSize=5`, {
+      headers: {
+        'Authorization': `Bearer ${lovableKey}`,
+        'X-Connection-Api-Key': twilioKey,
+      },
+    });
+    const listData = await listRes.json();
+    console.log('📋 Content list:', JSON.stringify(listData));
+
+    // Step 4: Try send
     const to = 'whatsapp:+5551981519708';
     const from = `whatsapp:+${(fromNumber || '').replace(/\D/g, '')}`;
 
