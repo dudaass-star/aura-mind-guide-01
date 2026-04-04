@@ -145,8 +145,7 @@ Deno.serve(async (req) => {
     console.log(`🕐 Session reminder running at ${now.toISOString()}`);
 
     let reminders24hSent = 0;
-    let reminders1hSent = 0;
-    let reminders15mSent = 0;
+    let reminders5mSent = 0;
     let postSessionSent = 0;
 
     // ========================================================================
