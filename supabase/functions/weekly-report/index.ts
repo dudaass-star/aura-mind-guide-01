@@ -188,6 +188,52 @@ function generateMonthlyReport(
   return report;
 }
 
+// Helper to get or create portal token for a user
+async function getOrCreatePortalToken(supabase: any, userId: string): Promise<string | null> {
+  try {
+    // Try to get existing token
+    const { data: existing } = await supabase
+      .from('user_portal_tokens')
+      .select('token')
+      .eq('user_id', userId)
+      .maybeSingle();
+    
+    if (existing?.token) return existing.token;
+
+    // Create new token
+    const { data: created } = await supabase
+      .from('user_portal_tokens')
+      .upsert({ user_id: userId }, { onConflict: 'user_id' })
+      .select('token')
+      .single();
+    
+    return created?.token || null;
+  } catch {
+    return null;
+  }
+}
+
+// Helper to create short link
+async function createShortLink(supabaseUrl: string, serviceKey: string, url: string, phone?: string): Promise<string | null> {
+  try {
+    const resp = await fetch(`${supabaseUrl}/functions/v1/create-short-link`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${serviceKey}`,
+      },
+      body: JSON.stringify({ url, phone }),
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      return data.shortUrl || null;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 // ============================================================================
 // HELPERS
 // ============================================================================
