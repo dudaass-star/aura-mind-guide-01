@@ -306,14 +306,25 @@ Deno.serve(async (req) => {
             console.warn('⚠️ Portal token creation failed (non-blocking):', tokenErr);
           }
 
+          // Fetch portal token for welcome message
+          let portalLinkTrial = '';
+          try {
+            const { data: tokenData } = await supabase.from('user_portal_tokens')
+              .select('token').eq('user_id', profileUserId).single();
+            if (tokenData?.token) {
+              portalLinkTrial = `https://olaaura.com.br/meu-espaco?t=${tokenData.token}`;
+            }
+          } catch { /* non-blocking */ }
+          const portalLineTrial = portalLinkTrial ? `\n\nAcesse seu painel pessoal: ${portalLinkTrial} ✨` : '';
+
           // Send welcome message
           let welcomeMessage: string;
           if (isReturning) {
-            welcomeMessage = `Oi, ${customerName}! 💜\n\nQue bom ter você de volta! 🌟\n\nVocê escolheu o plano ${planName}.\n\nVamos retomar de onde paramos?`;
+            welcomeMessage = `Oi, ${customerName}! 💜\n\nQue bom ter você de volta! 🌟\n\nVocê escolheu o plano ${planName}.${portalLineTrial}\n\nVamos retomar de onde paramos?`;
           } else if (isUpgrade) {
-            welcomeMessage = `Oi, ${customerName}! 💜 Que notícia boa!\n\nAgora somos oficiais. Você escolheu o plano ${planName}.\n\nVamos continuar de onde paramos?`;
+            welcomeMessage = `Oi, ${customerName}! 💜 Que notícia boa!\n\nAgora somos oficiais. Você escolheu o plano ${planName}.${portalLineTrial}\n\nVamos continuar de onde paramos?`;
           } else {
-            welcomeMessage = `Oi, ${customerName}! 🌟 Que bom te receber por aqui.\n\nEu sou a AURA — e vou ficar com você nessa jornada.\n\nVocê escolheu o plano ${planName}.\n\nComigo, você pode falar com liberdade: sem julgamento, no seu ritmo.\n\nMe diz: como você está hoje?`;
+            welcomeMessage = `Oi, ${customerName}! 🌟 Que bom te receber por aqui.\n\nEu sou a AURA — e vou ficar com você nessa jornada.\n\nVocê escolheu o plano ${planName}.\n\nComigo, você pode falar com liberdade: sem julgamento, no seu ritmo.${portalLineTrial}\n\nMe diz: como você está hoje?`;
           }
 
           try {
@@ -354,7 +365,7 @@ Deno.serve(async (req) => {
                   templateName: 'welcome',
                   recipientEmail: customerEmail,
                   idempotencyKey: `welcome-${session.id}`,
-                  templateData: { name: customerName },
+                  templateData: { name: customerName, portalUrl: portalLinkTrial || undefined },
                 },
               });
               console.log('✅ Welcome email enqueued');
@@ -555,21 +566,37 @@ Deno.serve(async (req) => {
         profileUserId = existingProfile?.user_id || crypto.randomUUID();
       }
 
+      // Generate portal token for paid users
+      let portalLink = '';
+      try {
+        const { data: tokenData } = await supabase.from('user_portal_tokens').upsert(
+          { user_id: profileUserId },
+          { onConflict: 'user_id' }
+        ).select('token').single();
+        if (tokenData?.token) {
+          portalLink = `https://olaaura.com.br/meu-espaco?t=${tokenData.token}`;
+          console.log('✅ Portal token created for paid user');
+        }
+      } catch (tokenErr) {
+        console.warn('⚠️ Portal token creation failed (non-blocking):', tokenErr);
+      }
+
       // Build message based on user scenario
       let welcomeMessage: string;
+      const portalLine = portalLink ? `\n\nAcesse seu painel pessoal: ${portalLink} ✨` : '';
 
       if (isReturning) {
         welcomeMessage = `Oi, ${customerName}! 💜
 
 Que bom ter você de volta! 🌟
 
-Você escolheu o plano ${planName}.
+Você escolheu o plano ${planName}.${portalLine}
 
 Vamos retomar de onde paramos?`;
       } else if (isUpgrade) {
         welcomeMessage = `Oi, ${customerName}! 💜 Que notícia boa!
 
-Agora somos oficiais. Você escolheu o plano ${planName}.
+Agora somos oficiais. Você escolheu o plano ${planName}.${portalLine}
 
 Vamos continuar de onde paramos?`;
       } else {
@@ -579,7 +606,7 @@ Eu sou a AURA — e vou ficar com você nessa jornada.
 
 Você escolheu o plano ${planName}.
 
-Comigo, você pode falar com liberdade: sem julgamento, no seu ritmo.
+Comigo, você pode falar com liberdade: sem julgamento, no seu ritmo.${portalLine}
 
 Me diz: como você está hoje?`;
       }
@@ -611,6 +638,23 @@ Me diz: como você está hoje?`;
           }
         } catch (retryErr) {
           console.error('❌ Welcome retry exception:', retryErr);
+        }
+      }
+
+      // Send welcome email as backup
+      if (customerEmail) {
+        try {
+          await supabase.functions.invoke('send-transactional-email', {
+            body: {
+              templateName: 'welcome',
+              recipientEmail: customerEmail,
+              idempotencyKey: `welcome-${session.id}`,
+              templateData: { name: customerName, portalUrl: portalLink || undefined },
+            },
+          });
+          console.log('✅ Welcome email enqueued (paid flow)');
+        } catch (emailErr) {
+          console.warn('⚠️ Welcome email failed (non-blocking):', emailErr);
         }
       }
 
