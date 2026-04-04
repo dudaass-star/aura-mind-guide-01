@@ -793,6 +793,36 @@ export type Database = {
           },
         ]
       }
+      monthly_reports: {
+        Row: {
+          analysis_text: string | null
+          created_at: string
+          id: string
+          metrics_json: Json | null
+          report_html: string | null
+          report_month: string
+          user_id: string
+        }
+        Insert: {
+          analysis_text?: string | null
+          created_at?: string
+          id?: string
+          metrics_json?: Json | null
+          report_html?: string | null
+          report_month: string
+          user_id: string
+        }
+        Update: {
+          analysis_text?: string | null
+          created_at?: string
+          id?: string
+          metrics_json?: Json | null
+          report_html?: string | null
+          report_month?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       plan_configs: {
         Row: {
           created_at: string
@@ -1121,6 +1151,7 @@ export type Database = {
           reminder_15m_sent: boolean | null
           reminder_1h_sent: boolean | null
           reminder_24h_sent: boolean | null
+          reminder_5m_sent: boolean | null
           resumption_count: number
           scheduled_at: string
           session_start_notified: boolean | null
@@ -1147,6 +1178,7 @@ export type Database = {
           reminder_15m_sent?: boolean | null
           reminder_1h_sent?: boolean | null
           reminder_24h_sent?: boolean | null
+          reminder_5m_sent?: boolean | null
           resumption_count?: number
           scheduled_at: string
           session_start_notified?: boolean | null
@@ -1173,6 +1205,7 @@ export type Database = {
           reminder_15m_sent?: boolean | null
           reminder_1h_sent?: boolean | null
           reminder_24h_sent?: boolean | null
+          reminder_5m_sent?: boolean | null
           resumption_count?: number
           scheduled_at?: string
           session_start_notified?: boolean | null
@@ -1441,6 +1474,27 @@ export type Database = {
             referencedColumns: ["user_id"]
           },
         ]
+      }
+      user_portal_tokens: {
+        Row: {
+          created_at: string
+          id: string
+          token: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          token?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          token?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       user_roles: {
         Row: {
