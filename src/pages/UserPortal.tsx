@@ -161,6 +161,20 @@ function JornadasTab({ userId, profile }: { userId: string; profile: any }) {
   const currentEpisode = profile?.current_episode || 0;
   const [expandedJourney, setExpandedJourney] = useState<string | null>(currentJourneyId || null);
 
+  const { data: journeyHistory } = useQuery({
+    queryKey: ["portal-journey-history", userId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("user_journey_history")
+        .select("journey_id, completed_at")
+        .eq("user_id", userId)
+        .order("completed_at", { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!userId,
+  });
+
   const { data: allJourneys } = useQuery({
     queryKey: ["portal-all-journeys"],
     queryFn: async () => {
@@ -186,7 +200,19 @@ function JornadasTab({ userId, profile }: { userId: string; profile: any }) {
     },
   });
 
-  if (!allJourneys || allJourneys.length === 0) {
+  const completedJourneyIds = new Set((journeyHistory || []).map((h: any) => h.journey_id));
+
+  const episodesByJourney = (allEpisodes || []).reduce((acc: Record<string, any[]>, ep: any) => {
+    if (!acc[ep.journey_id]) acc[ep.journey_id] = [];
+    acc[ep.journey_id].push(ep);
+    return acc;
+  }, {});
+
+  const visibleJourneys = (allJourneys || []).filter(
+    (j: any) => j.id === currentJourneyId || completedJourneyIds.has(j.id)
+  );
+
+  if (visibleJourneys.length === 0) {
     return (
       <EmptyState
         icon={Target}
@@ -196,20 +222,11 @@ function JornadasTab({ userId, profile }: { userId: string; profile: any }) {
     );
   }
 
-  const journeyOrder = allJourneys || [];
-  const currentIdx = journeyOrder.findIndex((j: any) => j.id === currentJourneyId);
-
-  const episodesByJourney = (allEpisodes || []).reduce((acc: Record<string, any[]>, ep: any) => {
-    if (!acc[ep.journey_id]) acc[ep.journey_id] = [];
-    acc[ep.journey_id].push(ep);
-    return acc;
-  }, {});
-
-  const getJourneyStatus = (journeyId: string, idx: number) => {
-    if (journeyId === currentJourneyId) return "current";
-    if (currentIdx >= 0 && idx < currentIdx) return "completed";
-    return "locked";
-  };
+  const sortedJourneys = visibleJourneys.sort((a: any, b: any) => {
+    if (a.id === currentJourneyId) return -1;
+    if (b.id === currentJourneyId) return 1;
+    return 0;
+  });
 
   return (
     <div className="space-y-5">
@@ -224,14 +241,12 @@ function JornadasTab({ userId, profile }: { userId: string; profile: any }) {
         </div>
       )}
 
-      {journeyOrder.map((journey: any, idx: number) => {
-        const status = getJourneyStatus(journey.id, idx);
-        if (status === "locked") return null;
-
+      {sortedJourneys.map((journey: any) => {
+        const isCurrent = journey.id === currentJourneyId;
+        const isCompleted = completedJourneyIds.has(journey.id);
         const isExpanded = expandedJourney === journey.id;
         const episodes = episodesByJourney[journey.id] || [];
         const totalEpisodes = journey.total_episodes || 8;
-        const isCurrent = status === "current";
         const completedEps = isCurrent ? currentEpisode : totalEpisodes;
         const progressPercent = (completedEps / totalEpisodes) * 100;
 
@@ -280,7 +295,7 @@ function JornadasTab({ userId, profile }: { userId: string; profile: any }) {
               <div className="space-y-2 pl-2">
                 <p className="text-sm font-semibold text-foreground font-['Nunito']">Episódios</p>
                 {episodes.map((ep: any) => {
-                  const isUnlocked = isCurrent ? ep.episode_number <= currentEpisode : true;
+                  const isUnlocked = isCompleted || (isCurrent && ep.episode_number <= currentEpisode);
                   return (
                     <div
                       key={ep.id}
