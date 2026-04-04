@@ -1436,6 +1436,27 @@ export type Database = {
           },
         ]
       }
+      user_journey_history: {
+        Row: {
+          completed_at: string
+          id: string
+          journey_id: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string
+          id?: string
+          journey_id: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string
+          id?: string
+          journey_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_meditation_history: {
         Row: {
           context: string | null
