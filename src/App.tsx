@@ -53,6 +53,7 @@ const App = () => (
             <Route path="/admin/engajamento" element={<AdminEngagement />} />
             <Route path="/admin/mensagens" element={<AdminMessages />} />
             <Route path="/admin/templates" element={<AdminTemplates />} />
+            <Route path="/admin/emails" element={<AdminEmails />} />
             <Route path="/guia" element={<UserGuide />} />
             <Route path="/episodio/:id" element={<Episode />} />
             <Route path="/jornada-completa/:journeyId/:userId" element={<JourneyComplete />} />
