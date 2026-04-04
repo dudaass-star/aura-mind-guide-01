@@ -1,53 +1,51 @@
 
 
-## Plano: Redesign do "Meu Espaço" — visual refinado + conteúdo acessível
+## Plano: Histórico de jornadas completadas
 
-### Resumo
+### Problema
 
-Redesign completo da página do portal: remover emojis, melhorar visual com ícones Lucide, e mudar a lógica de dados para mostrar conteúdo acessível (episódios liberados clicáveis, todas as meditações disponíveis com áudio).
+Não existe registro de *quais* jornadas o usuário completou — apenas um contador (`journeys_completed`). Por isso o portal não consegue mostrar jornadas passadas.
 
-### Mudanças visuais (todo o arquivo `UserPortal.tsx`)
+### Solução
 
-1. **Remover todos os emojis** — substituir por ícones Lucide React (`Target`, `BarChart3`, `Headphones`, `Heart`, `Play`, `Lock`, `CheckCircle2`, `Clock`, `MessageCircle`, `Brain`, `Calendar`, `Mail`)
-2. **Tabs** — ícones Lucide ao invés de emojis nas abas
-3. **Cards** — bordas mais suaves, gradientes sutis no header dos cards, sombras leves
-4. **Header/Greeting** — visual mais limpo, sem emoji no "Oi, {nome}"
-5. **Footer** — sem emoji
-6. **Empty states** — ícones Lucide grandes e estilizados ao invés de emojis gigantes
-7. **Audio player** — estilizar com wrapper visual (card com ícone play)
+1. **Criar tabela `user_journey_history`** para armazenar cada jornada completada
+2. **Registrar conclusões** no momento em que acontecem (a partir de agora)
+3. **Mostrar no portal** as jornadas com histórico, com todos os episódios acessíveis
 
-### Mudanças de lógica/dados
+### Mudanças
 
-**Jornadas (tab "Jornadas"):**
-- Mostrar **apenas a jornada atual** do usuário com destaque
-- Para cada episódio (1 a `current_episode`), mostrar card clicável que linka para `/episodio/{episodeId}?u={userId}`
-- Episódios acima de `current_episode` aparecem bloqueados (ícone Lock, opacidade reduzida)
-- Buscar `journey_episodes` filtrado pelo `current_journey_id` do perfil
-
-**Meditações (tab "Meditações"):**
-- Ao invés de mostrar só o histórico do usuário, mostrar **todas as meditações ativas** com áudio disponível
-- Agrupar por categoria (Ansiedade, Sono, Foco, etc.)
-- Cada meditação mostra título, duração, descrição e player de áudio inline
-- São apenas 6 meditações com áudio — todas ficam visíveis
-
-**Resumos (tab "Resumos"):**
-- Manter lógica atual (já mostra todos os resumos do usuário)
-- Apenas trocar emojis por ícones Lucide nos MetricCards
-
-**Cápsulas (tab "Cápsulas"):**
-- Manter lógica atual
-- Trocar emojis por ícones Lucide
-
-### Arquivo alterado
-
-| Arquivo | Ação |
-|---------|------|
-| `src/pages/UserPortal.tsx` | Rewrite completo — visual + lógica |
+| Componente | Ação |
+|---|---|
+| Migration SQL | Criar tabela `user_journey_history` (user_id, journey_id, completed_at) com RLS para portal tokens |
+| `supabase/functions/periodic-content/index.ts` | No trecho que completa a jornada (~linha 210), inserir registro na `user_journey_history` |
+| `supabase/functions/choose-next-journey/index.ts` | Verificar se já insere histórico (provavelmente não) — adicionar insert se necessário |
+| `src/pages/UserPortal.tsx` | JornadasTab: buscar `user_journey_history` do usuário, mostrar jornadas completadas com todos episódios desbloqueados + jornada atual com progresso parcial |
 
 ### Detalhes técnicos
 
-- Nova query em JornadasTab: buscar `journey_episodes` WHERE `journey_id = current_journey_id` ORDER BY `episode_number`
-- Nova query em MeditacoesTab: buscar `meditations` WHERE `is_active = true` + JOIN com `meditation_audios` para pegar URLs
-- Episódios clicáveis linkam para `/episodio/{episode.id}?u={userId}` (rota já existe)
-- Categorias de meditação mapeadas para labels em português e ícones
+**Tabela:**
+```sql
+CREATE TABLE public.user_journey_history (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  journey_id text NOT NULL,
+  completed_at timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE public.user_journey_history ENABLE ROW LEVEL SECURITY;
+-- Portal token holders can read
+CREATE POLICY "Portal token holders can read journey history"
+  ON public.user_journey_history FOR SELECT
+  USING (EXISTS (SELECT 1 FROM user_portal_tokens WHERE user_portal_tokens.user_id = user_journey_history.user_id));
+-- Service role full access
+CREATE POLICY "Service role full access"
+  ON public.user_journey_history FOR ALL
+  USING (auth.role() = 'service_role')
+  WITH CHECK (auth.role() = 'service_role');
+```
+
+**Portal (JornadasTab):**
+- Buscar `user_journey_history` WHERE user_id = userId
+- Jornadas com registro no histórico: mostrar como "Completada" com todos episódios clicáveis
+- Jornada atual (`current_journey_id`): mostrar com progresso parcial (episódios até `current_episode` desbloqueados)
+- Jornadas sem histórico e que não são a atual: não mostrar
 
