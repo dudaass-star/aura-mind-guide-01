@@ -1,29 +1,45 @@
 
 
-## Plano: Ativar templates aprovados e testar envio
+## Plano: Envio segmentado de Welcome e Reconnect
 
-### O que será feito
+### Situação real verificada
 
-**1. Atualizar os 3 templates aprovados no banco de dados**
+**No Stripe:**
+- 9 assinaturas **active** (pagantes confirmados)
+- 14 assinaturas **trialing** (trial com cartão válido, dentro dos 7 dias)
 
-Usando a página `/admin/templates` (ou via migração), atualizar o `twilio_content_sid` e `is_active = true` para:
+**No banco (profiles):**
+- 11 com status `active` (inclui Admin/test)
+- ~24 com status `trial` (muitos já passaram dos 7 dias sem assinatura no Stripe)
 
-| Template | Content SID |
-|---|---|
-| `aura_welcome_v2` | `HXa5ef9baff62dd1648c8e37f0ca03b054` |
-| `aura_welcome_trial_v2` | `HXba985652a6a517aac0f9732321398dee` |
-| `aura_reconnect_v2` | `HX824b3f789beb78ace2a1f38d8527c718` |
+### Quem recebe mensagem
 
-Será feito via migração SQL (`UPDATE whatsapp_templates SET twilio_content_sid = '...', is_active = true WHERE category = '...'`) para garantir que os 3 sejam atualizados de uma vez.
+**Grupo 1 — Welcome (4 usuários novos, 0 msgs da Aura):**
+- Noély, Lorena, Patrícia, Jenoelma
+- Enviar via `admin-send-message` com `template_category: welcome_trial`
 
-**2. Testar envio de welcome para Eduardo**
+**Grupo 2 — Reconnect (usuários com assinatura ativa/trialing no Stripe):**
+- Os ~9 pagantes + ~14 trialing que têm subscription válida no Stripe
+- Excluir Admin e os 4 do Grupo 1
+- Enviar via `instance-reconnect-notify` ou loop com `admin-send-message` usando `template_category: reconnect`
 
-Após ativar os templates, invocar a edge function `start-trial` ou chamar diretamente `sendProactive` para o número `5551981519708` com a categoria `welcome` para validar que o template está funcionando corretamente no Twilio/Meta.
+**Quem NÃO recebe nada:**
+- Trials antigos sem assinatura no Stripe (trial expirado de fato)
+- Canceled, trial_expired
+- Admin/test
 
-Vou usar a edge function `test-episode-send` como referência para criar uma chamada de teste rápida, ou invocar diretamente via curl a lógica de envio.
+### Passos de implementação
+
+1. **Cruzar dados Stripe x banco** — Buscar o telefone de cada customer do Stripe (metadata.phone) e verificar qual profile corresponde. Isso gera a lista final de destinatários do reconnect.
+
+2. **Enviar Welcome** para os 4 novos (individualmente via `admin-send-message`)
+
+3. **Enviar Reconnect** para os demais com assinatura válida no Stripe (loop com `admin-send-message` para controle fino, ou adaptar `instance-reconnect-notify` para filtrar apenas quem tem sub ativa)
+
+4. **Verificar logs** para confirmar entregas
 
 ### Detalhes técnicos
-- A migração atualiza apenas os 3 templates que aparecem como aprovados na screenshot
-- Os outros 8 templates continuam com `PENDING_APPROVAL` e `is_active = false`
-- O teste envia uma mensagem real via Twilio para o número informado
+- Para cruzar Stripe x banco, usaremos `metadata.phone` dos customers do Stripe contra `profiles.phone`
+- A abordagem mais segura é fazer o loop manualmente via `admin-send-message` com a lista filtrada, em vez de usar `instance-reconnect-notify` (que pega todos os active/trial sem verificar Stripe)
+- Estimativa: ~19-23 mensagens no total (4 welcome + 15-19 reconnect)
 
