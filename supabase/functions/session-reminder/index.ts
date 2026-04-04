@@ -135,10 +135,9 @@ Deno.serve(async (req) => {
     const brtHour = getBrtHour();
     const isQuietHours = brtHour < 8 || brtHour >= 22;
     if (isQuietHours) {
-      console.log(`🌙 Quiet hours (${brtHour}h BRT) - only time-sensitive reminders (1h, 15m, start, 10m) will be sent`);
+      console.log(`🌙 Quiet hours (${brtHour}h BRT) - only time-sensitive reminders (5m, start) will be sent`);
     }
-    const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
-    const fifteenMinutesFromNow = new Date(now.getTime() + 15 * 60 * 1000);
+    const fiveMinutesFromNow = new Date(now.getTime() + 5 * 60 * 1000);
     const twentyFourHoursFromNow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
     const twentyThreeHoursFromNow = new Date(now.getTime() + 23 * 60 * 60 * 1000);
     const thirtyMinutesAgo = new Date(now.getTime() - 30 * 60 * 1000);
