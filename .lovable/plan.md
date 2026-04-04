@@ -1,45 +1,43 @@
 
 
-## Plano: Envio segmentado de Welcome e Reconnect
+## Plano: Diagnosticar e corrigir erro "Channel did not accept given content"
 
-### Situação real verificada
+### Contexto
 
-**No Stripe:**
-- 9 assinaturas **active** (pagantes confirmados)
-- 14 assinaturas **trialing** (trial com cartão válido, dentro dos 7 dias)
+Você tem razão — o design original era colocar o texto personalizado dentro de `{{1}}`. O fluxo funciona assim:
 
-**No banco (profiles):**
-- 11 com status `active` (inclui Admin/test)
-- ~24 com status `trial` (muitos já passaram dos 7 dias sem assinatura no Stripe)
+1. Template aprovado pela Meta: `prefix` (fixo) + `{{1}}` (dinâmico) + `— Aura`
+2. O código sanitiza `\n` → espaço (evita erro 21656)
+3. O `splitMessageForTemplate` garante que não exceda 1024 chars
 
-### Quem recebe mensagem
+O código está correto para esse design. O erro "Channel did not accept given content" (erro 63016 do Twilio) indica que a **Meta rejeitou o conteúdo da variável**, não que o código está errado.
 
-**Grupo 1 — Welcome (4 usuários novos, 0 msgs da Aura):**
-- Noély, Lorena, Patrícia, Jenoelma
-- Enviar via `admin-send-message` com `template_category: welcome_trial`
+### Possíveis causas
 
-**Grupo 2 — Reconnect (usuários com assinatura ativa/trialing no Stripe):**
-- Os ~9 pagantes + ~14 trialing que têm subscription válida no Stripe
-- Excluir Admin e os 4 do Grupo 1
-- Enviar via `instance-reconnect-notify` ou loop com `admin-send-message` usando `template_category: reconnect`
+1. **Template aprovado com estrutura diferente** — A Meta pode ter aprovado o template `aura_reconnect_v2` com `{{1}}` como placeholder de nome curto, não como corpo dinâmico. Precisamos verificar o corpo exato do template no Twilio.
 
-**Quem NÃO recebe nada:**
-- Trials antigos sem assinatura no Stripe (trial expirado de fato)
-- Canceled, trial_expired
-- Admin/test
+2. **Conteúdo da variável incompatível** — A Meta tem políticas de conteúdo para variáveis de template. Textos longos com emojis ou certos padrões podem ser rejeitados.
 
-### Passos de implementação
+3. **Tamanho real excede o limite** — Embora o split cuide disso, precisamos confirmar que o texto pós-sanitização ainda cabe.
 
-1. **Cruzar dados Stripe x banco** — Buscar o telefone de cada customer do Stripe (metadata.phone) e verificar qual profile corresponde. Isso gera a lista final de destinatários do reconnect.
+### Passos
 
-2. **Enviar Welcome** para os 4 novos (individualmente via `admin-send-message`)
+**1. Verificar a estrutura real do template no Twilio Console**
 
-3. **Enviar Reconnect** para os demais com assinatura válida no Stripe (loop com `admin-send-message` para controle fino, ou adaptar `instance-reconnect-notify` para filtrar apenas quem tem sub ativa)
+Precisamos confirmar o corpo exato do `aura_reconnect_v2` (ContentSid: `HX824b3f789beb78ace2a1f38d8527c718`). Vou criar uma edge function de diagnóstico que consulta o **Twilio Content API** (`/v1/Content/{ContentSid}`) para retornar a estrutura do template — incluindo o body aprovado pela Meta e o mapeamento de variáveis.
 
-4. **Verificar logs** para confirmar entregas
+Isso nos dirá exatamente o que `{{1}}` espera.
 
-### Detalhes técnicos
-- Para cruzar Stripe x banco, usaremos `metadata.phone` dos customers do Stripe contra `profiles.phone`
-- A abordagem mais segura é fazer o loop manualmente via `admin-send-message` com a lista filtrada, em vez de usar `instance-reconnect-notify` (que pega todos os active/trial sem verificar Stripe)
-- Estimativa: ~19-23 mensagens no total (4 welcome + 15-19 reconnect)
+**2. Teste de envio controlado**
+
+Após verificar a estrutura, enviar um teste para o seu número (Eduardo) com um texto curto na variável para confirmar que o template funciona. Depois enviar com o texto completo para identificar o limite exato da rejeição.
+
+**3. Corrigir com base no diagnóstico**
+
+- Se `{{1}}` é corpo dinâmico (como planejado): o problema é no conteúdo → sanitizar melhor ou encurtar
+- Se `{{1}}` é apenas nome (Meta mudou na aprovação): ajustar a lógica para enviar só o nome e manter o corpo fixo no template
+
+### Arquivo criado/alterado
+
+- `supabase/functions/debug-template-structure/index.ts` — Edge function temporária que consulta `GET /v1/Content/{ContentSid}` via Twilio API e retorna a estrutura do template para diagnóstico
 
