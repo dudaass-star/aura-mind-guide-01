@@ -159,84 +159,61 @@ const UserPortal = () => {
 function JornadasTab({ userId, profile }: { userId: string; profile: any }) {
   const currentJourneyId = profile?.current_journey_id;
   const currentEpisode = profile?.current_episode || 0;
+  const [expandedJourney, setExpandedJourney] = useState<string | null>(currentJourneyId || null);
 
-  const { data: journey } = useQuery({
-    queryKey: ["portal-current-journey", currentJourneyId],
+  const { data: allJourneys } = useQuery({
+    queryKey: ["portal-all-journeys"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("content_journeys")
         .select("id, title, description, topic, total_episodes")
-        .eq("id", currentJourneyId!)
-        .single();
+        .eq("is_active", true)
+        .order("created_at");
       if (error) throw error;
       return data;
     },
-    enabled: !!currentJourneyId,
   });
 
-  const { data: episodes } = useQuery({
-    queryKey: ["portal-journey-episodes", currentJourneyId],
+  const { data: allEpisodes } = useQuery({
+    queryKey: ["portal-all-episodes"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("journey_episodes")
-        .select("id, episode_number, title, stage_title")
-        .eq("journey_id", currentJourneyId!)
+        .select("id, episode_number, title, stage_title, journey_id")
         .order("episode_number");
       if (error) throw error;
       return data;
     },
-    enabled: !!currentJourneyId,
   });
 
-  if (!currentJourneyId) {
+  if (!allJourneys || allJourneys.length === 0) {
     return (
       <EmptyState
         icon={Target}
-        title="Nenhuma jornada ativa"
+        title="Nenhuma jornada disponível"
         description="Sua jornada será iniciada em breve. Continue conversando com a Aura!"
       />
     );
   }
 
-  const totalEpisodes = journey?.total_episodes || 8;
-  const progressPercent = (currentEpisode / totalEpisodes) * 100;
+  const journeyOrder = allJourneys || [];
+  const currentIdx = journeyOrder.findIndex((j: any) => j.id === currentJourneyId);
+
+  const episodesByJourney = (allEpisodes || []).reduce((acc: Record<string, any[]>, ep: any) => {
+    if (!acc[ep.journey_id]) acc[ep.journey_id] = [];
+    acc[ep.journey_id].push(ep);
+    return acc;
+  }, {});
+
+  const getJourneyStatus = (journeyId: string, idx: number) => {
+    if (journeyId === currentJourneyId) return "current";
+    if (currentIdx >= 0 && idx < currentIdx) return "completed";
+    return "locked";
+  };
 
   return (
     <div className="space-y-5">
-      <SectionHeader icon={Target} title="Sua Jornada" />
-
-      {/* Current journey card */}
-      <div className="rounded-2xl border border-accent/20 bg-gradient-to-br from-accent/5 to-transparent p-5">
-        <div className="flex items-start justify-between mb-3">
-          <div>
-            <p className="text-xs uppercase tracking-wider text-accent font-semibold font-['Nunito']">
-              Jornada Atual
-            </p>
-            <p className="font-['Fraunces'] font-semibold text-foreground text-lg mt-1">
-              {journey?.title || "Carregando..."}
-            </p>
-          </div>
-          <div className="bg-accent/10 rounded-full p-2">
-            <Target size={20} className="text-accent" />
-          </div>
-        </div>
-        {journey?.description && (
-          <p className="text-sm text-muted-foreground font-['Nunito'] mb-3">
-            {journey.description}
-          </p>
-        )}
-        <div className="flex items-center gap-3">
-          <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
-            <div
-              className="h-full rounded-full bg-accent transition-all duration-500"
-              style={{ width: `${progressPercent}%` }}
-            />
-          </div>
-          <span className="text-xs text-muted-foreground font-['Nunito'] font-medium">
-            {currentEpisode}/{totalEpisodes}
-          </span>
-        </div>
-      </div>
+      <SectionHeader icon={Target} title="Suas Jornadas" />
 
       {(profile?.journeys_completed || 0) > 0 && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground font-['Nunito']">
@@ -247,55 +224,103 @@ function JornadasTab({ userId, profile }: { userId: string; profile: any }) {
         </div>
       )}
 
-      {/* Episodes list */}
-      {episodes && episodes.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-sm font-semibold text-foreground font-['Nunito']">Episódios</p>
-          {episodes.map((ep: any) => {
-            const isUnlocked = ep.episode_number <= currentEpisode;
-            return (
-              <div
-                key={ep.id}
-                className={`rounded-xl border p-4 flex items-center gap-3 transition-all ${
-                  isUnlocked
-                    ? "border-border bg-card hover:shadow-sm cursor-pointer"
-                    : "border-border/50 bg-muted/30 opacity-60"
-                }`}
-                onClick={() => {
-                  if (isUnlocked) {
-                    window.open(`/episodio/${ep.id}?u=${userId}`, "_blank");
-                  }
-                }}
-              >
-                <div
-                  className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-                    isUnlocked ? "bg-accent/10 text-accent" : "bg-muted text-muted-foreground"
-                  }`}
-                >
-                  {isUnlocked ? (
-                    <CheckCircle2 size={16} />
-                  ) : (
-                    <Lock size={14} />
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-foreground font-['Nunito'] truncate">
-                    {ep.episode_number}. {ep.title}
+      {journeyOrder.map((journey: any, idx: number) => {
+        const status = getJourneyStatus(journey.id, idx);
+        if (status === "locked") return null;
+
+        const isExpanded = expandedJourney === journey.id;
+        const episodes = episodesByJourney[journey.id] || [];
+        const totalEpisodes = journey.total_episodes || 8;
+        const isCurrent = status === "current";
+        const completedEps = isCurrent ? currentEpisode : totalEpisodes;
+        const progressPercent = (completedEps / totalEpisodes) * 100;
+
+        return (
+          <div key={journey.id} className="space-y-2">
+            <div
+              className={`rounded-2xl border p-5 cursor-pointer transition-all ${
+                isCurrent
+                  ? "border-accent/20 bg-gradient-to-br from-accent/5 to-transparent"
+                  : "border-border bg-card hover:shadow-sm"
+              }`}
+              onClick={() => setExpandedJourney(isExpanded ? null : journey.id)}
+            >
+              <div className="flex items-start justify-between mb-2">
+                <div>
+                  <p className={`text-xs uppercase tracking-wider font-semibold font-['Nunito'] ${isCurrent ? "text-accent" : "text-muted-foreground"}`}>
+                    {isCurrent ? "Jornada Atual" : "Jornada Completada"}
                   </p>
-                  {ep.stage_title && (
-                    <p className="text-xs text-muted-foreground font-['Nunito']">
-                      {ep.stage_title}
-                    </p>
-                  )}
+                  <p className="font-['Fraunces'] font-semibold text-foreground text-lg mt-1">
+                    {journey.title}
+                  </p>
                 </div>
-                {isUnlocked && (
-                  <Play size={14} className="text-accent shrink-0" />
-                )}
+                <div className={`rounded-full p-2 ${isCurrent ? "bg-accent/10" : "bg-muted"}`}>
+                  {isCurrent ? <Target size={20} className="text-accent" /> : <CheckCircle2 size={20} className="text-accent" />}
+                </div>
               </div>
-            );
-          })}
-        </div>
-      )}
+              {journey.description && (
+                <p className="text-sm text-muted-foreground font-['Nunito'] mb-3">
+                  {journey.description}
+                </p>
+              )}
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-accent transition-all duration-500"
+                    style={{ width: `${progressPercent}%` }}
+                  />
+                </div>
+                <span className="text-xs text-muted-foreground font-['Nunito'] font-medium">
+                  {completedEps}/{totalEpisodes}
+                </span>
+              </div>
+            </div>
+
+            {isExpanded && episodes.length > 0 && (
+              <div className="space-y-2 pl-2">
+                <p className="text-sm font-semibold text-foreground font-['Nunito']">Episódios</p>
+                {episodes.map((ep: any) => {
+                  const isUnlocked = isCurrent ? ep.episode_number <= currentEpisode : true;
+                  return (
+                    <div
+                      key={ep.id}
+                      className={`rounded-xl border p-4 flex items-center gap-3 transition-all ${
+                        isUnlocked
+                          ? "border-border bg-card hover:shadow-sm cursor-pointer"
+                          : "border-border/50 bg-muted/30 opacity-60"
+                      }`}
+                      onClick={() => {
+                        if (isUnlocked) {
+                          window.open(`/episodio/${ep.id}?u=${userId}`, "_blank");
+                        }
+                      }}
+                    >
+                      <div
+                        className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                          isUnlocked ? "bg-accent/10 text-accent" : "bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        {isUnlocked ? <CheckCircle2 size={16} /> : <Lock size={14} />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground font-['Nunito'] truncate">
+                          {ep.episode_number}. {ep.title}
+                        </p>
+                        {ep.stage_title && (
+                          <p className="text-xs text-muted-foreground font-['Nunito']">
+                            {ep.stage_title}
+                          </p>
+                        )}
+                      </div>
+                      {isUnlocked && <Play size={14} className="text-accent shrink-0" />}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
