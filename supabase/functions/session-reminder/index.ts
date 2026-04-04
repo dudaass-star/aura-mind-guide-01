@@ -396,75 +396,7 @@ Você está pronta(o) pra começar? Me responde um "vamos" ou "bora" quando quis
       }
     }
 
-    // ========================================================================
-    // LEMBRETE DE 10 MINUTOS - Para sessões notificadas mas não iniciadas
-    // ========================================================================
-    let reminder10mSent = 0;
-    
-    const { data: notifiedButNotStarted, error: errorNotStarted } = await supabase
-      .from('sessions')
-      .select('id, user_id, scheduled_at')
-      .eq('status', 'scheduled')
-      .eq('session_start_notified', true)
-      .is('started_at', null);
-    
-    if (errorNotStarted) {
-      console.error('❌ Error fetching notified but not started sessions:', errorNotStarted);
-    }
-    
-    if (notifiedButNotStarted && notifiedButNotStarted.length > 0) {
-      for (const session of notifiedButNotStarted) {
-        const scheduledTime = new Date(session.scheduled_at);
-        const minutesSinceScheduled = (now.getTime() - scheduledTime.getTime()) / 60000;
-        
-        // Se já passaram 15 minutos e sessão não iniciou, enviar lembrete gentil
-        // Mas só entre 15 e 25 minutos para não enviar duplicado (era 10-15)
-        if (minutesSinceScheduled >= 15 && minutesSinceScheduled < 25) {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('name, phone, whatsapp_instance_id')
-            .eq('user_id', session.user_id)
-            .maybeSingle();
-          
-          if (!profile?.phone) continue;
-          
-          // NOVO: Verificar se o usuário mandou mensagem recente (pode estar conversando/avisou que vai demorar)
-          const { data: recentUserMsg } = await supabase
-            .from('messages')
-            .select('created_at')
-            .eq('user_id', session.user_id)
-            .eq('role', 'user')
-            .gte('created_at', scheduledTime.toISOString())
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          
-          if (recentUserMsg) {
-            console.log(`⏭️ Skipping 10min reminder for session ${session.id}: user sent message after session notification`);
-            continue;
-          }
-          
-          const userName = profile.name || 'você';
-          // MENSAGEM MAIS CLARA: Reforça que precisa de resposta para iniciar
-          const reminderMessage = `Oi ${userName}! 💜 Ainda tô te esperando pra nossa sessão especial.
-
-Pra gente começar, me manda um "vamos" ou "bora" - ou me avisa se quer reagendar pra outro momento, tá? ✨`;
-          
-          try {
-            const cleanPhone = cleanPhoneNumber(profile.phone);
-            const instanceConfig = await getInstanceConfigForUser(supabase, session.user_id);
-            const result = await sendProactive(cleanPhone, reminderMessage, 'session_reminder', session.user_id);
-            
-            if (result.success) {
-              reminder10mSent++;
-              console.log(`✅ 10min reminder sent for waiting session ${session.id}`);
-            }
-          } catch (sendError) {
-            console.error(`❌ Error sending 10min reminder for session ${session.id}:`, sendError);
-          }
-        }
-      }
-    }
+    // (10-minute reminder removed — simplified to 24h + 5min only)
 
     // ========================================================================
     // DETECTAR SESSÕES NOTIFICADAS MAS NUNCA INICIADAS (missed - 30 min após notificação)
