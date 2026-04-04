@@ -201,10 +201,10 @@ Tá tudo bem? Se precisar, podemos remarcar pra um horário melhor. É só me co
 Estou aqui por você. ✨`;
 
         try {
-          // Get instance config for this user
           const zapiConfig = await getInstanceConfigForUser(supabase, session.user_id);
           const cleanPhone = cleanPhoneNumber(profile.phone);
-          const result = await sendProactive(cleanPhone, message, 'reactivation', session.user_id);
+          const missedNome = profile.name?.split(' ')[0] || 'você';
+          const result = await sendProactive(cleanPhone, message, 'reactivation', session.user_id, undefined, undefined, [missedNome]);
 
           if (result.success) {
             await supabase

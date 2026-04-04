@@ -1063,7 +1063,23 @@ Me conta: como você está hoje?`;
             } else {
               dunningRecord.error_stage = 'no_email';
               dunningRecord.error_message = 'No email found for dunning notification';
-              console.warn('⚠️ No email available for dunning, skipping notification');
+              console.warn('⚠️ No email available for dunning, skipping email notification');
+            }
+
+            // Step 5: Send WhatsApp notification via access_blocked template
+            try {
+              const accessBlockedNome = userName.split(' ')[0];
+              const accessBlockedMsg = `Oi, ${accessBlockedNome}! Tivemos um probleminha com o seu pagamento. 💜\n\nPara continuar com o nosso acompanhamento, atualize seus dados de pagamento pelo link que enviamos no seu e-mail.\n\nQualquer dúvida, estou aqui!\n\n— Aura`;
+              const whatsResult = await sendProactive(phone!, accessBlockedMsg, 'access_blocked', profile.user_id, undefined, undefined, [accessBlockedNome]);
+              if (whatsResult.success) {
+                dunningRecord.whatsapp_sent = true;
+                console.log('✅ Access blocked WhatsApp sent via', whatsResult.provider);
+                await supabase.from('messages').insert({ user_id: profile.user_id, role: 'assistant', content: accessBlockedMsg });
+              } else {
+                console.warn('⚠️ Access blocked WhatsApp failed:', whatsResult.error);
+              }
+            } catch (whatsErr) {
+              console.warn('⚠️ Access blocked WhatsApp error (non-blocking):', whatsErr);
             }
           } catch (portalErr) {
             const errMsg = portalErr instanceof Error ? portalErr.message : String(portalErr);
