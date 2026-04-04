@@ -1,28 +1,29 @@
 
 
-## Plano: Migrar para o Novo Número WhatsApp +16625255005
-
-### Contexto
-O novo WhatsApp Sender está ativo no Twilio. O sistema já lê o número de envio do secret `TWILIO_WHATSAPP_FROM`, então **a única mudança necessária é atualizar esse secret**.
-
-Nenhum código precisa ser alterado — a função `getFromNumber()` em `whatsapp-official.ts` já normaliza qualquer formato de número automaticamente.
+## Plano: Botão WhatsApp nas páginas de confirmação + E-mail de boas-vindas
 
 ### O que será feito
 
-**1. Atualizar o secret `TWILIO_WHATSAPP_FROM`**
-- Valor atual: `+12604684990` (banido)
-- Novo valor: `+16625255005`
+**1. Adicionar botão "Chamar a AURA no WhatsApp" nas páginas de confirmação**
+- **ThankYou.tsx** (`/obrigado`): Adicionar botão WhatsApp logo abaixo do bloco "Fique de olho no seu celular" (mantendo o bloco existente)
+- **TrialStarted.tsx** (`/trial-iniciado`): Adicionar botão WhatsApp logo abaixo do texto "Olha seu WhatsApp" (mantendo o texto existente)
+- Botão usa `variant="whatsapp"` com link `https://wa.me/16625255005?text=Oi%20AURA`
+- Abre em nova aba (`target="_blank"`)
 
-**2. Templates oficiais**
-- Como os templates ainda não foram criados na Meta, o sistema vai operar em **modo free-text** (mensagens dentro da janela de 24h) para usuários que já iniciaram conversa.
-- Mensagens proativas fora da janela de 24h **não funcionarão** até os templates serem aprovados pela Meta — isso é esperado e não causa erro (o sistema já trata esse cenário com graceful fallback).
+**2. Criar template de e-mail de boas-vindas**
+- Novo arquivo `supabase/functions/_shared/transactional-email-templates/welcome.tsx`
+- Conteúdo espelha as páginas de confirmação: saudação personalizada, dicas de "como aproveitar", e botão verde "Chamar a AURA no WhatsApp" apontando para `https://wa.me/16625255005?text=Oi%20AURA`
+- Registrar no `registry.ts`
 
-### O que NÃO muda
-- Nenhum código alterado
-- Webhook do Twilio (`webhook-twilio`) permanece o mesmo — basta configurar o webhook no Twilio Console para o novo sender apontar para a mesma URL
-- Toda a infraestrutura (provider abstraction, instance helper, anti-burst) continua funcionando
+**3. Disparar e-mail de boas-vindas no stripe-webhook**
+- Após criar o perfil e enviar a mensagem WhatsApp (linhas ~336), adicionar chamada ao `send-transactional-email` com `templateName: 'welcome'`
+- Usa o e-mail do cliente (`customerEmail`)
+- `idempotencyKey: welcome-${session.id}`
+- `templateData: { name: customerName }`
+- Funciona como reforço — mesmo que o WhatsApp falhe (templates pendentes), o e-mail chega
 
-### Checklist para você (no Twilio Console)
-- ✅ Novo sender ativo
-- ⬜ Configurar webhook de mensagens recebidas no novo sender para: `https://uhyogifgmutfmbyhzzyo.supabase.co/functions/v1/webhook-twilio` (POST)
+### Detalhes técnicos
+- O e-mail será enviado via infraestrutura transacional já existente (`send-transactional-email` + fila pgmq)
+- O botão WhatsApp no e-mail resolve o problema dos templates pendentes: o usuário inicia a conversa, abrindo a janela de 24h
+- Deploy necessário: `send-transactional-email` (template novo) + `stripe-webhook` (trigger novo)
 
