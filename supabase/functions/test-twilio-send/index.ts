@@ -48,11 +48,15 @@ Deno.serve(async (req) => {
 
     console.log(`📨 Attempting send from ${from} to ${to}`);
 
-    // Try with ContentSid for welcome template - no variables first
+    // Test 1: with properly formatted ContentVariables
+    const contentVars = JSON.stringify({"1": "Eduardo, esta e uma mensagem de teste da AURA"});
+    console.log('ContentVariables:', contentVars);
+    
     const body = new URLSearchParams({
       To: to,
       From: from,
       ContentSid: 'HXa5ef9baff62dd1648c8e37f0ca03b054',
+      ContentVariables: contentVars,
     });
 
     const sendRes = await fetch(`${GATEWAY_URL}/Messages.json`, {
