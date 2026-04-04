@@ -86,6 +86,19 @@ const ThankYou = () => {
             </p>
           </div>
 
+          {/* WhatsApp CTA */}
+          <div className="mt-6 animate-fade-up delay-250">
+            <a href="https://wa.me/16625255005?text=Oi%20AURA" target="_blank" rel="noopener noreferrer">
+              <Button variant="whatsapp" size="lg" className="gap-2 w-full sm:w-auto">
+                <MessageSquare className="w-5 h-5" />
+                Chamar a AURA no WhatsApp
+              </Button>
+            </a>
+            <p className="text-xs text-muted-foreground mt-2">
+              Ou, se preferir, toque aqui para iniciar a conversa agora mesmo.
+            </p>
+          </div>
+
           {/* Tips */}
           <div className="mt-12 p-6 bg-card/50 rounded-2xl border border-border/50 text-left animate-fade-up delay-300">
             <div className="flex items-center gap-2 mb-4">
