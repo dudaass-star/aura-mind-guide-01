@@ -343,8 +343,7 @@ Confirma que tá tudo certo? Me responde com "confirmo" ou me avisa se precisar 
       
       for (const session of sessionsToStart) {
         // Pular se já processamos nesta execução
-        if (sessions15m?.some(s => s.id === session.id) || 
-            sessions1h?.some(s => s.id === session.id) || 
+        if (sessions5m?.some(s => s.id === session.id) || 
             sessions24h?.some(s => s.id === session.id)) {
           continue;
         }
