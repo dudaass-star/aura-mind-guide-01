@@ -1,119 +1,54 @@
 
-## Plano: Templates fixos do WhatsApp para mensagens fora da janela de 24h
 
-### Contexto
+## Plano: Visualizar o Portal + Distribuir o Link do "Meu Espaço"
 
-Aprendemos que a variável `{{1}}` dos templates WhatsApp da Meta **só funciona com conteúdo curto** (nome). A estratégia agora é: templates com mensagem fixa + apenas `{{1}}` = nome do usuário.
+### Problema atual
 
-### Templates a criar/atualizar
+Nenhum token existe no banco — os tokens só são criados para **novos** usuários (via `start-trial` e `stripe-webhook`). Usuários existentes (como você) não têm token gerado.
 
-Precisamos de **4 templates** com texto fixo para submeter à Meta via Twilio. Abaixo, o texto exato de cada um (incluindo o `{{1}}` para o nome):
+### O que fazer
 
----
+**1. Gerar tokens para todos os usuários existentes (backfill)**
 
-**1. Check-in (7 dias sem interação)**
-- Template name: `aura_checkin_v2`
-- Categoria Meta: `marketing`
-- Texto completo para submissão:
+SQL de inserção para criar tokens para todos os perfis que ainda não possuem:
 
-```
-Oi, {{1}}! Faz um tempinho que a gente não conversa... 💜
-
-Como você está? Estou aqui sempre que precisar, é só me chamar.
-
-— Aura
+```sql
+INSERT INTO user_portal_tokens (user_id)
+SELECT p.user_id FROM profiles p
+WHERE NOT EXISTS (
+  SELECT 1 FROM user_portal_tokens t WHERE t.user_id = p.user_id
+);
 ```
 
----
+Após isso, vou buscar o seu token específico e navegar até o portal para você ver como ficou.
 
-**2. Acesso bloqueado (pagamento falhou)**
-- Template name: `aura_access_blocked_v2`
-- Categoria Meta: `utility`
-- Texto completo para submissão:
+**2. Distribuir o link do portal para os usuários**
 
-```
-Oi, {{1}}! Tivemos um probleminha com o seu pagamento. 💜
+Proposta de 3 pontos de distribuição:
 
-Para continuar com o nosso acompanhamento, atualize seus dados de pagamento pelo link que enviamos no seu e-mail.
+| Momento | Como |
+|---------|------|
+| **Página de Obrigado** (`/obrigado`) | Adicionar card com link "Acesse seu Meu Espaço" — mas o token só existe após o `stripe-webhook` processar, então precisaria buscar via phone/localStorage. Alternativa mais simples: mencionar que o link será enviado no WhatsApp. |
+| **Email de boas-vindas** | Incluir botão "Acessar Meu Espaço" no template `welcome.tsx` com o link `olaaura.com.br/meu-espaco?t=TOKEN` |
+| **Welcome no WhatsApp** | Incluir o link do portal na mensagem de boas-vindas (dentro da janela de 24h, texto livre) |
 
-Qualquer dúvida, estou aqui!
+**Recomendação:** O melhor ponto é o **Welcome no WhatsApp** (texto livre, já dentro da janela) + **Email de boas-vindas**. A página de Obrigado pode apenas mencionar "você receberá o link do seu painel pessoal no WhatsApp".
 
-— Aura
-```
+### Sequência
 
----
+1. Backfill de tokens para usuários existentes
+2. Navegar no portal com seu token para você avaliar
+3. Adicionar link do portal no welcome do WhatsApp (`start-trial` e `stripe-webhook`)
+4. Adicionar link do portal no email de boas-vindas (`welcome.tsx`)
+5. Atualizar página de Obrigado com menção ao "Meu Espaço"
 
-**3. Reativação (usuário inativo)**
-- Template name: `aura_reactivation_v2`
-- Categoria Meta: `marketing`
-- Texto completo para submissão:
+### Arquivos alterados
 
-```
-Oi, {{1}}! Senti sua falta por aqui. 💜
-
-Quando quiser conversar, é só me chamar. Estou sempre aqui por você.
-
-— Aura
-```
-
----
-
-**4. Reconexão (instância reconectou)**
-- Template name: `aura_reconnect_v2` — **já aprovado e ativo** ✅
-- Texto atual precisa ser verificado. Se o texto aprovado já é curto e fixo, basta ajustar a variável para enviar **só o nome**.
-
----
-
-### Alterações no código
-
-**1. Atualizar funções que enviam essas mensagens para usar `templateVariables: [nome]`:**
-
-- `supabase/functions/scheduled-checkin/index.ts` — Ao chamar `sendProactive`, passar `templateVariables: [nome]` para que, fora da janela, o template envie só o nome na variável. O texto dinâmico completo continua sendo enviado dentro da janela (free text).
-
-- `supabase/functions/instance-reconnect-notify/index.ts` — Idem, passar `templateVariables: [nome]`.
-
-- `supabase/functions/reactivation-check/index.ts` — Nas mensagens de missed session e trial nudges, passar `templateVariables: [nome]`.
-
-- `supabase/functions/stripe-webhook/index.ts` — No fluxo de `payment_failed`, além do email de dunning que já envia, adicionar envio WhatsApp com template `access_blocked` + `templateVariables: [nome]`.
-
-**2. Atualizar prefixes na tabela `whatsapp_templates`:**
-
-Os prefixes atuais na tabela serão substituídos pelos textos completos (sem a variável) quando os templates forem aprovados e o ContentSid for atualizado.
-
-### O que você precisa fazer manualmente
-
-1. Criar os 3 templates (checkin, access_blocked, reactivation) no Twilio Content Editor com o texto exato acima
-2. Submeter para aprovação da Meta
-3. Após aprovação, copiar os `ContentSid` e atualizar na página `/admin/templates`
-
-### Falta alguma coisa?
-
-Verificando o mapeamento completo:
-
-| Cenário | Dentro 24h | Fora 24h | Status |
-|---------|-----------|----------|--------|
-| Check-in 7d | Texto livre personalizado | Template fixo (novo) | **A criar** |
-| Acesso bloqueado | Texto livre + email | Template fixo + email | **A criar** |
-| Reativação | Texto livre personalizado | Template fixo (novo) | **A criar** |
-| Reconexão | Texto livre | Template fixo (existente) | ✅ Ativo |
-| Lembrete sessão | Texto livre (24h+5min) | Sempre dentro da janela* | Verificar |
-| Follow-up | Texto livre | Não envia (guard 24h) | ✅ Feito |
-| Resumo mensal | Teaser + link | Teaser + link (template?) | **Possível 5o template** |
-| Cápsula do tempo | Teaser + link | Teaser + link (template?) | **Possível 6o template** |
-| Meditação | Áudio direto | Dentro da janela sempre | ✅ OK |
-| Welcome/Trial | Template curto | Janela sempre aberta | ✅ Ativo |
-| Insight | Texto livre | Não envia (por agora) | ✅ OK |
-
-**Possíveis templates adicionais:** Se o resumo mensal e a cápsula do tempo precisam chegar fora da janela, seria bom criar templates curtos tipo:
-- `"Oi, {{1}}! Seu resumo mensal está pronto 📊 Veja aqui: {{2}} — Aura"`
-- `"Oi, {{1}}! Sua cápsula do tempo chegou 💜 Ouça aqui: {{2}} — Aura"`
-
-Esses teriam {{2}} = link curto. Mas podem ficar para uma segunda fase.
-
-### Sequência de implementação
-
-1. Atualizar `scheduled-checkin`, `reactivation-check`, `instance-reconnect-notify` para passar `templateVariables: [nome]`
-2. Adicionar envio WhatsApp no `stripe-webhook` para `payment_failed` com template `access_blocked`
-3. Você cria os templates no Twilio e submete para a Meta
-4. Após aprovação, atualiza os ContentSid no admin
+| Arquivo | Ação |
+|---------|------|
+| Inserção SQL (backfill) | Gerar tokens existentes |
+| `supabase/functions/start-trial/index.ts` | Incluir link do portal na welcome message |
+| `supabase/functions/stripe-webhook/index.ts` | Incluir link do portal na welcome message |
+| `supabase/functions/_shared/transactional-email-templates/welcome.tsx` | Adicionar botão "Meu Espaço" |
+| `src/pages/ThankYou.tsx` | Menção ao painel pessoal |
 
