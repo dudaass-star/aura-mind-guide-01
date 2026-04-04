@@ -267,26 +267,23 @@ Confirma que tá tudo certo? Me responde com "confirmo" ou me avisa se precisar 
     }
 
     // ========================================================================
-    // LEMBRETE DE 1 HORA
+    // LEMBRETE DE 5 MINUTOS
     // ========================================================================
-    const { data: sessions1h, error: error1h } = await supabase
+    const { data: sessions5m, error: error5m } = await supabase
       .from('sessions')
       .select(`id, user_id, scheduled_at, session_type, focus_topic`)
       .eq('status', 'scheduled')
-      .eq('reminder_1h_sent', false)
-      .lte('scheduled_at', oneHourFromNow.toISOString())
+      .eq('reminder_5m_sent', false)
+      .lte('scheduled_at', fiveMinutesFromNow.toISOString())
       .gt('scheduled_at', now.toISOString());
 
-    if (error1h) {
-      console.error('❌ Error fetching 1h sessions:', error1h);
+    if (error5m) {
+      console.error('❌ Error fetching 5m sessions:', error5m);
     }
 
-    if (sessions1h && sessions1h.length > 0) {
-      for (const session of sessions1h) {
-        // Pular se já enviamos o lembrete de 24h nesta mesma execução
-        if (sessions24h?.some(s => s.id === session.id)) {
-          continue;
-        }
+    if (sessions5m && sessions5m.length > 0) {
+      for (const session of sessions5m) {
+        if (sessions24h?.some(s => s.id === session.id)) continue;
 
         const { data: profile } = await supabase
           .from('profiles')
@@ -294,23 +291,10 @@ Confirma que tá tudo certo? Me responde com "confirmo" ou me avisa se precisar 
           .eq('user_id', session.user_id)
           .maybeSingle();
 
-        if (!profile?.phone) {
-          console.log(`⚠️ No phone for session ${session.id}`);
-          continue;
-        }
+        if (!profile?.phone) { console.log(`⚠️ No phone for session ${session.id}`); continue; }
 
         const userName = profile.name || 'você';
-        const sessionTime = new Date(session.scheduled_at).toLocaleTimeString('pt-BR', {
-          hour: '2-digit',
-          minute: '2-digit',
-          timeZone: 'America/Sao_Paulo'
-        });
-
-        const message = `Oi, ${userName}! 🌟
-
-Lembrete: nossa sessão especial começa em 1 hora (às ${sessionTime}).
-
-Separa um cantinho tranquilo pra gente conversar com calma. Te espero lá! 💜`;
+        const message = `Faltam 5 minutinhos pra nossa sessão, ${userName}! ✨\n\nJá estou aqui te esperando. Quando estiver pronta, é só me mandar uma mensagem que a gente começa. 💜`;
 
         try {
           const cleanPhone = cleanPhoneNumber(profile.phone);
@@ -318,79 +302,14 @@ Separa um cantinho tranquilo pra gente conversar com calma. Te espero lá! 💜`
           const result = await sendProactive(cleanPhone, message, 'session_reminder', session.user_id);
 
           if (result.success) {
-            await supabase
-              .from('sessions')
-              .update({ reminder_1h_sent: true })
-              .eq('id', session.id);
-            
-            reminders1hSent++;
-            console.log(`✅ 1h reminder sent for session ${session.id}`);
+            await supabase.from('sessions').update({ reminder_5m_sent: true }).eq('id', session.id);
+            reminders5mSent++;
+            console.log(`✅ 5m reminder sent for session ${session.id}`);
           } else {
-            console.error(`❌ Failed to send 1h reminder for session ${session.id}:`, result.error);
+            console.error(`❌ Failed to send 5m reminder for session ${session.id}:`, result.error);
           }
         } catch (sendError) {
-          console.error(`❌ Error sending 1h reminder for session ${session.id}:`, sendError);
-        }
-      }
-    }
-
-    // ========================================================================
-    // LEMBRETE DE 15 MINUTOS
-    // ========================================================================
-    const { data: sessions15m, error: error15m } = await supabase
-      .from('sessions')
-      .select(`id, user_id, scheduled_at, session_type, focus_topic`)
-      .eq('status', 'scheduled')
-      .eq('reminder_15m_sent', false)
-      .lte('scheduled_at', fifteenMinutesFromNow.toISOString())
-      .gt('scheduled_at', now.toISOString());
-
-    if (error15m) {
-      console.error('❌ Error fetching 15m sessions:', error15m);
-    }
-
-    if (sessions15m && sessions15m.length > 0) {
-      for (const session of sessions15m) {
-        // Pular se já processamos nesta execução
-        if (sessions1h?.some(s => s.id === session.id) || sessions24h?.some(s => s.id === session.id)) {
-          continue;
-        }
-
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('name, phone, whatsapp_instance_id')
-          .eq('user_id', session.user_id)
-          .maybeSingle();
-
-        if (!profile?.phone) {
-          console.log(`⚠️ No phone for session ${session.id}`);
-          continue;
-        }
-
-        const userName = profile.name || 'você';
-
-        const message = `Faltam 15 minutinhos pra nossa sessão, ${userName}! ✨
-
-Já estou aqui te esperando. Quando estiver pronta, é só me mandar uma mensagem que a gente começa. 💜`;
-
-        try {
-          const cleanPhone = cleanPhoneNumber(profile.phone);
-          const instanceConfig = await getInstanceConfigForUser(supabase, session.user_id);
-          const result = await sendProactive(cleanPhone, message, 'session_reminder', session.user_id);
-
-          if (result.success) {
-            await supabase
-              .from('sessions')
-              .update({ reminder_15m_sent: true })
-              .eq('id', session.id);
-            
-            reminders15mSent++;
-            console.log(`✅ 15m reminder sent for session ${session.id}`);
-          } else {
-            console.error(`❌ Failed to send 15m reminder for session ${session.id}:`, result.error);
-          }
-        } catch (sendError) {
-          console.error(`❌ Error sending 15m reminder for session ${session.id}:`, sendError);
+          console.error(`❌ Error sending 5m reminder for session ${session.id}:`, sendError);
         }
       }
     }
