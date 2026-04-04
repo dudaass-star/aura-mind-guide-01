@@ -4,14 +4,30 @@ import { supabase } from "@/integrations/supabase/client";
 import { Helmet } from "react-helmet-async";
 import { useState } from "react";
 import logoOlaAura from "@/assets/logo-ola-aura.png";
+import {
+  Target,
+  BarChart3,
+  Headphones,
+  Heart,
+  Lock,
+  CheckCircle2,
+  Clock,
+  MessageCircle,
+  Brain,
+  Calendar,
+  Play,
+  Mail,
+  TrendingUp,
+  Sparkles,
+} from "lucide-react";
 
 type TabId = "jornadas" | "resumos" | "meditacoes" | "capsulas";
 
-const TABS: { id: TabId; label: string; emoji: string }[] = [
-  { id: "jornadas", label: "Jornadas", emoji: "🎯" },
-  { id: "resumos", label: "Resumos", emoji: "📊" },
-  { id: "meditacoes", label: "Meditações", emoji: "🧘" },
-  { id: "capsulas", label: "Cápsulas", emoji: "💜" },
+const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
+  { id: "jornadas", label: "Jornadas", icon: Target },
+  { id: "resumos", label: "Resumos", icon: BarChart3 },
+  { id: "meditacoes", label: "Meditações", icon: Headphones },
+  { id: "capsulas", label: "Cápsulas", icon: Heart },
 ];
 
 const UserPortal = () => {
@@ -20,7 +36,6 @@ const UserPortal = () => {
   const initialTab = (searchParams.get("tab") as TabId) || "jornadas";
   const [activeTab, setActiveTab] = useState<TabId>(initialTab);
 
-  // Resolve token to user_id
   const { data: portalToken, isLoading: tokenLoading, error: tokenError } = useQuery({
     queryKey: ["portal-token", token],
     queryFn: async () => {
@@ -37,7 +52,6 @@ const UserPortal = () => {
 
   const userId = portalToken?.user_id;
 
-  // Fetch profile
   const { data: profile } = useQuery({
     queryKey: ["portal-profile", userId],
     queryFn: async () => {
@@ -52,17 +66,9 @@ const UserPortal = () => {
     enabled: !!userId,
   });
 
-  if (!token) {
-    return <PortalError message="Link inválido. Verifique o link que você recebeu." />;
-  }
-
-  if (tokenLoading) {
-    return <PortalLoading />;
-  }
-
-  if (tokenError || !portalToken) {
-    return <PortalError message="Token não encontrado. Este link pode ter expirado." />;
-  }
+  if (!token) return <PortalError message="Link inválido. Verifique o link que você recebeu." />;
+  if (tokenLoading) return <PortalLoading />;
+  if (tokenError || !portalToken) return <PortalError message="Token não encontrado. Este link pode ter expirado." />;
 
   const firstName = profile?.name?.split(" ")[0] || "você";
 
@@ -76,20 +82,20 @@ const UserPortal = () => {
 
       <div className="min-h-screen bg-background flex flex-col">
         {/* Header */}
-        <div className="bg-card border-b border-border/50">
+        <div className="bg-card border-b border-border/40 shadow-sm">
           <div className="max-w-2xl mx-auto px-5 py-3 flex items-center justify-between">
-            <img src={logoOlaAura} alt="Olá AURA" className="h-14 w-auto" />
-            <span className="text-xs uppercase tracking-wider text-accent font-semibold font-['Nunito']">
+            <img src={logoOlaAura} alt="Olá AURA" className="h-12 w-auto" />
+            <span className="text-xs uppercase tracking-widest text-accent font-semibold font-['Nunito']">
               Meu Espaço
             </span>
           </div>
         </div>
 
         {/* Greeting */}
-        <div className="bg-accent/8 border-b border-border/30">
-          <div className="max-w-2xl mx-auto px-5 py-4">
-            <p className="text-lg font-medium text-foreground font-['Fraunces']">
-              Oi, {firstName}! 💜
+        <div className="border-b border-border/20">
+          <div className="max-w-2xl mx-auto px-5 py-5">
+            <p className="text-xl font-medium text-foreground font-['Fraunces']">
+              Olá, {firstName}
             </p>
             <p className="text-sm text-muted-foreground font-['Nunito'] mt-1">
               Aqui está tudo que construímos juntas.
@@ -98,21 +104,26 @@ const UserPortal = () => {
         </div>
 
         {/* Tabs */}
-        <div className="border-b border-border/30 overflow-x-auto">
-          <div className="max-w-2xl mx-auto px-5 flex gap-1">
-            {TABS.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`px-4 py-3 text-sm font-['Nunito'] font-medium whitespace-nowrap border-b-2 transition-colors ${
-                  activeTab === tab.id
-                    ? "border-accent text-accent"
-                    : "border-transparent text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {tab.emoji} {tab.label}
-              </button>
-            ))}
+        <div className="border-b border-border/30 bg-card/50">
+          <div className="max-w-2xl mx-auto px-5 flex gap-0.5">
+            {TABS.map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center gap-1.5 px-4 py-3 text-sm font-['Nunito'] font-medium whitespace-nowrap border-b-2 transition-all ${
+                    isActive
+                      ? "border-accent text-accent"
+                      : "border-transparent text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Icon size={16} />
+                  <span className="hidden sm:inline">{tab.label}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -120,14 +131,14 @@ const UserPortal = () => {
         <div className="flex-1 max-w-2xl mx-auto w-full px-5 py-6">
           {activeTab === "jornadas" && <JornadasTab userId={userId!} profile={profile} />}
           {activeTab === "resumos" && <ResumosTab userId={userId!} />}
-          {activeTab === "meditacoes" && <MeditacoesTab userId={userId!} />}
+          {activeTab === "meditacoes" && <MeditacoesTab />}
           {activeTab === "capsulas" && <CapsulasTab userId={userId!} />}
         </div>
 
         {/* Footer */}
-        <footer className="border-t border-border/50 py-6 text-center">
+        <footer className="border-t border-border/40 py-6 text-center">
           <p className="text-sm text-muted-foreground font-['Nunito']">
-            Conteúdo exclusivo da Aura 💜
+            Conteúdo exclusivo da Aura
           </p>
           <a
             href="https://olaaura.com.br"
@@ -146,78 +157,145 @@ const UserPortal = () => {
 // ==================== TAB COMPONENTS ====================
 
 function JornadasTab({ userId, profile }: { userId: string; profile: any }) {
-  const { data: journeys } = useQuery({
-    queryKey: ["portal-journeys", userId],
+  const currentJourneyId = profile?.current_journey_id;
+  const currentEpisode = profile?.current_episode || 0;
+
+  const { data: journey } = useQuery({
+    queryKey: ["portal-current-journey", currentJourneyId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("content_journeys")
         .select("id, title, description, topic, total_episodes")
-        .eq("is_active", true)
-        .order("id");
+        .eq("id", currentJourneyId!)
+        .single();
       if (error) throw error;
       return data;
     },
-    enabled: !!userId,
+    enabled: !!currentJourneyId,
   });
 
-  const currentJourneyId = profile?.current_journey_id;
-  const currentEpisode = profile?.current_episode || 0;
+  const { data: episodes } = useQuery({
+    queryKey: ["portal-journey-episodes", currentJourneyId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("journey_episodes")
+        .select("id, episode_number, title, stage_title")
+        .eq("journey_id", currentJourneyId!)
+        .order("episode_number");
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!currentJourneyId,
+  });
+
+  if (!currentJourneyId) {
+    return (
+      <EmptyState
+        icon={Target}
+        title="Nenhuma jornada ativa"
+        description="Sua jornada será iniciada em breve. Continue conversando com a Aura!"
+      />
+    );
+  }
+
+  const totalEpisodes = journey?.total_episodes || 8;
+  const progressPercent = (currentEpisode / totalEpisodes) * 100;
 
   return (
-    <div className="space-y-4">
-      <h2 className="font-['Fraunces'] text-xl font-semibold text-foreground">Suas Jornadas</h2>
+    <div className="space-y-5">
+      <SectionHeader icon={Target} title="Sua Jornada" />
 
-      {currentJourneyId && (
-        <div className="rounded-xl border-2 border-accent/30 bg-accent/5 p-4">
-          <p className="text-xs uppercase tracking-wider text-accent font-semibold font-['Nunito'] mb-2">
-            Jornada Atual
-          </p>
-          <p className="font-['Fraunces'] font-semibold text-foreground">
-            {journeys?.find((j) => j.id === currentJourneyId)?.title || "Carregando..."}
-          </p>
-          <div className="flex items-center gap-3 mt-2">
-            <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
-              <div
-                className="h-full rounded-full transition-all"
-                style={{
-                  width: `${(currentEpisode / 8) * 100}%`,
-                  background: "linear-gradient(135deg, hsl(270 35% 70%), hsl(270 40% 80%))",
-                }}
-              />
-            </div>
-            <span className="text-xs text-muted-foreground font-['Nunito']">
-              {currentEpisode}/8
-            </span>
+      {/* Current journey card */}
+      <div className="rounded-2xl border border-accent/20 bg-gradient-to-br from-accent/5 to-transparent p-5">
+        <div className="flex items-start justify-between mb-3">
+          <div>
+            <p className="text-xs uppercase tracking-wider text-accent font-semibold font-['Nunito']">
+              Jornada Atual
+            </p>
+            <p className="font-['Fraunces'] font-semibold text-foreground text-lg mt-1">
+              {journey?.title || "Carregando..."}
+            </p>
           </div>
+          <div className="bg-accent/10 rounded-full p-2">
+            <Target size={20} className="text-accent" />
+          </div>
+        </div>
+        {journey?.description && (
+          <p className="text-sm text-muted-foreground font-['Nunito'] mb-3">
+            {journey.description}
+          </p>
+        )}
+        <div className="flex items-center gap-3">
+          <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+            <div
+              className="h-full rounded-full bg-accent transition-all duration-500"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+          <span className="text-xs text-muted-foreground font-['Nunito'] font-medium">
+            {currentEpisode}/{totalEpisodes}
+          </span>
+        </div>
+      </div>
+
+      {(profile?.journeys_completed || 0) > 0 && (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground font-['Nunito']">
+          <CheckCircle2 size={16} className="text-accent" />
+          <span>
+            {profile.journeys_completed} jornada{profile.journeys_completed > 1 ? "s" : ""} completada{profile.journeys_completed > 1 ? "s" : ""}
+          </span>
         </div>
       )}
 
-      {(profile?.journeys_completed || 0) > 0 && (
-        <p className="text-sm text-muted-foreground font-['Nunito']">
-          ✅ {profile.journeys_completed} jornada{profile.journeys_completed > 1 ? "s" : ""} completada{profile.journeys_completed > 1 ? "s" : ""}
-        </p>
+      {/* Episodes list */}
+      {episodes && episodes.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-sm font-semibold text-foreground font-['Nunito']">Episódios</p>
+          {episodes.map((ep: any) => {
+            const isUnlocked = ep.episode_number <= currentEpisode;
+            return (
+              <div
+                key={ep.id}
+                className={`rounded-xl border p-4 flex items-center gap-3 transition-all ${
+                  isUnlocked
+                    ? "border-border bg-card hover:shadow-sm cursor-pointer"
+                    : "border-border/50 bg-muted/30 opacity-60"
+                }`}
+                onClick={() => {
+                  if (isUnlocked) {
+                    window.open(`/episodio/${ep.id}?u=${userId}`, "_blank");
+                  }
+                }}
+              >
+                <div
+                  className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                    isUnlocked ? "bg-accent/10 text-accent" : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  {isUnlocked ? (
+                    <CheckCircle2 size={16} />
+                  ) : (
+                    <Lock size={14} />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground font-['Nunito'] truncate">
+                    {ep.episode_number}. {ep.title}
+                  </p>
+                  {ep.stage_title && (
+                    <p className="text-xs text-muted-foreground font-['Nunito']">
+                      {ep.stage_title}
+                    </p>
+                  )}
+                </div>
+                {isUnlocked && (
+                  <Play size={14} className="text-accent shrink-0" />
+                )}
+              </div>
+            );
+          })}
+        </div>
       )}
-
-      <div className="space-y-3">
-        {journeys?.map((journey) => {
-          const isCurrent = journey.id === currentJourneyId;
-          return (
-            <div
-              key={journey.id}
-              className={`rounded-xl border p-4 ${
-                isCurrent ? "border-accent/30 bg-accent/5" : "border-border bg-card"
-              }`}
-            >
-              <p className="font-['Fraunces'] font-semibold text-foreground">{journey.title}</p>
-              {journey.description && (
-                <p className="text-sm text-muted-foreground font-['Nunito'] mt-1 line-clamp-2">
-                  {journey.description}
-                </p>
-              )}
-            </div>
-          );
-        })}
-      </div>
     </div>
   );
 }
@@ -237,17 +315,15 @@ function ResumosTab({ userId }: { userId: string }) {
     enabled: !!userId,
   });
 
-  if (isLoading) return <p className="text-muted-foreground font-['Nunito']">Carregando...</p>;
+  if (isLoading) return <PortalLoadingInline />;
 
   if (!reports || reports.length === 0) {
     return (
-      <div className="text-center py-12 space-y-3">
-        <p className="text-4xl">📊</p>
-        <p className="text-foreground font-['Fraunces'] text-lg font-semibold">Nenhum resumo ainda</p>
-        <p className="text-muted-foreground font-['Nunito'] text-sm">
-          Seu primeiro resumo mensal aparecerá aqui em breve!
-        </p>
-      </div>
+      <EmptyState
+        icon={BarChart3}
+        title="Nenhum resumo ainda"
+        description="Seu primeiro resumo mensal aparecerá aqui em breve!"
+      />
     );
   }
 
@@ -257,49 +333,44 @@ function ResumosTab({ userId }: { userId: string }) {
   ];
 
   return (
-    <div className="space-y-4">
-      <h2 className="font-['Fraunces'] text-xl font-semibold text-foreground">Resumos Mensais</h2>
+    <div className="space-y-5">
+      <SectionHeader icon={BarChart3} title="Resumos Mensais" />
       {reports.map((report: any) => {
         const reportDate = new Date(report.report_month + "T12:00:00");
         const monthLabel = `${monthNames[reportDate.getMonth()]} ${reportDate.getFullYear()}`;
         const metrics = report.metrics_json || {};
 
         return (
-          <div key={report.id} className="rounded-xl border border-border bg-card p-5 space-y-4">
+          <div key={report.id} className="rounded-2xl border border-border bg-card p-5 space-y-4 shadow-sm">
             <div className="flex items-center justify-between">
               <h3 className="font-['Fraunces'] font-semibold text-foreground text-lg">{monthLabel}</h3>
-              <span className="text-accent text-lg">📊</span>
+              <Calendar size={18} className="text-accent" />
             </div>
 
-            {/* Metrics grid */}
             <div className="grid grid-cols-2 gap-3">
               {metrics.totalMessages != null && (
-                <MetricCard emoji="💬" label="Mensagens" value={metrics.totalMessages} />
+                <MetricCard icon={MessageCircle} label="Mensagens" value={metrics.totalMessages} />
               )}
               {metrics.insightsCount != null && (
-                <MetricCard emoji="🧠" label="Insights" value={metrics.insightsCount} />
+                <MetricCard icon={Brain} label="Insights" value={metrics.insightsCount} />
               )}
               {metrics.sessionsCount != null && (
-                <MetricCard emoji="📅" label="Sessões" value={metrics.sessionsCount} />
+                <MetricCard icon={Calendar} label="Sessões" value={metrics.sessionsCount} />
               )}
               {metrics.journeysCompleted != null && (
-                <MetricCard emoji="✅" label="Jornadas" value={metrics.journeysCompleted} />
+                <MetricCard icon={CheckCircle2} label="Jornadas" value={metrics.journeysCompleted} />
               )}
             </div>
 
-            {/* Journey progress */}
             {metrics.journeyTitle && (
-              <div className="bg-accent/5 rounded-lg p-3">
+              <div className="bg-accent/5 rounded-xl p-3">
                 <p className="text-xs text-accent font-semibold font-['Nunito'] mb-1">Jornada</p>
                 <p className="text-sm text-foreground font-['Nunito']">{metrics.journeyTitle}</p>
                 <div className="flex items-center gap-2 mt-2">
-                  <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden">
+                  <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
                     <div
-                      className="h-full rounded-full"
-                      style={{
-                        width: `${((metrics.currentEpisode || 0) / 8) * 100}%`,
-                        background: "linear-gradient(135deg, hsl(270 35% 70%), hsl(270 40% 80%))",
-                      }}
+                      className="h-full rounded-full bg-accent"
+                      style={{ width: `${((metrics.currentEpisode || 0) / 8) * 100}%` }}
                     />
                   </div>
                   <span className="text-xs text-muted-foreground font-['Nunito']">
@@ -309,10 +380,12 @@ function ResumosTab({ userId }: { userId: string }) {
               </div>
             )}
 
-            {/* AI Analysis */}
             {report.analysis_text && (
               <div>
-                <p className="text-xs text-accent font-semibold font-['Nunito'] mb-1">🌱 Sua Evolução</p>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <TrendingUp size={14} className="text-accent" />
+                  <p className="text-xs text-accent font-semibold font-['Nunito']">Sua Evolução</p>
+                </div>
                 <p className="text-sm text-foreground/90 font-['Nunito'] leading-relaxed">
                   {report.analysis_text}
                 </p>
@@ -325,20 +398,18 @@ function ResumosTab({ userId }: { userId: string }) {
   );
 }
 
-function MeditacoesTab({ userId }: { userId: string }) {
-  const { data: history } = useQuery({
-    queryKey: ["portal-meditation-history", userId],
+function MeditacoesTab() {
+  const { data: meditations, isLoading } = useQuery({
+    queryKey: ["portal-all-meditations"],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("user_meditation_history")
-        .select("meditation_id, sent_at, meditations(title, category, duration_seconds, description)")
-        .eq("user_id", userId)
-        .order("sent_at", { ascending: false })
-        .limit(20);
+        .from("meditations")
+        .select("id, title, category, duration_seconds, description")
+        .eq("is_active", true)
+        .order("category");
       if (error) throw error;
       return data;
     },
-    enabled: !!userId,
   });
 
   const { data: audios } = useQuery({
@@ -346,55 +417,88 @@ function MeditacoesTab({ userId }: { userId: string }) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("meditation_audios")
-        .select("meditation_id, public_url, duration_seconds");
+        .select("meditation_id, public_url");
       if (error) throw error;
       return data;
     },
   });
 
+  if (isLoading) return <PortalLoadingInline />;
+
   const audioMap = new Map(audios?.map((a: any) => [a.meditation_id, a.public_url]) || []);
 
-  if (!history || history.length === 0) {
+  // Only show meditations that have audio
+  const withAudio = meditations?.filter((m: any) => audioMap.has(m.id)) || [];
+
+  if (withAudio.length === 0) {
     return (
-      <div className="text-center py-12 space-y-3">
-        <p className="text-4xl">🧘</p>
-        <p className="text-foreground font-['Fraunces'] text-lg font-semibold">Nenhuma meditação ainda</p>
-        <p className="text-muted-foreground font-['Nunito'] text-sm">
-          Peça uma meditação à Aura no WhatsApp e ela aparecerá aqui!
-        </p>
-      </div>
+      <EmptyState
+        icon={Headphones}
+        title="Nenhuma meditação disponível"
+        description="As meditações estarão disponíveis em breve!"
+      />
     );
   }
 
-  return (
-    <div className="space-y-4">
-      <h2 className="font-['Fraunces'] text-xl font-semibold text-foreground">Suas Meditações</h2>
-      {history.map((item: any, i: number) => {
-        const meditation = item.meditations;
-        if (!meditation) return null;
-        const audioUrl = audioMap.get(item.meditation_id);
-        const sentDate = new Date(item.sent_at);
+  // Group by category
+  const grouped = withAudio.reduce((acc: Record<string, any[]>, m: any) => {
+    const cat = m.category || "Geral";
+    if (!acc[cat]) acc[cat] = [];
+    acc[cat].push(m);
+    return acc;
+  }, {});
 
-        return (
-          <div key={i} className="rounded-xl border border-border bg-card p-4 space-y-3">
-            <div>
-              <p className="font-['Fraunces'] font-semibold text-foreground">{meditation.title}</p>
-              <p className="text-xs text-muted-foreground font-['Nunito'] mt-0.5">
-                {meditation.category} · {Math.round(meditation.duration_seconds / 60)} min ·{" "}
-                {sentDate.toLocaleDateString("pt-BR")}
-              </p>
-            </div>
-            {meditation.description && (
-              <p className="text-sm text-foreground/80 font-['Nunito']">{meditation.description}</p>
-            )}
-            {audioUrl && (
-              <audio controls className="w-full h-10" preload="none">
-                <source src={audioUrl} type="audio/mpeg" />
-              </audio>
-            )}
-          </div>
-        );
-      })}
+  const categoryLabels: Record<string, string> = {
+    ansiedade: "Ansiedade",
+    sono: "Sono",
+    foco: "Foco",
+    estresse: "Estresse",
+    autocompaixao: "Autocompaixão",
+    geral: "Geral",
+  };
+
+  return (
+    <div className="space-y-6">
+      <SectionHeader icon={Headphones} title="Meditações" />
+      {Object.entries(grouped).map(([category, items]) => (
+        <div key={category} className="space-y-3">
+          <p className="text-sm font-semibold text-foreground font-['Nunito'] capitalize">
+            {categoryLabels[category.toLowerCase()] || category}
+          </p>
+          {(items as any[]).map((meditation: any) => {
+            const audioUrl = audioMap.get(meditation.id);
+            return (
+              <div
+                key={meditation.id}
+                className="rounded-2xl border border-border bg-card p-4 space-y-3 shadow-sm"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="bg-accent/10 rounded-full p-2 mt-0.5 shrink-0">
+                    <Headphones size={16} className="text-accent" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-['Fraunces'] font-semibold text-foreground">{meditation.title}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <Clock size={12} className="text-muted-foreground" />
+                      <p className="text-xs text-muted-foreground font-['Nunito']">
+                        {Math.round(meditation.duration_seconds / 60)} min
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                {meditation.description && (
+                  <p className="text-sm text-foreground/80 font-['Nunito']">{meditation.description}</p>
+                )}
+                {audioUrl && (
+                  <audio controls className="w-full h-10" preload="none">
+                    <source src={audioUrl} type="audio/mpeg" />
+                  </audio>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ))}
     </div>
   );
 }
@@ -415,23 +519,21 @@ function CapsulasTab({ userId }: { userId: string }) {
     enabled: !!userId,
   });
 
-  if (isLoading) return <p className="text-muted-foreground font-['Nunito']">Carregando...</p>;
+  if (isLoading) return <PortalLoadingInline />;
 
   if (!capsules || capsules.length === 0) {
     return (
-      <div className="text-center py-12 space-y-3">
-        <p className="text-4xl">💜</p>
-        <p className="text-foreground font-['Fraunces'] text-lg font-semibold">Nenhuma cápsula ainda</p>
-        <p className="text-muted-foreground font-['Nunito'] text-sm">
-          Grave uma cápsula do tempo com a Aura e ela aparecerá aqui quando chegar a hora!
-        </p>
-      </div>
+      <EmptyState
+        icon={Heart}
+        title="Nenhuma cápsula ainda"
+        description="Grave uma cápsula do tempo com a Aura e ela aparecerá aqui quando chegar a hora!"
+      />
     );
   }
 
   return (
-    <div className="space-y-4">
-      <h2 className="font-['Fraunces'] text-xl font-semibold text-foreground">Cápsulas do Tempo</h2>
+    <div className="space-y-5">
+      <SectionHeader icon={Heart} title="Cápsulas do Tempo" />
       {capsules.map((capsule: any) => {
         const deliveredDate = capsule.delivered_at
           ? new Date(capsule.delivered_at).toLocaleDateString("pt-BR")
@@ -439,7 +541,7 @@ function CapsulasTab({ userId }: { userId: string }) {
         const createdDate = new Date(capsule.created_at).toLocaleDateString("pt-BR");
 
         return (
-          <div key={capsule.id} className="rounded-xl border border-border bg-card p-5 space-y-3">
+          <div key={capsule.id} className="rounded-2xl border border-border bg-card p-5 space-y-3 shadow-sm">
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-['Fraunces'] font-semibold text-foreground">
@@ -449,11 +551,13 @@ function CapsulasTab({ userId }: { userId: string }) {
                   Entregue em {deliveredDate}
                 </p>
               </div>
-              <span className="text-2xl">💌</span>
+              <div className="bg-accent/10 rounded-full p-2">
+                <Mail size={18} className="text-accent" />
+              </div>
             </div>
 
             {capsule.context_message && (
-              <p className="text-sm text-foreground/80 font-['Nunito'] italic">
+              <p className="text-sm text-foreground/80 font-['Nunito'] italic border-l-2 border-accent/30 pl-3">
                 "{capsule.context_message}"
               </p>
             )}
@@ -484,12 +588,35 @@ function CapsulasTab({ userId }: { userId: string }) {
 
 // ==================== SHARED COMPONENTS ====================
 
-function MetricCard({ emoji, label, value }: { emoji: string; label: string; value: number }) {
+function SectionHeader({ icon: Icon, title }: { icon: React.ElementType; title: string }) {
   return (
-    <div className="bg-muted/50 rounded-lg p-3 text-center">
-      <p className="text-lg">{emoji}</p>
+    <div className="flex items-center gap-2">
+      <Icon size={20} className="text-accent" />
+      <h2 className="font-['Fraunces'] text-xl font-semibold text-foreground">{title}</h2>
+    </div>
+  );
+}
+
+function MetricCard({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: number }) {
+  return (
+    <div className="bg-muted/50 rounded-xl p-3 text-center">
+      <Icon size={18} className="text-accent mx-auto mb-1" />
       <p className="text-xl font-semibold text-foreground font-['Fraunces']">{value}</p>
       <p className="text-xs text-muted-foreground font-['Nunito']">{label}</p>
+    </div>
+  );
+}
+
+function EmptyState({ icon: Icon, title, description }: { icon: React.ElementType; title: string; description: string }) {
+  return (
+    <div className="text-center py-16 space-y-4">
+      <div className="bg-accent/10 rounded-full p-4 w-16 h-16 mx-auto flex items-center justify-center">
+        <Icon size={28} className="text-accent" />
+      </div>
+      <p className="text-foreground font-['Fraunces'] text-lg font-semibold">{title}</p>
+      <p className="text-muted-foreground font-['Nunito'] text-sm max-w-xs mx-auto">
+        {description}
+      </p>
     </div>
   );
 }
@@ -502,15 +629,21 @@ function PortalLoading() {
   );
 }
 
+function PortalLoadingInline() {
+  return <p className="text-muted-foreground font-['Nunito'] animate-pulse py-8 text-center">Carregando...</p>;
+}
+
 function PortalError({ message }: { message: string }) {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <div className="py-4 px-6 flex justify-center border-b border-border/50">
-        <img src={logoOlaAura} alt="Olá AURA" className="h-16 w-auto" />
+        <img src={logoOlaAura} alt="Olá AURA" className="h-14 w-auto" />
       </div>
       <div className="flex-1 flex items-center justify-center px-6">
         <div className="text-center max-w-md">
-          <p className="text-4xl mb-4">🔒</p>
+          <div className="bg-muted rounded-full p-4 w-16 h-16 mx-auto flex items-center justify-center mb-4">
+            <Lock size={28} className="text-muted-foreground" />
+          </div>
           <h1 className="text-xl font-semibold text-foreground mb-2 font-['Fraunces']">
             Acesso não autorizado
           </h1>
