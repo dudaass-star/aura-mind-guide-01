@@ -1,6 +1,7 @@
 import { Helmet } from "react-helmet-async";
 import { useLocation, Link } from "react-router-dom";
-import { CheckCircle, Smartphone, Sparkles } from "lucide-react";
+import { CheckCircle, Smartphone, Sparkles, MessageSquare } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
 
 const ThankYou = () => {
@@ -83,6 +84,19 @@ const ThankYou = () => {
             </div>
             <p className="text-muted-foreground text-center">
               A AURA vai te mandar uma mensagem no WhatsApp em instantes para iniciar sua jornada.
+            </p>
+          </div>
+
+          {/* WhatsApp CTA */}
+          <div className="mt-6 animate-fade-up delay-250">
+            <a href="https://wa.me/16625255005?text=Oi%20AURA" target="_blank" rel="noopener noreferrer">
+              <Button variant="whatsapp" size="lg" className="gap-2 w-full sm:w-auto">
+                <MessageSquare className="w-5 h-5" />
+                Chamar a AURA no WhatsApp
+              </Button>
+            </a>
+            <p className="text-xs text-muted-foreground mt-2">
+              Ou, se preferir, toque aqui para iniciar a conversa agora mesmo.
             </p>
           </div>
 

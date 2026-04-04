@@ -11,8 +11,10 @@ export interface TemplateEntry {
 
 import { template as dunningPaymentFailed } from './dunning-payment-failed.tsx'
 import { template as checkoutRecovery } from './checkout-recovery.tsx'
+import { template as welcome } from './welcome.tsx'
 
 export const TEMPLATES: Record<string, TemplateEntry> = {
   'dunning-payment-failed': dunningPaymentFailed,
   'checkout-recovery': checkoutRecovery,
+  'welcome': welcome,
 }
