@@ -25,6 +25,7 @@ import UserGuide from "./pages/UserGuide";
 import Episode from "./pages/Episode";
 import JourneyComplete from "./pages/JourneyComplete";
 import Unsubscribe from "./pages/Unsubscribe";
+import UserPortal from "./pages/UserPortal";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
