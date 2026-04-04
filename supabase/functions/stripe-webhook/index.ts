@@ -306,14 +306,25 @@ Deno.serve(async (req) => {
             console.warn('⚠️ Portal token creation failed (non-blocking):', tokenErr);
           }
 
+          // Fetch portal token for welcome message
+          let portalLinkTrial = '';
+          try {
+            const { data: tokenData } = await supabase.from('user_portal_tokens')
+              .select('token').eq('user_id', profileUserId).single();
+            if (tokenData?.token) {
+              portalLinkTrial = `https://olaaura.com.br/meu-espaco?t=${tokenData.token}`;
+            }
+          } catch { /* non-blocking */ }
+          const portalLineTrial = portalLinkTrial ? `\n\nAcesse seu painel pessoal: ${portalLinkTrial} ✨` : '';
+
           // Send welcome message
           let welcomeMessage: string;
           if (isReturning) {
-            welcomeMessage = `Oi, ${customerName}! 💜\n\nQue bom ter você de volta! 🌟\n\nVocê escolheu o plano ${planName}.\n\nVamos retomar de onde paramos?`;
+            welcomeMessage = `Oi, ${customerName}! 💜\n\nQue bom ter você de volta! 🌟\n\nVocê escolheu o plano ${planName}.${portalLineTrial}\n\nVamos retomar de onde paramos?`;
           } else if (isUpgrade) {
-            welcomeMessage = `Oi, ${customerName}! 💜 Que notícia boa!\n\nAgora somos oficiais. Você escolheu o plano ${planName}.\n\nVamos continuar de onde paramos?`;
+            welcomeMessage = `Oi, ${customerName}! 💜 Que notícia boa!\n\nAgora somos oficiais. Você escolheu o plano ${planName}.${portalLineTrial}\n\nVamos continuar de onde paramos?`;
           } else {
-            welcomeMessage = `Oi, ${customerName}! 🌟 Que bom te receber por aqui.\n\nEu sou a AURA — e vou ficar com você nessa jornada.\n\nVocê escolheu o plano ${planName}.\n\nComigo, você pode falar com liberdade: sem julgamento, no seu ritmo.\n\nMe diz: como você está hoje?`;
+            welcomeMessage = `Oi, ${customerName}! 🌟 Que bom te receber por aqui.\n\nEu sou a AURA — e vou ficar com você nessa jornada.\n\nVocê escolheu o plano ${planName}.\n\nComigo, você pode falar com liberdade: sem julgamento, no seu ritmo.${portalLineTrial}\n\nMe diz: como você está hoje?`;
           }
 
           try {

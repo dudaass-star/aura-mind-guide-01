@@ -142,8 +142,19 @@ Deno.serve(async (req) => {
     // Lead CAPI event removed — trial flow now goes directly to /checkout (Stripe)
     // The start-trial function is only used as a legacy fallback
 
+    // Fetch portal token for welcome message
+    let portalLink = '';
+    try {
+      const { data: tokenData } = await supabase.from('user_portal_tokens')
+        .select('token').eq('user_id', userId).single();
+      if (tokenData?.token) {
+        portalLink = `https://olaaura.com.br/meu-espaco?t=${tokenData.token}`;
+      }
+    } catch { /* non-blocking */ }
+
     // Link direto para o guia
     const guideLinkText = 'https://olaaura.com.br/guia';
+    const portalLine = portalLink ? `\n\nAcesse seu painel pessoal: ${portalLink} ✨` : '';
 
     const welcomeMessage = `Oi, ${name.trim()}! 💜
 
@@ -153,7 +164,7 @@ Vou estar com você nessa primeira jornada. Pode falar comigo sobre qualquer coi
 
 Se preferir, pode me mandar áudio também! 🎙️
 
-Dá uma olhada no que você vai ter acesso: ${guideLinkText} ✨
+Dá uma olhada no que você vai ter acesso: ${guideLinkText}${portalLine}
 
 Me conta: como você está se sentindo agora?`;
 

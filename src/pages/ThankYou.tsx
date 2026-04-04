@@ -85,6 +85,9 @@ const ThankYou = () => {
             <p className="text-muted-foreground text-center">
               A AURA vai te mandar uma mensagem no WhatsApp em instantes para iniciar sua jornada.
             </p>
+            <p className="text-muted-foreground/70 text-center text-sm">
+              📊 Você também receberá o link do seu <strong>painel pessoal</strong> — onde poderá acompanhar jornadas, meditações e resumos mensais.
+            </p>
           </div>
 
           {/* WhatsApp CTA */}

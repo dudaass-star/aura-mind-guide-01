@@ -9,9 +9,10 @@ const WHATSAPP_LINK = "https://wa.me/16625255005?text=Oi%20AURA"
 
 interface WelcomeProps {
   name?: string
+  portalUrl?: string
 }
 
-const WelcomeEmail = ({ name }: WelcomeProps) => {
+const WelcomeEmail = ({ name, portalUrl }: WelcomeProps) => {
   const firstName = name?.split(' ')[0]
   return (
     <Html lang="pt-BR" dir="ltr">
@@ -36,6 +37,23 @@ const WelcomeEmail = ({ name }: WelcomeProps) => {
               💬 Chamar a AURA no WhatsApp
             </Button>
           </Section>
+
+          {portalUrl && (
+            <>
+              <Hr style={hr} />
+              <Heading as="h2" style={h2}>
+                🏠 Seu Espaço Pessoal
+              </Heading>
+              <Text style={tipText}>
+                Acesse seu painel para acompanhar jornadas, meditações e resumos mensais.
+              </Text>
+              <Section style={ctaSection}>
+                <Button style={portalButton} href={portalUrl}>
+                  Acessar Meu Espaço
+                </Button>
+              </Section>
+            </>
+          )}
 
           <Hr style={hr} />
 
@@ -71,7 +89,7 @@ export const template = {
   component: WelcomeEmail,
   subject: 'Bem-vindo à AURA — comece sua jornada agora 💜',
   displayName: 'Boas-vindas',
-  previewData: { name: 'Maria' },
+  previewData: { name: 'Maria', portalUrl: 'https://olaaura.com.br/meu-espaco?t=example-token' },
 } satisfies TemplateEntry
 
 const main = { backgroundColor: '#ffffff', fontFamily: "'Nunito', Arial, sans-serif" }
@@ -89,6 +107,16 @@ const whatsappButton = {
   fontSize: '16px',
   fontWeight: 'bold',
   padding: '14px 32px',
+  borderRadius: '8px',
+  textDecoration: 'none',
+  display: 'inline-block',
+}
+const portalButton = {
+  backgroundColor: '#5a8a6e',
+  color: '#ffffff',
+  fontSize: '15px',
+  fontWeight: 'bold',
+  padding: '12px 28px',
   borderRadius: '8px',
   textDecoration: 'none',
   display: 'inline-block',
