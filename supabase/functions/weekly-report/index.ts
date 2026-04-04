@@ -441,13 +441,39 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // Send via WhatsApp
+        // Save report to monthly_reports table
+        const reportMonth = new Date();
+        reportMonth.setDate(1); // first of current month
+        const reportMonthStr = reportMonth.toISOString().split('T')[0];
+
+        await supabase.from('monthly_reports').upsert({
+          user_id: profile.user_id,
+          report_month: reportMonthStr,
+          metrics_json: metrics,
+          analysis_text: evolutionAnalysis || null,
+          report_html: report,
+        }, { onConflict: 'user_id,report_month' });
+
+        // Get portal token and create short link
+        const portalToken = await getOrCreatePortalToken(supabase, profile.user_id);
+        const portalUrl = portalToken
+          ? `https://olaaura.com.br/meu-espaco?t=${portalToken}&tab=resumos`
+          : 'https://olaaura.com.br';
+        
+        const shortLink = await createShortLink(supabaseUrl, supabaseServiceKey, portalUrl, profile.phone) || portalUrl;
+
+        // Build teaser message
+        const monthNames = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+        const currentMonth = monthNames[new Date().getMonth()];
+        const teaser = `Oi, ${userName}! Seu resumo de ${currentMonth} está pronto 📊✨\n\nVeja aqui: ${shortLink}\n\n— Aura 💜`;
+
+        // Send teaser via WhatsApp
         const zapiConfig = await getInstanceConfigForUser(supabase, profile.user_id);
         const cleanPhone = cleanPhoneNumber(profile.phone);
-        const result = await sendProactive(cleanPhone, report, 'weekly_report', profile.user_id);
+        const result = await sendProactive(cleanPhone, teaser, 'weekly_report', profile.user_id);
 
         if (result.success) {
-          console.log(`✅ Report sent to ${profile.name} (${profile.phone})`);
+          console.log(`✅ Report teaser sent to ${profile.name} (${profile.phone})`);
           sentCount++;
 
           // Save message and mark as sent (dedup)
@@ -455,7 +481,7 @@ Deno.serve(async (req) => {
             supabase.from('messages').insert({
               user_id: profile.user_id,
               role: 'assistant',
-              content: report,
+              content: teaser,
             }),
             supabase.from('weekly_plans').upsert({
               user_id: profile.user_id,
@@ -464,7 +490,7 @@ Deno.serve(async (req) => {
             }, { onConflict: 'user_id,week_start' }),
           ]);
         } else {
-          console.error(`❌ Failed to send report to ${profile.phone}: ${result.error}`);
+          console.error(`❌ Failed to send report teaser to ${profile.phone}: ${result.error}`);
         }
 
         // Short delay between sends
