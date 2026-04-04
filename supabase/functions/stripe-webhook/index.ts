@@ -641,6 +641,23 @@ Me diz: como você está hoje?`;
         }
       }
 
+      // Send welcome email as backup
+      if (customerEmail) {
+        try {
+          await supabase.functions.invoke('send-transactional-email', {
+            body: {
+              templateName: 'welcome',
+              recipientEmail: customerEmail,
+              idempotencyKey: `welcome-${session.id}`,
+              templateData: { name: customerName, portalUrl: portalLink || undefined },
+            },
+          });
+          console.log('✅ Welcome email enqueued (paid flow)');
+        } catch (emailErr) {
+          console.warn('⚠️ Welcome email failed (non-blocking):', emailErr);
+        }
+      }
+
       // Send CAPI Purchase event (non-blocking)
       try {
         const amountTotal = session.amount_total ? session.amount_total / 100 : 0;
