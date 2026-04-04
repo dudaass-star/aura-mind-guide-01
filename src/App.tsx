@@ -20,6 +20,7 @@ import AdminSettings from "./pages/AdminSettings";
 import AdminEngagement from "./pages/AdminEngagement";
 import AdminMessages from "./pages/AdminMessages";
 import AdminTemplates from "./pages/AdminTemplates";
+import AdminEmails from "./pages/AdminEmails";
 import UserGuide from "./pages/UserGuide";
 import Episode from "./pages/Episode";
 import JourneyComplete from "./pages/JourneyComplete";
