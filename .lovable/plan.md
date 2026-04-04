@@ -1,51 +1,54 @@
 
 
-## Plano: Histórico de jornadas completadas
+## Plano: Reenvio de reconexão para trials com cartão cadastrado
 
-### Problema
+### Situação atual
 
-Não existe registro de *quais* jornadas o usuário completou — apenas um contador (`journeys_completed`). Por isso o portal não consegue mostrar jornadas passadas.
+- O template `aura_reconnect_v2` (ContentSid: `HX824b3f789beb78ace2a1f38d8527c718`) esta **ativo** e funciona
+- A função `instance-reconnect-notify` ja usa `sendProactive` com `templateVariables: [nome]` (variavel curta) -- correto
+- O problema anterior era enviar texto longo como variavel; isso ja foi corrigido no codigo
 
-### Solução
+### O que precisa ser feito
 
-1. **Criar tabela `user_journey_history`** para armazenar cada jornada completada
-2. **Registrar conclusões** no momento em que acontecem (a partir de agora)
-3. **Mostrar no portal** as jornadas com histórico, com todos os episódios acessíveis
+Criar uma edge function `reengagement-blast` que:
 
-### Mudanças
+1. Busca perfis com `status IN ('active', 'trial')`, telefone valido, e `last_user_message_at IS NULL` (nunca falaram com o numero novo)
+2. **Cruza com Stripe** para garantir que so envia para quem tem assinatura `trialing` ou `active` (trial com cartao)
+3. Exclui Admin e Eduardo (ja ativos)
+4. Envia via `sendProactive` com categoria `reconnect` e `templateVariables: [primeiro_nome]`
+5. Anti-burst: 500ms entre envios
+6. Suporta `dry_run: true` para validar a lista antes de enviar
 
-| Componente | Ação |
+### Por que nao reutilizar `instance-reconnect-notify`
+
+- Filtra por `whatsapp_instance_id IS NOT NULL` (exclui ~15 usuarios)
+- Nao verifica assinatura no Stripe
+- Nao tem filtro por `last_user_message_at`
+- Nao tem modo `dry_run`
+
+### Mudancas
+
+| Componente | Acao |
 |---|---|
-| Migration SQL | Criar tabela `user_journey_history` (user_id, journey_id, completed_at) com RLS para portal tokens |
-| `supabase/functions/periodic-content/index.ts` | No trecho que completa a jornada (~linha 210), inserir registro na `user_journey_history` |
-| `supabase/functions/choose-next-journey/index.ts` | Verificar se já insere histórico (provavelmente não) — adicionar insert se necessário |
-| `src/pages/UserPortal.tsx` | JornadasTab: buscar `user_journey_history` do usuário, mostrar jornadas completadas com todos episódios desbloqueados + jornada atual com progresso parcial |
+| `supabase/functions/reengagement-blast/index.ts` | Nova edge function |
+| `supabase/config.toml` | Adicionar `verify_jwt = false` |
 
-### Detalhes técnicos
+### Fluxo tecnico
 
-**Tabela:**
-```sql
-CREATE TABLE public.user_journey_history (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL,
-  journey_id text NOT NULL,
-  completed_at timestamptz NOT NULL DEFAULT now()
-);
-ALTER TABLE public.user_journey_history ENABLE ROW LEVEL SECURITY;
--- Portal token holders can read
-CREATE POLICY "Portal token holders can read journey history"
-  ON public.user_journey_history FOR SELECT
-  USING (EXISTS (SELECT 1 FROM user_portal_tokens WHERE user_portal_tokens.user_id = user_journey_history.user_id));
--- Service role full access
-CREATE POLICY "Service role full access"
-  ON public.user_journey_history FOR ALL
-  USING (auth.role() = 'service_role')
-  WITH CHECK (auth.role() = 'service_role');
+```text
+1. Busca profiles (active/trial, phone NOT NULL, last_user_message_at IS NULL)
+2. Exclui Admin (phone = 'test-admin')
+3. Para cada usuario:
+   a. Busca customer no Stripe pelo phone/email
+   b. Verifica se tem subscription trialing ou active
+   c. Se sim: sendProactive(phone, msg, 'reconnect', userId, undefined, undefined, [nome])
+   d. Se nao: skip (trial legado sem cartao)
+4. Retorna relatorio: enviados, pulados (sem Stripe), erros
 ```
 
-**Portal (JornadasTab):**
-- Buscar `user_journey_history` WHERE user_id = userId
-- Jornadas com registro no histórico: mostrar como "Completada" com todos episódios clicáveis
-- Jornada atual (`current_journey_id`): mostrar com progresso parcial (episódios até `current_episode` desbloqueados)
-- Jornadas sem histórico e que não são a atual: não mostrar
+### Fluxo de uso
+
+1. Deploy da funcao
+2. Chamar com `{ "dry_run": true }` para ver a lista
+3. Confirmar e chamar com `{ "dry_run": false }` para enviar
 
