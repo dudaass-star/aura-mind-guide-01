@@ -555,21 +555,37 @@ Deno.serve(async (req) => {
         profileUserId = existingProfile?.user_id || crypto.randomUUID();
       }
 
+      // Generate portal token for paid users
+      let portalLink = '';
+      try {
+        const { data: tokenData } = await supabase.from('user_portal_tokens').upsert(
+          { user_id: profileUserId },
+          { onConflict: 'user_id' }
+        ).select('token').single();
+        if (tokenData?.token) {
+          portalLink = `https://olaaura.com.br/meu-espaco?t=${tokenData.token}`;
+          console.log('✅ Portal token created for paid user');
+        }
+      } catch (tokenErr) {
+        console.warn('⚠️ Portal token creation failed (non-blocking):', tokenErr);
+      }
+
       // Build message based on user scenario
       let welcomeMessage: string;
+      const portalLine = portalLink ? `\n\nAcesse seu painel pessoal: ${portalLink} ✨` : '';
 
       if (isReturning) {
         welcomeMessage = `Oi, ${customerName}! 💜
 
 Que bom ter você de volta! 🌟
 
-Você escolheu o plano ${planName}.
+Você escolheu o plano ${planName}.${portalLine}
 
 Vamos retomar de onde paramos?`;
       } else if (isUpgrade) {
         welcomeMessage = `Oi, ${customerName}! 💜 Que notícia boa!
 
-Agora somos oficiais. Você escolheu o plano ${planName}.
+Agora somos oficiais. Você escolheu o plano ${planName}.${portalLine}
 
 Vamos continuar de onde paramos?`;
       } else {
@@ -579,7 +595,7 @@ Eu sou a AURA — e vou ficar com você nessa jornada.
 
 Você escolheu o plano ${planName}.
 
-Comigo, você pode falar com liberdade: sem julgamento, no seu ritmo.
+Comigo, você pode falar com liberdade: sem julgamento, no seu ritmo.${portalLine}
 
 Me diz: como você está hoje?`;
       }
