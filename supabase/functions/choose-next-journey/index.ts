@@ -61,6 +61,17 @@ serve(async (req) => {
       );
     }
 
+    // Record the previous journey as completed if user had one
+    if (profile.current_journey_id) {
+      await supabase
+        .from('user_journey_history')
+        .insert({
+          user_id: profile.user_id,
+          journey_id: profile.current_journey_id,
+        });
+      console.log(`📜 Recorded journey ${profile.current_journey_id} in history`);
+    }
+
     // Update profile with chosen journey
     const { error: updateError } = await supabase
       .from('profiles')
