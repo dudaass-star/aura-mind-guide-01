@@ -1066,11 +1066,11 @@ Me conta: como você está hoje?`;
               console.warn('⚠️ No email available for dunning, skipping email notification');
             }
 
-            // Step 5: Send WhatsApp notification via access_blocked template
+            // Step 5: Send WhatsApp notification via access_blocked template (with payment link)
             try {
               const accessBlockedNome = userName.split(' ')[0];
-              const accessBlockedMsg = `Oi, ${accessBlockedNome}! Tivemos um probleminha com o seu pagamento. 💜\n\nPara continuar com o nosso acompanhamento, atualize seus dados de pagamento pelo link que enviamos no seu e-mail.\n\nQualquer dúvida, estou aqui!\n\n— Aura`;
-              const whatsResult = await sendProactive(phone!, accessBlockedMsg, 'access_blocked', profile.user_id, undefined, undefined, [accessBlockedNome]);
+              const accessBlockedMsg = `Oi, ${accessBlockedNome}! Tivemos um probleminha com o seu pagamento. 💜\n\nAtualize aqui: ${paymentLink}\n\nQualquer dúvida, estou aqui!\n\n— Aura`;
+              const whatsResult = await sendProactive(phone!, accessBlockedMsg, 'access_blocked', profile.user_id, undefined, undefined, [accessBlockedNome, paymentLink]);
               if (whatsResult.success) {
                 dunningRecord.whatsapp_sent = true;
                 console.log('✅ Access blocked WhatsApp sent via', whatsResult.provider);
