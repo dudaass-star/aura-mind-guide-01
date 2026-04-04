@@ -5,7 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, Save, Brain, Mic } from 'lucide-react';
+import { ArrowLeft, Save, Brain, Mic, Mail } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const AI_MODELS = [
@@ -137,6 +137,21 @@ export default function AdminSettings() {
         </div>
 
         <div className="space-y-6">
+          <Card className="cursor-pointer hover:border-primary/50 transition-colors" onClick={() => navigate('/admin/emails')}>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Mail className="h-5 w-5 text-primary" />
+                  <CardTitle>Templates de E-mail</CardTitle>
+                </div>
+                <ArrowLeft className="h-4 w-4 rotate-180 text-muted-foreground" />
+              </div>
+              <CardDescription>
+                Visualize todos os templates de e-mail transacional — veja exatamente como cada e-mail chega na caixa do usuário.
+              </CardDescription>
+            </CardHeader>
+          </Card>
+
           <Card>
             <CardHeader>
               <div className="flex items-center gap-2">

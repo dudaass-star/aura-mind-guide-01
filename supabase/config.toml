@@ -147,3 +147,6 @@ verify_jwt = false
 
 [functions.handle-email-suppression]
 verify_jwt = false
+
+[functions.admin-preview-emails]
+verify_jwt = false
