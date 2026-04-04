@@ -365,7 +365,7 @@ Deno.serve(async (req) => {
                   templateName: 'welcome',
                   recipientEmail: customerEmail,
                   idempotencyKey: `welcome-${session.id}`,
-                  templateData: { name: customerName },
+                  templateData: { name: customerName, portalUrl: portalLinkTrial || undefined },
                 },
               });
               console.log('✅ Welcome email enqueued');
