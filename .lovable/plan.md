@@ -1,29 +1,30 @@
 
+## Plano: Página Admin para visualizar templates de e-mail
 
-## Plano: Botão WhatsApp nas páginas de confirmação + E-mail de boas-vindas
+### Ideia
+Em vez de abas simples, a melhor experiência é uma página no painel admin com uma **lista lateral dos templates** e um **preview visual do e-mail renderizado** ao lado. Funciona como um "email viewer" — clica no template à esquerda e vê o e-mail completo à direita, exatamente como ele chega na caixa de entrada do usuário.
+
+Com apenas 3 templates hoje, isso é mais limpo que abas e escala melhor quando novos templates forem adicionados.
 
 ### O que será feito
 
-**1. Adicionar botão "Chamar a AURA no WhatsApp" nas páginas de confirmação**
-- **ThankYou.tsx** (`/obrigado`): Adicionar botão WhatsApp logo abaixo do bloco "Fique de olho no seu celular" (mantendo o bloco existente)
-- **TrialStarted.tsx** (`/trial-iniciado`): Adicionar botão WhatsApp logo abaixo do texto "Olha seu WhatsApp" (mantendo o texto existente)
-- Botão usa `variant="whatsapp"` com link `https://wa.me/16625255005?text=Oi%20AURA`
-- Abre em nova aba (`target="_blank"`)
+**1. Nova edge function `admin-preview-emails`**
+- Valida que o chamador é admin (JWT + verificação via `has_role`)
+- Renderiza todos os templates registrados com seus `previewData`
+- Retorna JSON com nome, assunto, displayName e HTML renderizado de cada template
 
-**2. Criar template de e-mail de boas-vindas**
-- Novo arquivo `supabase/functions/_shared/transactional-email-templates/welcome.tsx`
-- Conteúdo espelha as páginas de confirmação: saudação personalizada, dicas de "como aproveitar", e botão verde "Chamar a AURA no WhatsApp" apontando para `https://wa.me/16625255005?text=Oi%20AURA`
-- Registrar no `registry.ts`
+**2. Nova página `/admin/emails`**
+- Protegida por autenticação admin (mesmo padrão das outras páginas admin)
+- Layout: lista de templates à esquerda, preview HTML à direita
+- Cada card na lista mostra: nome do template, assunto, status (renderizado/erro)
+- Ao clicar, exibe o HTML renderizado em um iframe seguro (sandbox)
+- Botão de atualizar para recarregar
 
-**3. Disparar e-mail de boas-vindas no stripe-webhook**
-- Após criar o perfil e enviar a mensagem WhatsApp (linhas ~336), adicionar chamada ao `send-transactional-email` com `templateName: 'welcome'`
-- Usa o e-mail do cliente (`customerEmail`)
-- `idempotencyKey: welcome-${session.id}`
-- `templateData: { name: customerName }`
-- Funciona como reforço — mesmo que o WhatsApp falhe (templates pendentes), o e-mail chega
+**3. Adicionar rota no App.tsx e link no AdminSettings**
+- Nova rota `/admin/emails`
+- Link de acesso na página de configurações admin
 
 ### Detalhes técnicos
-- O e-mail será enviado via infraestrutura transacional já existente (`send-transactional-email` + fila pgmq)
-- O botão WhatsApp no e-mail resolve o problema dos templates pendentes: o usuário inicia a conversa, abrindo a janela de 24h
-- Deploy necessário: `send-transactional-email` (template novo) + `stripe-webhook` (trigger novo)
-
+- A edge function usa `createClient` com o JWT do usuário para verificar a role admin
+- O HTML é exibido via iframe com `srcdoc` (sandbox) para isolamento seguro
+- Reutiliza o registry de templates existente (`TEMPLATES` + `previewData`)
