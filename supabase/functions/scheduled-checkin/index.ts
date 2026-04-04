@@ -112,7 +112,8 @@ Deno.serve(async (req) => {
 
             const zapiConfig = await getInstanceConfigForUser(supabase, profile.user_id);
             const cleanPhone = cleanPhoneNumber(profile.phone);
-            const result = await sendProactive(cleanPhone, message, 'checkin', profile.user_id);
+            const nome = profile.name?.split(' ')[0] || 'você';
+            const result = await sendProactive(cleanPhone, message, 'checkin', profile.user_id, undefined, undefined, [nome]);
 
             if (result.success) {
               console.log(`✅ Check-in sent to ${profile.name} (${profile.phone})`);
