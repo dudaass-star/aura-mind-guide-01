@@ -1,54 +1,53 @@
 
 
-## Plano: Visualizar o Portal + Distribuir o Link do "Meu Espaço"
+## Plano: Redesign do "Meu Espaço" — visual refinado + conteúdo acessível
 
-### Problema atual
+### Resumo
 
-Nenhum token existe no banco — os tokens só são criados para **novos** usuários (via `start-trial` e `stripe-webhook`). Usuários existentes (como você) não têm token gerado.
+Redesign completo da página do portal: remover emojis, melhorar visual com ícones Lucide, e mudar a lógica de dados para mostrar conteúdo acessível (episódios liberados clicáveis, todas as meditações disponíveis com áudio).
 
-### O que fazer
+### Mudanças visuais (todo o arquivo `UserPortal.tsx`)
 
-**1. Gerar tokens para todos os usuários existentes (backfill)**
+1. **Remover todos os emojis** — substituir por ícones Lucide React (`Target`, `BarChart3`, `Headphones`, `Heart`, `Play`, `Lock`, `CheckCircle2`, `Clock`, `MessageCircle`, `Brain`, `Calendar`, `Mail`)
+2. **Tabs** — ícones Lucide ao invés de emojis nas abas
+3. **Cards** — bordas mais suaves, gradientes sutis no header dos cards, sombras leves
+4. **Header/Greeting** — visual mais limpo, sem emoji no "Oi, {nome}"
+5. **Footer** — sem emoji
+6. **Empty states** — ícones Lucide grandes e estilizados ao invés de emojis gigantes
+7. **Audio player** — estilizar com wrapper visual (card com ícone play)
 
-SQL de inserção para criar tokens para todos os perfis que ainda não possuem:
+### Mudanças de lógica/dados
 
-```sql
-INSERT INTO user_portal_tokens (user_id)
-SELECT p.user_id FROM profiles p
-WHERE NOT EXISTS (
-  SELECT 1 FROM user_portal_tokens t WHERE t.user_id = p.user_id
-);
-```
+**Jornadas (tab "Jornadas"):**
+- Mostrar **apenas a jornada atual** do usuário com destaque
+- Para cada episódio (1 a `current_episode`), mostrar card clicável que linka para `/episodio/{episodeId}?u={userId}`
+- Episódios acima de `current_episode` aparecem bloqueados (ícone Lock, opacidade reduzida)
+- Buscar `journey_episodes` filtrado pelo `current_journey_id` do perfil
 
-Após isso, vou buscar o seu token específico e navegar até o portal para você ver como ficou.
+**Meditações (tab "Meditações"):**
+- Ao invés de mostrar só o histórico do usuário, mostrar **todas as meditações ativas** com áudio disponível
+- Agrupar por categoria (Ansiedade, Sono, Foco, etc.)
+- Cada meditação mostra título, duração, descrição e player de áudio inline
+- São apenas 6 meditações com áudio — todas ficam visíveis
 
-**2. Distribuir o link do portal para os usuários**
+**Resumos (tab "Resumos"):**
+- Manter lógica atual (já mostra todos os resumos do usuário)
+- Apenas trocar emojis por ícones Lucide nos MetricCards
 
-Proposta de 3 pontos de distribuição:
+**Cápsulas (tab "Cápsulas"):**
+- Manter lógica atual
+- Trocar emojis por ícones Lucide
 
-| Momento | Como |
-|---------|------|
-| **Página de Obrigado** (`/obrigado`) | Adicionar card com link "Acesse seu Meu Espaço" — mas o token só existe após o `stripe-webhook` processar, então precisaria buscar via phone/localStorage. Alternativa mais simples: mencionar que o link será enviado no WhatsApp. |
-| **Email de boas-vindas** | Incluir botão "Acessar Meu Espaço" no template `welcome.tsx` com o link `olaaura.com.br/meu-espaco?t=TOKEN` |
-| **Welcome no WhatsApp** | Incluir o link do portal na mensagem de boas-vindas (dentro da janela de 24h, texto livre) |
-
-**Recomendação:** O melhor ponto é o **Welcome no WhatsApp** (texto livre, já dentro da janela) + **Email de boas-vindas**. A página de Obrigado pode apenas mencionar "você receberá o link do seu painel pessoal no WhatsApp".
-
-### Sequência
-
-1. Backfill de tokens para usuários existentes
-2. Navegar no portal com seu token para você avaliar
-3. Adicionar link do portal no welcome do WhatsApp (`start-trial` e `stripe-webhook`)
-4. Adicionar link do portal no email de boas-vindas (`welcome.tsx`)
-5. Atualizar página de Obrigado com menção ao "Meu Espaço"
-
-### Arquivos alterados
+### Arquivo alterado
 
 | Arquivo | Ação |
 |---------|------|
-| Inserção SQL (backfill) | Gerar tokens existentes |
-| `supabase/functions/start-trial/index.ts` | Incluir link do portal na welcome message |
-| `supabase/functions/stripe-webhook/index.ts` | Incluir link do portal na welcome message |
-| `supabase/functions/_shared/transactional-email-templates/welcome.tsx` | Adicionar botão "Meu Espaço" |
-| `src/pages/ThankYou.tsx` | Menção ao painel pessoal |
+| `src/pages/UserPortal.tsx` | Rewrite completo — visual + lógica |
+
+### Detalhes técnicos
+
+- Nova query em JornadasTab: buscar `journey_episodes` WHERE `journey_id = current_journey_id` ORDER BY `episode_number`
+- Nova query em MeditacoesTab: buscar `meditations` WHERE `is_active = true` + JOIN com `meditation_audios` para pegar URLs
+- Episódios clicáveis linkam para `/episodio/{episode.id}?u={userId}` (rota já existe)
+- Categorias de meditação mapeadas para labels em português e ícones
 
