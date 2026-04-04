@@ -1,0 +1,83 @@
+/**
+ * Test Twilio WhatsApp send - diagnostic function
+ * Sends a template message directly to verify the gateway account matches.
+ */
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+const GATEWAY_URL = 'https://connector-gateway.lovable.dev/twilio';
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const lovableKey = Deno.env.get('LOVABLE_API_KEY');
+    const twilioKey = Deno.env.get('TWILIO_API_KEY');
+    const fromNumber = Deno.env.get('TWILIO_WHATSAPP_FROM');
+
+    if (!lovableKey || !twilioKey) {
+      return new Response(JSON.stringify({ error: 'Missing API keys' }), {
+        status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    const headers = {
+      'Authorization': `Bearer ${lovableKey}`,
+      'X-Connection-Api-Key': twilioKey,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    };
+
+    // Step 1: Check account info
+    const accountRes = await fetch(`${GATEWAY_URL}/.json`, {
+      headers: {
+        'Authorization': `Bearer ${lovableKey}`,
+        'X-Connection-Api-Key': twilioKey,
+      },
+    });
+    const accountData = await accountRes.json();
+    console.log('🔍 Account info:', JSON.stringify(accountData));
+
+    // Step 2: Try sending a simple template message
+    const to = 'whatsapp:+5551981519708';
+    const from = `whatsapp:+${(fromNumber || '').replace(/\D/g, '')}`;
+
+    console.log(`📨 Attempting send from ${from} to ${to}`);
+
+    // Try with ContentSid for welcome template
+    const body = new URLSearchParams({
+      To: to,
+      From: from,
+      ContentSid: 'HXa5ef9baff62dd1648c8e37f0ca03b054',
+      ContentVariables: JSON.stringify({ "1": "Eduardo, essa é uma mensagem de teste! Tudo funcionando perfeitamente 💜" }),
+    });
+
+    const sendRes = await fetch(`${GATEWAY_URL}/Messages.json`, {
+      method: 'POST',
+      headers,
+      body,
+    });
+
+    const sendData = await sendRes.json();
+    console.log(`📬 Send result [${sendRes.status}]:`, JSON.stringify(sendData));
+
+    return new Response(JSON.stringify({
+      account: accountData,
+      fromNumber: from,
+      sendStatus: sendRes.status,
+      sendResult: sendData,
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : 'Unknown error';
+    return new Response(JSON.stringify({ error: msg }), {
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
+});
