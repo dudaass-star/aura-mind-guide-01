@@ -150,3 +150,6 @@ verify_jwt = false
 
 [functions.admin-preview-emails]
 verify_jwt = false
+
+[functions.reengagement-blast]
+verify_jwt = false
