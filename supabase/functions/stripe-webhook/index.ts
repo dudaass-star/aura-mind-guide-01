@@ -295,6 +295,17 @@ Deno.serve(async (req) => {
             profileUserId = existingProfile?.user_id || crypto.randomUUID();
           }
 
+          // Generate portal token
+          try {
+            await supabase.from('user_portal_tokens').upsert(
+              { user_id: profileUserId },
+              { onConflict: 'user_id' }
+            );
+            console.log('✅ Portal token created');
+          } catch (tokenErr) {
+            console.warn('⚠️ Portal token creation failed (non-blocking):', tokenErr);
+          }
+
           // Send welcome message
           let welcomeMessage: string;
           if (isReturning) {
