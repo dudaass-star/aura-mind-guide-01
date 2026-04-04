@@ -128,6 +128,17 @@ Deno.serve(async (req) => {
 
     console.log('✅ Trial profile created:', profile.id);
 
+    // Generate portal token
+    try {
+      await supabase.from('user_portal_tokens').upsert(
+        { user_id: userId },
+        { onConflict: 'user_id' }
+      );
+      console.log('✅ Portal token created for trial user');
+    } catch (tokenErr) {
+      console.warn('⚠️ Portal token creation failed (non-blocking):', tokenErr);
+    }
+
     // Lead CAPI event removed — trial flow now goes directly to /checkout (Stripe)
     // The start-trial function is only used as a legacy fallback
 

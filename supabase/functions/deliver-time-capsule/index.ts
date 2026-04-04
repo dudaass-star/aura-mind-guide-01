@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { sendMessage, sendAudioUrl, sendProactive } from "../_shared/whatsapp-provider.ts";
+import { sendProactive } from "../_shared/whatsapp-provider.ts";
 import { getInstanceConfigForUser } from "../_shared/instance-helper.ts";
 
 const corsHeaders = {
@@ -11,16 +11,56 @@ function getBrtHour(): number {
   return (new Date().getUTCHours() - 3 + 24) % 24;
 }
 
+async function getOrCreatePortalToken(supabase: any, userId: string): Promise<string | null> {
+  try {
+    const { data: existing } = await supabase
+      .from('user_portal_tokens')
+      .select('token')
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (existing?.token) return existing.token;
+
+    const { data: created } = await supabase
+      .from('user_portal_tokens')
+      .upsert({ user_id: userId }, { onConflict: 'user_id' })
+      .select('token')
+      .single();
+    return created?.token || null;
+  } catch {
+    return null;
+  }
+}
+
+async function createShortLink(supabaseUrl: string, serviceKey: string, url: string, phone?: string): Promise<string | null> {
+  try {
+    const resp = await fetch(`${supabaseUrl}/functions/v1/create-short-link`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${serviceKey}`,
+      },
+      body: JSON.stringify({ url, phone }),
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      return data.shortUrl || null;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Quiet hours guard: no deliveries between 22h and 8h BRT
+    // Quiet hours guard
     const brtHour = getBrtHour();
     if (brtHour < 8 || brtHour >= 22) {
-      console.log(`🌙 Quiet hours (${brtHour}h BRT) - skipping time capsule delivery (will retry next run)`);
+      console.log(`🌙 Quiet hours (${brtHour}h BRT) - skipping time capsule delivery`);
       return new Response(JSON.stringify({ status: 'skipped', reason: 'quiet_hours', brt_hour: brtHour }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -32,7 +72,6 @@ Deno.serve(async (req) => {
 
     console.log('📦 [deliver-time-capsule] Checking for capsules to deliver...');
 
-    // Buscar cápsulas que devem ser entregues
     const { data: capsules, error } = await supabase
       .from('time_capsules')
       .select('*, profiles!inner(phone, name, user_id, status, whatsapp_instance_id)')
@@ -66,46 +105,40 @@ Deno.serve(async (req) => {
         const instanceConfig = await getInstanceConfigForUser(supabase, profile.user_id);
         const userName = profile.name || 'você';
 
-        // Mensagem introdutória
-        const introMsg = `${userName}, lembra daquela cápsula do tempo que você gravou? 💜✨\n\nChegou a hora! Aqui está a mensagem que o seu eu do passado deixou pra você. Escuta com carinho 🫶`;
-        
-        await sendProactive(profile.phone, introMsg, 'checkin', profile.user_id);
+        // Get portal link
+        const portalToken = await getOrCreatePortalToken(supabase, profile.user_id);
+        const portalUrl = portalToken
+          ? `https://olaaura.com.br/meu-espaco?t=${portalToken}&tab=capsulas`
+          : 'https://olaaura.com.br';
+        const shortLink = await createShortLink(supabaseUrl, supabaseServiceKey, portalUrl, profile.phone) || portalUrl;
 
-        // Pequeno delay antes de enviar o áudio
-        await new Promise(resolve => setTimeout(resolve, 3000));
-
-        // Enviar áudio original
-        const audioResult = await sendAudioUrl(profile.phone, capsule.audio_url);
+        // Send teaser + link instead of direct audio
+        const teaserMsg = `${userName}, lembra daquela cápsula do tempo que você gravou? 💜✨\n\nChegou a hora de ouvir! Escuta com carinho 🫶\n\n${shortLink}\n\n— Aura`;
         
-        if (!audioResult.success) {
-          console.error(`❌ Failed to send capsule audio for ${capsule.id}:`, audioResult.error);
-          // Enviar transcrição como fallback
-          if (capsule.transcription) {
-            const fallbackMsg = `Não consegui enviar o áudio original, mas aqui está o que você disse:\n\n"${capsule.transcription}" 💜`;
-            await sendProactive(profile.phone, fallbackMsg, 'checkin', profile.user_id);
-          }
+        const result = await sendProactive(profile.phone, teaserMsg, 'checkin', profile.user_id);
+
+        if (result.success) {
+          // Mark as delivered
+          await supabase.from('time_capsules').update({
+            delivered: true,
+            delivered_at: new Date().toISOString(),
+          }).eq('id', capsule.id);
+
+          // Save to message history
+          await supabase.from('messages').insert({
+            user_id: profile.user_id,
+            role: 'assistant',
+            content: teaserMsg,
+          });
+
+          delivered++;
+          console.log(`✅ Capsule ${capsule.id} teaser sent to ${profile.phone.substring(0, 4)}***`);
+        } else {
+          console.error(`❌ Failed to send capsule teaser for ${capsule.id}:`, result.error);
         }
 
-        // Mensagem de encerramento
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        const closingMsg = `E aí, como é ouvir isso agora? 💜 Mudou muita coisa desde então?`;
-        await sendProactive(profile.phone, closingMsg, 'checkin', profile.user_id);
-
-        // Marcar como entregue
-        await supabase.from('time_capsules').update({
-          delivered: true,
-          delivered_at: new Date().toISOString(),
-        }).eq('id', capsule.id);
-
-        // Salvar no histórico de mensagens
-        await supabase.from('messages').insert([
-          { user_id: profile.user_id, role: 'assistant', content: introMsg },
-          { user_id: profile.user_id, role: 'assistant', content: '[Áudio da cápsula do tempo reenviado]' },
-          { user_id: profile.user_id, role: 'assistant', content: closingMsg },
-        ]);
-
-        delivered++;
-        console.log(`✅ Capsule ${capsule.id} delivered to ${profile.phone.substring(0, 4)}***`);
+        // Short delay between sends
+        await new Promise(resolve => setTimeout(resolve, 3000));
 
       } catch (err) {
         console.error(`❌ Error delivering capsule ${capsule.id}:`, err);

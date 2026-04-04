@@ -135,10 +135,9 @@ Deno.serve(async (req) => {
     const brtHour = getBrtHour();
     const isQuietHours = brtHour < 8 || brtHour >= 22;
     if (isQuietHours) {
-      console.log(`🌙 Quiet hours (${brtHour}h BRT) - only time-sensitive reminders (1h, 15m, start, 10m) will be sent`);
+      console.log(`🌙 Quiet hours (${brtHour}h BRT) - only time-sensitive reminders (5m, start) will be sent`);
     }
-    const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
-    const fifteenMinutesFromNow = new Date(now.getTime() + 15 * 60 * 1000);
+    const fiveMinutesFromNow = new Date(now.getTime() + 5 * 60 * 1000);
     const twentyFourHoursFromNow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
     const twentyThreeHoursFromNow = new Date(now.getTime() + 23 * 60 * 60 * 1000);
     const thirtyMinutesAgo = new Date(now.getTime() - 30 * 60 * 1000);
@@ -146,8 +145,7 @@ Deno.serve(async (req) => {
     console.log(`🕐 Session reminder running at ${now.toISOString()}`);
 
     let reminders24hSent = 0;
-    let reminders1hSent = 0;
-    let reminders15mSent = 0;
+    let reminders5mSent = 0;
     let postSessionSent = 0;
 
     // ========================================================================
@@ -269,26 +267,23 @@ Confirma que tá tudo certo? Me responde com "confirmo" ou me avisa se precisar 
     }
 
     // ========================================================================
-    // LEMBRETE DE 1 HORA
+    // LEMBRETE DE 5 MINUTOS
     // ========================================================================
-    const { data: sessions1h, error: error1h } = await supabase
+    const { data: sessions5m, error: error5m } = await supabase
       .from('sessions')
       .select(`id, user_id, scheduled_at, session_type, focus_topic`)
       .eq('status', 'scheduled')
-      .eq('reminder_1h_sent', false)
-      .lte('scheduled_at', oneHourFromNow.toISOString())
+      .eq('reminder_5m_sent', false)
+      .lte('scheduled_at', fiveMinutesFromNow.toISOString())
       .gt('scheduled_at', now.toISOString());
 
-    if (error1h) {
-      console.error('❌ Error fetching 1h sessions:', error1h);
+    if (error5m) {
+      console.error('❌ Error fetching 5m sessions:', error5m);
     }
 
-    if (sessions1h && sessions1h.length > 0) {
-      for (const session of sessions1h) {
-        // Pular se já enviamos o lembrete de 24h nesta mesma execução
-        if (sessions24h?.some(s => s.id === session.id)) {
-          continue;
-        }
+    if (sessions5m && sessions5m.length > 0) {
+      for (const session of sessions5m) {
+        if (sessions24h?.some(s => s.id === session.id)) continue;
 
         const { data: profile } = await supabase
           .from('profiles')
@@ -296,23 +291,10 @@ Confirma que tá tudo certo? Me responde com "confirmo" ou me avisa se precisar 
           .eq('user_id', session.user_id)
           .maybeSingle();
 
-        if (!profile?.phone) {
-          console.log(`⚠️ No phone for session ${session.id}`);
-          continue;
-        }
+        if (!profile?.phone) { console.log(`⚠️ No phone for session ${session.id}`); continue; }
 
         const userName = profile.name || 'você';
-        const sessionTime = new Date(session.scheduled_at).toLocaleTimeString('pt-BR', {
-          hour: '2-digit',
-          minute: '2-digit',
-          timeZone: 'America/Sao_Paulo'
-        });
-
-        const message = `Oi, ${userName}! 🌟
-
-Lembrete: nossa sessão especial começa em 1 hora (às ${sessionTime}).
-
-Separa um cantinho tranquilo pra gente conversar com calma. Te espero lá! 💜`;
+        const message = `Faltam 5 minutinhos pra nossa sessão, ${userName}! ✨\n\nJá estou aqui te esperando. Quando estiver pronta, é só me mandar uma mensagem que a gente começa. 💜`;
 
         try {
           const cleanPhone = cleanPhoneNumber(profile.phone);
@@ -320,79 +302,14 @@ Separa um cantinho tranquilo pra gente conversar com calma. Te espero lá! 💜`
           const result = await sendProactive(cleanPhone, message, 'session_reminder', session.user_id);
 
           if (result.success) {
-            await supabase
-              .from('sessions')
-              .update({ reminder_1h_sent: true })
-              .eq('id', session.id);
-            
-            reminders1hSent++;
-            console.log(`✅ 1h reminder sent for session ${session.id}`);
+            await supabase.from('sessions').update({ reminder_5m_sent: true }).eq('id', session.id);
+            reminders5mSent++;
+            console.log(`✅ 5m reminder sent for session ${session.id}`);
           } else {
-            console.error(`❌ Failed to send 1h reminder for session ${session.id}:`, result.error);
+            console.error(`❌ Failed to send 5m reminder for session ${session.id}:`, result.error);
           }
         } catch (sendError) {
-          console.error(`❌ Error sending 1h reminder for session ${session.id}:`, sendError);
-        }
-      }
-    }
-
-    // ========================================================================
-    // LEMBRETE DE 15 MINUTOS
-    // ========================================================================
-    const { data: sessions15m, error: error15m } = await supabase
-      .from('sessions')
-      .select(`id, user_id, scheduled_at, session_type, focus_topic`)
-      .eq('status', 'scheduled')
-      .eq('reminder_15m_sent', false)
-      .lte('scheduled_at', fifteenMinutesFromNow.toISOString())
-      .gt('scheduled_at', now.toISOString());
-
-    if (error15m) {
-      console.error('❌ Error fetching 15m sessions:', error15m);
-    }
-
-    if (sessions15m && sessions15m.length > 0) {
-      for (const session of sessions15m) {
-        // Pular se já processamos nesta execução
-        if (sessions1h?.some(s => s.id === session.id) || sessions24h?.some(s => s.id === session.id)) {
-          continue;
-        }
-
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('name, phone, whatsapp_instance_id')
-          .eq('user_id', session.user_id)
-          .maybeSingle();
-
-        if (!profile?.phone) {
-          console.log(`⚠️ No phone for session ${session.id}`);
-          continue;
-        }
-
-        const userName = profile.name || 'você';
-
-        const message = `Faltam 15 minutinhos pra nossa sessão, ${userName}! ✨
-
-Já estou aqui te esperando. Quando estiver pronta, é só me mandar uma mensagem que a gente começa. 💜`;
-
-        try {
-          const cleanPhone = cleanPhoneNumber(profile.phone);
-          const instanceConfig = await getInstanceConfigForUser(supabase, session.user_id);
-          const result = await sendProactive(cleanPhone, message, 'session_reminder', session.user_id);
-
-          if (result.success) {
-            await supabase
-              .from('sessions')
-              .update({ reminder_15m_sent: true })
-              .eq('id', session.id);
-            
-            reminders15mSent++;
-            console.log(`✅ 15m reminder sent for session ${session.id}`);
-          } else {
-            console.error(`❌ Failed to send 15m reminder for session ${session.id}:`, result.error);
-          }
-        } catch (sendError) {
-          console.error(`❌ Error sending 15m reminder for session ${session.id}:`, sendError);
+          console.error(`❌ Error sending 5m reminder for session ${session.id}:`, sendError);
         }
       }
     }
@@ -426,8 +343,7 @@ Já estou aqui te esperando. Quando estiver pronta, é só me mandar uma mensage
       
       for (const session of sessionsToStart) {
         // Pular se já processamos nesta execução
-        if (sessions15m?.some(s => s.id === session.id) || 
-            sessions1h?.some(s => s.id === session.id) || 
+        if (sessions5m?.some(s => s.id === session.id) || 
             sessions24h?.some(s => s.id === session.id)) {
           continue;
         }
@@ -480,75 +396,7 @@ Você está pronta(o) pra começar? Me responde um "vamos" ou "bora" quando quis
       }
     }
 
-    // ========================================================================
-    // LEMBRETE DE 10 MINUTOS - Para sessões notificadas mas não iniciadas
-    // ========================================================================
-    let reminder10mSent = 0;
-    
-    const { data: notifiedButNotStarted, error: errorNotStarted } = await supabase
-      .from('sessions')
-      .select('id, user_id, scheduled_at')
-      .eq('status', 'scheduled')
-      .eq('session_start_notified', true)
-      .is('started_at', null);
-    
-    if (errorNotStarted) {
-      console.error('❌ Error fetching notified but not started sessions:', errorNotStarted);
-    }
-    
-    if (notifiedButNotStarted && notifiedButNotStarted.length > 0) {
-      for (const session of notifiedButNotStarted) {
-        const scheduledTime = new Date(session.scheduled_at);
-        const minutesSinceScheduled = (now.getTime() - scheduledTime.getTime()) / 60000;
-        
-        // Se já passaram 15 minutos e sessão não iniciou, enviar lembrete gentil
-        // Mas só entre 15 e 25 minutos para não enviar duplicado (era 10-15)
-        if (minutesSinceScheduled >= 15 && minutesSinceScheduled < 25) {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('name, phone, whatsapp_instance_id')
-            .eq('user_id', session.user_id)
-            .maybeSingle();
-          
-          if (!profile?.phone) continue;
-          
-          // NOVO: Verificar se o usuário mandou mensagem recente (pode estar conversando/avisou que vai demorar)
-          const { data: recentUserMsg } = await supabase
-            .from('messages')
-            .select('created_at')
-            .eq('user_id', session.user_id)
-            .eq('role', 'user')
-            .gte('created_at', scheduledTime.toISOString())
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          
-          if (recentUserMsg) {
-            console.log(`⏭️ Skipping 10min reminder for session ${session.id}: user sent message after session notification`);
-            continue;
-          }
-          
-          const userName = profile.name || 'você';
-          // MENSAGEM MAIS CLARA: Reforça que precisa de resposta para iniciar
-          const reminderMessage = `Oi ${userName}! 💜 Ainda tô te esperando pra nossa sessão especial.
-
-Pra gente começar, me manda um "vamos" ou "bora" - ou me avisa se quer reagendar pra outro momento, tá? ✨`;
-          
-          try {
-            const cleanPhone = cleanPhoneNumber(profile.phone);
-            const instanceConfig = await getInstanceConfigForUser(supabase, session.user_id);
-            const result = await sendProactive(cleanPhone, reminderMessage, 'session_reminder', session.user_id);
-            
-            if (result.success) {
-              reminder10mSent++;
-              console.log(`✅ 10min reminder sent for waiting session ${session.id}`);
-            }
-          } catch (sendError) {
-            console.error(`❌ Error sending 10min reminder for session ${session.id}:`, sendError);
-          }
-        }
-      }
-    }
+    // (10-minute reminder removed — simplified to 24h + 5min only)
 
     // ========================================================================
     // DETECTAR SESSÕES NOTIFICADAS MAS NUNCA INICIADAS (missed - 30 min após notificação)
@@ -892,14 +740,12 @@ Me conta durante a semana como está seu progresso! Estou aqui por você. ✨`;
       }
     }
 
-    console.log(`📊 Session reminders completed: ${reminders24hSent} 24h, ${reminders1hSent} 1h, ${reminders15mSent} 15m, ${sessionStartsSent} starts, ${reminder10mSent} 10m reminders, ${missedSessionsClosed} missed, ${abandonedSessionsClosed} abandoned, ${postSessionSent} post-session`);
+    console.log(`📊 Session reminders completed: ${reminders24hSent} 24h, ${reminders5mSent} 5m, ${sessionStartsSent} starts, ${missedSessionsClosed} missed, ${abandonedSessionsClosed} abandoned, ${postSessionSent} post-session`);
 
     return new Response(JSON.stringify({ 
       success: true,
       reminders_24h_sent: reminders24hSent,
-      reminders_1h_sent: reminders1hSent,
-      reminders_15m_sent: reminders15mSent,
-      reminders_10m_sent: reminder10mSent,
+      reminders_5m_sent: reminders5mSent,
       session_starts_sent: sessionStartsSent,
       missed_sessions_closed: missedSessionsClosed,
       abandoned_sessions_closed: abandonedSessionsClosed,
