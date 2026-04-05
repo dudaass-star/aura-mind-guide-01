@@ -82,6 +82,7 @@ interface RecoverySession {
   id: string;
   name: string | null;
   phone: string;
+  email: string | null;
   plan: string | null;
   created_at: string;
   status: string;
