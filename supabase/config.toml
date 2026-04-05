@@ -128,7 +128,7 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.process-email-queue]
-verify_jwt = true
+verify_jwt = false
 
 [functions.webhook-twilio]
 verify_jwt = false
