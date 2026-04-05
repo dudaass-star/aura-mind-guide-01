@@ -670,52 +670,52 @@ export default function AdminEngagement() {
                       <CreditCard className="h-4 w-4" />
                       Tentativas de Dunning (Pagamento Falhou)
                     </CardTitle>
-                    <p className="text-xs text-muted-foreground">
-                      {dunningAttempts.length} tentativas registradas — {dunningAttempts.filter(d => d.whatsapp_sent).length} WhatsApp enviados, {dunningAttempts.filter(d => !d.profile_found).length} sem perfil
-                    </p>
-                  </CardHeader>
-                  <CardContent>
-                    {dunningAttempts.length === 0 ? (
-                      <p className="text-sm text-muted-foreground text-center py-4">Nenhuma tentativa de dunning registrada ainda.</p>
-                    ) : (
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Data</TableHead>
-                            <TableHead>Telefone</TableHead>
-                            <TableHead>Perfil</TableHead>
-                            <TableHead>Link</TableHead>
-                            <TableHead>WhatsApp</TableHead>
-                            <TableHead>Erro</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {dunningAttempts.map((d) => {
-                            const maskedPhone = d.phone_resolved ? `${d.phone_resolved.substring(0, 6)}***` : d.phone_raw ? `${d.phone_raw.substring(0, 6)}***` : '—';
-                            return (
-                              <TableRow key={d.id}>
-                                <TableCell className="text-xs">{format(new Date(d.created_at), 'dd/MM HH:mm')}</TableCell>
-                                <TableCell className="font-mono text-xs">{maskedPhone}</TableCell>
-                                <TableCell>
-                                  {d.profile_found ? (
-                                    <Badge className="bg-green-600 text-white text-xs">Sim</Badge>
-                                  ) : (
-                                    <Badge variant="destructive" className="text-xs">Não</Badge>
-                                  )}
-                                </TableCell>
-                                <TableCell>
-                                  {d.link_generated ? (
-                                    <Badge className="bg-green-600 text-white text-xs">✓</Badge>
-                                  ) : (
-                                    <Badge variant="secondary" className="text-xs">—</Badge>
-                                  )}
-                                </TableCell>
-                                <TableCell>
-                                  {d.whatsapp_sent ? (
-                                    <Badge className="bg-green-600 text-white text-xs">Enviado</Badge>
-                                  ) : (
-                                    <Badge variant="secondary" className="text-xs">Não</Badge>
-                                  )}
+                     <p className="text-xs text-muted-foreground">
+                       {dunningAttempts.length} tentativas registradas — {dunningAttempts.filter(d => d.whatsapp_sent).length} emails enviados, {dunningAttempts.filter(d => !d.profile_found).length} sem perfil
+                     </p>
+                   </CardHeader>
+                   <CardContent>
+                     {dunningAttempts.length === 0 ? (
+                       <p className="text-sm text-muted-foreground text-center py-4">Nenhuma tentativa de dunning registrada ainda.</p>
+                     ) : (
+                       <Table>
+                         <TableHeader>
+                           <TableRow>
+                             <TableHead>Data</TableHead>
+                             <TableHead>Telefone</TableHead>
+                             <TableHead>Perfil</TableHead>
+                             <TableHead>Link</TableHead>
+                             <TableHead>Email</TableHead>
+                             <TableHead>Erro</TableHead>
+                           </TableRow>
+                         </TableHeader>
+                         <TableBody>
+                           {dunningAttempts.map((d) => {
+                             const maskedPhone = d.phone_resolved ? `${d.phone_resolved.substring(0, 6)}***` : d.phone_raw ? `${d.phone_raw.substring(0, 6)}***` : '—';
+                             return (
+                               <TableRow key={d.id}>
+                                 <TableCell className="text-xs">{format(new Date(d.created_at), 'dd/MM HH:mm')}</TableCell>
+                                 <TableCell className="font-mono text-xs">{maskedPhone}</TableCell>
+                                 <TableCell>
+                                   {d.profile_found ? (
+                                     <Badge className="bg-green-600 text-white text-xs">Sim</Badge>
+                                   ) : (
+                                     <Badge variant="destructive" className="text-xs">Não</Badge>
+                                   )}
+                                 </TableCell>
+                                 <TableCell>
+                                   {d.link_generated ? (
+                                     <Badge className="bg-green-600 text-white text-xs">✓</Badge>
+                                   ) : (
+                                     <Badge variant="secondary" className="text-xs">—</Badge>
+                                   )}
+                                 </TableCell>
+                                 <TableCell>
+                                   {d.whatsapp_sent ? (
+                                     <Badge className="bg-green-600 text-white text-xs"><Mail className="h-3 w-3 mr-1" />Enviado</Badge>
+                                   ) : (
+                                     <Badge variant="secondary" className="text-xs">Não</Badge>
+                                   )}
                                 </TableCell>
                                 <TableCell className="text-xs max-w-[200px] truncate" title={d.error_message || ''}>
                                   {d.error_stage ? (
