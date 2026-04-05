@@ -1,65 +1,49 @@
 
 
-## Plano: Limpeza de customers duplicados no Stripe + prevenção futura
+## Plano: Corrigir envio de e-mails de Checkout Abandonado e Dunning
 
-### Problema identificado
+### Problemas identificados
 
-100 customers no Stripe para ~35 usuários reais. Causas:
-- Checkout abandonado cria customer sem assinatura
-- Retry com telefone em formato diferente cria customer duplicado
-- Exemplo: `cus_UF0go0thSpa1Iu` tem 3 subscriptions (2 trialing, 1 cancelada)
+**1. Dunning: `no_subscription_on_invoice` (100% de falhas)**
+Todas as tentativas recentes de dunning falham porque `invoice.subscription` vem como `undefined` no evento do webhook, mesmo que a invoice tenha `billing_reason: subscription_cycle` e o customer tenha uma subscription `past_due`. Isso acontece provavelmente por diferença entre a versão da API do webhook (configurada no dashboard do Stripe) e a versão usada no SDK (`2023-10-16`). O código atual simplesmente ignora a invoice se `invoice.subscription` for falsy.
 
-### Impacto
+**2. Checkout Recovery: `FunctionsHttpError` e sessões não retentadas**
+- O erro antigo (401) foi corrigido com `supabase.functions.invoke()`, mas a tentativa mais recente (14:10 de hoje) retornou `FunctionsHttpError` — provavelmente o `send-transactional-email` retornou um erro HTTP que o `.invoke()` classifica como `FunctionsHttpError`.
+- Todas as sessões que falharam com 401 foram marcadas como `recovery_sent = true`, então não serão retentadas automaticamente.
 
-- A função `reengagement-blast` já deduplica — sem risco de envio duplicado
-- Mas clientes com 2+ subscriptions trialing podem ser cobrados em duplicata quando o trial acabar
-- "Lixo" dificulta auditoria manual no Stripe
+---
 
-### Solução em 2 partes
+### Correções
 
-#### Parte 1: Edge function de auditoria `audit-stripe-duplicates`
+#### 1. Stripe Webhook — resolver `subscription` quando vier null
 
-Nova função que:
-1. Lista todos os customers do Stripe
-2. Agrupa por phone no metadata (normalizado)
-3. Identifica duplicatas reais (mesmo phone, múltiplos customers)
-4. Identifica customers sem assinatura (órfãos de checkout abandonado)
-5. Identifica customers com múltiplas subscriptions ativas/trialing
-6. Modo `dry_run` (default) para relatório, modo `fix` para:
-   - Cancelar subscriptions duplicadas (manter a mais recente)
-   - Deletar customers sem assinatura nem pagamento
+No `stripe-webhook/index.ts`, dentro do bloco `invoice.payment_failed`:
 
-#### Parte 2: Prevenção no `create-checkout`
+- Quando `invoice.subscription` for null/undefined mas `billing_reason` indicar que é uma invoice de subscription (`subscription_cycle`, `subscription_update`, `subscription_create`):
+  - Buscar o subscription via `stripe.subscriptions.list({ customer: customerId, status: 'past_due', limit: 1 })` ou `status: 'active'`
+  - Se encontrar, usar esse subscription ID e continuar o fluxo normalmente
+  - Isso desbloqueia **todos** os dunning events que estão falhando atualmente
 
-Melhorar a busca de customer existente:
-- Além de buscar por `metadata['phone']`, buscar também por **email**
-- Se encontrar por email mas phone diferente, atualizar o metadata do phone
-- Isso evita criação de novos customers quando a mesma pessoa refaz checkout
+#### 2. Checkout Recovery — melhorar tratamento de erros
 
-### Mudanças
+No `recover-abandoned-checkout/index.ts`:
 
-| Componente | Ação |
-|---|---|
-| `supabase/functions/audit-stripe-duplicates/index.ts` | Nova função de auditoria e limpeza |
-| `supabase/functions/create-checkout/index.ts` | Adicionar fallback de busca por email |
+- Após `supabase.functions.invoke()`, verificar tanto `error` quanto `data` para extrair mensagens de erro mais detalhadas
+- Logar o corpo completo da resposta para debug
 
-### Fluxo da auditoria
+#### 3. Reset de sessões com falha 401
 
-```text
-1. Lista todos os customers do Stripe (paginado)
-2. Normaliza phone de cada um
-3. Agrupa por phone normalizado
-4. Para cada grupo com >1 customer:
-   a. Identifica qual tem subscription ativa (keeper)
-   b. Reporta os duplicados
-5. Para customers sem phone e sem subscription:
-   a. Reporta como órfãos
-6. Em modo fix:
-   a. Cancela subscriptions extras
-   b. Deleta customers órfãos
-```
+- Criar uma query para resetar `recovery_sent = false` e `recovery_attempts_count = 0` nas sessões que falharam com erro 401 (anteriores à correção), permitindo que sejam retentadas na próxima execução do cron
 
-### Prioridade
+---
 
-Antes de rodar o `reengagement-blast` com `dry_run: false`, vale rodar a auditoria para garantir que não existe nenhum customer com 2 trials ativos que seria cobrado em duplicata.
+### Arquivos modificados
+
+1. `supabase/functions/stripe-webhook/index.ts` — fallback para resolver subscription quando `invoice.subscription` é null
+2. `supabase/functions/recover-abandoned-checkout/index.ts` — melhorar log de erros do `.invoke()`
+3. Migration SQL — reset das sessões de checkout que falharam com 401
+
+### Deploy
+
+Redeployar `stripe-webhook` e `recover-abandoned-checkout`, depois verificar nos logs e na tabela `dunning_attempts` que os próximos eventos são processados corretamente.
 
