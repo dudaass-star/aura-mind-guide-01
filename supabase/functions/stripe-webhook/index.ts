@@ -956,24 +956,50 @@ Me conta: como você está hoje?`;
     if (event.type === 'invoice.payment_failed') {
       const invoice = event.data.object as Stripe.Invoice;
       const customerId = invoice.customer as string;
-      console.log('🚨 [DUNNING-ENTRY] invoice.payment_failed BLOCK REACHED. invoice:', invoice.id, 'customer:', customerId, 'subscription:', invoice.subscription, 'amount:', invoice.amount_due);
+      let subscriptionId = invoice.subscription as string | null;
+      console.log('🚨 [DUNNING-ENTRY] invoice.payment_failed BLOCK REACHED. invoice:', invoice.id, 'customer:', customerId, 'subscription:', subscriptionId, 'amount:', invoice.amount_due, 'billing_reason:', invoice.billing_reason);
+
+      // Fallback: resolve subscription when invoice.subscription is null but billing_reason indicates subscription
+      const subscriptionBillingReasons = ['subscription_cycle', 'subscription_update', 'subscription_create', 'subscription_threshold'];
+      if (!subscriptionId && invoice.billing_reason && subscriptionBillingReasons.includes(invoice.billing_reason)) {
+        console.log(`🔍 [DUNNING] invoice.subscription is null but billing_reason="${invoice.billing_reason}" — attempting to resolve subscription from customer`);
+        try {
+          // Try past_due first (most likely for payment_failed), then active
+          for (const status of ['past_due', 'active', 'trialing'] as const) {
+            const { data: subs } = await stripe.subscriptions.list({ customer: customerId, status, limit: 1 });
+            if (subs && subs.length > 0) {
+              subscriptionId = subs[0].id;
+              console.log(`✅ [DUNNING] Resolved subscription ${subscriptionId} (status: ${status}) from customer ${customerId}`);
+              break;
+            }
+          }
+          if (!subscriptionId) {
+            console.warn('⚠️ [DUNNING] Could not resolve subscription from customer — no active/past_due/trialing subs found');
+          }
+        } catch (resolveErr) {
+          console.error('❌ [DUNNING] Error resolving subscription from customer:', resolveErr);
+        }
+      }
 
       // Audit trail record
       const dunningRecord: Record<string, any> = {
         event_id: event.id,
         customer_id: customerId,
         invoice_id: invoice.id,
-        subscription_id: invoice.subscription as string || null,
+        subscription_id: subscriptionId || null,
       };
 
-      if (!invoice.subscription) {
-        console.warn('⚠️ [DUNNING] invoice.subscription is NULL/falsy — skipping dunning but recording audit trail');
+      if (!subscriptionId) {
+        console.warn('⚠️ [DUNNING] No subscription resolved — skipping dunning but recording audit trail');
         dunningRecord.error_stage = 'no_subscription_on_invoice';
-        dunningRecord.error_message = `invoice.subscription was ${String(invoice.subscription)}. billing_reason: ${invoice.billing_reason}`;
+        dunningRecord.error_message = `invoice.subscription was ${String(invoice.subscription)}, fallback also failed. billing_reason: ${invoice.billing_reason}`;
         try { await supabase.from('dunning_attempts').insert(dunningRecord); } catch (_) {}
+        return new Response(JSON.stringify({ received: true }), {
+          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
       }
 
-      if (invoice.subscription) {
+      {
         try {
           const customer = await stripe.customers.retrieve(customerId);
           if (customer.deleted) {

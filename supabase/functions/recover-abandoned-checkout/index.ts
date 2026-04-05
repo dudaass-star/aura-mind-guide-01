@@ -199,8 +199,33 @@ Deno.serve(async (req) => {
           },
         });
 
-        const emailOk = !emailError;
-        const emailBody = emailError ? JSON.stringify(emailError) : JSON.stringify(emailData);
+        // Enhanced error extraction: FunctionsHttpError wraps an HTTP error response
+        let emailOk = !emailError;
+        let emailBody: string;
+        if (emailError) {
+          // Try to extract detailed message from FunctionsHttpError
+          let detailedError = '';
+          try {
+            if (typeof emailError === 'object' && emailError !== null) {
+              // FunctionsHttpError has a context property with response details
+              detailedError = JSON.stringify(emailError, Object.getOwnPropertyNames(emailError));
+            } else {
+              detailedError = String(emailError);
+            }
+          } catch {
+            detailedError = String(emailError);
+          }
+          emailBody = detailedError;
+          console.error(`❌ [RECOVERY] invoke error details:`, detailedError);
+        } else {
+          emailBody = JSON.stringify(emailData);
+          // Also check if data contains an error response
+          if (emailData && typeof emailData === 'object' && emailData.error) {
+            emailOk = false;
+            emailBody = JSON.stringify(emailData);
+            console.error(`❌ [RECOVERY] Email function returned error in body:`, emailBody);
+          }
+        }
 
         // Log the attempt
         await supabase.from('checkout_recovery_attempts').insert({
@@ -222,8 +247,9 @@ Deno.serve(async (req) => {
           sent++;
           console.log(`✅ [RECOVERY] Email sent to ${session.email.substring(0, 3)}***`);
         } else {
+          // Don't mark as recovery_sent so it can be retried
           await supabase.from('checkout_sessions').update({
-            recovery_sent: true,
+            recovery_sent: false,
             recovery_last_error: emailBody || 'Unknown error',
             recovery_attempts_count: 1,
           }).eq('id', session.id);
