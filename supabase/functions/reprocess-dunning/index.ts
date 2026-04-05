@@ -136,21 +136,16 @@ Deno.serve(async (req) => {
 
       if (recipientEmail) {
         try {
-          const emailResult = await fetch(`${supabaseUrl}/functions/v1/send-transactional-email`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${supabaseServiceKey}`,
-            },
-            body: JSON.stringify({
+          const { data: emailData, error: emailErr } = await supabase.functions.invoke('send-transactional-email', {
+            body: {
               templateName: 'dunning-payment-failed',
               recipientEmail,
               idempotencyKey: `reprocess-dunning-${customerId}-${Date.now()}`,
               templateData: { name: userName, paymentLink },
-            }),
+            },
           });
 
-          if (emailResult.ok) {
+          if (!emailErr) {
             dunningRecord.whatsapp_sent = true; // reusing field as notification_sent
             report.email_sent = true;
           } else {
