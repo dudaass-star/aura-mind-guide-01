@@ -120,6 +120,18 @@ serve(async (req) => {
       }
     }
 
+    // Fallback: search by email if not found by phone
+    if (!existingCustomer && email) {
+      const customersByEmail = await stripe.customers.search({
+        query: `email:'${email}'`,
+        limit: 1,
+      });
+      if (customersByEmail.data.length > 0) {
+        existingCustomer = customersByEmail.data[0];
+        logStep("Found customer by email fallback", { customerId: existingCustomer.id });
+      }
+    }
+
     if (existingCustomer) {
       customerId = existingCustomer.id;
       logStep("Found existing customer", { customerId });
