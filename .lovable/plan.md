@@ -1,45 +1,65 @@
 
 
-## Plano: Corrigir reengagement-blast para capturar todos os 23 usuários com assinatura Stripe
+## Plano: Limpeza de customers duplicados no Stripe + prevenção futura
 
-### Problema atual
+### Problema identificado
 
-A função `reengagement-blast` busca perfis no banco e depois tenta encontrar o customer no Stripe por email ou phone. Isso falha quando:
-- O email no banco não bate com o email no Stripe
-- O phone no metadata do Stripe está em formato diferente
-- Resultado: só encontra 12 de 23
+100 customers no Stripe para ~35 usuários reais. Causas:
+- Checkout abandonado cria customer sem assinatura
+- Retry com telefone em formato diferente cria customer duplicado
+- Exemplo: `cus_UF0go0thSpa1Iu` tem 3 subscriptions (2 trialing, 1 cancelada)
 
-### Solução
+### Impacto
 
-Inverter a lógica: partir do Stripe (fonte da verdade) para o banco.
+- A função `reengagement-blast` já deduplica — sem risco de envio duplicado
+- Mas clientes com 2+ subscriptions trialing podem ser cobrados em duplicata quando o trial acabar
+- "Lixo" dificulta auditoria manual no Stripe
 
-1. Listar todas as subscriptions `active` + `trialing` do Stripe
-2. Para cada subscription, pegar o customer e extrair phone/email dos metadados
-3. Buscar o perfil correspondente no banco pelo phone
-4. Se `last_user_message_at IS NULL`, incluir na lista de envio
-5. Enviar via `sendProactive` com template `reconnect` e `[nome]` como variável
+### Solução em 2 partes
+
+#### Parte 1: Edge function de auditoria `audit-stripe-duplicates`
+
+Nova função que:
+1. Lista todos os customers do Stripe
+2. Agrupa por phone no metadata (normalizado)
+3. Identifica duplicatas reais (mesmo phone, múltiplos customers)
+4. Identifica customers sem assinatura (órfãos de checkout abandonado)
+5. Identifica customers com múltiplas subscriptions ativas/trialing
+6. Modo `dry_run` (default) para relatório, modo `fix` para:
+   - Cancelar subscriptions duplicadas (manter a mais recente)
+   - Deletar customers sem assinatura nem pagamento
+
+#### Parte 2: Prevenção no `create-checkout`
+
+Melhorar a busca de customer existente:
+- Além de buscar por `metadata['phone']`, buscar também por **email**
+- Se encontrar por email mas phone diferente, atualizar o metadata do phone
+- Isso evita criação de novos customers quando a mesma pessoa refaz checkout
 
 ### Mudanças
 
-| Componente | Acao |
+| Componente | Ação |
 |---|---|
-| `supabase/functions/reengagement-blast/index.ts` | Reescrever para partir das subscriptions do Stripe em vez dos perfis do banco |
+| `supabase/functions/audit-stripe-duplicates/index.ts` | Nova função de auditoria e limpeza |
+| `supabase/functions/create-checkout/index.ts` | Adicionar fallback de busca por email |
 
-### Fluxo tecnico
+### Fluxo da auditoria
 
 ```text
-1. stripe.subscriptions.list(status: 'active') + stripe.subscriptions.list(status: 'trialing')
-2. Para cada sub: expand customer → pegar phone do metadata + email
-3. Buscar profile no banco por phone normalizado
-4. Se profile existe E last_user_message_at IS NULL → elegível
-5. Se profile não existe → reportar como "sem perfil"
-6. Enviar com sendProactive(phone, msg, 'reconnect', userId, undefined, [nome])
+1. Lista todos os customers do Stripe (paginado)
+2. Normaliza phone de cada um
+3. Agrupa por phone normalizado
+4. Para cada grupo com >1 customer:
+   a. Identifica qual tem subscription ativa (keeper)
+   b. Reporta os duplicados
+5. Para customers sem phone e sem subscription:
+   a. Reporta como órfãos
+6. Em modo fix:
+   a. Cancela subscriptions extras
+   b. Deleta customers órfãos
 ```
 
-### Segurança
+### Prioridade
 
-- dry_run mode mantido
-- Anti-burst 500ms entre envios
-- Horário silencioso (22h-8h BRT) mantido
-- Log de cada envio na tabela messages
+Antes de rodar o `reengagement-blast` com `dry_run: false`, vale rodar a auditoria para garantir que não existe nenhum customer com 2 trials ativos que seria cobrado em duplicata.
 
