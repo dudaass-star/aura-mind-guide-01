@@ -149,7 +149,7 @@ Deno.serve(async (req) => {
             dunningRecord.whatsapp_sent = true; // reusing field as notification_sent
             report.email_sent = true;
           } else {
-            const errBody = await emailResult.text();
+            const errBody = JSON.stringify(emailErr);
             dunningRecord.error_stage = 'email_send_failed';
             dunningRecord.error_message = errBody;
             report.email_sent = false;
