@@ -189,23 +189,18 @@ Deno.serve(async (req) => {
 
         console.log(`📤 [RECOVERY] Sending email to ${session.email.substring(0, 3)}*** for plan ${plan}`);
 
-        // Send recovery email
-        const emailResult = await fetch(`${supabaseUrl}/functions/v1/send-transactional-email`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseServiceKey}`,
-          },
-          body: JSON.stringify({
+        // Send recovery email via supabase.functions.invoke (handles auth properly)
+        const { data: emailData, error: emailError } = await supabase.functions.invoke('send-transactional-email', {
+          body: {
             templateName: 'checkout-recovery',
             recipientEmail: session.email,
             idempotencyKey: `checkout-recovery-${session.id}`,
             templateData: { name: customerName, plan, checkoutLink },
-          }),
+          },
         });
 
-        const emailOk = emailResult.ok;
-        const emailBody = await emailResult.text();
+        const emailOk = !emailError;
+        const emailBody = emailError ? JSON.stringify(emailError) : JSON.stringify(emailData);
 
         // Log the attempt
         await supabase.from('checkout_recovery_attempts').insert({
