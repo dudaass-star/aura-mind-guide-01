@@ -1,54 +1,45 @@
 
 
-## Plano: Reenvio de reconexão para trials com cartão cadastrado
+## Plano: Corrigir reengagement-blast para capturar todos os 23 usuários com assinatura Stripe
 
-### Situação atual
+### Problema atual
 
-- O template `aura_reconnect_v2` (ContentSid: `HX824b3f789beb78ace2a1f38d8527c718`) esta **ativo** e funciona
-- A função `instance-reconnect-notify` ja usa `sendProactive` com `templateVariables: [nome]` (variavel curta) -- correto
-- O problema anterior era enviar texto longo como variavel; isso ja foi corrigido no codigo
+A função `reengagement-blast` busca perfis no banco e depois tenta encontrar o customer no Stripe por email ou phone. Isso falha quando:
+- O email no banco não bate com o email no Stripe
+- O phone no metadata do Stripe está em formato diferente
+- Resultado: só encontra 12 de 23
 
-### O que precisa ser feito
+### Solução
 
-Criar uma edge function `reengagement-blast` que:
+Inverter a lógica: partir do Stripe (fonte da verdade) para o banco.
 
-1. Busca perfis com `status IN ('active', 'trial')`, telefone valido, e `last_user_message_at IS NULL` (nunca falaram com o numero novo)
-2. **Cruza com Stripe** para garantir que so envia para quem tem assinatura `trialing` ou `active` (trial com cartao)
-3. Exclui Admin e Eduardo (ja ativos)
-4. Envia via `sendProactive` com categoria `reconnect` e `templateVariables: [primeiro_nome]`
-5. Anti-burst: 500ms entre envios
-6. Suporta `dry_run: true` para validar a lista antes de enviar
+1. Listar todas as subscriptions `active` + `trialing` do Stripe
+2. Para cada subscription, pegar o customer e extrair phone/email dos metadados
+3. Buscar o perfil correspondente no banco pelo phone
+4. Se `last_user_message_at IS NULL`, incluir na lista de envio
+5. Enviar via `sendProactive` com template `reconnect` e `[nome]` como variável
 
-### Por que nao reutilizar `instance-reconnect-notify`
-
-- Filtra por `whatsapp_instance_id IS NOT NULL` (exclui ~15 usuarios)
-- Nao verifica assinatura no Stripe
-- Nao tem filtro por `last_user_message_at`
-- Nao tem modo `dry_run`
-
-### Mudancas
+### Mudanças
 
 | Componente | Acao |
 |---|---|
-| `supabase/functions/reengagement-blast/index.ts` | Nova edge function |
-| `supabase/config.toml` | Adicionar `verify_jwt = false` |
+| `supabase/functions/reengagement-blast/index.ts` | Reescrever para partir das subscriptions do Stripe em vez dos perfis do banco |
 
 ### Fluxo tecnico
 
 ```text
-1. Busca profiles (active/trial, phone NOT NULL, last_user_message_at IS NULL)
-2. Exclui Admin (phone = 'test-admin')
-3. Para cada usuario:
-   a. Busca customer no Stripe pelo phone/email
-   b. Verifica se tem subscription trialing ou active
-   c. Se sim: sendProactive(phone, msg, 'reconnect', userId, undefined, undefined, [nome])
-   d. Se nao: skip (trial legado sem cartao)
-4. Retorna relatorio: enviados, pulados (sem Stripe), erros
+1. stripe.subscriptions.list(status: 'active') + stripe.subscriptions.list(status: 'trialing')
+2. Para cada sub: expand customer → pegar phone do metadata + email
+3. Buscar profile no banco por phone normalizado
+4. Se profile existe E last_user_message_at IS NULL → elegível
+5. Se profile não existe → reportar como "sem perfil"
+6. Enviar com sendProactive(phone, msg, 'reconnect', userId, undefined, [nome])
 ```
 
-### Fluxo de uso
+### Segurança
 
-1. Deploy da funcao
-2. Chamar com `{ "dry_run": true }` para ver a lista
-3. Confirmar e chamar com `{ "dry_run": false }` para enviar
+- dry_run mode mantido
+- Anti-burst 500ms entre envios
+- Horário silencioso (22h-8h BRT) mantido
+- Log de cada envio na tabela messages
 
