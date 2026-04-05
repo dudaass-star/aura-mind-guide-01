@@ -618,10 +618,10 @@ export default function AdminEngagement() {
                     </CardHeader>
                     <CardContent>
                       <Table>
-                        <TableHeader>
+                         <TableHeader>
                           <TableRow>
                             <TableHead>Nome</TableHead>
-                            <TableHead>Telefone</TableHead>
+                            <TableHead>Email</TableHead>
                             <TableHead>Plano</TableHead>
                             <TableHead>Abandono</TableHead>
                             <TableHead>Envio</TableHead>
@@ -631,19 +631,19 @@ export default function AdminEngagement() {
                         <TableBody>
                           {recoverySessions.map((s) => {
                             const planNames: Record<string, string> = { essencial: 'Essencial', direcao: 'Direção', transformacao: 'Transformação' };
-                            const maskedPhone = s.phone ? `${s.phone.substring(0, 6)}***` : '—';
+                            const maskedEmail = s.email ? `${s.email.substring(0, 3)}***@${s.email.split('@')[1] || ''}` : '—';
                             const attemptStatus = s.attempt_status;
                             const sendBadge = attemptStatus === 'api_accepted'
-                              ? <Badge className="bg-emerald-600 text-white text-[10px]"><CheckCircle2 className="h-3 w-3 mr-1" />Aceito</Badge>
+                              ? <Badge className="bg-emerald-600 text-white text-[10px]"><CheckCircle2 className="h-3 w-3 mr-1" />Enviado</Badge>
                               : attemptStatus === 'failed' || attemptStatus === 'error'
                               ? <Badge variant="destructive" className="text-[10px]"><AlertCircle className="h-3 w-3 mr-1" />{s.recovery_last_error?.substring(0, 30) || 'Falhou'}</Badge>
                               : attemptStatus === 'skipped' || attemptStatus === 'skipped_active_customer'
-                              ? <Badge variant="outline" className="text-[10px]">{attemptStatus === 'skipped_active_customer' ? 'Cliente ativo' : 'Sem telefone'}</Badge>
+                              ? <Badge variant="outline" className="text-[10px]">{attemptStatus === 'skipped_active_customer' ? 'Cliente ativo' : 'Sem email'}</Badge>
                               : <Badge variant="secondary" className="text-[10px]">Legado</Badge>;
                             return (
                               <TableRow key={s.id}>
                                 <TableCell className="font-medium">{s.name || '—'}</TableCell>
-                                <TableCell className="font-mono text-xs">{maskedPhone}</TableCell>
+                                <TableCell className="text-xs">{maskedEmail}</TableCell>
                                 <TableCell>{planNames[s.plan || ''] || s.plan || '—'}</TableCell>
                                 <TableCell className="text-xs">{format(new Date(s.created_at), 'dd/MM HH:mm')}</TableCell>
                                 <TableCell>{sendBadge}</TableCell>
