@@ -82,6 +82,7 @@ interface RecoverySession {
   id: string;
   name: string | null;
   phone: string;
+  email: string | null;
   plan: string | null;
   created_at: string;
   status: string;
@@ -170,22 +171,24 @@ export default function AdminEngagement() {
     try {
       const { data: abandoned, error } = await supabase
         .from('checkout_sessions')
-        .select('id, name, phone, plan, created_at, status, recovery_sent, recovery_sent_at, recovery_last_error, recovery_attempts_count')
+        .select('id, name, phone, email, plan, created_at, status, recovery_sent, recovery_sent_at, recovery_last_error, recovery_attempts_count')
         .eq('recovery_sent', true)
         .order('created_at', { ascending: false })
         .limit(50);
 
       if (error) throw error;
 
-      // Check which phones later completed a checkout
+      // Check which emails/phones later completed a checkout
+      const emails = (abandoned || []).filter(s => s.email).map(s => s.email!);
       const phones = (abandoned || []).map(s => s.phone);
-      const { data: completed } = await supabase
-        .from('checkout_sessions')
-        .select('phone')
-        .eq('status', 'completed')
-        .in('phone', phones);
+      const { data: completedByEmail } = emails.length > 0
+        ? await supabase.from('checkout_sessions').select('email').eq('status', 'completed').in('email', emails)
+        : { data: [] };
+      const { data: completedByPhone } = await supabase
+        .from('checkout_sessions').select('phone').eq('status', 'completed').in('phone', phones);
 
-      const completedPhones = new Set((completed || []).map(c => c.phone));
+      const completedEmails = new Set((completedByEmail || []).map(c => c.email?.toLowerCase()));
+      const completedPhones = new Set((completedByPhone || []).map(c => c.phone));
 
       // Fetch latest attempt status for each session
       const sessionIds = (abandoned || []).map(s => s.id);
@@ -204,19 +207,20 @@ export default function AdminEngagement() {
         }
       }
 
-      // Deduplicate by phone: keep only the most recent session per phone
-      const byPhone = new Map<string, typeof abandoned[number]>();
+      // Deduplicate by email (primary) or phone (fallback)
+      const byKey = new Map<string, typeof abandoned[number]>();
       for (const s of (abandoned || [])) {
-        const existing = byPhone.get(s.phone);
+        const key = s.email?.toLowerCase() || s.phone;
+        const existing = byKey.get(key);
         if (!existing || new Date(s.created_at) > new Date(existing.created_at)) {
-          byPhone.set(s.phone, s);
+          byKey.set(key, s);
         }
       }
-      const uniqueSessions = Array.from(byPhone.values());
+      const uniqueSessions = Array.from(byKey.values());
 
       setRecoverySessions(uniqueSessions.map(s => ({
         ...s,
-        converted: completedPhones.has(s.phone),
+        converted: (s.email && completedEmails.has(s.email.toLowerCase())) || completedPhones.has(s.phone),
         attempt_status: attemptMap.get(s.id) || null,
       })));
     } catch (err) {
@@ -614,10 +618,10 @@ export default function AdminEngagement() {
                     </CardHeader>
                     <CardContent>
                       <Table>
-                        <TableHeader>
+                         <TableHeader>
                           <TableRow>
                             <TableHead>Nome</TableHead>
-                            <TableHead>Telefone</TableHead>
+                            <TableHead>Email</TableHead>
                             <TableHead>Plano</TableHead>
                             <TableHead>Abandono</TableHead>
                             <TableHead>Envio</TableHead>
@@ -627,19 +631,19 @@ export default function AdminEngagement() {
                         <TableBody>
                           {recoverySessions.map((s) => {
                             const planNames: Record<string, string> = { essencial: 'Essencial', direcao: 'Direção', transformacao: 'Transformação' };
-                            const maskedPhone = s.phone ? `${s.phone.substring(0, 6)}***` : '—';
+                            const maskedEmail = s.email ? `${s.email.substring(0, 3)}***@${s.email.split('@')[1] || ''}` : '—';
                             const attemptStatus = s.attempt_status;
                             const sendBadge = attemptStatus === 'api_accepted'
-                              ? <Badge className="bg-emerald-600 text-white text-[10px]"><CheckCircle2 className="h-3 w-3 mr-1" />Aceito</Badge>
+                              ? <Badge className="bg-emerald-600 text-white text-[10px]"><CheckCircle2 className="h-3 w-3 mr-1" />Enviado</Badge>
                               : attemptStatus === 'failed' || attemptStatus === 'error'
                               ? <Badge variant="destructive" className="text-[10px]"><AlertCircle className="h-3 w-3 mr-1" />{s.recovery_last_error?.substring(0, 30) || 'Falhou'}</Badge>
                               : attemptStatus === 'skipped' || attemptStatus === 'skipped_active_customer'
-                              ? <Badge variant="outline" className="text-[10px]">{attemptStatus === 'skipped_active_customer' ? 'Cliente ativo' : 'Sem telefone'}</Badge>
+                              ? <Badge variant="outline" className="text-[10px]">{attemptStatus === 'skipped_active_customer' ? 'Cliente ativo' : 'Sem email'}</Badge>
                               : <Badge variant="secondary" className="text-[10px]">Legado</Badge>;
                             return (
                               <TableRow key={s.id}>
                                 <TableCell className="font-medium">{s.name || '—'}</TableCell>
-                                <TableCell className="font-mono text-xs">{maskedPhone}</TableCell>
+                                <TableCell className="text-xs">{maskedEmail}</TableCell>
                                 <TableCell>{planNames[s.plan || ''] || s.plan || '—'}</TableCell>
                                 <TableCell className="text-xs">{format(new Date(s.created_at), 'dd/MM HH:mm')}</TableCell>
                                 <TableCell>{sendBadge}</TableCell>
@@ -666,52 +670,52 @@ export default function AdminEngagement() {
                       <CreditCard className="h-4 w-4" />
                       Tentativas de Dunning (Pagamento Falhou)
                     </CardTitle>
-                    <p className="text-xs text-muted-foreground">
-                      {dunningAttempts.length} tentativas registradas — {dunningAttempts.filter(d => d.whatsapp_sent).length} WhatsApp enviados, {dunningAttempts.filter(d => !d.profile_found).length} sem perfil
-                    </p>
-                  </CardHeader>
-                  <CardContent>
-                    {dunningAttempts.length === 0 ? (
-                      <p className="text-sm text-muted-foreground text-center py-4">Nenhuma tentativa de dunning registrada ainda.</p>
-                    ) : (
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Data</TableHead>
-                            <TableHead>Telefone</TableHead>
-                            <TableHead>Perfil</TableHead>
-                            <TableHead>Link</TableHead>
-                            <TableHead>WhatsApp</TableHead>
-                            <TableHead>Erro</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {dunningAttempts.map((d) => {
-                            const maskedPhone = d.phone_resolved ? `${d.phone_resolved.substring(0, 6)}***` : d.phone_raw ? `${d.phone_raw.substring(0, 6)}***` : '—';
-                            return (
-                              <TableRow key={d.id}>
-                                <TableCell className="text-xs">{format(new Date(d.created_at), 'dd/MM HH:mm')}</TableCell>
-                                <TableCell className="font-mono text-xs">{maskedPhone}</TableCell>
-                                <TableCell>
-                                  {d.profile_found ? (
-                                    <Badge className="bg-green-600 text-white text-xs">Sim</Badge>
-                                  ) : (
-                                    <Badge variant="destructive" className="text-xs">Não</Badge>
-                                  )}
-                                </TableCell>
-                                <TableCell>
-                                  {d.link_generated ? (
-                                    <Badge className="bg-green-600 text-white text-xs">✓</Badge>
-                                  ) : (
-                                    <Badge variant="secondary" className="text-xs">—</Badge>
-                                  )}
-                                </TableCell>
-                                <TableCell>
-                                  {d.whatsapp_sent ? (
-                                    <Badge className="bg-green-600 text-white text-xs">Enviado</Badge>
-                                  ) : (
-                                    <Badge variant="secondary" className="text-xs">Não</Badge>
-                                  )}
+                     <p className="text-xs text-muted-foreground">
+                       {dunningAttempts.length} tentativas registradas — {dunningAttempts.filter(d => d.whatsapp_sent).length} emails enviados, {dunningAttempts.filter(d => !d.profile_found).length} sem perfil
+                     </p>
+                   </CardHeader>
+                   <CardContent>
+                     {dunningAttempts.length === 0 ? (
+                       <p className="text-sm text-muted-foreground text-center py-4">Nenhuma tentativa de dunning registrada ainda.</p>
+                     ) : (
+                       <Table>
+                         <TableHeader>
+                           <TableRow>
+                             <TableHead>Data</TableHead>
+                             <TableHead>Telefone</TableHead>
+                             <TableHead>Perfil</TableHead>
+                             <TableHead>Link</TableHead>
+                             <TableHead>Email</TableHead>
+                             <TableHead>Erro</TableHead>
+                           </TableRow>
+                         </TableHeader>
+                         <TableBody>
+                           {dunningAttempts.map((d) => {
+                             const maskedPhone = d.phone_resolved ? `${d.phone_resolved.substring(0, 6)}***` : d.phone_raw ? `${d.phone_raw.substring(0, 6)}***` : '—';
+                             return (
+                               <TableRow key={d.id}>
+                                 <TableCell className="text-xs">{format(new Date(d.created_at), 'dd/MM HH:mm')}</TableCell>
+                                 <TableCell className="font-mono text-xs">{maskedPhone}</TableCell>
+                                 <TableCell>
+                                   {d.profile_found ? (
+                                     <Badge className="bg-green-600 text-white text-xs">Sim</Badge>
+                                   ) : (
+                                     <Badge variant="destructive" className="text-xs">Não</Badge>
+                                   )}
+                                 </TableCell>
+                                 <TableCell>
+                                   {d.link_generated ? (
+                                     <Badge className="bg-green-600 text-white text-xs">✓</Badge>
+                                   ) : (
+                                     <Badge variant="secondary" className="text-xs">—</Badge>
+                                   )}
+                                 </TableCell>
+                                 <TableCell>
+                                   {d.whatsapp_sent ? (
+                                     <Badge className="bg-green-600 text-white text-xs"><Mail className="h-3 w-3 mr-1" />Enviado</Badge>
+                                   ) : (
+                                     <Badge variant="secondary" className="text-xs">Não</Badge>
+                                   )}
                                 </TableCell>
                                 <TableCell className="text-xs max-w-[200px] truncate" title={d.error_message || ''}>
                                   {d.error_stage ? (
