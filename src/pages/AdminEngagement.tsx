@@ -171,22 +171,24 @@ export default function AdminEngagement() {
     try {
       const { data: abandoned, error } = await supabase
         .from('checkout_sessions')
-        .select('id, name, phone, plan, created_at, status, recovery_sent, recovery_sent_at, recovery_last_error, recovery_attempts_count')
+        .select('id, name, phone, email, plan, created_at, status, recovery_sent, recovery_sent_at, recovery_last_error, recovery_attempts_count')
         .eq('recovery_sent', true)
         .order('created_at', { ascending: false })
         .limit(50);
 
       if (error) throw error;
 
-      // Check which phones later completed a checkout
+      // Check which emails/phones later completed a checkout
+      const emails = (abandoned || []).filter(s => s.email).map(s => s.email!);
       const phones = (abandoned || []).map(s => s.phone);
-      const { data: completed } = await supabase
-        .from('checkout_sessions')
-        .select('phone')
-        .eq('status', 'completed')
-        .in('phone', phones);
+      const { data: completedByEmail } = emails.length > 0
+        ? await supabase.from('checkout_sessions').select('email').eq('status', 'completed').in('email', emails)
+        : { data: [] };
+      const { data: completedByPhone } = await supabase
+        .from('checkout_sessions').select('phone').eq('status', 'completed').in('phone', phones);
 
-      const completedPhones = new Set((completed || []).map(c => c.phone));
+      const completedEmails = new Set((completedByEmail || []).map(c => c.email?.toLowerCase()));
+      const completedPhones = new Set((completedByPhone || []).map(c => c.phone));
 
       // Fetch latest attempt status for each session
       const sessionIds = (abandoned || []).map(s => s.id);
@@ -205,19 +207,20 @@ export default function AdminEngagement() {
         }
       }
 
-      // Deduplicate by phone: keep only the most recent session per phone
-      const byPhone = new Map<string, typeof abandoned[number]>();
+      // Deduplicate by email (primary) or phone (fallback)
+      const byKey = new Map<string, typeof abandoned[number]>();
       for (const s of (abandoned || [])) {
-        const existing = byPhone.get(s.phone);
+        const key = s.email?.toLowerCase() || s.phone;
+        const existing = byKey.get(key);
         if (!existing || new Date(s.created_at) > new Date(existing.created_at)) {
-          byPhone.set(s.phone, s);
+          byKey.set(key, s);
         }
       }
-      const uniqueSessions = Array.from(byPhone.values());
+      const uniqueSessions = Array.from(byKey.values());
 
       setRecoverySessions(uniqueSessions.map(s => ({
         ...s,
-        converted: completedPhones.has(s.phone),
+        converted: (s.email && completedEmails.has(s.email.toLowerCase())) || completedPhones.has(s.phone),
         attempt_status: attemptMap.get(s.id) || null,
       })));
     } catch (err) {
