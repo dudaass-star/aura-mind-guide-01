@@ -1,49 +1,60 @@
 
 
-## Plano: Corrigir envio de e-mails de Checkout Abandonado e Dunning
+## Plano: Remover dunning via WhatsApp + Eliminar fallbacks de texto livre
 
-### Problemas identificados
+### Contexto
 
-**1. Dunning: `no_subscription_on_invoice` (100% de falhas)**
-Todas as tentativas recentes de dunning falham porque `invoice.subscription` vem como `undefined` no evento do webhook, mesmo que a invoice tenha `billing_reason: subscription_cycle` e o customer tenha uma subscription `past_due`. Isso acontece provavelmente por diferença entre a versão da API do webhook (configurada no dashboard do Stripe) e a versão usada no SDK (`2023-10-16`). O código atual simplesmente ignora a invoice se `invoice.subscription` for falsy.
+Dois problemas de segurança da conta Meta:
 
-**2. Checkout Recovery: `FunctionsHttpError` e sessões não retentadas**
-- O erro antigo (401) foi corrigido com `supabase.functions.invoke()`, mas a tentativa mais recente (14:10 de hoje) retornou `FunctionsHttpError` — provavelmente o `send-transactional-email` retornou um erro HTTP que o `.invoke()` classifica como `FunctionsHttpError`.
-- Todas as sessões que falharam com 401 foram marcadas como `recovery_sent = true`, então não serão retentadas automaticamente.
+1. **Dunning via WhatsApp** — O `stripe-webhook` (linhas 1134-1148) envia notificação WhatsApp via template `access_blocked` após já ter enviado o email. Deve ser removido.
 
----
+2. **Fallback de texto livre fora da janela** — Em `whatsapp-official.ts` (linhas 342-346), quando um template não está ativo/aprovado, o sistema tenta enviar como texto livre fora da janela de 24h. Isso viola as regras da Meta e pode causar banimento.
+
+### Regra de ouro (proteção contra banimento)
+
+- **Janela aberta (24h)** → texto livre, sem template
+- **Janela fechada** → template obrigatório. Se template não disponível → **falhar silenciosamente** e logar o erro. Nunca tentar texto livre.
 
 ### Correções
 
-#### 1. Stripe Webhook — resolver `subscription` quando vier null
+#### 1. Remover bloco WhatsApp do dunning no stripe-webhook
 
-No `stripe-webhook/index.ts`, dentro do bloco `invoice.payment_failed`:
+**Arquivo:** `supabase/functions/stripe-webhook/index.ts`
 
-- Quando `invoice.subscription` for null/undefined mas `billing_reason` indicar que é uma invoice de subscription (`subscription_cycle`, `subscription_update`, `subscription_create`):
-  - Buscar o subscription via `stripe.subscriptions.list({ customer: customerId, status: 'past_due', limit: 1 })` ou `status: 'active'`
-  - Se encontrar, usar esse subscription ID e continuar o fluxo normalmente
-  - Isso desbloqueia **todos** os dunning events que estão falhando atualmente
+Deletar linhas 1134-1148 (bloco "Step 5: Send WhatsApp notification" que chama `sendProactive` com categoria `access_blocked`). O email já cobre a notificação.
 
-#### 2. Checkout Recovery — melhorar tratamento de erros
+#### 2. Remover fallback de texto livre em `sendProactiveMessage`
 
-No `recover-abandoned-checkout/index.ts`:
+**Arquivo:** `supabase/functions/_shared/whatsapp-official.ts`
 
-- Após `supabase.functions.invoke()`, verificar tanto `error` quanto `data` para extrair mensagens de erro mais detalhadas
-- Logar o corpo completo da resposta para debug
+Na função `sendProactiveMessage`, linhas 342-346:
 
-#### 3. Reset de sessões com falha 401
+**Antes:**
+```typescript
+if (!templateConfig.is_active || templateConfig.twilio_content_sid === 'PENDING_APPROVAL') {
+  console.warn(`⚠️ [Twilio] Template "${templateCategory}" not active, attempting free text fallback`);
+  const result = await sendFreeText(phone, text);
+  return { success: result.success, parts: 1, type: 'freetext', error: result.error };
+}
+```
 
-- Criar uma query para resetar `recovery_sent = false` e `recovery_attempts_count = 0` nas sessões que falharam com erro 401 (anteriores à correção), permitindo que sejam retentadas na próxima execução do cron
+**Depois:**
+```typescript
+if (!templateConfig.is_active || templateConfig.twilio_content_sid === 'PENDING_APPROVAL') {
+  const errMsg = `Template "${templateCategory}" not active/approved. Cannot send outside 24h window without approved template. Aborting to protect Meta account quality.`;
+  console.error(`🛑 [Twilio] ${errMsg}`);
+  return { success: false, parts: 0, type: 'template', error: errMsg };
+}
+```
 
----
+Também remover o envio de "Parts 2+" como texto livre (linhas 368-377), pois fora da janela o template não abre sessão — essas partes nunca seriam entregues e são uma violação potencial. Se a mensagem não cabe em um template, deve usar teaser mode.
+
+#### 3. Redeploy
+
+Redeployar `stripe-webhook` e `process-webhook-message` (que importa `whatsapp-official.ts`).
 
 ### Arquivos modificados
 
-1. `supabase/functions/stripe-webhook/index.ts` — fallback para resolver subscription quando `invoice.subscription` é null
-2. `supabase/functions/recover-abandoned-checkout/index.ts` — melhorar log de erros do `.invoke()`
-3. Migration SQL — reset das sessões de checkout que falharam com 401
-
-### Deploy
-
-Redeployar `stripe-webhook` e `recover-abandoned-checkout`, depois verificar nos logs e na tabela `dunning_attempts` que os próximos eventos são processados corretamente.
+1. `supabase/functions/stripe-webhook/index.ts` — remover bloco WhatsApp dunning
+2. `supabase/functions/_shared/whatsapp-official.ts` — remover fallback de texto livre, remover split de partes extras
 
