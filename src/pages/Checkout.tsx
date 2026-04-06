@@ -523,21 +523,45 @@ const Checkout = () => {
         {showExitPopup && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/50 backdrop-blur-sm px-4">
             <div className="bg-card rounded-2xl p-8 max-w-md w-full shadow-xl border border-border/50 text-center space-y-5 animate-in fade-in zoom-in-95 duration-300">
-              <p className="text-4xl">💜</p>
+              <p className="text-4xl">🎁</p>
               <h2 className="font-display text-xl font-semibold text-foreground">
-                Ei, não vai embora!
+                Espera!
               </h2>
               <p className="text-muted-foreground text-sm leading-relaxed">
-                Você estava tão perto de começar sua jornada de autocuidado. A AURA está aqui pra te escutar — sem julgamento, no seu ritmo.
+                Sua oferta de trial ainda está ativa: <span className="font-semibold text-primary">7 dias por apenas R$ {currentPlan.trialPrice}</span> (plano {currentPlan.name})
               </p>
+              <ul className="space-y-2 text-sm text-muted-foreground text-left mx-auto max-w-xs">
+                <li className="flex items-center gap-2">
+                  <Check className="w-4 h-4 text-primary flex-shrink-0" />
+                  Garantia de satisfação
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="w-4 h-4 text-primary flex-shrink-0" />
+                  Cancele quando quiser
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="w-4 h-4 text-primary flex-shrink-0" />
+                  +500 pessoas já começaram
+                </li>
+              </ul>
               <Button
                 variant="sage"
                 size="lg"
                 className="w-full"
                 onClick={() => setShowExitPopup(false)}
               >
-                Continuar minha jornada
+                Quero experimentar por R$ {currentPlan.trialPrice}
               </Button>
+              <a
+                href="https://wa.me/5511999999999?text=Oi%2C%20tenho%20uma%20d%C3%BAvida%20sobre%20a%20AURA"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <MessageCircle className="w-3.5 h-3.5" />
+                Prefere tirar uma dúvida? Fale conosco
+              </a>
+              <br />
               <button
                 onClick={() => setShowExitPopup(false)}
                 className="text-xs text-muted-foreground hover:text-foreground transition-colors"
