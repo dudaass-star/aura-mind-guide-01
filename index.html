@@ -27,9 +27,13 @@
   <meta name="twitter:description" content="Seu acompanhamento emocional">
   <link rel="icon" type="image/png" href="/favicon.png">
 
-  <!-- Meta Pixel Code — skip on /obrigado to prevent ghost Purchase events -->
+  <!-- Meta Pixel Code — only on marketing routes -->
   <script>
-    if (window.location.pathname !== '/obrigado') {
+    (function(){
+      var marketingRoutes = ['/', '/checkout', '/obrigado', '/experimentar', '/trial-iniciado'];
+      var path = window.location.pathname;
+      if (marketingRoutes.indexOf(path) === -1) return;
+
       !function(f,b,e,v,n,t,s)
       {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
       n.callMethod.apply(n,arguments):n.queue.push(arguments)};
@@ -39,8 +43,10 @@
       s.parentNode.insertBefore(t,s)}(window, document,'script',
       'https://connect.facebook.net/en_US/fbevents.js');
       fbq('init', '939366085297921');
-      fbq('track', 'PageView');
-    }
+      if (path !== '/obrigado') {
+        fbq('track', 'PageView');
+      }
+    })();
   </script>
   <noscript><img height="1" width="1" style="display:none"
     src="https://www.facebook.com/tr?id=939366085297921&ev=PageView&noscript=1"
