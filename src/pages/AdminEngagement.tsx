@@ -460,69 +460,68 @@ export default function AdminEngagement() {
 
                 {/* Cost Section */}
                 {metrics && metrics.totalCostUSD !== undefined && (
-                  <div className="space-y-4">
-                    <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
-                      <DollarSign className="h-5 w-5" />
+                  <div className="space-y-3">
+                    <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                      <DollarSign className="h-4 w-4" />
                       Custo de IA no Período
                     </h2>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-3 gap-3">
                       <Card>
-                        <CardHeader className="flex flex-row items-center justify-between pb-2">
-                          <CardTitle className="text-sm font-medium text-muted-foreground">Custo Total</CardTitle>
-                          <DollarSign className="h-4 w-4 text-muted-foreground" />
+                        <CardHeader className="flex flex-row items-center justify-between p-3 pb-1">
+                          <CardTitle className="text-xs font-medium text-muted-foreground">Custo Total</CardTitle>
+                          <DollarSign className="h-3.5 w-3.5 text-muted-foreground" />
                         </CardHeader>
-                        <CardContent>
-                          <div className="text-2xl font-bold text-foreground">${(metrics.totalCostUSD ?? 0).toFixed(2)}</div>
-                          <p className="text-xs text-muted-foreground mt-1">{periodLabel}</p>
+                        <CardContent className="p-3 pt-0">
+                          <div className="text-xl font-bold text-foreground">${(metrics.totalCostUSD ?? 0).toFixed(2)}</div>
+                          <p className="text-[11px] text-muted-foreground">{periodLabel}</p>
                         </CardContent>
                       </Card>
                       <Card>
-                        <CardHeader className="flex flex-row items-center justify-between pb-2">
-                          <CardTitle className="text-sm font-medium text-muted-foreground">Custo/Usuário Ativo</CardTitle>
-                          <Users className="h-4 w-4 text-muted-foreground" />
+                        <CardHeader className="flex flex-row items-center justify-between p-3 pb-1">
+                          <CardTitle className="text-xs font-medium text-muted-foreground">Custo/Usuário</CardTitle>
+                          <Users className="h-3.5 w-3.5 text-muted-foreground" />
                         </CardHeader>
-                        <CardContent>
-                          <div className="text-2xl font-bold text-foreground">${(metrics.avgCostPerActiveUser ?? 0).toFixed(2)}</div>
-                          <p className="text-xs text-muted-foreground mt-1">{metrics.activeUsers} usuários ativos</p>
+                        <CardContent className="p-3 pt-0">
+                          <div className="text-xl font-bold text-foreground">${(metrics.avgCostPerActiveUser ?? 0).toFixed(2)}</div>
+                          <p className="text-[11px] text-muted-foreground">{metrics.activeUsers} ativos</p>
                         </CardContent>
                       </Card>
                       <Card>
-                        <CardHeader className="flex flex-row items-center justify-between pb-2">
-                          <CardTitle className="text-sm font-medium text-muted-foreground">Economia com Cache</CardTitle>
-                          <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                        <CardHeader className="flex flex-row items-center justify-between p-3 pb-1">
+                          <CardTitle className="text-xs font-medium text-muted-foreground">Cache Savings</CardTitle>
+                          <TrendingUp className="h-3.5 w-3.5 text-muted-foreground" />
                         </CardHeader>
-                        <CardContent>
-                          <div className="text-2xl font-bold text-green-600">${(metrics.totalCacheSavings ?? 0).toFixed(2)}</div>
-                          <p className="text-xs text-muted-foreground mt-1">economia vs. sem cache</p>
+                        <CardContent className="p-3 pt-0">
+                          <div className="text-xl font-bold text-green-600">${(metrics.totalCacheSavings ?? 0).toFixed(2)}</div>
+                          <p className="text-[11px] text-muted-foreground">vs. sem cache</p>
                         </CardContent>
                       </Card>
                     </div>
 
-                    {/* Cost breakdown by model */}
+                    {/* Cost breakdown inline table */}
                     {metrics.costBreakdownByModel && metrics.costBreakdownByModel.length > 0 && (
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="text-sm font-medium text-muted-foreground">Custo por Modelo</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="space-y-2">
+                      <div className="border border-border rounded-md overflow-hidden">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="text-[11px] py-1.5 px-2">Modelo</TableHead>
+                              <TableHead className="text-[11px] py-1.5 px-2 text-right">Calls</TableHead>
+                              <TableHead className="text-[11px] py-1.5 px-2 text-right">Cache</TableHead>
+                              <TableHead className="text-[11px] py-1.5 px-2 text-right">Custo</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
                             {metrics.costBreakdownByModel.map((m) => (
-                              <div key={m.model} className="flex items-center justify-between text-sm">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-mono text-xs text-muted-foreground">{m.model}</span>
-                                  <span className="text-xs text-muted-foreground">({m.calls} calls)</span>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                  {(m.cacheSavings ?? 0) > 0 && (
-                                    <span className="text-xs text-green-600">-${(m.cacheSavings ?? 0).toFixed(2)}</span>
-                                  )}
-                                  <span className="font-semibold text-foreground">${(m.cost ?? 0).toFixed(2)}</span>
-                                </div>
-                              </div>
+                              <TableRow key={m.model}>
+                                <TableCell className="font-mono text-[11px] py-1 px-2">{m.model}</TableCell>
+                                <TableCell className="text-[11px] py-1 px-2 text-right">{m.calls}</TableCell>
+                                <TableCell className="text-[11px] py-1 px-2 text-right text-green-600">{(m.cacheSavings ?? 0) > 0 ? `-$${(m.cacheSavings ?? 0).toFixed(2)}` : '—'}</TableCell>
+                                <TableCell className="text-[11px] py-1 px-2 text-right font-semibold">${(m.cost ?? 0).toFixed(2)}</TableCell>
+                              </TableRow>
                             ))}
-                          </div>
-                        </CardContent>
-                      </Card>
+                          </TableBody>
+                        </Table>
+                      </div>
                     )}
                   </div>
                 )}
