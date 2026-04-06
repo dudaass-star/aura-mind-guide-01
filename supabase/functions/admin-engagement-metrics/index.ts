@@ -8,6 +8,7 @@ const corsHeaders = {
 // Model pricing per 1M tokens (USD)
 const MODEL_PRICING: Record<string, { input: number; inputCached: number; output: number }> = {
   'gemini-2.5-flash': { input: 0.15, inputCached: 0.0375, output: 0.60 },
+  'gemini-2.5-flash-lite': { input: 0.075, inputCached: 0.01875, output: 0.30 },
   'gemini-3-flash-preview': { input: 0.15, inputCached: 0.0375, output: 0.60 },
   'gemini-2.5-pro': { input: 1.25, inputCached: 0.3125, output: 10.00 },
   'claude-sonnet-4-6': { input: 3.00, inputCached: 0.30, output: 15.00 },
