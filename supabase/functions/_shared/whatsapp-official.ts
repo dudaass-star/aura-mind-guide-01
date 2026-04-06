@@ -340,10 +340,9 @@ export async function sendProactiveMessage(
     }
 
     if (!templateConfig.is_active || templateConfig.twilio_content_sid === 'PENDING_APPROVAL') {
-      // Fallback: try free text anyway (may fail if outside window)
-      console.warn(`⚠️ [Twilio] Template "${templateCategory}" not active, attempting free text fallback`);
-      const result = await sendFreeText(phone, text);
-      return { success: result.success, parts: 1, type: 'freetext', error: result.error };
+      const errMsg = `Template "${templateCategory}" not active/approved. Cannot send outside 24h window without approved template. Aborting to protect Meta account quality.`;
+      console.error(`🛑 [Twilio] ${errMsg}`);
+      return { success: false, parts: 0, type: 'template', error: errMsg };
     }
 
     // If structured template variables provided, use them directly
@@ -365,15 +364,10 @@ export async function sendProactiveMessage(
       return { success: false, parts: 0, type: 'template', error: templateResult.error };
     }
 
-    // Parts 2+: Free text (NOTE: only works if user has responded, 
-    // templates do NOT open 24h window. Teaser mode avoids this.)
-    for (let i = 1; i < parts.length; i++) {
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      console.log(`📨 [Twilio] Sending part ${i + 1}/${parts.length} as free text`);
-      const freeResult = await sendFreeText(phone, parts[i]);
-      if (!freeResult.success) {
-        console.warn(`⚠️ [Twilio] Part ${i + 1} failed: ${freeResult.error}`);
-      }
+    // Parts 2+: NOT sent as free text — templates do NOT open 24h window,
+    // so additional parts would violate Meta policy. Use teaser mode for long messages.
+    if (parts.length > 1) {
+      console.warn(`⚠️ [Twilio] Message was split into ${parts.length} parts but only first part sent via template. Use teaser mode for long messages to avoid data loss.`);
     }
 
     return { success: true, parts: parts.length, type: 'template' };
