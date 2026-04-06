@@ -794,7 +794,7 @@ export default function AdminEngagement() {
             )}
           </TabsContent>
 
-          <TabsContent value="cancellations" className="mt-4 space-y-6">
+          <TabsContent value="cancellations" className="mt-3 space-y-4">
             {loading && !metrics ? <SkeletonCards /> : metrics && (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
