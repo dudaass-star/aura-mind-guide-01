@@ -453,7 +453,7 @@ export default function AdminEngagement() {
             <TabsTrigger value="cancellations">Cancelamentos</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="engagement" className="mt-4 space-y-6">
+          <TabsContent value="engagement" className="mt-3 space-y-4">
             {loading && !metrics ? <SkeletonCards /> : (
               <>
                 <MetricCards cards={engagementCards} />
