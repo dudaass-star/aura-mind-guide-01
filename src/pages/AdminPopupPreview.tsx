@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Check, MessageCircle } from 'lucide-react';
+import { ArrowLeft, Check, Gift } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 type PlanId = 'essencial' | 'direcao' | 'transformacao';
@@ -59,7 +59,9 @@ export default function AdminPopupPreview() {
         {/* Popup preview */}
         <div className="flex items-center justify-center">
           <div className="bg-card rounded-2xl p-8 max-w-md w-full shadow-xl border border-border/50 text-center space-y-5">
-            <p className="text-4xl">🎁</p>
+            <div className="flex justify-center">
+              <Gift className="w-10 h-10 text-primary" />
+            </div>
             <h2 className="font-display text-xl font-semibold text-foreground">
               Espera!
             </h2>
@@ -77,25 +79,12 @@ export default function AdminPopupPreview() {
               </li>
               <li className="flex items-center gap-2">
                 <Check className="w-4 h-4 text-primary flex-shrink-0" />
-                +500 pessoas já começaram
+                +5.000 pessoas já começaram
               </li>
             </ul>
             <Button variant="sage" size="lg" className="w-full">
               Quero experimentar por R$ {currentPlan.trialPrice}
             </Button>
-            <a
-              href="https://wa.me/5511999999999?text=Oi%2C%20tenho%20uma%20d%C3%BAvida%20sobre%20a%20AURA"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <MessageCircle className="w-3.5 h-3.5" />
-              Prefere tirar uma dúvida? Fale conosco
-            </a>
-            <br />
-            <button className="text-xs text-muted-foreground hover:text-foreground transition-colors">
-              Não, obrigado
-            </button>
           </div>
         </div>
       </div>
