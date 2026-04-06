@@ -298,24 +298,26 @@ export async function sendProactiveMessage(
   templateVariables?: string[],
 ): Promise<ProactiveMessageResult> {
   try {
-    // Check 24h window
+    // Check 24h window + resolve user name in a single query
     let windowOpen = false;
+    let userName: string | null = null;
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
     if (userId) {
-      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-      const supabase = createClient(supabaseUrl, supabaseKey);
-
       const { data: profile } = await supabase
         .from('profiles')
-        .select('last_user_message_at')
+        .select('last_user_message_at, name')
         .eq('user_id', userId)
         .single();
 
       windowOpen = isWithin24hWindow(profile?.last_user_message_at);
+      userName = profile?.name || null;
     }
 
-    // Window open → free text
+    // Window open → free text (full message content allowed)
     if (windowOpen) {
       console.log('✅ [Twilio] 24h window open, sending as free text');
       const messageToSend = teaserText || text;
@@ -323,12 +325,7 @@ export async function sendProactiveMessage(
       return { success: result.success, parts: 1, type: 'freetext', error: result.error };
     }
 
-    // Window closed → template
-    // Look up template config from DB
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
+    // Window closed → template ONLY (never inject message text into variables)
     const { data: templateConfig } = await supabase
       .from('whatsapp_templates')
       .select('template_name, prefix, twilio_content_sid, is_active')
@@ -345,32 +342,20 @@ export async function sendProactiveMessage(
       return { success: false, parts: 0, type: 'template', error: errMsg };
     }
 
-    // If structured template variables provided, use them directly
+    // If structured template variables provided explicitly, use them directly
     if (templateVariables && templateVariables.length > 0) {
       console.log(`📨 [Twilio] Sending template "${templateConfig.template_name}" with ${templateVariables.length} structured variable(s)`);
       const templateResult = await sendTemplateMessage(phone, templateConfig.template_name, templateVariables);
       return { success: templateResult.success, parts: 1, type: 'template', error: templateResult.error };
     }
 
-    // Use teaser if provided (short message with link, avoids split issues)
-    const messageToSend = teaserText || text;
-    const parts = splitMessageForTemplate(messageToSend, templateConfig.prefix.length);
-    console.log(`📨 [Twilio] Sending ${parts.length} part(s) via template "${templateConfig.template_name}"${teaserText ? ' (teaser mode)' : ''}`);
+    // No explicit templateVariables → auto-resolve first name as the ONLY variable
+    // NEVER inject message text into template variables (Meta policy protection)
+    const firstName = userName ? userName.split(' ')[0] : 'there';
+    console.log(`📨 [Twilio] Sending template "${templateConfig.template_name}" with auto-resolved name: "${firstName}"`);
 
-    // Part 1: Template
-    const templateResult = await sendTemplateMessage(phone, templateConfig.template_name, [parts[0]]);
-
-    if (!templateResult.success) {
-      return { success: false, parts: 0, type: 'template', error: templateResult.error };
-    }
-
-    // Parts 2+: NOT sent as free text — templates do NOT open 24h window,
-    // so additional parts would violate Meta policy. Use teaser mode for long messages.
-    if (parts.length > 1) {
-      console.warn(`⚠️ [Twilio] Message was split into ${parts.length} parts but only first part sent via template. Use teaser mode for long messages to avoid data loss.`);
-    }
-
-    return { success: true, parts: parts.length, type: 'template' };
+    const templateResult = await sendTemplateMessage(phone, templateConfig.template_name, [firstName]);
+    return { success: templateResult.success, parts: 1, type: 'template', error: templateResult.error };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('❌ [Twilio] Proactive message error:', errorMessage);
