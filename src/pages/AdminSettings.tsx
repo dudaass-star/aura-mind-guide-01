@@ -5,7 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, Save, Brain, Mic, Mail } from 'lucide-react';
+import { ArrowLeft, Save, Brain, Mic, Mail, Eye } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const AI_MODELS = [
