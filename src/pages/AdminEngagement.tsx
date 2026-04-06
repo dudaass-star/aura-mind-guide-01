@@ -529,7 +529,7 @@ export default function AdminEngagement() {
             )}
           </TabsContent>
 
-          <TabsContent value="trial" className="mt-4 space-y-6">
+          <TabsContent value="trial" className="mt-3 space-y-4">
             {loading && !metrics ? <SkeletonCards /> : (
               <>
                 {/* BILLING METRICS */}
