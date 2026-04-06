@@ -265,7 +265,7 @@ const Checkout = () => {
               </p>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-8">
+            <form id="checkout-form" onSubmit={handleSubmit} className="space-y-8">
               {/* Billing period toggle */}
               <div className="bg-card rounded-2xl p-6 border border-border/50">
                 <h2 className="font-display text-lg font-semibold text-foreground mb-4">
