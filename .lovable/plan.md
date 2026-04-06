@@ -1,31 +1,50 @@
 
 
-## Verificação: Custo de IA no Dashboard
+## Plano: Condensar layout do dashboard de métricas
 
-### Resultado
+### Problema atual
 
-O valor de **$8.51** exibido no dashboard está **essencialmente correto**. Verifiquei os dados brutos da tabela `token_usage_logs` e recalculei manualmente:
+Os cards de métricas ocupam muito espaço vertical — cada card tem padding generoso (`p-6`), textos grandes (`text-2xl`), e o grid usa no máximo 3 colunas. Isso força scrolling excessivo para ver todos os dados.
 
-| Modelo | Chamadas | Custo Calculado |
-|---|---|---|
-| google/gemini-2.5-pro (conversas) | 799 | $6.69 |
-| gemini-2.5-pro (cache-creation) | 122 | $1.49 |
-| gemini-2.5-flash-lite | 1,592 | $0.33 |
-| **Total** | **2,513** | **~$8.51** |
+### Melhorias propostas
 
-A economia com cache de **$8.34** também está correta — sem cache, só o input do Pro custaria ~$14.37.
+**1. Cards mais compactos**
+- Reduzir padding do CardHeader e CardContent (de `p-6` para `p-3`/`p-4`)
+- Diminuir tamanho do valor principal de `text-2xl` para `text-xl`
+- Reduzir `gap-4` dos grids para `gap-3`
 
-### Problema menor encontrado
+**2. Grid 4 colunas em desktop**
+- Trocar `lg:grid-cols-3` para `lg:grid-cols-4` nos grids de métricas (engajamento, trial, custos, cancelamentos)
+- Permite ver mais dados sem scroll
 
-O modelo `gemini-2.5-flash-lite` não tem entrada na tabela de preços do edge function. Ele cai no fallback ($0.15/$0.60), quando o preço real é **$0.075/$0.30** (metade). Isso causa uma sobrestimativa de ~$0.17 no Flash Lite — insignificante no total, mas tecnicamente incorreto.
+**3. Seção de custo inline**
+- Os 3 cards de custo de IA + breakdown podem ficar em layout mais denso
+- Breakdown por modelo: converter de Card com header para uma tabela simples inline
 
-### Correção proposta
+**4. Tabs header compacto**
+- Reduzir `space-y-6` entre seções para `space-y-4`
+- Reduzir espaçamento geral da página de `p-6` para `p-4`
 
-Adicionar `gemini-2.5-flash-lite` à tabela `MODEL_PRICING` no edge function `admin-engagement-metrics/index.ts`:
+**5. Tabelas mais densas**
+- Reduzir font-size das tabelas (recovery, dunning) para `text-xs` consistente
+- Compactar padding das cells
 
-```typescript
-'gemini-2.5-flash-lite': { input: 0.075, inputCached: 0.01875, output: 0.30 },
+### Arquivo modificado
+
+- `src/pages/AdminEngagement.tsx` — ajustes de classes CSS em grids, cards e espaçamento
+
+### Resumo visual esperado
+
+```text
+ANTES:                          DEPOIS:
+┌────┐ ┌────┐ ┌────┐           ┌───┐ ┌───┐ ┌───┐ ┌───┐
+│    │ │    │ │    │           │   │ │   │ │   │ │   │
+│    │ │    │ │    │           └───┘ └───┘ └───┘ └───┘
+└────┘ └────┘ └────┘           ┌───┐ ┌───┐ ┌───┐ ┌───┐
+┌────┐ ┌────┐ ┌────┐           │   │ │   │ │   │ │   │
+│    │ │    │ │    │           └───┘ └───┘ └───┘ └───┘
+└────┘ └────┘ └────┘
 ```
 
-**1 arquivo editado**: `supabase/functions/admin-engagement-metrics/index.ts` (1 linha adicionada na tabela de preços)
+~30% menos scroll vertical, mesma informação.
 
