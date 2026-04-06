@@ -340,10 +340,9 @@ export async function sendProactiveMessage(
     }
 
     if (!templateConfig.is_active || templateConfig.twilio_content_sid === 'PENDING_APPROVAL') {
-      // Fallback: try free text anyway (may fail if outside window)
-      console.warn(`⚠️ [Twilio] Template "${templateCategory}" not active, attempting free text fallback`);
-      const result = await sendFreeText(phone, text);
-      return { success: result.success, parts: 1, type: 'freetext', error: result.error };
+      const errMsg = `Template "${templateCategory}" not active/approved. Cannot send outside 24h window without approved template. Aborting to protect Meta account quality.`;
+      console.error(`🛑 [Twilio] ${errMsg}`);
+      return { success: false, parts: 0, type: 'template', error: errMsg };
     }
 
     // If structured template variables provided, use them directly
