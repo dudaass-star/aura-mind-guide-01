@@ -521,9 +521,11 @@ const Checkout = () => {
 
         {/* Exit-intent popup */}
         {showExitPopup && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/50 backdrop-blur-sm px-4">
-            <div className="bg-card rounded-2xl p-8 max-w-md w-full shadow-xl border border-border/50 text-center space-y-5 animate-in fade-in zoom-in-95 duration-300">
-              <p className="text-4xl">🎁</p>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/50 backdrop-blur-sm px-4" onClick={() => setShowExitPopup(false)}>
+            <div className="bg-card rounded-2xl p-8 max-w-md w-full shadow-xl border border-border/50 text-center space-y-5 animate-in fade-in zoom-in-95 duration-300" onClick={(e) => e.stopPropagation()}>
+              <div className="flex justify-center">
+                <Gift className="w-10 h-10 text-primary" />
+              </div>
               <h2 className="font-display text-xl font-semibold text-foreground">
                 Espera!
               </h2>
@@ -541,33 +543,20 @@ const Checkout = () => {
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="w-4 h-4 text-primary flex-shrink-0" />
-                  +500 pessoas já começaram
+                  +5.000 pessoas já começaram
                 </li>
               </ul>
               <Button
                 variant="sage"
                 size="lg"
                 className="w-full"
-                onClick={() => setShowExitPopup(false)}
+                onClick={() => {
+                  setShowExitPopup(false);
+                  document.getElementById('checkout-form')?.scrollIntoView({ behavior: 'smooth' });
+                }}
               >
                 Quero experimentar por R$ {currentPlan.trialPrice}
               </Button>
-              <a
-                href="https://wa.me/5511999999999?text=Oi%2C%20tenho%20uma%20d%C3%BAvida%20sobre%20a%20AURA"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <MessageCircle className="w-3.5 h-3.5" />
-                Prefere tirar uma dúvida? Fale conosco
-              </a>
-              <br />
-              <button
-                onClick={() => setShowExitPopup(false)}
-                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Não, obrigado
-              </button>
             </div>
           </div>
         )}
