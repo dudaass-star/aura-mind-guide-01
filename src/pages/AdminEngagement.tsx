@@ -539,35 +539,35 @@ export default function AdminEngagement() {
                       <CreditCard className="h-4 w-4" />
                       Cobranças no Período ({periodLabel})
                     </h2>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-3 gap-3">
                       <Card>
-                        <CardHeader className="flex flex-row items-center justify-between pb-2">
-                          <CardTitle className="text-sm font-medium text-muted-foreground">Cobrados no Período</CardTitle>
-                          <CreditCard className="h-4 w-4 text-muted-foreground" />
+                        <CardHeader className="flex flex-row items-center justify-between p-3 pb-1">
+                          <CardTitle className="text-xs font-medium text-muted-foreground">Cobrados</CardTitle>
+                          <CreditCard className="h-3.5 w-3.5 text-muted-foreground" />
                         </CardHeader>
-                        <CardContent>
-                          <div className="text-2xl font-bold text-foreground">{metrics.billingTotalInPeriod}</div>
-                          <p className="text-xs text-muted-foreground mt-1">tentativas de cobrança</p>
+                        <CardContent className="p-3 pt-0">
+                          <div className="text-xl font-bold text-foreground">{metrics.billingTotalInPeriod}</div>
+                          <p className="text-[11px] text-muted-foreground">tentativas</p>
                         </CardContent>
                       </Card>
                       <Card>
-                        <CardHeader className="flex flex-row items-center justify-between pb-2">
-                          <CardTitle className="text-sm font-medium text-muted-foreground">Cobranças com Sucesso</CardTitle>
-                          <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
+                        <CardHeader className="flex flex-row items-center justify-between p-3 pb-1">
+                          <CardTitle className="text-xs font-medium text-muted-foreground">Sucesso</CardTitle>
+                          <CheckCircle2 className="h-3.5 w-3.5 text-muted-foreground" />
                         </CardHeader>
-                        <CardContent>
-                          <div className="text-2xl font-bold text-green-600">{metrics.billingSuccessInPeriod}</div>
-                          <p className="text-xs text-muted-foreground mt-1">pagamentos confirmados</p>
+                        <CardContent className="p-3 pt-0">
+                          <div className="text-xl font-bold text-green-600">{metrics.billingSuccessInPeriod}</div>
+                          <p className="text-[11px] text-muted-foreground">confirmados</p>
                         </CardContent>
                       </Card>
                       <Card>
-                        <CardHeader className="flex flex-row items-center justify-between pb-2">
-                          <CardTitle className="text-sm font-medium text-muted-foreground">Taxa de Sucesso</CardTitle>
-                          <Percent className="h-4 w-4 text-muted-foreground" />
+                        <CardHeader className="flex flex-row items-center justify-between p-3 pb-1">
+                          <CardTitle className="text-xs font-medium text-muted-foreground">Taxa</CardTitle>
+                          <Percent className="h-3.5 w-3.5 text-muted-foreground" />
                         </CardHeader>
-                        <CardContent>
-                          <div className="text-2xl font-bold text-foreground">{metrics.billingSuccessRate}%</div>
-                          <p className="text-xs text-muted-foreground mt-1">{metrics.billingSuccessInPeriod} de {metrics.billingTotalInPeriod}</p>
+                        <CardContent className="p-3 pt-0">
+                          <div className="text-xl font-bold text-foreground">{metrics.billingSuccessRate}%</div>
+                          <p className="text-[11px] text-muted-foreground">{metrics.billingSuccessInPeriod}/{metrics.billingTotalInPeriod}</p>
                         </CardContent>
                       </Card>
                     </div>
