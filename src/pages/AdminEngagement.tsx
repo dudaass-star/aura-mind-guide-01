@@ -797,35 +797,35 @@ export default function AdminEngagement() {
           <TabsContent value="cancellations" className="mt-3 space-y-4">
             {loading && !metrics ? <SkeletonCards /> : metrics && (
               <>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-3 gap-3">
                   <Card>
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                      <CardTitle className="text-sm font-medium text-muted-foreground">Cancelamentos no Período</CardTitle>
-                      <UserMinus className="h-4 w-4 text-muted-foreground" />
+                    <CardHeader className="flex flex-row items-center justify-between p-3 pb-1">
+                      <CardTitle className="text-xs font-medium text-muted-foreground">Cancelamentos</CardTitle>
+                      <UserMinus className="h-3.5 w-3.5 text-muted-foreground" />
                     </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold text-foreground">{metrics.canceledInPeriod}</div>
-                      <p className="text-xs text-muted-foreground mt-1">{periodLabel}</p>
+                    <CardContent className="p-3 pt-0">
+                      <div className="text-xl font-bold text-foreground">{metrics.canceledInPeriod}</div>
+                      <p className="text-[11px] text-muted-foreground">{periodLabel}</p>
                     </CardContent>
                   </Card>
                   <Card>
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                      <CardTitle className="text-sm font-medium text-muted-foreground">Pausaram no Período</CardTitle>
-                      <Clock className="h-4 w-4 text-muted-foreground" />
+                    <CardHeader className="flex flex-row items-center justify-between p-3 pb-1">
+                      <CardTitle className="text-xs font-medium text-muted-foreground">Pausados</CardTitle>
+                      <Clock className="h-3.5 w-3.5 text-muted-foreground" />
                     </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold text-foreground">{metrics.pausedInPeriod}</div>
-                      <p className="text-xs text-muted-foreground mt-1">{periodLabel}</p>
+                    <CardContent className="p-3 pt-0">
+                      <div className="text-xl font-bold text-foreground">{metrics.pausedInPeriod}</div>
+                      <p className="text-[11px] text-muted-foreground">{periodLabel}</p>
                     </CardContent>
                   </Card>
                   <Card>
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                      <CardTitle className="text-sm font-medium text-muted-foreground">Churn Rate</CardTitle>
-                      <Percent className="h-4 w-4 text-muted-foreground" />
+                    <CardHeader className="flex flex-row items-center justify-between p-3 pb-1">
+                      <CardTitle className="text-xs font-medium text-muted-foreground">Churn Rate</CardTitle>
+                      <Percent className="h-3.5 w-3.5 text-muted-foreground" />
                     </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold text-foreground">{metrics.churnRate}%</div>
-                      <p className="text-xs text-muted-foreground mt-1">cancelados / ativos na base</p>
+                    <CardContent className="p-3 pt-0">
+                      <div className="text-xl font-bold text-foreground">{metrics.churnRate}%</div>
+                      <p className="text-[11px] text-muted-foreground">cancelados / ativos</p>
                     </CardContent>
                   </Card>
                 </div>
