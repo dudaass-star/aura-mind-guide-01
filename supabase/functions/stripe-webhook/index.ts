@@ -1131,21 +1131,7 @@ Me conta: como você está hoje?`;
               console.warn('⚠️ No email available for dunning, skipping email notification');
             }
 
-            // Step 5: Send WhatsApp notification via access_blocked template (with payment link)
-            try {
-              const accessBlockedNome = userName.split(' ')[0];
-              const accessBlockedMsg = `Oi, ${accessBlockedNome}! Tivemos um probleminha com o seu pagamento. 💜\n\nAtualize aqui: ${paymentLink}\n\nQualquer dúvida, estou aqui!\n\n— Aura`;
-              const whatsResult = await sendProactive(phone!, accessBlockedMsg, 'access_blocked', profile.user_id, undefined, undefined, [accessBlockedNome, paymentLink]);
-              if (whatsResult.success) {
-                dunningRecord.whatsapp_sent = true;
-                console.log('✅ Access blocked WhatsApp sent via', whatsResult.provider);
-                await supabase.from('messages').insert({ user_id: profile.user_id, role: 'assistant', content: accessBlockedMsg });
-              } else {
-                console.warn('⚠️ Access blocked WhatsApp failed:', whatsResult.error);
-              }
-            } catch (whatsErr) {
-              console.warn('⚠️ Access blocked WhatsApp error (non-blocking):', whatsErr);
-            }
+            // Step 5: WhatsApp dunning removed — dunning is email-only to protect Meta account quality
           } catch (portalErr) {
             const errMsg = portalErr instanceof Error ? portalErr.message : String(portalErr);
             console.error('❌ Error creating billing portal or sending dunning:', errMsg);

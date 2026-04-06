@@ -364,15 +364,10 @@ export async function sendProactiveMessage(
       return { success: false, parts: 0, type: 'template', error: templateResult.error };
     }
 
-    // Parts 2+: Free text (NOTE: only works if user has responded, 
-    // templates do NOT open 24h window. Teaser mode avoids this.)
-    for (let i = 1; i < parts.length; i++) {
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      console.log(`📨 [Twilio] Sending part ${i + 1}/${parts.length} as free text`);
-      const freeResult = await sendFreeText(phone, parts[i]);
-      if (!freeResult.success) {
-        console.warn(`⚠️ [Twilio] Part ${i + 1} failed: ${freeResult.error}`);
-      }
+    // Parts 2+: NOT sent as free text — templates do NOT open 24h window,
+    // so additional parts would violate Meta policy. Use teaser mode for long messages.
+    if (parts.length > 1) {
+      console.warn(`⚠️ [Twilio] Message was split into ${parts.length} parts but only first part sent via template. Use teaser mode for long messages to avoid data loss.`);
     }
 
     return { success: true, parts: parts.length, type: 'template' };
