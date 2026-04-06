@@ -1,63 +1,38 @@
 
 
-## Plano: Otimizar popup de exit-intent para conversão
+## Plano: Criar página admin de preview do popup de exit-intent
 
-### Problema atual
+### O que será feito
 
-O popup atual é puramente emocional e genérico. Ele pede para o usuário ficar mas **não oferece nenhum incentivo concreto**. Popups de exit-intent com maior conversão oferecem uma razão tangível para o usuário reconsiderar.
+Criar uma nova página administrativa (`/admin/popup-preview`) que renderiza o popup de exit-intent em estado visível permanente, permitindo visualizar o design e conteúdo sem precisar acionar o gatilho real no checkout.
 
-### Melhorias propostas
+### Estrutura
 
-**1. Reforçar o valor concreto do trial**
-- Trocar o emoji por um ícone de presente/oferta
-- Destacar o preço do trial (R$ 6,90 / R$ 9,90 / R$ 19,90) e os 7 dias de acesso
-- Mencionar a garantia de satisfação
-
-**2. Adicionar urgência leve**
-- Texto como "Sua oferta de trial ainda está ativa" para criar senso de oportunidade
-
-**3. Incluir micro social proof**
-- Linha curta: "+500 pessoas já começaram sua jornada com a AURA"
-
-**4. CTA mais específico**
-- Trocar "Continuar minha jornada" por algo como "Quero experimentar por R$ {trialPrice}"
-- O botão reflete o preço real do plano selecionado
-
-**5. Opção secundária de contato**
-- Link de WhatsApp para tirar dúvidas antes de sair ("Prefere tirar uma dúvida? Fale conosco")
-
-### Estrutura do popup revisado
+A página exibirá o popup centralizado na tela com os 3 planos disponíveis como seletor, para que você possa ver como o popup fica para cada plano (Despertar, Direção, Transformação) com seus respectivos preços de trial.
 
 ```text
-┌─────────────────────────────────────┐
-│         🎁  Espera!                 │
-│                                     │
-│  Sua oferta de trial ainda está     │
-│  ativa: 7 dias por apenas           │
-│  R$ 9,90 (plano Direção)            │
-│                                     │
-│  ✓ Garantia de satisfação           │
-│  ✓ Cancele quando quiser            │
-│  ✓ +500 pessoas já começaram        │
-│                                     │
-│  [Quero experimentar por R$ 9,90]   │
-│                                     │
-│  Prefere tirar uma dúvida?          │
-│  Fale conosco no WhatsApp           │
-│                                     │
-│         Não, obrigado               │
-└─────────────────────────────────────┘
+┌─────────────────────────────────────────┐
+│  ← Voltar   Preview do Popup Exit-Intent│
+│                                         │
+│  [Despertar] [Direção] [Transformação]  │
+│                                         │
+│  ┌─────────────────────────────────┐    │
+│  │     (popup renderizado aqui)    │    │
+│  │     com o plano selecionado     │    │
+│  └─────────────────────────────────┘    │
+└─────────────────────────────────────────┘
 ```
 
 ### Detalhes técnicos
 
-- **Arquivo**: `src/pages/Checkout.tsx` (bloco do popup, linhas ~509-537)
-- O popup já tem acesso a `currentPlan` e `selectedPlan` — basta referenciar `currentPlan.trialPrice` e `currentPlan.name` no texto
-- Adicionar link de WhatsApp com URL `https://wa.me/55NUMERO` (número do suporte AURA)
-- Manter a lógica de sessionStorage (exibir apenas 1x por sessão)
-- Manter animação existente (`animate-in fade-in zoom-in-95`)
+- **Novo arquivo**: `src/pages/AdminPopupPreview.tsx`
+- **Rota**: `/admin/popup-preview` adicionada em `src/App.tsx`
+- Reutiliza os dados de planos já definidos em `Checkout.tsx` (extraídos para constante compartilhada ou duplicados)
+- Protegida com `useAdminAuth` (mesma lógica das outras páginas admin)
+- Link de acesso adicionado na página `/admin/configuracoes`
 
 ### Escopo
 
-1 arquivo modificado: `src/pages/Checkout.tsx` (apenas o bloco JSX do popup)
+- 1 arquivo novo: `src/pages/AdminPopupPreview.tsx`
+- 2 arquivos editados: `src/App.tsx` (rota), `src/pages/AdminSettings.tsx` (link)
 
