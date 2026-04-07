@@ -92,7 +92,7 @@ Deno.serve(async (req) => {
     if (claimsError || !claimsData?.claims) throw new Error('Not authenticated');
     const userId = claimsData.claims.sub as string;
 
-    const { data: isAdmin } = await supabase.rpc('has_role', { _user_id: user.id, _role: 'admin' });
+    const { data: isAdmin } = await supabase.rpc('has_role', { _user_id: userId, _role: 'admin' });
     if (!isAdmin) throw new Error('Not admin');
 
     // Parse date filters
