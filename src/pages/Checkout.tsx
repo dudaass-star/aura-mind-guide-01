@@ -79,50 +79,14 @@ const Checkout = () => {
   const [showExitPopup, setShowExitPopup] = useState(false);
   const [hasRedirected, setHasRedirected] = useState(false);
 
+  // ViewContent on page load (browser pixel only — no PII available yet)
   useEffect(() => {
-    // Generate a unique event_id for deduplication between browser pixel and CAPI
-    const eventId = `ic_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-
-    // Browser pixel event with event_id
     if (typeof window !== 'undefined' && (window as any).fbq) {
-      (window as any).fbq('track', 'InitiateCheckout', {}, { eventID: eventId });
+      (window as any).fbq('track', 'ViewContent', {
+        content_name: 'Checkout Page',
+        content_category: 'checkout',
+      });
     }
-
-    // CAPI server-side event (same event_id for deduplication)
-    const sendCapiEvent = async () => {
-      try {
-        // Read fbp and fbc cookies for better match quality
-        const getCookie = (name: string) => {
-          const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
-          return match ? match[2] : undefined;
-        };
-        const fbp = getCookie('_fbp');
-        const fbc = getCookie('_fbc');
-
-        await supabase.functions.invoke('meta-capi', {
-          body: {
-            event_name: 'InitiateCheckout',
-            event_id: eventId,
-            event_source_url: window.location.href,
-            user_data: {
-              client_ip_address: undefined,
-              client_user_agent: navigator.userAgent,
-              fbp,
-              fbc,
-            },
-            custom_data: {
-              content_name: 'Checkout Page',
-              content_category: 'checkout',
-            },
-          },
-        });
-      } catch (e) {
-        // Non-blocking — browser pixel already covers this
-        console.warn('CAPI InitiateCheckout failed (non-blocking):', e);
-      }
-    };
-
-    sendCapiEvent();
   }, []);
 
   // Reset payment method when switching to monthly
@@ -208,27 +172,49 @@ const Checkout = () => {
           ? `fb.1.${Date.now()}.${new URLSearchParams(window.location.search).get('fbclid')}` 
           : undefined);
 
-      // Send CAPI InitiateCheckout with PII for better Match Quality
-      const capiEventId = `ic_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-      supabase.functions.invoke('meta-capi', {
-        body: {
-          event_name: 'InitiateCheckout',
-          event_id: capiEventId,
-          event_source_url: window.location.href,
-          user_data: {
-            email: email.trim(),
-            phone: phone.replace(/\D/g, ''),
-            first_name: name.trim().split(' ')[0],
-            client_user_agent: navigator.userAgent,
-            ...(fbp && { fbp }),
-            ...(fbc && { fbc }),
-          },
-          custom_data: {
-            content_name: `Trial ${plans[selectedPlan].name}`,
-            content_category: 'checkout',
-          },
+      // Shared event IDs for deduplication between browser pixel and CAPI
+      const leadEventId = `lead_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+      const icEventId = `ic_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+
+      const userData = {
+        email: email.trim(),
+        phone: phone.replace(/\D/g, ''),
+        first_name: name.trim().split(' ')[0],
+        client_user_agent: navigator.userAgent,
+        ...(fbp && { fbp }),
+        ...(fbc && { fbc }),
+      };
+
+      // Browser pixel: Lead + InitiateCheckout with event_id for dedup
+      if (typeof window !== 'undefined' && (window as any).fbq) {
+        (window as any).fbq('track', 'Lead', {
+          content_name: `Trial ${plans[selectedPlan].name}`,
+          content_category: 'checkout',
+        }, { eventID: leadEventId });
+        (window as any).fbq('track', 'InitiateCheckout', {
+          content_name: `Trial ${plans[selectedPlan].name}`,
+          content_category: 'checkout',
+        }, { eventID: icEventId });
+      }
+
+      // CAPI: Lead + InitiateCheckout with PII for high Match Quality
+      const capiPayload = {
+        event_source_url: window.location.href,
+        user_data: userData,
+        custom_data: {
+          content_name: `Trial ${plans[selectedPlan].name}`,
+          content_category: 'checkout',
         },
-      }).catch(() => {}); // non-blocking
+      };
+
+      Promise.all([
+        supabase.functions.invoke('meta-capi', {
+          body: { ...capiPayload, event_name: 'Lead', event_id: leadEventId },
+        }),
+        supabase.functions.invoke('meta-capi', {
+          body: { ...capiPayload, event_name: 'InitiateCheckout', event_id: icEventId },
+        }),
+      ]).catch(() => {}); // non-blocking
       
       const { data, error } = await supabase.functions.invoke('create-checkout', {
         body: {
