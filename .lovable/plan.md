@@ -1,50 +1,48 @@
 
 
-## Plano: Condensar layout do dashboard de métricas
+## Diagnóstico
 
-### Problema atual
+Encontrei **3 problemas críticos** na implementação atual dos eventos Meta:
 
-Os cards de métricas ocupam muito espaço vertical — cada card tem padding generoso (`p-6`), textos grandes (`text-2xl`), e o grid usa no máximo 3 colunas. Isso força scrolling excessivo para ver todos os dados.
+### Problema 1: InitiateCheckout dispara 2x
+O evento `InitiateCheckout` dispara no `useEffect` (page load) E novamente quando o usuário clica "Começar" (submit do formulário). São event_ids diferentes, então o Meta conta como eventos separados. Isso explica os 33 eventos no Meta vs 3 checkouts reais.
 
-### Melhorias propostas
+### Problema 2: Evento Purchase NUNCA é enviado
+O comentário no ThankYou.tsx diz "Purchase event is sent server-side only (CAPI via stripe-webhook)" — mas o stripe-webhook **não tem nenhum código** enviando o evento Purchase via CAPI. Zero. O Meta não recebe nenhum sinal de conversão.
 
-**1. Cards mais compactos**
-- Reduzir padding do CardHeader e CardContent (de `p-6` para `p-3`/`p-4`)
-- Diminuir tamanho do valor principal de `text-2xl` para `text-xl`
-- Reduzir `gap-4` dos grids para `gap-3`
+### Problema 3: Evento Lead não existe
+Quando o usuário preenche o formulário e clica "Começar", não há evento `Lead` — que é o sinal mais importante para o Meta otimizar campanhas de geração de leads.
 
-**2. Grid 4 colunas em desktop**
-- Trocar `lg:grid-cols-3` para `lg:grid-cols-4` nos grids de métricas (engajamento, trial, custos, cancelamentos)
-- Permite ver mais dados sem scroll
+---
 
-**3. Seção de custo inline**
-- Os 3 cards de custo de IA + breakdown podem ficar em layout mais denso
-- Breakdown por modelo: converter de Card com header para uma tabela simples inline
+## Plano de Correção
 
-**4. Tabs header compacto**
-- Reduzir `space-y-6` entre seções para `space-y-4`
-- Reduzir espaçamento geral da página de `p-6` para `p-4`
-
-**5. Tabelas mais densas**
-- Reduzir font-size das tabelas (recovery, dunning) para `text-xs` consistente
-- Compactar padding das cells
-
-### Arquivo modificado
-
-- `src/pages/AdminEngagement.tsx` — ajustes de classes CSS em grids, cards e espaçamento
-
-### Resumo visual esperado
+### 1. Reorganizar o funil de eventos
 
 ```text
-ANTES:                          DEPOIS:
-┌────┐ ┌────┐ ┌────┐           ┌───┐ ┌───┐ ┌───┐ ┌───┐
-│    │ │    │ │    │           │   │ │   │ │   │ │   │
-│    │ │    │ │    │           └───┘ └───┘ └───┘ └───┘
-└────┘ └────┘ └────┘           ┌───┐ ┌───┐ ┌───┐ ┌───┐
-┌────┐ ┌────┐ ┌────┐           │   │ │   │ │   │ │   │
-│    │ │    │ │    │           └───┘ └───┘ └───┘ └───┘
-└────┘ └────┘ └────┘
+Visitou /checkout  →  PageView (já existe no index.html)
+                       ViewContent (browser pixel)
+Preencheu e clicou  →  Lead (browser + CAPI com PII)
+                       InitiateCheckout (browser + CAPI com PII)
+Pagou no Stripe     →  Purchase (CAPI com PII via stripe-webhook)
 ```
 
-~30% menos scroll vertical, mesma informação.
+### 2. Arquivo: `src/pages/Checkout.tsx`
+- **Remover** o `useEffect` que dispara `InitiateCheckout` no page load (linhas 82-126)
+- **Adicionar** `ViewContent` no page load (browser pixel apenas, sem CAPI — tráfego frio)
+- **No submit do formulário** (onde já tem PII): disparar `Lead` + `InitiateCheckout` via browser pixel E CAPI, com event_id compartilhado e fbp/fbc
+
+### 3. Arquivo: `supabase/functions/stripe-webhook/index.ts`
+- Após confirmação de pagamento (`checkout.session.completed`), enviar evento `Purchase` via CAPI com email, telefone e valor da transação
+
+### 4. Arquivo: `supabase/functions/meta-capi/index.ts`
+- Sem alterações necessárias — já suporta os campos necessários
+
+---
+
+## Resultado Esperado
+- **ViewContent**: 1x por visitante do checkout (tráfego)
+- **Lead + InitiateCheckout**: 1x por lead real que preencheu dados (com PII → match quality alta)
+- **Purchase**: 1x por pagamento confirmado (server-side, impossível de perder)
+- Match Quality deve subir de 6.1/10 para 8+/10 nos eventos com PII
 
