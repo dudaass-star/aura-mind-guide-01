@@ -448,6 +448,30 @@ Deno.serve(async (req) => {
     }
     const cancellationReasons = Object.values(reasonCounts).sort((a, b) => b.count - a.count);
 
+    // ========== TRIAL-TO-PAID METRIC ==========
+    const sevenDaysAgoISO = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    const { count: trialsCompletedWeek } = await supabase
+      .from('profiles')
+      .select('*', { count: 'exact', head: true })
+      .not('trial_started_at', 'is', null)
+      .lt('trial_started_at', sevenDaysAgoISO)
+      .not('plan', 'is', null);
+
+    const { count: trialsToPaidSuccess } = await supabase
+      .from('profiles')
+      .select('*', { count: 'exact', head: true })
+      .not('trial_started_at', 'is', null)
+      .lt('trial_started_at', sevenDaysAgoISO)
+      .not('plan', 'is', null)
+      .in('status', ['active', 'canceled', 'canceling']);
+
+    const trialsCompletedWeekVal = trialsCompletedWeek || 0;
+    const trialsToPaidSuccessVal = trialsToPaidSuccess || 0;
+    const trialToPaidRate = trialsCompletedWeekVal > 0
+      ? Math.round(trialsToPaidSuccessVal / trialsCompletedWeekVal * 1000) / 10
+      : 0;
+
     // ========== CHECKOUT FUNNEL METRICS (deduplicated by phone) ==========
 
     // Fetch sessions in period and deduplicate by phone
@@ -536,6 +560,10 @@ Deno.serve(async (req) => {
       billingSuccessInPeriod,
       billingTotalInPeriod,
       billingSuccessRate,
+      // Trial-to-Paid
+      trialsCompletedWeek: trialsCompletedWeekVal,
+      trialsToPaidSuccess: trialsToPaidSuccessVal,
+      trialToPaidRate,
       // Cancellation
       canceledInPeriod,
       pausedInPeriod: pausedInPeriodCount || 0,
