@@ -639,9 +639,11 @@ Deno.serve(async (req) => {
       billingSuccessInPeriod,
       billingTotalInPeriod,
       billingSuccessRate,
-      // Trial-to-Paid
-      trialsCompletedWeek: trialsCompletedWeekVal,
-      trialsToPaidSuccess: trialsToPaidSuccessVal,
+      // Weekly Plans (Stripe)
+      totalWeeklyPlans,
+      weeklyPlansInPeriod,
+      trialsCompletedWeek: weeklyPlansOver7d,
+      trialsToPaidSuccess: weeklyPlansToPaidSuccess,
       trialToPaidRate,
       // Cancellation
       canceledInPeriod,
