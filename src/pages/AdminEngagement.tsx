@@ -759,8 +759,8 @@ export default function AdminEngagement() {
                 <Card>
                   <CardContent className="flex items-center justify-between py-4">
                     <div>
-                      <p className="font-medium text-foreground">Reativar Trials Finalizados</p>
-                      <p className="text-xs text-muted-foreground">Envia mensagem conversacional e reseta contador para continuar o fluxo de trial</p>
+                      <p className="font-medium text-foreground">Reativar Semanais Finalizados</p>
+                      <p className="text-xs text-muted-foreground">Envia mensagem conversacional e reseta contador para continuar o fluxo</p>
                     </div>
                     <Button onClick={handleReactivationBlast} disabled={blasting} variant="outline" size="sm">
                       <Send className={`h-4 w-4 mr-2 ${blasting ? 'animate-pulse' : ''}`} />
@@ -773,7 +773,7 @@ export default function AdminEngagement() {
                 {metrics?.trialsByPlan && metrics.trialsByPlan.length > 0 && (
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-base font-semibold">Distribuição por Plano (com cartão, período)</CardTitle>
+                      <CardTitle className="text-base font-semibold">Distribuição por Plano (período)</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3">
                       {metrics.trialsByPlan.map((item) => {
