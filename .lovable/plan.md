@@ -1,49 +1,67 @@
 
 
-## Plano: Corrigir detecção de conversão Semanal→Mensal usando Stripe diretamente
+## Plano: Métricas de Conversão Semanal→Mensal 100% via Stripe
 
-### Problema
-O código atual tenta detectar "cobrados com sucesso" cruzando o telefone do Stripe com a tabela `profiles` e verificando `status IN ('active', 'canceled', 'canceling')`. Isso falha por dois motivos:
-1. O telefone no Stripe pode não bater com o formato no `profiles` (prefixo 55, formatação)
-2. Muitos profiles com status `active` são legacy e não vieram de plano semanal
+### Lógica confirmada pelos dados
 
-O resultado é **0 cobrados** quando deveria haver mais.
+Analisando o Stripe, o fluxo é:
+- Charge de R$6,90/9,90/19,90 = pagamento do plano semanal (one-time)
+- Subscription criada com trial de 7 dias → invoice #0001 com `amount_due: 0` e `billing_reason: subscription_create`
+- Após 7 dias, Stripe tenta cobrar → invoice #0002 com `billing_reason: subscription_cycle` e `total > 0`
 
-### Solução: Verificar subscription status direto no Stripe
+Portanto:
+- **Semanais total** = customer IDs únicos com charge 690/990/1990 (já funciona = 23)
+- **Semanais expirados** (tentativa de cobrança mensal) = desses 23, quantos têm pelo menos 1 invoice com `billing_reason: subscription_cycle` e `total > 0`
+- **Convertidos com sucesso** = desses, quantos têm essa invoice com `status: paid`
+- **Taxa de conversão** = convertidos / expirados × 100
 
-Em vez de cruzar com `profiles`, para cada customer com cobrança semanal >7d, verificar o **status da subscription no Stripe**:
-- `active` → 1ª mensalidade cobrada com sucesso
-- `trialing` → ainda no período semanal (não deveria estar aqui se >7d, mas possível)
-- `past_due` → tentou cobrar e falhou
-- `canceled` → cancelada (pode ter sido cobrada ou não — verificar se há invoice paga)
+### Alteração
 
-### Alterações
+**Edge Function: `admin-engagement-metrics/index.ts` (linhas 511-524)**
 
-**1. Edge Function: `admin-engagement-metrics/index.ts` (linhas 511-540)**
+Substituir o bloco atual (que verifica `sub.status === 'active'`) por:
 
-Substituir o bloco de cross-reference com profiles por:
-
-```
-// Para cada customer >7d, listar subscriptions no Stripe
+```typescript
 for (const custId of customersOver7d) {
-  const subs = await stripe.subscriptions.list({ customer: custId, limit: 10 });
-  for (const sub of subs.data) {
-    if (sub.status === 'active') {
+  // List invoices for this customer
+  const invoices = await stripe.invoices.list({ 
+    customer: custId, 
+    limit: 20 
+  });
+  
+  // Find subscription_cycle invoices with amount > 0
+  // (these are the monthly billing attempts after the 7-day trial)
+  const monthlyInvoices = invoices.data.filter(inv => 
+    inv.billing_reason === 'subscription_cycle' && 
+    (inv.total || 0) > 0
+  );
+  
+  if (monthlyInvoices.length > 0) {
+    // This customer's weekly plan expired and monthly was attempted
+    weeklyPlansExpired++;
+    
+    // Check if any monthly invoice was actually paid
+    const hasPaidMonthly = monthlyInvoices.some(inv => inv.status === 'paid');
+    if (hasPaidMonthly) {
       weeklyPlansToPaidSuccess++;
-      break; // contar 1x por customer
     }
   }
 }
 ```
 
-Isso elimina a dependência do `profiles` e do matching por telefone. O Stripe sabe diretamente se a assinatura transitou para `active` (= 1ª mensalidade paga).
+Também:
+- Adicionar variável `weeklyPlansExpired` e retorná-la no JSON
+- Alterar a taxa: `weeklyPlansToPaidSuccess / weeklyPlansExpired * 100`
 
-**2. Frontend: sem alterações**
-Os cards já existem ("Semanais +7d", "Cobrados (1ª mensalidade)", "Taxa Semanal→Mensal"). Só precisam receber os dados corretos do backend.
+**Frontend: `AdminEngagement.tsx`**
+
+- Card "Semanais +7d" → renomear para **"Semanais Expirados"** (subtitle: "Tentativa de cobrança mensal realizada")
+- Card "Cobrados (1ª mensalidade)" → manter como **"Convertidos"** (subtitle: "1ª mensalidade paga com sucesso")
+- Card "Taxa Semanal→Mensal" → usar `convertidos / expirados`
 
 ### Resultado esperado
-- **Total Planos Semanais**: 23 (✅ já correto)
-- **Semanais +7d**: 8 (verificar se correto — depende das datas)
-- **Cobrados (1ª mensalidade)**: número real de subscriptions active entre os customers >7d
-- **Taxa Semanal→Mensal**: cobrados / semanais+7d × 100
+- Total Planos Semanais: **23**
+- Semanais Expirados (cobrança tentada): número real de invoices `subscription_cycle` encontradas
+- Convertidos: invoices `subscription_cycle` com status `paid`
+- Taxa: convertidos / expirados × 100
 
