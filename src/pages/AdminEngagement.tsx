@@ -71,7 +71,9 @@ interface Metrics {
   checkoutCompletionRate: number;
   checkoutCreatedAllTime: number;
   checkoutCompletedAllTime: number;
-  // Trial-to-Paid
+  // Weekly Plans (Stripe)
+  totalWeeklyPlans: number;
+  weeklyPlansInPeriod: number;
   trialsCompletedWeek: number;
   trialsToPaidSuccess: number;
   trialToPaidRate: number;
@@ -330,18 +332,12 @@ export default function AdminEngagement() {
 
   const trialCards = metrics ? [
     { title: 'Assinantes Ativos', value: metrics.activeSubscribers, icon: Users, subtitle: 'pagando agora (status = active)' },
-    { title: 'Trials Ativos (< 7d)', value: metrics.activeTrials, icon: UserPlus, subtitle: 'trial iniciado há menos de 7 dias' },
-    { title: 'Trials Expirados (aguardando)', value: metrics.expiredTrialsAwaitingPayment, icon: Clock, subtitle: 'trial > 7d, sem falha de pagamento' },
-    { title: '⚠️ Falha de Pagamento', value: metrics.paymentFailedCount, icon: XCircle, subtitle: 'trial expirado + pagamento falhou' },
-    { title: 'Trials no Período (total)', value: metrics.trialsInPeriod, icon: UserPlus, subtitle: `com e sem cartão — ${periodLabel}` },
-    { title: 'Trials com Cartão (período)', value: metrics.trialsWithCardInPeriod, icon: UserPlus, subtitle: `checkout iniciado — ${periodLabel}` },
-    { title: 'Convertidos no Período', value: metrics.convertedCount, icon: ArrowRightLeft, subtitle: 'trial → ativo (com cartão)' },
-    { title: 'Taxa de Conversão', value: `${metrics.conversionRate}%`, icon: Percent, subtitle: `${metrics.convertedCount} de ${metrics.trialsWithCardInPeriod} com cartão` },
-    { title: 'Tempo Médio até Conversão', value: `${metrics.avgDaysToConversion} dias`, icon: Timer, subtitle: 'trial → ativação (com cartão)' },
-    { title: 'Msgs Trial (Convertidos)', value: metrics.avgMsgsConverted, icon: MessageSquare, subtitle: 'média durante trial' },
-    { title: 'Msgs Trial (Não Convertidos)', value: metrics.avgMsgsNonConverted, icon: MessageSquare, subtitle: 'média durante trial' },
-    { title: '✅ Taxa Trial→Pago', value: `${metrics.trialToPaidRate}%`, icon: CreditCard, subtitle: `${metrics.trialsToPaidSuccess} de ${metrics.trialsCompletedWeek} cobrados` },
-    { title: 'Trials Pagos +7d', value: metrics.trialsCompletedWeek, icon: Clock, subtitle: 'pagaram trial e completaram semana' },
+    { title: 'Total Planos Semanais', value: metrics.totalWeeklyPlans, icon: ShoppingCart, subtitle: 'pessoas únicas (fonte: Stripe)' },
+    { title: 'Semanais Ativos (< 7d)', value: Math.max(0, metrics.totalWeeklyPlans - metrics.trialsCompletedWeek), icon: UserPlus, subtitle: 'cobrança há menos de 7 dias' },
+    { title: 'Semanais no Período', value: metrics.weeklyPlansInPeriod, icon: UserPlus, subtitle: `cobranças semanais — ${periodLabel}` },
+    { title: '⚠️ Falha de Pagamento', value: metrics.paymentFailedCount, icon: XCircle, subtitle: 'pagamento falhou' },
+    { title: '✅ Taxa Semanal→Mensal', value: `${metrics.trialToPaidRate}%`, icon: CreditCard, subtitle: `${metrics.trialsToPaidSuccess} de ${metrics.trialsCompletedWeek} cobrados` },
+    { title: 'Semanais +7d', value: metrics.trialsCompletedWeek, icon: Clock, subtitle: 'completaram a semana' },
     { title: 'Cobrados (1ª mensalidade)', value: metrics.trialsToPaidSuccess, icon: CheckCircle2, subtitle: 'cobrança mensal com sucesso' },
     { title: 'Cancelados', value: metrics.canceledUsers, icon: XCircle, subtitle: 'status = canceled (all-time)' },
     { title: 'Cancelando', value: metrics.cancelingUsers, icon: Clock, subtitle: 'aguardando fim do período' },
@@ -456,7 +452,7 @@ export default function AdminEngagement() {
         <Tabs defaultValue="engagement" className="w-full">
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="engagement">Engajamento</TabsTrigger>
-            <TabsTrigger value="trial">Trial & Conversão</TabsTrigger>
+            <TabsTrigger value="trial">Semanais & Conversão</TabsTrigger>
             <TabsTrigger value="cancellations">Cancelamentos</TabsTrigger>
           </TabsList>
 
@@ -743,18 +739,18 @@ export default function AdminEngagement() {
                   <CardHeader>
                     <CardTitle className="text-base font-semibold flex items-center gap-2">
                       <ArrowDown className="h-4 w-4" />
-                      Funil de Conversão (período — somente com cartão)
+                      Funil de Conversão (período)
                     </CardTitle>
                     <p className="text-xs text-muted-foreground">
-                      Período selecionado: {periodLabel}. Contexto all-time: {metrics?.totalTrialsAllTime ?? 0} trials, {metrics?.totalTrialsWithCardAllTime ?? 0} com cartão.
+                      Período selecionado: {periodLabel}. All-time: {metrics?.totalWeeklyPlans ?? 0} planos semanais (Stripe).
                     </p>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     {metrics && (
                       <>
-                        <FunnelStep label="Iniciaram Trial (com cartão)" value={metrics.trialsWithCardInPeriod} total={metrics.trialsWithCardInPeriod} color="bg-blue-500" />
+                        <FunnelStep label="Pagaram Plano Semanal" value={metrics.trialsWithCardInPeriod} total={metrics.trialsWithCardInPeriod} color="bg-blue-500" />
                         <FunnelStep label="Responderam (1+ mensagem)" value={metrics.trialRespondedCount} total={metrics.trialsWithCardInPeriod} color="bg-cyan-500" />
-                        <FunnelStep label="Converteram (assinaram)" value={metrics.convertedCount} total={metrics.trialsWithCardInPeriod} color="bg-green-500" />
+                        <FunnelStep label="Converteram (assinaram mensal)" value={metrics.convertedCount} total={metrics.trialsWithCardInPeriod} color="bg-green-500" />
                       </>
                     )}
                   </CardContent>
@@ -763,8 +759,8 @@ export default function AdminEngagement() {
                 <Card>
                   <CardContent className="flex items-center justify-between py-4">
                     <div>
-                      <p className="font-medium text-foreground">Reativar Trials Finalizados</p>
-                      <p className="text-xs text-muted-foreground">Envia mensagem conversacional e reseta contador para continuar o fluxo de trial</p>
+                      <p className="font-medium text-foreground">Reativar Semanais Finalizados</p>
+                      <p className="text-xs text-muted-foreground">Envia mensagem conversacional e reseta contador para continuar o fluxo</p>
                     </div>
                     <Button onClick={handleReactivationBlast} disabled={blasting} variant="outline" size="sm">
                       <Send className={`h-4 w-4 mr-2 ${blasting ? 'animate-pulse' : ''}`} />
@@ -777,7 +773,7 @@ export default function AdminEngagement() {
                 {metrics?.trialsByPlan && metrics.trialsByPlan.length > 0 && (
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-base font-semibold">Distribuição por Plano (com cartão, período)</CardTitle>
+                      <CardTitle className="text-base font-semibold">Distribuição por Plano (período)</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3">
                       {metrics.trialsByPlan.map((item) => {

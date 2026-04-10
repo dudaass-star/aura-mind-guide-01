@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import Stripe from "https://esm.sh/stripe@18.5.0";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -448,27 +449,102 @@ Deno.serve(async (req) => {
     }
     const cancellationReasons = Object.values(reasonCounts).sort((a, b) => b.count - a.count);
 
-    // ========== TRIAL-TO-PAID METRIC ==========
-    const sevenDaysAgoISO = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    // ========== WEEKLY PLANS (STRIPE SOURCE OF TRUTH) ==========
+    // Fetch charges from Stripe with amounts 690, 990, 1990 (R$6.90, R$9.90, R$19.90)
+    const stripeKey = Deno.env.get('STRIPE_SECRET_KEY');
+    let totalWeeklyPlans = 0;
+    let weeklyPlansOver7d = 0;
+    let weeklyPlansToPaidSuccess = 0;
+    let weeklyPlansInPeriod = 0;
 
-    const { count: trialsCompletedWeek } = await supabase
-      .from('profiles')
-      .select('*', { count: 'exact', head: true })
-      .not('trial_started_at', 'is', null)
-      .lt('trial_started_at', sevenDaysAgoISO);
+    if (stripeKey) {
+      const stripe = new Stripe(stripeKey, { apiVersion: '2025-08-27.basil' });
+      const weeklyAmounts = [690, 990, 1990];
 
-    const { count: trialsToPaidSuccess } = await supabase
-      .from('profiles')
-      .select('*', { count: 'exact', head: true })
-      .not('trial_started_at', 'is', null)
-      .lt('trial_started_at', sevenDaysAgoISO)
-      .in('status', ['active', 'canceled', 'canceling']);
+      // Use Stripe search to find charges with specific amounts
+      const allWeeklyCharges: Stripe.Charge[] = [];
+      for (const amount of weeklyAmounts) {
+        let hasMore = true;
+        let page: string | undefined;
+        while (hasMore) {
+          const searchParams: Stripe.ChargeSearchParams = {
+            query: `amount:${amount} AND status:"succeeded"`,
+            limit: 100,
+          };
+          if (page) searchParams.page = page;
+          const result = await stripe.charges.search(searchParams);
+          allWeeklyCharges.push(...result.data);
+          hasMore = result.has_more;
+          page = result.next_page ?? undefined;
+        }
+      }
 
-    const trialsCompletedWeekVal = trialsCompletedWeek || 0;
-    const trialsToPaidSuccessVal = trialsToPaidSuccess || 0;
-    const trialToPaidRate = trialsCompletedWeekVal > 0
-      ? Math.round(trialsToPaidSuccessVal / trialsCompletedWeekVal * 1000) / 10
+      // Deduplicate by customer ID
+      const customerMap = new Map<string, { charge: Stripe.Charge; created: number }>();
+      for (const charge of allWeeklyCharges) {
+        const custId = typeof charge.customer === 'string' ? charge.customer : charge.customer?.id;
+        if (!custId) continue;
+        const existing = customerMap.get(custId);
+        if (!existing || charge.created > existing.created) {
+          customerMap.set(custId, { charge, created: charge.created });
+        }
+      }
+
+      totalWeeklyPlans = customerMap.size;
+
+      // Determine which are >7d and which are in period
+      const sevenDaysAgoTs = Math.floor((now.getTime() - 7 * 24 * 60 * 60 * 1000) / 1000);
+      const periodStartTs = Math.floor(new Date(periodStart).getTime() / 1000);
+      const periodEndTs = Math.floor(new Date(periodEnd).getTime() / 1000);
+
+      const customersOver7d: string[] = [];
+      for (const [custId, { created }] of customerMap) {
+        if (created < sevenDaysAgoTs) {
+          customersOver7d.push(custId);
+        }
+        if (created >= periodStartTs && created < periodEndTs) {
+          weeklyPlansInPeriod++;
+        }
+      }
+      weeklyPlansOver7d = customersOver7d.length;
+
+      // Cross-reference with profiles to find converted users
+      // Fetch customers to get phone metadata
+      if (customersOver7d.length > 0) {
+        const customerPhones = new Map<string, string>();
+        for (const custId of customersOver7d) {
+          try {
+            const customer = await stripe.customers.retrieve(custId);
+            if ('deleted' in customer && customer.deleted) continue;
+            const phone = (customer as Stripe.Customer).phone || (customer as Stripe.Customer).metadata?.phone;
+            if (phone) customerPhones.set(custId, phone);
+          } catch { /* skip deleted customers */ }
+        }
+
+        // Match phones to profiles
+        for (const [, phone] of customerPhones) {
+          const normalizedPhone = phone.replace(/\D/g, '');
+          const phoneLike = normalizedPhone.length >= 10 ? normalizedPhone.slice(-10) : normalizedPhone;
+
+          const { data: matchedProfiles } = await supabase
+            .from('profiles')
+            .select('status')
+            .like('phone', `%${phoneLike}`)
+            .in('status', ['active', 'canceled', 'canceling'])
+            .limit(1);
+
+          if (matchedProfiles && matchedProfiles.length > 0) {
+            weeklyPlansToPaidSuccess++;
+          }
+        }
+      }
+    }
+
+    const trialToPaidRate = weeklyPlansOver7d > 0
+      ? Math.round(weeklyPlansToPaidSuccess / weeklyPlansOver7d * 1000) / 10
       : 0;
+
+    console.log(`📊 Weekly Plans: total=${totalWeeklyPlans}, >7d=${weeklyPlansOver7d}, converted=${weeklyPlansToPaidSuccess}, rate=${trialToPaidRate}%`);
 
     // ========== CHECKOUT FUNNEL METRICS (deduplicated by phone) ==========
 
@@ -558,9 +634,11 @@ Deno.serve(async (req) => {
       billingSuccessInPeriod,
       billingTotalInPeriod,
       billingSuccessRate,
-      // Trial-to-Paid
-      trialsCompletedWeek: trialsCompletedWeekVal,
-      trialsToPaidSuccess: trialsToPaidSuccessVal,
+      // Weekly Plans (Stripe)
+      totalWeeklyPlans,
+      weeklyPlansInPeriod,
+      trialsCompletedWeek: weeklyPlansOver7d,
+      trialsToPaidSuccess: weeklyPlansToPaidSuccess,
       trialToPaidRate,
       // Cancellation
       canceledInPeriod,
