@@ -739,18 +739,18 @@ export default function AdminEngagement() {
                   <CardHeader>
                     <CardTitle className="text-base font-semibold flex items-center gap-2">
                       <ArrowDown className="h-4 w-4" />
-                      Funil de Conversão (período — somente com cartão)
+                      Funil de Conversão (período)
                     </CardTitle>
                     <p className="text-xs text-muted-foreground">
-                      Período selecionado: {periodLabel}. Contexto all-time: {metrics?.totalTrialsAllTime ?? 0} trials, {metrics?.totalTrialsWithCardAllTime ?? 0} com cartão.
+                      Período selecionado: {periodLabel}. All-time: {metrics?.totalWeeklyPlans ?? 0} planos semanais (Stripe).
                     </p>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     {metrics && (
                       <>
-                        <FunnelStep label="Iniciaram Trial (com cartão)" value={metrics.trialsWithCardInPeriod} total={metrics.trialsWithCardInPeriod} color="bg-blue-500" />
+                        <FunnelStep label="Pagaram Plano Semanal" value={metrics.trialsWithCardInPeriod} total={metrics.trialsWithCardInPeriod} color="bg-blue-500" />
                         <FunnelStep label="Responderam (1+ mensagem)" value={metrics.trialRespondedCount} total={metrics.trialsWithCardInPeriod} color="bg-cyan-500" />
-                        <FunnelStep label="Converteram (assinaram)" value={metrics.convertedCount} total={metrics.trialsWithCardInPeriod} color="bg-green-500" />
+                        <FunnelStep label="Converteram (assinaram mensal)" value={metrics.convertedCount} total={metrics.trialsWithCardInPeriod} color="bg-green-500" />
                       </>
                     )}
                   </CardContent>
