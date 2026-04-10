@@ -542,7 +542,10 @@ export default function AdminEngagement() {
           <TabsContent value="trial" className="mt-3 space-y-4">
             {loading && !metrics ? <SkeletonCards /> : (
               <>
-                {/* BILLING METRICS */}
+                {/* 1. Cards de métricas */}
+                <MetricCards cards={trialCards} />
+
+                {/* 2. Cobranças no Período */}
                 {metrics && (
                   <div className="space-y-2">
                     <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
@@ -584,7 +587,7 @@ export default function AdminEngagement() {
                   </div>
                 )}
 
-                {/* CHECKOUT FUNNEL */}
+                {/* 3. Funil de Checkout */}
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-base font-semibold flex items-center gap-2">
@@ -613,135 +616,7 @@ export default function AdminEngagement() {
                   </CardContent>
                 </Card>
 
-                {/* RECOVERY TABLE */}
-                {recoverySessions.length > 0 && (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-base font-semibold flex items-center gap-2">
-                        <RotateCcw className="h-4 w-4" />
-                        Recuperação de Checkout Abandonado
-                      </CardTitle>
-                      <p className="text-xs text-muted-foreground">
-                        {recoverySessions.length} tentativas — {recoverySessions.filter(s => s.attempt_status === 'api_accepted').length} aceitas pela API — {recoverySessions.filter(s => s.converted).length} converteram
-                      </p>
-                    </CardHeader>
-                    <CardContent>
-                      <Table>
-                         <TableHeader>
-                          <TableRow>
-                            <TableHead>Nome</TableHead>
-                            <TableHead>Email</TableHead>
-                            <TableHead>Plano</TableHead>
-                            <TableHead>Abandono</TableHead>
-                            <TableHead>Envio</TableHead>
-                            <TableHead>Resultado</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {recoverySessions.map((s) => {
-                            const planNames: Record<string, string> = { essencial: 'Essencial', direcao: 'Direção', transformacao: 'Transformação' };
-                            const maskedEmail = s.email ? `${s.email.substring(0, 3)}***@${s.email.split('@')[1] || ''}` : '—';
-                            const attemptStatus = s.attempt_status;
-                            const sendBadge = attemptStatus === 'api_accepted'
-                              ? <Badge className="bg-emerald-600 text-white text-[10px]"><CheckCircle2 className="h-3 w-3 mr-1" />Enviado</Badge>
-                              : attemptStatus === 'failed' || attemptStatus === 'error'
-                              ? <Badge variant="destructive" className="text-[10px]"><AlertCircle className="h-3 w-3 mr-1" />{s.recovery_last_error?.substring(0, 30) || 'Falhou'}</Badge>
-                              : attemptStatus === 'skipped' || attemptStatus === 'skipped_active_customer'
-                              ? <Badge variant="outline" className="text-[10px]">{attemptStatus === 'skipped_active_customer' ? 'Cliente ativo' : 'Sem email'}</Badge>
-                              : <Badge variant="secondary" className="text-[10px]">Legado</Badge>;
-                            return (
-                              <TableRow key={s.id}>
-                                <TableCell className="font-medium">{s.name || '—'}</TableCell>
-                                <TableCell className="text-xs">{maskedEmail}</TableCell>
-                                <TableCell>{planNames[s.plan || ''] || s.plan || '—'}</TableCell>
-                                <TableCell className="text-xs">{format(new Date(s.created_at), 'dd/MM HH:mm')}</TableCell>
-                                <TableCell>{sendBadge}</TableCell>
-                                <TableCell>
-                                  {s.converted ? (
-                                    <Badge className="bg-green-600 text-white"><CheckCircle2 className="h-3 w-3 mr-1" />Converteu</Badge>
-                                  ) : (
-                                    <Badge variant="secondary"><AlertCircle className="h-3 w-3 mr-1" />Não voltou</Badge>
-                                  )}
-                                </TableCell>
-                              </TableRow>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* DUNNING ATTEMPTS TABLE */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base font-semibold flex items-center gap-2">
-                      <CreditCard className="h-4 w-4" />
-                      Tentativas de Dunning (Pagamento Falhou)
-                    </CardTitle>
-                     <p className="text-xs text-muted-foreground">
-                       {dunningAttempts.length} tentativas registradas — {dunningAttempts.filter(d => d.whatsapp_sent).length} emails enviados, {dunningAttempts.filter(d => !d.profile_found).length} sem perfil
-                     </p>
-                   </CardHeader>
-                   <CardContent>
-                     {dunningAttempts.length === 0 ? (
-                       <p className="text-sm text-muted-foreground text-center py-4">Nenhuma tentativa de dunning registrada ainda.</p>
-                     ) : (
-                       <Table>
-                         <TableHeader>
-                           <TableRow>
-                             <TableHead>Data</TableHead>
-                             <TableHead>Telefone</TableHead>
-                             <TableHead>Perfil</TableHead>
-                             <TableHead>Link</TableHead>
-                             <TableHead>Email</TableHead>
-                             <TableHead>Erro</TableHead>
-                           </TableRow>
-                         </TableHeader>
-                         <TableBody>
-                           {dunningAttempts.map((d) => {
-                             const maskedPhone = d.phone_resolved ? `${d.phone_resolved.substring(0, 6)}***` : d.phone_raw ? `${d.phone_raw.substring(0, 6)}***` : '—';
-                             return (
-                               <TableRow key={d.id}>
-                                 <TableCell className="text-xs">{format(new Date(d.created_at), 'dd/MM HH:mm')}</TableCell>
-                                 <TableCell className="font-mono text-xs">{maskedPhone}</TableCell>
-                                 <TableCell>
-                                   {d.profile_found ? (
-                                     <Badge className="bg-green-600 text-white text-xs">Sim</Badge>
-                                   ) : (
-                                     <Badge variant="destructive" className="text-xs">Não</Badge>
-                                   )}
-                                 </TableCell>
-                                 <TableCell>
-                                   {d.link_generated ? (
-                                     <Badge className="bg-green-600 text-white text-xs">✓</Badge>
-                                   ) : (
-                                     <Badge variant="secondary" className="text-xs">—</Badge>
-                                   )}
-                                 </TableCell>
-                                 <TableCell>
-                                   {d.whatsapp_sent ? (
-                                     <Badge className="bg-green-600 text-white text-xs"><Mail className="h-3 w-3 mr-1" />Enviado</Badge>
-                                   ) : (
-                                     <Badge variant="secondary" className="text-xs">Não</Badge>
-                                   )}
-                                </TableCell>
-                                <TableCell className="text-xs max-w-[200px] truncate" title={d.error_message || ''}>
-                                  {d.error_stage ? (
-                                    <span className="text-destructive">{d.error_stage}</span>
-                                  ) : (
-                                    <span className="text-muted-foreground">—</span>
-                                  )}
-                                </TableCell>
-                              </TableRow>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
-                    )}
-                  </CardContent>
-                </Card>
-
+                {/* 4. Funil de Conversão */}
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-base font-semibold flex items-center gap-2">
@@ -763,20 +638,7 @@ export default function AdminEngagement() {
                   </CardContent>
                 </Card>
 
-                <Card>
-                  <CardContent className="flex items-center justify-between py-4">
-                    <div>
-                      <p className="font-medium text-foreground">Reativar Semanais Finalizados</p>
-                      <p className="text-xs text-muted-foreground">Envia mensagem conversacional e reseta contador para continuar o fluxo</p>
-                    </div>
-                    <Button onClick={handleReactivationBlast} disabled={blasting} variant="outline" size="sm">
-                      <Send className={`h-4 w-4 mr-2 ${blasting ? 'animate-pulse' : ''}`} />
-                      {blasting ? 'Enviando...' : 'Disparar'}
-                    </Button>
-                  </CardContent>
-                </Card>
-
-                {/* Distribuição por Plano */}
+                {/* 5. Distribuição por Plano */}
                 {metrics?.trialsByPlan && metrics.trialsByPlan.length > 0 && (
                   <Card>
                     <CardHeader>
@@ -798,8 +660,178 @@ export default function AdminEngagement() {
                   </Card>
                 )}
 
-                {/* Cards detalhados */}
-                <MetricCards cards={trialCards} />
+                {/* 6. Recuperação de Checkout (colapsável) */}
+                {recoverySessions.length > 0 && (
+                  <Collapsible open={recoveryOpen} onOpenChange={setRecoveryOpen}>
+                    <Card>
+                      <CollapsibleTrigger asChild>
+                        <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+                          <div className="flex items-center justify-between">
+                            <CardTitle className="text-base font-semibold flex items-center gap-2">
+                              <RotateCcw className="h-4 w-4" />
+                              Recuperação de Checkout Abandonado
+                            </CardTitle>
+                            <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${recoveryOpen ? 'rotate-180' : ''}`} />
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {recoverySessions.length} tentativas — {recoverySessions.filter(s => s.attempt_status === 'api_accepted').length} aceitas pela API — {recoverySessions.filter(s => s.converted).length} converteram
+                          </p>
+                        </CardHeader>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <CardContent>
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Nome</TableHead>
+                                <TableHead>Email</TableHead>
+                                <TableHead>Plano</TableHead>
+                                <TableHead>Abandono</TableHead>
+                                <TableHead>Envio</TableHead>
+                                <TableHead>Resultado</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {(showAllRecovery ? recoverySessions : recoverySessions.slice(0, 5)).map((s) => {
+                                const planNames: Record<string, string> = { essencial: 'Essencial', direcao: 'Direção', transformacao: 'Transformação' };
+                                const maskedEmail = s.email ? `${s.email.substring(0, 3)}***@${s.email.split('@')[1] || ''}` : '—';
+                                const attemptStatus = s.attempt_status;
+                                const sendBadge = attemptStatus === 'api_accepted'
+                                  ? <Badge className="bg-emerald-600 text-white text-[10px]"><CheckCircle2 className="h-3 w-3 mr-1" />Enviado</Badge>
+                                  : attemptStatus === 'failed' || attemptStatus === 'error'
+                                  ? <Badge variant="destructive" className="text-[10px]"><AlertCircle className="h-3 w-3 mr-1" />{s.recovery_last_error?.substring(0, 30) || 'Falhou'}</Badge>
+                                  : attemptStatus === 'skipped' || attemptStatus === 'skipped_active_customer'
+                                  ? <Badge variant="outline" className="text-[10px]">{attemptStatus === 'skipped_active_customer' ? 'Cliente ativo' : 'Sem email'}</Badge>
+                                  : <Badge variant="secondary" className="text-[10px]">Legado</Badge>;
+                                return (
+                                  <TableRow key={s.id}>
+                                    <TableCell className="font-medium">{s.name || '—'}</TableCell>
+                                    <TableCell className="text-xs">{maskedEmail}</TableCell>
+                                    <TableCell>{planNames[s.plan || ''] || s.plan || '—'}</TableCell>
+                                    <TableCell className="text-xs">{format(new Date(s.created_at), 'dd/MM HH:mm')}</TableCell>
+                                    <TableCell>{sendBadge}</TableCell>
+                                    <TableCell>
+                                      {s.converted ? (
+                                        <Badge className="bg-green-600 text-white"><CheckCircle2 className="h-3 w-3 mr-1" />Converteu</Badge>
+                                      ) : (
+                                        <Badge variant="secondary"><AlertCircle className="h-3 w-3 mr-1" />Não voltou</Badge>
+                                      )}
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                          {recoverySessions.length > 5 && (
+                            <Button variant="ghost" size="sm" className="w-full mt-2 text-xs" onClick={() => setShowAllRecovery(!showAllRecovery)}>
+                              {showAllRecovery ? 'Mostrar menos' : `Ver todos (${recoverySessions.length})`}
+                            </Button>
+                          )}
+                        </CardContent>
+                      </CollapsibleContent>
+                    </Card>
+                  </Collapsible>
+                )}
+
+                {/* 7. Tentativas de Dunning (colapsável) */}
+                <Collapsible open={dunningOpen} onOpenChange={setDunningOpen}>
+                  <Card>
+                    <CollapsibleTrigger asChild>
+                      <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+                        <div className="flex items-center justify-between">
+                          <CardTitle className="text-base font-semibold flex items-center gap-2">
+                            <CreditCard className="h-4 w-4" />
+                            Tentativas de Dunning (Pagamento Falhou)
+                          </CardTitle>
+                          <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${dunningOpen ? 'rotate-180' : ''}`} />
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {dunningAttempts.length} tentativas registradas — {dunningAttempts.filter(d => d.whatsapp_sent).length} emails enviados, {dunningAttempts.filter(d => !d.profile_found).length} sem perfil
+                        </p>
+                      </CardHeader>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <CardContent>
+                        {dunningAttempts.length === 0 ? (
+                          <p className="text-sm text-muted-foreground text-center py-4">Nenhuma tentativa de dunning registrada ainda.</p>
+                        ) : (
+                          <>
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead>Data</TableHead>
+                                  <TableHead>Telefone</TableHead>
+                                  <TableHead>Perfil</TableHead>
+                                  <TableHead>Link</TableHead>
+                                  <TableHead>Email</TableHead>
+                                  <TableHead>Erro</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {(showAllDunning ? dunningAttempts : dunningAttempts.slice(0, 5)).map((d) => {
+                                  const maskedPhone = d.phone_resolved ? `${d.phone_resolved.substring(0, 6)}***` : d.phone_raw ? `${d.phone_raw.substring(0, 6)}***` : '—';
+                                  return (
+                                    <TableRow key={d.id}>
+                                      <TableCell className="text-xs">{format(new Date(d.created_at), 'dd/MM HH:mm')}</TableCell>
+                                      <TableCell className="font-mono text-xs">{maskedPhone}</TableCell>
+                                      <TableCell>
+                                        {d.profile_found ? (
+                                          <Badge className="bg-green-600 text-white text-xs">Sim</Badge>
+                                        ) : (
+                                          <Badge variant="destructive" className="text-xs">Não</Badge>
+                                        )}
+                                      </TableCell>
+                                      <TableCell>
+                                        {d.link_generated ? (
+                                          <Badge className="bg-green-600 text-white text-xs">✓</Badge>
+                                        ) : (
+                                          <Badge variant="secondary" className="text-xs">—</Badge>
+                                        )}
+                                      </TableCell>
+                                      <TableCell>
+                                        {d.whatsapp_sent ? (
+                                          <Badge className="bg-green-600 text-white text-xs"><Mail className="h-3 w-3 mr-1" />Enviado</Badge>
+                                        ) : (
+                                          <Badge variant="secondary" className="text-xs">Não</Badge>
+                                        )}
+                                      </TableCell>
+                                      <TableCell className="text-xs max-w-[200px] truncate" title={d.error_message || ''}>
+                                        {d.error_stage ? (
+                                          <span className="text-destructive">{d.error_stage}</span>
+                                        ) : (
+                                          <span className="text-muted-foreground">—</span>
+                                        )}
+                                      </TableCell>
+                                    </TableRow>
+                                  );
+                                })}
+                              </TableBody>
+                            </Table>
+                            {dunningAttempts.length > 5 && (
+                              <Button variant="ghost" size="sm" className="w-full mt-2 text-xs" onClick={() => setShowAllDunning(!showAllDunning)}>
+                                {showAllDunning ? 'Mostrar menos' : `Ver todos (${dunningAttempts.length})`}
+                              </Button>
+                            )}
+                          </>
+                        )}
+                      </CardContent>
+                    </CollapsibleContent>
+                  </Card>
+                </Collapsible>
+
+                {/* 8. Botão Reativar */}
+                <Card>
+                  <CardContent className="flex items-center justify-between py-4">
+                    <div>
+                      <p className="font-medium text-foreground">Reativar Semanais Finalizados</p>
+                      <p className="text-xs text-muted-foreground">Envia mensagem conversacional e reseta contador para continuar o fluxo</p>
+                    </div>
+                    <Button onClick={handleReactivationBlast} disabled={blasting} variant="outline" size="sm">
+                      <Send className={`h-4 w-4 mr-2 ${blasting ? 'animate-pulse' : ''}`} />
+                      {blasting ? 'Enviando...' : 'Disparar'}
+                    </Button>
+                  </CardContent>
+                </Card>
               </>
             )}
           </TabsContent>
