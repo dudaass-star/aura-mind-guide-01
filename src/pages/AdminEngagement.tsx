@@ -76,6 +76,7 @@ interface Metrics {
   weeklyPlansInPeriod: number;
   trialsCompletedWeek: number;
   trialsToPaidSuccess: number;
+  weeklyPlansExpired: number;
   trialToPaidRate: number;
   // Cancellation
   canceledInPeriod: number;
