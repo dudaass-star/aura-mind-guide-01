@@ -127,6 +127,10 @@ export default function AdminEngagement() {
   const [dateTo, setDateTo] = useState<Date>(new Date());
   const [recoverySessions, setRecoverySessions] = useState<RecoverySession[]>([]);
   const [dunningAttempts, setDunningAttempts] = useState<DunningAttempt[]>([]);
+  const [recoveryOpen, setRecoveryOpen] = useState(false);
+  const [dunningOpen, setDunningOpen] = useState(false);
+  const [showAllRecovery, setShowAllRecovery] = useState(false);
+  const [showAllDunning, setShowAllDunning] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
   const requestIdRef = useRef(0);
