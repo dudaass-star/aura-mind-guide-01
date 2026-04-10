@@ -71,7 +71,9 @@ interface Metrics {
   checkoutCompletionRate: number;
   checkoutCreatedAllTime: number;
   checkoutCompletedAllTime: number;
-  // Trial-to-Paid
+  // Weekly Plans (Stripe)
+  totalWeeklyPlans: number;
+  weeklyPlansInPeriod: number;
   trialsCompletedWeek: number;
   trialsToPaidSuccess: number;
   trialToPaidRate: number;
