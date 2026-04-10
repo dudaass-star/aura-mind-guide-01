@@ -1,67 +1,42 @@
 
 
-## Plano: Métricas de Conversão Semanal→Mensal 100% via Stripe
+## Plano: Corrigir contagem de "Semanais Expirados" filtrando apenas invoices realmente tentadas
 
-### Lógica confirmada pelos dados
+### Problema identificado
 
-Analisando o Stripe, o fluxo é:
-- Charge de R$6,90/9,90/19,90 = pagamento do plano semanal (one-time)
-- Subscription criada com trial de 7 dias → invoice #0001 com `amount_due: 0` e `billing_reason: subscription_create`
-- Após 7 dias, Stripe tenta cobrar → invoice #0002 com `billing_reason: subscription_cycle` e `total > 0`
+O código atual conta QUALQUER invoice com `billing_reason === 'subscription_cycle' && total > 0` como "expirado". Isso inclui:
+1. Invoices com status `draft` — o Stripe ainda não tentou cobrar
+2. Clientes sem nenhuma subscription_cycle invoice estão sendo contados como >7d mas não como expirados (correto), porém clientes com `draft` estão inflando o número
 
-Portanto:
-- **Semanais total** = customer IDs únicos com charge 690/990/1990 (já funciona = 23)
-- **Semanais expirados** (tentativa de cobrança mensal) = desses 23, quantos têm pelo menos 1 invoice com `billing_reason: subscription_cycle` e `total > 0`
-- **Convertidos com sucesso** = desses, quantos têm essa invoice com `status: paid`
-- **Taxa de conversão** = convertidos / expirados × 100
+A contagem correta de "expirados" (tentativa de cobrança mensal realizada) deve considerar apenas invoices com status `open`, `paid`, `uncollectible` ou `void` — ou seja, invoices que foram **finalizadas** e onde o Stripe **tentou** cobrar.
 
 ### Alteração
 
-**Edge Function: `admin-engagement-metrics/index.ts` (linhas 511-524)**
+**Edge Function: `admin-engagement-metrics/index.ts` (linhas 518-521)**
 
-Substituir o bloco atual (que verifica `sub.status === 'active'`) por:
+Alterar o filtro de invoices para excluir `draft`:
 
 ```typescript
-for (const custId of customersOver7d) {
-  // List invoices for this customer
-  const invoices = await stripe.invoices.list({ 
-    customer: custId, 
-    limit: 20 
-  });
-  
-  // Find subscription_cycle invoices with amount > 0
-  // (these are the monthly billing attempts after the 7-day trial)
-  const monthlyInvoices = invoices.data.filter(inv => 
-    inv.billing_reason === 'subscription_cycle' && 
-    (inv.total || 0) > 0
-  );
-  
-  if (monthlyInvoices.length > 0) {
-    // This customer's weekly plan expired and monthly was attempted
-    weeklyPlansExpired++;
-    
-    // Check if any monthly invoice was actually paid
-    const hasPaidMonthly = monthlyInvoices.some(inv => inv.status === 'paid');
-    if (hasPaidMonthly) {
-      weeklyPlansToPaidSuccess++;
-    }
-  }
-}
+// ANTES:
+const monthlyInvoices = invoices.data.filter(inv => 
+  inv.billing_reason === 'subscription_cycle' && 
+  (inv.total || 0) > 0
+);
+
+// DEPOIS:
+const monthlyInvoices = invoices.data.filter(inv => 
+  inv.billing_reason === 'subscription_cycle' && 
+  (inv.total || 0) > 0 &&
+  inv.status !== 'draft'  // draft = not yet attempted
+);
 ```
 
-Também:
-- Adicionar variável `weeklyPlansExpired` e retorná-la no JSON
-- Alterar a taxa: `weeklyPlansToPaidSuccess / weeklyPlansExpired * 100`
+Isso garante que apenas cobranças realmente tentadas (finalizadas pelo Stripe) sejam contadas como "expirados".
 
-**Frontend: `AdminEngagement.tsx`**
-
-- Card "Semanais +7d" → renomear para **"Semanais Expirados"** (subtitle: "Tentativa de cobrança mensal realizada")
-- Card "Cobrados (1ª mensalidade)" → manter como **"Convertidos"** (subtitle: "1ª mensalidade paga com sucesso")
-- Card "Taxa Semanal→Mensal" → usar `convertidos / expirados`
-
-### Resultado esperado
-- Total Planos Semanais: **23**
-- Semanais Expirados (cobrança tentada): número real de invoices `subscription_cycle` encontradas
-- Convertidos: invoices `subscription_cycle` com status `paid`
-- Taxa: convertidos / expirados × 100
+### Resultado esperado baseado nos dados verificados
+- **Total Planos Semanais**: 23 (sem mudança)
+- **Semanais +7d**: 9 (sem mudança — são os que pagaram o semanal há mais de 7 dias)
+- **Semanais Expirados**: ~7-8 (apenas os que tiveram invoice finalizada, excluindo drafts)
+- **Convertidos**: 3 (invoices com status `paid`)
+- **Taxa**: 3/7 ou 3/8 ≈ 37-43%
 
