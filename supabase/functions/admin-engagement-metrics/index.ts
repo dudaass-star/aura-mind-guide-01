@@ -517,7 +517,8 @@ Deno.serve(async (req) => {
           
           const monthlyInvoices = invoices.data.filter(inv => 
             inv.billing_reason === 'subscription_cycle' && 
-            (inv.total || 0) > 0
+            (inv.total || 0) > 0 &&
+            inv.status !== 'draft'  // draft = not yet attempted by Stripe
           );
           
           if (monthlyInvoices.length > 0) {
