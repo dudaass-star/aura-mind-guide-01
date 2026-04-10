@@ -76,6 +76,7 @@ interface Metrics {
   weeklyPlansInPeriod: number;
   trialsCompletedWeek: number;
   trialsToPaidSuccess: number;
+  weeklyPlansExpired: number;
   trialToPaidRate: number;
   // Cancellation
   canceledInPeriod: number;
@@ -336,9 +337,10 @@ export default function AdminEngagement() {
     { title: 'Semanais Ativos (< 7d)', value: Math.max(0, metrics.totalWeeklyPlans - metrics.trialsCompletedWeek), icon: UserPlus, subtitle: 'cobrança há menos de 7 dias' },
     { title: 'Semanais no Período', value: metrics.weeklyPlansInPeriod, icon: UserPlus, subtitle: `cobranças semanais — ${periodLabel}` },
     { title: '⚠️ Falha de Pagamento', value: metrics.paymentFailedCount, icon: XCircle, subtitle: 'pagamento falhou' },
-    { title: '✅ Taxa Semanal→Mensal', value: `${metrics.trialToPaidRate}%`, icon: CreditCard, subtitle: `${metrics.trialsToPaidSuccess} de ${metrics.trialsCompletedWeek} cobrados` },
+    { title: '✅ Taxa Semanal→Mensal', value: `${metrics.trialToPaidRate}%`, icon: CreditCard, subtitle: `${metrics.trialsToPaidSuccess} de ${metrics.weeklyPlansExpired || 0} expirados` },
     { title: 'Semanais +7d', value: metrics.trialsCompletedWeek, icon: Clock, subtitle: 'completaram a semana' },
-    { title: 'Cobrados (1ª mensalidade)', value: metrics.trialsToPaidSuccess, icon: CheckCircle2, subtitle: 'cobrança mensal com sucesso' },
+    { title: 'Semanais Expirados', value: metrics.weeklyPlansExpired || 0, icon: Clock, subtitle: 'tentativa de cobrança mensal realizada' },
+    { title: 'Convertidos (1ª mensalidade)', value: metrics.trialsToPaidSuccess, icon: CheckCircle2, subtitle: '1ª mensalidade paga com sucesso' },
     { title: 'Cancelados', value: metrics.canceledUsers, icon: XCircle, subtitle: 'status = canceled (all-time)' },
     { title: 'Cancelando', value: metrics.cancelingUsers, icon: Clock, subtitle: 'aguardando fim do período' },
   ] : [];
