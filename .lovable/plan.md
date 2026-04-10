@@ -1,42 +1,32 @@
 
 
-## Plano: Corrigir contagem de "Semanais Expirados" filtrando apenas invoices realmente tentadas
+## Plano: Compactar tabelas de Recovery e Dunning na aba "Semanais & Conversão"
 
-### Problema identificado
+### Problema
+As tabelas de "Recuperação de Checkout Abandonado" e "Tentativas de Dunning" ocupam muito espaço vertical, dificultando a visualização das métricas de conversão.
 
-O código atual conta QUALQUER invoice com `billing_reason === 'subscription_cycle' && total > 0` como "expirado". Isso inclui:
-1. Invoices com status `draft` — o Stripe ainda não tentou cobrar
-2. Clientes sem nenhuma subscription_cycle invoice estão sendo contados como >7d mas não como expirados (correto), porém clientes com `draft` estão inflando o número
+### Solução
+Colocar ambas as tabelas dentro de componentes **Collapsible** (já disponível no projeto via `@radix-ui/react-collapsible`), colapsados por padrão. O usuário clica para expandir quando quiser ver os detalhes. Além disso, limitar cada tabela a **5 linhas** visíveis com um botão "Ver mais".
 
-A contagem correta de "expirados" (tentativa de cobrança mensal realizada) deve considerar apenas invoices com status `open`, `paid`, `uncollectible` ou `void` — ou seja, invoices que foram **finalizadas** e onde o Stripe **tentou** cobrar.
+### Alterações em `src/pages/AdminEngagement.tsx`
 
-### Alteração
+1. **Importar** `Collapsible, CollapsibleTrigger, CollapsibleContent` de `@/components/ui/collapsible` e `ChevronDown` de `lucide-react`
 
-**Edge Function: `admin-engagement-metrics/index.ts` (linhas 518-521)**
+2. **Tabela Recovery (linhas 612-668)**: Envolver em `Collapsible` com `open={false}` por padrão. O header do Card vira o trigger clicável com ícone de seta. Mostrar apenas resumo (X tentativas, Y converteram) quando colapsado. Limitar a 5 linhas + botão "Ver todos".
 
-Alterar o filtro de invoices para excluir `draft`:
+3. **Tabela Dunning (linhas 670-738)**: Mesmo tratamento — collapsible, colapsado por padrão, limite de 5 linhas.
 
-```typescript
-// ANTES:
-const monthlyInvoices = invoices.data.filter(inv => 
-  inv.billing_reason === 'subscription_cycle' && 
-  (inv.total || 0) > 0
-);
+4. **Reordenar a aba**: Mover os cards de métricas (`trialCards`) e o funil de conversão para **antes** das tabelas de recovery/dunning, priorizando a visão geral.
 
-// DEPOIS:
-const monthlyInvoices = invoices.data.filter(inv => 
-  inv.billing_reason === 'subscription_cycle' && 
-  (inv.total || 0) > 0 &&
-  inv.status !== 'draft'  // draft = not yet attempted
-);
+### Layout final da aba "Semanais & Conversão"
+```text
+1. Cards de métricas (grid 4 colunas)
+2. Cobranças no Período (3 cards)
+3. Funil de Checkout (card)
+4. Funil de Conversão (card)
+5. Distribuição por Plano
+6. ▶ Recuperação de Checkout (colapsado, clique para expandir)
+7. ▶ Tentativas de Dunning (colapsado, clique para expandir)
+8. Botão Reativar
 ```
-
-Isso garante que apenas cobranças realmente tentadas (finalizadas pelo Stripe) sejam contadas como "expirados".
-
-### Resultado esperado baseado nos dados verificados
-- **Total Planos Semanais**: 23 (sem mudança)
-- **Semanais +7d**: 9 (sem mudança — são os que pagaram o semanal há mais de 7 dias)
-- **Semanais Expirados**: ~7-8 (apenas os que tiveram invoice finalizada, excluindo drafts)
-- **Convertidos**: 3 (invoices com status `paid`)
-- **Taxa**: 3/7 ou 3/8 ≈ 37-43%
 
