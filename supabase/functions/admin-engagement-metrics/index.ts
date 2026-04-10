@@ -461,26 +461,21 @@ Deno.serve(async (req) => {
       const stripe = new Stripe(stripeKey, { apiVersion: '2025-08-27.basil' });
       const weeklyAmounts = [690, 990, 1990];
 
-      // Fetch all successful charges with these amounts
+      // Use Stripe search to find charges with specific amounts
       const allWeeklyCharges: Stripe.Charge[] = [];
       for (const amount of weeklyAmounts) {
         let hasMore = true;
-        let startingAfter: string | undefined;
+        let page: string | undefined;
         while (hasMore) {
-          const params: Stripe.ChargeListParams = {
+          const searchParams: Stripe.ChargeSearchParams = {
+            query: `amount:${amount} AND status:"succeeded"`,
             limit: 100,
-            status: 'succeeded' as unknown as undefined,
           };
-          if (startingAfter) params.starting_after = startingAfter;
-          const charges = await stripe.charges.list(params);
-          const filtered = charges.data.filter(c => c.amount === amount && c.status === 'succeeded');
-          allWeeklyCharges.push(...filtered);
-          hasMore = charges.has_more;
-          if (charges.data.length > 0) {
-            startingAfter = charges.data[charges.data.length - 1].id;
-          } else {
-            hasMore = false;
-          }
+          if (page) searchParams.page = page;
+          const result = await stripe.charges.search(searchParams);
+          allWeeklyCharges.push(...result.data);
+          hasMore = result.has_more;
+          page = result.next_page ?? undefined;
         }
       }
 
