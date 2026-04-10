@@ -508,34 +508,18 @@ Deno.serve(async (req) => {
       }
       weeklyPlansOver7d = customersOver7d.length;
 
-      // Cross-reference with profiles to find converted users
-      // Fetch customers to get phone metadata
-      if (customersOver7d.length > 0) {
-        const customerPhones = new Map<string, string>();
-        for (const custId of customersOver7d) {
-          try {
-            const customer = await stripe.customers.retrieve(custId);
-            if ('deleted' in customer && customer.deleted) continue;
-            const phone = (customer as Stripe.Customer).phone || (customer as Stripe.Customer).metadata?.phone;
-            if (phone) customerPhones.set(custId, phone);
-          } catch { /* skip deleted customers */ }
-        }
-
-        // Match phones to profiles
-        for (const [, phone] of customerPhones) {
-          const normalizedPhone = phone.replace(/\D/g, '');
-          const phoneLike = normalizedPhone.length >= 10 ? normalizedPhone.slice(-10) : normalizedPhone;
-
-          const { data: matchedProfiles } = await supabase
-            .from('profiles')
-            .select('status')
-            .like('phone', `%${phoneLike}`)
-            .in('status', ['active', 'canceled', 'canceling'])
-            .limit(1);
-
-          if (matchedProfiles && matchedProfiles.length > 0) {
-            weeklyPlansToPaidSuccess++;
+      // Check subscription status directly in Stripe for customers >7d
+      for (const custId of customersOver7d) {
+        try {
+          const subs = await stripe.subscriptions.list({ customer: custId, limit: 10 });
+          for (const sub of subs.data) {
+            if (sub.status === 'active') {
+              weeklyPlansToPaidSuccess++;
+              break; // count once per customer
+            }
           }
+        } catch (e) {
+          console.warn(`⚠️ Failed to fetch subscriptions for ${custId}:`, e);
         }
       }
     }
