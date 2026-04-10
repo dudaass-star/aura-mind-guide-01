@@ -340,9 +340,9 @@ export default function AdminEngagement() {
     { title: 'Tempo Médio até Conversão', value: `${metrics.avgDaysToConversion} dias`, icon: Timer, subtitle: 'trial → ativação (com cartão)' },
     { title: 'Msgs Trial (Convertidos)', value: metrics.avgMsgsConverted, icon: MessageSquare, subtitle: 'média durante trial' },
     { title: 'Msgs Trial (Não Convertidos)', value: metrics.avgMsgsNonConverted, icon: MessageSquare, subtitle: 'média durante trial' },
-    { title: '✅ Taxa Trial→Pago', value: `${metrics.trialToPaidRate}%`, icon: CreditCard, subtitle: `${metrics.trialsToPaidSuccess} de ${metrics.trialsCompletedWeek} cobrados com sucesso` },
-    { title: 'Trials +7d (com cartão)', value: metrics.trialsCompletedWeek, icon: Clock, subtitle: 'completaram semana de trial' },
-    { title: 'Cobrados com Sucesso', value: metrics.trialsToPaidSuccess, icon: CheckCircle2, subtitle: 'pagaram 1ª mensalidade' },
+    { title: '✅ Taxa Trial→Pago', value: `${metrics.trialToPaidRate}%`, icon: CreditCard, subtitle: `${metrics.trialsToPaidSuccess} de ${metrics.trialsCompletedWeek} cobrados` },
+    { title: 'Trials Pagos +7d', value: metrics.trialsCompletedWeek, icon: Clock, subtitle: 'pagaram trial e completaram semana' },
+    { title: 'Cobrados (1ª mensalidade)', value: metrics.trialsToPaidSuccess, icon: CheckCircle2, subtitle: 'cobrança mensal com sucesso' },
     { title: 'Cancelados', value: metrics.canceledUsers, icon: XCircle, subtitle: 'status = canceled (all-time)' },
     { title: 'Cancelando', value: metrics.cancelingUsers, icon: Clock, subtitle: 'aguardando fim do período' },
   ] : [];

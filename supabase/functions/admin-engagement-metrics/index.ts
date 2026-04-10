@@ -455,15 +455,13 @@ Deno.serve(async (req) => {
       .from('profiles')
       .select('*', { count: 'exact', head: true })
       .not('trial_started_at', 'is', null)
-      .lt('trial_started_at', sevenDaysAgoISO)
-      .not('plan', 'is', null);
+      .lt('trial_started_at', sevenDaysAgoISO);
 
     const { count: trialsToPaidSuccess } = await supabase
       .from('profiles')
       .select('*', { count: 'exact', head: true })
       .not('trial_started_at', 'is', null)
       .lt('trial_started_at', sevenDaysAgoISO)
-      .not('plan', 'is', null)
       .in('status', ['active', 'canceled', 'canceling']);
 
     const trialsCompletedWeekVal = trialsCompletedWeek || 0;
