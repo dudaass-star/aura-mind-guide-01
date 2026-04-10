@@ -454,6 +454,7 @@ Deno.serve(async (req) => {
     const stripeKey = Deno.env.get('STRIPE_SECRET_KEY');
     let totalWeeklyPlans = 0;
     let weeklyPlansOver7d = 0;
+    let weeklyPlansExpired = 0;
     let weeklyPlansToPaidSuccess = 0;
     let weeklyPlansInPeriod = 0;
 
@@ -508,27 +509,36 @@ Deno.serve(async (req) => {
       }
       weeklyPlansOver7d = customersOver7d.length;
 
-      // Check subscription status directly in Stripe for customers >7d
+      // Check invoices directly in Stripe for customers >7d
+      // subscription_cycle with total > 0 = monthly billing attempt after trial
       for (const custId of customersOver7d) {
         try {
-          const subs = await stripe.subscriptions.list({ customer: custId, limit: 10 });
-          for (const sub of subs.data) {
-            if (sub.status === 'active') {
+          const invoices = await stripe.invoices.list({ customer: custId, limit: 20 });
+          
+          const monthlyInvoices = invoices.data.filter(inv => 
+            inv.billing_reason === 'subscription_cycle' && 
+            (inv.total || 0) > 0
+          );
+          
+          if (monthlyInvoices.length > 0) {
+            weeklyPlansExpired++;
+            
+            const hasPaidMonthly = monthlyInvoices.some(inv => inv.status === 'paid');
+            if (hasPaidMonthly) {
               weeklyPlansToPaidSuccess++;
-              break; // count once per customer
             }
           }
         } catch (e) {
-          console.warn(`⚠️ Failed to fetch subscriptions for ${custId}:`, e);
+          console.warn(`⚠️ Failed to fetch invoices for ${custId}:`, e);
         }
       }
     }
 
-    const trialToPaidRate = weeklyPlansOver7d > 0
-      ? Math.round(weeklyPlansToPaidSuccess / weeklyPlansOver7d * 1000) / 10
+    const trialToPaidRate = weeklyPlansExpired > 0
+      ? Math.round(weeklyPlansToPaidSuccess / weeklyPlansExpired * 1000) / 10
       : 0;
 
-    console.log(`📊 Weekly Plans: total=${totalWeeklyPlans}, >7d=${weeklyPlansOver7d}, converted=${weeklyPlansToPaidSuccess}, rate=${trialToPaidRate}%`);
+    console.log(`📊 Weekly Plans: total=${totalWeeklyPlans}, >7d=${weeklyPlansOver7d}, expired=${weeklyPlansExpired}, converted=${weeklyPlansToPaidSuccess}, rate=${trialToPaidRate}%`);
 
     // ========== CHECKOUT FUNNEL METRICS (deduplicated by phone) ==========
 
@@ -622,6 +632,7 @@ Deno.serve(async (req) => {
       totalWeeklyPlans,
       weeklyPlansInPeriod,
       trialsCompletedWeek: weeklyPlansOver7d,
+      weeklyPlansExpired,
       trialsToPaidSuccess: weeklyPlansToPaidSuccess,
       trialToPaidRate,
       // Cancellation
