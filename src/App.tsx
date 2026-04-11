@@ -22,6 +22,7 @@ import AdminMessages from "./pages/AdminMessages";
 import AdminTemplates from "./pages/AdminTemplates";
 import AdminEmails from "./pages/AdminEmails";
 import AdminPopupPreview from "./pages/AdminPopupPreview";
+import AdminUsers from "./pages/AdminUsers";
 import UserGuide from "./pages/UserGuide";
 import Episode from "./pages/Episode";
 import JourneyComplete from "./pages/JourneyComplete";
