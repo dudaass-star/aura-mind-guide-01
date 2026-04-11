@@ -887,6 +887,7 @@ export type Database = {
           onboarding_completed: boolean | null
           payment_failed_at: string | null
           pending_capsule_audio_url: string | null
+          pending_insight: string | null
           phone: string | null
           plan: string | null
           plan_expires_at: string | null
@@ -937,6 +938,7 @@ export type Database = {
           onboarding_completed?: boolean | null
           payment_failed_at?: string | null
           pending_capsule_audio_url?: string | null
+          pending_insight?: string | null
           phone?: string | null
           plan?: string | null
           plan_expires_at?: string | null
@@ -987,6 +989,7 @@ export type Database = {
           onboarding_completed?: boolean | null
           payment_failed_at?: string | null
           pending_capsule_audio_url?: string | null
+          pending_insight?: string | null
           phone?: string | null
           plan?: string | null
           plan_expires_at?: string | null
