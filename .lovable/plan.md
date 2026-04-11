@@ -1,53 +1,44 @@
 
 
-## Plano: Painel de Gestão de Usuários (Admin)
+## Plano: Corrigir cancel-subscription para incluir assinaturas past_due
 
-### O que será construído
+### Problema
+A edge function `cancel-subscription` busca apenas subscriptions com `status: "active"`. Clientes com pagamento atrasado (`past_due`) ficam impossibilitados de cancelar pelo site.
 
-Uma nova página `/admin/usuarios` com tabela de todos os usuários e capacidade de gerenciar manualmente contas, planos e status.
+### Solução
+No arquivo `supabase/functions/cancel-subscription/index.ts`, alterar a busca de subscriptions para incluir também o status `past_due`. Isso permite que clientes com cobrança pendente possam cancelar ou pausar normalmente.
 
-### Funcionalidades
+### Alteração
 
-1. **Tabela de Usuários** — lista todos os profiles com busca por nome/telefone/email
-2. **Ações por usuário** (via dialog ao clicar):
-   - Alterar plano (essencial/direção/transformação)
-   - Alterar status (active/inactive/canceled/paused)
-   - Editar nome, email, telefone
-   - Ver dados: data de criação, último contato, episódio atual, jornada atual
-   - Resetar sessões usadas no mês
-3. **Badges visuais** para status (verde=active, amarelo=paused, vermelho=canceled/inactive)
+**Arquivo: `supabase/functions/cancel-subscription/index.ts`**
 
-### Alterações técnicas
+1. Primeira busca (linha ~87): trocar `status: "active"` por buscar tanto `active` quanto `past_due` — fazer duas chamadas ou remover o filtro de status e filtrar no código.
 
-**Novo arquivo: `src/pages/AdminUsers.tsx`**
-- Tabela paginada com busca
-- Dialog de edição usando a edge function `admin-update-profile` (já existente)
-- Proteção via `useAdminAuth`
-- Importa componentes UI existentes (Table, Dialog, Input, Select, Badge, Button)
+2. Abordagem mais simples: buscar subscriptions sem filtro de status restritivo e pegar a primeira que seja `active` ou `past_due`:
 
-**Arquivo editado: `src/App.tsx`**
-- Adicionar rota `/admin/usuarios` → `AdminUsers`
+```typescript
+// Buscar active primeiro
+const activeSubs = await stripe.subscriptions.list({
+  customer: customer.id,
+  status: "active",
+  limit: 1,
+});
 
-### Layout da página
+let subscription = activeSubs.data[0];
 
-```text
-[← Voltar]  Gestão de Usuários
-
-[🔍 Buscar por nome, telefone ou email...]
-
-| Nome | Telefone | Plano | Status | Criado em | Último contato | Ações |
-|------|----------|-------|--------|-----------|----------------|-------|
-| Ana  | +55...   | 🟢 essencial | 🟢 active | 01/04 | 10/04 | [Editar] |
-
---- Dialog de Edição ---
-Nome: [____]
-Email: [____]  
-Telefone: [____]
-Plano: [dropdown]
-Status: [dropdown]
-[Salvar] [Cancelar]
+// Se não encontrou active, buscar past_due
+if (!subscription) {
+  const pastDueSubs = await stripe.subscriptions.list({
+    customer: customer.id,
+    status: "past_due",
+    limit: 1,
+  });
+  subscription = pastDueSubs.data[0];
+}
 ```
 
-### Sem alterações no backend
-A edge function `admin-update-profile` já existe e aceita `{ profile_id, updates }` — será reutilizada.
+3. O resto da lógica (check, pause, cancel) funciona igual para ambos os status.
+
+### Resultado esperado
+Clientes com assinatura `past_due` poderão cancelar ou pausar pelo site normalmente.
 
