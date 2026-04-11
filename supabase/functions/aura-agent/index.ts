@@ -4592,6 +4592,8 @@ INSTRUÇÃO: Retome de onde pararam naturalmente. Diga algo como "Que bom que vo
     // ========================================================================
     if (profile?.pending_insight) {
       const isWelcomePending = profile.pending_insight.startsWith('[WELCOME]');
+      const isWeeklyReport = profile.pending_insight.startsWith('[WEEKLY_REPORT]');
+      const isContent = profile.pending_insight.startsWith('[CONTENT]');
 
       if (isWelcomePending) {
         // WELCOME FLOW: User clicked "Começar" on the template
@@ -4611,6 +4613,40 @@ INSTRUÇÃO:
 3. Inclua os links do guia e da área pessoal que estão na mensagem
 4. Use [MODO_AUDIO] no início da resposta para enviar também um áudio de boas-vindas
 5. No áudio, dê as boas-vindas de forma breve e carinhosa (NÃO repita os links no áudio)`;
+
+      } else if (isWeeklyReport) {
+        // WEEKLY REPORT: User clicked "Ver meu resumo" on the template
+        const reportContent = profile.pending_insight.replace('[WEEKLY_REPORT]', '');
+        console.log(`📊 Delivering pending WEEKLY REPORT link for user ${profile.user_id}`);
+
+        dynamicContext += `\n\n📊 RESUMO SEMANAL PENDENTE:
+O usuário clicou no botão "Ver meu resumo" no WhatsApp. Entregue a mensagem abaixo com o link do resumo:
+
+"""
+${reportContent}
+"""
+
+INSTRUÇÃO:
+1. Entregue a mensagem acima de forma natural e breve
+2. O link já está incluído — NÃO modifique
+3. Pode adicionar uma frase curta de incentivo, mas mantenha conciso`;
+
+      } else if (isContent) {
+        // CONTENT/JOURNEY: User clicked "Ver conteúdo" on the template
+        const contentMsg = profile.pending_insight.replace('[CONTENT]', '');
+        console.log(`📖 Delivering pending CONTENT link for user ${profile.user_id}`);
+
+        dynamicContext += `\n\n📖 CONTEÚDO DE JORNADA PENDENTE:
+O usuário clicou no botão "Ver conteúdo" no WhatsApp. Entregue a mensagem abaixo:
+
+"""
+${contentMsg}
+"""
+
+INSTRUÇÃO:
+1. Entregue a mensagem acima de forma natural
+2. O link já está incluído — NÃO modifique
+3. Pode adicionar uma frase breve de contexto sobre a jornada`;
 
       } else {
         // INSIGHT FLOW: Regular pending insight

@@ -462,12 +462,20 @@ Deno.serve(async (req) => {
         
         const shortLink = await createShortLink(supabaseUrl, supabaseServiceKey, portalUrl, profile.phone) || portalUrl;
 
-        // Build teaser message
+        // Build teaser message with personalized link
         const monthNames = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
         const currentMonth = monthNames[new Date().getMonth()];
         const teaser = `Oi, ${userName}! Seu resumo de ${currentMonth} está pronto 📊✨\n\nVeja aqui: ${shortLink}\n\n— Aura 💜`;
 
-        // Send teaser via WhatsApp
+        // Save teaser with link as pending_insight so if template is sent (outside 24h window),
+        // when user clicks "Ver meu resumo" the link is delivered inside the opened window
+        try {
+          await supabase.from('profiles').update({
+            pending_insight: `[WEEKLY_REPORT]${teaser}`,
+          }).eq('user_id', profile.user_id);
+        } catch { /* non-blocking */ }
+
+        // Send teaser via WhatsApp (inside window: sends teaser directly; outside: sends template)
         const zapiConfig = await getInstanceConfigForUser(supabase, profile.user_id);
         const cleanPhone = cleanPhoneNumber(profile.phone);
         const result = await sendProactive(cleanPhone, teaser, 'weekly_report', profile.user_id);
@@ -475,6 +483,12 @@ Deno.serve(async (req) => {
         if (result.success) {
           console.log(`✅ Report teaser sent to ${profile.name} (${profile.phone})`);
           sentCount++;
+
+          // If sent as free text (inside window), clear pending since user already got the link
+          if (result.provider === 'official' || result.provider === 'zapi') {
+            // Check if it was sent as template or freetext by checking the teaser was delivered
+            // For simplicity, always keep pending — aura-agent will clear it on next interaction
+          }
 
           // Save message and mark as sent (dedup)
           await Promise.all([
