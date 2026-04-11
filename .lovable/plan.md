@@ -1,32 +1,53 @@
 
 
-## Plano: Compactar tabelas de Recovery e Dunning na aba "Semanais & Conversão"
+## Plano: Painel de Gestão de Usuários (Admin)
 
-### Problema
-As tabelas de "Recuperação de Checkout Abandonado" e "Tentativas de Dunning" ocupam muito espaço vertical, dificultando a visualização das métricas de conversão.
+### O que será construído
 
-### Solução
-Colocar ambas as tabelas dentro de componentes **Collapsible** (já disponível no projeto via `@radix-ui/react-collapsible`), colapsados por padrão. O usuário clica para expandir quando quiser ver os detalhes. Além disso, limitar cada tabela a **5 linhas** visíveis com um botão "Ver mais".
+Uma nova página `/admin/usuarios` com tabela de todos os usuários e capacidade de gerenciar manualmente contas, planos e status.
 
-### Alterações em `src/pages/AdminEngagement.tsx`
+### Funcionalidades
 
-1. **Importar** `Collapsible, CollapsibleTrigger, CollapsibleContent` de `@/components/ui/collapsible` e `ChevronDown` de `lucide-react`
+1. **Tabela de Usuários** — lista todos os profiles com busca por nome/telefone/email
+2. **Ações por usuário** (via dialog ao clicar):
+   - Alterar plano (essencial/direção/transformação)
+   - Alterar status (active/inactive/canceled/paused)
+   - Editar nome, email, telefone
+   - Ver dados: data de criação, último contato, episódio atual, jornada atual
+   - Resetar sessões usadas no mês
+3. **Badges visuais** para status (verde=active, amarelo=paused, vermelho=canceled/inactive)
 
-2. **Tabela Recovery (linhas 612-668)**: Envolver em `Collapsible` com `open={false}` por padrão. O header do Card vira o trigger clicável com ícone de seta. Mostrar apenas resumo (X tentativas, Y converteram) quando colapsado. Limitar a 5 linhas + botão "Ver todos".
+### Alterações técnicas
 
-3. **Tabela Dunning (linhas 670-738)**: Mesmo tratamento — collapsible, colapsado por padrão, limite de 5 linhas.
+**Novo arquivo: `src/pages/AdminUsers.tsx`**
+- Tabela paginada com busca
+- Dialog de edição usando a edge function `admin-update-profile` (já existente)
+- Proteção via `useAdminAuth`
+- Importa componentes UI existentes (Table, Dialog, Input, Select, Badge, Button)
 
-4. **Reordenar a aba**: Mover os cards de métricas (`trialCards`) e o funil de conversão para **antes** das tabelas de recovery/dunning, priorizando a visão geral.
+**Arquivo editado: `src/App.tsx`**
+- Adicionar rota `/admin/usuarios` → `AdminUsers`
 
-### Layout final da aba "Semanais & Conversão"
+### Layout da página
+
 ```text
-1. Cards de métricas (grid 4 colunas)
-2. Cobranças no Período (3 cards)
-3. Funil de Checkout (card)
-4. Funil de Conversão (card)
-5. Distribuição por Plano
-6. ▶ Recuperação de Checkout (colapsado, clique para expandir)
-7. ▶ Tentativas de Dunning (colapsado, clique para expandir)
-8. Botão Reativar
+[← Voltar]  Gestão de Usuários
+
+[🔍 Buscar por nome, telefone ou email...]
+
+| Nome | Telefone | Plano | Status | Criado em | Último contato | Ações |
+|------|----------|-------|--------|-----------|----------------|-------|
+| Ana  | +55...   | 🟢 essencial | 🟢 active | 01/04 | 10/04 | [Editar] |
+
+--- Dialog de Edição ---
+Nome: [____]
+Email: [____]  
+Telefone: [____]
+Plano: [dropdown]
+Status: [dropdown]
+[Salvar] [Cancelar]
 ```
+
+### Sem alterações no backend
+A edge function `admin-update-profile` já existe e aceita `{ profile_id, updates }` — será reutilizada.
 
