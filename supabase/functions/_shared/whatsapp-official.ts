@@ -16,14 +16,10 @@ export type TemplateCategory =
   | 'content'
   | 'weekly_report'
   | 'insight'
-  | 'session_reminder'
   | 'reactivation'
-  | 'checkout_recovery'
   | 'welcome'
   | 'welcome_trial'
   | 'reconnect'
-  | 'dunning'
-  | 'followup'
   | 'access_blocked';
 
 export interface TwilioSendResult {
@@ -317,11 +313,18 @@ export async function sendProactiveMessage(
       userName = profile?.name || null;
     }
 
-    // Window open → free text (full message content allowed)
+    // Window open → free text
     if (windowOpen) {
+      // For weekly_report and content: ALWAYS send teaser/link, never full text
+      if (['weekly_report', 'content'].includes(templateCategory)) {
+        console.log(`✅ [Twilio] 24h window open, but forcing teaser for ${templateCategory}`);
+        const messageToSend = teaserText || text;
+        const result = await sendFreeText(phone, messageToSend);
+        return { success: result.success, parts: 1, type: 'freetext', error: result.error };
+      }
+      // For insight and others: send full text as free text
       console.log('✅ [Twilio] 24h window open, sending as free text');
-      const messageToSend = teaserText || text;
-      const result = await sendFreeText(phone, messageToSend);
+      const result = await sendFreeText(phone, text);
       return { success: result.success, parts: 1, type: 'freetext', error: result.error };
     }
 

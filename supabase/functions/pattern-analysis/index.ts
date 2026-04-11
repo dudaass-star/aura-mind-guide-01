@@ -378,6 +378,27 @@ serve(async (req) => {
             if (sendResult.success) {
               console.log(`✅ [${user.name || 'Unknown'}] Insight sent`);
 
+              // If sent as template (outside 24h window), save insight for delivery when user responds
+              if (sendResult.provider === 'official') {
+                // Check if it was sent as a template (not free text)
+                // When outside window, the template just notifies — save full insight for later
+                const { data: profileCheck } = await supabase
+                  .from('profiles')
+                  .select('last_user_message_at')
+                  .eq('user_id', user.user_id)
+                  .single();
+                
+                const lastMsg = profileCheck?.last_user_message_at ? new Date(profileCheck.last_user_message_at) : null;
+                const isOutsideWindow = !lastMsg || (Date.now() - lastMsg.getTime()) >= 24 * 60 * 60 * 1000;
+                
+                if (isOutsideWindow) {
+                  console.log(`💾 [${user.name || 'Unknown'}] Saving pending_insight for delivery on next interaction`);
+                  await supabase.from('profiles').update({
+                    pending_insight: analysis.whatsapp_message,
+                  }).eq('id', user.id);
+                }
+              }
+
               // Save message and update timestamp
               await Promise.all([
                 supabase.from('messages').insert({
