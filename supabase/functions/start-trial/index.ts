@@ -179,9 +179,9 @@ Me conta: como você está se sentindo agora?`;
     }
 
     // Send short template via WhatsApp
-    const templateText = `Olá, ${name.trim()}. Seu acesso à Aura foi ativado. Estou aqui para você.`;
+    const templateText = `Olá, ${name.trim()}. Sua assinatura da Aura foi ativada com sucesso.`;
     try {
-      const result = await sendProactive(formattedPhone, templateText, 'welcome_trial', userId);
+      const result = await sendProactive(formattedPhone, templateText, 'welcome', userId);
       if (result.success) {
         console.log('✅ Welcome template sent via', result.provider);
       } else {
