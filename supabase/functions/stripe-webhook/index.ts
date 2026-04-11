@@ -317,43 +317,49 @@ Deno.serve(async (req) => {
           } catch { /* non-blocking */ }
           const portalLineTrial = portalLinkTrial ? `\n\nAcesse seu painel pessoal: ${portalLinkTrial} ✨` : '';
 
-          // Send welcome message
+          // Build full welcome message (to be delivered when user clicks "Começar")
+          const guideLinkText = 'https://olaaura.com.br/guia';
           let welcomeMessage: string;
           if (isReturning) {
             welcomeMessage = `Oi, ${customerName}! 💜\n\nQue bom ter você de volta! 🌟\n\nVocê escolheu o plano ${planName}.${portalLineTrial}\n\nVamos retomar de onde paramos?`;
           } else if (isUpgrade) {
             welcomeMessage = `Oi, ${customerName}! 💜 Que notícia boa!\n\nAgora somos oficiais. Você escolheu o plano ${planName}.${portalLineTrial}\n\nVamos continuar de onde paramos?`;
           } else {
-            welcomeMessage = `Oi, ${customerName}! 🌟 Que bom te receber por aqui.\n\nEu sou a AURA — e vou ficar com você nessa jornada.\n\nVocê escolheu o plano ${planName}.\n\nComigo, você pode falar com liberdade: sem julgamento, no seu ritmo.${portalLineTrial}\n\nMe diz: como você está hoje?`;
+            welcomeMessage = `Oi, ${customerName}! 🌟 Que bom te receber por aqui.\n\nEu sou a AURA — e vou ficar com você nessa jornada.\n\nVocê escolheu o plano ${planName}.\n\nComigo, você pode falar com liberdade: sem julgamento, no seu ritmo.\n\nSe preferir, pode me mandar áudio também! 🎙️\n\nDá uma olhada no que você vai ter acesso: ${guideLinkText}${portalLineTrial}\n\nMe diz: como você está hoje?`;
           }
 
+          // Save full welcome as pending_insight with [WELCOME] marker
+          // It will be delivered when the user clicks "Começar" and opens the 24h window
           try {
-            let result = await sendProactive(formattedPhone, welcomeMessage, 'welcome', profileUserId);
+            await supabase.from('profiles').update({
+              pending_insight: `[WELCOME]${welcomeMessage}`,
+            }).eq('user_id', profileUserId);
+            console.log('✅ Pending welcome saved for delivery on user interaction');
+          } catch (pendErr) {
+            console.warn('⚠️ Could not save pending welcome:', pendErr);
+          }
+
+          // Send short template via WhatsApp (user will click "Começar" to open window)
+          const templateText = `Olá, ${customerName}. Sua assinatura da Aura foi ativada com sucesso.`;
+          try {
+            let result = await sendProactive(formattedPhone, templateText, 'welcome', profileUserId);
             if (!result.success) {
-              console.warn('⚠️ First welcome attempt failed, retrying in 3s:', result.error);
+              console.warn('⚠️ First welcome template attempt failed, retrying in 3s:', result.error);
               await new Promise(resolve => setTimeout(resolve, 3000));
-              result = await sendProactive(formattedPhone, welcomeMessage, 'welcome', profileUserId);
+              result = await sendProactive(formattedPhone, templateText, 'welcome', profileUserId);
             }
             if (result.success) {
-              console.log('✅ Welcome message sent via', result.provider);
-              await supabase.from('messages').insert({ user_id: profileUserId, role: 'assistant', content: welcomeMessage });
+              console.log('✅ Welcome template sent via', result.provider);
             } else {
-              console.error('❌ Failed to send welcome after retry:', result.error);
+              console.error('❌ Failed to send welcome template after retry:', result.error);
             }
           } catch (sendError) {
-            console.error('❌ Error sending welcome:', sendError);
-            // Retry once on exception
+            console.error('❌ Error sending welcome template:', sendError);
             try {
               await new Promise(resolve => setTimeout(resolve, 3000));
-              const retryResult = await sendProactive(formattedPhone, welcomeMessage, 'welcome', profileUserId);
-              if (retryResult.success) {
-                console.log('✅ Welcome sent on retry via', retryResult.provider);
-                await supabase.from('messages').insert({ user_id: profileUserId, role: 'assistant', content: welcomeMessage });
-              } else {
-                console.error('❌ Welcome retry also failed:', retryResult.error);
-              }
+              await sendProactive(formattedPhone, templateText, 'welcome', profileUserId);
             } catch (retryErr) {
-              console.error('❌ Welcome retry exception:', retryErr);
+              console.error('❌ Welcome template retry exception:', retryErr);
             }
           }
 
@@ -581,63 +587,50 @@ Deno.serve(async (req) => {
         console.warn('⚠️ Portal token creation failed (non-blocking):', tokenErr);
       }
 
-      // Build message based on user scenario
+      // Build full welcome message (delivered when user clicks "Começar")
+      const guideLinkText2 = 'https://olaaura.com.br/guia';
       let welcomeMessage: string;
       const portalLine = portalLink ? `\n\nAcesse seu painel pessoal: ${portalLink} ✨` : '';
 
       if (isReturning) {
-        welcomeMessage = `Oi, ${customerName}! 💜
-
-Que bom ter você de volta! 🌟
-
-Você escolheu o plano ${planName}.${portalLine}
-
-Vamos retomar de onde paramos?`;
+        welcomeMessage = `Oi, ${customerName}! 💜\n\nQue bom ter você de volta! 🌟\n\nVocê escolheu o plano ${planName}.${portalLine}\n\nVamos retomar de onde paramos?`;
       } else if (isUpgrade) {
-        welcomeMessage = `Oi, ${customerName}! 💜 Que notícia boa!
-
-Agora somos oficiais. Você escolheu o plano ${planName}.${portalLine}
-
-Vamos continuar de onde paramos?`;
+        welcomeMessage = `Oi, ${customerName}! 💜 Que notícia boa!\n\nAgora somos oficiais. Você escolheu o plano ${planName}.${portalLine}\n\nVamos continuar de onde paramos?`;
       } else {
-        welcomeMessage = `Oi, ${customerName}! 🌟 Que bom te receber por aqui.
-
-Eu sou a AURA — e vou ficar com você nessa jornada.
-
-Você escolheu o plano ${planName}.
-
-Comigo, você pode falar com liberdade: sem julgamento, no seu ritmo.${portalLine}
-
-Me diz: como você está hoje?`;
+        welcomeMessage = `Oi, ${customerName}! 🌟 Que bom te receber por aqui.\n\nEu sou a AURA — e vou ficar com você nessa jornada.\n\nVocê escolheu o plano ${planName}.\n\nComigo, você pode falar com liberdade: sem julgamento, no seu ritmo.\n\nSe preferir, pode me mandar áudio também! 🎙️\n\nDá uma olhada no que você vai ter acesso: ${guideLinkText2}${portalLine}\n\nMe diz: como você está hoje?`;
       }
 
-      // Send welcome message with retry + persistence
+      // Save full welcome as pending_insight with [WELCOME] marker
       try {
-        let result = await sendProactive(formattedPhone, welcomeMessage, 'welcome', profileUserId);
+        await supabase.from('profiles').update({
+          pending_insight: `[WELCOME]${welcomeMessage}`,
+        }).eq('user_id', profileUserId);
+        console.log('✅ Pending welcome saved for delivery on user interaction');
+      } catch (pendErr) {
+        console.warn('⚠️ Could not save pending welcome:', pendErr);
+      }
+
+      // Send short template via WhatsApp
+      const templateText2 = `Olá, ${customerName}. Sua assinatura da Aura foi ativada com sucesso.`;
+      try {
+        let result = await sendProactive(formattedPhone, templateText2, 'welcome', profileUserId);
         if (!result.success) {
-          console.warn('⚠️ First welcome attempt failed, retrying in 3s:', result.error);
+          console.warn('⚠️ First welcome template attempt failed, retrying in 3s:', result.error);
           await new Promise(resolve => setTimeout(resolve, 3000));
-          result = await sendProactive(formattedPhone, welcomeMessage, 'welcome', profileUserId);
+          result = await sendProactive(formattedPhone, templateText2, 'welcome', profileUserId);
         }
         if (result.success) {
-          console.log(`✅ ${isUpgrade ? 'Upgrade' : 'Welcome'} message sent via ${result.provider}!`);
-          await supabase.from('messages').insert({ user_id: profileUserId, role: 'assistant', content: welcomeMessage });
+          console.log(`✅ ${isUpgrade ? 'Upgrade' : 'Welcome'} template sent via ${result.provider}!`);
         } else {
-          console.error('❌ Failed to send welcome after retry:', result.error);
+          console.error('❌ Failed to send welcome template after retry:', result.error);
         }
       } catch (sendError) {
-        console.error('❌ Error sending welcome:', sendError);
+        console.error('❌ Error sending welcome template:', sendError);
         try {
           await new Promise(resolve => setTimeout(resolve, 3000));
-          const retryResult = await sendProactive(formattedPhone, welcomeMessage, 'welcome', profileUserId);
-          if (retryResult.success) {
-            console.log('✅ Welcome sent on retry via', retryResult.provider);
-            await supabase.from('messages').insert({ user_id: profileUserId, role: 'assistant', content: welcomeMessage });
-          } else {
-            console.error('❌ Welcome retry also failed:', retryResult.error);
-          }
+          await sendProactive(formattedPhone, templateText2, 'welcome', profileUserId);
         } catch (retryErr) {
-          console.error('❌ Welcome retry exception:', retryErr);
+          console.error('❌ Welcome template retry exception:', retryErr);
         }
       }
 
