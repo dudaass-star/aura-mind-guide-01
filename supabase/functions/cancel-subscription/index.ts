@@ -88,12 +88,24 @@ serve(async (req) => {
 
     logStep("Customer found", { customerId: customer.id });
 
-    // Get active subscriptions
-    const subscriptions = await stripe.subscriptions.list({
+    // Get active subscriptions first, then fallback to past_due
+    const activeSubscriptions = await stripe.subscriptions.list({
       customer: customer.id,
       status: "active",
       limit: 1,
     });
+
+    let subscriptions = activeSubscriptions;
+
+    if (activeSubscriptions.data.length === 0) {
+      logStep("No active subscription, checking past_due");
+      const pastDueSubscriptions = await stripe.subscriptions.list({
+        customer: customer.id,
+        status: "past_due",
+        limit: 1,
+      });
+      subscriptions = pastDueSubscriptions;
+    }
 
     logStep("Subscriptions found", { count: subscriptions.data.length });
 
