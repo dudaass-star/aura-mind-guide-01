@@ -152,7 +152,7 @@ Deno.serve(async (req) => {
       }
     } catch { /* non-blocking */ }
 
-    // Link direto para o guia
+    // Build full welcome message (delivered when user clicks "Começar")
     const guideLinkText = 'https://olaaura.com.br/guia';
     const portalLine = portalLink ? `\n\nAcesse seu painel pessoal: ${portalLink} ✨` : '';
 
@@ -168,21 +168,27 @@ Dá uma olhada no que você vai ter acesso: ${guideLinkText}${portalLine}
 
 Me conta: como você está se sentindo agora?`;
 
+    // Save full welcome as pending_insight with [WELCOME] marker
     try {
-      const result = await sendProactive(formattedPhone, welcomeMessage, 'welcome_trial', userId);
-      if (result.success) {
-        console.log('✅ Welcome message sent via', result.provider);
+      await supabase.from('profiles').update({
+        pending_insight: `[WELCOME]${welcomeMessage}`,
+      }).eq('user_id', userId);
+      console.log('✅ Pending welcome saved for delivery on user interaction');
+    } catch (pendErr) {
+      console.warn('⚠️ Could not save pending welcome:', pendErr);
+    }
 
-        await supabase.from('messages').insert({
-          user_id: userId,
-          role: 'assistant',
-          content: welcomeMessage,
-        });
+    // Send short template via WhatsApp
+    const templateText = `Olá, ${name.trim()}. Seu acesso à Aura foi ativado. Estou aqui para você.`;
+    try {
+      const result = await sendProactive(formattedPhone, templateText, 'welcome_trial', userId);
+      if (result.success) {
+        console.log('✅ Welcome template sent via', result.provider);
       } else {
-        console.error('⚠️ Welcome message error:', result.error);
+        console.error('⚠️ Welcome template error:', result.error);
       }
     } catch (msgError) {
-      console.error('⚠️ Welcome message error (non-blocking):', msgError);
+      console.error('⚠️ Welcome template error (non-blocking):', msgError);
     }
 
 

@@ -4588,11 +4588,34 @@ INSTRUÇÃO: Retome de onde pararam naturalmente. Diga algo como "Que bom que vo
     }
 
     // ========================================================================
-    // CONTEXTO DE INSIGHT PENDENTE — entrega automática quando usuário interage
+    // CONTEXTO DE INSIGHT/WELCOME PENDENTE — entrega automática quando usuário interage
     // ========================================================================
     if (profile?.pending_insight) {
-      console.log(`💡 Delivering pending insight for user ${profile.user_id} (${profile.pending_insight.length} chars)`);
-      dynamicContext += `\n\n💡 INSIGHT PENDENTE PARA ENTREGAR:
+      const isWelcomePending = profile.pending_insight.startsWith('[WELCOME]');
+
+      if (isWelcomePending) {
+        // WELCOME FLOW: User clicked "Começar" on the template
+        const welcomeContent = profile.pending_insight.replace('[WELCOME]', '');
+        console.log(`🎉 Delivering pending WELCOME for user ${profile.user_id}`);
+
+        dynamicContext += `\n\n🎉 MENSAGEM DE BOAS-VINDAS PENDENTE:
+O usuário acabou de ativar sua assinatura e clicou "Começar" no WhatsApp. Esta é a PRIMEIRA interação dele com você. Entregue esta mensagem de boas-vindas de forma calorosa e acolhedora:
+
+"""
+${welcomeContent}
+"""
+
+INSTRUÇÃO:
+1. Use EXATAMENTE o conteúdo acima como sua resposta (pode fazer pequenos ajustes de naturalidade)
+2. Esta é a primeira impressão do usuário — seja calorosa e acolhedora
+3. Inclua os links do guia e da área pessoal que estão na mensagem
+4. Use [MODO_AUDIO] no início da resposta para enviar também um áudio de boas-vindas
+5. No áudio, dê as boas-vindas de forma breve e carinhosa (NÃO repita os links no áudio)`;
+
+      } else {
+        // INSIGHT FLOW: Regular pending insight
+        console.log(`💡 Delivering pending insight for user ${profile.user_id} (${profile.pending_insight.length} chars)`);
+        dynamicContext += `\n\n💡 INSIGHT PENDENTE PARA ENTREGAR:
 Você preparou um insight personalizado para ${profile.name?.split(' ')[0] || 'o usuário'} anteriormente, mas ele foi enviado como notificação (fora da janela de 24h). Agora que o usuário interagiu, ENTREGUE este insight de forma natural na sua resposta:
 
 """
@@ -4604,8 +4627,9 @@ INSTRUÇÃO:
 2. Se o usuário mandou uma pergunta específica, responda a pergunta PRIMEIRO e depois entregue o insight como algo que "você queria compartilhar"
 3. Se o usuário apenas clicou no botão (mensagem curta/genérica), entregue o insight como tema principal
 4. NÃO mencione que é um "insight pendente" ou "notificação" — pareça que você acabou de pensar nisso`;
+      }
 
-      // Clear the pending insight
+      // Clear the pending insight/welcome
       await supabase.from('profiles').update({ pending_insight: null }).eq('id', profile.id);
     }
 
