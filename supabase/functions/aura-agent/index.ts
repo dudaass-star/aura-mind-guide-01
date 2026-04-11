@@ -4588,6 +4588,28 @@ INSTRUÇÃO: Retome de onde pararam naturalmente. Diga algo como "Que bom que vo
     }
 
     // ========================================================================
+    // CONTEXTO DE INSIGHT PENDENTE — entrega automática quando usuário interage
+    // ========================================================================
+    if (profile?.pending_insight) {
+      console.log(`💡 Delivering pending insight for user ${profile.user_id} (${profile.pending_insight.length} chars)`);
+      dynamicContext += `\n\n💡 INSIGHT PENDENTE PARA ENTREGAR:
+Você preparou um insight personalizado para ${profile.name?.split(' ')[0] || 'o usuário'} anteriormente, mas ele foi enviado como notificação (fora da janela de 24h). Agora que o usuário interagiu, ENTREGUE este insight de forma natural na sua resposta:
+
+"""
+${profile.pending_insight.substring(0, 1500)}
+"""
+
+INSTRUÇÃO:
+1. Integre este insight naturalmente na sua resposta
+2. Se o usuário mandou uma pergunta específica, responda a pergunta PRIMEIRO e depois entregue o insight como algo que "você queria compartilhar"
+3. Se o usuário apenas clicou no botão (mensagem curta/genérica), entregue o insight como tema principal
+4. NÃO mencione que é um "insight pendente" ou "notificação" — pareça que você acabou de pensar nisso`;
+
+      // Clear the pending insight
+      await supabase.from('profiles').update({ pending_insight: null }).eq('id', profile.id);
+    }
+
+    // ========================================================================
     // CONTEXTO DE INTERRUPÇÃO - Conteúdo pendente de resposta anterior
     // ========================================================================
     if (pending_content && pending_content.trim()) {
@@ -4615,6 +4637,7 @@ Exemplo natural:
 - Usuário interrompe com "espera, deixa eu te contar outra coisa" → Descarte e escute
 - Usuário interrompe com "sim!" → Incorpore o pendente naturalmente
 - Usuário interrompe com "mudando de assunto..." → Descarte completamente`;
+    }
     }
     
     const shouldSuggestUpgrade = userPlan === 'essencial' && planConfig.dailyMessageTarget > 0 && messagesToday > planConfig.dailyMessageTarget;
