@@ -1,7 +1,7 @@
 /**
  * WhatsApp Provider Abstraction Layer
  * 
- * Camada que decide entre Z-API (atual) e API Oficial do WhatsApp (Twilio).
+ * Camada que decide entre Z-API (legado) e API Oficial do WhatsApp (Meta Cloud API direta).
  * O provider ativo é controlado pela key `whatsapp_provider` em `system_config`.
  * 
  * Default: 'zapi' — nenhuma mudança no comportamento existente.
@@ -107,7 +107,7 @@ export async function sendMessage(
       return { success: result.success, provider: 'zapi', error: result.error };
     }
 
-    // Official API: texto livre via Twilio Gateway
+    // Official API: texto livre via Meta Cloud API
     const result = await sendFreeText(phone, text);
     return { success: result.success, provider: 'official', error: result.error };
   }, `sendMessage(${phone.substring(0, 4)}***)`);
@@ -184,7 +184,7 @@ export async function sendAudioUrl(
       return { success: result.success, provider: 'zapi', error: result.error };
     }
 
-    // Official API: MediaUrl via Twilio Gateway
+    // Official API: audio via Meta Cloud API
     const result = await twilioSendAudioFromUrl(phone, audioUrl);
     return { success: result.success, provider: 'official', error: result.error };
   }, `sendAudioUrl(${phone.substring(0, 4)}***)`);

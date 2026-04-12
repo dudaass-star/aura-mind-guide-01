@@ -1714,6 +1714,7 @@ export type Database = {
           created_at: string | null
           id: string
           is_active: boolean
+          language_code: string
           meta_category: string
           prefix: string
           template_name: string
@@ -1724,6 +1725,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           is_active?: boolean
+          language_code?: string
           meta_category?: string
           prefix: string
           template_name: string
@@ -1734,6 +1736,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           is_active?: boolean
+          language_code?: string
           meta_category?: string
           prefix?: string
           template_name?: string

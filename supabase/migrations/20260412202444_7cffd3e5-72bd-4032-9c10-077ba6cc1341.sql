@@ -1,0 +1,1 @@
+ALTER TABLE public.whatsapp_templates ADD COLUMN IF NOT EXISTS language_code text NOT NULL DEFAULT 'pt_BR';
