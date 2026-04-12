@@ -14,7 +14,7 @@ serve(async (req) => {
     const token = url.searchParams.get("hub.verify_token");
     const challenge = url.searchParams.get("hub.challenge");
 
-    const verifyToken = Deno.env.get("INSTAGRAM_VERIFY_TOKEN") || "aura_instagram_webhook_2024";
+    const verifyToken = Deno.env.get("INSTAGRAM_VERIFY_TOKEN") || "aura_ig_verify_2026";
 
     if (mode === "subscribe" && token === verifyToken) {
       console.log("Webhook verified");
