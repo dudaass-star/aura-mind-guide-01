@@ -184,7 +184,7 @@ export async function sendAudioUrl(
       return { success: result.success, provider: 'zapi', error: result.error };
     }
 
-    // Official API: MediaUrl via Twilio Gateway
+    // Official API: audio via Meta Cloud API
     const result = await twilioSendAudioFromUrl(phone, audioUrl);
     return { success: result.success, provider: 'official', error: result.error };
   }, `sendAudioUrl(${phone.substring(0, 4)}***)`);
