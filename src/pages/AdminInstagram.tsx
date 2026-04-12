@@ -13,6 +13,7 @@ import { Instagram, MessageCircle, ThumbsUp, ThumbsDown, HelpCircle, Minus, Refr
 
 interface Interaction {
   id: string;
+  ig_user_id: string;
   ig_username: string | null;
   interaction_type: string;
   original_text: string;
@@ -85,9 +86,9 @@ export default function AdminInstagram() {
 
   const sentimentIcon = (s: string | null) => {
     switch (s) {
-      case "positive": return <ThumbsUp className="h-4 w-4 text-green-500" />;
-      case "negative": return <ThumbsDown className="h-4 w-4 text-red-500" />;
-      case "question": return <HelpCircle className="h-4 w-4 text-blue-500" />;
+      case "positive": return <ThumbsUp className="h-4 w-4 text-primary" />;
+      case "negative": return <ThumbsDown className="h-4 w-4 text-destructive" />;
+      case "question": return <HelpCircle className="h-4 w-4 text-accent-foreground" />;
       default: return <Minus className="h-4 w-4 text-muted-foreground" />;
     }
   };

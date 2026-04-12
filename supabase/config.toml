@@ -156,3 +156,9 @@ verify_jwt = false
 
 [functions.audit-stripe-duplicates]
 verify_jwt = false
+
+[functions.webhook-instagram]
+verify_jwt = false
+
+[functions.instagram-agent]
+verify_jwt = false
