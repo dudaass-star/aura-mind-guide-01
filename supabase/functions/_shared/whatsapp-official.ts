@@ -1,7 +1,10 @@
 /**
- * WhatsApp Official API - Meta Cloud API Direct Integration
+ * WhatsApp Official API - Twilio Gateway (sending) + Meta webhook (receiving)
  * 
- * Implementação direta usando Meta Graph API v21.0.
+ * Modelo híbrido:
+ * - ENVIO: via Twilio Gateway (connector-gateway.lovable.dev/twilio)
+ * - RECEBIMENTO: via webhook-meta (Meta Cloud API direta)
+ * 
  * Ativado quando WHATSAPP_PROVIDER = 'official' em system_config.
  */
 
@@ -22,7 +25,7 @@ export type TemplateCategory =
   | 'reconnect'
   | 'access_blocked';
 
-export interface MetaSendResult {
+export interface TwilioSendResult {
   success: boolean;
   messageId?: string;
   error?: string;
@@ -35,32 +38,40 @@ export interface ProactiveMessageResult {
   error?: string;
 }
 
-// Keep legacy type alias for backwards compatibility
-export type TwilioSendResult = MetaSendResult;
+// Keep alias for backwards compat
+export type MetaSendResult = TwilioSendResult;
 
 // ============================================================================
-// META CLOUD API CONFIG
+// TWILIO GATEWAY CONFIG
 // ============================================================================
 
-const META_API_VERSION = 'v21.0';
-const META_BASE_URL = `https://graph.facebook.com/${META_API_VERSION}`;
+const GATEWAY_URL = 'https://connector-gateway.lovable.dev/twilio';
 
-function getPhoneNumberId(): string {
-  const id = Deno.env.get('META_WHATSAPP_PHONE_NUMBER_ID');
-  if (!id) throw new Error('META_WHATSAPP_PHONE_NUMBER_ID is not configured');
-  return id;
+function getGatewayHeaders(): Record<string, string> {
+  const lovableKey = Deno.env.get('LOVABLE_API_KEY');
+  if (!lovableKey) throw new Error('LOVABLE_API_KEY is not configured');
+
+  const twilioKey = Deno.env.get('TWILIO_API_KEY');
+  if (!twilioKey) throw new Error('TWILIO_API_KEY is not configured');
+
+  return {
+    'Authorization': `Bearer ${lovableKey}`,
+    'X-Connection-Api-Key': twilioKey,
+    'Content-Type': 'application/x-www-form-urlencoded',
+  };
 }
 
-function getAccessToken(): string {
-  const token = Deno.env.get('META_ACCESS_TOKEN');
-  if (!token) throw new Error('META_ACCESS_TOKEN is not configured');
-  return token;
+function getFromNumber(): string {
+  const from = Deno.env.get('TWILIO_WHATSAPP_FROM');
+  if (!from) throw new Error('TWILIO_WHATSAPP_FROM is not configured');
+  return from.startsWith('whatsapp:') ? from : `whatsapp:${from}`;
 }
 
-function formatPhoneForMeta(phone: string): string {
+function formatPhoneForTwilio(phone: string): string {
   const clean = phone.replace(/\D/g, '');
   if (!clean) throw new Error(`Invalid phone number (no digits): "${phone}"`);
-  return clean;
+  const withCountry = clean.startsWith('55') ? clean : `55${clean}`;
+  return `whatsapp:+${withCountry}`;
 }
 
 // ============================================================================
@@ -113,166 +124,137 @@ export function splitMessageForTemplate(text: string, prefixLength: number): str
 }
 
 // ============================================================================
-// SEND FREE TEXT (within 24h window)
+// SEND FREE TEXT (within 24h window) - via Twilio Gateway
 // ============================================================================
 
-export async function sendFreeText(phone: string, text: string): Promise<MetaSendResult> {
+export async function sendFreeText(phone: string, text: string): Promise<TwilioSendResult> {
   try {
     if (!phone || !phone.replace(/\D/g, '')) {
       return { success: false, error: `Invalid phone number: "${phone}"` };
     }
-    const phoneNumberId = getPhoneNumberId();
-    const accessToken = getAccessToken();
-    const to = formatPhoneForMeta(phone);
+    const to = formatPhoneForTwilio(phone);
+    const from = getFromNumber();
+    const headers = getGatewayHeaders();
 
-    console.log(`📨 [Meta] Sending free text | To: ${to} | Body length: ${text.length}`);
+    console.log(`📨 [Twilio] Sending free text | To: ${to} | Body length: ${text.length}`);
 
-    const response = await fetch(`${META_BASE_URL}/${phoneNumberId}/messages`, {
+    const response = await fetch(`${GATEWAY_URL}/Messages.json`, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        messaging_product: 'whatsapp',
-        recipient_type: 'individual',
-        to,
-        type: 'text',
-        text: { body: text },
-      }),
+      headers,
+      body: new URLSearchParams({ To: to, From: from, Body: text }),
     });
 
     const data = await response.json();
 
     if (!response.ok) {
-      const errMsg = `Meta API error [${response.status}]: ${JSON.stringify(data)}`;
-      console.error(`❌ [Meta] ${errMsg}`);
+      const errMsg = `Twilio API error [${response.status}]: ${JSON.stringify(data)}`;
+      console.error(`❌ [Twilio] ${errMsg}`);
       return { success: false, error: errMsg };
     }
 
-    const messageId = data.messages?.[0]?.id;
-    console.log(`✅ [Meta] Free text sent, ID: ${messageId}`);
-    return { success: true, messageId };
+    console.log(`✅ [Twilio] Free text sent, SID: ${data.sid}`);
+    return { success: true, messageId: data.sid };
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Unknown error';
-    console.error(`❌ [Meta] sendFreeText error: ${msg}`);
+    console.error(`❌ [Twilio] sendFreeText error: ${msg}`);
     return { success: false, error: msg };
   }
 }
 
 // ============================================================================
-// SEND TEMPLATE MESSAGE (Meta Cloud API)
+// SEND TEMPLATE MESSAGE - via Twilio Gateway (ContentSid)
 // ============================================================================
 
 export async function sendTemplateMessage(
   phone: string,
-  templateName: string,
+  contentSid: string,
   variables: string[],
-  languageCode: string = 'pt_BR',
-): Promise<MetaSendResult> {
+  _languageCode: string = 'pt_BR',
+): Promise<TwilioSendResult> {
   if (!phone || !phone.replace(/\D/g, '')) {
     return { success: false, error: `Invalid phone number: "${phone}"` };
   }
   try {
-    const phoneNumberId = getPhoneNumberId();
-    const accessToken = getAccessToken();
-    const to = formatPhoneForMeta(phone);
+    const to = formatPhoneForTwilio(phone);
+    const from = getFromNumber();
+    const headers = getGatewayHeaders();
 
-    // Build template components with variables
-    const components: any[] = [];
+    console.log(`📨 [Twilio] Sending template ContentSid="${contentSid}" to ${to}`);
+
+    const params: Record<string, string> = {
+      To: to,
+      From: from,
+      ContentSid: contentSid,
+    };
+
     if (variables.length > 0) {
-      components.push({
-        type: 'body',
-        parameters: variables.map(v => ({
-          type: 'text',
-          text: v.replace(/\n+/g, ' '), // Sanitize newlines
-        })),
-      });
+      const varsObj: Record<string, string> = {};
+      variables.forEach((v, i) => { varsObj[String(i + 1)] = v; });
+      params.ContentVariables = JSON.stringify(varsObj);
     }
 
-    console.log(`📨 [Meta] Sending template "${templateName}" (lang: ${languageCode}) to ${to}`);
-
-    const response = await fetch(`${META_BASE_URL}/${phoneNumberId}/messages`, {
+    const response = await fetch(`${GATEWAY_URL}/Messages.json`, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        messaging_product: 'whatsapp',
-        recipient_type: 'individual',
-        to,
-        type: 'template',
-        template: {
-          name: templateName,
-          language: { code: languageCode },
-          components: components.length > 0 ? components : undefined,
-        },
-      }),
+      headers,
+      body: new URLSearchParams(params),
     });
 
     const data = await response.json();
 
     if (!response.ok) {
-      const errMsg = `Meta template error [${response.status}]: ${JSON.stringify(data)}`;
-      console.error(`❌ [Meta] ${errMsg}`);
+      const errMsg = `Twilio template error [${response.status}]: ${JSON.stringify(data)}`;
+      console.error(`❌ [Twilio] ${errMsg}`);
       return { success: false, error: errMsg };
     }
 
-    const messageId = data.messages?.[0]?.id;
-    console.log(`✅ [Meta] Template sent, ID: ${messageId}`);
-    return { success: true, messageId };
+    console.log(`✅ [Twilio] Template sent, SID: ${data.sid}`);
+    return { success: true, messageId: data.sid };
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Unknown error';
-    console.error(`❌ [Meta] sendTemplateMessage error: ${msg}`);
+    console.error(`❌ [Twilio] sendTemplateMessage error: ${msg}`);
     return { success: false, error: msg };
   }
 }
 
 // ============================================================================
-// SEND AUDIO VIA URL (Meta Cloud API)
+// SEND AUDIO VIA URL - via Twilio Gateway
 // ============================================================================
 
-export async function sendAudioFromUrl(phone: string, audioUrl: string): Promise<MetaSendResult> {
+export async function sendAudioFromUrl(phone: string, audioUrl: string): Promise<TwilioSendResult> {
   try {
     if (!phone || !phone.replace(/\D/g, '')) {
       return { success: false, error: `Invalid phone number: "${phone}"` };
     }
-    const phoneNumberId = getPhoneNumberId();
-    const accessToken = getAccessToken();
-    const to = formatPhoneForMeta(phone);
+    const to = formatPhoneForTwilio(phone);
+    const from = getFromNumber();
+    const headers = getGatewayHeaders();
 
-    console.log(`🎵 [Meta] Sending audio URL to ${to}`);
+    console.log(`🎵 [Twilio] Sending audio URL to ${to}`);
 
-    const response = await fetch(`${META_BASE_URL}/${phoneNumberId}/messages`, {
+    const response = await fetch(`${GATEWAY_URL}/Messages.json`, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        messaging_product: 'whatsapp',
-        recipient_type: 'individual',
-        to,
-        type: 'audio',
-        audio: { link: audioUrl },
+      headers,
+      body: new URLSearchParams({
+        To: to,
+        From: from,
+        MediaUrl: audioUrl,
+        Body: '',
       }),
     });
 
     const data = await response.json();
 
     if (!response.ok) {
-      const errMsg = `Meta audio error [${response.status}]: ${JSON.stringify(data)}`;
-      console.error(`❌ [Meta] ${errMsg}`);
+      const errMsg = `Twilio audio error [${response.status}]: ${JSON.stringify(data)}`;
+      console.error(`❌ [Twilio] ${errMsg}`);
       return { success: false, error: errMsg };
     }
 
-    const messageId = data.messages?.[0]?.id;
-    console.log(`✅ [Meta] Audio sent, ID: ${messageId}`);
-    return { success: true, messageId };
+    console.log(`✅ [Twilio] Audio sent, SID: ${data.sid}`);
+    return { success: true, messageId: data.sid };
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Unknown error';
-    console.error(`❌ [Meta] sendAudioFromUrl error: ${msg}`);
+    console.error(`❌ [Twilio] sendAudioFromUrl error: ${msg}`);
     return { success: false, error: msg };
   }
 }
@@ -285,10 +267,7 @@ export async function sendAudioFromUrl(phone: string, audioUrl: string): Promise
  * Envia uma mensagem proativa (fora da conversa iniciada pelo usuário).
  * 
  * 1. Verifica janela de 24h → texto livre (grátis)
- * 2. Janela fechada → template envelope (pago)
- * 
- * For content/journey messages outside 24h window, pass `teaserText` 
- * (short version with link) to avoid splitting long messages.
+ * 2. Janela fechada → template envelope (pago via ContentSid)
  */
 export async function sendProactiveMessage(
   phone: string,
@@ -299,7 +278,6 @@ export async function sendProactiveMessage(
   templateVariables?: string[],
 ): Promise<ProactiveMessageResult> {
   try {
-    // Check 24h window + resolve user name in a single query
     let windowOpen = false;
     let userName: string | null = null;
 
@@ -320,23 +298,21 @@ export async function sendProactiveMessage(
 
     // Window open → free text
     if (windowOpen) {
-      // For weekly_report and content: ALWAYS send teaser/link, never full text
       if (['weekly_report', 'content'].includes(templateCategory)) {
-        console.log(`✅ [Meta] 24h window open, but forcing teaser for ${templateCategory}`);
+        console.log(`✅ [Twilio] 24h window open, but forcing teaser for ${templateCategory}`);
         const messageToSend = teaserText || text;
         const result = await sendFreeText(phone, messageToSend);
         return { success: result.success, parts: 1, type: 'freetext', error: result.error };
       }
-      // For insight and others: send full text as free text
-      console.log('✅ [Meta] 24h window open, sending as free text');
+      console.log('✅ [Twilio] 24h window open, sending as free text');
       const result = await sendFreeText(phone, text);
       return { success: result.success, parts: 1, type: 'freetext', error: result.error };
     }
 
-    // Window closed → template ONLY (never inject message text into variables)
+    // Window closed → template via ContentSid
     const { data: templateConfig } = await supabase
       .from('whatsapp_templates')
-      .select('template_name, prefix, is_active, language_code')
+      .select('template_name, twilio_content_sid, prefix, is_active, language_code')
       .eq('category', templateCategory)
       .single();
 
@@ -345,30 +321,32 @@ export async function sendProactiveMessage(
     }
 
     if (!templateConfig.is_active) {
-      const errMsg = `Template "${templateCategory}" not active. Cannot send outside 24h window without approved template. Aborting to protect Meta account quality.`;
-      console.error(`🛑 [Meta] ${errMsg}`);
+      const errMsg = `Template "${templateCategory}" not active/approved. Cannot send outside 24h window without approved template. Aborting to protect Meta account quality.`;
+      console.error(`🛑 [Twilio] ${errMsg}`);
       return { success: false, parts: 0, type: 'template', error: errMsg };
     }
 
-    const langCode = templateConfig.language_code || 'pt_BR';
+    const contentSid = templateConfig.twilio_content_sid;
+    if (!contentSid) {
+      return { success: false, parts: 0, type: 'template', error: `Template "${templateCategory}" has no ContentSid configured` };
+    }
 
     // If structured template variables provided explicitly, use them directly
     if (templateVariables && templateVariables.length > 0) {
-      console.log(`📨 [Meta] Sending template "${templateConfig.template_name}" with ${templateVariables.length} structured variable(s)`);
-      const templateResult = await sendTemplateMessage(phone, templateConfig.template_name, templateVariables, langCode);
+      console.log(`📨 [Twilio] Sending template ContentSid="${contentSid}" with ${templateVariables.length} structured variable(s)`);
+      const templateResult = await sendTemplateMessage(phone, contentSid, templateVariables);
       return { success: templateResult.success, parts: 1, type: 'template', error: templateResult.error };
     }
 
-    // No explicit templateVariables → auto-resolve first name as the ONLY variable
-    // NEVER inject message text into template variables (Meta policy protection)
+    // Auto-resolve first name as the ONLY variable
     const firstName = userName ? userName.split(' ')[0] : 'there';
-    console.log(`📨 [Meta] Sending template "${templateConfig.template_name}" with auto-resolved name: "${firstName}"`);
+    console.log(`📨 [Twilio] Sending template ContentSid="${contentSid}" with auto-resolved name: "${firstName}"`);
 
-    const templateResult = await sendTemplateMessage(phone, templateConfig.template_name, [firstName], langCode);
+    const templateResult = await sendTemplateMessage(phone, contentSid, [firstName]);
     return { success: templateResult.success, parts: 1, type: 'template', error: templateResult.error };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error('❌ [Meta] Proactive message error:', errorMessage);
+    console.error('❌ [Twilio] Proactive message error:', errorMessage);
     return { success: false, parts: 0, type: 'template', error: errorMessage };
   }
 }
