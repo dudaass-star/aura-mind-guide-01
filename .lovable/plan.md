@@ -1,95 +1,112 @@
 
 
-## Plano: Finalizar Templates WhatsApp da Aura + Ajustar Lógica de Envio
+## Plano: Automacao Instagram com IA Separada (Comentarios + DMs)
 
-### Contexto
-Você está criando os templates na Meta com apenas **1 variável (nome)** e categoria **Utilidade**. Precisamos ajustar o sistema para:
-1. Mapear os templates corretos na tabela `whatsapp_templates`
-2. Ajustar a lógica do Insight para funcionar com botão (template abre janela → Aura manda o insight como texto livre)
-3. Garantir que Resumo e Jornada **sempre usem link** (mesmo dentro da janela de 24h)
+### Visao Geral
 
-### Templates a manter/ajustar na tabela `whatsapp_templates`
+Criar uma IA "Gestora de Comunidade" separada da Aura que responde automaticamente a **comentarios** e **DMs** no Instagram. Usa a **Instagram Graph API** via webhooks do Meta, processados por edge functions no backend.
 
-| Categoria | Template Name | Texto fixo (aprovado na Meta) | Variável {{1}} | Categoria Meta |
-|-----------|--------------|-------------------------------|----------------|----------------|
-| `checkin` | `aura_checkin_v2` | Check-in padrão | Nome | Utilidade |
-| `welcome` | `aura_welcome_v2` | Boas-vindas pago | Nome | Utilidade |
-| `welcome_trial` | `aura_welcome_trial_v2` | Boas-vindas trial | Nome | Utilidade |
-| `reconnect` | `aura_reconnect_v2` | Reconexão | Nome | Utilidade |
-| `reactivation` | `aura_reactivation_v2` | Reativação | Nome | Utilidade |
-| `access_blocked` | `aura_access_blocked_v2` | Acesso bloqueado | Nome | Utilidade |
-| `weekly_report` | `aura_weekly_report_v2` | **NOVO** — "{{1}}, seu resumo está pronto! Veja aqui:" + botão/link | Nome | Utilidade |
-| `content` | `aura_content_v2` | **NOVO** — "{{1}}, seu próximo episódio está disponível!" + botão/link | Nome | Utilidade |
-| `insight` | `aura_insight_v2` | **NOVO** — "{{1}}, tenho um insight especial para você!" + botão CTA | Nome | Utilidade |
-
-Templates **removidos** (não mais necessários como template separado):
-- `followup` → usa `checkin` ou texto livre na janela
-- `dunning` → já é por email exclusivamente
-- `checkout_recovery` → já é por email
-- `session_reminder` → pode usar `checkin`
-
-### Alterações técnicas
-
-#### 1. `supabase/functions/_shared/whatsapp-official.ts`
-- Atualizar `TemplateCategory` type: remover categorias obsoletas, manter as ativas
-- Na `sendProactiveMessage`: para categorias `weekly_report` e `content`, **sempre enviar como link/teaser** mesmo dentro da janela de 24h (não usar texto livre completo)
-
-#### 2. `supabase/functions/pattern-analysis/index.ts` (Insights)
-- **Mudar a lógica**: fora da janela de 24h, enviar o template `insight` com botão CTA
-- Quando o usuário clicar o botão e abrir a janela de 24h, o webhook recebe a mensagem
-- Adicionar lógica no `process-webhook-message` ou `aura-agent` para detectar que o usuário respondeu ao insight e entregar o conteúdo como texto livre
-- **Alternativa mais simples**: salvar o insight pendente no banco (`pending_insights` ou campo em `profiles`), e quando o usuário interagir (qualquer mensagem após o template), a Aura entrega o insight na resposta
-
-#### 3. `supabase/functions/periodic-content/index.ts` (Jornadas)
-- Ajustar: mesmo dentro da janela de 24h, enviar sempre como link (teaser) — nunca o conteúdo completo
-- Usar `templateCategory: 'content'` para o template de jornada
-
-#### 4. `supabase/functions/weekly-report/index.ts` (Resumo)
-- Já usa teaser com link ✅
-- Ajustar `templateCategory` de `'weekly_report'` para corresponder ao novo template
-- Confirmar que dentro da janela também envia com link (teaser)
-
-#### 5. Migração SQL
-- Atualizar/inserir as novas categorias na tabela `whatsapp_templates` (weekly_report, content, insight com os novos template_names)
-- Remover categorias obsoletas (dunning, checkout_recovery, followup, session_reminder) ou marcá-las como `is_active = false`
-
-#### 6. `sendProactiveMessage` — forçar link para weekly_report e content
-```typescript
-// Dentro de sendProactiveMessage, após checar janela:
-if (windowOpen) {
-  // Para weekly_report e content: sempre usar teaser (link), nunca texto completo
-  if (['weekly_report', 'content'].includes(templateCategory)) {
-    const messageToSend = teaserText || text;
-    const result = await sendFreeText(phone, messageToSend);
-    return { success: result.success, parts: 1, type: 'freetext', error: result.error };
-  }
-  // Para insight dentro da janela: enviar o insight completo como texto livre
-  const result = await sendFreeText(phone, text);
-  return { success: result.success, parts: 1, type: 'freetext', error: result.error };
-}
-```
-
-#### 7. Sistema de Insight Pendente (para botão do template)
-- Adicionar campo `pending_insight` (text, nullable) na tabela `profiles`
-- `pattern-analysis`: ao enviar template de insight fora da janela, salvar o conteúdo em `pending_insight`
-- `aura-agent`: no início da conversa, checar se há `pending_insight` → se sim, entregar o insight e limpar o campo
-
-### Fluxo do Insight com botão
+### Arquitetura
 
 ```text
-1. pattern-analysis gera insight para usuário
-2. Janela fechada → envia template "insight" com botão CTA
-3. Salva insight em profiles.pending_insight
-4. Usuário clica botão → abre janela de 24h → webhook recebe mensagem
-5. aura-agent detecta pending_insight → entrega como texto livre na resposta
-6. Limpa pending_insight
+Instagram (Comentario/DM)
+        │
+        ▼
+  Meta Webhook POST
+        │
+        ▼
+  webhook-instagram (edge function)
+    ├── Valida assinatura Meta
+    ├── Classifica: comentario vs DM
+    └── Chama instagram-agent
+              │
+              ▼
+        instagram-agent (edge function)
+          ├── Carrega contexto (post, historico)
+          ├── Chama Lovable AI (Gemini Flash)
+          ├── Classifica sentimento (positivo/negativo/duvida)
+          └── Responde via Instagram Graph API
+                ├── Comentario → Reply no comentario
+                └── DM → Envia mensagem direta
 ```
 
-### Resumo dos arquivos alterados
-1. `supabase/functions/_shared/whatsapp-official.ts` — types + lógica de envio
-2. `supabase/functions/pattern-analysis/index.ts` — salvar insight pendente
-3. `supabase/functions/periodic-content/index.ts` — forçar link sempre
-4. `supabase/functions/weekly-report/index.ts` — confirmar link sempre
-5. `supabase/functions/aura-agent/index.ts` — checar e entregar pending_insight
-6. Migração SQL — atualizar `whatsapp_templates` + campo `pending_insight`
+### Componentes
+
+#### 1. Edge Function: `webhook-instagram`
+- Recebe webhooks do Meta (GET para verificacao, POST para eventos)
+- Valida a assinatura `X-Hub-Signature-256` com o App Secret
+- Processa eventos: `comments` (novos comentarios) e `messages` (DMs)
+- Encaminha para `instagram-agent` com payload normalizado
+
+#### 2. Edge Function: `instagram-agent`
+- IA separada com persona de "Gestora de Comunidade da Aura"
+- **Para comentarios**: tom institucional, acolhedor, educativo. Responde criticas sobre IA com empatia. Responde elogios com gratidao. Responde duvidas com informacao + CTA para o WhatsApp
+- **Para DMs**: tom mais pessoal, funciona como funil de conversao. Explica o que a Aura faz, convida para experimentar via WhatsApp
+- Usa Lovable AI (Gemini Flash) para gerar respostas contextuais
+- Regras de seguranca: nao responder a spam/bots, nao responder proprios comentarios, rate limit por usuario
+
+#### 3. Tabela: `instagram_interactions`
+- Registra todas as interacoes (comentarios respondidos, DMs)
+- Campos: `id`, `ig_user_id`, `ig_username`, `interaction_type` (comment/dm), `original_text`, `response_text`, `post_id`, `comment_id`, `sentiment`, `created_at`
+- RLS: service_role + admin read
+
+#### 4. Tabela: `instagram_config`
+- Configuracoes do bot: `ig_account_id`, `response_enabled`, `comment_keywords` (palavras que disparam resposta), `max_daily_responses`, `daily_count`, `last_reset_date`
+- RLS: service_role + admin
+
+#### 5. Painel Admin (`/admin/instagram`)
+- Dashboard com metricas: respostas hoje, sentimento geral, interacoes por dia
+- Toggle on/off para ativar/desativar respostas
+- Lista de interacoes recentes com o texto original e resposta gerada
+- Configuracao de palavras-chave e limites diarios
+
+### Persona da IA (System Prompt)
+
+**Para comentarios publicos:**
+- Nunca mencionar que e IA
+- Representar a "equipe Aura"
+- Criticas sobre IA: reconhecer a preocupacao, explicar que a Aura e uma ferramenta complementar de autoconhecimento, nao substitui terapia
+- Elogios: agradecer com genuinidade
+- Duvidas: responder brevemente + "Quer saber mais? Chama a gente no WhatsApp"
+- Maximo 2-3 frases por resposta
+
+**Para DMs:**
+- Tom acolhedor mas nao terapeutico
+- Explicar o que a Aura oferece
+- Direcionar para o WhatsApp como canal principal
+- Pode ser um pouco mais longo (3-5 frases)
+
+### Secrets Necessarios
+
+| Secret | Descricao | Status |
+|--------|-----------|--------|
+| `META_ACCESS_TOKEN` | Token da pagina/app Meta | Ja existe |
+| `INSTAGRAM_APP_SECRET` | App Secret para validar webhooks | Novo |
+| `INSTAGRAM_ACCOUNT_ID` | ID da conta profissional do Instagram | Novo |
+
+### Configuracao no Meta
+
+O usuario precisara:
+1. No Meta Business Suite, ir em **Configuracoes do App**
+2. Adicionar o produto **Instagram** ao app existente (mesmo app do Pixel/CAPI)
+3. Configurar o webhook URL: `https://uhyogifgmutfmbyhzzyo.supabase.co/functions/v1/webhook-instagram`
+4. Assinar os eventos: `comments`, `messages`, `messaging_postbacks`
+5. Gerar token de pagina com permissoes `instagram_manage_comments`, `instagram_manage_messages`, `pages_messaging`
+
+### Arquivos a Criar/Modificar
+
+1. **Criar** `supabase/functions/webhook-instagram/index.ts` — receptor de webhooks
+2. **Criar** `supabase/functions/instagram-agent/index.ts` — IA de resposta
+3. **Criar** `src/pages/AdminInstagram.tsx` — painel admin
+4. **Migracoes SQL** — tabelas `instagram_interactions` e `instagram_config`
+5. **Atualizar** `supabase/config.toml` — adicionar as novas functions com `verify_jwt = false`
+6. **Atualizar** `src/App.tsx` — rota `/admin/instagram`
+
+### Ordem de Implementacao
+
+1. Migracoes SQL (tabelas)
+2. `webhook-instagram` (receptor + verificacao Meta)
+3. `instagram-agent` (IA com Lovable AI)
+4. Painel admin
+5. Configuracao de secrets + instrucoes para setup no Meta
 
