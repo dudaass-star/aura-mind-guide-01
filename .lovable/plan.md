@@ -1,112 +1,62 @@
 
 
-## Plano: Automacao Instagram com IA Separada (Comentarios + DMs)
+## Plano: Migrar WhatsApp 100% para Meta Cloud API (eliminar Twilio)
 
-### Visao Geral
+### Pré-requisito
 
-Criar uma IA "Gestora de Comunidade" separada da Aura que responde automaticamente a **comentarios** e **DMs** no Instagram. Usa a **Instagram Graph API** via webhooks do Meta, processados por edge functions no backend.
+Você precisa fornecer o **Phone Number ID** da Meta (número de ~15 dígitos, encontrado em Meta Business Suite → WhatsApp → Configurações da API). Será salvo como secret `META_WHATSAPP_PHONE_NUMBER_ID`.
 
-### Arquitetura
+### O que muda
 
-```text
-Instagram (Comentario/DM)
-        │
-        ▼
-  Meta Webhook POST
-        │
-        ▼
-  webhook-instagram (edge function)
-    ├── Valida assinatura Meta
-    ├── Classifica: comentario vs DM
-    └── Chama instagram-agent
-              │
-              ▼
-        instagram-agent (edge function)
-          ├── Carrega contexto (post, historico)
-          ├── Chama Lovable AI (Gemini Flash)
-          ├── Classifica sentimento (positivo/negativo/duvida)
-          └── Responde via Instagram Graph API
-                ├── Comentario → Reply no comentario
-                └── DM → Envia mensagem direta
-```
+| Funcionalidade | Hoje (Twilio Gateway) | Depois (Meta Cloud API direta) |
+|---|---|---|
+| Texto livre (24h) | `POST connector-gateway.lovable.dev/twilio/Messages.json` | `POST graph.facebook.com/v21.0/{phone_id}/messages` com `type: text` |
+| Templates | `ContentSid` do Twilio | `template.name` direto da Meta |
+| Áudio via URL | Twilio `MediaUrl` | Meta `type: audio` com `link` |
+| Recebimento (webhook) | `webhook-twilio` (form-urlencoded Twilio) | Novo `webhook-meta` (JSON da Meta Cloud API) |
 
-### Componentes
+### Etapas de implementação
 
-#### 1. Edge Function: `webhook-instagram`
-- Recebe webhooks do Meta (GET para verificacao, POST para eventos)
-- Valida a assinatura `X-Hub-Signature-256` com o App Secret
-- Processa eventos: `comments` (novos comentarios) e `messages` (DMs)
-- Encaminha para `instagram-agent` com payload normalizado
+**1. Adicionar secret `META_WHATSAPP_PHONE_NUMBER_ID`**
 
-#### 2. Edge Function: `instagram-agent`
-- IA separada com persona de "Gestora de Comunidade da Aura"
-- **Para comentarios**: tom institucional, acolhedor, educativo. Responde criticas sobre IA com empatia. Responde elogios com gratidao. Responde duvidas com informacao + CTA para o WhatsApp
-- **Para DMs**: tom mais pessoal, funciona como funil de conversao. Explica o que a Aura faz, convida para experimentar via WhatsApp
-- Usa Lovable AI (Gemini Flash) para gerar respostas contextuais
-- Regras de seguranca: nao responder a spam/bots, nao responder proprios comentarios, rate limit por usuario
+**2. Reescrever `whatsapp-official.ts`**
+- Remover todas as referências ao Twilio Gateway (`GATEWAY_URL`, `getGatewayHeaders`, `TWILIO_API_KEY`, `LOVABLE_API_KEY`)
+- `sendFreeText()` → `POST graph.facebook.com/v21.0/{phone_id}/messages` com `Authorization: Bearer META_ACCESS_TOKEN` e body `{ messaging_product: "whatsapp", to: "55...", type: "text", text: { body: "..." } }`
+- `sendTemplateMessage()` → Usar `template_name` do banco diretamente (não mais `ContentSid`): `{ type: "template", template: { name: "...", language: { code: "pt_BR" }, components: [...] } }`
+- `sendAudioFromUrl()` → `{ type: "audio", audio: { link: "..." } }`
+- Manter toda a lógica existente de 24h window, splitting, proactive messaging
 
-#### 3. Tabela: `instagram_interactions`
-- Registra todas as interacoes (comentarios respondidos, DMs)
-- Campos: `id`, `ig_user_id`, `ig_username`, `interaction_type` (comment/dm), `original_text`, `response_text`, `post_id`, `comment_id`, `sentiment`, `created_at`
-- RLS: service_role + admin read
+**3. Adicionar coluna `language_code` na tabela `whatsapp_templates`**
+- Default `pt_BR`
+- Campo `twilio_content_sid` se torna legado (não deletar, mas não será mais usado para envio)
 
-#### 4. Tabela: `instagram_config`
-- Configuracoes do bot: `ig_account_id`, `response_enabled`, `comment_keywords` (palavras que disparam resposta), `max_daily_responses`, `daily_count`, `last_reset_date`
-- RLS: service_role + admin
+**4. Criar novo webhook `webhook-meta`**
+- Recebe JSON da Meta Cloud API (formato diferente do Twilio)
+- Extrai phone, text, audio, image do payload Meta
+- Normaliza e envia para `process-webhook-message` (mesmo padrão do webhook-twilio)
+- Implementa verificação de webhook (Meta exige resposta ao challenge GET com `hub.verify_token`)
 
-#### 5. Painel Admin (`/admin/instagram`)
-- Dashboard com metricas: respostas hoje, sentimento geral, interacoes por dia
-- Toggle on/off para ativar/desativar respostas
-- Lista de interacoes recentes com o texto original e resposta gerada
-- Configuracao de palavras-chave e limites diarios
+**5. Atualizar `whatsapp-provider.ts`**
+- Remover imports do Twilio
+- O provider `official` agora chama as funções reescritas (Meta direta)
+- Manter provider `zapi` como fallback (sem mudança)
 
-### Persona da IA (System Prompt)
+**6. Atualizar painel `/admin/templates`**
+- Mostrar `language_code` em vez de `ContentSid`
+- `ContentSid` vira campo legado (oculto ou read-only)
 
-**Para comentarios publicos:**
-- Nunca mencionar que e IA
-- Representar a "equipe Aura"
-- Criticas sobre IA: reconhecer a preocupacao, explicar que a Aura e uma ferramenta complementar de autoconhecimento, nao substitui terapia
-- Elogios: agradecer com genuinidade
-- Duvidas: responder brevemente + "Quer saber mais? Chama a gente no WhatsApp"
-- Maximo 2-3 frases por resposta
+**7. Configurar webhook no Meta Business Suite**
+- Após deploy do `webhook-meta`, você configurará a URL do webhook na Meta
+- URL será: `https://uhyogifgmutfmbyhzzyo.supabase.co/functions/v1/webhook-meta`
+- O verify_token será um secret que definiremos
 
-**Para DMs:**
-- Tom acolhedor mas nao terapeutico
-- Explicar o que a Aura oferece
-- Direcionar para o WhatsApp como canal principal
-- Pode ser um pouco mais longo (3-5 frases)
+### O que NÃO muda
+- `whatsapp-provider.ts` continua como camada de abstração (zapi vs official)
+- `process-webhook-message` não muda (recebe o mesmo payload normalizado)
+- Toda a lógica de retry, failed_message_log, janela 24h permanece
+- O `webhook-twilio` será mantido temporariamente até confirmar que o Meta webhook funciona
 
-### Secrets Necessarios
-
-| Secret | Descricao | Status |
-|--------|-----------|--------|
-| `META_ACCESS_TOKEN` | Token da pagina/app Meta | Ja existe |
-| `INSTAGRAM_APP_SECRET` | App Secret para validar webhooks | Novo |
-| `INSTAGRAM_ACCOUNT_ID` | ID da conta profissional do Instagram | Novo |
-
-### Configuracao no Meta
-
-O usuario precisara:
-1. No Meta Business Suite, ir em **Configuracoes do App**
-2. Adicionar o produto **Instagram** ao app existente (mesmo app do Pixel/CAPI)
-3. Configurar o webhook URL: `https://uhyogifgmutfmbyhzzyo.supabase.co/functions/v1/webhook-instagram`
-4. Assinar os eventos: `comments`, `messages`, `messaging_postbacks`
-5. Gerar token de pagina com permissoes `instagram_manage_comments`, `instagram_manage_messages`, `pages_messaging`
-
-### Arquivos a Criar/Modificar
-
-1. **Criar** `supabase/functions/webhook-instagram/index.ts` — receptor de webhooks
-2. **Criar** `supabase/functions/instagram-agent/index.ts` — IA de resposta
-3. **Criar** `src/pages/AdminInstagram.tsx` — painel admin
-4. **Migracoes SQL** — tabelas `instagram_interactions` e `instagram_config`
-5. **Atualizar** `supabase/config.toml` — adicionar as novas functions com `verify_jwt = false`
-6. **Atualizar** `src/App.tsx` — rota `/admin/instagram`
-
-### Ordem de Implementacao
-
-1. Migracoes SQL (tabelas)
-2. `webhook-instagram` (receptor + verificacao Meta)
-3. `instagram-agent` (IA com Lovable AI)
-4. Painel admin
-5. Configuracao de secrets + instrucoes para setup no Meta
+### Riscos e mitigação
+- **Transição suave**: manter `webhook-twilio` ativo durante testes, só desativar após validação
+- **Token Meta**: o `META_ACCESS_TOKEN` já existe como secret; tokens de longa duração do Meta expiram em ~60 dias — monitorar renovação
 
