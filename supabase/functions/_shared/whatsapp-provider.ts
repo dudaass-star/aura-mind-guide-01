@@ -1,7 +1,7 @@
 /**
  * WhatsApp Provider Abstraction Layer
  * 
- * Camada que decide entre Z-API (atual) e API Oficial do WhatsApp (Twilio).
+ * Camada que decide entre Z-API (legado) e API Oficial do WhatsApp (Meta Cloud API direta).
  * O provider ativo é controlado pela key `whatsapp_provider` em `system_config`.
  * 
  * Default: 'zapi' — nenhuma mudança no comportamento existente.
