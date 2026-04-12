@@ -107,7 +107,7 @@ export async function sendMessage(
       return { success: result.success, provider: 'zapi', error: result.error };
     }
 
-    // Official API: texto livre via Twilio Gateway
+    // Official API: texto livre via Meta Cloud API
     const result = await sendFreeText(phone, text);
     return { success: result.success, provider: 'official', error: result.error };
   }, `sendMessage(${phone.substring(0, 4)}***)`);
