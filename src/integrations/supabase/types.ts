@@ -545,6 +545,90 @@ export type Database = {
         }
         Relationships: []
       }
+      instagram_config: {
+        Row: {
+          comment_keywords: string[] | null
+          comment_response_enabled: boolean
+          daily_count: number
+          dm_response_enabled: boolean
+          id: number
+          ig_account_id: string | null
+          last_reset_date: string
+          max_daily_responses: number
+          response_enabled: boolean
+          updated_at: string
+        }
+        Insert: {
+          comment_keywords?: string[] | null
+          comment_response_enabled?: boolean
+          daily_count?: number
+          dm_response_enabled?: boolean
+          id?: number
+          ig_account_id?: string | null
+          last_reset_date?: string
+          max_daily_responses?: number
+          response_enabled?: boolean
+          updated_at?: string
+        }
+        Update: {
+          comment_keywords?: string[] | null
+          comment_response_enabled?: boolean
+          daily_count?: number
+          dm_response_enabled?: boolean
+          id?: number
+          ig_account_id?: string | null
+          last_reset_date?: string
+          max_daily_responses?: number
+          response_enabled?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      instagram_interactions: {
+        Row: {
+          comment_id: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          ig_user_id: string
+          ig_username: string | null
+          interaction_type: string
+          original_text: string
+          post_id: string | null
+          responded: boolean
+          response_text: string | null
+          sentiment: string | null
+        }
+        Insert: {
+          comment_id?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          ig_user_id: string
+          ig_username?: string | null
+          interaction_type: string
+          original_text: string
+          post_id?: string | null
+          responded?: boolean
+          response_text?: string | null
+          sentiment?: string | null
+        }
+        Update: {
+          comment_id?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          ig_user_id?: string
+          ig_username?: string | null
+          interaction_type?: string
+          original_text?: string
+          post_id?: string | null
+          responded?: boolean
+          response_text?: string | null
+          sentiment?: string | null
+        }
+        Relationships: []
+      }
       instance_health_logs: {
         Row: {
           alert_sent: boolean
