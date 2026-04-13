@@ -1,4 +1,6 @@
 import { Star, Quote, Users, MessageSquare, RefreshCw, Zap, Heart } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Button } from "@/components/ui/button";
 import avatarMariana from "@/assets/avatar-mariana.jpg";
 import avatarCarlos from "@/assets/avatar-carlos.jpg";
 import avatarJuliana from "@/assets/avatar-juliana.jpg";
@@ -198,11 +200,11 @@ const Testimonials = () => {
 
         {/* CTA */}
         <div className="text-center mt-10 animate-fade-up delay-600">
-          <a href="/checkout">
-            <button className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground shadow hover:bg-primary/90 h-14 rounded-xl px-10 text-lg min-w-[280px]">
+          <Link to="/checkout">
+            <Button variant="sage" size="xl" className="min-w-[280px]">
               Começar Minha Jornada
-            </button>
-          </a>
+            </Button>
+          </Link>
         </div>
       </div>
     </section>);

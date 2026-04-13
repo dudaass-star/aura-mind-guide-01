@@ -1,4 +1,6 @@
 import { Check, X, AlertTriangle } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Button } from "@/components/ui/button";
 
 const comparisonData = [
   {
@@ -91,6 +93,17 @@ const Comparison = () => {
               </div>
             ))}
           </div>
+        </div>
+
+        <div className="text-center mt-10">
+          <Link to="/checkout">
+            <Button variant="sage" size="xl" className="min-w-[280px]">
+              Começar por R$ 6,90
+            </Button>
+          </Link>
+          <p className="text-sm text-muted-foreground mt-3">
+            7 dias por R$ 6,90. Cancele quando quiser.
+          </p>
         </div>
 
         <p className="text-center text-sm text-muted-foreground mt-8 max-w-2xl mx-auto flex items-start justify-center gap-2">

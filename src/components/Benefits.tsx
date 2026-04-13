@@ -1,4 +1,6 @@
 import { Clock, Brain, Calendar, FileText, Heart, PauseCircle, BookOpen, Mic, Timer, Sparkles, Bell } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Button } from "@/components/ui/button";
 
 const benefits = [
 {
@@ -114,6 +116,17 @@ const Benefits = () => {
               </p>
             </div>
           )}
+        </div>
+
+        <div className="text-center mt-12">
+          <Link to="/checkout">
+            <Button variant="sage" size="xl" className="min-w-[280px]">
+              Começar por R$ 6,90
+            </Button>
+          </Link>
+          <p className="text-sm text-muted-foreground mt-3">
+            7 dias por R$ 6,90. Cancele quando quiser.
+          </p>
         </div>
       </div>
     </section>);

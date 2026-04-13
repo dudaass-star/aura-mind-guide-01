@@ -1,4 +1,6 @@
 import { Clock, Mic, MessageCircle, Star } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Button } from "@/components/ui/button";
 
 const features = [
 {
@@ -64,9 +66,17 @@ const Meditations = () => {
           )}
         </div>
 
-        <p className="text-center text-muted-foreground text-sm animate-fade-up delay-300 font-semibold">
+        <p className="text-center text-muted-foreground text-sm animate-fade-up delay-300 font-semibold mb-8">
           Ansiedade, sono, foco, estresse, gratidão… a AURA escolhe a meditação certa pra você.
         </p>
+
+        <div className="text-center animate-fade-up delay-400">
+          <Link to="/checkout">
+            <Button variant="sage" size="xl" className="min-w-[280px]">
+              Experimentar por R$ 6,90
+            </Button>
+          </Link>
+        </div>
       </div>
     </section>);
 

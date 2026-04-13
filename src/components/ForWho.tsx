@@ -1,4 +1,6 @@
 import { Brain, Heart, Route, CalendarCheck, Compass } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Button } from "@/components/ui/button";
 const profiles = [{
   icon: Brain,
   title: "Pensa demais",
@@ -76,11 +78,11 @@ const ForWho = () => {
         {/* CTA */}
         <div className="text-center mt-12">
           <p className="text-lg text-muted-foreground mb-4">Se identificou?</p>
-          <a href="/checkout">
-            <button className="inline-flex items-center justify-center gap-2 whitespace-nowrap font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground shadow hover:bg-primary/90 h-12 rounded-xl px-8 text-base">
+          <Link to="/checkout">
+            <Button variant="sage" size="xl" className="min-w-[280px]">
               Começar por R$ 6,90
-            </button>
-          </a>
+            </Button>
+          </Link>
           <p className="text-sm text-muted-foreground mt-2">
             7 dias por R$ 6,90. Cancele quando quiser.
           </p>
