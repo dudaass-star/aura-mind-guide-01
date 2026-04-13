@@ -14,11 +14,11 @@ import { CapsulasTab } from "@/components/portal/CapsulasTab";
 
 type TabId = "jornadas" | "resumos" | "meditacoes" | "capsulas";
 
-const TABS: { id: TabId; label: string; shortLabel: string; icon: React.ElementType }[] = [
-  { id: "jornadas", label: "Jornadas", shortLabel: "Jorn.", icon: Target },
-  { id: "resumos", label: "Resumos", shortLabel: "Res.", icon: BarChart3 },
-  { id: "meditacoes", label: "Meditações", shortLabel: "Med.", icon: Headphones },
-  { id: "capsulas", label: "Cápsulas", shortLabel: "Cáps.", icon: Heart },
+const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
+  { id: "jornadas", label: "Jornadas", icon: Target },
+  { id: "resumos", label: "Resumos", icon: BarChart3 },
+  { id: "meditacoes", label: "Meditações", icon: Headphones },
+  { id: "capsulas", label: "Cápsulas", icon: Heart },
 ];
 
 const UserPortal = () => {
@@ -115,15 +115,14 @@ const UserPortal = () => {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-1.5 px-4 py-3 text-sm font-['Nunito'] font-medium whitespace-nowrap border-b-2 transition-all ${
+                  className={`flex items-center gap-1 px-2.5 sm:px-4 py-3 text-xs sm:text-sm font-['Nunito'] font-medium whitespace-nowrap border-b-2 transition-all ${
                     isActive
                       ? "border-accent text-accent"
                       : "border-transparent text-muted-foreground hover:text-foreground"
                   }`}
                 >
-                  <Icon size={16} />
-                  <span className="sm:hidden">{tab.shortLabel}</span>
-                  <span className="hidden sm:inline">{tab.label}</span>
+                  <Icon size={15} />
+                  <span>{tab.label}</span>
                 </button>
               );
             })}
