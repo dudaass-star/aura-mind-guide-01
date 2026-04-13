@@ -4591,11 +4591,56 @@ INSTRUÇÃO: Retome de onde pararam naturalmente. Diga algo como "Que bom que vo
     // CONTEXTO DE INSIGHT/WELCOME PENDENTE — entrega automática quando usuário interage
     // ========================================================================
     if (profile?.pending_insight) {
+      const isSessionStart = profile.pending_insight.startsWith('[SESSION_START]');
       const isWelcomePending = profile.pending_insight.startsWith('[WELCOME]');
       const isWeeklyReport = profile.pending_insight.startsWith('[WEEKLY_REPORT]');
       const isContent = profile.pending_insight.startsWith('[CONTENT]');
 
-      if (isWelcomePending) {
+      if (isSessionStart) {
+        // SESSION START: User clicked button on 5-min template — start session immediately
+        const sessionId = profile.pending_insight.replace('[SESSION_START]', '');
+        console.log(`🚀 [SESSION_START] User clicked template button — starting session ${sessionId} immediately`);
+
+        // Start the session
+        const startNow = new Date().toISOString();
+        await supabase.from('sessions').update({
+          status: 'in_progress',
+          started_at: startNow,
+          session_start_notified: true,
+        }).eq('id', sessionId);
+
+        // Update profile with current session
+        await supabase.from('profiles').update({
+          current_session_id: sessionId,
+          pending_insight: null,
+        }).eq('id', profile.id);
+
+        // Fetch session details for context
+        const { data: sessionData } = await supabase
+          .from('sessions')
+          .select('session_type, focus_topic, duration_minutes')
+          .eq('id', sessionId)
+          .single();
+
+        const sessionType = sessionData?.session_type || 'livre';
+        const focusTopic = sessionData?.focus_topic;
+        const durationMin = sessionData?.duration_minutes || 45;
+
+        dynamicContext += `\n\n🚀 SESSÃO TERAPÊUTICA INICIADA AGORA:
+O usuário acabou de clicar no botão do template de lembrete de 5 minutos. A sessão foi iniciada automaticamente.
+
+Tipo: ${sessionType}
+Duração: ${durationMin} minutos
+${focusTopic ? `Tema de foco: ${focusTopic}` : ''}
+
+INSTRUÇÃO:
+1. Dê as boas-vindas calorosas para a sessão
+2. Este é o momento especial de ${durationMin} minutos — diferente das conversas do dia a dia
+3. Pergunte como o usuário está se sentindo e o que gostaria de trabalhar hoje
+4. Seja acolhedora e profissional — esta é uma sessão terapêutica estruturada
+5. NÃO mencione que "clicou no botão" — pareça natural`;
+
+      } else if (isWelcomePending) {
         // WELCOME FLOW: User clicked "Começar" on the template
         const welcomeContent = profile.pending_insight.replace('[WELCOME]', '');
         console.log(`🎉 Delivering pending WELCOME for user ${profile.user_id}`);

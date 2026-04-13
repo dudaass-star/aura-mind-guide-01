@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { cleanPhoneNumber } from "../_shared/zapi-client.ts";
 import { sendMessage, sendProactive } from "../_shared/whatsapp-provider.ts";
+import { sendFreeText, isWithin24hWindow } from "../_shared/whatsapp-official.ts";
 import { getInstanceConfigForUser, antiBurstDelay } from "../_shared/instance-helper.ts";
 
 const corsHeaders = {
@@ -170,7 +171,7 @@ Deno.serve(async (req) => {
       for (const session of sessions24h) {
         const { data: profile } = await supabase
           .from('profiles')
-          .select('name, phone, whatsapp_instance_id, last_message_date')
+          .select('name, phone, whatsapp_instance_id, last_message_date, last_user_message_at')
           .eq('user_id', session.user_id)
           .maybeSingle();
 
@@ -183,6 +184,15 @@ Deno.serve(async (req) => {
         const lastMsg = profile.last_message_date ? new Date(profile.last_message_date) : null;
         if (lastMsg && (Date.now() - lastMsg.getTime()) > 7 * 24 * 60 * 60 * 1000) {
           console.log(`🔇 Auto-silenced 24h reminder for session ${session.id}: ${profile.name} (7+ days inactive)`);
+          continue;
+        }
+
+        // 24h reminder: ONLY send as free text if 24h window is open
+        const windowOpen = isWithin24hWindow(profile.last_user_message_at);
+        if (!windowOpen) {
+          console.log(`⏭️ Skipping 24h reminder for session ${session.id}: 24h window closed (template reserved for 5min)`);
+          // Still mark as sent so we don't retry
+          await supabase.from('sessions').update({ reminder_24h_sent: true }).eq('id', session.id);
           continue;
         }
 
@@ -214,7 +224,6 @@ Deno.serve(async (req) => {
 
         let previewSection = '';
         
-        // Adicionar preview da sessão anterior se existir
         if (lastSession?.session_summary) {
           previewSection += `
 📝 *Na última sessão você trabalhou:*
@@ -222,7 +231,6 @@ ${lastSession.session_summary.substring(0, 150)}...
 `;
         }
         
-        // Adicionar compromissos pendentes se existirem
         if (pendingCommitments && pendingCommitments.length > 0) {
           previewSection += `
 🎯 *Compromissos que vamos revisar:*
@@ -243,8 +251,8 @@ Confirma que tá tudo certo? Me responde com "confirmo" ou me avisa se precisar 
 
         try {
           const cleanPhone = cleanPhoneNumber(profile.phone);
-          const instanceConfig = await getInstanceConfigForUser(supabase, session.user_id);
-          const result = await sendProactive(cleanPhone, message, 'session_reminder', session.user_id);
+          // Send as free text (window is open)
+          const result = await sendFreeText(cleanPhone, message);
 
           if (result.success) {
             await supabase
@@ -256,7 +264,7 @@ Confirma que tá tudo certo? Me responde com "confirmo" ou me avisa se precisar 
               .eq('id', session.id);
             
             reminders24hSent++;
-            console.log(`✅ 24h reminder sent for session ${session.id}`);
+            console.log(`✅ 24h reminder sent as free text for session ${session.id}`);
           } else {
             console.error(`❌ Failed to send 24h reminder for session ${session.id}:`, result.error);
           }
@@ -298,14 +306,21 @@ Confirma que tá tudo certo? Me responde com "confirmo" ou me avisa se precisar 
 
         try {
           const cleanPhone = cleanPhoneNumber(profile.phone);
-          const instanceConfig = await getInstanceConfigForUser(supabase, session.user_id);
+          
+          // Save pending_insight with SESSION_START marker so aura-agent starts session immediately on button click
+          await supabase.from('profiles').update({
+            pending_insight: `[SESSION_START]${session.id}`
+          }).eq('user_id', session.user_id);
+          
           const result = await sendProactive(cleanPhone, message, 'session_reminder', session.user_id);
 
           if (result.success) {
             await supabase.from('sessions').update({ reminder_5m_sent: true }).eq('id', session.id);
             reminders5mSent++;
-            console.log(`✅ 5m reminder sent for session ${session.id}`);
+            console.log(`✅ 5m reminder sent (template) for session ${session.id} + pending_insight [SESSION_START] saved`);
           } else {
+            // Clear pending_insight if send failed
+            await supabase.from('profiles').update({ pending_insight: null }).eq('user_id', session.user_id);
             console.error(`❌ Failed to send 5m reminder for session ${session.id}:`, result.error);
           }
         } catch (sendError) {
@@ -350,7 +365,7 @@ Confirma que tá tudo certo? Me responde com "confirmo" ou me avisa se precisar 
 
         const { data: profile } = await supabase
           .from('profiles')
-          .select('name, phone, whatsapp_instance_id')
+          .select('name, phone, whatsapp_instance_id, last_user_message_at')
           .eq('user_id', session.user_id)
           .maybeSingle();
 
@@ -359,9 +374,17 @@ Confirma que tá tudo certo? Me responde com "confirmo" ou me avisa se precisar 
           continue;
         }
 
+        // Session start notification: ONLY send as free text if 24h window is open
+        // (the 5min template already covers this — no need to waste another template)
+        const windowOpen = isWithin24hWindow(profile.last_user_message_at);
+        if (!windowOpen) {
+          console.log(`⏭️ Skipping session start notification for ${session.id}: 24h window closed (5min template already sent)`);
+          await supabase.from('sessions').update({ session_start_notified: true }).eq('id', session.id);
+          continue;
+        }
+
         const userName = profile.name || 'você';
 
-        // NOVA MENSAGEM: Pede confirmação explícita para iniciar
         const message = `Oi, ${userName}! 💜 Chegou a hora da nossa sessão especial!
 
 Esse é nosso momento de 45 minutos pra gente ir mais fundo, diferente das conversas do dia a dia.
@@ -370,23 +393,17 @@ Você está pronta(o) pra começar? Me responde um "vamos" ou "bora" quando quis
 
         try {
           const cleanPhone = cleanPhoneNumber(profile.phone);
-          const instanceConfig = await getInstanceConfigForUser(supabase, session.user_id);
-          const result = await sendProactive(cleanPhone, message, 'session_reminder', session.user_id);
+          // Send as free text (window is open)
+          const result = await sendFreeText(cleanPhone, message);
 
           if (result.success) {
-            // CORREÇÃO: APENAS marca como notificado, NÃO muda status para in_progress
-            // O aura-agent irá mudar para in_progress quando o usuário responder com confirmação
             await supabase
               .from('sessions')
-              .update({ 
-                session_start_notified: true
-                // REMOVIDO: status: 'in_progress' e started_at
-                // Será feito pelo aura-agent quando usuário confirmar
-              })
+              .update({ session_start_notified: true })
               .eq('id', session.id);
             
             sessionStartsSent++;
-            console.log(`✅ Session start confirmation request sent for session ${session.id} - waiting for explicit user confirmation`);
+            console.log(`✅ Session start notification sent as free text for session ${session.id}`);
           } else {
             console.error(`❌ Failed to send session start notification for ${session.id}:`, result.error);
           }
