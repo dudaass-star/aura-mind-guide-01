@@ -4698,7 +4698,6 @@ Exemplo natural:
 - Usuário interrompe com "sim!" → Incorpore o pendente naturalmente
 - Usuário interrompe com "mudando de assunto..." → Descarte completamente`;
     }
-    }
     
     const shouldSuggestUpgrade = userPlan === 'essencial' && planConfig.dailyMessageTarget > 0 && messagesToday > planConfig.dailyMessageTarget;
     if (shouldSuggestUpgrade) {
