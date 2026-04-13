@@ -1,42 +1,72 @@
 
 
-# Melhorias Finais do Portal Premium
+# Auditoria de Conversao da Landing Page AURA
 
-## Problemas encontrados
+## Analise por Secao (fluxo do lead)
 
-### Bug crítico: Link "Voltar ao Meu Espaço" nunca aparece
-O JornadasTab abre episódios com `?u=userId`, mas o Episode.tsx verifica `?t=portalToken` para mostrar o botão voltar. Como o token nunca é passado, o link de retorno **nunca é exibido**.
+### O que esta funcionando bem
+- **Hero**: Video autoplay chama atencao, headline clara, CTA direto com preco
+- **Problem**: Dor bem articulada, transicao "E se existisse outra forma?" eficaz
+- **ForWho**: Identificacao com perfis reais, CTA intermediario presente
+- **Demo**: Conversa simulada com tipagem humana, muito persuasiva
+- **Pricing**: Toggle mensal/anual, badge "Mais escolhido", precos por dia
+- **Comparison**: Tabela visual clara AURA vs Terapia Tradicional
+- **FAQ**: Objecoes principais cobertas
+- **Checkout**: Exit-intent popup, planos com trial price em destaque
 
-### Inconsistências visuais
-- Episode.tsx usa emojis 💜 no footer e nas mensagens de conclusão
-- Loading do Episode usa texto simples em vez de skeleton
-- Tabs no mobile mostram labels abreviados ("Jorn.") que podem confundir
+### Problemas Identificados (priorizados por impacto na conversao)
+
+#### 1. ForWho usa `<a href>` e `<button>` manuais em vez de `<Link>` + `<Button>`
+O CTA "Começar por R$ 6,90" na secao ForWho usa uma tag `<a href="/checkout">` com botao inline estilizado manualmente, nao o componente `<Button variant="sage">`. Isso causa full page reload (perde estado do SPA) e quebra a consistencia visual. O mesmo problema existe no CTA de Testimonials.
+
+#### 2. Testimonials CTA tambem usa `<a href>` + botao manual
+Mesmo problema do ForWho. Ambos devem usar `<Link to="/checkout"><Button>`.
+
+#### 3. Secao Benefits nao tem CTA
+Apos mostrar 11 beneficios incriveis, o usuario fica sem acao imediata. E a secao mais rica em valor e nao tem botao nenhum. Oportunidade perdida.
+
+#### 4. Meditations nao tem CTA
+Mesma situacao: secao de meditacoes termina sem oferecer nenhuma acao ao usuario.
+
+#### 5. FinalCTA fraco — frase "+5.000 pessoas ja comecaram" esta solta
+A prova social esta como unico "trust badge" sem contexto. Falta urgencia ou reforco de objecao (ex: "Sem fidelidade", "Cancele quando quiser").
+
+#### 6. Comparison nao tem CTA
+Apos a tabela comparativa (momento de alta conviccao), nao ha botao para converter. O lead precisa scrollar mais para encontrar um CTA.
+
+#### 7. Erro de ortografia em Meditations
+"estresse" deveria ser "estress**e**" (correto) — na verdade, "estresse" esta correto em portugues. Mas "Ansiedade, sono, foco, estresse, gratidão" poderia ter mais impacto visual.
+
+#### 8. Header mobile sem CTA sticky
+No mobile, o botao "Começar agora" esta escondido no menu hamburger. O usuario precisa abrir o menu para converter. Um CTA fixo no bottom seria mais eficaz.
 
 ---
 
-## Plano de correções
+## Plano de Melhorias
 
-### 1. Corrigir link de retorno no Episode
-- JornadasTab: passar o `portalToken` na URL do episódio (precisa receber via props ou searchParams)
-- Ou: Episode.tsx aceitar `?u=` como fallback para mostrar botão voltar genérico com `window.history.back()`
+### Prioridade 1 — CTAs ausentes (maior impacto)
+- **Benefits**: Adicionar CTA "Começar por R$ 6,90" ao final da secao
+- **Meditations**: Adicionar CTA ao final
+- **Comparison**: Adicionar CTA apos a tabela comparativa
+- Todos usando `<Link to="/checkout"><Button variant="sage" size="xl">`
 
-### 2. Remover emojis restantes no Episode
-- Substituir 💜 no footer por `<Heart>` Lucide com cor accent
-- Remover emojis das mensagens de conclusão de jornada (linhas 206, 275)
+### Prioridade 2 — Corrigir links quebrados (SPA)
+- **ForWho**: Substituir `<a href="/checkout"><button>` por `<Link to="/checkout"><Button variant="sage">`
+- **Testimonials**: Substituir `<a href="/checkout"><button>` por `<Link to="/checkout"><Button variant="sage">`
 
-### 3. Skeleton no Episode loading
-- Substituir "Carregando..." por skeleton com header + barra de progresso + blocos de texto
+### Prioridade 3 — FinalCTA mais forte
+- Adicionar trust badges: "Sem fidelidade", "Cancele quando quiser", "Dados protegidos"
+- Manter "+5.000 pessoas" mas como badge inline, nao isolado
 
-### 4. Melhorar tabs mobile
-- Mostrar sempre o label completo em todas as telas (remover shortLabel)
-- Reduzir padding e font-size no mobile para caber tudo
+### Prioridade 4 — Mobile sticky CTA
+- Adicionar barra fixa no bottom do mobile com "Começar por R$ 6,90" que aparece apos o Hero sair da viewport (usando IntersectionObserver)
 
 ---
 
-## Arquivos modificados
-- `src/pages/Episode.tsx` — emojis, skeleton, back link
-- `src/pages/UserPortal.tsx` — tabs sempre com label completo
-- `src/components/portal/JornadasTab.tsx` — passar token na URL do episódio
-
-Total: 3 arquivos, sem mudanças no banco.
+## Detalhes tecnicos
+- 6 arquivos modificados: `ForWho.tsx`, `Testimonials.tsx`, `Benefits.tsx`, `Meditations.tsx`, `Comparison.tsx`, `FinalCTA.tsx`
+- 1 arquivo novo: `src/components/StickyMobileCTA.tsx` (barra fixa bottom mobile)
+- `Index.tsx` atualizado para incluir o sticky CTA
+- Sem mudancas no banco de dados
+- Todas as dependencias ja existem (Link, Button, Lucide icons)
 
