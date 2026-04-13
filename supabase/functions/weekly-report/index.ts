@@ -485,6 +485,10 @@ Deno.serve(async (req) => {
         const cleanPhone = cleanPhoneNumber(profile.phone);
         const result = await sendProactive(cleanPhone, teaser, 'weekly_report', profile.user_id);
 
+        if (result.success) {
+          console.log(`✅ Report teaser sent to ${profile.name} (${profile.phone}) [window=${windowOpen ? 'open' : 'closed'}]`);
+          sentCount++;
+
           // Save message and mark as sent (dedup)
           await Promise.all([
             supabase.from('messages').insert({
