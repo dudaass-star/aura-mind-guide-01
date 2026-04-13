@@ -1,0 +1,1 @@
+ALTER TABLE public.instagram_config ADD COLUMN page_id text;
