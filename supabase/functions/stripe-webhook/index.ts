@@ -476,9 +476,7 @@ Deno.serve(async (req) => {
       const sessionsCount = PLAN_SESSIONS[customerPlan] || 0;
       
       const cleanPhone = customerPhone.replace(/\D/g, '');
-      const formattedPhone = (cleanPhone.length === 10 || cleanPhone.length === 11)
-        ? `55${cleanPhone}`
-        : cleanPhone;
+      const formattedPhone = normalizeBrazilianPhone(cleanPhone);
       const today = new Date().toISOString().split('T')[0];
 
       let planExpiresAt: string | null = null;
