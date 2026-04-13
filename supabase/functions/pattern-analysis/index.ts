@@ -1,7 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { cleanPhoneNumber } from "../_shared/zapi-client.ts";
-import { sendMessage, sendProactive } from "../_shared/whatsapp-provider.ts";
+import { sendMessage } from "../_shared/whatsapp-provider.ts";
+import { isWithin24hWindow } from "../_shared/whatsapp-official.ts";
 import { getInstanceConfigForUser, antiBurstDelayForInstance, groupByInstance } from "../_shared/instance-helper.ts";
 
 const corsHeaders = {
@@ -362,7 +363,14 @@ serve(async (req) => {
               continue;
             }
 
-            // SEND
+            // SEND — only if 24h window is open (no template for insights)
+            if (!isWithin24hWindow(user.last_user_message_at)) {
+              console.log(`⏰ [${user.name || 'Unknown'}] 24h window closed, skipping insight (no template)`);
+              skipCount++;
+              results.push({ user: user.name, status: 'SKIP_WINDOW_CLOSED', reasoning: analysis.reasoning });
+              continue;
+            }
+
             if (dryRun) {
               console.log(`🧪 [DRY RUN] Would send to ${user.name}: ${analysis.whatsapp_message.substring(0, 80)}...`);
               sentCount++;
@@ -370,34 +378,13 @@ serve(async (req) => {
               continue;
             }
 
-            // Get instance config and send
+            // Send as free text (window is open)
             const zapiConfig = await getInstanceConfigForUser(supabase, user.user_id);
             const cleanPhone = cleanPhoneNumber(user.phone);
-            const sendResult = await sendProactive(cleanPhone, analysis.whatsapp_message, 'insight', user.user_id);
+            const sendResult = await sendMessage(cleanPhone, analysis.whatsapp_message, zapiConfig);
 
             if (sendResult.success) {
-              console.log(`✅ [${user.name || 'Unknown'}] Insight sent`);
-
-              // If sent as template (outside 24h window), save insight for delivery when user responds
-              if (sendResult.provider === 'official') {
-                // Check if it was sent as a template (not free text)
-                // When outside window, the template just notifies — save full insight for later
-                const { data: profileCheck } = await supabase
-                  .from('profiles')
-                  .select('last_user_message_at')
-                  .eq('user_id', user.user_id)
-                  .single();
-                
-                const lastMsg = profileCheck?.last_user_message_at ? new Date(profileCheck.last_user_message_at) : null;
-                const isOutsideWindow = !lastMsg || (Date.now() - lastMsg.getTime()) >= 24 * 60 * 60 * 1000;
-                
-                if (isOutsideWindow) {
-                  console.log(`💾 [${user.name || 'Unknown'}] Saving pending_insight for delivery on next interaction`);
-                  await supabase.from('profiles').update({
-                    pending_insight: analysis.whatsapp_message,
-                  }).eq('id', user.id);
-                }
-              }
+              console.log(`✅ [${user.name || 'Unknown'}] Insight sent (free text, window open)`);
 
               // Save message and update timestamp
               await Promise.all([
