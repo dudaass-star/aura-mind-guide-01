@@ -1,22 +1,31 @@
 
 
-## Plano: Corrigir validação de assinatura do webhook Instagram
+## Plano: Corrigir envio de DMs no Instagram
 
 ### Problema
-Os logs mostram "Invalid webhook signature" em todos os POSTs da Meta. O secret `INSTAGRAM_APP_SECRET` armazenado não corresponde ao App Secret real.
+O token está correto no banco (verificado nos logs), mas o envio falha com "Cannot parse access token". A causa raiz é que o código usa o endpoint errado:
+- **Atual**: `https://graph.instagram.com/v21.0/${igAccountId}/messages`
+- **Correto**: `https://graph.facebook.com/v21.0/${pageId}/messages`
+
+O Instagram Messaging API opera via Facebook Graph API, usando o **Page ID** (ID da página do Facebook), não o IG Account ID. O OAuth callback salva o `ig_account_id` mas não salva o `page_id`.
 
 ### Passos
 
-1. **Solicitar atualização do secret `INSTAGRAM_APP_SECRET`** com o valor correto do painel Meta (Configurações > Básico > Chave Secreta do Aplicativo)
+1. **Adicionar coluna `page_id` na tabela `instagram_config`**
+   - Migration: `ALTER TABLE instagram_config ADD COLUMN page_id text;`
 
-2. **Adicionar logs de debug no webhook** (`supabase/functions/webhook-instagram/index.ts`):
-   - Logar os primeiros 10 caracteres da assinatura recebida vs esperada para facilitar diagnóstico
-   - Modo "warn but continue": se a assinatura falhar, logar warning mas continuar processando (temporário, para testar o fluxo completo)
+2. **Atualizar `meta-oauth-callback/index.ts`**
+   - Salvar `selectedPage.id` como `page_id` no banco junto com os outros dados
 
-3. **Testar novamente** com um comentário ou DM no Instagram para confirmar que o fluxo funciona
+3. **Atualizar `instagram-agent/index.ts`**
+   - Mudar endpoint de DM de `graph.instagram.com/v21.0/${igAccountId}/messages` para `graph.facebook.com/v21.0/${pageId}/messages`
+   - Ler `page_id` do config passado pelo webhook
+   - Adicionar log do URL completo para debug
+
+4. **Re-deploy** ambas as funções e solicitar novo teste
 
 ### Detalhes técnicos
-- Arquivo modificado: `supabase/functions/webhook-instagram/index.ts` (linhas 47-60)
-- Alteração: adicionar `console.warn` com prefixos das assinaturas e remover o `return` que bloqueia o processamento
-- Após confirmar funcionamento, restaurar a validação estrita
+- Arquivos modificados: `meta-oauth-callback/index.ts`, `instagram-agent/index.ts`
+- Migration SQL para adicionar coluna
+- Após deploy, será necessário **reconectar o Instagram** pelo painel admin para popular o novo `page_id`
 
