@@ -895,7 +895,7 @@ Me conta: como você está hoje?`;
                 const rawPhone = custForCreate.metadata?.phone;
                 if (rawPhone) {
                   const cleanPhone = rawPhone.replace(/\D/g, '');
-                  const formattedPhone = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
+                  const formattedPhone = normalizeBrazilianPhone(cleanPhone);
                   
                   // Determine plan from subscription price
                   const sub = await stripe.subscriptions.retrieve(invoice.subscription as string);
