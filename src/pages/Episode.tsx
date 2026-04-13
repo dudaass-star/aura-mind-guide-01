@@ -5,6 +5,7 @@ import { Helmet } from "react-helmet-async";
 import { useState } from "react";
 import logoOlaAura from "@/assets/logo-ola-aura.png";
 import { Waves, Dumbbell, Clock, Heart, Leaf, Bird, RefreshCw, Brain, Sparkles, ArrowLeft } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const topicIcon: Record<string, React.ElementType> = {
   ansiedade: Waves,
@@ -80,10 +81,32 @@ const Episode = () => {
     onSuccess: () => setConfirmed(true),
   });
 
+  const hasBackLink = portalToken || userId;
+
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-pulse text-muted-foreground font-['Nunito']">Carregando...</div>
+      <div className="min-h-screen bg-background flex flex-col">
+        <div className="bg-card border-b border-border/50">
+          <div className="max-w-2xl mx-auto px-5 py-3 flex items-center justify-between">
+            <Skeleton className="h-14 w-28" />
+            <Skeleton className="h-4 w-24" />
+          </div>
+        </div>
+        <div className="bg-accent/8 border-b border-border/30">
+          <div className="max-w-2xl mx-auto px-5 py-3 space-y-2">
+            <Skeleton className="h-4 w-40" />
+            <Skeleton className="h-1.5 w-full rounded-full" />
+          </div>
+        </div>
+        <div className="max-w-2xl mx-auto w-full px-5 py-8 space-y-5">
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-8 w-3/4" />
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-5/6" />
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-4/5" />
+        </div>
       </div>
     );
   }
@@ -123,14 +146,20 @@ const Episode = () => {
         <div className="bg-card border-b border-border/50">
           <div className="max-w-2xl mx-auto px-5 py-3 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              {portalToken && (
-                <a
-                  href={`/meu-espaco?t=${portalToken}&tab=jornadas`}
+              {hasBackLink && (
+                <button
+                  onClick={() => {
+                    if (portalToken) {
+                      window.location.href = `/meu-espaco?t=${portalToken}&tab=jornadas`;
+                    } else {
+                      window.history.back();
+                    }
+                  }}
                   className="flex items-center gap-1 text-accent hover:text-accent/80 transition-colors text-sm font-['Nunito']"
                 >
                   <ArrowLeft size={16} />
                   <span className="hidden sm:inline">Meu Espaço</span>
-                </a>
+                </button>
               )}
               <img src={logoOlaAura} alt="Olá AURA" className="h-14 w-auto" />
             </div>
@@ -202,7 +231,7 @@ const Episode = () => {
                 </p>
                 <p className="text-muted-foreground font-['Nunito'] text-base max-w-md mx-auto">
                   Foram {totalEpisodes} episódios de reflexão e crescimento.
-                  Cada manifesto que você leu plantou uma semente. 💜
+                  Cada manifesto que você leu plantou uma semente.
                 </p>
               </div>
 
@@ -271,14 +300,14 @@ const Episode = () => {
                 Sua próxima jornada será <strong>{availableJourneys?.find(j => j.id === chosenJourneyId)?.title || "a escolhida"}</strong>.
               </p>
               <p className="text-muted-foreground font-['Nunito'] text-sm">
-                O primeiro episódio chegará em breve no seu WhatsApp. 💜
+                O primeiro episódio chegará em breve no seu WhatsApp.
               </p>
             </div>
           )}
 
           {/* Footer */}
           <footer className="mt-16 pt-8 border-t border-border/50 text-center space-y-3">
-            <p className="text-accent text-lg">💜</p>
+            <Heart size={20} className="text-accent mx-auto" />
             <p className="text-sm text-muted-foreground font-['Nunito']">
               Conteúdo exclusivo da Aura
             </p>
