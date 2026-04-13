@@ -33,7 +33,7 @@ const Hero = () => {
   };
 
   return (
-    <section className="relative min-h-screen flex items-center justify-center overflow-hidden bg-gradient-hero pt-20">
+    <section id="hero-section" className="relative min-h-screen flex items-center justify-center overflow-hidden bg-gradient-hero pt-20">
       {/* Subtle decorative elements */}
       <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-sage-soft rounded-full blur-3xl opacity-60 animate-pulse-soft" />
       <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-lavender-soft rounded-full blur-3xl opacity-50 animate-pulse-soft delay-200" />

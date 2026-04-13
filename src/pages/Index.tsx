@@ -14,6 +14,7 @@ import Comparison from "@/components/Comparison";
 import FAQ from "@/components/FAQ";
 import FinalCTA from "@/components/FinalCTA";
 import Footer from "@/components/Footer";
+import StickyMobileCTA from "@/components/StickyMobileCTA";
 
 const Index = () => {
   useEffect(() => {
@@ -57,6 +58,7 @@ const Index = () => {
           <FinalCTA />
         </main>
         <Footer />
+        <StickyMobileCTA />
       </div>
     </>
   );
