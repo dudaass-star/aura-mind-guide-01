@@ -162,3 +162,6 @@ verify_jwt = false
 
 [functions.instagram-agent]
 verify_jwt = false
+
+[functions.refresh-meta-token]
+verify_jwt = false

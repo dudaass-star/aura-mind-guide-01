@@ -115,7 +115,8 @@ serve(async (req) => {
     const sentiment = classifySentiment(interaction.original_text);
 
     // Post reply via Instagram Graph API
-    const META_ACCESS_TOKEN = Deno.env.get("META_ACCESS_TOKEN");
+    // Read token from DB (config passed from webhook) with env var fallback
+    const META_ACCESS_TOKEN = config?.meta_access_token || Deno.env.get("META_ACCESS_TOKEN");
     if (!META_ACCESS_TOKEN) {
       console.error("META_ACCESS_TOKEN not configured");
       return new Response(JSON.stringify({ 

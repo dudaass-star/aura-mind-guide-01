@@ -79,6 +79,14 @@ serve(async (req) => {
       return new Response("OK", { status: 200 });
     }
 
+    // Warn if token is about to expire
+    if (config.token_expires_at) {
+      const daysLeft = (new Date(config.token_expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24);
+      if (daysLeft < 3) {
+        console.warn(`⚠️ META_ACCESS_TOKEN expires in ${Math.round(daysLeft)} days!`);
+      }
+    }
+
     // Reset daily count if new day
     const today = new Date().toISOString().split("T")[0];
     if (config.last_reset_date !== today) {
