@@ -2,6 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { cleanPhoneNumber } from "../_shared/zapi-client.ts";
 import { sendMessage, sendProactive } from "../_shared/whatsapp-provider.ts";
 import { getInstanceConfigForUser } from "../_shared/instance-helper.ts";
+import { isWithin24hWindow } from "../_shared/whatsapp-official.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
