@@ -1,72 +1,75 @@
 
 
-# Auditoria de Conversao da Landing Page AURA
+# Auditoria Completa do Funil AURA — Landing Page, Checkout e Stripe
 
-## Analise por Secao (fluxo do lead)
+## Status das Melhorias Anteriores
 
-### O que esta funcionando bem
-- **Hero**: Video autoplay chama atencao, headline clara, CTA direto com preco
-- **Problem**: Dor bem articulada, transicao "E se existisse outra forma?" eficaz
-- **ForWho**: Identificacao com perfis reais, CTA intermediario presente
-- **Demo**: Conversa simulada com tipagem humana, muito persuasiva
-- **Pricing**: Toggle mensal/anual, badge "Mais escolhido", precos por dia
-- **Comparison**: Tabela visual clara AURA vs Terapia Tradicional
-- **FAQ**: Objecoes principais cobertas
-- **Checkout**: Exit-intent popup, planos com trial price em destaque
+Todas as melhorias planejadas foram implementadas corretamente:
+- CTAs em Benefits, Meditations, Comparison — usando `<Link>` + `<Button variant="sage">`
+- ForWho e Testimonials — corrigidos de `<a href>` para `<Link>`
+- FinalCTA — trust badges (Sem fidelidade, Cancele quando quiser, Dados protegidos)
+- StickyMobileCTA — funcional com IntersectionObserver no hero-section
+- Hero tem `id="hero-section"` para o observer
 
-### Problemas Identificados (priorizados por impacto na conversao)
+## Problemas Encontrados por Etapa
 
-#### 1. ForWho usa `<a href>` e `<button>` manuais em vez de `<Link>` + `<Button>`
-O CTA "Começar por R$ 6,90" na secao ForWho usa uma tag `<a href="/checkout">` com botao inline estilizado manualmente, nao o componente `<Button variant="sage">`. Isso causa full page reload (perde estado do SPA) e quebra a consistencia visual. O mesmo problema existe no CTA de Testimonials.
+### Landing Page — Pequenos Ajustes
 
-#### 2. Testimonials CTA tambem usa `<a href>` + botao manual
-Mesmo problema do ForWho. Ambos devem usar `<Link to="/checkout"><Button>`.
+**1. FAQ sem CTA ao final (impacto médio)**
+Após 9 perguntas respondidas, o lead fica convicto mas precisa scrollar até o FinalCTA. Oportunidade perdida — um CTA logo após as FAQs captura quem acabou de ter suas objeções eliminadas.
 
-#### 3. Secao Benefits nao tem CTA
-Apos mostrar 11 beneficios incriveis, o usuario fica sem acao imediata. E a secao mais rica em valor e nao tem botao nenhum. Oportunidade perdida.
+**2. HowItWorks sem CTA (impacto baixo-médio)**
+A seção "Como funciona" termina sem oferecer ação. Após entender o processo, o lead pode querer agir imediatamente.
 
-#### 4. Meditations nao tem CTA
-Mesma situacao: secao de meditacoes termina sem oferecer nenhuma acao ao usuario.
+**3. Demo sem CTA ao final (impacto médio)**
+A conversa simulada é altamente persuasiva (523 linhas de demo interativa), mas termina sem botão. O lead fica emocionalmente engajado sem caminho direto para conversão.
 
-#### 5. FinalCTA fraco — frase "+5.000 pessoas ja comecaram" esta solta
-A prova social esta como unico "trust badge" sem contexto. Falta urgencia ou reforco de objecao (ex: "Sem fidelidade", "Cancele quando quiser").
+**4. ThankYou mostra emoji 📊 (inconsistência menor)**
+Linha 89: `📊 Você também receberá...` — deveria usar ícone Lucide para consistência.
 
-#### 6. Comparison nao tem CTA
-Apos a tabela comparativa (momento de alta conviccao), nao ha botao para converter. O lead precisa scrollar mais para encontrar um CTA.
+### Checkout — Oportunidades de Otimização
 
-#### 7. Erro de ortografia em Meditations
-"estresse" deveria ser "estress**e**" (correto) — na verdade, "estresse" esta correto em portugues. Mas "Ansiedade, sono, foco, estresse, gratidão" poderia ter mais impacto visual.
+**5. Checkout não passa `plan` e `billing` via URL quando vem de CTAs genéricos (impacto médio)**
+Os CTAs "Começar por R$ 6,90" nas seções Benefits, Meditations, Comparison, FinalCTA linkam para `/checkout` sem parâmetros. O checkout abre com o plano "Direção" (default), ignorando a intenção do lead. Os CTAs do Pricing passam via `state`, mas CTAs genéricos não.
 
-#### 8. Header mobile sem CTA sticky
-No mobile, o botao "Começar agora" esta escondido no menu hamburger. O usuario precisa abrir o menu para converter. Um CTA fixo no bottom seria mais eficaz.
+**6. Falta 3DS explícito no trial checkout (impacto na conversão)**
+A memória técnica diz que o sistema usa `request_three_d_secure: 'always'`, mas o código do `create-checkout` NÃO configura isso. A `payment_method_options.card` só tem `setup_future_usage: 'off_session'` — falta o `request_three_d_secure`.
+
+**7. Checkout exit popup usa `visibilitychange` (pode irritar no mobile)**
+No mobile, trocar de app (ex: copiar número do cartão) dispara o popup. O `visibilitychange` deveria ser desabilitado no mobile ou ter um delay.
+
+### Stripe Checkout (Página do Stripe)
+
+**8. Nome do produto no Stripe poderia ser mais claro**
+Atualmente: `AURA Direção — 7 dias | Após: R$ 49,90/mês` — está bom, mas a descrição é apenas `CANCELE QUANDO QUISER.` em caps lock. Poderia ser mais persuasiva sem ser gritante.
+
+**9. `success_url` usa domínio hardcoded como fallback**
+Linha 158: `origin || "https://aura.lovable.app"` — se o header origin não vier, redireciona para o domínio do Lovable em vez do domínio publicado. Deveria usar o domínio correto.
 
 ---
 
-## Plano de Melhorias
+## Plano de Melhorias (Priorizado)
 
-### Prioridade 1 — CTAs ausentes (maior impacto)
-- **Benefits**: Adicionar CTA "Começar por R$ 6,90" ao final da secao
-- **Meditations**: Adicionar CTA ao final
-- **Comparison**: Adicionar CTA apos a tabela comparativa
+### Prioridade 1 — CTAs ausentes nas seções finais
+- **FAQ.tsx**: Adicionar CTA "Começar por R$ 6,90" após o Accordion
+- **Demo.tsx**: Adicionar CTA ao final da seção de demo
+- **HowItWorks.tsx**: Adicionar CTA ao final
 - Todos usando `<Link to="/checkout"><Button variant="sage" size="xl">`
 
-### Prioridade 2 — Corrigir links quebrados (SPA)
-- **ForWho**: Substituir `<a href="/checkout"><button>` por `<Link to="/checkout"><Button variant="sage">`
-- **Testimonials**: Substituir `<a href="/checkout"><button>` por `<Link to="/checkout"><Button variant="sage">`
+### Prioridade 2 — Fix do exit popup no mobile
+- **Checkout.tsx**: Desabilitar o listener `visibilitychange` em viewports mobile (usar `window.innerWidth < 768` como guard)
 
-### Prioridade 3 — FinalCTA mais forte
-- Adicionar trust badges: "Sem fidelidade", "Cancele quando quiser", "Dados protegidos"
-- Manter "+5.000 pessoas" mas como badge inline, nao isolado
+### Prioridade 3 — Consistência visual
+- **ThankYou.tsx**: Substituir emoji 📊 por `<BarChart3>` ou `<LayoutDashboard>` do Lucide
 
-### Prioridade 4 — Mobile sticky CTA
-- Adicionar barra fixa no bottom do mobile com "Começar por R$ 6,90" que aparece apos o Hero sair da viewport (usando IntersectionObserver)
+### Prioridade 4 — 3DS no Stripe (se confirmado)
+- **create-checkout/index.ts**: Adicionar `request_three_d_secure: 'always'` em `payment_method_options.card` no modo trial
 
 ---
 
-## Detalhes tecnicos
-- 6 arquivos modificados: `ForWho.tsx`, `Testimonials.tsx`, `Benefits.tsx`, `Meditations.tsx`, `Comparison.tsx`, `FinalCTA.tsx`
-- 1 arquivo novo: `src/components/StickyMobileCTA.tsx` (barra fixa bottom mobile)
-- `Index.tsx` atualizado para incluir o sticky CTA
-- Sem mudancas no banco de dados
-- Todas as dependencias ja existem (Link, Button, Lucide icons)
+## Detalhes Técnicos
+- 5 arquivos modificados: `FAQ.tsx`, `Demo.tsx`, `HowItWorks.tsx`, `Checkout.tsx`, `ThankYou.tsx`
+- Opcionalmente 1 edge function: `create-checkout/index.ts` (3DS)
+- Sem mudanças no banco de dados
+- Todas as dependências já existem
 
