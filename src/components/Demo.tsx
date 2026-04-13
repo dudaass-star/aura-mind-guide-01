@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { Link } from "react-router-dom";
 import { Smartphone, Play, Pause, RotateCcw, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import avatarAura from "@/assets/avatar-aura.jpg";
@@ -505,11 +506,11 @@ const Demo = () => {
             <p className="font-display text-xl font-bold text-foreground mb-4">
               Pronta pra descobrir suas pistas?
             </p>
-            <a href="/checkout">
+            <Link to="/checkout">
               <Button variant="sage" size="xl">
                 Começar minha jornada
               </Button>
-            </a>
+            </Link>
             <p className="text-sm text-muted-foreground mt-2">
               7 dias por R$ 6,90 • Cancele quando quiser
             </p>

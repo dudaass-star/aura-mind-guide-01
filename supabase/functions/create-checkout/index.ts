@@ -208,6 +208,7 @@ serve(async (req) => {
       sessionConfig.payment_method_options = {
         card: {
           setup_future_usage: 'off_session',
+          request_three_d_secure: 'always',
         },
       };
       sessionConfig.metadata = {

@@ -109,7 +109,7 @@ const Checkout = () => {
     };
 
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden' && !hasRedirected && !sessionStorage.getItem('aura_exit_popup_shown')) {
+      if (window.innerWidth >= 768 && document.visibilityState === 'hidden' && !hasRedirected && !sessionStorage.getItem('aura_exit_popup_shown')) {
         sessionStorage.setItem('aura_exit_popup_shown', 'true');
         setShowExitPopup(true);
       }

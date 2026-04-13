@@ -1,6 +1,6 @@
 import { Helmet } from "react-helmet-async";
 import { useLocation, Link } from "react-router-dom";
-import { CheckCircle, Smartphone, Sparkles, MessageSquare } from "lucide-react";
+import { CheckCircle, Smartphone, Sparkles, MessageSquare, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
 
@@ -85,8 +85,9 @@ const ThankYou = () => {
             <p className="text-muted-foreground text-center">
               A AURA vai te mandar uma mensagem no WhatsApp em instantes para iniciar sua jornada.
             </p>
-            <p className="text-muted-foreground/70 text-center text-sm">
-              📊 Você também receberá o link do seu <strong>painel pessoal</strong> — onde poderá acompanhar jornadas, meditações e resumos mensais.
+            <p className="text-muted-foreground/70 text-center text-sm flex items-center justify-center gap-1.5">
+              <BarChart3 className="w-4 h-4 inline-block" />
+              Você também receberá o link do seu <strong>painel pessoal</strong> — onde poderá acompanhar jornadas, meditações e resumos mensais.
             </p>
           </div>
 
