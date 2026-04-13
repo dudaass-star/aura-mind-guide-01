@@ -468,28 +468,22 @@ Deno.serve(async (req) => {
         const currentMonth = monthNames[new Date().getMonth()];
         const teaser = `Oi, ${userName}! Seu resumo de ${currentMonth} está pronto 📊✨\n\nVeja aqui: ${shortLink}\n\n— Aura 💜`;
 
-        // Save teaser with link as pending_insight so if template is sent (outside 24h window),
-        // when user clicks "Ver meu resumo" the link is delivered inside the opened window
-        try {
-          await supabase.from('profiles').update({
-            pending_insight: `[WEEKLY_REPORT]${teaser}`,
-          }).eq('user_id', profile.user_id);
-        } catch { /* non-blocking */ }
+        // Save teaser as pending_insight ONLY if window is closed (template will be sent).
+        // If window is open, the teaser goes as free text directly — no need for pending.
+        const windowOpen = isWithin24hWindow(profile.last_user_message_at);
+
+        if (!windowOpen) {
+          try {
+            await supabase.from('profiles').update({
+              pending_insight: `[WEEKLY_REPORT]${teaser}`,
+            }).eq('user_id', profile.user_id);
+          } catch { /* non-blocking */ }
+        }
 
         // Send teaser via WhatsApp (inside window: sends teaser directly; outside: sends template)
         const zapiConfig = await getInstanceConfigForUser(supabase, profile.user_id);
         const cleanPhone = cleanPhoneNumber(profile.phone);
         const result = await sendProactive(cleanPhone, teaser, 'weekly_report', profile.user_id);
-
-        if (result.success) {
-          console.log(`✅ Report teaser sent to ${profile.name} (${profile.phone})`);
-          sentCount++;
-
-          // If sent as free text (inside window), clear pending since user already got the link
-          if (result.provider === 'official' || result.provider === 'zapi') {
-            // Check if it was sent as template or freetext by checking the teaser was delivered
-            // For simplicity, always keep pending — aura-agent will clear it on next interaction
-          }
 
           // Save message and mark as sent (dedup)
           await Promise.all([
