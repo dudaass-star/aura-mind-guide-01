@@ -338,6 +338,11 @@ export default function AdminUsers() {
               <Button variant="outline" size="sm" className="w-full" onClick={handleResetSessions} disabled={saving}>
                 <RotateCcw className="h-4 w-4 mr-2" /> Resetar sessões do mês
               </Button>
+
+              <Button variant="outline" size="sm" className="w-full" onClick={handleCopyPortalLink} disabled={portalLinkLoading}>
+                {portalLinkCopied ? <Check className="h-4 w-4 mr-2 text-green-600" /> : <Link className="h-4 w-4 mr-2" />}
+                {portalLinkLoading ? 'Gerando...' : portalLinkCopied ? 'Link copiado!' : 'Copiar link do Meu Espaço'}
+              </Button>
             </div>
           )}
           <DialogFooter>
