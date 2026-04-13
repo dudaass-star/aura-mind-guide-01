@@ -555,7 +555,9 @@ export type Database = {
           ig_account_id: string | null
           last_reset_date: string
           max_daily_responses: number
+          meta_access_token: string | null
           response_enabled: boolean
+          token_expires_at: string | null
           updated_at: string
         }
         Insert: {
@@ -567,7 +569,9 @@ export type Database = {
           ig_account_id?: string | null
           last_reset_date?: string
           max_daily_responses?: number
+          meta_access_token?: string | null
           response_enabled?: boolean
+          token_expires_at?: string | null
           updated_at?: string
         }
         Update: {
@@ -579,7 +583,9 @@ export type Database = {
           ig_account_id?: string | null
           last_reset_date?: string
           max_daily_responses?: number
+          meta_access_token?: string | null
           response_enabled?: boolean
+          token_expires_at?: string | null
           updated_at?: string
         }
         Relationships: []
