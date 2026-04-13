@@ -59,6 +59,8 @@ export default function AdminUsers() {
   const [editProfile, setEditProfile] = useState<Profile | null>(null);
   const [editForm, setEditForm] = useState({ name: '', email: '', phone: '', plan: '', status: '' });
   const [saving, setSaving] = useState(false);
+  const [portalLinkLoading, setPortalLinkLoading] = useState(false);
+  const [portalLinkCopied, setPortalLinkCopied] = useState(false);
 
   useEffect(() => {
     if (!authLoading) redirectIfNotAdmin();
