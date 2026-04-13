@@ -1,4 +1,6 @@
+import { Link } from "react-router-dom";
 import { MessageSquare, Brain, Target } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 const steps = [
   {
@@ -60,6 +62,17 @@ const HowItWorks = () => {
               </p>
             </div>
           ))}
+        </div>
+
+        <div className="text-center mt-12">
+          <Link to="/checkout">
+            <Button variant="sage" size="xl">
+              Começar por R$ 6,90
+            </Button>
+          </Link>
+          <p className="text-sm text-muted-foreground mt-2">
+            7 dias para experimentar • Cancele quando quiser
+          </p>
         </div>
       </div>
     </section>
