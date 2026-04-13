@@ -2,7 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import Stripe from "https://esm.sh/stripe@14.21.0";
 import { allocateInstance } from "../_shared/instance-helper.ts";
 import { resolveProfile } from "../_shared/profile-resolver.ts";
-import { getPhoneVariations } from "../_shared/zapi-client.ts";
+import { getPhoneVariations, normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
 import { sendProactive } from "../_shared/whatsapp-provider.ts";
 
 const corsHeaders = {
@@ -148,8 +148,7 @@ Deno.serve(async (req) => {
         }
 
         const cleanPhone = customerPhone.replace(/\D/g, '');
-        const formattedPhone = (cleanPhone.length === 10 || cleanPhone.length === 11)
-          ? `55${cleanPhone}` : cleanPhone;
+        const formattedPhone = normalizeBrazilianPhone(cleanPhone);
 
         try {
           // Retrieve PaymentIntent to get the payment method for future charges
@@ -477,9 +476,7 @@ Deno.serve(async (req) => {
       const sessionsCount = PLAN_SESSIONS[customerPlan] || 0;
       
       const cleanPhone = customerPhone.replace(/\D/g, '');
-      const formattedPhone = (cleanPhone.length === 10 || cleanPhone.length === 11)
-        ? `55${cleanPhone}`
-        : cleanPhone;
+      const formattedPhone = normalizeBrazilianPhone(cleanPhone);
       const today = new Date().toISOString().split('T')[0];
 
       let planExpiresAt: string | null = null;
@@ -898,7 +895,7 @@ Me conta: como você está hoje?`;
                 const rawPhone = custForCreate.metadata?.phone;
                 if (rawPhone) {
                   const cleanPhone = rawPhone.replace(/\D/g, '');
-                  const formattedPhone = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
+                  const formattedPhone = normalizeBrazilianPhone(cleanPhone);
                   
                   // Determine plan from subscription price
                   const sub = await stripe.subscriptions.retrieve(invoice.subscription as string);
