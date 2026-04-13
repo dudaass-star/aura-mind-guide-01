@@ -1,46 +1,38 @@
 
 
-## Plano: Template `sessao_inicio` só no lembrete de 5 min + início imediato ao clicar
+## Plano: Corrigir duplicação do relatório semanal com janela aberta
 
-### Resumo da mudança
+### Problema
+Quando a janela de 24h está aberta, o `weekly-report` envia o teaser com link como texto livre (correto), mas o `pending_insight` com `[WEEKLY_REPORT]` permanece salvo. Na próxima interação do usuário, o `aura-agent` entrega o mesmo conteúdo novamente.
 
-O template oficial `sessao_inicio` será usado **somente** no lembrete de 5 minutos antes da sessão. Para o lembrete de 24h e a notificação de início, usaremos texto livre apenas se a janela de 24h estiver aberta. Quando o usuário clicar no botão do template de 5 min, a sessão inicia imediatamente.
+### Correção
 
-### Mudanças
+#### `supabase/functions/weekly-report/index.ts` (~linha 487-491)
+Após o envio bem-sucedido via `sendProactive`, verificar se o provider enviou como texto livre. Se sim, limpar o `pending_insight` imediatamente, pois o link já foi entregue.
 
-#### 1. `session-reminder/index.ts` — Lembrete de 24h
-- **Antes**: `sendProactive(phone, message, 'session_reminder', userId)` → usa template se janela fechada
-- **Depois**: Verificar janela de 24h manualmente. Se aberta, enviar como texto livre (`sendFreeText`). Se fechada, **pular** (não enviar template — o template será reservado para os 5 min)
-
-#### 2. `session-reminder/index.ts` — Lembrete de 5 min
-- **Antes**: `sendProactive(phone, message, 'session_reminder', userId)` → decide automaticamente
-- **Depois**: Sempre usar `sendProactive(phone, message, 'session_reminder', userId)` com a adição de salvar `pending_insight` com marcador `[SESSION_START]` + dados da sessão para que, ao clicar no botão do template, a Aura inicie a sessão imediatamente
-
-#### 3. `session-reminder/index.ts` — Notificação de início de sessão (bloco "sessionsToStart")
-- **Antes**: `sendProactive(phone, message, 'session_reminder', userId)` → usa template se janela fechada
-- **Depois**: Usar texto livre apenas se janela aberta. Se janela fechada, pular (o template de 5 min já foi enviado)
-
-#### 4. `aura-agent/index.ts` — Detectar clique no botão do template
-- Adicionar detecção do marcador `[SESSION_START]` no `pending_insight`
-- Quando detectado: iniciar sessão imediatamente (mudar status para `in_progress`, setar `started_at`, limpar `pending_insight`)
-- Enviar mensagem de abertura da sessão
-
-### Fluxo final
-
-```text
-24h antes (janela aberta)  → texto livre com preview da sessão
-24h antes (janela fechada) → NÃO envia (sem desperdício de template)
-5 min antes                → template sessao_inicio + pending_insight [SESSION_START]
-Clique no botão            → aura-agent detecta, inicia sessão imediatamente
-Horário da sessão          → texto livre SE janela aberta E sessão não iniciada
+```typescript
+if (result.success) {
+  // If sent as free text (window open), user already got the link — clear pending
+  if (result.provider !== 'official') {
+    // Not a template, so user received the full teaser with link
+    await supabase.from('profiles').update({ pending_insight: null }).eq('user_id', profile.user_id);
+  }
+  // ... rest of success logic
+}
 ```
 
-### Arquivos modificados
-- `supabase/functions/session-reminder/index.ts`
-- `supabase/functions/aura-agent/index.ts`
+**Nota**: O `result` vem de `sendProactive` que retorna `SendResult` com `provider: 'zapi' | 'official'`. Para Z-API, sempre é texto livre. Para official, precisamos checar melhor — mas como a lógica do `sendProactiveMessage` retorna `type: 'freetext'` ou `type: 'template'`, o wrapper `sendProactive` perde essa info (retorna só `provider`).
+
+#### Alternativa mais precisa
+Verificar diretamente a janela de 24h no `weekly-report` antes de salvar o `pending_insight`:
+- Se janela aberta → NÃO salva `pending_insight` (o teaser vai direto como texto livre)
+- Se janela fechada → salva `pending_insight` normalmente (será entregue quando clicar no botão)
+
+### Arquivo modificado
+- `supabase/functions/weekly-report/index.ts` — condicionar o save do `pending_insight` à janela de 24h
 
 ### Detalhes técnicos
-- Importar `isWithin24hWindow` e `sendFreeText` de `whatsapp-official.ts` no session-reminder
-- O `pending_insight` para `[SESSION_START]` conterá o session ID para garantir que a sessão correta é iniciada
-- O bloco existente de confirmação de sessão no aura-agent será adaptado para detectar o marcador antes de pedir confirmação verbal
+- Importar `isWithin24hWindow` de `whatsapp-official.ts`
+- Consultar `last_user_message_at` do profile (já disponível no select existente)
+- Se `isWithin24hWindow(profile.last_user_message_at)` → pular o save do `pending_insight`
 
