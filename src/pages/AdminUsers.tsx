@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, Search, Pencil, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Search, Pencil, RotateCcw, ChevronLeft, ChevronRight, Link, Copy, Check } from 'lucide-react';
 
 interface Profile {
   id: string;
@@ -59,6 +59,8 @@ export default function AdminUsers() {
   const [editProfile, setEditProfile] = useState<Profile | null>(null);
   const [editForm, setEditForm] = useState({ name: '', email: '', phone: '', plan: '', status: '' });
   const [saving, setSaving] = useState(false);
+  const [portalLinkLoading, setPortalLinkLoading] = useState(false);
+  const [portalLinkCopied, setPortalLinkCopied] = useState(false);
 
   useEffect(() => {
     if (!authLoading) redirectIfNotAdmin();
@@ -92,6 +94,7 @@ export default function AdminUsers() {
 
   const openEdit = (p: Profile) => {
     setEditProfile(p);
+    setPortalLinkCopied(false);
     setEditForm({
       name: p.name || '',
       email: p.email || '',
@@ -99,6 +102,47 @@ export default function AdminUsers() {
       plan: p.plan || 'essencial',
       status: p.status || 'active',
     });
+  };
+
+  const handleCopyPortalLink = async () => {
+    if (!editProfile) return;
+    setPortalLinkLoading(true);
+    try {
+      // Check for existing token
+      const { data: existing } = await supabase
+        .from('user_portal_tokens')
+        .select('token')
+        .eq('user_id', editProfile.user_id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      let token = existing?.token;
+      if (!token) {
+        const { data: newToken, error } = await supabase.functions.invoke('admin-update-profile', {
+          body: { profile_id: editProfile.id, generate_portal_token: true },
+        });
+        // Fallback: insert directly via service (admin has no insert RLS on portal_tokens)
+        // So we use a simple insert
+        const { data: inserted, error: insertErr } = await supabase
+          .from('user_portal_tokens')
+          .insert({ user_id: editProfile.user_id })
+          .select('token')
+          .single();
+        if (insertErr) throw insertErr;
+        token = inserted.token;
+      }
+
+      const url = `${window.location.origin}/meu-espaco?t=${token}`;
+      await navigator.clipboard.writeText(url);
+      setPortalLinkCopied(true);
+      toast({ title: 'Link copiado!', description: 'Link do portal copiado para a área de transferência.' });
+      setTimeout(() => setPortalLinkCopied(false), 3000);
+    } catch (err: any) {
+      toast({ title: 'Erro', description: err.message || 'Não foi possível gerar o link', variant: 'destructive' });
+    } finally {
+      setPortalLinkLoading(false);
+    }
   };
 
   const handleSave = async () => {
@@ -293,6 +337,11 @@ export default function AdminUsers() {
 
               <Button variant="outline" size="sm" className="w-full" onClick={handleResetSessions} disabled={saving}>
                 <RotateCcw className="h-4 w-4 mr-2" /> Resetar sessões do mês
+              </Button>
+
+              <Button variant="outline" size="sm" className="w-full" onClick={handleCopyPortalLink} disabled={portalLinkLoading}>
+                {portalLinkCopied ? <Check className="h-4 w-4 mr-2 text-green-600" /> : <Link className="h-4 w-4 mr-2" />}
+                {portalLinkLoading ? 'Gerando...' : portalLinkCopied ? 'Link copiado!' : 'Copiar link do Meu Espaço'}
               </Button>
             </div>
           )}
