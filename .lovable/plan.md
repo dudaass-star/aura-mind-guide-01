@@ -1,75 +1,56 @@
 
 
-# Plano: Portal Premium "Meu Espaço"
+# Verificacao do Portal Premium - Analise e Melhorias Pendentes
 
-Priorizado por impacto na percepção de valor do usuário.
+## O que ficou bom (implementado)
 
----
+1. **Arquitetura modular** - Refatoracao completa: UserPortal.tsx agora com 178 linhas, componentes separados por aba
+2. **AudioPlayer custom** - Player com gradiente AURA, barra de progresso, seek, botao play/pause circular
+3. **Skeleton screens** - PortalLoading e PortalLoadingInline com layout fiel
+4. **Header emocional** - Saudacao contextual + frase motivacional rotativa + Sparkles animado
+5. **Badges de progresso** - "Primeira Jornada", "Exploradora", "Primeiro Mes", "Consistencia"
+6. **Micro-animacoes** - animate-fade-up com stagger delays nos cards, hover:shadow-card, hover:scale
+7. **Capsulas** - Layout com citacao estilizada (border-l), details/summary para transcricao
+8. **Resumos** - MetricCards em grid, barra de progresso da jornada, secao "Sua Evolucao"
 
-## Fase 1 — Alto Impacto Visual (maior retorno imediato)
+## Problemas e melhorias necessarias
 
-### 1. Player de Áudio Custom Branded
-Substituir os `<audio controls>` nativos do browser por um player customizado com visual AURA.
-- Botão play/pause circular com gradiente lavender/sage
-- Barra de progresso estilizada com cores da marca
-- Display de tempo (atual / total)
-- Componente reutilizável: `src/components/portal/AudioPlayer.tsx`
-- Usado em Meditações e Cápsulas do Tempo
+### 1. Pagina Episode.tsx usa emojis (inconsistencia)
+A pagina de episodio (`/episodio/:id`) ainda usa emojis (`topicEmoji`) em vez de icones Lucide, quebrando a consistencia visual do portal premium.
 
-### 2. Skeleton Screens
-Substituir "Carregando..." por skeletons animados que refletem o layout real do conteúdo.
-- `PortalLoading` → skeleton com header + tabs + cards
-- `PortalLoadingInline` → skeleton cards por aba
+### 2. Tabs mostram so icones no mobile
+No mobile (`hidden sm:inline` no label), as tabs mostram apenas icones sem texto. Isso prejudica a usabilidade - o usuario nao sabe o que cada icone significa.
 
-### 3. Header Emocional Contextual
-Transformar a saudação estática em algo vivo:
-- Saudação por período do dia ("Bom dia", "Boa tarde", "Boa noite")
-- Frase motivacional rotativa (array de frases da Aura)
-- Ícone decorativo com animação sutil (Sparkles com pulse)
+### 3. Falta visualizacao de evolucao com graficos (Fase 3 do plano)
+Os resumos mensais mostram metricas como numeros estaticos. O plano previa mini-graficos com recharts comparando meses quando ha 2+ relatorios.
 
----
+### 4. AudioPlayer nao tem preload otimizado
+O player usa `preload="none"` (bom para performance) mas nao tem feedback visual de loading quando o usuario clica play pela primeira vez - pode parecer que nao funciona.
 
-## Fase 2 — Engajamento e Profundidade
-
-### 4. Micro-Animações e Transições
-- Fade-in nos cards ao entrar na aba (CSS `animate-fade-up` já existente)
-- Transição suave ao trocar de aba (opacity transition)
-- Hover effects nos cards (scale sutil + shadow)
-- Stagger delay nos itens de lista
-
-### 5. Badges e Marcos de Progresso
-Seção visual no header ou na aba Jornadas mostrando conquistas:
-- "Primeira Jornada Completa", "X dias consecutivos", "X meditações ouvidas"
-- Badges como ícones circulares com cores diferentes
-- Dados derivados de `journeys_completed`, `monthly_reports`, dados existentes
+### 5. Falta um indicador de "voltar" no Episode
+Quando o usuario abre um episodio do portal, nao tem como voltar facilmente ao Meu Espaco.
 
 ---
 
-## Fase 3 — Refinamento
+## Plano de melhorias
 
-### 6. Refatoração em Componentes Modulares
-Quebrar o monolito de 697 linhas:
-- `src/components/portal/PortalHeader.tsx`
-- `src/components/portal/PortalTabs.tsx`
-- `src/components/portal/JornadasTab.tsx`
-- `src/components/portal/ResumosTab.tsx`
-- `src/components/portal/MeditacoesTab.tsx`
-- `src/components/portal/CapsulasTab.tsx`
-- `src/components/portal/AudioPlayer.tsx`
-- `src/components/portal/shared.tsx` (EmptyState, MetricCard, SectionHeader)
+### Prioridade 1 - UX critica
+- **Tabs mobile**: Mostrar labels abreviados sempre (ex: "Jorn.", "Res.", "Med.", "Cap.") em vez de esconder
+- **AudioPlayer loading state**: Adicionar spinner/pulse enquanto o audio carrega ao clicar play
 
-### 7. Visualização de Evolução nos Resumos
-Adicionar mini-gráficos nos resumos mensais usando `recharts` (já instalado):
-- Barras horizontais para mensagens/insights/sessões comparando meses
-- Só aparece quando há 2+ relatórios
+### Prioridade 2 - Consistencia
+- **Episode.tsx**: Substituir `topicEmoji` por icones Lucide, manter consistencia visual
+- **Botao voltar no Episode**: Link de retorno ao portal
+
+### Prioridade 3 - Profundidade (Fase 3)
+- **Mini-graficos nos Resumos**: Barras horizontais comparando metricas entre meses usando recharts (so quando 2+ relatorios existem)
 
 ---
 
-## Detalhes Técnicos
-
-- **Sem mudanças no banco de dados** — tudo usa dados existentes
-- **Sem novas dependências** — recharts e Lucide já estão no projeto
-- **CSS animations** já definidas em `index.css` (fade-up, fade-in, pulse-soft, float)
-- **Mobile-first** mantido — todas as melhorias respeitam o layout atual
-- Estimativa: ~8 arquivos novos/modificados
+## Detalhes tecnicos
+- Tabs: remover `hidden sm:inline` e usar labels curtos sempre visiveis
+- AudioPlayer: estado `isBuffering` com onWaiting/onCanPlay do audio element
+- Episode.tsx: mapa de topicos para icones Lucide (Waves, Dumbbell, Clock, Heart, etc)
+- Recharts: BarChart horizontal simples comparando totalMessages/insights entre meses
+- ~5 arquivos modificados, sem mudancas no banco
 
