@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 
-const StickyMobileCTA = () => {
+const StickyMobileCTA = React.forwardRef<HTMLDivElement>((_, ref) => {
   const isMobile = useIsMobile();
   const [show, setShow] = useState(false);
 
@@ -24,7 +24,7 @@ const StickyMobileCTA = () => {
   if (!isMobile || !show) return null;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 p-3 bg-background/90 backdrop-blur-md border-t border-border/50 shadow-lg">
+    <div ref={ref} className="fixed bottom-0 left-0 right-0 z-50 p-3 bg-background/90 backdrop-blur-md border-t border-border/50 shadow-lg">
       <Link to="/checkout" className="block">
         <Button variant="sage" size="lg" className="w-full">
           Começar por R$ 6,90
@@ -32,6 +32,8 @@ const StickyMobileCTA = () => {
       </Link>
     </div>
   );
-};
+});
+
+StickyMobileCTA.displayName = "StickyMobileCTA";
 
 export default StickyMobileCTA;

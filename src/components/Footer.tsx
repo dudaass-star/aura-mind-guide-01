@@ -1,10 +1,11 @@
+import React from "react";
 import { Link } from "react-router-dom";
 import { Shield, Lock } from "lucide-react";
 import logoOlaAura from "@/assets/logo-ola-aura.png";
 
-const Footer = () => {
+const Footer = React.forwardRef<HTMLElement>((_, ref) => {
   return (
-    <footer className="py-12 bg-card border-t border-border/50">
+    <footer ref={ref} className="py-12 bg-card border-t border-border/50">
       <div className="container mx-auto px-4">
         <div className="flex flex-col items-center gap-6 mb-8">
           {/* Logo */}
@@ -55,6 +56,8 @@ const Footer = () => {
       </div>
     </footer>
   );
-};
+});
+
+Footer.displayName = "Footer";
 
 export default Footer;
