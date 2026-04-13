@@ -61,16 +61,40 @@ serve(async (req) => {
     const pagesResp = await fetch(pagesUrl);
     const pagesData = await pagesResp.json();
 
+    console.log("Pages API raw response:", JSON.stringify(pagesData));
+
     if (pagesData.error) {
       console.error("Pages fetch error:", JSON.stringify(pagesData.error));
       return Response.redirect(`${redirectBase}/admin/instagram?oauth_error=${encodeURIComponent(pagesData.error.message || "pages_fetch_failed")}`, 302);
     }
 
-    const pages = pagesData.data || [];
+    let pages = pagesData.data || [];
+
+    // If no pages found, try fetching via /me to get user info and debug
+    if (pages.length === 0) {
+      const meUrl = `https://graph.facebook.com/v21.0/me?access_token=${longLivedUserToken}&fields=id,name`;
+      const meResp = await fetch(meUrl);
+      const meData = await meResp.json();
+      console.log("User /me data:", JSON.stringify(meData));
+
+      // Try with explicit permissions debug
+      const debugUrl = `https://graph.facebook.com/v21.0/me/permissions?access_token=${longLivedUserToken}`;
+      const debugResp = await fetch(debugUrl);
+      const debugData = await debugResp.json();
+      console.log("Granted permissions:", JSON.stringify(debugData));
+
+      // Try fetching pages with limit parameter
+      const pagesRetryUrl = `https://graph.facebook.com/v21.0/me/accounts?access_token=${longLivedUserToken}&fields=id,name,access_token,instagram_business_account&limit=100`;
+      const pagesRetryResp = await fetch(pagesRetryUrl);
+      const pagesRetryData = await pagesRetryResp.json();
+      console.log("Pages retry response:", JSON.stringify(pagesRetryData));
+      pages = pagesRetryData.data || [];
+    }
+
     console.log(`Found ${pages.length} pages:`, pages.map((p: any) => p.name));
 
     if (pages.length === 0) {
-      return Response.redirect(`${redirectBase}/admin/instagram?oauth_error=${encodeURIComponent("Nenhuma página encontrada. Verifique se sua conta tem uma Página do Facebook vinculada.")}`, 302);
+      return Response.redirect(`${redirectBase}/admin/instagram?oauth_error=${encodeURIComponent("Nenhuma página encontrada. Verifique se sua conta tem uma Página do Facebook vinculada e se a permissão pages_show_list foi concedida.")}`, 302);
     }
 
     // Find page with Instagram Business Account, or use first page
