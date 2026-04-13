@@ -14,11 +14,11 @@ import { CapsulasTab } from "@/components/portal/CapsulasTab";
 
 type TabId = "jornadas" | "resumos" | "meditacoes" | "capsulas";
 
-const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
-  { id: "jornadas", label: "Jornadas", icon: Target },
-  { id: "resumos", label: "Resumos", icon: BarChart3 },
-  { id: "meditacoes", label: "Meditações", icon: Headphones },
-  { id: "capsulas", label: "Cápsulas", icon: Heart },
+const TABS: { id: TabId; label: string; shortLabel: string; icon: React.ElementType }[] = [
+  { id: "jornadas", label: "Jornadas", shortLabel: "Jorn.", icon: Target },
+  { id: "resumos", label: "Resumos", shortLabel: "Res.", icon: BarChart3 },
+  { id: "meditacoes", label: "Meditações", shortLabel: "Med.", icon: Headphones },
+  { id: "capsulas", label: "Cápsulas", shortLabel: "Cáps.", icon: Heart },
 ];
 
 const UserPortal = () => {
@@ -122,6 +122,7 @@ const UserPortal = () => {
                   }`}
                 >
                   <Icon size={16} />
+                  <span className="sm:hidden">{tab.shortLabel}</span>
                   <span className="hidden sm:inline">{tab.label}</span>
                 </button>
               );
