@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendProactive } from "../_shared/whatsapp-provider.ts";
 import { allocateInstance } from "../_shared/instance-helper.ts";
+import { normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
 
 async function createShortLink(supabaseUrl: string, serviceKey: string, url: string, phone?: string): Promise<string | null> {
   try {
@@ -66,12 +67,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Adicionar código do país se não tiver
-    const formattedPhone = cleanPhone.length === 11 
-      ? `55${cleanPhone}` 
-      : cleanPhone.length === 10 
-        ? `55${cleanPhone}` 
-        : cleanPhone;
+    // Adicionar código do país e normalizar
+    const formattedPhone = normalizeBrazilianPhone(cleanPhone);
 
     // Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
