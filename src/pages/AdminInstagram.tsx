@@ -108,7 +108,7 @@ export default function AdminInstagram() {
     const appId = "1491408882345218";
     const redirectUri = encodeURIComponent(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-oauth-callback`);
     const state = encodeURIComponent(window.location.origin);
-    const scopes = "pages_show_list,pages_messaging,pages_read_engagement,instagram_basic,instagram_manage_comments,instagram_manage_messages";
+    const scopes = "pages_show_list,pages_messaging,pages_read_engagement,pages_manage_metadata,business_management,instagram_basic,instagram_manage_comments,instagram_manage_messages";
     const oauthUrl = `https://www.facebook.com/v21.0/dialog/oauth?client_id=${appId}&redirect_uri=${redirectUri}&scope=${scopes}&state=${state}&response_type=code`;
     window.location.href = oauthUrl;
   };
