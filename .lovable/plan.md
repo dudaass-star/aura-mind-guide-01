@@ -1,28 +1,33 @@
 
 
-## Plano: Corrigir perfil da Jenoelma e investigar bug de formatação
+## Plano: Configurar 3 templates aprovados no Twilio
 
-### Problema
-O perfil da usuária Jenoelma Barboza (email: elmaricardorosa@gmail.com) tem o telefone salvo como `5555129961510` quando deveria ser `5512996151077`. Por isso, todas as mensagens da Aura foram enviadas para um número inexistente.
+### Mapeamento
 
-### Ação imediata
+| Template Twilio | ContentSid | Categoria no sistema |
+|---|---|---|
+| `welcome3` | `HXa793bb4cd721c3849088189a669748ff` | `welcome` |
+| `relatorio_semanal` | `HX607738eeadd6fc8008c5735bbf0457a1` | `weekly_report` |
+| `sessao_inicio` | `HXd36142c0778b6b77d1d7d49d3c41b319` | `session_reminder` |
 
-1. **Corrigir o telefone no perfil** via migration SQL:
-   ```sql
-   UPDATE profiles SET phone = '5512996151077' WHERE id = '71994c91-b86e-47a1-947f-038a0fc1887b';
-   ```
+### Ações
 
-2. **Atualizar o status** de `trial` para `active` (o checkout foi completado em 03/04, há 10 dias — o trial de 7 dias já expirou mas ela pagou):
-   - Verificar no Stripe se a assinatura está ativa antes de atualizar
+1. **Atualizar `welcome`** (id: `714fd4f9-ffb1-4fca-a15e-607a8834b07d`):
+   - ContentSid: `HXa5ef9baff62dd1648c8e37f0ca03b054` → `HXa793bb4cd721c3849088189a669748ff`
+   - `is_active` já é `true`
 
-### Investigação do bug
+2. **Atualizar `weekly_report`** (id: `9f513187-55cc-41b4-bd59-b234fd35ef48`):
+   - ContentSid: `PENDING_APPROVAL` → `HX607738eeadd6fc8008c5735bbf0457a1`
+   - `is_active`: `false` → `true`
 
-3. **Verificar a lógica de limpeza de telefone** no `stripe-webhook` e `start-trial` — o número `12996151077` (sem DDI) foi transformado em `5555129961510`, o que indica um bug na função `cleanPhoneNumber` ou na forma como o telefone é passado do checkout para o webhook.
+3. **Atualizar `session_reminder`** (id: `5451a527-b91c-47d0-97f0-6f34208dde56`):
+   - ContentSid: `PENDING_APPROVAL` → `HXd36142c0778b6b77d1d7d49d3c41b319`
+   - `is_active`: `false` → `true`
+
+### Após configuração
+4. **Enviar welcome para Jenoelma** usando o novo template `welcome3` via `admin-send-message`
 
 ### Detalhes técnicos
-- Perfil ID: `71994c91-b86e-47a1-947f-038a0fc1887b`
-- User ID: `ff7ca625-1c12-48e2-a844-d256a35feb32`
-- Telefone atual (errado): `5555129961510`
-- Telefone correto: `5512996151077`
-- Arquivos a investigar: `supabase/functions/stripe-webhook/index.ts`, `supabase/functions/_shared/zapi-client.ts` (função `cleanPhoneNumber`)
+- 3 UPDATEs na tabela `whatsapp_templates` via insert tool
+- 1 chamada à Edge Function `admin-send-message` para enviar boas-vindas à Jenoelma
 
