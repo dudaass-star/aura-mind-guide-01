@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
-import { Heart } from "lucide-react";
+import { Heart, ShieldCheck, XCircle, Lock } from "lucide-react";
 const FinalCTA = () => {
   return <section className="py-24 bg-gradient-to-b from-lavender-soft/30 via-sage-soft/20 to-background relative overflow-hidden">
       <div className="absolute top-0 right-0 w-1/2 h-full bg-sage-soft/30 rounded-l-[100px] opacity-50" />
@@ -32,10 +32,17 @@ const FinalCTA = () => {
 
           {/* Trust badges */}
           <div className="flex flex-wrap justify-center gap-4 text-sm text-muted-foreground">
-            
-            
-            <span className="text-xl text-lavender font-bold">+5.000 pessoas já começaram</span>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-card/60 border border-border/50">
+              <XCircle className="w-4 h-4 text-primary" /> Sem fidelidade
+            </span>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-card/60 border border-border/50">
+              <ShieldCheck className="w-4 h-4 text-primary" /> Cancele quando quiser
+            </span>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-card/60 border border-border/50">
+              <Lock className="w-4 h-4 text-primary" /> Dados protegidos
+            </span>
           </div>
+          <p className="text-base text-accent font-semibold mt-4">+5.000 pessoas já começaram</p>
         </div>
       </div>
     </section>;
