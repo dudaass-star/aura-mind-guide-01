@@ -155,7 +155,7 @@ serve(async (req) => {
       logStep("Created new customer", { customerId });
     }
 
-    const origin = req.headers.get("origin") || "https://aura.lovable.app";
+    const origin = req.headers.get("origin") || "https://olaaura.com.br";
 
     // Plan display prices for custom_text
     const planPrices: Record<string, { monthly: string; yearly: string }> = {
