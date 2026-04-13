@@ -180,7 +180,8 @@ serve(async (req) => {
 
     if (isComment && interaction.comment_id) {
       // Reply to comment
-      const replyUrl = `https://graph.instagram.com/v21.0/${interaction.comment_id}/replies?access_token=${encodeURIComponent(META_ACCESS_TOKEN)}`;
+      const replyUrl = `https://graph.facebook.com/v21.0/${interaction.comment_id}/replies?access_token=${encodeURIComponent(META_ACCESS_TOKEN)}`;
+      console.log(`[DEBUG] Comment reply URL: graph.facebook.com/v21.0/${interaction.comment_id}/replies`);
       const replyResp = await fetch(replyUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
