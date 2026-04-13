@@ -1,38 +1,32 @@
 
 
-## Plano: Corrigir duplicação do relatório semanal com janela aberta
+## Plano: Remover auto-silence para usuários ativos com pagamento em dia
 
 ### Problema
-Quando a janela de 24h está aberta, o `weekly-report` envia o teaser com link como texto livre (correto), mas o `pending_insight` com `[WEEKLY_REPORT]` permanece salvo. Na próxima interação do usuário, o `aura-agent` entrega o mesmo conteúdo novamente.
+O check de auto-silence (7 dias sem mensagem) no `periodic-content` bloqueia **todos** os usuários, incluindo assinantes ativos com pagamento em dia. Usuários pagantes devem sempre receber o conteúdo das jornadas, independentemente de quanto tempo faz que mandaram mensagem.
 
 ### Correção
 
-#### `supabase/functions/weekly-report/index.ts` (~linha 487-491)
-Após o envio bem-sucedido via `sendProactive`, verificar se o provider enviou como texto livre. Se sim, limpar o `pending_insight` imediatamente, pois o link já foi entregue.
+#### `supabase/functions/periodic-content/index.ts` (linhas 133-138)
+Remover completamente o check de auto-silence de 7 dias. Usuários com status `active` ou `trial` (já filtrados na query) e com `current_journey_id` definido devem sempre receber episódios.
 
+**Antes:**
 ```typescript
-if (result.success) {
-  // If sent as free text (window open), user already got the link — clear pending
-  if (result.provider !== 'official') {
-    // Not a template, so user received the full teaser with link
-    await supabase.from('profiles').update({ pending_insight: null }).eq('user_id', profile.user_id);
-  }
-  // ... rest of success logic
+// Auto-silence: skip if user hasn't messaged in 7+ days
+const lastMsg = user.last_message_date ? new Date(user.last_message_date) : null;
+if (lastMsg && (Date.now() - lastMsg.getTime()) > 7 * 24 * 60 * 60 * 1000) {
+  console.log(`🔇 Auto-silenced: ${user.name || 'Unknown'} (7+ days inactive)`);
+  continue;
 }
 ```
 
-**Nota**: O `result` vem de `sendProactive` que retorna `SendResult` com `provider: 'zapi' | 'official'`. Para Z-API, sempre é texto livre. Para official, precisamos checar melhor — mas como a lógica do `sendProactiveMessage` retorna `type: 'freetext'` ou `type: 'template'`, o wrapper `sendProactive` perde essa info (retorna só `provider`).
+**Depois:** Bloco removido. O filtro de `do_not_disturb_until` permanece — é o único mecanismo para pausar conteúdo (quando o próprio usuário pede).
 
-#### Alternativa mais precisa
-Verificar diretamente a janela de 24h no `weekly-report` antes de salvar o `pending_insight`:
-- Se janela aberta → NÃO salva `pending_insight` (o teaser vai direto como texto livre)
-- Se janela fechada → salva `pending_insight` normalmente (será entregue quando clicar no botão)
+### Justificativa
+- A query já filtra por `status IN ('active', 'trial')` — são usuários pagantes
+- O auto-silence faz sentido para follow-ups conversacionais, mas **não** para conteúdo de jornada que é passivo
+- O `do_not_disturb_until` continua como válvula de escape se o usuário pedir para pausar
 
 ### Arquivo modificado
-- `supabase/functions/weekly-report/index.ts` — condicionar o save do `pending_insight` à janela de 24h
-
-### Detalhes técnicos
-- Importar `isWithin24hWindow` de `whatsapp-official.ts`
-- Consultar `last_user_message_at` do profile (já disponível no select existente)
-- Se `isWithin24hWindow(profile.last_user_message_at)` → pular o save do `pending_insight`
+- `supabase/functions/periodic-content/index.ts` — remover linhas 133-138
 
