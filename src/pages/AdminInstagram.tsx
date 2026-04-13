@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -9,7 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Instagram, MessageCircle, ThumbsUp, ThumbsDown, HelpCircle, Minus, RefreshCw } from "lucide-react";
+import { Instagram, MessageCircle, ThumbsUp, ThumbsDown, HelpCircle, Minus, RefreshCw, Link2, CheckCircle2, AlertTriangle } from "lucide-react";
 
 interface Interaction {
   id: string;
@@ -31,6 +32,8 @@ interface Config {
   daily_count: number;
   ig_account_id: string | null;
   comment_keywords: string[];
+  meta_access_token: string | null;
+  token_expires_at: string | null;
 }
 
 export default function AdminInstagram() {
@@ -39,6 +42,23 @@ export default function AdminInstagram() {
   const [interactions, setInteractions] = useState<Interaction[]>([]);
   const [config, setConfig] = useState<Config | null>(null);
   const [loading, setLoading] = useState(true);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Handle OAuth callback results
+  useEffect(() => {
+    const oauthSuccess = searchParams.get("oauth_success");
+    const oauthError = searchParams.get("oauth_error");
+    const pageName = searchParams.get("page");
+
+    if (oauthSuccess) {
+      toast({ title: "Instagram conectado! ✅", description: pageName ? `Página: ${pageName}` : "Token salvo com sucesso." });
+      setSearchParams({}, { replace: true });
+      loadData();
+    } else if (oauthError) {
+      toast({ title: "Erro na conexão", description: decodeURIComponent(oauthError), variant: "destructive" });
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     if (!isLoading) redirectIfNotAdmin();
@@ -60,7 +80,7 @@ export default function AdminInstagram() {
         .limit(50),
       supabase
         .from("instagram_config")
-        .select("*")
+        .select("*, meta_access_token, token_expires_at")
         .eq("id", 1)
         .single(),
     ]);
@@ -82,6 +102,25 @@ export default function AdminInstagram() {
       setConfig(prev => prev ? { ...prev, ...updates } : null);
       toast({ title: "Configuração atualizada" });
     }
+  };
+
+  const handleConnectInstagram = () => {
+    const appId = "1491408882345218";
+    const redirectUri = encodeURIComponent(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-oauth-callback`);
+    const state = encodeURIComponent(window.location.origin);
+    const scopes = "pages_show_list,pages_messaging,pages_read_engagement,instagram_basic,instagram_manage_comments,instagram_manage_messages";
+    const oauthUrl = `https://www.facebook.com/v21.0/dialog/oauth?client_id=${appId}&redirect_uri=${redirectUri}&scope=${scopes}&state=${state}&response_type=code`;
+    window.location.href = oauthUrl;
+  };
+
+  const tokenStatus = () => {
+    if (!config?.meta_access_token) return { label: "Não conectado", color: "destructive" as const, icon: AlertTriangle };
+    if (config.token_expires_at) {
+      const days = Math.round((new Date(config.token_expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+      if (days > 30) return { label: `Token válido (${days} dias)`, color: "default" as const, icon: CheckCircle2 };
+      if (days > 0) return { label: `Expira em ${days} dias`, color: "secondary" as const, icon: AlertTriangle };
+    }
+    return { label: "Token configurado", color: "default" as const, icon: CheckCircle2 };
   };
 
   const sentimentIcon = (s: string | null) => {
@@ -119,10 +158,39 @@ export default function AdminInstagram() {
             <Instagram className="h-8 w-8 text-primary" />
             <h1 className="text-2xl font-bold text-foreground">Instagram — Automação</h1>
           </div>
-          <Button variant="outline" size="sm" onClick={loadData}>
-            <RefreshCw className="h-4 w-4 mr-2" /> Atualizar
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={loadData}>
+              <RefreshCw className="h-4 w-4 mr-2" /> Atualizar
+            </Button>
+          </div>
         </div>
+
+        {/* Connection Status */}
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                {(() => {
+                  const status = tokenStatus();
+                  const Icon = status.icon;
+                  return (
+                    <>
+                      <Icon className={`h-5 w-5 ${status.color === "destructive" ? "text-destructive" : "text-primary"}`} />
+                      <div>
+                        <p className="text-sm font-medium text-foreground">Conexão com Meta</p>
+                        <Badge variant={status.color}>{status.label}</Badge>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+              <Button onClick={handleConnectInstagram} variant={config?.meta_access_token ? "outline" : "default"} size="sm">
+                <Link2 className="h-4 w-4 mr-2" />
+                {config?.meta_access_token ? "Reconectar" : "Conectar Instagram"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
