@@ -94,6 +94,7 @@ export default function AdminUsers() {
 
   const openEdit = (p: Profile) => {
     setEditProfile(p);
+    setPortalLinkCopied(false);
     setEditForm({
       name: p.name || '',
       email: p.email || '',
@@ -101,6 +102,47 @@ export default function AdminUsers() {
       plan: p.plan || 'essencial',
       status: p.status || 'active',
     });
+  };
+
+  const handleCopyPortalLink = async () => {
+    if (!editProfile) return;
+    setPortalLinkLoading(true);
+    try {
+      // Check for existing token
+      const { data: existing } = await supabase
+        .from('user_portal_tokens')
+        .select('token')
+        .eq('user_id', editProfile.user_id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      let token = existing?.token;
+      if (!token) {
+        const { data: newToken, error } = await supabase.functions.invoke('admin-update-profile', {
+          body: { profile_id: editProfile.id, generate_portal_token: true },
+        });
+        // Fallback: insert directly via service (admin has no insert RLS on portal_tokens)
+        // So we use a simple insert
+        const { data: inserted, error: insertErr } = await supabase
+          .from('user_portal_tokens')
+          .insert({ user_id: editProfile.user_id })
+          .select('token')
+          .single();
+        if (insertErr) throw insertErr;
+        token = inserted.token;
+      }
+
+      const url = `${window.location.origin}/meu-espaco?t=${token}`;
+      await navigator.clipboard.writeText(url);
+      setPortalLinkCopied(true);
+      toast({ title: 'Link copiado!', description: 'Link do portal copiado para a área de transferência.' });
+      setTimeout(() => setPortalLinkCopied(false), 3000);
+    } catch (err: any) {
+      toast({ title: 'Erro', description: err.message || 'Não foi possível gerar o link', variant: 'destructive' });
+    } finally {
+      setPortalLinkLoading(false);
+    }
   };
 
   const handleSave = async () => {
