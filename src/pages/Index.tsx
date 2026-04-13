@@ -38,7 +38,7 @@ const Index = () => {
           name="keywords"
           content="acompanhamento emocional, saúde mental acessível, WhatsApp, ansiedade, autoconhecimento, clareza mental, terapia acessível, suporte emocional"
         />
-        <link rel="canonical" href="https://aura.app" />
+        <link rel="canonical" href="https://olaaura.com.br" />
       </Helmet>
 
       <div className="min-h-screen bg-background">
