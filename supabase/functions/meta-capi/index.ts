@@ -39,7 +39,19 @@ Deno.serve(async (req) => {
 
   try {
     const pixelId = Deno.env.get('META_PIXEL_ID') || '939366085297921';
-    const accessToken = Deno.env.get('META_ACCESS_TOKEN');
+    let accessToken = Deno.env.get('META_ACCESS_TOKEN');
+
+    // Try reading token from instagram_config DB for auto-renewal support
+    try {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL');
+      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+      if (supabaseUrl && supabaseKey) {
+        const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2");
+        const sb = createClient(supabaseUrl, supabaseKey);
+        const { data: cfg } = await sb.from('instagram_config').select('meta_access_token').eq('id', 1).single();
+        if (cfg?.meta_access_token) accessToken = cfg.meta_access_token;
+      }
+    } catch (_) { /* fallback to env var */ }
 
     if (!accessToken) {
       console.error('❌ META_ACCESS_TOKEN not configured');
