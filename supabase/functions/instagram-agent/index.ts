@@ -117,6 +117,7 @@ serve(async (req) => {
     // Post reply via Instagram Graph API
     // Read token from DB (config passed from webhook) with env var fallback
     const META_ACCESS_TOKEN = config?.meta_access_token || Deno.env.get("META_ACCESS_TOKEN");
+    console.log(`[DEBUG] Token source: ${config?.meta_access_token ? "DB config" : "env var"}, length: ${META_ACCESS_TOKEN?.length}, prefix: ${META_ACCESS_TOKEN?.slice(0, 15)}...`);
     if (!META_ACCESS_TOKEN) {
       console.error("META_ACCESS_TOKEN not configured");
       return new Response(JSON.stringify({ 
