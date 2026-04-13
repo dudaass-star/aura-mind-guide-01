@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Helmet } from "react-helmet-async";
 import { useState } from "react";
 import logoOlaAura from "@/assets/logo-ola-aura.png";
-import { Waves, Dumbbell, Clock, Heart, Leaf, Bird, Butterfly, Brain, Sparkles, ArrowLeft } from "lucide-react";
+import { Waves, Dumbbell, Clock, Heart, Leaf, Bird, RefreshCw, Brain, Sparkles, ArrowLeft } from "lucide-react";
 
 const topicIcon: Record<string, React.ElementType> = {
   ansiedade: Waves,
@@ -13,7 +13,7 @@ const topicIcon: Record<string, React.ElementType> = {
   relacionamentos: Heart,
   estresse: Leaf,
   luto: Bird,
-  medo_mudanca: Butterfly,
+  medo_mudanca: RefreshCw,
   inteligencia_emocional: Brain,
 };
 
