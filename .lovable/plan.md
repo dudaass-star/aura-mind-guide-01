@@ -1,75 +1,48 @@
 
 
-# Auditoria Completa do Funil AURA — Landing Page, Checkout e Stripe
+# Verificacao Final — Status das Melhorias e Problemas Pendentes
 
-## Status das Melhorias Anteriores
+## Status: Todas as melhorias planejadas estao 100% implementadas
 
-Todas as melhorias planejadas foram implementadas corretamente:
-- CTAs em Benefits, Meditations, Comparison — usando `<Link>` + `<Button variant="sage">`
-- ForWho e Testimonials — corrigidos de `<a href>` para `<Link>`
-- FinalCTA — trust badges (Sem fidelidade, Cancele quando quiser, Dados protegidos)
-- StickyMobileCTA — funcional com IntersectionObserver no hero-section
-- Hero tem `id="hero-section"` para o observer
+| Melhoria | Status |
+|----------|--------|
+| CTAs em Benefits, Meditations, Comparison | Implementado com `<Link>` + `<Button variant="sage">` |
+| CTAs em FAQ, HowItWorks, Demo | Implementado |
+| ForWho e Testimonials corrigidos (SPA links) | Implementado com `<Link>` + `<Button>` |
+| FinalCTA trust badges | Implementado (Sem fidelidade, Cancele quando quiser, Dados protegidos) |
+| StickyMobileCTA | Implementado com IntersectionObserver |
+| Exit-intent popup desktop-only | Implementado (`window.innerWidth >= 768`) |
+| 3D Secure no trial | Implementado (`request_three_d_secure: 'always'`) |
+| Emoji substituido no ThankYou | Implementado (`<BarChart3>`) |
 
-## Problemas Encontrados por Etapa
+## Problemas encontrados que precisam correcao
 
-### Landing Page — Pequenos Ajustes
+### 1. URL canonica errada (impacto SEO)
+`Index.tsx` linha 41 tem `<link rel="canonical" href="https://aura.app" />` — o dominio real e `https://olaaura.com.br`. Isso prejudica SEO ao apontar para um dominio inexistente.
 
-**1. FAQ sem CTA ao final (impacto médio)**
-Após 9 perguntas respondidas, o lead fica convicto mas precisa scrollar até o FinalCTA. Oportunidade perdida — um CTA logo após as FAQs captura quem acabou de ter suas objeções eliminadas.
+### 2. Fallback de dominio no Stripe errado
+`create-checkout/index.ts` linha 158 usa `origin || "https://aura.lovable.app"` como fallback. Se o header origin nao vier, o redirect pos-pagamento vai para o dominio do Lovable em vez de `https://olaaura.com.br`. Deveria usar o dominio correto.
 
-**2. HowItWorks sem CTA (impacto baixo-médio)**
-A seção "Como funciona" termina sem oferecer ação. Após entender o processo, o lead pode querer agir imediatamente.
-
-**3. Demo sem CTA ao final (impacto médio)**
-A conversa simulada é altamente persuasiva (523 linhas de demo interativa), mas termina sem botão. O lead fica emocionalmente engajado sem caminho direto para conversão.
-
-**4. ThankYou mostra emoji 📊 (inconsistência menor)**
-Linha 89: `📊 Você também receberá...` — deveria usar ícone Lucide para consistência.
-
-### Checkout — Oportunidades de Otimização
-
-**5. Checkout não passa `plan` e `billing` via URL quando vem de CTAs genéricos (impacto médio)**
-Os CTAs "Começar por R$ 6,90" nas seções Benefits, Meditations, Comparison, FinalCTA linkam para `/checkout` sem parâmetros. O checkout abre com o plano "Direção" (default), ignorando a intenção do lead. Os CTAs do Pricing passam via `state`, mas CTAs genéricos não.
-
-**6. Falta 3DS explícito no trial checkout (impacto na conversão)**
-A memória técnica diz que o sistema usa `request_three_d_secure: 'always'`, mas o código do `create-checkout` NÃO configura isso. A `payment_method_options.card` só tem `setup_future_usage: 'off_session'` — falta o `request_three_d_secure`.
-
-**7. Checkout exit popup usa `visibilitychange` (pode irritar no mobile)**
-No mobile, trocar de app (ex: copiar número do cartão) dispara o popup. O `visibilitychange` deveria ser desabilitado no mobile ou ter um delay.
-
-### Stripe Checkout (Página do Stripe)
-
-**8. Nome do produto no Stripe poderia ser mais claro**
-Atualmente: `AURA Direção — 7 dias | Após: R$ 49,90/mês` — está bom, mas a descrição é apenas `CANCELE QUANDO QUISER.` em caps lock. Poderia ser mais persuasiva sem ser gritante.
-
-**9. `success_url` usa domínio hardcoded como fallback**
-Linha 158: `origin || "https://aura.lovable.app"` — se o header origin não vier, redireciona para o domínio do Lovable em vez do domínio publicado. Deveria usar o domínio correto.
+### 3. Warnings de ref no console (nao-critico)
+O console mostra "Function components cannot be given refs" para `Footer` e `StickyMobileCTA`. Isso ocorre porque o React Router ou algum parent tenta passar ref a esses componentes funcionais. Nao causa erro visivel mas polui o console. Correcao simples com `React.forwardRef`.
 
 ---
 
-## Plano de Melhorias (Priorizado)
+## Plano de correcao
 
-### Prioridade 1 — CTAs ausentes nas seções finais
-- **FAQ.tsx**: Adicionar CTA "Começar por R$ 6,90" após o Accordion
-- **Demo.tsx**: Adicionar CTA ao final da seção de demo
-- **HowItWorks.tsx**: Adicionar CTA ao final
-- Todos usando `<Link to="/checkout"><Button variant="sage" size="xl">`
+### Correcao 1 — URL canonica
+- **Index.tsx**: Alterar `href="https://aura.app"` para `href="https://olaaura.com.br"`
 
-### Prioridade 2 — Fix do exit popup no mobile
-- **Checkout.tsx**: Desabilitar o listener `visibilitychange` em viewports mobile (usar `window.innerWidth < 768` como guard)
+### Correcao 2 — Fallback do Stripe
+- **create-checkout/index.ts**: Alterar fallback de `"https://aura.lovable.app"` para `"https://olaaura.com.br"`
 
-### Prioridade 3 — Consistência visual
-- **ThankYou.tsx**: Substituir emoji 📊 por `<BarChart3>` ou `<LayoutDashboard>` do Lucide
-
-### Prioridade 4 — 3DS no Stripe (se confirmado)
-- **create-checkout/index.ts**: Adicionar `request_three_d_secure: 'always'` em `payment_method_options.card` no modo trial
+### Correcao 3 — Warnings de ref (opcional)
+- **Footer.tsx** e **StickyMobileCTA.tsx**: Envolver com `React.forwardRef` para eliminar warnings do console
 
 ---
 
-## Detalhes Técnicos
-- 5 arquivos modificados: `FAQ.tsx`, `Demo.tsx`, `HowItWorks.tsx`, `Checkout.tsx`, `ThankYou.tsx`
-- Opcionalmente 1 edge function: `create-checkout/index.ts` (3DS)
-- Sem mudanças no banco de dados
-- Todas as dependências já existem
+## Detalhes tecnicos
+- 4 arquivos modificados: `Index.tsx`, `create-checkout/index.ts`, `Footer.tsx`, `StickyMobileCTA.tsx`
+- 1 edge function para redeploy: `create-checkout`
+- Sem mudancas no banco de dados
 
