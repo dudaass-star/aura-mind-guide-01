@@ -151,9 +151,21 @@ serve(async (req) => {
         console.error("Failed to reply to comment:", replyResp.status, errBody);
       }
     } else if (!isComment && interaction.ig_user_id) {
-      // Send DM
-      const igAccountId = config?.ig_account_id || Deno.env.get("INSTAGRAM_ACCOUNT_ID");
-      const dmUrl = `https://graph.instagram.com/v21.0/${igAccountId}/messages?access_token=${encodeURIComponent(META_ACCESS_TOKEN)}`;
+      // Send DM via Facebook Graph API (requires Page ID, not IG Account ID)
+      const pageId = config?.page_id;
+      if (!pageId) {
+        console.error("page_id not configured - reconnect Instagram via admin panel");
+        return new Response(JSON.stringify({ 
+          response_text: responseText, 
+          sentiment,
+          error: "page_id not configured - reconnect Instagram" 
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const dmUrl = `https://graph.facebook.com/v21.0/${pageId}/messages?access_token=${encodeURIComponent(META_ACCESS_TOKEN)}`;
+      console.log(`[DEBUG] DM URL: graph.facebook.com/v21.0/${pageId}/messages`);
       const dmResp = await fetch(dmUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

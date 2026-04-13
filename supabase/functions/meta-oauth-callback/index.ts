@@ -114,6 +114,7 @@ serve(async (req) => {
     const updateData: Record<string, any> = {
       meta_access_token: pageAccessToken,
       token_expires_at: expiresAt,
+      page_id: selectedPage.id,
       updated_at: new Date().toISOString(),
     };
 
