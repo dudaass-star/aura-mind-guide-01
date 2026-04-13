@@ -134,13 +134,12 @@ serve(async (req) => {
 
     if (isComment && interaction.comment_id) {
       // Reply to comment
-      const replyUrl = `https://graph.instagram.com/v21.0/${interaction.comment_id}/replies`;
+      const replyUrl = `https://graph.instagram.com/v21.0/${interaction.comment_id}/replies?access_token=${encodeURIComponent(META_ACCESS_TOKEN)}`;
       const replyResp = await fetch(replyUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: responseText,
-          access_token: META_ACCESS_TOKEN,
         }),
       });
 
@@ -154,14 +153,13 @@ serve(async (req) => {
     } else if (!isComment && interaction.ig_user_id) {
       // Send DM
       const igAccountId = config?.ig_account_id || Deno.env.get("INSTAGRAM_ACCOUNT_ID");
-      const dmUrl = `https://graph.instagram.com/v21.0/${igAccountId}/messages`;
+      const dmUrl = `https://graph.instagram.com/v21.0/${igAccountId}/messages?access_token=${encodeURIComponent(META_ACCESS_TOKEN)}`;
       const dmResp = await fetch(dmUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           recipient: { id: interaction.ig_user_id },
           message: { text: responseText },
-          access_token: META_ACCESS_TOKEN,
         }),
       });
 
