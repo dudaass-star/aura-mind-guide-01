@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Play, Pause } from "lucide-react";
+import { Play, Pause, Loader2 } from "lucide-react";
 
 interface AudioPlayerProps {
   src: string;
@@ -16,6 +16,7 @@ function formatTime(seconds: number) {
 const AudioPlayer = ({ src, type = "audio/mpeg" }: AudioPlayerProps) => {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isBuffering, setIsBuffering] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
@@ -26,16 +27,22 @@ const AudioPlayer = ({ src, type = "audio/mpeg" }: AudioPlayerProps) => {
 
     const onTime = () => { if (!isDragging) setCurrentTime(audio.currentTime); };
     const onMeta = () => setDuration(audio.duration);
-    const onEnd = () => setIsPlaying(false);
+    const onEnd = () => { setIsPlaying(false); setIsBuffering(false); };
+    const onWaiting = () => setIsBuffering(true);
+    const onCanPlay = () => setIsBuffering(false);
 
     audio.addEventListener("timeupdate", onTime);
     audio.addEventListener("loadedmetadata", onMeta);
     audio.addEventListener("ended", onEnd);
+    audio.addEventListener("waiting", onWaiting);
+    audio.addEventListener("canplay", onCanPlay);
 
     return () => {
       audio.removeEventListener("timeupdate", onTime);
       audio.removeEventListener("loadedmetadata", onMeta);
       audio.removeEventListener("ended", onEnd);
+      audio.removeEventListener("waiting", onWaiting);
+      audio.removeEventListener("canplay", onCanPlay);
     };
   }, [isDragging]);
 
@@ -44,8 +51,10 @@ const AudioPlayer = ({ src, type = "audio/mpeg" }: AudioPlayerProps) => {
     if (!audio) return;
     if (isPlaying) {
       audio.pause();
+      setIsBuffering(false);
     } else {
-      audio.play();
+      setIsBuffering(true);
+      audio.play().then(() => setIsBuffering(false)).catch(() => setIsBuffering(false));
     }
     setIsPlaying(!isPlaying);
   }, [isPlaying]);
@@ -74,7 +83,9 @@ const AudioPlayer = ({ src, type = "audio/mpeg" }: AudioPlayerProps) => {
         className="w-10 h-10 rounded-full bg-gradient-to-br from-accent to-primary flex items-center justify-center shrink-0 shadow-md hover:scale-105 transition-transform active:scale-95"
         aria-label={isPlaying ? "Pausar" : "Reproduzir"}
       >
-        {isPlaying ? (
+        {isBuffering ? (
+          <Loader2 size={18} className="text-primary-foreground animate-spin" />
+        ) : isPlaying ? (
           <Pause size={18} className="text-primary-foreground" fill="currentColor" />
         ) : (
           <Play size={18} className="text-primary-foreground ml-0.5" fill="currentColor" />

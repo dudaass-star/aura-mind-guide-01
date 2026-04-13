@@ -4,22 +4,24 @@ import { supabase } from "@/integrations/supabase/client";
 import { Helmet } from "react-helmet-async";
 import { useState } from "react";
 import logoOlaAura from "@/assets/logo-ola-aura.png";
+import { Waves, Dumbbell, Clock, Heart, Leaf, Bird, RefreshCw, Brain, Sparkles, ArrowLeft } from "lucide-react";
 
-const topicEmoji: Record<string, string> = {
-  ansiedade: "🌊",
-  autoconfianca: "💪",
-  procrastinacao: "⏳",
-  relacionamentos: "💞",
-  estresse: "🧘",
-  luto: "🕊️",
-  medo_mudanca: "🦋",
-  inteligencia_emocional: "🧠",
+const topicIcon: Record<string, React.ElementType> = {
+  ansiedade: Waves,
+  autoconfianca: Dumbbell,
+  procrastinacao: Clock,
+  relacionamentos: Heart,
+  estresse: Leaf,
+  luto: Bird,
+  medo_mudanca: RefreshCw,
+  inteligencia_emocional: Brain,
 };
 
 const Episode = () => {
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
   const userId = searchParams.get("u");
+  const portalToken = searchParams.get("t");
 
   const [confirmed, setConfirmed] = useState(false);
   const [chosenJourneyId, setChosenJourneyId] = useState<string | null>(null);
@@ -94,7 +96,7 @@ const Episode = () => {
         </div>
         <div className="flex-1 flex items-center justify-center px-6">
           <div className="text-center max-w-md">
-            <p className="text-4xl mb-4">🌿</p>
+            <Sparkles size={40} className="text-accent mx-auto mb-4" />
             <h1 className="text-xl font-semibold text-foreground mb-2 font-['Fraunces']">Episódio não encontrado</h1>
             <p className="text-muted-foreground font-['Nunito']">Este link pode ter expirado ou o episódio não existe.</p>
           </div>
@@ -106,6 +108,7 @@ const Episode = () => {
   const stageTitle = episode.stage_title || episode.title;
   const essayContent = episode.essay_content || episode.content_prompt || "";
   const paragraphs = essayContent.split(/\n\n+/).filter((p: string) => p.trim());
+  const topic = episode.content_journeys?.topic || "";
 
   return (
     <>
@@ -116,10 +119,21 @@ const Episode = () => {
       </Helmet>
 
       <div className="min-h-screen bg-background flex flex-col">
-        {/* Top bar with logo */}
+        {/* Top bar */}
         <div className="bg-card border-b border-border/50">
           <div className="max-w-2xl mx-auto px-5 py-3 flex items-center justify-between">
-            <img src={logoOlaAura} alt="Olá AURA" className="h-14 w-auto" />
+            <div className="flex items-center gap-3">
+              {portalToken && (
+                <a
+                  href={`/meu-espaco?t=${portalToken}&tab=jornadas`}
+                  className="flex items-center gap-1 text-accent hover:text-accent/80 transition-colors text-sm font-['Nunito']"
+                >
+                  <ArrowLeft size={16} />
+                  <span className="hidden sm:inline">Meu Espaço</span>
+                </a>
+              )}
+              <img src={logoOlaAura} alt="Olá AURA" className="h-14 w-auto" />
+            </div>
             <span className="text-xs uppercase tracking-wider text-accent font-semibold font-['Nunito']">
               Conteúdo exclusivo
             </span>
@@ -175,11 +189,11 @@ const Episode = () => {
             })}
           </div>
 
-          {/* Journey completion section — only on last episode with userId */}
+          {/* Journey completion section */}
           {isLastEpisode && userId && !confirmed && (
             <div className="mt-16 pt-8 border-t border-border/50 space-y-6">
               <div className="text-center space-y-3">
-                <p className="text-5xl">🎉</p>
+                <Sparkles size={48} className="text-accent mx-auto" />
                 <h2 className="font-['Fraunces'] text-2xl font-semibold text-foreground">
                   Parabéns! Você concluiu a jornada
                 </h2>
@@ -199,7 +213,7 @@ const Episode = () => {
 
                 <div className="space-y-3">
                   {availableJourneys?.map((journey) => {
-                    const emoji = topicEmoji[journey.topic] || "✨";
+                    const Icon = topicIcon[journey.topic] || Sparkles;
                     const isSelecting = chooseMutation.isPending && chosenJourneyId === journey.id;
                     return (
                       <button
@@ -213,7 +227,9 @@ const Episode = () => {
                         } disabled:opacity-50`}
                       >
                         <div className="flex items-start gap-3">
-                          <span className="text-2xl mt-0.5">{emoji}</span>
+                          <div className="w-8 h-8 rounded-full bg-accent/10 flex items-center justify-center mt-0.5 shrink-0">
+                            <Icon size={16} className="text-accent" />
+                          </div>
                           <div className="flex-1 min-w-0">
                             <p className="font-['Fraunces'] font-semibold text-foreground text-base">
                               {journey.title}
@@ -249,7 +265,7 @@ const Episode = () => {
           {/* Success state after choosing */}
           {isLastEpisode && confirmed && (
             <div className="mt-16 pt-8 border-t border-border/50 text-center space-y-4">
-              <p className="text-5xl">🎯</p>
+              <Sparkles size={48} className="text-accent mx-auto" />
               <h2 className="font-['Fraunces'] text-2xl font-semibold text-foreground">Pronto!</h2>
               <p className="text-foreground/80 font-['Nunito'] text-lg">
                 Sua próxima jornada será <strong>{availableJourneys?.find(j => j.id === chosenJourneyId)?.title || "a escolhida"}</strong>.

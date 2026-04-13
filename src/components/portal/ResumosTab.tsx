@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { BarChart3, MessageCircle, Brain, Calendar, CheckCircle2, TrendingUp } from "lucide-react";
 import { SectionHeader, EmptyState, MetricCard, PortalLoadingInline } from "./shared";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 
 export function ResumosTab({ userId }: { userId: string }) {
   const { data: reports, isLoading } = useQuery({
@@ -35,9 +36,59 @@ export function ResumosTab({ userId }: { userId: string }) {
     "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
   ];
 
+  const shortMonthNames = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+
+  // Build chart data if 2+ reports
+  const chartData = reports.length >= 2
+    ? [...reports].reverse().slice(-6).map((r: any) => {
+        const d = new Date(r.report_month + "T12:00:00");
+        const m = r.metrics_json || {};
+        return {
+          month: shortMonthNames[d.getMonth()],
+          mensagens: m.totalMessages || 0,
+          insights: m.insightsCount || 0,
+        };
+      })
+    : null;
+
   return (
     <div className="space-y-5">
       <SectionHeader icon={BarChart3} title="Resumos Mensais" />
+
+      {/* Evolution chart */}
+      {chartData && (
+        <div className="rounded-2xl border border-border bg-card p-5 shadow-sm animate-fade-up">
+          <div className="flex items-center gap-1.5 mb-4">
+            <TrendingUp size={16} className="text-accent" />
+            <h3 className="font-['Fraunces'] font-semibold text-foreground text-sm">Sua Evolução</h3>
+          </div>
+          <ResponsiveContainer width="100%" height={140}>
+            <BarChart data={chartData} barGap={4}>
+              <XAxis dataKey="month" tick={{ fontSize: 11, fontFamily: "Nunito" }} axisLine={false} tickLine={false} />
+              <YAxis hide />
+              <Tooltip
+                contentStyle={{ borderRadius: 12, fontFamily: "Nunito", fontSize: 12, border: "1px solid hsl(var(--border))" }}
+                cursor={{ fill: "hsl(var(--muted))", radius: 8 }}
+              />
+              <Bar dataKey="mensagens" name="Mensagens" radius={[6, 6, 0, 0]} maxBarSize={28}>
+                {chartData.map((_, i) => (
+                  <Cell key={i} fill="hsl(var(--accent))" fillOpacity={0.7 + (i / chartData.length) * 0.3} />
+                ))}
+              </Bar>
+              <Bar dataKey="insights" name="Insights" radius={[6, 6, 0, 0]} maxBarSize={28}>
+                {chartData.map((_, i) => (
+                  <Cell key={i} fill="hsl(var(--primary))" fillOpacity={0.5 + (i / chartData.length) * 0.5} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+          <div className="flex items-center justify-center gap-4 mt-2 text-[10px] text-muted-foreground font-['Nunito']">
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-accent inline-block" /> Mensagens</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-primary inline-block" /> Insights</span>
+          </div>
+        </div>
+      )}
+
       {reports.map((report: any, idx: number) => {
         const reportDate = new Date(report.report_month + "T12:00:00");
         const monthLabel = `${monthNames[reportDate.getMonth()]} ${reportDate.getFullYear()}`;
