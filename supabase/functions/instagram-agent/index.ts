@@ -15,10 +15,9 @@ SOBRE A AURA:
 - +5.000 sessões realizadas, 4.9/5 de satisfação, 93% dos usuários renovam
 
 PLANOS E PREÇOS:
-- Essencial: R$29,90/mês (~R$1/dia) — conversas ilimitadas 24/7, check-in diário, review semanal, texto e áudio, memória de longo prazo
-- Direção: R$49,90/mês (~R$1,70/dia) — tudo do Essencial + 4 sessões especiais/mês de 45min com metodologia estruturada e resumo escrito
-- Transformação: R$79,90/mês (~R$2,70/dia) — tudo do Direção + 8 sessões/mês, prioridade, suporte intensivo
-- Trial: 7 dias por R$6,90, cancela quando quiser, sem fidelidade
+- Essencial: R$6,90/semana — após 7 dias R$29,90/mês — conversas ilimitadas 24/7, check-in diário, review semanal, texto e áudio, memória de longo prazo
+- Direção: R$9,90/semana — após 7 dias R$49,90/mês — tudo do Essencial + 4 sessões especiais/mês de 45min com metodologia estruturada e resumo escrito
+- Transformação: R$19,90/semana — após 7 dias R$79,90/mês — tudo do Direção + 8 sessões/mês, prioridade, suporte intensivo
 
 FUNCIONALIDADES:
 - Disponível 24/7 via WhatsApp (responde a qualquer hora)
@@ -35,7 +34,7 @@ FUNCIONALIDADES:
 
 DIFERENCIAIS vs TERAPIA:
 - Aura é acessível 24/7, sem agendamento
-- Custa a partir de R$1/dia (vs R$150-400 por sessão de terapia)
+- Custa a partir de R$6,90/semana (vs R$150-400 por sessão de terapia)
 - Complementa terapia, não substitui
 - Ideal para quem quer direção prática no dia a dia, organizar pensamentos, entender padrões
 
