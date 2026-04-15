@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -l \"CREATE TABLE.*messages\\\\|CREATE TABLE.*profiles\\\\|CREATE TABLE.*conversation\" /c/Users/dudaa/Documents/aura-mind-guide-01/supabase/migrations/*.sql)"
+    ]
+  }
+}

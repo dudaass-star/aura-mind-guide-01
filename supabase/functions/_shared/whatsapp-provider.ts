@@ -4,7 +4,7 @@
  * Camada que decide entre Z-API (legado) e API Oficial do WhatsApp (Meta Cloud API direta).
  * O provider ativo é controlado pela key `whatsapp_provider` em `system_config`.
  * 
- * Default: 'zapi' — nenhuma mudança no comportamento existente.
+ * Default: 'official' — usa a API Oficial do WhatsApp por padrão.
  */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -19,7 +19,7 @@ export type WhatsAppProvider = 'zapi' | 'official';
 
 /**
  * Lê o provider ativo da tabela system_config.
- * Default: 'zapi' (sem mudança no comportamento atual).
+ * Default: 'official' (API Oficial do WhatsApp).
  */
 export async function getProvider(): Promise<WhatsAppProvider> {
   try {
@@ -34,11 +34,11 @@ export async function getProvider(): Promise<WhatsAppProvider> {
       .single();
 
     const provider = data?.value as string | undefined;
-    if (provider === 'official') return 'official';
-    return 'zapi';
+    if (provider === 'zapi') return 'zapi';
+    return 'official';
   } catch (error) {
-    console.warn('⚠️ [WhatsApp Provider] Could not read provider config, defaulting to zapi:', error);
-    return 'zapi';
+    console.warn('⚠️ [WhatsApp Provider] Could not read provider config, defaulting to official:', error);
+    return 'official';
   }
 }
 
