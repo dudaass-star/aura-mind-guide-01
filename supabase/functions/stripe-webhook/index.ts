@@ -51,11 +51,11 @@ Deno.serve(async (req) => {
 
   const stripeSecretKey = Deno.env.get('STRIPE_SECRET_KEY');
   const webhookSecret = Deno.env.get('STRIPE_WEBHOOK_SECRET');
-  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
-  if (!stripeSecretKey || !webhookSecret) {
-    console.error('❌ Missing Stripe keys');
+  if (!stripeSecretKey || !webhookSecret || !supabaseUrl || !supabaseServiceKey) {
+    console.error('❌ Missing required environment variables');
     return new Response(JSON.stringify({ error: 'Server configuration error' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

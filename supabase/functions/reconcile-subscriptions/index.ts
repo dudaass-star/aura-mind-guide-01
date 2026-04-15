@@ -104,11 +104,19 @@ Deno.serve(async (req) => {
         }
 
         // Look up profile
-        const { data: profile } = await supabase
+        const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('id, user_id, name, phone, status, plan')
           .eq('phone', cleanPhone)
-          .single();
+          .maybeSingle();
+
+        if (profileError) {
+          errors.push({
+            subscription_id: sub.id,
+            error: `Error fetching profile for phone ${cleanPhone}: ${profileError.message}`,
+          });
+          continue;
+        }
 
         if (!profile) {
           fixes.push({

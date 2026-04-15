@@ -48,11 +48,14 @@ serve(async (req) => {
     
     logStep("Phone cleaned", { phoneClean });
 
-    const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
+    const stripe = new Stripe(stripeKey, { apiVersion: "2023-10-16" });
 
     // Initialize Supabase
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!supabaseUrl || !supabaseServiceKey) {
+      throw new Error("SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is not set");
+    }
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Search for customer by phone in metadata using all variations

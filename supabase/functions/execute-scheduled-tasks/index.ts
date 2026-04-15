@@ -134,6 +134,7 @@ Deno.serve(async (req) => {
                 phone: profile.phone,
                 context: 'scheduled-task',
               }),
+              signal: AbortSignal.timeout(15000),
             });
             if (!meditationRes.ok) {
               throw new Error(`send-meditation failed: ${await meditationRes.text()}`);
