@@ -2279,13 +2279,20 @@ Quando um usuario do plano Essencial pedir para agendar uma sessao:
 ## SUGESTAO PROATIVA DE UPGRADE (APENAS PLANO ESSENCIAL):
 
 REGRA INVIOLÁVEL DE UPGRADE:
-- Consulte "Último CTA de upgrade" nos DADOS DINÂMICOS antes de qualquer menção a planos.
-- Se cooldown ativo (< 30 dias desde último CTA): NÃO mencione upgrade. Zero.
-- Se o usuário recusou ("não tenho condições", "agora não", "não posso", "tá caro", "depois", "sem dinheiro"): aceite com carinho e siga. NÃO insista nesta conversa NEM nas próximas 30 dias.
-- EXCEÇÃO ÚNICA: se o PRÓPRIO usuário perguntar sobre planos, responda normalmente.
+- Consulte "Upgrade — status" nos DADOS DINÂMICOS antes de qualquer menção a planos.
+- Se cooldown ativo: NÃO mencione upgrade. Zero.
+- Se status for BLOQUEADO PERMANENTEMENTE: NÃO sugira upgrade proativamente jamais. Só responda se o próprio usuário perguntar.
+- EXCEÇÃO ÚNICA: se o PRÓPRIO usuário perguntar sobre planos, responda normalmente (mesmo com cooldown ou bloqueio).
 - SO use a tag [UPGRADE:plano] quando o usuario CONFIRMAR que quer fazer upgrade.
 
-QUANDO PUDER SUGERIR (cooldown expirado + usuário acima do target diário):
+QUANDO O USUÁRIO RECUSAR:
+Classifique a recusa e use a tag correspondente NO FINAL da sua resposta (invisível para o usuário):
+- Recusa financeira ("não tenho condições", "tá caro", "sem dinheiro", "não posso pagar") → [UPGRADE_REFUSED:financial]
+- Timing / indecisão ("agora não", "depois", "vou pensar", "talvez") → [UPGRADE_REFUSED:timing]
+- Sem resposta clara / ignorou → [UPGRADE_REFUSED:no_response]
+Acolha com carinho e mude de assunto imediatamente. NÃO insista.
+
+QUANDO PUDER SUGERIR (cooldown expirado + usuário acima do target diário + não bloqueado):
 - A sugestão deve ser QUASE IMPERCEPTÍVEL. Nunca um pitch, nunca uma lista de benefícios.
 - Integre organicamente na conversa, como quem comenta de passagem.
 - Exemplo BOM: "Ah, e sabia que tem um jeito da gente conversar sem esse limite? Mas enfim, me conta mais sobre..."
@@ -4289,16 +4296,20 @@ REGRAS GERAIS DO ONBOARDING:
 - Compromissos pendentes: ${pendingCommitments}
 - Histórico de conversas: ${messageCount} mensagens
 - Em sessão especial: ${sessionActive ? 'Sim - MODO SESSÃO ATIVO' : 'Não'}
-- Último CTA de upgrade: ${(() => {
+- Upgrade — status: ${(() => {
+  const refusalCount = profile?.upgrade_refusal_count || 0;
+  const refusalType = profile?.upgrade_refusal_type as string | undefined;
   const upgradeSuggestedAt = profile?.upgrade_suggested_at;
-  if (!upgradeSuggestedAt) return 'Nenhum CTA recente — pode sugerir se apropriado e de forma quase imperceptível';
+  if (refusalCount >= 3) return `BLOQUEADO PERMANENTEMENTE (${refusalCount} recusas). NÃO sugira upgrade proativamente. Responda apenas se o usuário perguntar.`;
+  const cooldownDays = refusalType === 'financial' ? 60 : refusalType === 'timing' ? 21 : 30;
+  if (!upgradeSuggestedAt) return `Nenhum CTA recente — pode sugerir se apropriado e de forma quase imperceptível. Recusas: ${refusalCount}/3`;
   const lastCTA = new Date(upgradeSuggestedAt);
   const daysSince = Math.floor((Date.now() - lastCTA.getTime()) / 86400000);
-  if (daysSince < 30) {
-    const cooldownEnd = new Date(lastCTA.getTime() + 30 * 86400000);
-    return `Último CTA: ${lastCTA.toLocaleDateString('pt-BR')} (há ${daysSince} dias) — cooldown ativo até ${cooldownEnd.toLocaleDateString('pt-BR')}. NÃO sugira upgrade.`;
+  if (daysSince < cooldownDays) {
+    const cooldownEnd = new Date(lastCTA.getTime() + cooldownDays * 86400000);
+    return `Último CTA: ${lastCTA.toLocaleDateString('pt-BR')} (há ${daysSince} dias) — cooldown ativo até ${cooldownEnd.toLocaleDateString('pt-BR')} (${cooldownDays}d por recusa "${refusalType || 'no_response'}"). NÃO sugira upgrade. Recusas: ${refusalCount}/3`;
   }
-  return `Último CTA: há ${daysSince} dias — cooldown expirado, pode sugerir de forma quase imperceptível`;
+  return `Último CTA: há ${daysSince} dias — cooldown expirado, pode sugerir de forma quase imperceptível. Recusas: ${refusalCount}/3`;
 })()}
 
 ## Controle de Tempo da Sessão
@@ -4744,7 +4755,8 @@ Exemplo natural:
 - Usuário interrompe com "mudando de assunto..." → Descarte completamente`;
     }
     
-    const shouldSuggestUpgrade = userPlan === 'essencial' && planConfig.dailyMessageTarget > 0 && messagesToday > planConfig.dailyMessageTarget;
+    const upgradePermBlocked = (profile?.upgrade_refusal_count || 0) >= 3;
+    const shouldSuggestUpgrade = userPlan === 'essencial' && planConfig.dailyMessageTarget > 0 && messagesToday > planConfig.dailyMessageTarget && !upgradePermBlocked;
     if (shouldSuggestUpgrade) {
       dynamicContext += `\n\n⚠️ INSTRUÇÃO ESPECIAL: O usuário já mandou ${messagesToday} mensagens hoje. Sugira naturalmente o upgrade para o plano Direção no final da sua resposta. IMPORTANTE: No plano Direção e Transformação, o usuário pode mandar mensagens o quanto quiser, sem limite. NÃO diga "limite maior" — diga que pode falar o quanto quiser.`;
     }
@@ -5176,13 +5188,29 @@ Exemplo com 4 sessões:
     
     if (userPhone && assistantMessage.includes('[UPGRADE:')) {
       assistantMessage = await processUpgradeTags(assistantMessage, userPhone, userName);
-      // Registrar que CTA de upgrade foi enviado — ativa cooldown de 30 dias
+      // Registrar que CTA de upgrade foi enviado — ativa cooldown
       if (profile?.id) {
         await supabase.from('profiles')
           .update({ upgrade_suggested_at: new Date().toISOString() })
           .eq('id', profile.id);
-        console.log('📊 upgrade_suggested_at updated — cooldown 30 dias ativado');
+        console.log('📊 upgrade_suggested_at updated — cooldown ativado');
       }
+    }
+
+    // Processar tag de recusa de upgrade [UPGRADE_REFUSED:financial|timing|no_response]
+    const refusedMatch = assistantMessage.match(/\[UPGRADE_REFUSED:(financial|timing|no_response)\]/i);
+    if (refusedMatch && profile?.id) {
+      const refusalType = refusedMatch[1].toLowerCase();
+      assistantMessage = assistantMessage.replace(/\[UPGRADE_REFUSED:[^\]]+\]/gi, '').trim();
+      const newCount = (profile?.upgrade_refusal_count || 0) + 1;
+      await supabase.from('profiles')
+        .update({
+          upgrade_refusal_type: refusalType,
+          upgrade_refusal_count: newCount,
+          upgrade_suggested_at: new Date().toISOString(),
+        })
+        .eq('id', profile.id);
+      console.log(`📊 Upgrade refused — type=${refusalType}, count=${newCount}/3`);
     }
 
     // ========================================================================

@@ -1,7 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Bash(grep -l \"CREATE TABLE.*messages\\\\|CREATE TABLE.*profiles\\\\|CREATE TABLE.*conversation\" /c/Users/dudaa/Documents/aura-mind-guide-01/supabase/migrations/*.sql)"
+      "Bash(grep -l \"CREATE TABLE.*messages\\\\|CREATE TABLE.*profiles\\\\|CREATE TABLE.*conversation\" /c/Users/dudaa/Documents/aura-mind-guide-01/supabase/migrations/*.sql)",
+      "Bash(supabase --version)",
+      "Bash(where supabase *)",
+      "Bash(npx supabase *)",
+      "Bash(npm list *)",
+      "Bash(npm --version)"
     ]
   }
 }

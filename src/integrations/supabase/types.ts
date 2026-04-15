@@ -1000,6 +1000,8 @@ export type Database = {
           trial_phase: string | null
           trial_started_at: string | null
           updated_at: string | null
+          upgrade_refusal_count: number
+          upgrade_refusal_type: string | null
           upgrade_suggested_at: string | null
           user_id: string
           whatsapp_instance_id: string | null
@@ -1051,6 +1053,8 @@ export type Database = {
           trial_phase?: string | null
           trial_started_at?: string | null
           updated_at?: string | null
+          upgrade_refusal_count?: number
+          upgrade_refusal_type?: string | null
           upgrade_suggested_at?: string | null
           user_id: string
           whatsapp_instance_id?: string | null
@@ -1102,6 +1106,8 @@ export type Database = {
           trial_phase?: string | null
           trial_started_at?: string | null
           updated_at?: string | null
+          upgrade_refusal_count?: number
+          upgrade_refusal_type?: string | null
           upgrade_suggested_at?: string | null
           user_id?: string
           whatsapp_instance_id?: string | null
