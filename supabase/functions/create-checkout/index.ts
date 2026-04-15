@@ -89,7 +89,7 @@ serve(async (req) => {
       throw new Error("Price ID not configured for this plan. Check environment variables.");
     }
 
-    const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
+    const stripe = new Stripe(stripeKey, { apiVersion: "2023-10-16" });
 
     // Clean and validate phone number
     const phoneClean = phone.replace(/\D/g, "");
@@ -208,7 +208,7 @@ serve(async (req) => {
       sessionConfig.payment_method_options = {
         card: {
           setup_future_usage: 'off_session',
-          request_three_d_secure: 'any',
+          request_three_d_secure: 'automatic',
         },
       };
       sessionConfig.metadata = {
@@ -247,11 +247,6 @@ serve(async (req) => {
       sessionConfig.payment_method_collection = 'always';
       sessionConfig.line_items = [{ price: priceId, quantity: 1 }];
       sessionConfig.payment_method_types = ["card"];
-      sessionConfig.payment_method_options = {
-        card: {
-          setup_future_usage: 'off_session',
-        },
-      };
       sessionConfig.metadata = {
         phone: phoneClean,
         name: name,
