@@ -996,9 +996,9 @@ export type Database = {
           therapy_experience: string | null
           trial_aha_at_count: number | null
           trial_conversations_count: number
+          trial_insight_sent_at: string | null
           trial_nudge_active: boolean | null
           trial_phase: string | null
-          trial_insight_sent_at: string | null
           trial_started_at: string | null
           updated_at: string | null
           upgrade_refusal_count: number
@@ -1050,9 +1050,9 @@ export type Database = {
           therapy_experience?: string | null
           trial_aha_at_count?: number | null
           trial_conversations_count?: number
+          trial_insight_sent_at?: string | null
           trial_nudge_active?: boolean | null
           trial_phase?: string | null
-          trial_insight_sent_at?: string | null
           trial_started_at?: string | null
           updated_at?: string | null
           upgrade_refusal_count?: number
@@ -1104,9 +1104,9 @@ export type Database = {
           therapy_experience?: string | null
           trial_aha_at_count?: number | null
           trial_conversations_count?: number
+          trial_insight_sent_at?: string | null
           trial_nudge_active?: boolean | null
           trial_phase?: string | null
-          trial_insight_sent_at?: string | null
           trial_started_at?: string | null
           updated_at?: string | null
           upgrade_refusal_count?: number
