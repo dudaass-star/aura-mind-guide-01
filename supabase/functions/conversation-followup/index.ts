@@ -306,7 +306,7 @@ Deno.serve(async (req) => {
         // Buscar profile
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
-          .select('name, phone, status, plan, current_session_id, do_not_disturb_until, whatsapp_instance_id, last_message_date')
+          .select('name, phone, status, plan, current_session_id, do_not_disturb_until, whatsapp_instance_id, last_message_date, trial_started_at, trial_insight_sent_at')
           .eq('user_id', followup.user_id)
           .maybeSingle();
         
@@ -315,9 +315,10 @@ Deno.serve(async (req) => {
           continue;
         }
         
-        // Skip if no phone or user is not active
-        if (!profile?.phone || profile?.status !== 'active') {
-          console.log(`⏭️ Skipping user ${followup.user_id}: no phone or inactive`);
+        // Skip if no phone, or user is not active/trial
+        const isActiveOrTrial = profile?.status === 'active' || profile?.status === 'trial';
+        if (!profile?.phone || !isActiveOrTrial) {
+          console.log(`⏭️ Skipping user ${followup.user_id}: no phone or inactive (status: ${profile?.status})`);
           continue;
         }
 
@@ -356,7 +357,7 @@ Deno.serve(async (req) => {
           .select('content, role, created_at')
           .eq('user_id', followup.user_id)
           .order('created_at', { ascending: false })
-          .limit(15);
+          .limit(20);
         
         const lastUserMessage = recentMessages?.find((m: any) => m.role === 'user');
         const lastAssistantMessage = recentMessages?.find((m: any) => m.role === 'assistant');
@@ -408,11 +409,39 @@ Deno.serve(async (req) => {
         let timingReason: string;
         
         if (isNaturalEnd) {
+          // Efeito Espelho: schedule a personalized trial insight 45-90 min after natural end
+          const isTrial = profile.status === 'trial';
+          if (isTrial && !profile.trial_insight_sent_at) {
+            const substantialMessages = recentMessages?.filter(
+              (m: any) => m.role === 'user' && m.content.trim().split(/\s+/).length > 10
+            ) || [];
+            if (substantialMessages.length >= 6) {
+              const delayMinutes = 45 + Math.floor(Math.random() * 46); // 45–90 min
+              const executeAt = new Date(Date.now() + delayMinutes * 60 * 1000).toISOString();
+              await supabase.from('scheduled_tasks').insert({
+                user_id: followup.user_id,
+                task_type: 'trial_insight',
+                execute_at: executeAt,
+                status: 'pending',
+                payload: { scheduled_at: new Date().toISOString() },
+              });
+              console.log(`🪞 Scheduled trial insight for ${followup.user_id} in ${delayMinutes}min`);
+            } else {
+              console.log(`⏭️ Trial insight skipped for ${followup.user_id}: only ${substantialMessages.length} substantial messages (need 6)`);
+            }
+          }
           console.log(`⏭️ Skipping ${followup.user_id}: natural conversation end detected — zero follow-ups`);
           skippedNaturalEnd++;
           continue;
         }
-        
+
+        // Trial users only receive the mirror effect (scheduled above on natural end).
+        // Skip regular follow-ups for them entirely.
+        if (profile?.status === 'trial') {
+          console.log(`⏭️ Skipping regular follow-up for trial user ${followup.user_id}`);
+          continue;
+        }
+
         if (isSessionActive) {
           timingReason = 'IN_SESSION';
         } else {

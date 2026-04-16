@@ -153,6 +153,27 @@ Deno.serve(async (req) => {
           }
 
 
+          case 'trial_insight': {
+            const insightRes = await fetch(`${supabaseUrl}/functions/v1/deliver-trial-insight`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${supabaseServiceKey}`,
+              },
+              body: JSON.stringify({
+                user_id: task.user_id,
+                scheduled_at: payload.scheduled_at,
+              }),
+              signal: AbortSignal.timeout(45000),
+            });
+            if (!insightRes.ok) {
+              throw new Error(`deliver-trial-insight failed: ${await insightRes.text()}`);
+            }
+            const insightData = await insightRes.json();
+            console.log(`✅ Trial insight result for ${profile.phone.substring(0, 4)}***: ${insightData.status}`);
+            break;
+          }
+
           default:
             console.warn(`⚠️ Unknown task type: ${task.task_type}`);
         }
