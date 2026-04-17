@@ -62,6 +62,7 @@ Deno.serve(async (req) => {
     const now = new Date();
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const sixHoursAgo = new Date(now.getTime() - 6 * 60 * 60 * 1000);
 
     // Query: active users, 7+ days without message, no check-in in last 30 days
     let profilesQuery = supabase
@@ -79,13 +80,27 @@ Deno.serve(async (req) => {
         .or('last_checkin_sent_at.is.null,last_checkin_sent_at.lte.' + thirtyDaysAgo.toISOString());
     }
 
-    const { data: profiles, error: profilesError } = await profilesQuery;
+    const { data: profilesRaw, error: profilesError } = await profilesQuery;
 
     if (profilesError) {
       throw new Error(`Error fetching profiles: ${profilesError.message}`);
     }
 
-    console.log(`📋 Found ${profiles?.length || 0} eligible users (7+ days inactive, no check-in in 30 days)`);
+    // Guard: pular usuários com conteúdo pendente OU que receberam conteúdo nas últimas 6h.
+    // Evita sobrescrever entrega de jornada/resumo com check-in genérico.
+    const profiles = (profilesRaw || []).filter((p: any) => {
+      if (p.pending_insight) {
+        console.log(`⏭️ Skip ${p.name || p.user_id}: pending_insight ainda não entregue`);
+        return false;
+      }
+      if (p.last_content_sent_at && new Date(p.last_content_sent_at) > sixHoursAgo) {
+        console.log(`⏭️ Skip ${p.name || p.user_id}: conteúdo enviado <6h atrás`);
+        return false;
+      }
+      return true;
+    });
+
+    console.log(`📋 Found ${profilesRaw?.length || 0} candidates → ${profiles.length} eligible after pending/recent-content guard`);
 
     let sentCount = 0;
     const dryRunResults: any[] = [];
