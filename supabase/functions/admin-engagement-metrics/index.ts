@@ -254,6 +254,26 @@ Deno.serve(async (req) => {
 
     const totalCacheSavings = Math.round(costBreakdownByModel.reduce((s, m) => s + m.cacheSavings, 0) * 100) / 100;
 
+    // BRL conversion (USD → BRL at ~5.10) and daily-cost alert
+    const USD_TO_BRL = 5.10;
+    const totalCostBRL = Math.round(totalCostUSD * USD_TO_BRL * 100) / 100;
+    const avgDailyCostUSD = Math.round((totalCostUSD / periodDays) * 100) / 100;
+    const avgDailyCostBRL = Math.round(avgDailyCostUSD * USD_TO_BRL * 100) / 100;
+    // Alert threshold: R$30/day
+    const dailyCostAlertBRL = 30;
+    const costAlertActive = avgDailyCostBRL > dailyCostAlertBRL;
+
+    // Cache hit rate (cached_tokens / total_input_tokens)
+    let totalPromptTokens = 0;
+    let totalCachedTokens = 0;
+    for (const log of tokenLogs) {
+      totalPromptTokens += (log.prompt_tokens as number) || 0;
+      totalCachedTokens += (log.cached_tokens as number) || 0;
+    }
+    const cacheHitRate = totalPromptTokens > 0
+      ? Math.round((totalCachedTokens / totalPromptTokens) * 1000) / 10
+      : 0;
+
     // ========== TRIAL & CONVERSION METRICS ==========
     // Real trials = profiles with trial_started_at AND plan IS NOT NULL (had card registered)
     // This excludes: legacy profiles and trials without card
@@ -592,6 +612,12 @@ Deno.serve(async (req) => {
       avgDailyMessagesPerUser,
       // Cost
       totalCostUSD,
+      totalCostBRL,
+      avgDailyCostUSD,
+      avgDailyCostBRL,
+      dailyCostAlertBRL,
+      costAlertActive,
+      cacheHitRate,
       avgCostPerActiveUser,
       costBreakdownByModel,
       totalCacheSavings,
