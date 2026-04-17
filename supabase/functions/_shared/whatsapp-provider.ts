@@ -9,7 +9,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendTextMessage, sendAudioMessage, sendAudioFromUrl as zapiSendAudioFromUrl, type ZapiConfig } from "./zapi-client.ts";
-import { sendFreeText, sendAudioFromUrl as twilioSendAudioFromUrl, sendProactiveMessage, type TemplateCategory, type ProactiveMessageResult } from "./whatsapp-official.ts";
+import { sendFreeText, sendAudioFromUrl as twilioSendAudioFromUrl, sendProactiveMessage, sendTemplateOnly, type TemplateCategory, type ProactiveMessageResult } from "./whatsapp-official.ts";
 
 // ============================================================================
 // PROVIDER DETECTION
