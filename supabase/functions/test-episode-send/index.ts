@@ -8,6 +8,29 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const TEMPLATE_TEST_DEDUPE_WINDOW_MS = 90 * 1000;
+
+function getTemplateTestLockKey(userId: string, episodeId: string): string {
+  return `test_episode_send:${userId}:${episodeId}:template`;
+}
+
+function getLockSentAt(value: unknown): string | null {
+  if (!value) return null;
+  if (typeof value === 'string') return value;
+  if (typeof value === 'object' && value !== null && 'sent_at' in value) {
+    const sentAt = (value as { sent_at?: unknown }).sent_at;
+    return typeof sentAt === 'string' ? sentAt : null;
+  }
+  return null;
+}
+
+function wasSentRecently(sentAt: string | null): boolean {
+  if (!sentAt) return false;
+  const sentMs = new Date(sentAt).getTime();
+  if (Number.isNaN(sentMs)) return false;
+  return Date.now() - sentMs < TEMPLATE_TEST_DEDUPE_WINDOW_MS;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -25,6 +48,36 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     console.log(`🧪 Test: Generating episode for user ${user_id} (force_template=${force_template})`);
+
+    if (force_template) {
+      const lockKey = getTemplateTestLockKey(user_id, episode_id);
+      const { data: existingLock, error: lockError } = await supabase
+        .from('system_config')
+        .select('value')
+        .eq('key', lockKey)
+        .maybeSingle();
+
+      if (lockError) {
+        console.warn(`⚠️ [Force Template] Could not read dedupe lock ${lockKey}:`, lockError);
+      }
+
+      const lastSentAt = getLockSentAt(existingLock?.value);
+      if (wasSentRecently(lastSentAt)) {
+        const secondsAgo = Math.round((Date.now() - new Date(lastSentAt!).getTime()) / 1000);
+        console.warn(`⛔ [Force Template] Duplicate blocked for ${lockKey}. Last send ${secondsAgo}s ago.`);
+
+        return new Response(JSON.stringify({
+          success: false,
+          mode: 'force_template',
+          duplicate_blocked: true,
+          retry_after_seconds: Math.max(1, Math.ceil((TEMPLATE_TEST_DEDUPE_WINDOW_MS - (Date.now() - new Date(lastSentAt!).getTime())) / 1000)),
+          error: `Template de teste já foi enviado há ${secondsAgo}s. Bloqueado para evitar duplicidade.`,
+        }), {
+          status: 409,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
 
     // Invoke generate-episode-manifesto with teaser enabled
     const { data: manifestoData, error: manifestoError } = await supabase.functions.invoke('generate-episode-manifesto', {
@@ -75,6 +128,22 @@ serve(async (req) => {
           status: 502,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
+      }
+
+      const lockKey = getTemplateTestLockKey(user_id, episode_id);
+      const { error: lockWriteError } = await supabase
+        .from('system_config')
+        .upsert({
+          key: lockKey,
+          value: {
+            sent_at: new Date().toISOString(),
+            phone: cleanPhone,
+            mode: 'force_template',
+          },
+        }, { onConflict: 'key' });
+
+      if (lockWriteError) {
+        console.warn(`⚠️ [Force Template] Could not persist dedupe lock ${lockKey}:`, lockWriteError);
       }
 
       console.log(`✅ [Force Template] Template sent via ${sendResult.provider}`);
