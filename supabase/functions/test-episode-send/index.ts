@@ -14,7 +14,7 @@ serve(async (req) => {
   }
 
   try {
-    const { user_id, episode_id, phone } = await req.json();
+    const { user_id, episode_id, phone, force_template = false } = await req.json();
 
     if (!user_id || !episode_id || !phone) {
       throw new Error('user_id, episode_id and phone are required');
@@ -46,6 +46,21 @@ serve(async (req) => {
       console.warn('⚠️ Could not save pending_insight [CONTENT]:', e);
     }
 
+    // Optionally force template path by temporarily clearing last_user_message_at
+    let originalLastUserMessageAt: string | null = null;
+    if (force_template) {
+      const { data: prof } = await supabase
+        .from('profiles')
+        .select('last_user_message_at')
+        .eq('user_id', user_id)
+        .single();
+      originalLastUserMessageAt = prof?.last_user_message_at || null;
+      // Set to 48h ago to force 24h window closed → template path
+      const fakeOld = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+      await supabase.from('profiles').update({ last_user_message_at: fakeOld }).eq('user_id', user_id);
+      console.log(`🔧 Temporarily set last_user_message_at to ${fakeOld} to force template`);
+    }
+
     const cleanPhone = cleanPhoneNumber(phone);
     const sendResult = await sendProactive(
       cleanPhone,
@@ -55,6 +70,12 @@ serve(async (req) => {
       undefined,
       manifestoData.teaser || undefined
     );
+
+    // Restore original last_user_message_at
+    if (force_template && originalLastUserMessageAt) {
+      await supabase.from('profiles').update({ last_user_message_at: originalLastUserMessageAt }).eq('user_id', user_id);
+      console.log(`🔧 Restored last_user_message_at to ${originalLastUserMessageAt}`);
+    }
 
     console.log(`✅ Message sent via ${sendResult.provider}`);
 
