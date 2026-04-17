@@ -1,56 +1,52 @@
 
-Objetivo: corrigir o teste para que ele envie o template da Jornada de forma garantida, e não “fingir” template enquanto na prática manda a mensagem pós-template direto.
 
-O que encontrei
-- O `test-episode-send` hoje chama `sendProactive(...)` mesmo quando `force_template = true`.
-- Esse `force_template` só mexe em `last_user_message_at` para simular janela de 24h fechada.
-- Só que o `sendProactive(...)` ainda depende do provider ativo em `system_config.whatsapp_provider`.
-- Se o provider ativo estiver em `zapi`, ele ignora completamente a lógica de template/janela e manda texto direto.
-- Ou seja: o teste atual não garante template. Ele só “tenta” induzir o caminho de template.
-- Além disso, o teste não falha quando sai como `freetext`; então ele pode aparentar sucesso mesmo mandando a coisa errada.
+## Diagnóstico
 
-Diagnóstico mais provável
-1. O provider ativo no ambiente de teste/produção está em `zapi`, então `force_template` nunca terá efeito real.
-2. Mesmo se o provider estiver `official`, o endpoint de teste está mal desenhado porque continua usando uma função “automática”, em vez de um caminho “template-only”.
+O link do episódio enviado pelo WhatsApp é:
+```
+https://olaaura.com.br/episodio/{id}?u={userId}
+```
 
-Plano de correção
-1. Auditar o estado real antes de mexer
-- Verificar o valor atual de `system_config.whatsapp_provider`.
-- Verificar logs mais recentes de `test-episode-send` para confirmar se o envio saiu como `template` ou `freetext`.
-- Verificar se a categoria `content` está apontando para o template `jornada_disponivel` ativo.
+No `Episode.tsx` o botão de voltar (`Meu Espaço`) só funciona corretamente se houver `?t=<portalToken>` na URL — caso contrário cai em `window.history.back()`, que não leva a nada quando o usuário acabou de abrir o link direto do WhatsApp. Hoje o link nunca traz `t`, então o usuário fica preso na tela do episódio.
 
-2. Tornar o teste determinístico
-- Refatorar `test-episode-send` para ter um modo explícito de teste de template, sem depender de janela de 24h nem de roteamento automático.
-- Em vez de usar `sendProactive(...)` no teste, chamar um caminho dedicado de “enviar template oficial agora”.
-- Esse caminho deve enviar o `jornada_disponivel` diretamente e só usar o `pending_insight` para a mensagem que virá após o clique.
+Mesmo problema acontece no portal: ao clicar em um episódio dentro de `JornadasTab`, abrimos `?u=<userId>` em nova aba e perdemos o token do portal.
 
-3. Falhar fechado quando não for template
-- Se o usuário pedir teste de template, a função deve retornar erro se o envio não sair como `template`.
-- Incluir no retorno/log:
-  - provider ativo
-  - categoria/template usado
-  - tipo real do envio (`template` vs `freetext`)
-  - motivo do fallback, se houver
+## Plano de correção
 
-4. Reduzir chance de regressão
-- Extrair um helper claro para “template-only send” no módulo compartilhado de WhatsApp.
-- Manter `sendProactive(...)` para fluxos normais automáticos.
-- Usar o helper novo apenas em cenários de QA/teste/manual resend onde template precisa ser obrigatório.
+### 1. Sempre incluir o `portalToken` no link do episódio enviado pelo WhatsApp
+Em `supabase/functions/generate-episode-manifesto/index.ts`:
+- Buscar (ou criar via upsert) o `user_portal_tokens.token` do usuário, igual já fazem `weekly-report`, `start-trial`, `stripe-webhook` e `deliver-time-capsule`.
+- Montar o link como:
+  ```
+  https://olaaura.com.br/episodio/{episodeId}?u={userId}&t={portalToken}
+  ```
+- Manter `u` por compatibilidade (final de jornada / escolha da próxima jornada continua usando `u`).
 
-5. Validar ponta a ponta
-- Reenviar o template da Jornada para o Eduardo usando o novo caminho determinístico.
-- Confirmar que no WhatsApp chega o template com botão.
-- Depois validar que o clique no botão continua disparando a entrega do `pending_insight` pelo fast-path já implantado.
+### 2. Preservar o token do portal ao abrir um episódio a partir do `JornadasTab`
+Em `src/components/portal/JornadasTab.tsx`:
+- Receber o `portalToken` por prop (vindo de `UserPortal.tsx`, que já tem o `token` da URL).
+- Ao clicar num episódio, abrir `/episodio/{id}?u={userId}&t={portalToken}`.
 
-Arquivos que devem entrar
-- `supabase/functions/test-episode-send/index.ts`
-- `supabase/functions/_shared/whatsapp-provider.ts`
-- `supabase/functions/_shared/whatsapp-official.ts`
+### 3. Passar o token de `UserPortal` para `JornadasTab`
+Em `src/pages/UserPortal.tsx`:
+- Repassar o `token` que já está em `searchParams` como prop `portalToken` ao `<JornadasTab />`.
 
-Sem mudanças de banco
-- Não vejo necessidade de migration ou ajuste de RLS para esse problema.
+### 4. (Opcional, mas recomendado) Tornar o botão "Meu Espaço" sempre visível quando houver `userId`
+Em `src/pages/Episode.tsx`:
+- Quando só temos `u` (sem `t`), buscar o token do portal pelo `userId` (a tabela `user_portal_tokens` já tem RLS público de leitura por chave) e usá-lo no botão de voltar.
+- Isso protege links antigos que ainda estão no histórico do WhatsApp dos usuários.
 
-Resultado esperado
-- Quando pedirmos “mandar o template para testar”, o sistema enviará obrigatoriamente o template de verdade.
-- Se não conseguir enviar template, vai acusar erro explícito em vez de mandar a mensagem pós-template e confundir o teste.
-- Isso também cria uma base segura para testar outros fluxos com botão, como relatório semanal e boas-vindas.
+### Arquivos afetados
+- `supabase/functions/generate-episode-manifesto/index.ts` — incluir `&t=<portalToken>` no link
+- `src/components/portal/JornadasTab.tsx` — receber e propagar `portalToken`
+- `src/pages/UserPortal.tsx` — passar `portalToken` para `JornadasTab`
+- `src/pages/Episode.tsx` — fallback que busca o token via `userId` quando só vier `u`
+
+### Sem mudanças de banco
+A tabela `user_portal_tokens` já existe com token único por usuário e RLS adequado.
+
+### Resultado esperado
+- Todo link de episódio enviado pelo WhatsApp passará a abrir já com o contexto do portal. O botão "Meu Espaço" no topo levará o usuário direto ao painel `/meu-espaco?t=...&tab=jornadas`.
+- Dentro do portal, abrir um episódio mantém o contexto e permite voltar com um clique.
+- Links antigos sem `t` continuam funcionando porque o `Episode.tsx` recupera o token a partir do `userId`.
+
