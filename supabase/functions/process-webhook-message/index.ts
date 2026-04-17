@@ -866,27 +866,17 @@ Deno.serve(async (req) => {
     const isSessionActive = agentData.session_active === true;
     const shouldEnableFollowup = conversationStatus === 'awaiting' || isSessionActive;
 
-    const { data: existingFollowup } = await supabase
-      .from('conversation_followups')
-      .select('conversation_context')
-      .eq('user_id', profile.user_id)
-      .maybeSingle();
-
-    const existingContext = existingFollowup?.conversation_context;
-    const hasGoodContext = existingContext && existingContext.length > 15 &&
-      !['ok', 'legal', 'beleza', 'sim', 'não'].includes(existingContext.toLowerCase());
-
+    // Context is always cleared so conversation-followup regenerates it fresh
+    // from the current messages via AI — prevents old topics leaking across sessions.
     await supabase
       .from('conversation_followups')
       .upsert({
         user_id: profile.user_id,
         last_user_message_at: shouldEnableFollowup ? now : null,
         followup_count: shouldEnableFollowup ? 0 : 99,
-        conversation_context: shouldEnableFollowup
-          ? (hasGoodContext ? existingContext : messageText.substring(0, 200))
-          : null,
+        conversation_context: null,
       }, { onConflict: 'user_id' });
-    console.log(`📍 Conversation tracking updated - status: ${conversationStatus}, sessionActive: ${isSessionActive}, followup: ${shouldEnableFollowup}, preservedContext: ${hasGoodContext}`);
+    console.log(`📍 Conversation tracking updated - status: ${conversationStatus}, sessionActive: ${isSessionActive}, followup: ${shouldEnableFollowup}`);
 
     // ========================================================================
     // SEND RESPONSE MESSAGES (with interruption check)
