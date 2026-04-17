@@ -36,6 +36,12 @@ interface Metrics {
   avgDailyMessagesPerUser: number;
   // Cost
   totalCostUSD: number;
+  totalCostBRL: number;
+  avgDailyCostUSD: number;
+  avgDailyCostBRL: number;
+  dailyCostAlertBRL: number;
+  costAlertActive: boolean;
+  cacheHitRate: number;
   avgCostPerActiveUser: number;
   costBreakdownByModel: CostBreakdown[];
   totalCacheSavings: number;
@@ -475,15 +481,31 @@ export default function AdminEngagement() {
                       <DollarSign className="h-4 w-4" />
                       Custo de IA no Período
                     </h2>
-                    <div className="grid grid-cols-3 gap-3">
+                    {/* Daily cost alert */}
+                    {metrics.costAlertActive && (
+                      <div className="border border-destructive/50 bg-destructive/10 rounded-md px-3 py-2 text-xs text-destructive">
+                        ⚠️ Custo diário médio (R${(metrics.avgDailyCostBRL ?? 0).toFixed(2)}) acima do limite de R${metrics.dailyCostAlertBRL ?? 30}/dia
+                      </div>
+                    )}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                       <Card>
                         <CardHeader className="flex flex-row items-center justify-between p-3 pb-1">
                           <CardTitle className="text-xs font-medium text-muted-foreground">Custo Total</CardTitle>
                           <DollarSign className="h-3.5 w-3.5 text-muted-foreground" />
                         </CardHeader>
                         <CardContent className="p-3 pt-0">
-                          <div className="text-xl font-bold text-foreground">${(metrics.totalCostUSD ?? 0).toFixed(2)}</div>
-                          <p className="text-[11px] text-muted-foreground">{periodLabel}</p>
+                          <div className="text-xl font-bold text-foreground">R${(metrics.totalCostBRL ?? 0).toFixed(2)}</div>
+                          <p className="text-[11px] text-muted-foreground">${(metrics.totalCostUSD ?? 0).toFixed(2)} • {periodLabel}</p>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardHeader className="flex flex-row items-center justify-between p-3 pb-1">
+                          <CardTitle className="text-xs font-medium text-muted-foreground">Custo/Dia</CardTitle>
+                          <DollarSign className="h-3.5 w-3.5 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent className="p-3 pt-0">
+                          <div className={`text-xl font-bold ${metrics.costAlertActive ? 'text-destructive' : 'text-foreground'}`}>R${(metrics.avgDailyCostBRL ?? 0).toFixed(2)}</div>
+                          <p className="text-[11px] text-muted-foreground">limite: R${metrics.dailyCostAlertBRL ?? 30}/dia</p>
                         </CardContent>
                       </Card>
                       <Card>
@@ -498,12 +520,12 @@ export default function AdminEngagement() {
                       </Card>
                       <Card>
                         <CardHeader className="flex flex-row items-center justify-between p-3 pb-1">
-                          <CardTitle className="text-xs font-medium text-muted-foreground">Cache Savings</CardTitle>
+                          <CardTitle className="text-xs font-medium text-muted-foreground">Cache Hit Rate</CardTitle>
                           <TrendingUp className="h-3.5 w-3.5 text-muted-foreground" />
                         </CardHeader>
                         <CardContent className="p-3 pt-0">
-                          <div className="text-xl font-bold text-green-600">${(metrics.totalCacheSavings ?? 0).toFixed(2)}</div>
-                          <p className="text-[11px] text-muted-foreground">vs. sem cache</p>
+                          <div className="text-xl font-bold text-green-600">{(metrics.cacheHitRate ?? 0).toFixed(1)}%</div>
+                          <p className="text-[11px] text-muted-foreground">economia: ${(metrics.totalCacheSavings ?? 0).toFixed(2)}</p>
                         </CardContent>
                       </Card>
                     </div>
