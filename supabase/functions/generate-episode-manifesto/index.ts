@@ -111,11 +111,49 @@ Te espero. 💜${optOutNotice}`;
     if (generate_teaser) {
       console.log('📎 Generating teaser + short link for episode');
 
+      // Buscar (ou criar) o token do portal do usuário para que o link
+      // do episódio já abra com contexto e o botão "Meu Espaço" funcione.
+      let portalToken: string | null = null;
+      try {
+        const { data: existingToken } = await supabase
+          .from('user_portal_tokens')
+          .select('token')
+          .eq('user_id', user_id)
+          .maybeSingle();
+
+        if (existingToken?.token) {
+          portalToken = existingToken.token as string;
+        } else {
+          const { data: newToken, error: insertError } = await supabase
+            .from('user_portal_tokens')
+            .insert({ user_id })
+            .select('token')
+            .single();
+          if (insertError) {
+            console.warn('⚠️ Falha ao criar portal token:', insertError.message);
+          } else {
+            portalToken = newToken?.token as string;
+          }
+        }
+      } catch (tokenErr) {
+        console.warn('⚠️ Erro inesperado ao resolver portal token:', tokenErr);
+      }
+
       // Build the page URL using the custom domain
       const siteUrl = 'https://olaaura.com.br';
-      const episodePageUrl = isLastEpisode && user_id
-        ? `${siteUrl}/episodio/${episode_id}?u=${user_id}`
-        : `${siteUrl}/episodio/${episode_id}`;
+      const params = new URLSearchParams();
+      // Mantém `u` por compatibilidade (final de jornada precisa do user_id)
+      // ou para qualquer link que envolva escolha da próxima jornada.
+      if (isLastEpisode && user_id) {
+        params.set('u', user_id);
+      } else if (user_id) {
+        params.set('u', user_id);
+      }
+      if (portalToken) {
+        params.set('t', portalToken);
+      }
+      const query = params.toString();
+      const episodePageUrl = `${siteUrl}/episodio/${episode_id}${query ? `?${query}` : ''}`;
       shortUrl = episodePageUrl;
 
       teaser = `Oi ${userName}. 💜

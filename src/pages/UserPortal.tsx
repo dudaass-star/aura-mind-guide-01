@@ -131,7 +131,7 @@ const UserPortal = () => {
 
         {/* Content */}
         <div className="flex-1 max-w-2xl mx-auto w-full px-5 py-6">
-          {activeTab === "jornadas" && <JornadasTab userId={userId!} profile={profile} />}
+          {activeTab === "jornadas" && <JornadasTab userId={userId!} profile={profile} portalToken={token!} />}
           {activeTab === "resumos" && <ResumosTab userId={userId!} />}
           {activeTab === "meditacoes" && <MeditacoesTab />}
           {activeTab === "capsulas" && <CapsulasTab userId={userId!} />}

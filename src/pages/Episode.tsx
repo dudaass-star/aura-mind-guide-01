@@ -27,6 +27,25 @@ const Episode = () => {
   const [confirmed, setConfirmed] = useState(false);
   const [chosenJourneyId, setChosenJourneyId] = useState<string | null>(null);
 
+  // Fallback: se a URL trouxer apenas `u` (links antigos do WhatsApp),
+  // buscamos o portal token a partir do user_id para que o botão
+  // "Meu Espaço" continue levando o usuário ao painel.
+  const { data: fallbackPortalToken } = useQuery({
+    queryKey: ["episode-portal-token", userId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("user_portal_tokens")
+        .select("token")
+        .eq("user_id", userId!)
+        .maybeSingle();
+      if (error) throw error;
+      return data?.token as string | undefined;
+    },
+    enabled: !!userId && !portalToken,
+  });
+
+  const effectivePortalToken = portalToken || fallbackPortalToken || null;
+
   const { data: episode, isLoading, error } = useQuery({
     queryKey: ["episode", id],
     queryFn: async () => {
@@ -81,7 +100,7 @@ const Episode = () => {
     onSuccess: () => setConfirmed(true),
   });
 
-  const hasBackLink = portalToken || userId;
+  const hasBackLink = effectivePortalToken || userId;
 
   if (isLoading) {
     return (
@@ -149,8 +168,8 @@ const Episode = () => {
               {hasBackLink && (
                 <button
                   onClick={() => {
-                    if (portalToken) {
-                      window.location.href = `/meu-espaco?t=${portalToken}&tab=jornadas`;
+                    if (effectivePortalToken) {
+                      window.location.href = `/meu-espaco?t=${effectivePortalToken}&tab=jornadas`;
                     } else {
                       window.history.back();
                     }
