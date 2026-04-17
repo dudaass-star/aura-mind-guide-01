@@ -180,13 +180,17 @@ serve(async (req) => {
             }
 
             const message = manifestoResult.message;
+            const teaser = manifestoResult.teaser as string | undefined;
 
-            // Save full content as pending_insight with [CONTENT] marker.
-            // If the 24h window is closed, the template `jornada_disponivel` will be sent;
-            // when the user clicks the Quick Reply button, aura-agent delivers this content.
+            // Save TEASER (com link curto para o episódio) como pending_insight.
+            // Quando a janela de 24h estiver fechada, o template `jornada_disponivel`
+            // é enviado; ao clicar no botão "Acessar", o fast-path do aura-agent
+            // entrega APENAS o teaser+link — o conteúdo completo está no /episodio/{id}.
+            // Fallback para `message` apenas se o teaser não foi gerado.
+            const pendingPayload = teaser && teaser.trim().length > 0 ? teaser : message;
             try {
               await supabase.from('profiles').update({
-                pending_insight: `[CONTENT]${message}`,
+                pending_insight: `[CONTENT]${pendingPayload}`,
               }).eq('user_id', user.user_id);
             } catch (e) {
               console.warn('⚠️ Could not save pending_insight [CONTENT]:', e);

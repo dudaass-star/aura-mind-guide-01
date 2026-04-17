@@ -90,10 +90,15 @@ serve(async (req) => {
 
     console.log(`✅ Episode generated (teaser: ${manifestoData.teaser ? 'yes' : 'no'})`);
 
-    // Save full content as pending_insight with [CONTENT] marker for button click delivery
+    // Save TEASER (com link curto) como pending_insight.
+    // Quando o usuário clicar em "Acessar" no template, recebe apenas o teaser+link
+    // — o conteúdo completo da jornada vive no /episodio/{id}.
+    const pendingPayload = manifestoData.teaser && String(manifestoData.teaser).trim().length > 0
+      ? manifestoData.teaser
+      : manifestoData.message;
     try {
       await supabase.from('profiles').update({
-        pending_insight: `[CONTENT]${manifestoData.message}`,
+        pending_insight: `[CONTENT]${pendingPayload}`,
       }).eq('user_id', user_id);
     } catch (e) {
       console.warn('⚠️ Could not save pending_insight [CONTENT]:', e);
