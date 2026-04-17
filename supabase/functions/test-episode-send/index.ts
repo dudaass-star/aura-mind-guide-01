@@ -14,7 +14,7 @@ serve(async (req) => {
   }
 
   try {
-    const { user_id, episode_id, phone } = await req.json();
+    const { user_id, episode_id, phone, force_template = false } = await req.json();
 
     if (!user_id || !episode_id || !phone) {
       throw new Error('user_id, episode_id and phone are required');
