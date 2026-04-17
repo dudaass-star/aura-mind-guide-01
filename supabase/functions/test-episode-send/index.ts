@@ -37,6 +37,15 @@ serve(async (req) => {
 
     console.log(`✅ Episode generated (teaser: ${manifestoData.teaser ? 'yes' : 'no'}), sending via provider...`);
 
+    // Save full content as pending_insight with [CONTENT] marker for button click delivery
+    try {
+      await supabase.from('profiles').update({
+        pending_insight: `[CONTENT]${manifestoData.message}`,
+      }).eq('user_id', user_id);
+    } catch (e) {
+      console.warn('⚠️ Could not save pending_insight [CONTENT]:', e);
+    }
+
     const cleanPhone = cleanPhoneNumber(phone);
     const sendResult = await sendProactive(
       cleanPhone,
