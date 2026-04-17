@@ -7,9 +7,10 @@ import { SectionHeader, EmptyState } from "./shared";
 interface JornadasTabProps {
   userId: string;
   profile: any;
+  portalToken?: string;
 }
 
-export function JornadasTab({ userId, profile }: JornadasTabProps) {
+export function JornadasTab({ userId, profile, portalToken }: JornadasTabProps) {
   const currentJourneyId = profile?.current_journey_id;
   const currentEpisode = profile?.current_episode || 0;
   const [expandedJourney, setExpandedJourney] = useState<string | null>(currentJourneyId || null);
@@ -155,7 +156,10 @@ export function JornadasTab({ userId, profile }: JornadasTabProps) {
                       }`}
                       style={{ animationDelay: `${epIdx * 50}ms` }}
                       onClick={() => {
-                        if (isUnlocked) window.open(`/episodio/${ep.id}?u=${userId}`, "_blank");
+                        if (!isUnlocked) return;
+                        const params = new URLSearchParams({ u: userId });
+                        if (portalToken) params.set("t", portalToken);
+                        window.open(`/episodio/${ep.id}?${params.toString()}`, "_blank");
                       }}
                     >
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${isUnlocked ? "bg-accent/10 text-accent" : "bg-muted text-muted-foreground"}`}>
