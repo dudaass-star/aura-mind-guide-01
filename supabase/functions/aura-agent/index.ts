@@ -3534,6 +3534,80 @@ serve(async (req) => {
         .eq('id', profile.id);
     }
 
+    // ========================================================================
+    // FAST-PATH DETERMINÍSTICO: entrega direta de pending_insight ao clicar em Quick Reply
+    // ========================================================================
+    // Quando o usuário clica em botão de template (jornada_disponivel, weekly_report, welcome),
+    // a mensagem chega como texto curto (ex: "Acessar", "Ver", "Começar").
+    // Entregamos o conteúdo do pending_insight DIRETO via WhatsApp, sem passar pelo LLM,
+    // garantindo entrega mesmo se o Gemini falhar, atrasar ou ignorar a instrução.
+    // ========================================================================
+    if (profile?.pending_insight && message && phone) {
+      const pi = profile.pending_insight as string;
+      const isContent = pi.startsWith('[CONTENT]');
+      const isWeeklyReport = pi.startsWith('[WEEKLY_REPORT]');
+      const isWelcomePending = pi.startsWith('[WELCOME]');
+      const userMsgNormalized = String(message).trim().toLowerCase();
+      // Mensagens curtas / cliques de Quick Reply (até 30 chars com palavras-chave)
+      const isButtonClick =
+        userMsgNormalized.length <= 30 &&
+        /\b(acessar|ver|abrir|começar|comecar|come[çc]ar|resumo|conte[úu]do|jornada|sim)\b/i.test(userMsgNormalized);
+
+      if (isButtonClick && (isContent || isWeeklyReport || isWelcomePending)) {
+        const marker = isContent ? '[CONTENT]' : isWeeklyReport ? '[WEEKLY_REPORT]' : '[WELCOME]';
+        const directContent = pi.replace(marker, '').trim();
+        console.log(`⚡ [FAST-PATH] Deterministic delivery of ${marker} for user ${profile.user_id} (msg="${userMsgNormalized}")`);
+
+        try {
+          // Garantir uso da instância correta (caso ainda usemos Z-API em algum perfil)
+          let instanceConfig = undefined;
+          try {
+            instanceConfig = await getInstanceConfigForUser(supabase, profile.user_id);
+          } catch (_) { /* fallback to default */ }
+
+          const cleanPhone = cleanPhoneNumber(phone);
+          const sendResult = await sendMessage(cleanPhone, directContent, instanceConfig);
+
+          if (sendResult.success) {
+            // Salvar como mensagem da assistente, limpar pending_insight, marcar last_content_sent_at
+            await Promise.all([
+              supabase.from('messages').insert({
+                user_id: profile.user_id,
+                role: 'assistant',
+                content: directContent,
+              }),
+              supabase.from('profiles').update({
+                pending_insight: null,
+                last_content_sent_at: new Date().toISOString(),
+              }).eq('id', profile.id),
+              supabase.from('aura_response_state').update({
+                is_responding: false,
+                pending_content: null,
+                pending_context: null,
+              }).eq('user_id', profile.user_id),
+            ]);
+
+            console.log(`✅ [FAST-PATH] Delivered ${marker} directly via ${sendResult.provider} — skipping LLM`);
+
+            return new Response(
+              JSON.stringify({
+                fastPath: true,
+                marker,
+                provider: sendResult.provider,
+                response: directContent,
+              }),
+              { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          } else {
+            console.error(`❌ [FAST-PATH] sendMessage failed: ${sendResult.error}. Falling back to LLM flow.`);
+            // continua para o fluxo normal do LLM (que também tem o handler de pending_insight)
+          }
+        } catch (fastPathError) {
+          console.error('❌ [FAST-PATH] Unexpected error, falling back to LLM:', fastPathError);
+        }
+      }
+    }
+
     // Verificar se precisa resetar sessões mensais
     const nowDate = new Date();
     const currentMonth = `${nowDate.getFullYear()}-${String(nowDate.getMonth() + 1).padStart(2, '0')}-01`;
