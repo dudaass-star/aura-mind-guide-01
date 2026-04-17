@@ -142,6 +142,32 @@ export async function sendProactive(
 }
 
 /**
+ * Envio determinístico de template oficial (QA / reenvio manual).
+ * - Ignora janela de 24h.
+ * - Ignora `system_config.whatsapp_provider` (sempre via API oficial Twilio).
+ * - Falha fechado se o template não estiver ativo.
+ *
+ * Use APENAS em testes manuais e ferramentas de QA — fluxos automáticos
+ * devem continuar usando `sendProactive(...)`.
+ */
+export async function sendForcedTemplate(
+  phone: string,
+  templateCategory: TemplateCategory,
+  userId?: string,
+  templateVariables?: string[],
+): Promise<SendResult & { type?: 'template' | 'freetext' }> {
+  return withRetry(async () => {
+    const result = await sendTemplateOnly(phone, templateCategory, userId, templateVariables);
+    return {
+      success: result.success,
+      provider: 'official' as WhatsAppProvider,
+      error: result.error,
+      type: result.type,
+    };
+  }, `sendForcedTemplate(${templateCategory},${phone.substring(0, 4)}***)`);
+}
+
+/**
  * Envia áudio usando o provider ativo.
  * API oficial NÃO suporta base64 — apenas URLs públicas.
  */
