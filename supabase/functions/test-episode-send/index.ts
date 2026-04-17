@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { sendProactive } from "../_shared/whatsapp-provider.ts";
+import { sendProactive, sendForcedTemplate } from "../_shared/whatsapp-provider.ts";
 import { cleanPhoneNumber } from "../_shared/zapi-client.ts";
 
 const corsHeaders = {
@@ -24,7 +24,7 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    console.log(`🧪 Test: Generating episode for user ${user_id}`);
+    console.log(`🧪 Test: Generating episode for user ${user_id} (force_template=${force_template})`);
 
     // Invoke generate-episode-manifesto with teaser enabled
     const { data: manifestoData, error: manifestoError } = await supabase.functions.invoke('generate-episode-manifesto', {
@@ -35,7 +35,7 @@ serve(async (req) => {
       throw new Error(`Manifesto generation failed: ${manifestoError?.message || manifestoData?.error}`);
     }
 
-    console.log(`✅ Episode generated (teaser: ${manifestoData.teaser ? 'yes' : 'no'}), sending via provider...`);
+    console.log(`✅ Episode generated (teaser: ${manifestoData.teaser ? 'yes' : 'no'})`);
 
     // Save full content as pending_insight with [CONTENT] marker for button click delivery
     try {
@@ -46,22 +46,56 @@ serve(async (req) => {
       console.warn('⚠️ Could not save pending_insight [CONTENT]:', e);
     }
 
-    // Optionally force template path by temporarily clearing last_user_message_at
-    let originalLastUserMessageAt: string | null = null;
+    const cleanPhone = cleanPhoneNumber(phone);
+
+    // ─────────────────────────────────────────────────────────────────────
+    // FORCE_TEMPLATE: caminho determinístico — envia o template oficial
+    // jornada_disponivel diretamente, sem depender de janela de 24h nem
+    // do provider ativo. Falha fechado se não sair como template.
+    // ─────────────────────────────────────────────────────────────────────
     if (force_template) {
-      const { data: prof } = await supabase
-        .from('profiles')
-        .select('last_user_message_at')
-        .eq('user_id', user_id)
-        .single();
-      originalLastUserMessageAt = prof?.last_user_message_at || null;
-      // Set to 48h ago to force 24h window closed → template path
-      const fakeOld = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
-      await supabase.from('profiles').update({ last_user_message_at: fakeOld }).eq('user_id', user_id);
-      console.log(`🔧 Temporarily set last_user_message_at to ${fakeOld} to force template`);
+      console.log(`🎯 [Force Template] Sending jornada_disponivel via deterministic path`);
+
+      const sendResult = await sendForcedTemplate(
+        cleanPhone,
+        'content',
+        user_id,
+      );
+
+      if (!sendResult.success || sendResult.type !== 'template') {
+        const reason = sendResult.error || `Unexpected send type: ${sendResult.type}`;
+        console.error(`❌ [Force Template] Failed: ${reason}`);
+        return new Response(JSON.stringify({
+          success: false,
+          mode: 'force_template',
+          provider: sendResult.provider,
+          send_type: sendResult.type,
+          error: reason,
+        }), {
+          status: 502,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      console.log(`✅ [Force Template] Template sent via ${sendResult.provider}`);
+      return new Response(JSON.stringify({
+        success: true,
+        mode: 'force_template',
+        provider: sendResult.provider,
+        send_type: sendResult.type,
+        template_category: 'content',
+        episode: manifestoData.stage_title,
+        episode_number: manifestoData.episode_number,
+        had_teaser: !!manifestoData.teaser,
+        note: 'Template enviado. O conteúdo rico está em pending_insight e será entregue quando o usuário clicar no botão "Acessar".',
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
-    const cleanPhone = cleanPhoneNumber(phone);
+    // ─────────────────────────────────────────────────────────────────────
+    // Caminho normal: roteamento automático (janela 24h + provider ativo)
+    // ─────────────────────────────────────────────────────────────────────
     const sendResult = await sendProactive(
       cleanPhone,
       manifestoData.message,
@@ -71,16 +105,11 @@ serve(async (req) => {
       manifestoData.teaser || undefined
     );
 
-    // Restore original last_user_message_at
-    if (force_template && originalLastUserMessageAt) {
-      await supabase.from('profiles').update({ last_user_message_at: originalLastUserMessageAt }).eq('user_id', user_id);
-      console.log(`🔧 Restored last_user_message_at to ${originalLastUserMessageAt}`);
-    }
-
     console.log(`✅ Message sent via ${sendResult.provider}`);
 
-    return new Response(JSON.stringify({ 
+    return new Response(JSON.stringify({
       success: true,
+      mode: 'auto',
       provider: sendResult.provider,
       episode: manifestoData.stage_title,
       episode_number: manifestoData.episode_number,
@@ -92,9 +121,9 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('❌ Test error:', error);
-    return new Response(JSON.stringify({ 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
+    return new Response(JSON.stringify({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

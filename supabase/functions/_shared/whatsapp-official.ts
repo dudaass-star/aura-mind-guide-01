@@ -260,6 +260,69 @@ export async function sendAudioFromUrl(phone: string, audioUrl: string): Promise
 }
 
 // ============================================================================
+// TEMPLATE-ONLY SENDER (QA / forced template path)
+// ============================================================================
+
+/**
+ * Envia OBRIGATORIAMENTE um template aprovado, sem checar janela de 24h
+ * nem fazer fallback para texto livre. Usado para QA e reenvio manual
+ * onde o teste precisa validar que o template (com botões) chegou de fato.
+ *
+ * Falha fechado: se o template não estiver ativo / sem ContentSid, retorna erro.
+ */
+export async function sendTemplateOnly(
+  phone: string,
+  templateCategory: TemplateCategory,
+  userId?: string,
+  templateVariables?: string[],
+): Promise<ProactiveMessageResult> {
+  try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    const { data: templateConfig } = await supabase
+      .from('whatsapp_templates')
+      .select('template_name, twilio_content_sid, is_active')
+      .eq('category', templateCategory)
+      .single();
+
+    if (!templateConfig) {
+      return { success: false, parts: 0, type: 'template', error: `Template category "${templateCategory}" not found` };
+    }
+    if (!templateConfig.is_active) {
+      return { success: false, parts: 0, type: 'template', error: `Template "${templateCategory}" is not active` };
+    }
+    const contentSid = templateConfig.twilio_content_sid;
+    if (!contentSid) {
+      return { success: false, parts: 0, type: 'template', error: `Template "${templateCategory}" has no ContentSid configured` };
+    }
+
+    // Resolve variables: explicit > first name > "there"
+    let variables = templateVariables ?? [];
+    if (variables.length === 0 && userId) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('name')
+        .eq('user_id', userId)
+        .single();
+      const firstName = profile?.name ? profile.name.split(' ')[0] : 'there';
+      variables = [firstName];
+    }
+    if (variables.length === 0) variables = ['there'];
+
+    console.log(`📨 [Twilio][TemplateOnly] Sending "${templateConfig.template_name}" (${contentSid}) to ${phone.substring(0, 4)}*** with vars=${JSON.stringify(variables)}`);
+
+    const result = await sendTemplateMessage(phone, contentSid, variables);
+    return { success: result.success, parts: 1, type: 'template', error: result.error };
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : 'Unknown error';
+    console.error(`❌ [Twilio][TemplateOnly] error: ${msg}`);
+    return { success: false, parts: 0, type: 'template', error: msg };
+  }
+}
+
+// ============================================================================
 // PROACTIVE MESSAGE SENDER
 // ============================================================================
 

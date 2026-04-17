@@ -9,7 +9,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendTextMessage, sendAudioMessage, sendAudioFromUrl as zapiSendAudioFromUrl, type ZapiConfig } from "./zapi-client.ts";
-import { sendFreeText, sendAudioFromUrl as twilioSendAudioFromUrl, sendProactiveMessage, type TemplateCategory, type ProactiveMessageResult } from "./whatsapp-official.ts";
+import { sendFreeText, sendAudioFromUrl as twilioSendAudioFromUrl, sendProactiveMessage, sendTemplateOnly, type TemplateCategory, type ProactiveMessageResult } from "./whatsapp-official.ts";
 
 // ============================================================================
 // PROVIDER DETECTION
@@ -139,6 +139,32 @@ export async function sendProactive(
     const result: ProactiveMessageResult = await sendProactiveMessage(phone, text, templateCategory, userId, teaserText, templateVariables);
     return { success: result.success, provider: 'official', error: result.error };
   }, `sendProactive(${phone.substring(0, 4)}***)`);
+}
+
+/**
+ * Envio determinístico de template oficial (QA / reenvio manual).
+ * - Ignora janela de 24h.
+ * - Ignora `system_config.whatsapp_provider` (sempre via API oficial Twilio).
+ * - Falha fechado se o template não estiver ativo.
+ *
+ * Use APENAS em testes manuais e ferramentas de QA — fluxos automáticos
+ * devem continuar usando `sendProactive(...)`.
+ */
+export async function sendForcedTemplate(
+  phone: string,
+  templateCategory: TemplateCategory,
+  userId?: string,
+  templateVariables?: string[],
+): Promise<SendResult & { type?: 'template' | 'freetext' }> {
+  return withRetry(async () => {
+    const result = await sendTemplateOnly(phone, templateCategory, userId, templateVariables);
+    return {
+      success: result.success,
+      provider: 'official' as WhatsAppProvider,
+      error: result.error,
+      type: result.type,
+    };
+  }, `sendForcedTemplate(${templateCategory},${phone.substring(0, 4)}***)`);
 }
 
 /**
