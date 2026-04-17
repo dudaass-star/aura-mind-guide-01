@@ -144,9 +144,7 @@ Te espero. 💜${optOutNotice}`;
       const params = new URLSearchParams();
       // Mantém `u` por compatibilidade (final de jornada precisa do user_id)
       // ou para qualquer link que envolva escolha da próxima jornada.
-      if (isLastEpisode && user_id) {
-        params.set('u', user_id);
-      } else if (user_id) {
+      if (user_id) {
         params.set('u', user_id);
       }
       if (portalToken) {
