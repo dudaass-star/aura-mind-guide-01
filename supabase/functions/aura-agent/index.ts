@@ -479,15 +479,22 @@ async function callAI(
       }));
     }
 
-    console.log('✅ Gemini native API success, cached_tokens:', cachedTokens, 'prompt:', usage.promptTokenCount, 'completion:', usage.candidatesTokenCount);
+    // CRITICAL: Gemini 2.5 Pro charges thinking tokens as OUTPUT ($10/M)
+    // Without this, we underreport real cost by 2-3x
+    const thoughtsTokens = usage.thoughtsTokenCount || 0;
+    const candidatesTokens = usage.candidatesTokenCount || 0;
+    const totalCompletionTokens = candidatesTokens + thoughtsTokens;
+
+    console.log('✅ Gemini native API success, cached_tokens:', cachedTokens, 'prompt:', usage.promptTokenCount, 'completion:', candidatesTokens, 'thoughts:', thoughtsTokens);
 
     return {
       choices: [{ message: { role: 'assistant', content: text }, finish_reason: candidate?.finishReason === 'STOP' ? 'stop' : (candidate?.finishReason || 'stop') }],
       usage: {
         prompt_tokens: usage.promptTokenCount || 0,
-        completion_tokens: usage.candidatesTokenCount || 0,
+        completion_tokens: totalCompletionTokens,
         total_tokens: usage.totalTokenCount || 0,
         prompt_tokens_details: { cached_tokens: cachedTokens },
+        completion_tokens_details: { reasoning_tokens: thoughtsTokens },
       },
     };
   }
@@ -736,16 +743,18 @@ Apenas o JSON, sem markdown.`;
     const result = await response.json();
     const text = result.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
 
-    // Log token usage
+    // Log token usage (include thinking tokens as completion)
     const usage = result.usageMetadata;
     if (usage && supabase) {
+      const thoughts = usage.thoughtsTokenCount || 0;
+      const candidates = usage.candidatesTokenCount || 0;
       supabase.from('token_usage_logs').insert({
         user_id: userId,
         function_name: 'aura-agent',
         call_type: 'action_extraction',
         model: 'gemini-2.5-flash-lite',
         prompt_tokens: usage.promptTokenCount || 0,
-        completion_tokens: usage.candidatesTokenCount || 0,
+        completion_tokens: candidates + thoughts,
         total_tokens: usage.totalTokenCount || 0,
         cached_tokens: 0,
       }).then(null, (e: any) => console.error('Token log error:', e));
@@ -1515,16 +1524,18 @@ Use a função extract_analysis para retornar os dados.`;
 
     const result = await response.json();
     
-    // Log token usage
+    // Log token usage (include thinking tokens as completion)
     const usage = result.usageMetadata;
     if (usage) {
+      const thoughts = usage.thoughtsTokenCount || 0;
+      const candidates = usage.candidatesTokenCount || 0;
       supabase.from('token_usage_logs').insert({
         user_id: userId,
         function_name: 'aura-agent',
         call_type: 'post_conversation_analysis',
         model: 'gemini-2.5-flash-lite',
         prompt_tokens: usage.promptTokenCount || 0,
-        completion_tokens: usage.candidatesTokenCount || 0,
+        completion_tokens: candidates + thoughts,
         total_tokens: usage.totalTokenCount || 0,
         cached_tokens: 0,
       }).then(null, (e: any) => console.error('Token log error:', e));
