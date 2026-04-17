@@ -135,7 +135,65 @@ serve(async (req) => {
     if (existingCustomer) {
       customerId = existingCustomer.id;
       logStep("Found existing customer", { customerId });
-      
+
+      // === ANTI-DUPLICAÇÃO: bloquear se já existe assinatura ativa ===
+      // Verifica TODOS os customers que batem por phone OU email (não só o primeiro)
+      // para evitar caso de customers duplicados com sub ativa em qualquer um deles.
+      try {
+        const customersToCheck = new Map<string, true>();
+        customersToCheck.set(customerId, true);
+
+        // Buscar TODOS por email (pode haver mais de um customer com mesmo email)
+        if (email) {
+          const allByEmail = await stripe.customers.list({ email, limit: 10 });
+          for (const c of allByEmail.data) customersToCheck.set(c.id, true);
+        }
+        // Buscar TODOS por variações de telefone
+        for (const phoneVar of phoneVariations) {
+          const allByPhone = await stripe.customers.search({
+            query: `metadata['phone']:'${phoneVar}'`,
+            limit: 10,
+          });
+          for (const c of allByPhone.data) customersToCheck.set(c.id, true);
+        }
+
+        logStep("Anti-dup: checking active subscriptions", { customerCount: customersToCheck.size });
+
+        for (const cid of customersToCheck.keys()) {
+          const subs = await stripe.subscriptions.list({
+            customer: cid,
+            status: 'active',
+            limit: 5,
+          });
+          const trialing = await stripe.subscriptions.list({
+            customer: cid,
+            status: 'trialing',
+            limit: 5,
+          });
+          if (subs.data.length > 0 || trialing.data.length > 0) {
+            const activeSub = subs.data[0] || trialing.data[0];
+            logStep("⛔ Anti-dup: active subscription found", {
+              customerId: cid,
+              subscriptionId: activeSub.id,
+              status: activeSub.status,
+            });
+            return new Response(JSON.stringify({
+              error: "Você já possui uma assinatura ativa da AURA. Acesse seu WhatsApp ou entre em contato com o suporte.",
+              code: "ACTIVE_SUBSCRIPTION_EXISTS",
+            }), {
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+              status: 409,
+            });
+          }
+        }
+        logStep("✅ Anti-dup: no active subscription, OK to proceed");
+      } catch (dupErr) {
+        // Não-bloqueante: se a checagem falhar, prosseguir (não queremos quebrar o checkout por isso)
+        const msg = dupErr instanceof Error ? dupErr.message : String(dupErr);
+        if (msg.includes("ACTIVE_SUBSCRIPTION_EXISTS")) throw dupErr;
+        console.warn("⚠️ Anti-dup check failed (non-blocking):", msg);
+      }
+
       await stripe.customers.update(customerId, {
         email: email,
         name: name,
