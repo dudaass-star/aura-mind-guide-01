@@ -181,6 +181,17 @@ serve(async (req) => {
 
             const message = manifestoResult.message;
 
+            // Save full content as pending_insight with [CONTENT] marker.
+            // If the 24h window is closed, the template `jornada_disponivel` will be sent;
+            // when the user clicks the Quick Reply button, aura-agent delivers this content.
+            try {
+              await supabase.from('profiles').update({
+                pending_insight: `[CONTENT]${message}`,
+              }).eq('user_id', user.user_id);
+            } catch (e) {
+              console.warn('⚠️ Could not save pending_insight [CONTENT]:', e);
+            }
+
             const cleanPhone = cleanPhoneNumber(user.phone);
             const sendResult = await sendProactive(
               cleanPhone,
