@@ -791,6 +791,7 @@ Deno.serve(async (req) => {
 
     // RETRY STRATEGY: attempt 1 (normal) → attempt 2 (normal) → attempt 3 (minimal context)
     let lastError: any = null;
+    console.log(`🚀 [INVOKE] aura-agent for user=${profile.user_id} phone=${cleanPhone.substring(0, 4)}*** msgLen=${messageText.length} pending_insight=${profile.pending_insight ? 'YES' : 'no'}`);
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
         const useMinimal = attempt === 3;
@@ -810,6 +811,18 @@ Deno.serve(async (req) => {
     }
 
     if (lastError || !agentData) {
+      // Log estruturado para debug futuro de invocações que falham silenciosamente
+      try {
+        await supabase.from('failed_message_log').insert({
+          user_id: profile.user_id,
+          phone: cleanPhone,
+          content: messageText.substring(0, 500),
+          error: `aura-agent invoke failed after 3 attempts: ${lastError?.message || 'no agentData'}`,
+          function_name: 'process-webhook-message',
+        });
+      } catch (logErr) {
+        console.error('⚠️ Failed to write failed_message_log:', logErr);
+      }
       throw lastError || new Error('All 3 aura-agent attempts failed');
     }
 
