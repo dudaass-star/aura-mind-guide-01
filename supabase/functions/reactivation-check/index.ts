@@ -113,7 +113,8 @@ Deno.serve(async (req) => {
           const zapiConfig = await getInstanceConfigForUser(supabase, tp.user_id);
           const cleanPhone = cleanPhoneNumber(tp.phone!);
           const trialNome = tp.name?.split(' ')[0] || 'você';
-          const result = await sendProactive(cleanPhone, nudgeMessage, 'reactivation', tp.user_id, undefined, undefined, [trialNome]);
+          // Reativação consolidada na categoria 'checkin' (template cheking_7dias)
+          const result = await sendProactive(cleanPhone, nudgeMessage, 'checkin', tp.user_id, undefined, undefined, [trialNome]);
 
           if (result.success) {
             await supabase
@@ -204,7 +205,8 @@ Estou aqui por você. ✨`;
           const zapiConfig = await getInstanceConfigForUser(supabase, session.user_id);
           const cleanPhone = cleanPhoneNumber(profile.phone);
           const missedNome = profile.name?.split(' ')[0] || 'você';
-          const result = await sendProactive(cleanPhone, message, 'reactivation', session.user_id, undefined, undefined, [missedNome]);
+          // Reativação consolidada na categoria 'checkin' (template cheking_7dias)
+          const result = await sendProactive(cleanPhone, message, 'checkin', session.user_id, undefined, undefined, [missedNome]);
 
           if (result.success) {
             await supabase

@@ -78,7 +78,8 @@ Deno.serve(async (req) => {
             );
 
             const cleanPhone = cleanPhoneNumber(user.phone);
-            const result = await sendProactive(cleanPhone, message, 'reactivation', user.user_id);
+            // Reativação consolidada na categoria 'checkin' (template cheking_7dias)
+            const result = await sendProactive(cleanPhone, message, 'checkin', user.user_id);
 
             if (result.success) {
               await supabase
