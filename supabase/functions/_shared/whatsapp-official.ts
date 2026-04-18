@@ -14,6 +14,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 // TYPES
 // ============================================================================
 
+// Categorias ativas alinhadas com a realidade do plano semanal → mensal:
+// - Não existe mais 'trial gratuito', então 'welcome_trial' foi removido.
+// - 'welcome' único cobre boas-vindas pós-pagamento (semanal e mensal).
 export type TemplateCategory =
   | 'checkin'
   | 'content'
@@ -21,7 +24,6 @@ export type TemplateCategory =
   | 'insight'
   | 'reactivation'
   | 'welcome'
-  | 'welcome_trial'
   | 'reconnect'
   | 'access_blocked';
 
