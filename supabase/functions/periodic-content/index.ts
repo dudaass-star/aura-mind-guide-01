@@ -53,13 +53,22 @@ serve(async (req) => {
     const fallbackThreshold = new Date();
     fallbackThreshold.setTime(fallbackThreshold.getTime() - (48 * 60 * 60 * 1000));
 
+    // BUG FIX: also include profiles with last_content_sent_at IS NULL (newly onboarded
+    // users who never received content). The previous `.lte(...)` filter dropped NULLs
+    // because `NULL <= timestamp` evaluates to NULL in Postgres, not true.
+    // Guard: only fallback for profiles older than 24h (avoids assigning a journey
+    // before the welcome flow completes).
+    const minProfileAge = new Date();
+    minProfileAge.setTime(minProfileAge.getTime() - (24 * 60 * 60 * 1000));
+
     const { data: pendingUsers } = await supabase
       .from('profiles')
-      .select('id, user_id, name, journeys_completed, last_content_sent_at')
+      .select('id, user_id, name, journeys_completed, last_content_sent_at, created_at')
       .in('status', ['active', 'trial'])
       .is('current_journey_id', null)
       .not('phone', 'is', null)
-      .lte('last_content_sent_at', fallbackThreshold.toISOString());
+      .lte('created_at', minProfileAge.toISOString())
+      .or(`last_content_sent_at.is.null,last_content_sent_at.lte.${fallbackThreshold.toISOString()}`);
 
     if (pendingUsers && pendingUsers.length > 0) {
       console.log(`⏰ Found ${pendingUsers.length} users pending journey choice (48h+ elapsed)`);

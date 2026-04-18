@@ -270,6 +270,9 @@ Deno.serve(async (req) => {
                 needs_schedule_setup: sessionsCount > 0,
                 trial_started_at: new Date().toISOString(),
                 trial_phase: 'listening',
+                current_journey_id: 'j1-ansiedade',
+                current_episode: 0,
+                last_content_sent_at: null,
                 ...(instanceId && { whatsapp_instance_id: instanceId }),
               });
               console.log('✅ Trial profile created');
@@ -518,6 +521,9 @@ Deno.serve(async (req) => {
               messages_today: 0,
               last_message_date: today,
               needs_schedule_setup: sessionsCount > 0,
+              current_journey_id: 'j1-ansiedade',
+              current_episode: 0,
+              last_content_sent_at: null,
               ...(isTrial && { trial_started_at: new Date().toISOString(), trial_phase: 'listening' }),
               ...(instanceId && { whatsapp_instance_id: instanceId }),
               ...(planExpiresAt && { plan_expires_at: planExpiresAt }),
