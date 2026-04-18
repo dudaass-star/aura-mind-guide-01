@@ -113,6 +113,7 @@ Deno.serve(async (req) => {
         plan: null,
         current_journey_id: 'j1-ansiedade',
         current_episode: 0,
+        last_content_sent_at: null,
         whatsapp_instance_id: instanceId,
       })
       .select()
