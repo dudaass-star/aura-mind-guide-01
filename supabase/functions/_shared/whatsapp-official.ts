@@ -14,18 +14,18 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 // TYPES
 // ============================================================================
 
-// Categorias ativas alinhadas com a realidade do plano semanal → mensal:
-// - Não existe mais 'trial gratuito', então 'welcome_trial' foi removido.
-// - 'welcome' único cobre boas-vindas pós-pagamento (semanal e mensal).
+// Categorias ativas alinhadas com a estratégia atual:
+// - Plano semanal pago vira mensal automático -> só 'welcome' (sem welcome_trial).
+// - Follow-up/insight só rodam em janela 24h aberta -> texto livre, dispensa template.
+// - Reativação foi absorvida pelo 'checkin' (template cheking_7dias).
+// - access_blocked / dunning agora vai por email.
 export type TemplateCategory =
   | 'checkin'
   | 'content'
   | 'weekly_report'
-  | 'insight'
-  | 'reactivation'
   | 'welcome'
   | 'reconnect'
-  | 'access_blocked';
+  | 'session_reminder';
 
 export interface TwilioSendResult {
   success: boolean;

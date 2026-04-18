@@ -514,7 +514,8 @@ Deno.serve(async (req) => {
 
         // Send via WhatsApp with instance routing
         const instanceConfig = await getInstanceConfigForUser(supabase, followup.user_id);
-        const sendResult = await sendProactive(profile.phone, message, 'followup', followup.user_id);
+        // Follow-up só roda em janela 24h aberta -> texto livre (categoria 'checkin' como fallback se janela fechou)
+        const sendResult = await sendProactive(profile.phone, message, 'checkin', followup.user_id);
 
         if (sendResult.success) {
           console.log(`✅ Follow-up sent successfully`);
