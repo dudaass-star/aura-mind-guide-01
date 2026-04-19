@@ -632,13 +632,21 @@ export default function AdminEngagement() {
                         {metrics.churnRate}%
                       </div>
                       <div className="text-sm text-muted-foreground">
-                        {metrics.canceledInPeriod} usuários / {metrics.activeAtPeriodStart} ativos no início
+                        {metrics.canceledInPeriod} usuários (banco) / {metrics.activeAtPeriodStart} ativos no início
                       </div>
                     </div>
+                    {(metrics.totalChurnFromStripe ?? 0) > 0 && (
+                      <div className="mt-2 text-xs text-muted-foreground">
+                        🔎 <strong>Stripe (30d real):</strong> {metrics.totalChurnFromStripe} cancelamentos · {metrics.voluntaryChurnLive ?? 0} voluntários + {metrics.involuntaryChurnLive ?? 0} involuntários
+                      </div>
+                    )}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4 text-xs">
                       <div className="border rounded-md p-2.5 bg-muted/30">
-                        <div className="text-muted-foreground mb-1">🟦 Voluntário (cancelaram)</div>
-                        <div className="font-semibold text-foreground">{metrics.voluntaryChurnInPeriod} · {metrics.voluntaryChurnRate}%</div>
+                        <div className="text-muted-foreground mb-1">🟦 Voluntário (Stripe 30d)</div>
+                        <div className="font-semibold text-foreground">{metrics.voluntaryChurnLive ?? metrics.voluntaryChurnInPeriod}</div>
+                        <div className="text-[10px] text-muted-foreground mt-1">
+                          inclui Portal Stripe · banco: {metrics.voluntaryChurnInPeriod}
+                        </div>
                       </div>
                       <div className="border rounded-md p-2.5 bg-yellow-500/10 border-yellow-500/30">
                         <div className="text-muted-foreground mb-1">🟡 Em risco ≤7d (recuperável)</div>
@@ -651,13 +659,27 @@ export default function AdminEngagement() {
                         <div className="text-[10px] text-muted-foreground mt-1">R$ {(metrics.mrrAtRiskCriticalBRL ?? 0).toFixed(2)} · Stripe ainda tentando</div>
                       </div>
                       <div className="border rounded-md p-2.5 bg-destructive/10 border-destructive/30">
-                        <div className="text-muted-foreground mb-1">🔴 Churn involuntário (30d)</div>
+                        <div className="text-muted-foreground mb-1">🔴 Churn involuntário (Stripe 30d)</div>
                         <div className="font-semibold text-destructive">{metrics.involuntaryChurnLive ?? 0}</div>
                         <div className="text-[10px] text-muted-foreground mt-1">canceladas pelo Stripe por falha de pagamento</div>
                       </div>
                     </div>
+                    {metrics.stripeChurnReasons && Object.keys(metrics.stripeChurnReasons).length > 0 && (
+                      <div className="mt-3 p-2.5 border rounded-md bg-muted/20">
+                        <div className="text-[11px] font-medium text-muted-foreground mb-1.5">Razões de cancelamento (Stripe, últimos 30d):</div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {Object.entries(metrics.stripeChurnReasons)
+                            .sort(([, a], [, b]) => b - a)
+                            .map(([reason, count]) => (
+                              <span key={reason} className="text-[10px] px-2 py-0.5 rounded-full bg-background border">
+                                <strong>{count}</strong> · {reason}
+                              </span>
+                            ))}
+                        </div>
+                      </div>
+                    )}
                     <p className="text-[11px] text-muted-foreground mt-3">
-                      💡 Stripe Smart Retries tenta recuperar pagamentos por até ~4 semanas antes de cancelar. Enquanto status = <code>past_due</code>, ainda é recuperável. Só conta como churn involuntário quando o Stripe efetivamente cancela (<code>canceled</code> + <code>cancellation_details.reason = payment_failed</code>).
+                      💡 <strong>Stripe é fonte da verdade</strong> e captura cancelamentos via Portal Stripe que não passam pelo nosso UI. Banco interno (cancellation_feedback) só registra cancelamentos feitos no app. Stripe Smart Retries tenta recuperar pagamentos por até ~4 semanas antes de cancelar.
                     </p>
                   </CardContent>
                 </Card>
