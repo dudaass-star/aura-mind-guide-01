@@ -805,21 +805,43 @@ Deno.serve(async (req) => {
       totalBRL: Math.round((data.committed + data.weekly) / 100 * 100) / 100,
     })).sort((a, b) => b.totalBRL - a.totalBRL);
 
-    // ========== 🎯 ACTIVATION RATE ==========
+    // ========== 🎯 ACTIVATION RATE (uses true first message, not last) ==========
     const { data: activePayingProfiles } = await supabase
       .from('profiles')
-      .select('plan, status, trial_started_at, converted_at, created_at, last_user_message_at')
+      .select('user_id, plan, status, trial_started_at, converted_at, created_at')
       .in('status', ['active', 'trial']);
 
     const payingUsers = (activePayingProfiles || []).filter(p => p.trial_started_at);
+    const payingUserIds = payingUsers.map(p => p.user_id as string);
+
+    // Fetch FIRST user message per user (paginated, to bypass 1000-row limit)
+    const firstMsgByUser = new Map<string, string>();
+    if (payingUserIds.length > 0) {
+      const allUserMsgs = await fetchAllPaginated(
+        supabase,
+        'messages',
+        'user_id, created_at',
+        [{ column: 'role', op: 'eq', value: 'user' }]
+      );
+      for (const m of allUserMsgs) {
+        const uid = m.user_id as string;
+        const ts = m.created_at as string;
+        const existing = firstMsgByUser.get(uid);
+        if (!existing || ts < existing) {
+          firstMsgByUser.set(uid, ts);
+        }
+      }
+    }
+
     const activatedUsers = payingUsers.filter(p => {
-      if (!p.last_user_message_at || !p.created_at) return false;
+      const firstMsgTs = firstMsgByUser.get(p.user_id as string);
+      if (!firstMsgTs || !p.created_at) return false;
       const created = new Date(p.created_at as string).getTime();
-      const firstMsg = new Date(p.last_user_message_at as string).getTime();
+      const firstMsg = new Date(firstMsgTs).getTime();
       const diffDays = (firstMsg - created) / (1000 * 60 * 60 * 24);
-      return diffDays <= 3;
+      return diffDays <= 3 && diffDays >= 0;
     });
-    const silentPayers = payingUsers.filter(p => !p.last_user_message_at);
+    const silentPayers = payingUsers.filter(p => !firstMsgByUser.has(p.user_id as string));
     const activationRate = payingUsers.length > 0
       ? Math.round(activatedUsers.length / payingUsers.length * 1000) / 10
       : 0;
