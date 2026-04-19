@@ -514,25 +514,36 @@ export default function AdminEngagement() {
                   </CardHeader>
                   <CardContent>
                     <div className="text-4xl font-bold text-foreground">R$ {metrics.mrrTotalBRL.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                    <div className="text-[11px] text-muted-foreground mt-1">
+                      {metrics.activeSubscriptionsCount} assinaturas ativas
+                      {(metrics.monthlyActiveSubscriptionsCount !== undefined || metrics.weeklyActiveSubscriptionsCount !== undefined) && (
+                        <> ({metrics.monthlyActiveSubscriptionsCount ?? 0} mensais/anuais + {metrics.weeklyActiveSubscriptionsCount ?? 0} semanais)</>
+                      )}
+                    </div>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-3 text-xs">
                       <div>
                         <span className="text-muted-foreground">Comprometido (mensal/anual): </span>
                         <div className="font-semibold text-foreground">R$ {metrics.mrrCommittedBRL.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                        <div className="text-[10px] text-muted-foreground">{metrics.activeSubscriptionsCount} assinaturas ativas</div>
+                        <div className="text-[10px] text-muted-foreground">{metrics.monthlyActiveSubscriptionsCount ?? metrics.activeSubscriptionsCount} assinaturas mensais/anuais</div>
                       </div>
                       <div>
                         <span className="text-muted-foreground">Semanal anualizado: </span>
                         <div className="font-semibold text-foreground">R$ {metrics.mrrWeeklyEquivBRL.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                        <div className="text-[10px] text-muted-foreground">trial pago × 4.33</div>
+                        <div className="text-[10px] text-muted-foreground">{metrics.weeklyActiveSubscriptionsCount ?? 0} semanais × 4.33 (Stripe trialing = semanal pago)</div>
                       </div>
                       <div>
                         <span className="text-muted-foreground">⚠️ Em risco (past_due): </span>
                         <div className={`font-semibold ${metrics.mrrAtRiskBRL > 0 ? 'text-destructive' : 'text-foreground'}`}>R$ {metrics.mrrAtRiskBRL.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                        <div className="text-[10px] text-muted-foreground">{metrics.pastDueSubscriptionsCount} assinaturas com cobrança falha</div>
+                        <div className="text-[10px] text-muted-foreground">
+                          {metrics.pastDueSubscriptionsCount} cobranças falhas
+                          {(metrics.mrrAtRiskMonthlyBRL !== undefined && metrics.mrrAtRiskWeeklyBRL !== undefined && (metrics.mrrAtRiskMonthlyBRL > 0 || metrics.mrrAtRiskWeeklyBRL > 0)) && (
+                            <> · R$ {metrics.mrrAtRiskMonthlyBRL.toFixed(0)} mensais + R$ {metrics.mrrAtRiskWeeklyBRL.toFixed(0)} semanais</>
+                          )}
+                        </div>
                       </div>
                     </div>
                     <p className="text-[11px] text-muted-foreground mt-3">
-                      💡 Dados buscados em tempo real do Stripe. "Em risco" = past_due (Stripe ainda tentando cobrar).
+                      💡 Dados em tempo real do Stripe. Inclui status <code>active</code>, <code>trialing</code> (semanal pago) e <code>past_due</code>. Valores reais (<code>unit_amount</code>) por assinatura.
                     </p>
                   </CardContent>
                 </Card>
