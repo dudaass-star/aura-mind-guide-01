@@ -105,7 +105,11 @@ interface Metrics {
   mrrWeeklyEquivBRL: number;
   mrrTotalBRL: number;
   mrrAtRiskBRL: number;
+  mrrAtRiskMonthlyBRL?: number;
+  mrrAtRiskWeeklyBRL?: number;
   activeSubscriptionsCount: number;
+  monthlyActiveSubscriptionsCount?: number;
+  weeklyActiveSubscriptionsCount?: number;
   pastDueSubscriptionsCount: number;
   mrrBreakdown: { plan: string; users: number; committedBRL: number; weeklyEquivBRL: number; totalBRL: number }[];
   // 🎯 Activation
