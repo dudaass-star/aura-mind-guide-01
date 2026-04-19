@@ -96,6 +96,8 @@ interface Metrics {
   churnRateLegacy: number;
   activeAtPeriodStart: number;
   paymentAtRiskCount: number;
+  pastDueRecentCount?: number;
+  pastDueCriticalCount?: number;
   involuntaryChurnLive?: number;
   recoveryRate: number;
   totalPaymentFailedAllTime: number;
@@ -106,6 +108,8 @@ interface Metrics {
   mrrWeeklyEquivBRL: number;
   mrrTotalBRL: number;
   mrrAtRiskBRL: number;
+  mrrAtRiskRecentBRL?: number;
+  mrrAtRiskCriticalBRL?: number;
   mrrAtRiskMonthlyBRL?: number;
   mrrAtRiskWeeklyBRL?: number;
   activeSubscriptionsCount: number;
@@ -533,15 +537,19 @@ export default function AdminEngagement() {
                         <div className="text-[10px] text-muted-foreground">{metrics.weeklyActiveSubscriptionsCount ?? 0} semanais × 4.33 (Stripe trialing = semanal pago)</div>
                       </div>
                       <div>
-                        <span className="text-muted-foreground">⚠️ Em risco (past_due ≤7d): </span>
+                        <span className="text-muted-foreground">⚠️ Em risco (past_due no Stripe): </span>
                         <div className={`font-semibold ${metrics.mrrAtRiskBRL > 0 ? 'text-destructive' : 'text-foreground'}`}>R$ {metrics.mrrAtRiskBRL.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
                         <div className="text-[10px] text-muted-foreground">
-                          {metrics.pastDueSubscriptionsCount} cobranças em dunning ativo
+                          {metrics.pastDueSubscriptionsCount} cobranças (Stripe tenta recuperar por ~30d)
                           {(metrics.mrrAtRiskMonthlyBRL !== undefined && metrics.mrrAtRiskWeeklyBRL !== undefined && (metrics.mrrAtRiskMonthlyBRL > 0 || metrics.mrrAtRiskWeeklyBRL > 0)) && (
                             <> · R$ {metrics.mrrAtRiskMonthlyBRL.toFixed(0)} mensais + R$ {metrics.mrrAtRiskWeeklyBRL.toFixed(0)} semanais</>
                           )}
-                          {(metrics.involuntaryChurnLive ?? 0) > 0 && (
-                            <div className="mt-1 text-destructive/80">+{metrics.involuntaryChurnLive} past_due &gt;7d (já é churn, não conta aqui)</div>
+                          {((metrics.pastDueRecentCount ?? 0) > 0 || (metrics.pastDueCriticalCount ?? 0) > 0) && (
+                            <div className="mt-1">
+                              🟡 ≤7d: {metrics.pastDueRecentCount ?? 0} (R$ {(metrics.mrrAtRiskRecentBRL ?? 0).toFixed(0)})
+                              {' · '}
+                              🟠 &gt;7d: {metrics.pastDueCriticalCount ?? 0} (R$ {(metrics.mrrAtRiskCriticalBRL ?? 0).toFixed(0)})
+                            </div>
                           )}
                         </div>
                       </div>
@@ -624,30 +632,29 @@ export default function AdminEngagement() {
                         {metrics.canceledInPeriod} usuários / {metrics.activeAtPeriodStart} ativos no início
                       </div>
                     </div>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-4 text-xs">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4 text-xs">
                       <div className="border rounded-md p-2.5 bg-muted/30">
                         <div className="text-muted-foreground mb-1">🟦 Voluntário (cancelaram)</div>
                         <div className="font-semibold text-foreground">{metrics.voluntaryChurnInPeriod} · {metrics.voluntaryChurnRate}%</div>
                       </div>
-                      <div className="border rounded-md p-2.5 bg-muted/30">
-                        <div className="text-muted-foreground mb-1">🟥 Involuntário no período (cartão falhou 7d+)</div>
-                        <div className="font-semibold text-destructive">{metrics.involuntaryChurnInPeriod} · {metrics.involuntaryChurnRate}%</div>
-                      </div>
                       <div className="border rounded-md p-2.5 bg-yellow-500/10 border-yellow-500/30">
-                        <div className="text-muted-foreground mb-1">🟧 Em recuperação ativa (≤7d)</div>
-                        <div className="font-semibold text-yellow-700 dark:text-yellow-500">{metrics.paymentAtRiskCount}</div>
-                        <div className="text-[10px] text-muted-foreground mt-1">past_due no Stripe, dentro da janela de dunning</div>
+                        <div className="text-muted-foreground mb-1">🟡 Em risco ≤7d (recuperável)</div>
+                        <div className="font-semibold text-yellow-700 dark:text-yellow-500">{metrics.pastDueRecentCount ?? 0}</div>
+                        <div className="text-[10px] text-muted-foreground mt-1">R$ {(metrics.mrrAtRiskRecentBRL ?? 0).toFixed(2)} · dunning recente</div>
+                      </div>
+                      <div className="border rounded-md p-2.5 bg-orange-500/10 border-orange-500/30">
+                        <div className="text-muted-foreground mb-1">🟠 Em risco crítico &gt;7d</div>
+                        <div className="font-semibold text-orange-700 dark:text-orange-500">{metrics.pastDueCriticalCount ?? 0}</div>
+                        <div className="text-[10px] text-muted-foreground mt-1">R$ {(metrics.mrrAtRiskCriticalBRL ?? 0).toFixed(2)} · Stripe ainda tentando</div>
+                      </div>
+                      <div className="border rounded-md p-2.5 bg-destructive/10 border-destructive/30">
+                        <div className="text-muted-foreground mb-1">🔴 Churn involuntário (30d)</div>
+                        <div className="font-semibold text-destructive">{metrics.involuntaryChurnLive ?? 0}</div>
+                        <div className="text-[10px] text-muted-foreground mt-1">canceladas pelo Stripe por falha de pagamento</div>
                       </div>
                     </div>
-                    {(metrics.involuntaryChurnLive ?? 0) > 0 && (
-                      <div className="mt-3 border rounded-md p-2.5 bg-destructive/5 border-destructive/30 text-xs">
-                        <div className="text-muted-foreground mb-1">⚠️ Cobranças velhas no Stripe (past_due &gt;7d ainda não canceladas)</div>
-                        <div className="font-semibold text-destructive">{metrics.involuntaryChurnLive} assinaturas — já são churn involuntário de fato</div>
-                        <div className="text-[10px] text-muted-foreground mt-1">Stripe ainda não as cancelou (configure Smart Retries para "Cancel after X days"). Não contam em "Em risco" nem no MRR.</div>
-                      </div>
-                    )}
                     <p className="text-[11px] text-muted-foreground mt-3">
-                      💡 "Em risco" só conta past_due dentro da janela de 7 dias do dunning. Após isso, vira churn involuntário automaticamente.
+                      💡 Stripe Smart Retries tenta recuperar pagamentos por até ~4 semanas antes de cancelar. Enquanto status = <code>past_due</code>, ainda é recuperável. Só conta como churn involuntário quando o Stripe efetivamente cancela (<code>canceled</code> + <code>cancellation_details.reason = payment_failed</code>).
                     </p>
                   </CardContent>
                 </Card>
