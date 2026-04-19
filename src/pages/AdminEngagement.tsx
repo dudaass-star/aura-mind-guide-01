@@ -85,17 +85,28 @@ interface Metrics {
   trialsToPaidSuccess: number;
   weeklyPlansExpired: number;
   trialToPaidRate: number;
-  // Cancellation
+  // Cancellation (voluntary + involuntary)
   canceledInPeriod: number;
+  voluntaryChurnInPeriod: number;
+  involuntaryChurnInPeriod: number;
   pausedInPeriod: number;
   churnRate: number;
+  voluntaryChurnRate: number;
+  involuntaryChurnRate: number;
   churnRateLegacy: number;
   activeAtPeriodStart: number;
+  paymentAtRiskCount: number;
+  recoveryRate: number;
+  totalPaymentFailedAllTime: number;
+  recoveredPayments: number;
   cancellationReasons: { reason: string; action_taken: string; count: number }[];
-  // 💰 Revenue & MRR
+  // 💰 Revenue & MRR (Stripe-sourced)
   mrrCommittedBRL: number;
   mrrWeeklyEquivBRL: number;
   mrrTotalBRL: number;
+  mrrAtRiskBRL: number;
+  activeSubscriptionsCount: number;
+  pastDueSubscriptionsCount: number;
   mrrBreakdown: { plan: string; users: number; committedBRL: number; weeklyEquivBRL: number; totalBRL: number }[];
   // 🎯 Activation
   activationRate: number;
