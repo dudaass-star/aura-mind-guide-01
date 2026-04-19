@@ -794,6 +794,8 @@ Deno.serve(async (req) => {
     const mrrWeeklyEquivBRL = Math.round(weeklyRevenueCents / 100 * 100) / 100;
     const mrrTotalBRL = Math.round(mrrTotalCents / 100 * 100) / 100;
     const mrrAtRiskBRL = Math.round(mrrAtRiskCents / 100 * 100) / 100;
+    const mrrAtRiskMonthlyBRL = Math.round(mrrAtRiskMonthlyCents / 100 * 100) / 100;
+    const mrrAtRiskWeeklyBRL = Math.round(mrrAtRiskWeeklyCents / 100 * 100) / 100;
 
     const mrrBreakdown = Object.entries(mrrByPlan).map(([plan, data]) => ({
       plan,
