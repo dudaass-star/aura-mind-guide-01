@@ -696,14 +696,19 @@ Deno.serve(async (req) => {
     const mrrByPlan: Record<string, { committed: number; weekly: number; users: number }> = {};
     let mrrCommittedCents = 0;
     let weeklyRevenueCents = 0;
-    let mrrAtRiskCents = 0;
+    // "Em risco" = TODAS as past_due no Stripe (Smart Retries roda por ~30 dias).
+    // Separamos em recente (≤7d) e crítico (>7d) só para visualização — ambos ainda são recuperáveis.
+    let mrrAtRiskCents = 0;                    // total (recent + critical)
+    let mrrAtRiskRecentCents = 0;              // ≤7d
+    let mrrAtRiskCriticalCents = 0;            // >7d (ainda past_due no Stripe)
     let mrrAtRiskMonthlyCents = 0;
     let mrrAtRiskWeeklyCents = 0;
     let activeSubscriptionsCount = 0;
     let weeklyActiveSubscriptionsCount = 0;
     let monthlyActiveSubscriptionsCount = 0;
-    let pastDueSubscriptionsCount = 0;        // past_due ≤7d (em recuperação ativa)
-    let pastDueExpiredCount = 0;              // past_due >7d (já é churn involuntário, ignorar)
+    let pastDueSubscriptionsCount = 0;         // total past_due no Stripe (recuperáveis)
+    let pastDueRecentCount = 0;                // past_due ≤7d
+    let pastDueCriticalCount = 0;              // past_due >7d (Stripe ainda tentando)
 
     if (stripeKey) {
       const stripe = new Stripe(stripeKey, { apiVersion: '2025-08-27.basil' });
