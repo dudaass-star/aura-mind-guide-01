@@ -765,7 +765,23 @@ Deno.serve(async (req) => {
       canceledInPeriod,
       pausedInPeriod: pausedInPeriodCount || 0,
       churnRate,
+      churnRateLegacy,
+      activeAtPeriodStart: activeAtPeriodStart || 0,
       cancellationReasons,
+      // 💰 Revenue & MRR
+      mrrCommittedBRL,
+      mrrWeeklyEquivBRL,
+      mrrTotalBRL,
+      mrrBreakdown,
+      // 🎯 Activation
+      activationRate,
+      activatedUsersCount: activatedUsers.length,
+      payingUsersCount: payingUsers.length,
+      silentPayersCount: silentPayers.length,
+      // 📈 Mature trial conversion
+      matureTrialsCount: matureTrials.length,
+      matureConvertedCount: matureConverted.length,
+      matureConversionRate,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
