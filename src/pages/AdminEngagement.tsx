@@ -505,23 +505,30 @@ export default function AdminEngagement() {
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                       <DollarSign className="h-4 w-4" />
-                      MRR Total (Estimado)
+                      MRR Total (Stripe — fonte da verdade)
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="text-4xl font-bold text-foreground">R$ {metrics.mrrTotalBRL.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-                    <div className="flex gap-4 mt-3 text-xs">
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-3 text-xs">
                       <div>
-                        <span className="text-muted-foreground">Comprometido (mensal): </span>
-                        <span className="font-semibold text-foreground">R$ {metrics.mrrCommittedBRL.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        <span className="text-muted-foreground">Comprometido (mensal/anual): </span>
+                        <div className="font-semibold text-foreground">R$ {metrics.mrrCommittedBRL.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                        <div className="text-[10px] text-muted-foreground">{metrics.activeSubscriptionsCount} assinaturas ativas</div>
                       </div>
                       <div>
                         <span className="text-muted-foreground">Semanal anualizado: </span>
-                        <span className="font-semibold text-foreground">R$ {metrics.mrrWeeklyEquivBRL.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        <div className="font-semibold text-foreground">R$ {metrics.mrrWeeklyEquivBRL.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                        <div className="text-[10px] text-muted-foreground">trial pago × 4.33</div>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">⚠️ Em risco (past_due): </span>
+                        <div className={`font-semibold ${metrics.mrrAtRiskBRL > 0 ? 'text-destructive' : 'text-foreground'}`}>R$ {metrics.mrrAtRiskBRL.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                        <div className="text-[10px] text-muted-foreground">{metrics.pastDueSubscriptionsCount} assinaturas com cobrança falha</div>
                       </div>
                     </div>
-                    <p className="text-[11px] text-muted-foreground mt-2">
-                      💡 Comprometido = converted_at preenchido. Semanal × 4.33 = equivalente mensal teórico.
+                    <p className="text-[11px] text-muted-foreground mt-3">
+                      💡 Dados buscados em tempo real do Stripe. "Em risco" = past_due (Stripe ainda tentando cobrar).
                     </p>
                   </CardContent>
                 </Card>
@@ -569,17 +576,54 @@ export default function AdminEngagement() {
 
                   <Card>
                     <CardHeader className="flex flex-row items-center justify-between p-3 pb-1">
-                      <CardTitle className="text-xs font-medium text-muted-foreground">📉 Churn Real (período)</CardTitle>
-                      <UserMinus className="h-3.5 w-3.5 text-muted-foreground" />
+                      <CardTitle className="text-xs font-medium text-muted-foreground">💚 Recovery Rate</CardTitle>
+                      <RotateCcw className="h-3.5 w-3.5 text-muted-foreground" />
                     </CardHeader>
                     <CardContent className="p-3 pt-0">
-                      <div className={`text-xl font-bold ${metrics.churnRate <= 5 ? 'text-green-600' : metrics.churnRate <= 10 ? 'text-yellow-600' : 'text-destructive'}`}>
-                        {metrics.churnRate}%
+                      <div className={`text-xl font-bold ${metrics.recoveryRate >= 30 ? 'text-green-600' : metrics.recoveryRate >= 15 ? 'text-yellow-600' : 'text-destructive'}`}>
+                        {metrics.recoveryRate}%
                       </div>
-                      <p className="text-[11px] text-muted-foreground">{metrics.canceledInPeriod}/{metrics.activeAtPeriodStart} ativos no início</p>
+                      <p className="text-[11px] text-muted-foreground">{metrics.recoveredPayments}/{metrics.totalPaymentFailedAllTime} cartões recuperados</p>
                     </CardContent>
                   </Card>
                 </div>
+
+                {/* Churn breakdown card */}
+                <Card className="border-destructive/20">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                      <UserMinus className="h-4 w-4" />
+                      Churn Total no Período (Voluntário + Involuntário)
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-baseline gap-3">
+                      <div className={`text-3xl font-bold ${metrics.churnRate <= 5 ? 'text-green-600' : metrics.churnRate <= 10 ? 'text-yellow-600' : 'text-destructive'}`}>
+                        {metrics.churnRate}%
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        {metrics.canceledInPeriod} usuários / {metrics.activeAtPeriodStart} ativos no início
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-4 text-xs">
+                      <div className="border rounded-md p-2.5 bg-muted/30">
+                        <div className="text-muted-foreground mb-1">🟦 Voluntário (cancelaram)</div>
+                        <div className="font-semibold text-foreground">{metrics.voluntaryChurnInPeriod} · {metrics.voluntaryChurnRate}%</div>
+                      </div>
+                      <div className="border rounded-md p-2.5 bg-muted/30">
+                        <div className="text-muted-foreground mb-1">🟥 Involuntário (cartão falhou 7d+)</div>
+                        <div className="font-semibold text-destructive">{metrics.involuntaryChurnInPeriod} · {metrics.involuntaryChurnRate}%</div>
+                      </div>
+                      <div className="border rounded-md p-2.5 bg-yellow-500/10 border-yellow-500/30">
+                        <div className="text-muted-foreground mb-1">🟧 Em recuperação (&lt;7d)</div>
+                        <div className="font-semibold text-yellow-700 dark:text-yellow-500">{metrics.paymentAtRiskCount}</div>
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-3">
+                      💡 Churn involuntário só conta após 7 dias sem recuperação (período do dunning Stripe). Em recuperação ainda pode voltar.
+                    </p>
+                  </CardContent>
+                </Card>
 
                 {/* MRR breakdown by plan */}
                 {metrics.mrrBreakdown.length > 0 && (
@@ -592,8 +636,8 @@ export default function AdminEngagement() {
                         <TableHeader>
                           <TableRow>
                             <TableHead className="text-xs">Plano</TableHead>
-                            <TableHead className="text-xs text-right">Usuários</TableHead>
-                            <TableHead className="text-xs text-right">Mensal (R$)</TableHead>
+                            <TableHead className="text-xs text-right">Assinaturas</TableHead>
+                            <TableHead className="text-xs text-right">Mensal/Anual (R$)</TableHead>
                             <TableHead className="text-xs text-right">Semanal anualizado (R$)</TableHead>
                             <TableHead className="text-xs text-right">Total (R$)</TableHead>
                           </TableRow>
@@ -621,11 +665,13 @@ export default function AdminEngagement() {
                 <Card className="bg-muted/30">
                   <CardContent className="p-4 text-xs text-muted-foreground space-y-1.5">
                     <p><strong className="text-foreground">📚 Metodologia:</strong></p>
-                    <p>• <strong>MRR Comprometido:</strong> usuários `active` com `converted_at` × preço mensal do plano.</p>
-                    <p>• <strong>Semanal Anualizado:</strong> preço semanal × 4.33 (ainda em trial pago, não comprometido).</p>
-                    <p>• <strong>Activation Rate:</strong> % de pagantes (com `trial_started_at`) que enviaram a 1ª mensagem em ≤3 dias do cadastro.</p>
-                    <p>• <strong>Conversão Madura:</strong> só conta trials com ≥7 dias de vida (ciclo completo). Meta: &gt;25%.</p>
-                    <p>• <strong>Churn Real:</strong> cancelados no período / ativos no início do período. Meta: &lt;5%/mês.</p>
+                    <p>• <strong>MRR Total:</strong> buscado em tempo real no Stripe. Soma assinaturas active (mensal/anual prorrateado) + semanal × 4.33.</p>
+                    <p>• <strong>MRR em Risco:</strong> assinaturas em past_due (Stripe ainda tentando cobrar — pode recuperar).</p>
+                    <p>• <strong>Churn Voluntário:</strong> usuário clicou em cancelar (via cancellation_feedback).</p>
+                    <p>• <strong>Churn Involuntário:</strong> cartão recusado há 7+ dias E status virou canceled/trial_expired/inactive no período.</p>
+                    <p>• <strong>Recovery Rate:</strong> % de usuários com cartão recusado que voltaram para status active (all-time).</p>
+                    <p>• <strong>Activation Rate:</strong> % de pagantes que enviaram a 1ª mensagem em ≤3 dias do cadastro. Meta: &gt;70%.</p>
+                    <p>• <strong>Conversão Madura:</strong> só conta trials com ≥7 dias de vida. Meta: &gt;25%.</p>
                   </CardContent>
                 </Card>
               </>
