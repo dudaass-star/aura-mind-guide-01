@@ -437,7 +437,7 @@ Deno.serve(async (req) => {
       .select('*', { count: 'exact', head: true })
       .eq('status', 'canceling');
 
-    // ========== CANCELLATION METRICS ==========
+    // ========== CANCELLATION METRICS (VOLUNTARY + INVOLUNTARY) ==========
 
     const { data: cancelFeedbackInPeriod } = await supabase
       .from('cancellation_feedback')
@@ -453,24 +453,75 @@ Deno.serve(async (req) => {
       .gte('created_at', periodStart)
       .lt('created_at', periodEnd);
 
-    const canceledInPeriod = cancelFeedbackInPeriod?.length || 0;
+    // 🟦 VOLUNTARY CHURN: user clicked cancel
+    const voluntaryChurnInPeriod = cancelFeedbackInPeriod?.length || 0;
 
-    // ✅ CORRECTED CHURN: canceled_in_period / active_at_start_of_period
-    // Active at start = profiles created before periodStart that were active or got canceled within the period
+    // 🟥 INVOLUNTARY CHURN: payment failed 7+ days ago AND not recovered
+    // Logic: payment_failed_at is older than (periodEnd - 7d) and status changed to canceled/trial_expired in period
+    // OR payment_failed_at falls within period AND it's been 7+ days since
+    const sevenDaysBeforePeriodEnd = new Date(new Date(periodEnd).getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    
+    const { data: involuntaryChurnProfiles } = await supabase
+      .from('profiles')
+      .select('user_id, status, payment_failed_at, updated_at')
+      .not('payment_failed_at', 'is', null)
+      .lt('payment_failed_at', sevenDaysBeforePeriodEnd)
+      .in('status', ['canceled', 'trial_expired', 'inactive']);
+
+    // Filter: status change happened within period
+    const involuntaryChurnInPeriod = (involuntaryChurnProfiles || []).filter(p => {
+      const updatedAt = p.updated_at as string;
+      return updatedAt >= periodStart && updatedAt < periodEnd;
+    }).length;
+
+    // 🟧 PAYMENT AT RISK: payment_failed_at within period, still in dunning window (< 7 days)
+    const { count: paymentAtRiskCount } = await supabase
+      .from('profiles')
+      .select('*', { count: 'exact', head: true })
+      .not('payment_failed_at', 'is', null)
+      .gte('payment_failed_at', sevenDaysBeforePeriodEnd);
+
+    // 🟩 RECOVERY RATE: % of payment_failed users that recovered (status active again)
+    const { count: totalPaymentFailedAllTime } = await supabase
+      .from('profiles')
+      .select('*', { count: 'exact', head: true })
+      .not('payment_failed_at', 'is', null);
+
+    const { count: recoveredPayments } = await supabase
+      .from('profiles')
+      .select('*', { count: 'exact', head: true })
+      .not('payment_failed_at', 'is', null)
+      .eq('status', 'active');
+
+    const recoveryRate = (totalPaymentFailedAllTime || 0) > 0
+      ? Math.round((recoveredPayments || 0) / (totalPaymentFailedAllTime || 1) * 1000) / 10
+      : 0;
+
+    // TOTAL CHURN = voluntary + involuntary
+    const canceledInPeriod = voluntaryChurnInPeriod + involuntaryChurnInPeriod;
+
+    // ✅ CORRECTED CHURN: total_churn_in_period / active_at_start_of_period
     const { count: activeAtPeriodStart } = await supabase
       .from('profiles')
       .select('*', { count: 'exact', head: true })
       .lt('created_at', periodStart)
-      .in('status', ['active', 'canceling', 'canceled', 'paused']);
+      .in('status', ['active', 'canceling', 'canceled', 'paused', 'trial_expired', 'inactive']);
 
-    // Count cancellations of users that existed at period start (proxy: cancellation_feedback in period)
     const churnRate = activeAtPeriodStart && activeAtPeriodStart > 0
       ? Math.round(canceledInPeriod / activeAtPeriodStart * 1000) / 10
       : 0;
 
+    const voluntaryChurnRate = activeAtPeriodStart && activeAtPeriodStart > 0
+      ? Math.round(voluntaryChurnInPeriod / activeAtPeriodStart * 1000) / 10
+      : 0;
+
+    const involuntaryChurnRate = activeAtPeriodStart && activeAtPeriodStart > 0
+      ? Math.round(involuntaryChurnInPeriod / activeAtPeriodStart * 1000) / 10
+      : 0;
+
     // Legacy churn (for comparison): cancelled / total base
     const churnRateLegacy = activeUsersBase && activeUsersBase > 0
-      ? Math.round(canceledInPeriod / activeUsersBase * 1000) / 10
+      ? Math.round(voluntaryChurnInPeriod / activeUsersBase * 1000) / 10
       : 0;
 
     // Group by reason
@@ -613,48 +664,102 @@ Deno.serve(async (req) => {
       ? Math.round((checkoutCompletedInPeriod || 0) / (checkoutCreatedInPeriod || 0) * 1000) / 10
       : 0;
 
-    // ========== 💰 MRR & REVENUE METRICS ==========
-    // Plan prices in cents (BRL)
+    // ========== 💰 MRR & REVENUE METRICS (STRIPE = SOURCE OF TRUTH) ==========
     const PLAN_PRICES_MONTHLY: Record<string, number> = {
       essencial: 2990,
       direcao: 4990,
       transformacao: 7990,
     };
-    // Weekly plan prices (entry tier — bills weekly until converts to monthly after 7d)
     const WEEKLY_PRICES: Record<string, number> = {
       essencial: 690,
       direcao: 990,
       transformacao: 1990,
     };
 
-    // Fetch all active subscribers grouped by plan
-    const { data: activePayingProfiles } = await supabase
-      .from('profiles')
-      .select('plan, status, trial_started_at, converted_at, created_at, last_user_message_at')
-      .in('status', ['active', 'trial']);
+    // Map Stripe price IDs to plan names
+    const priceToPlan: Record<string, { plan: string; cycle: 'monthly' | 'yearly' | 'weekly' }> = {};
+    const priceMappings = [
+      { env: 'STRIPE_PRICE_ESSENCIAL_MONTHLY', plan: 'essencial', cycle: 'monthly' as const },
+      { env: 'STRIPE_PRICE_ESSENCIAL_YEARLY', plan: 'essencial', cycle: 'yearly' as const },
+      { env: 'STRIPE_PRICE_ESSENCIAL_TRIAL', plan: 'essencial', cycle: 'weekly' as const },
+      { env: 'STRIPE_PRICE_DIRECAO_MONTHLY', plan: 'direcao', cycle: 'monthly' as const },
+      { env: 'STRIPE_PRICE_DIRECAO_YEARLY', plan: 'direcao', cycle: 'yearly' as const },
+      { env: 'STRIPE_PRICE_DIRECAO_TRIAL', plan: 'direcao', cycle: 'weekly' as const },
+      { env: 'STRIPE_PRICE_TRANSFORMACAO_MONTHLY', plan: 'transformacao', cycle: 'monthly' as const },
+      { env: 'STRIPE_PRICE_TRANSFORMACAO_YEARLY', plan: 'transformacao', cycle: 'yearly' as const },
+      { env: 'STRIPE_PRICE_TRANSFORMACAO_TRIAL', plan: 'transformacao', cycle: 'weekly' as const },
+    ];
+    for (const { env, plan, cycle } of priceMappings) {
+      const id = Deno.env.get(env);
+      if (id) priceToPlan[id] = { plan, cycle };
+    }
 
     const mrrByPlan: Record<string, { committed: number; weekly: number; users: number }> = {};
-    let mrrCommittedCents = 0; // monthly subscribers (true MRR)
-    let weeklyRevenueCents = 0; // weekly entry tier (not yet committed)
+    let mrrCommittedCents = 0;
+    let weeklyRevenueCents = 0;
+    let mrrAtRiskCents = 0;
+    let activeSubscriptionsCount = 0;
+    let pastDueSubscriptionsCount = 0;
 
-    for (const p of activePayingProfiles || []) {
-      const plan = (p.plan as string) || 'essencial';
-      if (!mrrByPlan[plan]) mrrByPlan[plan] = { committed: 0, weekly: 0, users: 0 };
-      mrrByPlan[plan].users++;
-
-      // Active + converted_at = paying monthly (committed MRR)
-      if (p.status === 'active' && p.converted_at) {
-        const price = PLAN_PRICES_MONTHLY[plan] || 0;
-        mrrCommittedCents += price;
-        mrrByPlan[plan].committed += price;
+    if (stripeKey) {
+      const stripe = new Stripe(stripeKey, { apiVersion: '2025-08-27.basil' });
+      
+      // Fetch all active + past_due subscriptions (paginated)
+      const allSubs: Stripe.Subscription[] = [];
+      for (const status of ['active', 'past_due'] as const) {
+        let hasMore = true;
+        let startingAfter: string | undefined;
+        while (hasMore) {
+          const params: Stripe.SubscriptionListParams = { status, limit: 100 };
+          if (startingAfter) params.starting_after = startingAfter;
+          const result = await stripe.subscriptions.list(params);
+          allSubs.push(...result.data);
+          hasMore = result.has_more;
+          if (result.data.length > 0) startingAfter = result.data[result.data.length - 1].id;
+        }
       }
-      // Active without converted_at, or trial = on weekly tier
-      else if (p.status === 'active' || p.status === 'trial') {
-        const price = WEEKLY_PRICES[plan] || 0;
-        // Weekly → annualized monthly equivalent: price × 4.33 weeks
-        const monthlyEquivalent = Math.round(price * 4.33);
-        weeklyRevenueCents += monthlyEquivalent;
-        mrrByPlan[plan].weekly += monthlyEquivalent;
+
+      for (const sub of allSubs) {
+        const priceId = sub.items.data[0]?.price?.id;
+        if (!priceId) continue;
+        const mapping = priceToPlan[priceId];
+        if (!mapping) continue;
+
+        const { plan, cycle } = mapping;
+        if (!mrrByPlan[plan]) mrrByPlan[plan] = { committed: 0, weekly: 0, users: 0 };
+        mrrByPlan[plan].users++;
+
+        // Skip paused subscriptions for MRR
+        if (sub.pause_collection) continue;
+
+        // Past due → MRR at risk (still counts as committed but flagged)
+        if (sub.status === 'past_due') {
+          pastDueSubscriptionsCount++;
+          if (cycle === 'monthly') {
+            mrrAtRiskCents += PLAN_PRICES_MONTHLY[plan] || 0;
+          } else if (cycle === 'yearly') {
+            mrrAtRiskCents += Math.round((PLAN_PRICES_MONTHLY[plan] || 0)); // monthly equivalent
+          }
+          continue;
+        }
+
+        activeSubscriptionsCount++;
+        if (cycle === 'monthly') {
+          const price = PLAN_PRICES_MONTHLY[plan] || 0;
+          mrrCommittedCents += price;
+          mrrByPlan[plan].committed += price;
+        } else if (cycle === 'yearly') {
+          // Yearly → divide by 12 for monthly equivalent
+          const yearlyAmount = sub.items.data[0]?.price?.unit_amount || 0;
+          const monthlyEquiv = Math.round(yearlyAmount / 12);
+          mrrCommittedCents += monthlyEquiv;
+          mrrByPlan[plan].committed += monthlyEquiv;
+        } else if (cycle === 'weekly') {
+          const price = WEEKLY_PRICES[plan] || 0;
+          const monthlyEquivalent = Math.round(price * 4.33);
+          weeklyRevenueCents += monthlyEquivalent;
+          mrrByPlan[plan].weekly += monthlyEquivalent;
+        }
       }
     }
 
@@ -662,6 +767,7 @@ Deno.serve(async (req) => {
     const mrrCommittedBRL = Math.round(mrrCommittedCents / 100 * 100) / 100;
     const mrrWeeklyEquivBRL = Math.round(weeklyRevenueCents / 100 * 100) / 100;
     const mrrTotalBRL = Math.round(mrrTotalCents / 100 * 100) / 100;
+    const mrrAtRiskBRL = Math.round(mrrAtRiskCents / 100 * 100) / 100;
 
     const mrrBreakdown = Object.entries(mrrByPlan).map(([plan, data]) => ({
       plan,
@@ -672,7 +778,11 @@ Deno.serve(async (req) => {
     })).sort((a, b) => b.totalBRL - a.totalBRL);
 
     // ========== 🎯 ACTIVATION RATE ==========
-    // % of paying users (active or trial with card) that sent ≥1 message within 3 days of created_at
+    const { data: activePayingProfiles } = await supabase
+      .from('profiles')
+      .select('plan, status, trial_started_at, converted_at, created_at, last_user_message_at')
+      .in('status', ['active', 'trial']);
+
     const payingUsers = (activePayingProfiles || []).filter(p => p.trial_started_at);
     const activatedUsers = payingUsers.filter(p => {
       if (!p.last_user_message_at || !p.created_at) return false;
@@ -761,17 +871,28 @@ Deno.serve(async (req) => {
       weeklyPlansExpired,
       trialsToPaidSuccess: weeklyPlansToPaidSuccess,
       trialToPaidRate,
-      // Cancellation
+      // Cancellation (voluntary + involuntary)
       canceledInPeriod,
+      voluntaryChurnInPeriod,
+      involuntaryChurnInPeriod,
       pausedInPeriod: pausedInPeriodCount || 0,
       churnRate,
+      voluntaryChurnRate,
+      involuntaryChurnRate,
       churnRateLegacy,
       activeAtPeriodStart: activeAtPeriodStart || 0,
+      paymentAtRiskCount: paymentAtRiskCount || 0,
+      recoveryRate,
+      totalPaymentFailedAllTime: totalPaymentFailedAllTime || 0,
+      recoveredPayments: recoveredPayments || 0,
       cancellationReasons,
-      // 💰 Revenue & MRR
+      // 💰 Revenue & MRR (Stripe-sourced)
       mrrCommittedBRL,
       mrrWeeklyEquivBRL,
       mrrTotalBRL,
+      mrrAtRiskBRL,
+      activeSubscriptionsCount,
+      pastDueSubscriptionsCount,
       mrrBreakdown,
       // 🎯 Activation
       activationRate,
