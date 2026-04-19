@@ -957,7 +957,8 @@ Deno.serve(async (req) => {
       involuntaryChurnRate,
       churnRateLegacy,
       activeAtPeriodStart: activeAtPeriodStart || 0,
-      paymentAtRiskCount: paymentAtRiskCount || 0,
+      paymentAtRiskCount: paymentAtRiskCount || 0,         // past_due ≤7d (recuperável)
+      involuntaryChurnLive: pastDueExpiredCount,           // past_due >7d (já é churn, Stripe ainda não cancelou)
       recoveryRate,
       totalPaymentFailedAllTime: totalPaymentFailedAllTime || 0,
       recoveredPayments: recoveredPayments || 0,
