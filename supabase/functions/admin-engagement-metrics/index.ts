@@ -700,7 +700,8 @@ Deno.serve(async (req) => {
     let activeSubscriptionsCount = 0;
     let weeklyActiveSubscriptionsCount = 0;
     let monthlyActiveSubscriptionsCount = 0;
-    let pastDueSubscriptionsCount = 0;
+    let pastDueSubscriptionsCount = 0;        // past_due ≤7d (em recuperação ativa)
+    let pastDueExpiredCount = 0;              // past_due >7d (já é churn involuntário, ignorar)
 
     if (stripeKey) {
       const stripe = new Stripe(stripeKey, { apiVersion: '2025-08-27.basil' });
