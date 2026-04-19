@@ -474,12 +474,9 @@ Deno.serve(async (req) => {
       return updatedAt >= periodStart && updatedAt < periodEnd;
     }).length;
 
-    // 🟧 PAYMENT AT RISK: payment_failed_at within period, still in dunning window (< 7 days)
-    const { count: paymentAtRiskCount } = await supabase
-      .from('profiles')
-      .select('*', { count: 'exact', head: true })
-      .not('payment_failed_at', 'is', null)
-      .gte('payment_failed_at', sevenDaysBeforePeriodEnd);
+    // 🟧 PAYMENT AT RISK: real past_due subscriptions in Stripe (computed below in MRR section)
+    // Will be assigned after MRR loop runs.
+    let paymentAtRiskCount = 0;
 
     // 🟩 RECOVERY RATE: % of payment_failed users that recovered (status active again)
     const { count: totalPaymentFailedAllTime } = await supabase
@@ -698,15 +695,21 @@ Deno.serve(async (req) => {
     let mrrCommittedCents = 0;
     let weeklyRevenueCents = 0;
     let mrrAtRiskCents = 0;
+    let mrrAtRiskMonthlyCents = 0;
+    let mrrAtRiskWeeklyCents = 0;
     let activeSubscriptionsCount = 0;
+    let weeklyActiveSubscriptionsCount = 0;
+    let monthlyActiveSubscriptionsCount = 0;
     let pastDueSubscriptionsCount = 0;
 
     if (stripeKey) {
       const stripe = new Stripe(stripeKey, { apiVersion: '2025-08-27.basil' });
       
-      // Fetch all active + past_due subscriptions (paginated)
+      // Fetch all active + trialing + past_due subscriptions (paginated)
+      // NOTE: 'trialing' is required because weekly plans (R$6.90/9.90/19.90) stay
+      // in 'trialing' status during the first 7 days before converting to 'active' monthly.
       const allSubs: Stripe.Subscription[] = [];
-      for (const status of ['active', 'past_due'] as const) {
+      for (const status of ['active', 'trialing', 'past_due'] as const) {
         let hasMore = true;
         let startingAfter: string | undefined;
         while (hasMore) {
@@ -732,35 +735,68 @@ Deno.serve(async (req) => {
         // Skip paused subscriptions for MRR
         if (sub.pause_collection) continue;
 
-        // Past due → MRR at risk (still counts as committed but flagged)
+        // Past due → MRR at risk (use real unit_amount from Stripe, not fixed map)
         if (sub.status === 'past_due') {
           pastDueSubscriptionsCount++;
+          const realAmount = sub.items.data[0]?.price?.unit_amount || 0;
           if (cycle === 'monthly') {
-            mrrAtRiskCents += PLAN_PRICES_MONTHLY[plan] || 0;
+            mrrAtRiskCents += realAmount;
+            mrrAtRiskMonthlyCents += realAmount;
           } else if (cycle === 'yearly') {
-            mrrAtRiskCents += Math.round((PLAN_PRICES_MONTHLY[plan] || 0)); // monthly equivalent
+            const monthlyEquiv = Math.round(realAmount / 12);
+            mrrAtRiskCents += monthlyEquiv;
+            mrrAtRiskMonthlyCents += monthlyEquiv;
+          } else if (cycle === 'weekly') {
+            const monthlyEquiv = Math.round(realAmount * 4.33);
+            mrrAtRiskCents += monthlyEquiv;
+            mrrAtRiskWeeklyCents += monthlyEquiv;
           }
           continue;
         }
 
-        activeSubscriptionsCount++;
+        // 'trialing' status in this project = paid 7-day weekly cycle on a MONTHLY price.
+        // Stripe holds the subscription in 'trialing' until the first full monthly charge.
+        // Economically these users are on the WEEKLY plan (R$6.90/9.90/19.90), not monthly yet.
+        // We count them as weekly revenue (× 4.33) to avoid inflating committed MRR.
+        if (sub.status === 'trialing') {
+          if (cycle === 'monthly' || cycle === 'weekly') {
+            activeSubscriptionsCount++;
+            weeklyActiveSubscriptionsCount++;
+            const weeklyPrice = WEEKLY_PRICES[plan] || 0;
+            const monthlyEquivalent = Math.round(weeklyPrice * 4.33);
+            weeklyRevenueCents += monthlyEquivalent;
+            mrrByPlan[plan].weekly += monthlyEquivalent;
+          }
+          // yearly trialing = legacy free trial, ignore
+          continue;
+        }
+
         if (cycle === 'monthly') {
+          activeSubscriptionsCount++;
+          monthlyActiveSubscriptionsCount++;
           const price = PLAN_PRICES_MONTHLY[plan] || 0;
           mrrCommittedCents += price;
           mrrByPlan[plan].committed += price;
         } else if (cycle === 'yearly') {
-          // Yearly → divide by 12 for monthly equivalent
+          activeSubscriptionsCount++;
+          monthlyActiveSubscriptionsCount++;
           const yearlyAmount = sub.items.data[0]?.price?.unit_amount || 0;
           const monthlyEquiv = Math.round(yearlyAmount / 12);
           mrrCommittedCents += monthlyEquiv;
           mrrByPlan[plan].committed += monthlyEquiv;
         } else if (cycle === 'weekly') {
-          const price = WEEKLY_PRICES[plan] || 0;
-          const monthlyEquivalent = Math.round(price * 4.33);
+          // Active weekly (rare — usually means recurring weekly price exists)
+          activeSubscriptionsCount++;
+          weeklyActiveSubscriptionsCount++;
+          const realAmount = sub.items.data[0]?.price?.unit_amount || WEEKLY_PRICES[plan] || 0;
+          const monthlyEquivalent = Math.round(realAmount * 4.33);
           weeklyRevenueCents += monthlyEquivalent;
           mrrByPlan[plan].weekly += monthlyEquivalent;
         }
       }
+
+      // Sync paymentAtRiskCount with real past_due count from Stripe
+      paymentAtRiskCount = pastDueSubscriptionsCount;
     }
 
     const mrrTotalCents = mrrCommittedCents + weeklyRevenueCents;
@@ -768,6 +804,8 @@ Deno.serve(async (req) => {
     const mrrWeeklyEquivBRL = Math.round(weeklyRevenueCents / 100 * 100) / 100;
     const mrrTotalBRL = Math.round(mrrTotalCents / 100 * 100) / 100;
     const mrrAtRiskBRL = Math.round(mrrAtRiskCents / 100 * 100) / 100;
+    const mrrAtRiskMonthlyBRL = Math.round(mrrAtRiskMonthlyCents / 100 * 100) / 100;
+    const mrrAtRiskWeeklyBRL = Math.round(mrrAtRiskWeeklyCents / 100 * 100) / 100;
 
     const mrrBreakdown = Object.entries(mrrByPlan).map(([plan, data]) => ({
       plan,
@@ -777,21 +815,43 @@ Deno.serve(async (req) => {
       totalBRL: Math.round((data.committed + data.weekly) / 100 * 100) / 100,
     })).sort((a, b) => b.totalBRL - a.totalBRL);
 
-    // ========== 🎯 ACTIVATION RATE ==========
+    // ========== 🎯 ACTIVATION RATE (uses true first message, not last) ==========
     const { data: activePayingProfiles } = await supabase
       .from('profiles')
-      .select('plan, status, trial_started_at, converted_at, created_at, last_user_message_at')
+      .select('user_id, plan, status, trial_started_at, converted_at, created_at')
       .in('status', ['active', 'trial']);
 
     const payingUsers = (activePayingProfiles || []).filter(p => p.trial_started_at);
+    const payingUserIds = payingUsers.map(p => p.user_id as string);
+
+    // Fetch FIRST user message per user (paginated, to bypass 1000-row limit)
+    const firstMsgByUser = new Map<string, string>();
+    if (payingUserIds.length > 0) {
+      const allUserMsgs = await fetchAllPaginated(
+        supabase,
+        'messages',
+        'user_id, created_at',
+        [{ column: 'role', op: 'eq', value: 'user' }]
+      );
+      for (const m of allUserMsgs) {
+        const uid = m.user_id as string;
+        const ts = m.created_at as string;
+        const existing = firstMsgByUser.get(uid);
+        if (!existing || ts < existing) {
+          firstMsgByUser.set(uid, ts);
+        }
+      }
+    }
+
     const activatedUsers = payingUsers.filter(p => {
-      if (!p.last_user_message_at || !p.created_at) return false;
+      const firstMsgTs = firstMsgByUser.get(p.user_id as string);
+      if (!firstMsgTs || !p.created_at) return false;
       const created = new Date(p.created_at as string).getTime();
-      const firstMsg = new Date(p.last_user_message_at as string).getTime();
+      const firstMsg = new Date(firstMsgTs).getTime();
       const diffDays = (firstMsg - created) / (1000 * 60 * 60 * 24);
-      return diffDays <= 3;
+      return diffDays <= 3 && diffDays >= 0;
     });
-    const silentPayers = payingUsers.filter(p => !p.last_user_message_at);
+    const silentPayers = payingUsers.filter(p => !firstMsgByUser.has(p.user_id as string));
     const activationRate = payingUsers.length > 0
       ? Math.round(activatedUsers.length / payingUsers.length * 1000) / 10
       : 0;
@@ -891,7 +951,11 @@ Deno.serve(async (req) => {
       mrrWeeklyEquivBRL,
       mrrTotalBRL,
       mrrAtRiskBRL,
+      mrrAtRiskMonthlyBRL,
+      mrrAtRiskWeeklyBRL,
       activeSubscriptionsCount,
+      monthlyActiveSubscriptionsCount,
+      weeklyActiveSubscriptionsCount,
       pastDueSubscriptionsCount,
       mrrBreakdown,
       // 🎯 Activation
