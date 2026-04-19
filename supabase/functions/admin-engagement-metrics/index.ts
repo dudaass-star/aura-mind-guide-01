@@ -1133,6 +1133,8 @@ Deno.serve(async (req) => {
       recoveredPayments: recoveredPayments || 0,
       cancellationReasons,
       internalCancellationReasons30d: internalReasonCounts30d,
+      // 📊 Retenção por Coorte (Cohort Retention)
+      cohortRetention,
       // 💰 Revenue & MRR (Stripe-sourced)
       mrrCommittedBRL,
       mrrWeeklyEquivBRL,
