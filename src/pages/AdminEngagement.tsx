@@ -99,6 +99,9 @@ interface Metrics {
   pastDueRecentCount?: number;
   pastDueCriticalCount?: number;
   involuntaryChurnLive?: number;
+  voluntaryChurnLive?: number;
+  totalChurnFromStripe?: number;
+  stripeChurnReasons?: Record<string, number>;
   recoveryRate: number;
   totalPaymentFailedAllTime: number;
   recoveredPayments: number;
