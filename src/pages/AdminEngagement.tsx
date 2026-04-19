@@ -679,6 +679,36 @@ export default function AdminEngagement() {
                         </div>
                       </div>
                     )}
+                    {metrics.internalCancellationReasons30d && Object.keys(metrics.internalCancellationReasons30d).length > 0 && (
+                      <div className="mt-2 p-2.5 border rounded-md bg-primary/5 border-primary/20">
+                        <div className="text-[11px] font-medium text-muted-foreground mb-1.5">
+                          🟦 Motivos detalhados (banco interno · fluxo /cancelar · últimos 30d):
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {Object.entries(metrics.internalCancellationReasons30d)
+                            .sort(([, a], [, b]) => b - a)
+                            .map(([reason, count]) => {
+                              const labels: Record<string, string> = {
+                                expensive: '💰 Está caro',
+                                not_using: '😴 Não estou usando',
+                                not_satisfied: '😞 Não gostei do serviço',
+                                come_back_later: '👋 Vou voltar depois',
+                                other: '❓ Outro motivo',
+                                pause_requested: '⏸️ Pediu pausa',
+                                unknown: '— Sem motivo',
+                              };
+                              return (
+                                <span key={reason} className="text-[10px] px-2 py-0.5 rounded-full bg-background border">
+                                  <strong>{count}</strong> · {labels[reason] || reason}
+                                </span>
+                              );
+                            })}
+                        </div>
+                        <div className="text-[10px] text-muted-foreground mt-1.5">
+                          ℹ️ Captura quem cancelou pelo nosso fluxo (não inclui Portal Stripe)
+                        </div>
+                      </div>
+                    )}
                     <p className="text-[11px] text-muted-foreground mt-3">
                       💡 <strong>Stripe é fonte da verdade</strong> e captura cancelamentos via Portal Stripe que não passam pelo nosso UI. Banco interno (cancellation_feedback) só registra cancelamentos feitos no app. Stripe Smart Retries tenta recuperar pagamentos por até ~4 semanas antes de cancelar.
                     </p>
