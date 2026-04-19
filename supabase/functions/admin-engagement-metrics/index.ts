@@ -897,6 +897,86 @@ Deno.serve(async (req) => {
 
     const totalChurnFromStripe = voluntaryChurnFromStripeCount + involuntaryChurnFromStripeCount;
 
+    // ============================================================
+    // 📊 RETENÇÃO POR COORTE (Cohort Retention)
+    // ============================================================
+    // Para cada bucket de idade (≤7d, ≤30d, ≤60d, ≤90d), calcula:
+    //   - total: assinaturas criadas há ≥ Nd (coorte madura)
+    //   - canceled: quantas dessas foram canceladas dentro de Nd da criação
+    //   - pct: % de churn no bucket
+    // Considera apenas coortes "maduras" para evitar viés (sub criada há 3d
+    // não pode ser contada no bucket de 30d porque ainda não teve chance).
+    // ------------------------------------------------------------
+    type CohortBucket = { total: number; canceled: number; pct: number };
+    const cohortRetention: Record<string, CohortBucket> = {
+      churn7d: { total: 0, canceled: 0, pct: 0 },
+      churn30d: { total: 0, canceled: 0, pct: 0 },
+      churn60d: { total: 0, canceled: 0, pct: 0 },
+      churn90d: { total: 0, canceled: 0, pct: 0 },
+    };
+
+    if (stripeKey) {
+      try {
+        const stripe = new Stripe(stripeKey, { apiVersion: '2025-08-27.basil' });
+        const DAY = 24 * 60 * 60;
+        const nowTs = Math.floor(Date.now() / 1000);
+        // Janela: últimos 180 dias para garantir dados de 90d+
+        const windowStartTs = nowTs - 180 * DAY;
+
+        const buckets = [
+          { key: 'churn7d', days: 7 },
+          { key: 'churn30d', days: 30 },
+          { key: 'churn60d', days: 60 },
+          { key: 'churn90d', days: 90 },
+        ];
+
+        // Pagina TODAS as subscriptions criadas nos últimos 180 dias (status: all)
+        let hasMore = true;
+        let startingAfter: string | undefined;
+        let processedCount = 0;
+        while (hasMore) {
+          const params: Stripe.SubscriptionListParams = {
+            status: 'all',
+            limit: 100,
+            created: { gte: windowStartTs },
+          };
+          if (startingAfter) params.starting_after = startingAfter;
+          const result = await stripe.subscriptions.list(params);
+
+          for (const sub of result.data) {
+            const createdTs = sub.created;
+            const ageDays = (nowTs - createdTs) / DAY;
+            const canceledTs = sub.canceled_at || 0;
+            const lifetimeDays = canceledTs > 0 ? (canceledTs - createdTs) / DAY : null;
+
+            for (const { key, days } of buckets) {
+              // Coorte madura: sub precisa ter idade ≥ Nd para entrar no denominador
+              if (ageDays >= days) {
+                cohortRetention[key].total++;
+                // Cancelou DENTRO da janela de Nd após criação?
+                if (lifetimeDays !== null && lifetimeDays <= days) {
+                  cohortRetention[key].canceled++;
+                }
+              }
+            }
+            processedCount++;
+          }
+
+          hasMore = result.has_more;
+          if (result.data.length > 0) startingAfter = result.data[result.data.length - 1].id;
+        }
+
+        for (const key of Object.keys(cohortRetention)) {
+          const b = cohortRetention[key];
+          b.pct = b.total > 0 ? Math.round((b.canceled / b.total) * 1000) / 10 : 0;
+        }
+
+        console.log(`📊 Cohort Retention (processed ${processedCount} subs):`, JSON.stringify(cohortRetention));
+      } catch (e) {
+        console.warn('⚠️ Failed to compute cohort retention:', e);
+      }
+    }
+
     const mrrTotalCents = mrrCommittedCents + weeklyRevenueCents;
     const mrrCommittedBRL = Math.round(mrrCommittedCents / 100 * 100) / 100;
     const mrrWeeklyEquivBRL = Math.round(weeklyRevenueCents / 100 * 100) / 100;
@@ -1053,6 +1133,8 @@ Deno.serve(async (req) => {
       recoveredPayments: recoveredPayments || 0,
       cancellationReasons,
       internalCancellationReasons30d: internalReasonCounts30d,
+      // 📊 Retenção por Coorte (Cohort Retention)
+      cohortRetention,
       // 💰 Revenue & MRR (Stripe-sourced)
       mrrCommittedBRL,
       mrrWeeklyEquivBRL,
