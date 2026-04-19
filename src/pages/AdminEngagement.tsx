@@ -106,6 +106,7 @@ interface Metrics {
   totalPaymentFailedAllTime: number;
   recoveredPayments: number;
   cancellationReasons: { reason: string; action_taken: string; count: number }[];
+  internalCancellationReasons30d?: Record<string, number>;
   // 💰 Revenue & MRR (Stripe-sourced)
   mrrCommittedBRL: number;
   mrrWeeklyEquivBRL: number;

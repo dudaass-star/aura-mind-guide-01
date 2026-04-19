@@ -1052,6 +1052,7 @@ Deno.serve(async (req) => {
       totalPaymentFailedAllTime: totalPaymentFailedAllTime || 0,
       recoveredPayments: recoveredPayments || 0,
       cancellationReasons,
+      internalCancellationReasons30d: internalReasonCounts30d,
       // 💰 Revenue & MRR (Stripe-sourced)
       mrrCommittedBRL,
       mrrWeeklyEquivBRL,
