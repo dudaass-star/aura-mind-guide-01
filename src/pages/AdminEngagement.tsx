@@ -108,10 +108,10 @@ interface Metrics {
   cancellationReasons: { reason: string; action_taken: string; count: number }[];
   internalCancellationReasons30d?: Record<string, number>;
   cohortRetention?: {
-    churn7d: { total: number; canceled: number; pct: number };
-    churn30d: { total: number; canceled: number; pct: number };
-    churn60d: { total: number; canceled: number; pct: number };
-    churn90d: { total: number; canceled: number; pct: number };
+    churn0_7: { total: number; canceled: number; pct: number };
+    churn8_30: { total: number; canceled: number; pct: number };
+    churn31_60: { total: number; canceled: number; pct: number };
+    churn61_90: { total: number; canceled: number; pct: number };
   };
   // 💰 Revenue & MRR (Stripe-sourced)
   mrrCommittedBRL: number;
@@ -721,25 +721,25 @@ export default function AdminEngagement() {
                   </CardContent>
                 </Card>
 
-                {/* 📊 Retenção por Coorte (Cohort Retention) */}
+                {/* 📊 Retenção por Coorte (Cohort Retention) — JANELAS */}
                 {metrics.cohortRetention && (
                   <Card>
                     <CardHeader>
                       <CardTitle className="text-base font-semibold flex items-center gap-2">
-                        📊 Retenção por Coorte
+                        📊 Retenção por Coorte (por janela)
                       </CardTitle>
                       <p className="text-xs text-muted-foreground mt-1">
-                        % de assinaturas canceladas dentro de N dias após a contratação. Considera apenas coortes maduras (subs com idade ≥ N dias) dos últimos 180 dias.
+                        % de assinaturas que cancelaram <strong>dentro de cada janela</strong> do ciclo de vida (não cumulativo). Cada bucket considera apenas subs que <strong>sobreviveram até o início da janela</strong> e tiveram tempo de atravessá-la inteira.
                       </p>
                     </CardHeader>
                     <CardContent>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                         {([
-                          { key: 'churn7d', label: 'Churn ≤7 dias', hint: 'Dropoff trial → 1ª cobrança' },
-                          { key: 'churn30d', label: 'Churn ≤30 dias', hint: '1º mês completo' },
-                          { key: 'churn60d', label: 'Churn ≤60 dias', hint: '2º mês' },
-                          { key: 'churn90d', label: 'Churn ≤90 dias', hint: '3º mês' },
-                        ] as const).map(({ key, label, hint }) => {
+                          { key: 'churn0_7',   label: 'Churn 0-7 dias',   hint: 'Dropoff trial → 1ª cobrança', highlight: false },
+                          { key: 'churn8_30',  label: 'Churn 8-30 dias',  hint: '1º ciclo mensal',             highlight: false },
+                          { key: 'churn31_60', label: 'Churn 31-60 dias', hint: '🔥 Renovação 2ª mensalidade', highlight: true  },
+                          { key: 'churn61_90', label: 'Churn 61-90 dias', hint: '3ª mensalidade',              highlight: false },
+                        ] as const).map(({ key, label, hint, highlight }) => {
                           const bucket = metrics.cohortRetention![key];
                           const pct = bucket.pct;
                           // Cor: verde (<15%), amarelo (15-30%), vermelho (>30%)
@@ -752,7 +752,7 @@ export default function AdminEngagement() {
                                   ? 'border-yellow-500/30 bg-yellow-500/5 text-yellow-700 dark:text-yellow-400'
                                   : 'border-destructive/40 bg-destructive/10 text-destructive';
                           return (
-                            <div key={key} className={`border rounded-lg p-3 ${colorClass}`}>
+                            <div key={key} className={`border rounded-lg p-3 ${colorClass} ${highlight ? 'ring-2 ring-primary/40' : ''}`}>
                               <div className="text-[11px] font-medium text-muted-foreground mb-1">{label}</div>
                               <div className="text-2xl font-bold leading-tight">
                                 {bucket.total === 0 ? '—' : `${pct.toFixed(1)}%`}
@@ -766,8 +766,8 @@ export default function AdminEngagement() {
                         })}
                       </div>
                       <div className="mt-3 p-2.5 bg-muted/30 rounded-md text-[11px] text-muted-foreground space-y-1">
-                        <p>💡 <strong>Como ler:</strong> "Churn ≤30d = 28%" significa que <strong>28% das assinaturas foram canceladas em até 30 dias</strong> da contratação.</p>
-                        <p>🎯 <strong>Onde dói:</strong> Churn alto em ≤7d = problema de onboarding/expectativa. Em ≤30d = valor percebido. Em ≤60d+ = hábito/engajamento.</p>
+                        <p>💡 <strong>Como ler:</strong> "Churn 31-60d = 20%" significa que <strong>20% das subs que sobreviveram aos 30 primeiros dias cancelaram entre o 31º e o 60º dia</strong> — exatamente quando rola a 2ª cobrança mensal.</p>
+                        <p>🎯 <strong>Onde dói:</strong> 0-7d = onboarding/expectativa · 8-30d = valor percebido · <strong>31-60d = teste real da renovação</strong> · 61-90d = hábito consolidado.</p>
                         <p>🎨 <strong>Cores:</strong> <span className="text-green-600 dark:text-green-400 font-medium">verde &lt;15%</span> · <span className="text-yellow-600 dark:text-yellow-400 font-medium">amarelo 15-30%</span> · <span className="text-destructive font-medium">vermelho &gt;30%</span></p>
                       </div>
                     </CardContent>
