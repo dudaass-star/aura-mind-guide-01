@@ -89,7 +89,23 @@ interface Metrics {
   canceledInPeriod: number;
   pausedInPeriod: number;
   churnRate: number;
+  churnRateLegacy: number;
+  activeAtPeriodStart: number;
   cancellationReasons: { reason: string; action_taken: string; count: number }[];
+  // 💰 Revenue & MRR
+  mrrCommittedBRL: number;
+  mrrWeeklyEquivBRL: number;
+  mrrTotalBRL: number;
+  mrrBreakdown: { plan: string; users: number; committedBRL: number; weeklyEquivBRL: number; totalBRL: number }[];
+  // 🎯 Activation
+  activationRate: number;
+  activatedUsersCount: number;
+  payingUsersCount: number;
+  silentPayersCount: number;
+  // 📈 Mature trial conversion
+  matureTrialsCount: number;
+  matureConvertedCount: number;
+  matureConversionRate: number;
 }
 
 interface RecoverySession {
@@ -462,12 +478,148 @@ export default function AdminEngagement() {
           </div>
         </div>
 
-        <Tabs defaultValue="engagement" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+        <Tabs defaultValue="revenue" className="w-full">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="revenue">💰 Receita & Saúde</TabsTrigger>
             <TabsTrigger value="engagement">Engajamento</TabsTrigger>
             <TabsTrigger value="trial">Semanais & Conversão</TabsTrigger>
             <TabsTrigger value="cancellations">Cancelamentos</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="revenue" className="mt-3 space-y-4">
+            {loading && !metrics ? <SkeletonCards /> : metrics && (
+              <>
+                {/* Hero MRR Card */}
+                <Card className="border-primary/30 bg-gradient-to-br from-primary/5 to-accent/5">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                      <DollarSign className="h-4 w-4" />
+                      MRR Total (Estimado)
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-4xl font-bold text-foreground">R$ {metrics.mrrTotalBRL.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                    <div className="flex gap-4 mt-3 text-xs">
+                      <div>
+                        <span className="text-muted-foreground">Comprometido (mensal): </span>
+                        <span className="font-semibold text-foreground">R$ {metrics.mrrCommittedBRL.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Semanal anualizado: </span>
+                        <span className="font-semibold text-foreground">R$ {metrics.mrrWeeklyEquivBRL.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-2">
+                      💡 Comprometido = converted_at preenchido. Semanal × 4.33 = equivalente mensal teórico.
+                    </p>
+                  </CardContent>
+                </Card>
+
+                {/* Health KPIs grid */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between p-3 pb-1">
+                      <CardTitle className="text-xs font-medium text-muted-foreground">🎯 Activation Rate</CardTitle>
+                      <CheckCircle2 className="h-3.5 w-3.5 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent className="p-3 pt-0">
+                      <div className={`text-xl font-bold ${metrics.activationRate >= 70 ? 'text-green-600' : metrics.activationRate >= 50 ? 'text-yellow-600' : 'text-destructive'}`}>
+                        {metrics.activationRate}%
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">{metrics.activatedUsersCount}/{metrics.payingUsersCount} falaram em ≤3d</p>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between p-3 pb-1">
+                      <CardTitle className="text-xs font-medium text-muted-foreground">🔇 Pagantes Silenciosos</CardTitle>
+                      <AlertCircle className="h-3.5 w-3.5 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent className="p-3 pt-0">
+                      <div className={`text-xl font-bold ${metrics.silentPayersCount > 0 ? 'text-destructive' : 'text-foreground'}`}>
+                        {metrics.silentPayersCount}
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">pagaram, nunca falaram</p>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between p-3 pb-1">
+                      <CardTitle className="text-xs font-medium text-muted-foreground">📈 Conversão Madura</CardTitle>
+                      <ArrowRightLeft className="h-3.5 w-3.5 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent className="p-3 pt-0">
+                      <div className={`text-xl font-bold ${metrics.matureConversionRate >= 25 ? 'text-green-600' : 'text-foreground'}`}>
+                        {metrics.matureConversionRate}%
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">{metrics.matureConvertedCount}/{metrics.matureTrialsCount} trials &gt;7d</p>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between p-3 pb-1">
+                      <CardTitle className="text-xs font-medium text-muted-foreground">📉 Churn Real (período)</CardTitle>
+                      <UserMinus className="h-3.5 w-3.5 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent className="p-3 pt-0">
+                      <div className={`text-xl font-bold ${metrics.churnRate <= 5 ? 'text-green-600' : metrics.churnRate <= 10 ? 'text-yellow-600' : 'text-destructive'}`}>
+                        {metrics.churnRate}%
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">{metrics.canceledInPeriod}/{metrics.activeAtPeriodStart} ativos no início</p>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* MRR breakdown by plan */}
+                {metrics.mrrBreakdown.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base font-semibold">MRR por Plano</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="text-xs">Plano</TableHead>
+                            <TableHead className="text-xs text-right">Usuários</TableHead>
+                            <TableHead className="text-xs text-right">Mensal (R$)</TableHead>
+                            <TableHead className="text-xs text-right">Semanal anualizado (R$)</TableHead>
+                            <TableHead className="text-xs text-right">Total (R$)</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {metrics.mrrBreakdown.map((row) => {
+                            const planNames: Record<string, string> = { essencial: 'Essencial', direcao: 'Direção', transformacao: 'Transformação' };
+                            return (
+                              <TableRow key={row.plan}>
+                                <TableCell className="font-medium text-sm">{planNames[row.plan] || row.plan}</TableCell>
+                                <TableCell className="text-sm text-right">{row.users}</TableCell>
+                                <TableCell className="text-sm text-right">{row.committedBRL.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</TableCell>
+                                <TableCell className="text-sm text-right text-muted-foreground">{row.weeklyEquivBRL.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</TableCell>
+                                <TableCell className="text-sm text-right font-semibold">{row.totalBRL.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Methodology note */}
+                <Card className="bg-muted/30">
+                  <CardContent className="p-4 text-xs text-muted-foreground space-y-1.5">
+                    <p><strong className="text-foreground">📚 Metodologia:</strong></p>
+                    <p>• <strong>MRR Comprometido:</strong> usuários `active` com `converted_at` × preço mensal do plano.</p>
+                    <p>• <strong>Semanal Anualizado:</strong> preço semanal × 4.33 (ainda em trial pago, não comprometido).</p>
+                    <p>• <strong>Activation Rate:</strong> % de pagantes (com `trial_started_at`) que enviaram a 1ª mensagem em ≤3 dias do cadastro.</p>
+                    <p>• <strong>Conversão Madura:</strong> só conta trials com ≥7 dias de vida (ciclo completo). Meta: &gt;25%.</p>
+                    <p>• <strong>Churn Real:</strong> cancelados no período / ativos no início do período. Meta: &lt;5%/mês.</p>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+          </TabsContent>
 
           <TabsContent value="engagement" className="mt-3 space-y-4">
             {loading && !metrics ? <SkeletonCards /> : (
@@ -889,7 +1041,8 @@ export default function AdminEngagement() {
                     </CardHeader>
                     <CardContent className="p-3 pt-0">
                       <div className="text-xl font-bold text-foreground">{metrics.churnRate}%</div>
-                      <p className="text-[11px] text-muted-foreground">cancelados / ativos</p>
+                      <p className="text-[11px] text-muted-foreground">{metrics.canceledInPeriod}/{metrics.activeAtPeriodStart} (ativos no início)</p>
+                      <p className="text-[10px] text-muted-foreground/70 mt-0.5">Legado: {metrics.churnRateLegacy}%</p>
                     </CardContent>
                   </Card>
                 </div>
