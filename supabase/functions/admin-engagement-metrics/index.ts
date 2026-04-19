@@ -454,7 +454,22 @@ Deno.serve(async (req) => {
       .lt('created_at', periodEnd);
 
     const canceledInPeriod = cancelFeedbackInPeriod?.length || 0;
-    const churnRate = activeUsersBase && activeUsersBase > 0
+
+    // ✅ CORRECTED CHURN: canceled_in_period / active_at_start_of_period
+    // Active at start = profiles created before periodStart that were active or got canceled within the period
+    const { count: activeAtPeriodStart } = await supabase
+      .from('profiles')
+      .select('*', { count: 'exact', head: true })
+      .lt('created_at', periodStart)
+      .in('status', ['active', 'canceling', 'canceled', 'paused']);
+
+    // Count cancellations of users that existed at period start (proxy: cancellation_feedback in period)
+    const churnRate = activeAtPeriodStart && activeAtPeriodStart > 0
+      ? Math.round(canceledInPeriod / activeAtPeriodStart * 1000) / 10
+      : 0;
+
+    // Legacy churn (for comparison): cancelled / total base
+    const churnRateLegacy = activeUsersBase && activeUsersBase > 0
       ? Math.round(canceledInPeriod / activeUsersBase * 1000) / 10
       : 0;
 
