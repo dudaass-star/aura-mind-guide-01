@@ -613,6 +613,90 @@ Deno.serve(async (req) => {
       ? Math.round((checkoutCompletedInPeriod || 0) / (checkoutCreatedInPeriod || 0) * 1000) / 10
       : 0;
 
+    // ========== 💰 MRR & REVENUE METRICS ==========
+    // Plan prices in cents (BRL)
+    const PLAN_PRICES_MONTHLY: Record<string, number> = {
+      essencial: 2990,
+      direcao: 4990,
+      transformacao: 7990,
+    };
+    // Weekly plan prices (entry tier — bills weekly until converts to monthly after 7d)
+    const WEEKLY_PRICES: Record<string, number> = {
+      essencial: 690,
+      direcao: 990,
+      transformacao: 1990,
+    };
+
+    // Fetch all active subscribers grouped by plan
+    const { data: activePayingProfiles } = await supabase
+      .from('profiles')
+      .select('plan, status, trial_started_at, converted_at, created_at, last_user_message_at')
+      .in('status', ['active', 'trial']);
+
+    const mrrByPlan: Record<string, { committed: number; weekly: number; users: number }> = {};
+    let mrrCommittedCents = 0; // monthly subscribers (true MRR)
+    let weeklyRevenueCents = 0; // weekly entry tier (not yet committed)
+
+    for (const p of activePayingProfiles || []) {
+      const plan = (p.plan as string) || 'essencial';
+      if (!mrrByPlan[plan]) mrrByPlan[plan] = { committed: 0, weekly: 0, users: 0 };
+      mrrByPlan[plan].users++;
+
+      // Active + converted_at = paying monthly (committed MRR)
+      if (p.status === 'active' && p.converted_at) {
+        const price = PLAN_PRICES_MONTHLY[plan] || 0;
+        mrrCommittedCents += price;
+        mrrByPlan[plan].committed += price;
+      }
+      // Active without converted_at, or trial = on weekly tier
+      else if (p.status === 'active' || p.status === 'trial') {
+        const price = WEEKLY_PRICES[plan] || 0;
+        // Weekly → annualized monthly equivalent: price × 4.33 weeks
+        const monthlyEquivalent = Math.round(price * 4.33);
+        weeklyRevenueCents += monthlyEquivalent;
+        mrrByPlan[plan].weekly += monthlyEquivalent;
+      }
+    }
+
+    const mrrTotalCents = mrrCommittedCents + weeklyRevenueCents;
+    const mrrCommittedBRL = Math.round(mrrCommittedCents / 100 * 100) / 100;
+    const mrrWeeklyEquivBRL = Math.round(weeklyRevenueCents / 100 * 100) / 100;
+    const mrrTotalBRL = Math.round(mrrTotalCents / 100 * 100) / 100;
+
+    const mrrBreakdown = Object.entries(mrrByPlan).map(([plan, data]) => ({
+      plan,
+      users: data.users,
+      committedBRL: Math.round(data.committed / 100 * 100) / 100,
+      weeklyEquivBRL: Math.round(data.weekly / 100 * 100) / 100,
+      totalBRL: Math.round((data.committed + data.weekly) / 100 * 100) / 100,
+    })).sort((a, b) => b.totalBRL - a.totalBRL);
+
+    // ========== 🎯 ACTIVATION RATE ==========
+    // % of paying users (active or trial with card) that sent ≥1 message within 3 days of created_at
+    const payingUsers = (activePayingProfiles || []).filter(p => p.trial_started_at);
+    const activatedUsers = payingUsers.filter(p => {
+      if (!p.last_user_message_at || !p.created_at) return false;
+      const created = new Date(p.created_at as string).getTime();
+      const firstMsg = new Date(p.last_user_message_at as string).getTime();
+      const diffDays = (firstMsg - created) / (1000 * 60 * 60 * 24);
+      return diffDays <= 3;
+    });
+    const silentPayers = payingUsers.filter(p => !p.last_user_message_at);
+    const activationRate = payingUsers.length > 0
+      ? Math.round(activatedUsers.length / payingUsers.length * 1000) / 10
+      : 0;
+
+    // ========== 📈 MATURE TRIAL CONVERSION ==========
+    // Only count trials with ≥7 days of life (full cycle)
+    const matureTrials = (allTrialWithCard || []).filter(p => {
+      const ts = p.trial_started_at as string;
+      return ts <= sevenDaysAgo;
+    });
+    const matureConverted = matureTrials.filter(p => p.status === 'active' || p.converted_at);
+    const matureConversionRate = matureTrials.length > 0
+      ? Math.round(matureConverted.length / matureTrials.length * 1000) / 10
+      : 0;
+
     return new Response(JSON.stringify({
       // Engagement
       activeUsers: activeUsersInPeriod,
