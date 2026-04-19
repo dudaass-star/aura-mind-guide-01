@@ -1041,7 +1041,8 @@ export default function AdminEngagement() {
                     </CardHeader>
                     <CardContent className="p-3 pt-0">
                       <div className="text-xl font-bold text-foreground">{metrics.churnRate}%</div>
-                      <p className="text-[11px] text-muted-foreground">cancelados / ativos</p>
+                      <p className="text-[11px] text-muted-foreground">{metrics.canceledInPeriod}/{metrics.activeAtPeriodStart} (ativos no início)</p>
+                      <p className="text-[10px] text-muted-foreground/70 mt-0.5">Legado: {metrics.churnRateLegacy}%</p>
                     </CardContent>
                   </Card>
                 </div>
