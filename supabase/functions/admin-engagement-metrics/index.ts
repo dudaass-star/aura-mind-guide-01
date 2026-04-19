@@ -871,17 +871,28 @@ Deno.serve(async (req) => {
       weeklyPlansExpired,
       trialsToPaidSuccess: weeklyPlansToPaidSuccess,
       trialToPaidRate,
-      // Cancellation
+      // Cancellation (voluntary + involuntary)
       canceledInPeriod,
+      voluntaryChurnInPeriod,
+      involuntaryChurnInPeriod,
       pausedInPeriod: pausedInPeriodCount || 0,
       churnRate,
+      voluntaryChurnRate,
+      involuntaryChurnRate,
       churnRateLegacy,
       activeAtPeriodStart: activeAtPeriodStart || 0,
+      paymentAtRiskCount: paymentAtRiskCount || 0,
+      recoveryRate,
+      totalPaymentFailedAllTime: totalPaymentFailedAllTime || 0,
+      recoveredPayments: recoveredPayments || 0,
       cancellationReasons,
-      // 💰 Revenue & MRR
+      // 💰 Revenue & MRR (Stripe-sourced)
       mrrCommittedBRL,
       mrrWeeklyEquivBRL,
       mrrTotalBRL,
+      mrrAtRiskBRL,
+      activeSubscriptionsCount,
+      pastDueSubscriptionsCount,
       mrrBreakdown,
       // 🎯 Activation
       activationRate,
