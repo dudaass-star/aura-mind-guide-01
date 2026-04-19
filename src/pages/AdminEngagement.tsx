@@ -96,6 +96,7 @@ interface Metrics {
   churnRateLegacy: number;
   activeAtPeriodStart: number;
   paymentAtRiskCount: number;
+  involuntaryChurnLive?: number;
   recoveryRate: number;
   totalPaymentFailedAllTime: number;
   recoveredPayments: number;
