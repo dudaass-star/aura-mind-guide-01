@@ -821,17 +821,37 @@ Deno.serve(async (req) => {
       paymentAtRiskCount = pastDueSubscriptionsCount;
     }
 
-    // ========== 🔴 INVOLUNTARY CHURN (REAL, from Stripe) ==========
-    // Conta assinaturas que o Stripe efetivamente CANCELOU por falha de pagamento
-    // (após esgotar Smart Retries) nos últimos 30 dias.
+    // ========== 🔴 CHURN REAL DO STRIPE (Voluntário + Involuntário) ==========
+    // Stripe é a fonte da verdade — captura cancelamentos via Portal Stripe,
+    // via API e via webhook que podem não estar refletidos no banco interno.
+    //
+    // Voluntário:    cancellation_requested | customer_service | too_expensive |
+    //                missing_features | switched_service | unused | low_quality | other
+    // Involuntário:  payment_failed (após esgotar Smart Retries por ~30 dias)
+    //
+    // Janela: últimos 30 dias (alinhado com ciclo de retry do Stripe)
     let involuntaryChurnFromStripeCount = 0;
+    let voluntaryChurnFromStripeCount = 0;
+    const stripeChurnReasons: Record<string, number> = {};
+    const VOLUNTARY_REASONS = new Set([
+      'cancellation_requested',
+      'customer_service',
+      'too_expensive',
+      'missing_features',
+      'switched_service',
+      'unused',
+      'low_quality',
+      'other',
+    ]);
+
     if (stripeKey) {
       try {
         const stripe = new Stripe(stripeKey, { apiVersion: '2025-08-27.basil' });
         const thirtyDaysAgoTs = Math.floor((Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000);
         let hasMore = true;
         let startingAfter: string | undefined;
-        while (hasMore) {
+        let stop = false;
+        while (hasMore && !stop) {
           const params: Stripe.SubscriptionListParams = {
             status: 'canceled',
             limit: 100,
@@ -839,21 +859,29 @@ Deno.serve(async (req) => {
           if (startingAfter) params.starting_after = startingAfter;
           const result = await stripe.subscriptions.list(params);
           for (const sub of result.data) {
-            if ((sub.canceled_at || 0) < thirtyDaysAgoTs) continue;
-            const reason = sub.cancellation_details?.reason;
-            // Stripe marca como 'payment_failed' quando esgota retries
-            if (reason === 'payment_failed') involuntaryChurnFromStripeCount++;
+            const canceledAt = sub.canceled_at || 0;
+            if (canceledAt < thirtyDaysAgoTs) continue;
+            const reason = sub.cancellation_details?.reason || 'unknown';
+            stripeChurnReasons[reason] = (stripeChurnReasons[reason] || 0) + 1;
+            if (reason === 'payment_failed') {
+              involuntaryChurnFromStripeCount++;
+            } else if (VOLUNTARY_REASONS.has(reason)) {
+              voluntaryChurnFromStripeCount++;
+            }
           }
           hasMore = result.has_more;
           if (result.data.length > 0) startingAfter = result.data[result.data.length - 1].id;
           // Safety: se a página mais antiga já passou de 30d, parar paginação
           const oldest = result.data[result.data.length - 1];
-          if (oldest && (oldest.canceled_at || 0) < thirtyDaysAgoTs) break;
+          if (oldest && (oldest.canceled_at || 0) < thirtyDaysAgoTs) stop = true;
         }
+        console.log(`🔴 Stripe Churn (30d): voluntary=${voluntaryChurnFromStripeCount}, involuntary=${involuntaryChurnFromStripeCount}, reasons=${JSON.stringify(stripeChurnReasons)}`);
       } catch (e) {
-        console.warn('⚠️ Failed to fetch involuntary churn from Stripe:', e);
+        console.warn('⚠️ Failed to fetch churn from Stripe:', e);
       }
     }
+
+    const totalChurnFromStripe = voluntaryChurnFromStripeCount + involuntaryChurnFromStripeCount;
 
     const mrrTotalCents = mrrCommittedCents + weeklyRevenueCents;
     const mrrCommittedBRL = Math.round(mrrCommittedCents / 100 * 100) / 100;
