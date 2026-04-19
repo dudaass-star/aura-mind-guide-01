@@ -106,6 +106,7 @@ interface Metrics {
   totalPaymentFailedAllTime: number;
   recoveredPayments: number;
   cancellationReasons: { reason: string; action_taken: string; count: number }[];
+  internalCancellationReasons30d?: Record<string, number>;
   // 💰 Revenue & MRR (Stripe-sourced)
   mrrCommittedBRL: number;
   mrrWeeklyEquivBRL: number;
@@ -675,6 +676,36 @@ export default function AdminEngagement() {
                                 <strong>{count}</strong> · {reason}
                               </span>
                             ))}
+                        </div>
+                      </div>
+                    )}
+                    {metrics.internalCancellationReasons30d && Object.keys(metrics.internalCancellationReasons30d).length > 0 && (
+                      <div className="mt-2 p-2.5 border rounded-md bg-primary/5 border-primary/20">
+                        <div className="text-[11px] font-medium text-muted-foreground mb-1.5">
+                          🟦 Motivos detalhados (banco interno · fluxo /cancelar · últimos 30d):
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {Object.entries(metrics.internalCancellationReasons30d)
+                            .sort(([, a], [, b]) => b - a)
+                            .map(([reason, count]) => {
+                              const labels: Record<string, string> = {
+                                expensive: '💰 Está caro',
+                                not_using: '😴 Não estou usando',
+                                not_satisfied: '😞 Não gostei do serviço',
+                                come_back_later: '👋 Vou voltar depois',
+                                other: '❓ Outro motivo',
+                                pause_requested: '⏸️ Pediu pausa',
+                                unknown: '— Sem motivo',
+                              };
+                              return (
+                                <span key={reason} className="text-[10px] px-2 py-0.5 rounded-full bg-background border">
+                                  <strong>{count}</strong> · {labels[reason] || reason}
+                                </span>
+                              );
+                            })}
+                        </div>
+                        <div className="text-[10px] text-muted-foreground mt-1.5">
+                          ℹ️ Captura quem cancelou pelo nosso fluxo (não inclui Portal Stripe)
                         </div>
                       </div>
                     )}

@@ -523,7 +523,7 @@ Deno.serve(async (req) => {
       ? Math.round(voluntaryChurnInPeriod / activeUsersBase * 1000) / 10
       : 0;
 
-    // Group by reason
+    // Group by reason (período do dashboard)
     const reasonCounts: Record<string, { reason: string; action_taken: string; count: number }> = {};
     for (const fb of cancelFeedbackInPeriod || []) {
       const key = fb.reason || 'unknown';
@@ -533,6 +533,20 @@ Deno.serve(async (req) => {
       reasonCounts[key].count++;
     }
     const cancellationReasons = Object.values(reasonCounts).sort((a, b) => b.count - a.count);
+
+    // 🟦 Motivos detalhados do banco interno (últimos 30 dias) — alinhado com janela do Stripe
+    const thirtyDaysAgoIso = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const { data: cancelFeedback30d } = await supabase
+      .from('cancellation_feedback')
+      .select('reason, action_taken')
+      .eq('action_taken', 'canceled')
+      .gte('created_at', thirtyDaysAgoIso);
+
+    const internalReasonCounts30d: Record<string, number> = {};
+    for (const fb of cancelFeedback30d || []) {
+      const key = fb.reason || 'unknown';
+      internalReasonCounts30d[key] = (internalReasonCounts30d[key] || 0) + 1;
+    }
 
     // ========== WEEKLY PLANS (STRIPE SOURCE OF TRUTH) ==========
     // Fetch charges from Stripe with amounts 690, 990, 1990 (R$6.90, R$9.90, R$19.90)
@@ -1038,6 +1052,7 @@ Deno.serve(async (req) => {
       totalPaymentFailedAllTime: totalPaymentFailedAllTime || 0,
       recoveredPayments: recoveredPayments || 0,
       cancellationReasons,
+      internalCancellationReasons30d: internalReasonCounts30d,
       // 💰 Revenue & MRR (Stripe-sourced)
       mrrCommittedBRL,
       mrrWeeklyEquivBRL,
