@@ -821,11 +821,47 @@ Deno.serve(async (req) => {
       paymentAtRiskCount = pastDueSubscriptionsCount;
     }
 
+    // ========== 🔴 INVOLUNTARY CHURN (REAL, from Stripe) ==========
+    // Conta assinaturas que o Stripe efetivamente CANCELOU por falha de pagamento
+    // (após esgotar Smart Retries) nos últimos 30 dias.
+    let involuntaryChurnFromStripeCount = 0;
+    if (stripeKey) {
+      try {
+        const stripe = new Stripe(stripeKey, { apiVersion: '2025-08-27.basil' });
+        const thirtyDaysAgoTs = Math.floor((Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000);
+        let hasMore = true;
+        let startingAfter: string | undefined;
+        while (hasMore) {
+          const params: Stripe.SubscriptionListParams = {
+            status: 'canceled',
+            limit: 100,
+          };
+          if (startingAfter) params.starting_after = startingAfter;
+          const result = await stripe.subscriptions.list(params);
+          for (const sub of result.data) {
+            if ((sub.canceled_at || 0) < thirtyDaysAgoTs) continue;
+            const reason = sub.cancellation_details?.reason;
+            // Stripe marca como 'payment_failed' quando esgota retries
+            if (reason === 'payment_failed') involuntaryChurnFromStripeCount++;
+          }
+          hasMore = result.has_more;
+          if (result.data.length > 0) startingAfter = result.data[result.data.length - 1].id;
+          // Safety: se a página mais antiga já passou de 30d, parar paginação
+          const oldest = result.data[result.data.length - 1];
+          if (oldest && (oldest.canceled_at || 0) < thirtyDaysAgoTs) break;
+        }
+      } catch (e) {
+        console.warn('⚠️ Failed to fetch involuntary churn from Stripe:', e);
+      }
+    }
+
     const mrrTotalCents = mrrCommittedCents + weeklyRevenueCents;
     const mrrCommittedBRL = Math.round(mrrCommittedCents / 100 * 100) / 100;
     const mrrWeeklyEquivBRL = Math.round(weeklyRevenueCents / 100 * 100) / 100;
     const mrrTotalBRL = Math.round(mrrTotalCents / 100 * 100) / 100;
     const mrrAtRiskBRL = Math.round(mrrAtRiskCents / 100 * 100) / 100;
+    const mrrAtRiskRecentBRL = Math.round(mrrAtRiskRecentCents / 100 * 100) / 100;
+    const mrrAtRiskCriticalBRL = Math.round(mrrAtRiskCriticalCents / 100 * 100) / 100;
     const mrrAtRiskMonthlyBRL = Math.round(mrrAtRiskMonthlyCents / 100 * 100) / 100;
     const mrrAtRiskWeeklyBRL = Math.round(mrrAtRiskWeeklyCents / 100 * 100) / 100;
 
