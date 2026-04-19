@@ -743,34 +743,35 @@ Deno.serve(async (req) => {
         // Skip paused subscriptions for MRR
         if (sub.pause_collection) continue;
 
-        // Past due → SÓ conta em "Em risco" se estiver na janela de dunning ativa (≤7 dias)
-        // Após 7 dias sem recuperação, é tratado como churn involuntário e NÃO entra no MRR At Risk.
-        // Isso evita inflar o card com cobranças velhas que já deveriam ter virado canceled.
+        // Past due → conta como "Em risco" enquanto Stripe ainda está tentando recuperar (até ~30 dias).
+        // Smart Retries do Stripe roda por ~4 semanas antes de marcar como canceled/unpaid.
+        // Separamos em "recente" (≤7d) e "crítico" (>7d) apenas para visualização — ambos são recuperáveis.
         if (sub.status === 'past_due') {
           const periodEndMs = (sub.current_period_end || 0) * 1000;
           const daysSinceFailure = periodEndMs > 0
             ? (Date.now() - periodEndMs) / (1000 * 60 * 60 * 24)
             : 999;
 
-          if (daysSinceFailure > 7) {
-            // Já passou da janela de recuperação → conta como churn involuntário, não como "em risco"
-            pastDueExpiredCount++;
-            continue;
-          }
-
           pastDueSubscriptionsCount++;
           const realAmount = sub.items.data[0]?.price?.unit_amount || 0;
+          let monthlyContribution = 0;
           if (cycle === 'monthly') {
-            mrrAtRiskCents += realAmount;
+            monthlyContribution = realAmount;
             mrrAtRiskMonthlyCents += realAmount;
           } else if (cycle === 'yearly') {
-            const monthlyEquiv = Math.round(realAmount / 12);
-            mrrAtRiskCents += monthlyEquiv;
-            mrrAtRiskMonthlyCents += monthlyEquiv;
+            monthlyContribution = Math.round(realAmount / 12);
+            mrrAtRiskMonthlyCents += monthlyContribution;
           } else if (cycle === 'weekly') {
-            const monthlyEquiv = Math.round(realAmount * 4.33);
-            mrrAtRiskCents += monthlyEquiv;
-            mrrAtRiskWeeklyCents += monthlyEquiv;
+            monthlyContribution = Math.round(realAmount * 4.33);
+            mrrAtRiskWeeklyCents += monthlyContribution;
+          }
+          mrrAtRiskCents += monthlyContribution;
+          if (daysSinceFailure > 7) {
+            pastDueCriticalCount++;
+            mrrAtRiskCriticalCents += monthlyContribution;
+          } else {
+            pastDueRecentCount++;
+            mrrAtRiskRecentCents += monthlyContribution;
           }
           continue;
         }
