@@ -754,9 +754,20 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // 'trialing' status: only meaningful for weekly plans (paid 7-day cycle).
-        // Monthly/yearly subs in 'trialing' would be legacy free trials — ignore those.
-        if (sub.status === 'trialing' && cycle !== 'weekly') {
+        // 'trialing' status in this project = paid 7-day weekly cycle on a MONTHLY price.
+        // Stripe holds the subscription in 'trialing' until the first full monthly charge.
+        // Economically these users are on the WEEKLY plan (R$6.90/9.90/19.90), not monthly yet.
+        // We count them as weekly revenue (× 4.33) to avoid inflating committed MRR.
+        if (sub.status === 'trialing') {
+          if (cycle === 'monthly' || cycle === 'weekly') {
+            activeSubscriptionsCount++;
+            weeklyActiveSubscriptionsCount++;
+            const weeklyPrice = WEEKLY_PRICES[plan] || 0;
+            const monthlyEquivalent = Math.round(weeklyPrice * 4.33);
+            weeklyRevenueCents += monthlyEquivalent;
+            mrrByPlan[plan].weekly += monthlyEquivalent;
+          }
+          // yearly trialing = legacy free trial, ignore
           continue;
         }
 
@@ -769,13 +780,12 @@ Deno.serve(async (req) => {
         } else if (cycle === 'yearly') {
           activeSubscriptionsCount++;
           monthlyActiveSubscriptionsCount++;
-          // Yearly → divide by 12 for monthly equivalent
           const yearlyAmount = sub.items.data[0]?.price?.unit_amount || 0;
           const monthlyEquiv = Math.round(yearlyAmount / 12);
           mrrCommittedCents += monthlyEquiv;
           mrrByPlan[plan].committed += monthlyEquiv;
         } else if (cycle === 'weekly') {
-          // Both 'active' (renewing weekly before card upgrade) and 'trialing' (current 7-day) count
+          // Active weekly (rare — usually means recurring weekly price exists)
           activeSubscriptionsCount++;
           weeklyActiveSubscriptionsCount++;
           const realAmount = sub.items.data[0]?.price?.unit_amount || WEEKLY_PRICES[plan] || 0;
