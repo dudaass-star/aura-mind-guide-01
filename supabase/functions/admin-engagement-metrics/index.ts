@@ -898,21 +898,27 @@ Deno.serve(async (req) => {
     const totalChurnFromStripe = voluntaryChurnFromStripeCount + involuntaryChurnFromStripeCount;
 
     // ============================================================
-    // 📊 RETENÇÃO POR COORTE (Cohort Retention)
+    // 📊 RETENÇÃO POR COORTE (Cohort Retention) — JANELAS DISCRETAS
     // ============================================================
-    // Para cada bucket de idade (≤7d, ≤30d, ≤60d, ≤90d), calcula:
-    //   - total: assinaturas criadas há ≥ Nd (coorte madura)
-    //   - canceled: quantas dessas foram canceladas dentro de Nd da criação
-    //   - pct: % de churn no bucket
-    // Considera apenas coortes "maduras" para evitar viés (sub criada há 3d
-    // não pode ser contada no bucket de 30d porque ainda não teve chance).
+    // Cada bucket representa uma JANELA específica do ciclo de vida da assinatura:
+    //   - churn0_7:   dropoff inicial (trial → 1ª cobrança)
+    //   - churn8_30:  1º ciclo mensal completo
+    //   - churn31_60: 🔥 RENOVAÇÃO 2ª MENSALIDADE (teste do "valor real")
+    //   - churn61_90: 3ª mensalidade
+    //
+    // Para cada janela [startDay, endDay]:
+    //   - total: subs que SOBREVIVERAM até startDay E têm idade ≥ endDay
+    //            (ou seja: chegaram vivas no início da janela e tiveram tempo
+    //             suficiente para serem testadas pela janela inteira)
+    //   - canceled: dessas, quantas cancelaram DENTRO de [startDay, endDay]
+    //   - pct: % de churn DA JANELA (não cumulativo)
     // ------------------------------------------------------------
     type CohortBucket = { total: number; canceled: number; pct: number };
     const cohortRetention: Record<string, CohortBucket> = {
-      churn7d: { total: 0, canceled: 0, pct: 0 },
-      churn30d: { total: 0, canceled: 0, pct: 0 },
-      churn60d: { total: 0, canceled: 0, pct: 0 },
-      churn90d: { total: 0, canceled: 0, pct: 0 },
+      churn0_7: { total: 0, canceled: 0, pct: 0 },
+      churn8_30: { total: 0, canceled: 0, pct: 0 },
+      churn31_60: { total: 0, canceled: 0, pct: 0 },
+      churn61_90: { total: 0, canceled: 0, pct: 0 },
     };
 
     if (stripeKey) {
@@ -924,10 +930,10 @@ Deno.serve(async (req) => {
         const windowStartTs = nowTs - 180 * DAY;
 
         const buckets = [
-          { key: 'churn7d', days: 7 },
-          { key: 'churn30d', days: 30 },
-          { key: 'churn60d', days: 60 },
-          { key: 'churn90d', days: 90 },
+          { key: 'churn0_7',   start: 0,  end: 7 },
+          { key: 'churn8_30',  start: 8,  end: 30 },
+          { key: 'churn31_60', start: 31, end: 60 },
+          { key: 'churn61_90', start: 61, end: 90 },
         ];
 
         // Pagina TODAS as subscriptions criadas nos últimos 180 dias (status: all)
@@ -949,12 +955,23 @@ Deno.serve(async (req) => {
             const canceledTs = sub.canceled_at || 0;
             const lifetimeDays = canceledTs > 0 ? (canceledTs - createdTs) / DAY : null;
 
-            for (const { key, days } of buckets) {
-              // Coorte madura: sub precisa ter idade ≥ Nd para entrar no denominador
-              if (ageDays >= days) {
+            for (const { key, start, end } of buckets) {
+              // Para entrar no denominador da JANELA [start, end]:
+              //   1. Sub precisa ter idade ≥ end (teve chance de atravessar a janela inteira)
+              //   2. Sub precisa ter sobrevivido até pelo menos `start` dias
+              //      (ou seja: NÃO cancelou antes do início desta janela)
+              const matureForWindow = ageDays >= end;
+              const survivedToWindowStart =
+                lifetimeDays === null || lifetimeDays >= start;
+
+              if (matureForWindow && survivedToWindowStart) {
                 cohortRetention[key].total++;
-                // Cancelou DENTRO da janela de Nd após criação?
-                if (lifetimeDays !== null && lifetimeDays <= days) {
+                // Cancelou DENTRO desta janela?
+                if (
+                  lifetimeDays !== null &&
+                  lifetimeDays >= start &&
+                  lifetimeDays <= end
+                ) {
                   cohortRetention[key].canceled++;
                 }
               }
@@ -971,7 +988,7 @@ Deno.serve(async (req) => {
           b.pct = b.total > 0 ? Math.round((b.canceled / b.total) * 1000) / 10 : 0;
         }
 
-        console.log(`📊 Cohort Retention (processed ${processedCount} subs):`, JSON.stringify(cohortRetention));
+        console.log(`📊 Cohort Retention windows (processed ${processedCount} subs):`, JSON.stringify(cohortRetention));
       } catch (e) {
         console.warn('⚠️ Failed to compute cohort retention:', e);
       }
