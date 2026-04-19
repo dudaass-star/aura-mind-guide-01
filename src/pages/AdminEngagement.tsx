@@ -533,12 +533,15 @@ export default function AdminEngagement() {
                         <div className="text-[10px] text-muted-foreground">{metrics.weeklyActiveSubscriptionsCount ?? 0} semanais × 4.33 (Stripe trialing = semanal pago)</div>
                       </div>
                       <div>
-                        <span className="text-muted-foreground">⚠️ Em risco (past_due): </span>
+                        <span className="text-muted-foreground">⚠️ Em risco (past_due ≤7d): </span>
                         <div className={`font-semibold ${metrics.mrrAtRiskBRL > 0 ? 'text-destructive' : 'text-foreground'}`}>R$ {metrics.mrrAtRiskBRL.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
                         <div className="text-[10px] text-muted-foreground">
-                          {metrics.pastDueSubscriptionsCount} cobranças falhas
+                          {metrics.pastDueSubscriptionsCount} cobranças em dunning ativo
                           {(metrics.mrrAtRiskMonthlyBRL !== undefined && metrics.mrrAtRiskWeeklyBRL !== undefined && (metrics.mrrAtRiskMonthlyBRL > 0 || metrics.mrrAtRiskWeeklyBRL > 0)) && (
                             <> · R$ {metrics.mrrAtRiskMonthlyBRL.toFixed(0)} mensais + R$ {metrics.mrrAtRiskWeeklyBRL.toFixed(0)} semanais</>
+                          )}
+                          {(metrics.involuntaryChurnLive ?? 0) > 0 && (
+                            <div className="mt-1 text-destructive/80">+{metrics.involuntaryChurnLive} past_due &gt;7d (já é churn, não conta aqui)</div>
                           )}
                         </div>
                       </div>
