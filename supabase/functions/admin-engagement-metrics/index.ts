@@ -1031,6 +1031,9 @@ Deno.serve(async (req) => {
       pastDueRecentCount,                                      // ≤7d
       pastDueCriticalCount,                                    // >7d (Stripe ainda tentando)
       involuntaryChurnLive: involuntaryChurnFromStripeCount,   // canceled por payment_failed nos últimos 30d (real do Stripe)
+      voluntaryChurnLive: voluntaryChurnFromStripeCount,       // canceled por solicitação do usuário nos últimos 30d (Stripe Portal + UI)
+      totalChurnFromStripe,                                    // soma real do Stripe nos últimos 30d
+      stripeChurnReasons,                                      // breakdown por razão (Stripe)
       recoveryRate,
       totalPaymentFailedAllTime: totalPaymentFailedAllTime || 0,
       recoveredPayments: recoveredPayments || 0,
