@@ -494,7 +494,9 @@ Deno.serve(async (req) => {
       ? Math.round((recoveredPayments || 0) / (totalPaymentFailedAllTime || 1) * 1000) / 10
       : 0;
 
-    // TOTAL CHURN = voluntary + involuntary
+    // TOTAL CHURN do período (histórico): voluntary + involuntary registrados
+    // Obs: past_due >7d HOJE (pastDueExpiredCount) é exposto separado como "involuntaryChurnLive"
+    // — representa cobranças velhas que já são churn de fato mas o Stripe ainda não cancelou.
     const canceledInPeriod = voluntaryChurnInPeriod + involuntaryChurnInPeriod;
 
     // ✅ CORRECTED CHURN: total_churn_in_period / active_at_start_of_period
@@ -700,7 +702,8 @@ Deno.serve(async (req) => {
     let activeSubscriptionsCount = 0;
     let weeklyActiveSubscriptionsCount = 0;
     let monthlyActiveSubscriptionsCount = 0;
-    let pastDueSubscriptionsCount = 0;
+    let pastDueSubscriptionsCount = 0;        // past_due ≤7d (em recuperação ativa)
+    let pastDueExpiredCount = 0;              // past_due >7d (já é churn involuntário, ignorar)
 
     if (stripeKey) {
       const stripe = new Stripe(stripeKey, { apiVersion: '2025-08-27.basil' });
@@ -735,8 +738,21 @@ Deno.serve(async (req) => {
         // Skip paused subscriptions for MRR
         if (sub.pause_collection) continue;
 
-        // Past due → MRR at risk (use real unit_amount from Stripe, not fixed map)
+        // Past due → SÓ conta em "Em risco" se estiver na janela de dunning ativa (≤7 dias)
+        // Após 7 dias sem recuperação, é tratado como churn involuntário e NÃO entra no MRR At Risk.
+        // Isso evita inflar o card com cobranças velhas que já deveriam ter virado canceled.
         if (sub.status === 'past_due') {
+          const periodEndMs = (sub.current_period_end || 0) * 1000;
+          const daysSinceFailure = periodEndMs > 0
+            ? (Date.now() - periodEndMs) / (1000 * 60 * 60 * 24)
+            : 999;
+
+          if (daysSinceFailure > 7) {
+            // Já passou da janela de recuperação → conta como churn involuntário, não como "em risco"
+            pastDueExpiredCount++;
+            continue;
+          }
+
           pastDueSubscriptionsCount++;
           const realAmount = sub.items.data[0]?.price?.unit_amount || 0;
           if (cycle === 'monthly') {
@@ -941,7 +957,8 @@ Deno.serve(async (req) => {
       involuntaryChurnRate,
       churnRateLegacy,
       activeAtPeriodStart: activeAtPeriodStart || 0,
-      paymentAtRiskCount: paymentAtRiskCount || 0,
+      paymentAtRiskCount: paymentAtRiskCount || 0,         // past_due ≤7d (recuperável)
+      involuntaryChurnLive: pastDueExpiredCount,           // past_due >7d (já é churn, Stripe ainda não cancelou)
       recoveryRate,
       totalPaymentFailedAllTime: totalPaymentFailedAllTime || 0,
       recoveredPayments: recoveredPayments || 0,

@@ -96,6 +96,7 @@ interface Metrics {
   churnRateLegacy: number;
   activeAtPeriodStart: number;
   paymentAtRiskCount: number;
+  involuntaryChurnLive?: number;
   recoveryRate: number;
   totalPaymentFailedAllTime: number;
   recoveredPayments: number;
@@ -532,12 +533,15 @@ export default function AdminEngagement() {
                         <div className="text-[10px] text-muted-foreground">{metrics.weeklyActiveSubscriptionsCount ?? 0} semanais × 4.33 (Stripe trialing = semanal pago)</div>
                       </div>
                       <div>
-                        <span className="text-muted-foreground">⚠️ Em risco (past_due): </span>
+                        <span className="text-muted-foreground">⚠️ Em risco (past_due ≤7d): </span>
                         <div className={`font-semibold ${metrics.mrrAtRiskBRL > 0 ? 'text-destructive' : 'text-foreground'}`}>R$ {metrics.mrrAtRiskBRL.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
                         <div className="text-[10px] text-muted-foreground">
-                          {metrics.pastDueSubscriptionsCount} cobranças falhas
+                          {metrics.pastDueSubscriptionsCount} cobranças em dunning ativo
                           {(metrics.mrrAtRiskMonthlyBRL !== undefined && metrics.mrrAtRiskWeeklyBRL !== undefined && (metrics.mrrAtRiskMonthlyBRL > 0 || metrics.mrrAtRiskWeeklyBRL > 0)) && (
                             <> · R$ {metrics.mrrAtRiskMonthlyBRL.toFixed(0)} mensais + R$ {metrics.mrrAtRiskWeeklyBRL.toFixed(0)} semanais</>
+                          )}
+                          {(metrics.involuntaryChurnLive ?? 0) > 0 && (
+                            <div className="mt-1 text-destructive/80">+{metrics.involuntaryChurnLive} past_due &gt;7d (já é churn, não conta aqui)</div>
                           )}
                         </div>
                       </div>
@@ -626,16 +630,24 @@ export default function AdminEngagement() {
                         <div className="font-semibold text-foreground">{metrics.voluntaryChurnInPeriod} · {metrics.voluntaryChurnRate}%</div>
                       </div>
                       <div className="border rounded-md p-2.5 bg-muted/30">
-                        <div className="text-muted-foreground mb-1">🟥 Involuntário (cartão falhou 7d+)</div>
+                        <div className="text-muted-foreground mb-1">🟥 Involuntário no período (cartão falhou 7d+)</div>
                         <div className="font-semibold text-destructive">{metrics.involuntaryChurnInPeriod} · {metrics.involuntaryChurnRate}%</div>
                       </div>
                       <div className="border rounded-md p-2.5 bg-yellow-500/10 border-yellow-500/30">
-                        <div className="text-muted-foreground mb-1">🟧 Em recuperação (&lt;7d)</div>
+                        <div className="text-muted-foreground mb-1">🟧 Em recuperação ativa (≤7d)</div>
                         <div className="font-semibold text-yellow-700 dark:text-yellow-500">{metrics.paymentAtRiskCount}</div>
+                        <div className="text-[10px] text-muted-foreground mt-1">past_due no Stripe, dentro da janela de dunning</div>
                       </div>
                     </div>
+                    {(metrics.involuntaryChurnLive ?? 0) > 0 && (
+                      <div className="mt-3 border rounded-md p-2.5 bg-destructive/5 border-destructive/30 text-xs">
+                        <div className="text-muted-foreground mb-1">⚠️ Cobranças velhas no Stripe (past_due &gt;7d ainda não canceladas)</div>
+                        <div className="font-semibold text-destructive">{metrics.involuntaryChurnLive} assinaturas — já são churn involuntário de fato</div>
+                        <div className="text-[10px] text-muted-foreground mt-1">Stripe ainda não as cancelou (configure Smart Retries para "Cancel after X days"). Não contam em "Em risco" nem no MRR.</div>
+                      </div>
+                    )}
                     <p className="text-[11px] text-muted-foreground mt-3">
-                      💡 Churn involuntário só conta após 7 dias sem recuperação (período do dunning Stripe). Em recuperação ainda pode voltar.
+                      💡 "Em risco" só conta past_due dentro da janela de 7 dias do dunning. Após isso, vira churn involuntário automaticamente.
                     </p>
                   </CardContent>
                 </Card>
