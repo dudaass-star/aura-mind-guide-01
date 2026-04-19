@@ -437,7 +437,7 @@ Deno.serve(async (req) => {
       .select('*', { count: 'exact', head: true })
       .eq('status', 'canceling');
 
-    // ========== CANCELLATION METRICS ==========
+    // ========== CANCELLATION METRICS (VOLUNTARY + INVOLUNTARY) ==========
 
     const { data: cancelFeedbackInPeriod } = await supabase
       .from('cancellation_feedback')
@@ -453,24 +453,75 @@ Deno.serve(async (req) => {
       .gte('created_at', periodStart)
       .lt('created_at', periodEnd);
 
-    const canceledInPeriod = cancelFeedbackInPeriod?.length || 0;
+    // 🟦 VOLUNTARY CHURN: user clicked cancel
+    const voluntaryChurnInPeriod = cancelFeedbackInPeriod?.length || 0;
 
-    // ✅ CORRECTED CHURN: canceled_in_period / active_at_start_of_period
-    // Active at start = profiles created before periodStart that were active or got canceled within the period
+    // 🟥 INVOLUNTARY CHURN: payment failed 7+ days ago AND not recovered
+    // Logic: payment_failed_at is older than (periodEnd - 7d) and status changed to canceled/trial_expired in period
+    // OR payment_failed_at falls within period AND it's been 7+ days since
+    const sevenDaysBeforePeriodEnd = new Date(new Date(periodEnd).getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    
+    const { data: involuntaryChurnProfiles } = await supabase
+      .from('profiles')
+      .select('user_id, status, payment_failed_at, updated_at')
+      .not('payment_failed_at', 'is', null)
+      .lt('payment_failed_at', sevenDaysBeforePeriodEnd)
+      .in('status', ['canceled', 'trial_expired', 'inactive']);
+
+    // Filter: status change happened within period
+    const involuntaryChurnInPeriod = (involuntaryChurnProfiles || []).filter(p => {
+      const updatedAt = p.updated_at as string;
+      return updatedAt >= periodStart && updatedAt < periodEnd;
+    }).length;
+
+    // 🟧 PAYMENT AT RISK: payment_failed_at within period, still in dunning window (< 7 days)
+    const { count: paymentAtRiskCount } = await supabase
+      .from('profiles')
+      .select('*', { count: 'exact', head: true })
+      .not('payment_failed_at', 'is', null)
+      .gte('payment_failed_at', sevenDaysBeforePeriodEnd);
+
+    // 🟩 RECOVERY RATE: % of payment_failed users that recovered (status active again)
+    const { count: totalPaymentFailedAllTime } = await supabase
+      .from('profiles')
+      .select('*', { count: 'exact', head: true })
+      .not('payment_failed_at', 'is', null);
+
+    const { count: recoveredPayments } = await supabase
+      .from('profiles')
+      .select('*', { count: 'exact', head: true })
+      .not('payment_failed_at', 'is', null)
+      .eq('status', 'active');
+
+    const recoveryRate = (totalPaymentFailedAllTime || 0) > 0
+      ? Math.round((recoveredPayments || 0) / (totalPaymentFailedAllTime || 1) * 1000) / 10
+      : 0;
+
+    // TOTAL CHURN = voluntary + involuntary
+    const canceledInPeriod = voluntaryChurnInPeriod + involuntaryChurnInPeriod;
+
+    // ✅ CORRECTED CHURN: total_churn_in_period / active_at_start_of_period
     const { count: activeAtPeriodStart } = await supabase
       .from('profiles')
       .select('*', { count: 'exact', head: true })
       .lt('created_at', periodStart)
-      .in('status', ['active', 'canceling', 'canceled', 'paused']);
+      .in('status', ['active', 'canceling', 'canceled', 'paused', 'trial_expired', 'inactive']);
 
-    // Count cancellations of users that existed at period start (proxy: cancellation_feedback in period)
     const churnRate = activeAtPeriodStart && activeAtPeriodStart > 0
       ? Math.round(canceledInPeriod / activeAtPeriodStart * 1000) / 10
       : 0;
 
+    const voluntaryChurnRate = activeAtPeriodStart && activeAtPeriodStart > 0
+      ? Math.round(voluntaryChurnInPeriod / activeAtPeriodStart * 1000) / 10
+      : 0;
+
+    const involuntaryChurnRate = activeAtPeriodStart && activeAtPeriodStart > 0
+      ? Math.round(involuntaryChurnInPeriod / activeAtPeriodStart * 1000) / 10
+      : 0;
+
     // Legacy churn (for comparison): cancelled / total base
     const churnRateLegacy = activeUsersBase && activeUsersBase > 0
-      ? Math.round(canceledInPeriod / activeUsersBase * 1000) / 10
+      ? Math.round(voluntaryChurnInPeriod / activeUsersBase * 1000) / 10
       : 0;
 
     // Group by reason
