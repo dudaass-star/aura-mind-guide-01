@@ -494,8 +494,9 @@ Deno.serve(async (req) => {
       ? Math.round((recoveredPayments || 0) / (totalPaymentFailedAllTime || 1) * 1000) / 10
       : 0;
 
-    // TOTAL CHURN = voluntary + involuntary
-    const canceledInPeriod = voluntaryChurnInPeriod + involuntaryChurnInPeriod;
+    // TOTAL CHURN = voluntary + involuntary (histórico do período)
+    // Obs: pastDueExpiredCount (past_due >7d hoje) é somado mais abaixo, após o loop do Stripe rodar
+    let canceledInPeriod = voluntaryChurnInPeriod + involuntaryChurnInPeriod;
 
     // ✅ CORRECTED CHURN: total_churn_in_period / active_at_start_of_period
     const { count: activeAtPeriodStart } = await supabase
