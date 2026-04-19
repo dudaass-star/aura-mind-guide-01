@@ -474,12 +474,9 @@ Deno.serve(async (req) => {
       return updatedAt >= periodStart && updatedAt < periodEnd;
     }).length;
 
-    // 🟧 PAYMENT AT RISK: payment_failed_at within period, still in dunning window (< 7 days)
-    const { count: paymentAtRiskCount } = await supabase
-      .from('profiles')
-      .select('*', { count: 'exact', head: true })
-      .not('payment_failed_at', 'is', null)
-      .gte('payment_failed_at', sevenDaysBeforePeriodEnd);
+    // 🟧 PAYMENT AT RISK: real past_due subscriptions in Stripe (computed below in MRR section)
+    // Will be assigned after MRR loop runs.
+    let paymentAtRiskCount = 0;
 
     // 🟩 RECOVERY RATE: % of payment_failed users that recovered (status active again)
     const { count: totalPaymentFailedAllTime } = await supabase
