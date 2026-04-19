@@ -89,7 +89,23 @@ interface Metrics {
   canceledInPeriod: number;
   pausedInPeriod: number;
   churnRate: number;
+  churnRateLegacy: number;
+  activeAtPeriodStart: number;
   cancellationReasons: { reason: string; action_taken: string; count: number }[];
+  // 💰 Revenue & MRR
+  mrrCommittedBRL: number;
+  mrrWeeklyEquivBRL: number;
+  mrrTotalBRL: number;
+  mrrBreakdown: { plan: string; users: number; committedBRL: number; weeklyEquivBRL: number; totalBRL: number }[];
+  // 🎯 Activation
+  activationRate: number;
+  activatedUsersCount: number;
+  payingUsersCount: number;
+  silentPayersCount: number;
+  // 📈 Mature trial conversion
+  matureTrialsCount: number;
+  matureConvertedCount: number;
+  matureConversionRate: number;
 }
 
 interface RecoverySession {
