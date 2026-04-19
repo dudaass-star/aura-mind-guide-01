@@ -108,10 +108,10 @@ interface Metrics {
   cancellationReasons: { reason: string; action_taken: string; count: number }[];
   internalCancellationReasons30d?: Record<string, number>;
   cohortRetention?: {
-    churn7d: { total: number; canceled: number; pct: number };
-    churn30d: { total: number; canceled: number; pct: number };
-    churn60d: { total: number; canceled: number; pct: number };
-    churn90d: { total: number; canceled: number; pct: number };
+    churn0_7: { total: number; canceled: number; pct: number };
+    churn8_30: { total: number; canceled: number; pct: number };
+    churn31_60: { total: number; canceled: number; pct: number };
+    churn61_90: { total: number; canceled: number; pct: number };
   };
   // 💰 Revenue & MRR (Stripe-sourced)
   mrrCommittedBRL: number;
