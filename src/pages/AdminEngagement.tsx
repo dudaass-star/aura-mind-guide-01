@@ -96,6 +96,8 @@ interface Metrics {
   churnRateLegacy: number;
   activeAtPeriodStart: number;
   paymentAtRiskCount: number;
+  pastDueRecentCount?: number;
+  pastDueCriticalCount?: number;
   involuntaryChurnLive?: number;
   recoveryRate: number;
   totalPaymentFailedAllTime: number;
@@ -106,6 +108,8 @@ interface Metrics {
   mrrWeeklyEquivBRL: number;
   mrrTotalBRL: number;
   mrrAtRiskBRL: number;
+  mrrAtRiskRecentBRL?: number;
+  mrrAtRiskCriticalBRL?: number;
   mrrAtRiskMonthlyBRL?: number;
   mrrAtRiskWeeklyBRL?: number;
   activeSubscriptionsCount: number;
