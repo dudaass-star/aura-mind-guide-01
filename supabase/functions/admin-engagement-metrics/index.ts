@@ -695,15 +695,21 @@ Deno.serve(async (req) => {
     let mrrCommittedCents = 0;
     let weeklyRevenueCents = 0;
     let mrrAtRiskCents = 0;
+    let mrrAtRiskMonthlyCents = 0;
+    let mrrAtRiskWeeklyCents = 0;
     let activeSubscriptionsCount = 0;
+    let weeklyActiveSubscriptionsCount = 0;
+    let monthlyActiveSubscriptionsCount = 0;
     let pastDueSubscriptionsCount = 0;
 
     if (stripeKey) {
       const stripe = new Stripe(stripeKey, { apiVersion: '2025-08-27.basil' });
       
-      // Fetch all active + past_due subscriptions (paginated)
+      // Fetch all active + trialing + past_due subscriptions (paginated)
+      // NOTE: 'trialing' is required because weekly plans (R$6.90/9.90/19.90) stay
+      // in 'trialing' status during the first 7 days before converting to 'active' monthly.
       const allSubs: Stripe.Subscription[] = [];
-      for (const status of ['active', 'past_due'] as const) {
+      for (const status of ['active', 'trialing', 'past_due'] as const) {
         let hasMore = true;
         let startingAfter: string | undefined;
         while (hasMore) {
@@ -729,35 +735,58 @@ Deno.serve(async (req) => {
         // Skip paused subscriptions for MRR
         if (sub.pause_collection) continue;
 
-        // Past due → MRR at risk (still counts as committed but flagged)
+        // Past due → MRR at risk (use real unit_amount from Stripe, not fixed map)
         if (sub.status === 'past_due') {
           pastDueSubscriptionsCount++;
+          const realAmount = sub.items.data[0]?.price?.unit_amount || 0;
           if (cycle === 'monthly') {
-            mrrAtRiskCents += PLAN_PRICES_MONTHLY[plan] || 0;
+            mrrAtRiskCents += realAmount;
+            mrrAtRiskMonthlyCents += realAmount;
           } else if (cycle === 'yearly') {
-            mrrAtRiskCents += Math.round((PLAN_PRICES_MONTHLY[plan] || 0)); // monthly equivalent
+            const monthlyEquiv = Math.round(realAmount / 12);
+            mrrAtRiskCents += monthlyEquiv;
+            mrrAtRiskMonthlyCents += monthlyEquiv;
+          } else if (cycle === 'weekly') {
+            const monthlyEquiv = Math.round(realAmount * 4.33);
+            mrrAtRiskCents += monthlyEquiv;
+            mrrAtRiskWeeklyCents += monthlyEquiv;
           }
           continue;
         }
 
-        activeSubscriptionsCount++;
+        // 'trialing' status: only meaningful for weekly plans (paid 7-day cycle).
+        // Monthly/yearly subs in 'trialing' would be legacy free trials — ignore those.
+        if (sub.status === 'trialing' && cycle !== 'weekly') {
+          continue;
+        }
+
         if (cycle === 'monthly') {
+          activeSubscriptionsCount++;
+          monthlyActiveSubscriptionsCount++;
           const price = PLAN_PRICES_MONTHLY[plan] || 0;
           mrrCommittedCents += price;
           mrrByPlan[plan].committed += price;
         } else if (cycle === 'yearly') {
+          activeSubscriptionsCount++;
+          monthlyActiveSubscriptionsCount++;
           // Yearly → divide by 12 for monthly equivalent
           const yearlyAmount = sub.items.data[0]?.price?.unit_amount || 0;
           const monthlyEquiv = Math.round(yearlyAmount / 12);
           mrrCommittedCents += monthlyEquiv;
           mrrByPlan[plan].committed += monthlyEquiv;
         } else if (cycle === 'weekly') {
-          const price = WEEKLY_PRICES[plan] || 0;
-          const monthlyEquivalent = Math.round(price * 4.33);
+          // Both 'active' (renewing weekly before card upgrade) and 'trialing' (current 7-day) count
+          activeSubscriptionsCount++;
+          weeklyActiveSubscriptionsCount++;
+          const realAmount = sub.items.data[0]?.price?.unit_amount || WEEKLY_PRICES[plan] || 0;
+          const monthlyEquivalent = Math.round(realAmount * 4.33);
           weeklyRevenueCents += monthlyEquivalent;
           mrrByPlan[plan].weekly += monthlyEquivalent;
         }
       }
+
+      // Sync paymentAtRiskCount with real past_due count from Stripe
+      paymentAtRiskCount = pastDueSubscriptionsCount;
     }
 
     const mrrTotalCents = mrrCommittedCents + weeklyRevenueCents;
