@@ -941,7 +941,11 @@ Deno.serve(async (req) => {
       mrrWeeklyEquivBRL,
       mrrTotalBRL,
       mrrAtRiskBRL,
+      mrrAtRiskMonthlyBRL,
+      mrrAtRiskWeeklyBRL,
       activeSubscriptionsCount,
+      monthlyActiveSubscriptionsCount,
+      weeklyActiveSubscriptionsCount,
       pastDueSubscriptionsCount,
       mrrBreakdown,
       // 🎯 Activation
