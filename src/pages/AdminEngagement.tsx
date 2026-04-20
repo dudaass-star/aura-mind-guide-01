@@ -137,6 +137,8 @@ interface Metrics {
   mrrAtPeriodStartBRL?: number;
   grossMarginBRL?: number;
   grossMarginPct?: number;
+  totalCostMonthlyBRL?: number;
+  periodDays?: number;
   avgDaysUntilChurn?: number;
   churnedSubsCount90d?: number;
   // 🎯 Activation
