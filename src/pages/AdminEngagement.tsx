@@ -923,7 +923,7 @@ export default function AdminEngagement() {
                     <p>• <strong>Conversão Madura:</strong> só conta trials com ≥7 dias de vida. Meta: &gt;25%.</p>
                     <p>• <strong>ARR / ARPU:</strong> ARR = MRR × 12 (projeção anualizada). ARPU = MRR ÷ assinaturas ativas (receita média por usuário/mês).</p>
                     <p>• <strong>MRR Growth (30d):</strong> soma do MRR das assinaturas <strong>novas</strong> criadas nos últimos 30d menos o MRR <strong>perdido</strong> por cancelamentos no mesmo período. % calculado sobre o MRR estimado no início do período.</p>
-                    <p>• <strong>Margem de contribuição:</strong> MRR total menos custo de IA do período selecionado. Positiva = receita cobre o custo direto. Verde ≥70%, amarelo 40-70%, vermelho &lt;40%.</p>
+                    <p>• <strong>Margem de contribuição:</strong> MRR mensal menos custo de IA <strong>mensalizado</strong> (custo do período × 30 ÷ dias do período). Garante que ambos os lados estão na mesma escala temporal — a margem fica estável independente do filtro de data. Verde ≥70%, amarelo 40-70%, vermelho &lt;40%.</p>
                     <p>• <strong>Tempo médio até churn:</strong> média de dias-de-vida das assinaturas canceladas nos últimos 90d (exclui cancelamentos no D0 = lixo/duplicatas).</p>
                   </CardContent>
                 </Card>
