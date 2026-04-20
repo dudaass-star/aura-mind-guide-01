@@ -165,3 +165,6 @@ verify_jwt = false
 
 [functions.refresh-meta-token]
 verify_jwt = false
+
+[functions.audit-recovered-payments]
+verify_jwt = false
