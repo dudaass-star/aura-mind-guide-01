@@ -1218,6 +1218,7 @@ Deno.serve(async (req) => {
       involuntaryChurnRate,
       churnRateLegacy,
       activeAtPeriodStart: activeAtPeriodStart || 0,
+      churnDenominatorSource,                                  // 'stripe' (preferido) ou 'db_fallback'
       paymentAtRiskCount: paymentAtRiskCount || 0,             // total past_due (≤7d + >7d)
       pastDueRecentCount,                                      // ≤7d
       pastDueCriticalCount,                                    // >7d (Stripe ainda tentando)
