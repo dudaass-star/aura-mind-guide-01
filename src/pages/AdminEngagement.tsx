@@ -127,6 +127,18 @@ interface Metrics {
   weeklyActiveSubscriptionsCount?: number;
   pastDueSubscriptionsCount: number;
   mrrBreakdown: { plan: string; users: number; committedBRL: number; weeklyEquivBRL: number; totalBRL: number }[];
+  // 🚀 Fase 2: derivadas de receita
+  arrBRL?: number;
+  arpuBRL?: number;
+  mrrGrowthBRL?: number;
+  mrrGrowthPct?: number;
+  newMRRBRL?: number;
+  churnedMRRBRL?: number;
+  mrrAtPeriodStartBRL?: number;
+  grossMarginBRL?: number;
+  grossMarginPct?: number;
+  avgDaysUntilChurn?: number;
+  churnedSubsCount90d?: number;
   // 🎯 Activation
   activationRate: number;
   activatedUsersCount: number;
@@ -570,6 +582,67 @@ export default function AdminEngagement() {
                   </CardContent>
                 </Card>
 
+                {/* 🚀 Fase 2: Mini-cards de derivadas (ARR / ARPU / MRR Growth / Margem) */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {/* ARR */}
+                  <Card>
+                    <CardHeader className="p-3 pb-1">
+                      <CardTitle className="text-xs font-medium text-muted-foreground">📅 ARR</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-3 pt-0">
+                      <div className="text-xl font-bold text-foreground">
+                        R$ {(metrics.arrBRL ?? metrics.mrrTotalBRL * 12).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">projeção anualizada (MRR × 12)</p>
+                    </CardContent>
+                  </Card>
+
+                  {/* ARPU */}
+                  <Card>
+                    <CardHeader className="p-3 pb-1">
+                      <CardTitle className="text-xs font-medium text-muted-foreground">👤 ARPU</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-3 pt-0">
+                      <div className="text-xl font-bold text-foreground">
+                        R$ {(metrics.arpuBRL ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">receita média por assinante/mês</p>
+                    </CardContent>
+                  </Card>
+
+                  {/* MRR Growth */}
+                  <Card>
+                    <CardHeader className="p-3 pb-1">
+                      <CardTitle className="text-xs font-medium text-muted-foreground">📈 MRR Growth (30d)</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-3 pt-0">
+                      <div className={`text-xl font-bold ${(metrics.mrrGrowthBRL ?? 0) > 0 ? 'text-green-600' : (metrics.mrrGrowthBRL ?? 0) < 0 ? 'text-destructive' : 'text-foreground'}`}>
+                        {(metrics.mrrGrowthBRL ?? 0) > 0 ? '+' : ''}R$ {(metrics.mrrGrowthBRL ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        {metrics.mrrGrowthPct !== undefined && metrics.mrrGrowthPct !== 0 && (
+                          <span className="text-xs ml-1">({metrics.mrrGrowthPct > 0 ? '+' : ''}{metrics.mrrGrowthPct}%)</span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">
+                        +R$ {(metrics.newMRRBRL ?? 0).toFixed(0)} novo · −R$ {(metrics.churnedMRRBRL ?? 0).toFixed(0)} churn
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  {/* Margem de contribuição */}
+                  <Card>
+                    <CardHeader className="p-3 pb-1">
+                      <CardTitle className="text-xs font-medium text-muted-foreground">💚 Margem</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-3 pt-0">
+                      <div className={`text-xl font-bold ${(metrics.grossMarginPct ?? 0) >= 70 ? 'text-green-600' : (metrics.grossMarginPct ?? 0) >= 40 ? 'text-yellow-600' : 'text-destructive'}`}>
+                        R$ {(metrics.grossMarginBRL ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}
+                        <span className="text-xs ml-1">({metrics.grossMarginPct ?? 0}%)</span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">MRR − custo IA do período</p>
+                    </CardContent>
+                  </Card>
+                </div>
+
                 {/* Health KPIs grid */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   <Card>
@@ -770,6 +843,26 @@ export default function AdminEngagement() {
                         <p>🎯 <strong>Onde dói:</strong> 0-7d = onboarding/expectativa · 8-30d = valor percebido · <strong>31-60d = teste real da renovação</strong> · 61-90d = hábito consolidado.</p>
                         <p>🎨 <strong>Cores:</strong> <span className="text-green-600 dark:text-green-400 font-medium">verde &lt;15%</span> · <span className="text-yellow-600 dark:text-yellow-400 font-medium">amarelo 15-30%</span> · <span className="text-destructive font-medium">vermelho &gt;30%</span></p>
                       </div>
+
+                      {/* ⏱️ Tempo médio até churn (90d) */}
+                      {(metrics.churnedSubsCount90d ?? 0) > 0 && (
+                        <div className="mt-3 p-3 border border-border rounded-md flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg">⏱️</span>
+                            <div>
+                              <div className="text-sm font-medium text-foreground">
+                                Quem cancela, cancela em média no <strong>D{metrics.avgDaysUntilChurn ?? 0}</strong> da assinatura
+                              </div>
+                              <div className="text-[11px] text-muted-foreground">
+                                Baseado em {metrics.churnedSubsCount90d} cancelamentos nos últimos 90 dias (exclui D0).
+                              </div>
+                            </div>
+                          </div>
+                          <div className={`text-2xl font-bold ${(metrics.avgDaysUntilChurn ?? 0) < 14 ? 'text-destructive' : (metrics.avgDaysUntilChurn ?? 0) < 45 ? 'text-yellow-600' : 'text-green-600'}`}>
+                            D{metrics.avgDaysUntilChurn ?? 0}
+                          </div>
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 )}
@@ -821,6 +914,10 @@ export default function AdminEngagement() {
                     <p>• <strong>Recovery Rate:</strong> % de usuários com cartão recusado que voltaram para status active (all-time).</p>
                     <p>• <strong>Activation Rate:</strong> % de pagantes que enviaram a 1ª mensagem em ≤3 dias do cadastro. Meta: &gt;70%.</p>
                     <p>• <strong>Conversão Madura:</strong> só conta trials com ≥7 dias de vida. Meta: &gt;25%.</p>
+                    <p>• <strong>ARR / ARPU:</strong> ARR = MRR × 12 (projeção anualizada). ARPU = MRR ÷ assinaturas ativas (receita média por usuário/mês).</p>
+                    <p>• <strong>MRR Growth (30d):</strong> soma do MRR das assinaturas <strong>novas</strong> criadas nos últimos 30d menos o MRR <strong>perdido</strong> por cancelamentos no mesmo período. % calculado sobre o MRR estimado no início do período.</p>
+                    <p>• <strong>Margem de contribuição:</strong> MRR total menos custo de IA do período selecionado. Positiva = receita cobre o custo direto. Verde ≥70%, amarelo 40-70%, vermelho &lt;40%.</p>
+                    <p>• <strong>Tempo médio até churn:</strong> média de dias-de-vida das assinaturas canceladas nos últimos 90d (exclui cancelamentos no D0 = lixo/duplicatas).</p>
                   </CardContent>
                 </Card>
               </>
