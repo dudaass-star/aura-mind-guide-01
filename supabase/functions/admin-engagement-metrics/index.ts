@@ -1329,6 +1329,8 @@ Deno.serve(async (req) => {
       mrrAtPeriodStartBRL,
       grossMarginBRL,
       grossMarginPct,
+      totalCostMonthlyBRL,
+      periodDays,
       avgDaysUntilChurn,
       churnedSubsCount90d,
       // 🎯 Activation
