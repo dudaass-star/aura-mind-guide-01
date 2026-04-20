@@ -1,103 +1,102 @@
 
 
-## Avaliação dos pontos levantados
+## Fase 2 — Métricas adicionais de Saúde do Negócio
 
-Verifiquei cada ponto contra o código real. Veredito ponto a ponto:
+Pegando o gancho da Fase 1 (MRR + Cohort + Churn corrigidos), agora adiciono as 5 métricas que ficaram pendentes para fechar o quadro de receita.
 
 ---
 
-### 🔴 Bug crítico #1 — MRR mensal hardcoded → **PROCEDE, mas com ressalva**
+### O que será adicionado
 
-Linha 813:
+| # | Métrica | Cálculo | Onde virá |
+|---|---|---|---|
+| 1 | **ARR** (Annual Run Rate) | `mrrTotalBRL × 12` | Derivada do MRR já existente |
+| 2 | **ARPU** (Avg Revenue Per User) | `mrrTotalBRL / activeSubscriptionsCount` | Derivada |
+| 3 | **MRR Growth** (período) | `novoMRR − churnMRR` nos últimos 30d | Stripe: subs criadas no período × valor + subs canceladas × valor que tinham |
+| 4 | **Margem de contribuição** | `mrrTotalBRL − totalCostBRL` (mensal) e % | Já temos os 2 lados, só faltava cruzar |
+| 5 | **Tempo médio até churn** | Média de `(canceled_at − created) / dias` para subs canceladas nos últimos 90d | Stripe |
+
+---
+
+### Backend — `supabase/functions/admin-engagement-metrics/index.ts`
+
+**Aproveita a paginação Stripe que já existe** para cohort retention (`status: 'all'`, últimos 180d). Numa única passada, calculo:
+
+- **MRR Growth (30d):**
+  - `newMRR` = soma de `unit_amount` (normalizado para mensal) das subs criadas nos últimos 30d que estão ativas/trialing/past_due
+  - `churnedMRR` = soma de `unit_amount` (mensal) das subs canceladas nos últimos 30d
+  - `mrrGrowth = newMRR − churnedMRR`
+  - `mrrGrowthPct = mrrGrowth / mrrAtPeriodStart`
+
+- **Tempo médio até churn:** média de `(canceled_at − created) / 86400` para subs canceladas nos últimos 90d (exclui canceladas no D0 que são duplicatas/lixo).
+
+**Derivadas simples (no final, antes do `return`):**
 ```ts
-const price = PLAN_PRICES_MONTHLY[plan] || 0;  // 2990/4990/7990 hardcoded
+const arrBRL = mrrTotalBRL * 12;
+const arpuBRL = activeSubscriptionsCount > 0 
+  ? Math.round(mrrTotalBRL / activeSubscriptionsCount * 100) / 100 
+  : 0;
+const grossMarginBRL = mrrTotalBRL - totalCostBRL;
+const grossMarginPct = mrrTotalBRL > 0 
+  ? Math.round((grossMarginBRL / mrrTotalBRL) * 1000) / 10 
+  : 0;
 ```
 
-vs. yearly (linha 819) que usa `unit_amount` real.
-
-**Procede.** Inconsistência real. Se tivermos cupom, preço legado ou A/B de preço, MRR fica errado. Hoje provavelmente bate por sorte, mas é frágil. Fix correto:
-```ts
-const price = sub.items.data[0]?.price?.unit_amount || PLAN_PRICES_MONTHLY[plan] || 0;
+Adicionar ao payload de retorno:
+```
+arrBRL, arpuBRL, mrrGrowthBRL, mrrGrowthPct, newMRRBRL, churnedMRRBRL,
+grossMarginBRL, grossMarginPct, avgDaysUntilChurn, churnedSubsCount90d
 ```
 
 ---
 
-### 🟡 Bug crítico #2 — `apiVersion: '2025-08-27.basil'` → **NÃO PROCEDE como bug**
+### Frontend — `src/pages/AdminEngagement.tsx`
 
-A avaliação diz "deveria ser '2023-10-16' como já fizemos no create-checkout". Verifiquei:
+**1. Atualizar interface `EngagementMetrics`** com os 9 novos campos.
 
-| Função | apiVersion |
-|---|---|
-| create-checkout, cancel-subscription, stripe-webhook, reprocess-dunning, reconcile-subscriptions | `2023-10-16` |
-| admin-engagement-metrics, audit-stripe-duplicates, reengagement-blast, attach-checkout-payment-methods, fix-subscription-payment-methods, audit-recovered-payments | `2025-08-27.basil` |
+**2. Logo abaixo do Hero MRR, adicionar uma faixa de 4 mini-cards** (`grid-cols-2 md:grid-cols-4`):
 
-`2025-08-27.basil` **é a versão estável atual** (a documentação da Lovable/Stripe inclusive recomenda essa). Não é "preview". O projeto está com **dois padrões convivendo** — isso é uma inconsistência cosmética, não um bug.
-
-**Recomendação:** padronizar tudo em `2025-08-27.basil` (mais novo, mais features), OU manter `2023-10-16` nos paths críticos de pagamento e usar `basil` em ferramentas analíticas. Não é urgente. **Não vou mexer agora.**
-
----
-
-### 🟡 Bug médio #3 — Activation Rate varre tabela `messages` inteira → **PROCEDE parcialmente**
-
-Linhas 1027-1032:
-```ts
-const allUserMsgs = await fetchAllPaginated(
-  supabase, 'messages', 'user_id, created_at',
-  [{ column: 'role', op: 'eq', value: 'user' }]
-);
+```text
+┌──────────┬──────────┬──────────────┬──────────┐
+│ ARR      │ ARPU     │ MRR Growth   │ Margem   │
+│ R$ X     │ R$ Y     │ +R$ Z (+W%)  │ R$ A (B%)│
+│ projeção │ por sub  │ últimos 30d  │ mrr−custo│
+└──────────┴──────────┴──────────────┴──────────┘
 ```
 
-**Procede.** Está paginando a tabela `messages` toda só para depois filtrar por `payingUserIds` em memória. Com a base crescendo (já temos milhares de mensagens), isso vai degradar.
+- **ARR**: cinza neutro, "projeção anualizada"
+- **ARPU**: cor neutra
+- **MRR Growth**: verde se positivo, vermelho se negativo, com tooltip mostrando `newMRR` vs `churnedMRR`
+- **Margem**: verde se ≥ 70%, amarelo 40-70%, vermelho < 40%
 
-**Fix simples:** adicionar `{ column: 'user_id', op: 'in', value: payingUserIds }` no filtro. Como Supabase tem limite de URL para `.in()` com listas grandes, fazer em chunks de 100 IDs se necessário.
-
----
-
-### 🟡 Bug leve #4 — Churn denominator inclui já-cancelados → **PROCEDE**
-
-Linha 507:
-```ts
-.in('status', ['active', 'canceling', 'canceled', 'paused', 'trial_expired', 'inactive'])
+**3. Adicionar um 5º card "Tempo médio até churn"** discretamente, dentro da seção de Cohort Retention existente (mesma linha, complementa o quadro):
+```text
+"Quem cancela, cancela em média no D{X} da assinatura."
+"Baseado em N cancelamentos nos últimos 90d."
 ```
 
-**Procede.** O denominador conta TODA a base histórica criada antes do período, incluindo quem já estava cancelado. Isso **subestima** o churn rate (denominador inflado).
+---
 
-**Limitação real:** sem snapshot histórico de status, não dá pra saber quem estava `active` em `periodStart`. A aproximação correta é:
-- Denominador = `active + canceling` criados antes do período + cancelados DENTRO do período (que estavam ativos no início)
-- OU usar Stripe como fonte (subscriptions ativas em uma data)
+### Notas de metodologia (rodapé do card)
 
-A 2ª opção é mais precisa. Vou usar Stripe.
+Adicionar 2 linhas no card "Notas":
+- **MRR Growth:** soma do MRR de assinaturas novas (criadas em 30d) menos MRR perdido por cancelamentos no mesmo período.
+- **Margem:** MRR total menos custo de IA do período. Positiva = receita cobre o custo direto.
 
 ---
 
-## Decisão sobre o que aplicar
+### Sem mudanças
 
-| # | Bug | Aplicar? |
-|---|---|---|
-| 1 | MRR mensal usar `unit_amount` real | ✅ Sim — fix de 1 linha, mais robusto |
-| 2 | apiVersion padronização | ❌ Não — falso positivo, ambas são válidas |
-| 3 | Activation: filtrar por `payingUserIds` | ✅ Sim — em chunks de 100 |
-| 4 | Churn denominator | ✅ Sim — usar Stripe (subs ativas há 30d via `created < periodStart` AND `(canceled_at == null OR canceled_at >= periodStart)`) |
-
-Sobre as **métricas adicionais sugeridas** (ARR, ARPU, MRR Growth, Margem, Tempo até churn): **todas fazem sentido**, mas são uma segunda fase. Sugiro implementar separado depois que os 3 fixes estiverem em produção.
+- Banco de dados: nada (tudo derivado do Stripe + cálculos)
+- UI existente: preservada — só adiciono cards
+- Performance: zero impacto (usa loops já existentes)
 
 ---
 
-## Plano de implementação
+### Plano de execução
 
-**Arquivo único:** `supabase/functions/admin-engagement-metrics/index.ts`
-
-1. **Fix MRR mensal (linha 813)** — usar `unit_amount` do Stripe com fallback hardcoded.
-
-2. **Fix Activation query (linhas 1024-1032)** — passar `payingUserIds` em chunks de 100 para o `fetchAllPaginated`, ou adicionar suporte a filtro `in` no helper. Resultado: query escaneia só mensagens dos pagantes, não a tabela toda.
-
-3. **Fix Churn denominator (linha 505-509)** — substituir a query de profiles por contagem via Stripe:
-   - Buscar subs com `created < periodStart` AND (`status === 'active'` OR (`status === 'canceled'` AND `canceled_at >= periodStart`))
-   - Esse é o conjunto que estava ativo no início do período → denominador correto.
-   - Atualizar `churnRate = churnCount / activeAtPeriodStart`.
-   - Adicionar nota no card explicando a metodologia (Stripe = fonte da verdade).
-
-4. **Redeploy** da função.
-
-Não toco em UI — o fix é todo backend e os números vão simplesmente ficar mais corretos no card existente.
+1. Adicionar cálculos no backend (1 arquivo, ~80 linhas adicionadas)
+2. Atualizar interface e adicionar 4 mini-cards no frontend (1 arquivo)
+3. Redeploy da função
+4. Verificação final no painel `/admin/engajamento`
 
