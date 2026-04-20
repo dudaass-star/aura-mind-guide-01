@@ -503,6 +503,7 @@ Deno.serve(async (req) => {
     // Stripe = fonte da verdade. Conta subs que estavam ATIVAS no início do período:
     //   created < periodStart AND (status active/trialing/past_due OU canceled_at >= periodStart)
     // Isso elimina o viés do denominador inflado (incluir quem já estava cancelado antes).
+    const stripeKey = Deno.env.get('STRIPE_SECRET_KEY');
     let activeAtPeriodStart = 0;
     let churnDenominatorSource: 'stripe' | 'db_fallback' = 'db_fallback';
     if (stripeKey) {
