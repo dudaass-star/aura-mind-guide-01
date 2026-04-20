@@ -1315,6 +1315,18 @@ Deno.serve(async (req) => {
       weeklyActiveSubscriptionsCount,
       pastDueSubscriptionsCount,
       mrrBreakdown,
+      // 🚀 Fase 2: derivadas de receita
+      arrBRL,
+      arpuBRL,
+      mrrGrowthBRL,
+      mrrGrowthPct,
+      newMRRBRL,
+      churnedMRRBRL,
+      mrrAtPeriodStartBRL,
+      grossMarginBRL,
+      grossMarginPct,
+      avgDaysUntilChurn,
+      churnedSubsCount90d,
       // 🎯 Activation
       activationRate,
       activatedUsersCount: activatedUsers.length,
