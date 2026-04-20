@@ -127,6 +127,18 @@ interface Metrics {
   weeklyActiveSubscriptionsCount?: number;
   pastDueSubscriptionsCount: number;
   mrrBreakdown: { plan: string; users: number; committedBRL: number; weeklyEquivBRL: number; totalBRL: number }[];
+  // 🚀 Fase 2: derivadas de receita
+  arrBRL?: number;
+  arpuBRL?: number;
+  mrrGrowthBRL?: number;
+  mrrGrowthPct?: number;
+  newMRRBRL?: number;
+  churnedMRRBRL?: number;
+  mrrAtPeriodStartBRL?: number;
+  grossMarginBRL?: number;
+  grossMarginPct?: number;
+  avgDaysUntilChurn?: number;
+  churnedSubsCount90d?: number;
   // 🎯 Activation
   activationRate: number;
   activatedUsersCount: number;
