@@ -1118,6 +1118,27 @@ Deno.serve(async (req) => {
     const mrrAtRiskMonthlyBRL = Math.round(mrrAtRiskMonthlyCents / 100 * 100) / 100;
     const mrrAtRiskWeeklyBRL = Math.round(mrrAtRiskWeeklyCents / 100 * 100) / 100;
 
+    // 📊 Derivadas (Fase 2): ARR, ARPU, MRR Growth, Margem, Tempo até churn
+    const arrBRL = Math.round(mrrTotalBRL * 12 * 100) / 100;
+    const arpuBRL = activeSubscriptionsCount > 0
+      ? Math.round((mrrTotalBRL / activeSubscriptionsCount) * 100) / 100
+      : 0;
+    const newMRRBRL = Math.round(newMRRCents / 100 * 100) / 100;
+    const churnedMRRBRL = Math.round(churnedMRRCents / 100 * 100) / 100;
+    const mrrGrowthBRL = Math.round((newMRRBRL - churnedMRRBRL) * 100) / 100;
+    // Aproximação: MRR no início do período = MRR atual − novo + churned
+    const mrrAtPeriodStartBRL = Math.max(0, Math.round((mrrTotalBRL - newMRRBRL + churnedMRRBRL) * 100) / 100);
+    const mrrGrowthPct = mrrAtPeriodStartBRL > 0
+      ? Math.round((mrrGrowthBRL / mrrAtPeriodStartBRL) * 1000) / 10
+      : 0;
+    const grossMarginBRL = Math.round((mrrTotalBRL - totalCostBRL) * 100) / 100;
+    const grossMarginPct = mrrTotalBRL > 0
+      ? Math.round((grossMarginBRL / mrrTotalBRL) * 1000) / 10
+      : 0;
+    const avgDaysUntilChurn = churnedSubsCount90d > 0
+      ? Math.round(churnedDaysSum90d / churnedSubsCount90d)
+      : 0;
+
     const mrrBreakdown = Object.entries(mrrByPlan).map(([plan, data]) => ({
       plan,
       users: data.users,
