@@ -616,7 +616,6 @@ Deno.serve(async (req) => {
 
     // ========== WEEKLY PLANS (STRIPE SOURCE OF TRUTH) ==========
     // Fetch charges from Stripe with amounts 690, 990, 1990 (R$6.90, R$9.90, R$19.90)
-    const stripeKey = Deno.env.get('STRIPE_SECRET_KEY');
     let totalWeeklyPlans = 0;
     let weeklyPlansOver7d = 0;
     let weeklyPlansExpired = 0;
