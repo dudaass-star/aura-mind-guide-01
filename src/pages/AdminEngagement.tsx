@@ -137,6 +137,8 @@ interface Metrics {
   mrrAtPeriodStartBRL?: number;
   grossMarginBRL?: number;
   grossMarginPct?: number;
+  totalCostMonthlyBRL?: number;
+  periodDays?: number;
   avgDaysUntilChurn?: number;
   churnedSubsCount90d?: number;
   // 🎯 Activation
@@ -638,7 +640,12 @@ export default function AdminEngagement() {
                         R$ {(metrics.grossMarginBRL ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}
                         <span className="text-xs ml-1">({metrics.grossMarginPct ?? 0}%)</span>
                       </div>
-                      <p className="text-[11px] text-muted-foreground">MRR − custo IA do período</p>
+                      <p
+                        className="text-[11px] text-muted-foreground cursor-help"
+                        title={`Custo do período: R$ ${(metrics.totalCostBRL ?? 0).toFixed(2)} em ${metrics.periodDays ?? 0} dias → mensalizado: R$ ${(metrics.totalCostMonthlyBRL ?? 0).toFixed(2)}/mês`}
+                      >
+                        MRR mensal − custo IA mensalizado
+                      </p>
                     </CardContent>
                   </Card>
                 </div>
@@ -916,7 +923,7 @@ export default function AdminEngagement() {
                     <p>• <strong>Conversão Madura:</strong> só conta trials com ≥7 dias de vida. Meta: &gt;25%.</p>
                     <p>• <strong>ARR / ARPU:</strong> ARR = MRR × 12 (projeção anualizada). ARPU = MRR ÷ assinaturas ativas (receita média por usuário/mês).</p>
                     <p>• <strong>MRR Growth (30d):</strong> soma do MRR das assinaturas <strong>novas</strong> criadas nos últimos 30d menos o MRR <strong>perdido</strong> por cancelamentos no mesmo período. % calculado sobre o MRR estimado no início do período.</p>
-                    <p>• <strong>Margem de contribuição:</strong> MRR total menos custo de IA do período selecionado. Positiva = receita cobre o custo direto. Verde ≥70%, amarelo 40-70%, vermelho &lt;40%.</p>
+                    <p>• <strong>Margem de contribuição:</strong> MRR mensal menos custo de IA <strong>mensalizado</strong> (custo do período × 30 ÷ dias do período). Garante que ambos os lados estão na mesma escala temporal — a margem fica estável independente do filtro de data. Verde ≥70%, amarelo 40-70%, vermelho &lt;40%.</p>
                     <p>• <strong>Tempo médio até churn:</strong> média de dias-de-vida das assinaturas canceladas nos últimos 90d (exclui cancelamentos no D0 = lixo/duplicatas).</p>
                   </CardContent>
                 </Card>
