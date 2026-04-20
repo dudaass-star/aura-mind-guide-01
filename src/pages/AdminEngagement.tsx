@@ -582,6 +582,67 @@ export default function AdminEngagement() {
                   </CardContent>
                 </Card>
 
+                {/* 🚀 Fase 2: Mini-cards de derivadas (ARR / ARPU / MRR Growth / Margem) */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {/* ARR */}
+                  <Card>
+                    <CardHeader className="p-3 pb-1">
+                      <CardTitle className="text-xs font-medium text-muted-foreground">📅 ARR</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-3 pt-0">
+                      <div className="text-xl font-bold text-foreground">
+                        R$ {(metrics.arrBRL ?? metrics.mrrTotalBRL * 12).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">projeção anualizada (MRR × 12)</p>
+                    </CardContent>
+                  </Card>
+
+                  {/* ARPU */}
+                  <Card>
+                    <CardHeader className="p-3 pb-1">
+                      <CardTitle className="text-xs font-medium text-muted-foreground">👤 ARPU</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-3 pt-0">
+                      <div className="text-xl font-bold text-foreground">
+                        R$ {(metrics.arpuBRL ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">receita média por assinante/mês</p>
+                    </CardContent>
+                  </Card>
+
+                  {/* MRR Growth */}
+                  <Card>
+                    <CardHeader className="p-3 pb-1">
+                      <CardTitle className="text-xs font-medium text-muted-foreground">📈 MRR Growth (30d)</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-3 pt-0">
+                      <div className={`text-xl font-bold ${(metrics.mrrGrowthBRL ?? 0) > 0 ? 'text-green-600' : (metrics.mrrGrowthBRL ?? 0) < 0 ? 'text-destructive' : 'text-foreground'}`}>
+                        {(metrics.mrrGrowthBRL ?? 0) > 0 ? '+' : ''}R$ {(metrics.mrrGrowthBRL ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        {metrics.mrrGrowthPct !== undefined && metrics.mrrGrowthPct !== 0 && (
+                          <span className="text-xs ml-1">({metrics.mrrGrowthPct > 0 ? '+' : ''}{metrics.mrrGrowthPct}%)</span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">
+                        +R$ {(metrics.newMRRBRL ?? 0).toFixed(0)} novo · −R$ {(metrics.churnedMRRBRL ?? 0).toFixed(0)} churn
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  {/* Margem de contribuição */}
+                  <Card>
+                    <CardHeader className="p-3 pb-1">
+                      <CardTitle className="text-xs font-medium text-muted-foreground">💚 Margem</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-3 pt-0">
+                      <div className={`text-xl font-bold ${(metrics.grossMarginPct ?? 0) >= 70 ? 'text-green-600' : (metrics.grossMarginPct ?? 0) >= 40 ? 'text-yellow-600' : 'text-destructive'}`}>
+                        R$ {(metrics.grossMarginBRL ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}
+                        <span className="text-xs ml-1">({metrics.grossMarginPct ?? 0}%)</span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">MRR − custo IA do período</p>
+                    </CardContent>
+                  </Card>
+                </div>
+
                 {/* Health KPIs grid */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   <Card>
