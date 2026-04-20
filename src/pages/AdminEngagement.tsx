@@ -843,6 +843,26 @@ export default function AdminEngagement() {
                         <p>🎯 <strong>Onde dói:</strong> 0-7d = onboarding/expectativa · 8-30d = valor percebido · <strong>31-60d = teste real da renovação</strong> · 61-90d = hábito consolidado.</p>
                         <p>🎨 <strong>Cores:</strong> <span className="text-green-600 dark:text-green-400 font-medium">verde &lt;15%</span> · <span className="text-yellow-600 dark:text-yellow-400 font-medium">amarelo 15-30%</span> · <span className="text-destructive font-medium">vermelho &gt;30%</span></p>
                       </div>
+
+                      {/* ⏱️ Tempo médio até churn (90d) */}
+                      {(metrics.churnedSubsCount90d ?? 0) > 0 && (
+                        <div className="mt-3 p-3 border border-border rounded-md flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg">⏱️</span>
+                            <div>
+                              <div className="text-sm font-medium text-foreground">
+                                Quem cancela, cancela em média no <strong>D{metrics.avgDaysUntilChurn ?? 0}</strong> da assinatura
+                              </div>
+                              <div className="text-[11px] text-muted-foreground">
+                                Baseado em {metrics.churnedSubsCount90d} cancelamentos nos últimos 90 dias (exclui D0).
+                              </div>
+                            </div>
+                          </div>
+                          <div className={`text-2xl font-bold ${(metrics.avgDaysUntilChurn ?? 0) < 14 ? 'text-destructive' : (metrics.avgDaysUntilChurn ?? 0) < 45 ? 'text-yellow-600' : 'text-green-600'}`}>
+                            D{metrics.avgDaysUntilChurn ?? 0}
+                          </div>
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 )}
