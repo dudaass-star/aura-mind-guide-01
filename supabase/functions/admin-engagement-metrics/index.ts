@@ -988,6 +988,13 @@ Deno.serve(async (req) => {
       churn61_90: { total: 0, canceled: 0, pct: 0 },
     };
 
+    // 📈 MRR Growth (30d) + Tempo médio até churn (90d)
+    // Calculados na MESMA passada do cohort para evitar custo extra na API do Stripe.
+    let newMRRCents = 0;          // MRR de subs criadas nos últimos 30d que estão ativas/trialing/past_due
+    let churnedMRRCents = 0;      // MRR perdido (subs canceladas nos últimos 30d)
+    let churnedSubsCount90d = 0;  // # subs canceladas nos últimos 90d (excluindo D0)
+    let churnedDaysSum90d = 0;    // soma de dias-de-vida das canceladas nos últimos 90d
+
     if (stripeKey) {
       try {
         const stripe = new Stripe(stripeKey, { apiVersion: '2025-08-27.basil' });
@@ -995,6 +1002,8 @@ Deno.serve(async (req) => {
         const nowTs = Math.floor(Date.now() / 1000);
         // Janela: últimos 180 dias para garantir dados de 90d+
         const windowStartTs = nowTs - 180 * DAY;
+        const thirtyDaysAgoTs = nowTs - 30 * DAY;
+        const ninetyDaysAgoTs = nowTs - 90 * DAY;
 
         const buckets = [
           { key: 'churn0_7',   start: 0,  end: 7 },
@@ -1002,6 +1011,23 @@ Deno.serve(async (req) => {
           { key: 'churn31_60', start: 31, end: 60 },
           { key: 'churn61_90', start: 61, end: 90 },
         ];
+
+        // Helper: normaliza unit_amount para MRR mensal em cents conforme cycle
+        const toMonthlyCents = (sub: Stripe.Subscription): number => {
+          const priceId = sub.items.data[0]?.price?.id;
+          const mapping = priceId ? priceToPlan[priceId] : undefined;
+          const realAmount = sub.items.data[0]?.price?.unit_amount || 0;
+          if (!mapping) return realAmount; // fallback: assume mensal
+          if (mapping.cycle === 'monthly') return realAmount;
+          if (mapping.cycle === 'yearly') return Math.round(realAmount / 12);
+          if (mapping.cycle === 'weekly') return Math.round(realAmount * 4.33);
+          // 'trialing' em preço mensal = semanal economicamente
+          if (sub.status === 'trialing') {
+            const weeklyPrice = WEEKLY_PRICES[mapping.plan] || 0;
+            return Math.round(weeklyPrice * 4.33);
+          }
+          return realAmount;
+        };
 
         // Pagina TODAS as subscriptions criadas nos últimos 180 dias (status: all)
         let hasMore = true;
@@ -1022,18 +1048,14 @@ Deno.serve(async (req) => {
             const canceledTs = sub.canceled_at || 0;
             const lifetimeDays = canceledTs > 0 ? (canceledTs - createdTs) / DAY : null;
 
+            // ---- Cohort Retention ----
             for (const { key, start, end } of buckets) {
-              // Para entrar no denominador da JANELA [start, end]:
-              //   1. Sub precisa ter idade ≥ end (teve chance de atravessar a janela inteira)
-              //   2. Sub precisa ter sobrevivido até pelo menos `start` dias
-              //      (ou seja: NÃO cancelou antes do início desta janela)
               const matureForWindow = ageDays >= end;
               const survivedToWindowStart =
                 lifetimeDays === null || lifetimeDays >= start;
 
               if (matureForWindow && survivedToWindowStart) {
                 cohortRetention[key].total++;
-                // Cancelou DENTRO desta janela?
                 if (
                   lifetimeDays !== null &&
                   lifetimeDays >= start &&
@@ -1043,6 +1065,30 @@ Deno.serve(async (req) => {
                 }
               }
             }
+
+            // ---- MRR Growth (30d) ----
+            // newMRR: subs criadas nos últimos 30d que continuam vivas
+            const isAlive = sub.status === 'active' || sub.status === 'trialing' || sub.status === 'past_due';
+            if (isAlive && createdTs >= thirtyDaysAgoTs) {
+              newMRRCents += toMonthlyCents(sub);
+            }
+            // churnedMRR: subs canceladas nos últimos 30d
+            if (canceledTs > 0 && canceledTs >= thirtyDaysAgoTs) {
+              churnedMRRCents += toMonthlyCents(sub);
+            }
+
+            // ---- Tempo médio até churn (90d) ----
+            // Excluir cancelamentos D0 (lifetimeDays < 1) que tipicamente são lixo/duplicatas
+            if (
+              canceledTs > 0 &&
+              canceledTs >= ninetyDaysAgoTs &&
+              lifetimeDays !== null &&
+              lifetimeDays >= 1
+            ) {
+              churnedSubsCount90d++;
+              churnedDaysSum90d += lifetimeDays;
+            }
+
             processedCount++;
           }
 
@@ -1056,8 +1102,9 @@ Deno.serve(async (req) => {
         }
 
         console.log(`📊 Cohort Retention windows (processed ${processedCount} subs):`, JSON.stringify(cohortRetention));
+        console.log(`📈 MRR Growth 30d: new=${newMRRCents/100} churned=${churnedMRRCents/100} | avg days to churn (90d): ${churnedSubsCount90d > 0 ? Math.round(churnedDaysSum90d/churnedSubsCount90d) : 0} (n=${churnedSubsCount90d})`);
       } catch (e) {
-        console.warn('⚠️ Failed to compute cohort retention:', e);
+        console.warn('⚠️ Failed to compute cohort retention / MRR growth:', e);
       }
     }
 
