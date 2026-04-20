@@ -1131,7 +1131,11 @@ Deno.serve(async (req) => {
     const mrrGrowthPct = mrrAtPeriodStartBRL > 0
       ? Math.round((mrrGrowthBRL / mrrAtPeriodStartBRL) * 1000) / 10
       : 0;
-    const grossMarginBRL = Math.round((mrrTotalBRL - totalCostBRL) * 100) / 100;
+    // Normaliza custo do período para escala mensal (30d), para bater com MRR mensal
+    const totalCostMonthlyBRL = periodDays > 0
+      ? Math.round((totalCostBRL / periodDays) * 30 * 100) / 100
+      : 0;
+    const grossMarginBRL = Math.round((mrrTotalBRL - totalCostMonthlyBRL) * 100) / 100;
     const grossMarginPct = mrrTotalBRL > 0
       ? Math.round((grossMarginBRL / mrrTotalBRL) * 1000) / 10
       : 0;
