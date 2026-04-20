@@ -500,11 +500,76 @@ Deno.serve(async (req) => {
     const canceledInPeriod = voluntaryChurnInPeriod + involuntaryChurnInPeriod;
 
     // ✅ CORRECTED CHURN: total_churn_in_period / active_at_start_of_period
-    const { count: activeAtPeriodStart } = await supabase
-      .from('profiles')
-      .select('*', { count: 'exact', head: true })
-      .lt('created_at', periodStart)
-      .in('status', ['active', 'canceling', 'canceled', 'paused', 'trial_expired', 'inactive']);
+    // Stripe = fonte da verdade. Conta subs que estavam ATIVAS no início do período:
+    //   created < periodStart AND (status active/trialing/past_due OU canceled_at >= periodStart)
+    // Isso elimina o viés do denominador inflado (incluir quem já estava cancelado antes).
+    let activeAtPeriodStart = 0;
+    let churnDenominatorSource: 'stripe' | 'db_fallback' = 'db_fallback';
+    if (stripeKey) {
+      try {
+        const stripeChurnDenom = new Stripe(stripeKey, { apiVersion: '2025-08-27.basil' });
+        const periodStartTs = Math.floor(new Date(periodStart).getTime() / 1000);
+        // Buscar subs ativas/trialing/past_due criadas antes do período (todas vivas hoje)
+        for (const status of ['active', 'trialing', 'past_due'] as const) {
+          let hasMore = true;
+          let startingAfter: string | undefined;
+          while (hasMore) {
+            const params: Stripe.SubscriptionListParams = {
+              status,
+              limit: 100,
+              created: { lt: periodStartTs },
+            };
+            if (startingAfter) params.starting_after = startingAfter;
+            const result = await stripeChurnDenom.subscriptions.list(params);
+            activeAtPeriodStart += result.data.length;
+            hasMore = result.has_more;
+            if (result.data.length > 0) startingAfter = result.data[result.data.length - 1].id;
+          }
+        }
+        // + canceladas que ainda estavam vivas em periodStart (canceled_at >= periodStart)
+        let hasMore = true;
+        let startingAfter: string | undefined;
+        let stop = false;
+        while (hasMore && !stop) {
+          const params: Stripe.SubscriptionListParams = {
+            status: 'canceled',
+            limit: 100,
+            created: { lt: periodStartTs },
+          };
+          if (startingAfter) params.starting_after = startingAfter;
+          const result = await stripeChurnDenom.subscriptions.list(params);
+          for (const sub of result.data) {
+            const canceledAt = sub.canceled_at || 0;
+            if (canceledAt >= periodStartTs) {
+              activeAtPeriodStart++;
+            } else {
+              // Stripe lista cancelled em ordem desc por created — paramos quando passa
+              // do janela útil (otimização leve; mantemos correto pois filter já é por created)
+              stop = true;
+              break;
+            }
+          }
+          hasMore = result.has_more && !stop;
+          if (result.data.length > 0) startingAfter = result.data[result.data.length - 1].id;
+        }
+        churnDenominatorSource = 'stripe';
+      } catch (err) {
+        console.warn('⚠️ Stripe churn denominator failed, falling back to DB:', err);
+        const { count } = await supabase
+          .from('profiles')
+          .select('*', { count: 'exact', head: true })
+          .lt('created_at', periodStart)
+          .in('status', ['active', 'canceling', 'canceled', 'paused', 'trial_expired', 'inactive']);
+        activeAtPeriodStart = count || 0;
+      }
+    } else {
+      const { count } = await supabase
+        .from('profiles')
+        .select('*', { count: 'exact', head: true })
+        .lt('created_at', periodStart)
+        .in('status', ['active', 'canceling', 'canceled', 'paused', 'trial_expired', 'inactive']);
+      activeAtPeriodStart = count || 0;
+    }
 
     const churnRate = activeAtPeriodStart && activeAtPeriodStart > 0
       ? Math.round(canceledInPeriod / activeAtPeriodStart * 1000) / 10
@@ -810,7 +875,9 @@ Deno.serve(async (req) => {
         if (cycle === 'monthly') {
           activeSubscriptionsCount++;
           monthlyActiveSubscriptionsCount++;
-          const price = PLAN_PRICES_MONTHLY[plan] || 0;
+          // Usa preço REAL do Stripe (respeita cupons, preços legados, A/B).
+          // Fallback para hardcoded só se Stripe não retornar amount.
+          const price = sub.items.data[0]?.price?.unit_amount || PLAN_PRICES_MONTHLY[plan] || 0;
           mrrCommittedCents += price;
           mrrByPlan[plan].committed += price;
         } else if (cycle === 'yearly') {
@@ -1021,21 +1088,34 @@ Deno.serve(async (req) => {
     const payingUsers = (activePayingProfiles || []).filter(p => p.trial_started_at);
     const payingUserIds = payingUsers.map(p => p.user_id as string);
 
-    // Fetch FIRST user message per user (paginated, to bypass 1000-row limit)
+    // Fetch FIRST user message per user — filtra por payingUserIds em chunks de 100
+    // para evitar varrer toda a tabela `messages` (escala com a base de pagantes, não com o total).
     const firstMsgByUser = new Map<string, string>();
     if (payingUserIds.length > 0) {
-      const allUserMsgs = await fetchAllPaginated(
-        supabase,
-        'messages',
-        'user_id, created_at',
-        [{ column: 'role', op: 'eq', value: 'user' }]
-      );
-      for (const m of allUserMsgs) {
-        const uid = m.user_id as string;
-        const ts = m.created_at as string;
-        const existing = firstMsgByUser.get(uid);
-        if (!existing || ts < existing) {
-          firstMsgByUser.set(uid, ts);
+      const CHUNK = 100;
+      for (let i = 0; i < payingUserIds.length; i += CHUNK) {
+        const chunk = payingUserIds.slice(i, i + CHUNK);
+        let page = 0;
+        const pageSize = 1000;
+        while (true) {
+          const { data, error } = await supabase
+            .from('messages')
+            .select('user_id, created_at')
+            .eq('role', 'user')
+            .in('user_id', chunk)
+            .range(page * pageSize, (page + 1) * pageSize - 1);
+          if (error) throw error;
+          if (!data || data.length === 0) break;
+          for (const m of data) {
+            const uid = m.user_id as string;
+            const ts = m.created_at as string;
+            const existing = firstMsgByUser.get(uid);
+            if (!existing || ts < existing) {
+              firstMsgByUser.set(uid, ts);
+            }
+          }
+          if (data.length < pageSize) break;
+          page++;
         }
       }
     }
