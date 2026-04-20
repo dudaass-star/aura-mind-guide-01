@@ -640,7 +640,12 @@ export default function AdminEngagement() {
                         R$ {(metrics.grossMarginBRL ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}
                         <span className="text-xs ml-1">({metrics.grossMarginPct ?? 0}%)</span>
                       </div>
-                      <p className="text-[11px] text-muted-foreground">MRR − custo IA do período</p>
+                      <p
+                        className="text-[11px] text-muted-foreground cursor-help"
+                        title={`Custo do período: R$ ${(metrics.totalCostBRL ?? 0).toFixed(2)} em ${metrics.periodDays ?? 0} dias → mensalizado: R$ ${(metrics.totalCostMonthlyBRL ?? 0).toFixed(2)}/mês`}
+                      >
+                        MRR mensal − custo IA mensalizado
+                      </p>
                     </CardContent>
                   </Card>
                 </div>
