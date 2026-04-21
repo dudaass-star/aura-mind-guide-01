@@ -1,95 +1,95 @@
 
 
-## IA de Suporte por Email — Painel com Aprovação Humana
+## Base de Conhecimento Vetorizada (RAG) + Políticas Oficiais
 
-### Como vai funcionar
+Vamos entregar **dois pacotes em paralelo**: a infraestrutura RAG e o conteúdo das políticas oficiais (escritos por mim seguindo melhores práticas SaaS BR + LGPD + CDC).
 
-```text
-Cliente manda email pra suporte@olaaura.com.br (Locaweb)
-        ↓
-[Cron a cada 2 min] Edge function lê IMAP da Locaweb
-        ↓
-Cria ticket no banco (com email original + anexos como links)
-        ↓
-[support-agent] Gemini 2.5 Pro:
-  • Classifica (categoria + severidade)
-  • Busca contexto: profile, Stripe (assinatura/faturas), últimas msgs WhatsApp
-  • Gera rascunho de resposta em PT-BR (tom Aura)
-  • Sugere ação: cancelar / pausar / reembolsar / link portal / nenhuma
-        ↓
-Você abre /admin/suporte → revisa → 3 opções:
-  ✅ Aprovar → envia via SMTP Locaweb (mantém thread) + executa ação Stripe
-  ✏️  Editar texto/ação → envia o que você ajustou
-  ❌ Rejeitar → escreve resposta manual do zero, sem ação
-        ↓
-Resposta sai DE suporte@olaaura.com.br via SMTP Locaweb
-(Reply-To, In-Reply-To, References preservados — thread intacta no Gmail do cliente)
-```
+---
 
-### O que a IA faz (rascunho + ação sugerida)
+### Parte 1 — Infraestrutura técnica (RAG)
 
-**Categorias:** `dúvida_técnica`, `cancelamento`, `pausa`, `reembolso`, `cobrança_falhou`, `bug`, `troca_plano`, `elogio`, `outro`
-
-**Severidades:** `baixa` (FAQ) | `média` (cobrança/troca) | `alta` (reembolso, jurídico, ameaça pública)
-
-**Ações estruturadas que ela pode sugerir:**
-- `none` — só responder
-- `send_portal_link` — gera link `/meu-espaco` via `user_portal_tokens`
-- `send_stripe_billing_portal` — link de gestão Stripe
-- `cancel_subscription` — chama função existente `cancel-subscription`
-- `pause_subscription` — registra pausa em `cancellation_feedback`
-- `refund_invoice` — Stripe refund (com valor sugerido)
-- `retry_payment` — reaproveita `attach-checkout-payment-methods`
-- `change_plan` — upgrade/downgrade
-
-Toda ação executa só após **confirmação dupla** sua + grava em `support_ticket_actions` (auditoria: quem, quando, payload, resposta Stripe).
-
-### Painel `/admin/suporte`
-
-Layout 3 colunas (segue padrão do `/admin/mensagens` que já existe):
-
-- **Esquerda — Fila:** badges 🔴 Urgente | 🟡 Aguardando | 🟢 Respondido | ⏸ Snooze. Filtros por status/categoria/plano. Realtime via Supabase.
-- **Centro — Thread:** email original com headers, anexos como links de download (Storage), histórico de respostas, contexto do cliente colapsável (plano, status Stripe, últimas faturas, últimas 10 msgs WhatsApp).
-- **Direita — Painel de ação:** rascunho editável (`Textarea`), ação sugerida com toggle, botões: ✅ Aprovar e Enviar | ✏️ Editar | ❌ Rejeitar | ⏸ Snooze | 🔄 Regenerar rascunho.
-
-Acesso: mesma RLS do `/admin/usuarios` — `has_role(auth.uid(), 'admin')`.
-
-### Estrutura técnica
-
-**Tabelas novas (RLS admin-only via `has_role`):**
-
-- `support_tickets` — id, customer_email, subject, status (`pending_review` / `approved` / `replied` / `manual` / `snoozed` / `closed`), category, severity, profile_user_id (FK soft pra `profiles.user_id`), imap_message_id, in_reply_to, references, snooze_until, created_at, updated_at
-- `support_ticket_messages` — ticket_id, direction (`inbound` / `outbound`), from_email, to_email, body_text, body_html, headers (jsonb), attachments (jsonb com paths do Storage), created_at
-- `support_ticket_drafts` — ticket_id, ai_model, draft_body, suggested_action (jsonb), context_snapshot (jsonb), generated_at, regenerated_count
-- `support_ticket_actions` — ticket_id, action_type, payload (jsonb), executed_by (admin user_id), executed_at, stripe_response (jsonb), success, error_message
-
-**Storage bucket novo:** `support-attachments` (privado, RLS admin-only)
+**Banco:**
+- Habilita extensão `pgvector`
+- Tabela `support_knowledge_base`: `id`, `title`, `category`, `question`, `answer`, `keywords[]`, `embedding vector(768)`, `is_active`, `usage_count`, `created_at`, `updated_at`, `created_by`
+- Função SQL `match_support_kb(query_embedding, threshold, count)` — busca por similaridade cosseno
+- RLS admin-only (igual aos outros support_*)
 
 **Edge functions novas:**
+1. `support-kb-embed` — gera embedding via Gemini `text-embedding-004` (768 dim) ao salvar/editar artigo
+2. `support-kb-search` — busca debug pelo painel (input texto → top 5 com scores)
 
-1. **`support-imap-poll`** — cron a cada 2 min. Conecta IMAP Locaweb (`imap.locaweb.com.br:993` SSL), lê não-lidos de `suporte@olaaura.com.br`, salva ticket + mensagem + anexos no Storage, marca como lido. Usa `npm:imapflow` + `npm:mailparser`.
-2. **`support-agent`** — invocada após cada inbound novo. Gemini 2.5 Pro com tool calling: retorna `{category, severity, draft_response, suggested_action}`. Busca contexto via SQL (profiles, Stripe subs/invoices via API com `STRIPE_SECRET_KEY`, últimas msgs).
-3. **`support-execute-action`** — invocada quando admin aprova. Valida `executed_by` (JWT admin), executa ação no Stripe / gera link / etc., grava em `support_ticket_actions`, retorna resultado.
-4. **`support-send-reply`** — envia via SMTP Locaweb (`smtp.locaweb.com.br:465` SSL) usando `npm:nodemailer`. Preserva headers `In-Reply-To` + `References` pra manter thread no Gmail do cliente. Marca ticket como `replied` e cria `support_ticket_messages` outbound.
-5. **`support-regenerate-draft`** — chama `support-agent` de novo opcionalmente com hint do admin ("mais empático", "mais técnico").
+**Mudança em `support-agent`:**
+- Antes de chamar Gemini Pro, gera embedding da pergunta do cliente (assunto + último email)
+- Busca top 5 artigos com threshold 0.7
+- Injeta no prompt como bloco `BASE DE CONHECIMENTO OFICIAL` com instrução: *"Use APENAS estes artigos como fonte de verdade. Se a pergunta não for coberta, diga que vai verificar com a equipe."*
+- Salva IDs usados em `context_snapshot.kb_used` e incrementa `usage_count`
 
-**Frontend:** página nova `src/pages/AdminSupport.tsx` + rota `/admin/suporte` em `App.tsx` + link no menu admin (igual aos outros).
+**Frontend `/admin/suporte/conhecimento`:**
+- Lista por categoria com badge de `usage_count` e busca textual
+- Editor: title, category (select), question, answer (textarea grande markdown), keywords (chips), toggle is_active
+- Botão "Testar busca" — modal pra você validar cobertura antes de publicar
+- Auto-embed ao salvar
 
-**Secrets necessários (vou pedir depois do plano aprovado):**
-- `LOCAWEB_IMAP_USER` (= `suporte@olaaura.com.br`)
-- `LOCAWEB_IMAP_PASSWORD` (senha da caixa)
-- `LOCAWEB_SMTP_HOST` (default `email-ssl.com.br` — você confirma)
-- `LOCAWEB_IMAP_HOST` (default `imap.locaweb.com.br` — você confirma)
+---
 
-### Fora de escopo desta entrega
-- Notificação proativa (você disse que olha todo dia — fica pra fase 2)
-- Auto-aprovação de FAQ (depois de 30 dias de calibração)
-- Métricas de tempo médio de resposta / dashboard de suporte (fase 2)
+### Parte 2 — Conteúdo das políticas (eu escrevo, você revisa)
 
-### Entregáveis nesta sprint
-1. Migration: 4 tabelas + bucket Storage + RLS
-2. 5 edge functions novas + cron IMAP a cada 2 min
-3. Página `/admin/suporte` completa com realtime
-4. Pedido de 4 secrets Locaweb (IMAP + SMTP)
-5. Configuração `verify_jwt` apropriada em `config.toml` para as funções
+Vou criar **15 artigos seed** seguindo melhores práticas:
+
+**Cobrança e pagamento (4):**
+1. Política de reembolso (7 dias CDC + critérios pós-prazo)
+2. Falha no cartão / cobrança recusada (Smart Retries Stripe, dunning, prazo)
+3. Atualizar método de pagamento (link billing portal)
+4. Diferença mensal vs anual / como mudar ciclo
+
+**Assinatura (4):**
+5. Como cancelar (impacto: acesso até fim do ciclo, sem reembolso parcial)
+6. Como pausar (até 30 dias, preserva histórico)
+7. Trocar de plano: upgrade (proration imediata) vs downgrade (no próximo ciclo)
+8. Reativar conta cancelada (mesma conta, sem perder histórico)
+
+**Produto e técnico (4):**
+9. Não estou recebendo mensagem da Aura (debug: número correto, bloqueio WhatsApp, instância)
+10. Como acessar o portal /meu-espaco (link via WhatsApp, validade do token)
+11. Diferença entre planos Essencial / Direção / Transformação (limites de mensagens, sessões, áudio)
+12. Trial pago de 7 dias (R$ 6,90 / 11,90 / 24,90 — conversão automática, como cancelar antes)
+
+**Privacidade e legal (3):**
+13. Privacidade e LGPD (dados coletados, finalidade, retenção, direitos do titular)
+14. Aura não substitui terapia (disclaimer obrigatório + CVV 188 em emergência)
+15. Solicitar exclusão de conta e dados (prazo 30 dias, exceções legais)
+
+**Padrão de cada artigo:**
+- Tom: PT-BR direto, sem juridiquês desnecessário
+- Estrutura: pergunta canônica → resposta curta (1-2 frases) → detalhes → quando escalar pra humano
+- Sempre cita a base legal quando aplicável (CDC art. 49 pra reembolso, LGPD art. 18 pra direitos do titular)
+- Inclui `keywords` com sinônimos comuns ("estornar", "devolver dinheiro", "cancelar cobrança" → todos apontam pro artigo de reembolso)
+
+---
+
+### Melhores práticas aplicadas
+
+- **Versionamento implícito** via `updated_at` (fase 2 traz histórico completo)
+- **Threshold 0.7** evita falsos positivos (testado como sweet spot pra PT-BR com Gemini embeddings)
+- **Máximo 5 artigos no contexto** evita poluir o prompt e diluir foco
+- **`usage_count`** vira métrica de qualidade da KB (artigo nunca usado = pergunta errada ou keywords ruins)
+- **Auditoria completa**: `kb_used` no draft mostra exatamente quais artigos a IA consultou
+- **Fallback explícito**: se score < 0.7 em todos, IA é instruída a NÃO inventar e escalar
+- **Segregação clara** entre "política oficial" (KB) e "contexto do cliente" (Stripe/profile) no prompt
+
+---
+
+### Entregáveis
+
+1. Migration: `pgvector` + tabela `support_knowledge_base` + função `match_support_kb` + RLS
+2. 2 edge functions novas (`support-kb-embed`, `support-kb-search`)
+3. `support-agent` atualizado com fluxo RAG completo
+4. Sub-rota `/admin/suporte/conhecimento` (lista + editor + teste de busca)
+5. **15 artigos seed inseridos no banco** (você edita depois pelo painel)
+
+### Fora de escopo (fase 2)
+- Histórico de versões de artigos
+- Import/export CSV
+- Re-embedding em massa (script manual quando necessário)
+- A/B testing de respostas
 
