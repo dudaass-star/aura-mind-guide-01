@@ -521,6 +521,17 @@ Deno.serve(async (req) => {
             console.warn('⚠️ CAPI events failed (non-blocking):', capiError);
           }
 
+          // GA4 Purchase via Measurement Protocol (dormant if GA4_API_SECRET not set)
+          await sendGa4Purchase({
+            clientId: session.metadata?.ga_client_id,
+            email: customerEmail || undefined,
+            transactionId: `${session.id}_trial`,
+            value: (session.amount_total || 0) / 100,
+            plan: customerPlan,
+            planName: planName,
+            eventSourceUrl: 'https://olaaura.com.br/obrigado',
+          });
+
           return new Response(JSON.stringify({ received: true }), {
             status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
@@ -774,6 +785,17 @@ Deno.serve(async (req) => {
       } catch (capiError) {
         console.warn('⚠️ CAPI Purchase event failed (non-blocking):', capiError);
       }
+
+      // GA4 Purchase via Measurement Protocol (dormant if GA4_API_SECRET not set)
+      await sendGa4Purchase({
+        clientId: session.metadata?.ga_client_id,
+        email: customerEmail || undefined,
+        transactionId: session.id,
+        value: session.amount_total ? session.amount_total / 100 : 0,
+        plan: customerPlan,
+        planName: planName,
+        eventSourceUrl: 'https://olaaura.com.br/obrigado',
+      });
     }
 
     // ========== customer.subscription.deleted ==========
