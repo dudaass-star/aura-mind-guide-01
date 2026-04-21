@@ -140,7 +140,7 @@ export default function AdminSupport() {
       supabase.from('support_ticket_drafts').select('*').eq('ticket_id', ticket.id).eq('is_current', true).maybeSingle(),
     ]);
 
-    setMessages((msgsRes.data || []) as TicketMessage[]);
+    setMessages((msgsRes.data || []) as unknown as TicketMessage[]);
     if (draftRes.data) {
       const d = draftRes.data as unknown as Draft;
       setDraft(d);
