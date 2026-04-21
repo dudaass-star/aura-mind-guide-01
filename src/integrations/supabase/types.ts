@@ -1372,6 +1372,210 @@ export type Database = {
         }
         Relationships: []
       }
+      support_ticket_actions: {
+        Row: {
+          action_type: string
+          error_message: string | null
+          executed_at: string
+          executed_by: string | null
+          id: string
+          payload: Json | null
+          stripe_response: Json | null
+          success: boolean
+          ticket_id: string
+        }
+        Insert: {
+          action_type: string
+          error_message?: string | null
+          executed_at?: string
+          executed_by?: string | null
+          id?: string
+          payload?: Json | null
+          stripe_response?: Json | null
+          success?: boolean
+          ticket_id: string
+        }
+        Update: {
+          action_type?: string
+          error_message?: string | null
+          executed_at?: string
+          executed_by?: string | null
+          id?: string
+          payload?: Json | null
+          stripe_response?: Json | null
+          success?: boolean
+          ticket_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_ticket_actions_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "support_tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      support_ticket_drafts: {
+        Row: {
+          ai_model: string
+          context_snapshot: Json | null
+          draft_body: string
+          generated_at: string
+          hint: string | null
+          id: string
+          is_current: boolean
+          suggested_action: Json | null
+          ticket_id: string
+        }
+        Insert: {
+          ai_model: string
+          context_snapshot?: Json | null
+          draft_body: string
+          generated_at?: string
+          hint?: string | null
+          id?: string
+          is_current?: boolean
+          suggested_action?: Json | null
+          ticket_id: string
+        }
+        Update: {
+          ai_model?: string
+          context_snapshot?: Json | null
+          draft_body?: string
+          generated_at?: string
+          hint?: string | null
+          id?: string
+          is_current?: boolean
+          suggested_action?: Json | null
+          ticket_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_ticket_drafts_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "support_tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      support_ticket_messages: {
+        Row: {
+          attachments: Json | null
+          body_html: string | null
+          body_text: string | null
+          created_at: string
+          direction: string
+          from_email: string
+          headers: Json | null
+          id: string
+          in_reply_to: string | null
+          message_id_header: string | null
+          sent_by: string | null
+          subject: string | null
+          ticket_id: string
+          to_email: string
+        }
+        Insert: {
+          attachments?: Json | null
+          body_html?: string | null
+          body_text?: string | null
+          created_at?: string
+          direction: string
+          from_email: string
+          headers?: Json | null
+          id?: string
+          in_reply_to?: string | null
+          message_id_header?: string | null
+          sent_by?: string | null
+          subject?: string | null
+          ticket_id: string
+          to_email: string
+        }
+        Update: {
+          attachments?: Json | null
+          body_html?: string | null
+          body_text?: string | null
+          created_at?: string
+          direction?: string
+          from_email?: string
+          headers?: Json | null
+          id?: string
+          in_reply_to?: string | null
+          message_id_header?: string | null
+          sent_by?: string | null
+          subject?: string | null
+          ticket_id?: string
+          to_email?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_ticket_messages_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "support_tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      support_tickets: {
+        Row: {
+          category: string | null
+          created_at: string
+          customer_email: string
+          customer_name: string | null
+          email_references: string | null
+          id: string
+          imap_message_id: string | null
+          in_reply_to: string | null
+          last_inbound_at: string
+          last_outbound_at: string | null
+          profile_user_id: string | null
+          severity: string | null
+          snooze_until: string | null
+          status: string
+          subject: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          customer_email: string
+          customer_name?: string | null
+          email_references?: string | null
+          id?: string
+          imap_message_id?: string | null
+          in_reply_to?: string | null
+          last_inbound_at?: string
+          last_outbound_at?: string | null
+          profile_user_id?: string | null
+          severity?: string | null
+          snooze_until?: string | null
+          status?: string
+          subject: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          customer_email?: string
+          customer_name?: string | null
+          email_references?: string | null
+          id?: string
+          imap_message_id?: string | null
+          in_reply_to?: string | null
+          last_inbound_at?: string
+          last_outbound_at?: string | null
+          profile_user_id?: string | null
+          severity?: string | null
+          snooze_until?: string | null
+          status?: string
+          subject?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       suppressed_emails: {
         Row: {
           created_at: string
