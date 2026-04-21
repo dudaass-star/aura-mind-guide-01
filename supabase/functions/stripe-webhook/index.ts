@@ -25,6 +25,91 @@ const PLAN_SESSIONS: Record<string, number> = {
 };
 
 /**
+ * Sends a `purchase` event to GA4 via Measurement Protocol.
+ * No-op (logs and returns) if GA4_API_SECRET is not configured.
+ * Non-blocking: errors are logged but never thrown.
+ */
+async function sendGa4Purchase(params: {
+  clientId: string | undefined;
+  email: string | undefined;
+  transactionId: string;
+  value: number;
+  plan: string;
+  planName: string;
+  eventSourceUrl?: string;
+}): Promise<void> {
+  try {
+    const measurementId = Deno.env.get("GA4_MEASUREMENT_ID");
+    const apiSecret = Deno.env.get("GA4_API_SECRET");
+    if (!measurementId) {
+      console.log("ℹ️ GA4 Purchase skipped: GA4_MEASUREMENT_ID not set");
+      return;
+    }
+    if (!apiSecret) {
+      console.log("ℹ️ GA4 Purchase skipped: GA4_API_SECRET not set (dormant)");
+      return;
+    }
+
+    // client_id is required by Measurement Protocol. Fallback: deterministic id from email.
+    let clientId = params.clientId;
+    if (!clientId && params.email) {
+      // Deterministic synthetic client_id (good enough for attribution; won't match browser session)
+      const enc = new TextEncoder().encode(params.email.toLowerCase().trim());
+      const hash = await crypto.subtle.digest("SHA-256", enc);
+      const hex = Array.from(new Uint8Array(hash))
+        .slice(0, 8)
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
+      clientId = `synth.${parseInt(hex.slice(0, 8), 16)}.${parseInt(hex.slice(8, 16), 16)}`;
+    }
+    if (!clientId) {
+      console.warn("⚠️ GA4 Purchase skipped: no client_id and no email for fallback");
+      return;
+    }
+
+    const url = `https://www.google-analytics.com/mp/collect?measurement_id=${measurementId}&api_secret=${apiSecret}`;
+    const body = {
+      client_id: clientId,
+      events: [
+        {
+          name: "purchase",
+          params: {
+            transaction_id: params.transactionId,
+            value: params.value,
+            currency: "BRL",
+            items: [
+              {
+                item_id: params.plan,
+                item_name: params.planName,
+                price: params.value,
+                quantity: 1,
+              },
+            ],
+            ...(params.eventSourceUrl && { page_location: params.eventSourceUrl }),
+          },
+        },
+      ],
+    };
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      console.warn("⚠️ GA4 Purchase non-2xx:", res.status, text);
+    } else {
+      console.log(
+        `✅ GA4 Purchase sent (transaction_id: ${params.transactionId}, value: ${params.value}, client_id: ${clientId.startsWith("synth.") ? "synth" : "cookie"})`,
+      );
+    }
+  } catch (err) {
+    console.warn("⚠️ GA4 Purchase failed (non-blocking):", err);
+  }
+}
+
+/**
  * Helper: resolve profile from Stripe customer using phone variations + email fallback
  * Returns { profile, phone } where phone is the matched phone for messaging
  */
