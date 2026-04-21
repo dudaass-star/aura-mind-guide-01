@@ -8,6 +8,7 @@ import { Link, useLocation } from "react-router-dom";
 import { ArrowLeft, CreditCard, Check, Shield, Lock, Gift, MessageCircle, Calendar, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { trackBeginCheckout, trackAddPaymentInfo, trackExitIntent, getGaClientId } from "@/lib/ga4";
 
 type PlanId = "essencial" | "direcao" | "transformacao";
 type BillingPeriod = "monthly" | "yearly";
@@ -87,6 +88,10 @@ const Checkout = () => {
         content_category: 'checkout',
       });
     }
+    // GA4 begin_checkout — usuário entrou na página de checkout
+    const trialPriceMap: Record<string, number> = { essencial: 6.9, direcao: 9.9, transformacao: 19.9 };
+    trackBeginCheckout({ plan: selectedPlan, value: trialPriceMap[selectedPlan] });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Reset payment method when switching to monthly
@@ -105,6 +110,7 @@ const Checkout = () => {
       if (e.clientY <= 0 && !hasRedirected && !sessionStorage.getItem('aura_exit_popup_shown')) {
         sessionStorage.setItem('aura_exit_popup_shown', 'true');
         setShowExitPopup(true);
+        trackExitIntent('open');
       }
     };
 
@@ -112,6 +118,7 @@ const Checkout = () => {
       if (window.innerWidth >= 768 && document.visibilityState === 'hidden' && !hasRedirected && !sessionStorage.getItem('aura_exit_popup_shown')) {
         sessionStorage.setItem('aura_exit_popup_shown', 'true');
         setShowExitPopup(true);
+        trackExitIntent('open');
       }
     };
 
@@ -216,6 +223,13 @@ const Checkout = () => {
         }),
       ]).catch(() => {}); // non-blocking
       
+      // GA4 add_payment_info — usuário enviou o formulário, indo pro Stripe
+      const trialPriceMap: Record<string, number> = { essencial: 6.9, direcao: 9.9, transformacao: 19.9 };
+      trackAddPaymentInfo({ plan: selectedPlan, billing: billingPeriod, value: trialPriceMap[selectedPlan] });
+
+      // GA4 client_id (cookie _ga) — encaminhado ao Stripe via metadata para Measurement Protocol
+      const gaClientId = getGaClientId();
+
       const { data, error } = await supabase.functions.invoke('create-checkout', {
         body: {
           plan: selectedPlan,
@@ -226,6 +240,7 @@ const Checkout = () => {
           phone: phone,
           ...(fbp && { fbp }),
           ...(fbc && { fbc }),
+          ...(gaClientId && { gaClientId }),
         },
       });
 
@@ -573,6 +588,7 @@ const Checkout = () => {
                 className="w-full"
                 onClick={() => {
                   setShowExitPopup(false);
+                  trackExitIntent('convert');
                   document.getElementById('checkout-form')?.scrollIntoView({ behavior: 'smooth' });
                 }}
               >

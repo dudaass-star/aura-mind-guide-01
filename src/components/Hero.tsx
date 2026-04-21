@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Star, Clock, Brain, Volume2, VolumeX, RotateCcw } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useRef, useState } from "react";
+import { trackCtaClick } from "@/lib/ga4";
 
 const Hero = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -108,7 +109,7 @@ const Hero = () => {
 
           {/* CTA */}
           <div className="flex flex-col items-center gap-4 animate-fade-up opacity-0 delay-300">
-            <Link to="/checkout">
+            <Link to="/checkout" onClick={() => trackCtaClick("hero", "Começar por R$ 6,90")}>
               <Button variant="sage" size="xl" className="min-w-[280px]">
                 Começar por R$ 6,90
               </Button>

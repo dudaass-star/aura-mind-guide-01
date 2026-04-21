@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Menu, X } from "lucide-react";
 import { useState } from "react";
 import logoOlaAura from "@/assets/logo-ola-aura.png";
+import { trackCtaClick } from "@/lib/ga4";
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -36,7 +37,7 @@ const Header = () => {
             >
               FAQ
             </a>
-            <Link to="/checkout">
+            <Link to="/checkout" onClick={() => trackCtaClick("header", "Começar agora (desktop)")}>
               <Button variant="sage" size="sm">
                 Começar agora
               </Button>
@@ -77,7 +78,13 @@ const Header = () => {
               >
                 FAQ
               </a>
-              <Link to="/checkout" onClick={() => setIsMenuOpen(false)}>
+              <Link
+                to="/checkout"
+                onClick={() => {
+                  trackCtaClick("header", "Começar agora (mobile menu)");
+                  setIsMenuOpen(false);
+                }}
+              >
                 <Button variant="sage" className="w-full">
                   Começar agora
                 </Button>

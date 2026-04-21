@@ -52,6 +52,29 @@
     src="https://www.facebook.com/tr?id=939366085297921&ev=PageView&noscript=1"
   /></noscript>
   <!-- End Meta Pixel Code -->
+
+  <!-- Google Analytics 4 — only on marketing routes -->
+  <script>
+    (function(){
+      var marketingRoutes = ['/', '/checkout', '/obrigado', '/experimentar', '/trial-iniciado'];
+      var path = window.location.pathname;
+      if (marketingRoutes.indexOf(path) === -1) return;
+
+      var GA4_ID = 'G-2G7T7SJWBK';
+      var s = document.createElement('script');
+      s.async = true;
+      s.src = 'https://www.googletagmanager.com/gtag/js?id=' + GA4_ID;
+      document.head.appendChild(s);
+
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){ window.dataLayer.push(arguments); }
+      window.gtag = gtag;
+      gtag('js', new Date());
+      // send_page_view: false — page_view is dispatched by the React Router hook
+      gtag('config', GA4_ID, { send_page_view: false });
+    })();
+  </script>
+  <!-- End GA4 -->
 </head>
 
   <body>

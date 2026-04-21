@@ -50,13 +50,13 @@ serve(async (req) => {
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
 
-    const { plan: requestedPlan, billing = "monthly", name, email, phone, trial, paymentMethod, fbp, fbc } = await req.json();
+    const { plan: requestedPlan, billing = "monthly", name, email, phone, trial, paymentMethod, fbp, fbc, gaClientId } = await req.json();
     
     const plan = requestedPlan;
     const billingOverride = billing;
     const isBoletoPayment = paymentMethod === "boleto" && billingOverride === "yearly";
     
-    logStep("Request received", { plan, billing: billingOverride, name, email, phone, trial: !!trial, paymentMethod, isBoleto: isBoletoPayment, hasFbp: !!fbp, hasFbc: !!fbc });
+    logStep("Request received", { plan, billing: billingOverride, name, email, phone, trial: !!trial, paymentMethod, isBoleto: isBoletoPayment, hasFbp: !!fbp, hasFbc: !!fbc, hasGaClientId: !!gaClientId });
 
     const PRICES = getPrices();
     
@@ -278,6 +278,7 @@ serve(async (req) => {
         trial_validation: "true",
         ...(fbp && { fbp }),
         ...(fbc && { fbc }),
+        ...(gaClientId && { ga_client_id: gaClientId }),
       };
     } else if (isBoletoPayment) {
       // Boleto: one-time payment
@@ -298,6 +299,7 @@ serve(async (req) => {
         payment_method: "boleto",
         ...(fbp && { fbp }),
         ...(fbc && { fbc }),
+        ...(gaClientId && { ga_client_id: gaClientId }),
       };
     } else {
       // Card: subscription
@@ -313,6 +315,7 @@ serve(async (req) => {
         billing: billingPeriod,
         ...(fbp && { fbp }),
         ...(fbc && { fbc }),
+        ...(gaClientId && { ga_client_id: gaClientId }),
       };
       sessionConfig.subscription_data = {
         metadata: {
@@ -321,6 +324,7 @@ serve(async (req) => {
           email: email,
           plan: plan,
           billing: billingPeriod,
+          ...(gaClientId && { ga_client_id: gaClientId }),
         },
       };
     }

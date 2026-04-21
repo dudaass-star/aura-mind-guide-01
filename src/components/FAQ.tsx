@@ -6,6 +6,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { trackCtaClick, trackFaqOpen } from "@/lib/ga4";
 
 const faqs = [
   {
@@ -69,7 +70,17 @@ const FAQ = () => {
         </div>
 
         <div className="max-w-3xl mx-auto">
-          <Accordion type="single" collapsible className="space-y-4">
+          <Accordion
+            type="single"
+            collapsible
+            className="space-y-4"
+            onValueChange={(value) => {
+              if (!value) return;
+              const idx = parseInt(value.replace("item-", ""), 10);
+              const q = faqs[idx]?.question;
+              if (q) trackFaqOpen(q);
+            }}
+          >
             {faqs.map((faq, index) => (
               <AccordionItem
                 key={index}
@@ -87,7 +98,7 @@ const FAQ = () => {
           </Accordion>
 
           <div className="text-center mt-12">
-            <Link to="/checkout">
+            <Link to="/checkout" onClick={() => trackCtaClick("faq", "Começar por R$ 6,90")}>
               <Button variant="sage" size="xl">
                 Começar por R$ 6,90
               </Button>
