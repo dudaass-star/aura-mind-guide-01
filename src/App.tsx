@@ -30,6 +30,7 @@ import JourneyComplete from "./pages/JourneyComplete";
 import Unsubscribe from "./pages/Unsubscribe";
 import UserPortal from "./pages/UserPortal";
 import NotFound from "./pages/NotFound";
+import GA4RouteTracker from "./components/GA4RouteTracker";
 
 const queryClient = new QueryClient();
 
@@ -40,6 +41,7 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
+          <GA4RouteTracker />
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/checkout" element={<Checkout />} />
