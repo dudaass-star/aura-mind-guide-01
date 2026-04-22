@@ -300,34 +300,17 @@ Deno.serve(async (req) => {
     console.log(`👤 Found user: ${profile.name} (${profile.user_id}), status: ${profile.status}, instance: ${profile.whatsapp_instance_id || 'env-default'}`);
 
     // ========================================================================
-    // INLINE TRIAL EXPIRATION — expire ONLY genuine free trials at message time
+    // TRIAL EXPIRATION — handled by Stripe webhook, NOT inline.
     //
-    // SAFETY: Only expire when the user is in the legacy "free trial" listening
-    // phase AND the trial window has elapsed. This block must NEVER touch paid
-    // subscribers — the source-of-truth for paying customers is the Stripe webhook
-    // (`stripe-webhook`) which sets `status='active'` / `past_due` / `canceled`.
+    // Bug fixed 2026-04-22: previous inline rule expired ANY profile with
+    // status='trial' and trial_started_at older than 5 days. This wrongly
+    // affected paid users (paid trials, monthly subs whose status='trial' had
+    // never been promoted to 'active' due to webhook race conditions, etc.),
+    // mass-expiring 15 paying customers on 2026-04-22.
     //
-    // Bug fixed 2026-04-22: previous code expired ANY profile with `status='trial'`
-    // and `trial_started_at` older than 5 days, including paying users whose
-    // status had not yet been promoted to `active` by the webhook (race condition
-    // between checkout.session.completed and customer.subscription.updated).
-    // That mass-expired ~15 paying users on 2026-04-22.
+    // Source of truth for paid users: stripe-webhook (sub.status →
+    // active/past_due/canceled). Inline expiration removed entirely.
     // ========================================================================
-    if (
-      profile.status === 'trial' &&
-      profile.trial_started_at &&
-      profile.trial_phase === 'listening' &&
-      !profile.plan_expires_at &&        // paid users have an expiry set by webhook
-      !profile.converted_at              // paid users have converted_at populated
-    ) {
-      const trialAge = Date.now() - new Date(profile.trial_started_at).getTime();
-      const sevenDays = 7 * 24 * 60 * 60 * 1000;
-      if (trialAge > sevenDays) {
-        console.log(`⏰ Free trial expired inline for ${profile.user_id} — started ${profile.trial_started_at}`);
-        await supabase.from('profiles').update({ status: 'trial_expired', updated_at: new Date().toISOString() }).eq('user_id', profile.user_id);
-        profile.status = 'trial_expired';
-      }
-      }
 
     // ========================================================================
     // SUBSCRIPTION STATUS CHECK
