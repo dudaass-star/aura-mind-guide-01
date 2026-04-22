@@ -234,6 +234,7 @@ ${inboundEmails}
 
 CONTEXTO DO CLIENTE:
 ${JSON.stringify(context, null, 2)}${kbBlock}
+${recurringCustomer ? `\n⚠️ ATENÇÃO: Cliente RECORRENTE (${RECURRING_CUSTOMER_THRESHOLD}+ tickets em 30 dias). Reconheça o histórico no rascunho, evite respostas genéricas, e sugira escalonar pra revisão humana se for o mesmo problema repetido.\n` : ""}
 
 ${hint ? `INSTRUÇÃO DO ADMIN: ${hint}\n` : ""}
 Analise e responda com a estrutura solicitada.`;
