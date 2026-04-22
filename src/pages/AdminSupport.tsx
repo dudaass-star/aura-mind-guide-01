@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, RefreshCw, Send, Pause, X, CheckCircle2, AlertTriangle, Mail, Paperclip, Loader2, Sparkles, Inbox, BookOpen, Bot, AlertOctagon } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Send, Pause, X, CheckCircle2, AlertTriangle, Mail, Paperclip, Loader2, Sparkles, Inbox, BookOpen, Bot, AlertOctagon, RotateCcw, HelpCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -32,6 +32,8 @@ interface Ticket {
   auto_sent?: boolean;
   auto_sent_at?: string | null;
   recurring_customer?: boolean;
+  reopened_at?: string | null;
+  auto_reply_attempts?: number;
 }
 
 interface TicketMessage {
@@ -113,6 +115,8 @@ export default function AdminSupport() {
       query = query.eq('auto_sent', true);
     } else if (statusFilter === 'recurring') {
       query = query.eq('recurring_customer', true);
+    } else if (statusFilter === 'reopened') {
+      query = query.not('reopened_at', 'is', null);
     } else if (statusFilter !== 'all') {
       query = query.eq('status', statusFilter);
     }
@@ -167,7 +171,7 @@ export default function AdminSupport() {
     try {
       // 1. Send email
       const { data: sendData, error: sendErr } = await supabase.functions.invoke('support-send-reply', {
-        body: { ticket_id: selectedTicket.id, body: editedBody },
+        body: { ticket_id: selectedTicket.id, body: editedBody, draft_id: draft?.id },
       });
       if (sendErr) throw sendErr;
 
@@ -279,6 +283,9 @@ export default function AdminSupport() {
             <Button onClick={() => navigate('/admin/suporte/conhecimento')} variant="outline" size="sm">
               <BookOpen className="h-4 w-4 mr-1" /> Base de Conhecimento
             </Button>
+            <Button onClick={() => navigate('/admin/suporte/gaps')} variant="outline" size="sm">
+              <HelpCircle className="h-4 w-4 mr-1" /> Perguntas sem cobertura
+            </Button>
             <Button onClick={handlePoll} disabled={polling} variant="outline" size="sm">
               {polling ? <Loader2 className="h-4 w-4 animate-spin" /> : <Inbox className="h-4 w-4" />}
               Verificar caixa
@@ -299,6 +306,7 @@ export default function AdminSupport() {
                 <SelectItem value="replied">Respondido</SelectItem>
                 <SelectItem value="auto_sent">Auto-respondidos</SelectItem>
                 <SelectItem value="recurring">Clientes recorrentes</SelectItem>
+                <SelectItem value="reopened">Reabertos (auto-resposta falhou)</SelectItem>
                 <SelectItem value="snoozed">Snooze</SelectItem>
                 <SelectItem value="closed">Fechado</SelectItem>
                 <SelectItem value="all">Todos</SelectItem>
@@ -378,6 +386,17 @@ export default function AdminSupport() {
                     <span>
                       Respondido automaticamente {selectedTicket.auto_sent_at && format(new Date(selectedTicket.auto_sent_at), "dd/MM 'às' HH:mm", { locale: ptBR })}
                     </span>
+                  </div>
+                )}
+                {selectedTicket.reopened_at && (
+                  <div className="mt-2 flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-2 text-xs">
+                    <RotateCcw className="h-4 w-4 text-destructive mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="font-medium text-destructive">Cliente reabriu o ticket</p>
+                      <p className="text-muted-foreground">
+                        A auto-resposta não resolveu. Próxima resposta SEMPRE será manual (auto-resposta bloqueada).
+                      </p>
+                    </div>
                   </div>
                 )}
               </CardHeader>

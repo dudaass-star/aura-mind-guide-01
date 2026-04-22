@@ -177,9 +177,11 @@ serve(async (req) => {
     let kbBlock = "";
     let kbUsedIds: string[] = [];
     let kbTopScore: number | null = null;
+    let kbQueryText = "";
     try {
       const lastInbound = (messages || []).filter((m) => m.direction === "inbound").slice(-1)[0];
       const queryText = `${ticket.subject}\n\n${lastInbound?.body_text || ""}`.slice(0, 4000);
+      kbQueryText = queryText;
       const apiKey = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_CLOUD_API_KEY");
       if (apiKey && queryText.trim()) {
         const embResp = await fetch(
@@ -224,6 +226,21 @@ serve(async (req) => {
       }
     } catch (e) {
       log("KB search failed", { error: String(e) });
+    }
+
+    // ========== Registrar gap se score muito baixo ==========
+    try {
+      if ((kbTopScore === null || kbTopScore < 0.55) && kbQueryText.trim()) {
+        await supabase.rpc("record_kb_gap", {
+          _question: kbQueryText.slice(0, 2000),
+          _subject: ticket.subject,
+          _best_score: kbTopScore,
+          _ticket_id: ticket_id,
+        });
+        log("KB gap recorded", { kbTopScore });
+      }
+    } catch (e) {
+      log("KB gap recording failed", { error: String(e) });
     }
 
     const userPrompt = `EMAIL DO CLIENTE:
@@ -299,7 +316,9 @@ Analise e responda com a estrutura solicitada.`;
     const isSafeAction = args.suggested_action?.type === "none" || args.suggested_action?.type === "send_portal_link";
     const hasGoodKbMatch = kbTopScore !== null && kbTopScore >= AUTO_REPLY_KB_THRESHOLD;
     const isLowSeverity = args.severity === "baixa";
-    const autoEligible = isSafeCategory && isSafeAction && hasGoodKbMatch && isLowSeverity && !recurringCustomer;
+    // Bloqueia auto-resposta se ticket já foi auto-respondido antes (regra: nunca 2x)
+    const previouslyAutoReplied = (ticket.auto_reply_attempts || 0) > 0 || !!ticket.reopened_at;
+    const autoEligible = isSafeCategory && isSafeAction && hasGoodKbMatch && isLowSeverity && !recurringCustomer && !previouslyAutoReplied;
 
     log("Auto-reply eligibility", {
       ticket_id,
@@ -309,6 +328,7 @@ Analise e responda com a estrutura solicitada.`;
       action: args.suggested_action?.type,
       kb_top_score: kbTopScore,
       recurring: recurringCustomer,
+      previously_auto_replied: previouslyAutoReplied,
     });
 
     const { data: draft, error: dErr } = await supabase.from("support_ticket_drafts").insert({

@@ -159,8 +159,31 @@ serve(async (req) => {
             auto_sent: true,
             auto_sent_at: new Date().toISOString(),
             last_outbound_at: new Date().toISOString(),
+            auto_reply_attempts: 1,
           })
           .eq("id", ticket.id);
+
+        // Marca o draft como auto_sent e registra como aprovação na KB
+        try {
+          await supabase.from("support_ticket_drafts").update({
+            feedback_status: "auto_sent",
+            edit_distance: 0,
+            final_body: draft.draft_body,
+            feedback_at: new Date().toISOString(),
+          }).eq("id", draft.id);
+
+          const { data: ctxRow } = await supabase
+            .from("support_ticket_drafts")
+            .select("context_snapshot")
+            .eq("id", draft.id)
+            .maybeSingle();
+          const kbIds = (ctxRow?.context_snapshot as { kb_used?: string[] } | null)?.kb_used || [];
+          if (kbIds.length > 0) {
+            await supabase.rpc("record_kb_feedback", { kb_ids: kbIds, feedback: "auto_sent" });
+          }
+        } catch (e) {
+          log("Draft feedback update failed (non-fatal)", { ticket_id: ticket.id, error: String(e) });
+        }
 
         sent++;
         log("Auto-sent", { ticket_id: ticket.id, message_id: info.messageId });

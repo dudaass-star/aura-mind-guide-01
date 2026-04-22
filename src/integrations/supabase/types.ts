@@ -1372,45 +1372,117 @@ export type Database = {
         }
         Relationships: []
       }
+      support_kb_gaps: {
+        Row: {
+          best_kb_score: number | null
+          created_at: string
+          first_seen_at: string
+          id: string
+          last_seen_at: string
+          occurrence_count: number
+          question_text: string
+          resolved_at: string | null
+          resolved_by: string | null
+          resolved_kb_id: string | null
+          source_ticket_id: string | null
+          status: string
+          ticket_subject: string | null
+        }
+        Insert: {
+          best_kb_score?: number | null
+          created_at?: string
+          first_seen_at?: string
+          id?: string
+          last_seen_at?: string
+          occurrence_count?: number
+          question_text: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          resolved_kb_id?: string | null
+          source_ticket_id?: string | null
+          status?: string
+          ticket_subject?: string | null
+        }
+        Update: {
+          best_kb_score?: number | null
+          created_at?: string
+          first_seen_at?: string
+          id?: string
+          last_seen_at?: string
+          occurrence_count?: number
+          question_text?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          resolved_kb_id?: string | null
+          source_ticket_id?: string | null
+          status?: string
+          ticket_subject?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_kb_gaps_resolved_kb_id_fkey"
+            columns: ["resolved_kb_id"]
+            isOneToOne: false
+            referencedRelation: "support_knowledge_base"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "support_kb_gaps_source_ticket_id_fkey"
+            columns: ["source_ticket_id"]
+            isOneToOne: false
+            referencedRelation: "support_tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       support_knowledge_base: {
         Row: {
           answer: string
+          approved_count: number
           category: string
           created_at: string
           created_by: string | null
+          edited_count: number
           embedding: string | null
           id: string
           is_active: boolean
           keywords: string[]
           question: string
+          rejected_count: number
           title: string
           updated_at: string
           usage_count: number
         }
         Insert: {
           answer: string
+          approved_count?: number
           category: string
           created_at?: string
           created_by?: string | null
+          edited_count?: number
           embedding?: string | null
           id?: string
           is_active?: boolean
           keywords?: string[]
           question: string
+          rejected_count?: number
           title: string
           updated_at?: string
           usage_count?: number
         }
         Update: {
           answer?: string
+          approved_count?: number
           category?: string
           created_at?: string
           created_by?: string | null
+          edited_count?: number
           embedding?: string | null
           id?: string
           is_active?: boolean
           keywords?: string[]
           question?: string
+          rejected_count?: number
           title?: string
           updated_at?: string
           usage_count?: number
@@ -1467,6 +1539,10 @@ export type Database = {
           auto_eligible: boolean
           context_snapshot: Json | null
           draft_body: string
+          edit_distance: number | null
+          feedback_at: string | null
+          feedback_status: string
+          final_body: string | null
           generated_at: string
           hint: string | null
           id: string
@@ -1480,6 +1556,10 @@ export type Database = {
           auto_eligible?: boolean
           context_snapshot?: Json | null
           draft_body: string
+          edit_distance?: number | null
+          feedback_at?: string | null
+          feedback_status?: string
+          final_body?: string | null
           generated_at?: string
           hint?: string | null
           id?: string
@@ -1493,6 +1573,10 @@ export type Database = {
           auto_eligible?: boolean
           context_snapshot?: Json | null
           draft_body?: string
+          edit_distance?: number | null
+          feedback_at?: string | null
+          feedback_status?: string
+          final_body?: string | null
           generated_at?: string
           hint?: string | null
           id?: string
@@ -1572,6 +1656,7 @@ export type Database = {
       }
       support_tickets: {
         Row: {
+          auto_reply_attempts: number
           auto_sent: boolean
           auto_sent_at: string | null
           category: string | null
@@ -1586,6 +1671,7 @@ export type Database = {
           last_outbound_at: string | null
           profile_user_id: string | null
           recurring_customer: boolean
+          reopened_at: string | null
           severity: string | null
           snooze_until: string | null
           status: string
@@ -1593,6 +1679,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          auto_reply_attempts?: number
           auto_sent?: boolean
           auto_sent_at?: string | null
           category?: string | null
@@ -1607,6 +1694,7 @@ export type Database = {
           last_outbound_at?: string | null
           profile_user_id?: string | null
           recurring_customer?: boolean
+          reopened_at?: string | null
           severity?: string | null
           snooze_until?: string | null
           status?: string
@@ -1614,6 +1702,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          auto_reply_attempts?: number
           auto_sent?: boolean
           auto_sent_at?: string | null
           category?: string | null
@@ -1628,6 +1717,7 @@ export type Database = {
           last_outbound_at?: string | null
           profile_user_id?: string | null
           recurring_customer?: boolean
+          reopened_at?: string | null
           severity?: string | null
           snooze_until?: string | null
           status?: string
@@ -2132,6 +2222,19 @@ export type Database = {
           msg_id: number
           read_ct: number
         }[]
+      }
+      record_kb_feedback: {
+        Args: { feedback: string; kb_ids: string[] }
+        Returns: undefined
+      }
+      record_kb_gap: {
+        Args: {
+          _best_score: number
+          _question: string
+          _subject: string
+          _ticket_id: string
+        }
+        Returns: string
       }
     }
     Enums: {

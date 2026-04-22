@@ -13,8 +13,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { ArrowLeft, Plus, Trash2, Search, Sparkles, Loader2, X, Save, BookOpen } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { ArrowLeft, Plus, Trash2, Search, Sparkles, Loader2, X, Save, BookOpen, ThumbsUp, ThumbsDown, Pencil } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 interface KBArticle {
   id: string;
@@ -28,6 +28,9 @@ interface KBArticle {
   embedding: unknown | null;
   created_at: string;
   updated_at: string;
+  approved_count?: number;
+  edited_count?: number;
+  rejected_count?: number;
 }
 
 const CATEGORIES: { value: string; label: string }[] = [
@@ -59,6 +62,7 @@ export default function AdminSupportKnowledge() {
   const { isLoading: authLoading, isAdmin, redirectIfNotAdmin } = useAdminAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [articles, setArticles] = useState<KBArticle[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -89,6 +93,26 @@ export default function AdminSupportKnowledge() {
   }, [toast]);
 
   useEffect(() => { if (isAdmin) load(); }, [isAdmin, load]);
+
+  // Pré-preenchimento a partir de um gap (?from_gap=...&question=...)
+  useEffect(() => {
+    const fromGap = searchParams.get('from_gap');
+    const questionParam = searchParams.get('question');
+    if (fromGap && questionParam) {
+      setSelectedId(null);
+      setDraft({
+        ...EMPTY,
+        question: questionParam,
+        title: questionParam.slice(0, 80),
+      });
+      // Limpa os params pra não re-aplicar em re-renders
+      const next = new URLSearchParams(searchParams);
+      next.delete('from_gap');
+      next.delete('question');
+      setSearchParams(next, { replace: true });
+      toast({ title: 'Pré-preenchido a partir do gap', description: 'Edite título, resposta e palavras-chave antes de salvar.' });
+    }
+  }, [searchParams, setSearchParams, toast]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -307,6 +331,17 @@ export default function AdminSupportKnowledge() {
                           <div className="flex items-center gap-1.5 mt-1">
                             {!a.is_active && <Badge variant="outline" className="text-[10px] h-4">inativo</Badge>}
                             {!a.embedding && <Badge variant="destructive" className="text-[10px] h-4">sem embedding</Badge>}
+                            {(() => {
+                              const total = (a.approved_count || 0) + (a.edited_count || 0) + (a.rejected_count || 0);
+                              if (total === 0) return null;
+                              const rate = ((a.approved_count || 0) / total) * 100;
+                              const variant = rate >= 75 ? 'default' : rate >= 50 ? 'secondary' : 'destructive';
+                              return (
+                                <Badge variant={variant as 'default' | 'secondary' | 'destructive'} className="text-[10px] h-4" title={`${a.approved_count || 0} aprovados, ${a.edited_count || 0} editados, ${a.rejected_count || 0} rejeitados`}>
+                                  {rate.toFixed(0)}% aprov.
+                                </Badge>
+                              );
+                            })()}
                           </div>
                         </button>
                       ))}

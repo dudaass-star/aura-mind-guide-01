@@ -124,10 +124,57 @@ serve(async (req) => {
             if (insertErr) throw insertErr;
             ticketId = newTicket.id;
           } else {
+            // Verifica se é reabertura após auto-resposta
+            const { data: prevTicket } = await supabase
+              .from("support_tickets")
+              .select("auto_sent, auto_sent_at, reopened_at")
+              .eq("id", ticketId)
+              .single();
+
+            const isReopen = prevTicket?.auto_sent && !prevTicket?.reopened_at;
+
+            const updatePayload: Record<string, unknown> = {
+              status: "pending_review",
+              last_inbound_at: new Date().toISOString(),
+            };
+            if (isReopen) {
+              updatePayload.reopened_at = new Date().toISOString();
+            }
+
             await supabase
               .from("support_tickets")
-              .update({ status: "pending_review", last_inbound_at: new Date().toISOString() })
+              .update(updatePayload)
               .eq("id", ticketId);
+
+            // Se reabriu, decrementa confiança KB e marca draft anterior como rejeitado
+            if (isReopen) {
+              try {
+                const { data: lastDraft } = await supabase
+                  .from("support_ticket_drafts")
+                  .select("id, context_snapshot, feedback_status")
+                  .eq("ticket_id", ticketId)
+                  .order("generated_at", { ascending: false })
+                  .limit(1)
+                  .maybeSingle();
+                if (lastDraft && lastDraft.feedback_status === "auto_sent") {
+                  // Reverte feedback: auto-resposta não resolveu = rejected
+                  await supabase.from("support_ticket_drafts").update({
+                    feedback_status: "rejected",
+                    feedback_at: new Date().toISOString(),
+                  }).eq("id", lastDraft.id);
+
+                  const kbIds = (lastDraft.context_snapshot as { kb_used?: string[] } | null)?.kb_used || [];
+                  if (kbIds.length > 0) {
+                    // Adiciona como rejected (o approved anterior fica como histórico do envio,
+                    // mas o rejected reflete que a resposta não resolveu)
+                    await supabase.rpc("record_kb_feedback", { kb_ids: kbIds, feedback: "rejected" });
+                  }
+                  log("Reopen detected: KB feedback reverted", { ticketId, kbCount: kbIds.length });
+                }
+              } catch (e) {
+                log("Reopen KB revert failed", { error: String(e) });
+              }
+            }
           }
 
           // Save attachments to Storage
