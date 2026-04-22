@@ -451,9 +451,17 @@ export default function AdminSupport() {
                 <div className="flex items-center gap-2 text-xs">
                   <Sparkles className="h-3 w-3 text-primary" />
                   <span className="text-muted-foreground">Rascunho · {draft.ai_model}</span>
+                  {draft.auto_eligible && (
+                    <Badge variant="default" className="text-[10px] py-0 px-1.5 ml-auto">
+                      <Bot className="h-2.5 w-2.5 mr-0.5" /> Auto-elegível
+                    </Badge>
+                  )}
                 </div>
                 <p className="text-[11px] text-muted-foreground">
                   Gerado {format(new Date(draft.generated_at), "dd/MM 'às' HH:mm", { locale: ptBR })}
+                  {typeof draft.kb_top_score === 'number' && (
+                    <> · KB match {(draft.kb_top_score * 100).toFixed(0)}%</>
+                  )}
                 </p>
               </div>
 
