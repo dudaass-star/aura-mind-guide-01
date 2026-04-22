@@ -291,6 +291,8 @@ export default function AdminSupport() {
               <SelectContent>
                 <SelectItem value="pending_review">Aguardando</SelectItem>
                 <SelectItem value="replied">Respondido</SelectItem>
+                <SelectItem value="auto_sent">Auto-respondidos</SelectItem>
+                <SelectItem value="recurring">Clientes recorrentes</SelectItem>
                 <SelectItem value="snoozed">Snooze</SelectItem>
                 <SelectItem value="closed">Fechado</SelectItem>
                 <SelectItem value="all">Todos</SelectItem>
