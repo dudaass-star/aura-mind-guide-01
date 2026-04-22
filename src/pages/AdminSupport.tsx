@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, RefreshCw, Send, Pause, X, CheckCircle2, AlertTriangle, Mail, Paperclip, Loader2, Sparkles, Inbox, BookOpen } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Send, Pause, X, CheckCircle2, AlertTriangle, Mail, Paperclip, Loader2, Sparkles, Inbox, BookOpen, Bot, AlertOctagon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -29,6 +29,9 @@ interface Ticket {
   last_inbound_at: string;
   last_outbound_at: string | null;
   created_at: string;
+  auto_sent?: boolean;
+  auto_sent_at?: string | null;
+  recurring_customer?: boolean;
 }
 
 interface TicketMessage {
@@ -50,6 +53,8 @@ interface Draft {
   context_snapshot: Record<string, unknown>;
   generated_at: string;
   ai_model: string;
+  auto_eligible?: boolean;
+  kb_top_score?: number | null;
 }
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
