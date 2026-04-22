@@ -195,3 +195,6 @@ verify_jwt = false
 
 [functions.audit-orphan-subscribers]
 verify_jwt = false
+
+[functions.cleanup-tts-audios]
+verify_jwt = false
