@@ -109,7 +109,13 @@ export default function AdminSupport() {
   const fetchTickets = useCallback(async () => {
     setLoadingList(true);
     let query = supabase.from('support_tickets').select('*').order('last_inbound_at', { ascending: false }).limit(200);
-    if (statusFilter !== 'all') query = query.eq('status', statusFilter);
+    if (statusFilter === 'auto_sent') {
+      query = query.eq('auto_sent', true);
+    } else if (statusFilter === 'recurring') {
+      query = query.eq('recurring_customer', true);
+    } else if (statusFilter !== 'all') {
+      query = query.eq('status', statusFilter);
+    }
     const { data, error } = await query;
     if (error) {
       toast({ title: 'Erro ao carregar tickets', description: error.message, variant: 'destructive' });
