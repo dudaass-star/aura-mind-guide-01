@@ -176,6 +176,7 @@ serve(async (req) => {
     // ========== RAG: search knowledge base ==========
     let kbBlock = "";
     let kbUsedIds: string[] = [];
+    let kbTopScore: number | null = null;
     try {
       const lastInbound = (messages || []).filter((m) => m.direction === "inbound").slice(-1)[0];
       const queryText = `${ticket.subject}\n\n${lastInbound?.body_text || ""}`.slice(0, 4000);
@@ -204,6 +205,7 @@ serve(async (req) => {
             });
             if (matches && matches.length > 0) {
               kbUsedIds = matches.map((m: { id: string }) => m.id);
+              kbTopScore = matches[0]?.similarity ?? null;
               kbBlock = `\n\n=== BASE DE CONHECIMENTO OFICIAL (use como ÚNICA fonte de política) ===\n` +
                 matches.map((m: { title: string; category: string; question: string; answer: string; similarity: number }, idx: number) =>
                   `[Artigo ${idx + 1} — ${m.category} — relevância ${(m.similarity * 100).toFixed(0)}%]\n` +
