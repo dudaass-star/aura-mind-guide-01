@@ -317,8 +317,16 @@ export default function AdminSupport() {
                   <button key={t.id} onClick={() => loadTicketDetail(t)}
                     className={`w-full text-left p-3 rounded-md border transition-colors hover:bg-muted ${selectedTicket?.id === t.id ? 'bg-muted border-primary' : 'border-border'}`}>
                     <div className="flex items-start justify-between gap-2 mb-1">
-                      <span className="text-sm font-medium truncate">{t.customer_name || t.customer_email}</span>
-                      <div className={`h-2 w-2 rounded-full ${status.color} flex-shrink-0 mt-1.5`} />
+                      <span className="text-sm font-medium truncate flex items-center gap-1">
+                        {t.customer_name || t.customer_email}
+                        {t.recurring_customer && (
+                          <AlertOctagon className="h-3 w-3 text-orange-500 flex-shrink-0" aria-label="Cliente recorrente" />
+                        )}
+                      </span>
+                      <div className="flex items-center gap-1 flex-shrink-0 mt-1">
+                        {t.auto_sent && <Bot className="h-3 w-3 text-primary" aria-label="Auto-respondido" />}
+                        <div className={`h-2 w-2 rounded-full ${status.color}`} />
+                      </div>
                     </div>
                     <p className="text-xs text-muted-foreground truncate">{t.subject}</p>
                     <div className="flex items-center gap-2 mt-1.5 flex-wrap">
