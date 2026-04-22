@@ -64,7 +64,11 @@ serve(async (req) => {
           let offset = 0;
           for (const chunk of chunks) { buffer.set(chunk, offset); offset += chunk.length; }
 
-          const parsed = await simpleParser(buffer);
+          // mailparser espera Buffer/string ou stream Node clássico (com .once).
+          // O stream do imapflow no Deno é um AsyncIterable Web, então convertemos
+          // para um Buffer Node antes de passar pro parser.
+          const { Buffer } = await import("node:buffer");
+          const parsed = await simpleParser(Buffer.from(buffer));
           const messageId = parsed.messageId || `imap-${uid}-${Date.now()}`;
           const fromEmail = (parsed.from?.value?.[0]?.address || "").toLowerCase();
           const fromName = parsed.from?.value?.[0]?.name || null;
