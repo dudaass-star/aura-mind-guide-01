@@ -15,6 +15,18 @@ const log = (step: string, data?: unknown) => {
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
+  // Permite reprocessar mensagens já marcadas como lidas (recovery).
+  // Uso: POST com { reprocess_seen: true, since_days?: 7 }
+  let reprocessSeen = false;
+  let sinceDays = 7;
+  try {
+    if (req.method === "POST") {
+      const body = await req.json().catch(() => ({}));
+      reprocessSeen = body?.reprocess_seen === true;
+      if (typeof body?.since_days === "number") sinceDays = body.since_days;
+    }
+  } catch (_) { /* ignore */ }
+
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
@@ -48,12 +60,15 @@ serve(async (req) => {
 
     const lock = await client.getMailboxLock("INBOX");
     try {
-      // Fetch unseen messages
+      // Fetch unseen messages (ou lidas recentes em modo reprocess)
       const uids: number[] = [];
-      for await (const msg of client.fetch({ seen: false }, { uid: true })) {
+      const searchCriteria: Record<string, unknown> = reprocessSeen
+        ? { since: new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000) }
+        : { seen: false };
+      for await (const msg of client.fetch(searchCriteria, { uid: true })) {
         uids.push(msg.uid);
       }
-      log(`Found ${uids.length} unread messages`);
+      log(`Found ${uids.length} messages`, { reprocessSeen, sinceDays });
 
       for (const uid of uids) {
         try {
@@ -64,7 +79,11 @@ serve(async (req) => {
           let offset = 0;
           for (const chunk of chunks) { buffer.set(chunk, offset); offset += chunk.length; }
 
-          const parsed = await simpleParser(buffer);
+          // mailparser espera Buffer/string ou stream Node clássico (com .once).
+          // O stream do imapflow no Deno é um AsyncIterable Web, então convertemos
+          // para um Buffer Node antes de passar pro parser.
+          const { Buffer } = await import("node:buffer");
+          const parsed = await simpleParser(Buffer.from(buffer));
           const messageId = parsed.messageId || `imap-${uid}-${Date.now()}`;
           const fromEmail = (parsed.from?.value?.[0]?.address || "").toLowerCase();
           const fromName = parsed.from?.value?.[0]?.name || null;
