@@ -294,6 +294,23 @@ Analise e responda com a estrutura solicitada.`;
     // Mark previous drafts as not current
     await supabase.from("support_ticket_drafts").update({ is_current: false }).eq("ticket_id", ticket_id);
 
+    // Calcula elegibilidade pra auto-resposta
+    const isSafeCategory = SAFE_AUTO_REPLY_CATEGORIES.has(args.category);
+    const isSafeAction = args.suggested_action?.type === "none" || args.suggested_action?.type === "send_portal_link";
+    const hasGoodKbMatch = kbTopScore !== null && kbTopScore >= AUTO_REPLY_KB_THRESHOLD;
+    const isLowSeverity = args.severity === "baixa";
+    const autoEligible = isSafeCategory && isSafeAction && hasGoodKbMatch && isLowSeverity && !recurringCustomer;
+
+    log("Auto-reply eligibility", {
+      ticket_id,
+      auto_eligible: autoEligible,
+      category: args.category,
+      severity: args.severity,
+      action: args.suggested_action?.type,
+      kb_top_score: kbTopScore,
+      recurring: recurringCustomer,
+    });
+
     const { data: draft, error: dErr } = await supabase.from("support_ticket_drafts").insert({
       ticket_id,
       ai_model: "google/gemini-2.5-pro",
@@ -302,6 +319,8 @@ Analise e responda com a estrutura solicitada.`;
       context_snapshot: { context, summary: args.summary, kb_used: kbUsedIds },
       hint: hint || null,
       is_current: true,
+      auto_eligible: autoEligible,
+      kb_top_score: kbTopScore,
     }).select().single();
     if (dErr) throw dErr;
 
@@ -314,9 +333,10 @@ Analise e responda com a estrutura solicitada.`;
     await supabase.from("support_tickets").update({
       category: args.category,
       severity: args.severity,
+      recurring_customer: recurringCustomer,
     }).eq("id", ticket_id);
 
-    return new Response(JSON.stringify({ ok: true, draft }), {
+    return new Response(JSON.stringify({ ok: true, draft, auto_eligible: autoEligible }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
