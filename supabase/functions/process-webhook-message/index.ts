@@ -3,7 +3,7 @@ import {
   cleanPhoneNumber,
   getPhoneVariations,
 } from "../_shared/zapi-client.ts";
-import { sendMessage, sendAudio, type SendResult } from "../_shared/whatsapp-provider.ts";
+import { sendMessage, sendAudio, sendAudioUrl, type SendResult } from "../_shared/whatsapp-provider.ts";
 import { getInstanceConfigForUser } from "../_shared/instance-helper.ts";
 
 const corsHeaders = {
@@ -95,24 +95,24 @@ async function transcribeAudio(audioUrl: string): Promise<string | null> {
   }
 }
 
-async function generateTTS(text: string): Promise<string | null> {
+async function generateTTS(text: string, userId?: string): Promise<{ audioUrl: string | null; audioContent: string | null }> {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const response = await fetch(`${supabaseUrl}/functions/v1/aura-tts`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseServiceKey}` },
-      body: JSON.stringify({ text, voice: 'shimmer' }),
+      body: JSON.stringify({ text, userId, voice: 'shimmer' }),
     });
     if (!response.ok) {
       console.error('❌ TTS error:', await response.text());
-      return null;
+      return { audioUrl: null, audioContent: null };
     }
     const data = await response.json();
-    return data.audioContent;
+    return { audioUrl: data.audioUrl ?? null, audioContent: data.audioContent ?? null };
   } catch (error) {
     console.error('❌ TTS exception:', error);
-    return null;
+    return { audioUrl: null, audioContent: null };
   }
 }
 
@@ -946,10 +946,16 @@ Deno.serve(async (req) => {
       // Audio messages
       if (msg.isAudio) {
         console.log(`🎙️ Generating audio for: ${responseText.substring(0, 50)}...`);
-        const audioContent = await generateTTS(responseText);
-        if (audioContent) {
-          
-          const audioResult = await sendAudio(cleanPhone, audioContent);
+        const { audioUrl, audioContent } = await generateTTS(responseText, profile.user_id);
+        if (audioUrl || audioContent) {
+          let audioResult: SendResult;
+          if (audioUrl) {
+            console.log(`🔗 Sending audio via public URL: ${audioUrl}`);
+            audioResult = await sendAudioUrl(cleanPhone, audioUrl);
+          } else {
+            console.log(`📦 No audioUrl available, attempting base64 fallback (Z-API only)`);
+            audioResult = await sendAudio(cleanPhone, audioContent!);
+          }
           if (audioResult.success) {
             sentAnyResponse = true;
             try {
@@ -966,7 +972,7 @@ Deno.serve(async (req) => {
             } catch {}
             continue;
           }
-          console.log('⚠️ Audio send failed, falling back to text');
+          console.log(`⚠️ Audio send failed (provider=${audioResult.provider}, error=${audioResult.error}), falling back to text`);
         }
       }
 
