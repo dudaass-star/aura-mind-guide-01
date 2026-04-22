@@ -363,6 +363,23 @@ export default function AdminSupport() {
                   {selectedTicket.customer_name && `${selectedTicket.customer_name} · `}
                   {selectedTicket.customer_email}
                 </p>
+                {selectedTicket.recurring_customer && (
+                  <div className="mt-2 flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive-foreground">
+                    <AlertOctagon className="h-4 w-4 text-destructive mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="font-medium text-destructive">Cliente recorrente</p>
+                      <p className="text-muted-foreground">3+ tickets nos últimos 30 dias. Auto-resposta bloqueada — revise pessoalmente.</p>
+                    </div>
+                  </div>
+                )}
+                {selectedTicket.auto_sent && (
+                  <div className="mt-2 flex items-center gap-2 rounded-md border border-primary/30 bg-primary/10 p-2 text-xs">
+                    <Bot className="h-4 w-4 text-primary flex-shrink-0" />
+                    <span>
+                      Respondido automaticamente {selectedTicket.auto_sent_at && format(new Date(selectedTicket.auto_sent_at), "dd/MM 'às' HH:mm", { locale: ptBR })}
+                    </span>
+                  </div>
+                )}
               </CardHeader>
               <ScrollArea className="flex-1">
                 <CardContent className="p-4 space-y-3">
