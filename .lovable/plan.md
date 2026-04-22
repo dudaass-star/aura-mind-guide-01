@@ -1,95 +1,51 @@
 
 
-## Base de Conhecimento Vetorizada (RAG) + Políticas Oficiais
+## Diagnóstico: O caso Thiago
 
-Vamos entregar **dois pacotes em paralelo**: a infraestrutura RAG e o conteúdo das políticas oficiais (escritos por mim seguindo melhores práticas SaaS BR + LGPD + CDC).
+### Linha do tempo real
 
----
+**10/abr 22:45** — Thiago acessa o checkout **anual Transformação** (R$ 359,90) → não conclui.
+**10/abr 22:46** — Volta e fecha o **mensal Transformação (R$ 79,90/mês)**. Pagamento aprovado, perfil criado, plano `transformacao`, status `active`.
 
-### Parte 1 — Infraestrutura técnica (RAG)
+**Então não — ele NÃO entrou pelo trial semanal de R$ 19,90.** Entrou direto no plano mensal cheio, pagou os R$ 79,90 do dia 10/abr.
 
-**Banco:**
-- Habilita extensão `pgvector`
-- Tabela `support_knowledge_base`: `id`, `title`, `category`, `question`, `answer`, `keywords[]`, `embedding vector(768)`, `is_active`, `usage_count`, `created_at`, `updated_at`, `created_by`
-- Função SQL `match_support_kb(query_embedding, threshold, count)` — busca por similaridade cosseno
-- RLS admin-only (igual aos outros support_*)
+**10/abr a 21/abr** — Conversas ativas, 2 sessões completas (12/04 no_show, 14/04 ok, 19/04 ok), próximas 4 sessões agendadas até 05/maio.
 
-**Edge functions novas:**
-1. `support-kb-embed` — gera embedding via Gemini `text-embedding-004` (768 dim) ao salvar/editar artigo
-2. `support-kb-search` — busca debug pelo painel (input texto → top 5 com scores)
+**22/abr 07:42** — Stripe processa o `invoice.payment_failed` da renovação. **Mas o valor cobrado foi R$ 49,90, não R$ 79,90.** Isso é estranho — parece que o assinante caiu pro plano Direção em algum momento, ou houve troca de plano, ou foi cobrança parcial.
 
-**Mudança em `support-agent`:**
-- Antes de chamar Gemini Pro, gera embedding da pergunta do cliente (assunto + último email)
-- Busca top 5 artigos com threshold 0.7
-- Injeta no prompt como bloco `BASE DE CONHECIMENTO OFICIAL` com instrução: *"Use APENAS estes artigos como fonte de verdade. Se a pergunta não for coberta, diga que vai verificar com a equipe."*
-- Salva IDs usados em `context_snapshot.kb_used` e incrementa `usage_count`
+**22/abr 07:42** — Algum job (provavelmente `stripe-webhook` reagindo ao payment_failed) marcou o status como `trial_expired`. **Esse é o bug real.** Um pagamento que falha numa renovação **NÃO deveria virar `trial_expired`** — deveria virar `past_due` (com acesso mantido durante dunning, conforme a regra documentada em `mem://features/subscription/dunning-access-control`).
 
-**Frontend `/admin/suporte/conhecimento`:**
-- Lista por categoria com badge de `usage_count` e busca textual
-- Editor: title, category (select), question, answer (textarea grande markdown), keywords (chips), toggle is_active
-- Botão "Testar busca" — modal pra você validar cobertura antes de publicar
-- Auto-embed ao salvar
+**22/abr 09:11+** — Thiago manda 16 mensagens cobrando resposta. `aura-agent` retorna HTTP 500 em todas, porque a combinação `plan=transformacao + status=trial_expired` é um estado que o agent não sabe tratar (provavelmente quebra na checagem de limites ou no contexto da sessão).
 
----
+### Os 3 problemas reais a corrigir
 
-### Parte 2 — Conteúdo das políticas (eu escrevo, você revisa)
+**1. Status errado no Thiago (urgente — usuário pagante sem resposta há 4 dias)**
+- Reverter `status: trial_expired → active` no perfil dele.
+- Verificar no Stripe se a assinatura está realmente `past_due` ou se já foi cancelada por falha de retry.
+- Se `past_due`: manter acesso e mandar e-mail de dunning (link de atualização de cartão).
+- Se cancelada: oferecer reativação manual.
 
-Vou criar **15 artigos seed** seguindo melhores práticas:
+**2. Bug no `stripe-webhook`: payment_failed marcando como `trial_expired`**
+- Investigar a função `stripe-webhook` e descobrir por que um `invoice.payment_failed` em assinatura mensal (não trial) virou `trial_expired`.
+- O comportamento correto: setar `status: past_due`, manter acesso, registrar `payment_failed_at`, disparar dunning por email.
+- `trial_expired` só deveria ser aplicado quando o trial semanal de 7 dias termina sem conversão.
 
-**Cobrança e pagamento (4):**
-1. Política de reembolso (7 dias CDC + critérios pós-prazo)
-2. Falha no cartão / cobrança recusada (Smart Retries Stripe, dunning, prazo)
-3. Atualizar método de pagamento (link billing portal)
-4. Diferença mensal vs anual / como mudar ciclo
+**3. Bug no `aura-agent`: crash em estados inesperados**
+- O agent está retornando HTTP 500 quando combinação `plan + status` é inconsistente (ex: `transformacao + trial_expired`).
+- Adicionar fallback defensivo: se status não permite resposta, mandar mensagem clara ("seu pagamento falhou, atualize aqui") em vez de crashar.
+- Logar o stacktrace real (hoje só vemos HTTP 500 genérico).
 
-**Assinatura (4):**
-5. Como cancelar (impacto: acesso até fim do ciclo, sem reembolso parcial)
-6. Como pausar (até 30 dias, preserva histórico)
-7. Trocar de plano: upgrade (proration imediata) vs downgrade (no próximo ciclo)
-8. Reativar conta cancelada (mesma conta, sem perder histórico)
+### Sequência de execução proposta
 
-**Produto e técnico (4):**
-9. Não estou recebendo mensagem da Aura (debug: número correto, bloqueio WhatsApp, instância)
-10. Como acessar o portal /meu-espaco (link via WhatsApp, validade do token)
-11. Diferença entre planos Essencial / Direção / Transformação (limites de mensagens, sessões, áudio)
-12. Trial pago de 7 dias (R$ 6,90 / 11,90 / 24,90 — conversão automática, como cancelar antes)
+1. **Corrigir o Thiago agora**: setar `status=active`, mandar mensagem WhatsApp pedindo desculpa pela demora + link de atualização de cartão se a sub estiver past_due.
+2. **Auditar quem mais foi afetado**: SQL pra encontrar perfis com `plan IN ('essencial','direcao','transformacao')` e `status='trial_expired'` — provavelmente outros pagantes caíram no mesmo bug.
+3. **Patch no `stripe-webhook`**: corrigir a lógica de tratamento de `invoice.payment_failed` pra nunca setar `trial_expired` em assinaturas pós-conversão.
+4. **Patch no `aura-agent`**: tratar estados inconsistentes com mensagem amigável + log detalhado em vez de HTTP 500.
+5. **Comunicar com o Thiago**: e-mail/WhatsApp pessoal explicando o ocorrido, oferecendo crédito/desconto pelo transtorno (4 dias sem resposta num plano de R$ 79,90).
 
-**Privacidade e legal (3):**
-13. Privacidade e LGPD (dados coletados, finalidade, retenção, direitos do titular)
-14. Aura não substitui terapia (disclaimer obrigatório + CVV 188 em emergência)
-15. Solicitar exclusão de conta e dados (prazo 30 dias, exceções legais)
+### Detalhes técnicos a investigar antes do patch
 
-**Padrão de cada artigo:**
-- Tom: PT-BR direto, sem juridiquês desnecessário
-- Estrutura: pergunta canônica → resposta curta (1-2 frases) → detalhes → quando escalar pra humano
-- Sempre cita a base legal quando aplicável (CDC art. 49 pra reembolso, LGPD art. 18 pra direitos do titular)
-- Inclui `keywords` com sinônimos comuns ("estornar", "devolver dinheiro", "cancelar cobrança" → todos apontam pro artigo de reembolso)
-
----
-
-### Melhores práticas aplicadas
-
-- **Versionamento implícito** via `updated_at` (fase 2 traz histórico completo)
-- **Threshold 0.7** evita falsos positivos (testado como sweet spot pra PT-BR com Gemini embeddings)
-- **Máximo 5 artigos no contexto** evita poluir o prompt e diluir foco
-- **`usage_count`** vira métrica de qualidade da KB (artigo nunca usado = pergunta errada ou keywords ruins)
-- **Auditoria completa**: `kb_used` no draft mostra exatamente quais artigos a IA consultou
-- **Fallback explícito**: se score < 0.7 em todos, IA é instruída a NÃO inventar e escalar
-- **Segregação clara** entre "política oficial" (KB) e "contexto do cliente" (Stripe/profile) no prompt
-
----
-
-### Entregáveis
-
-1. Migration: `pgvector` + tabela `support_knowledge_base` + função `match_support_kb` + RLS
-2. 2 edge functions novas (`support-kb-embed`, `support-kb-search`)
-3. `support-agent` atualizado com fluxo RAG completo
-4. Sub-rota `/admin/suporte/conhecimento` (lista + editor + teste de busca)
-5. **15 artigos seed inseridos no banco** (você edita depois pelo painel)
-
-### Fora de escopo (fase 2)
-- Histórico de versões de artigos
-- Import/export CSV
-- Re-embedding em massa (script manual quando necessário)
-- A/B testing de respostas
+- Qual `subscription.status` está no Stripe agora pro `cus_*` do Thiago (active, past_due, canceled, unpaid).
+- Por que a cobrança foi R$ 49,90 e não R$ 79,90 — houve downgrade silencioso? Coupon? Proration?
+- Quantos outros perfis estão em `trial_expired` mas têm `plan` pago e `trial_started_at` antigo (>30 dias) — esses são os candidatos a vítimas do mesmo bug.
 
