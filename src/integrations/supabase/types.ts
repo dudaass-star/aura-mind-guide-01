@@ -1464,34 +1464,40 @@ export type Database = {
       support_ticket_drafts: {
         Row: {
           ai_model: string
+          auto_eligible: boolean
           context_snapshot: Json | null
           draft_body: string
           generated_at: string
           hint: string | null
           id: string
           is_current: boolean
+          kb_top_score: number | null
           suggested_action: Json | null
           ticket_id: string
         }
         Insert: {
           ai_model: string
+          auto_eligible?: boolean
           context_snapshot?: Json | null
           draft_body: string
           generated_at?: string
           hint?: string | null
           id?: string
           is_current?: boolean
+          kb_top_score?: number | null
           suggested_action?: Json | null
           ticket_id: string
         }
         Update: {
           ai_model?: string
+          auto_eligible?: boolean
           context_snapshot?: Json | null
           draft_body?: string
           generated_at?: string
           hint?: string | null
           id?: string
           is_current?: boolean
+          kb_top_score?: number | null
           suggested_action?: Json | null
           ticket_id?: string
         }
@@ -1566,6 +1572,8 @@ export type Database = {
       }
       support_tickets: {
         Row: {
+          auto_sent: boolean
+          auto_sent_at: string | null
           category: string | null
           created_at: string
           customer_email: string
@@ -1577,6 +1585,7 @@ export type Database = {
           last_inbound_at: string
           last_outbound_at: string | null
           profile_user_id: string | null
+          recurring_customer: boolean
           severity: string | null
           snooze_until: string | null
           status: string
@@ -1584,6 +1593,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          auto_sent?: boolean
+          auto_sent_at?: string | null
           category?: string | null
           created_at?: string
           customer_email: string
@@ -1595,6 +1606,7 @@ export type Database = {
           last_inbound_at?: string
           last_outbound_at?: string | null
           profile_user_id?: string | null
+          recurring_customer?: boolean
           severity?: string | null
           snooze_until?: string | null
           status?: string
@@ -1602,6 +1614,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          auto_sent?: boolean
+          auto_sent_at?: string | null
           category?: string | null
           created_at?: string
           customer_email?: string
@@ -1613,6 +1627,7 @@ export type Database = {
           last_inbound_at?: string
           last_outbound_at?: string | null
           profile_user_id?: string | null
+          recurring_customer?: boolean
           severity?: string | null
           snooze_until?: string | null
           status?: string
@@ -2054,6 +2069,10 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      count_recent_tickets: {
+        Args: { _days?: number; _email: string }
+        Returns: number
+      }
       delete_email: {
         Args: { message_id: number; queue_name: string }
         Returns: boolean
@@ -2061,6 +2080,17 @@ export type Database = {
       enqueue_email: {
         Args: { payload: Json; queue_name: string }
         Returns: number
+      }
+      get_customer_ticket_history: {
+        Args: { _days?: number; _email: string; _limit?: number }
+        Returns: {
+          category: string
+          created_at: string
+          id: string
+          severity: string
+          status: string
+          subject: string
+        }[]
       }
       has_role: {
         Args: {
