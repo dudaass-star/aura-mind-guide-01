@@ -189,3 +189,6 @@ verify_jwt = true
 
 [functions.support-kb-search]
 verify_jwt = true
+
+[functions.support-auto-respond]
+verify_jwt = false

@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, RefreshCw, Send, Pause, X, CheckCircle2, AlertTriangle, Mail, Paperclip, Loader2, Sparkles, Inbox, BookOpen } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Send, Pause, X, CheckCircle2, AlertTriangle, Mail, Paperclip, Loader2, Sparkles, Inbox, BookOpen, Bot, AlertOctagon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -29,6 +29,9 @@ interface Ticket {
   last_inbound_at: string;
   last_outbound_at: string | null;
   created_at: string;
+  auto_sent?: boolean;
+  auto_sent_at?: string | null;
+  recurring_customer?: boolean;
 }
 
 interface TicketMessage {
@@ -50,6 +53,8 @@ interface Draft {
   context_snapshot: Record<string, unknown>;
   generated_at: string;
   ai_model: string;
+  auto_eligible?: boolean;
+  kb_top_score?: number | null;
 }
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
@@ -104,7 +109,13 @@ export default function AdminSupport() {
   const fetchTickets = useCallback(async () => {
     setLoadingList(true);
     let query = supabase.from('support_tickets').select('*').order('last_inbound_at', { ascending: false }).limit(200);
-    if (statusFilter !== 'all') query = query.eq('status', statusFilter);
+    if (statusFilter === 'auto_sent') {
+      query = query.eq('auto_sent', true);
+    } else if (statusFilter === 'recurring') {
+      query = query.eq('recurring_customer', true);
+    } else if (statusFilter !== 'all') {
+      query = query.eq('status', statusFilter);
+    }
     const { data, error } = await query;
     if (error) {
       toast({ title: 'Erro ao carregar tickets', description: error.message, variant: 'destructive' });
@@ -286,6 +297,8 @@ export default function AdminSupport() {
               <SelectContent>
                 <SelectItem value="pending_review">Aguardando</SelectItem>
                 <SelectItem value="replied">Respondido</SelectItem>
+                <SelectItem value="auto_sent">Auto-respondidos</SelectItem>
+                <SelectItem value="recurring">Clientes recorrentes</SelectItem>
                 <SelectItem value="snoozed">Snooze</SelectItem>
                 <SelectItem value="closed">Fechado</SelectItem>
                 <SelectItem value="all">Todos</SelectItem>
@@ -304,8 +317,16 @@ export default function AdminSupport() {
                   <button key={t.id} onClick={() => loadTicketDetail(t)}
                     className={`w-full text-left p-3 rounded-md border transition-colors hover:bg-muted ${selectedTicket?.id === t.id ? 'bg-muted border-primary' : 'border-border'}`}>
                     <div className="flex items-start justify-between gap-2 mb-1">
-                      <span className="text-sm font-medium truncate">{t.customer_name || t.customer_email}</span>
-                      <div className={`h-2 w-2 rounded-full ${status.color} flex-shrink-0 mt-1.5`} />
+                      <span className="text-sm font-medium truncate flex items-center gap-1">
+                        {t.customer_name || t.customer_email}
+                        {t.recurring_customer && (
+                          <AlertOctagon className="h-3 w-3 text-destructive flex-shrink-0" aria-label="Cliente recorrente" />
+                        )}
+                      </span>
+                      <div className="flex items-center gap-1 flex-shrink-0 mt-1">
+                        {t.auto_sent && <Bot className="h-3 w-3 text-primary" aria-label="Auto-respondido" />}
+                        <div className={`h-2 w-2 rounded-full ${status.color}`} />
+                      </div>
                     </div>
                     <p className="text-xs text-muted-foreground truncate">{t.subject}</p>
                     <div className="flex items-center gap-2 mt-1.5 flex-wrap">
@@ -342,6 +363,23 @@ export default function AdminSupport() {
                   {selectedTicket.customer_name && `${selectedTicket.customer_name} · `}
                   {selectedTicket.customer_email}
                 </p>
+                {selectedTicket.recurring_customer && (
+                  <div className="mt-2 flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive-foreground">
+                    <AlertOctagon className="h-4 w-4 text-destructive mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="font-medium text-destructive">Cliente recorrente</p>
+                      <p className="text-muted-foreground">3+ tickets nos últimos 30 dias. Auto-resposta bloqueada — revise pessoalmente.</p>
+                    </div>
+                  </div>
+                )}
+                {selectedTicket.auto_sent && (
+                  <div className="mt-2 flex items-center gap-2 rounded-md border border-primary/30 bg-primary/10 p-2 text-xs">
+                    <Bot className="h-4 w-4 text-primary flex-shrink-0" />
+                    <span>
+                      Respondido automaticamente {selectedTicket.auto_sent_at && format(new Date(selectedTicket.auto_sent_at), "dd/MM 'às' HH:mm", { locale: ptBR })}
+                    </span>
+                  </div>
+                )}
               </CardHeader>
               <ScrollArea className="flex-1">
                 <CardContent className="p-4 space-y-3">
@@ -413,9 +451,17 @@ export default function AdminSupport() {
                 <div className="flex items-center gap-2 text-xs">
                   <Sparkles className="h-3 w-3 text-primary" />
                   <span className="text-muted-foreground">Rascunho · {draft.ai_model}</span>
+                  {draft.auto_eligible && (
+                    <Badge variant="default" className="text-[10px] py-0 px-1.5 ml-auto">
+                      <Bot className="h-2.5 w-2.5 mr-0.5" /> Auto-elegível
+                    </Badge>
+                  )}
                 </div>
                 <p className="text-[11px] text-muted-foreground">
                   Gerado {format(new Date(draft.generated_at), "dd/MM 'às' HH:mm", { locale: ptBR })}
+                  {typeof draft.kb_top_score === 'number' && (
+                    <> · KB match {(draft.kb_top_score * 100).toFixed(0)}%</>
+                  )}
                 </p>
               </div>
 

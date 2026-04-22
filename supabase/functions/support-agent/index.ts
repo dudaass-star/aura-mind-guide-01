@@ -57,6 +57,11 @@ IMPORTANTE:
 - Se não tiver certeza, sugira "none" e peça mais informação no rascunho
 - Para reembolso de alto valor (>R$100) ou casos jurídicos, sugira "none" e escale ao admin no rascunho`;
 
+// Categorias seguras pra auto-resposta (nunca incluem ações financeiras/sensíveis)
+const SAFE_AUTO_REPLY_CATEGORIES = new Set(["duvida_tecnica", "elogio", "outro"]);
+const AUTO_REPLY_KB_THRESHOLD = 0.82;
+const RECURRING_CUSTOMER_THRESHOLD = 3; // 3+ tickets em 30d
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -85,6 +90,32 @@ serve(async (req) => {
 
     // Build customer context
     const context: Record<string, unknown> = { ticket: { subject: ticket.subject, category: ticket.category } };
+
+    // ========== Histórico de tickets do cliente (últimos 90 dias) ==========
+    let recurringCustomer = false;
+    try {
+      const { data: ticketCount } = await supabase.rpc("count_recent_tickets", {
+        _email: ticket.customer_email,
+        _days: 30,
+      });
+      const count30d = typeof ticketCount === "number" ? ticketCount : 0;
+      recurringCustomer = count30d >= RECURRING_CUSTOMER_THRESHOLD;
+
+      const { data: history } = await supabase.rpc("get_customer_ticket_history", {
+        _email: ticket.customer_email,
+        _days: 90,
+        _limit: 5,
+      });
+      context.customer_history = {
+        tickets_last_30d: count30d,
+        tickets_last_90d: history?.length || 0,
+        recurring: recurringCustomer,
+        recent_tickets: history || [],
+      };
+      log("Customer history", { email: ticket.customer_email, count30d, recurring: recurringCustomer });
+    } catch (e) {
+      log("Customer history lookup failed", { error: String(e) });
+    }
 
     if (ticket.profile_user_id) {
       const { data: profile } = await supabase
@@ -145,6 +176,7 @@ serve(async (req) => {
     // ========== RAG: search knowledge base ==========
     let kbBlock = "";
     let kbUsedIds: string[] = [];
+    let kbTopScore: number | null = null;
     try {
       const lastInbound = (messages || []).filter((m) => m.direction === "inbound").slice(-1)[0];
       const queryText = `${ticket.subject}\n\n${lastInbound?.body_text || ""}`.slice(0, 4000);
@@ -173,6 +205,7 @@ serve(async (req) => {
             });
             if (matches && matches.length > 0) {
               kbUsedIds = matches.map((m: { id: string }) => m.id);
+              kbTopScore = matches[0]?.similarity ?? null;
               kbBlock = `\n\n=== BASE DE CONHECIMENTO OFICIAL (use como ÚNICA fonte de política) ===\n` +
                 matches.map((m: { title: string; category: string; question: string; answer: string; similarity: number }, idx: number) =>
                   `[Artigo ${idx + 1} — ${m.category} — relevância ${(m.similarity * 100).toFixed(0)}%]\n` +
@@ -201,6 +234,7 @@ ${inboundEmails}
 
 CONTEXTO DO CLIENTE:
 ${JSON.stringify(context, null, 2)}${kbBlock}
+${recurringCustomer ? `\n⚠️ ATENÇÃO: Cliente RECORRENTE (${RECURRING_CUSTOMER_THRESHOLD}+ tickets em 30 dias). Reconheça o histórico no rascunho, evite respostas genéricas, e sugira escalonar pra revisão humana se for o mesmo problema repetido.\n` : ""}
 
 ${hint ? `INSTRUÇÃO DO ADMIN: ${hint}\n` : ""}
 Analise e responda com a estrutura solicitada.`;
@@ -260,6 +294,23 @@ Analise e responda com a estrutura solicitada.`;
     // Mark previous drafts as not current
     await supabase.from("support_ticket_drafts").update({ is_current: false }).eq("ticket_id", ticket_id);
 
+    // Calcula elegibilidade pra auto-resposta
+    const isSafeCategory = SAFE_AUTO_REPLY_CATEGORIES.has(args.category);
+    const isSafeAction = args.suggested_action?.type === "none" || args.suggested_action?.type === "send_portal_link";
+    const hasGoodKbMatch = kbTopScore !== null && kbTopScore >= AUTO_REPLY_KB_THRESHOLD;
+    const isLowSeverity = args.severity === "baixa";
+    const autoEligible = isSafeCategory && isSafeAction && hasGoodKbMatch && isLowSeverity && !recurringCustomer;
+
+    log("Auto-reply eligibility", {
+      ticket_id,
+      auto_eligible: autoEligible,
+      category: args.category,
+      severity: args.severity,
+      action: args.suggested_action?.type,
+      kb_top_score: kbTopScore,
+      recurring: recurringCustomer,
+    });
+
     const { data: draft, error: dErr } = await supabase.from("support_ticket_drafts").insert({
       ticket_id,
       ai_model: "google/gemini-2.5-pro",
@@ -268,6 +319,8 @@ Analise e responda com a estrutura solicitada.`;
       context_snapshot: { context, summary: args.summary, kb_used: kbUsedIds },
       hint: hint || null,
       is_current: true,
+      auto_eligible: autoEligible,
+      kb_top_score: kbTopScore,
     }).select().single();
     if (dErr) throw dErr;
 
@@ -280,9 +333,10 @@ Analise e responda com a estrutura solicitada.`;
     await supabase.from("support_tickets").update({
       category: args.category,
       severity: args.severity,
+      recurring_customer: recurringCustomer,
     }).eq("id", ticket_id);
 
-    return new Response(JSON.stringify({ ok: true, draft }), {
+    return new Response(JSON.stringify({ ok: true, draft, auto_eligible: autoEligible }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
