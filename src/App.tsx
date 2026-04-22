@@ -24,12 +24,16 @@ import AdminEmails from "./pages/AdminEmails";
 import AdminPopupPreview from "./pages/AdminPopupPreview";
 import AdminUsers from "./pages/AdminUsers";
 import AdminInstagram from "./pages/AdminInstagram";
+import AdminSupport from "./pages/AdminSupport";
+import AdminSupportKnowledge from "./pages/AdminSupportKnowledge";
+import AdminSupportGaps from "./pages/AdminSupportGaps";
 import UserGuide from "./pages/UserGuide";
 import Episode from "./pages/Episode";
 import JourneyComplete from "./pages/JourneyComplete";
 import Unsubscribe from "./pages/Unsubscribe";
 import UserPortal from "./pages/UserPortal";
 import NotFound from "./pages/NotFound";
+import GA4RouteTracker from "./components/GA4RouteTracker";
 
 const queryClient = new QueryClient();
 
@@ -40,6 +44,7 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
+          <GA4RouteTracker />
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/checkout" element={<Checkout />} />
@@ -61,6 +66,9 @@ const App = () => (
             <Route path="/admin/popup-preview" element={<AdminPopupPreview />} />
             <Route path="/admin/usuarios" element={<AdminUsers />} />
             <Route path="/admin/instagram" element={<AdminInstagram />} />
+            <Route path="/admin/suporte" element={<AdminSupport />} />
+            <Route path="/admin/suporte/conhecimento" element={<AdminSupportKnowledge />} />
+            <Route path="/admin/suporte/gaps" element={<AdminSupportGaps />} />
             <Route path="/guia" element={<UserGuide />} />
             <Route path="/episodio/:id" element={<Episode />} />
             <Route path="/jornada-completa/:journeyId/:userId" element={<JourneyComplete />} />

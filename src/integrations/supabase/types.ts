@@ -1372,6 +1372,360 @@ export type Database = {
         }
         Relationships: []
       }
+      support_kb_gaps: {
+        Row: {
+          best_kb_score: number | null
+          created_at: string
+          first_seen_at: string
+          id: string
+          last_seen_at: string
+          occurrence_count: number
+          question_text: string
+          resolved_at: string | null
+          resolved_by: string | null
+          resolved_kb_id: string | null
+          source_ticket_id: string | null
+          status: string
+          ticket_subject: string | null
+        }
+        Insert: {
+          best_kb_score?: number | null
+          created_at?: string
+          first_seen_at?: string
+          id?: string
+          last_seen_at?: string
+          occurrence_count?: number
+          question_text: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          resolved_kb_id?: string | null
+          source_ticket_id?: string | null
+          status?: string
+          ticket_subject?: string | null
+        }
+        Update: {
+          best_kb_score?: number | null
+          created_at?: string
+          first_seen_at?: string
+          id?: string
+          last_seen_at?: string
+          occurrence_count?: number
+          question_text?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          resolved_kb_id?: string | null
+          source_ticket_id?: string | null
+          status?: string
+          ticket_subject?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_kb_gaps_resolved_kb_id_fkey"
+            columns: ["resolved_kb_id"]
+            isOneToOne: false
+            referencedRelation: "support_knowledge_base"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "support_kb_gaps_source_ticket_id_fkey"
+            columns: ["source_ticket_id"]
+            isOneToOne: false
+            referencedRelation: "support_tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      support_knowledge_base: {
+        Row: {
+          answer: string
+          approved_count: number
+          category: string
+          created_at: string
+          created_by: string | null
+          edited_count: number
+          embedding: string | null
+          id: string
+          is_active: boolean
+          keywords: string[]
+          question: string
+          rejected_count: number
+          title: string
+          updated_at: string
+          usage_count: number
+        }
+        Insert: {
+          answer: string
+          approved_count?: number
+          category: string
+          created_at?: string
+          created_by?: string | null
+          edited_count?: number
+          embedding?: string | null
+          id?: string
+          is_active?: boolean
+          keywords?: string[]
+          question: string
+          rejected_count?: number
+          title: string
+          updated_at?: string
+          usage_count?: number
+        }
+        Update: {
+          answer?: string
+          approved_count?: number
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          edited_count?: number
+          embedding?: string | null
+          id?: string
+          is_active?: boolean
+          keywords?: string[]
+          question?: string
+          rejected_count?: number
+          title?: string
+          updated_at?: string
+          usage_count?: number
+        }
+        Relationships: []
+      }
+      support_ticket_actions: {
+        Row: {
+          action_type: string
+          error_message: string | null
+          executed_at: string
+          executed_by: string | null
+          id: string
+          payload: Json | null
+          stripe_response: Json | null
+          success: boolean
+          ticket_id: string
+        }
+        Insert: {
+          action_type: string
+          error_message?: string | null
+          executed_at?: string
+          executed_by?: string | null
+          id?: string
+          payload?: Json | null
+          stripe_response?: Json | null
+          success?: boolean
+          ticket_id: string
+        }
+        Update: {
+          action_type?: string
+          error_message?: string | null
+          executed_at?: string
+          executed_by?: string | null
+          id?: string
+          payload?: Json | null
+          stripe_response?: Json | null
+          success?: boolean
+          ticket_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_ticket_actions_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "support_tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      support_ticket_drafts: {
+        Row: {
+          ai_model: string
+          auto_eligible: boolean
+          context_snapshot: Json | null
+          draft_body: string
+          edit_distance: number | null
+          feedback_at: string | null
+          feedback_status: string
+          final_body: string | null
+          generated_at: string
+          hint: string | null
+          id: string
+          is_current: boolean
+          kb_top_score: number | null
+          suggested_action: Json | null
+          ticket_id: string
+        }
+        Insert: {
+          ai_model: string
+          auto_eligible?: boolean
+          context_snapshot?: Json | null
+          draft_body: string
+          edit_distance?: number | null
+          feedback_at?: string | null
+          feedback_status?: string
+          final_body?: string | null
+          generated_at?: string
+          hint?: string | null
+          id?: string
+          is_current?: boolean
+          kb_top_score?: number | null
+          suggested_action?: Json | null
+          ticket_id: string
+        }
+        Update: {
+          ai_model?: string
+          auto_eligible?: boolean
+          context_snapshot?: Json | null
+          draft_body?: string
+          edit_distance?: number | null
+          feedback_at?: string | null
+          feedback_status?: string
+          final_body?: string | null
+          generated_at?: string
+          hint?: string | null
+          id?: string
+          is_current?: boolean
+          kb_top_score?: number | null
+          suggested_action?: Json | null
+          ticket_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_ticket_drafts_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "support_tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      support_ticket_messages: {
+        Row: {
+          attachments: Json | null
+          body_html: string | null
+          body_text: string | null
+          created_at: string
+          direction: string
+          from_email: string
+          headers: Json | null
+          id: string
+          in_reply_to: string | null
+          message_id_header: string | null
+          sent_by: string | null
+          subject: string | null
+          ticket_id: string
+          to_email: string
+        }
+        Insert: {
+          attachments?: Json | null
+          body_html?: string | null
+          body_text?: string | null
+          created_at?: string
+          direction: string
+          from_email: string
+          headers?: Json | null
+          id?: string
+          in_reply_to?: string | null
+          message_id_header?: string | null
+          sent_by?: string | null
+          subject?: string | null
+          ticket_id: string
+          to_email: string
+        }
+        Update: {
+          attachments?: Json | null
+          body_html?: string | null
+          body_text?: string | null
+          created_at?: string
+          direction?: string
+          from_email?: string
+          headers?: Json | null
+          id?: string
+          in_reply_to?: string | null
+          message_id_header?: string | null
+          sent_by?: string | null
+          subject?: string | null
+          ticket_id?: string
+          to_email?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_ticket_messages_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "support_tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      support_tickets: {
+        Row: {
+          auto_reply_attempts: number
+          auto_sent: boolean
+          auto_sent_at: string | null
+          category: string | null
+          created_at: string
+          customer_email: string
+          customer_name: string | null
+          email_references: string | null
+          id: string
+          imap_message_id: string | null
+          in_reply_to: string | null
+          last_inbound_at: string
+          last_outbound_at: string | null
+          profile_user_id: string | null
+          recurring_customer: boolean
+          reopened_at: string | null
+          severity: string | null
+          snooze_until: string | null
+          status: string
+          subject: string
+          updated_at: string
+        }
+        Insert: {
+          auto_reply_attempts?: number
+          auto_sent?: boolean
+          auto_sent_at?: string | null
+          category?: string | null
+          created_at?: string
+          customer_email: string
+          customer_name?: string | null
+          email_references?: string | null
+          id?: string
+          imap_message_id?: string | null
+          in_reply_to?: string | null
+          last_inbound_at?: string
+          last_outbound_at?: string | null
+          profile_user_id?: string | null
+          recurring_customer?: boolean
+          reopened_at?: string | null
+          severity?: string | null
+          snooze_until?: string | null
+          status?: string
+          subject: string
+          updated_at?: string
+        }
+        Update: {
+          auto_reply_attempts?: number
+          auto_sent?: boolean
+          auto_sent_at?: string | null
+          category?: string | null
+          created_at?: string
+          customer_email?: string
+          customer_name?: string | null
+          email_references?: string | null
+          id?: string
+          imap_message_id?: string | null
+          in_reply_to?: string | null
+          last_inbound_at?: string
+          last_outbound_at?: string | null
+          profile_user_id?: string | null
+          recurring_customer?: boolean
+          reopened_at?: string | null
+          severity?: string | null
+          snooze_until?: string | null
+          status?: string
+          subject?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       suppressed_emails: {
         Row: {
           created_at: string
@@ -1805,6 +2159,10 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      count_recent_tickets: {
+        Args: { _days?: number; _email: string }
+        Returns: number
+      }
       delete_email: {
         Args: { message_id: number; queue_name: string }
         Returns: boolean
@@ -1813,12 +2171,40 @@ export type Database = {
         Args: { payload: Json; queue_name: string }
         Returns: number
       }
+      get_customer_ticket_history: {
+        Args: { _days?: number; _email: string; _limit?: number }
+        Returns: {
+          category: string
+          created_at: string
+          id: string
+          severity: string
+          status: string
+          subject: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
         Returns: boolean
+      }
+      increment_kb_usage: { Args: { kb_ids: string[] }; Returns: undefined }
+      match_support_kb: {
+        Args: {
+          match_count?: number
+          match_threshold?: number
+          query_embedding: string
+        }
+        Returns: {
+          answer: string
+          category: string
+          id: string
+          keywords: string[]
+          question: string
+          similarity: number
+          title: string
+        }[]
       }
       move_to_dlq: {
         Args: {
@@ -1836,6 +2222,19 @@ export type Database = {
           msg_id: number
           read_ct: number
         }[]
+      }
+      record_kb_feedback: {
+        Args: { feedback: string; kb_ids: string[] }
+        Returns: undefined
+      }
+      record_kb_gap: {
+        Args: {
+          _best_score: number
+          _question: string
+          _subject: string
+          _ticket_id: string
+        }
+        Returns: string
       }
     }
     Enums: {

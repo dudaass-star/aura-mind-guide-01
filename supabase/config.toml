@@ -169,5 +169,29 @@ verify_jwt = false
 [functions.audit-recovered-payments]
 verify_jwt = false
 
+[functions.support-imap-poll]
+verify_jwt = false
+
+[functions.support-agent]
+verify_jwt = false
+
+[functions.support-send-reply]
+verify_jwt = true
+
+[functions.support-execute-action]
+verify_jwt = true
+
+[functions.support-attachment-url]
+verify_jwt = true
+
+[functions.support-kb-embed]
+verify_jwt = true
+
+[functions.support-kb-search]
+verify_jwt = true
+
+[functions.support-auto-respond]
+verify_jwt = false
+
 [functions.audit-orphan-subscribers]
 verify_jwt = false

@@ -15,8 +15,12 @@ import FAQ from "@/components/FAQ";
 import FinalCTA from "@/components/FinalCTA";
 import Footer from "@/components/Footer";
 import StickyMobileCTA from "@/components/StickyMobileCTA";
+import { trackViewItem } from "@/lib/ga4";
+import { useScrollDepth } from "@/hooks/useScrollDepth";
 
 const Index = () => {
+  useScrollDepth();
+
   useEffect(() => {
     if (typeof window !== 'undefined' && (window as any).fbq) {
       (window as any).fbq('track', 'ViewContent', {
@@ -24,6 +28,8 @@ const Index = () => {
         content_category: 'homepage',
       });
     }
+    // GA4 view_item — espelha o ViewContent do Meta Pixel
+    trackViewItem({ item_id: "landing_page", item_name: "Landing Page" });
   }, []);
 
   return (

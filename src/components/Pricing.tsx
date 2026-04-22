@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Check, Sparkles, MessageCircle, Calendar, FileText, Headphones, Zap, BookOpen } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useState } from "react";
+import { trackCtaClick } from "@/lib/ga4";
 type BillingPeriod = "monthly" | "yearly";
 const plans = [{
   id: "essencial",
@@ -209,7 +210,7 @@ const Pricing = () => {
               <Link to="/checkout" state={{
               plan: plan.id,
               billing: billingPeriod
-            }}>
+            }} onClick={() => trackCtaClick("pricing", `${plan.name} (${billingPeriod})`)}>
                 <Button variant={plan.popular ? "sage" : "glass"} size="lg" className="w-full">
                   {plan.cta}
                 </Button>
