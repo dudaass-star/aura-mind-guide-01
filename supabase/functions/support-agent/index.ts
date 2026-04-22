@@ -91,6 +91,32 @@ serve(async (req) => {
     // Build customer context
     const context: Record<string, unknown> = { ticket: { subject: ticket.subject, category: ticket.category } };
 
+    // ========== Histórico de tickets do cliente (últimos 90 dias) ==========
+    let recurringCustomer = false;
+    try {
+      const { data: ticketCount } = await supabase.rpc("count_recent_tickets", {
+        _email: ticket.customer_email,
+        _days: 30,
+      });
+      const count30d = typeof ticketCount === "number" ? ticketCount : 0;
+      recurringCustomer = count30d >= RECURRING_CUSTOMER_THRESHOLD;
+
+      const { data: history } = await supabase.rpc("get_customer_ticket_history", {
+        _email: ticket.customer_email,
+        _days: 90,
+        _limit: 5,
+      });
+      context.customer_history = {
+        tickets_last_30d: count30d,
+        tickets_last_90d: history?.length || 0,
+        recurring: recurringCustomer,
+        recent_tickets: history || [],
+      };
+      log("Customer history", { email: ticket.customer_email, count30d, recurring: recurringCustomer });
+    } catch (e) {
+      log("Customer history lookup failed", { error: String(e) });
+    }
+
     if (ticket.profile_user_id) {
       const { data: profile } = await supabase
         .from("profiles")
