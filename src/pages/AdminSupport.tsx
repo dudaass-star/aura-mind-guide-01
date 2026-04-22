@@ -320,7 +320,7 @@ export default function AdminSupport() {
                       <span className="text-sm font-medium truncate flex items-center gap-1">
                         {t.customer_name || t.customer_email}
                         {t.recurring_customer && (
-                          <AlertOctagon className="h-3 w-3 text-orange-500 flex-shrink-0" aria-label="Cliente recorrente" />
+                          <AlertOctagon className="h-3 w-3 text-destructive flex-shrink-0" aria-label="Cliente recorrente" />
                         )}
                       </span>
                       <div className="flex items-center gap-1 flex-shrink-0 mt-1">
