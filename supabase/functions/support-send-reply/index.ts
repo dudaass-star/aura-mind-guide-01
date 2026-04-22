@@ -32,7 +32,7 @@ serve(async (req) => {
     const { data: isAdmin } = await supabase.rpc("has_role", { _user_id: userData.user.id, _role: "admin" });
     if (!isAdmin) throw new Error("Not an admin");
 
-    const { ticket_id, body, mark_status } = await req.json();
+    const { ticket_id, body, mark_status, draft_id } = await req.json();
     if (!ticket_id || !body) throw new Error("ticket_id and body required");
 
     const { data: ticket, error: tErr } = await supabase
@@ -103,6 +103,44 @@ serve(async (req) => {
       status: mark_status || "replied",
       last_outbound_at: new Date().toISOString(),
     }).eq("id", ticket_id);
+
+    // ============ FEEDBACK LOOP: comparar draft x final, atualizar KB ============
+    try {
+      const draftQuery = draft_id
+        ? supabase.from("support_ticket_drafts").select("id, draft_body, context_snapshot").eq("id", draft_id).maybeSingle()
+        : supabase.from("support_ticket_drafts").select("id, draft_body, context_snapshot").eq("ticket_id", ticket_id).eq("is_current", true).maybeSingle();
+      const { data: currentDraft } = await draftQuery;
+      if (currentDraft) {
+        const original = (currentDraft.draft_body || "").trim();
+        const final = body.trim();
+        // Distância simples normalizada por tamanho (Levenshtein é caro; usamos diff de caracteres)
+        const maxLen = Math.max(original.length, final.length, 1);
+        let diff = 0;
+        const minLen = Math.min(original.length, final.length);
+        for (let i = 0; i < minLen; i++) if (original[i] !== final[i]) diff++;
+        diff += Math.abs(original.length - final.length);
+        const editDistance = Math.min(1, diff / maxLen);
+
+        // Threshold: <5% diff = aprovado sem edição (margem pra espaços/quebras)
+        const feedbackStatus = editDistance < 0.05 ? "approved_no_edit" : "approved_with_edit";
+
+        await supabase.from("support_ticket_drafts").update({
+          feedback_status: feedbackStatus,
+          edit_distance: editDistance,
+          final_body: final,
+          feedback_at: new Date().toISOString(),
+        }).eq("id", currentDraft.id);
+
+        const ctx = currentDraft.context_snapshot as { kb_used?: string[] } | null;
+        const kbIds = ctx?.kb_used || [];
+        if (kbIds.length > 0) {
+          await supabase.rpc("record_kb_feedback", { kb_ids: kbIds, feedback: feedbackStatus });
+        }
+        log("KB feedback recorded", { feedbackStatus, editDistance, kbCount: kbIds.length });
+      }
+    } catch (e) {
+      log("Feedback loop failed (non-fatal)", { error: String(e) });
+    }
 
     return new Response(JSON.stringify({ ok: true, message_id: newMessageId }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
