@@ -265,11 +265,16 @@ Analise e responda com a estrutura solicitada.`;
       ai_model: "google/gemini-2.5-pro",
       draft_body: args.draft_response,
       suggested_action: args.suggested_action,
-      context_snapshot: { context, summary: args.summary },
+      context_snapshot: { context, summary: args.summary, kb_used: kbUsedIds },
       hint: hint || null,
       is_current: true,
     }).select().single();
     if (dErr) throw dErr;
+
+    // Increment usage_count for cited KB articles
+    if (kbUsedIds.length > 0) {
+      await supabase.rpc("increment_kb_usage", { kb_ids: kbUsedIds });
+    }
 
     // Update ticket classification
     await supabase.from("support_tickets").update({
