@@ -6423,9 +6423,14 @@ Só DEPOIS de saber a situação, explore as emoções com profundidade.`;
     });
 
   } catch (error) {
-    console.error("Error in aura-agent:", error);
-    return new Response(JSON.stringify({ 
-      messages: [{ text: "Desculpa, tive um probleminha aqui. Pode repetir?", delay: 0, isAudio: false }]
+    // Detailed logging so HTTP 500s are diagnosable in edge logs
+    const errMsg = error instanceof Error ? error.message : String(error);
+    const errStack = error instanceof Error ? error.stack : undefined;
+    console.error("❌ [AURA-AGENT] Unhandled error:", errMsg);
+    if (errStack) console.error("❌ [AURA-AGENT] Stack trace:", errStack);
+    return new Response(JSON.stringify({
+      messages: [{ text: "Desculpa, tive um probleminha aqui. Pode repetir?", delay: 0, isAudio: false }],
+      error: errMsg,
     }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

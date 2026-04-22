@@ -300,17 +300,17 @@ Deno.serve(async (req) => {
     console.log(`👤 Found user: ${profile.name} (${profile.user_id}), status: ${profile.status}, instance: ${profile.whatsapp_instance_id || 'env-default'}`);
 
     // ========================================================================
-    // INLINE TRIAL EXPIRATION — expire trials automatically at message time
+    // TRIAL EXPIRATION — handled by Stripe webhook, NOT inline.
+    //
+    // Bug fixed 2026-04-22: previous inline rule expired ANY profile with
+    // status='trial' and trial_started_at older than 5 days. This wrongly
+    // affected paid users (paid trials, monthly subs whose status='trial' had
+    // never been promoted to 'active' due to webhook race conditions, etc.),
+    // mass-expiring 15 paying customers on 2026-04-22.
+    //
+    // Source of truth for paid users: stripe-webhook (sub.status →
+    // active/past_due/canceled). Inline expiration removed entirely.
     // ========================================================================
-    if (profile.status === 'trial' && profile.trial_started_at) {
-      const trialAge = Date.now() - new Date(profile.trial_started_at).getTime();
-      const fiveDays = 5 * 24 * 60 * 60 * 1000;
-      if (trialAge > fiveDays) {
-        console.log(`⏰ Trial expired inline for ${profile.user_id} — started ${profile.trial_started_at}`);
-        await supabase.from('profiles').update({ status: 'trial_expired', updated_at: new Date().toISOString() }).eq('user_id', profile.user_id);
-        profile.status = 'trial_expired';
-      }
-    }
 
     // ========================================================================
     // SUBSCRIPTION STATUS CHECK
