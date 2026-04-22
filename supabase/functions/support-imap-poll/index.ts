@@ -15,6 +15,18 @@ const log = (step: string, data?: unknown) => {
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
+  // Permite reprocessar mensagens já marcadas como lidas (recovery).
+  // Uso: POST com { reprocess_seen: true, since_days?: 7 }
+  let reprocessSeen = false;
+  let sinceDays = 7;
+  try {
+    if (req.method === "POST") {
+      const body = await req.json().catch(() => ({}));
+      reprocessSeen = body?.reprocess_seen === true;
+      if (typeof body?.since_days === "number") sinceDays = body.since_days;
+    }
+  } catch (_) { /* ignore */ }
+
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
@@ -48,12 +60,15 @@ serve(async (req) => {
 
     const lock = await client.getMailboxLock("INBOX");
     try {
-      // Fetch unseen messages
+      // Fetch unseen messages (ou lidas recentes em modo reprocess)
       const uids: number[] = [];
-      for await (const msg of client.fetch({ seen: false }, { uid: true })) {
+      const searchCriteria: Record<string, unknown> = reprocessSeen
+        ? { since: new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000) }
+        : { seen: false };
+      for await (const msg of client.fetch(searchCriteria, { uid: true })) {
         uids.push(msg.uid);
       }
-      log(`Found ${uids.length} unread messages`);
+      log(`Found ${uids.length} messages`, { reprocessSeen, sinceDays });
 
       for (const uid of uids) {
         try {
