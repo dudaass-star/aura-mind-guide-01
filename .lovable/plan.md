@@ -1,46 +1,81 @@
 
 
-## Como mandar a mensagem pro Thiago
+# Corrigir entrega de áudios da Aura (TTS via URL pública + limpeza automática)
 
-### Estado da janela (verificado agora)
+## Problema
+Os áudios gerados pelo `aura-tts` (Inworld/Google) **não estão chegando aos usuários** há 14 dias. O pipeline retorna base64, mas a API oficial Twilio/Meta só aceita URL pública. Resultado: todos os áudios silenciosamente caem para fallback de texto.
 
-- Última mensagem do Thiago: **22/abr 09:11 BRT** (~4h35min atrás)
-- Janela 24h: **ABERTA** até ~23/abr 09:11 BRT
-- Caminho: **texto livre via `sendFreeText`** (gratuito, sem template, entrega imediata)
+## Solução
+Mudar `aura-tts` para fazer upload do MP3 no Supabase Storage e retornar URL pública. Atualizar o consumidor para usar `sendAudioUrl()`. Adicionar limpeza automática diária (TTL 7 dias).
 
-### Por que texto livre e não template
+---
 
-A função `sendProactive` já decide isso automaticamente:
-1. Se `last_user_message_at` < 24h → manda **texto livre** (`sendFreeText`)
-2. Se > 24h → manda **template aprovado** (ContentSid)
+## Implementação
 
-Como ele mandou mensagem hoje de manhã, a janela está aberta. Se eu demorar e passar das 09:11 de amanhã, o `sendProactive` faz fallback automático pro template `cheking_7dias` (único de check-in proativo aprovado) — mas aí a mensagem vira o texto fixo do template, sem personalização rica.
+### 1. Criar bucket público `aura-tts-audios` (migration)
+- Bucket público (Twilio precisa baixar sem auth)
+- Sem políticas de INSERT/UPDATE/DELETE para usuários (apenas service role via edge functions)
+- Política de SELECT público para leitura
 
-**Conclusão: vou rodar agora, dentro da janela, com texto livre.**
+### 2. Atualizar `supabase/functions/aura-tts/index.ts`
+- Após gerar `audioBytes`, fazer upload para `aura-tts-audios/{userId}/{timestamp}-{random}.mp3`
+- Obter URL pública via `supabase.storage.from(...).getPublicUrl(path)`
+- Retornar no payload: `{ audioUrl, storagePath, format, voice, provider, fallbackToText: false }`
+- **Manter** `audioContent` (base64) por compatibilidade temporária — assim nada quebra se outro consumidor ainda usar base64
+- Aceitar `userId` opcional no body para organizar arquivos por usuário (fallback: `shared/`)
 
-### Conteúdo proposto (informal, sem mencionar pagamento — porque não houve problema)
+### 3. Atualizar `supabase/functions/process-webhook-message/index.ts`
+- Localizar a chamada atual `sendAudio(phone, audioBase64)`
+- Substituir por `sendAudioUrl(phone, audioUrl)` usando o `audioUrl` retornado pelo `aura-tts`
+- Passar `userId` na chamada do `aura-tts` para organização
+- Manter fallback para texto se `audioUrl` ausente
 
-> Oi Thiago, aqui é a Aura. Tive uma falha técnica do meu lado entre ontem e hoje e suas mensagens não chegaram pra mim do jeito certo — por isso o silêncio. Já tá resolvido. Me desculpa pela demora, sei que você tava esperando resposta. Tô aqui agora, pode mandar.
+### 4. Limpeza automática (TTL 7 dias)
+- Nova edge function `cleanup-tts-audios/index.ts`:
+  - Lista objetos em `aura-tts-audios` com `created_at < now() - 7 days`
+  - Deleta em lote (até 1000 por execução)
+  - Loga total removido em `console.log`
+- Cron job diário às 04h BRT (07h UTC) via `pg_cron` + `pg_net`
+- `verify_jwt = false` em `supabase/config.toml` para a função
 
-Mensagem curta, honesta, sem desculpa exagerada, sem oferecer compensação (você decide se quer somar isso depois).
+### 5. Logs de observabilidade
+- `aura-tts`: logar `audioUrl`, `storagePath`, `uploadDurationMs`
+- `process-webhook-message`: logar quando usa URL vs quando cai no fallback de texto
 
-### Execução técnica
+---
 
-1. Chamar a edge function `send-zapi-message` (ou `sendProactive` direto via invoke) com:
-   - `user_id`: `b05f509a-1a17-4364-b454-22ae21cfa137`
-   - `phone`: `553183774774`
-   - `text`: mensagem acima
-2. Confirmar HTTP 200 + `messageId` retornado pelo Twilio
-3. Verificar nos logs do `process-webhook-message` se ele responder
+## Arquivos afetados
 
-### Plano B se passar das 09:11 de amanhã sem ação
+```text
+supabase/migrations/<timestamp>_create_aura_tts_bucket.sql    [NOVO]
+supabase/functions/aura-tts/index.ts                          [MODIFICAR]
+supabase/functions/process-webhook-message/index.ts           [MODIFICAR — só trecho de áudio]
+supabase/functions/cleanup-tts-audios/index.ts                [NOVO]
+supabase/config.toml                                          [+1 bloco verify_jwt]
+SQL para cron job (insert direto, não migration)              [NOVO]
+```
 
-- `sendProactive` cai automaticamente no template `cheking_7dias` (HX4e299f6168e7d4ac4159c14ed470fca6, categoria `checkin`, único proativo aprovado)
-- Esse template tem botão de Quick Reply — quando ele clicar, abre a janela de 24h e aí mandamos o texto rico de desculpa
-- Ou seja: nunca fica sem caminho de entrega, só perde a riqueza do texto direto
+---
 
-### Decisões pendentes pra você
+## Comportamento após deploy
 
-- **Texto da mensagem**: aprovar a versão acima, ou ajustar tom/conteúdo?
-- **Compensação**: mandar só desculpa, ou já incluir oferta (1 mês grátis / crédito)?
+| Etapa | Antes | Depois |
+|---|---|---|
+| `aura-tts` retorna | base64 inline | URL pública + base64 (compat) |
+| `process-webhook-message` envia | `sendAudio(base64)` → falha silenciosa | `sendAudioUrl(url)` → entrega real |
+| Storage usado | 0 | ~200-500KB por áudio, max 7 dias |
+| Latência por áudio | ~2-4s | +0.5-1s (upload paralelo) |
+| Áudios chegando aos usuários | ❌ 0 nos últimos 14 dias | ✅ Conforme orçamento mensal do plano |
+
+## Riscos & mitigações
+- **Storage crescendo**: mitigado pelo cron de limpeza diária (TTL 7 dias)
+- **Bucket público expõe áudios**: aceitável — paths usam UUID aleatório, sem enumeração viável; áudios são pessoais mas não contêm credenciais
+- **Build errors pré-existentes** no projeto (visíveis no `<build-errors>`): NÃO serão tocados — são problemas independentes em outras funções (`aura-agent`, `admin-engagement-metrics`, etc.). Esta mudança não os agrava nem corrige.
+
+## Validação pós-deploy
+1. Enviar mensagem que dispare áudio (ex: pedido de meditação ou trecho emocional em sessão)
+2. Verificar logs do `aura-tts` → deve mostrar `audioUrl` populado
+3. Verificar logs do `process-webhook-message` → deve mostrar `sendAudioUrl success`
+4. Confirmar recebimento do áudio no WhatsApp do usuário de teste
+5. Após 24h, verificar `token_usage_logs` filtrando `function_name = 'aura-tts'` → deve ter atividade
 
