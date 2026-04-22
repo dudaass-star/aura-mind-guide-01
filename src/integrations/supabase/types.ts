@@ -1372,6 +1372,51 @@ export type Database = {
         }
         Relationships: []
       }
+      support_knowledge_base: {
+        Row: {
+          answer: string
+          category: string
+          created_at: string
+          created_by: string | null
+          embedding: string | null
+          id: string
+          is_active: boolean
+          keywords: string[]
+          question: string
+          title: string
+          updated_at: string
+          usage_count: number
+        }
+        Insert: {
+          answer: string
+          category: string
+          created_at?: string
+          created_by?: string | null
+          embedding?: string | null
+          id?: string
+          is_active?: boolean
+          keywords?: string[]
+          question: string
+          title: string
+          updated_at?: string
+          usage_count?: number
+        }
+        Update: {
+          answer?: string
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          embedding?: string | null
+          id?: string
+          is_active?: boolean
+          keywords?: string[]
+          question?: string
+          title?: string
+          updated_at?: string
+          usage_count?: number
+        }
+        Relationships: []
+      }
       support_ticket_actions: {
         Row: {
           action_type: string
@@ -2023,6 +2068,23 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      increment_kb_usage: { Args: { kb_ids: string[] }; Returns: undefined }
+      match_support_kb: {
+        Args: {
+          match_count?: number
+          match_threshold?: number
+          query_embedding: string
+        }
+        Returns: {
+          answer: string
+          category: string
+          id: string
+          keywords: string[]
+          question: string
+          similarity: number
+          title: string
+        }[]
       }
       move_to_dlq: {
         Args: {

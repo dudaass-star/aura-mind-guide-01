@@ -25,6 +25,7 @@ import AdminPopupPreview from "./pages/AdminPopupPreview";
 import AdminUsers from "./pages/AdminUsers";
 import AdminInstagram from "./pages/AdminInstagram";
 import AdminSupport from "./pages/AdminSupport";
+import AdminSupportKnowledge from "./pages/AdminSupportKnowledge";
 import UserGuide from "./pages/UserGuide";
 import Episode from "./pages/Episode";
 import JourneyComplete from "./pages/JourneyComplete";
@@ -65,6 +66,7 @@ const App = () => (
             <Route path="/admin/usuarios" element={<AdminUsers />} />
             <Route path="/admin/instagram" element={<AdminInstagram />} />
             <Route path="/admin/suporte" element={<AdminSupport />} />
+            <Route path="/admin/suporte/conhecimento" element={<AdminSupportKnowledge />} />
             <Route path="/guia" element={<UserGuide />} />
             <Route path="/episodio/:id" element={<Episode />} />
             <Route path="/jornada-completa/:journeyId/:userId" element={<JourneyComplete />} />
