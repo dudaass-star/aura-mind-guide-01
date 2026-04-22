@@ -250,7 +250,7 @@ serve(async (req) => {
       });
     }
 
-    const { text } = await req.json();
+    const { text, userId } = await req.json();
     if (!text || text.trim().length === 0) {
       return new Response(JSON.stringify({ audioContent: null, fallbackToText: true, reason: "empty_text" }), {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -322,10 +322,55 @@ serve(async (req) => {
     }
 
     const base64Audio = base64Encode(audioBytes.buffer as ArrayBuffer);
-    console.log("TTS generated:", { audioSize: audioBytes.byteLength, provider, voice: ttsModel === 'inworld/aura' ? INWORLD_CONFIG.voiceId : AURA_VOICE_CONFIG.voiceName });
+
+    // Upload para Storage e obter URL pública (Twilio/Meta exigem URL, não aceitam base64)
+    let audioUrl: string | null = null;
+    let storagePath: string | null = null;
+    let uploadDurationMs = 0;
+    try {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      const storageClient = createClient(supabaseUrl, supabaseKey);
+      const folder = userId && typeof userId === 'string' ? userId : 'shared';
+      const filename = `${Date.now()}-${crypto.randomUUID()}.mp3`;
+      storagePath = `${folder}/${filename}`;
+
+      const uploadStart = Date.now();
+      const { error: uploadError } = await storageClient.storage
+        .from('aura-tts-audios')
+        .upload(storagePath, audioBytes, {
+          contentType: 'audio/mpeg',
+          cacheControl: '604800', // 7 dias
+          upsert: false,
+        });
+      uploadDurationMs = Date.now() - uploadStart;
+
+      if (uploadError) {
+        console.error('❌ Storage upload error:', uploadError);
+        storagePath = null;
+      } else {
+        const { data: pub } = storageClient.storage.from('aura-tts-audios').getPublicUrl(storagePath);
+        audioUrl = pub.publicUrl;
+      }
+    } catch (uploadErr) {
+      console.error('❌ Upload exception:', uploadErr);
+      storagePath = null;
+      audioUrl = null;
+    }
+
+    console.log("TTS generated:", {
+      audioSize: audioBytes.byteLength,
+      provider,
+      voice: ttsModel === 'inworld/aura' ? INWORLD_CONFIG.voiceId : AURA_VOICE_CONFIG.voiceName,
+      audioUrl,
+      storagePath,
+      uploadDurationMs,
+    });
 
     return new Response(JSON.stringify({
-      audioContent: base64Audio,
+      audioContent: base64Audio, // mantido para compatibilidade temporária
+      audioUrl,
+      storagePath,
       format: 'mp3',
       voice: ttsModel === 'inworld/aura' ? INWORLD_CONFIG.voiceId : AURA_VOICE_CONFIG.voiceName,
       provider,
