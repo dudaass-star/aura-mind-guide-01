@@ -57,6 +57,11 @@ IMPORTANTE:
 - Se não tiver certeza, sugira "none" e peça mais informação no rascunho
 - Para reembolso de alto valor (>R$100) ou casos jurídicos, sugira "none" e escale ao admin no rascunho`;
 
+// Categorias seguras pra auto-resposta (nunca incluem ações financeiras/sensíveis)
+const SAFE_AUTO_REPLY_CATEGORIES = new Set(["duvida_tecnica", "elogio", "outro"]);
+const AUTO_REPLY_KB_THRESHOLD = 0.82;
+const RECURRING_CUSTOMER_THRESHOLD = 3; // 3+ tickets em 30d
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
