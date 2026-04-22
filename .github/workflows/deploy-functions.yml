@@ -7,6 +7,7 @@ on:
     paths:
       - 'supabase/functions/aura-agent/**'
       - 'supabase/functions/instagram-agent/**'
+      - 'supabase/functions/audit-orphan-subscribers/**'
       - 'supabase/functions/_shared/**'
 
 jobs:
@@ -29,5 +30,10 @@ jobs:
 
       - name: Deploy instagram-agent
         run: supabase functions deploy instagram-agent --project-ref ${{ secrets.SUPABASE_PROJECT_ID }}
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: Deploy audit-orphan-subscribers
+        run: supabase functions deploy audit-orphan-subscribers --project-ref ${{ secrets.SUPABASE_PROJECT_ID }}
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}

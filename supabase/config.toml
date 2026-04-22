@@ -168,3 +168,6 @@ verify_jwt = false
 
 [functions.audit-recovered-payments]
 verify_jwt = false
+
+[functions.audit-orphan-subscribers]
+verify_jwt = false
