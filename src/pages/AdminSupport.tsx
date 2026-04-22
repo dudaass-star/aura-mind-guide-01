@@ -389,10 +389,10 @@ export default function AdminSupport() {
                   </div>
                 )}
                 {selectedTicket.reopened_at && (
-                  <div className="mt-2 flex items-start gap-2 rounded-md border border-orange-500/40 bg-orange-500/10 p-2 text-xs">
-                    <RotateCcw className="h-4 w-4 text-orange-600 dark:text-orange-400 mt-0.5 flex-shrink-0" />
+                  <div className="mt-2 flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-2 text-xs">
+                    <RotateCcw className="h-4 w-4 text-destructive mt-0.5 flex-shrink-0" />
                     <div>
-                      <p className="font-medium text-orange-700 dark:text-orange-300">Cliente reabriu o ticket</p>
+                      <p className="font-medium text-destructive">Cliente reabriu o ticket</p>
                       <p className="text-muted-foreground">
                         A auto-resposta não resolveu. Próxima resposta SEMPRE será manual (auto-resposta bloqueada).
                       </p>
