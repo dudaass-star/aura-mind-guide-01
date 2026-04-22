@@ -142,6 +142,57 @@ serve(async (req) => {
       .map((m) => `[${m.from_email}]: ${m.body_text || "(sem texto)"}`)
       .join("\n\n---\n\n");
 
+    // ========== RAG: search knowledge base ==========
+    let kbBlock = "";
+    let kbUsedIds: string[] = [];
+    try {
+      const lastInbound = (messages || []).filter((m) => m.direction === "inbound").slice(-1)[0];
+      const queryText = `${ticket.subject}\n\n${lastInbound?.body_text || ""}`.slice(0, 4000);
+      const apiKey = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_CLOUD_API_KEY");
+      if (apiKey && queryText.trim()) {
+        const embResp = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${apiKey}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              model: "models/text-embedding-004",
+              content: { parts: [{ text: queryText }] },
+              outputDimensionality: 768,
+            }),
+          },
+        );
+        if (embResp.ok) {
+          const embData = await embResp.json();
+          const embedding: number[] = embData?.embedding?.values || [];
+          if (embedding.length === 768) {
+            const { data: matches } = await supabase.rpc("match_support_kb", {
+              query_embedding: embedding as unknown as string,
+              match_threshold: 0.55,
+              match_count: 5,
+            });
+            if (matches && matches.length > 0) {
+              kbUsedIds = matches.map((m: { id: string }) => m.id);
+              kbBlock = `\n\n=== BASE DE CONHECIMENTO OFICIAL (use como ÚNICA fonte de política) ===\n` +
+                matches.map((m: { title: string; category: string; question: string; answer: string; similarity: number }, idx: number) =>
+                  `[Artigo ${idx + 1} — ${m.category} — relevância ${(m.similarity * 100).toFixed(0)}%]\n` +
+                  `Título: ${m.title}\n` +
+                  `Pergunta canônica: ${m.question}\n` +
+                  `Resposta oficial:\n${m.answer}`,
+                ).join("\n\n---\n\n") +
+                `\n=== FIM DA BASE DE CONHECIMENTO ===`;
+              log("KB matches", { count: matches.length, ids: kbUsedIds });
+            } else {
+              kbBlock = `\n\n=== BASE DE CONHECIMENTO OFICIAL ===\nNenhum artigo relevante encontrado na KB para esta pergunta. Se for questão de política, NÃO invente — diga no rascunho que vai verificar com a equipe e sugira ação "none".\n=== FIM ===`;
+              log("KB no matches");
+            }
+          }
+        }
+      }
+    } catch (e) {
+      log("KB search failed", { error: String(e) });
+    }
+
     const userPrompt = `EMAIL DO CLIENTE:
 Assunto: ${ticket.subject}
 De: ${ticket.customer_email}
@@ -149,7 +200,7 @@ De: ${ticket.customer_email}
 ${inboundEmails}
 
 CONTEXTO DO CLIENTE:
-${JSON.stringify(context, null, 2)}
+${JSON.stringify(context, null, 2)}${kbBlock}
 
 ${hint ? `INSTRUÇÃO DO ADMIN: ${hint}\n` : ""}
 Analise e responda com a estrutura solicitada.`;
