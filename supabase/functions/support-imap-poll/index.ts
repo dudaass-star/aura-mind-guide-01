@@ -165,14 +165,9 @@ serve(async (req) => {
 
                   const kbIds = (lastDraft.context_snapshot as { kb_used?: string[] } | null)?.kb_used || [];
                   if (kbIds.length > 0) {
-                    // Reverte o approved_count que foi incrementado no auto-send e adiciona como rejected
+                    // Adiciona como rejected (o approved anterior fica como histórico do envio,
+                    // mas o rejected reflete que a resposta não resolveu)
                     await supabase.rpc("record_kb_feedback", { kb_ids: kbIds, feedback: "rejected" });
-                    // Decrementa o approved_count anterior
-                    for (const kbId of kbIds) {
-                      await supabase.from("support_knowledge_base").update({
-                        approved_count: 0, // será corrigido pelo SQL abaixo via raw
-                      }).eq("id", kbId).gte("approved_count", 1);
-                    }
                   }
                   log("Reopen detected: KB feedback reverted", { ticketId, kbCount: kbIds.length });
                 }
