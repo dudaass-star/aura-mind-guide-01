@@ -54,7 +54,7 @@ serve(async (req) => {
       match_threshold: threshold,
       match_count: count,
     });
-    if (mErr) throw mErr;
+    if (mErr) throw new Error(`RPC match_support_kb failed: ${mErr.message || JSON.stringify(mErr)}`);
 
     log("Search done", { query: query.slice(0, 80), threshold, hits: matches?.length || 0 });
 
