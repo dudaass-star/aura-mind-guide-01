@@ -183,3 +183,9 @@ verify_jwt = true
 
 [functions.support-attachment-url]
 verify_jwt = true
+
+[functions.support-kb-embed]
+verify_jwt = true
+
+[functions.support-kb-search]
+verify_jwt = true
