@@ -311,7 +311,6 @@ export default function AdminSupportKnowledge() {
                     </p>
                     <div className="space-y-1">
                       {items.map((a) => (
-                        ((): null | React.ReactNode => null)() ||
                         <button
                           key={a.id}
                           onClick={() => selectArticle(a)}
