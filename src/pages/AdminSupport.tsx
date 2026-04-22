@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, RefreshCw, Send, Pause, X, CheckCircle2, AlertTriangle, Mail, Paperclip, Loader2, Sparkles, Inbox } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Send, Pause, X, CheckCircle2, AlertTriangle, Mail, Paperclip, Loader2, Sparkles, Inbox, BookOpen } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -264,10 +264,15 @@ export default function AdminSupport() {
               <p className="text-xs text-muted-foreground">suporte@olaaura.com.br · IA assistida com aprovação humana</p>
             </div>
           </div>
-          <Button onClick={handlePoll} disabled={polling} variant="outline" size="sm">
-            {polling ? <Loader2 className="h-4 w-4 animate-spin" /> : <Inbox className="h-4 w-4" />}
-            Verificar caixa
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button onClick={() => navigate('/admin/suporte/conhecimento')} variant="outline" size="sm">
+              <BookOpen className="h-4 w-4 mr-1" /> Base de Conhecimento
+            </Button>
+            <Button onClick={handlePoll} disabled={polling} variant="outline" size="sm">
+              {polling ? <Loader2 className="h-4 w-4 animate-spin" /> : <Inbox className="h-4 w-4" />}
+              Verificar caixa
+            </Button>
+          </div>
         </div>
       </div>
 
