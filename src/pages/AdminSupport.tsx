@@ -32,6 +32,8 @@ interface Ticket {
   auto_sent?: boolean;
   auto_sent_at?: string | null;
   recurring_customer?: boolean;
+  reopened_at?: string | null;
+  auto_reply_attempts?: number;
 }
 
 interface TicketMessage {
@@ -167,7 +169,7 @@ export default function AdminSupport() {
     try {
       // 1. Send email
       const { data: sendData, error: sendErr } = await supabase.functions.invoke('support-send-reply', {
-        body: { ticket_id: selectedTicket.id, body: editedBody },
+        body: { ticket_id: selectedTicket.id, body: editedBody, draft_id: draft?.id },
       });
       if (sendErr) throw sendErr;
 
