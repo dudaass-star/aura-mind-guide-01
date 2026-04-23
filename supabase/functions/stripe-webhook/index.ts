@@ -238,10 +238,20 @@ Deno.serve(async (req) => {
         try {
           // Retrieve PaymentIntent to get the payment method for future charges
           const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId, {
-            expand: ['payment_method'],
+            expand: ['payment_method', 'latest_charge'],
           });
           const paymentMethod = paymentIntent.payment_method as Stripe.PaymentMethod;
-          console.log('✅ Paid trial accepted, creating trial subscription');
+          // CIT→MIT: log do network_transaction_id para conferir mandato off_session
+          const latestCharge = paymentIntent.latest_charge as Stripe.Charge | null;
+          const networkTxnId = latestCharge?.payment_method_details?.card?.network_transaction_id || null;
+          const setupFutureUsage = paymentIntent.setup_future_usage || null;
+          console.log('✅ Paid trial accepted, creating trial subscription', {
+            paymentIntentId,
+            paymentMethodId: paymentMethod?.id,
+            setupFutureUsage,
+            networkTxnId,
+            citMitReinforced: session.metadata?.cit_mit_reinforced === 'true',
+          });
 
           // Get the payment methods for this customer
           const paymentMethods = await stripe.paymentMethods.list({
@@ -292,6 +302,7 @@ Deno.serve(async (req) => {
             items: [{ price: subscriptionPriceId }],
             trial_period_days: 7,
             payment_behavior: 'allow_incomplete',
+            off_session: true,
             ...(defaultPm && { default_payment_method: defaultPm }),
             metadata: {
               phone: cleanPhone,
@@ -300,10 +311,16 @@ Deno.serve(async (req) => {
               plan: customerPlan,
               billing: customerBilling,
               trial: "true",
+              cit_mit_reinforced: session.metadata?.cit_mit_reinforced === 'true' ? 'true' : 'false',
+              ...(networkTxnId && { source_network_txn_id: networkTxnId }),
             },
             description: "7 dias de acesso incluídos — a primeira cobrança será no 8º dia.",
           });
-          console.log('✅ Trial subscription created:', subscription.id);
+          console.log('✅ Trial subscription created:', subscription.id, {
+            defaultPm,
+            offSession: true,
+            inheritedNetworkTxnId: networkTxnId,
+          });
 
           // Ensure PM is set on subscription (verify post-creation)
           if (defaultPm && !subscription.default_payment_method) {
