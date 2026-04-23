@@ -257,7 +257,32 @@ serve(async (req) => {
 
       sessionConfig.mode = "payment";
       sessionConfig.payment_method_types = ["card"];
-      sessionConfig.line_items = [{ price: trialPriceId, quantity: 1 }];
+
+      // Buscar o trial Price do Stripe para extrair unit_amount/currency e reusar product_id.
+      // Em seguida, montamos um price_data inline com product_data.description customizada
+      // para que o Stripe Checkout exiba "Após 7 dias: R$ XX/mês" sob o nome do produto.
+      const trialPriceObj = await stripe.prices.retrieve(trialPriceId, { expand: ["product"] });
+      const trialUnitAmount = trialPriceObj.unit_amount ?? 0;
+      const trialCurrency = trialPriceObj.currency || "brl";
+      const trialProductId = typeof trialPriceObj.product === "string"
+        ? trialPriceObj.product
+        : (trialPriceObj.product as Stripe.Product).id;
+
+      sessionConfig.line_items = [{
+        quantity: 1,
+        price_data: {
+          currency: trialCurrency,
+          unit_amount: trialUnitAmount,
+          product: trialProductId,
+        },
+      }];
+
+      // Custom text exibido no Stripe Checkout (acima do botão "Pagar") com aviso da renovação.
+      sessionConfig.custom_text = {
+        submit: {
+          message: `Após os 7 dias, sua assinatura renova automaticamente por R$ ${displayPrice}/${periodLabel}. Cancele quando quiser.`,
+        },
+      };
       sessionConfig.payment_method_options = {
         card: {
           request_three_d_secure: 'automatic',
