@@ -264,16 +264,24 @@ serve(async (req) => {
       const trialPriceObj = await stripe.prices.retrieve(trialPriceId, { expand: ["product"] });
       const trialUnitAmount = trialPriceObj.unit_amount ?? 0;
       const trialCurrency = trialPriceObj.currency || "brl";
-      const trialProductId = typeof trialPriceObj.product === "string"
-        ? trialPriceObj.product
-        : (trialPriceObj.product as Stripe.Product).id;
+      const trialProductObj = typeof trialPriceObj.product === "string"
+        ? null
+        : (trialPriceObj.product as Stripe.Product);
+      const productName = trialProductObj?.name || `AURA — 7 dias ${planDisplayName}`;
 
+      // Usamos product_data inline (name + description) para que a descrição
+      // customizada apareça no painel esquerdo (verde) do Stripe Checkout,
+      // logo abaixo do preço — exatamente onde o usuário pediu para ver
+      // a info de renovação automática.
       sessionConfig.line_items = [{
         quantity: 1,
         price_data: {
           currency: trialCurrency,
           unit_amount: trialUnitAmount,
-          product: trialProductId,
+          product_data: {
+            name: productName,
+            description: `7 dias de acesso ao plano ${planDisplayName}. Após o período, renova automaticamente por R$ ${displayPrice}/${periodLabel}. Cancele quando quiser.`,
+          },
         },
       }];
 
