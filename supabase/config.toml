@@ -198,3 +198,6 @@ verify_jwt = false
 
 [functions.cleanup-tts-audios]
 verify_jwt = false
+
+[functions.audit-decline-codes]
+verify_jwt = false
