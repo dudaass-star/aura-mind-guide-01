@@ -244,42 +244,30 @@ serve(async (req) => {
     
 
     if (trial) {
-      // === TRIAL UNIFICADO: Subscription nativa com trial 7d + invoice imediata do trial ===
-      // Estratégia CIT→MIT: 1 único objeto Subscription estabelece o mandato recorrente
-      // desde a 1ª autorização, evitando que o banco trate a 2ª cobrança como evento isolado.
-      const trialAmounts: Record<string, number> = {
-        essencial: 690,
-        direcao: 990,
-        transformacao: 1990,
-      };
+      // === PLANO SEMANAL (legado "trial"): mode=payment + setup_future_usage off_session ===
+      // Estratégia CIT→MIT: a 1ª cobrança (R$ 6,90/9,90/19,90) já estabelece um mandato
+      // off_session reusável. Quando o webhook criar a Subscription com o MESMO PaymentMethod
+      // como default, o banco enxerga a 2ª cobrança como continuidade autorizada do mesmo merchant
+      // (e não como tentativa órfã), reduzindo do_not_honor.
+      const trialPriceIds = getTrialPrices();
+      const trialPriceId = trialPriceIds[plan];
+      if (!trialPriceId) {
+        throw new Error("Trial price ID not configured for this plan. Check STRIPE_PRICE_*_TRIAL env vars.");
+      }
 
-      sessionConfig.mode = "subscription";
-      sessionConfig.payment_method_collection = 'always';
+      sessionConfig.mode = "payment";
       sessionConfig.payment_method_types = ["card"];
-      sessionConfig.line_items = [{ price: priceId, quantity: 1 }];
+      sessionConfig.line_items = [{ price: trialPriceId, quantity: 1 }];
       sessionConfig.payment_method_options = {
         card: {
           request_three_d_secure: 'automatic',
         },
       };
-      sessionConfig.subscription_data = {
-        trial_period_days: 7,
-        trial_settings: {
-          end_behavior: { missing_payment_method: 'cancel' },
-        },
-        // Cobra o valor do trial (R$ 6,90 / 9,90 / 19,90) imediatamente como add-on
-        // do primeiro invoice (que sai com R$ 0 da subscription + esse item avulso).
-        add_invoice_items: [{
-          price_data: {
-            currency: 'brl',
-            unit_amount: trialAmounts[plan],
-            product_data: {
-              name: `AURA ${planDisplayName} — Acesso 7 dias`,
-            },
-          },
-          quantity: 1,
-        }],
-        description: `AURA ${planDisplayName} — 7 dias por R$ ${(trialAmounts[plan] / 100).toFixed(2).replace('.', ',')}, depois R$ ${displayPrice}/${periodLabel}. Cancele quando quiser.`,
+      // Flag-chave: estabelece mandato MIT desde a 1ª autorização.
+      // O PaymentMethod salvo aqui poderá ser cobrado off_session pela Subscription criada no webhook.
+      sessionConfig.payment_intent_data = {
+        setup_future_usage: 'off_session',
+        description: `AURA ${planDisplayName} — Plano Semanal (7 dias), depois R$ ${displayPrice}/${periodLabel}.`,
         metadata: {
           phone: phoneClean,
           name: name,
@@ -287,7 +275,7 @@ serve(async (req) => {
           plan: plan,
           billing: billingPeriod,
           trial: "true",
-          trial_unified: "true",
+          cit_mit_reinforced: "true",
           ...(gaClientId && { ga_client_id: gaClientId }),
         },
       };
@@ -297,7 +285,8 @@ serve(async (req) => {
         email: email,
         plan: plan,
         billing: billingPeriod,
-        trial_unified: "true",
+        trial_validation: "true",
+        cit_mit_reinforced: "true",
         ...(fbp && { fbp }),
         ...(fbc && { fbc }),
         ...(gaClientId && { ga_client_id: gaClientId }),
@@ -351,7 +340,7 @@ serve(async (req) => {
       };
     }
 
-    logStep("Creating checkout session", { plan, billing: billingPeriod, priceId: trial ? 'price_data' : priceId, mode: sessionConfig.mode, trial: !!trial });
+    logStep("Creating checkout session", { plan, billing: billingPeriod, priceId: trial ? getTrialPrices()[plan] : priceId, mode: sessionConfig.mode, trial: !!trial, citMitReinforced: !!trial });
     const session = await stripe.checkout.sessions.create(sessionConfig);
     logStep("Checkout session created", { sessionId: session.id });
 
