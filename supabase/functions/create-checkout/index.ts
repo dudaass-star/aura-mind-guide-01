@@ -285,12 +285,8 @@ serve(async (req) => {
         },
       }];
 
-      // Custom text exibido no Stripe Checkout (acima do botão "Pagar") com aviso da renovação.
-      sessionConfig.custom_text = {
-        submit: {
-          message: `Após os 7 dias, sua assinatura renova automaticamente por R$ ${displayPrice}/${periodLabel}. Cancele quando quiser.`,
-        },
-      };
+      // Aviso de renovação já aparece no painel esquerdo (product_data.description),
+      // então não duplicamos no custom_text do botão "Pagar".
       sessionConfig.payment_method_options = {
         card: {
           request_three_d_secure: 'automatic',
