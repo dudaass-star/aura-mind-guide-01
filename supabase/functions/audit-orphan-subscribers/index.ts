@@ -85,6 +85,44 @@ Deno.serve(async (req) => {
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" as any });
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // ── MODE: last_payments ─────────────────────────────────────────────────────
+    let body: any = {};
+    try { body = await req.json(); } catch { /* no body */ }
+
+    if (body.mode === "last_payments" && Array.isArray(body.customer_ids)) {
+      const results: any[] = [];
+      for (const custId of body.customer_ids) {
+        const charges = await stripe.charges.list({
+          customer: custId,
+          limit: 5,
+        });
+        const successful = charges.data.filter((c) => c.status === "succeeded");
+        const last = successful[0] ?? null;
+        results.push({
+          customer_id: custId,
+          last_successful_payment: last
+            ? {
+                date: new Date(last.created * 1000).toISOString(),
+                amount_brl: (last.amount / 100).toFixed(2),
+                description: last.description,
+                receipt_email: last.receipt_email,
+                payment_method_details: last.payment_method_details?.type ?? null,
+                charge_id: last.id,
+              }
+            : null,
+          all_recent: charges.data.map((c) => ({
+            date: new Date(c.created * 1000).toISOString(),
+            amount_brl: (c.amount / 100).toFixed(2),
+            status: c.status,
+            charge_id: c.id,
+          })),
+        });
+      }
+      return new Response(JSON.stringify(results, null, 2), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // ── STEP 1: Fetch ALL non-cancelled Stripe subscriptions ────────────────────
     const ACTIVE_STATUSES = ["active", "trialing", "past_due", "unpaid", "incomplete"] as const;
     console.log("STEP 1: Fetching Stripe subscriptions...");
