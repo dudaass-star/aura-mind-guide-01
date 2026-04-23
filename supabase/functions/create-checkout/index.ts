@@ -244,29 +244,51 @@ serve(async (req) => {
     
 
     if (trial) {
-      // === TRIAL: Paid trial (R$6,90 / R$9,90 / R$19,90) ===
+      // === TRIAL UNIFICADO: Subscription nativa com trial 7d + invoice imediata do trial ===
+      // Estratégia CIT→MIT: 1 único objeto Subscription estabelece o mandato recorrente
+      // desde a 1ª autorização, evitando que o banco trate a 2ª cobrança como evento isolado.
       const trialAmounts: Record<string, number> = {
         essencial: 690,
         direcao: 990,
         transformacao: 1990,
       };
 
-      sessionConfig.mode = "payment";
-      sessionConfig.line_items = [{
-        price_data: {
-          currency: 'brl',
-          unit_amount: trialAmounts[plan],
-          product_data: {
-          name: `AURA ${planDisplayName} — 7 dias | Após: R$ ${displayPrice}/${periodLabel}`,
-          description: `CANCELE QUANDO QUISER.`,
-          },
-        },
-        quantity: 1,
-      }];
+      sessionConfig.mode = "subscription";
+      sessionConfig.payment_method_collection = 'always';
+      sessionConfig.payment_method_types = ["card"];
+      sessionConfig.line_items = [{ price: priceId, quantity: 1 }];
       sessionConfig.payment_method_options = {
         card: {
-          setup_future_usage: 'off_session',
           request_three_d_secure: 'automatic',
+        },
+      };
+      sessionConfig.subscription_data = {
+        trial_period_days: 7,
+        trial_settings: {
+          end_behavior: { missing_payment_method: 'cancel' },
+        },
+        // Cobra o valor do trial (R$ 6,90 / 9,90 / 19,90) imediatamente como add-on
+        // do primeiro invoice (que sai com R$ 0 da subscription + esse item avulso).
+        add_invoice_items: [{
+          price_data: {
+            currency: 'brl',
+            unit_amount: trialAmounts[plan],
+            product_data: {
+              name: `AURA ${planDisplayName} — Acesso 7 dias`,
+            },
+          },
+          quantity: 1,
+        }],
+        description: `AURA ${planDisplayName} — 7 dias por R$ ${(trialAmounts[plan] / 100).toFixed(2).replace('.', ',')}, depois R$ ${displayPrice}/${periodLabel}. Cancele quando quiser.`,
+        metadata: {
+          phone: phoneClean,
+          name: name,
+          email: email,
+          plan: plan,
+          billing: billingPeriod,
+          trial: "true",
+          trial_unified: "true",
+          ...(gaClientId && { ga_client_id: gaClientId }),
         },
       };
       sessionConfig.metadata = {
@@ -275,7 +297,7 @@ serve(async (req) => {
         email: email,
         plan: plan,
         billing: billingPeriod,
-        trial_validation: "true",
+        trial_unified: "true",
         ...(fbp && { fbp }),
         ...(fbc && { fbc }),
         ...(gaClientId && { ga_client_id: gaClientId }),
