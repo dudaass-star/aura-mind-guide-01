@@ -340,7 +340,7 @@ serve(async (req) => {
       };
     }
 
-    logStep("Creating checkout session", { plan, billing: billingPeriod, priceId: trial ? 'price_data' : priceId, mode: sessionConfig.mode, trial: !!trial });
+    logStep("Creating checkout session", { plan, billing: billingPeriod, priceId: trial ? getTrialPrices()[plan] : priceId, mode: sessionConfig.mode, trial: !!trial, citMitReinforced: !!trial });
     const session = await stripe.checkout.sessions.create(sessionConfig);
     logStep("Checkout session created", { sessionId: session.id });
 
