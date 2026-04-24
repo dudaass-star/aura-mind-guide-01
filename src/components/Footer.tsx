@@ -15,6 +15,9 @@ const Footer = React.forwardRef<HTMLElement>((_, ref) => {
 
           {/* Links */}
           <nav className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
+            <Link to="/blog" className="hover:text-foreground transition-colors">
+              Blog
+            </Link>
             <Link to="/termos" className="hover:text-foreground transition-colors">
               Termos de Uso
             </Link>
