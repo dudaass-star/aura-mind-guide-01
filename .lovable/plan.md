@@ -1,51 +1,80 @@
 ## Objetivo
 
-Criar uma página `/blog` em `olaaura.com.br` que hospeda o widget do Soro, permitindo que os artigos gerados pela IA do Soro sejam exibidos sob o domínio da AURA e indexados pelo Google.
+Avaliar como a Aura está performando para os **10 assinantes mais recentes** (todos em status `trial` pago, criados entre 20/04 e 24/04). Cruzar comportamento real com a configuração que definimos (fases de sessão, método Logoterapia/Estoicismo/Socrático, persona, regras anti-acolhimento, geração de insights/compromissos, segurança).
 
-## O que será feito
+Entrega: **diagnóstico executivo de 1 página em markdown, direto no chat.**
 
-### 1. Nova página `src/pages/Blog.tsx`
-- Layout com `Header` (existente) no topo e `Footer` (existente) no rodapé, mantendo a identidade visual da AURA
-- Container central com título "Blog AURA" e subtítulo curto sobre autoconhecimento, ansiedade, meditação, etc.
-- Div alvo do Soro: `<div id="soro-blog"></div>`
-- Carregamento do script do Soro via `useEffect` (necessário em SPA React, pois o `<script defer>` no JSX não executa em navegações client-side)
-- Cleanup do script ao desmontar (evita duplicação ao navegar)
-- SEO: `<title>Blog AURA — Autoconhecimento, Ansiedade e Meditação</title>`, `<meta name="description">`, Open Graph tags (via manipulação de `document.head` no `useEffect`, padrão usado nas outras páginas do projeto)
+## Os 10 assinantes em análise
 
-### 2. Registrar rota em `src/App.tsx`
-Adicionar `<Route path="/blog" element={<Blog />} />` junto com as demais rotas públicas.
+| # | Nome | Plano | Sign-up | Msgs (user/Aura) | Sessões | Compromissos | Temas |
+|---|---|---|---|---|---|---|---|
+| 1 | Aline Mendes | Transformação | 24/04 | 10 / 35 | 0 | 1 | 4 |
+| 2 | Ideline Pecori | Direção | 24/04 | 48 / 106 | 4 | 18 | 14 |
+| 3 | Kelvin Amorim | Essencial | 24/04 | 22 / 48 | 0 | 2 | 2 |
+| 4 | Brandon Galvão | Direção | 23/04 | 12 / 31 | 4 | 7 | 6 |
+| 5 | Marciel S. Costa | Direção | 23/04 | 21 / 60 | 4 | 6 | 5 |
+| 6 | Anderson S. de Jesus | Direção | 23/04 | 51 / 180 | 4 | 39 | 12 |
+| 7 | Cristiane | Direção | 23/04 | 58 / 118 | 0 | 21 | 8 |
+| 8 | Jessica Lima | Direção | 22/04 | 7 / 18 | 0 | 2 | 2 |
+| 9 | Luciana Fetter | Essencial | 22/04 | 5 / 15 | 0 | 2 | 7 |
+| 10 | Sara S. Dias | Direção | 21/04 | 36 / 96 | 4 | 18 | 9 |
 
-### 3. Link de navegação
-- Adicionar item "Blog" no menu do `Header.tsx` (desktop e mobile)
-- Adicionar link "Blog" na coluna de navegação do `Footer.tsx`
+Observação preliminar: **0 ratings** registradas em todos. Vale investigar se o gatilho de `rating_requested` está sendo disparado.
 
-### 4. SEO técnico
-- Confirmar `public/robots.txt` permite `/blog` (atualmente permite tudo — ok)
-- Sitemap fica para um momento futuro (o Soro normalmente gera o seu próprio sitemap de artigos)
+## O que vou fazer
 
-### 5. Snippet do Soro
-Usar exatamente o código que aparece no painel do Soro:
-```html
-<div id="soro-blog"></div>
-<script src="https://app.trysoro.com/api/embed/93f944b3-dd6b-4e3c-8c42-0c078e169773" defer></script>
+### 1. Coleta quantitativa (já temos a base, complementar)
+- Por usuário: msgs/dia, dias ativos, gap desde última msg, ratio Aura/usuário (verbosidade), profundidade média do user_msg (chars), distribuição de horários.
+- Sessões: agendadas vs completadas vs com summary, lembretes enviados, presença de insights e compromissos por sessão.
+- Sinais de churn: gap >48h, mensagens curtas decrescentes, ausência de retorno após follow-up.
+
+### 2. Análise qualitativa por amostragem
+Para cada um dos 10, ler:
+- Primeiras 10 mensagens (qualidade da abertura, mapeamento situacional, tom).
+- 10 mensagens do meio (aderência às fases, perguntas socráticas, reframes, evitação de acolhimento automático).
+- Últimas 10 mensagens (fechamento, geração de compromisso, gancho para próxima sessão, sinal de engajamento ou frustração).
+- Resumos de sessão e insights gravados (qualidade da síntese, alinhamento com o método).
+
+### 3. Avaliação contra as regras de persona
+Cruzar com as memórias-chave do projeto:
+- `padroes-qualidade-terapeutica` — Exploração ≥7 pares antes de reframe; presença antes de técnica.
+- `proportional-reaction-standard` — sem acolhimento automático, reação proporcional.
+- `base-metodologica` — Logoterapia + Estoicismo + Socrático.
+- `surgical-safety-protocol` — detecção e tratamento de ideação.
+- `upgrade-cta-governance` — sem upgrade em crise.
+- `meditation-offering-rules` — não oferecer como fuga.
+- `interpersonal-conflict-protocol` — sem demonizar terceiros.
+- `session-lifecycle-architecture` — abertura/exploração/reframe/fechamento.
+
+### 4. Diagnóstico executivo
+Estrutura final entregue no chat:
+
+```
+## Diagnóstico — 10 últimos assinantes
+
+### Tabela semáforo (1 linha por usuário)
+Nome | Engajamento | Qualidade terapêutica | Aderência método | Risco churn | Observação curta
+
+### Top 5 problemas sistêmicos detectados
+(padrões que aparecem em múltiplos usuários — ex: "0 ratings em 10/10",
+"sessões agendadas mas summary não gravado em X casos", "Aura verbosa demais
+no plano Essencial", etc.)
+
+### Top 3 acertos
+(o que está funcionando bem e deve ser preservado)
+
+### Recomendações priorizadas (3-5 ações)
+Ordem de impacto × esforço, com ação concreta.
 ```
 
-## Fora do escopo (próximos passos depois)
+## Detalhes técnicos da execução
 
-- Decidir se `/blog` deve disparar Pixel Meta (recomendado, mas requer alteração no `GA4RouteTracker` e no setup do Pixel — fazemos numa segunda etapa, depois de confirmar que o Soro está funcionando)
-- Sitemap.xml manual (Soro normalmente cuida disso)
-- Estilização avançada do widget (depende do que o Soro permite via "Light/Dark" no painel deles)
+- Queries SQL em `messages`, `sessions`, `session_themes`, `commitments`, `session_ratings`, `profiles`, `aura_response_state`, `conversation_followups`.
+- Leitura amostrada de `messages` por usuário (não vou copiar tudo no relatório — só citar padrões).
+- Sem mudanças de código nem migrations. Apenas leitura.
+- Sem geração de PDF (entrega é markdown no chat).
 
-## Detalhes técnicos
-
-- **Por que `useEffect` para o script**: em SPAs React, scripts adicionados via JSX dentro de componentes não são executados pelo navegador. A forma correta é criar o elemento `<script>` programaticamente em `useEffect`, anexar ao `document.body` e remover no cleanup.
-- **Estilo visual**: a página `/blog` herda Header/Footer da AURA, então a moldura segue a identidade. O conteúdo dos artigos é renderizado pelo Soro — a estilização interna depende do tema escolhido no painel do Soro (Light/Dark conforme a captura).
-- **Publicação**: após implementar, é necessário **republicar o site** para que `olaaura.com.br/blog` exista. Só então o botão "I've Added the Code" no Soro vai validar com sucesso.
-
-## Passo a passo após eu implementar
-
-1. Eu implemento as mudanças
-2. Você publica o site (botão Publish no Lovable)
-3. Você acessa `olaaura.com.br/blog` e confirma que o widget carrega
-4. No painel do Soro, clica em "I've Added the Code" para validar a conexão
-5. Pronto — o Soro começa a publicar artigos automaticamente
+## Limitações assumidas
+- Análise é amostral nas conversas (10 + 10 + 10 mensagens por usuário) — não 100% das mensagens.
+- "Qualidade terapêutica" é avaliação heurística contra as regras de persona, não validação clínica.
+- 4 dos 10 têm <24h de uso — sinais ainda parciais.
