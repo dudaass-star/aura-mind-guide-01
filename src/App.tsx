@@ -32,6 +32,7 @@ import Episode from "./pages/Episode";
 import JourneyComplete from "./pages/JourneyComplete";
 import Unsubscribe from "./pages/Unsubscribe";
 import UserPortal from "./pages/UserPortal";
+import Blog from "./pages/Blog";
 import NotFound from "./pages/NotFound";
 import GA4RouteTracker from "./components/GA4RouteTracker";
 
@@ -74,6 +75,7 @@ const App = () => (
             <Route path="/jornada-completa/:journeyId/:userId" element={<JourneyComplete />} />
             <Route path="/unsubscribe" element={<Unsubscribe />} />
             <Route path="/meu-espaco" element={<UserPortal />} />
+            <Route path="/blog" element={<Blog />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

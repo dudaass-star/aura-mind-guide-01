@@ -25,6 +25,12 @@ const Header = () => {
             >
               Guia
             </Link>
+            <Link
+              to="/blog"
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium"
+            >
+              Blog
+            </Link>
             <a
               href="#precos"
               className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium"
@@ -63,6 +69,13 @@ const Header = () => {
                 onClick={() => setIsMenuOpen(false)}
               >
                 Guia
+              </Link>
+              <Link
+                to="/blog"
+                className="text-muted-foreground hover:text-foreground transition-colors font-medium"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Blog
               </Link>
               <a
                 href="#precos"
