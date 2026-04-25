@@ -4742,7 +4742,7 @@ REGRA: ${behaviorInstruction}`;
       const crisisActive =
         last_user_context?.user_emotional_state === 'crisis' ||
         last_user_context?.user_emotional_state === 'vulnerable' ||
-        (typeof userMessage === 'string' && (isCrisis(userMessage) || isLifeThreatening(userMessage) || isEmotionalCrisis(userMessage)));
+        (typeof message === 'string' && (isCrisis(message) || isLifeThreatening(message) || isEmotionalCrisis(message)));
 
       // Verificar se já existe reminder pendente (anti-empilhamento)
       let pendingReminderExists = false;
