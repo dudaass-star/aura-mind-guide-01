@@ -3436,6 +3436,109 @@ async function processUpgradeTags(
   return processedContent;
 }
 
+// ============================================================================
+// FECHAMENTO CONDUZIDO COM RETOMADA DATADA
+// ----------------------------------------------------------------------------
+// Decide deterministicamente como a Aura deve fechar uma conversa profunda
+// quando o "menor passo" emergir. Três rotas possíveis:
+//   - session_bridge   : já existe sessão agendada nos próximos 7 dias
+//   - suggest_session  : plano permite sessões e não há sessão agendada
+//   - schedule_reminder: plano sem sessões disponíveis (Essencial)
+//   - none             : conversa curta, crise, sessão ativa, ou cooldown
+// ============================================================================
+type ClosureRoute =
+  | { route: 'none' }
+  | { route: 'session_bridge'; sessionDateLabel: string; sessionTimeLabel: string }
+  | { route: 'suggest_session' }
+  | { route: 'schedule_reminder'; isoDateTime: string; humanLabel: string };
+
+function selectClosureRoute(params: {
+  profile: any;
+  planConfig: { sessions: number };
+  upcomingSessions: any[];
+  messageHistory: Array<{ role: string; content: string }>;
+  sessionActive: boolean;
+  sessionsAvailable: number;
+  pendingReminderExists: boolean;
+  crisisActive: boolean;
+}): ClosureRoute {
+  const {
+    profile, planConfig, upcomingSessions, messageHistory,
+    sessionActive, sessionsAvailable, pendingReminderExists, crisisActive
+  } = params;
+
+  // Bypass total
+  if (sessionActive) return { route: 'none' };
+  if (crisisActive) return { route: 'none' };
+
+  // Janela mínima de 4 trocas (≥4 mensagens do usuário) para evitar fechar ping-pong
+  const userTurns = messageHistory.filter(m => m.role === 'user').length;
+  if (userTurns < 4) return { route: 'none' };
+
+  // Cooldown: já fechou recentemente (últimas 5 msgs da assistente contêm AGENDAR_TAREFA)?
+  const lastAssistant = messageHistory.filter(m => m.role === 'assistant').slice(-5);
+  const recentlyScheduled = lastAssistant.some(m => /\[AGENDAR_TAREFA/i.test(m.content));
+  if (recentlyScheduled) return { route: 'none' };
+
+  // Rota 1: sessão agendada nos próximos 7 dias
+  if (upcomingSessions.length > 0) {
+    const next = upcomingSessions[0];
+    const nextDate = new Date(next.scheduled_at);
+    const hoursAhead = (nextDate.getTime() - Date.now()) / (1000 * 60 * 60);
+    if (hoursAhead > 0 && hoursAhead <= 24 * 7) {
+      const dateLabel = nextDate.toLocaleDateString('pt-BR', {
+        weekday: 'long', day: 'numeric', month: 'long',
+        timeZone: 'America/Sao_Paulo'
+      });
+      const timeLabel = nextDate.toLocaleTimeString('pt-BR', {
+        hour: '2-digit', minute: '2-digit',
+        timeZone: 'America/Sao_Paulo'
+      });
+      return { route: 'session_bridge', sessionDateLabel: dateLabel, sessionTimeLabel: timeLabel };
+    }
+  }
+
+  // Rota 2: plano com sessões disponíveis e sem sessão marcada
+  if (planConfig.sessions > 0 && sessionsAvailable > 0) {
+    return { route: 'suggest_session' };
+  }
+
+  // Rota 3: agendar reminder datado (Essencial ou plano com sessões esgotadas)
+  if (pendingReminderExists) return { route: 'none' };
+
+  // Calcular data/hora 3 dias à frente.
+  // Hora preferida: tenta extrair de preferred_session_time (formato livre),
+  // caso contrário usa 19:00 BRT.
+  const target = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+  let hour = 19;
+  let minute = 0;
+  const pref: string | undefined = profile?.preferred_session_time;
+  if (pref) {
+    const m = pref.match(/(\d{1,2})\s*[:hH]\s*(\d{0,2})/);
+    if (m) {
+      const h = parseInt(m[1], 10);
+      const mm = m[2] ? parseInt(m[2], 10) : 0;
+      if (h >= 6 && h <= 23) { hour = h; minute = isNaN(mm) ? 0 : mm; }
+    }
+  }
+  // Construir Date no fuso BRT (UTC-3) e converter para ISO UTC
+  const yyyy = target.getUTCFullYear();
+  const mm = String(target.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(target.getUTCDate()).padStart(2, '0');
+  const hh = String(hour).padStart(2, '0');
+  const mi = String(minute).padStart(2, '0');
+  // Data local BRT, depois +3h para virar UTC
+  const localBrtIso = `${yyyy}-${mm}-${dd}T${hh}:${mi}:00-03:00`;
+  const utcIso = new Date(localBrtIso).toISOString();
+  // Formato esperado pelo parser de [AGENDAR_TAREFA]: "YYYY-MM-DD HH:MM" (assumido BRT)
+  const taskFormat = `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
+  const humanLabel = new Date(localBrtIso).toLocaleDateString('pt-BR', {
+    weekday: 'long', day: 'numeric', month: 'long',
+    timeZone: 'America/Sao_Paulo'
+  }) + ` às ${hh}:${mi}`;
+  return { route: 'schedule_reminder', isoDateTime: taskFormat, humanLabel };
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
