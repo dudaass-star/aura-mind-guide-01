@@ -54,10 +54,10 @@ async function gatherContext(supabase: any, userId: string): Promise<{
       .limit(8),
     supabase
       .from('user_insights')
-      .select('content')
+      .select('value')
       .eq('user_id', userId)
       .gte('created_at', thirtyDaysAgo)
-      .order('priority', { ascending: false })
+      .order('importance', { ascending: false })
       .limit(10),
     supabase
       .from('session_themes')
@@ -76,7 +76,7 @@ async function gatherContext(supabase: any, userId: string): Promise<{
 
   return {
     milestones: (milestonesRes.data || []).map((m: any) => m.milestone_text).filter(Boolean),
-    insights: (insightsRes.data || []).map((i: any) => i.content).filter(Boolean),
+    insights: (insightsRes.data || []).map((i: any) => i.value).filter(Boolean),
     themes: (themesRes.data || []).map((t: any) => t.theme_name).filter(Boolean),
     sessions_count: sessionsRes.count || 0,
   };
