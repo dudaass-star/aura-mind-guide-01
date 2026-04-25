@@ -290,12 +290,29 @@ serve(async (req) => {
       sessionConfig.payment_method_options = {
         card: {
           request_three_d_secure: 'automatic',
+          // === REFORÇO MIT #1: mandate_options ===
+          // Declara formalmente ao banco emissor (via bandeira) que este cartão
+          // terá cobranças recorrentes esporádicas até R$ 600. Isso pré-autoriza
+          // o mandato no nível de rede, reduzindo do_not_honor em renovações.
+          mandate_options: {
+            reference: `aura-${customerId}-${Date.now()}`,
+            amount_type: 'maximum',
+            amount: 60000, // R$ 600 (cobre maior plano anual: Transformação 574,90)
+            currency: 'brl',
+            interval: 'sporadic',
+            supported_types: ['india'], // exigido pelo schema; ignorado fora da Índia
+            description: 'Assinatura AURA — cobrança recorrente conforme plano escolhido.',
+          },
         },
       };
       // Flag-chave: estabelece mandato MIT desde a 1ª autorização.
       // O PaymentMethod salvo aqui poderá ser cobrado off_session pela Subscription criada no webhook.
       sessionConfig.payment_intent_data = {
         setup_future_usage: 'off_session',
+        // === REFORÇO MIT #2: statement_descriptor_suffix ===
+        // Padrão estável "AURA*" na fatura é sinal forte de legitimidade
+        // pros algoritmos antifraude dos bancos BR (Itaú, Bradesco, Nubank).
+        statement_descriptor_suffix: 'SEMANAL',
         description: `AURA ${planDisplayName} — Plano Semanal (7 dias), depois R$ ${displayPrice}/${periodLabel}.`,
         metadata: {
           phone: phoneClean,
@@ -305,6 +322,7 @@ serve(async (req) => {
           billing: billingPeriod,
           trial: "true",
           cit_mit_reinforced: "true",
+          mandate_reference: `aura-${customerId}`,
           ...(gaClientId && { ga_client_id: gaClientId }),
         },
       };

@@ -304,6 +304,12 @@ Deno.serve(async (req) => {
             payment_behavior: 'allow_incomplete',
             off_session: true,
             ...(defaultPm && { default_payment_method: defaultPm }),
+            // Garante que toda invoice da Subscription usa cartão e salva o PM como default
+            payment_settings: {
+              payment_method_types: ['card'],
+              save_default_payment_method: 'on_subscription',
+            },
+            description: `AURA ${PLAN_NAMES[customerPlan] || customerPlan} — Assinatura ${customerBilling === 'yearly' ? 'anual' : 'mensal'}`,
             metadata: {
               phone: cleanPhone,
               name: customerName,
@@ -312,9 +318,9 @@ Deno.serve(async (req) => {
               billing: customerBilling,
               trial: "true",
               cit_mit_reinforced: session.metadata?.cit_mit_reinforced === 'true' ? 'true' : 'false',
+              mandate_reference: `aura-${customerId}`,
               ...(networkTxnId && { source_network_txn_id: networkTxnId }),
             },
-            description: "7 dias de acesso incluídos — a primeira cobrança será no 8º dia.",
           });
           console.log('✅ Trial subscription created:', subscription.id, {
             defaultPm,
@@ -335,6 +341,10 @@ Deno.serve(async (req) => {
             try {
               await stripe.customers.update(customerId, {
                 invoice_settings: { default_payment_method: defaultPm },
+                metadata: {
+                  aura_mandate_active: 'true',
+                  aura_mandate_reference: `aura-${customerId}`,
+                },
               });
               console.log('✅ Customer invoice_settings.default_payment_method updated');
             } catch (custErr: any) {
