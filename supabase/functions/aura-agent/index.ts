@@ -75,6 +75,7 @@ function stripAllInternalTags(text: string): string {
     .replace(/\[UPGRADE:[^\]]+\]/gi, '')
     .replace(/\[INSIGHT:[^\]]+\]/gi, '')
     .replace(/\[CRIAR_AGENDA:[^\]]+\]/gi, '')
+    .replace(/\[MARCO:[^\]]+\]/gi, '')
     // Catch-all: qualquer tag [ALGO] ou [ALGO:valor] remanescente
     // (segurança para tags futuras esquecidas)
     .replace(/\[[A-Z_]{3,}(?::[^\]]+)?\]/g, '')
