@@ -6397,9 +6397,18 @@ Só DEPOIS de saber a situação, explore as emoções com profundidade.`;
         if (recentlyMarked) {
           console.log('⏸️ MARCO ignorado (cooldown: marco recente nas últimas 7 mensagens)');
         } else if (marcoText.length >= 10) {
-          // Pegar trecho da última mensagem do usuário como context_excerpt
-          const lastUserMsg = chatMessages?.slice().reverse().find((m: any) => m.role === 'user')?.content || '';
-          const contextExcerpt = String(lastUserMsg).substring(0, 500) || null;
+          // Pegar trecho da última mensagem do usuário como context_excerpt (do DB)
+          const { data: lastUserMsgRow } = await sbAdminM
+            .from('messages')
+            .select('content')
+            .eq('user_id', profile.user_id)
+            .eq('role', 'user')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          const contextExcerpt = lastUserMsgRow?.content
+            ? String(lastUserMsgRow.content).substring(0, 500)
+            : null;
 
           const { error: marcoErr } = await sbAdminM
             .from('user_milestones')
