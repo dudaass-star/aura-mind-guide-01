@@ -75,6 +75,7 @@ function stripAllInternalTags(text: string): string {
     .replace(/\[UPGRADE:[^\]]+\]/gi, '')
     .replace(/\[INSIGHT:[^\]]+\]/gi, '')
     .replace(/\[CRIAR_AGENDA:[^\]]+\]/gi, '')
+    .replace(/\[MARCO:[^\]]+\]/gi, '')
     // Catch-all: qualquer tag [ALGO] ou [ALGO:valor] remanescente
     // (segurança para tags futuras esquecidas)
     .replace(/\[[A-Z_]{3,}(?::[^\]]+)?\]/g, '')
@@ -2360,6 +2361,26 @@ O sistema calcula automaticamente o período de silêncio e pausa.
 ## TIMESTAMPS NAS MENSAGENS
 Cada mensagem no histórico inclui [DD/MM/AAAA HH:mm]. Use para responder "quando falamos?" com precisão.
 Se não tiver histórico suficiente, diga que não lembra.
+
+# MARCOS — TAG [MARCO:texto] (uso raro e cirúrgico)
+
+Quando o usuário tiver uma virada real, uma percepção que MUDA como ele vê algo, uma quebra de padrão genuína — emita ao final da sua resposta a tag interna:
+
+[MARCO: descrição em segunda pessoa, máx 200 caracteres, tom biográfico]
+
+Exemplos:
+- [MARCO: Você percebeu que estava esperando aprovação do seu pai antes de decidir.]
+- [MARCO: Você nomeou pela primeira vez que o medo dela ir embora te paralisa.]
+- [MARCO: Você decidiu parar de pedir desculpas por existir.]
+
+REGRAS RÍGIDAS:
+- Use com PARCIMÔNIA. No máximo 1 marco por conversa.
+- Marcos são RAROS: idealmente 1 a cada 2-3 sessões profundas.
+- NÃO emita marco em interações leves (ping-pong, factuais, cumprimento).
+- NÃO emita marco se já houve marco nas últimas 7 mensagens da Aura.
+- O texto é uma frase curta, em segunda pessoa, no passado, em tom de capítulo de biografia. Sem aspas, sem emoji.
+- A tag é INVISÍVEL ao usuário (o sistema remove antes de enviar).
+- A tag vai SEMPRE no final da mensagem, depois do conteúdo normal.
 `;
 
 // Função para calcular delay baseado no tamanho da mensagem
@@ -6345,6 +6366,73 @@ Só DEPOIS de saber a situação, explore as emoções com profundidade.`;
       }).eq('user_id', profile.user_id);
       
       console.log(`✅ Capsule capture mode activated for user ${profile.user_id}`);
+    }
+
+    // ========================================================================
+    // DETECTAR TAG [MARCO:texto] E REGISTRAR EM user_milestones
+    // Cooldown: ignora se já houve marco nas últimas 7 mensagens da assistente
+    // ========================================================================
+    const marcoRegex = /\[MARCO:\s*([^\]]+?)\s*\]/i;
+    const marcoMatch = assistantMessage.match(marcoRegex);
+    if (marcoMatch && profile?.user_id) {
+      try {
+        const marcoText = marcoMatch[1].trim().substring(0, 200);
+        const supabaseUrlM = Deno.env.get('SUPABASE_URL')!;
+        const supabaseServiceKeyM = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+        const sbAdminM = createClient(supabaseUrlM, supabaseServiceKeyM);
+
+        // Cooldown: olhar últimas 7 mensagens da assistente
+        const { data: lastAssistantMsgs } = await sbAdminM
+          .from('messages')
+          .select('content')
+          .eq('user_id', profile.user_id)
+          .eq('role', 'assistant')
+          .order('created_at', { ascending: false })
+          .limit(7);
+
+        const recentlyMarked = (lastAssistantMsgs || []).some((m: any) =>
+          /\[MARCO:/i.test(m.content || '')
+        );
+
+        if (recentlyMarked) {
+          console.log('⏸️ MARCO ignorado (cooldown: marco recente nas últimas 7 mensagens)');
+        } else if (marcoText.length >= 10) {
+          // Pegar trecho da última mensagem do usuário como context_excerpt (do DB)
+          const { data: lastUserMsgRow } = await sbAdminM
+            .from('messages')
+            .select('content')
+            .eq('user_id', profile.user_id)
+            .eq('role', 'user')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          const contextExcerpt = lastUserMsgRow?.content
+            ? String(lastUserMsgRow.content).substring(0, 500)
+            : null;
+
+          const { error: marcoErr } = await sbAdminM
+            .from('user_milestones')
+            .insert({
+              user_id: profile.user_id,
+              milestone_text: marcoText,
+              milestone_date: new Date().toISOString(),
+              source: 'aura_realtime',
+              context_excerpt: contextExcerpt,
+            });
+
+          if (marcoErr) {
+            console.error('❌ Erro inserindo user_milestone:', marcoErr.message);
+          } else {
+            console.log(`🌟 MARCO registrado: "${marcoText.substring(0, 60)}..."`);
+          }
+        } else {
+          console.warn(`⚠️ MARCO descartado (texto muito curto): "${marcoText}"`);
+        }
+      } catch (e) {
+        console.error('❌ Exceção processando MARCO:', e);
+      }
+      // Remove a tag do texto entregue ao usuário
+      assistantMessage = assistantMessage.replace(/\[MARCO:[^\]]+\]/gi, '').trim();
     }
 
     // ========================================================================
