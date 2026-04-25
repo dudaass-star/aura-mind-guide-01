@@ -886,6 +886,36 @@ export type Database = {
           },
         ]
       }
+      monthly_letters: {
+        Row: {
+          created_at: string
+          id: string
+          letter_month: string
+          letter_text: string
+          preview_text: string
+          sent_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          letter_month: string
+          letter_text: string
+          preview_text: string
+          sent_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          letter_month?: string
+          letter_text?: string
+          preview_text?: string
+          sent_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       monthly_reports: {
         Row: {
           analysis_text: string | null
@@ -1955,6 +1985,36 @@ export type Database = {
           },
         ]
       }
+      user_milestones: {
+        Row: {
+          context_excerpt: string | null
+          created_at: string
+          id: string
+          milestone_date: string
+          milestone_text: string
+          source: string
+          user_id: string
+        }
+        Insert: {
+          context_excerpt?: string | null
+          created_at?: string
+          id?: string
+          milestone_date?: string
+          milestone_text: string
+          source?: string
+          user_id: string
+        }
+        Update: {
+          context_excerpt?: string | null
+          created_at?: string
+          id?: string
+          milestone_date?: string
+          milestone_text?: string
+          source?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_portal_tokens: {
         Row: {
           created_at: string
@@ -2034,6 +2094,39 @@ export type Database = {
             referencedColumns: ["user_id"]
           },
         ]
+      }
+      weekly_questions: {
+        Row: {
+          created_at: string
+          id: string
+          question_date: string
+          question_text: string
+          responded_at: string | null
+          response_text: string | null
+          sent_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          question_date: string
+          question_text: string
+          responded_at?: string | null
+          response_text?: string | null
+          sent_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          question_date?: string
+          question_text?: string
+          responded_at?: string | null
+          response_text?: string | null
+          sent_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
       }
       whatsapp_instances: {
         Row: {
