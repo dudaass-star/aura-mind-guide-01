@@ -362,12 +362,90 @@ Deno.serve(async (req) => {
 
     // ========================================================================
     // CAPTURA DE RESPOSTA DA PERGUNTA DA SEMANA
-    // Se há weekly_questions enviada nos últimos 3 dias e ainda sem resposta,
-    // marcar esta mensagem como resposta. Fire-and-forget — não bloqueia fluxo.
+    // ENTREGA CONTEXTUAL: padrão da casa (igual weekly_report/content).
+    // Quando o usuário responde ao template gatilho 'cheking_7dias' e abre a
+    // janela 24h, o conteúdo rico (Pergunta da Semana / Carta Mensal) é
+    // entregue como texto livre ANTES do fluxo normal da Aura processar a msg.
+    // Idempotente via delivered_at IS NULL.
+    // Captura de resposta da pergunta segue após (linka resposta -> pergunta).
     // ========================================================================
     if (messageText && messageText.trim().length > 0) {
       (async () => {
         try {
+          // 1) ENTREGA pendente da Pergunta da Semana (se houver)
+          const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+          const { data: pendingQuestionDelivery } = await supabase
+            .from('weekly_questions')
+            .select('id, question_text')
+            .eq('user_id', profile.user_id)
+            .is('delivered_at', null)
+            .gte('sent_at', sevenDaysAgo)
+            .order('sent_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (pendingQuestionDelivery?.id && pendingQuestionDelivery.question_text) {
+            // Marca ANTES de enviar (evita double-send em concorrência)
+            const { data: claimed } = await supabase
+              .from('weekly_questions')
+              .update({ delivered_at: new Date().toISOString() })
+              .eq('id', pendingQuestionDelivery.id)
+              .is('delivered_at', null)
+              .select('id')
+              .maybeSingle();
+
+            if (claimed) {
+              const sendResult = await sendMessage(cleanPhone, pendingQuestionDelivery.question_text, profile.user_id);
+              if (!sendResult.success) {
+                // Reverte para tentar de novo na próxima interação
+                await supabase
+                  .from('weekly_questions')
+                  .update({ delivered_at: null })
+                  .eq('id', pendingQuestionDelivery.id);
+                console.warn(`⚠️ Falha entrega Pergunta da Semana (${pendingQuestionDelivery.id}): ${sendResult.error}`);
+              } else {
+                console.log(`💌 Pergunta da Semana entregue na janela aberta (id=${pendingQuestionDelivery.id})`);
+              }
+            }
+          }
+
+          // 2) ENTREGA pendente da Carta Mensal (se houver)
+          const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+          const { data: pendingLetter } = await supabase
+            .from('monthly_letters')
+            .select('id, preview_text, letter_text')
+            .eq('user_id', profile.user_id)
+            .is('delivered_at', null)
+            .not('trigger_sent_at', 'is', null)
+            .gte('trigger_sent_at', thirtyDaysAgo)
+            .order('trigger_sent_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (pendingLetter?.id && pendingLetter.preview_text) {
+            const { data: claimedLetter } = await supabase
+              .from('monthly_letters')
+              .update({ delivered_at: new Date().toISOString() })
+              .eq('id', pendingLetter.id)
+              .is('delivered_at', null)
+              .select('id')
+              .maybeSingle();
+
+            if (claimedLetter) {
+              const sendResult = await sendMessage(cleanPhone, pendingLetter.preview_text, profile.user_id);
+              if (!sendResult.success) {
+                await supabase
+                  .from('monthly_letters')
+                  .update({ delivered_at: null })
+                  .eq('id', pendingLetter.id);
+                console.warn(`⚠️ Falha entrega Carta Mensal (${pendingLetter.id}): ${sendResult.error}`);
+              } else {
+                console.log(`💌 Preview da Carta Mensal entregue na janela aberta (id=${pendingLetter.id})`);
+              }
+            }
+          }
+
+          // 3) CAPTURA de resposta da Pergunta (mantém comportamento existente)
           const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
           const { data: pendingQuestion } = await supabase
             .from('weekly_questions')
@@ -390,7 +468,7 @@ Deno.serve(async (req) => {
             console.log(`💌 Resposta da Pergunta da Semana capturada (id=${pendingQuestion.id})`);
           }
         } catch (e) {
-          console.warn('⚠️ Erro capturando resposta da Pergunta da Semana:', e);
+          console.warn('⚠️ Erro no fluxo de entrega/captura Pergunta/Carta:', e);
         }
       })();
     }
