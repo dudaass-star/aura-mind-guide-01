@@ -889,29 +889,35 @@ export type Database = {
       monthly_letters: {
         Row: {
           created_at: string
+          delivered_at: string | null
           id: string
           letter_month: string
           letter_text: string
           preview_text: string
           sent_at: string | null
+          trigger_sent_at: string | null
           user_id: string
         }
         Insert: {
           created_at?: string
+          delivered_at?: string | null
           id?: string
           letter_month: string
           letter_text: string
           preview_text: string
           sent_at?: string | null
+          trigger_sent_at?: string | null
           user_id: string
         }
         Update: {
           created_at?: string
+          delivered_at?: string | null
           id?: string
           letter_month?: string
           letter_text?: string
           preview_text?: string
           sent_at?: string | null
+          trigger_sent_at?: string | null
           user_id?: string
         }
         Relationships: []
@@ -2098,6 +2104,7 @@ export type Database = {
       weekly_questions: {
         Row: {
           created_at: string
+          delivered_at: string | null
           id: string
           question_date: string
           question_text: string
@@ -2108,6 +2115,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          delivered_at?: string | null
           id?: string
           question_date: string
           question_text: string
@@ -2118,6 +2126,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          delivered_at?: string | null
           id?: string
           question_date?: string
           question_text?: string
