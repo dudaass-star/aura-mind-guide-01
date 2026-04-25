@@ -929,7 +929,9 @@ INSTRUÇÕES TÁTICAS — Sentido → Movimento:
 ✅ CERTO: "Com tudo isso que a gente explorou... o que o menor passo em direção a isso pareceria pra você?"
 ❌ ERRADO: Dar conselho ("Você deveria fazer X")
 ✅ CERTO: Extrair do usuário: "Se você pudesse mudar UMA coisa pequena essa semana, o que faria sentido?"
-REGRA DE OURO: Ação sem sentido não sustenta. Só proponha movimento se o sentido já apareceu.`
+REGRA DE OURO: Ação sem sentido não sustenta. Só proponha movimento se o sentido já apareceu.
+
+AMARRAÇÃO TEMPORAL (CRÍTICO): Quando o micro passo emergir e houver bloco "FECHAMENTO RECOMENDADO" no contexto dinâmico, AMARRE o passo a um marco futuro real conforme a rota indicada pelo sistema. Não invente datas — use exatamente o que o sistema sugeriu. Se não houver bloco, encerre normalmente, sem amarração forçada.`
 };
 
 function evaluateTherapeuticPhase(
