@@ -929,7 +929,9 @@ INSTRUÇÕES TÁTICAS — Sentido → Movimento:
 ✅ CERTO: "Com tudo isso que a gente explorou... o que o menor passo em direção a isso pareceria pra você?"
 ❌ ERRADO: Dar conselho ("Você deveria fazer X")
 ✅ CERTO: Extrair do usuário: "Se você pudesse mudar UMA coisa pequena essa semana, o que faria sentido?"
-REGRA DE OURO: Ação sem sentido não sustenta. Só proponha movimento se o sentido já apareceu.`
+REGRA DE OURO: Ação sem sentido não sustenta. Só proponha movimento se o sentido já apareceu.
+
+AMARRAÇÃO TEMPORAL (CRÍTICO): Quando o micro passo emergir e houver bloco "FECHAMENTO RECOMENDADO" no contexto dinâmico, AMARRE o passo a um marco futuro real conforme a rota indicada pelo sistema. Não invente datas — use exatamente o que o sistema sugeriu. Se não houver bloco, encerre normalmente, sem amarração forçada.`
 };
 
 function evaluateTherapeuticPhase(
@@ -2116,6 +2118,7 @@ o movimento deve nascer da própria pessoa, não da AURA.
 
 REGRA DE OURO: Se você chegou na Fase 3 sem passar pela Fase 2, volte.
 Ação sem sentido não sustenta.
+Movimento sem retomada vira esquecimento. Quando o sistema indicar uma rota de retomada (sessão futura ou reminder agendado), feche conectando o micro passo a esse marco — nunca deixe o passo solto no ar.
 
 ## MODO DIREÇÃO (travado, em loop, sem ação)
 Sinais: "não sei o que fazer", "tô travado", "não consigo", 3ª+ msg sobre o mesmo problema sem movimento.
@@ -3433,6 +3436,109 @@ async function processUpgradeTags(
   return processedContent;
 }
 
+// ============================================================================
+// FECHAMENTO CONDUZIDO COM RETOMADA DATADA
+// ----------------------------------------------------------------------------
+// Decide deterministicamente como a Aura deve fechar uma conversa profunda
+// quando o "menor passo" emergir. Três rotas possíveis:
+//   - session_bridge   : já existe sessão agendada nos próximos 7 dias
+//   - suggest_session  : plano permite sessões e não há sessão agendada
+//   - schedule_reminder: plano sem sessões disponíveis (Essencial)
+//   - none             : conversa curta, crise, sessão ativa, ou cooldown
+// ============================================================================
+type ClosureRoute =
+  | { route: 'none' }
+  | { route: 'session_bridge'; sessionDateLabel: string; sessionTimeLabel: string }
+  | { route: 'suggest_session' }
+  | { route: 'schedule_reminder'; isoDateTime: string; humanLabel: string };
+
+function selectClosureRoute(params: {
+  profile: any;
+  planConfig: { sessions: number };
+  upcomingSessions: any[];
+  messageHistory: Array<{ role: string; content: string }>;
+  sessionActive: boolean;
+  sessionsAvailable: number;
+  pendingReminderExists: boolean;
+  crisisActive: boolean;
+}): ClosureRoute {
+  const {
+    profile, planConfig, upcomingSessions, messageHistory,
+    sessionActive, sessionsAvailable, pendingReminderExists, crisisActive
+  } = params;
+
+  // Bypass total
+  if (sessionActive) return { route: 'none' };
+  if (crisisActive) return { route: 'none' };
+
+  // Janela mínima de 4 trocas (≥4 mensagens do usuário) para evitar fechar ping-pong
+  const userTurns = messageHistory.filter(m => m.role === 'user').length;
+  if (userTurns < 4) return { route: 'none' };
+
+  // Cooldown: já fechou recentemente (últimas 5 msgs da assistente contêm AGENDAR_TAREFA)?
+  const lastAssistant = messageHistory.filter(m => m.role === 'assistant').slice(-5);
+  const recentlyScheduled = lastAssistant.some(m => /\[AGENDAR_TAREFA/i.test(m.content));
+  if (recentlyScheduled) return { route: 'none' };
+
+  // Rota 1: sessão agendada nos próximos 7 dias
+  if (upcomingSessions.length > 0) {
+    const next = upcomingSessions[0];
+    const nextDate = new Date(next.scheduled_at);
+    const hoursAhead = (nextDate.getTime() - Date.now()) / (1000 * 60 * 60);
+    if (hoursAhead > 0 && hoursAhead <= 24 * 7) {
+      const dateLabel = nextDate.toLocaleDateString('pt-BR', {
+        weekday: 'long', day: 'numeric', month: 'long',
+        timeZone: 'America/Sao_Paulo'
+      });
+      const timeLabel = nextDate.toLocaleTimeString('pt-BR', {
+        hour: '2-digit', minute: '2-digit',
+        timeZone: 'America/Sao_Paulo'
+      });
+      return { route: 'session_bridge', sessionDateLabel: dateLabel, sessionTimeLabel: timeLabel };
+    }
+  }
+
+  // Rota 2: plano com sessões disponíveis e sem sessão marcada
+  if (planConfig.sessions > 0 && sessionsAvailable > 0) {
+    return { route: 'suggest_session' };
+  }
+
+  // Rota 3: agendar reminder datado (Essencial ou plano com sessões esgotadas)
+  if (pendingReminderExists) return { route: 'none' };
+
+  // Calcular data/hora 3 dias à frente.
+  // Hora preferida: tenta extrair de preferred_session_time (formato livre),
+  // caso contrário usa 19:00 BRT.
+  const target = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+  let hour = 19;
+  let minute = 0;
+  const pref: string | undefined = profile?.preferred_session_time;
+  if (pref) {
+    const m = pref.match(/(\d{1,2})\s*[:hH]\s*(\d{0,2})/);
+    if (m) {
+      const h = parseInt(m[1], 10);
+      const mm = m[2] ? parseInt(m[2], 10) : 0;
+      if (h >= 6 && h <= 23) { hour = h; minute = isNaN(mm) ? 0 : mm; }
+    }
+  }
+  // Construir Date no fuso BRT (UTC-3) e converter para ISO UTC
+  const yyyy = target.getUTCFullYear();
+  const mm = String(target.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(target.getUTCDate()).padStart(2, '0');
+  const hh = String(hour).padStart(2, '0');
+  const mi = String(minute).padStart(2, '0');
+  // Data local BRT, depois +3h para virar UTC
+  const localBrtIso = `${yyyy}-${mm}-${dd}T${hh}:${mi}:00-03:00`;
+  const utcIso = new Date(localBrtIso).toISOString();
+  // Formato esperado pelo parser de [AGENDAR_TAREFA]: "YYYY-MM-DD HH:MM" (assumido BRT)
+  const taskFormat = `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
+  const humanLabel = new Date(localBrtIso).toLocaleDateString('pt-BR', {
+    weekday: 'long', day: 'numeric', month: 'long',
+    timeZone: 'America/Sao_Paulo'
+  }) + ` às ${hh}:${mi}`;
+  return { route: 'schedule_reminder', isoDateTime: taskFormat, humanLabel };
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -4626,6 +4732,64 @@ REGRA: ${behaviorInstruction}`;
 
       dynamicContext += agendaBlock;
       console.log(`📅 Agenda context injected: ${upcomingSessions.length} upcoming sessions, next in ${hoursUntilNext.toFixed(1)}h`);
+    }
+
+    // ========================================================================
+    // FECHAMENTO RECOMENDADO - Amarração temporal do micro passo (Fase 3)
+    // ========================================================================
+    try {
+      // Detectar crise/segurança a partir do contexto do micro-agente
+      const crisisActive =
+        last_user_context?.user_emotional_state === 'crisis' ||
+        last_user_context?.user_emotional_state === 'vulnerable' ||
+        (typeof message === 'string' && (isCrisis(message) || isLifeThreatening(message) || isEmotionalCrisis(message)));
+
+      // Verificar se já existe reminder pendente (anti-empilhamento)
+      let pendingReminderExists = false;
+      if (profile?.user_id) {
+        const { count } = await supabase
+          .from('scheduled_tasks')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', profile.user_id)
+          .eq('task_type', 'reminder')
+          .eq('status', 'pending')
+          .gt('execute_at', new Date().toISOString());
+        pendingReminderExists = (count || 0) > 0;
+      }
+
+      const closure = selectClosureRoute({
+        profile,
+        planConfig: { sessions: planConfig.sessions },
+        upcomingSessions,
+        messageHistory,
+        sessionActive,
+        sessionsAvailable,
+        pendingReminderExists,
+        crisisActive,
+      });
+
+      if (closure.route !== 'none') {
+        let closureBlock = `\n\n🔚 FECHAMENTO RECOMENDADO (use APENAS quando o micro passo da Fase 3 emergir):`;
+        if (closure.route === 'session_bridge') {
+          closureBlock += `\nRota: BRIDGE_PARA_SESSAO`;
+          closureBlock += `\nProxima sessao: ${closure.sessionDateLabel} as ${closure.sessionTimeLabel}`;
+          closureBlock += `\nQuando o usuario combinar o micro passo, AMARRE-O verbalmente a essa sessao. Exemplo: "Faz isso ate ${closure.sessionDateLabel} e a gente abre na nossa sessao." NAO emita [AGENDAR_TAREFA] nessa rota.`;
+        } else if (closure.route === 'suggest_session') {
+          closureBlock += `\nRota: SUGERIR_SESSAO`;
+          closureBlock += `\nO usuario tem sessoes disponiveis no plano e nao agendou nenhuma. Quando o micro passo emergir, convide-o a marcar uma sessao para aprofundar. Exemplo: "Esse fio merece tempo dedicado. Bora marcar uma sessao essa semana pra ir mais fundo?" NAO emita [AGENDAR_TAREFA] nessa rota.`;
+        } else if (closure.route === 'schedule_reminder') {
+          closureBlock += `\nRota: AGENDAR_RETOMADA`;
+          closureBlock += `\nData/hora sugerida: ${closure.humanLabel}`;
+          closureBlock += `\nQuando o usuario combinar o micro passo, AMARRE-O a essa data verbalmente E emita no final da sua resposta:`;
+          closureBlock += `\n[AGENDAR_TAREFA:${closure.isoDateTime}:reminder:Oi! Vim ver como foi com {descreva aqui o micro passo combinado}. Conseguiu?]`;
+          closureBlock += `\nUse o conteudo real do micro passo no lugar de {descreva...}. NAO escolha outra data — use exatamente a sugerida.`;
+        }
+        closureBlock += `\nIMPORTANTE: Se o micro passo NAO emergir nessa resposta (porque a conversa ainda esta em Presenca/Sentido), IGNORE este bloco e nao force fechamento.`;
+        dynamicContext += closureBlock;
+        console.log(`🔚 Closure route injected: ${closure.route}`);
+      }
+    } catch (e) {
+      console.error('🔚 Erro em selectClosureRoute (ignorado):', e);
     }
 
     // ========================================================================
