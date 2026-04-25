@@ -4,14 +4,18 @@
 // CRON: toda terça às 9h BRT (12h UTC).
 // Para cada usuário ativo (status active|trial), gera UMA pergunta provocativa
 // contextual via Lovable AI Gateway (gemini-2.5-flash), persiste em
-// public.weekly_questions e envia via WhatsApp (sendProactive).
+// public.weekly_questions e dispara o template gatilho 'cheking_7dias' via
+// sendTemplateOnly (sempre via template — padrão da casa).
+//
+// A PERGUNTA em si é entregue pelo process-webhook-message quando o usuário
+// responder ao template e abrir a janela de 24h (campo delivered_at).
 //
 // Idempotência: skip se já existe weekly_questions(user_id, question_date=hoje).
 // Respeita do_not_disturb_until.
 // ============================================================================
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { sendProactive } from "../_shared/whatsapp-provider.ts";
+import { sendTemplateOnly } from "../_shared/whatsapp-official.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -263,14 +267,15 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // Enviar via WhatsApp
-      const result = await sendProactive(user.phone, question, 'checkin', user.user_id);
+      // Disparar SEMPRE o template gatilho 'cheking_7dias' (categoria 'checkin').
+      // A pergunta gerada será entregue pelo webhook quando o usuário responder.
+      const result = await sendTemplateOnly(user.phone, 'checkin', user.user_id);
       if (!result.success) {
-        console.error(`❌ sendProactive failed for ${user.user_id}: ${result.error}`);
+        console.error(`❌ sendTemplateOnly failed for ${user.user_id}: ${result.error}`);
         failed++;
       } else {
         sent++;
-        console.log(`✅ Pergunta enviada para ${user.phone.substring(0, 4)}***`);
+        console.log(`✅ Template gatilho enviado para ${user.phone.substring(0, 4)}*** (pergunta aguardando entrega na janela)`);
       }
 
       // Anti-burst
