@@ -360,6 +360,41 @@ Deno.serve(async (req) => {
     // ========================================================================
     const currentMessageId = messageId || `msg_${Date.now()}`;
 
+    // ========================================================================
+    // CAPTURA DE RESPOSTA DA PERGUNTA DA SEMANA
+    // Se há weekly_questions enviada nos últimos 3 dias e ainda sem resposta,
+    // marcar esta mensagem como resposta. Fire-and-forget — não bloqueia fluxo.
+    // ========================================================================
+    if (messageText && messageText.trim().length > 0) {
+      (async () => {
+        try {
+          const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+          const { data: pendingQuestion } = await supabase
+            .from('weekly_questions')
+            .select('id')
+            .eq('user_id', profile.user_id)
+            .is('response_text', null)
+            .gte('sent_at', threeDaysAgo)
+            .order('sent_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (pendingQuestion?.id) {
+            await supabase
+              .from('weekly_questions')
+              .update({
+                response_text: messageText.substring(0, 4000),
+                responded_at: new Date().toISOString(),
+              })
+              .eq('id', pendingQuestion.id);
+            console.log(`💌 Resposta da Pergunta da Semana capturada (id=${pendingQuestion.id})`);
+          }
+        } catch (e) {
+          console.warn('⚠️ Erro capturando resposta da Pergunta da Semana:', e);
+        }
+      })();
+    }
+
     // Ensure row exists for atomic lock
     const { error: upsertError } = await supabase
       .from('aura_response_state')
