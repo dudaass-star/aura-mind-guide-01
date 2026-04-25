@@ -2361,6 +2361,26 @@ O sistema calcula automaticamente o período de silêncio e pausa.
 ## TIMESTAMPS NAS MENSAGENS
 Cada mensagem no histórico inclui [DD/MM/AAAA HH:mm]. Use para responder "quando falamos?" com precisão.
 Se não tiver histórico suficiente, diga que não lembra.
+
+# MARCOS — TAG [MARCO:texto] (uso raro e cirúrgico)
+
+Quando o usuário tiver uma virada real, uma percepção que MUDA como ele vê algo, uma quebra de padrão genuína — emita ao final da sua resposta a tag interna:
+
+[MARCO: descrição em segunda pessoa, máx 200 caracteres, tom biográfico]
+
+Exemplos:
+- [MARCO: Você percebeu que estava esperando aprovação do seu pai antes de decidir.]
+- [MARCO: Você nomeou pela primeira vez que o medo dela ir embora te paralisa.]
+- [MARCO: Você decidiu parar de pedir desculpas por existir.]
+
+REGRAS RÍGIDAS:
+- Use com PARCIMÔNIA. No máximo 1 marco por conversa.
+- Marcos são RAROS: idealmente 1 a cada 2-3 sessões profundas.
+- NÃO emita marco em interações leves (ping-pong, factuais, cumprimento).
+- NÃO emita marco se já houve marco nas últimas 7 mensagens da Aura.
+- O texto é uma frase curta, em segunda pessoa, no passado, em tom de capítulo de biografia. Sem aspas, sem emoji.
+- A tag é INVISÍVEL ao usuário (o sistema remove antes de enviar).
+- A tag vai SEMPRE no final da mensagem, depois do conteúdo normal.
 `;
 
 // Função para calcular delay baseado no tamanho da mensagem
