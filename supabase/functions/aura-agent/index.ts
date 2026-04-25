@@ -4735,6 +4735,64 @@ REGRA: ${behaviorInstruction}`;
     }
 
     // ========================================================================
+    // FECHAMENTO RECOMENDADO - Amarração temporal do micro passo (Fase 3)
+    // ========================================================================
+    try {
+      // Detectar crise/segurança a partir do contexto do micro-agente
+      const crisisActive =
+        last_user_context?.user_emotional_state === 'crisis' ||
+        last_user_context?.user_emotional_state === 'vulnerable' ||
+        (typeof userMessage === 'string' && (isCrisis(userMessage) || isLifeThreatening(userMessage) || isEmotionalCrisis(userMessage)));
+
+      // Verificar se já existe reminder pendente (anti-empilhamento)
+      let pendingReminderExists = false;
+      if (profile?.user_id) {
+        const { count } = await supabase
+          .from('scheduled_tasks')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', profile.user_id)
+          .eq('task_type', 'reminder')
+          .eq('status', 'pending')
+          .gt('execute_at', new Date().toISOString());
+        pendingReminderExists = (count || 0) > 0;
+      }
+
+      const closure = selectClosureRoute({
+        profile,
+        planConfig: { sessions: planConfig.sessions },
+        upcomingSessions,
+        messageHistory,
+        sessionActive,
+        sessionsAvailable,
+        pendingReminderExists,
+        crisisActive,
+      });
+
+      if (closure.route !== 'none') {
+        let closureBlock = `\n\n🔚 FECHAMENTO RECOMENDADO (use APENAS quando o micro passo da Fase 3 emergir):`;
+        if (closure.route === 'session_bridge') {
+          closureBlock += `\nRota: BRIDGE_PARA_SESSAO`;
+          closureBlock += `\nProxima sessao: ${closure.sessionDateLabel} as ${closure.sessionTimeLabel}`;
+          closureBlock += `\nQuando o usuario combinar o micro passo, AMARRE-O verbalmente a essa sessao. Exemplo: "Faz isso ate ${closure.sessionDateLabel} e a gente abre na nossa sessao." NAO emita [AGENDAR_TAREFA] nessa rota.`;
+        } else if (closure.route === 'suggest_session') {
+          closureBlock += `\nRota: SUGERIR_SESSAO`;
+          closureBlock += `\nO usuario tem sessoes disponiveis no plano e nao agendou nenhuma. Quando o micro passo emergir, convide-o a marcar uma sessao para aprofundar. Exemplo: "Esse fio merece tempo dedicado. Bora marcar uma sessao essa semana pra ir mais fundo?" NAO emita [AGENDAR_TAREFA] nessa rota.`;
+        } else if (closure.route === 'schedule_reminder') {
+          closureBlock += `\nRota: AGENDAR_RETOMADA`;
+          closureBlock += `\nData/hora sugerida: ${closure.humanLabel}`;
+          closureBlock += `\nQuando o usuario combinar o micro passo, AMARRE-O a essa data verbalmente E emita no final da sua resposta:`;
+          closureBlock += `\n[AGENDAR_TAREFA:${closure.isoDateTime}:reminder:Oi! Vim ver como foi com {descreva aqui o micro passo combinado}. Conseguiu?]`;
+          closureBlock += `\nUse o conteudo real do micro passo no lugar de {descreva...}. NAO escolha outra data — use exatamente a sugerida.`;
+        }
+        closureBlock += `\nIMPORTANTE: Se o micro passo NAO emergir nessa resposta (porque a conversa ainda esta em Presenca/Sentido), IGNORE este bloco e nao force fechamento.`;
+        dynamicContext += closureBlock;
+        console.log(`🔚 Closure route injected: ${closure.route}`);
+      }
+    } catch (e) {
+      console.error('🔚 Erro em selectClosureRoute (ignorado):', e);
+    }
+
+    // ========================================================================
     // CONTROLE DE SESSÃO - Reforço determinístico de fase no dynamicContext
     // ========================================================================
     if (sessionActive && currentSession?.started_at) {
