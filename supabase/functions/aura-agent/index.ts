@@ -6369,6 +6369,64 @@ Só DEPOIS de saber a situação, explore as emoções com profundidade.`;
     }
 
     // ========================================================================
+    // DETECTAR TAG [MARCO:texto] E REGISTRAR EM user_milestones
+    // Cooldown: ignora se já houve marco nas últimas 7 mensagens da assistente
+    // ========================================================================
+    const marcoRegex = /\[MARCO:\s*([^\]]+?)\s*\]/i;
+    const marcoMatch = assistantMessage.match(marcoRegex);
+    if (marcoMatch && profile?.user_id) {
+      try {
+        const marcoText = marcoMatch[1].trim().substring(0, 200);
+        const supabaseUrlM = Deno.env.get('SUPABASE_URL')!;
+        const supabaseServiceKeyM = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+        const sbAdminM = createClient(supabaseUrlM, supabaseServiceKeyM);
+
+        // Cooldown: olhar últimas 7 mensagens da assistente
+        const { data: lastAssistantMsgs } = await sbAdminM
+          .from('messages')
+          .select('content')
+          .eq('user_id', profile.user_id)
+          .eq('role', 'assistant')
+          .order('created_at', { ascending: false })
+          .limit(7);
+
+        const recentlyMarked = (lastAssistantMsgs || []).some((m: any) =>
+          /\[MARCO:/i.test(m.content || '')
+        );
+
+        if (recentlyMarked) {
+          console.log('⏸️ MARCO ignorado (cooldown: marco recente nas últimas 7 mensagens)');
+        } else if (marcoText.length >= 10) {
+          // Pegar trecho da última mensagem do usuário como context_excerpt
+          const lastUserMsg = chatMessages?.slice().reverse().find((m: any) => m.role === 'user')?.content || '';
+          const contextExcerpt = String(lastUserMsg).substring(0, 500) || null;
+
+          const { error: marcoErr } = await sbAdminM
+            .from('user_milestones')
+            .insert({
+              user_id: profile.user_id,
+              milestone_text: marcoText,
+              milestone_date: new Date().toISOString(),
+              source: 'aura_realtime',
+              context_excerpt: contextExcerpt,
+            });
+
+          if (marcoErr) {
+            console.error('❌ Erro inserindo user_milestone:', marcoErr.message);
+          } else {
+            console.log(`🌟 MARCO registrado: "${marcoText.substring(0, 60)}..."`);
+          }
+        } else {
+          console.warn(`⚠️ MARCO descartado (texto muito curto): "${marcoText}"`);
+        }
+      } catch (e) {
+        console.error('❌ Exceção processando MARCO:', e);
+      }
+      // Remove a tag do texto entregue ao usuário
+      assistantMessage = assistantMessage.replace(/\[MARCO:[^\]]+\]/gi, '').trim();
+    }
+
+    // ========================================================================
     // DETECTAR TAG [AGENDAR_TAREFA:...] E CRIAR AGENDAMENTO
     // ========================================================================
     const agendarRegex = /\[AGENDAR_TAREFA:(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}):(\w+):(.*?)\]/gi;
