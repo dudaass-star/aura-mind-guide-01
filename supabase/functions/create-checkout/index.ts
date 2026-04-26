@@ -290,19 +290,6 @@ serve(async (req) => {
       sessionConfig.payment_method_options = {
         card: {
           request_three_d_secure: 'automatic',
-          // === REFORÇO MIT #1: mandate_options ===
-          // Declara formalmente ao banco emissor (via bandeira) que este cartão
-          // terá cobranças recorrentes esporádicas até R$ 600. Isso pré-autoriza
-          // o mandato no nível de rede, reduzindo do_not_honor em renovações.
-          mandate_options: {
-            reference: `aura-${customerId}-${Date.now()}`,
-            amount_type: 'maximum',
-            amount: 60000, // R$ 600 (cobre maior plano anual: Transformação 574,90)
-            currency: 'brl',
-            interval: 'sporadic',
-            supported_types: ['india'], // exigido pelo schema; ignorado fora da Índia
-            description: 'Assinatura AURA — cobrança recorrente conforme plano escolhido.',
-          },
         },
       };
       // Flag-chave: estabelece mandato MIT desde a 1ª autorização.

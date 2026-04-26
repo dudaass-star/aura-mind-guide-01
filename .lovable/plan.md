@@ -1,94 +1,55 @@
-# Implementar mandate_options + statement_descriptor_suffix
+## Diagnóstico
 
-Dois reforços cirúrgicos pro banco reconhecer a renovação como continuidade autorizada do mandato inicial. Sem fricção, sem 3DS na renovação.
+O erro "Edge Function returned a non-2xx status code" está quebrando **todos os checkouts do plano semanal** (R$ 6,90 / 9,90 / 19,90).
 
-## Mudanças
+Causa raiz, confirmada nos logs do Stripe:
+```
+Received unknown parameter: payment_method_options[card][mandate_options]
+```
 
-### 1. `supabase/functions/create-checkout/index.ts` (bloco trial, ~linha 290)
+Foi introduzido no último reforço MIT que fizemos em `supabase/functions/create-checkout/index.ts`. O Stripe **não aceita `mandate_options` em `card` no modo `payment`** fora da Índia — é um parâmetro exclusivo de SetupIntent ou de métodos específicos (India card, AU BECS). A própria flag `supported_types: ['india']` que coloquei já era um sinal de que o reforço não era universal.
 
-Adicionar `mandate_options` ao `payment_method_options.card` da 1ª cobrança:
+Os outros dois reforços daquela mesma rodada **continuam válidos e devem ficar**:
+- `payment_intent_data.setup_future_usage: 'off_session'` → este é o reforço MIT real
+- `payment_intent_data.statement_descriptor_suffix: 'SEMANAL'` → padrão de fatura
+- `request_three_d_secure: 'automatic'` → política 3DS já documentada
 
+## Correção
+
+Em `supabase/functions/create-checkout/index.ts`, dentro do branch `if (trial) { ... }`, simplificar `payment_method_options.card`:
+
+De:
 ```ts
 sessionConfig.payment_method_options = {
   card: {
     request_three_d_secure: 'automatic',
-    mandate_options: {
-      reference: `aura-${customerId}-${Date.now()}`, // ID único do mandato
-      amount_type: 'maximum',
-      amount: 60000, // R$ 600 — teto que cobre maior plano anual (Transformação 574,90)
-      currency: 'brl',
-      interval: 'sporadic', // Stripe escolhe quando cobrar (semanal→mensal→anual)
-      supported_types: ['india'], // ignorado fora da Índia, mas exigido pelo schema
-      description: 'Assinatura AURA — cobrança recorrente conforme plano escolhido.',
-    },
+    mandate_options: { ... }, // ← REMOVER
   },
 };
 ```
 
-E adicionar `statement_descriptor_suffix` ao `payment_intent_data`:
-
+Para:
 ```ts
-sessionConfig.payment_intent_data = {
-  setup_future_usage: 'off_session',
-  statement_descriptor_suffix: 'AURA SEMANAL', // aparece na fatura como "AURA* AURA SEMANAL"
-  description: `AURA ${planDisplayName} — Plano Semanal (7 dias), depois R$ ${displayPrice}/${periodLabel}.`,
-  metadata: { /* ... mantém igual ... */ },
+sessionConfig.payment_method_options = {
+  card: {
+    request_three_d_secure: 'automatic',
+  },
 };
 ```
 
-### 2. `supabase/functions/stripe-webhook/index.ts` (criação da Subscription, ~linha 300)
+Manter intactos:
+- `payment_intent_data.setup_future_usage: 'off_session'`
+- `payment_intent_data.statement_descriptor_suffix`
+- `payment_intent_data.description` e `metadata`
+- Toda a lógica anti-duplicação, busca de customer, line_items com product_data inline
 
-Adicionar `payment_settings` herdado + `description` consistente:
+## Validação
 
-```ts
-const subscription = await stripe.subscriptions.create({
-  customer: customerId,
-  items: [{ price: subscriptionPriceId }],
-  trial_period_days: 7,
-  payment_behavior: 'allow_incomplete',
-  off_session: true,
-  ...(defaultPm && { default_payment_method: defaultPm }),
-  payment_settings: {
-    payment_method_types: ['card'],
-    save_default_payment_method: 'on_subscription',
-  },
-  metadata: { /* ... mantém igual + ... */ },
-  description: `AURA ${PLAN_NAMES[customerPlan]} — Assinatura ${customerBilling === 'yearly' ? 'anual' : 'mensal'}`,
-});
-```
+1. Deploy da função `create-checkout`.
+2. Tail dos logs por 1-2 minutos confirmando que novos checkouts retornam `Checkout session created` sem o erro `Received unknown parameter`.
+3. Atualizar `mem://technical/stripe/mit-mandate-reinforcement` removendo o item "mandate_options" da lista de reforços e marcando-o como inválido para Brasil/cartão.
 
-E adicionar `statement_descriptor` na invoice da renovação via update no Customer:
+## Impacto esperado
 
-```ts
-// Após criar a Subscription, sincronizar invoice settings com descriptor consistente
-await stripe.customers.update(customerId, {
-  invoice_settings: {
-    default_payment_method: defaultPm,
-    custom_fields: null,
-  },
-  metadata: {
-    ...(customer as any).metadata,
-    aura_mandate_active: 'true',
-    aura_mandate_reference: `aura-${customerId}`,
-  },
-});
-```
-
-> Nota técnica: o `statement_descriptor` da Subscription é controlado pelo Statement Descriptor da conta Stripe (configurado no Dashboard como "AURA"). O `_suffix` na 1ª cobrança garante que a fatura mostra "AURA* AURA SEMANAL" e as renovações mostram "AURA* AURA" — padrão estável de mesmo merchant pro banco.
-
-## Por que esses 2 sinais funcionam
-
-1. **`mandate_options.reference`** — vai junto na autorização inicial. Bandeiras (Visa/Mastercard) propagam isso pro emissor como "este merchant tem permissão pré-acordada de cobrar até R$ X de forma esporádica neste cartão".
-
-2. **`statement_descriptor` consistente** — algoritmos antifraude dos bancos BR (Itaú, Bradesco, Nubank) usam padrão de descriptor como sinal forte de legitimidade. "AURA*" estável = baixo risco; descriptor mudando = alto risco de chargeback → bloqueio preventivo.
-
-## Validação pós-deploy
-
-Vou rodar `audit-decline-codes` (últimos 7d) pra capturar baseline antes de aplicar. 30 dias depois, rodar de novo e medir variação em `do_not_honor`.
-
-## Atualizações de memória
-
-- Atualizar `mem://technical/stripe/checkout-3ds-policy` pra refletir `'automatic'` (alinha código + memória)
-- Criar `mem://technical/stripe/mit-mandate-reinforcement` documentando os 2 reforços e o teto de R$ 600
-
-## Sem migrações de banco. Sem mudanças no frontend. Sem fricção pro usuário.
+- Restabelece 100% dos checkouts do plano semanal imediatamente.
+- Zero perda de proteção MIT real — o `setup_future_usage: 'off_session'` é o que de fato estabelece o mandato off-session que o webhook reusa ao criar a Subscription.
