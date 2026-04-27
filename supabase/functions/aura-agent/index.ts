@@ -4570,6 +4570,15 @@ ${audioSessionContext}
 ## Memória de Longo Prazo
 ${formatInsightsForContext(userInsights)}
 
+## 🛡️ Correções de Memória (PRIORIDADE MÁXIMA — sobrepõe qualquer insight acima)
+${(() => {
+  if (!userCorrections || userCorrections.length === 0) {
+    return '- Nenhuma correção registrada.';
+  }
+  const lines = userCorrections.map((c: any, i: number) => `${i + 1}. ${c.correction_text}`).join('\n');
+  return `Estas são verdades que o próprio usuário já estabeleceu (ou correções que ele te deu em conversas passadas). NUNCA contrarie, NUNCA repita o erro corrigido, e NUNCA force conexões entre temas que estas correções proibiram explicitamente.\n\n${lines}`;
+})()}
+
 ## Processo Terapêutico
 ${(() => {
   const techniques = userInsights?.filter((i: any) => i.category === 'tecnica') || [];
