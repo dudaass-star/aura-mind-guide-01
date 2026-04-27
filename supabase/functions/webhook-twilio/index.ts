@@ -160,6 +160,12 @@ Deno.serve(async (req) => {
       audioUrl,
       hasImage,
       imageCaption: hasImage ? messageBody : undefined,
+      // Metadados de clique de botão (Twilio) — habilitam detecção determinística
+      // de respostas a templates Quick Reply no process-webhook-message.
+      messageType,
+      buttonText,
+      buttonPayload,
+      originalRepliedMessageSid,
     };
 
     const internalSecret = Deno.env.get('INTERNAL_WEBHOOK_SECRET');
