@@ -243,17 +243,19 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // Skip se já existe pergunta hoje
-      const { data: existing } = await supabase
-        .from('weekly_questions')
-        .select('id')
-        .eq('user_id', user.user_id)
-        .eq('question_date', todayDateStr)
-        .maybeSingle();
+      // Skip se já existe pergunta hoje (a menos que force=true para testes)
+      if (!force) {
+        const { data: existing } = await supabase
+          .from('weekly_questions')
+          .select('id')
+          .eq('user_id', user.user_id)
+          .eq('question_date', todayDateStr)
+          .maybeSingle();
 
-      if (existing) {
-        skipped++;
-        continue;
+        if (existing) {
+          skipped++;
+          continue;
+        }
       }
 
       // Coletar contexto
