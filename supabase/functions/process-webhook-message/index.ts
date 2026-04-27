@@ -116,6 +116,43 @@ async function generateTTS(text: string, userId?: string): Promise<{ audioUrl: s
   }
 }
 
+// ============================================================================
+// QUOTED MESSAGE — Busca o conteúdo da mensagem citada (reply nativo do WhatsApp)
+// ----------------------------------------------------------------------------
+// Quando o usuário usa o "Responder" do WhatsApp citando uma mensagem anterior
+// da AURA, o Twilio envia o SID em `OriginalRepliedMessageSid`. O body da
+// mensagem citada não vem no webhook, então precisamos buscá-lo via Twilio API.
+// ============================================================================
+async function fetchTwilioQuotedBody(messageSid: string): Promise<string | null> {
+  try {
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    const TWILIO_API_KEY = Deno.env.get('TWILIO_API_KEY');
+    if (!LOVABLE_API_KEY || !TWILIO_API_KEY) {
+      console.warn('⚠️ [QUOTED] Twilio gateway credentials missing, cannot fetch quoted body');
+      return null;
+    }
+    const GATEWAY_URL = 'https://connector-gateway.lovable.dev/twilio';
+    const resp = await fetch(`${GATEWAY_URL}/Messages/${messageSid}.json`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'X-Connection-Api-Key': TWILIO_API_KEY,
+      },
+    });
+    if (!resp.ok) {
+      console.warn(`⚠️ [QUOTED] Twilio API ${resp.status} for SID ${messageSid}`);
+      return null;
+    }
+    const data = await resp.json();
+    const body: string | undefined = data?.body;
+    if (!body) return null;
+    return body.trim();
+  } catch (err) {
+    console.warn('⚠️ [QUOTED] fetchTwilioQuotedBody failed:', err);
+    return null;
+  }
+}
+
 async function handleSessionConfirmation(
   supabase: any, userId: string, message: string
 ): Promise<{ handled: boolean; response?: string }> {
@@ -229,6 +266,8 @@ Deno.serve(async (req) => {
       hasAudio, audioUrl, hasImage, imageCaption,
       // Metadados de clique de botão (Twilio Quick Reply)
       messageType, buttonText, buttonPayload, originalRepliedMessageSid,
+      // Identificador da mensagem citada via "Responder" nativo do WhatsApp (Meta)
+      quotedMessageId,
     } = workerPayload;
 
     contingencyPhone = cleanPhone;
@@ -1023,6 +1062,31 @@ Deno.serve(async (req) => {
 
     // wasInterrupted, interruptedAtIndex, agentData declared at outer scope (line ~200)
 
+    // ========================================================================
+    // QUOTED MESSAGE — resolve o conteúdo da mensagem citada (reply nativo)
+    // ------------------------------------------------------------------------
+    // Quando o usuário usa "Responder" no WhatsApp citando uma mensagem da AURA,
+    // o webhook recebe o SID (Twilio) ou wamid (Meta) da mensagem original. Aqui
+    // buscamos o body via Twilio API e injetamos como `quoted_message` no
+    // payload do aura-agent. Isso evita que a Aura assuma que o usuário está
+    // respondendo à última mensagem dela quando, na verdade, está respondendo
+    // a uma mensagem mais antiga.
+    //
+    // Pulamos esta resolução em cliques de botão (Quick Reply) — esses já têm
+    // fast-path determinístico tratado antes deste ponto.
+    // ========================================================================
+    let quotedMessageBody: string | null = null;
+    const isButtonClickReply = messageType === 'button';
+    if (!isButtonClickReply && originalRepliedMessageSid) {
+      console.log(`💬 [QUOTED] Twilio reply detected — fetching SID ${originalRepliedMessageSid}`);
+      quotedMessageBody = await fetchTwilioQuotedBody(originalRepliedMessageSid);
+      if (quotedMessageBody) {
+        console.log(`💬 [QUOTED] Resolved body (${quotedMessageBody.length} chars): "${quotedMessageBody.substring(0, 80)}..."`);
+      } else {
+        console.log(`💬 [QUOTED] Could not resolve body for SID ${originalRepliedMessageSid}`);
+      }
+    }
+
     // Helper: call aura-agent with timeout and optional minimal context
     async function callAuraAgent(useMinimalContext = false): Promise<any> {
       const controller = new AbortController();
@@ -1036,6 +1100,8 @@ Deno.serve(async (req) => {
           pending_content: pendingContent,
           pending_context: pendingContext,
           last_user_context: lastUserContext,
+          // Conteúdo da mensagem citada via "Responder" nativo do WhatsApp
+          quoted_message: quotedMessageBody,
         };
         if (useMinimalContext) {
           body.minimal_context = true;
