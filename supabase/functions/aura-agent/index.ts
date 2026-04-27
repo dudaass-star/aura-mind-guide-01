@@ -7056,13 +7056,30 @@ Só DEPOIS de saber a situação, explore as emoções com profundidade.`;
         }
       })();
 
+      // 3. Resumo evolutivo (terceira camada de memória) — assíncrono, ≤600 chars
+      const evolutionSummaryPromise = (async () => {
+        try {
+          await maybeTriggerEvolutionSummary(
+            profile.user_id,
+            supabase,
+            GEMINI_API_KEY
+          );
+        } catch (err) {
+          console.error('⚠️ Evolution-summary async error:', err);
+        }
+      })();
+
       // Combine both async tasks
-      const combinedPromise = Promise.all([microAgentPromise, postAnalysisPromise]);
+      const combinedPromise = Promise.all([
+        microAgentPromise,
+        postAnalysisPromise,
+        evolutionSummaryPromise,
+      ]);
 
       // Keep runtime alive for async processing
       try {
         (globalThis as any).EdgeRuntime.waitUntil(combinedPromise);
-        console.log('🤖 Micro-agent + Post-analysis triggered via waitUntil');
+        console.log('🤖 Micro-agent + Post-analysis + Evolution-summary triggered via waitUntil');
       } catch {
         console.log('ℹ️ waitUntil not available, running inline');
         await combinedPromise;
