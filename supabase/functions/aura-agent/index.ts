@@ -1424,6 +1424,9 @@ interface ConversationAnalysis {
     value: string;
   }>;
   commitments: string[];
+  corrections?: Array<{
+    correction_text: string;
+  }>;
 }
 
 async function postConversationAnalysis(
@@ -1446,6 +1449,13 @@ async function postConversationAnalysis(
 
     const analysisPrompt = `Analise esta conversa entre um usuário e uma mentora emocional.
 Extraia informações relevantes para memória de longo prazo.
+
+REGRAS CRÍTICAS:
+1. Só salve como insight aquilo que o USUÁRIO afirmou diretamente. NÃO salve hipóteses, interpretações ou conexões que a AURA fez sem o usuário ter confirmado.
+2. Se a AURA fez uma interpretação e o usuário NÃO confirmou (ou ficou neutro), NÃO salve essa interpretação como fato.
+3. Se o usuário CORRIGIU a AURA (ex.: "você misturou", "não é isso", "você já sabe", "eu já te falei", "tá tudo errado"), gere uma entrada em "corrections" descrevendo o que NÃO deve mais ser feito ou afirmado, em linguagem clara e acionável (1-2 frases).
+4. Não invente conexões entre temas. Se o usuário fala de ansiedade hoje, não ligue automaticamente a esposa, mãe, trabalho, etc.
+5. Insights devem ser fatos curtos e literais (nomes, profissão, evento, preferência declarada). Evite frases interpretativas.
 
 CONTEXTO RECENTE:
 ${recentContext}
@@ -1494,6 +1504,17 @@ Use a função extract_analysis para retornar os dados.`;
                 type: 'ARRAY',
                 description: 'Compromissos concretos assumidos pelo usuário (ações com prazo implícito). Omita intenções vagas.',
                 items: { type: 'STRING' }
+              },
+              corrections: {
+                type: 'ARRAY',
+                description: 'Correções explícitas que o usuário fez à AURA nesta troca. Cada item descreve o que a AURA NÃO deve mais fazer/afirmar. Omita se não houver correção clara.',
+                items: {
+                  type: 'OBJECT',
+                  properties: {
+                    correction_text: { type: 'STRING', description: 'Texto curto e acionável da correção, do ponto de vista do que a AURA precisa lembrar daqui em diante.' }
+                  },
+                  required: ['correction_text']
+                }
               }
             }
           }
