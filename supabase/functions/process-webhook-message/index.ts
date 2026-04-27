@@ -173,6 +173,30 @@ async function handleSessionConfirmation(
 
   if (/^(sim|confirmo|confirmado|ok|pode ser|tá bom|ta bom|certo|fechado|confirma|confirmei)$/i.test(lowerMessage)) {
     await supabase.from('sessions').update({ user_confirmed: true }).eq('id', pendingSession.id);
+
+    // PRÉ-ARME: marca pending_insight com [SESSION_PREARM] para que QUALQUER mensagem
+    // do usuário próxima ao horário agendado dispare o início imediato da sessão,
+    // mesmo que o cron de T-5min atrase ou falhe ao enviar o template.
+    // Só sobrescreve pending_insight se ele estiver vazio (não atropela INSIGHT/WELCOME pendente).
+    try {
+      const { data: prof } = await supabase
+        .from('profiles')
+        .select('pending_insight')
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (!prof?.pending_insight) {
+        await supabase
+          .from('profiles')
+          .update({ pending_insight: `[SESSION_PREARM]${pendingSession.id}` })
+          .eq('user_id', userId);
+        console.log(`🎯 [SESSION_PREARM] Sessão ${pendingSession.id} pré-armada via confirmação T-24h`);
+      } else {
+        console.log(`⏭️ [SESSION_PREARM] Pulado — pending_insight já preenchido (${prof.pending_insight.substring(0, 30)}...)`);
+      }
+    } catch (e) {
+      console.error('⚠️ [SESSION_PREARM] Falha ao pré-armar sessão:', e);
+    }
+
     const sessionDate = new Date(pendingSession.scheduled_at);
     const sessionTime = sessionDate.toLocaleString('pt-BR', {
       day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo'
