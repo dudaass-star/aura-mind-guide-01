@@ -895,6 +895,7 @@ export type Database = {
           letter_text: string
           preview_text: string
           sent_at: string | null
+          trigger_message_sid: string | null
           trigger_sent_at: string | null
           user_id: string
         }
@@ -906,6 +907,7 @@ export type Database = {
           letter_text: string
           preview_text: string
           sent_at?: string | null
+          trigger_message_sid?: string | null
           trigger_sent_at?: string | null
           user_id: string
         }
@@ -917,6 +919,7 @@ export type Database = {
           letter_text?: string
           preview_text?: string
           sent_at?: string | null
+          trigger_message_sid?: string | null
           trigger_sent_at?: string | null
           user_id?: string
         }
@@ -1804,6 +1807,42 @@ export type Database = {
         }
         Relationships: []
       }
+      template_definitions: {
+        Row: {
+          button_text: string
+          content_sid: string
+          created_at: string
+          delivers_content_type: string
+          id: string
+          is_active: boolean
+          notes: string | null
+          template_name: string
+          updated_at: string
+        }
+        Insert: {
+          button_text: string
+          content_sid: string
+          created_at?: string
+          delivers_content_type: string
+          id?: string
+          is_active?: boolean
+          notes?: string | null
+          template_name: string
+          updated_at?: string
+        }
+        Update: {
+          button_text?: string
+          content_sid?: string
+          created_at?: string
+          delivers_content_type?: string
+          id?: string
+          is_active?: boolean
+          notes?: string | null
+          template_name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       time_capsules: {
         Row: {
           audio_url: string
@@ -2063,33 +2102,6 @@ export type Database = {
         }
         Relationships: []
       }
-      webhook_payload_debug: {
-        Row: {
-          from_phone: string | null
-          headers: Json
-          id: string
-          notes: string | null
-          payload: Json
-          received_at: string
-        }
-        Insert: {
-          from_phone?: string | null
-          headers?: Json
-          id?: string
-          notes?: string | null
-          payload?: Json
-          received_at?: string
-        }
-        Update: {
-          from_phone?: string | null
-          headers?: Json
-          id?: string
-          notes?: string | null
-          payload?: Json
-          received_at?: string
-        }
-        Relationships: []
-      }
       weekly_plans: {
         Row: {
           created_at: string | null
@@ -2138,6 +2150,7 @@ export type Database = {
           responded_at: string | null
           response_text: string | null
           sent_at: string | null
+          trigger_message_sid: string | null
           user_id: string
         }
         Insert: {
@@ -2149,6 +2162,7 @@ export type Database = {
           responded_at?: string | null
           response_text?: string | null
           sent_at?: string | null
+          trigger_message_sid?: string | null
           user_id: string
         }
         Update: {
@@ -2160,6 +2174,7 @@ export type Database = {
           responded_at?: string | null
           response_text?: string | null
           sent_at?: string | null
+          trigger_message_sid?: string | null
           user_id?: string
         }
         Relationships: []
