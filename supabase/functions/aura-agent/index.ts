@@ -1424,6 +1424,9 @@ interface ConversationAnalysis {
     value: string;
   }>;
   commitments: string[];
+  corrections?: Array<{
+    correction_text: string;
+  }>;
 }
 
 async function postConversationAnalysis(
@@ -1446,6 +1449,13 @@ async function postConversationAnalysis(
 
     const analysisPrompt = `Analise esta conversa entre um usuário e uma mentora emocional.
 Extraia informações relevantes para memória de longo prazo.
+
+REGRAS CRÍTICAS:
+1. Só salve como insight aquilo que o USUÁRIO afirmou diretamente. NÃO salve hipóteses, interpretações ou conexões que a AURA fez sem o usuário ter confirmado.
+2. Se a AURA fez uma interpretação e o usuário NÃO confirmou (ou ficou neutro), NÃO salve essa interpretação como fato.
+3. Se o usuário CORRIGIU a AURA (ex.: "você misturou", "não é isso", "você já sabe", "eu já te falei", "tá tudo errado"), gere uma entrada em "corrections" descrevendo o que NÃO deve mais ser feito ou afirmado, em linguagem clara e acionável (1-2 frases).
+4. Não invente conexões entre temas. Se o usuário fala de ansiedade hoje, não ligue automaticamente a esposa, mãe, trabalho, etc.
+5. Insights devem ser fatos curtos e literais (nomes, profissão, evento, preferência declarada). Evite frases interpretativas.
 
 CONTEXTO RECENTE:
 ${recentContext}
@@ -1494,6 +1504,17 @@ Use a função extract_analysis para retornar os dados.`;
                 type: 'ARRAY',
                 description: 'Compromissos concretos assumidos pelo usuário (ações com prazo implícito). Omita intenções vagas.',
                 items: { type: 'STRING' }
+              },
+              corrections: {
+                type: 'ARRAY',
+                description: 'Correções explícitas que o usuário fez à AURA nesta troca. Cada item descreve o que a AURA NÃO deve mais fazer/afirmar. Omita se não houver correção clara.',
+                items: {
+                  type: 'OBJECT',
+                  properties: {
+                    correction_text: { type: 'STRING', description: 'Texto curto e acionável da correção, do ponto de vista do que a AURA precisa lembrar daqui em diante.' }
+                  },
+                  required: ['correction_text']
+                }
               }
             }
           }
@@ -1558,13 +1579,14 @@ Use a função extract_analysis para retornar os dados.`;
     const themesCount = analysis.themes?.length || 0;
     const insightsCount = analysis.insights?.length || 0;
     const commitmentsCount = analysis.commitments?.length || 0;
-    
-    if (themesCount === 0 && insightsCount === 0 && commitmentsCount === 0) {
+    const correctionsCount = analysis.corrections?.length || 0;
+
+    if (themesCount === 0 && insightsCount === 0 && commitmentsCount === 0 && correctionsCount === 0) {
       console.log('ℹ️ [POST-ANALYSIS] Nothing to save');
       return;
     }
 
-    console.log(`🔍 [POST-ANALYSIS] Extracted: ${themesCount} themes, ${insightsCount} insights, ${commitmentsCount} commitments`);
+    console.log(`🔍 [POST-ANALYSIS] Extracted: ${themesCount} themes, ${insightsCount} insights, ${commitmentsCount} commitments, ${correctionsCount} corrections`);
 
     // Save themes
     if (analysis.themes && analysis.themes.length > 0) {
@@ -1645,6 +1667,35 @@ Use a função extract_analysis para retornar os dados.`;
             session_id: sessionId
           });
           console.log(`📋 [POST-ANALYSIS] Commitment: ${title}`);
+        }
+      }
+    }
+
+    // Save corrections (priority memory — never repeat the corrected mistake)
+    if (analysis.corrections && analysis.corrections.length > 0) {
+      for (const c of analysis.corrections) {
+        const text = (c?.correction_text || '').trim();
+        if (!text || text.length < 8) continue;
+
+        // Dedup: evitar duplicar a mesma correção (prefixo de 60 chars)
+        const prefix = text.substring(0, 60);
+        const { data: existing } = await supabase
+          .from('user_memory_corrections')
+          .select('id')
+          .eq('user_id', userId)
+          .ilike('correction_text', `${prefix}%`)
+          .limit(1);
+
+        if (!existing || existing.length === 0) {
+          await supabase.from('user_memory_corrections').insert({
+            user_id: userId,
+            correction_text: text.substring(0, 800),
+            source: 'correcao_usuario_conversa',
+            confidence: 10,
+          });
+          console.log(`🛡️ [POST-ANALYSIS] Correction saved: ${text.substring(0, 80)}...`);
+        } else {
+          console.log(`🛡️ [POST-ANALYSIS] Correction already exists, skipped`);
         }
       }
     }
@@ -2325,6 +2376,13 @@ Sua única responsabilidade: quando o usuário mencionar uma pessoa sem dar o no
 Fora isso, converse naturalmente — o sistema registra os insights em segundo plano.
 
 IMPORTANTE: Insights da memória são contexto PASSIVO — use para personalizar (saber o nome, a rotina, preferências), NÃO para pautar a conversa. Se o usuário fala de filme, fale de filme. Se fala de comida, fale de comida. Não puxe temas da memória que o usuário não trouxe. Os insights existem para você CONHECER o usuário, não para redirecionar o assunto.
+
+REGRAS ANTI-CONEXÃO FORÇADA (críticas):
+- Memória NÃO é pauta. Só use um insight se a mensagem ATUAL do usuário abrir um gancho direto para ele.
+- Não conecte temas diferentes por similaridade vaga. Ex.: ansiedade hoje numa loja NÃO se liga automaticamente a mãe, esposa, trabalho, atividade física. Só conecte se o usuário fizer a ponte.
+- Se você ofereceu uma interpretação e o usuário corrigiu (ex.: "você misturou", "não é isso", "você já sabe", "eu já te falei"), trate a correção dele como verdade superior. Não repita a interpretação errada.
+- Bloco "Correções de Memória" acima vence qualquer outro insight. Se houver conflito, siga a correção.
+- Se a conversa estava parada e voltou por uma Pergunta da Semana / Carta Mensal / mensagem proativa sua, NÃO salte para micro-passo nem para "qual ação você vai tomar?". Fique em presença/reflexão até o usuário pedir direção.
 
 # COMPROMISSOS E TEMAS
 
@@ -4158,6 +4216,7 @@ serve(async (req) => {
     let messageCount = 0;
     let temporalGapHours = 0;
     let userInsights: any[] = [];
+    let userCorrections: any[] = [];
     let previousSessionsContext = '';
     let isFirstSession = false;
     let lastCheckin = "Nenhum registrado";
@@ -4186,6 +4245,7 @@ serve(async (req) => {
         completedCountResult,
         journeyResult,
         meditationsResult,
+        correctionsResult,
       ] = await Promise.allSettled([
         // 1. Últimas mensagens (10 em minimal, 40 normal)
         supabase
@@ -4268,6 +4328,14 @@ serve(async (req) => {
               .from('meditations')
               .select('category, title, best_for, triggers')
               .eq('is_active', true),
+        // 11. Correções de memória do usuário (prioridade máxima)
+        supabase
+          .from('user_memory_corrections')
+          .select('correction_text, source, confidence, created_at')
+          .eq('user_id', userId)
+          .order('confidence', { ascending: false })
+          .order('created_at', { ascending: false })
+          .limit(15),
       ]);
 
       console.log('⚡ All context queries completed in parallel');
@@ -4305,6 +4373,14 @@ serve(async (req) => {
       const generalInsights = generalInsightsResult.status === 'fulfilled' ? generalInsightsResult.value.data || [] : [];
       userInsights = [...criticalInsights, ...generalInsights];
       console.log('🧠 Loaded insights:', { critical: criticalInsights.length, general: generalInsights.length, total: userInsights.length });
+
+      // 11. Correções de memória (prioridade máxima sobre insights)
+      if (correctionsResult.status === 'fulfilled' && correctionsResult.value.data) {
+        userCorrections = correctionsResult.value.data;
+        if (userCorrections.length > 0) {
+          console.log(`🛡️ Loaded ${userCorrections.length} memory corrections (priority overrides)`);
+        }
+      }
 
       // 4. Previous sessions
       if (completedSessionsResult.status === 'fulfilled') {
@@ -4551,6 +4627,15 @@ ${audioSessionContext}
 
 ## Memória de Longo Prazo
 ${formatInsightsForContext(userInsights)}
+
+## 🛡️ Correções de Memória (PRIORIDADE MÁXIMA — sobrepõe qualquer insight acima)
+${(() => {
+  if (!userCorrections || userCorrections.length === 0) {
+    return '- Nenhuma correção registrada.';
+  }
+  const lines = userCorrections.map((c: any, i: number) => `${i + 1}. ${c.correction_text}`).join('\n');
+  return `Estas são verdades que o próprio usuário já estabeleceu (ou correções que ele te deu em conversas passadas). NUNCA contrarie, NUNCA repita o erro corrigido, e NUNCA force conexões entre temas que estas correções proibiram explicitamente.\n\n${lines}`;
+})()}
 
 ## Processo Terapêutico
 ${(() => {
