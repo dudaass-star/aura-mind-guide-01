@@ -1671,6 +1671,35 @@ Use a função extract_analysis para retornar os dados.`;
       }
     }
 
+    // Save corrections (priority memory — never repeat the corrected mistake)
+    if (analysis.corrections && analysis.corrections.length > 0) {
+      for (const c of analysis.corrections) {
+        const text = (c?.correction_text || '').trim();
+        if (!text || text.length < 8) continue;
+
+        // Dedup: evitar duplicar a mesma correção (prefixo de 60 chars)
+        const prefix = text.substring(0, 60);
+        const { data: existing } = await supabase
+          .from('user_memory_corrections')
+          .select('id')
+          .eq('user_id', userId)
+          .ilike('correction_text', `${prefix}%`)
+          .limit(1);
+
+        if (!existing || existing.length === 0) {
+          await supabase.from('user_memory_corrections').insert({
+            user_id: userId,
+            correction_text: text.substring(0, 800),
+            source: 'correcao_usuario_conversa',
+            confidence: 10,
+          });
+          console.log(`🛡️ [POST-ANALYSIS] Correction saved: ${text.substring(0, 80)}...`);
+        } else {
+          console.log(`🛡️ [POST-ANALYSIS] Correction already exists, skipped`);
+        }
+      }
+    }
+
     console.log('✅ [POST-ANALYSIS] Complete');
   } catch (error) {
     console.error('⚠️ [POST-ANALYSIS] Error (non-blocking):', error);
