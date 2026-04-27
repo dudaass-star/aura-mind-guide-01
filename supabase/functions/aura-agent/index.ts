@@ -4502,6 +4502,7 @@ serve(async (req) => {
     let temporalGapHours = 0;
     let userInsights: any[] = [];
     let userCorrections: any[] = [];
+    let userEvolutionSummary: string = '';
     let previousSessionsContext = '';
     let isFirstSession = false;
     let lastCheckin = "Nenhum registrado";
