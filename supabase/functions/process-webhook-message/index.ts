@@ -518,6 +518,62 @@ Deno.serve(async (req) => {
           }
           // Se não entregou, cai pro fluxo normal (Aura responde como se fosse texto).
         }
+
+        // ====================================================================
+        // FALLBACK DETERMINÍSTICO POR pending_insight
+        // --------------------------------------------------------------------
+        // Cobre Jornadas (`[CONTENT]<teaser+link>`) e Resumo Semanal
+        // (`[WEEKLY_REPORT]<teaser+link>`). Esses fluxos disparam um template
+        // (jornada_disponivel / aura_weekly_report_v2) e gravam o teaser em
+        // profiles.pending_insight. Quando o usuário clica no botão do
+        // template, MessageType === 'button' chega aqui — entregamos o
+        // conteúdo gravado direto, sem chamar o aura-agent.
+        //
+        // Não precisamos de template_definitions porque o vínculo é o próprio
+        // pending_insight: se ele existe + houve clique de botão, é entrega.
+        // ====================================================================
+        try {
+          const pi = (profile as { pending_insight?: string | null }).pending_insight;
+          if (pi && typeof pi === 'string') {
+            let marker: '[CONTENT]' | '[WEEKLY_REPORT]' | null = null;
+            if (pi.startsWith('[CONTENT]')) marker = '[CONTENT]';
+            else if (pi.startsWith('[WEEKLY_REPORT]')) marker = '[WEEKLY_REPORT]';
+
+            if (marker) {
+              const directContent = pi.replace(marker, '').trim();
+              if (directContent.length > 0) {
+                const sendResult = await sendMessage(cleanPhone, directContent, profile.user_id);
+                if (sendResult.success) {
+                  await Promise.all([
+                    supabase.from('messages').insert({
+                      user_id: profile.user_id,
+                      role: 'assistant',
+                      content: directContent,
+                    }),
+                    supabase.from('profiles').update({
+                      pending_insight: null,
+                      last_content_sent_at: new Date().toISOString(),
+                    }).eq('id', profile.id),
+                    supabase.from('aura_response_state').update({
+                      is_responding: false,
+                      pending_content: null,
+                      pending_context: null,
+                    }).eq('user_id', profile.user_id),
+                  ]);
+                  console.log(`⚡ [BUTTON-FALLBACK] Entregou ${marker} via pending_insight (${directContent.length} chars) — pulando aura-agent`);
+                  return new Response(
+                    JSON.stringify({ status: 'delivered', content_type: marker, source: 'pending_insight' }),
+                    { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+                  );
+                } else {
+                  console.warn(`⚠️ [BUTTON-FALLBACK] Falha enviando ${marker}: ${sendResult.error} — caindo no fluxo normal`);
+                }
+              }
+            }
+          }
+        } catch (fbErr) {
+          console.error('❌ [BUTTON-FALLBACK] Erro entregando pending_insight:', fbErr);
+        }
       } catch (btnErr) {
         console.error('❌ [BUTTON] Erro no handler determinístico (caindo no fluxo normal):', btnErr);
       }
