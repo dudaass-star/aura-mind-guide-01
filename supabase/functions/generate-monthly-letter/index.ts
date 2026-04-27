@@ -6,7 +6,9 @@
 // sessões dos últimos 30 dias e gera uma carta personalizada via gemini-2.5-pro.
 //
 // Persiste em public.monthly_letters (letter_text + preview_text) e dispara o
-// template gatilho 'weekly_report' (aura_weekly_report_v2) via sendTemplateOnly.
+// template gatilho 'carta_mensal' (Quick Reply) via sendTemplateOnly.
+// O preview é entregue em texto livre pelo process-webhook-message quando o
+// usuário clica no botão (abre janela de 24h).
 //
 // O PREVIEW é entregue pelo process-webhook-message quando o usuário responde
 // e abre a janela 24h (campo delivered_at). A carta completa fica no portal.
@@ -257,9 +259,10 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // Disparar SEMPRE template gatilho 'weekly_report'.
-      // O preview será entregue pelo webhook quando o usuário responder.
-      const sendResult = await sendTemplateOnly(user.phone, 'weekly_report', user.user_id);
+      // Disparar SEMPRE template gatilho Quick Reply 'carta_mensal'
+      // (categoria 'monthly_letter'). O preview será entregue pelo webhook
+      // quando o usuário clicar no botão (abre janela de 24h).
+      const sendResult = await sendTemplateOnly(user.phone, 'monthly_letter', user.user_id);
       if (!sendResult.success) {
         console.error(`❌ sendTemplateOnly failed for ${user.user_id}: ${sendResult.error}`);
         // Reverte trigger_sent_at para reprocessar depois
