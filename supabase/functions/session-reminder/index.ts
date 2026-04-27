@@ -506,12 +506,13 @@ Quer remarcar pra outro horário? É só me dizer quando fica bom pra você. ✨
     // ========================================================================
     // DETECTAR E FECHAR SESSÕES ABANDONADAS (30 min após fim previsto)
     // CORREÇÃO: Diferenciar entre usuário que participou vs apenas recebeu abertura
-    // Skip during quiet hours - will be processed next run
+    // IMPORTANTE: Sempre fechamos no banco (integridade dos dados); mensagem proativa
+    // é suprimida durante quiet hours para respeitar silêncio noturno.
     // ========================================================================
     let abandonedSessionsClosed = 0;
     
     // Buscar sessões in_progress que deveriam ter terminado há mais de 30 minutos
-    const { data: abandonedSessions, error: errorAbandoned } = isQuietHours ? { data: null, error: null } : await supabase
+    const { data: abandonedSessions, error: errorAbandoned } = await supabase
       .from('sessions')
       .select('id, user_id, scheduled_at, duration_minutes, started_at')
       .eq('status', 'in_progress')
@@ -613,8 +614,8 @@ Se quiser remarcar uma nova sessão, é só me dizer!`;
           .update({ current_session_id: null })
           .eq('user_id', session.user_id);
         
-        // Enviar mensagem de fechamento se tiver telefone
-        if (profile?.phone) {
+        // Enviar mensagem de fechamento se tiver telefone E não estiver em quiet hours
+        if (profile?.phone && !isQuietHours) {
           try {
             const cleanPhone = cleanPhoneNumber(profile.phone);
             const instanceConfig = await getInstanceConfigForUser(supabase, session.user_id);
@@ -627,6 +628,8 @@ Se quiser remarcar uma nova sessão, é só me dizer!`;
           } catch (sendError) {
             console.error(`❌ Error sending closure message for session ${session.id}:`, sendError);
           }
+        } else if (isQuietHours) {
+          console.log(`🌙 Session ${session.id} closed during quiet hours - closure message suppressed`);
         }
         
         abandonedSessionsClosed++;
