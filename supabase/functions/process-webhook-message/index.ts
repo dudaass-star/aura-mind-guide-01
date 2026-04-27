@@ -450,6 +450,13 @@ Deno.serve(async (req) => {
                   await supabase.from('weekly_questions').update({ delivered_at: null }).eq('id', rec.id);
                   console.warn(`⚠️ [BUTTON] Falha envio Pergunta da Semana (${rec.id}): ${sendResult.error}`);
                 } else {
+                  // Persiste como mensagem assistant pra Aura ter o contexto da pergunta
+                  // ao processar a próxima resposta livre do usuário.
+                  await supabase.from('messages').insert({
+                    user_id: profile.user_id,
+                    role: 'assistant',
+                    content: rec.question_text,
+                  });
                   console.log(`💌 [BUTTON] Pergunta da Semana entregue (id=${rec.id})`);
                   deliveryDone = true;
                 }
@@ -498,6 +505,13 @@ Deno.serve(async (req) => {
                   await supabase.from('monthly_letters').update({ delivered_at: null }).eq('id', rec.id);
                   console.warn(`⚠️ [BUTTON] Falha envio Carta Mensal (${rec.id}): ${sendResult.error}`);
                 } else {
+                  // Persiste como mensagem assistant pra Aura ter o contexto
+                  // da carta ao processar a próxima resposta livre do usuário.
+                  await supabase.from('messages').insert({
+                    user_id: profile.user_id,
+                    role: 'assistant',
+                    content: rec.preview_text,
+                  });
                   console.log(`💌 [BUTTON] Preview Carta Mensal entregue (id=${rec.id})`);
                   deliveryDone = true;
                 }
