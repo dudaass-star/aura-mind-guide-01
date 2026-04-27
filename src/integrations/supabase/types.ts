@@ -1926,6 +1926,36 @@ export type Database = {
         }
         Relationships: []
       }
+      user_evolution_summary: {
+        Row: {
+          created_at: string
+          generation_count: number
+          last_generated_at: string
+          messages_count_at_generation: number
+          summary_text: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          generation_count?: number
+          last_generated_at?: string
+          messages_count_at_generation?: number
+          summary_text: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          generation_count?: number
+          last_generated_at?: string
+          messages_count_at_generation?: number
+          summary_text?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_insights: {
         Row: {
           category: string
