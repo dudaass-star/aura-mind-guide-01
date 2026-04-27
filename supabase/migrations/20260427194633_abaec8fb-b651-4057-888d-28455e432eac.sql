@@ -1,0 +1,2 @@
+ALTER TABLE public.session_ratings DROP CONSTRAINT IF EXISTS session_ratings_rating_check;
+ALTER TABLE public.session_ratings ADD CONSTRAINT session_ratings_rating_check CHECK (rating >= 0 AND rating <= 10);
