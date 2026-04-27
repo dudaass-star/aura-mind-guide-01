@@ -1062,6 +1062,31 @@ Deno.serve(async (req) => {
 
     // wasInterrupted, interruptedAtIndex, agentData declared at outer scope (line ~200)
 
+    // ========================================================================
+    // QUOTED MESSAGE — resolve o conteúdo da mensagem citada (reply nativo)
+    // ------------------------------------------------------------------------
+    // Quando o usuário usa "Responder" no WhatsApp citando uma mensagem da AURA,
+    // o webhook recebe o SID (Twilio) ou wamid (Meta) da mensagem original. Aqui
+    // buscamos o body via Twilio API e injetamos como `quoted_message` no
+    // payload do aura-agent. Isso evita que a Aura assuma que o usuário está
+    // respondendo à última mensagem dela quando, na verdade, está respondendo
+    // a uma mensagem mais antiga.
+    //
+    // Pulamos esta resolução em cliques de botão (Quick Reply) — esses já têm
+    // fast-path determinístico tratado antes deste ponto.
+    // ========================================================================
+    let quotedMessageBody: string | null = null;
+    const isButtonClickReply = messageType === 'button';
+    if (!isButtonClickReply && originalRepliedMessageSid) {
+      console.log(`💬 [QUOTED] Twilio reply detected — fetching SID ${originalRepliedMessageSid}`);
+      quotedMessageBody = await fetchTwilioQuotedBody(originalRepliedMessageSid);
+      if (quotedMessageBody) {
+        console.log(`💬 [QUOTED] Resolved body (${quotedMessageBody.length} chars): "${quotedMessageBody.substring(0, 80)}..."`);
+      } else {
+        console.log(`💬 [QUOTED] Could not resolve body for SID ${originalRepliedMessageSid}`);
+      }
+    }
+
     // Helper: call aura-agent with timeout and optional minimal context
     async function callAuraAgent(useMinimalContext = false): Promise<any> {
       const controller = new AbortController();
@@ -1075,6 +1100,8 @@ Deno.serve(async (req) => {
           pending_content: pendingContent,
           pending_context: pendingContext,
           last_user_context: lastUserContext,
+          // Conteúdo da mensagem citada via "Responder" nativo do WhatsApp
+          quoted_message: quotedMessageBody,
         };
         if (useMinimalContext) {
           body.minimal_context = true;
