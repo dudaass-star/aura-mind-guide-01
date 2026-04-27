@@ -439,11 +439,11 @@ Você está pronta(o) pra começar? Me responde um "vamos" ou "bora" quando quis
 
     // ========================================================================
     // DETECTAR SESSÕES NOTIFICADAS MAS NUNCA INICIADAS (missed - 30 min após notificação)
-    // Skip during quiet hours - will be processed next run
+    // IMPORTANTE: Sempre fechamos no banco; mensagem suprimida em quiet hours.
     // ========================================================================
     let missedSessionsClosed = 0;
     
-    const { data: missedSessions, error: errorMissed } = isQuietHours ? { data: null, error: null } : await supabase
+    const { data: missedSessions, error: errorMissed } = await supabase
       .from('sessions')
       .select('id, user_id, scheduled_at')
       .eq('status', 'scheduled')
@@ -476,8 +476,8 @@ Você está pronta(o) pra começar? Me responde um "vamos" ou "bora" quando quis
           })
           .eq('id', session.id);
         
-        // Enviar mensagem oferecendo reagendamento
-        if (profile?.phone) {
+        // Enviar mensagem oferecendo reagendamento (suprimido em quiet hours)
+        if (profile?.phone && !isQuietHours) {
           const userName = profile.name || 'você';
           const message = `Oi ${userName}! 💜
 
@@ -497,6 +497,8 @@ Quer remarcar pra outro horário? É só me dizer quando fica bom pra você. ✨
           } catch (sendError) {
             console.error(`❌ Error sending missed session message for session ${session.id}:`, sendError);
           }
+        } else if (isQuietHours) {
+          console.log(`🌙 Session ${session.id} marked missed during quiet hours - message suppressed`);
         }
         
         missedSessionsClosed++;
