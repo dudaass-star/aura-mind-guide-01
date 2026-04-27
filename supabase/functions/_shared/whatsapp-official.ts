@@ -38,6 +38,13 @@ export interface ProactiveMessageResult {
   parts: number;
   type: 'template' | 'freetext';
   error?: string;
+  /**
+   * SID retornado pelo Twilio quando o envio é um template (Quick Reply).
+   * Necessário para casar cliques de botão (OriginalRepliedMessageSid)
+   * com o registro original no banco (ex: weekly_questions, monthly_letters).
+   * Disponível apenas quando type === 'template' e success === true.
+   */
+  messageId?: string;
 }
 
 // Keep alias for backwards compat
@@ -316,7 +323,7 @@ export async function sendTemplateOnly(
     console.log(`📨 [Twilio][TemplateOnly] Sending "${templateConfig.template_name}" (${contentSid}) to ${phone.substring(0, 4)}*** with vars=${JSON.stringify(variables)}`);
 
     const result = await sendTemplateMessage(phone, contentSid, variables);
-    return { success: result.success, parts: 1, type: 'template', error: result.error };
+    return { success: result.success, parts: 1, type: 'template', error: result.error, messageId: result.messageId };
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Unknown error';
     console.error(`❌ [Twilio][TemplateOnly] error: ${msg}`);
@@ -400,7 +407,7 @@ export async function sendProactiveMessage(
     if (templateVariables && templateVariables.length > 0) {
       console.log(`📨 [Twilio] Sending template ContentSid="${contentSid}" with ${templateVariables.length} structured variable(s)`);
       const templateResult = await sendTemplateMessage(phone, contentSid, templateVariables);
-      return { success: templateResult.success, parts: 1, type: 'template', error: templateResult.error };
+      return { success: templateResult.success, parts: 1, type: 'template', error: templateResult.error, messageId: templateResult.messageId };
     }
 
     // Auto-resolve first name as the ONLY variable
@@ -408,7 +415,7 @@ export async function sendProactiveMessage(
     console.log(`📨 [Twilio] Sending template ContentSid="${contentSid}" with auto-resolved name: "${firstName}"`);
 
     const templateResult = await sendTemplateMessage(phone, contentSid, [firstName]);
-    return { success: templateResult.success, parts: 1, type: 'template', error: templateResult.error };
+    return { success: templateResult.success, parts: 1, type: 'template', error: templateResult.error, messageId: templateResult.messageId };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('❌ [Twilio] Proactive message error:', errorMessage);

@@ -271,6 +271,10 @@ Deno.serve(async (req) => {
           question_text: question,
           question_date: todayDateStr,
           sent_at: triggerSentIso,
+          // SID retornado pelo Twilio — usado pelo webhook para casar
+          // o clique do botão (OriginalRepliedMessageSid) com este registro
+          // de forma 100% determinística.
+          trigger_message_sid: result.messageId ?? null,
         });
 
       if (insertErr) {

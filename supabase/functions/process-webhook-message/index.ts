@@ -227,6 +227,8 @@ Deno.serve(async (req) => {
     const {
       phone, cleanPhone, messageId, text,
       hasAudio, audioUrl, hasImage, imageCaption,
+      // Metadados de clique de botão (Twilio Quick Reply)
+      messageType, buttonText, buttonPayload, originalRepliedMessageSid,
     } = workerPayload;
 
     contingencyPhone = cleanPhone;
@@ -361,134 +363,174 @@ Deno.serve(async (req) => {
     const currentMessageId = messageId || `msg_${Date.now()}`;
 
     // ========================================================================
-    // CAPTURA DE RESPOSTA DA PERGUNTA DA SEMANA
-    // ENTREGA CONTEXTUAL: padrão da casa (igual weekly_report/content).
-    // Quando o usuário responde ao template gatilho 'cheking_7dias' e abre a
-    // janela 24h, o conteúdo rico (Pergunta da Semana / Carta Mensal) é
-    // entregue como texto livre ANTES do fluxo normal da Aura processar a msg.
-    // Idempotente via delivered_at IS NULL.
-    // Captura de resposta da pergunta segue após (linka resposta -> pergunta).
+    // ENTREGA DETERMINÍSTICA DE CONTEÚDO RICO (clique em template Quick Reply)
+    //
+    // Twilio envia em cada clique de botão:
+    //   MessageType = "button"
+    //   ButtonText  = texto exato do botão clicado (ex: "Ver pergunta", "Acessar")
+    //   OriginalRepliedMessageSid = SID da mensagem-template clicada
+    //
+    // Fluxo:
+    //   1. Se MessageType !== 'button' → segue fluxo normal (aura-agent).
+    //   2. Se for botão:
+    //      a) Lookup em template_definitions por button_text (case-insensitive)
+    //         para descobrir delivers_content_type ('weekly_question' | 'monthly_letter').
+    //      b) Lookup do registro em weekly_questions / monthly_letters cujo
+    //         trigger_message_sid == OriginalRepliedMessageSid.
+    //         Fallback: registro mais recente do usuário ainda não entregue
+    //         (≤ 24h) — cobre cliques em templates antigos sem trigger_message_sid.
+    //      c) Entrega o conteúdo (texto livre), marca delivered_at, libera lock,
+    //         e RETORNA — não chamamos o aura-agent porque clique é comando, não conversa.
+    //      d) Se algo falhar (template_definitions sem match, registro inexistente),
+    //         cai pro fluxo normal — a Aura responde como se fosse texto.
+    // ========================================================================
+    const isButtonClick = messageType === 'button' && buttonText && originalRepliedMessageSid;
+    if (isButtonClick) {
+      try {
+        console.log(`🔘 [BUTTON] Click detectado — text="${buttonText}" originalSid="${originalRepliedMessageSid}"`);
+
+        // a) Resolver o tipo de conteúdo via template_definitions
+        const { data: templateDef } = await supabase
+          .from('template_definitions')
+          .select('template_name, delivers_content_type, button_text')
+          .ilike('button_text', buttonText.trim())
+          .eq('is_active', true)
+          .maybeSingle();
+
+        if (!templateDef) {
+          console.warn(`⚠️ [BUTTON] Sem template_definition para button_text="${buttonText}". Caindo no fluxo normal.`);
+        } else {
+          const contentType = templateDef.delivers_content_type;
+          console.log(`🎯 [BUTTON] Template "${templateDef.template_name}" entrega "${contentType}"`);
+
+          // b) Buscar o registro pendente. Match primário por trigger_message_sid;
+          //    fallback por janela de 24h se SID não bater (templates legados).
+          const ONE_DAY_AGO = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+          let deliveryDone = false;
+
+          if (contentType === 'weekly_question') {
+            // Match por SID
+            let { data: rec } = await supabase
+              .from('weekly_questions')
+              .select('id, question_text, sent_at')
+              .eq('user_id', profile.user_id)
+              .eq('trigger_message_sid', originalRepliedMessageSid)
+              .is('delivered_at', null)
+              .maybeSingle();
+
+            // Fallback: registro mais recente sem SID gravado, dentro de 24h
+            if (!rec) {
+              const { data: fb } = await supabase
+                .from('weekly_questions')
+                .select('id, question_text, sent_at')
+                .eq('user_id', profile.user_id)
+                .is('delivered_at', null)
+                .gte('sent_at', ONE_DAY_AGO)
+                .order('sent_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+              if (fb) {
+                console.log(`↪️ [BUTTON] Fallback weekly_question por janela (id=${fb.id}) — SID não casou`);
+                rec = fb;
+              }
+            }
+
+            if (rec?.id && rec.question_text) {
+              const { data: claimed } = await supabase
+                .from('weekly_questions')
+                .update({ delivered_at: new Date().toISOString() })
+                .eq('id', rec.id)
+                .is('delivered_at', null)
+                .select('id')
+                .maybeSingle();
+
+              if (claimed) {
+                const sendResult = await sendMessage(cleanPhone, rec.question_text, profile.user_id);
+                if (!sendResult.success) {
+                  await supabase.from('weekly_questions').update({ delivered_at: null }).eq('id', rec.id);
+                  console.warn(`⚠️ [BUTTON] Falha envio Pergunta da Semana (${rec.id}): ${sendResult.error}`);
+                } else {
+                  console.log(`💌 [BUTTON] Pergunta da Semana entregue (id=${rec.id})`);
+                  deliveryDone = true;
+                }
+              }
+            } else {
+              console.warn(`⚠️ [BUTTON] Nenhuma weekly_question pendente encontrada para user ${profile.user_id}`);
+            }
+          } else if (contentType === 'monthly_letter') {
+            let { data: rec } = await supabase
+              .from('monthly_letters')
+              .select('id, preview_text')
+              .eq('user_id', profile.user_id)
+              .eq('trigger_message_sid', originalRepliedMessageSid)
+              .is('delivered_at', null)
+              .maybeSingle();
+
+            if (!rec) {
+              const { data: fb } = await supabase
+                .from('monthly_letters')
+                .select('id, preview_text')
+                .eq('user_id', profile.user_id)
+                .is('delivered_at', null)
+                .not('trigger_sent_at', 'is', null)
+                .gte('trigger_sent_at', ONE_DAY_AGO)
+                .order('trigger_sent_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+              if (fb) {
+                console.log(`↪️ [BUTTON] Fallback monthly_letter por janela (id=${fb.id}) — SID não casou`);
+                rec = fb;
+              }
+            }
+
+            if (rec?.id && rec.preview_text) {
+              const { data: claimed } = await supabase
+                .from('monthly_letters')
+                .update({ delivered_at: new Date().toISOString() })
+                .eq('id', rec.id)
+                .is('delivered_at', null)
+                .select('id')
+                .maybeSingle();
+
+              if (claimed) {
+                const sendResult = await sendMessage(cleanPhone, rec.preview_text, profile.user_id);
+                if (!sendResult.success) {
+                  await supabase.from('monthly_letters').update({ delivered_at: null }).eq('id', rec.id);
+                  console.warn(`⚠️ [BUTTON] Falha envio Carta Mensal (${rec.id}): ${sendResult.error}`);
+                } else {
+                  console.log(`💌 [BUTTON] Preview Carta Mensal entregue (id=${rec.id})`);
+                  deliveryDone = true;
+                }
+              }
+            } else {
+              console.warn(`⚠️ [BUTTON] Nenhuma monthly_letter pendente encontrada para user ${profile.user_id}`);
+            }
+          } else {
+            console.warn(`⚠️ [BUTTON] delivers_content_type desconhecido: "${contentType}"`);
+          }
+
+          // d) Se entregou, encerra aqui — clique de botão é comando, não conversa.
+          if (deliveryDone) {
+            return new Response(
+              JSON.stringify({ status: 'delivered', content_type: contentType }),
+              { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+            );
+          }
+          // Se não entregou, cai pro fluxo normal (Aura responde como se fosse texto).
+        }
+      } catch (btnErr) {
+        console.error('❌ [BUTTON] Erro no handler determinístico (caindo no fluxo normal):', btnErr);
+      }
+    }
+
+    // ========================================================================
+    // CAPTURA ANALÍTICA DE RESPOSTA DA PERGUNTA DA SEMANA
+    // (texto livre que vem depois do clique — linka resposta à pergunta entregue)
     // ========================================================================
     if (messageText && messageText.trim().length > 0) {
       (async () => {
         try {
-          // ====================================================================
-          // ENTREGA CONTEXTUAL — janela curta + heurística de aceite
-          // ====================================================================
-          // Só entregamos o conteúdo rico (Pergunta da Semana / Carta Mensal)
-          // se a mensagem do usuário for plausivelmente uma RESPOSTA AO TEMPLATE
-          // gatilho. Critérios (qualquer um basta):
-          //   (a) Mensagem chegou em ≤30min após o trigger (provável clique no botão).
-          //   (b) Mensagem chegou em ≤2h após o trigger E começa com palavra
-          //       afirmativa curta típica de Quick Reply ("sim", "quero", "manda",
-          //       "pode", "aceito", "claro", "vai", "bora", "ok").
-          // Caso contrário, NÃO entrega e a Aura responde normalmente.
-          // Após 24h sem entrega, marca como expirado (delivered_at = -infinity sentinel
-          // não existe; usamos delivered_at = trigger_sent_at + 24h via update fora aqui).
-          // Aqui só consumimos triggers ainda dentro da janela máxima de 24h.
-          // ====================================================================
           const NOW = Date.now();
-          const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
-          const QUICK_WINDOW_MS = 30 * 60 * 1000;        // 30min = clique direto
-          const ACCEPT_WINDOW_MS = 2 * 60 * 60 * 1000;   // 2h com texto afirmativo
-
-          const normalizedMsg = messageText.trim().toLowerCase();
-          const ACCEPT_RX = /^(sim|quero|manda|pode|aceito|aceita|claro|vai|bora|ok|okay|tá|ta|beleza|isso|uhum|aham|por favor|pf|👍|✅|✨|🙌|❤️|💜)\b/i;
-          const looksLikeAccept = ACCEPT_RX.test(normalizedMsg);
-
-          const isWithinDeliveryWindow = (triggerIso: string | null | undefined): boolean => {
-            if (!triggerIso) return false;
-            const elapsed = NOW - new Date(triggerIso).getTime();
-            if (elapsed > TWENTY_FOUR_HOURS_MS || elapsed < 0) return false;
-            if (elapsed <= QUICK_WINDOW_MS) return true;
-            if (elapsed <= ACCEPT_WINDOW_MS && looksLikeAccept) return true;
-            return false;
-          };
-
-          // 1) Pergunta da Semana — só entrega se passou no critério de janela
-          const oneDayAgo = new Date(NOW - TWENTY_FOUR_HOURS_MS).toISOString();
-          const { data: pendingQuestionDelivery } = await supabase
-            .from('weekly_questions')
-            .select('id, question_text, sent_at')
-            .eq('user_id', profile.user_id)
-            .is('delivered_at', null)
-            .gte('sent_at', oneDayAgo)
-            .order('sent_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-          if (
-            pendingQuestionDelivery?.id &&
-            pendingQuestionDelivery.question_text &&
-            isWithinDeliveryWindow(pendingQuestionDelivery.sent_at)
-          ) {
-            const { data: claimed } = await supabase
-              .from('weekly_questions')
-              .update({ delivered_at: new Date().toISOString() })
-              .eq('id', pendingQuestionDelivery.id)
-              .is('delivered_at', null)
-              .select('id')
-              .maybeSingle();
-
-            if (claimed) {
-              const sendResult = await sendMessage(cleanPhone, pendingQuestionDelivery.question_text, profile.user_id);
-              if (!sendResult.success) {
-                await supabase
-                  .from('weekly_questions')
-                  .update({ delivered_at: null })
-                  .eq('id', pendingQuestionDelivery.id);
-                console.warn(`⚠️ Falha entrega Pergunta da Semana (${pendingQuestionDelivery.id}): ${sendResult.error}`);
-              } else {
-                console.log(`💌 Pergunta da Semana entregue (id=${pendingQuestionDelivery.id}, gap=${Math.round((NOW - new Date(pendingQuestionDelivery.sent_at).getTime())/60000)}min)`);
-              }
-            }
-          } else if (pendingQuestionDelivery?.id) {
-            console.log(`⏭️ Pergunta pendente (id=${pendingQuestionDelivery.id}) NÃO entregue — fora da janela ou msg não é aceite.`);
-          }
-
-          // 2) Carta Mensal — mesma lógica
-          const { data: pendingLetter } = await supabase
-            .from('monthly_letters')
-            .select('id, preview_text, trigger_sent_at')
-            .eq('user_id', profile.user_id)
-            .is('delivered_at', null)
-            .not('trigger_sent_at', 'is', null)
-            .gte('trigger_sent_at', oneDayAgo)
-            .order('trigger_sent_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-          if (
-            pendingLetter?.id &&
-            pendingLetter.preview_text &&
-            isWithinDeliveryWindow(pendingLetter.trigger_sent_at)
-          ) {
-            const { data: claimedLetter } = await supabase
-              .from('monthly_letters')
-              .update({ delivered_at: new Date().toISOString() })
-              .eq('id', pendingLetter.id)
-              .is('delivered_at', null)
-              .select('id')
-              .maybeSingle();
-
-            if (claimedLetter) {
-              const sendResult = await sendMessage(cleanPhone, pendingLetter.preview_text, profile.user_id);
-              if (!sendResult.success) {
-                await supabase
-                  .from('monthly_letters')
-                  .update({ delivered_at: null })
-                  .eq('id', pendingLetter.id);
-                console.warn(`⚠️ Falha entrega Carta Mensal (${pendingLetter.id}): ${sendResult.error}`);
-              } else {
-                console.log(`💌 Preview Carta Mensal entregue (id=${pendingLetter.id})`);
-              }
-            }
-          } else if (pendingLetter?.id) {
-            console.log(`⏭️ Carta pendente (id=${pendingLetter.id}) NÃO entregue — fora da janela ou msg não é aceite.`);
-          }
-
-          // 3) CAPTURA analítica de resposta da Pergunta — só registra se ENTREGUE
-          //    (antes registrava qualquer mensagem, gerando dados ruins).
           const threeDaysAgo = new Date(NOW - 3 * 24 * 60 * 60 * 1000).toISOString();
           const { data: pendingQuestion } = await supabase
             .from('weekly_questions')
@@ -512,7 +554,7 @@ Deno.serve(async (req) => {
             console.log(`💌 Resposta da Pergunta da Semana capturada (id=${pendingQuestion.id})`);
           }
         } catch (e) {
-          console.warn('⚠️ Erro no fluxo de entrega/captura Pergunta/Carta:', e);
+          console.warn('⚠️ Erro na captura analítica de resposta da Pergunta:', e);
         }
       })();
     }
