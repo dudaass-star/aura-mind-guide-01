@@ -5285,42 +5285,74 @@ INSTRUÇÃO: Retome de onde pararam naturalmente. Diga algo como "Que bom que vo
     // ========================================================================
     if (profile?.pending_insight) {
       const isSessionStart = profile.pending_insight.startsWith('[SESSION_START]');
+      const isSessionPrearm = profile.pending_insight.startsWith('[SESSION_PREARM]');
       const isWelcomePending = profile.pending_insight.startsWith('[WELCOME]');
       const isWeeklyReport = profile.pending_insight.startsWith('[WEEKLY_REPORT]');
       const isContent = profile.pending_insight.startsWith('[CONTENT]');
 
-      if (isSessionStart) {
-        // SESSION START: User clicked button on 5-min template — start session immediately
-        const sessionId = profile.pending_insight.replace('[SESSION_START]', '');
-        console.log(`🚀 [SESSION_START] User clicked template button — starting session ${sessionId} immediately`);
+      if (isSessionStart || isSessionPrearm) {
+        // SESSION START: usuário clicou no botão T-5min ([SESSION_START])
+        // OU confirmou T-24h e está mandando mensagem perto do horário ([SESSION_PREARM])
+        const tag = isSessionStart ? '[SESSION_START]' : '[SESSION_PREARM]';
+        const sessionId = profile.pending_insight.replace(tag, '');
+        console.log(`🚀 ${tag} Detectado para sessão ${sessionId} — avaliando início`);
 
-        // Start the session
-        const startNow = new Date().toISOString();
-        await supabase.from('sessions').update({
-          status: 'in_progress',
-          started_at: startNow,
-          session_start_notified: true,
-        }).eq('id', sessionId);
-
-        // Update profile with current session
-        await supabase.from('profiles').update({
-          current_session_id: sessionId,
-          pending_insight: null,
-        }).eq('id', profile.id);
-
-        // Fetch session details for context
-        const { data: sessionData } = await supabase
+        // Buscar sessão para validar janela de início
+        const { data: prearmSession } = await supabase
           .from('sessions')
-          .select('session_type, focus_topic, duration_minutes')
+          .select('scheduled_at, status, session_type, focus_topic, duration_minutes')
           .eq('id', sessionId)
-          .single();
+          .maybeSingle();
 
-        const sessionType = sessionData?.session_type || 'livre';
-        const focusTopic = sessionData?.focus_topic;
-        const durationMin = sessionData?.duration_minutes || 45;
+        if (!prearmSession) {
+          console.warn(`⚠️ ${tag} sessão ${sessionId} não encontrada — limpando pending_insight`);
+          await supabase.from('profiles').update({ pending_insight: null }).eq('id', profile.id);
+        } else if (prearmSession.status !== 'scheduled') {
+          console.log(`⏭️ ${tag} sessão ${sessionId} já está com status=${prearmSession.status} — limpando pending_insight`);
+          await supabase.from('profiles').update({ pending_insight: null }).eq('id', profile.id);
+        } else {
+          const scheduledAt = new Date(prearmSession.scheduled_at);
+          const nowTs = Date.now();
+          const minutesUntilScheduled = (scheduledAt.getTime() - nowTs) / 60000;
 
-        dynamicContext += `\n\n🚀 SESSÃO TERAPÊUTICA INICIADA AGORA:
-O usuário acabou de clicar no botão do template de lembrete de 5 minutos. A sessão foi iniciada automaticamente.
+          // Janela de início: de 15 min ANTES do horário até 60 min DEPOIS
+          // Para [SESSION_START] (clique direto no botão T-5min) também aceitamos início imediato
+          const inStartWindow = isSessionStart
+            ? minutesUntilScheduled <= 15 && minutesUntilScheduled >= -60
+            : minutesUntilScheduled <= 15 && minutesUntilScheduled >= -60;
+
+          // GUARD: nunca iniciar antes de 5 min antes do horário
+          if (minutesUntilScheduled > 15) {
+            console.log(`⏳ ${tag} sessão ${sessionId} ainda longe (faltam ${Math.round(minutesUntilScheduled)} min). Mantém pré-arme e segue conversa normal.`);
+            // Mantém pending_insight para a próxima mensagem reavaliar.
+          } else if (!inStartWindow) {
+            console.log(`⌛ ${tag} sessão ${sessionId} fora da janela (${Math.round(minutesUntilScheduled)} min). Limpando pré-arme.`);
+            await supabase.from('profiles').update({ pending_insight: null }).eq('id', profile.id);
+          } else {
+            // INICIAR SESSÃO AGORA
+            const startNow = new Date().toISOString();
+            await supabase.from('sessions').update({
+              status: 'in_progress',
+              started_at: startNow,
+              session_start_notified: true,
+            }).eq('id', sessionId);
+
+            await supabase.from('profiles').update({
+              current_session_id: sessionId,
+              pending_insight: null,
+            }).eq('id', profile.id);
+
+            const sessionType = prearmSession.session_type || 'livre';
+            const focusTopic = prearmSession.focus_topic;
+            const durationMin = prearmSession.duration_minutes || 45;
+
+            const triggerNote = isSessionStart
+              ? 'O usuário acabou de clicar no botão do template de lembrete de 5 minutos.'
+              : 'O usuário havia confirmado a sessão antes e agora mandou uma mensagem dentro da janela de início.';
+            console.log(`✅ ${tag} sessão ${sessionId} iniciada (delta=${Math.round(minutesUntilScheduled)} min)`);
+
+            dynamicContext += `\n\n🚀 SESSÃO TERAPÊUTICA INICIADA AGORA:
+${triggerNote} A sessão foi iniciada automaticamente.
 
 Tipo: ${sessionType}
 Duração: ${durationMin} minutos
@@ -5331,7 +5363,9 @@ INSTRUÇÃO:
 2. Este é o momento especial de ${durationMin} minutos — diferente das conversas do dia a dia
 3. Pergunte como o usuário está se sentindo e o que gostaria de trabalhar hoje
 4. Seja acolhedora e profissional — esta é uma sessão terapêutica estruturada
-5. NÃO mencione que "clicou no botão" — pareça natural`;
+5. NÃO mencione "clique no botão" ou "confirmação" — pareça natural`;
+          }
+        }
 
       } else if (isWelcomePending) {
         // WELCOME FLOW: User clicked "Começar" on the template
