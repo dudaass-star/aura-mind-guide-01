@@ -189,18 +189,40 @@ Deno.serve(async (req) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
   );
 
-  console.log('📅 [send-weekly-question] starting batch run');
+  // Permitir disparo individual via body { target_user_id, force? }
+  // Útil para testes manuais e reenvios.
+  let targetUserId: string | null = null;
+  let force = false;
+  try {
+    if (req.method === 'POST') {
+      const body = await req.json().catch(() => ({}));
+      targetUserId = typeof body?.target_user_id === 'string' ? body.target_user_id : null;
+      force = body?.force === true;
+    }
+  } catch { /* sem body, segue batch normal */ }
+
+  console.log(`📅 [send-weekly-question] starting${targetUserId ? ` (target=${targetUserId}, force=${force})` : ' batch run'}`);
 
   const today = new Date();
   const todayDateStr = today.toISOString().slice(0, 10); // YYYY-MM-DD
   const nowIso = today.toISOString();
 
   // Buscar usuários ativos
-  const { data: users, error: usersErr } = await supabase
+  let usersQuery = supabase
     .from('profiles')
     .select('user_id, name, phone, primary_topic, do_not_disturb_until, status')
     .in('status', ['active', 'trial'])
     .not('phone', 'is', null);
+
+  if (targetUserId) {
+    usersQuery = supabase
+      .from('profiles')
+      .select('user_id, name, phone, primary_topic, do_not_disturb_until, status')
+      .eq('user_id', targetUserId)
+      .not('phone', 'is', null);
+  }
+
+  const { data: users, error: usersErr } = await usersQuery;
 
   if (usersErr) {
     console.error('❌ Error fetching users:', usersErr);
