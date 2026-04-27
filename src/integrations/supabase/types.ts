@@ -2030,6 +2030,36 @@ export type Database = {
           },
         ]
       }
+      user_memory_corrections: {
+        Row: {
+          confidence: number
+          correction_text: string
+          created_at: string
+          id: string
+          last_used_at: string | null
+          source: string | null
+          user_id: string
+        }
+        Insert: {
+          confidence?: number
+          correction_text: string
+          created_at?: string
+          id?: string
+          last_used_at?: string | null
+          source?: string | null
+          user_id: string
+        }
+        Update: {
+          confidence?: number
+          correction_text?: string
+          created_at?: string
+          id?: string
+          last_used_at?: string | null
+          source?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_milestones: {
         Row: {
           context_excerpt: string | null
