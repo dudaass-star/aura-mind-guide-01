@@ -4941,6 +4941,14 @@ ${(() => {
   return `Estas são verdades que o próprio usuário já estabeleceu (ou correções que ele te deu em conversas passadas). NUNCA contrarie, NUNCA repita o erro corrigido, e NUNCA force conexões entre temas que estas correções proibiram explicitamente.\n\n${lines}`;
 })()}
 
+## 📖 Quem é ${profile?.name || 'esta pessoa'} (contexto de fundo, NÃO use como pauta)
+${(() => {
+  if (!userEvolutionSummary) {
+    return '- (resumo evolutivo ainda não gerado para este usuário)';
+  }
+  return `${userEvolutionSummary}\n\n⚠️ Use este resumo só para entender quem está do outro lado. NÃO traga estes pontos à tona se o usuário não abrir o gancho. Frases separadas estão separadas de propósito — NÃO conecte temas que aparecem em frases distintas.`;
+})()}
+
 ## Processo Terapêutico
 ${(() => {
   const techniques = userInsights?.filter((i: any) => i.category === 'tecnica') || [];
