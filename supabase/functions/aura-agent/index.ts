@@ -7107,7 +7107,7 @@ Só DEPOIS de saber a situação, explore as emoções com profundidade.`;
           await maybeTriggerEvolutionSummary(
             profile.user_id,
             supabase,
-            GEMINI_API_KEY
+            LOVABLE_API_KEY
           );
         } catch (err) {
           console.error('⚠️ Evolution-summary async error:', err);
