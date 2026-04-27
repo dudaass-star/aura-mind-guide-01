@@ -17,7 +17,39 @@ Deno.serve(async (req) => {
     if (!twilioKey) throw new Error('TWILIO_API_KEY not configured');
 
     const body = await req.json().catch(() => ({}));
-    const { check_sids } = body;
+    const { check_sids, content_sids } = body;
+
+    // Look up Content templates (Quick Reply button labels) via Content API
+    // Routed through the same gateway. Path "Content/{sid}.json" — gateway
+    // strips the /2010-04-01/Accounts prefix automatically when path doesn't match.
+    if (content_sids && Array.isArray(content_sids)) {
+      const out: any[] = [];
+      for (const sid of content_sids) {
+        const attempts = [
+          `${GATEWAY_URL}/Content/${sid}`,
+          `${GATEWAY_URL}/Content/${sid}.json`,
+        ];
+        let found: any = { sid, tries: [] };
+        for (const url of attempts) {
+          const r = await fetch(url, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${lovableKey}`,
+              'X-Connection-Api-Key': twilioKey,
+            },
+          });
+          const t = await r.text();
+          let parsed: any;
+          try { parsed = JSON.parse(t); } catch { parsed = { raw: t.slice(0, 600) }; }
+          found.tries.push({ url, status: r.status, parsed });
+          if (r.ok) { found.data = parsed; break; }
+        }
+        out.push(found);
+      }
+      return new Response(JSON.stringify(out, null, 2), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     // Check message delivery status for specific SIDs
     if (check_sids && Array.isArray(check_sids)) {
