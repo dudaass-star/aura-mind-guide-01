@@ -1,46 +1,50 @@
-# Robustecer fluxo de início de sessão agendada
+# Corrigir cron faltante do relatório semanal + reenviar para o Eduardo
 
-## Problema
-62% das sessões agendadas terminam como `cancelled`/`no_show`. O fluxo tem 3 pontos frágeis:
+## Diagnóstico
 
-1. **Gatilho único T-5min** — se o cron atrasa ou o template falha, o `pending_insight = [SESSION_START]<id>` nunca é setado e a sessão nunca inicia.
-2. **Confirmação T-24h não pré-arma a sessão** — se o usuário confirma 24h antes ou manda mensagem entre T-24h e T-5min próximo do horário, nada acontece.
-3. **Timeout rígido de 30min** — usuário que responde T+35min entra em conversa livre, sessão vira `no_show` mesmo com intenção clara.
+Investigação completa:
 
-## O que vai ser feito (ordem de prioridade)
+1. Eduardo (`329ebadd-...`, +5551981519708, plano direção, status active): **nenhuma mensagem de relatório semanal** em `messages` no domingo 26/04.
+2. Função `weekly-report`: **zero logs recentes** — não foi invocada.
+3. **Causa raiz no `cron.job`**: existe um único agendamento para essa função, mas com schedule errado.
+   - `jobname`: `monthly-report`
+   - `schedule`: `0 22 1 * *` (apenas dia 1 do mês, 22h UTC)
+   - **Não existe cron rodando aos domingos** apontando para `weekly-report`.
 
-### 1. Pré-armar sessão na confirmação T-24h (maior impacto)
-Quando o usuário confirma no template T-24h, gravar `pending_insight = [SESSION_PREARM]<id>` em vez de só marcar `confirmation_requested = true`.
+A função em si está correta:
+- Invoca `sendProactive(phone, teaser, 'weekly_report', userId)`.
+- Categoria `weekly_report` mapeada na tabela `whatsapp_templates` para o template **`aura_weekly_report_v2`** (ContentSid `HX607738eeadd6fc8008c5735bbf0457a1`), ativo em pt_BR.
+- Janela 24h aberta → teaser direto como texto livre. Janela fechada → template oficial + `pending_insight: [WEEKLY_REPORT]…` entregue pelo fast-path do `process-webhook-message` quando o usuário clica no botão.
 
-No `aura-agent`, ao detectar `[SESSION_PREARM]<id>`:
-- Se faltam ≤15min para `scheduled_at` OU já passou ≤30min → inicia sessão imediatamente (mesma lógica do `[SESSION_START]`).
-- Se ainda falta muito → mantém pré-armada, responde naturalmente.
+Ou seja: lógica de envio e template já estão corretos. Só falta o cron disparar aos domingos.
 
-### 2. Janela ampliada e idempotente para o lembrete T-5min
-- `session-reminder` busca sessões com `scheduled_at` entre `now-2min` e `now+10min` (em vez de janela estreita).
-- Idempotência via `reminder_5m_sent = true` (coluna já existe).
-- Se envio do template falhar, **não** marcar `reminder_5m_sent` — permite retry no próximo tick.
+## Mudanças
 
-### 3. Grace period 30min → 60min
-- Usuário pode iniciar até T+60min com `[SESSION_START]` ou `[SESSION_PREARM]` ativo.
-- Sessões só viram `cancelled` após T+60min sem interação.
+### 1. Criar cron semanal de domingo
 
-### 4. Auditar `started_at < scheduled_at`
-- Investigar o(s) caso(s) detectados.
-- Adicionar guard: nunca setar `started_at` se `scheduled_at > now() + 5min`.
+Inserido via SQL `cron.schedule(...)` (não migration — contém anon key):
 
-## Detalhes técnicos
+- **jobname**: `weekly-report-sunday-10am-brt`
+- **schedule**: `0 13 * * 0` (todo domingo 13h UTC = **10h BRT**)
+- **target**: `https://uhyogifgmutfmbyhzzyo.supabase.co/functions/v1/weekly-report`
+- **body**: `{}` (a função calcula `weekStart` sozinha — últimos 7 dias)
 
-**Arquivos afetados:**
-- `supabase/functions/session-reminder/index.ts` — janela ampliada T-5min, lógica de pré-arme T-24h.
-- `supabase/functions/aura-agent/index.ts` — handler `[SESSION_PREARM]`, grace 60min, guard `started_at`.
-- `supabase/functions/process-webhook-message/index.ts` — fast-path para clique no botão `aura_session_reminder_v2` (padrão Trigger+Deliver).
+Horário 10h BRT: fora das silent hours (22h–08h), domingo de manhã, dá tempo de processar todos os batches antes do almoço. Padrão consistente com os outros crons proativos do projeto.
 
-**Sem migrations** — colunas `pending_insight`, `reminder_5m_sent`, `confirmation_requested`, `user_confirmed` já existem.
+Mantemos o cron `monthly-report` como está (dia 1 do mês, 22h UTC) — ele continua válido para o relatório mensal.
 
-**Verificação pós-deploy:** monitorar por 48h taxa `completed` vs `cancelled`, presença de `[SESSION_PREARM]` em logs, query de `started_at < scheduled_at`.
+### 2. Reenvio manual para o Eduardo
 
-## O que NÃO muda
-- Template `aura_session_reminder_v2` e ContentSid permanecem iguais.
-- Cron do `session-reminder` permanece igual (só a janela fica mais tolerante).
-- Bloco "🚀 SESSÃO TERAPÊUTICA INICIADA" no prompt permanece igual.
+Após criar o cron, invocar uma vez via `supabase.functions.invoke('weekly-report', { body: { target_user_id: '329ebadd-07eb-4e1e-88db-d8974b2ea3e5' } })` para que ele receba o relatório que perdeu agora, sem esperar o próximo domingo.
+
+A função já tem suporte a `target_user_id` no parse de body (linha ~310). Se o caminho individual não existir totalmente, ajuste mínimo antes de disparar.
+
+### 3. Memória
+
+Salvar `mem://technical/weekly-report/cron-schedule` com a regra: relatório **semanal** → `0 13 * * 0` (domingo 10h BRT); relatório **mensal** → `0 22 1 * *` (dia 1 às 22h UTC). Evita confusão futura entre as duas cadências.
+
+## Validação
+
+- `SELECT * FROM cron.job WHERE jobname = 'weekly-report-sunday-10am-brt'` confirmando o schedule.
+- Logs do `weekly-report` mostrando o batch executado após o disparo manual.
+- Última mensagem em `messages` para o Eduardo contendo o teaser do relatório semanal.
