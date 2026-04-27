@@ -4675,6 +4675,17 @@ serve(async (req) => {
         }
       }
 
+      // 12. Resumo evolutivo narrativo (carregado se já gerado)
+      if (
+        evolutionSummaryResult.status === 'fulfilled' &&
+        evolutionSummaryResult.value.data?.summary_text
+      ) {
+        userEvolutionSummary = evolutionSummaryResult.value.data.summary_text;
+        console.log(
+          `📖 Loaded evolution summary (${userEvolutionSummary.length} chars)`
+        );
+      }
+
       // 4. Previous sessions
       if (completedSessionsResult.status === 'fulfilled') {
         const completedSessions = completedSessionsResult.value.data;
