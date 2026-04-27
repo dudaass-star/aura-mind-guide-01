@@ -1721,7 +1721,7 @@ const EVOLUTION_SUMMARY_HOURS_THRESHOLD = 24;
 async function regenerateEvolutionSummary(
   userId: string,
   supabase: any,
-  geminiApiKey: string
+  lovableApiKey: string
 ): Promise<void> {
   try {
     console.log(`📖 [EVOLUTION-SUMMARY] Iniciando regeneração para user ${userId}`);
@@ -1862,7 +1862,7 @@ Responda APENAS com o texto do resumo. Sem cabeçalhos, sem JSON, sem markdown. 
       {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${geminiApiKey}`,
+          Authorization: `Bearer ${lovableApiKey}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -1939,7 +1939,7 @@ Responda APENAS com o texto do resumo. Sem cabeçalhos, sem JSON, sem markdown. 
 async function maybeTriggerEvolutionSummary(
   userId: string,
   supabase: any,
-  geminiApiKey: string
+  lovableApiKey: string
 ): Promise<void> {
   try {
     const { data: existing } = await supabase
@@ -1961,7 +1961,7 @@ async function maybeTriggerEvolutionSummary(
         console.log(
           `📖 [EVOLUTION-SUMMARY] Primeira geração (${totalMsgs} msgs)`
         );
-        await regenerateEvolutionSummary(userId, supabase, geminiApiKey);
+        await regenerateEvolutionSummary(userId, supabase, lovableApiKey);
       }
       return;
     }
@@ -1981,7 +1981,7 @@ async function maybeTriggerEvolutionSummary(
       console.log(
         `📖 [EVOLUTION-SUMMARY] Regenerar (msgs novas=${msgsSinceLast}, h=${hoursSinceLast.toFixed(1)})`
       );
-      await regenerateEvolutionSummary(userId, supabase, geminiApiKey);
+      await regenerateEvolutionSummary(userId, supabase, lovableApiKey);
     }
   } catch (error) {
     console.error(
@@ -7107,7 +7107,7 @@ Só DEPOIS de saber a situação, explore as emoções com profundidade.`;
           await maybeTriggerEvolutionSummary(
             profile.user_id,
             supabase,
-            GEMINI_API_KEY
+            LOVABLE_API_KEY
           );
         } catch (err) {
           console.error('⚠️ Evolution-summary async error:', err);
