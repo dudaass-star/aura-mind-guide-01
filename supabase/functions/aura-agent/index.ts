@@ -4158,6 +4158,7 @@ serve(async (req) => {
     let messageCount = 0;
     let temporalGapHours = 0;
     let userInsights: any[] = [];
+    let userCorrections: any[] = [];
     let previousSessionsContext = '';
     let isFirstSession = false;
     let lastCheckin = "Nenhum registrado";
