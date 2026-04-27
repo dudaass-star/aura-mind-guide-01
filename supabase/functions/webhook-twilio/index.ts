@@ -58,32 +58,6 @@ Deno.serve(async (req) => {
     console.log('📩 Twilio Webhook received:', JSON.stringify(body, null, 2));
 
     // ========================================================================
-    // DEBUG LOG (TEMPORÁRIO) — captura payloads do telefone de teste
-    // Remover após análise dos cliques de botão.
-    // ========================================================================
-    try {
-      const fromRaw = body.From || '';
-      if (fromRaw.includes('5551981519708')) {
-        const headersObj: Record<string, string> = {};
-        req.headers.forEach((v, k) => { headersObj[k] = v; });
-
-        const debugClient = createClient(
-          Deno.env.get('SUPABASE_URL') ?? '',
-          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-        );
-        await debugClient.from('webhook_payload_debug').insert({
-          from_phone: fromRaw,
-          payload: body,
-          headers: headersObj,
-          notes: 'twilio button-click capture test'
-        });
-        console.log('🧪 [DEBUG] Payload de 5551981519708 salvo em webhook_payload_debug');
-      }
-    } catch (debugErr) {
-      console.error('⚠️ [DEBUG] Falha ao salvar payload de debug (não-bloqueante):', debugErr);
-    }
-
-    // ========================================================================
     // EXTRACT FIELDS
     // ========================================================================
     const from = body.From || '';          // "whatsapp:+5511999998888"
@@ -92,6 +66,17 @@ Deno.serve(async (req) => {
     const numMedia = parseInt(body.NumMedia || '0', 10);
     const mediaUrl0 = body.MediaUrl0 || '';
     const mediaType0 = body.MediaContentType0 || '';
+
+    // ========================================================================
+    // BUTTON CLICK METADATA (Twilio Quick Reply / List Picker / etc.)
+    // Confirmado em 27/abr/2026 que esses campos chegam quando o usuário
+    // clica num botão de template (MessageType = "button"). Propagamos para
+    // o worker decidir entrega determinística do conteúdo associado.
+    // ========================================================================
+    const messageType = body.MessageType || '';                                  // 'text' | 'button' | 'audio' | ...
+    const buttonText = body.ButtonText || '';                                    // texto do botão clicado
+    const buttonPayload = body.ButtonPayload || '';                              // payload (geralmente igual ao texto)
+    const originalRepliedMessageSid = body.OriginalRepliedMessageSid || '';      // SID do template original
 
     // ========================================================================
     // EARLY EXITS
