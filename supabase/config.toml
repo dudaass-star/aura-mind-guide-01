@@ -3,6 +3,9 @@ project_id = "uhyogifgmutfmbyhzzyo"
 [functions.admin-update-profile]
 verify_jwt = false
 
+[functions.debug-send-test-templates]
+verify_jwt = false
+
 [functions.admin-send-message]
 verify_jwt = false
 

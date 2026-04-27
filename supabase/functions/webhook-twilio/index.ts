@@ -58,6 +58,32 @@ Deno.serve(async (req) => {
     console.log('📩 Twilio Webhook received:', JSON.stringify(body, null, 2));
 
     // ========================================================================
+    // DEBUG LOG (TEMPORÁRIO) — captura payloads do telefone de teste
+    // Remover após análise dos cliques de botão.
+    // ========================================================================
+    try {
+      const fromRaw = body.From || '';
+      if (fromRaw.includes('5551981519708')) {
+        const headersObj: Record<string, string> = {};
+        req.headers.forEach((v, k) => { headersObj[k] = v; });
+
+        const debugClient = createClient(
+          Deno.env.get('SUPABASE_URL') ?? '',
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+        );
+        await debugClient.from('webhook_payload_debug').insert({
+          from_phone: fromRaw,
+          payload: body,
+          headers: headersObj,
+          notes: 'twilio button-click capture test'
+        });
+        console.log('🧪 [DEBUG] Payload de 5551981519708 salvo em webhook_payload_debug');
+      }
+    } catch (debugErr) {
+      console.error('⚠️ [DEBUG] Falha ao salvar payload de debug (não-bloqueante):', debugErr);
+    }
+
+    // ========================================================================
     // EXTRACT FIELDS
     // ========================================================================
     const from = body.From || '';          // "whatsapp:+5511999998888"
