@@ -4316,6 +4316,14 @@ serve(async (req) => {
       userInsights = [...criticalInsights, ...generalInsights];
       console.log('🧠 Loaded insights:', { critical: criticalInsights.length, general: generalInsights.length, total: userInsights.length });
 
+      // 11. Correções de memória (prioridade máxima sobre insights)
+      if (correctionsResult.status === 'fulfilled' && correctionsResult.value.data) {
+        userCorrections = correctionsResult.value.data;
+        if (userCorrections.length > 0) {
+          console.log(`🛡️ Loaded ${userCorrections.length} memory corrections (priority overrides)`);
+        }
+      }
+
       // 4. Previous sessions
       if (completedSessionsResult.status === 'fulfilled') {
         const completedSessions = completedSessionsResult.value.data;
