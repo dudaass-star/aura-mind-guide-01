@@ -1579,13 +1579,14 @@ Use a função extract_analysis para retornar os dados.`;
     const themesCount = analysis.themes?.length || 0;
     const insightsCount = analysis.insights?.length || 0;
     const commitmentsCount = analysis.commitments?.length || 0;
-    
-    if (themesCount === 0 && insightsCount === 0 && commitmentsCount === 0) {
+    const correctionsCount = analysis.corrections?.length || 0;
+
+    if (themesCount === 0 && insightsCount === 0 && commitmentsCount === 0 && correctionsCount === 0) {
       console.log('ℹ️ [POST-ANALYSIS] Nothing to save');
       return;
     }
 
-    console.log(`🔍 [POST-ANALYSIS] Extracted: ${themesCount} themes, ${insightsCount} insights, ${commitmentsCount} commitments`);
+    console.log(`🔍 [POST-ANALYSIS] Extracted: ${themesCount} themes, ${insightsCount} insights, ${commitmentsCount} commitments, ${correctionsCount} corrections`);
 
     // Save themes
     if (analysis.themes && analysis.themes.length > 0) {
