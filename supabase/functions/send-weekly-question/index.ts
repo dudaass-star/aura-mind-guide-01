@@ -252,33 +252,34 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // Persistir antes do envio (assim a captura de resposta no webhook tem registro)
+      // Disparar PRIMEIRO o template gatilho Quick Reply 'pergunta_semanal'.
+      // Só persistimos a pergunta se o template foi enviado com sucesso, e
+      // usamos o instante real do envio como sent_at (âncora da janela de
+      // entrega). Isso garante que a janela curta (30min/2h) seja precisa.
+      const result = await sendTemplateOnly(user.phone, 'weekly_question', user.user_id);
+      if (!result.success) {
+        console.error(`❌ sendTemplateOnly failed for ${user.user_id}: ${result.error}`);
+        failed++;
+        continue;
+      }
+
+      const triggerSentIso = new Date().toISOString();
       const { error: insertErr } = await supabase
         .from('weekly_questions')
         .insert({
           user_id: user.user_id,
           question_text: question,
           question_date: todayDateStr,
-          sent_at: nowIso,
+          sent_at: triggerSentIso,
         });
 
       if (insertErr) {
         console.error(`❌ Insert weekly_questions failed for ${user.user_id}:`, insertErr.message);
-        failed++;
-        continue;
+        // template já foi enviado — não conta como failed pra não duplicar amanhã
       }
 
-      // Disparar SEMPRE o template gatilho Quick Reply 'pergunta_semanal'
-      // (categoria 'weekly_question'). A pergunta gerada será entregue pelo
-      // webhook quando o usuário clicar no botão (abre janela de 24h).
-      const result = await sendTemplateOnly(user.phone, 'weekly_question', user.user_id);
-      if (!result.success) {
-        console.error(`❌ sendTemplateOnly failed for ${user.user_id}: ${result.error}`);
-        failed++;
-      } else {
-        sent++;
-        console.log(`✅ Template gatilho enviado para ${user.phone.substring(0, 4)}*** (pergunta aguardando entrega na janela)`);
-      }
+      sent++;
+      console.log(`✅ Template gatilho enviado para ${user.phone.substring(0, 4)}*** (pergunta aguardando clique do botão dentro de 30min)`);
 
       // Anti-burst
       await new Promise(r => setTimeout(r, 300));
