@@ -139,9 +139,15 @@ Deno.serve(async (req) => {
       console.log(`🌙 Quiet hours (${brtHour}h BRT) - only time-sensitive reminders (5m, start) will be sent`);
     }
     const fiveMinutesFromNow = new Date(now.getTime() + 5 * 60 * 1000);
+    // Janela ampliada para o lembrete T-5min: aceita sessões com scheduled_at
+    // entre now-2min e now+10min — tolerante a atrasos do cron (até ~5min).
+    const tenMinutesFromNow = new Date(now.getTime() + 10 * 60 * 1000);
+    const twoMinutesAgo = new Date(now.getTime() - 2 * 60 * 1000);
     const twentyFourHoursFromNow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
     const twentyThreeHoursFromNow = new Date(now.getTime() + 23 * 60 * 60 * 1000);
-    const thirtyMinutesAgo = new Date(now.getTime() - 30 * 60 * 1000);
+    // Grace period ampliado: 60 min (antes 30) para missed/abandoned sessions —
+    // dá mais margem para usuário responder tardiamente sem virar no_show.
+    const sixtyMinutesAgo = new Date(now.getTime() - 60 * 60 * 1000);
 
     console.log(`🕐 Session reminder running at ${now.toISOString()}`);
 
@@ -282,8 +288,8 @@ Confirma que tá tudo certo? Me responde com "confirmo" ou me avisa se precisar 
       .select(`id, user_id, scheduled_at, session_type, focus_topic`)
       .eq('status', 'scheduled')
       .eq('reminder_5m_sent', false)
-      .lte('scheduled_at', fiveMinutesFromNow.toISOString())
-      .gt('scheduled_at', now.toISOString());
+      .lte('scheduled_at', tenMinutesFromNow.toISOString())
+      .gte('scheduled_at', twoMinutesAgo.toISOString());
 
     if (error5m) {
       console.error('❌ Error fetching 5m sessions:', error5m);
@@ -306,22 +312,38 @@ Confirma que tá tudo certo? Me responde com "confirmo" ou me avisa se precisar 
 
         try {
           const cleanPhone = cleanPhoneNumber(profile.phone);
-          
-          // Save pending_insight with SESSION_START marker so aura-agent starts session immediately on button click
-          await supabase.from('profiles').update({
-            pending_insight: `[SESSION_START]${session.id}`
-          }).eq('user_id', session.user_id);
-          
+
+          // Salva pending_insight com [SESSION_START] para iniciar sessão no clique do botão.
+          // Só sobrescreve se estiver vazio OU se já contiver [SESSION_PREARM] da mesma sessão.
+          const { data: curProf } = await supabase
+            .from('profiles')
+            .select('pending_insight')
+            .eq('user_id', session.user_id)
+            .maybeSingle();
+          const cur = curProf?.pending_insight as string | null | undefined;
+          const safeToOverwrite = !cur || cur.startsWith('[SESSION_PREARM]') || cur.startsWith('[SESSION_START]');
+          if (safeToOverwrite) {
+            await supabase.from('profiles').update({
+              pending_insight: `[SESSION_START]${session.id}`
+            }).eq('user_id', session.user_id);
+          } else {
+            console.log(`⏭️ 5m reminder ${session.id}: pending_insight ocupado (${cur?.substring(0, 30)}) — não sobrescreve`);
+          }
+
           const result = await sendProactive(cleanPhone, message, 'session_reminder', session.user_id);
 
           if (result.success) {
+            // Idempotência: só marca reminder_5m_sent quando o envio confirma sucesso.
             await supabase.from('sessions').update({ reminder_5m_sent: true }).eq('id', session.id);
             reminders5mSent++;
             console.log(`✅ 5m reminder sent (template) for session ${session.id} + pending_insight [SESSION_START] saved`);
           } else {
-            // Clear pending_insight if send failed
-            await supabase.from('profiles').update({ pending_insight: null }).eq('user_id', session.user_id);
-            console.error(`❌ Failed to send 5m reminder for session ${session.id}:`, result.error);
+            // Não marcar reminder_5m_sent — permite retry no próximo tick do cron.
+            // Reverte pending_insight apenas se fomos nós que o setamos.
+            if (safeToOverwrite) {
+              await supabase.from('profiles').update({ pending_insight: null }).eq('user_id', session.user_id);
+            }
+            console.error(`❌ Failed to send 5m reminder for session ${session.id} (will retry next tick):`, result.error);
           }
         } catch (sendError) {
           console.error(`❌ Error sending 5m reminder for session ${session.id}:`, sendError);
@@ -427,7 +449,7 @@ Você está pronta(o) pra começar? Me responde um "vamos" ou "bora" quando quis
       .eq('status', 'scheduled')
       .eq('session_start_notified', true)
       .is('started_at', null)
-      .lt('scheduled_at', thirtyMinutesAgo.toISOString()); // Agendada há mais de 30 min
+      .lt('scheduled_at', sixtyMinutesAgo.toISOString()); // Agendada há mais de 60 min (grace ampliado)
     
     if (errorMissed) {
       console.error('❌ Error fetching missed sessions:', errorMissed);
@@ -493,7 +515,7 @@ Quer remarcar pra outro horário? É só me dizer quando fica bom pra você. ✨
       .from('sessions')
       .select('id, user_id, scheduled_at, duration_minutes, started_at')
       .eq('status', 'in_progress')
-      .lt('started_at', thirtyMinutesAgo.toISOString()); // Começou há mais de 30 min
+      .lt('started_at', sixtyMinutesAgo.toISOString()); // Começou há mais de 60 min
     
     if (errorAbandoned) {
       console.error('❌ Error fetching abandoned sessions:', errorAbandoned);
