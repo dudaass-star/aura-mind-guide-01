@@ -237,8 +237,8 @@ Deno.serve(async (req) => {
 
   for (const user of users || []) {
     try {
-      // Respeita DND
-      if (user.do_not_disturb_until && new Date(user.do_not_disturb_until) > today) {
+      // Respeita DND (a menos que force=true para testes manuais)
+      if (!force && user.do_not_disturb_until && new Date(user.do_not_disturb_until) > today) {
         skipped++;
         continue;
       }
