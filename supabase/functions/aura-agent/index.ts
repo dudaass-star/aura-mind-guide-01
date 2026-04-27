@@ -1721,7 +1721,7 @@ const EVOLUTION_SUMMARY_HOURS_THRESHOLD = 24;
 async function regenerateEvolutionSummary(
   userId: string,
   supabase: any,
-  geminiApiKey: string
+  lovableApiKey: string
 ): Promise<void> {
   try {
     console.log(`📖 [EVOLUTION-SUMMARY] Iniciando regeneração para user ${userId}`);
@@ -1862,7 +1862,7 @@ Responda APENAS com o texto do resumo. Sem cabeçalhos, sem JSON, sem markdown. 
       {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${geminiApiKey}`,
+          Authorization: `Bearer ${lovableApiKey}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
