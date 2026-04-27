@@ -242,7 +242,17 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // Persistir antes do envio (preview e letter_text). delivered_at fica null.
+      // Disparar PRIMEIRO o template gatilho Quick Reply 'carta_mensal'.
+      // Só persistimos se o envio do template foi bem-sucedido, e usamos o
+      // instante real como trigger_sent_at (âncora da janela curta de entrega).
+      const sendResult = await sendTemplateOnly(user.phone, 'monthly_letter', user.user_id);
+      if (!sendResult.success) {
+        console.error(`❌ sendTemplateOnly failed for ${user.user_id}: ${sendResult.error}`);
+        failed++;
+        continue;
+      }
+
+      const triggerSentIso = new Date().toISOString();
       const { error: insertErr } = await supabase
         .from('monthly_letters')
         .insert({
@@ -250,32 +260,16 @@ Deno.serve(async (req) => {
           letter_month: letterMonth,
           letter_text: result.letter,
           preview_text: result.preview,
-          trigger_sent_at: nowIso,
+          trigger_sent_at: triggerSentIso,
         });
 
       if (insertErr) {
         console.error(`❌ Insert monthly_letters failed for ${user.user_id}:`, insertErr.message);
-        failed++;
-        continue;
+        // template já foi enviado — não reverter para evitar reenvio amanhã
       }
 
-      // Disparar SEMPRE template gatilho Quick Reply 'carta_mensal'
-      // (categoria 'monthly_letter'). O preview será entregue pelo webhook
-      // quando o usuário clicar no botão (abre janela de 24h).
-      const sendResult = await sendTemplateOnly(user.phone, 'monthly_letter', user.user_id);
-      if (!sendResult.success) {
-        console.error(`❌ sendTemplateOnly failed for ${user.user_id}: ${sendResult.error}`);
-        // Reverte trigger_sent_at para reprocessar depois
-        await supabase
-          .from('monthly_letters')
-          .update({ trigger_sent_at: null })
-          .eq('user_id', user.user_id)
-          .eq('letter_month', letterMonth);
-        failed++;
-      } else {
-        sent++;
-        console.log(`✅ Template gatilho da Carta Mensal enviado para ${user.phone.substring(0, 4)}***`);
-      }
+      sent++;
+      console.log(`✅ Template gatilho da Carta Mensal enviado para ${user.phone.substring(0, 4)}*** (preview entregue se clicar em até 30min)`);
 
       await new Promise(r => setTimeout(r, 400));
     } catch (e) {
