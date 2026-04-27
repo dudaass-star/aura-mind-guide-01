@@ -2063,6 +2063,33 @@ export type Database = {
         }
         Relationships: []
       }
+      webhook_payload_debug: {
+        Row: {
+          from_phone: string | null
+          headers: Json
+          id: string
+          notes: string | null
+          payload: Json
+          received_at: string
+        }
+        Insert: {
+          from_phone?: string | null
+          headers?: Json
+          id?: string
+          notes?: string | null
+          payload?: Json
+          received_at?: string
+        }
+        Update: {
+          from_phone?: string | null
+          headers?: Json
+          id?: string
+          notes?: string | null
+          payload?: Json
+          received_at?: string
+        }
+        Relationships: []
+      }
       weekly_plans: {
         Row: {
           created_at: string | null
