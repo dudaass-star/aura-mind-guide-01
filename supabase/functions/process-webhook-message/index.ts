@@ -266,6 +266,8 @@ Deno.serve(async (req) => {
       hasAudio, audioUrl, hasImage, imageCaption,
       // Metadados de clique de botão (Twilio Quick Reply)
       messageType, buttonText, buttonPayload, originalRepliedMessageSid,
+      // Identificador da mensagem citada via "Responder" nativo do WhatsApp (Meta)
+      quotedMessageId,
     } = workerPayload;
 
     contingencyPhone = cleanPhone;
