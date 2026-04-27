@@ -407,7 +407,7 @@ export async function sendProactiveMessage(
     if (templateVariables && templateVariables.length > 0) {
       console.log(`📨 [Twilio] Sending template ContentSid="${contentSid}" with ${templateVariables.length} structured variable(s)`);
       const templateResult = await sendTemplateMessage(phone, contentSid, templateVariables);
-      return { success: templateResult.success, parts: 1, type: 'template', error: templateResult.error };
+      return { success: templateResult.success, parts: 1, type: 'template', error: templateResult.error, messageId: templateResult.messageId };
     }
 
     // Auto-resolve first name as the ONLY variable
@@ -415,7 +415,7 @@ export async function sendProactiveMessage(
     console.log(`📨 [Twilio] Sending template ContentSid="${contentSid}" with auto-resolved name: "${firstName}"`);
 
     const templateResult = await sendTemplateMessage(phone, contentSid, [firstName]);
-    return { success: templateResult.success, parts: 1, type: 'template', error: templateResult.error };
+    return { success: templateResult.success, parts: 1, type: 'template', error: templateResult.error, messageId: templateResult.messageId };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('❌ [Twilio] Proactive message error:', errorMessage);
