@@ -323,7 +323,7 @@ export async function sendTemplateOnly(
     console.log(`📨 [Twilio][TemplateOnly] Sending "${templateConfig.template_name}" (${contentSid}) to ${phone.substring(0, 4)}*** with vars=${JSON.stringify(variables)}`);
 
     const result = await sendTemplateMessage(phone, contentSid, variables);
-    return { success: result.success, parts: 1, type: 'template', error: result.error };
+    return { success: result.success, parts: 1, type: 'template', error: result.error, messageId: result.messageId };
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Unknown error';
     console.error(`❌ [Twilio][TemplateOnly] error: ${msg}`);
