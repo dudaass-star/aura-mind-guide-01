@@ -4532,6 +4532,7 @@ serve(async (req) => {
         journeyResult,
         meditationsResult,
         correctionsResult,
+        evolutionSummaryResult,
       ] = await Promise.allSettled([
         // 1. Últimas mensagens (10 em minimal, 40 normal)
         supabase
@@ -4622,6 +4623,12 @@ serve(async (req) => {
           .order('confidence', { ascending: false })
           .order('created_at', { ascending: false })
           .limit(15),
+        // 12. Resumo evolutivo narrativo (terceira camada de memória)
+        supabase
+          .from('user_evolution_summary')
+          .select('summary_text')
+          .eq('user_id', userId)
+          .maybeSingle(),
       ]);
 
       console.log('⚡ All context queries completed in parallel');
