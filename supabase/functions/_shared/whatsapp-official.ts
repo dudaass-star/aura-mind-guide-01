@@ -38,6 +38,13 @@ export interface ProactiveMessageResult {
   parts: number;
   type: 'template' | 'freetext';
   error?: string;
+  /**
+   * SID retornado pelo Twilio quando o envio é um template (Quick Reply).
+   * Necessário para casar cliques de botão (OriginalRepliedMessageSid)
+   * com o registro original no banco (ex: weekly_questions, monthly_letters).
+   * Disponível apenas quando type === 'template' e success === true.
+   */
+  messageId?: string;
 }
 
 // Keep alias for backwards compat
