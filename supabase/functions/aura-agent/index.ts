@@ -1901,6 +1901,12 @@ Responda APENAS com o texto do resumo. Sem cabeçalhos, sem JSON, sem markdown. 
       summaryText = summaryText.substring(0, EVOLUTION_SUMMARY_MAX_CHARS);
     }
 
+    // Conta total real de mensagens (não usar messages.length pois está capado em 80)
+    const { count: totalMsgsCount } = await supabase
+      .from('messages')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId);
+
     // Upsert
     const { error: upsertError } = await supabase
       .from('user_evolution_summary')
@@ -1909,7 +1915,7 @@ Responda APENAS com o texto do resumo. Sem cabeçalhos, sem JSON, sem markdown. 
           user_id: userId,
           summary_text: summaryText,
           last_generated_at: new Date().toISOString(),
-          messages_count_at_generation: messages.length,
+          messages_count_at_generation: totalMsgsCount ?? messages.length,
           generation_count: prevGenCount + 1,
           updated_at: new Date().toISOString(),
         },
