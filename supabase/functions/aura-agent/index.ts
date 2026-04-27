@@ -5438,7 +5438,18 @@ INSTRUÇÃO:
       }
 
       // Clear the pending insight/welcome
-      await supabase.from('profiles').update({ pending_insight: null }).eq('id', profile.id);
+      // EXCEÇÃO: se for [SESSION_PREARM] e a sessão ainda está longe, o handler acima
+      // já decidiu mantê-lo no banco para reavaliar nas próximas mensagens.
+      // Recarrega o estado atual para evitar sobrescrever uma decisão de "manter".
+      const { data: freshProfile } = await supabase
+        .from('profiles')
+        .select('pending_insight')
+        .eq('id', profile.id)
+        .maybeSingle();
+      const stillPrearmed = freshProfile?.pending_insight?.startsWith('[SESSION_PREARM]');
+      if (!stillPrearmed) {
+        await supabase.from('profiles').update({ pending_insight: null }).eq('id', profile.id);
+      }
     }
 
     // ========================================================================
