@@ -4,8 +4,9 @@
 // CRON: toda terça às 9h BRT (12h UTC).
 // Para cada usuário ativo (status active|trial), gera UMA pergunta provocativa
 // contextual via Lovable AI Gateway (gemini-2.5-flash), persiste em
-// public.weekly_questions e dispara o template gatilho 'cheking_7dias' via
-// sendTemplateOnly (sempre via template — padrão da casa).
+// public.weekly_questions e dispara o template gatilho 'pergunta_semanal'
+// (Quick Reply) via sendTemplateOnly. A pergunta gerada é entregue em texto
+// livre pelo process-webhook-message quando o usuário clica no botão.
 //
 // A PERGUNTA em si é entregue pelo process-webhook-message quando o usuário
 // responder ao template e abrir a janela de 24h (campo delivered_at).
@@ -267,9 +268,10 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // Disparar SEMPRE o template gatilho 'cheking_7dias' (categoria 'checkin').
-      // A pergunta gerada será entregue pelo webhook quando o usuário responder.
-      const result = await sendTemplateOnly(user.phone, 'checkin', user.user_id);
+      // Disparar SEMPRE o template gatilho Quick Reply 'pergunta_semanal'
+      // (categoria 'weekly_question'). A pergunta gerada será entregue pelo
+      // webhook quando o usuário clicar no botão (abre janela de 24h).
+      const result = await sendTemplateOnly(user.phone, 'weekly_question', user.user_id);
       if (!result.success) {
         console.error(`❌ sendTemplateOnly failed for ${user.user_id}: ${result.error}`);
         failed++;
