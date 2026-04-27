@@ -227,6 +227,8 @@ Deno.serve(async (req) => {
     const {
       phone, cleanPhone, messageId, text,
       hasAudio, audioUrl, hasImage, imageCaption,
+      // Metadados de clique de botão (Twilio Quick Reply)
+      messageType, buttonText, buttonPayload, originalRepliedMessageSid,
     } = workerPayload;
 
     contingencyPhone = cleanPhone;
