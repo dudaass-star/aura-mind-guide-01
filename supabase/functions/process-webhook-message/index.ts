@@ -215,10 +215,18 @@ async function handleSessionRating(
   supabase: any, userId: string, message: string
 ): Promise<{ handled: boolean; response?: string }> {
   const lowerMessage = message.toLowerCase().trim();
-  const ratingMatch = lowerMessage.match(/^([1-5])$/);
-  if (!ratingMatch) return { handled: false };
+  // Aceita escala 0-10 (bem-estar terapêutico).
+  // Padrões aceitos: "8", "8!", "nota 8", "8 obrigada", "10/10", "dou 7"
+  // Rejeita números soltos no meio de frases longas (>40 chars sem contexto de nota)
+  let rating: number | null = null;
+  const standalone = lowerMessage.match(/^(10|[0-9])\b/);
+  const withContext = lowerMessage.match(/\b(?:nota|dou|seria|acho|talvez|uns?)\s+(10|[0-9])\b/);
+  const slashFormat = lowerMessage.match(/^(10|[0-9])\s*\/\s*10\b/);
+  if (standalone && lowerMessage.length <= 40) rating = parseInt(standalone[1]);
+  else if (slashFormat) rating = parseInt(slashFormat[1]);
+  else if (withContext) rating = parseInt(withContext[1]);
+  if (rating === null || rating < 0 || rating > 10) return { handled: false };
 
-  const rating = parseInt(ratingMatch[1]);
   const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
   const { data: ratedSession } = await supabase
@@ -242,12 +250,14 @@ async function handleSessionRating(
     .from('session_ratings').insert({ session_id: ratedSession.id, user_id: userId, rating });
   if (insertError) { console.error('❌ Error saving session rating:', insertError); return { handled: false }; }
 
+  // Resposta proporcional à nota de bem-estar (0-10)
   let response: string;
-  if (rating >= 4) response = `Que bom que você gostou! 💜 Fico muito feliz em saber. Obrigada pelo feedback!`;
-  else if (rating === 3) response = `Obrigada pelo feedback! 💜 Vou me esforçar pra melhorar cada vez mais.`;
-  else response = `Obrigada por me contar. 💜 Me desculpa se não foi tão bom quanto você esperava. Vou trabalhar pra melhorar!`;
+  if (rating >= 8) response = `Que bom saber disso! 💜 Fico feliz que tenha sido um movimento bom pra você.`;
+  else if (rating >= 5) response = `Obrigada por me contar. 💜 Mesmo um passo pequeno já é movimento — segue comigo essa semana.`;
+  else if (rating >= 1) response = `Tô aqui, viu. 💜 Nem toda sessão precisa fechar com uma sensação clara — às vezes o trabalho continua dentro depois.`;
+  else response = `Recebido. 💜 Me conta mais quando puder o que ficou pesado — quero entender.`;
 
-  console.log(`✅ Session rating saved: ${rating} stars for session ${ratedSession.id}`);
+  console.log(`✅ Session rating saved: ${rating}/10 for session ${ratedSession.id}`);
   return { handled: true, response };
 }
 
