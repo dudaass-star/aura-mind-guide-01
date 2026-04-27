@@ -116,6 +116,43 @@ async function generateTTS(text: string, userId?: string): Promise<{ audioUrl: s
   }
 }
 
+// ============================================================================
+// QUOTED MESSAGE — Busca o conteúdo da mensagem citada (reply nativo do WhatsApp)
+// ----------------------------------------------------------------------------
+// Quando o usuário usa o "Responder" do WhatsApp citando uma mensagem anterior
+// da AURA, o Twilio envia o SID em `OriginalRepliedMessageSid`. O body da
+// mensagem citada não vem no webhook, então precisamos buscá-lo via Twilio API.
+// ============================================================================
+async function fetchTwilioQuotedBody(messageSid: string): Promise<string | null> {
+  try {
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    const TWILIO_API_KEY = Deno.env.get('TWILIO_API_KEY');
+    if (!LOVABLE_API_KEY || !TWILIO_API_KEY) {
+      console.warn('⚠️ [QUOTED] Twilio gateway credentials missing, cannot fetch quoted body');
+      return null;
+    }
+    const GATEWAY_URL = 'https://connector-gateway.lovable.dev/twilio';
+    const resp = await fetch(`${GATEWAY_URL}/Messages/${messageSid}.json`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'X-Connection-Api-Key': TWILIO_API_KEY,
+      },
+    });
+    if (!resp.ok) {
+      console.warn(`⚠️ [QUOTED] Twilio API ${resp.status} for SID ${messageSid}`);
+      return null;
+    }
+    const data = await resp.json();
+    const body: string | undefined = data?.body;
+    if (!body) return null;
+    return body.trim();
+  } catch (err) {
+    console.warn('⚠️ [QUOTED] fetchTwilioQuotedBody failed:', err);
+    return null;
+  }
+}
+
 async function handleSessionConfirmation(
   supabase: any, userId: string, message: string
 ): Promise<{ handled: boolean; response?: string }> {
