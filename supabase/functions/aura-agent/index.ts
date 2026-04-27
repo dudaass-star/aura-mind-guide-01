@@ -3603,7 +3603,22 @@ serve(async (req) => {
       console.warn('Failed to read AI model config, using default:', e);
     }
 
-    const { message, user_id, phone, pending_content, pending_context, last_user_context, minimal_context } = await req.json();
+    const { message: rawMessage, user_id, phone, pending_content, pending_context, last_user_context, minimal_context, quoted_message } = await req.json();
+
+    // ========================================================================
+    // QUOTED MESSAGE — Reply nativo do WhatsApp
+    // ------------------------------------------------------------------------
+    // Quando o usuário usa "Responder" citando uma mensagem anterior da AURA,
+    // prefixamos a mensagem com um bloco explícito para que o modelo entenda
+    // que a resposta se refere àquela mensagem específica — e não à última
+    // mensagem da AURA por padrão.
+    // ========================================================================
+    let message = rawMessage;
+    if (quoted_message && typeof quoted_message === 'string' && quoted_message.trim().length > 0) {
+      const quoted = quoted_message.length > 600 ? quoted_message.substring(0, 600) + '…' : quoted_message;
+      message = `[O usuário está respondendo à sua mensagem anterior: "${quoted}"]\n\n${rawMessage}`;
+      console.log('💬 [AURA] quoted_message injetada no prompt do usuário');
+    }
 
     if (minimal_context) {
       console.log('📉 minimal_context mode: reduced history and skipped analysis');
