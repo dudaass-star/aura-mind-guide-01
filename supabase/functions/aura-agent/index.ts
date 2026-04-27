@@ -1706,6 +1706,291 @@ Use a função extract_analysis para retornar os dados.`;
   }
 }
 
+// ============================================================================
+// RESUMO EVOLUTIVO NARRATIVO (terceira camada de memória)
+// ----------------------------------------------------------------------------
+// Gera um resumo curto (≤600 chars) sobre QUEM É o usuário, para a AURA usar
+// como contexto de fundo. NUNCA é pauta. NUNCA conecta temas que o usuário
+// não conectou. Respeita correções como anti-padrões. Modelo: Flash-Lite.
+// Frequência: a cada 20 mensagens novas OU a cada 24h.
+// ============================================================================
+const EVOLUTION_SUMMARY_MAX_CHARS = 600;
+const EVOLUTION_SUMMARY_MSG_THRESHOLD = 20;
+const EVOLUTION_SUMMARY_HOURS_THRESHOLD = 24;
+
+async function regenerateEvolutionSummary(
+  userId: string,
+  supabase: any,
+  geminiApiKey: string
+): Promise<void> {
+  try {
+    console.log(`📖 [EVOLUTION-SUMMARY] Iniciando regeneração para user ${userId}`);
+
+    // Carrega entradas em paralelo: mensagens, insights, correções, temas
+    const [msgsRes, insightsRes, correctionsRes, themesRes, prevSummaryRes] =
+      await Promise.allSettled([
+        supabase
+          .from('messages')
+          .select('role, content, created_at')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(80),
+        supabase
+          .from('user_insights')
+          .select('category, key, value, importance')
+          .eq('user_id', userId)
+          .order('importance', { ascending: false })
+          .limit(30),
+        supabase
+          .from('user_memory_corrections')
+          .select('correction_text')
+          .eq('user_id', userId)
+          .order('confidence', { ascending: false })
+          .limit(15),
+        supabase
+          .from('session_themes')
+          .select('theme_name, status')
+          .eq('user_id', userId)
+          .eq('status', 'active')
+          .limit(10),
+        supabase
+          .from('user_evolution_summary')
+          .select('generation_count')
+          .eq('user_id', userId)
+          .maybeSingle(),
+      ]);
+
+    const messages: any[] =
+      msgsRes.status === 'fulfilled' && msgsRes.value.data
+        ? [...msgsRes.value.data].reverse()
+        : [];
+    const insights: any[] =
+      insightsRes.status === 'fulfilled' ? insightsRes.value.data || [] : [];
+    const corrections: any[] =
+      correctionsRes.status === 'fulfilled' ? correctionsRes.value.data || [] : [];
+    const themes: any[] =
+      themesRes.status === 'fulfilled' ? themesRes.value.data || [] : [];
+    const prevGenCount: number =
+      prevSummaryRes.status === 'fulfilled' && prevSummaryRes.value.data
+        ? prevSummaryRes.value.data.generation_count || 0
+        : 0;
+
+    // Não gera se não há histórico mínimo
+    if (messages.length < 6) {
+      console.log('📖 [EVOLUTION-SUMMARY] Histórico insuficiente, skip');
+      return;
+    }
+
+    // Monta blocos de input (sem incluir o summary anterior — evita deriva)
+    const messagesBlock = messages
+      .map((m: any) => {
+        const role = m.role === 'user' ? 'USUÁRIO' : 'AURA';
+        const text = stripAllInternalTags(m.content || '').substring(0, 280);
+        return `${role}: ${text}`;
+      })
+      .join('\n');
+
+    const insightsBlock =
+      insights.length === 0
+        ? '(nenhum insight registrado)'
+        : insights
+            .map(
+              (i: any) =>
+                `- [${i.category}:${i.key}] ${String(i.value || '').substring(0, 200)}`
+            )
+            .join('\n');
+
+    const correctionsBlock =
+      corrections.length === 0
+        ? '(nenhuma correção registrada)'
+        : corrections
+            .map((c: any, idx: number) => `${idx + 1}. ${c.correction_text}`)
+            .join('\n');
+
+    const themesBlock =
+      themes.length === 0
+        ? '(nenhum tema ativo)'
+        : themes.map((t: any) => `- ${t.theme_name}`).join(', ');
+
+    const prompt = `Você está gerando um RESUMO EVOLUTIVO de QUEM É este usuário, para a AURA usar como contexto de fundo. Não é pauta. Não é agenda. É descrição factual.
+
+LIMITE RÍGIDO: Máximo ${EVOLUTION_SUMMARY_MAX_CHARS} caracteres na saída final. Conte. Se passar, corte.
+
+REGRA CRÍTICA — TRATAMENTO DOS INSIGHTS:
+Cada insight da lista é um fato ISOLADO. Eles NÃO estão relacionados entre si a menos que o próprio usuário tenha feito a conexão em fala literal nas mensagens, ou que uma correção afirme a conexão.
+
+PROIBIDO:
+- Inferir causa/efeito entre dois insights ("ansiedade POR CAUSA da esposa").
+- Agrupar temas distintos sob um guarda-chuva ("questões familiares incluem esposa, mãe e trabalho").
+- Usar conectivos que sugiram ligação ("relacionado a", "ligado a", "em torno de", "decorrente de", "especialmente quando", "por causa de", "quando se trata de").
+- Incluir interpretações da AURA que o usuário não confirmou.
+- Contradizer qualquer item da seção CORREÇÕES.
+- Usar rótulos clínicos ou diagnósticos.
+
+PERMITIDO:
+- Listar temas em paralelo, em frases SEPARADAS por ponto final.
+- Refletir literalmente o que o usuário disse.
+- Refletir correções já registradas.
+
+ESTRUTURA OBRIGATÓRIA (frases-fato em paralelo, sem prosa corrida e sem títulos no texto):
+1) Identidade/momento atual: 1-2 frases factuais.
+2) Padrões observados: 2-4 frases, cada uma um padrão, SEPARADAS por ponto final.
+3) Evolução: 1-2 frases sobre o que ele já demonstrou conseguir.
+
+TESTE INTERNO antes de responder: cada frase deve poder ser lida sozinha sem perder sentido. Se uma frase depende da anterior para fazer sentido, você está conectando — refaça em paralelo.
+
+Tom: descritivo, terceira pessoa, PT-BR informal mas factual, sem julgamento.
+
+============================================================
+🛡️ CORREÇÕES — verdades do usuário e conexões PROIBIDAS:
+${correctionsBlock}
+============================================================
+
+INSIGHTS (fatos isolados, NÃO conecte entre si):
+${insightsBlock}
+
+TEMAS ATIVOS (referência, não conecte):
+${themesBlock}
+
+ÚLTIMAS MENSAGENS (use só o que o usuário disse explicitamente):
+${messagesBlock}
+
+Responda APENAS com o texto do resumo. Sem cabeçalhos, sem JSON, sem markdown. Máximo ${EVOLUTION_SUMMARY_MAX_CHARS} caracteres.`;
+
+    const response = await fetch(
+      'https://ai.gateway.lovable.dev/v1/chat/completions',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${geminiApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'google/gemini-2.5-flash-lite',
+          messages: [
+            {
+              role: 'system',
+              content:
+                'Você é um sumarizador rigoroso. Nunca inventa conexões entre fatos isolados. Nunca contradiz correções explícitas. Sempre respeita o limite de caracteres.',
+            },
+            { role: 'user', content: prompt },
+          ],
+          temperature: 0.3,
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      console.error(
+        `📖 [EVOLUTION-SUMMARY] Erro ${response.status} no AI gateway`
+      );
+      return;
+    }
+
+    const json = await response.json();
+    let summaryText: string =
+      json?.choices?.[0]?.message?.content?.trim() || '';
+
+    if (!summaryText) {
+      console.warn('📖 [EVOLUTION-SUMMARY] Resposta vazia, skip');
+      return;
+    }
+
+    // Truncamento defensivo (cinto + suspensório)
+    if (summaryText.length > EVOLUTION_SUMMARY_MAX_CHARS) {
+      summaryText = summaryText.substring(0, EVOLUTION_SUMMARY_MAX_CHARS);
+    }
+
+    // Upsert
+    const { error: upsertError } = await supabase
+      .from('user_evolution_summary')
+      .upsert(
+        {
+          user_id: userId,
+          summary_text: summaryText,
+          last_generated_at: new Date().toISOString(),
+          messages_count_at_generation: messages.length,
+          generation_count: prevGenCount + 1,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id' }
+      );
+
+    if (upsertError) {
+      console.error(
+        '📖 [EVOLUTION-SUMMARY] Erro ao salvar:',
+        upsertError.message
+      );
+      return;
+    }
+
+    console.log(
+      `📖 [EVOLUTION-SUMMARY] Salvo (${summaryText.length} chars, gen #${prevGenCount + 1})`
+    );
+  } catch (error) {
+    console.error(
+      '📖 [EVOLUTION-SUMMARY] Erro (não-bloqueante):',
+      error instanceof Error ? error.message : String(error)
+    );
+  }
+}
+
+// Decide se precisa regenerar com base em msgs novas ou tempo decorrido.
+async function maybeTriggerEvolutionSummary(
+  userId: string,
+  supabase: any,
+  geminiApiKey: string
+): Promise<void> {
+  try {
+    const { data: existing } = await supabase
+      .from('user_evolution_summary')
+      .select('last_generated_at, messages_count_at_generation')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    const { count: currentMsgCount } = await supabase
+      .from('messages')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId);
+
+    const totalMsgs = currentMsgCount || 0;
+
+    // Primeira geração: precisa de pelo menos 6 mensagens
+    if (!existing) {
+      if (totalMsgs >= 6) {
+        console.log(
+          `📖 [EVOLUTION-SUMMARY] Primeira geração (${totalMsgs} msgs)`
+        );
+        await regenerateEvolutionSummary(userId, supabase, geminiApiKey);
+      }
+      return;
+    }
+
+    const msgsSinceLast =
+      totalMsgs - (existing.messages_count_at_generation || 0);
+    const hoursSinceLast = existing.last_generated_at
+      ? (Date.now() - new Date(existing.last_generated_at).getTime()) /
+        (1000 * 60 * 60)
+      : Infinity;
+
+    const shouldRegen =
+      msgsSinceLast >= EVOLUTION_SUMMARY_MSG_THRESHOLD ||
+      hoursSinceLast >= EVOLUTION_SUMMARY_HOURS_THRESHOLD;
+
+    if (shouldRegen) {
+      console.log(
+        `📖 [EVOLUTION-SUMMARY] Regenerar (msgs novas=${msgsSinceLast}, h=${hoursSinceLast.toFixed(1)})`
+      );
+      await regenerateEvolutionSummary(userId, supabase, geminiApiKey);
+    }
+  } catch (error) {
+    console.error(
+      '📖 [EVOLUTION-SUMMARY] Erro no trigger (não-bloqueante):',
+      error instanceof Error ? error.message : String(error)
+    );
+  }
+}
+
 const AURA_STATIC_INSTRUCTIONS = `# REGRA CRÍTICA DE DATA/HORA
 
 - A data e hora ATUAIS serão fornecidas no contexto da conversa
