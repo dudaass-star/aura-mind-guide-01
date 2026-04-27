@@ -1,164 +1,46 @@
-## Objetivo
+# Robustecer fluxo de início de sessão agendada
 
-Criar a terceira camada da memória da AURA — um **resumo evolutivo narrativo** por usuário — que complementa `user_insights` (fatos atômicos) e `user_memory_corrections` (verdades prioritárias). Esta camada dá à AURA uma compreensão de "quem é a pessoa" sem forçar pauta e **sem inventar conexões entre temas distintos**.
+## Problema
+62% das sessões agendadas terminam como `cancelled`/`no_show`. O fluxo tem 3 pontos frágeis:
 
-## Arquitetura final da memória
+1. **Gatilho único T-5min** — se o cron atrasa ou o template falha, o `pending_insight = [SESSION_START]<id>` nunca é setado e a sessão nunca inicia.
+2. **Confirmação T-24h não pré-arma a sessão** — se o usuário confirma 24h antes ou manda mensagem entre T-24h e T-5min próximo do horário, nada acontece.
+3. **Timeout rígido de 30min** — usuário que responde T+35min entra em conversa livre, sessão vira `no_show` mesmo com intenção clara.
 
-```text
-user_insights              → fatos atômicos com prioridade (4-10)
-user_memory_corrections    → verdades de prioridade máxima (overrides)
-user_evolution_summary     → narrativa curta de quem é a pessoa  ← NOVO
-```
+## O que vai ser feito (ordem de prioridade)
 
-## Frente 1 — Tabela `user_evolution_summary`
+### 1. Pré-armar sessão na confirmação T-24h (maior impacto)
+Quando o usuário confirma no template T-24h, gravar `pending_insight = [SESSION_PREARM]<id>` em vez de só marcar `confirmation_requested = true`.
 
-Migration nova:
+No `aura-agent`, ao detectar `[SESSION_PREARM]<id>`:
+- Se faltam ≤15min para `scheduled_at` OU já passou ≤30min → inicia sessão imediatamente (mesma lógica do `[SESSION_START]`).
+- Se ainda falta muito → mantém pré-armada, responde naturalmente.
 
-```sql
-create table public.user_evolution_summary (
-  user_id uuid primary key,
-  summary_text text not null,
-  last_generated_at timestamptz not null default now(),
-  messages_count_at_generation integer not null default 0,
-  generation_count integer not null default 0,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
+### 2. Janela ampliada e idempotente para o lembrete T-5min
+- `session-reminder` busca sessões com `scheduled_at` entre `now-2min` e `now+10min` (em vez de janela estreita).
+- Idempotência via `reminder_5m_sent = true` (coluna já existe).
+- Se envio do template falhar, **não** marcar `reminder_5m_sent` — permite retry no próximo tick.
 
-alter table public.user_evolution_summary enable row level security;
--- service role full access
--- portal token holders podem ler o próprio
--- admin pode ler tudo
-```
+### 3. Grace period 30min → 60min
+- Usuário pode iniciar até T+60min com `[SESSION_START]` ou `[SESSION_PREARM]` ativo.
+- Sessões só viram `cancelled` após T+60min sem interação.
 
-Uma linha por usuário. Sempre upsert.
+### 4. Auditar `started_at < scheduled_at`
+- Investigar o(s) caso(s) detectados.
+- Adicionar guard: nunca setar `started_at` se `scheduled_at > now() + 5min`.
 
-## Frente 2 — Função `regenerateEvolutionSummary(userId)`
+## Detalhes técnicos
 
-Adicionar em `supabase/functions/aura-agent/index.ts`.
+**Arquivos afetados:**
+- `supabase/functions/session-reminder/index.ts` — janela ampliada T-5min, lógica de pré-arme T-24h.
+- `supabase/functions/aura-agent/index.ts` — handler `[SESSION_PREARM]`, grace 60min, guard `started_at`.
+- `supabase/functions/process-webhook-message/index.ts` — fast-path para clique no botão `aura_session_reminder_v2` (padrão Trigger+Deliver).
 
-**Modelo:** `google/gemini-2.5-flash-lite`.
+**Sem migrations** — colunas `pending_insight`, `reminder_5m_sent`, `confirmation_requested`, `user_confirmed` já existem.
 
-**Input:**
-- últimas ~80 mensagens (`messages`)
-- `user_insights` top 30 por prioridade
-- `user_memory_corrections` (todas) — destacadas como **anti-padrões / conexões proibidas**
-- `session_themes` ativos
+**Verificação pós-deploy:** monitorar por 48h taxa `completed` vs `cancelled`, presença de `[SESSION_PREARM]` em logs, query de `started_at < scheduled_at`.
 
-**Prompt (PT-BR, hardcoded — núcleo anti-confabulação):**
-
-```text
-Você está gerando um resumo evolutivo de QUEM É este usuário, para a AURA usar
-como contexto de fundo. Não é pauta. Não é agenda. É descrição factual.
-
-LIMITE: Máximo 600 caracteres. Conte. Se passar, corte.
-
-REGRA CRÍTICA — TRATAMENTO DOS INSIGHTS:
-Cada insight da lista é um fato ISOLADO. Eles NÃO estão relacionados entre si
-a menos que o próprio usuário tenha feito a conexão em fala literal nas
-mensagens, ou que uma correção em user_memory_corrections afirme a conexão.
-
-PROIBIDO:
-- Inferir causa/efeito entre dois insights ("ansiedade POR CAUSA da esposa").
-- Agrupar temas distintos sob um guarda-chuva ("questões familiares incluem
-  esposa, mãe e trabalho").
-- Usar conectivos que sugiram ligação ("relacionado a", "ligado a", "em torno
-  de", "decorrente de", "especialmente quando", "por causa de").
-- Incluir interpretações da AURA que o usuário não confirmou.
-- Contradizer qualquer item de user_memory_corrections.
-
-PERMITIDO:
-- Listar temas em paralelo, em frases SEPARADAS por ponto final.
-- Refletir literalmente o que o usuário disse.
-- Refletir correções já registradas.
-
-ESTRUTURA OBRIGATÓRIA (frases-fato em paralelo, não prosa corrida):
-
-Identidade/momento: [1-2 frases factuais sobre vida atual]
-Padrões observados: [2-4 frases SEPARADAS por ponto final, uma por padrão]
-Evolução: [1-2 frases sobre o que ele já demonstrou conseguir]
-
-TESTE INTERNO: cada frase deve poder ser lida sozinha sem perder sentido.
-Se uma frase depende da anterior para fazer sentido, você está conectando —
-refaça em paralelo.
-```
-
-**Bloco de correções como anti-padrões** (montado em código antes de mandar pro modelo):
-
-```text
-🛡️ CORREÇÕES — conexões PROIBIDAS para este usuário:
-- {correction_text_1}
-- {correction_text_2}
-...
-```
-
-Saída salva em `user_evolution_summary.summary_text`.
-
-**Trigger de regeneração** (no fim do `postConversationAnalysis`, **assíncrono**, nunca bloqueia resposta):
-
-```ts
-const shouldRegenerate =
-  (messagesSinceLastGen >= 20) ||
-  (hoursSinceLastGen >= 24);
-
-if (shouldRegenerate) {
-  EdgeRuntime.waitUntil(regenerateEvolutionSummary(userId));
-}
-```
-
-**Truncamento defensivo** em código: `summary_text.slice(0, 600)` antes do upsert.
-
-**Sem leitura do summary anterior**: a regeneração lê só `messages` + `user_insights` + `user_memory_corrections` + `session_themes`. Nunca o próprio summary, evitando deriva.
-
-## Frente 3 — Injeção no prompt do `aura-agent`
-
-Em `loadUserContext`, carregar o summary em paralelo.
-
-Em `buildSystemPrompt`, injetar como bloco descritivo **logo após** o bloco de correções (prioridade máxima), **antes** dos insights gerais:
-
-```text
-📖 QUEM É {nome} (contexto de fundo, NÃO use como pauta):
-{summary_text}
-
-Use isso só pra entender quem está do outro lado. Não traga estes pontos à
-tona se o usuário não abrir o gancho. Não conecte temas que estão em frases
-separadas — eles estão separados de propósito.
-```
-
-## Frente 4 — Backfill para Eduardo
-
-`user_id = 329ebadd-07eb-4e1e-88db-d8974b2ea3e5`
-
-Rodar `regenerateEvolutionSummary(eduardoId)` uma vez via edge call manual.
-
-**Critérios de aceite (rígidos):**
-- ✅ Contém algo equivalente a "age apesar do medo".
-- ✅ Contém algo equivalente a "prefere conversa livre, sem sessões agora".
-- ✅ Menciona "atividade física" e "ansiedade" **em frases separadas, sem conectivo causal entre elas**.
-- ❌ Se aparecer "ansiedade ligada a...", "em torno de...", "relacionada à esposa/exercício", "por causa de..." → **falhou**, ajustar prompt e regenerar.
-
-## Garantias técnicas
-
-- **Assíncrono**: `EdgeRuntime.waitUntil`, fora do caminho crítico.
-- **Limite rígido**: 600 chars no prompt + truncamento em código.
-- **Custo**: Flash-Lite + frequência baixa (a cada 20 msgs / 24h) → desprezível.
-- **Anti-confabulação**: regra explícita, estrutura em frases-fato paralelas, correções como anti-padrões, lista de conectivos proibidos.
-- **Sem deriva**: nunca lê o próprio summary anterior.
-- **Coerência com correções**: correções entram como anti-padrões e o prompt proíbe contradizê-las.
-
-## Arquivos afetados
-
-- `supabase/migrations/<novo>.sql` — tabela + RLS.
-- `supabase/functions/aura-agent/index.ts`
-  - nova função `regenerateEvolutionSummary`
-  - `loadUserContext`: carregar summary
-  - `buildSystemPrompt`: injetar bloco "QUEM É"
-  - `postConversationAnalysis`: trigger assíncrono
-- `src/integrations/supabase/types.ts` — auto-regenerado.
-- Memória do projeto: registrar a nova camada em `mem://features/user-memory-structure`.
-
-## Resultado esperado
-
-- A AURA passa a ter noção contínua de quem o usuário é, sem reler 80 mensagens toda hora.
-- O resumo respeita correções, não inventa conexões e não contradiz o que o usuário corrigiu.
-- O Eduardo, após backfill, deve ter resumo coerente com "age apesar do medo" e "prefere conversa livre", e com temas (atividade física / ansiedade / esposa) em frases separadas — validando a arquitetura.
+## O que NÃO muda
+- Template `aura_session_reminder_v2` e ContentSid permanecem iguais.
+- Cron do `session-reminder` permanece igual (só a janela fica mais tolerante).
+- Bloco "🚀 SESSÃO TERAPÊUTICA INICIADA" no prompt permanece igual.
