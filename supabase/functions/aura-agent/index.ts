@@ -1939,7 +1939,7 @@ Responda APENAS com o texto do resumo. Sem cabeçalhos, sem JSON, sem markdown. 
 async function maybeTriggerEvolutionSummary(
   userId: string,
   supabase: any,
-  geminiApiKey: string
+  lovableApiKey: string
 ): Promise<void> {
   try {
     const { data: existing } = await supabase
@@ -1961,7 +1961,7 @@ async function maybeTriggerEvolutionSummary(
         console.log(
           `📖 [EVOLUTION-SUMMARY] Primeira geração (${totalMsgs} msgs)`
         );
-        await regenerateEvolutionSummary(userId, supabase, geminiApiKey);
+        await regenerateEvolutionSummary(userId, supabase, lovableApiKey);
       }
       return;
     }
@@ -1981,7 +1981,7 @@ async function maybeTriggerEvolutionSummary(
       console.log(
         `📖 [EVOLUTION-SUMMARY] Regenerar (msgs novas=${msgsSinceLast}, h=${hoursSinceLast.toFixed(1)})`
       );
-      await regenerateEvolutionSummary(userId, supabase, geminiApiKey);
+      await regenerateEvolutionSummary(userId, supabase, lovableApiKey);
     }
   } catch (error) {
     console.error(
