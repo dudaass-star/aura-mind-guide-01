@@ -134,6 +134,12 @@ Deno.serve(async (req) => {
           let hasImage = false;
           let imageCaption: string | undefined;
 
+          // ====================================================================
+          // QUOTED MESSAGE (resposta citando uma mensagem anterior da AURA)
+          // Meta envia em `context.id` o wamid da mensagem citada.
+          // ====================================================================
+          const quotedMessageId: string | undefined = message.context?.id;
+
           if (messageType === 'text') {
             text = message.text?.body || null;
           } else if (messageType === 'interactive') {
@@ -200,6 +206,8 @@ Deno.serve(async (req) => {
             audioUrl,
             hasImage,
             imageCaption,
+            // Identificador da mensagem citada (reply nativo do WhatsApp)
+            quotedMessageId,
           };
 
           const workerPromise = fetch(`${supabaseUrl}/functions/v1/process-webhook-message`, {
