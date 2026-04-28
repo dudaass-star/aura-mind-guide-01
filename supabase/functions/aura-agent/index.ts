@@ -1457,6 +1457,7 @@ REGRAS CRÍTICAS:
 3. Se o usuário CORRIGIU a AURA (ex.: "você misturou", "não é isso", "você já sabe", "eu já te falei", "tá tudo errado"), gere uma entrada em "corrections" descrevendo o que NÃO deve mais ser feito ou afirmado, em linguagem clara e acionável (1-2 frases).
 4. Não invente conexões entre temas. Se o usuário fala de ansiedade hoje, não ligue automaticamente a esposa, mãe, trabalho, etc.
 5. Insights devem ser fatos curtos e literais (nomes, profissão, evento, preferência declarada). Evite frases interpretativas.
+6. Se o usuário expressou RECUSA, DESINTERESSE ou pediu para PARAR de insistir em algum tópico (ex.: "não quero", "já disse que não", "para de insistir", "não tenho interesse", "deixa pra lá"), preencha "cancel_topics" com palavras-chave curtas do(s) tópico(s) recusado(s) (ex.: ["sessão", "agendar"]). Use 1-3 palavras por item, em minúsculas.
 
 CONTEXTO RECENTE:
 ${recentContext}
@@ -1516,6 +1517,11 @@ Use a função extract_analysis para retornar os dados.`;
                   },
                   required: ['correction_text']
                 }
+              },
+              cancel_topics: {
+                type: 'ARRAY',
+                description: 'Palavras-chave de tópicos que o usuário recusou explicitamente nesta troca (ex.: ["sessão","agendar"]). Use minúsculas, 1-3 palavras por item. Omita se não houver recusa clara.',
+                items: { type: 'STRING' }
               }
             }
           }
