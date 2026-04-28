@@ -1707,6 +1707,33 @@ Use a função extract_analysis para retornar os dados.`;
       }
     }
 
+    // Auto-cancel commitments por recusa explícita do usuário
+    if (analysis.cancel_topics && analysis.cancel_topics.length > 0) {
+      const topics = analysis.cancel_topics
+        .map(t => (t || '').trim().toLowerCase())
+        .filter(t => t.length >= 3 && t.length <= 40);
+
+      if (topics.length > 0) {
+        const orFilter = topics
+          .flatMap(t => [`title.ilike.%${t}%`, `description.ilike.%${t}%`])
+          .join(',');
+
+        const { data: cancelled, error: cancelErr } = await supabase
+          .from('commitments')
+          .update({ commitment_status: 'cancelled', completed: true })
+          .eq('user_id', userId)
+          .eq('commitment_status', 'pending')
+          .or(orFilter)
+          .select('id, title');
+
+        if (cancelErr) {
+          console.warn('⚠️ [POST-ANALYSIS] cancel_topics update error:', cancelErr.message);
+        } else if (cancelled && cancelled.length > 0) {
+          console.log(`🚫 [POST-ANALYSIS] Cancelados ${cancelled.length} commitments por recusa (tópicos: ${topics.join(', ')})`);
+        }
+      }
+    }
+
     console.log('✅ [POST-ANALYSIS] Complete');
   } catch (error) {
     console.error('⚠️ [POST-ANALYSIS] Error (non-blocking):', error);
