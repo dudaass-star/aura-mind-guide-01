@@ -1427,6 +1427,7 @@ interface ConversationAnalysis {
   corrections?: Array<{
     correction_text: string;
   }>;
+  cancel_topics?: string[];
 }
 
 async function postConversationAnalysis(
