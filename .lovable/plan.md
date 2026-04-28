@@ -1,50 +1,41 @@
-# Corrigir cron faltante do relatório semanal + reenviar para o Eduardo
+# Plano: Evitar que commitments alimentem insistência da Aura
 
-## Diagnóstico
+## Problema
+Hoje o post-analysis cria commitments a cada turno sem deduplicar e sem detectar recusa. Quando o usuário recusa um tópico, a recusa vira mais um commitment "pendente", reforçando o bloco "padrão recorrente" no próximo prompt → Aura insiste.
 
-Investigação completa:
+## Solução (mínima, 1 lugar só)
 
-1. Eduardo (`329ebadd-...`, +5551981519708, plano direção, status active): **nenhuma mensagem de relatório semanal** em `messages` no domingo 26/04.
-2. Função `weekly-report`: **zero logs recentes** — não foi invocada.
-3. **Causa raiz no `cron.job`**: existe um único agendamento para essa função, mas com schedule errado.
-   - `jobname`: `monthly-report`
-   - `schedule`: `0 22 1 * *` (apenas dia 1 do mês, 22h UTC)
-   - **Não existe cron rodando aos domingos** apontando para `weekly-report`.
+### 1. Cleanup retroativo (SQL)
+Marcar como `cancelled` os 9 commitments pendentes do Eduardo (`329ebadd-07eb-4e1e-88db-d8974b2ea3e5`) que mencionam "sessão/sessões/agendar".
 
-A função em si está correta:
-- Invoca `sendProactive(phone, teaser, 'weekly_report', userId)`.
-- Categoria `weekly_report` mapeada na tabela `whatsapp_templates` para o template **`aura_weekly_report_v2`** (ContentSid `HX607738eeadd6fc8008c5735bbf0457a1`), ativo em pt_BR.
-- Janela 24h aberta → teaser direto como texto livre. Janela fechada → template oficial + `pending_insight: [WEEKLY_REPORT]…` entregue pelo fast-path do `process-webhook-message` quando o usuário clica no botão.
+### 2. Auto-cancel por recusa no `post-analysis`
+No `supabase/functions/aura-agent/index.ts`, dentro do bloco de post-analysis (Flash-lite), adicionar uma instrução curta no prompt do extractor:
 
-Ou seja: lógica de envio e template já estão corretos. Só falta o cron disparar aos domingos.
+> "Se a última mensagem do usuário expressa recusa, desinteresse ou pedido para parar (ex: 'não quero', 'já disse que não', 'para de insistir', 'não tenho interesse') sobre um tópico que existe em commitments pendentes, retorne um campo `cancel_topics: string[]` com palavras-chave do(s) tópico(s) recusado(s)."
 
-## Mudanças
+Depois do parse, se `cancel_topics.length > 0`:
+```ts
+await supabase
+  .from('commitments')
+  .update({ commitment_status: 'cancelled', completed: true })
+  .eq('user_id', userId)
+  .eq('commitment_status', 'pending')
+  .or(cancel_topics.map(t => `title.ilike.%${t}%,description.ilike.%${t}%`).join(','));
+```
 
-### 1. Criar cron semanal de domingo
+### 3. Deduplicação leve na criação
+Antes de inserir um novo commitment, checar se já existe um pendente com `title` similar (ilike) nos últimos 7 dias. Se sim, pular insert (ou incrementar `follow_up_count`).
 
-Inserido via SQL `cron.schedule(...)` (não migration — contém anon key):
+## O que NÃO vamos fazer
+- Não mexer em estrutura do prompt principal
+- Não criar novos campos/tabelas
+- Não tocar no Phase Evaluator nem no fluxo de memória
 
-- **jobname**: `weekly-report-sunday-10am-brt`
-- **schedule**: `0 13 * * 0` (todo domingo 13h UTC = **10h BRT**)
-- **target**: `https://uhyogifgmutfmbyhzzyo.supabase.co/functions/v1/weekly-report`
-- **body**: `{}` (a função calcula `weekStart` sozinha — últimos 7 dias)
+## Resultado esperado
+- Recusa explícita → commitments do tópico viram `cancelled` no mesmo turno
+- Bloco "padrão recorrente" para de listar tópico recusado
+- Aura para de insistir naturalmente
+- Custo: ~25 linhas de código em 1 arquivo + 1 UPDATE retroativo
 
-Horário 10h BRT: fora das silent hours (22h–08h), domingo de manhã, dá tempo de processar todos os batches antes do almoço. Padrão consistente com os outros crons proativos do projeto.
-
-Mantemos o cron `monthly-report` como está (dia 1 do mês, 22h UTC) — ele continua válido para o relatório mensal.
-
-### 2. Reenvio manual para o Eduardo
-
-Após criar o cron, invocar uma vez via `supabase.functions.invoke('weekly-report', { body: { target_user_id: '329ebadd-07eb-4e1e-88db-d8974b2ea3e5' } })` para que ele receba o relatório que perdeu agora, sem esperar o próximo domingo.
-
-A função já tem suporte a `target_user_id` no parse de body (linha ~310). Se o caminho individual não existir totalmente, ajuste mínimo antes de disparar.
-
-### 3. Memória
-
-Salvar `mem://technical/weekly-report/cron-schedule` com a regra: relatório **semanal** → `0 13 * * 0` (domingo 10h BRT); relatório **mensal** → `0 22 1 * *` (dia 1 às 22h UTC). Evita confusão futura entre as duas cadências.
-
-## Validação
-
-- `SELECT * FROM cron.job WHERE jobname = 'weekly-report-sunday-10am-brt'` confirmando o schedule.
-- Logs do `weekly-report` mostrando o batch executado após o disparo manual.
-- Última mensagem em `messages` para o Eduardo contendo o teaser do relatório semanal.
+## Memória a salvar (após implementação)
+`mem://features/commitments/auto-cancel-on-refusal` — descrevendo a regra de cancelamento por recusa e dedupe de 7 dias.
