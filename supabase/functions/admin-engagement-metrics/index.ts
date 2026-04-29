@@ -635,14 +635,18 @@ Deno.serve(async (req) => {
           }
         }
         // + canceladas que ainda estavam vivas em periodStart (canceled_at >= periodStart)
+        // OTIMIZAÇÃO: limitamos a busca a subs criadas até 180 dias antes de periodStart
+        // (subs mais antigas que 6 meses raramente são relevantes para o denominador
+        //  e custavam centenas de chamadas Stripe).
         let hasMore = true;
         let startingAfter: string | undefined;
         let stop = false;
+        const cancelLookbackTs = periodStartTs - 180 * 24 * 60 * 60;
         while (hasMore && !stop) {
           const params: Stripe.SubscriptionListParams = {
             status: 'canceled',
             limit: 100,
-            created: { lt: periodStartTs },
+            created: { lt: periodStartTs, gte: cancelLookbackTs },
           };
           if (startingAfter) params.starting_after = startingAfter;
           const result = await stripeChurnDenom.subscriptions.list(params);
