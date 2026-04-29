@@ -1282,7 +1282,7 @@ Deno.serve(async (req) => {
       ? Math.round(matureConverted.length / matureTrials.length * 1000) / 10
       : 0;
 
-    return new Response(JSON.stringify({
+    const responsePayload = JSON.stringify({
       // Engagement
       activeUsers: activeUsersInPeriod,
       activeUsersBase: activeUsersBase || 0,
@@ -1408,8 +1408,15 @@ Deno.serve(async (req) => {
       matureTrialsCount: matureTrials.length,
       matureConvertedCount: matureConverted.length,
       matureConversionRate,
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+
+    // Salva no cache para próximas requests dentro do TTL
+    setCached(cacheKey, responsePayload);
+    const elapsedMs = Date.now() - computeStartedAt;
+    console.log(`✅ Computed metrics in ${elapsedMs}ms (cached as ${cacheKey})`);
+
+    return new Response(responsePayload, {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Cache': 'MISS', 'X-Compute-Ms': String(elapsedMs) },
     });
 
   } catch (error: unknown) {
