@@ -780,29 +780,27 @@ Deno.serve(async (req) => {
       }
       weeklyPlansOver7d = customersOver7d.length;
 
-      // Check invoices directly in Stripe for customers >7d
-      // subscription_cycle with total > 0 = monthly billing attempt after trial
-      for (const custId of customersOver7d) {
+      // Check invoices directly in Stripe for customers >7d — PARALELIZADO
+      // (10 requests Stripe simultâneas em vez de uma por uma)
+      const invoiceResults = await runWithConcurrency(customersOver7d, 10, async (custId) => {
         try {
           const invoices = await stripe.invoices.list({ customer: custId, limit: 20 });
-          
-          const monthlyInvoices = invoices.data.filter(inv => 
-            inv.billing_reason === 'subscription_cycle' && 
+          const monthlyInvoices = invoices.data.filter(inv =>
+            inv.billing_reason === 'subscription_cycle' &&
             (inv.total || 0) > 0 &&
-            inv.status !== 'draft'  // draft = not yet attempted by Stripe
+            inv.status !== 'draft'
           );
-          
-          if (monthlyInvoices.length > 0) {
-            weeklyPlansExpired++;
-            
-            const hasPaidMonthly = monthlyInvoices.some(inv => inv.status === 'paid');
-            if (hasPaidMonthly) {
-              weeklyPlansToPaidSuccess++;
-            }
-          }
+          if (monthlyInvoices.length === 0) return { expired: false, paid: false };
+          const hasPaidMonthly = monthlyInvoices.some(inv => inv.status === 'paid');
+          return { expired: true, paid: hasPaidMonthly };
         } catch (e) {
           console.warn(`⚠️ Failed to fetch invoices for ${custId}:`, e);
+          return { expired: false, paid: false };
         }
+      });
+      for (const r of invoiceResults) {
+        if (r.expired) weeklyPlansExpired++;
+        if (r.paid) weeklyPlansToPaidSuccess++;
       }
     }
 
