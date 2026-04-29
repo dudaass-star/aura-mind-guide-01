@@ -230,7 +230,10 @@ Deno.serve(async (req) => {
       avgSessionMinutes = Math.round(totalMinutes / completedSessions.length);
     }
 
-    // Messages per session (sessions that ended in period)
+    // Messages per session (sessions that ended in period) — OTIMIZADO
+    // Em vez de N+1 (1 count por sessão), buscamos as mensagens dos usuários
+    // alvo em UMA única paginação e classificamos em memória usando
+    // started_at/ended_at de cada sessão.
     let messagesPerSession = 0;
     if (completedSessions && completedSessions.length > 0) {
       const sessionsByUser = new Map<string, typeof completedSessions>();
@@ -239,18 +242,56 @@ Deno.serve(async (req) => {
         sessionsByUser.get(s.user_id)!.push(s);
       }
 
+      const userIds = Array.from(sessionsByUser.keys());
+      // Janela mínima/máxima entre todas as sessões — limita o range
+      let minStart = completedSessions[0].started_at!;
+      let maxEnd = completedSessions[0].ended_at!;
+      for (const s of completedSessions) {
+        if (s.started_at! < minStart) minStart = s.started_at!;
+        if (s.ended_at! > maxEnd) maxEnd = s.ended_at!;
+      }
+
+      // Busca todas as mensagens user-role desses usuários no range em chunks de 100 user_ids
+      const allMsgs: { user_id: string; created_at: string }[] = [];
+      const CHUNK = 100;
+      for (let i = 0; i < userIds.length; i += CHUNK) {
+        const chunk = userIds.slice(i, i + CHUNK);
+        let page = 0;
+        const pageSize = 1000;
+        while (true) {
+          const { data, error } = await supabase
+            .from('messages')
+            .select('user_id, created_at')
+            .eq('role', 'user')
+            .in('user_id', chunk)
+            .gte('created_at', minStart)
+            .lte('created_at', maxEnd)
+            .range(page * pageSize, (page + 1) * pageSize - 1);
+          if (error) break;
+          if (!data || data.length === 0) break;
+          allMsgs.push(...(data as { user_id: string; created_at: string }[]));
+          if (data.length < pageSize) break;
+          page++;
+        }
+      }
+
+      // Indexa por user_id e ordena por timestamp para classificar rápido por sessão
+      const msgsByUser = new Map<string, string[]>();
+      for (const m of allMsgs) {
+        if (!msgsByUser.has(m.user_id)) msgsByUser.set(m.user_id, []);
+        msgsByUser.get(m.user_id)!.push(m.created_at);
+      }
+
       const userAverages: number[] = [];
       for (const [userId, sessions] of sessionsByUser) {
+        const userMsgs = msgsByUser.get(userId) || [];
         let userTotalMsgs = 0;
         for (const session of sessions) {
-          const { count } = await supabase
-            .from('messages')
-            .select('*', { count: 'exact', head: true })
-            .eq('user_id', userId)
-            .eq('role', 'user')
-            .gte('created_at', session.started_at!)
-            .lte('created_at', session.ended_at!);
-          userTotalMsgs += (count || 0);
+          const start = session.started_at!;
+          const end = session.ended_at!;
+          for (const ts of userMsgs) {
+            if (ts >= start && ts <= end) userTotalMsgs++;
+          }
         }
         userAverages.push(userTotalMsgs / sessions.length);
       }
