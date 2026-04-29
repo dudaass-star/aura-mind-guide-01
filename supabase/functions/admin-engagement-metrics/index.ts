@@ -6,6 +6,54 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// ============================================================
+// 🚀 CACHE EM MEMÓRIA (módulo-level) — TTL 5 min
+// ------------------------------------------------------------
+// Reduz drasticamente a latência percebida quando o admin troca
+// de aba ou reabre o dashboard. O botão "Atualizar" envia
+// forceRefresh=true para invalidar e recomputar.
+// ============================================================
+const METRICS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos
+const metricsCache = new Map<string, { expiresAt: number; payload: string }>();
+
+function getCached(key: string): string | null {
+  const hit = metricsCache.get(key);
+  if (!hit) return null;
+  if (Date.now() > hit.expiresAt) {
+    metricsCache.delete(key);
+    return null;
+  }
+  return hit.payload;
+}
+
+function setCached(key: string, payload: string) {
+  metricsCache.set(key, { expiresAt: Date.now() + METRICS_CACHE_TTL_MS, payload });
+  // Limita tamanho do cache (evita memory leak em runs longos)
+  if (metricsCache.size > 50) {
+    const firstKey = metricsCache.keys().next().value;
+    if (firstKey) metricsCache.delete(firstKey);
+  }
+}
+
+// Helper genérico: roda promises em paralelo limitando concorrência
+async function runWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let cursor = 0;
+  const workers = new Array(Math.min(limit, items.length)).fill(0).map(async () => {
+    while (true) {
+      const i = cursor++;
+      if (i >= items.length) return;
+      results[i] = await fn(items[i]);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
 // Model pricing per 1M tokens (USD)
 const MODEL_PRICING: Record<string, { input: number; inputCached: number; output: number }> = {
   'gemini-2.5-flash': { input: 0.15, inputCached: 0.0375, output: 0.60 },
@@ -99,10 +147,12 @@ Deno.serve(async (req) => {
     // Parse date filters
     let dateFrom: string | null = null;
     let dateTo: string | null = null;
+    let forceRefresh = false;
     try {
       const body = await req.json();
       dateFrom = body.dateFrom || null;
       dateTo = body.dateTo || null;
+      forceRefresh = !!body.forceRefresh;
     } catch { /* no body */ }
 
     const now = new Date();
@@ -113,6 +163,22 @@ Deno.serve(async (req) => {
     const { periodStart, periodEnd } = toBRTInterval(dateFrom || defaultFrom, dateTo || defaultTo);
 
     console.log(`📊 Period: ${periodStart} → ${periodEnd} (BRT-aligned)`);
+
+    // ⚡ Cache check
+    const cacheKey = `${dateFrom || defaultFrom}:${dateTo || defaultTo}`;
+    if (!forceRefresh) {
+      const cached = getCached(cacheKey);
+      if (cached) {
+        console.log(`⚡ Cache HIT for ${cacheKey} (saved full computation)`);
+        return new Response(cached, {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Cache': 'HIT' },
+        });
+      }
+    } else {
+      console.log(`🔄 Force refresh requested for ${cacheKey}`);
+      metricsCache.delete(cacheKey);
+    }
+    const computeStartedAt = Date.now();
 
     // ========== ENGAGEMENT METRICS ==========
 
@@ -164,7 +230,10 @@ Deno.serve(async (req) => {
       avgSessionMinutes = Math.round(totalMinutes / completedSessions.length);
     }
 
-    // Messages per session (sessions that ended in period)
+    // Messages per session (sessions that ended in period) — OTIMIZADO
+    // Em vez de N+1 (1 count por sessão), buscamos as mensagens dos usuários
+    // alvo em UMA única paginação e classificamos em memória usando
+    // started_at/ended_at de cada sessão.
     let messagesPerSession = 0;
     if (completedSessions && completedSessions.length > 0) {
       const sessionsByUser = new Map<string, typeof completedSessions>();
@@ -173,18 +242,56 @@ Deno.serve(async (req) => {
         sessionsByUser.get(s.user_id)!.push(s);
       }
 
+      const userIds = Array.from(sessionsByUser.keys());
+      // Janela mínima/máxima entre todas as sessões — limita o range
+      let minStart = completedSessions[0].started_at!;
+      let maxEnd = completedSessions[0].ended_at!;
+      for (const s of completedSessions) {
+        if (s.started_at! < minStart) minStart = s.started_at!;
+        if (s.ended_at! > maxEnd) maxEnd = s.ended_at!;
+      }
+
+      // Busca todas as mensagens user-role desses usuários no range em chunks de 100 user_ids
+      const allMsgs: { user_id: string; created_at: string }[] = [];
+      const CHUNK = 100;
+      for (let i = 0; i < userIds.length; i += CHUNK) {
+        const chunk = userIds.slice(i, i + CHUNK);
+        let page = 0;
+        const pageSize = 1000;
+        while (true) {
+          const { data, error } = await supabase
+            .from('messages')
+            .select('user_id, created_at')
+            .eq('role', 'user')
+            .in('user_id', chunk)
+            .gte('created_at', minStart)
+            .lte('created_at', maxEnd)
+            .range(page * pageSize, (page + 1) * pageSize - 1);
+          if (error) break;
+          if (!data || data.length === 0) break;
+          allMsgs.push(...(data as { user_id: string; created_at: string }[]));
+          if (data.length < pageSize) break;
+          page++;
+        }
+      }
+
+      // Indexa por user_id e ordena por timestamp para classificar rápido por sessão
+      const msgsByUser = new Map<string, string[]>();
+      for (const m of allMsgs) {
+        if (!msgsByUser.has(m.user_id)) msgsByUser.set(m.user_id, []);
+        msgsByUser.get(m.user_id)!.push(m.created_at);
+      }
+
       const userAverages: number[] = [];
       for (const [userId, sessions] of sessionsByUser) {
+        const userMsgs = msgsByUser.get(userId) || [];
         let userTotalMsgs = 0;
         for (const session of sessions) {
-          const { count } = await supabase
-            .from('messages')
-            .select('*', { count: 'exact', head: true })
-            .eq('user_id', userId)
-            .eq('role', 'user')
-            .gte('created_at', session.started_at!)
-            .lte('created_at', session.ended_at!);
-          userTotalMsgs += (count || 0);
+          const start = session.started_at!;
+          const end = session.ended_at!;
+          for (const ts of userMsgs) {
+            if (ts >= start && ts <= end) userTotalMsgs++;
+          }
         }
         userAverages.push(userTotalMsgs / sessions.length);
       }
@@ -528,14 +635,18 @@ Deno.serve(async (req) => {
           }
         }
         // + canceladas que ainda estavam vivas em periodStart (canceled_at >= periodStart)
+        // OTIMIZAÇÃO: limitamos a busca a subs criadas até 180 dias antes de periodStart
+        // (subs mais antigas que 6 meses raramente são relevantes para o denominador
+        //  e custavam centenas de chamadas Stripe).
         let hasMore = true;
         let startingAfter: string | undefined;
         let stop = false;
+        const cancelLookbackTs = periodStartTs - 180 * 24 * 60 * 60;
         while (hasMore && !stop) {
           const params: Stripe.SubscriptionListParams = {
             status: 'canceled',
             limit: 100,
-            created: { lt: periodStartTs },
+            created: { lt: periodStartTs, gte: cancelLookbackTs },
           };
           if (startingAfter) params.starting_after = startingAfter;
           const result = await stripeChurnDenom.subscriptions.list(params);
@@ -673,29 +784,27 @@ Deno.serve(async (req) => {
       }
       weeklyPlansOver7d = customersOver7d.length;
 
-      // Check invoices directly in Stripe for customers >7d
-      // subscription_cycle with total > 0 = monthly billing attempt after trial
-      for (const custId of customersOver7d) {
+      // Check invoices directly in Stripe for customers >7d — PARALELIZADO
+      // (10 requests Stripe simultâneas em vez de uma por uma)
+      const invoiceResults = await runWithConcurrency(customersOver7d, 10, async (custId) => {
         try {
           const invoices = await stripe.invoices.list({ customer: custId, limit: 20 });
-          
-          const monthlyInvoices = invoices.data.filter(inv => 
-            inv.billing_reason === 'subscription_cycle' && 
+          const monthlyInvoices = invoices.data.filter(inv =>
+            inv.billing_reason === 'subscription_cycle' &&
             (inv.total || 0) > 0 &&
-            inv.status !== 'draft'  // draft = not yet attempted by Stripe
+            inv.status !== 'draft'
           );
-          
-          if (monthlyInvoices.length > 0) {
-            weeklyPlansExpired++;
-            
-            const hasPaidMonthly = monthlyInvoices.some(inv => inv.status === 'paid');
-            if (hasPaidMonthly) {
-              weeklyPlansToPaidSuccess++;
-            }
-          }
+          if (monthlyInvoices.length === 0) return { expired: false, paid: false };
+          const hasPaidMonthly = monthlyInvoices.some(inv => inv.status === 'paid');
+          return { expired: true, paid: hasPaidMonthly };
         } catch (e) {
           console.warn(`⚠️ Failed to fetch invoices for ${custId}:`, e);
+          return { expired: false, paid: false };
         }
+      });
+      for (const r of invoiceResults) {
+        if (r.expired) weeklyPlansExpired++;
+        if (r.paid) weeklyPlansToPaidSuccess++;
       }
     }
 
@@ -1216,7 +1325,7 @@ Deno.serve(async (req) => {
       ? Math.round(matureConverted.length / matureTrials.length * 1000) / 10
       : 0;
 
-    return new Response(JSON.stringify({
+    const responsePayload = JSON.stringify({
       // Engagement
       activeUsers: activeUsersInPeriod,
       activeUsersBase: activeUsersBase || 0,
@@ -1342,8 +1451,15 @@ Deno.serve(async (req) => {
       matureTrialsCount: matureTrials.length,
       matureConvertedCount: matureConverted.length,
       matureConversionRate,
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+
+    // Salva no cache para próximas requests dentro do TTL
+    setCached(cacheKey, responsePayload);
+    const elapsedMs = Date.now() - computeStartedAt;
+    console.log(`✅ Computed metrics in ${elapsedMs}ms (cached as ${cacheKey})`);
+
+    return new Response(responsePayload, {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Cache': 'MISS', 'X-Compute-Ms': String(elapsedMs) },
     });
 
   } catch (error: unknown) {

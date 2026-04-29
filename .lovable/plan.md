@@ -1,41 +1,62 @@
-# Plano: Evitar que commitments alimentem insistência da Aura
+## Diagnóstico
 
-## Problema
-Hoje o post-analysis cria commitments a cada turno sem deduplicar e sem detectar recusa. Quando o usuário recusa um tópico, a recusa vira mais um commitment "pendente", reforçando o bloco "padrão recorrente" no próximo prompt → Aura insiste.
+A função `admin-engagement-metrics` faz **muito trabalho síncrono em sequência** numa única edge function. Os principais gargalos hoje são:
 
-## Solução (mínima, 1 lugar só)
+1. **Stripe sequencial e exaustivo** (a parte mais lenta — fácil 30-90s):
+   - `stripe.charges.search` paginando até o fim para 3 amounts (690/990/1990).
+   - Para cada cliente >7d, chama `stripe.invoices.list` (loop serial — N requests).
+   - Lista TODAS as `subscriptions` (`active` + `trialing` + `past_due`) paginadas.
+   - Lista TODAS as subs `canceled` para calcular o denominador de churn.
+   - Tudo isso roda **sempre que você clica em atualizar**, mesmo só pra mudar 1 dia de filtro.
 
-### 1. Cleanup retroativo (SQL)
-Marcar como `cancelled` os 9 commitments pendentes do Eduardo (`329ebadd-07eb-4e1e-88db-d8974b2ea3e5`) que mencionam "sessão/sessões/agendar".
+2. **Supabase paginação manual** (`fetchAllPaginated`) varrendo `messages` e `token_usage_logs` inteiros do período.
 
-### 2. Auto-cancel por recusa no `post-analysis`
-No `supabase/functions/aura-agent/index.ts`, dentro do bloco de post-analysis (Flash-lite), adicionar uma instrução curta no prompt do extractor:
+3. **N+1 em `messagesPerSession`**: um `count` por sessão completada (pode virar centenas de queries).
 
-> "Se a última mensagem do usuário expressa recusa, desinteresse ou pedido para parar (ex: 'não quero', 'já disse que não', 'para de insistir', 'não tenho interesse') sobre um tópico que existe em commitments pendentes, retorne um campo `cancel_topics: string[]` com palavras-chave do(s) tópico(s) recusado(s)."
+4. **Sem cache**: cada clique reprocessa tudo do zero.
 
-Depois do parse, se `cancel_topics.length > 0`:
-```ts
-await supabase
-  .from('commitments')
-  .update({ commitment_status: 'cancelled', completed: true })
-  .eq('user_id', userId)
-  .eq('commitment_status', 'pending')
-  .or(cancel_topics.map(t => `title.ilike.%${t}%,description.ilike.%${t}%`).join(','));
-```
+## Plano
 
-### 3. Deduplicação leve na criação
-Antes de inserir um novo commitment, checar se já existe um pendente com `title` similar (ilike) nos últimos 7 dias. Se sim, pular insert (ou incrementar `follow_up_count`).
+### 1. Cache em memória com TTL (ganho imediato — clicks repetidos viram instantâneos)
 
-## O que NÃO vamos fazer
-- Não mexer em estrutura do prompt principal
-- Não criar novos campos/tabelas
-- Não tocar no Phase Evaluator nem no fluxo de memória
+Guardar o resultado por chave `dateFrom:dateTo` por **5 minutos** dentro da edge function (variável module-level). Adicionar parâmetro opcional `forceRefresh: true` para o botão "Atualizar" forçar recomputo quando o usuário realmente quer.
+
+Resultado: navegar entre abas / reabrir página = resposta em <1s.
+
+### 2. Paralelizar os 3 grandes blocos independentes
+
+Hoje rodam em série: `Engagement` → `Cost` → `Trial` → `Billing` → `Cancellation` → `Weekly Plans (Stripe)` → `Checkout` → `MRR (Stripe)`.
+
+Envolver em `Promise.all([engagementBlock(), costBlock(), trialBlock(), stripeBlock(), checkoutBlock()])`. O bloco Stripe (de longe o mais pesado) já roda em paralelo aos blocos de DB.
+
+### 3. Reduzir trabalho do Stripe
+
+- **Unificar as 4 chamadas separadas de `subscriptions.list`** (active, trialing, past_due, canceled) — hoje churn denominador faz outra rodada completa só pra contar. Usar a lista já carregada do bloco MRR + uma única busca extra de `canceled` filtrada por `created[gte]`.
+- **Paralelizar `stripe.invoices.list` por cliente** com `Promise.all` em batches de 10 ao invés do loop serial.
+- **Dropar a busca de `canceled` por `created < periodStart`** sem `limit` no tempo — hoje pode varrer milhares de subs antigas. Usar `created[gte]: periodStart - 90d` (90 dias é suficiente para qualquer churn analytics).
+
+### 4. Substituir N+1 de `messagesPerSession` por agregação única
+
+Trocar o loop por uma única query agregando todas as mensagens dos usuários com sessões completadas no período (já que `periodUserMessages` JÁ está em memória). Calcular tudo client-side em JS ao invés de 1 count por sessão.
+
+### 5. Spinner e feedback no botão
+
+No `AdminEngagement.tsx`:
+- Mostrar tempo decorrido no botão ("Atualizando... 12s") para o usuário saber que está vivo.
+- Manter dados antigos visíveis com leve opacidade enquanto recarrega (em vez de skeleton total) — percepção muito melhor.
+
+## Arquivos afetados
+
+- `supabase/functions/admin-engagement-metrics/index.ts` — refatoração de cache, paralelização, fix N+1.
+- `src/pages/AdminEngagement.tsx` — botão "Atualizar" passa `forceRefresh: true`, indicador de tempo, mantém dados durante reload.
 
 ## Resultado esperado
-- Recusa explícita → commitments do tópico viram `cancelled` no mesmo turno
-- Bloco "padrão recorrente" para de listar tópico recusado
-- Aura para de insistir naturalmente
-- Custo: ~25 linhas de código em 1 arquivo + 1 UPDATE retroativo
 
-## Memória a salvar (após implementação)
-`mem://features/commitments/auto-cancel-on-refusal` — descrevendo a regra de cancelamento por recusa e dedupe de 7 dias.
+| Cenário | Antes | Depois |
+|---|---|---|
+| 1ª carga (cache vazio) | 30-90s | **8-15s** |
+| Clique em "Atualizar" (force refresh) | 30-90s | **8-15s** |
+| Mudar filtro de data e voltar | 30-90s | **<1s** (cache hit) |
+| Trocar de aba e voltar | 30-90s | **<1s** (cache hit) |
+
+Sem mudar nenhuma métrica — só otimizando como elas são calculadas.

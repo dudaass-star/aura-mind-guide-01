@@ -200,12 +200,26 @@ export default function AdminEngagement() {
   const { toast } = useToast();
   const navigate = useNavigate();
   const requestIdRef = useRef(0);
+  const [elapsedSec, setElapsedSec] = useState(0);
+
+  // Cronômetro do botão "Atualizar" para feedback visual durante esperas longas.
+  useEffect(() => {
+    if (!loading) {
+      setElapsedSec(0);
+      return;
+    }
+    const startedAt = Date.now();
+    const id = setInterval(() => {
+      setElapsedSec(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [loading]);
 
   useEffect(() => {
     if (!isLoading) redirectIfNotAdmin();
   }, [isLoading, isAdmin]);
 
-  const fetchMetrics = async (from: Date = dateFrom, to: Date = dateTo) => {
+  const fetchMetrics = async (from: Date = dateFrom, to: Date = dateTo, forceRefresh = false) => {
     const requestId = ++requestIdRef.current;
     setLoading(true);
 
@@ -218,6 +232,7 @@ export default function AdminEngagement() {
         body: {
           dateFrom: format(from, 'yyyy-MM-dd'),
           dateTo: format(to, 'yyyy-MM-dd'),
+          forceRefresh,
         },
       });
 
@@ -461,7 +476,7 @@ export default function AdminEngagement() {
 
   return (
     <div className="min-h-screen bg-background p-4">
-      <div className="max-w-6xl mx-auto space-y-4">
+      <div className={cn("max-w-6xl mx-auto space-y-4 transition-opacity", loading && metrics && "opacity-70")}>
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="icon" onClick={() => navigate('/admin/configuracoes')}>
@@ -511,9 +526,9 @@ export default function AdminEngagement() {
                 <Calendar mode="single" selected={dateTo} onSelect={(d) => d && setDateTo(d)} locale={ptBR} className="p-3 pointer-events-auto" />
               </PopoverContent>
             </Popover>
-            <Button variant="outline" size="sm" onClick={() => fetchMetrics()} disabled={loading} className="h-8">
+            <Button variant="outline" size="sm" onClick={() => fetchMetrics(dateFrom, dateTo, true)} disabled={loading} className="h-8">
               <RefreshCw className={`h-4 w-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
-              Atualizar
+              {loading ? `Atualizando${elapsedSec > 2 ? ` ${elapsedSec}s` : '...'}` : 'Atualizar'}
             </Button>
             <Button variant="outline" size="sm" onClick={handleSendEmailNotification} disabled={sendingEmail} className="h-8 border-primary/30 text-primary hover:bg-primary/10">
               <Mail className={`h-4 w-4 mr-1 ${sendingEmail ? 'animate-pulse' : ''}`} />
