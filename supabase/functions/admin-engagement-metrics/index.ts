@@ -6,6 +6,54 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// ============================================================
+// 🚀 CACHE EM MEMÓRIA (módulo-level) — TTL 5 min
+// ------------------------------------------------------------
+// Reduz drasticamente a latência percebida quando o admin troca
+// de aba ou reabre o dashboard. O botão "Atualizar" envia
+// forceRefresh=true para invalidar e recomputar.
+// ============================================================
+const METRICS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos
+const metricsCache = new Map<string, { expiresAt: number; payload: string }>();
+
+function getCached(key: string): string | null {
+  const hit = metricsCache.get(key);
+  if (!hit) return null;
+  if (Date.now() > hit.expiresAt) {
+    metricsCache.delete(key);
+    return null;
+  }
+  return hit.payload;
+}
+
+function setCached(key: string, payload: string) {
+  metricsCache.set(key, { expiresAt: Date.now() + METRICS_CACHE_TTL_MS, payload });
+  // Limita tamanho do cache (evita memory leak em runs longos)
+  if (metricsCache.size > 50) {
+    const firstKey = metricsCache.keys().next().value;
+    if (firstKey) metricsCache.delete(firstKey);
+  }
+}
+
+// Helper genérico: roda promises em paralelo limitando concorrência
+async function runWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let cursor = 0;
+  const workers = new Array(Math.min(limit, items.length)).fill(0).map(async () => {
+    while (true) {
+      const i = cursor++;
+      if (i >= items.length) return;
+      results[i] = await fn(items[i]);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
 // Model pricing per 1M tokens (USD)
 const MODEL_PRICING: Record<string, { input: number; inputCached: number; output: number }> = {
   'gemini-2.5-flash': { input: 0.15, inputCached: 0.0375, output: 0.60 },
