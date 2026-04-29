@@ -147,10 +147,12 @@ Deno.serve(async (req) => {
     // Parse date filters
     let dateFrom: string | null = null;
     let dateTo: string | null = null;
+    let forceRefresh = false;
     try {
       const body = await req.json();
       dateFrom = body.dateFrom || null;
       dateTo = body.dateTo || null;
+      forceRefresh = !!body.forceRefresh;
     } catch { /* no body */ }
 
     const now = new Date();
@@ -161,6 +163,22 @@ Deno.serve(async (req) => {
     const { periodStart, periodEnd } = toBRTInterval(dateFrom || defaultFrom, dateTo || defaultTo);
 
     console.log(`📊 Period: ${periodStart} → ${periodEnd} (BRT-aligned)`);
+
+    // ⚡ Cache check
+    const cacheKey = `${dateFrom || defaultFrom}:${dateTo || defaultTo}`;
+    if (!forceRefresh) {
+      const cached = getCached(cacheKey);
+      if (cached) {
+        console.log(`⚡ Cache HIT for ${cacheKey} (saved full computation)`);
+        return new Response(cached, {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Cache': 'HIT' },
+        });
+      }
+    } else {
+      console.log(`🔄 Force refresh requested for ${cacheKey}`);
+      metricsCache.delete(cacheKey);
+    }
+    const computeStartedAt = Date.now();
 
     // ========== ENGAGEMENT METRICS ==========
 
