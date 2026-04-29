@@ -200,12 +200,26 @@ export default function AdminEngagement() {
   const { toast } = useToast();
   const navigate = useNavigate();
   const requestIdRef = useRef(0);
+  const [elapsedSec, setElapsedSec] = useState(0);
+
+  // Cronômetro do botão "Atualizar" para feedback visual durante esperas longas.
+  useEffect(() => {
+    if (!loading) {
+      setElapsedSec(0);
+      return;
+    }
+    const startedAt = Date.now();
+    const id = setInterval(() => {
+      setElapsedSec(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [loading]);
 
   useEffect(() => {
     if (!isLoading) redirectIfNotAdmin();
   }, [isLoading, isAdmin]);
 
-  const fetchMetrics = async (from: Date = dateFrom, to: Date = dateTo) => {
+  const fetchMetrics = async (from: Date = dateFrom, to: Date = dateTo, forceRefresh = false) => {
     const requestId = ++requestIdRef.current;
     setLoading(true);
 
@@ -218,6 +232,7 @@ export default function AdminEngagement() {
         body: {
           dateFrom: format(from, 'yyyy-MM-dd'),
           dateTo: format(to, 'yyyy-MM-dd'),
+          forceRefresh,
         },
       });
 
