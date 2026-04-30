@@ -1,90 +1,76 @@
-# Plano A — Restaurar envios de áudio da Aura
 
-## Problema
+# Plano de correção — 2 bugs independentes
 
-Nos últimos 7 dias: ~8.300 mensagens enviadas pela Aura, apenas **4 áudios**. Sessões completas estão saindo com `audio_sent_count = 0` mesmo na abertura/fechamento (que são obrigatórios). Crises e pedidos explícitos do usuário também viram texto.
+## Bug 1 — Remarcação de sessão sem efeito no banco
 
-## Causa raiz
+### Causa-raiz
+O handler em `aura-agent/index.ts` (linha 6042-6075) já existe e funciona corretamente: quando a resposta da IA contém a tag `[REAGENDAR_SESSAO:YYYY-MM-DD HH:MM]`, ele atualiza `sessions.scheduled_at` e reseta os flags de lembrete.
 
-O backend (`determineAudioMode()`) decide corretamente quando o áudio é obrigatório (`mandatory: true`), mas a função `splitIntoMessages()` só ativa modo áudio se a IA escrever literalmente `[MODO_AUDIO]` no início da resposta. Quando a IA esquece a tag, **toda a regra determinística é ignorada** e a mensagem vai como texto.
+O problema é que **o prompt nunca ensina a IA a emitir essa tag**. Na seção `# SESSÕES` (linha 2724-2729) o prompt diz apenas:
 
-```text
-determineAudioMode → mandatory: true ✅
-       │
-       ▼
-splitIntoMessages → checa só a TAG ❌  → vai como texto
+> *"Quando o usuário quiser agendar, reagendar ou cancelar uma sessão, confirme naturalmente com data e horário. O sistema extrai a intenção da sua resposta e executa a ação no banco de dados."*
+
+Isso é falso — não há extrator NLP rodando depois da resposta; só o regex literal. Resultado: a Aura confirma "Já mudei pra quinta 22h" mas **nada é gravado**. Mesmo bug provavelmente atinge `[AGENDAR_SESSAO:...]` (criação de novas sessões pedidas pelo usuário em conversa).
+
+### Correção
+Editar a seção `# SESSÕES` do prompt em `aura-agent/index.ts` (~linha 2724) para tornar as tags **obrigatórias e explícitas**, no mesmo padrão das outras tags internas que já funcionam (`[MARCO:...]`, `[REAGENDAR_SESSAO:...]` no removeInternalTags).
+
+Conteúdo a adicionar ao prompt:
+
+- Lista clara das 2 tags: `[REAGENDAR_SESSAO:YYYY-MM-DD HH:MM]` e `[AGENDAR_SESSAO:YYYY-MM-DD HH:MM]`.
+- Regra: SEMPRE que confirmar uma data/hora nova com o usuário, anexar a tag correspondente ao final da mensagem.
+- Exemplos curtos de uso (com e sem a tag, mostrando que sem ela nada acontece).
+- Conversão de "amanhã às 22h" / "quinta 22h" para data absoluta usando o timestamp de hoje (já injetado no contexto).
+- Reforçar que cancelamento usa `[SESSAO_PERDIDA_RECUSADA]` (tag que já existe).
+
+Sem mudanças de código no handler — ele já está correto.
+
+### Validação
+- Após o deploy, verificar nos logs do `aura-agent` por `📅 Session rescheduled via AURA` em conversas reais.
+- Como teste manual, simular o fluxo da Larissa: pedido de remarcação → checar se a próxima sessão `scheduled` muda de horário.
+
+---
+
+## Bug 2 — Cron `weekly-report-sunday-10am-brt` (jobid 35) nunca disparou
+
+### Causa-raiz
+O job está cadastrado em `cron.job` com `active=true`, schedule `0 13 * * 0` (domingo 13h UTC = 10h BRT) e `command` SQL bem formado e idêntico ao do jobid 23 (mensal, que funciona). Mesmo assim `cron.job_run_details` mostra **0 execuções** desde a criação (27/04/2026, jobid 35). Outros jobs do mesmo período rodaram normalmente.
+
+Esse padrão (job ativo, schedule válido, comando válido, zero runs) é típico de jobs que ficaram em estado inconsistente no pg_cron — geralmente após criação durante uma janela onde o worker do pg_cron não recarregou o catálogo. Solução padrão: remover e recriar.
+
+### Correção
+Via tool de DB insert (não migration, pois contém anon key específico do projeto, conforme regra de cron jobs):
+
+```sql
+SELECT cron.unschedule(35);
+
+SELECT cron.schedule(
+  'weekly-report-sunday-10am-brt',
+  '0 13 * * 0',
+  $$
+  SELECT net.http_post(
+    url := 'https://uhyogifgmutfmbyhzzyo.supabase.co/functions/v1/weekly-report',
+    headers := '{"Content-Type":"application/json","Authorization":"Bearer <ANON_KEY>"}'::jsonb,
+    body := '{}'::jsonb
+  ) AS request_id;
+  $$
+);
 ```
 
-## Mudanças
+### Validação
+- Após recriar, consultar `cron.job` para confirmar novo `jobid` e `active=true`.
+- No próximo domingo 10h BRT, conferir `cron.job_run_details` e logs da edge function `weekly-report`.
+- Para não esperar uma semana, disparar 1 execução manual agora via `supabase.functions.invoke('weekly-report', { body: {} })` para validar a função em si — separado da validação do cron.
 
-### 1. `supabase/functions/aura-agent/index.ts` — `splitIntoMessages()` (linha 3273)
+---
 
-Trocar a assinatura para receber a `AudioDecision` completa em vez de só `allowAudioThisTurn`. Forçar `isAudioMode = true` sempre que `audioDecision.mandatory === true`, independente da tag.
+## Ordem de execução
 
-```ts
-// ANTES
-function splitIntoMessages(response, allowAudioThisTurn) {
-  const wantsAudioByTag = response.trimStart().startsWith('[MODO_AUDIO]');
-  const isAudioMode = wantsAudioByTag && allowAudioThisTurn;
-  ...
-}
+1. Editar prompt do `aura-agent/index.ts` (Bug 1).
+2. Recriar cron jobid 35 (Bug 2).
+3. Disparo manual de teste do `weekly-report` para confirmar que a função em si está saudável.
+4. Atualizar memória `mem://features/whatsapp/session-reminder-flow` (ou criar uma nova memória) registrando que tags `[AGENDAR_SESSAO]` e `[REAGENDAR_SESSAO]` são o único caminho de gravação — para evitar regressão futura.
 
-// DEPOIS
-function splitIntoMessages(response, audioDecision) {
-  const wantsAudioByTag = response.trimStart().startsWith('[MODO_AUDIO]');
-  const isAudioMode = audioDecision.mandatory
-    || (wantsAudioByTag && audioDecision.shouldUseAudio);
-
-  if (audioDecision.mandatory && !wantsAudioByTag) {
-    console.log(`🎙️ FORCED audio (no AI tag): reason=${audioDecision.reason}`);
-  }
-  ...
-}
-```
-
-### 2. Atualizar a chamada (linha 7121)
-
-```ts
-const messageChunks = splitIntoMessages(assistantMessage, audioDecision);
-```
-
-### 3. Garantir limpeza da tag em qualquer caminho
-
-A linha 42 já remove `[MODO_AUDIO]`. Confirmar que `stripAllInternalTags` (já chamado em `splitIntoMessages`) cobre o caso "áudio forçado sem tag" — sem duplicação de conteúdo.
-
-### 4. Logs de auditoria
-
-Adicionar log estruturado quando o áudio for forçado pelo backend, para acompanhar o efeito da mudança nos primeiros dias:
-```
-🎙️ FORCED audio (no AI tag): reason=session_opening|session_closing|crisis_detected|user_requested
-```
-
-## Comportamento resultante
-
-| Situação | Antes | Depois |
-|---|---|---|
-| Abertura de sessão (msg 1 e 2) | só com tag | **sempre áudio** |
-| Fechamento de sessão | só com tag | **sempre áudio** |
-| Crise detectada (pânico, ideação) | só com tag | **sempre áudio** |
-| Usuário pede áudio explícito | só com tag | **sempre áudio** |
-| Aura "sente" momento emocional casual | tag (igual) | tag (igual) |
-| Usuário pediu texto | texto | texto (inalterado) |
-| Orçamento mensal estourado | bloqueia | bloqueia (inalterado para não-mandatórios; mandatórios passam — comportamento já existente em `determineAudioMode`) |
-
-## Validação pós-deploy
-
-Após 24–48h, conferir:
-1. `SELECT COUNT(*) FROM token_usage_logs WHERE service = 'inworld_tts' AND created_at > now() - interval '24 hours'` — esperado: dezenas, não 0–1.
-2. `SELECT id, audio_sent_count FROM sessions WHERE status = 'completed' AND ended_at > now() - interval '24 hours'` — esperado: todas com `audio_sent_count >= 2`.
-3. Logs do `aura-agent` filtrar por `🎙️ FORCED audio` para mapear quais reasons estão disparando.
-
-## Não está no escopo
-
-- Fallback Inworld → Google TTS (item separado, decidido depois).
-- Mudar limites de orçamento mensal por plano.
-- Mudar critérios de detecção de crise/pedido de áudio.
-- Cap diário de áudios forçados (essa era a opção B, descartada).
-
-## Risco aceito
-
-Custo Inworld TTS sobe (já discutido). Mitigado pelo orçamento mensal por usuário, que continua funcionando.
+## Fora de escopo (conforme pedido)
+- Não criar manualmente sessão remarcada para a Larissa.
+- Não disparar weekly-report retroativo dela.
