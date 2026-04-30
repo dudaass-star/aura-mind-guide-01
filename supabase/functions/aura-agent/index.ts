@@ -5454,6 +5454,9 @@ REGRA: ${behaviorInstruction}`;
         phaseBlock += `\n✅ OBRIGATÓRIO: Continue explorando e aprofundando.`;
         if (phaseInfo.phase === 'opening' && elapsed <= 3) {
           phaseBlock += `\n📌 PRIMEIROS MINUTOS. Faça abertura e check-in.`;
+          phaseBlock += `\n🔗 ABERTURA OBRIGATÓRIA COM FIO CONDUTOR: Se houver resumo da última sessão, memórias hierárquicas ou compromissos anteriores no contexto, COMECE puxando o fio explicitamente — antes de qualquer outra coisa.`;
+          phaseBlock += `\nExemplo: "Semana passada você terminou pensando em [X]. O que aconteceu com isso desde então?" ou "Você tinha combinado de [Y]. Como foi?"`;
+          phaseBlock += `\nSe NÃO houver material de sessão anterior no contexto (primeira sessão), faça abertura padrão. NUNCA invente memórias.`;
         } else if (phaseInfo.phase === 'exploration') {
           phaseBlock += `\n📌 EXPLORAÇÃO. Vá mais fundo. Uma observação + uma pergunta.`;
         }
