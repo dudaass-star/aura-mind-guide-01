@@ -75,3 +75,18 @@ Deno.test("Fase 1 — Presença: regra 'VALIDA + ENTREGA' está no prompt", () =
     "Regra 'VALIDA + ENTREGA' sumiu do prompt da FASE 1 — PRESENÇA."
   );
 });
+
+Deno.test("Fase 2 — Postura Clínica: princípio mestre está no prompt geral", () => {
+  assert(
+    /POSTURA CL[IÍ]NICA \(princ[ií]pio mestre\)/.test(SOURCE),
+    "Bloco 'POSTURA CLÍNICA (princípio mestre)' sumiu — princípio universal de ir contra a corrente foi removido."
+  );
+  assert(
+    /Vá contra a corrente/.test(SOURCE),
+    "Permissão 'Vá contra a corrente' sumiu do bloco POSTURA CLÍNICA."
+  );
+  assert(
+    /Quando N[AÃ]O ir contra a corrente/.test(SOURCE),
+    "Salvaguarda 'Quando NÃO ir contra a corrente' sumiu — risco de confronto sem propósito."
+  );
+});
