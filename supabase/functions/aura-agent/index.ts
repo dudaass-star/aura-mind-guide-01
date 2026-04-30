@@ -3270,14 +3270,26 @@ function sanitizeMessageHistory(messages: { role: string; content: string; creat
 }
 
 // Função para separar resposta em múltiplos balões
-function splitIntoMessages(response: string, allowAudioThisTurn: boolean): Array<{ text: string; delay: number; isAudio: boolean }> {
+// Aceita a AudioDecision completa para que o backend possa FORÇAR áudio
+// quando a regra é obrigatória (abertura/fechamento de sessão, crise, pedido
+// explícito do usuário), mesmo que a IA tenha esquecido a tag [MODO_AUDIO].
+function splitIntoMessages(
+  response: string,
+  audioDecision: AudioDecision,
+): Array<{ text: string; delay: number; isAudio: boolean }> {
   const wantsAudioByTag = response.trimStart().startsWith('[MODO_AUDIO]');
-  const isAudioMode = wantsAudioByTag && allowAudioThisTurn;
-  
-  if (wantsAudioByTag && !allowAudioThisTurn) {
+  // Áudio forçado pelo backend SEMPRE prevalece sobre a ausência da tag.
+  // Caso contrário, respeita a decisão híbrida (tag + permissão de orçamento).
+  const isAudioMode = audioDecision.mandatory
+    || (wantsAudioByTag && audioDecision.shouldUseAudio);
+
+  if (audioDecision.mandatory && !wantsAudioByTag) {
+    console.log(`🎙️ FORCED audio (no AI tag): reason=${audioDecision.reason}`);
+  }
+  if (wantsAudioByTag && !audioDecision.shouldUseAudio && !audioDecision.mandatory) {
     console.log('⚠️ Audio tag received but NOT allowed this turn - converting to text');
   }
-  
+
   let cleanResponse = stripAllInternalTags(response);
 
   if (isAudioMode) {

@@ -1,62 +1,90 @@
-## Diagnóstico
+# Plano A — Restaurar envios de áudio da Aura
 
-A função `admin-engagement-metrics` faz **muito trabalho síncrono em sequência** numa única edge function. Os principais gargalos hoje são:
+## Problema
 
-1. **Stripe sequencial e exaustivo** (a parte mais lenta — fácil 30-90s):
-   - `stripe.charges.search` paginando até o fim para 3 amounts (690/990/1990).
-   - Para cada cliente >7d, chama `stripe.invoices.list` (loop serial — N requests).
-   - Lista TODAS as `subscriptions` (`active` + `trialing` + `past_due`) paginadas.
-   - Lista TODAS as subs `canceled` para calcular o denominador de churn.
-   - Tudo isso roda **sempre que você clica em atualizar**, mesmo só pra mudar 1 dia de filtro.
+Nos últimos 7 dias: ~8.300 mensagens enviadas pela Aura, apenas **4 áudios**. Sessões completas estão saindo com `audio_sent_count = 0` mesmo na abertura/fechamento (que são obrigatórios). Crises e pedidos explícitos do usuário também viram texto.
 
-2. **Supabase paginação manual** (`fetchAllPaginated`) varrendo `messages` e `token_usage_logs` inteiros do período.
+## Causa raiz
 
-3. **N+1 em `messagesPerSession`**: um `count` por sessão completada (pode virar centenas de queries).
+O backend (`determineAudioMode()`) decide corretamente quando o áudio é obrigatório (`mandatory: true`), mas a função `splitIntoMessages()` só ativa modo áudio se a IA escrever literalmente `[MODO_AUDIO]` no início da resposta. Quando a IA esquece a tag, **toda a regra determinística é ignorada** e a mensagem vai como texto.
 
-4. **Sem cache**: cada clique reprocessa tudo do zero.
+```text
+determineAudioMode → mandatory: true ✅
+       │
+       ▼
+splitIntoMessages → checa só a TAG ❌  → vai como texto
+```
 
-## Plano
+## Mudanças
 
-### 1. Cache em memória com TTL (ganho imediato — clicks repetidos viram instantâneos)
+### 1. `supabase/functions/aura-agent/index.ts` — `splitIntoMessages()` (linha 3273)
 
-Guardar o resultado por chave `dateFrom:dateTo` por **5 minutos** dentro da edge function (variável module-level). Adicionar parâmetro opcional `forceRefresh: true` para o botão "Atualizar" forçar recomputo quando o usuário realmente quer.
+Trocar a assinatura para receber a `AudioDecision` completa em vez de só `allowAudioThisTurn`. Forçar `isAudioMode = true` sempre que `audioDecision.mandatory === true`, independente da tag.
 
-Resultado: navegar entre abas / reabrir página = resposta em <1s.
+```ts
+// ANTES
+function splitIntoMessages(response, allowAudioThisTurn) {
+  const wantsAudioByTag = response.trimStart().startsWith('[MODO_AUDIO]');
+  const isAudioMode = wantsAudioByTag && allowAudioThisTurn;
+  ...
+}
 
-### 2. Paralelizar os 3 grandes blocos independentes
+// DEPOIS
+function splitIntoMessages(response, audioDecision) {
+  const wantsAudioByTag = response.trimStart().startsWith('[MODO_AUDIO]');
+  const isAudioMode = audioDecision.mandatory
+    || (wantsAudioByTag && audioDecision.shouldUseAudio);
 
-Hoje rodam em série: `Engagement` → `Cost` → `Trial` → `Billing` → `Cancellation` → `Weekly Plans (Stripe)` → `Checkout` → `MRR (Stripe)`.
+  if (audioDecision.mandatory && !wantsAudioByTag) {
+    console.log(`🎙️ FORCED audio (no AI tag): reason=${audioDecision.reason}`);
+  }
+  ...
+}
+```
 
-Envolver em `Promise.all([engagementBlock(), costBlock(), trialBlock(), stripeBlock(), checkoutBlock()])`. O bloco Stripe (de longe o mais pesado) já roda em paralelo aos blocos de DB.
+### 2. Atualizar a chamada (linha 7121)
 
-### 3. Reduzir trabalho do Stripe
+```ts
+const messageChunks = splitIntoMessages(assistantMessage, audioDecision);
+```
 
-- **Unificar as 4 chamadas separadas de `subscriptions.list`** (active, trialing, past_due, canceled) — hoje churn denominador faz outra rodada completa só pra contar. Usar a lista já carregada do bloco MRR + uma única busca extra de `canceled` filtrada por `created[gte]`.
-- **Paralelizar `stripe.invoices.list` por cliente** com `Promise.all` em batches de 10 ao invés do loop serial.
-- **Dropar a busca de `canceled` por `created < periodStart`** sem `limit` no tempo — hoje pode varrer milhares de subs antigas. Usar `created[gte]: periodStart - 90d` (90 dias é suficiente para qualquer churn analytics).
+### 3. Garantir limpeza da tag em qualquer caminho
 
-### 4. Substituir N+1 de `messagesPerSession` por agregação única
+A linha 42 já remove `[MODO_AUDIO]`. Confirmar que `stripAllInternalTags` (já chamado em `splitIntoMessages`) cobre o caso "áudio forçado sem tag" — sem duplicação de conteúdo.
 
-Trocar o loop por uma única query agregando todas as mensagens dos usuários com sessões completadas no período (já que `periodUserMessages` JÁ está em memória). Calcular tudo client-side em JS ao invés de 1 count por sessão.
+### 4. Logs de auditoria
 
-### 5. Spinner e feedback no botão
+Adicionar log estruturado quando o áudio for forçado pelo backend, para acompanhar o efeito da mudança nos primeiros dias:
+```
+🎙️ FORCED audio (no AI tag): reason=session_opening|session_closing|crisis_detected|user_requested
+```
 
-No `AdminEngagement.tsx`:
-- Mostrar tempo decorrido no botão ("Atualizando... 12s") para o usuário saber que está vivo.
-- Manter dados antigos visíveis com leve opacidade enquanto recarrega (em vez de skeleton total) — percepção muito melhor.
+## Comportamento resultante
 
-## Arquivos afetados
-
-- `supabase/functions/admin-engagement-metrics/index.ts` — refatoração de cache, paralelização, fix N+1.
-- `src/pages/AdminEngagement.tsx` — botão "Atualizar" passa `forceRefresh: true`, indicador de tempo, mantém dados durante reload.
-
-## Resultado esperado
-
-| Cenário | Antes | Depois |
+| Situação | Antes | Depois |
 |---|---|---|
-| 1ª carga (cache vazio) | 30-90s | **8-15s** |
-| Clique em "Atualizar" (force refresh) | 30-90s | **8-15s** |
-| Mudar filtro de data e voltar | 30-90s | **<1s** (cache hit) |
-| Trocar de aba e voltar | 30-90s | **<1s** (cache hit) |
+| Abertura de sessão (msg 1 e 2) | só com tag | **sempre áudio** |
+| Fechamento de sessão | só com tag | **sempre áudio** |
+| Crise detectada (pânico, ideação) | só com tag | **sempre áudio** |
+| Usuário pede áudio explícito | só com tag | **sempre áudio** |
+| Aura "sente" momento emocional casual | tag (igual) | tag (igual) |
+| Usuário pediu texto | texto | texto (inalterado) |
+| Orçamento mensal estourado | bloqueia | bloqueia (inalterado para não-mandatórios; mandatórios passam — comportamento já existente em `determineAudioMode`) |
 
-Sem mudar nenhuma métrica — só otimizando como elas são calculadas.
+## Validação pós-deploy
+
+Após 24–48h, conferir:
+1. `SELECT COUNT(*) FROM token_usage_logs WHERE service = 'inworld_tts' AND created_at > now() - interval '24 hours'` — esperado: dezenas, não 0–1.
+2. `SELECT id, audio_sent_count FROM sessions WHERE status = 'completed' AND ended_at > now() - interval '24 hours'` — esperado: todas com `audio_sent_count >= 2`.
+3. Logs do `aura-agent` filtrar por `🎙️ FORCED audio` para mapear quais reasons estão disparando.
+
+## Não está no escopo
+
+- Fallback Inworld → Google TTS (item separado, decidido depois).
+- Mudar limites de orçamento mensal por plano.
+- Mudar critérios de detecção de crise/pedido de áudio.
+- Cap diário de áudios forçados (essa era a opção B, descartada).
+
+## Risco aceito
+
+Custo Inworld TTS sobe (já discutido). Mitigado pelo orçamento mensal por usuário, que continua funcionando.
