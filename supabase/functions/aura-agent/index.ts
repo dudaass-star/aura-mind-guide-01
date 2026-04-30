@@ -1328,15 +1328,23 @@ async function processExtractedActions(
       const utcMinutes = new Date().getTimezoneOffset();
       const now = new Date(Date.now() + (utcMinutes + saoPauloOffset) * 60 * 1000);
       const parsed = parseDateTimeFromText(actions.schedule_reminder.datetime_text, now);
-      if (parsed && parsed > new Date()) {
-        // Check for duplicate
-        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      if (!parsed) {
+        // Falha de parsing: log explícito para evitar falha silenciosa
+        console.warn('⚠️ [MICRO-AGENT] Reminder extraído mas datetime_text não pôde ser interpretado:', actions.schedule_reminder.datetime_text);
+      } else if (parsed <= new Date()) {
+        console.warn('⚠️ [MICRO-AGENT] Reminder com datetime no passado, ignorado:', parsed.toISOString());
+      } else {
+        // Anti-duplicata: bloqueia apenas se houver reminder PENDENTE com execute_at próximo (±2 min)
+        const windowStart = new Date(parsed.getTime() - 2 * 60 * 1000).toISOString();
+        const windowEnd = new Date(parsed.getTime() + 2 * 60 * 1000).toISOString();
         const { data: existing } = await supabase
           .from('scheduled_tasks')
           .select('id')
           .eq('user_id', userId)
           .eq('task_type', 'reminder')
-          .gte('created_at', sevenDaysAgo)
+          .eq('status', 'pending')
+          .gte('execute_at', windowStart)
+          .lte('execute_at', windowEnd)
           .limit(1);
 
         if (!existing || existing.length === 0) {
@@ -1347,7 +1355,9 @@ async function processExtractedActions(
             payload: { text: actions.schedule_reminder.description },
             status: 'pending',
           });
-          console.log('✅ [MICRO-AGENT] Reminder scheduled:', parsed.toISOString());
+          console.log('✅ [MICRO-AGENT] Reminder scheduled:', parsed.toISOString(), '→', actions.schedule_reminder.description);
+        } else {
+          console.log('ℹ️ [MICRO-AGENT] Reminder duplicado próximo (±2min), ignorado');
         }
       }
     }
