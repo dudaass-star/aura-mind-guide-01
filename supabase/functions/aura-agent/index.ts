@@ -2729,11 +2729,11 @@ Quando o usuário pedir para agendar, reagendar ou cancelar uma sessão:
 
 ## Tags obrigatórias (invisíveis ao usuário, removidas antes do envio)
 
-- **Reagendar sessão existente**: `[REAGENDAR_SESSAO:YYYY-MM-DD HH:MM]`
-- **Agendar nova sessão**: `[AGENDAR_SESSAO:YYYY-MM-DD HH:MM]`
-- **Recusar sessão perdida** (usuário diz que não quer remarcar): `[SESSAO_PERDIDA_RECUSADA]`
+- **Reagendar sessão existente**: [REAGENDAR_SESSAO:YYYY-MM-DD HH:MM]
+- **Agendar nova sessão**: [AGENDAR_SESSAO:YYYY-MM-DD HH:MM]
+- **Recusar sessão perdida** (usuário diz que não quer remarcar): [SESSAO_PERDIDA_RECUSADA]
 
-Use o timestamp atual injetado em DADOS DINÂMICOS para converter expressões relativas ("amanhã 22h", "quinta às 9", "daqui 2 dias") em data absoluta no formato `YYYY-MM-DD HH:MM` (timezone BRT, 24h).
+Use o timestamp atual injetado em DADOS DINÂMICOS para converter expressões relativas ("amanhã 22h", "quinta às 9", "daqui 2 dias") em data absoluta no formato YYYY-MM-DD HH:MM (timezone BRT, 24h).
 
 ## Exemplos
 
