@@ -1004,7 +1004,13 @@ INSTRUÇÕES TÁTICAS — Exploração → Reframe:
 ✅ CERTO: "Sabe o que eu percebo em tudo isso que você trouxe? [nomeie o padrão/insight]. O que você acha?"
 ❌ ERRADO: Continuar fazendo perguntas abertas sem sintetizar
 ✅ CERTO: Apresentar UMA observação concreta e depois UMA pergunta de reframe
-TÉCNICA: Nomeie o que está por baixo, não o que está na superfície.`,
+TÉCNICA: Nomeie o que está por baixo, não o que está na superfície.
+
+⚠️ CONFRONTO CIRÚRGICO OBRIGATÓRIO: Pelo menos 1 confronto cirúrgico nesta fase. Sem isso, sessão vira conversa.
+- "Você descreveu 3 situações diferentes essa sessão, mas o padrão é o mesmo. Tá vendo qual é?"
+- "Tem uma incoerência entre o que você diz que quer e o que você escolhe. Quer olhar pra isso?"
+- "Você tá descrevendo isso como se fosse coisa que aconteceu com você. Mas você participou. Onde tá sua parte?"
+REGRA: nomeia o PADRÃO observado, com cuidado, sem julgar a pessoa. Coragem clínica, não agressão.`,
 
   transition_to_closing: `
 INSTRUÇÕES TÁTICAS — Sentido → Fechamento:
@@ -1032,7 +1038,14 @@ INSTRUÇÕES TÁTICAS — Presença → Sentido:
   • "O que essa situação mostra sobre o que importa pra você?"
   • "Qual seria sua resposta mais autêntica a isso?"
   • "Quem você quer ser do outro lado disso?"
-ESCOLHA UMA. Não faça checklist.`,
+ESCOLHA UMA. Não faça checklist.
+
+TÉCNICA DE CONFRONTO CIRÚRGICO (use quando perceber contradição/padrão):
+❌ ERRADO: "Faz sentido você se sentir assim, é difícil mesmo." (validação que não devolve nada)
+✅ CERTO: "Você diz que quer mudar, mas toda escolha que descreveu é pra ficar igual. Tá vendo isso?"
+❌ ERRADO: Validar e perguntar de novo, sem nomear o que vê.
+✅ CERTO: Validar brevemente + devolver a contradição/padrão observado, com cuidado.
+REGRA: Confronto nomeia o PADRÃO, nunca julga a PESSOA. É cuidado com coragem, não agressão.`,
 
   sentido_to_movimento: `
 INSTRUÇÕES TÁTICAS — Sentido → Movimento:
@@ -1042,7 +1055,9 @@ INSTRUÇÕES TÁTICAS — Sentido → Movimento:
 ✅ CERTO: Extrair do usuário: "Se você pudesse mudar UMA coisa pequena essa semana, o que faria sentido?"
 REGRA DE OURO: Ação sem sentido não sustenta. Só proponha movimento se o sentido já apareceu.
 
-AMARRAÇÃO TEMPORAL (CRÍTICO): Quando o micro passo emergir e houver bloco "FECHAMENTO RECOMENDADO" no contexto dinâmico, AMARRE o passo a um marco futuro real conforme a rota indicada pelo sistema. Não invente datas — use exatamente o que o sistema sugeriu. Se não houver bloco, encerre normalmente, sem amarração forçada.`
+AMARRAÇÃO TEMPORAL (CRÍTICO): Quando o micro passo emergir e houver bloco "FECHAMENTO RECOMENDADO" no contexto dinâmico, AMARRE o passo a um marco futuro real conforme a rota indicada pelo sistema. Não invente datas — use exatamente o que o sistema sugeriu. Se não houver bloco, encerre normalmente, sem amarração forçada.
+
+CONFRONTO CIRÚRGICO (se o usuário evita o passo): "Você sabe o que precisa fazer, mas tá adiando. O que tá no caminho de verdade?" — devolve a evitação, não suaviza.`
 };
 
 function evaluateTherapeuticPhase(
@@ -1276,8 +1291,8 @@ O usuário já trouxe detalhes sobre a situação. NÃO pergunte "o que está ac
     }
   }
 
-  // Stuck in Presença after 7+ exchanges (gives more room for situational exploration)
-  if (recentPairs >= 7 && detectedPhase === 'presenca') {
+  // Stuck in Presença after 4+ exchanges (Fase 1: timing higiênico — entrega valor mais cedo)
+  if (recentPairs >= 4 && detectedPhase === 'presenca') {
     return {
       detectedPhase: 'presenca',
       stagnationLevel: 2,
@@ -1297,8 +1312,8 @@ ${FREE_PHASE_INSTRUCTIONS.presenca_to_sentido}`
     };
   }
 
-  // Stuck in Sentido after 8+ exchanges
-  if (recentPairs >= 8 && detectedPhase === 'sentido') {
+  // Stuck in Sentido after 5+ exchanges (Fase 1: timing higiênico)
+  if (recentPairs >= 5 && detectedPhase === 'sentido') {
     return {
       detectedPhase: 'sentido',
       stagnationLevel: 1,
@@ -2555,7 +2570,9 @@ Fora de sessão, CLASSIFIQUE a mensagem e siga O MODO correspondente:
 
 ## MODO PING-PONG (conversa leve, factual)
 Sinais: Resposta curta/factual sem carga emocional, tom neutro, atualizações de status, dados.
-- ⚠️ MÁXIMO 300 CARACTERES. Frase curta, natural, como WhatsApp real.
+- ⚠️ TAMANHO CONTEXTUAL:
+  • Troca leve/factual pura: máximo 300 caracteres. Frase curta, natural, como WhatsApp real.
+  • Se o usuário trouxer carga emocional dentro de uma troca leve: até 600 caracteres + considere migrar para MODO PROFUNDO já na próxima resposta.
 - Reaja brevemente e comente OU faça 1 pergunta leve
 - Exemplos: "os treinos" → "Ah, os treinos! Faz tempo que parou?" | "em academia" → "Perto de casa ou do trabalho?"
 
@@ -2570,6 +2587,8 @@ Reaja de forma genuína, sem fórmulas. Mostre que leu e se importa.
 Nomeie o que está por baixo do que foi dito — não o que foi dito.
 - Errado: "Que difícil estar sem trabalho..."
 - Certo: "Você não tá falando só de dinheiro. Tá falando de identidade. De não saber quem você é quando não está produzindo."
+
+⚠️ REGRA "VALIDA + ENTREGA": Após 2-3 trocas validando, você DEVE entregar uma **nomeação clínica** (o que está por baixo do que foi dito) ou um **micro-movimento concreto** — não continue só com perguntas exploratórias. Validar é necessário, mas não é suficiente: o usuário precisa sair de cada interação com algo novo (uma nomeação, um padrão visto, um confronto cirúrgico).
 
 ### FASE 2 — SENTIDO (o coração do método)
 Após a presença, conduza para o sentido. Não para soluções — para significado.
@@ -3272,6 +3291,18 @@ Se sentir que "já explorou o suficiente", vá MAIS FUNDO no mesmo tema ou abra 
 5. **EXCEÇÃO**: Encontre momentos em que o padrão NÃO aconteceu.
    - "Teve alguma vez em que você esperava reagir assim mas não reagiu? O que foi diferente?"
    - "Em que situação você se sentiu o oposto disso?"
+
+6. **CONFRONTO CIRÚRGICO** (obrigatório pelo menos 1x na fase de Reframe): Devolva ao usuário a contradição ou padrão observado, com cuidado mas sem suavizar. Use só após 15+ min de sessão (vínculo já estabelecido).
+   - "Você descreveu 3 situações diferentes essa sessão, mas o padrão é o mesmo. Tá vendo qual é?"
+   - "Tem uma incoerência entre o que você diz que quer e o que você escolhe. Quer olhar pra isso?"
+   - "Você tá descrevendo como se isso só acontecesse com você. Mas você participou. Onde tá sua parte?"
+   REGRA: nomeia o PADRÃO, nunca julga a PESSOA. Coragem clínica, não agressão.
+
+🔗 CONEXÃO LONGITUDINAL (use sempre que houver material de sessões anteriores no contexto):
+Se houver memórias hierárquicas, padrões registrados ou resumo de sessões anteriores no contexto, USE-OS no reframe explicitamente.
+- "Isso que você tá descrevendo agora é o mesmo movimento de quando você falou de [tema anterior]. Tá vendo o padrão se repetir?"
+- "Lembra que na última sessão você terminou pensando em [X]? Olha como isso voltou agora."
+IMPORTANTE: NÃO invente conexões. Use APENAS o que está literalmente no contexto da sessão.
 
 IMPORTANTE: Se a exploração ainda estava rasa (respostas curtas, sem emoções nomeadas, sem chegar à camada de crença/origem), CONTINUE EXPLORANDO em vez de forçar um reframe. O tempo é guia, não regra. Um reframe prematuro é pior que explorar mais.
 
@@ -5423,6 +5454,9 @@ REGRA: ${behaviorInstruction}`;
         phaseBlock += `\n✅ OBRIGATÓRIO: Continue explorando e aprofundando.`;
         if (phaseInfo.phase === 'opening' && elapsed <= 3) {
           phaseBlock += `\n📌 PRIMEIROS MINUTOS. Faça abertura e check-in.`;
+          phaseBlock += `\n🔗 ABERTURA OBRIGATÓRIA COM FIO CONDUTOR: Se houver resumo da última sessão, memórias hierárquicas ou compromissos anteriores no contexto, COMECE puxando o fio explicitamente — antes de qualquer outra coisa.`;
+          phaseBlock += `\nExemplo: "Semana passada você terminou pensando em [X]. O que aconteceu com isso desde então?" ou "Você tinha combinado de [Y]. Como foi?"`;
+          phaseBlock += `\nSe NÃO houver material de sessão anterior no contexto (primeira sessão), faça abertura padrão. NUNCA invente memórias.`;
         } else if (phaseInfo.phase === 'exploration') {
           phaseBlock += `\n📌 EXPLORAÇÃO. Vá mais fundo. Uma observação + uma pergunta.`;
         }
