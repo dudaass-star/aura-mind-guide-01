@@ -7130,7 +7130,7 @@ Só DEPOIS de saber a situação, explore as emoções com profundidade.`;
     }
 
 
-    const messageChunks = splitIntoMessages(assistantMessage, allowAudioThisTurn);
+    const messageChunks = splitIntoMessages(assistantMessage, audioDecision);
     const hasAudioInResponse = messageChunks.some(m => m.isAudio);
     
     // Incrementar contador de áudio da sessão APENAS se realmente vai enviar áudio
