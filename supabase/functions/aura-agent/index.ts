@@ -1285,8 +1285,8 @@ O usuário já trouxe detalhes sobre a situação. NÃO pergunte "o que está ac
     }
   }
 
-  // Stuck in Presença after 7+ exchanges (gives more room for situational exploration)
-  if (recentPairs >= 7 && detectedPhase === 'presenca') {
+  // Stuck in Presença after 4+ exchanges (Fase 1: timing higiênico — entrega valor mais cedo)
+  if (recentPairs >= 4 && detectedPhase === 'presenca') {
     return {
       detectedPhase: 'presenca',
       stagnationLevel: 2,
@@ -1306,8 +1306,8 @@ ${FREE_PHASE_INSTRUCTIONS.presenca_to_sentido}`
     };
   }
 
-  // Stuck in Sentido after 8+ exchanges
-  if (recentPairs >= 8 && detectedPhase === 'sentido') {
+  // Stuck in Sentido after 5+ exchanges (Fase 1: timing higiênico)
+  if (recentPairs >= 5 && detectedPhase === 'sentido') {
     return {
       detectedPhase: 'sentido',
       stagnationLevel: 1,
