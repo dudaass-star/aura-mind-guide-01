@@ -676,6 +676,75 @@ function parseDateTimeFromText(text: string, referenceDate: Date): Date | null {
   return targetDate;
 }
 
+function extractDeterministicReminder(text: string, referenceDate: Date): { description: string; executeAt: Date; datetimeText: string } | null {
+  const normalized = text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const asksReminder = /\b(me\s+)?(lembra|lembre|lembrar|avisa|avise|alarme|despertador)\b/i.test(normalized);
+  if (!asksReminder) return null;
+
+  const parsed = parseDateTimeFromText(text, referenceDate);
+  if (!parsed || parsed.getTime() <= Date.now() - 30_000) return null;
+
+  let description = text
+    .replace(/\b(aura[,\s]*)?/i, '')
+    .replace(/\b(me\s+)?(lembra|lembre|lembrar|avisa|avise)\b/gi, '')
+    .replace(/\b(alarme|despertador)\b/gi, '')
+    .replace(/\b(agora\s+)?(em|daqui\s+a?)\s+\d{1,3}\s*(min|minuto|minutos|h|hora|horas|dia|dias)\b/gi, '')
+    .replace(/\b(agora\s+)?(em|daqui\s+a?)\s+(meia|uma)\s+hora\b/gi, '')
+    .replace(/\b(para|pra|de|que\s+eu|que)\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!description || description.length < 3) {
+    description = 'o que você me pediu pra lembrar';
+  }
+
+  return { description, executeAt: parsed, datetimeText: text };
+}
+
+async function insertPendingReminder(
+  supabase: any,
+  userId: string,
+  executeAt: Date,
+  text: string,
+  source: string,
+): Promise<boolean> {
+  const windowStart = new Date(executeAt.getTime() - 2 * 60 * 1000).toISOString();
+  const windowEnd = new Date(executeAt.getTime() + 2 * 60 * 1000).toISOString();
+  const { data: existing, error: existingError } = await supabase
+    .from('scheduled_tasks')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('task_type', 'reminder')
+    .eq('status', 'pending')
+    .gte('execute_at', windowStart)
+    .lte('execute_at', windowEnd)
+    .limit(1);
+
+  if (existingError) {
+    console.warn(`⚠️ [${source}] Falha ao checar duplicata de reminder:`, existingError.message);
+  }
+  if (existing && existing.length > 0) {
+    console.log(`ℹ️ [${source}] Reminder duplicado próximo (±2min), ignorado`);
+    return false;
+  }
+
+  const { error: insertError } = await supabase.from('scheduled_tasks').insert({
+    user_id: userId,
+    execute_at: executeAt.toISOString(),
+    task_type: 'reminder',
+    payload: { text },
+    status: 'pending',
+  });
+
+  if (insertError) {
+    console.error(`❌ [${source}] Erro inserindo reminder:`, insertError.message);
+    return false;
+  }
+
+  console.log(`✅ [${source}] Reminder scheduled: ${executeAt.toISOString()} → ${text}`);
+  return true;
+}
+
 // ============================================================
 // Micro-agente extrator de ações (pós-resposta, assíncrono)
 // Analisa a resposta da AURA e extrai ações estruturadas
