@@ -7129,6 +7129,7 @@ Só DEPOIS de saber a situação, explore as emoções com profundidade.`;
     // ========================================================================
     const agendarRegex = /\[AGENDAR_TAREFA:(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}):(\w+):(.*?)\]/gi;
     let agendarMatch;
+    let scheduledByExplicitTag = false;
     while ((agendarMatch = agendarRegex.exec(assistantMessage)) !== null) {
       const [fullMatch, dateStr, timeStr, taskType, description] = agendarMatch;
       console.log(`📅 Schedule tag detected: type=${taskType}, date=${dateStr} ${timeStr}, desc=${description}`);
@@ -7158,6 +7159,7 @@ Só DEPOIS de saber a situação, explore as emoções com profundidade.`;
           payload,
           status: 'pending',
         });
+        scheduledByExplicitTag = true;
         
         console.log(`✅ Task scheduled for ${executeAt.toISOString()}: ${taskType} - ${description}`);
       } else {
@@ -7166,6 +7168,19 @@ Só DEPOIS de saber a situação, explore as emoções com profundidade.`;
     }
     // Remove tags from response
     assistantMessage = assistantMessage.replace(/\[AGENDAR_TAREFA:.*?\]/gi, '').trim();
+
+    const deterministicReminder = profile?.user_id && !scheduledByExplicitTag
+      ? extractDeterministicReminder(rawMessage || message, reminderReferenceDate)
+      : null;
+    if (deterministicReminder) {
+      await insertPendingReminder(
+        supabase,
+        profile.user_id,
+        deterministicReminder.executeAt,
+        deterministicReminder.description,
+        'DETERMINISTIC-REMINDER',
+      );
+    }
 
     // ========================================================================
     // DETECTAR TAG [CANCELAR_TAREFA:tipo] E CANCELAR PRÓXIMA PENDENTE
