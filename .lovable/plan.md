@@ -1,76 +1,77 @@
+## Bug confirmado: shift de timezone fabricado quebra lembretes relativos
 
-# Plano de correção — 2 bugs independentes
+### Evidência (logs do aura-agent às 12:01 BRT / 15:01 UTC)
 
-## Bug 1 — Remarcação de sessão sem efeito no banco
-
-### Causa-raiz
-O handler em `aura-agent/index.ts` (linha 6042-6075) já existe e funciona corretamente: quando a resposta da IA contém a tag `[REAGENDAR_SESSAO:YYYY-MM-DD HH:MM]`, ele atualiza `sessions.scheduled_at` e reseta os flags de lembrete.
-
-O problema é que **o prompt nunca ensina a IA a emitir essa tag**. Na seção `# SESSÕES` (linha 2724-2729) o prompt diz apenas:
-
-> *"Quando o usuário quiser agendar, reagendar ou cancelar uma sessão, confirme naturalmente com data e horário. O sistema extrai a intenção da sua resposta e executa a ação no banco de dados."*
-
-Isso é falso — não há extrator NLP rodando depois da resposta; só o regex literal. Resultado: a Aura confirma "Já mudei pra quinta 22h" mas **nada é gravado**. Mesmo bug provavelmente atinge `[AGENDAR_SESSAO:...]` (criação de novas sessões pedidas pelo usuário em conversa).
-
-### Correção
-Editar a seção `# SESSÕES` do prompt em `aura-agent/index.ts` (~linha 2724) para tornar as tags **obrigatórias e explícitas**, no mesmo padrão das outras tags internas que já funcionam (`[MARCO:...]`, `[REAGENDAR_SESSAO:...]` no removeInternalTags).
-
-Conteúdo a adicionar ao prompt:
-
-- Lista clara das 2 tags: `[REAGENDAR_SESSAO:YYYY-MM-DD HH:MM]` e `[AGENDAR_SESSAO:YYYY-MM-DD HH:MM]`.
-- Regra: SEMPRE que confirmar uma data/hora nova com o usuário, anexar a tag correspondente ao final da mensagem.
-- Exemplos curtos de uso (com e sem a tag, mostrando que sem ela nada acontece).
-- Conversão de "amanhã às 22h" / "quinta 22h" para data absoluta usando o timestamp de hoje (já injetado no contexto).
-- Reforçar que cancelamento usa `[SESSAO_PERDIDA_RECUSADA]` (tag que já existe).
-
-Sem mudanças de código no handler — ele já está correto.
-
-### Validação
-- Após o deploy, verificar nos logs do `aura-agent` por `📅 Session rescheduled via AURA` em conversas reais.
-- Como teste manual, simular o fluxo da Larissa: pedido de remarcação → checar se a próxima sessão `scheduled` muda de horário.
-
----
-
-## Bug 2 — Cron `weekly-report-sunday-10am-brt` (jobid 35) nunca disparou
-
-### Causa-raiz
-O job está cadastrado em `cron.job` com `active=true`, schedule `0 13 * * 0` (domingo 13h UTC = 10h BRT) e `command` SQL bem formado e idêntico ao do jobid 23 (mensal, que funciona). Mesmo assim `cron.job_run_details` mostra **0 execuções** desde a criação (27/04/2026, jobid 35). Outros jobs do mesmo período rodaram normalmente.
-
-Esse padrão (job ativo, schedule válido, comando válido, zero runs) é típico de jobs que ficaram em estado inconsistente no pg_cron — geralmente após criação durante uma janela onde o worker do pg_cron não recarregou o catálogo. Solução padrão: remover e recriar.
-
-### Correção
-Via tool de DB insert (não migration, pois contém anon key específico do projeto, conforme regra de cron jobs):
-
-```sql
-SELECT cron.unschedule(35);
-
-SELECT cron.schedule(
-  'weekly-report-sunday-10am-brt',
-  '0 13 * * 0',
-  $$
-  SELECT net.http_post(
-    url := 'https://uhyogifgmutfmbyhzzyo.supabase.co/functions/v1/weekly-report',
-    headers := '{"Content-Type":"application/json","Authorization":"Bearer <ANON_KEY>"}'::jsonb,
-    body := '{}'::jsonb
-  ) AS request_id;
-  $$
-);
+```
+INFO  🤖 Extracted actions: {"schedule_reminder":{"description":"uma panela no fogo","datetime_text":"agora em 3 minutos"}, ...}
+WARN  ⚠️ [MICRO-AGENT] Reminder com datetime no passado, ignorado: 2026-04-30T12:04:12.246Z
 ```
 
+O extractor funcionou. O parser entendeu "em 3 minutos". Mas o resultado saiu como `12:04 UTC` (= 09:04 BRT, três horas no passado), e a guarda anti-passado descartou a task. Zero linhas em `scheduled_tasks` para o usuário.
+
+### Causa-raiz (aura-agent/index.ts linhas 1327-1329)
+
+```ts
+const saoPauloOffset = -3 * 60;
+const utcMinutes = new Date().getTimezoneOffset();
+const now = new Date(Date.now() + (utcMinutes + saoPauloOffset) * 60 * 1000);
+const parsed = parseDateTimeFromText(actions.schedule_reminder.datetime_text, now);
+```
+
+Isso fabrica um objeto `Date` que mente sobre o instante real: pega o UTC atual e subtrai 3h, criando um Date cujo `.getTime()` aponta para 3h no passado. Então:
+
+- Real: `Date.now()` = 15:01 UTC
+- `now` falso: 12:01 UTC
+- Parser relativo: `now.getTime() + 3min` = 12:04 UTC (`.toISOString()` = `12:04Z`)
+- Comparação `parsed <= new Date()`: 12:04Z ≤ 15:01Z → **passado → descartado**
+
+A "compensação de timezone" só faria sentido se o parser estivesse interpretando hora absoluta de wall clock (ex: "amanhã 22h" significa 22h BRT = 01h UTC do dia seguinte). Mesmo aí, a abordagem correta é manter `now` em UTC real e converter as horas absolutas para UTC no momento do `setHours`. Para parsing relativo (`+N minutos/horas/dias`), timezone é totalmente irrelevante — `Date.now() + delta` já é o instante absoluto correto em qualquer fuso.
+
+### Correção
+
+**Arquivo: `supabase/functions/aura-agent/index.ts`**
+
+1. **Remover o shift falso** nas linhas 1327-1329. Usar `new Date()` real:
+   ```ts
+   const now = new Date();
+   const parsed = parseDateTimeFromText(actions.schedule_reminder.datetime_text, now);
+   ```
+
+2. **Corrigir `parseDateTimeFromText` (linhas 620-673) para parsing absoluto BRT-aware**: quando o usuário diz "amanhã 22h", `setHours(22)` está chamando em horário local do servidor (UTC). Como o servidor roda em UTC, `setHours(22, 0)` cria 22:00 UTC = 19:00 BRT — errado. Solução: para parsing absoluto, calcular o offset BRT manualmente:
+   ```ts
+   // Em vez de targetDate.setHours(hour, minute, 0, 0):
+   // Construir a data alvo em UTC adicionando 3h ao horário pretendido em BRT
+   targetDate.setUTCHours(hour + 3, minute, 0, 0);
+   ```
+   (Tratando wraparound de dia se `hour + 3 >= 24`.)
+
+   Para parsing relativo (linhas 587-618), nada muda — `Date.now() + delta` já está correto.
+
+3. **Reduzir margem da guarda "passado"** (linha 1334): `parsed <= new Date()` é exato demais para microsegundos. Permitir até 30s de slop:
+   ```ts
+   } else if (parsed.getTime() <= Date.now() - 30_000) {
+   ```
+   Não é o bug atual, mas previne edge case de processamento lento async (extractor leva 1-2s) deixar lembretes "em 1 minuto" como passado.
+
+4. **Log mais informativo** quando ignorar passado: incluir `now.toISOString()` e `datetime_text` original para diagnóstico:
+   ```ts
+   console.warn('⚠️ [MICRO-AGENT] Reminder no passado, ignorado:', { 
+     parsed: parsed.toISOString(), 
+     now: new Date().toISOString(), 
+     text: actions.schedule_reminder.datetime_text 
+   });
+   ```
+
 ### Validação
-- Após recriar, consultar `cron.job` para confirmar novo `jobid` e `active=true`.
-- No próximo domingo 10h BRT, conferir `cron.job_run_details` e logs da edge function `weekly-report`.
-- Para não esperar uma semana, disparar 1 execução manual agora via `supabase.functions.invoke('weekly-report', { body: {} })` para validar a função em si — separado da validação do cron.
 
----
+- Após deploy, testar via WhatsApp: "me lembra em 2 minutos de X". Verificar que aparece linha `✅ [MICRO-AGENT] Reminder scheduled: <iso>` nos logs e `scheduled_tasks` recebe a row com `execute_at` correto.
+- Testar também absoluto: "me lembra amanhã às 9h". Verificar que `execute_at` ISO corresponde a 9h BRT (= 12h UTC) do dia seguinte.
 
-## Ordem de execução
+### Memória a atualizar
 
-1. Editar prompt do `aura-agent/index.ts` (Bug 1).
-2. Recriar cron jobid 35 (Bug 2).
-3. Disparo manual de teste do `weekly-report` para confirmar que a função em si está saudável.
-4. Atualizar memória `mem://features/whatsapp/session-reminder-flow` (ou criar uma nova memória) registrando que tags `[AGENDAR_SESSAO]` e `[REAGENDAR_SESSAO]` são o único caminho de gravação — para evitar regressão futura.
+Atualizar `mem://features/agendamento-tarefas-sistema` com a regra: **timezone é irrelevante para parsing relativo; para absoluto, usar `setUTCHours(hour + 3, ...)` em vez de fabricar objetos Date com offset shifted**. Marcar como bug histórico o anti-padrão de `new Date(Date.now() + offset*60*1000)`.
 
-## Fora de escopo (conforme pedido)
-- Não criar manualmente sessão remarcada para a Larissa.
-- Não disparar weekly-report retroativo dela.
+### Fora de escopo
+
+- Não recriar manualmente o lembrete da panela (já passou).
+- Não tocar no Bug 2 do plano anterior (cron weekly-report) — independente.

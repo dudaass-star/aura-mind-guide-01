@@ -1324,15 +1324,19 @@ async function processExtractedActions(
   try {
     // Schedule reminder
     if (actions.schedule_reminder?.datetime_text) {
-      const saoPauloOffset = -3 * 60;
-      const utcMinutes = new Date().getTimezoneOffset();
-      const now = new Date(Date.now() + (utcMinutes + saoPauloOffset) * 60 * 1000);
+      // Usa o instante REAL (UTC). O parser interno cuida do offset BRT para horários absolutos.
+      // Para parsing relativo (em N min/h/dias), timezone é irrelevante: Date.now() + delta já é absoluto.
+      const now = new Date();
       const parsed = parseDateTimeFromText(actions.schedule_reminder.datetime_text, now);
       if (!parsed) {
-        // Falha de parsing: log explícito para evitar falha silenciosa
         console.warn('⚠️ [MICRO-AGENT] Reminder extraído mas datetime_text não pôde ser interpretado:', actions.schedule_reminder.datetime_text);
-      } else if (parsed <= new Date()) {
-        console.warn('⚠️ [MICRO-AGENT] Reminder com datetime no passado, ignorado:', parsed.toISOString());
+      } else if (parsed.getTime() <= Date.now() - 30_000) {
+        // 30s de slop para tolerar latência do extractor async em pedidos "em 1 minuto"
+        console.warn('⚠️ [MICRO-AGENT] Reminder no passado, ignorado:', {
+          parsed: parsed.toISOString(),
+          now: new Date().toISOString(),
+          text: actions.schedule_reminder.datetime_text,
+        });
       } else {
         // Anti-duplicata: bloqueia apenas se houver reminder PENDENTE com execute_at próximo (±2 min)
         const windowStart = new Date(parsed.getTime() - 2 * 60 * 1000).toISOString();
