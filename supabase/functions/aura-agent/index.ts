@@ -579,6 +579,44 @@ function parseDateTimeFromText(text: string, referenceDate: Date): Date | null {
   const lowerText = text.toLowerCase();
   const now = new Date(referenceDate);
   
+  // ============================================================
+  // PARSING RELATIVO (deve vir ANTES do absoluto)
+  // Suporta: "daqui a/em N minutos/horas/dias", "meia hora", "uma hora"
+  // ============================================================
+  // "meia hora" / "em meia hora" / "daqui meia hora"
+  if (/\bmeia\s+hora\b/i.test(lowerText)) {
+    return new Date(now.getTime() + 30 * 60 * 1000);
+  }
+  // "uma hora" / "em uma hora" (sem número explícito)
+  if (/\b(em|daqui(\s+a)?)\s+uma\s+hora\b/i.test(lowerText)) {
+    return new Date(now.getTime() + 60 * 60 * 1000);
+  }
+  // "em/daqui (a) N minuto(s)"
+  const relMin = lowerText.match(/(?:em|daqui(?:\s+a)?)\s+(\d{1,3})\s*(?:min|minuto|minutos)\b/i)
+    || lowerText.match(/\b(\d{1,3})\s*(?:min|minuto|minutos)\b/i);
+  if (relMin) {
+    const mins = parseInt(relMin[1]);
+    if (mins > 0 && mins <= 1440) {
+      return new Date(now.getTime() + mins * 60 * 1000);
+    }
+  }
+  // "em/daqui (a) N hora(s)"
+  const relHour = lowerText.match(/(?:em|daqui(?:\s+a)?)\s+(\d{1,2})\s*(?:h|hora|horas)\b(?!\s*\d)/i);
+  if (relHour) {
+    const hrs = parseInt(relHour[1]);
+    if (hrs > 0 && hrs <= 24) {
+      return new Date(now.getTime() + hrs * 60 * 60 * 1000);
+    }
+  }
+  // "em/daqui (a) N dia(s)" - mantém hora atual
+  const relDay = lowerText.match(/(?:em|daqui(?:\s+a)?)\s+(\d{1,2})\s*(?:dia|dias)\b/i);
+  if (relDay) {
+    const days = parseInt(relDay[1]);
+    if (days > 0 && days <= 60) {
+      return new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+    }
+  }
+
   // Regex para capturar hora
   const timeMatch = lowerText.match(/(\d{1,2})[h:](\d{0,2})?/);
   let hour = timeMatch ? parseInt(timeMatch[1]) : null;
