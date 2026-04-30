@@ -668,8 +668,11 @@ function parseDateTimeFromText(text: string, referenceDate: Date): Date | null {
     // Sem indicação de dia - assumir hoje
   }
   
-  targetDate.setHours(hour, minute, 0, 0);
-  
+  // O servidor roda em UTC, mas o usuário fala em wall-clock BRT (UTC-3).
+  // "amanhã às 22h" significa 22h BRT = 01h UTC do dia seguinte.
+  // setUTCHours(hour + 3, ...) converte BRT → UTC; o overflow de dia é tratado automaticamente pelo Date.
+  targetDate.setUTCHours(hour + 3, minute, 0, 0);
+
   return targetDate;
 }
 
