@@ -676,6 +676,75 @@ function parseDateTimeFromText(text: string, referenceDate: Date): Date | null {
   return targetDate;
 }
 
+function extractDeterministicReminder(text: string, referenceDate: Date): { description: string; executeAt: Date; datetimeText: string } | null {
+  const normalized = text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const asksReminder = /\b(me\s+)?(lembra|lembre|lembrar|avisa|avise|alarme|despertador)\b/i.test(normalized);
+  if (!asksReminder) return null;
+
+  const parsed = parseDateTimeFromText(text, referenceDate);
+  if (!parsed || parsed.getTime() <= Date.now() - 30_000) return null;
+
+  let description = text
+    .replace(/\b(aura[,\s]*)?/i, '')
+    .replace(/\b(me\s+)?(lembra|lembre|lembrar|avisa|avise)\b/gi, '')
+    .replace(/\b(alarme|despertador)\b/gi, '')
+    .replace(/\b(agora\s+)?(em|daqui\s+a?)\s+\d{1,3}\s*(min|minuto|minutos|h|hora|horas|dia|dias)\b/gi, '')
+    .replace(/\b(agora\s+)?(em|daqui\s+a?)\s+(meia|uma)\s+hora\b/gi, '')
+    .replace(/\b(para|pra|de|que\s+eu|que)\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!description || description.length < 3) {
+    description = 'o que você me pediu pra lembrar';
+  }
+
+  return { description, executeAt: parsed, datetimeText: text };
+}
+
+async function insertPendingReminder(
+  supabase: any,
+  userId: string,
+  executeAt: Date,
+  text: string,
+  source: string,
+): Promise<boolean> {
+  const windowStart = new Date(executeAt.getTime() - 2 * 60 * 1000).toISOString();
+  const windowEnd = new Date(executeAt.getTime() + 2 * 60 * 1000).toISOString();
+  const { data: existing, error: existingError } = await supabase
+    .from('scheduled_tasks')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('task_type', 'reminder')
+    .eq('status', 'pending')
+    .gte('execute_at', windowStart)
+    .lte('execute_at', windowEnd)
+    .limit(1);
+
+  if (existingError) {
+    console.warn(`⚠️ [${source}] Falha ao checar duplicata de reminder:`, existingError.message);
+  }
+  if (existing && existing.length > 0) {
+    console.log(`ℹ️ [${source}] Reminder duplicado próximo (±2min), ignorado`);
+    return false;
+  }
+
+  const { error: insertError } = await supabase.from('scheduled_tasks').insert({
+    user_id: userId,
+    execute_at: executeAt.toISOString(),
+    task_type: 'reminder',
+    payload: { text },
+    status: 'pending',
+  });
+
+  if (insertError) {
+    console.error(`❌ [${source}] Erro inserindo reminder:`, insertError.message);
+    return false;
+  }
+
+  console.log(`✅ [${source}] Reminder scheduled: ${executeAt.toISOString()} → ${text}`);
+  return true;
+}
+
 // ============================================================
 // Micro-agente extrator de ações (pós-resposta, assíncrono)
 // Analisa a resposta da AURA e extrai ações estruturadas
@@ -1341,31 +1410,7 @@ async function processExtractedActions(
           text: actions.schedule_reminder.datetime_text,
         });
       } else {
-        // Anti-duplicata: bloqueia apenas se houver reminder PENDENTE com execute_at próximo (±2 min)
-        const windowStart = new Date(parsed.getTime() - 2 * 60 * 1000).toISOString();
-        const windowEnd = new Date(parsed.getTime() + 2 * 60 * 1000).toISOString();
-        const { data: existing } = await supabase
-          .from('scheduled_tasks')
-          .select('id')
-          .eq('user_id', userId)
-          .eq('task_type', 'reminder')
-          .eq('status', 'pending')
-          .gte('execute_at', windowStart)
-          .lte('execute_at', windowEnd)
-          .limit(1);
-
-        if (!existing || existing.length === 0) {
-          await supabase.from('scheduled_tasks').insert({
-            user_id: userId,
-            execute_at: parsed.toISOString(),
-            task_type: 'reminder',
-            payload: { text: actions.schedule_reminder.description },
-            status: 'pending',
-          });
-          console.log('✅ [MICRO-AGENT] Reminder scheduled:', parsed.toISOString(), '→', actions.schedule_reminder.description);
-        } else {
-          console.log('ℹ️ [MICRO-AGENT] Reminder duplicado próximo (±2min), ignorado');
-        }
+        await insertPendingReminder(supabase, userId, parsed, actions.schedule_reminder.description, 'MICRO-AGENT');
       }
     }
 
@@ -4079,7 +4124,9 @@ serve(async (req) => {
       console.warn('Failed to read AI model config, using default:', e);
     }
 
-    const { message: rawMessage, user_id, phone, pending_content, pending_context, last_user_context, minimal_context, quoted_message } = await req.json();
+    const { message: rawMessage, user_id, phone, pending_content, pending_context, last_user_context, minimal_context, quoted_message, inbound_message_created_at } = await req.json();
+    const inboundMessageDate = inbound_message_created_at ? new Date(inbound_message_created_at) : null;
+    const reminderReferenceDate = inboundMessageDate && !isNaN(inboundMessageDate.getTime()) ? inboundMessageDate : new Date();
 
     // ========================================================================
     // QUOTED MESSAGE — Reply nativo do WhatsApp
@@ -7082,6 +7129,7 @@ Só DEPOIS de saber a situação, explore as emoções com profundidade.`;
     // ========================================================================
     const agendarRegex = /\[AGENDAR_TAREFA:(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}):(\w+):(.*?)\]/gi;
     let agendarMatch;
+    let scheduledByExplicitTag = false;
     while ((agendarMatch = agendarRegex.exec(assistantMessage)) !== null) {
       const [fullMatch, dateStr, timeStr, taskType, description] = agendarMatch;
       console.log(`📅 Schedule tag detected: type=${taskType}, date=${dateStr} ${timeStr}, desc=${description}`);
@@ -7111,6 +7159,7 @@ Só DEPOIS de saber a situação, explore as emoções com profundidade.`;
           payload,
           status: 'pending',
         });
+        scheduledByExplicitTag = true;
         
         console.log(`✅ Task scheduled for ${executeAt.toISOString()}: ${taskType} - ${description}`);
       } else {
@@ -7119,6 +7168,19 @@ Só DEPOIS de saber a situação, explore as emoções com profundidade.`;
     }
     // Remove tags from response
     assistantMessage = assistantMessage.replace(/\[AGENDAR_TAREFA:.*?\]/gi, '').trim();
+
+    const deterministicReminder = profile?.user_id && !scheduledByExplicitTag
+      ? extractDeterministicReminder(rawMessage || message, reminderReferenceDate)
+      : null;
+    if (deterministicReminder) {
+      await insertPendingReminder(
+        supabase,
+        profile.user_id,
+        deterministicReminder.executeAt,
+        deterministicReminder.description,
+        'DETERMINISTIC-REMINDER',
+      );
+    }
 
     // ========================================================================
     // DETECTAR TAG [CANCELAR_TAREFA:tipo] E CANCELAR PRÓXIMA PENDENTE

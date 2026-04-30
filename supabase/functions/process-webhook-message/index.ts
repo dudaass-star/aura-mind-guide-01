@@ -788,6 +788,7 @@ Deno.serve(async (req) => {
     // PERSIST INBOUND MESSAGE (after lock — prevents duplicates from competing workers)
     // ========================================================================
     let inboundSaved = false;
+    let inboundMessageCreatedAt: string | null = null;
     if (messageText) {
       // Content-based dedup: check for identical message in last 30s
       const { data: recentDup } = await supabase
@@ -812,9 +813,10 @@ Deno.serve(async (req) => {
         const { data: insertedMsg } = await supabase
           .from('messages')
           .insert({ user_id: profile.user_id, role: 'user', content: messageText })
-          .select('id')
+          .select('id, created_at')
           .single();
         inboundSaved = true;
+        inboundMessageCreatedAt = insertedMsg?.created_at ?? null;
         if (insertedMsg?.id) {
           (globalThis as any).__inboundMessageDbId = insertedMsg.id;
         }
@@ -1069,7 +1071,7 @@ Deno.serve(async (req) => {
 
     let accumulatedQuery = supabase
       .from('messages')
-      .select('content')
+      .select('content, created_at')
       .eq('user_id', profile.user_id)
       .eq('role', 'user')
       .order('created_at', { ascending: true });
@@ -1082,6 +1084,7 @@ Deno.serve(async (req) => {
 
     if (recentUserMsgs && recentUserMsgs.length > 1) {
       messageText = recentUserMsgs.map(m => m.content).join('\n');
+      inboundMessageCreatedAt = recentUserMsgs[recentUserMsgs.length - 1]?.created_at ?? inboundMessageCreatedAt;
       console.log(`📦 Accumulated ${recentUserMsgs.length} sequential messages into one`);
     }
 
@@ -1134,6 +1137,7 @@ Deno.serve(async (req) => {
           pending_content: pendingContent,
           pending_context: pendingContext,
           last_user_context: lastUserContext,
+          inbound_message_created_at: inboundMessageCreatedAt,
           // Conteúdo da mensagem citada via "Responder" nativo do WhatsApp
           quoted_message: quotedMessageBody,
         };
