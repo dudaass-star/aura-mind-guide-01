@@ -18,4 +18,14 @@ type: feature
 
 **Anti-duplicata:** bloqueia apenas se já existir reminder com `status=pending` e `execute_at` dentro de ±2min do novo. Reminders executados/cancelados NÃO bloqueiam.
 
-**Bug histórico (corrigido em 2026-04-30):** parser só aceitava horário absoluto, e guarda anti-dup checava 7 dias por created_at sem filtro de status — bloqueava qualquer reminder novo se houvesse algum executado nos últimos 7 dias.
+**Timezone (CRÍTICO):**
+- Servidor roda em UTC; usuário fala em wall-clock BRT (UTC-3).
+- **Relativo** ("em N min/h/dias"): use `Date.now() + delta`. Timezone é IRRELEVANTE — instante absoluto é o mesmo em qualquer fuso.
+- **Absoluto** ("amanhã 22h"): use `setUTCHours(hour + 3, minute, 0, 0)` para converter BRT → UTC. NUNCA use `setHours()` — em UTC isso vira 22h UTC = 19h BRT (errado).
+- **NUNCA** fabrique um Date "BRT-aware" via `new Date(Date.now() + offset*60*1000)`. Isso cria um objeto que mente sobre o instante real e quebra parsing relativo (lembrete "em 3min" vira passado, é descartado pela guarda anti-passado).
+- Guarda anti-passado tolera 30s de slop (`parsed <= Date.now() - 30_000`) para suportar latência do extractor async em pedidos curtos.
+
+**Bugs históricos corrigidos em 2026-04-30:**
+1. Parser só aceitava horário absoluto (sem suporte a "em N min").
+2. Guarda anti-dup checava 7 dias por created_at sem filtro de status — bloqueava qualquer reminder novo.
+3. Shift de timezone fabricado (`Date.now() - 3h`) no callsite quebrava parser relativo: lembrete "em 3min" calculava `12:04 UTC` (= 09:04 BRT, passado) e era descartado. Solução: usar `new Date()` real e mover correção de timezone para dentro do parser absoluto via `setUTCHours(hour + 3, ...)`.
