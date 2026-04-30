@@ -1410,31 +1410,7 @@ async function processExtractedActions(
           text: actions.schedule_reminder.datetime_text,
         });
       } else {
-        // Anti-duplicata: bloqueia apenas se houver reminder PENDENTE com execute_at próximo (±2 min)
-        const windowStart = new Date(parsed.getTime() - 2 * 60 * 1000).toISOString();
-        const windowEnd = new Date(parsed.getTime() + 2 * 60 * 1000).toISOString();
-        const { data: existing } = await supabase
-          .from('scheduled_tasks')
-          .select('id')
-          .eq('user_id', userId)
-          .eq('task_type', 'reminder')
-          .eq('status', 'pending')
-          .gte('execute_at', windowStart)
-          .lte('execute_at', windowEnd)
-          .limit(1);
-
-        if (!existing || existing.length === 0) {
-          await supabase.from('scheduled_tasks').insert({
-            user_id: userId,
-            execute_at: parsed.toISOString(),
-            task_type: 'reminder',
-            payload: { text: actions.schedule_reminder.description },
-            status: 'pending',
-          });
-          console.log('✅ [MICRO-AGENT] Reminder scheduled:', parsed.toISOString(), '→', actions.schedule_reminder.description);
-        } else {
-          console.log('ℹ️ [MICRO-AGENT] Reminder duplicado próximo (±2min), ignorado');
-        }
+        await insertPendingReminder(supabase, userId, parsed, actions.schedule_reminder.description, 'MICRO-AGENT');
       }
     }
 
