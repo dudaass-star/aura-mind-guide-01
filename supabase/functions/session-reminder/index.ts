@@ -496,23 +496,22 @@ Parece que não conseguimos fazer nossa sessão hoje. Tudo bem, a vida acontece!
 Quer remarcar pra outro horário? É só me dizer quando fica bom pra você. ✨`;
         } else if ((userMsgsInSession || 0) >= 5) {
           // Usuário participou ativamente (5+ msgs) mas sessão expirou - marcar como completed
-          const aiSummary = await generateSessionSummaryFallback(supabase, session);
+          // Marcar como completed primeiro; o session-extractor lê do banco usando started_at
+          await supabase
+            .from('sessions')
+            .update({ status: 'completed', ended_at: now.toISOString() })
+            .eq('id', session.id);
+          const extracted = await runSessionExtractor(supabase, session.id);
           statusToSet = 'completed';
-          summaryToSet = aiSummary.summary;
+          summaryToSet = extracted?.summary
+            || 'Sessão encerrada automaticamente após período de inatividade. O usuário participou ativamente da conversa.';
           messageToSend = `Oi ${userName}! 💜
 
 Nossa sessão de hoje foi ótima, mesmo que tenha ficado em silêncio no final. Já salvei o resumo pra você!
 
 Se quiser retomar de onde paramos ou agendar a próxima, é só me chamar. ✨`;
 
-          // Salvar key_insights e commitments também
-          await supabase
-            .from('sessions')
-            .update({
-              key_insights: aiSummary.key_insights,
-              commitments: aiSummary.commitments,
-            })
-            .eq('id', session.id);
+          // key_insights e commitments já foram persistidos pelo session-extractor.
         } else {
           // Usuário participou pouco (2-4 msgs) - manter como no_show
           statusToSet = 'no_show';
