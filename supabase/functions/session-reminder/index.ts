@@ -600,8 +600,16 @@ Se quiser remarcar uma nova sessão, é só me dizer!`;
           continue;
         }
         if (!session.session_summary) {
-          console.log(`⚠️ No summary for completed session ${session.id}`);
-          continue;
+          console.log(`⚠️ No summary for completed session ${session.id} — disparando session-extractor para recuperar`);
+          const recovered = await runSessionExtractor(supabase, session.id);
+          if (!recovered?.summary) {
+            console.warn(`⚠️ session-extractor não conseguiu gerar summary para ${session.id} neste ciclo — tentará novamente no próximo`);
+            continue;
+          }
+          // Atualiza a referência local pro restante deste loop usar os dados frescos
+          session.session_summary = recovered.summary;
+          session.key_insights = recovered.key_insights;
+          session.commitments = recovered.commitments;
         }
 
         const userName = profile.name || 'você';
