@@ -1,79 +1,96 @@
-## Fase 2 — Intervenção mínima e universal
+# Encerramento de sessão — micro-agent dedicado `session-extractor`
 
-**Princípio:** Não codificar cenários (Daiane, traição, medicação, cansaço). Codificar **postura clínica** que serve para qualquer cenário que vier — agora ou daqui 6 meses.
+## Confirmação: SIM, novo micro-agent
 
-### O que muda
+Será criada **uma nova edge function** chamada `session-extractor`, totalmente separada do `aura-agent`. Ela é a única responsável por extrair `session_summary`, `key_insights` e `commitments` de uma sessão encerrada.
 
-Adicionar **um único bloco** no prompt da `aura-agent`, posicionado logo antes do `# REGRA ANTI-ECO` (linha ~2348). É um princípio transversal, não uma regra IF/THEN.
+Isso segue o padrão já consolidado no projeto (memória `Workflow agêntico`: "Main agent + Flash-lite extractor + async analysis") e usa o mesmo mecanismo `EdgeRuntime.waitUntil` que o `aura-agent` já usa nas linhas 7427-7441 para o micro-agent atual e o post-analysis.
 
-### O bloco a adicionar
+## Quem faz isso hoje (problema)
 
-```
-# POSTURA CLÍNICA (princípio mestre)
+- **`aura-agent/index.ts` linhas ~6517-6688** faz a extração inline no mesmo handler que respondeu o usuário.
+- Usa **Gemini 2.5 Pro** (caro, lento) com **JSON puro** (frágil, parse manual com regex).
+- Loop de 3 retries; se todas falharem, grava `completed` com `summary=""` e `commitments=[]`.
+- Bloqueia a resposta do `aura-agent` (até ~6s extras) e compete por contexto/cache.
 
-Você não é assistente do humor do usuário. Você é a presença clínica dele.
+**Evidência no banco** (últimos 14 dias): das 11 sessões `completed`, **só 1** tem `commitments`; existe sessão `completed` com summary vazio gerando warning no `session-reminder` há dias.
 
-Isso significa que, quando o discernimento pedir, você tem PERMISSÃO e
-RESPONSABILIDADE de ir contra a corrente do que o usuário está dizendo —
-com cuidado, sem suavizar, mas sem julgar.
+## Arquitetura nova
 
-Vá contra a corrente quando perceber:
-- Discurso e corpo não batem (alguém afirma estar bem mas mostra exaustão)
-- Validação repetida virou eco e parou de produzir movimento
-- O foco gira no terceiro há tempo demais sem voltar para o próprio território
-- A pessoa pede confirmação para uma evitação
-- Há contradição entre o que ela diz hoje e o padrão de longo prazo na memória
-
-Como ir contra a corrente, sem virar terapeuta caricato:
-- Nomeie o que você está vendo, não interrogue
-- Use a observação como espelho, não como acusação
-- "Espera — você me diz X mas também Y. Como isso bate?"
-- "A gente já circulou nisso umas 3 vezes hoje. O que tá pedindo pra ser visto?"
-
-A pessoa não te paga para concordar. Te paga para enxergar o que ela ainda
-não enxerga — e te paga para ter coragem de devolver isso com cuidado.
-
-Quando NÃO ir contra a corrente:
-- Quando ela genuinamente está bem (e o resto do contexto confirma)
-- Em momento de vulnerabilidade aguda (ali se fica junto, não se confronta)
-- Quando seria só pra mostrar que você é "esperta" — confronto sem propósito é arrogância
+```text
+[aura-agent] detecta [ENCERRAR_SESSAO]
+    │
+    ├─► marca session=completed (sem summary ainda)
+    ├─► limpa profile.current_session_id
+    ├─► envia despedida ao usuário (resposta normal)
+    └─► EdgeRuntime.waitUntil(invoke('session-extractor', {session_id}))
+              │
+              ▼
+    [session-extractor] (novo micro-agent)
+        - lê mensagens da sessão direto do DB
+        - chama Gemini 2.5 Flash via Lovable AI Gateway
+        - usa TOOL CALLING (JSON Schema) — sem parse manual
+        - grava session_summary, key_insights, commitments
 ```
 
-### Por que isso é universal (e não cenário específico)
+## Detalhes do `session-extractor`
 
-| Não fala de | Mas cobre |
-|---|---|
-| Traição, medicação, cansaço | "Discurso e corpo não batem" |
-| Validação 5x na mesma palavra | "Validação repetida virou eco" |
-| Marido, chefe, pai | "Foco gira no terceiro há tempo demais" |
-| Adiar terapeuta, adiar conversa difícil | "Pede confirmação para uma evitação" |
+- **Endpoint**: `supabase/functions/session-extractor/index.ts`
+- **Input**: `{ session_id: string }`
+- **Modelo**: `google/gemini-2.5-flash` via Lovable AI Gateway (`https://ai.gateway.lovable.dev/v1/chat/completions`)
+- **Tool calling estruturado** com `tool_choice` forçado (esquema idêntico ao já validado em `session-reminder/generateSessionSummaryFallback` linhas 50-86):
+  ```text
+  parameters: { summary, key_insights[], commitments[{title}] }
+  ```
+- **Prompt clínico**: migra o prompt detalhado de extração de compromissos que está hoje em `aura-agent` linhas 6546-6605 (regras de aceite minimalista "💜", exemplos reais). Não muda uma vírgula da lógica clínica.
+- **Idempotente**: pode ser chamado N vezes pra mesma `session_id` — sempre sobrescreve os 3 campos.
+- **Sem retry-loop**: tool calling com schema garantido = funciona na primeira. Se falhar 1 vez, registra erro estruturado e o `session-reminder` re-dispara no próximo ciclo.
+- **`config.toml`**: adicionar bloco `[functions.session-extractor]` com `verify_jwt = false` (chamada interna).
 
-Cada item é abstrato o suficiente para a IA aplicar com discernimento, e específico o suficiente para servir de farol.
+## Alterações nos arquivos existentes
 
-### O que NÃO entra
+### `aura-agent/index.ts`
+- Remove ~160 linhas (6520-6676): todo o loop de 3 tentativas com JSON puro.
+- Mantém: detecção de `[ENCERRAR_SESSAO]`, atualização de `status='completed'`, limpeza de `current_session_id`, lógica de `onboarding_completed`, agendamento de próxima sessão.
+- Adiciona: `supabase.functions.invoke('session-extractor', { body: { session_id } })` dentro do `EdgeRuntime.waitUntil` que já existe na linha 7436.
 
-- ❌ Nenhum IF/THEN
-- ❌ Nenhuma contagem ("após X turnos faça Y")
-- ❌ Nenhuma palavra-chave proibida
-- ❌ Nenhum cenário nominado
-- ❌ Nenhuma trava determinística
+### `session-reminder/index.ts`
+- Remove a função local `generateSessionSummaryFallback` (linhas 13-119) — sua lógica vai pro micro-agent.
+- Linha 676 (`⚠️ No summary for completed session`): em vez de só logar, **invoca `session-extractor` uma vez** e segue. Isso quebra o loop infinito que vemos hoje na sessão `64a45e2b`.
+- Linha 571 (sessão abandonada com 5+ msgs): **invoca `session-extractor`** em vez da função local.
+- Linha 569-587 (sessões abandonadas com 2-4 msgs `no_show`): também invoca o extractor pra gerar summary real em vez de texto fixo de 60 chars.
 
-### Onde encaixa
+### Memória
+Atualiza `mem://technical/session/data-integrity-and-ratings`:
+- De: "Pro model 3-retry loop for JSON extraction"
+- Para: "Dedicated `session-extractor` micro-agent (Flash + tool calling), invoked async via waitUntil"
 
-Arquivo: `supabase/functions/aura-agent/index.ts`
-Posição: imediatamente antes da `# REGRA ANTI-ECO` (linha ~2348), no prompt geral — para valer tanto em sessão quanto fora dela.
+## Teste
 
-### Memória a registrar
+`supabase/functions/session-extractor/index_test.ts`: cria sessão fake com mensagens conhecidas (incluindo aceite "💜"), invoca o micro-agent, verifica que os 3 campos são populados e que `commitments.length >= 1` quando há aceite explícito.
 
-Criar `mem://persona/postura-clinica-permissao` documentando o princípio, para que futuras edições do prompt não removam ou diluam essa postura.
+## Arquivos afetados
 
-### Validação
+```text
+NEW   supabase/functions/session-extractor/index.ts
+NEW   supabase/functions/session-extractor/index_test.ts
+EDIT  supabase/functions/aura-agent/index.ts          (remove ~160 linhas, adiciona 1 invoke)
+EDIT  supabase/functions/session-reminder/index.ts    (remove fallback local, 3 invokes)
+EDIT  supabase/config.toml                            (registra a nova função)
+EDIT  mem://technical/session/data-integrity-and-ratings
+```
 
-Estender `phase_thresholds_test.ts` com 1 teste estático garantindo que o bloco "POSTURA CLÍNICA (princípio mestre)" existe no prompt — mesma estratégia dos outros testes (regex no `index.ts`).
+## Por que isso não precisa de fallback
 
-### Estimativa
+1. **Tool calling > JSON puro**: o schema é validado pelo provider Gemini. Não há "JSON quebrado".
+2. **Flash > Pro pra extração estruturada**: é o caso de uso ideal de Flash, alinhado ao roster da memória Core.
+3. **Fora do hot path**: se demorar 5s ou 50s, o usuário não percebe — já recebeu a despedida.
+4. **Auto-recuperação**: o `session-reminder` (que roda periodicamente) re-dispara para qualquer sessão `completed` ainda sem summary. Sem loop infinito, sem fallback genérico.
 
-- ~30 linhas no prompt
-- 1 arquivo de memória novo
-- 1 teste novo
-- Zero refactor, zero mudança de schema, zero risco arquitetural
+## O que NÃO muda
+
+- Tags `[ENCERRAR_SESSAO]`, `[AGENDAR_SESSAO]`, `[REAGENDAR_SESSAO]` — contratos preservados.
+- Fase 1 (Limiares Clínicos) e Fase 2 (Postura Clínica).
+- Prompt clínico de extração de compromissos — migra inalterado.
+- Lógica de `no_show` vs `cancelled` vs `completed` no `session-reminder`.
+- Fluxo da despedida da Aura ao usuário.
