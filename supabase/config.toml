@@ -201,3 +201,6 @@ verify_jwt = false
 
 [functions.audit-decline-codes]
 verify_jwt = false
+
+[functions.session-extractor]
+verify_jwt = false
