@@ -6517,175 +6517,41 @@ Exemplo com 4 sessões:
     if ((shouldEndSession || aiWantsToEndSession) && currentSession && profile) {
       const endTime = new Date().toISOString();
 
-      let sessionSummary = "";
-      let keyInsights: string[] = [];
-      let commitments: any[] = [];
-      
-      // ========== DETERMINISTIC SUMMARY: 3 attempts, no generic fallback ==========
-      const maxSummaryAttempts = 3;
-      for (let attempt = 1; attempt <= maxSummaryAttempts; attempt++) {
-        try {
-          // Janela ampla (30 msgs) — fechamento da AURA é fragmentado em vários balões com '|||'
-          // e o compromisso real costuma aparecer entre 10-25 msgs antes do fim.
-          // Tentativa 3: reduz para 20 se houver problemas de token.
-          const contextSize = attempt === 3 ? 20 : 30;
-          const summaryMessages = messageHistory.slice(-contextSize);
-
-          // Reforço progressivo: na tentativa 2+ exigimos compromisso explícito se houver
-          let extraInstruction = '';
-          if (attempt >= 2) {
-            extraInstruction = `\n\n⚠️ ATENÇÃO CRÍTICA (tentativa ${attempt}):
-1. Responda APENAS o JSON puro (sem markdown, sem texto antes/depois).
-2. RELEIA a conversa procurando frases da AURA que propõem uma ação concreta para o usuário fazer ENTRE AGORA e a próxima sessão. Exemplos de gatilhos: "Topa fazer...?", "Combinado?", "Como nosso compromisso pra essa semana...", "Sua única tarefa é...", "Vamos combinar...", "Quando você [X], você vai [Y]".
-3. Se o usuário concordou (mesmo que com "sim", "tá bom", "perfeito", "topo", "combinado", emoji 💜), É um compromisso assumido — registre.`;
-          }
-
-          const summaryData = await callAI(configuredModel, [
-                {
-                  role: "system",
-                  content: `Você é um assistente especializado em analisar o FECHAMENTO de sessões de mentoria emocional (Logoterapia).
-Sua missão é extrair fielmente o que foi acordado, sem inventar nada.
-
-Retorne EXATAMENTE neste formato JSON (sem markdown):
-{
-  "summary": "Resumo de 2-3 frases sobre o tema central e a virada/conclusão",
-  "insights": ["aprendizado 1", "aprendizado 2", "aprendizado 3"],
-  "commitments": ["ação concreta combinada"]
-}
-
-──────────────────────────────────────────
-REGRAS DE EXTRAÇÃO DE COMPROMISSOS (CRÍTICO):
-──────────────────────────────────────────
-Um COMPROMISSO é uma ação concreta que o usuário se comprometeu a fazer entre o fim da sessão e a próxima conversa. NÃO confunda com insights ou intenções vagas.
-
-✅ CONTA como compromisso:
-- AURA propõe ação concreta + usuário aceita (ex.: "sim", "combinado", "topo", "tá bom", "perfeito", "vou tentar")
-- Mesmo aceite minimalista vale (ex.: "💜", "✨", "ok")
-- A AURA pode ter formulado como pergunta ("Topa fazer X?", "Combinado?") — se houve aceite, é compromisso
-- Frases-gatilho típicas da AURA: "como nosso compromisso pra essa semana...", "sua única tarefa é...", "quando [X], você vai [Y]", "vamos combinar..."
-
-❌ NÃO conta como compromisso:
-- Reflexões soltas ("você precisa olhar pra isso")
-- Insights/aprendizados (vão no campo 'insights')
-- Promessas sem ação ("vou pensar nisso")
-- Coisas que a AURA disse mas o usuário NÃO respondeu/aceitou
-
-──────────────────────────────────────────
-EXEMPLOS REAIS (estude o padrão):
-──────────────────────────────────────────
-
-EXEMPLO 1 — fechamento com compromisso claro:
-AURA: "Quando você chegar em casa hoje, antes de qualquer coisa, você vai pegar um livro na mão. Só pegar. Sentir o peso dele, ler a orelha. Nada mais."
-AURA: "Topa fazer só isso pela Sara hoje?"
-USUÁRIO: "topo sim 💜"
-→ commitments: ["Ao chegar em casa hoje, pegar um livro na mão — só sentir o peso e ler a orelha"]
-
-EXEMPLO 2 — compromisso embutido em pergunta:
-AURA: "Então, como nosso compromisso pra essa semana: na primeira vez que você perceber o gatilho da vítima, sua única tarefa é observar... e não abrir o portão. Combinado?"
-USUÁRIO: "combinado"
-→ commitments: ["Na primeira vez que perceber o gatilho da vítima essa semana, observar sem abrir o portão"]
-
-EXEMPLO 3 — sugestão aceita silenciosamente:
-AURA: "Que tal um pequeno passo pra essa semana, sem a pressão de já ter a conversa? Só escrever, pra você mesma, o que você diria pra sua filha se o único objetivo fosse ela conhecer a sua dor."
-AURA: "A gente pode usar isso como ponto de partida na nossa próxima sessão. O que me diz?"
-USUÁRIO: "tá bom 💜"
-→ commitments: ["Escrever pra si mesma o que diria à filha se o objetivo fosse ela conhecer sua dor"]
-
-EXEMPLO 4 — sessão SEM compromisso prático (fechamento puramente emocional):
-AURA: "Por hoje, nosso tempo se encerrou. Fico orgulhosa do que você construiu aqui hoje."
-→ commitments: ["Permitir-se sentir o que veio nessa sessão sem julgamento"]  (intenção emocional, último recurso)
-
-──────────────────────────────────────────
-REGRAS GERAIS:
-──────────────────────────────────────────
-- summary: 2-3 frases sobre o tema central e a virada que aconteceu
-- insights: SEMPRE pelo menos 2 (mudanças de perspectiva, reconhecimentos, padrões nomeados)
-- commitments: pelo menos 1 (ação concreta acordada > intenção emocional como fallback)
-- NUNCA arrays vazios
-- Português brasileiro claro, na voz do usuário (1ª pessoa quando fizer sentido)${extraInstruction}`
-                },
-                ...summaryMessages,
-                { role: "user", content: message },
-                { role: "assistant", content: assistantMessage }
-              ], 600, 0.4, LOVABLE_API_KEY);
-
-          if (summaryData) {
-            await logTokenUsage(supabase, user_id || null, 'session_summary', configuredModel, summaryData.usage);
-            const aiResponse = summaryData.choices?.[0]?.message?.content?.trim();
-            
-            if (aiResponse) {
-              console.log(`📝 [Summary attempt ${attempt}/${maxSummaryAttempts}] Raw response (first 300):`, aiResponse.substring(0, 300));
-              
-              try {
-                // Aggressive JSON cleaning: strip everything outside { }
-                let cleanJson = aiResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-                const firstBrace = cleanJson.indexOf('{');
-                const lastBrace = cleanJson.lastIndexOf('}');
-                if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-                  cleanJson = cleanJson.substring(firstBrace, lastBrace + 1);
-                }
-                
-                const parsed = JSON.parse(cleanJson);
-                
-                // Structural validation
-                const validSummary = typeof parsed.summary === 'string' && parsed.summary.length > 20;
-                const validInsights = Array.isArray(parsed.insights) && parsed.insights.length >= 2;
-                const validCommitments = Array.isArray(parsed.commitments) && parsed.commitments.length >= 1;
-                
-                if (!validSummary || !validInsights || !validCommitments) {
-                  console.warn(`⚠️ [Summary attempt ${attempt}] Validation failed: summary=${validSummary}, insights=${validInsights}, commitments=${validCommitments}`);
-                  if (attempt < maxSummaryAttempts) continue; // retry — incluindo commitments vazio
-                }
-                
-                sessionSummary = parsed.summary || '';
-                keyInsights = Array.isArray(parsed.insights) ? parsed.insights : [];
-                commitments = Array.isArray(parsed.commitments) 
-                  ? parsed.commitments.map((c: string) => ({ title: c }))
-                  : [];
-                
-                console.log(`✅ [Summary attempt ${attempt}] Extracted:`, {
-                  summary: sessionSummary.substring(0, 50),
-                  insightsCount: keyInsights.length,
-                  commitmentsCount: commitments.length
-                });
-                break; // Success — exit retry loop
-                
-              } catch (parseError) {
-                console.error(`❌ [Summary attempt ${attempt}] JSON parse failed:`, parseError);
-                if (attempt === maxSummaryAttempts) {
-                  // Last attempt: use raw text as summary rather than nothing
-                  sessionSummary = aiResponse.substring(0, 500);
-                  console.log(`🚨 CRITICAL: Using raw text as summary after ${maxSummaryAttempts} failed attempts`);
-                }
-              }
-            } else {
-              console.error(`❌ [Summary attempt ${attempt}] Empty AI response`);
-            }
-          }
-        } catch (summaryError) {
-          console.error(`❌ [Summary attempt ${attempt}/${maxSummaryAttempts}] Error:`, summaryError);
-          if (attempt === maxSummaryAttempts) {
-            console.log('🚨 CRITICAL: Session summary generation failed after all attempts');
-          }
-        }
-        
-        // Wait 1s between retries
-        if (attempt < maxSummaryAttempts) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-      }
-
-      // Atualizar sessão para completed com todos os dados
+      // ========== ENCERRAMENTO ==========
+      // Marca como completed imediatamente. A extração de summary/insights/commitments
+      // é feita assincronamente pelo micro-agent `session-extractor` (Flash + tool calling),
+      // disparado via EdgeRuntime.waitUntil no bloco async no fim deste handler.
+      const sessionIdToExtract = currentSession.id;
       await supabase
         .from('sessions')
         .update({
           status: 'completed',
           ended_at: endTime,
-          session_summary: sessionSummary,
-          key_insights: keyInsights,
-          commitments: commitments
         })
-        .eq('id', currentSession.id);
+        .eq('id', sessionIdToExtract);
+      console.log(`🏁 Session ${sessionIdToExtract} marcada como completed — extração será feita pelo session-extractor`);
+
+      // Dispara o micro-agent em background (não bloqueia a despedida).
+      // Idempotente: se falhar, session-reminder re-dispara no próximo ciclo.
+      try {
+        const extractorPromise = supabase.functions
+          .invoke('session-extractor', { body: { session_id: sessionIdToExtract } })
+          .then((res: any) => {
+            if (res?.error) {
+              console.error('⚠️ session-extractor invoke retornou erro:', res.error);
+            } else {
+              console.log('🧪 session-extractor disparado para', sessionIdToExtract);
+            }
+          })
+          .catch((err: any) => console.error('⚠️ session-extractor invoke falhou:', err));
+        try {
+          (globalThis as any).EdgeRuntime.waitUntil(extractorPromise);
+        } catch {
+          // waitUntil indisponível: deixa rodar fire-and-forget
+        }
+      } catch (invokeErr) {
+        console.error('⚠️ Erro ao agendar session-extractor:', invokeErr);
+      }
 
       // Preparar atualização do profile
       const profileUpdate: any = {
