@@ -1,0 +1,1 @@
+UPDATE public.profiles SET phone = '5554981274414' WHERE id = '292c58df-484c-48eb-8898-9ea3cc3dd6ac';
