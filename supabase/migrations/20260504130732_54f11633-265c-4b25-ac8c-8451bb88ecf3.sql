@@ -1,0 +1,1 @@
+UPDATE public.profiles SET status = 'canceled' WHERE id = '4905be28-5d68-4834-bfb7-6d4c21dc08a5';
