@@ -430,6 +430,9 @@ Deno.serve(async (req) => {
       windowDays,
       totalCanceledInWindow: totalInWindow,
       totalCanceled8_30d: total,
+      totalCancelEventsRaw,
+      excludedDeletedProfile: excludedDeletedProfile + Math.max(0, unresolvedCancels),
+      excludedOutOfRange,
       byFeatureExposure,
       engagementVolume: {
         avgMessagesUntilChurn: avgMsgs,
