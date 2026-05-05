@@ -187,6 +187,9 @@ interface ChurnDiagnosis {
   windowDays: number;
   totalCanceledInWindow: number;
   totalCanceled8_30d: number;
+  totalCancelEventsRaw?: number;
+  excludedDeletedProfile?: number;
+  excludedOutOfRange?: number;
   byFeatureExposure: Record<string, { count: number; pct: number }>;
   engagementVolume: {
     avgMessagesUntilChurn: number;
