@@ -183,10 +183,35 @@ interface DunningAttempt {
   created_at: string;
 }
 
+interface ChurnDiagnosis {
+  windowDays: number;
+  totalCanceledInWindow: number;
+  totalCanceled8_30d: number;
+  byFeatureExposure: Record<string, { count: number; pct: number }>;
+  engagementVolume: {
+    avgMessagesUntilChurn: number;
+    medianMessagesUntilChurn: number;
+    avgActiveDaysUntilChurn: number;
+    silentChurners: number;
+  };
+  bySegment: {
+    naoExperimentou: { count: number; pct: number };
+    experimentouParcial: { count: number; pct: number };
+    experimentouMuito: { count: number; pct: number };
+  };
+  cancelDayHistogram: Record<string, number>;
+  topReasons: { reason: string; count: number }[];
+  verdict: 'exposure_problem' | 'fit_problem' | 'mixed' | 'insufficient_data';
+}
+
 export default function AdminEngagement() {
   const { isLoading, isAdmin, redirectIfNotAdmin } = useAdminAuth();
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [loading, setLoading] = useState(true);
+  // 🔍 Diagnóstico de Churn Precoce (D8-D30)
+  const [churnDiag, setChurnDiag] = useState<ChurnDiagnosis | null>(null);
+  const [churnDiagLoading, setChurnDiagLoading] = useState(false);
+  const [churnWindowDays, setChurnWindowDays] = useState<number>(60);
   const [blasting, setBlasting] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
   const [dateFrom, setDateFrom] = useState<Date>(new Date());
@@ -259,6 +284,35 @@ export default function AdminEngagement() {
   useEffect(() => {
     if (isAdmin) fetchMetrics();
   }, [isAdmin, dateFrom, dateTo]);
+
+  // 🔍 Diagnóstico de Churn Precoce (D8-D30)
+  const fetchChurnDiagnosis = async (windowDays = churnWindowDays, forceRefresh = false) => {
+    setChurnDiagLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('No session');
+      const { data, error } = await supabase.functions.invoke('admin-churn-diagnosis', {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        body: { windowDays, forceRefresh },
+      });
+      if (error) throw error;
+      setChurnDiag(data);
+    } catch (err) {
+      console.error('Error fetching churn diagnosis:', err);
+      toast({
+        title: 'Erro ao carregar diagnóstico de churn',
+        description: err instanceof Error ? err.message : 'Erro desconhecido',
+        variant: 'destructive',
+      });
+    } finally {
+      setChurnDiagLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isAdmin) fetchChurnDiagnosis(churnWindowDays);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin, churnWindowDays]);
 
   const fetchRecoverySessions = async () => {
     try {
@@ -888,6 +942,186 @@ export default function AdminEngagement() {
                     </CardContent>
                   </Card>
                 )}
+
+                {/* 🔍 Diagnóstico de Churn Precoce (D8-D30) */}
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                      <div>
+                        <CardTitle className="text-base font-semibold flex items-center gap-2">
+                          🔍 Diagnóstico de Churn Precoce (D8-D30)
+                        </CardTitle>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Dos usuários que cancelaram entre o 8º e 30º dia, <strong>quantos efetivamente experimentaram</strong> as features de retenção que já existem? Resposta dita se o problema é <em>timing/exposição</em> ou <em>fit do produto</em>.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={churnWindowDays}
+                          onChange={(e) => setChurnWindowDays(Number(e.target.value))}
+                          className="text-xs border rounded px-2 py-1 bg-background"
+                        >
+                          <option value={30}>Últimos 30d</option>
+                          <option value={60}>Últimos 60d</option>
+                          <option value={90}>Últimos 90d</option>
+                          <option value={180}>Últimos 180d</option>
+                        </select>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => fetchChurnDiagnosis(churnWindowDays, true)}
+                          disabled={churnDiagLoading}
+                        >
+                          <RefreshCw className={`h-3.5 w-3.5 ${churnDiagLoading ? 'animate-spin' : ''}`} />
+                        </Button>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {churnDiagLoading && !churnDiag && (
+                      <div className="text-sm text-muted-foreground">Carregando diagnóstico…</div>
+                    )}
+                    {churnDiag && churnDiag.totalCanceled8_30d === 0 && (
+                      <div className="text-sm text-muted-foreground p-3 bg-muted/30 rounded-md">
+                        Sem cancelamentos no intervalo D8-D30 nos últimos {churnDiag.windowDays} dias ({churnDiag.totalCanceledInWindow} cancelamentos no total na janela). Aumente a janela ou aguarde mais dados.
+                      </div>
+                    )}
+                    {churnDiag && churnDiag.totalCanceled8_30d > 0 && (
+                      <>
+                        {/* Veredicto */}
+                        {(() => {
+                          const v = churnDiag.verdict;
+                          const cfg = v === 'exposure_problem'
+                            ? { color: 'border-destructive/40 bg-destructive/10 text-destructive', label: '🚨 Problema é TIMING / EXPOSIÇÃO', text: 'A maioria cancelou sem ter testado as features de retenção. Antes de adicionar coisas novas, antecipe a entrega das que já existem para o D2-D14.' }
+                            : v === 'fit_problem'
+                              ? { color: 'border-green-500/30 bg-green-500/5 text-green-700 dark:text-green-400', label: '✅ Problema é FIT', text: 'A maioria experimentou várias features e ainda assim cancelou. Repensar oferta, pricing ou proposta de valor — adicionar features não vai resolver.' }
+                              : v === 'mixed'
+                                ? { color: 'border-yellow-500/30 bg-yellow-500/5 text-yellow-700 dark:text-yellow-400', label: '⚠️ MISTO', text: 'Há tanto problema de exposição quanto de fit. Ataque duplo: antecipar entregas E revisar oferta.' }
+                                : { color: 'border-muted bg-muted/30 text-muted-foreground', label: 'ℹ️ Dados insuficientes', text: 'Poucos cancelamentos para conclusão estatística. Aguarde mais coorte.' };
+                          return (
+                            <div className={`border rounded-md p-3 ${cfg.color}`}>
+                              <div className="text-sm font-semibold mb-1">{cfg.label}</div>
+                              <div className="text-xs">{cfg.text}</div>
+                            </div>
+                          );
+                        })()}
+
+                        {/* 3 buckets de segmento */}
+                        <div className="grid grid-cols-3 gap-3">
+                          {([
+                            { key: 'naoExperimentou', label: 'Não experimentou', hint: '0-1 features tocadas', color: 'border-destructive/40 bg-destructive/10 text-destructive' },
+                            { key: 'experimentouParcial', label: 'Experimentou parcial', hint: '2-3 features', color: 'border-yellow-500/30 bg-yellow-500/5 text-yellow-700 dark:text-yellow-400' },
+                            { key: 'experimentouMuito', label: 'Experimentou muito', hint: '4+ features', color: 'border-green-500/30 bg-green-500/5 text-green-700 dark:text-green-400' },
+                          ] as const).map(({ key, label, hint, color }) => {
+                            const b = churnDiag.bySegment[key];
+                            return (
+                              <div key={key} className={`border rounded-lg p-3 ${color}`}>
+                                <div className="text-[11px] font-medium text-muted-foreground mb-1">{label}</div>
+                                <div className="text-2xl font-bold leading-tight">{b.pct.toFixed(1)}%</div>
+                                <div className="text-[11px] text-muted-foreground mt-1">{b.count} usuários</div>
+                                <div className="text-[10px] text-muted-foreground/80 mt-1.5 italic">{hint}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Exposição por feature */}
+                        <div>
+                          <div className="text-xs font-medium text-foreground mb-2">% de cancelados D8-30 que tocaram cada feature antes de churnar</div>
+                          <div className="space-y-1.5">
+                            {(() => {
+                              const labels: Record<string, string> = {
+                                completedSession: 'Sessão 45min completa',
+                                startedJourney: 'Iniciou jornada',
+                                receivedOracleInsight: 'Insight do Oráculo',
+                                receivedTrialInsight: 'Insight inicial (trial)',
+                                receivedCapsule: 'Cápsula do tempo',
+                                receivedMonthlyLetter: 'Carta mensal',
+                                createdCommitment: 'Criou compromisso',
+                                hasThemes: 'Temas detectados',
+                              };
+                              return Object.entries(churnDiag.byFeatureExposure)
+                                .sort((a, b) => b[1].pct - a[1].pct)
+                                .map(([key, v]) => (
+                                  <div key={key} className="flex items-center gap-2">
+                                    <div className="text-xs text-muted-foreground w-44 shrink-0">{labels[key] || key}</div>
+                                    <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                                      <div className="h-full bg-primary" style={{ width: `${Math.min(100, v.pct)}%` }} />
+                                    </div>
+                                    <div className="text-[11px] text-muted-foreground w-20 text-right tabular-nums">
+                                      {v.count} <span className="text-muted-foreground/70">({v.pct.toFixed(1)}%)</span>
+                                    </div>
+                                  </div>
+                                ));
+                            })()}
+                          </div>
+                        </div>
+
+                        {/* Volume de engajamento */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                          <div className="border rounded-md p-3">
+                            <div className="text-[11px] text-muted-foreground">Msgs até churn (média)</div>
+                            <div className="text-lg font-bold">{churnDiag.engagementVolume.avgMessagesUntilChurn}</div>
+                          </div>
+                          <div className="border rounded-md p-3">
+                            <div className="text-[11px] text-muted-foreground">Msgs até churn (mediana)</div>
+                            <div className="text-lg font-bold">{churnDiag.engagementVolume.medianMessagesUntilChurn}</div>
+                          </div>
+                          <div className="border rounded-md p-3">
+                            <div className="text-[11px] text-muted-foreground">Dias ativos (média)</div>
+                            <div className="text-lg font-bold">{churnDiag.engagementVolume.avgActiveDaysUntilChurn}</div>
+                          </div>
+                          <div className="border rounded-md p-3">
+                            <div className="text-[11px] text-muted-foreground">Silent churners</div>
+                            <div className="text-lg font-bold">{churnDiag.engagementVolume.silentChurners}</div>
+                            <div className="text-[10px] text-muted-foreground/80 italic">cancelaram com 0 msgs</div>
+                          </div>
+                        </div>
+
+                        {/* Histograma D8-D30 */}
+                        <div>
+                          <div className="text-xs font-medium text-foreground mb-2">Em qual dia cancelaram (D8 → D30)</div>
+                          {(() => {
+                            const days = Array.from({ length: 23 }, (_, i) => i + 8);
+                            const max = Math.max(1, ...days.map(d => churnDiag.cancelDayHistogram[String(d)] || 0));
+                            return (
+                              <div className="flex items-end gap-1 h-24">
+                                {days.map(d => {
+                                  const v = churnDiag.cancelDayHistogram[String(d)] || 0;
+                                  const h = (v / max) * 100;
+                                  return (
+                                    <div key={d} className="flex-1 flex flex-col items-center gap-0.5" title={`D${d}: ${v} cancelamento(s)`}>
+                                      <div className="w-full bg-primary/70 rounded-t" style={{ height: `${h}%`, minHeight: v > 0 ? 2 : 0 }} />
+                                      <div className="text-[9px] text-muted-foreground">{d}</div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })()}
+                        </div>
+
+                        {/* Top razões */}
+                        {churnDiag.topReasons.length > 0 && (
+                          <div>
+                            <div className="text-xs font-medium text-foreground mb-2">Razões declaradas no cancelamento</div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {churnDiag.topReasons.slice(0, 8).map(({ reason, count }) => (
+                                <span key={reason} className="text-[10px] px-2 py-0.5 rounded-full bg-background border">
+                                  <strong>{count}</strong> · {reason}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        <p className="text-[11px] text-muted-foreground">
+                          📊 Base: {churnDiag.totalCanceled8_30d} cancelamentos D8-30d em {churnDiag.totalCanceledInWindow} cancelamentos totais nos últimos {churnDiag.windowDays} dias.
+                        </p>
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
 
                 {/* MRR breakdown by plan */}
                 {metrics.mrrBreakdown.length > 0 && (
