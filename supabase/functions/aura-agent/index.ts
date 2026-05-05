@@ -6267,8 +6267,15 @@ Exemplo com 4 sessões:
         weekday: scheduledAt.getDay()
       });
       
-      // Validar que é no futuro
-      if (scheduledAt > new Date()) {
+      // Validar que é no futuro, com tolerância curta para "agora".
+      // A Aura agenda em precisão de minuto; se ela emitir o minuto atual,
+      // o timestamp pode parecer alguns segundos no passado.
+      const now = new Date();
+      const minutesUntilScheduled = (scheduledAt.getTime() - now.getTime()) / 60000;
+      const canCreateSession = minutesUntilScheduled >= -2;
+      const shouldPrearmImmediately = minutesUntilScheduled <= 5 && minutesUntilScheduled >= -2;
+
+      if (canCreateSession) {
         const { data: newSession, error: sessionError } = await supabase
           .from('sessions')
           .insert({
@@ -6284,6 +6291,17 @@ Exemplo com 4 sessões:
         
         if (newSession) {
           console.log('📅 Session scheduled via AURA:', newSession.id, 'at', scheduledAt.toISOString());
+
+          // Sessões marcadas para "agora" entram no mesmo fluxo livre já usado
+          // por confirmações: a próxima mensagem do usuário dispara o handler
+          // [SESSION_PREARM] e inicia a sessão, sem depender de template Meta.
+          if (shouldPrearmImmediately && profile.id) {
+            await supabase
+              .from('profiles')
+              .update({ pending_insight: `[SESSION_PREARM]${newSession.id}` })
+              .eq('id', profile.id);
+            console.log(`🎯 [SESSION_PREARM] Sessão ${newSession.id} pré-armada via agendamento imediato da Aura`);
+          }
         } else if (sessionError) {
           console.error('❌ Error scheduling session:', sessionError);
         }
