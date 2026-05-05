@@ -11,8 +11,8 @@ const corsHeaders = {
 
 // Plan configurations
 const PLAN_CONFIGS: Record<string, { sessions: number; dailyMessageTarget: number }> = {
-  essencial: { sessions: 0, dailyMessageTarget: 20 },
-  mensal: { sessions: 0, dailyMessageTarget: 20 },  // Alias para essencial
+  essencial: { sessions: 1, dailyMessageTarget: 20 },
+  mensal: { sessions: 1, dailyMessageTarget: 20 },  // Alias para essencial
   direcao: { sessions: 4, dailyMessageTarget: 0 },
   transformacao: { sessions: 8, dailyMessageTarget: 0 },
 };
