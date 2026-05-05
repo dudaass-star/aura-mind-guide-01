@@ -5629,6 +5629,18 @@ INSTRUÇÃO:
 4. Use [MODO_AUDIO] no início da resposta para enviar também um áudio de boas-vindas
 5. No áudio, dê as boas-vindas de forma breve e carinhosa (NÃO repita os links no áudio)`;
 
+        // Marca para convidar à 1ª sessão na PRÓXIMA mensagem do usuário (D0 fishing).
+        // Ver mem://features/sessions/first-session-invite-d0
+        try {
+          await supabase
+            .from('profiles')
+            .update({ pending_first_session_invite: true })
+            .eq('id', profile.id);
+          console.log('🎯 pending_first_session_invite=true (próxima msg dispara convite à 1ª sessão)');
+        } catch (flagErr) {
+          console.warn('⚠️ Falha ao marcar pending_first_session_invite:', flagErr);
+        }
+
       } else if (isWeeklyReport) {
         // WEEKLY REPORT: User clicked "Ver meu resumo" on the template
         const reportContent = profile.pending_insight.replace('[WEEKLY_REPORT]', '');
