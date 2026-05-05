@@ -104,16 +104,60 @@ Deno.serve(async (req) => {
     const windowStart = new Date(now.getTime() - windowDays * 24 * 60 * 60 * 1000).toISOString();
 
     // ===== 1) Cancelamentos na janela =====
-    const cancelEvents = await fetchAllPaginated(supabase, 'cancellation_feedback', 'user_id, created_at, reason, action_taken', [
+    // Nota: cancellation_feedback frequentemente vem com user_id NULL e
+    // apenas o telefone preenchido (sem prefixo "55"). Resolvemos o user_id
+    // por telefone via profiles.phone (que armazena com prefixo "55").
+    const cancelEvents = await fetchAllPaginated(supabase, 'cancellation_feedback', 'user_id, phone, created_at, reason, action_taken', [
       { column: 'action_taken', op: 'eq', value: 'canceled' },
       { column: 'created_at', op: 'gte', value: windowStart },
-      { column: 'user_id', op: 'not.is', value: null },
     ]);
+
+    // Coleta telefones que precisam ser resolvidos
+    const phonesToResolve = new Set<string>();
+    for (const c of cancelEvents) {
+      if (!c.user_id && c.phone) {
+        const raw = String(c.phone).replace(/\D/g, '');
+        if (raw) phonesToResolve.add(raw);
+      }
+    }
+
+    // Resolve telefones -> user_id via profiles. profiles.phone tipicamente
+    // tem formato 55 + DDD + número; o cf.phone vem sem o "55". Tentamos
+    // ambos: prefixado e sufixo-match.
+    const phoneToUserId = new Map<string, string>();
+    if (phonesToResolve.size > 0) {
+      const phoneList = Array.from(phonesToResolve);
+      const candidates = new Set<string>();
+      for (const p of phoneList) {
+        candidates.add(p);
+        candidates.add('55' + p);
+      }
+      const candArr = Array.from(candidates);
+      for (let i = 0; i < candArr.length; i += 200) {
+        const chunk = candArr.slice(i, i + 200);
+        const { data } = await supabase
+          .from('profiles')
+          .select('user_id, phone')
+          .in('phone', chunk);
+        if (data) {
+          for (const r of data as { user_id: string; phone: string }[]) {
+            const norm = String(r.phone).replace(/\D/g, '');
+            phoneToUserId.set(norm, r.user_id);
+            if (norm.startsWith('55')) phoneToUserId.set(norm.slice(2), r.user_id);
+          }
+        }
+      }
+    }
 
     // Pega o cancelamento mais recente por user
     const cancelByUser = new Map<string, { canceled_at: string; reason: string }>();
     for (const c of cancelEvents) {
-      const uid = c.user_id as string;
+      let uid = c.user_id as string | null;
+      if (!uid && c.phone) {
+        const raw = String(c.phone).replace(/\D/g, '');
+        uid = phoneToUserId.get(raw) || phoneToUserId.get('55' + raw) || null;
+      }
+      if (!uid) continue;
       const ts = c.created_at as string;
       const existing = cancelByUser.get(uid);
       if (!existing || ts > existing.canceled_at) {
