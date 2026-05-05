@@ -18,6 +18,11 @@ const PLAN_NAMES: Record<string, string> = {
 };
 
 // Sessions per plan
+// Sessões/mês — para flag `needs_schedule_setup` no signup.
+// Essencial fica 0 de propósito: a 1ª sessão dele é coberta pelo convite D0
+// (`pending_first_session_invite`), então não setamos `needs_schedule_setup`
+// aqui pra evitar duplicação de prompts. A partir do 2º mês, o cron
+// `monthly-schedule-renewal` ativa a flag normalmente.
 const PLAN_SESSIONS: Record<string, number> = {
   essencial: 0,
   direcao: 4,

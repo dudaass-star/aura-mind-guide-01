@@ -28,7 +28,7 @@ Deno.serve(async (req) => {
     const { data: users, error } = await supabase
       .from('profiles')
       .select('*')
-      .in('plan', ['direcao', 'transformacao'])
+      .in('plan', ['essencial', 'mensal', 'direcao', 'transformacao'])
       .eq('status', 'active');
 
     if (error) {
@@ -50,7 +50,9 @@ Deno.serve(async (req) => {
 
     for (const user of users || []) {
       try {
-        const sessionsCount = user.plan === 'transformacao' ? 8 : 4;
+        const sessionsCount =
+          user.plan === 'transformacao' ? 8 :
+          user.plan === 'direcao' ? 4 : 1;
 
         // Reset session counter and trigger schedule setup
         const { error: updateError } = await supabase
@@ -73,8 +75,16 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // Send message prompting schedule setup
-        const message = `Oi, ${user.name}! 🌟
+        // Mensagem adaptada por plano (Essencial = 1 sessão; demais = múltiplas)
+        const message = sessionsCount === 1
+          ? `Oi, ${user.name}! 🌟
+
+Começamos ${currentMonth} e sua sessão do mês tá disponível!
+
+São 45 minutos só nossos pra ir mais fundo. Me conta: qual dia e horário funciona melhor pra você?
+
+Por exemplo: "quinta às 19h" ou "domingo às 20h"`
+          : `Oi, ${user.name}! 🌟
 
 Começamos ${currentMonth} e suas ${sessionsCount} sessões do mês estão disponíveis!
 
