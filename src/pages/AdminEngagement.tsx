@@ -183,6 +183,27 @@ interface DunningAttempt {
   created_at: string;
 }
 
+interface ChurnDiagnosis {
+  windowDays: number;
+  totalCanceledInWindow: number;
+  totalCanceled8_30d: number;
+  byFeatureExposure: Record<string, { count: number; pct: number }>;
+  engagementVolume: {
+    avgMessagesUntilChurn: number;
+    medianMessagesUntilChurn: number;
+    avgActiveDaysUntilChurn: number;
+    silentChurners: number;
+  };
+  bySegment: {
+    naoExperimentou: { count: number; pct: number };
+    experimentouParcial: { count: number; pct: number };
+    experimentouMuito: { count: number; pct: number };
+  };
+  cancelDayHistogram: Record<string, number>;
+  topReasons: { reason: string; count: number }[];
+  verdict: 'exposure_problem' | 'fit_problem' | 'mixed' | 'insufficient_data';
+}
+
 export default function AdminEngagement() {
   const { isLoading, isAdmin, redirectIfNotAdmin } = useAdminAuth();
   const [metrics, setMetrics] = useState<Metrics | null>(null);
