@@ -1,0 +1,1 @@
+UPDATE public.plan_configs SET sessions_per_month = 1, session_duration_minutes = 45 WHERE plan_id = 'essencial';
