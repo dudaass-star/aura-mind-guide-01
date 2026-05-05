@@ -5708,6 +5708,53 @@ INSTRUÇÃO:
     }
 
     // ========================================================================
+    // CONVITE À 1ª SESSÃO (D0) — fisga o usuário no início do trial de 7 dias
+    // ========================================================================
+    // Disparado pela flag `pending_first_session_invite` (setada após entrega do WELCOME).
+    // Não dispara se: já existe sessão ativa, pré-arme pendente ou já há sessão agendada futura.
+    // A Aura usa o fluxo padrão: emite [AGENDAR_SESSAO:<datetime>] → backend cria sessão →
+    // [SESSION_PREARM] ativa início imediato (ver mem://features/session-prearm-flow).
+    if (profile?.pending_first_session_invite && !profile?.current_session_id) {
+      console.log(`🎯 Injetando convite à 1ª sessão (D0) para user ${profile.user_id}`);
+
+      // Limpa a flag imediatamente (best-effort) para não repetir em próximas mensagens
+      try {
+        await supabase
+          .from('profiles')
+          .update({ pending_first_session_invite: false })
+          .eq('id', profile.id);
+      } catch (clearErr) {
+        console.warn('⚠️ Falha ao limpar pending_first_session_invite:', clearErr);
+      }
+
+      // Calcula "agora arredondado" em BRT para o exemplo de [AGENDAR_SESSAO]
+      const nowBrt = new Date(Date.now() - 3 * 60 * 60 * 1000);
+      const ymd = nowBrt.toISOString().slice(0, 10);
+      const hh = String(nowBrt.getUTCHours()).padStart(2, '0');
+      const mm = String(nowBrt.getUTCMinutes()).padStart(2, '0');
+      const exampleNow = `${ymd} ${hh}:${mm}`;
+
+      dynamicContext += `\n\n🎯 CONVITE À 1ª SESSÃO (PRIMEIRA RESPOSTA DO USUÁRIO):
+Esta é a PRIMEIRA mensagem real do usuário depois do WELCOME. Antes de qualquer mapeamento ou conversa longa, **convide-o agora para uma sessão de 45 minutos com tema livre** — ele decide o que trazer.
+
+POR QUÊ: o trial é de 7 dias. A sessão é o produto-âncora. Fisgar com valor real no D0 multiplica retenção.
+
+COMO CONDUZIR:
+1. Acolha brevemente o que ele acabou de dizer (1-2 frases, sem mergulhar fundo ainda).
+2. Apresente a sessão como o espaço principal: 45 min, ritmo seu, tema livre, você conduz com presença.
+3. Convide para começar **agora** — se ele topar, emita ao final da resposta a tag:
+   [AGENDAR_SESSAO:${exampleNow}]
+   (use o horário atual ou alguns minutos à frente; o backend vai criar e ativar a sessão automaticamente)
+4. Se ele preferir outro horário, faça uma pergunta aberta ("quando faz sentido pra você?") e quando ele responder com data/hora, emita [AGENDAR_SESSAO:YYYY-MM-DD HH:MM] no formato BRT.
+5. Se ele recusar ou desconversar, NÃO insista — siga o fio dele com presença, e a sessão vira convite natural mais à frente.
+
+IMPORTANTE:
+- NÃO faça onboarding/mapeamento longo agora. A sessão É o espaço de exploração.
+- Tom: convite leve e claro, não venda. Você está oferecendo algo valioso.
+- Sem [MODO_AUDIO] obrigatório — use só se fizer sentido emocional.`;
+    }
+
+    // ========================================================================
     // CONTEXTO DE INTERRUPÇÃO - Conteúdo pendente de resposta anterior
     // ========================================================================
     if (pending_content && pending_content.trim()) {
