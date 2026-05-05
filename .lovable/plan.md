@@ -1,96 +1,128 @@
-# Encerramento de sessão — micro-agent dedicado `session-extractor`
+## Objetivo
 
-## Confirmação: SIM, novo micro-agent
+Construir **apenas o diagnóstico** de churn precoce (D8-D30). Sem antecipar plano de ação. Vamos ler os números reais primeiro e decidir baseado neles.
 
-Será criada **uma nova edge function** chamada `session-extractor`, totalmente separada do `aura-agent`. Ela é a única responsável por extrair `session_summary`, `key_insights` e `commitments` de uma sessão encerrada.
+## Hipótese a validar
 
-Isso segue o padrão já consolidado no projeto (memória `Workflow agêntico`: "Main agent + Flash-lite extractor + async analysis") e usa o mesmo mecanismo `EdgeRuntime.waitUntil` que o `aura-agent` já usa nas linhas 7427-7441 para o micro-agent atual e o post-analysis.
+Dos usuários que cancelaram entre D8 e D30, **quantos efetivamente experimentaram** o arsenal de retenção que já existe (jornadas, meditações, sessões 45min, insights, cápsula, relatório semanal/mensal, portal)?
 
-## Quem faz isso hoje (problema)
+- Se a maioria **não experimentou** → problema é timing/exposição.
+- Se a maioria **experimentou e ainda assim cancelou** → problema é fit do produto.
 
-- **`aura-agent/index.ts` linhas ~6517-6688** faz a extração inline no mesmo handler que respondeu o usuário.
-- Usa **Gemini 2.5 Pro** (caro, lento) com **JSON puro** (frágil, parse manual com regex).
-- Loop de 3 retries; se todas falharem, grava `completed` com `summary=""` e `commitments=[]`.
-- Bloqueia a resposta do `aura-agent` (até ~6s extras) e compete por contexto/cache.
+## Entregáveis
 
-**Evidência no banco** (últimos 14 dias): das 11 sessões `completed`, **só 1** tem `commitments`; existe sessão `completed` com summary vazio gerando warning no `session-reminder` há dias.
+### 1. Edge function `admin-churn-diagnosis` (read-only, admin-only)
 
-## Arquitetura nova
+Padrão idêntico ao `admin-engagement-metrics`:
+- Validação JWT via `getClaims()` + `has_role('admin')`.
+- CORS padrão.
+- Cache em memória 5 min com `forceRefresh`.
 
-```text
-[aura-agent] detecta [ENCERRAR_SESSAO]
-    │
-    ├─► marca session=completed (sem summary ainda)
-    ├─► limpa profile.current_session_id
-    ├─► envia despedida ao usuário (resposta normal)
-    └─► EdgeRuntime.waitUntil(invoke('session-extractor', {session_id}))
-              │
-              ▼
-    [session-extractor] (novo micro-agent)
-        - lê mensagens da sessão direto do DB
-        - chama Gemini 2.5 Flash via Lovable AI Gateway
-        - usa TOOL CALLING (JSON Schema) — sem parse manual
-        - grava session_summary, key_insights, commitments
+**Input:** `{ windowDays?: number }` (default 60, máx 180).
+
+**Lógica:**
+
+1. Buscar todos os perfis com `cancellation_feedback.action_taken = 'canceled'` na janela.
+2. Calcular `lifetime_days = canceled_at - created_at`. Filtrar `lifetime_days BETWEEN 8 AND 30`.
+3. Para cada perfil cancelado, contar (lendo direto das tabelas existentes):
+
+| Sinal | Tabela / regra |
+|---|---|
+| Total mensagens user-role | `messages where role='user'` |
+| Dias ativos com ≥1 msg | `count(distinct date(created_at))` em `messages` |
+| Sessões iniciadas | `sessions where status in ('active','completed')` |
+| Sessões completas | `sessions where status='completed' AND ended_at not null` |
+| Sessões com summary real | `sessions where session_summary not null` |
+| Jornada iniciada | `profiles.current_journey_id not null` OR `current_episode > 0` |
+| Episódios consumidos | `profiles.current_episode` |
+| Meditação recebida | indireto via `messages` contendo URL de `meditation_audios` (busca por padrão de URL) |
+| Insight Oráculo | `profiles.last_proactive_insight_at not null` (na janela de vida) |
+| Insight inicial trial | `profiles.trial_insight_sent_at not null` |
+| Cápsula recebida | `profiles.awaiting_time_capsule` ou msg com `pending_capsule_audio_url` consumido |
+| Carta mensal recebida | `monthly_letters where user_id=X AND sent_at not null` |
+| Relatório mensal gerado | `monthly_reports where user_id=X` |
+| Check-in respondido | `profiles.last_checkin_sent_at not null` (proxy) |
+| Compromissos criados | `commitments where user_id=X` |
+| Temas detectados | `session_themes` |
+
+4. Classificar cada cancelado em segmento:
+   - **Não experimentou** (0-1 features tocadas)
+   - **Experimentou parcial** (2-3)
+   - **Experimentou muito** (4+)
+
+5. Agregados de saída:
+
+```json
+{
+  "windowDays": 60,
+  "totalCanceled8_30d": 43,
+  "byFeatureExposure": {
+    "completedSession":      { "count": 5,  "pct": 11.6 },
+    "startedJourney":        { "count": 12, "pct": 27.9 },
+    "receivedMeditation":    { "count": 3,  "pct": 7.0  },
+    "receivedOracleInsight": { "count": 8,  "pct": 18.6 },
+    "receivedCapsule":       { "count": 1,  "pct": 2.3  },
+    "receivedMonthlyLetter": { "count": 0,  "pct": 0    },
+    "createdCommitment":     { "count": 4,  "pct": 9.3  }
+  },
+  "engagementVolume": {
+    "avgMessagesUntilChurn": 38,
+    "medianMessagesUntilChurn": 22,
+    "avgActiveDaysUntilChurn": 6.4,
+    "silentChurners": 3
+  },
+  "bySegment": {
+    "naoExperimentou": { "count": 28, "pct": 65.1 },
+    "experimentouParcial": { "count": 12, "pct": 27.9 },
+    "experimentouMuito": { "count": 3, "pct": 7.0 }
+  },
+  "cancelDayHistogram": { "8":4, "9":7, "10":5, "11":3, ..., "30":1 },
+  "topReasons": [
+    { "reason": "too_expensive", "count": 18 },
+    { "reason": "missing_features", "count": 9 },
+    ...
+  ],
+  "verdict": "exposure_problem" // ou "fit_problem" ou "mixed"
+}
 ```
 
-## Detalhes do `session-extractor`
+**Lógica do `verdict`:**
+- `exposure_problem` se `naoExperimentou.pct > 60`
+- `fit_problem` se `experimentouMuito.pct > 40`
+- `mixed` caso contrário
 
-- **Endpoint**: `supabase/functions/session-extractor/index.ts`
-- **Input**: `{ session_id: string }`
-- **Modelo**: `google/gemini-2.5-flash` via Lovable AI Gateway (`https://ai.gateway.lovable.dev/v1/chat/completions`)
-- **Tool calling estruturado** com `tool_choice` forçado (esquema idêntico ao já validado em `session-reminder/generateSessionSummaryFallback` linhas 50-86):
-  ```text
-  parameters: { summary, key_insights[], commitments[{title}] }
-  ```
-- **Prompt clínico**: migra o prompt detalhado de extração de compromissos que está hoje em `aura-agent` linhas 6546-6605 (regras de aceite minimalista "💜", exemplos reais). Não muda uma vírgula da lógica clínica.
-- **Idempotente**: pode ser chamado N vezes pra mesma `session_id` — sempre sobrescreve os 3 campos.
-- **Sem retry-loop**: tool calling com schema garantido = funciona na primeira. Se falhar 1 vez, registra erro estruturado e o `session-reminder` re-dispara no próximo ciclo.
-- **`config.toml`**: adicionar bloco `[functions.session-extractor]` com `verify_jwt = false` (chamada interna).
+### 2. UI: novo card no `AdminEngagement.tsx`
 
-## Alterações nos arquivos existentes
+Card "🔍 Diagnóstico de Churn Precoce (D8-D30)" abaixo de Retenção por Coorte:
 
-### `aura-agent/index.ts`
-- Remove ~160 linhas (6520-6676): todo o loop de 3 tentativas com JSON puro.
-- Mantém: detecção de `[ENCERRAR_SESSAO]`, atualização de `status='completed'`, limpeza de `current_session_id`, lógica de `onboarding_completed`, agendamento de próxima sessão.
-- Adiciona: `supabase.functions.invoke('session-extractor', { body: { session_id } })` dentro do `EdgeRuntime.waitUntil` que já existe na linha 7436.
+- 3 buckets coloridos lado a lado (Não experimentou / Parcial / Muito) com count + %.
+- Lista vertical de exposição por feature (barra horizontal + count + %).
+- Sub-card "Volume de engajamento" (média/mediana de mensagens, dias ativos, "silent churners").
+- Histograma simples do dia do cancelamento (D8 a D30).
+- Box de veredicto colorido no topo:
+  - Verde: "Problema é fit. Features chegaram mas não seguraram. Considerar mudança de oferta."
+  - Amarelo: "Misto."
+  - Vermelho: "Problema é timing/exposição. Maioria cancelou sem testar o que existe."
+- Seletor de janela: 30/60/90/180 dias.
+- Botão "Atualizar" com `forceRefresh`.
 
-### `session-reminder/index.ts`
-- Remove a função local `generateSessionSummaryFallback` (linhas 13-119) — sua lógica vai pro micro-agent.
-- Linha 676 (`⚠️ No summary for completed session`): em vez de só logar, **invoca `session-extractor` uma vez** e segue. Isso quebra o loop infinito que vemos hoje na sessão `64a45e2b`.
-- Linha 571 (sessão abandonada com 5+ msgs): **invoca `session-extractor`** em vez da função local.
-- Linha 569-587 (sessões abandonadas com 2-4 msgs `no_show`): também invoca o extractor pra gerar summary real em vez de texto fixo de 60 chars.
+## Detalhes técnicos
 
-### Memória
-Atualiza `mem://technical/session/data-integrity-and-ratings`:
-- De: "Pro model 3-retry loop for JSON extraction"
-- Para: "Dedicated `session-extractor` micro-agent (Flash + tool calling), invoked async via waitUntil"
+- Função: `supabase/functions/admin-churn-diagnosis/index.ts`. Sem mudança no `config.toml`.
+- Sem migrations.
+- Sem novos secrets.
+- Custo: queries SQL paginadas via service role; nenhuma chamada de IA.
+- Performance esperada: 2-5s para janela de 60d (~50-100 perfis), mais rápido com cache.
 
-## Teste
+## Não faz parte deste escopo
 
-`supabase/functions/session-extractor/index_test.ts`: cria sessão fake com mensagens conhecidas (incluindo aceite "💜"), invoca o micro-agent, verifica que os 3 campos são populados e que `commitments.length >= 1` quando há aceite explícito.
+- Programa "Primeiros 15 Dias" — só será planejado **depois** que lermos o veredicto.
+- AURA Health — adiado.
+- Qualquer mudança em prompts, pricing ou jornadas existentes.
 
-## Arquivos afetados
+## O que vem depois
 
-```text
-NEW   supabase/functions/session-extractor/index.ts
-NEW   supabase/functions/session-extractor/index_test.ts
-EDIT  supabase/functions/aura-agent/index.ts          (remove ~160 linhas, adiciona 1 invoke)
-EDIT  supabase/functions/session-reminder/index.ts    (remove fallback local, 3 invokes)
-EDIT  supabase/config.toml                            (registra a nova função)
-EDIT  mem://technical/session/data-integrity-and-ratings
-```
-
-## Por que isso não precisa de fallback
-
-1. **Tool calling > JSON puro**: o schema é validado pelo provider Gemini. Não há "JSON quebrado".
-2. **Flash > Pro pra extração estruturada**: é o caso de uso ideal de Flash, alinhado ao roster da memória Core.
-3. **Fora do hot path**: se demorar 5s ou 50s, o usuário não percebe — já recebeu a despedida.
-4. **Auto-recuperação**: o `session-reminder` (que roda periodicamente) re-dispara para qualquer sessão `completed` ainda sem summary. Sem loop infinito, sem fallback genérico.
-
-## O que NÃO muda
-
-- Tags `[ENCERRAR_SESSAO]`, `[AGENDAR_SESSAO]`, `[REAGENDAR_SESSAO]` — contratos preservados.
-- Fase 1 (Limiares Clínicos) e Fase 2 (Postura Clínica).
-- Prompt clínico de extração de compromissos — migra inalterado.
-- Lógica de `no_show` vs `cancelled` vs `completed` no `session-reminder`.
-- Fluxo da despedida da Aura ao usuário.
+Roda 1x, lê o veredicto, e aí decidimos juntos:
+- Se "exposure_problem" → planejar antecipação determinística de entregas no D2-D14.
+- Se "fit_problem" → repensar oferta (talvez paywall pós-D7 mais flexível, ou mudar pricing).
+- Se "mixed" → ataque duplo, escopo menor.
