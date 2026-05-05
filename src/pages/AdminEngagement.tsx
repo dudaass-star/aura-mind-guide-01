@@ -285,6 +285,35 @@ export default function AdminEngagement() {
     if (isAdmin) fetchMetrics();
   }, [isAdmin, dateFrom, dateTo]);
 
+  // 🔍 Diagnóstico de Churn Precoce (D8-D30)
+  const fetchChurnDiagnosis = async (windowDays = churnWindowDays, forceRefresh = false) => {
+    setChurnDiagLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('No session');
+      const { data, error } = await supabase.functions.invoke('admin-churn-diagnosis', {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        body: { windowDays, forceRefresh },
+      });
+      if (error) throw error;
+      setChurnDiag(data);
+    } catch (err) {
+      console.error('Error fetching churn diagnosis:', err);
+      toast({
+        title: 'Erro ao carregar diagnóstico de churn',
+        description: err instanceof Error ? err.message : 'Erro desconhecido',
+        variant: 'destructive',
+      });
+    } finally {
+      setChurnDiagLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isAdmin) fetchChurnDiagnosis(churnWindowDays);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin, churnWindowDays]);
+
   const fetchRecoverySessions = async () => {
     try {
       const { data: abandoned, error } = await supabase
