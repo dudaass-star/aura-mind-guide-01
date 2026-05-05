@@ -5810,6 +5810,21 @@ REGRAS ABSOLUTAS:
 Se o usuário mencionar algo sobre "finalizar checkout" ou "upgrade", CONFIRME que ele já está no plano certo e ofereça ajuda para agendar a primeira sessão.`;
     }
 
+    // Essencial esgotou a sessão do mês → instrução de upsell suave (Direção/Transformação)
+    if (userPlan === 'essencial' && planConfig.sessions > 0 && sessionsAvailable === 0 && !upgradePermBlocked) {
+      dynamicContext += `
+
+⚠️ COTA DE SESSÃO DO MÊS ESGOTADA (PLANO ESSENCIAL):
+O usuário já usou a sessão do mês incluída no plano Essencial. NÃO emita [AGENDAR_SESSAO] em hipótese alguma.
+
+SE ele pedir nova sessão / mais sessões agora:
+1. Reconheça com cuidado o desejo dele de ir mais fundo ("faz sentido você querer mais um espaço desses").
+2. Explique de forma honesta e curta: o Essencial inclui 1 sessão por mês, e a próxima abre no início do mês que vem.
+3. Ofereça naturalmente (sem pressão) o upgrade pra **Direção (4 sessões/mês)** ou **Transformação (8 sessões/mês)** como caminho pra ter mais sessões agora.
+4. Termine com pergunta aberta ("quer que eu te mande o link pra fazer o upgrade?"). NÃO mande link sem ele pedir.
+5. Respeite a regra de cooldown de upgrade — se ele recusar, não insista nessa conversa.`;
+    }
+
     // ========================================================================
     // CONTEXTO DE CONFIGURAÇÃO DE AGENDA MENSAL
     // ========================================================================
