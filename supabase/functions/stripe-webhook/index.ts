@@ -19,7 +19,7 @@ const PLAN_NAMES: Record<string, string> = {
 
 // Sessions per plan
 const PLAN_SESSIONS: Record<string, number> = {
-  essencial: 0,
+  essencial: 1,
   direcao: 4,
   transformacao: 8,
 };
