@@ -985,8 +985,9 @@ export default function AdminEngagement() {
                       <div className="text-sm text-muted-foreground">Carregando diagnóstico…</div>
                     )}
                     {churnDiag && churnDiag.totalCanceled8_30d === 0 && (
-                      <div className="text-sm text-muted-foreground p-3 bg-muted/30 rounded-md">
-                        Sem cancelamentos no intervalo D8-D30 nos últimos {churnDiag.windowDays} dias ({churnDiag.totalCanceledInWindow} cancelamentos no total na janela). Aumente a janela ou aguarde mais dados.
+                      <div className="text-sm text-muted-foreground p-3 bg-muted/30 rounded-md space-y-1">
+                        <p>Sem cancelamentos analisáveis no intervalo D7-D30 nos últimos {churnDiag.windowDays} dias.</p>
+                        <p className="text-[11px]">Eventos brutos: {churnDiag.totalCancelEventsRaw ?? churnDiag.totalCanceledInWindow} · Profiles deletados: {churnDiag.excludedDeletedProfile ?? 0} · Fora do range: {churnDiag.excludedOutOfRange ?? 0}</p>
                       </div>
                     )}
                     {churnDiag && churnDiag.totalCanceled8_30d > 0 && (
