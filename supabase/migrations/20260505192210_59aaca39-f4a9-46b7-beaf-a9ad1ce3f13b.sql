@@ -1,0 +1,1 @@
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS pending_first_session_invite boolean NOT NULL DEFAULT false;
