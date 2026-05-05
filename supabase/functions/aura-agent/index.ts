@@ -4304,6 +4304,9 @@ serve(async (req) => {
               supabase.from('profiles').update({
                 pending_insight: null,
                 last_content_sent_at: new Date().toISOString(),
+                // Após entregar o WELCOME, arma convite à 1ª sessão para a próxima msg do usuário.
+                // Ver mem://features/sessions/first-session-invite-d0
+                ...(isWelcomePending ? { pending_first_session_invite: true } : {}),
               }).eq('id', profile.id),
               supabase.from('aura_response_state').update({
                 is_responding: false,
