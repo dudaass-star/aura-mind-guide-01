@@ -187,6 +187,10 @@ export default function AdminEngagement() {
   const { isLoading, isAdmin, redirectIfNotAdmin } = useAdminAuth();
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [loading, setLoading] = useState(true);
+  // 🔍 Diagnóstico de Churn Precoce (D8-D30)
+  const [churnDiag, setChurnDiag] = useState<ChurnDiagnosis | null>(null);
+  const [churnDiagLoading, setChurnDiagLoading] = useState(false);
+  const [churnWindowDays, setChurnWindowDays] = useState<number>(60);
   const [blasting, setBlasting] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
   const [dateFrom, setDateFrom] = useState<Date>(new Date());
