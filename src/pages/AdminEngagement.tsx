@@ -187,6 +187,9 @@ interface ChurnDiagnosis {
   windowDays: number;
   totalCanceledInWindow: number;
   totalCanceled8_30d: number;
+  totalCancelEventsRaw?: number;
+  excludedDeletedProfile?: number;
+  excludedOutOfRange?: number;
   byFeatureExposure: Record<string, { count: number; pct: number }>;
   engagementVolume: {
     avgMessagesUntilChurn: number;
@@ -982,8 +985,9 @@ export default function AdminEngagement() {
                       <div className="text-sm text-muted-foreground">Carregando diagnóstico…</div>
                     )}
                     {churnDiag && churnDiag.totalCanceled8_30d === 0 && (
-                      <div className="text-sm text-muted-foreground p-3 bg-muted/30 rounded-md">
-                        Sem cancelamentos no intervalo D8-D30 nos últimos {churnDiag.windowDays} dias ({churnDiag.totalCanceledInWindow} cancelamentos no total na janela). Aumente a janela ou aguarde mais dados.
+                      <div className="text-sm text-muted-foreground p-3 bg-muted/30 rounded-md space-y-1">
+                        <p>Sem cancelamentos analisáveis no intervalo D7-D30 nos últimos {churnDiag.windowDays} dias.</p>
+                        <p className="text-[11px]">Eventos brutos: {churnDiag.totalCancelEventsRaw ?? churnDiag.totalCanceledInWindow} · Profiles deletados: {churnDiag.excludedDeletedProfile ?? 0} · Fora do range: {churnDiag.excludedOutOfRange ?? 0}</p>
                       </div>
                     )}
                     {churnDiag && churnDiag.totalCanceled8_30d > 0 && (
@@ -1115,9 +1119,15 @@ export default function AdminEngagement() {
                           </div>
                         )}
 
-                        <p className="text-[11px] text-muted-foreground">
-                          📊 Base: {churnDiag.totalCanceled8_30d} cancelamentos D8-30d em {churnDiag.totalCanceledInWindow} cancelamentos totais nos últimos {churnDiag.windowDays} dias.
-                        </p>
+                        <div className="text-[11px] text-muted-foreground space-y-1">
+                          <p>📊 Base analisada: <strong>{churnDiag.totalCanceled8_30d}</strong> cancelamentos D7-30d (com profile íntegro) — de <strong>{churnDiag.totalCancelEventsRaw ?? churnDiag.totalCanceledInWindow}</strong> eventos brutos nos últimos {churnDiag.windowDays} dias.</p>
+                          {(churnDiag.excludedDeletedProfile ?? 0) > 0 && (
+                            <p>⚠️ {churnDiag.excludedDeletedProfile} excluídos: profile já deletado pelo cleanup de inativos (sem como medir lifetime ou exposição).</p>
+                          )}
+                          {(churnDiag.excludedOutOfRange ?? 0) > 0 && (
+                            <p>↳ {churnDiag.excludedOutOfRange} fora da janela D7-D30 (cancelaram antes ou depois).</p>
+                          )}
+                        </div>
                       </>
                     )}
                   </CardContent>

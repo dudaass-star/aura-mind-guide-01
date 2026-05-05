@@ -207,15 +207,22 @@ Deno.serve(async (req) => {
     }
     const d8_30: CancelRecord[] = [];
     let totalInWindow = 0;
+    let excludedDeletedProfile = 0;
+    let excludedOutOfRange = 0;
+    // Total bruto de eventos de cancelamento na janela temporal
+    // (independente de termos resolvido o profile)
+    const totalCancelEventsRaw = cancelEvents.length;
     for (const [uid, c] of cancelByUser) {
       const p = profileByUser.get(uid);
-      if (!p) continue;
+      if (!p) { excludedDeletedProfile++; continue; }
       const created = p.created_at as string;
-      if (!created) continue;
+      if (!created) { excludedDeletedProfile++; continue; }
       const lifetimeMs = new Date(c.canceled_at).getTime() - new Date(created).getTime();
       const lifetimeDays = lifetimeMs / (1000 * 60 * 60 * 24);
       totalInWindow++;
-      if (lifetimeDays >= 8 && lifetimeDays <= 30) {
+      // Janela ampliada para D7-D30: cancelamentos no D7 (fim do trial pago)
+      // são parte central do problema de retenção.
+      if (lifetimeDays >= 7 && lifetimeDays <= 30) {
         d8_30.push({
           user_id: uid,
           created_at: created,
@@ -223,14 +230,21 @@ Deno.serve(async (req) => {
           lifetime_days: Math.round(lifetimeDays),
           reason: c.reason,
         });
+      } else {
+        excludedOutOfRange++;
       }
     }
+    // Cancelamentos sem user_id resolvido (telefone órfão / profile deletado)
+    const unresolvedCancels = totalCancelEventsRaw - cancelByUser.size - excludedDeletedProfile;
 
     if (d8_30.length === 0) {
       const empty = JSON.stringify({
         windowDays,
         totalCanceled8_30d: 0,
         totalCanceledInWindow: totalInWindow,
+        totalCancelEventsRaw,
+        excludedDeletedProfile: excludedDeletedProfile + Math.max(0, unresolvedCancels),
+        excludedOutOfRange,
         byFeatureExposure: {},
         engagementVolume: { avgMessagesUntilChurn: 0, medianMessagesUntilChurn: 0, avgActiveDaysUntilChurn: 0, silentChurners: 0 },
         bySegment: { naoExperimentou: { count: 0, pct: 0 }, experimentouParcial: { count: 0, pct: 0 }, experimentouMuito: { count: 0, pct: 0 } },
@@ -416,6 +430,9 @@ Deno.serve(async (req) => {
       windowDays,
       totalCanceledInWindow: totalInWindow,
       totalCanceled8_30d: total,
+      totalCancelEventsRaw,
+      excludedDeletedProfile: excludedDeletedProfile + Math.max(0, unresolvedCancels),
+      excludedOutOfRange,
       byFeatureExposure,
       engagementVolume: {
         avgMessagesUntilChurn: avgMsgs,
