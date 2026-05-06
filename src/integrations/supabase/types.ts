@@ -171,6 +171,10 @@ export type Database = {
           recovery_last_error: string | null
           recovery_sent: boolean
           recovery_sent_at: string | null
+          recovery_stage: number
+          recovery_stage1_sent_at: string | null
+          recovery_stage2_sent_at: string | null
+          recovery_stage3_sent_at: string | null
           status: string
           stripe_session_id: string | null
         }
@@ -188,6 +192,10 @@ export type Database = {
           recovery_last_error?: string | null
           recovery_sent?: boolean
           recovery_sent_at?: string | null
+          recovery_stage?: number
+          recovery_stage1_sent_at?: string | null
+          recovery_stage2_sent_at?: string | null
+          recovery_stage3_sent_at?: string | null
           status?: string
           stripe_session_id?: string | null
         }
@@ -205,6 +213,10 @@ export type Database = {
           recovery_last_error?: string | null
           recovery_sent?: boolean
           recovery_sent_at?: string | null
+          recovery_stage?: number
+          recovery_stage1_sent_at?: string | null
+          recovery_stage2_sent_at?: string | null
+          recovery_stage3_sent_at?: string | null
           status?: string
           stripe_session_id?: string | null
         }
