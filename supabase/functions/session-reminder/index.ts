@@ -570,11 +570,15 @@ Se quiser remarcar uma nova sessão, é só me dizer!`;
     // Skip during quiet hours - will be processed next run
     // ========================================================================
     const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
+    // Filtramos por rating_requested=false (não por post_session_sent),
+    // porque o aura-agent agora envia o resumo imediatamente e marca
+    // post_session_sent=true. O envio do rating "1 a 5" continua sendo
+    // responsabilidade do session-reminder, 5 min após o término.
     const { data: completedSessions, error: errorCompleted } = isQuietHours ? { data: null, error: null } : await supabase
       .from('sessions')
-      .select(`id, user_id, session_summary, commitments, key_insights, ended_at`)
+      .select(`id, user_id, session_summary, commitments, key_insights, ended_at, post_session_sent`)
       .eq('status', 'completed')
-      .eq('post_session_sent', false)
+      .eq('rating_requested', false)
       .lte('ended_at', fiveMinutesAgo.toISOString());
 
     if (errorCompleted) {
@@ -656,15 +660,27 @@ Me conta durante a semana como está seu progresso! Estou aqui por você. ✨`;
         try {
           const cleanPhone = cleanPhoneNumber(profile.phone);
           const instanceConfig = await getInstanceConfigForUser(supabase, session.user_id);
-          const result = await sendProactive(cleanPhone, message, 'session_reminder', session.user_id);
 
-          if (result.success) {
-            // Only mark post_session_sent AFTER rating is also sent successfully
+          // Caminho feliz: aura-agent já enviou o resumo imediatamente.
+          // Aqui mandamos APENAS a pergunta de rating.
+          // Caminho fallback (post_session_sent=false): aura-agent falhou
+          // ou não enviou — mandamos resumo + rating.
+          let summarySent = session.post_session_sent === true;
+          if (!summarySent) {
+            const result = await sendProactive(cleanPhone, message, 'session_reminder', session.user_id);
+            if (!result.success) {
+              console.error(`❌ Failed to send post-session summary for session ${session.id}:`, result.error);
+              continue;
+            }
+            summarySent = true;
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          } else {
+            console.log(`ℹ️ Resumo já enviado pelo aura-agent para sessão ${session.id} — enviando apenas rating`);
+          }
+
+          {
             let ratingSuccess = false;
 
-            // Enviar pesquisa de satisfação após 2 segundos
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            
             const ratingMessage = `Antes de fechar, me conta rapidinho: ⭐
 
 *De 1 a 5, que nota você dá pra nossa sessão de hoje?*
@@ -709,8 +725,6 @@ Me conta durante a semana como está seu progresso! Estou aqui por você. ✨`;
             
             postSessionSent++;
             console.log(`✅ Post-session complete for session ${session.id} (rating: ${ratingSuccess})`);
-          } else {
-            console.error(`❌ Failed to send post-session summary for session ${session.id}:`, result.error);
           }
         } catch (sendError) {
           console.error(`❌ Error sending post-session summary for session ${session.id}:`, sendError);
