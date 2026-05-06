@@ -4660,12 +4660,31 @@ serve(async (req) => {
       }
       // CASO 4: Usuário explicitamente pediu para iniciar
       else if (wantsToStartSession(message)) {
-        shouldStartSession = true;
-        console.log('🚀 User explicitly wants to start scheduled session');
+        // GUARDA TEMPORAL: só permite início se estivermos dentro de 15 min
+        // do horário agendado (alinhado com a regra do [SESSION_PREARM]).
+        // Evita que frases triviais ("oi", "to aqui", "pronta") iniciem
+        // sessão muito antes da hora marcada.
+        if (diffMinutes <= 15) {
+          shouldStartSession = true;
+          console.log(`🚀 User explicitly wants to start scheduled session (diff=${diffMinutes.toFixed(1)}min)`);
+        } else {
+          console.log(`⏰ Ignorando wantsToStartSession — fora da janela T-15min (diff=${diffMinutes.toFixed(1)}min)`);
+        }
       }
     }
 
     // Executar início de sessão
+    if (shouldStartSession && pendingScheduledSession && profile) {
+      // GUARDA FINAL: trava de segurança caso algum path acima tenha
+      // setado shouldStartSession sem checar a janela temporal.
+      const scheduledTime = new Date(pendingScheduledSession.scheduled_at);
+      const diffMin = Math.abs(Date.now() - scheduledTime.getTime()) / 60000;
+      if (diffMin > 15 && !pendingScheduledSession.session_start_notified) {
+        console.warn(`🛑 BLOQUEADO início precoce de sessão ${pendingScheduledSession.id}: diff=${diffMin.toFixed(1)}min, notified=false`);
+        shouldStartSession = false;
+      }
+    }
+
     if (shouldStartSession && pendingScheduledSession && profile) {
       const now = new Date().toISOString();
       
