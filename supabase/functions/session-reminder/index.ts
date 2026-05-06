@@ -665,11 +665,11 @@ Me conta durante a semana como está seu progresso! Estou aqui por você. ✨`;
             // Enviar pesquisa de satisfação após 2 segundos
             await new Promise(resolve => setTimeout(resolve, 2000));
             
-            const ratingMessage = `Antes de terminar, me conta: 🌟
+            const ratingMessage = `Antes de fechar, me conta rapidinho: ⭐
 
-*De 0 a 10, como você se sente agora comparado a quando começamos a sessão?*
+*De 1 a 5, que nota você dá pra nossa sessão de hoje?*
 
-(Só o número tá ótimo! E se quiser me dizer o que mais gostou ou o que posso melhorar, adoraria ouvir! 💜)`;
+(Só o número tá ótimo! Se quiser comentar o que mais gostou ou o que posso melhorar, adoraria ouvir 💜)`;
 
             const ratingResult = await sendProactive(cleanPhone, ratingMessage, 'session_reminder', session.user_id);
             
