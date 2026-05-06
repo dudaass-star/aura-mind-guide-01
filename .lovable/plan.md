@@ -1,128 +1,68 @@
-## Objetivo
+# Correções: Rating pós-sessão + Sessões duplicadas
 
-Construir **apenas o diagnóstico** de churn precoce (D8-D30). Sem antecipar plano de ação. Vamos ler os números reais primeiro e decidir baseado neles.
+## Problema 1 — Rating de 1 a 5 nunca é enviado
 
-## Hipótese a validar
+**Causa raiz:** O `aura-agent` envia o resumo imediatamente ao encerrar a sessão e marca `post_session_sent = true`. O `session-reminder` filtra por `post_session_sent = false`, então **nunca processa essas sessões** e a pergunta "De 1 a 5..." não chega ao usuário. Confirmado nas 5 sessões de hoje (Fabiana, Luana, Jéssica, Suelly, Tamara) — nenhuma recebeu o rating.
 
-Dos usuários que cancelaram entre D8 e D30, **quantos efetivamente experimentaram** o arsenal de retenção que já existe (jornadas, meditações, sessões 45min, insights, cápsula, relatório semanal/mensal, portal)?
+**Correção (Opção C com fallback):**
 
-- Se a maioria **não experimentou** → problema é timing/exposição.
-- Se a maioria **experimentou e ainda assim cancelou** → problema é fit do produto.
+Em `supabase/functions/session-reminder/index.ts`:
 
-## Entregáveis
+1. **Trocar o filtro** da query de `completedSessions` (linha 573-578):
+   - Remover `.eq('post_session_sent', false)`
+   - Adicionar `.eq('rating_requested', false)`
+   - Selecionar também `post_session_sent` na query
+   - Manter `.lte('ended_at', fiveMinutesAgo)` para garantir o atraso de 5 min (tempo do session-extractor rodar)
 
-### 1. Edge function `admin-churn-diagnosis` (read-only, admin-only)
+2. **Lógica condicional de envio** (linhas 656-714):
+   - Se `session.post_session_sent === true` → Aura já mandou o resumo. Enviar **apenas** o `ratingMessage`.
+   - Se `session.post_session_sent === false` → fallback: Aura falhou. Enviar resumo + delay 2s + ratingMessage (fluxo atual).
+   - Em ambos os casos, ao final, marcar `rating_requested = true` e `post_session_sent = true`.
 
-Padrão idêntico ao `admin-engagement-metrics`:
-- Validação JWT via `getClaims()` + `has_role('admin')`.
-- CORS padrão.
-- Cache em memória 5 min com `forceRefresh`.
+3. **Manter** a criação dos `commitments` follow-up (linhas 680-697) só no caminho de fallback (quando o resumo é enviado pelo session-reminder), pois no caminho feliz isso já deve ser tratado em outro fluxo. Verificar se hoje a criação de commitments depende exclusivamente desse bloco — se sim, mover para fora do `if` e rodar sempre que `rating_requested` for marcado.
 
-**Input:** `{ windowDays?: number }` (default 60, máx 180).
+## Problema 2 — Sessões duplicadas (caso Luana)
 
-**Lógica:**
+**Causa raiz:** A Aura emitiu `[AGENDAR_SESSAO]` em duas mensagens consecutivas (14:14 e 14:18 BRT). O `aura-agent` (linha 6313) faz `INSERT` direto em `sessions` sem verificar duplicatas próximas. Resultado: duas sessões `scheduled` para a mesma usuária com 4 min de diferença, ambas iniciadas e concluídas em paralelo.
 
-1. Buscar todos os perfis com `cancellation_feedback.action_taken = 'canceled'` na janela.
-2. Calcular `lifetime_days = canceled_at - created_at`. Filtrar `lifetime_days BETWEEN 8 AND 30`.
-3. Para cada perfil cancelado, contar (lendo direto das tabelas existentes):
+**Correção em duas camadas:**
 
-| Sinal | Tabela / regra |
-|---|---|
-| Total mensagens user-role | `messages where role='user'` |
-| Dias ativos com ≥1 msg | `count(distinct date(created_at))` em `messages` |
-| Sessões iniciadas | `sessions where status in ('active','completed')` |
-| Sessões completas | `sessions where status='completed' AND ended_at not null` |
-| Sessões com summary real | `sessions where session_summary not null` |
-| Jornada iniciada | `profiles.current_journey_id not null` OR `current_episode > 0` |
-| Episódios consumidos | `profiles.current_episode` |
-| Meditação recebida | indireto via `messages` contendo URL de `meditation_audios` (busca por padrão de URL) |
-| Insight Oráculo | `profiles.last_proactive_insight_at not null` (na janela de vida) |
-| Insight inicial trial | `profiles.trial_insight_sent_at not null` |
-| Cápsula recebida | `profiles.awaiting_time_capsule` ou msg com `pending_capsule_audio_url` consumido |
-| Carta mensal recebida | `monthly_letters where user_id=X AND sent_at not null` |
-| Relatório mensal gerado | `monthly_reports where user_id=X` |
-| Check-in respondido | `profiles.last_checkin_sent_at not null` (proxy) |
-| Compromissos criados | `commitments where user_id=X` |
-| Temas detectados | `session_themes` |
+### Camada 1 — Guarda no código (`aura-agent`)
 
-4. Classificar cada cancelado em segmento:
-   - **Não experimentou** (0-1 features tocadas)
-   - **Experimentou parcial** (2-3)
-   - **Experimentou muito** (4+)
+Antes do `INSERT` em `sessions` (linha 6313 e linha 6450), adicionar verificação:
 
-5. Agregados de saída:
+- Buscar sessões existentes do usuário com `status IN ('scheduled', 'active')` cujo `scheduled_at` esteja dentro de **±30 minutos** do novo `scheduledAt`.
+- Se encontrar: logar warning, pular o INSERT e (no caso de [AGENDAR_SESSAO]) reusar a sessão existente para o `[SESSION_PREARM]` se aplicável.
 
-```json
-{
-  "windowDays": 60,
-  "totalCanceled8_30d": 43,
-  "byFeatureExposure": {
-    "completedSession":      { "count": 5,  "pct": 11.6 },
-    "startedJourney":        { "count": 12, "pct": 27.9 },
-    "receivedMeditation":    { "count": 3,  "pct": 7.0  },
-    "receivedOracleInsight": { "count": 8,  "pct": 18.6 },
-    "receivedCapsule":       { "count": 1,  "pct": 2.3  },
-    "receivedMonthlyLetter": { "count": 0,  "pct": 0    },
-    "createdCommitment":     { "count": 4,  "pct": 9.3  }
-  },
-  "engagementVolume": {
-    "avgMessagesUntilChurn": 38,
-    "medianMessagesUntilChurn": 22,
-    "avgActiveDaysUntilChurn": 6.4,
-    "silentChurners": 3
-  },
-  "bySegment": {
-    "naoExperimentou": { "count": 28, "pct": 65.1 },
-    "experimentouParcial": { "count": 12, "pct": 27.9 },
-    "experimentouMuito": { "count": 3, "pct": 7.0 }
-  },
-  "cancelDayHistogram": { "8":4, "9":7, "10":5, "11":3, ..., "30":1 },
-  "topReasons": [
-    { "reason": "too_expensive", "count": 18 },
-    { "reason": "missing_features", "count": 9 },
-    ...
-  ],
-  "verdict": "exposure_problem" // ou "fit_problem" ou "mixed"
-}
+Aplicar a mesma guarda no loop de `[CRIAR_AGENDA]` (linha 6450).
+
+### Camada 2 — Constraint no banco (defense-in-depth)
+
+Criar índice único parcial em `sessions`:
+
+```sql
+CREATE UNIQUE INDEX idx_sessions_no_duplicate_scheduled
+ON public.sessions (user_id, date_trunc('hour', scheduled_at))
+WHERE status IN ('scheduled', 'active');
 ```
 
-**Lógica do `verdict`:**
-- `exposure_problem` se `naoExperimentou.pct > 60`
-- `fit_problem` se `experimentouMuito.pct > 40`
-- `mixed` caso contrário
+Isso impede duas sessões agendadas/ativas para o mesmo usuário na mesma janela de hora. Se o INSERT colidir, o erro será capturado pelo bloco `if (!sessionError)` que já existe.
 
-### 2. UI: novo card no `AdminEngagement.tsx`
+> Nota: `date_trunc` em índice exige função `IMMUTABLE`. Caso o Postgres reclame, alternativa é gerar coluna `scheduled_at_hour` via `GENERATED ALWAYS AS (date_trunc('hour', scheduled_at)) STORED` e indexar nela.
 
-Card "🔍 Diagnóstico de Churn Precoce (D8-D30)" abaixo de Retenção por Coorte:
+## Arquivos afetados
 
-- 3 buckets coloridos lado a lado (Não experimentou / Parcial / Muito) com count + %.
-- Lista vertical de exposição por feature (barra horizontal + count + %).
-- Sub-card "Volume de engajamento" (média/mediana de mensagens, dias ativos, "silent churners").
-- Histograma simples do dia do cancelamento (D8 a D30).
-- Box de veredicto colorido no topo:
-  - Verde: "Problema é fit. Features chegaram mas não seguraram. Considerar mudança de oferta."
-  - Amarelo: "Misto."
-  - Vermelho: "Problema é timing/exposição. Maioria cancelou sem testar o que existe."
-- Seletor de janela: 30/60/90/180 dias.
-- Botão "Atualizar" com `forceRefresh`.
+- `supabase/functions/session-reminder/index.ts` — query e lógica condicional do post-session
+- `supabase/functions/aura-agent/index.ts` — guarda anti-duplicação nos dois pontos de INSERT
+- Nova migração SQL — índice único parcial em `sessions`
 
-## Detalhes técnicos
+## Validação pós-deploy
 
-- Função: `supabase/functions/admin-churn-diagnosis/index.ts`. Sem mudança no `config.toml`.
-- Sem migrations.
-- Sem novos secrets.
-- Custo: queries SQL paginadas via service role; nenhuma chamada de IA.
-- Performance esperada: 2-5s para janela de 60d (~50-100 perfis), mais rápido com cache.
+1. Aguardar próxima sessão real concluída → confirmar nos logs do `session-reminder` que o rating foi enviado.
+2. Confirmar no DB que `session_ratings` recebe nova entrada quando a usuária responder "1" a "5".
+3. Tentar agendar duas sessões manualmente próximas via Aura → confirmar que a segunda é bloqueada com warning.
 
-## Não faz parte deste escopo
+## Fora do escopo
 
-- Programa "Primeiros 15 Dias" — só será planejado **depois** que lermos o veredicto.
-- AURA Health — adiado.
-- Qualquer mudança em prompts, pricing ou jornadas existentes.
-
-## O que vem depois
-
-Roda 1x, lê o veredicto, e aí decidimos juntos:
-- Se "exposure_problem" → planejar antecipação determinística de entregas no D2-D14.
-- Se "fit_problem" → repensar oferta (talvez paywall pós-D7 mais flexível, ou mudar pricing).
-- Se "mixed" → ataque duplo, escopo menor.
+- Limpeza retroativa da sessão duplicada da Luana (pode ser feita manualmente depois se quiser).
+- Mudança no prompt da Aura para evitar emitir `[AGENDAR_SESSAO]` duas vezes — o fix de banco/código já elimina o sintoma.

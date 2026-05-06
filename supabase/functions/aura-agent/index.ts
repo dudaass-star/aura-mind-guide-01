@@ -6310,6 +6310,31 @@ Exemplo com 4 sessões:
       const shouldPrearmImmediately = minutesUntilScheduled <= 5 && minutesUntilScheduled >= -2;
 
       if (canCreateSession) {
+        // Guarda anti-duplicação: verifica se já existe sessão scheduled/active
+        // do mesmo usuário em janela de ±30min antes de inserir.
+        const windowStart = new Date(scheduledAt.getTime() - 30 * 60 * 1000).toISOString();
+        const windowEnd = new Date(scheduledAt.getTime() + 30 * 60 * 1000).toISOString();
+        const { data: existingNearby } = await supabase
+          .from('sessions')
+          .select('id, scheduled_at')
+          .eq('user_id', profile.user_id)
+          .in('status', ['scheduled', 'active'])
+          .gte('scheduled_at', windowStart)
+          .lte('scheduled_at', windowEnd)
+          .limit(1)
+          .maybeSingle();
+
+        if (existingNearby) {
+          console.warn(`⚠️ [AGENDAR_SESSAO] Sessão duplicada evitada — já existe ${existingNearby.id} em ${existingNearby.scheduled_at} (janela ±30min)`);
+          // Reusa a sessão existente para o pré-arme se for o caso
+          if (shouldPrearmImmediately && profile.id) {
+            await supabase
+              .from('profiles')
+              .update({ pending_insight: `[SESSION_PREARM]${existingNearby.id}` })
+              .eq('id', profile.id);
+            console.log(`🎯 [SESSION_PREARM] Reusando sessão existente ${existingNearby.id}`);
+          }
+        } else {
         const { data: newSession, error: sessionError } = await supabase
           .from('sessions')
           .insert({
@@ -6338,6 +6363,7 @@ Exemplo com 4 sessões:
           }
         } else if (sessionError) {
           console.error('❌ Error scheduling session:', sessionError);
+        }
         }
       } else {
         console.log('⚠️ Attempted to schedule session in the past:', scheduledAt.toISOString());
@@ -6447,6 +6473,25 @@ Exemplo com 4 sessões:
         });
         
         if (scheduledAt > new Date()) {
+          // Guarda anti-duplicação: ±30 min para [CRIAR_AGENDA] também
+          const windowStart = new Date(scheduledAt.getTime() - 30 * 60 * 1000).toISOString();
+          const windowEnd = new Date(scheduledAt.getTime() + 30 * 60 * 1000).toISOString();
+          const { data: existingNearby } = await supabase
+            .from('sessions')
+            .select('id')
+            .eq('user_id', profile.user_id)
+            .in('status', ['scheduled', 'active'])
+            .gte('scheduled_at', windowStart)
+            .lte('scheduled_at', windowEnd)
+            .limit(1)
+            .maybeSingle();
+
+          if (existingNearby) {
+            console.warn(`⚠️ [CRIAR_AGENDA] Sessão duplicada evitada em ${scheduledAt.toISOString()} — já existe ${existingNearby.id}`);
+            failedCount++;
+            continue;
+          }
+
           const { error: sessionError } = await supabase
             .from('sessions')
             .insert({
