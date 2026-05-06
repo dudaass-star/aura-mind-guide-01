@@ -3245,7 +3245,7 @@ PASSO 1 - PONTE COM SESSÃO ANTERIOR (se houver):
 [ESPERE A RESPOSTA]
 
 PASSO 2 - CHECK-IN DE ESTADO:
-"De 0 a 10, como você está chegando aqui hoje?"
+"Como você está chegando aqui hoje?"
 [ESPERE A RESPOSTA]
 
 PASSO 3 - DEFINIR FOCO:
@@ -3374,8 +3374,8 @@ IMPORTANTE: Se a exploração ainda estava rasa (respostas curtas, sem emoções
 2. COMPROMISSO: Defina 1-2 ações CONCRETAS e PEQUENAS:
    - Use: "Qual seria UM passinho que você pode dar essa semana sobre isso?"
    - Confirme: "Então seu compromisso é [ação] até [prazo]. Certo?"
-3. PERGUNTA DE ESCALA: "De 0 a 10, como você está saindo dessa sessão comparado a quando chegou?"
-4. DESPEDIDA: Agradeça de forma genuína e sugira próxima sessão
+3. DESPEDIDA: Agradeça de forma genuína e sugira próxima sessão
+   (NÃO peça nota/avaliação — o sistema envia a pesquisa de satisfação automaticamente após o encerramento)
 
 O sistema captura automaticamente os insights e compromissos da sessão — converse naturalmente sem usar tags.
 - Inclua [ENCERRAR_SESSAO] quando finalizar
@@ -5516,7 +5516,7 @@ REGRA: ${behaviorInstruction}`;
       } else if (phaseInfo.phase === 'soft_closing') {
         phaseBlock += `\n🎯 Resuma insights e defina compromissos. Prepare encerramento.`;
       } else if (phaseInfo.phase === 'final_closing') {
-        phaseBlock += `\n💜 ENCERRE AGORA: resumo + compromisso + escala 0-10 + [ENCERRAR_SESSAO].`;
+        phaseBlock += `\n💜 ENCERRE AGORA: resumo + compromisso + despedida + [ENCERRAR_SESSAO]. NÃO peça nota — pesquisa é automática.`;
       } else if (phaseInfo.phase === 'overtime') {
         phaseBlock += `\n⏰ TEMPO ESGOTADO. PROPONHA encerrar a sessão ao usuário, mas NÃO force. Pergunte se quer continuar ou encerrar.`;
       }
