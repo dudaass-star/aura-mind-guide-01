@@ -6869,27 +6869,9 @@ Estou aqui sempre que precisar! 💜`;
               
             console.log('📨 Session summary sent immediately to client');
 
-            // ========== ENVIO IMEDIATO DO RATING ==========
-            await new Promise(resolve => setTimeout(resolve, 3000));
-            
-            const ratingMessage = `Antes de terminar, me conta: 🌟
-
-*De 0 a 10, como você se sente agora comparado a quando começamos a sessão?*
-
-(Só o número tá ótimo! E se quiser me dizer o que mais gostou ou o que posso melhorar, adoraria ouvir! 💜)`;
-
-            const ratingResult = await sendMessage(cleanPhone, ratingMessage);
-            
-            if (ratingResult.success) {
-              await supabase
-                .from('sessions')
-                .update({ rating_requested: true })
-                .eq('id', currentSession.id);
-              console.log('✅ Rating request sent immediately for session', currentSession.id);
-            } else {
-              console.error('⚠️ Failed to send immediate rating:', ratingResult.error);
-              // session-reminder will retry as safety net
-            }
+            // Rating é enviado exclusivamente pelo session-reminder (5 min depois),
+            // após o session-extractor garantir summary/insights/commitments.
+            // Removido daqui pra evitar duplicação e divergência de escala.
           } else {
             console.error('⚠️ Failed to send immediate summary:', sendResult.error);
             // session-reminder will retry as safety net
