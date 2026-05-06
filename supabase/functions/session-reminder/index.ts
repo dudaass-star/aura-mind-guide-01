@@ -575,7 +575,6 @@ Se quiser remarcar uma nova sessão, é só me dizer!`;
       .select(`id, user_id, session_summary, commitments, key_insights, ended_at`)
       .eq('status', 'completed')
       .eq('post_session_sent', false)
-      .not('session_summary', 'is', null)
       .lte('ended_at', fiveMinutesAgo.toISOString());
 
     if (errorCompleted) {
