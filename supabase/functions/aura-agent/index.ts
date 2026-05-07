@@ -4152,9 +4152,18 @@ serve(async (req) => {
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
     const authHeader = req.headers.get('Authorization');
-    
-    if (!authHeader || !authHeader.includes(SUPABASE_SERVICE_ROLE_KEY!)) {
-      console.warn('🚫 Unauthorized request to aura-agent');
+    const internalAuth = req.headers.get('X-Internal-Auth') || '';
+    const INTERNAL_SECRET = Deno.env.get('INTERNAL_WEBHOOK_SECRET');
+    const isInternalCall = !!(INTERNAL_SECRET && internalAuth === INTERNAL_SECRET);
+    const isServiceRoleCall = !!(SUPABASE_SERVICE_ROLE_KEY && authHeader && authHeader.includes(SUPABASE_SERVICE_ROLE_KEY));
+
+    if (!isInternalCall && !isServiceRoleCall) {
+      console.warn('🚫 Unauthorized request to aura-agent', {
+        hasAuthHeader: !!authHeader,
+        hasInternalHeader: !!internalAuth,
+        hasInternalSecret: !!INTERNAL_SECRET,
+        hasServiceRoleEnv: !!SUPABASE_SERVICE_ROLE_KEY,
+      });
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
