@@ -570,6 +570,10 @@ Se quiser remarcar uma nova sessão, é só me dizer!`;
     // Skip during quiet hours - will be processed next run
     // ========================================================================
     const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
+    // Janela máxima: só enviar rating para sessões finalizadas nas últimas 2h.
+    // Isso evita disparos tardios em sessões antigas (ex: legado sem rating_requested marcado,
+    // ou sessões reabertas/migradas) que poderiam gerar mensagem "do nada" no WhatsApp.
+    const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000);
     // Filtramos por rating_requested=false (não por post_session_sent),
     // porque o aura-agent agora envia o resumo imediatamente e marca
     // post_session_sent=true. O envio do rating "1 a 5" continua sendo
@@ -579,7 +583,8 @@ Se quiser remarcar uma nova sessão, é só me dizer!`;
       .select(`id, user_id, session_summary, commitments, key_insights, ended_at, post_session_sent`)
       .eq('status', 'completed')
       .eq('rating_requested', false)
-      .lte('ended_at', fiveMinutesAgo.toISOString());
+      .lte('ended_at', fiveMinutesAgo.toISOString())
+      .gte('ended_at', twoHoursAgo.toISOString());
 
     if (errorCompleted) {
       console.error('❌ Error fetching completed sessions:', errorCompleted);
