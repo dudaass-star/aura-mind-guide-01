@@ -185,8 +185,9 @@ Confirma que tá tudo certo? Me responde com "confirmo" ou me avisa se precisar 
 
         try {
           const cleanPhone = cleanPhoneNumber(profile.phone);
-          // Send as free text (window is open)
-          const result = await sendFreeText(cleanPhone, message);
+          // Usa sendProactive para ganhar prefixo "Lembrete de sessão 🕐" e
+          // cair em template caso a janela 24h esteja fechada.
+          const result = await sendProactive(cleanPhone, message, 'session_reminder', session.user_id);
 
           if (result.success) {
             await supabase
@@ -343,8 +344,9 @@ Você está pronta(o) pra começar? Me responde um "vamos" ou "bora" quando quis
 
         try {
           const cleanPhone = cleanPhoneNumber(profile.phone);
-          // Send as free text (window is open)
-          const result = await sendFreeText(cleanPhone, message);
+          // Padroniza com lembrete 5min: usa sendProactive para garantir título
+          // "Lembrete de sessão 🕐" no free-text (janela aberta já é checada acima).
+          const result = await sendProactive(cleanPhone, message, 'session_reminder', session.user_id);
 
           if (result.success) {
             await supabase

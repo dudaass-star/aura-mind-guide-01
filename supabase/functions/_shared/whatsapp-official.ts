@@ -61,25 +61,30 @@ export type MetaSendResult = TwilioSendResult;
 // ============================================================================
 
 export const PROACTIVE_TITLES: Record<TemplateCategory, string> = {
-  checkin: '🌱 *Check-in da Aura*',
-  content: '📖 *Jornada da semana*',
-  weekly_report: '📊 *Seu resumo semanal*',
-  welcome: '💜 *Bem-vinda à AURA*',
-  reconnect: '💜 *Estou de volta*',
-  session_reminder: '🕐 *Lembrete de sessão*',
+  // Strings vazias = sem prefixo no caminho free-text. Os textos não-vazios
+  // batem 1:1 com o `prefix` da tabela `whatsapp_templates` (Twilio), para
+  // que a experiência seja idêntica em janela aberta vs. fechada.
+  checkin: '',
+  content: 'Sua jornada chegou 📖',
+  weekly_report: 'Seu resumo semanal 📊',
+  welcome: 'Bem-vinda à AURA 💜',
+  reconnect: 'Estou de volta! 💜',
+  session_reminder: 'Lembrete de sessão 🕐',
 };
 
 // Títulos para conteúdos entregues no fast-path de cliques de botão
 // (process-webhook-message). Não são TemplateCategory porque carta/pergunta
 // só viajam por template + clique, nunca como proativo direto.
 export const CLICK_DELIVERY_TITLES = {
-  weekly_question: '💭 *Pergunta da semana*',
-  monthly_letter: '💌 *Sua carta mensal*',
-  content: '📖 *Jornada da semana*',
-  weekly_report: '📊 *Seu resumo semanal*',
+  weekly_question: 'Sua pergunta da semana 💭',
+  monthly_letter: 'Sua carta mensal 💌',
+  content: 'Sua jornada chegou 📖',
+  weekly_report: 'Seu resumo semanal 📊',
 } as const;
 
 export function prefixWithTitle(title: string, body: string): string {
+  // Sem título → devolve corpo intacto (no-op para categorias conversacionais).
+  if (!title) return body;
   if (!body) return title;
   // Evita duplicar título se o corpo já começa com ele.
   const firstLine = body.split('\n', 1)[0]?.trim();
