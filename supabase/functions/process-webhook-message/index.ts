@@ -5,6 +5,7 @@ import {
 } from "../_shared/zapi-client.ts";
 import { sendMessage, sendAudio, sendAudioUrl, type SendResult } from "../_shared/whatsapp-provider.ts";
 import { getInstanceConfigForUser } from "../_shared/instance-helper.ts";
+import { CLICK_DELIVERY_TITLES, prefixWithTitle } from "../_shared/whatsapp-official.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -538,7 +539,8 @@ Deno.serve(async (req) => {
                 .maybeSingle();
 
               if (claimed) {
-                const sendResult = await sendMessage(cleanPhone, rec.question_text, profile.user_id);
+                const titledQuestion = prefixWithTitle(CLICK_DELIVERY_TITLES.weekly_question, rec.question_text);
+                const sendResult = await sendMessage(cleanPhone, titledQuestion, profile.user_id);
                 if (!sendResult.success) {
                   await supabase.from('weekly_questions').update({ delivered_at: null }).eq('id', rec.id);
                   console.warn(`⚠️ [BUTTON] Falha envio Pergunta da Semana (${rec.id}): ${sendResult.error}`);
@@ -548,7 +550,7 @@ Deno.serve(async (req) => {
                   await supabase.from('messages').insert({
                     user_id: profile.user_id,
                     role: 'assistant',
-                    content: rec.question_text,
+                    content: titledQuestion,
                   });
                   console.log(`💌 [BUTTON] Pergunta da Semana entregue (id=${rec.id})`);
                   deliveryDone = true;
@@ -593,7 +595,8 @@ Deno.serve(async (req) => {
                 .maybeSingle();
 
               if (claimed) {
-                const sendResult = await sendMessage(cleanPhone, rec.preview_text, profile.user_id);
+                const titledLetter = prefixWithTitle(CLICK_DELIVERY_TITLES.monthly_letter, rec.preview_text);
+                const sendResult = await sendMessage(cleanPhone, titledLetter, profile.user_id);
                 if (!sendResult.success) {
                   await supabase.from('monthly_letters').update({ delivered_at: null }).eq('id', rec.id);
                   console.warn(`⚠️ [BUTTON] Falha envio Carta Mensal (${rec.id}): ${sendResult.error}`);
@@ -603,7 +606,7 @@ Deno.serve(async (req) => {
                   await supabase.from('messages').insert({
                     user_id: profile.user_id,
                     role: 'assistant',
-                    content: rec.preview_text,
+                    content: titledLetter,
                   });
                   console.log(`💌 [BUTTON] Preview Carta Mensal entregue (id=${rec.id})`);
                   deliveryDone = true;
@@ -649,13 +652,17 @@ Deno.serve(async (req) => {
             if (marker) {
               const directContent = pi.replace(marker, '').trim();
               if (directContent.length > 0) {
-                const sendResult = await sendMessage(cleanPhone, directContent, profile.user_id);
+                const title = marker === '[CONTENT]'
+                  ? CLICK_DELIVERY_TITLES.content
+                  : CLICK_DELIVERY_TITLES.weekly_report;
+                const titledContent = prefixWithTitle(title, directContent);
+                const sendResult = await sendMessage(cleanPhone, titledContent, profile.user_id);
                 if (sendResult.success) {
                   await Promise.all([
                     supabase.from('messages').insert({
                       user_id: profile.user_id,
                       role: 'assistant',
-                      content: directContent,
+                      content: titledContent,
                     }),
                     supabase.from('profiles').update({
                       pending_insight: null,
