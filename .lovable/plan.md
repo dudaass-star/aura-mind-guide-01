@@ -1,68 +1,45 @@
-## Objetivo
+## Causa raiz
+Após rotação dos JWT keys da Supabase, deploys parciais deixaram `aura-agent` com `SUPABASE_SERVICE_ROLE_KEY` antiga e `process-webhook-message` com a nova. O check `authHeader.includes(SERVICE_ROLE_KEY)` em `aura-agent` retorna 401 em todas as 3 tentativas, e nenhuma resposta chega ao usuário.
 
-Implementar bugs 2, 3 e 4 da auditoria de títulos. Bug 1 (`conversation-followup`) fica para depois.
+## Correções
 
-## Prefixos reais dos templates aprovados (fonte: tabela `whatsapp_templates`)
+### 1. Tornar a auth resiliente em `aura-agent` (fix definitivo)
+**Arquivo**: `supabase/functions/aura-agent/index.ts` (linha ~4154-4163)
 
-| Categoria | Prefix oficial Twilio |
-|---|---|
-| `checkin` | (vazio — gatilho conversacional) |
-| `content` | (vazio — Quick Reply trigger) |
-| `monthly_letter` | (vazio — Quick Reply trigger) |
-| `weekly_question` | (vazio — Quick Reply trigger) |
-| `reconnect` | `Estou de volta! 💜` |
-| `session_reminder` | `Lembrete de sessão 🕐` |
-| `weekly_report` | `Seu resumo semanal 📊` |
-| `welcome` | `Bem-vinda à AURA 💜` |
-
-## Bug 4 — Alinhar prefixos free-text 1:1 com templates
-
-`supabase/functions/_shared/whatsapp-official.ts`:
+Trocar o check frágil baseado em `includes(SERVICE_ROLE_KEY)` por uma verificação robusta usando um **shared secret dedicado** (`INTERNAL_WEBHOOK_SECRET` — já existe nos secrets) OU validando contra **ambas** as chaves (publishable+secret) lidas das listas plurais. Abordagem escolhida: usar `INTERNAL_WEBHOOK_SECRET` como header `X-Internal-Auth`, com fallback para o check antigo:
 
 ```ts
-const PROACTIVE_TITLES: Record<TemplateCategory, string> = {
-  checkin:          '',
-  content:          'Sua jornada chegou 📖',
-  weekly_report:    'Seu resumo semanal 📊',
-  welcome:          'Bem-vinda à AURA 💜',
-  reconnect:        'Estou de volta! 💜',
-  session_reminder: 'Lembrete de sessão 🕐',
-};
+const authHeader = req.headers.get('Authorization') || '';
+const internalAuth = req.headers.get('X-Internal-Auth') || '';
+const INTERNAL = Deno.env.get('INTERNAL_WEBHOOK_SECRET');
+const SR = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
-const CLICK_DELIVERY_TITLES = {
-  weekly_question: 'Sua pergunta da semana 💭',
-  monthly_letter:  'Sua carta mensal 💌',
-  content:         'Sua jornada chegou 📖',
-  weekly_report:   'Seu resumo semanal 📊',
-};
+const isInternalCall = INTERNAL && internalAuth === INTERNAL;
+const isServiceRole = SR && authHeader.includes(SR);
+
+if (!isInternalCall && !isServiceRole) {
+  console.warn('🚫 Unauthorized request to aura-agent');
+  return 401;
+}
 ```
 
-Mudanças:
-- Remover negrito markdown `*...*` (Twilio entrega texto puro nos prefixes).
-- `checkin` vira string vazia → `prefixWithTitle` deve no-op quando título for vazio.
-- Textos batem literalmente com o `prefix` da `whatsapp_templates`.
+### 2. Atualizar chamador `process-webhook-message`
+**Arquivo**: `supabase/functions/process-webhook-message/index.ts` (linha 1176, função `callAuraAgent`)
 
-Atualizar helper `prefixWithTitle(title, body)` para retornar `body` direto se `!title`.
+Adicionar header `X-Internal-Auth: ${INTERNAL_WEBHOOK_SECRET}` na chamada fetch ao `aura-agent`, mantendo `Authorization: Bearer ${SR}` por compatibilidade.
 
-## Bug 3 — `deliver-time-capsule` ganha título de check-in
+### 3. Forçar redeploy sincronizado
+Edição mínima (comentário/versão) no `aura-agent` para garantir que o deploy injete a chave SR atualizada — mesmo que o fix #1 já blinde contra rotações futuras.
 
-`supabase/functions/deliver-time-capsule/index.ts`: trocar todas as chamadas `sendProactive(..., 'checkin', ...)` por `sendMessage(...)` direto. A cápsula tem identidade própria no corpo ("⏳ Cápsula do Tempo"), não deve receber prefixo de check-in.
+### 4. Pequena defesa em `cleanPhoneNumber` (bug isolado)
+**Arquivo**: `supabase/functions/_shared/zapi-client.ts` (linha 42)
 
-## Bug 2 — `session-reminder` lembretes inconsistentes
+Retornar string vazia (ou throw com mensagem clara) se `phone` for undefined, evitando o TypeError visto em um webhook órfão hoje.
 
-`supabase/functions/session-reminder/index.ts`:
+## Validação após deploy
+1. `curl POST /aura-agent` sem auth → ainda 401 (esperado).
+2. Enviar mensagem WhatsApp de teste e observar `process-webhook-message` logs: deve mostrar `🤖 Agent response:` ao invés de `Agent HTTP 401`.
+3. Conferir mensagens da Beatriz (5511944774214): enviar uma resposta manual de retomada após o fix.
 
-- **Linha 189** (lembrete 24h antes): trocar `sendFreeText(cleanPhone, message)` por `sendProactive(cleanPhone, message, 'session_reminder', session.user_id)`. Ganha prefixo + cai em template se janela fechada.
-- **Linha 347** (notificação "chegou a hora"): mesma troca. Padroniza com lembrete 5min (linha 261).
-
-Importar `sendProactive` no topo se ainda não estiver.
-
-## Arquivos modificados
-
-1. `supabase/functions/_shared/whatsapp-official.ts` — atualizar `PROACTIVE_TITLES`, `CLICK_DELIVERY_TITLES`, `prefixWithTitle`.
-2. `supabase/functions/deliver-time-capsule/index.ts` — `sendProactive('checkin')` → `sendMessage`.
-3. `supabase/functions/session-reminder/index.ts` — `sendFreeText` → `sendProactive('session_reminder')` em duas linhas.
-
-## Memória
-
-Atualizar `mem://features/whatsapp/proactive-message-titles` com a nova tabela 1:1 com templates Twilio (sem markdown, sem `checkin`).
+## Não está relacionado
+Os fixes dos bugs 2/3/4 (títulos de templates) **não causaram** essa falha — apenas o redeploy de `process-webhook-message` para entregá-los expôs uma rotação de chave preexistente. Não há necessidade de rollback.
