@@ -407,14 +407,17 @@ export async function sendProactiveMessage(
 
     // Window open → free text
     if (windowOpen) {
+      const title = PROACTIVE_TITLES[templateCategory];
       if (['weekly_report', 'content'].includes(templateCategory)) {
         console.log(`✅ [Twilio] 24h window open, but forcing teaser for ${templateCategory}`);
-        const messageToSend = teaserText || text;
+        const baseMessage = teaserText || text;
+        const messageToSend = title ? prefixWithTitle(title, baseMessage) : baseMessage;
         const result = await sendFreeText(phone, messageToSend);
         return { success: result.success, parts: 1, type: 'freetext', error: result.error };
       }
       console.log('✅ [Twilio] 24h window open, sending as free text');
-      const result = await sendFreeText(phone, text);
+      const messageToSend = title ? prefixWithTitle(title, text) : text;
+      const result = await sendFreeText(phone, messageToSend);
       return { success: result.success, parts: 1, type: 'freetext', error: result.error };
     }
 
