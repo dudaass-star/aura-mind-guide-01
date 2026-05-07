@@ -54,7 +54,27 @@ async function createShortLink(url: string, phone: string): Promise<string | nul
 async function transcribeAudio(audioUrl: string): Promise<string | null> {
   try {
     console.log('🎙️ Downloading audio from:', audioUrl);
-    const audioResponse = await fetch(audioUrl);
+    // Twilio media URLs (api.twilio.com) são privadas e exigem autenticação.
+    // Roteamos via connector gateway, que injeta as credenciais automaticamente
+    // e prepende /2010-04-01/Accounts/{AccountSid}.
+    let fetchUrl = audioUrl;
+    let fetchHeaders: Record<string, string> = {};
+    const twilioMatch = audioUrl.match(/api\.twilio\.com\/2010-04-01\/Accounts\/[^/]+(\/.+)$/);
+    if (twilioMatch) {
+      const lovableKey = Deno.env.get('LOVABLE_API_KEY');
+      const twilioKey = Deno.env.get('TWILIO_API_KEY');
+      if (lovableKey && twilioKey) {
+        fetchUrl = `https://connector-gateway.lovable.dev/twilio${twilioMatch[1]}`;
+        fetchHeaders = {
+          'Authorization': `Bearer ${lovableKey}`,
+          'X-Connection-Api-Key': twilioKey,
+        };
+        console.log('🔐 Using Twilio gateway for media download');
+      } else {
+        console.warn('⚠️ Twilio media URL detected but credentials missing');
+      }
+    }
+    const audioResponse = await fetch(fetchUrl, { headers: fetchHeaders, redirect: 'follow' });
     if (!audioResponse.ok) {
       console.error('❌ Failed to download audio:', audioResponse.status);
       return null;
