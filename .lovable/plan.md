@@ -1,65 +1,68 @@
 ## Objetivo
 
-Adicionar títulos visuais em todas as mensagens proativas enviadas via texto livre (janela 24h aberta) e no fast-path de cliques de botão, para que o usuário sempre identifique que é "algo extra da Aura" — nunca uma mensagem solta fora de contexto.
+Implementar bugs 2, 3 e 4 da auditoria de títulos. Bug 1 (`conversation-followup`) fica para depois.
 
-## Onde aplicar
+## Prefixos reais dos templates aprovados (fonte: tabela `whatsapp_templates`)
 
-### 1. `supabase/functions/_shared/whatsapp-official.ts`
+| Categoria | Prefix oficial Twilio |
+|---|---|
+| `checkin` | (vazio — gatilho conversacional) |
+| `content` | (vazio — Quick Reply trigger) |
+| `monthly_letter` | (vazio — Quick Reply trigger) |
+| `weekly_question` | (vazio — Quick Reply trigger) |
+| `reconnect` | `Estou de volta! 💜` |
+| `session_reminder` | `Lembrete de sessão 🕐` |
+| `weekly_report` | `Seu resumo semanal 📊` |
+| `welcome` | `Bem-vinda à AURA 💜` |
 
-Adicionar mapa `PROACTIVE_TITLES` por `TemplateCategory` e prefixar o texto livre dentro de `sendProactiveMessage` quando `windowOpen === true`.
+## Bug 4 — Alinhar prefixos free-text 1:1 com templates
+
+`supabase/functions/_shared/whatsapp-official.ts`:
 
 ```ts
 const PROACTIVE_TITLES: Record<TemplateCategory, string> = {
-  checkin:          '🌱 *Check-in da Aura*',
-  content:          '📖 *Jornada da semana*',
-  weekly_report:    '📊 *Seu resumo semanal*',
-  welcome:          '💜 *Bem-vinda à AURA*',
-  reconnect:        '💜 *Estou de volta*',
-  session_reminder: '🕐 *Lembrete de sessão*',
+  checkin:          '',
+  content:          'Sua jornada chegou 📖',
+  weekly_report:    'Seu resumo semanal 📊',
+  welcome:          'Bem-vinda à AURA 💜',
+  reconnect:        'Estou de volta! 💜',
+  session_reminder: 'Lembrete de sessão 🕐',
+};
+
+const CLICK_DELIVERY_TITLES = {
+  weekly_question: 'Sua pergunta da semana 💭',
+  monthly_letter:  'Sua carta mensal 💌',
+  content:         'Sua jornada chegou 📖',
+  weekly_report:   'Seu resumo semanal 📊',
 };
 ```
 
-Aplicar como: `${PROACTIVE_TITLES[category]}\n\n${text}` (ou `teaserText` para `weekly_report`/`content`).
+Mudanças:
+- Remover negrito markdown `*...*` (Twilio entrega texto puro nos prefixes).
+- `checkin` vira string vazia → `prefixWithTitle` deve no-op quando título for vazio.
+- Textos batem literalmente com o `prefix` da `whatsapp_templates`.
 
-Categorias `monthly_letter` e `weekly_question` **não existem** mais no `TemplateCategory` — elas vão exclusivamente por `sendTemplateOnly` + fast-path. Portanto serão tratadas no item 2.
+Atualizar helper `prefixWithTitle(title, body)` para retornar `body` direto se `!title`.
 
-### 2. `supabase/functions/process-webhook-message/index.ts` (fast-path de cliques)
+## Bug 3 — `deliver-time-capsule` ganha título de check-in
 
-Quando o usuário clica num botão de Quick Reply e o conteúdo é entregue via `sendMessage`/`sendFreeText`, prefixar com título correspondente:
+`supabase/functions/deliver-time-capsule/index.ts`: trocar todas as chamadas `sendProactive(..., 'checkin', ...)` por `sendMessage(...)` direto. A cápsula tem identidade própria no corpo ("⏳ Cápsula do Tempo"), não deve receber prefixo de check-in.
 
-- `weekly_question` (botão "Ver pergunta") → `💭 *Pergunta da semana*`
-- `monthly_letter` (botão "Acessar") → `💌 *Sua carta mensal*`
-- `pending_insight [CONTENT]` (botão Jornadas) → `📖 *Jornada da semana*`
-- `pending_insight [WEEKLY_REPORT]` (botão Resumo) → `📊 *Seu resumo semanal*`
+## Bug 2 — `session-reminder` lembretes inconsistentes
 
-### 3. Excluir explicitamente do prefixo
+`supabase/functions/session-reminder/index.ts`:
 
-- `conversation-followup` → continuação natural, não usa `sendProactiveMessage` com categoria de conteúdo (nudge orgânico).
-- `aura-agent` → respostas conversacionais normais, jamais.
-- Templates aprovados via Twilio (Quick Reply) → o próprio header do template já cumpre o papel.
-- `deliver-time-capsule` → já tem identidade própria ("⏳ Cápsula do tempo" no corpo); validar se duplica e ajustar.
-- `send-meditation` → áudio, não texto; sem título.
+- **Linha 189** (lembrete 24h antes): trocar `sendFreeText(cleanPhone, message)` por `sendProactive(cleanPhone, message, 'session_reminder', session.user_id)`. Ganha prefixo + cai em template se janela fechada.
+- **Linha 347** (notificação "chegou a hora"): mesma troca. Padroniza com lembrete 5min (linha 261).
 
-## Validação template-only (decisão final)
-
-Confirmado nas memórias e código:
-
-- **`monthly_letter`** e **`weekly_question`**: sempre disparados via `sendTemplateOnly` (template Quick Reply). Conteúdo só vai por texto livre **após o clique**, dentro do fast-path do `process-webhook-message`. ✅ Tratado no item 2.
-- **Demais categorias** (`checkin`, `content`, `weekly_report`, `welcome`, `reconnect`, `session_reminder`): funcionam tanto em texto livre (24h aberta) quanto em template (24h fechada). ✅ Tratado no item 1.
-- **Nenhuma categoria proibida** de ir por texto livre quando a janela está aberta.
-
-## Detalhes técnicos
-
-- Helper `prefixWithTitle(category, text)` exportado de `whatsapp-official.ts` para reuso no `process-webhook-message`.
-- Não alterar templates aprovados Twilio (já têm header oficial Meta).
-- Não alterar `splitIntoMessages` do `aura-agent` (mensagens orgânicas seguem sem título).
-- Sem mudança em DB nem em `whatsapp_templates`.
+Importar `sendProactive` no topo se ainda não estiver.
 
 ## Arquivos modificados
 
-1. `supabase/functions/_shared/whatsapp-official.ts` — adicionar mapa `PROACTIVE_TITLES`, helper `prefixWithTitle`, aplicar no `sendProactiveMessage` (free-text path + teaser path).
-2. `supabase/functions/process-webhook-message/index.ts` — aplicar `prefixWithTitle` nos 4 ramos do fast-path de clique (weekly_question, monthly_letter, content, weekly_report).
+1. `supabase/functions/_shared/whatsapp-official.ts` — atualizar `PROACTIVE_TITLES`, `CLICK_DELIVERY_TITLES`, `prefixWithTitle`.
+2. `supabase/functions/deliver-time-capsule/index.ts` — `sendProactive('checkin')` → `sendMessage`.
+3. `supabase/functions/session-reminder/index.ts` — `sendFreeText` → `sendProactive('session_reminder')` em duas linhas.
 
-## Memória a salvar
+## Memória
 
-Nova memória `mem://features/whatsapp/proactive-message-titles` documentando o mapa de títulos e o princípio "toda mensagem proativa em texto livre leva título; conversação orgânica nunca leva".
+Atualizar `mem://features/whatsapp/proactive-message-titles` com a nova tabela 1:1 com templates Twilio (sem markdown, sem `checkin`).

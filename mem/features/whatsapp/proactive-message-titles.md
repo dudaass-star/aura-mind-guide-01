@@ -20,17 +20,23 @@ Princípio: o usuário deve identificar imediatamente que uma mensagem chegou "d
 - `conversation-followup` nudges.
 - Áudio (`send-meditation`).
 
-## Títulos canônicos
+## Títulos canônicos (alinhados 1:1 com `whatsapp_templates.prefix`)
 
-| Categoria | Título |
+Sem markdown — Twilio entrega texto puro nos prefixes dos templates.
+
+| Categoria | Título free-text / clique |
 |---|---|
-| checkin | 🌱 *Check-in da Aura* |
-| content | 📖 *Jornada da semana* |
-| weekly_report | 📊 *Seu resumo semanal* |
-| welcome | 💜 *Bem-vinda à AURA* |
-| reconnect | 💜 *Estou de volta* |
-| session_reminder | 🕐 *Lembrete de sessão* |
-| weekly_question (clique) | 💭 *Pergunta da semana* |
-| monthly_letter (clique) | 💌 *Sua carta mensal* |
+| checkin | (vazio — gatilho conversacional, sem prefixo) |
+| content | Sua jornada chegou 📖 |
+| weekly_report | Seu resumo semanal 📊 |
+| welcome | Bem-vinda à AURA 💜 |
+| reconnect | Estou de volta! 💜 |
+| session_reminder | Lembrete de sessão 🕐 |
+| weekly_question (clique) | Sua pergunta da semana 💭 |
+| monthly_letter (clique) | Sua carta mensal 💌 |
+
+`deliver-time-capsule` usa `sendMessage` direto (identidade própria no corpo, sem prefixo).
+`session-reminder` (24h, 5min, "chegou a hora") usa `sendProactive('session_reminder')`.
 
 Helper `prefixWithTitle(title, body)` evita duplicar caso o body já comece com o título.
+Quando `title === ''`, retorna o corpo intacto (no-op).

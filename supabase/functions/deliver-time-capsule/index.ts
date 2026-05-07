@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { sendProactive } from "../_shared/whatsapp-provider.ts";
+import { sendMessage } from "../_shared/whatsapp-provider.ts";
 import { getInstanceConfigForUser } from "../_shared/instance-helper.ts";
 
 const corsHeaders = {
@@ -115,7 +115,8 @@ Deno.serve(async (req) => {
         // Send teaser + link instead of direct audio
         const teaserMsg = `${userName}, lembra daquela cápsula do tempo que você gravou? 💜✨\n\nChegou a hora de ouvir! Escuta com carinho 🫶\n\n${shortLink}\n\n— Aura`;
         
-        const result = await sendProactive(profile.phone, teaserMsg, 'checkin', profile.user_id);
+        // Cápsula tem identidade própria no corpo — não recebe prefixo de check-in.
+        const result = await sendMessage(profile.phone, teaserMsg);
 
         if (result.success) {
           // Mark as delivered
