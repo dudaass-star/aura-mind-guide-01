@@ -1,45 +1,57 @@
-## Causa raiz
-Após rotação dos JWT keys da Supabase, deploys parciais deixaram `aura-agent` com `SUPABASE_SERVICE_ROLE_KEY` antiga e `process-webhook-message` com a nova. O check `authHeader.includes(SERVICE_ROLE_KEY)` em `aura-agent` retorna 401 em todas as 3 tentativas, e nenhuma resposta chega ao usuário.
+## Diagnóstico revisado
 
-## Correções
+Acatando a observação do usuário: o problema pode não ser de código, e sim de runtime/secrets. Há um sinal forte disso nos logs:
 
-### 1. Tornar a auth resiliente em `aura-agent` (fix definitivo)
-**Arquivo**: `supabase/functions/aura-agent/index.ts` (linha ~4154-4163)
+- O código atual em `supabase/functions/aura-agent/index.ts` (linhas 4154-4170) já emite um log estruturado de Unauthorized com `hasAuthHeader`, `hasInternalHeader`, `hasInternalSecret`, `hasServiceRoleEnv`.
+- Nos logs do `aura-agent` em produção, nenhuma linha contém `hasInternal` nem `hasAuthHeader`. Só aparece a mensagem antiga `🚫 Unauthorized request to aura-agent` sem objeto.
 
-Trocar o check frágil baseado em `includes(SERVICE_ROLE_KEY)` por uma verificação robusta usando um **shared secret dedicado** (`INTERNAL_WEBHOOK_SECRET` — já existe nos secrets) OU validando contra **ambas** as chaves (publishable+secret) lidas das listas plurais. Abordagem escolhida: usar `INTERNAL_WEBHOOK_SECRET` como header `X-Internal-Auth`, com fallback para o check antigo:
+Conclusão: o `aura-agent` está rodando uma build antiga. O deploy mais recente não chegou no runtime, ou está usando cache de uma versão anterior. Por isso qualquer mudança de header feita no `process-webhook-message` continua batendo num check antigo.
 
-```ts
-const authHeader = req.headers.get('Authorization') || '';
-const internalAuth = req.headers.get('X-Internal-Auth') || '';
-const INTERNAL = Deno.env.get('INTERNAL_WEBHOOK_SECRET');
-const SR = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+## Plano em 2 fases — diagnóstico primeiro, hotfix depois
 
-const isInternalCall = INTERNAL && internalAuth === INTERNAL;
-const isServiceRole = SR && authHeader.includes(SR);
+### Fase 1 — Provar o estado real do runtime
 
-if (!isInternalCall && !isServiceRole) {
-  console.warn('🚫 Unauthorized request to aura-agent');
-  return 401;
-}
-```
+1. Forçar redeploy explícito de `aura-agent` e `process-webhook-message`.
+2. Disparar um `curl` direto contra `/aura-agent` com 3 headers de teste inválidos (valores quaisquer) só para fazer o handler logar o objeto de diagnóstico.
+3. Buscar nos logs por `hasInternalSecret`. Os 3 cenários possíveis:
+   - **Aparece o log novo** → deploy ok, e o objeto vai mostrar exatamente quais secrets existem no runtime.
+   - **Não aparece** → deploy não propagou. Tentar novo deploy ou abrir suporte de Cloud.
+   - **Aparece mas com `hasInternalSecret: false`** → confirma a hipótese do usuário: secret não está injetado no runtime do `aura-agent`. Próximo passo é forçar reinjeção (re-salvar a secret) e/ou abrir suporte.
+4. Em paralelo, fazer um teste com headers reais conforme sugerido:
 
-### 2. Atualizar chamador `process-webhook-message`
-**Arquivo**: `supabase/functions/process-webhook-message/index.ts` (linha 1176, função `callAuraAgent`)
+   ```
+   curl -X POST .../functions/v1/aura-agent \
+     -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+     -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+     -H "X-Internal-Auth: $INTERNAL_WEBHOOK_SECRET" \
+     -H "Content-Type: application/json" \
+     -d '{"probe":true}'
+   ```
 
-Adicionar header `X-Internal-Auth: ${INTERNAL_WEBHOOK_SECRET}` na chamada fetch ao `aura-agent`, mantendo `Authorization: Bearer ${SR}` por compatibilidade.
+   Se ainda 401 com headers válidos → confirma problema de runtime, não de código.
 
-### 3. Forçar redeploy sincronizado
-Edição mínima (comentário/versão) no `aura-agent` para garantir que o deploy injete a chave SR atualizada — mesmo que o fix #1 já blinde contra rotações futuras.
+### Fase 2 — Hotfix de auth (só se Fase 1 mostrar que o deploy chegou)
 
-### 4. Pequena defesa em `cleanPhoneNumber` (bug isolado)
-**Arquivo**: `supabase/functions/_shared/zapi-client.ts` (linha 42)
+Aplicar então o ajuste defensivo no `aura-agent` para aceitar qualquer um destes três caminhos:
 
-Retornar string vazia (ou throw com mensagem clara) se `phone` for undefined, evitando o TypeError visto em um webhook órfão hoje.
+- `Authorization: Bearer <SUPABASE_SERVICE_ROLE_KEY>`
+- `apikey: <SUPABASE_SERVICE_ROLE_KEY>`
+- `X-Internal-Auth: <INTERNAL_WEBHOOK_SECRET>`
 
-## Validação após deploy
-1. `curl POST /aura-agent` sem auth → ainda 401 (esperado).
-2. Enviar mensagem WhatsApp de teste e observar `process-webhook-message` logs: deve mostrar `🤖 Agent response:` ao invés de `Agent HTTP 401`.
-3. Conferir mensagens da Beatriz (5511944774214): enviar uma resposta manual de retomada após o fix.
+E enviar os três simultaneamente a partir do `process-webhook-message`. Manter o log estruturado de flags booleanas (sem vazar segredos).
 
-## Não está relacionado
-Os fixes dos bugs 2/3/4 (títulos de templates) **não causaram** essa falha — apenas o redeploy de `process-webhook-message` para entregá-los expôs uma rotação de chave preexistente. Não há necessidade de rollback.
+### Fase 3 — Validação
+
+1. Curl sem credencial → 401 esperado.
+2. Curl com headers válidos → não deve mais ser 401.
+3. Mensagem WhatsApp real de teste → procurar `🤖 Agent response:` em `process-webhook-message`.
+4. Confirmar que `aura-agent` para de logar `Unauthorized request` para mensagens novas.
+
+## Por que essa ordem importa
+
+Se pular direto para o hotfix sem provar a Fase 1, e o problema for realmente de secrets não injetados, o hotfix não vai resolver — vamos só empilhar mudanças de código sobre uma falha de ambiente. A Fase 1 leva poucos minutos e elimina ambiguidade.
+
+## Não relacionado / pendente
+
+- Mensagem manual de retomada para a Beatriz: pendente, depende da Aura voltar a responder.
+- Bugs 2/3/4 (títulos de templates) já estão no código e não causaram esse incidente.
