@@ -5,6 +5,7 @@ import {
 } from "../_shared/zapi-client.ts";
 import { sendMessage, sendAudio, sendAudioUrl, type SendResult } from "../_shared/whatsapp-provider.ts";
 import { getInstanceConfigForUser } from "../_shared/instance-helper.ts";
+import { CLICK_DELIVERY_TITLES, prefixWithTitle } from "../_shared/whatsapp-official.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
