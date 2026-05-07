@@ -1,57 +1,25 @@
-## Diagnóstico revisado
+## Objetivo
+Enviar uma única mensagem padrão de recuperação para os 11 usuários impactados pela falha do `aura-agent` em 07/05, retomando rapidamente as conversas.
 
-Acatando a observação do usuário: o problema pode não ser de código, e sim de runtime/secrets. Há um sinal forte disso nos logs:
+## Mensagem única (PT-BR, tom Aura)
+> "Oi, [nome]! Tive uma instabilidade técnica agora pela manhã e suas mensagens não chegaram em mim na hora — eu li tudo agora. Não foi você, fui eu que falhei. Tô aqui de volta. Continua daqui comigo? 💜"
 
-- O código atual em `supabase/functions/aura-agent/index.ts` (linhas 4154-4170) já emite um log estruturado de Unauthorized com `hasAuthHeader`, `hasInternalHeader`, `hasInternalSecret`, `hasServiceRoleEnv`.
-- Nos logs do `aura-agent` em produção, nenhuma linha contém `hasInternal` nem `hasAuthHeader`. Só aparece a mensagem antiga `🚫 Unauthorized request to aura-agent` sem objeto.
+- `[nome]` substituído pelo primeiro nome do `profiles.name` (fallback: sem nome → "Oi! Tive uma instabilidade...").
+- Enviada como **texto livre** via `admin-send-message` (categoria `checkin`) — todos os 11 usuários trocaram mensagem nas últimas 24h, então a janela WhatsApp está aberta e não precisa de template.
 
-Conclusão: o `aura-agent` está rodando uma build antiga. O deploy mais recente não chegou no runtime, ou está usando cache de uma versão anterior. Por isso qualquer mudança de header feita no `process-webhook-message` continua batendo num check antigo.
+## Execução (one-shot script)
+Script Deno avulso rodado via `code--exec` que:
+1. Lê os 11 `user_id` da lista já identificada (Eduardo, Aline, Beatriz, Jéssica, Daiane, Angela, Jeniffer, Alexandre, FRANKLIN, Nivea, Michele).
+2. Para cada um: busca `name` + `phone` em `profiles`, monta a mensagem com primeiro nome, e invoca `admin-send-message` com `{ phone, message, user_id, template_category: 'checkin' }`.
+3. Espera ~1.5s entre envios (anti-burst Twilio).
+4. Loga sucesso/falha por usuário e grava cada mensagem em `messages` (já feito automaticamente pela própria `admin-send-message`).
 
-## Plano em 2 fases — diagnóstico primeiro, hotfix depois
+## Detalhes técnicos
+- Não cria nova edge function — usa a existente `admin-send-message` que já trata `cleanPhoneNumber`, `sendProactive`, instance config e gravação em `messages`.
+- Autenticação: chamada server-side com `SUPABASE_SERVICE_ROLE_KEY` direto via `fetch` ao endpoint da função.
+- Sem alteração de schema, sem migração, sem novo arquivo no repo.
 
-### Fase 1 — Provar o estado real do runtime
-
-1. Forçar redeploy explícito de `aura-agent` e `process-webhook-message`.
-2. Disparar um `curl` direto contra `/aura-agent` com 3 headers de teste inválidos (valores quaisquer) só para fazer o handler logar o objeto de diagnóstico.
-3. Buscar nos logs por `hasInternalSecret`. Os 3 cenários possíveis:
-   - **Aparece o log novo** → deploy ok, e o objeto vai mostrar exatamente quais secrets existem no runtime.
-   - **Não aparece** → deploy não propagou. Tentar novo deploy ou abrir suporte de Cloud.
-   - **Aparece mas com `hasInternalSecret: false`** → confirma a hipótese do usuário: secret não está injetado no runtime do `aura-agent`. Próximo passo é forçar reinjeção (re-salvar a secret) e/ou abrir suporte.
-4. Em paralelo, fazer um teste com headers reais conforme sugerido:
-
-   ```
-   curl -X POST .../functions/v1/aura-agent \
-     -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
-     -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
-     -H "X-Internal-Auth: $INTERNAL_WEBHOOK_SECRET" \
-     -H "Content-Type: application/json" \
-     -d '{"probe":true}'
-   ```
-
-   Se ainda 401 com headers válidos → confirma problema de runtime, não de código.
-
-### Fase 2 — Hotfix de auth (só se Fase 1 mostrar que o deploy chegou)
-
-Aplicar então o ajuste defensivo no `aura-agent` para aceitar qualquer um destes três caminhos:
-
-- `Authorization: Bearer <SUPABASE_SERVICE_ROLE_KEY>`
-- `apikey: <SUPABASE_SERVICE_ROLE_KEY>`
-- `X-Internal-Auth: <INTERNAL_WEBHOOK_SECRET>`
-
-E enviar os três simultaneamente a partir do `process-webhook-message`. Manter o log estruturado de flags booleanas (sem vazar segredos).
-
-### Fase 3 — Validação
-
-1. Curl sem credencial → 401 esperado.
-2. Curl com headers válidos → não deve mais ser 401.
-3. Mensagem WhatsApp real de teste → procurar `🤖 Agent response:` em `process-webhook-message`.
-4. Confirmar que `aura-agent` para de logar `Unauthorized request` para mensagens novas.
-
-## Por que essa ordem importa
-
-Se pular direto para o hotfix sem provar a Fase 1, e o problema for realmente de secrets não injetados, o hotfix não vai resolver — vamos só empilhar mudanças de código sobre uma falha de ambiente. A Fase 1 leva poucos minutos e elimina ambiguidade.
-
-## Não relacionado / pendente
-
-- Mensagem manual de retomada para a Beatriz: pendente, depende da Aura voltar a responder.
-- Bugs 2/3/4 (títulos de templates) já estão no código e não causaram esse incidente.
+## Validação após envio
+- Conferir nos logs de `admin-send-message` que houve 11 `✅ Message sent`.
+- Conferir no `messages` que cada `user_id` recebeu a linha `role=assistant` com o texto.
+- Aguardar respostas via webhook normal (Aura já está operando).
