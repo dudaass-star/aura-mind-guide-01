@@ -24,5 +24,11 @@ A decisão é simples ("1ª resposta após WELCOME = convidar") e síncrona. Mic
 ## Coluna
 `profiles.pending_first_session_invite boolean default false` (migration 2026-05-05).
 
+## Precedência sobre setup mensal
+Vale para TODOS os planos (Essencial, Direção, Transformação). Enquanto `pending_first_session_invite=true`, o bloco de `needs_schedule_setup` (configurar 4/8 sessões da semana) NÃO é injetado no prompt — senão a Aura mistura os fluxos e nunca emite `[AGENDAR_SESSAO:...]` para a 1ª sessão D0. O setup mensal volta a ativar naturalmente depois que a flag é consumida.
+
+## Contrato de tag obrigatório
+O prompt do convite D0 exige explicitamente que a Aura termine a resposta com `[AGENDAR_SESSAO:YYYY-MM-DD HH:MM]` ao receber qualquer aceite ("sim", "bora", "vamos", "agora", etc.). Sem a tag, o backend não cria sessão (ver `mem://features/sessions/scheduling-tag-contract`) — incidente recorrente antes do reforço (Alexandre/Adriana, 06-07/05/2026).
+
 ## Arquivos
 - `supabase/functions/aura-agent/index.ts` — set flag (~5630), inject convite + clear (~5697)

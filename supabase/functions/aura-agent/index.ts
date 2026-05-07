@@ -5773,11 +5773,20 @@ POR QUÊ: o trial é de 7 dias. A sessão é o produto-âncora. Fisgar com valor
 COMO CONDUZIR:
 1. Acolha brevemente o que ele acabou de dizer (1-2 frases, sem mergulhar fundo ainda).
 2. Apresente a sessão como o espaço principal: 45 min, ritmo seu, tema livre, você conduz com presença.
-3. Convide para começar **agora** — se ele topar, emita ao final da resposta a tag:
-   [AGENDAR_SESSAO:${exampleNow}]
-   (use o horário atual ou alguns minutos à frente; o backend vai criar e ativar a sessão automaticamente)
-4. Se ele preferir outro horário, faça uma pergunta aberta ("quando faz sentido pra você?") e quando ele responder com data/hora, emita [AGENDAR_SESSAO:YYYY-MM-DD HH:MM] no formato BRT.
+3. Convide para começar **agora**.
+4. Se ele preferir outro horário, faça uma pergunta aberta ("quando faz sentido pra você?").
 5. Se ele recusar ou desconversar, NÃO insista — siga o fio dele com presença, e a sessão vira convite natural mais à frente.
+
+⚠️ OBRIGATÓRIO — CONTRATO DE TAG:
+- Se o usuário aceitar (qualquer "sim", "bora", "vamos", "pode ser", "ok", "agora") sua resposta DEVE TERMINAR com a tag literal:
+  [AGENDAR_SESSAO:${exampleNow}]
+  (use horário atual BRT ou alguns minutos à frente)
+- Se ele propuser outro horário concreto (ex: "amanhã às 10h"), termine com:
+  [AGENDAR_SESSAO:YYYY-MM-DD HH:MM]
+- SEM ESSA TAG, A SESSÃO NÃO É CRIADA NO BANCO e você quebra a promessa que acabou de fazer. Isso é falha grave.
+
+EXEMPLO de turno completo (aceite imediato):
+"Boa! Bora começar então. Vou abrir nossa sessão agora — 45 min só nossos. Pode trazer o que tiver vindo. [AGENDAR_SESSAO:${exampleNow}]"
 
 IMPORTANTE:
 - NÃO faça onboarding/mapeamento longo agora. A sessão É o espaço de exploração.
@@ -5862,7 +5871,7 @@ SE ele pedir nova sessão / mais sessões agora:
       console.log(`⏸️ Sessions paused until ${profile.sessions_paused_until} - skipping schedule setup prompt`);
     }
 
-    if (profile?.needs_schedule_setup && planConfig.sessions > 0 && !isSessionsPaused) {
+    if (profile?.needs_schedule_setup && planConfig.sessions > 0 && !isSessionsPaused && !profile?.pending_first_session_invite) {
       const sessionsCount = planConfig.sessions;
       dynamicContext += `
 
