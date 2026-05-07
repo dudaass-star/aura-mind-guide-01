@@ -652,13 +652,17 @@ Deno.serve(async (req) => {
             if (marker) {
               const directContent = pi.replace(marker, '').trim();
               if (directContent.length > 0) {
-                const sendResult = await sendMessage(cleanPhone, directContent, profile.user_id);
+                const title = marker === '[CONTENT]'
+                  ? CLICK_DELIVERY_TITLES.content
+                  : CLICK_DELIVERY_TITLES.weekly_report;
+                const titledContent = prefixWithTitle(title, directContent);
+                const sendResult = await sendMessage(cleanPhone, titledContent, profile.user_id);
                 if (sendResult.success) {
                   await Promise.all([
                     supabase.from('messages').insert({
                       user_id: profile.user_id,
                       role: 'assistant',
-                      content: directContent,
+                      content: titledContent,
                     }),
                     supabase.from('profiles').update({
                       pending_insight: null,
