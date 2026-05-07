@@ -51,6 +51,43 @@ export interface ProactiveMessageResult {
 export type MetaSendResult = TwilioSendResult;
 
 // ============================================================================
+// PROACTIVE TITLES — prefixos visuais para mensagens proativas em texto livre
+// ----------------------------------------------------------------------------
+// Toda mensagem proativa (fora de conversa orgânica) deve carregar um título
+// para o usuário identificar imediatamente que é "algo extra da Aura" e não
+// uma mensagem solta sem contexto. Templates aprovados (Twilio) já trazem
+// header próprio — esses títulos só se aplicam ao caminho de TEXTO LIVRE
+// (janela 24h aberta) e ao fast-path de cliques em Quick Reply.
+// ============================================================================
+
+export const PROACTIVE_TITLES: Record<TemplateCategory, string> = {
+  checkin: '🌱 *Check-in da Aura*',
+  content: '📖 *Jornada da semana*',
+  weekly_report: '📊 *Seu resumo semanal*',
+  welcome: '💜 *Bem-vinda à AURA*',
+  reconnect: '💜 *Estou de volta*',
+  session_reminder: '🕐 *Lembrete de sessão*',
+};
+
+// Títulos para conteúdos entregues no fast-path de cliques de botão
+// (process-webhook-message). Não são TemplateCategory porque carta/pergunta
+// só viajam por template + clique, nunca como proativo direto.
+export const CLICK_DELIVERY_TITLES = {
+  weekly_question: '💭 *Pergunta da semana*',
+  monthly_letter: '💌 *Sua carta mensal*',
+  content: '📖 *Jornada da semana*',
+  weekly_report: '📊 *Seu resumo semanal*',
+} as const;
+
+export function prefixWithTitle(title: string, body: string): string {
+  if (!body) return title;
+  // Evita duplicar título se o corpo já começa com ele.
+  const firstLine = body.split('\n', 1)[0]?.trim();
+  if (firstLine && title.includes(firstLine)) return body;
+  return `${title}\n\n${body}`;
+}
+
+// ============================================================================
 // TWILIO GATEWAY CONFIG
 // ============================================================================
 
