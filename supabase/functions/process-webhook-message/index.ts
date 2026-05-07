@@ -1173,7 +1173,11 @@ Deno.serve(async (req) => {
         }
         const resp = await fetch(`${supabaseUrl}/functions/v1/aura-agent`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseServiceKey}` },
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseServiceKey}`,
+            'X-Internal-Auth': Deno.env.get('INTERNAL_WEBHOOK_SECRET') ?? '',
+          },
           body: JSON.stringify(body),
           signal: controller.signal,
         });

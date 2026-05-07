@@ -53,6 +53,7 @@ export function buildZapiHeaders(config: ZapiConfig): Record<string, string> {
  * Removes all non-digit characters and validates E.164 format (10-15 digits)
  */
 export function cleanPhoneNumber(phone: string): string {
+  if (!phone || typeof phone !== 'string') return '';
   return phone.replace('@c.us', '').replace(/\D/g, '');
 }
 
