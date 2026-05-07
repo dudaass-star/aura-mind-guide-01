@@ -539,7 +539,8 @@ Deno.serve(async (req) => {
                 .maybeSingle();
 
               if (claimed) {
-                const sendResult = await sendMessage(cleanPhone, rec.question_text, profile.user_id);
+                const titledQuestion = prefixWithTitle(CLICK_DELIVERY_TITLES.weekly_question, rec.question_text);
+                const sendResult = await sendMessage(cleanPhone, titledQuestion, profile.user_id);
                 if (!sendResult.success) {
                   await supabase.from('weekly_questions').update({ delivered_at: null }).eq('id', rec.id);
                   console.warn(`⚠️ [BUTTON] Falha envio Pergunta da Semana (${rec.id}): ${sendResult.error}`);
@@ -549,7 +550,7 @@ Deno.serve(async (req) => {
                   await supabase.from('messages').insert({
                     user_id: profile.user_id,
                     role: 'assistant',
-                    content: rec.question_text,
+                    content: titledQuestion,
                   });
                   console.log(`💌 [BUTTON] Pergunta da Semana entregue (id=${rec.id})`);
                   deliveryDone = true;
@@ -594,7 +595,8 @@ Deno.serve(async (req) => {
                 .maybeSingle();
 
               if (claimed) {
-                const sendResult = await sendMessage(cleanPhone, rec.preview_text, profile.user_id);
+                const titledLetter = prefixWithTitle(CLICK_DELIVERY_TITLES.monthly_letter, rec.preview_text);
+                const sendResult = await sendMessage(cleanPhone, titledLetter, profile.user_id);
                 if (!sendResult.success) {
                   await supabase.from('monthly_letters').update({ delivered_at: null }).eq('id', rec.id);
                   console.warn(`⚠️ [BUTTON] Falha envio Carta Mensal (${rec.id}): ${sendResult.error}`);
@@ -604,7 +606,7 @@ Deno.serve(async (req) => {
                   await supabase.from('messages').insert({
                     user_id: profile.user_id,
                     role: 'assistant',
-                    content: rec.preview_text,
+                    content: titledLetter,
                   });
                   console.log(`💌 [BUTTON] Preview Carta Mensal entregue (id=${rec.id})`);
                   deliveryDone = true;
