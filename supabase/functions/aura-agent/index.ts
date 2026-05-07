@@ -5862,7 +5862,7 @@ SE ele pedir nova sessão / mais sessões agora:
       console.log(`⏸️ Sessions paused until ${profile.sessions_paused_until} - skipping schedule setup prompt`);
     }
 
-    if (profile?.needs_schedule_setup && planConfig.sessions > 0 && !isSessionsPaused) {
+    if (profile?.needs_schedule_setup && planConfig.sessions > 0 && !isSessionsPaused && !profile?.pending_first_session_invite) {
       const sessionsCount = planConfig.sessions;
       dynamicContext += `
 
