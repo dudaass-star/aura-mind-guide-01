@@ -6399,7 +6399,27 @@ Exemplo com 4 sessões:
         console.log('⚠️ Attempted to schedule session in the past:', scheduledAt.toISOString());
       }
     }
-    
+
+    // Limpa pending_first_session_invite quando a Aura emite [AGENDAR_SESSAO]
+    // (aceite confirmado da 1ª sessão D0) OU quando atingimos o limite de 3
+    // tentativas (usuário recusou/desconversou). Sem isso a flag pode persistir
+    // ou ser zerada cedo demais. (Bug Anderson Costa, 08/05/2026)
+    if (profile?.pending_first_session_invite && profile?.id) {
+      const _attemptsNow = (profile as any)?.first_session_invite_attempts ?? 0;
+      const _shouldClear = !!scheduleMatch || (_attemptsNow + 1) >= 3;
+      if (_shouldClear) {
+        try {
+          await supabase
+            .from('profiles')
+            .update({ pending_first_session_invite: false })
+            .eq('id', profile.id);
+          console.log(`🎯 pending_first_session_invite=false (motivo=${scheduleMatch ? 'tag_emitida' : 'limite_tentativas'})`);
+        } catch (clearErr) {
+          console.warn('⚠️ Falha ao limpar pending_first_session_invite pós-resposta:', clearErr);
+        }
+      }
+    }
+
     // Tag de reagendamento: [REAGENDAR_SESSAO:YYYY-MM-DD HH:mm]
     const rescheduleMatch = assistantMessage.match(/\[REAGENDAR_SESSAO:(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})\]/);
     if (rescheduleMatch && profile?.user_id) {
