@@ -30,5 +30,10 @@ Vale para TODOS os planos (Essencial, Direção, Transformação). Enquanto `pen
 ## Contrato de tag obrigatório
 O prompt do convite D0 exige explicitamente que a Aura termine a resposta com `[AGENDAR_SESSAO:YYYY-MM-DD HH:MM]` ao receber qualquer aceite ("sim", "bora", "vamos", "agora", etc.). Sem a tag, o backend não cria sessão (ver `mem://features/sessions/scheduling-tag-contract`) — incidente recorrente antes do reforço (Alexandre/Adriana, 06-07/05/2026).
 
+## Anti-race do fast-path (08/05/2026 — Anderson Costa)
+- O bloco D0 só é injetado se `message` for fala real do usuário (>0 chars e não cliques curtos como "Começar"/"Bora"/"Sim"/"Ok"). Isso evita que um turno paralelo do worker, disparado logo após o fast-path do WELCOME, queime a flag antes do usuário escrever de fato.
+- A flag `pending_first_session_invite` NÃO é limpa quando o bloco é injetado. A limpeza ocorre só pós-resposta, em duas condições: (a) `[AGENDAR_SESSAO:` foi emitido pela Aura (aceite consumado) ou (b) `first_session_invite_attempts >= 3` (anti-loop, usuário desconversou).
+- Coluna `profiles.first_session_invite_attempts int default 0` controla o anti-loop. Incrementada a cada turno em que o bloco D0 é injetado.
+
 ## Arquivos
 - `supabase/functions/aura-agent/index.ts` — set flag (~5630), inject convite + clear (~5697)
