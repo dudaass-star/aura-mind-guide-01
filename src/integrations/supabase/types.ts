@@ -1016,6 +1016,8 @@ export type Database = {
           do_not_disturb_until: string | null
           email: string | null
           expectations: string | null
+          extractor_pending: boolean
+          extractor_pending_at: string | null
           first_session_invite_attempts: number
           id: string
           journeys_completed: number | null
@@ -1072,6 +1074,8 @@ export type Database = {
           do_not_disturb_until?: string | null
           email?: string | null
           expectations?: string | null
+          extractor_pending?: boolean
+          extractor_pending_at?: string | null
           first_session_invite_attempts?: number
           id?: string
           journeys_completed?: number | null
@@ -1128,6 +1132,8 @@ export type Database = {
           do_not_disturb_until?: string | null
           email?: string | null
           expectations?: string | null
+          extractor_pending?: boolean
+          extractor_pending_at?: string | null
           first_session_invite_attempts?: number
           id?: string
           journeys_completed?: number | null
@@ -1303,6 +1309,7 @@ export type Database = {
           commitments: Json | null
           confirmation_requested: boolean | null
           created_at: string
+          created_by: string
           duration_minutes: number
           ended_at: string | null
           focus_topic: string | null
@@ -1330,6 +1337,7 @@ export type Database = {
           commitments?: Json | null
           confirmation_requested?: boolean | null
           created_at?: string
+          created_by?: string
           duration_minutes?: number
           ended_at?: string | null
           focus_topic?: string | null
@@ -1357,6 +1365,7 @@ export type Database = {
           commitments?: Json | null
           confirmation_requested?: boolean | null
           created_at?: string
+          created_by?: string
           duration_minutes?: number
           ended_at?: string | null
           focus_topic?: string | null
