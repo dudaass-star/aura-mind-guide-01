@@ -5745,18 +5745,22 @@ INSTRUÇÃO:
     // Não dispara se: já existe sessão ativa, pré-arme pendente ou já há sessão agendada futura.
     // A Aura usa o fluxo padrão: emite [AGENDAR_SESSAO:<datetime>] → backend cria sessão →
     // [SESSION_PREARM] ativa início imediato (ver mem://features/session-prearm-flow).
-    if (profile?.pending_first_session_invite && !profile?.current_session_id) {
-      console.log(`🎯 Injetando convite à 1ª sessão (D0) para user ${profile.user_id}`);
+    // Só injeta o convite D0 se houver mensagem real do usuário (não cliques de
+    // template tipo "Começar"/"Bora"/"Sim") — evita queimar o convite num turno
+    // paralelo que rode logo após o fast-path do WELCOME, antes do usuário
+    // efetivamente escrever algo. (Bug Anderson Costa, 08/05/2026)
+    const _msgNorm = String(message || '').trim().toLowerCase();
+    const _looksLikeButtonClick =
+      _msgNorm.length > 0 &&
+      _msgNorm.length <= 12 &&
+      /^(come[çc]ar|bora|sim|ok|acessar|ver|abrir|resumo|conte[úu]do|jornada)\.?!?$/i.test(_msgNorm);
 
-      // Limpa a flag imediatamente (best-effort) para não repetir em próximas mensagens
-      try {
-        await supabase
-          .from('profiles')
-          .update({ pending_first_session_invite: false })
-          .eq('id', profile.id);
-      } catch (clearErr) {
-        console.warn('⚠️ Falha ao limpar pending_first_session_invite:', clearErr);
-      }
+    if (profile?.pending_first_session_invite && !profile?.current_session_id && _msgNorm.length > 0 && !_looksLikeButtonClick) {
+      console.log(`🎯 Injetando convite à 1ª sessão (D0) para user ${profile.user_id} (msg="${_msgNorm.slice(0,40)}")`);
+
+      // NÃO limpamos a flag aqui. A limpeza acontece depois do LLM responder,
+      // só se a tag [AGENDAR_SESSAO: estiver presente (aceite confirmado) ou
+      // recusa explícita. Ver post-processing perto do envio da resposta.
 
       // Calcula "agora arredondado" em BRT para o exemplo de [AGENDAR_SESSAO]
       const nowBrt = new Date(Date.now() - 3 * 60 * 60 * 1000);
