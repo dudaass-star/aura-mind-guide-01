@@ -5745,17 +5745,29 @@ INSTRUÇÃO:
     // Não dispara se: já existe sessão ativa, pré-arme pendente ou já há sessão agendada futura.
     // A Aura usa o fluxo padrão: emite [AGENDAR_SESSAO:<datetime>] → backend cria sessão →
     // [SESSION_PREARM] ativa início imediato (ver mem://features/session-prearm-flow).
-    if (profile?.pending_first_session_invite && !profile?.current_session_id) {
-      console.log(`🎯 Injetando convite à 1ª sessão (D0) para user ${profile.user_id}`);
+    // Só injeta o convite D0 se houver mensagem real do usuário (não cliques de
+    // template tipo "Começar"/"Bora"/"Sim") — evita queimar o convite num turno
+    // paralelo que rode logo após o fast-path do WELCOME, antes do usuário
+    // efetivamente escrever algo. (Bug Anderson Costa, 08/05/2026)
+    const _msgNorm = String(message || '').trim().toLowerCase();
+    const _looksLikeButtonClick =
+      _msgNorm.length > 0 &&
+      _msgNorm.length <= 12 &&
+      /^(come[çc]ar|bora|sim|ok|acessar|ver|abrir|resumo|conte[úu]do|jornada)\.?!?$/i.test(_msgNorm);
 
-      // Limpa a flag imediatamente (best-effort) para não repetir em próximas mensagens
+    const _d0Attempts = (profile as any)?.first_session_invite_attempts ?? 0;
+    if (profile?.pending_first_session_invite && !profile?.current_session_id && _msgNorm.length > 0 && !_looksLikeButtonClick && _d0Attempts < 3) {
+      console.log(`🎯 Injetando convite à 1ª sessão (D0) para user ${profile.user_id} (msg="${_msgNorm.slice(0,40)}", tentativa ${_d0Attempts + 1}/3)`);
+
+      // Incrementa o contador. NÃO limpamos a flag aqui — só após a Aura emitir
+      // [AGENDAR_SESSAO:...] (ver pós-processamento) ou após 3 tentativas (anti-loop).
       try {
         await supabase
           .from('profiles')
-          .update({ pending_first_session_invite: false })
+          .update({ first_session_invite_attempts: _d0Attempts + 1 })
           .eq('id', profile.id);
-      } catch (clearErr) {
-        console.warn('⚠️ Falha ao limpar pending_first_session_invite:', clearErr);
+      } catch (incErr) {
+        console.warn('⚠️ Falha ao incrementar first_session_invite_attempts:', incErr);
       }
 
       // Calcula "agora arredondado" em BRT para o exemplo de [AGENDAR_SESSAO]
@@ -6387,7 +6399,27 @@ Exemplo com 4 sessões:
         console.log('⚠️ Attempted to schedule session in the past:', scheduledAt.toISOString());
       }
     }
-    
+
+    // Limpa pending_first_session_invite quando a Aura emite [AGENDAR_SESSAO]
+    // (aceite confirmado da 1ª sessão D0) OU quando atingimos o limite de 3
+    // tentativas (usuário recusou/desconversou). Sem isso a flag pode persistir
+    // ou ser zerada cedo demais. (Bug Anderson Costa, 08/05/2026)
+    if (profile?.pending_first_session_invite && profile?.id) {
+      const _attemptsNow = (profile as any)?.first_session_invite_attempts ?? 0;
+      const _shouldClear = !!scheduleMatch || (_attemptsNow + 1) >= 3;
+      if (_shouldClear) {
+        try {
+          await supabase
+            .from('profiles')
+            .update({ pending_first_session_invite: false })
+            .eq('id', profile.id);
+          console.log(`🎯 pending_first_session_invite=false (motivo=${scheduleMatch ? 'tag_emitida' : 'limite_tentativas'})`);
+        } catch (clearErr) {
+          console.warn('⚠️ Falha ao limpar pending_first_session_invite pós-resposta:', clearErr);
+        }
+      }
+    }
+
     // Tag de reagendamento: [REAGENDAR_SESSAO:YYYY-MM-DD HH:mm]
     const rescheduleMatch = assistantMessage.match(/\[REAGENDAR_SESSAO:(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})\]/);
     if (rescheduleMatch && profile?.user_id) {

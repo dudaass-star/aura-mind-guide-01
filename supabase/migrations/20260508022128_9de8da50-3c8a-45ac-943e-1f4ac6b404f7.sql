@@ -1,0 +1,1 @@
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS first_session_invite_attempts integer NOT NULL DEFAULT 0;

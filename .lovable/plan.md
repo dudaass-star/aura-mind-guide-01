@@ -1,54 +1,61 @@
-# Convite D0 à 1ª sessão para todos os planos
+# Convite D0 sumindo após WELCOME — race condition no fast-path
 
-## Problema confirmado
+## O que aconteceu com o Anderson Costa
 
-O convite à 1ª sessão pós-WELCOME só funciona para Essencial. Para Direção e Transformação, ele é silenciosamente atropelado pelo prompt de "configurar agenda mensal", porque ambos os blocos disparam na mesma resposta. Resultado: 7 usuários Direção criados nas últimas 48h, 0 sessões D0 iniciadas. Apenas Fabiana (Essencial) teve sessão.
+Linha do tempo (timestamps reais do banco):
+- 01:47:37 — usuário clica "Começar" no template
+- 01:47:43 — fast-path entrega WELCOME e seta `pending_first_session_invite=true`
+- **01:48:03 — Aura envia "Bora! 💜" (assistant)** ← anomalia: mensagem extra, sem convite D0
+- 01:48:28 — usuário responde "Estou um pouco melhor..."
+- 01:48:47 em diante — Aura pula para "vamos organizar as 4 sessões do mês" (fluxo `needs_schedule_setup`)
 
-## Causa raiz
+Ou seja: o convite à 1ª sessão D0 nunca foi disparado. Aura foi direto para o setup mensal — exatamente o que a guarda em `aura-agent/index.ts:5874` deveria impedir. A flag `pending_first_session_invite` está `false` no banco agora, então **alguma coisa consumiu a flag silenciosamente entre 01:47:43 e 01:48:28**, sem produzir o convite.
 
-Em `supabase/functions/aura-agent/index.ts`:
-- Linha 5748 — injeta CONVITE D0 (1ª sessão, tema livre, agora)
-- Linha 5865 — injeta CONFIGURAÇÃO DE AGENDA MENSAL (4/8 sessões da semana)
+## Causa raiz: race condition fast-path × LLM paralelo
 
-Quando o usuário tem plano Direção/Transformação e a flag `pending_first_session_invite=true`, os DOIS blocos são injetados no mesmo prompt. A Aura segue o fluxo mensal porque ele é mais detalhado e termina não emitindo `[AGENDAR_SESSAO:...]` para a sessão D0.
+O fast-path em `aura-agent/index.ts:4290-4337` entrega o WELCOME direto via WhatsApp e retorna `fastPath: true`, mas o webhook/worker tem um padrão de re-acumulação pós-agente. A mensagem "Bora! 💜" é a impressão digital disso: um segundo turno do LLM rodou logo após o fast-path, dentro do mesmo evento "Começar". Esse segundo turno:
 
-## Mudanças
+1. Leu o profile já atualizado (`pending_first_session_invite=true`)
+2. Caiu no bloco D0 (linha 5748) → **limpou a flag** (linha 5755)
+3. Mas o usuário ainda não tinha mandado mensagem real → LLM produziu só "Bora! 💜" sem emitir `[AGENDAR_SESSAO]`
+4. Quando o Anderson de fato escreveu ("Estou um pouco melhor..."), a flag já estava `false` → guarda em 5874 não bloqueou mais → entrou o setup mensal
 
-### 1. Prioridade dura no aura-agent (linha ~5865)
-Pular o bloco de `needs_schedule_setup` enquanto `pending_first_session_invite=true`. A configuração mensal só entra DEPOIS que a 1ª sessão D0 foi agendada/concluída.
+Confirma o diagnóstico:
+- Não existe nenhum log `🎯 Injetando convite à 1ª sessão (D0)` para esse user (busquei).
+- A "Bora! 💜" às 01:48:03 não tem mensagem do usuário entre 01:47:37 e 01:48:28 que a justifique.
+- A flag está `false` no banco mesmo sem o convite ter sido feito.
 
-```ts
-if (profile?.needs_schedule_setup 
-    && planConfig.sessions > 0 
-    && !isSessionsPaused
-    && !profile?.pending_first_session_invite) {  // <- adiciona guarda
-```
+## Mudanças propostas
 
-### 2. Reforçar obrigatoriedade da tag no convite D0 (linha ~5768)
-Hoje o prompt diz "emita ao final" — vou tornar imperativo, com exemplo concreto, alinhado ao contrato em `mem://features/sessions/scheduling-tag-contract`:
+### 1. Limpar flag SOMENTE quando o convite for de fato emitido
+Em `aura-agent/index.ts:5748-5759`, mover o `update({ pending_first_session_invite: false })` para depois da resposta da Aura, condicionado à presença da tag `[AGENDAR_SESSAO:` OU à confirmação de que o turno realmente convidou (heurística simples: response contém "sessão" + emitiu tag, OU usuário recusou explicitamente). Hoje a flag é zerada antes do LLM responder, então qualquer falha (race, recusa, desvio) queima o convite para sempre.
 
-- "OBRIGATÓRIO: se o usuário aceitar (qualquer sinal de sim, 'bora', 'vamos'), a resposta DEVE terminar com `[AGENDAR_SESSAO:YYYY-MM-DD HH:MM]`. Sem essa tag, a sessão NÃO é criada e você quebra a promessa."
-- Adicionar exemplo de turno completo mostrando a tag no fim.
+Padrão a seguir: só limpar a flag quando:
+- A resposta gerada contém `[AGENDAR_SESSAO:` (aceite confirmado), OU
+- Já passaram N (3-4) interações desde que a flag foi setada (anti-loop), OU
+- O usuário explicitamente desconversou do convite
 
-### 3. Recuperar os 7 usuários Direção que ficaram sem sessão D0
-Re-armar `pending_first_session_invite=true` apenas para os 7 usuários Direção das últimas 48h que: (a) ainda não têm nenhuma sessão criada, (b) `status='trial'`, (c) ainda estão dentro do trial de 7 dias. Na próxima mensagem deles, o convite D0 dispara naturalmente.
+### 2. Bloquear D0 quando turno não tem mensagem real do usuário
+Em `aura-agent/index.ts:5748`, adicionar guarda: só injetar o bloco D0 se `message?.trim()` existir e não for o próprio click "Começar" (mesmo padrão do `isButtonClick` em 4286). Isso impede que o segundo turno paralelo do worker queime o convite com uma resposta vazia tipo "Bora! 💜".
 
-Lista atual:
-- Aline Kosuzinski, Danubia Santos, Nagirley Araújo, Adriana Paula, Alexandre Pardossi, Silvia Cristina, Marilene Alves
+### 3. Fast-path: marcar `last_content_sent_at` para criar janela de cooldown
+Adicionar em `aura-agent/index.ts:4313-4319` uma flag/timestamp tipo `welcome_delivered_at` (ou reusar `last_content_sent_at` já existente) e fazer o LLM principal abortar qualquer execução paralela nos N segundos seguintes ao fast-path do WELCOME. Já existe lógica de lock em `aura_response_state` — verificar por que ela não está prevenindo este turno extra e reforçar.
 
-Observação: Adriana e Alexandre já estão em conversa avançada sobre agenda mensal — para esses dois, sugiro NÃO re-armar (seria redundante/confuso). Vou re-armar só os 5 que mal conversaram.
+### 4. Recuperar o Anderson Costa manualmente
+- Re-armar `pending_first_session_invite=true` no profile dele
+- Como ele já está em conversa avançada de setup mensal (já confirmou dias e horários), o re-arme aqui seria confuso. **Recomendo NÃO re-armar** — a 1ª sessão dele já está marcada para sábado 09/05 às 21h. Apenas registrar como caso documentado e seguir.
+
+### 5. Auditoria dos demais novos usuários
+Rodar query nas últimas 48h: profiles com `created_at` recente, `pending_first_session_invite=false` e SEM nenhuma sessão criada em até 30 min após o `trial_started_at`. Esses são os que sofreram o mesmo bug. Re-armar os que ainda não estão em conversa avançada.
 
 ## Arquivos afetados
 
-- `supabase/functions/aura-agent/index.ts` — guarda em ~5865 + reforço de prompt em ~5768
-- Ação manual: UPDATE em `profiles` para os 5 usuários elegíveis
+- `supabase/functions/aura-agent/index.ts` — linhas ~4313, ~5748-5759, ~5874
+- DB: UPDATE pontual em `profiles` para usuários elegíveis identificados na auditoria
+- `mem/features/sessions/first-session-invite-d0.md` — documentar a regra "limpar flag só após emissão da tag" e o anti-race do fast-path
 
-## Validação
+## Validação pós-deploy
 
-- Logs: buscar `🎯 Injetando convite à 1ª sessão (D0)` na próxima interação dos usuários re-armados
-- DB: contar sessões criadas em D0 (criadas dentro de 24h do `trial_started_at`) vs total de novos trials por plano
-- Não deve haver `# 📅 CONFIGURAÇÃO DE AGENDA DO MÊS` no prompt enquanto `pending_first_session_invite=true`
-
-## Memória
-
-Atualizar `mem://features/sessions/first-session-invite-d0` para registrar a precedência sobre `needs_schedule_setup` e que vale para todos os planos.
+- Próximo trial novo: log `🎯 Injetando convite à 1ª sessão (D0)` deve aparecer **na primeira mensagem real** do usuário (não no clique "Começar")
+- Não deve aparecer mensagem solta tipo "Bora! 💜" entre WELCOME e primeira resposta real
+- Bloco `# 📅 CONFIGURAÇÃO DE AGENDA DO MÊS` não deve ser injetado enquanto convite D0 não foi resolvido (com tag emitida ou recusa explícita)
