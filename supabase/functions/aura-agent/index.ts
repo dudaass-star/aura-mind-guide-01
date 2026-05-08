@@ -4786,6 +4786,9 @@ serve(async (req) => {
     let currentEpisodeInfo = '0';
     let totalEpisodesInfo = '0';
     let meditationCatalogSection = '';
+    // Catálogo acessível também no escopo do fallback (linha ~7353).
+    // Mantido fora do if(profile?.user_id) para evitar ReferenceError quando o fallback de meditação roda.
+    const meditationCatalog = new Map<string, { titles: string[], triggers: string[], best_for: string[] }>();
 
     if (profile?.user_id) {
       const userId = profile.user_id;
@@ -5021,7 +5024,6 @@ serve(async (req) => {
 
       // 10. Meditations catalog
       const availableMeditations = meditationsResult.status === 'fulfilled' ? meditationsResult.value.data || [] : [];
-      const meditationCatalog = new Map<string, { titles: string[], triggers: string[], best_for: string[] }>();
       for (const m of availableMeditations) {
         if (!meditationCatalog.has(m.category)) {
           meditationCatalog.set(m.category, { titles: [], triggers: [], best_for: [] });
