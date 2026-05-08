@@ -1016,6 +1016,7 @@ export type Database = {
           do_not_disturb_until: string | null
           email: string | null
           expectations: string | null
+          first_session_invite_attempts: number
           id: string
           journeys_completed: number | null
           last_checkin_sent_at: string | null
@@ -1071,6 +1072,7 @@ export type Database = {
           do_not_disturb_until?: string | null
           email?: string | null
           expectations?: string | null
+          first_session_invite_attempts?: number
           id?: string
           journeys_completed?: number | null
           last_checkin_sent_at?: string | null
@@ -1126,6 +1128,7 @@ export type Database = {
           do_not_disturb_until?: string | null
           email?: string | null
           expectations?: string | null
+          first_session_invite_attempts?: number
           id?: string
           journeys_completed?: number | null
           last_checkin_sent_at?: string | null
