@@ -5755,12 +5755,20 @@ INSTRUÇÃO:
       _msgNorm.length <= 12 &&
       /^(come[çc]ar|bora|sim|ok|acessar|ver|abrir|resumo|conte[úu]do|jornada)\.?!?$/i.test(_msgNorm);
 
-    if (profile?.pending_first_session_invite && !profile?.current_session_id && _msgNorm.length > 0 && !_looksLikeButtonClick) {
-      console.log(`🎯 Injetando convite à 1ª sessão (D0) para user ${profile.user_id} (msg="${_msgNorm.slice(0,40)}")`);
+    const _d0Attempts = (profile as any)?.first_session_invite_attempts ?? 0;
+    if (profile?.pending_first_session_invite && !profile?.current_session_id && _msgNorm.length > 0 && !_looksLikeButtonClick && _d0Attempts < 3) {
+      console.log(`🎯 Injetando convite à 1ª sessão (D0) para user ${profile.user_id} (msg="${_msgNorm.slice(0,40)}", tentativa ${_d0Attempts + 1}/3)`);
 
-      // NÃO limpamos a flag aqui. A limpeza acontece depois do LLM responder,
-      // só se a tag [AGENDAR_SESSAO: estiver presente (aceite confirmado) ou
-      // recusa explícita. Ver post-processing perto do envio da resposta.
+      // Incrementa o contador. NÃO limpamos a flag aqui — só após a Aura emitir
+      // [AGENDAR_SESSAO:...] (ver pós-processamento) ou após 3 tentativas (anti-loop).
+      try {
+        await supabase
+          .from('profiles')
+          .update({ first_session_invite_attempts: _d0Attempts + 1 })
+          .eq('id', profile.id);
+      } catch (incErr) {
+        console.warn('⚠️ Falha ao incrementar first_session_invite_attempts:', incErr);
+      }
 
       // Calcula "agora arredondado" em BRT para o exemplo de [AGENDAR_SESSAO]
       const nowBrt = new Date(Date.now() - 3 * 60 * 60 * 1000);
