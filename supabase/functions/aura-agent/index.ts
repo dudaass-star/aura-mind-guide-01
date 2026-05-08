@@ -7417,6 +7417,9 @@ Só DEPOIS de saber a situação, explore as emoções com profundidade.`;
     // ========================================================================
     // FALLBACK: Se usuário pediu meditação mas LLM esqueceu a tag
     // ========================================================================
+    // Envolvido em try/catch defensivo: se este bloco opcional falhar,
+    // a resposta principal da Aura NÃO pode ser derrubada.
+    try {
     if (!meditationMatch && (profile?.user_id || userPhone)) {
       const userLower = message.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
       const meditationKeywords = ['meditacao', 'meditar', 'meditando', 'meditation', 'medita pra', 'medita para'];
@@ -7467,6 +7470,9 @@ Só DEPOIS de saber a situação, explore as emoções com profundidade.`;
           console.error(`🧘 FALLBACK send-meditation error:`, err);
         });
       }
+    }
+    } catch (fallbackError) {
+      console.warn('⚠️ [meditation-fallback] skipped due to error (non-fatal):', fallbackError);
     }
 
 
