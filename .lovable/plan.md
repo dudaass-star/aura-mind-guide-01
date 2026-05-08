@@ -1,139 +1,70 @@
-# Safety Net D0 — Plano Técnico (v3)
+## Aviso importante sobre o que você está vendo
 
-## Objetivo
-Capturar o caso em que a Aura confirma a 1ª sessão D0 verbalmente mas esquece de emitir `[AGENDAR_SESSAO:YYYY-MM-DD HH:MM]`. O extractor **nunca cria sessão** — apenas envia uma re-confirmação proativa para que o usuário responda "sim", e aí o fluxo existente (`aura-agent` regex → INSERT em `sessions`) faz o trabalho normal.
+O arquivo `.lovable/plan.md` aberto no editor é o **plano antigo do Safety Net D0** (já implementado e em produção desde 08/05 cedo). Ele **não é** o plano para resolver o silêncio da Luana — é só um arquivo histórico que ficou aberto. Vou descrever abaixo o plano que de fato resolve o problema atual.
 
-## Escopo
-- Apenas o **convite D0 da 1ª sessão** (`profiles.pending_first_session_invite=true` no início do turno).
-- Reagendamento, setup mensal e sessões avulsas continuam tag-only.
+## Verificação do diagnóstico (feita agora, com dados reais)
 
----
+1. **Código no repo está correto.** `aura-agent/index.ts:4791` declara `const meditationCatalog` **fora** do `if (profile?.user_id)`, com comentário explicativo (linhas 4789-4790: "Mantido fora do if(profile?.user_id) para evitar ReferenceError quando o fallback de meditação roda"). O fallback em `index.ts:7430` consegue enxergar a variável.
 
-## Arquitetura
+2. **Produção está com a versão antiga.** A `failed_message_log` mostra **9 falhas** com `meditationCatalog is not defined` nas últimas 24h, a última às **17:11 UTC de hoje** (já depois do nosso fix). Todas vêm da `process-webhook-message` invocando a `aura-agent`.
 
-```text
-aura-agent (responde) ──► hasScheduleTag? 
-                              │
-                       não ───┴─── sim → fluxo normal (regex cria sessão)
-                              │
-                  shouldRunScheduleSafetyNet()
-                  (gates zero-custo)
-                              │
-                              ▼
-              await UPDATE profiles SET extractor_pending=true
-                              │
-                       ok ────┴──── falhou → ABORTA (não invoca extractor)
-                              │
-                              ▼
-              EdgeRuntime.waitUntil(invoke schedule-tag-extractor)
-                              │
-                              ▼
-              extractor → sendProactive (re-confirmação)
-                              │
-              usuário responde "sim" → aura-agent → tag → sessão criada
-```
+3. **Apenas a Luana é afetada.** As mensagens acumuladas dela contêm "meditação", o que dispara o regex em `index.ts:7422-7423` (`['meditacao','meditar',...]`) → entra no fallback → ReferenceError na versão deployada. Outros usuários não escreveram essa palavra recentemente, então nem entram nesse caminho.
 
----
+4. **Conclusão:** Drift entre repo e produção. O fix está commitado mas o GitHub Actions não publicou — provavelmente porque commits do Lovable nem sempre disparam o workflow definido em `.github/workflows/deploy-functions.yml`.
 
-## Decisão crítica: `await` no lock (mantido)
+## Esta é a solução correta? Sim — com 3 partes
 
-### Por que `await` e não `Promise.all` fire-and-forget
+A "solução real" não é só republicar. Se republicar e nada mais, o mesmo bug pode voltar amanhã via outro caminho. O plano abaixo resolve **agora** + **previne reincidência**.
 
-**Custo:** UPDATE por PK em `profiles` → 50–150ms. Inserido entre a resposta da Aura (já entregue ao WhatsApp) e o `waitUntil`. Não bloqueia entrega.
+### Parte 1 — Republicar o `aura-agent` (resolve o agora)
 
-**Race window se removermos o `await`:**
-1. Usuário manda "bora" + "agora" em 800ms.
-2. Turno 1: dispara `Promise.all([update, invoke])` — update ainda em flight.
-3. Turno 2 entra no `aura-agent`, lê `extractor_pending=false` (update do turno 1 ainda não commitou), passa o gate, dispara segundo `Promise.all`.
-4. Resultado: 2 extractors → 2 mensagens de re-confirmação → exatamente o cenário que o lock deveria evitar.
+Usar `supabase--deploy_edge_functions(["aura-agent"])`. Sem mudança de código — só promover o que já está no repo.
 
-Com `await`, o turno 2 só lê o profile depois do commit do turno 1, vê `extractor_pending=true` e é bloqueado pelo gate.
+**Validação imediata pós-deploy:**
+- `select created_at, error from failed_message_log where created_at > now() - interval '5 min' and error like '%meditationCatalog%'` → tem que voltar 0 linhas.
+- Verificar mensagens novas da Luana: `select role, content, created_at from messages where user_id='802bbcf8-690c-4956-b350-87973337ad11' order by created_at desc limit 5` → tem que aparecer `assistant` recente.
 
-**Erro do UPDATE = sinal de abortar.** Se o lock falha (RLS, conexão, conflito), **não invocamos o extractor**. Melhor perder uma re-confirmação do que disparar duas. Sem `await`, um erro silencioso no update vira um trigger sem proteção.
+### Parte 2 — Mensagem de recuperação para a Luana
 
-### Implementação do abort
+Ela ficou ~17h sem resposta após mandar 6 mensagens pedindo conexão. Janela de 24h ainda aberta (última msg dela 17:09 UTC). Disparar 1 `sendProactive` (categoria `checkin` = texto livre dentro da janela) com algo curto e honesto:
 
-```ts
-// aura-agent/index.ts (~linha 6608, após hasScheduleTag check)
-if (!hasScheduleTag && shouldRunScheduleSafetyNet(profile, message, auraResponse)) {
-  const { error: lockError } = await supabase
-    .from('profiles')
-    .update({
-      extractor_pending: true,
-      extractor_pending_at: new Date().toISOString(),
-    })
-    .eq('user_id', userId)
-    .eq('extractor_pending', false); // optimistic lock: só passa se ainda estava livre
+> "Luana, me perdoa o sumiço — tive um problema técnico aqui e suas mensagens não chegaram em mim. Tô de volta. Quer continuar de onde parou (segurança, cargo público, o Ravi) ou começar pelo que tá mais vivo agora?"
 
-  if (lockError) {
-    console.error('🏷️ [SAFETY_NET] lock failed, aborting extractor invoke', lockError);
-  } else {
-    EdgeRuntime.waitUntil(
-      supabase.functions.invoke('schedule-tag-extractor', {
-        body: { userId, lastUserMessage: message, lastAuraResponse: auraResponse }
-      }).catch(e => console.error('🏷️ [SAFETY_NET] invoke failed', e))
-    );
-  }
-}
-```
+Pode ir pelo painel admin (`/admin/messages`) que já usa `admin-send-message` → `sendProactive` corretamente.
 
-Notas:
-- `.eq('extractor_pending', false)` adiciona **optimistic locking** — se outro turno paralelo já gravou `true`, o UPDATE retorna 0 linhas (sem erro), e o segundo invoke nem é tentado. Verificamos via `count` ou re-leitura leve; se preferir simplicidade, mantemos só o gate em memória e confiamos no commit serial do Postgres por PK.
-- Latência total acrescentada ao turno: ~100ms (≈3% do delay 1.5–3.5s já existente).
-- Erro não derruba a resposta — log + continue. Resposta da Aura já foi entregue antes desse bloco (linha de envio fica acima).
+### Parte 3 — Hardening preventivo (mesmo deploy)
 
-### TTL do lock
-`extractor_pending_at` permite expirar locks órfãos. O extractor, ao terminar (sucesso ou falha), faz `UPDATE profiles SET extractor_pending=false`. Job de limpeza ou check inline: se `now() - extractor_pending_at > 10min`, considera expirado.
+a) **Try/catch defensivo no fallback de meditação** (`aura-agent/index.ts:7420-7470`):
+   Envolver todo o bloco `if (!meditationMatch && ...)` em `try { ... } catch (e) { console.warn('[meditation-fallback] skipped:', e); }`. Esse fallback é **opcional** — se quebrar, no pior caso o usuário não recebe a meditação, mas a resposta principal da Aura segue. Hoje um erro ali derruba a resposta inteira.
 
----
+b) **Garantir que commits do Lovable disparem o deploy:**
+   - O workflow atual usa `paths:` com filtro restritivo (`supabase/functions/aura-agent/**` etc.). Push do Lovable em outros caminhos não dispara, e às vezes o trigger nem dispara mesmo com path match (depende de permissões do `GITHUB_TOKEN`).
+   - Adicionar `workflow_dispatch:` ao topo do workflow → permite trigger manual via UI/API quando preciso.
+   - Opcional: remover o filtro `paths:` para garantir deploy em qualquer push para `main` (custo: ~30s a mais por commit, ganho: zero drift).
 
-## Componentes
+c) **Alerta operacional simples:** cron diário (já temos infra) que faz `select count(*) from failed_message_log where created_at > now() - interval '1 hour' and resolved = false group by error having count(*) >= 3` e dispara email pra `ADMIN_ALERT_EMAIL`. Hoje a Luana ficou 17h sem ninguém perceber.
 
-### 1. Migration
-- `sessions.created_by text default 'aura_tag'` (valores: `aura_tag` | `extractor_reconfirm` | `manual_admin`).
-- `profiles.extractor_pending boolean default false`.
-- `profiles.extractor_pending_at timestamptz`.
+### Parte 4 — Memória
 
-### 2. `schedule-tag-extractor/index.ts` (novo, ~180 linhas)
-- Modelo: `google/gemini-2.5-flash-lite` + tool calling.
-- System prompt ultra-conservador: "qualquer ambiguidade → `confirmed=false`".
-- Se `confirmed=true`: `sendProactive` com texto de re-confirmação ("Pra confirmar: nossa sessão fica marcada pra <horário>?").
-- **Nunca** escreve em `sessions`.
-- No `finally`: `UPDATE profiles SET extractor_pending=false`.
+Atualizar `mem://technical/ai/aura-agent-deployment-and-fallback-safety.md` (criar se não existir) com:
+- Commits do Lovable em `supabase/functions/**` **podem não disparar** o workflow → sempre validar com `failed_message_log` depois de mexer no agent.
+- Padrão obrigatório: qualquer fallback opcional dentro do `aura-agent` deve estar em `try/catch` próprio.
 
-### 3. `aura-agent/index.ts` (+~45 linhas após 6608)
-- `hasScheduleTag` (regex `/\[AGENDAR_SESSAO:/`).
-- `shouldRunScheduleSafetyNet`: gates zero-custo
-  - `profile.pending_first_session_invite === true`
-  - `profile.extractor_pending !== true` (ou expirado >10min)
-  - regex de aceite do usuário (`bora|vamos|sim|fechado|agora|...`)
-  - regex de confirmação da Aura (`combinado|fechado|nos vemos|marcado|...`)
-- Bloco do snippet acima.
+## Arquivos que serão tocados
 
-### 4. `supabase/config.toml`
-```toml
-[functions.schedule-tag-extractor]
-verify_jwt = false
-```
+- `supabase/functions/aura-agent/index.ts` — try/catch no bloco 7420-7470 (Parte 3a).
+- `.github/workflows/deploy-functions.yml` — adicionar `workflow_dispatch` e revisar `paths` (Parte 3b).
+- `mem/technical/ai/aura-agent-deployment-and-fallback-safety.md` (novo) + `mem/index.md` (referência).
+- **Sem migration**, sem mudança de schema, sem nova edge function.
 
-### 5. `.github/workflows/deploy-functions.yml`
-Adicionar deploy da nova função.
+## Risco / rollback
 
-### 6. Memórias
-- `mem://features/sessions/safety-net-d0.md` (novo)
-- Atualizar `mem://features/sessions/scheduling-tag-contract.md` (linkar safety net)
-- Atualizar `mem://features/sessions/first-session-invite-d0.md`
-- Atualizar `mem://index.md`
+- Republicar `aura-agent`: risco mínimo. É exatamente o código atual do repo, fix de 1 linha já validado.
+- Try/catch: risco zero — só impede propagação de erro.
+- Mudança no workflow: zero impacto runtime — só configuração de CI.
 
----
+## Por que esta É a solução real (e não só uma correção pontual)
 
-## Validação pós-deploy
-- Smoke test: enviar "bora" no D0 → esperar re-confirmação → responder "sim" → verificar `sessions` com `created_by='extractor_reconfirm'`.
-- Query diária de auditoria: contagem por `created_by` últimas 24h.
-- Alarme: se `extractor_reconfirm` > 20% do total → reabrir investigação do prompt.
-- Rollback emergencial: feature flag em `profiles` ou env var no extractor para retornar imediatamente sem `sendProactive`.
-
-## Não-objetivos
-- Não cobre reagendamento, setup mensal, sessão avulsa.
-- Não cria sessão silenciosamente em nenhuma hipótese.
-- Não troca modelo nem faz retry de LLM.
+- **Resolve o sintoma:** Luana volta a receber resposta no próximo deploy.
+- **Resolve a causa direta:** o fix do escopo da variável já está no código.
+- **Resolve a causa sistêmica:** drift de deploy + fallback frágil + zero alerta. Sem isso, o próximo bug parecido vai silenciar outro usuário por horas de novo.

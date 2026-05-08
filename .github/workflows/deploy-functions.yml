@@ -1,15 +1,10 @@
 name: Deploy Edge Functions
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
-    paths:
-      - 'supabase/functions/aura-agent/**'
-      - 'supabase/functions/instagram-agent/**'
-      - 'supabase/functions/audit-orphan-subscribers/**'
-      - 'supabase/functions/schedule-tag-extractor/**'
-      - 'supabase/functions/_shared/**'
 
 jobs:
   deploy:
