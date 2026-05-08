@@ -6402,6 +6402,81 @@ Exemplo com 4 sessões:
       }
     }
 
+    // ========================================================================
+    // SAFETY NET D0 — re-confirmação quando a Aura esquece [AGENDAR_SESSAO:]
+    // ------------------------------------------------------------------------
+    // Dispara micro-agente schedule-tag-extractor SOMENTE quando:
+    //   - estamos no convite D0 da 1ª sessão (pending_first_session_invite)
+    //   - a Aura NÃO emitiu [AGENDAR_SESSAO:] neste turno
+    //   - heurística regex sugere aceite do usuário + confirmação verbal da Aura
+    //   - lock extractor_pending livre (ou expirado >10min)
+    // O micro-agente NUNCA cria sessão — apenas envia re-confirmação proativa.
+    // A criação continua acontecendo via regex literal acima quando o usuário
+    // responder "sim" e a Aura emitir a tag no próximo turno.
+    // ========================================================================
+    if (
+      !scheduleMatch &&
+      profile?.pending_first_session_invite &&
+      profile?.user_id &&
+      typeof message === 'string' &&
+      typeof assistantMessage === 'string'
+    ) {
+      const _userAcceptRegex = /\b(sim|bora|vamos|fechado|combinado|topo|agora|ok|pode ser|tá bom|ta bom|beleza|partiu)\b/i;
+      const _auraConfirmRegex = /\b(combinado|fechado|nos vemos|marcado|tá no calendário|ta no calendario|vou abrir|abrir agora|nossa sessão|nossa sessao)\b/i;
+      const _userAccepted = _userAcceptRegex.test(message);
+      const _auraConfirmed = _auraConfirmRegex.test(assistantMessage);
+
+      // Lock TTL — considera expirado após 10min para destravar locks órfãos
+      const _lockAt = (profile as any)?.extractor_pending_at
+        ? new Date((profile as any).extractor_pending_at).getTime()
+        : 0;
+      const _lockAgeMs = _lockAt > 0 ? Date.now() - _lockAt : Number.POSITIVE_INFINITY;
+      const _lockBusy = !!(profile as any)?.extractor_pending && _lockAgeMs < 10 * 60 * 1000;
+
+      if (_userAccepted && _auraConfirmed && !_lockBusy) {
+        // Optimistic locking via .eq('extractor_pending', false): se um turno
+        // paralelo já gravou true, o UPDATE retorna 0 linhas e nem invocamos
+        // o extractor. Aguardamos (await) para garantir commit antes de
+        // disparar — sem isso, dois turnos rápidos podem ler false em
+        // paralelo e disparar dois extractors (race window real).
+        try {
+          const { error: lockError, count: lockCount } = await supabase
+            .from('profiles')
+            .update(
+              {
+                extractor_pending: true,
+                extractor_pending_at: new Date().toISOString(),
+              },
+              { count: 'exact' },
+            )
+            .eq('id', profile.id)
+            .eq('extractor_pending', false);
+
+          if (lockError) {
+            console.error('🏷️ [SAFETY_NET] lock falhou — abortando invoke', lockError);
+          } else if ((lockCount ?? 0) === 0) {
+            console.log('🏷️ [SAFETY_NET] lock já estava ocupado em paralelo — abortando');
+          } else {
+            console.log('🏷️ [SAFETY_NET] disparando extractor (D0 sem tag)');
+            // Fire-and-forget — entrega da resposta principal já aconteceu acima
+            EdgeRuntime.waitUntil(
+              supabase.functions
+                .invoke('schedule-tag-extractor', {
+                  body: {
+                    userId: profile.user_id,
+                    lastUserMessage: message,
+                    lastAuraResponse: assistantMessage,
+                  },
+                })
+                .catch((e) => console.error('🏷️ [SAFETY_NET] invoke falhou', e)),
+            );
+          }
+        } catch (lockEx) {
+          console.error('🏷️ [SAFETY_NET] exceção no lock — abortando', lockEx);
+        }
+      }
+    }
+
     // Limpa pending_first_session_invite quando a Aura emite [AGENDAR_SESSAO]
     // (aceite confirmado da 1ª sessão D0) OU quando atingimos o limite de 3
     // tentativas (usuário recusou/desconversou). Sem isso a flag pode persistir
