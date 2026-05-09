@@ -31,7 +31,7 @@ const plans = [
 ];
 
 const PricingV2 = () => (
-  <section id="precos-v2" className="relative py-28 md:py-36 bg-background overflow-hidden">
+  <section id="precos" className="relative py-28 md:py-36 bg-background overflow-hidden">
     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] v2-glow-sage pointer-events-none" />
 
     <div className="container mx-auto px-6 relative z-10">

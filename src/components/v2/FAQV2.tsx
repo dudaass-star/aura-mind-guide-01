@@ -26,7 +26,7 @@ const faqs = [
 ];
 
 const FAQV2 = () => (
-  <section className="relative py-28 md:py-36 bg-background">
+  <section id="faq" className="relative py-28 md:py-36 bg-background">
     <div className="container mx-auto px-6">
       <div className="max-w-2xl mx-auto">
         <p className="text-sm uppercase tracking-[0.25em] text-primary/80 mb-4 text-center">dúvidas</p>
