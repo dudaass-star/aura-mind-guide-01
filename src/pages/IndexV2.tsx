@@ -5,7 +5,7 @@ import "@/styles/v2-theme.css";
 import HeaderV2 from "@/components/v2/HeaderV2";
 import HeroV2 from "@/components/v2/HeroV2";
 import EmotionalMirror from "@/components/v2/EmotionalMirror";
-import ConversationShowcase from "@/components/v2/ConversationShowcase";
+import DemoV2 from "@/components/v2/DemoV2";
 import TransformationsV2 from "@/components/v2/TransformationsV2";
 import ComparisonV2 from "@/components/v2/ComparisonV2";
 import TestimonialsV2 from "@/components/v2/TestimonialsV2";
@@ -45,7 +45,7 @@ const IndexV2 = () => {
         <main>
           <HeroV2 />
           <EmotionalMirror />
-          <ConversationShowcase />
+          <DemoV2 />
           <TransformationsV2 />
           <ComparisonV2 />
           <TestimonialsV2 />
