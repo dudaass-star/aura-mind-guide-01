@@ -5830,7 +5830,12 @@ EXEMPLO de turno completo (aceite imediato):
 IMPORTANTE:
 - NÃO faça onboarding/mapeamento longo agora. A sessão É o espaço de exploração.
 - Tom: convite leve e claro, não venda. Você está oferecendo algo valioso.
-- Sem [MODO_AUDIO] obrigatório — use só se fizer sentido emocional.`;
+- Sem [MODO_AUDIO] obrigatório — use só se fizer sentido emocional.
+
+🚫 PROIBIÇÕES ABSOLUTAS NESTE TURNO (1ª sessão D0):
+- NÃO pergunte sobre dias da semana ou horários recorrentes ("quais dias funcionam?", "que horário prefere?"). Setup mensal vem DEPOIS desta sessão acontecer, NUNCA antes.
+- NÃO emita [CRIAR_AGENDA:...] aqui. Essa tag é exclusiva do setup mensal de 4 sessões e NÃO se aplica ao convite D0. Usá-la aqui cria 4 sessões fantasma e quebra o funil.
+- A ÚNICA tag de agendamento aceita neste contexto é [AGENDAR_SESSAO:YYYY-MM-DD HH:MM] (uma única sessão).`;
     }
 
     // ========================================================================
