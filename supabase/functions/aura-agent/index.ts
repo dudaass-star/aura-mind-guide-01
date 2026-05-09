@@ -6360,12 +6360,10 @@ Exemplo com 4 sessões:
         console.warn('🚨 Tags inventadas detectadas:', unknownTags);
         // fire-and-forget — não usar await
         supabase.from('failed_message_log').insert({
-          error_type: 'unknown_tag_invented',
-          payload: {
-            tags: unknownTags,
-            user_id: profile?.user_id ?? null,
-            response_excerpt: assistantMessage.slice(0, 500),
-          },
+          function_name: 'aura-agent',
+          user_id: profile?.user_id ?? null,
+          content: assistantMessage.slice(0, 500),
+          error: `unknown_tag_invented: ${unknownTags.join(', ')}`,
         } as any)
           .then(() => {})
           .catch((e: unknown) => console.error('Falha ao logar tags inventadas (não bloqueia):', e));
