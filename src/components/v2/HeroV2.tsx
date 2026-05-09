@@ -14,7 +14,7 @@ const HeroV2 = () => (
     <div className="container mx-auto px-6 relative z-10">
       <div className="max-w-3xl mx-auto text-center">
         <h1 className="font-display text-4xl md:text-6xl lg:text-7xl font-medium leading-[1.05] tracking-tight text-foreground v2-fade-up">
-          Quando sua mente acelera,
+          Quando sua mente precisa,
           <br />
           <span className="text-gradient-sage">a Aura responde.</span>
         </h1>

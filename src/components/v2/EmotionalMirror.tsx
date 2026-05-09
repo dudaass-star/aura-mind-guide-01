@@ -14,7 +14,7 @@ const EmotionalMirror = () => (
     <div className="container mx-auto px-6 relative z-10">
       <div className="max-w-3xl mx-auto">
         <h2 className="font-display text-3xl md:text-5xl font-medium leading-[1.15] tracking-tight text-foreground">
-          Tem gente que parece normal por fora{" "}
+          Tem gente que parece bem por fora{" "}
           <span className="text-muted-foreground">— mas está lutando contra a própria mente todos os dias.</span>
         </h2>
 

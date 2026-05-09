@@ -30,7 +30,7 @@ const IndexV2 = () => {
   return (
     <>
       <Helmet>
-        <title>Aura — Quando sua mente acelera, a Aura responde</title>
+        <title>Aura — Quando sua mente precisa, a Aura responde</title>
         <meta
           name="description"
           content="Converse, descarregue pensamentos e reorganize sua mente — direto no WhatsApp. 7 dias por R$ 6,90."
