@@ -1,46 +1,35 @@
 ## Objetivo
 
-Substituir a seção **"Conversas reais"** da V2 (4 cenas estáticas em `ConversationShowcase.tsx`) por uma versão da **demo animada** da home padrão (`Demo.tsx`) — a conversa que se monta sozinha dentro do mockup de celular, com indicador "digitando…", áudio do WhatsApp no final e botão de "Ver novamente".
-
-A lógica e o conteúdo da conversa permanecem iguais aos da home padrão. Só o visual é adaptado pra estética minimalista/cinematográfica da V2.
-
----
+Trazer pra V2 todas as 9 perguntas do FAQ da home padrão (`FAQ.tsx`), mantendo o visual minimalista da V2.
 
 ## Mudanças
 
-### 1. Criar `src/components/v2/DemoV2.tsx`
+**Editar apenas `src/components/v2/FAQV2.tsx`:**
 
-Cópia funcional do `Demo.tsx` da home padrão, com os seguintes ajustes visuais:
+1. **Substituir o array `faqs`** pelas 9 perguntas/respostas idênticas às do `FAQ.tsx` (campos renomeados de `question/answer` → `q/a` para preservar a interface atual da V2):
+   - Por que é tão mais barato que terapia?
+   - A AURA substitui terapia com psicólogo?
+   - Como funciona o período de teste?
+   - Posso pausar minha assinatura?
+   - O que são as Sessões Especiais?
+   - Posso enviar áudio?
+   - Meus dados ficam seguros?
+   - Posso cancelar quando quiser?
+   - O que é a Cápsula do Tempo?
 
-- **Mesma conversa, mesma lógica**: array `messages`, `TypingIndicator`, `WhatsAppVoiceMessage`, cálculos de delay (`calculateTypingDelay`, `humanizeDelay`), auto-scroll, estados (`isPlaying`, `visibleMessages`, `isTyping`, `isAudioPlaying`, `isComplete`) e botões "Ver conversa completa" / "Ver novamente" — tudo idêntico.
-- **Wrapper da seção**: trocar o gradiente verde da home por `bg-background` + glow sutil (`v2-glow-sage`) no canto, igual ao padrão das outras seções V2.
-- **Header da seção**: adotar tipografia V2.
-  - Eyebrow: `text-sm uppercase tracking-[0.25em] text-primary/80` → "veja na prática"
-  - Título: `font-display text-3xl md:text-5xl font-medium leading-[1.15] tracking-tight` → "Como é conversar com a <span class='text-gradient-sage'>Aura</span>"
-  - Subtítulo opcional, mais curto e em `text-muted-foreground`.
-- **Mockup do celular**: manter estrutura, mas usar tokens da V2 (`bg-card`, `border-border/60`, `shadow-[0_0_60px_hsl(var(--primary)/0.12)]`) e cantos `rounded-[3rem]`. Sem `shadow-glow` específico da home.
-- **Bolhas**: aplicar o mesmo estilo das bolhas atuais da V2 (`rounded-3xl`, `bg-secondary` para usuário, `bg-card border border-border/60` para Aura) — mas mantendo as caudas `rounded-br-md` / `rounded-bl-md` que indicam direção.
-- **CTA dentro do mockup**: usar `Button` com `variant="sage"` (mesmo padrão da V2).
+2. **Adicionar CTA final** (espelhando a home padrão) abaixo do accordion, dentro do mesmo container:
+   - Texto: "Começar por R$ 6,90"
+   - `variant="sage"`, `size="xl"`, `Link to="/checkout"`
+   - `trackCtaClick("faq", "Começar por R$ 6,90 (v2)")`
+   - Microcopy: "7 dias para experimentar • Cancele quando quiser"
 
-### 2. Substituir no `src/pages/IndexV2.tsx`
-
-- Remover import e uso de `ConversationShowcase`.
-- Importar e usar `DemoV2` no mesmo lugar (entre `EmotionalMirror` e `TransformationsV2`).
-
-### 3. Apagar `src/components/v2/ConversationShowcase.tsx`
-
-Não é mais usado em nenhum outro lugar.
-
----
-
-## Detalhes técnicos
-
-- O áudio do final continua apontando pra mesma URL pública do Supabase Storage (`meditations/demo/aura-voice.mp3`).
-- Avatar reutilizado de `@/assets/avatar-aura.jpg`.
-- Nenhuma mudança em rotas, GA4, tracking, ou na home padrão (`Demo.tsx` continua intacto).
-- Sem alteração de dependências.
+3. **Manter intactos**:
+   - Header da seção (eyebrow "dúvidas" + título "O que costumam perguntar.")
+   - Estilo do `AccordionItem` (`border border-border/60 rounded-2xl px-6 bg-card/40`)
+   - `id="faq"` (já usado pelo header da V2)
+   - Tracking via `trackFaqOpen`
 
 ## Fora de escopo
 
-- Não mexer no header/footer/preços/FAQ da V2.
-- Não alterar o conteúdo da conversa (mesmo roteiro da home padrão).
+- Não mexer no FAQ da home padrão.
+- Não alterar tokens de design nem o restante da V2.
