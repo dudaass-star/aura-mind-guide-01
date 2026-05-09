@@ -28,14 +28,24 @@ Recebe a ÚLTIMA mensagem do usuário e a ÚLTIMA resposta da Aura. Decide se ho
 
 REGRA DE OURO: na dúvida, confirmed=false. É MUITO pior re-confirmar uma sessão que não existe do que perder uma re-confirmação.
 
-✅ confirmed=true APENAS quando:
-- O usuário aceitou explicitamente ("sim", "bora", "vamos", "fechado", "combinado", "topo", "agora", "pode ser", "ok") E
-- A Aura confirmou o agendamento ("combinado", "fechado", "marcado", "tá no calendário", "nos vemos", "vou abrir agora")
+✅ confirmed=true APENAS quando TODAS as 3 condições abaixo são verdadeiras:
+
+1. ACEITE NO TURNO IMEDIATAMENTE ANTERIOR — a ÚLTIMA mensagem do usuário (não uma anterior) precisa ter aceite explícito: "sim", "bora", "vamos", "fechado", "combinado", "topo", "agora", "pode ser", "pode marcar", "ok".
+
+2. EXECUÇÃO ATIVA NA RESPOSTA ATUAL — a ÚLTIMA resposta da Aura (não uma anterior) precisa conter pelo menos UMA frase de execução ativa, no presente/futuro imediato:
+   - "vou marcar", "vou abrir agora", "vou começar"
+   - "começar nossa primeira sessão", "começar agora"
+   - "nossos 45 minutos", "nossa sessão de 45 min"
+   - "marcado", "fechado", "combinado" (quando dito como afirmação, não pergunta)
+
+3. FRASES AMBÍGUAS SÓ CONTAM COM HORÁRIO CONCRETO — expressões como "deixei salvo", "travar no calendário", "tá no calendário", "nos vemos" só justificam confirmed=true se a MESMA resposta da Aura mencionar um horário/data concreto (ex: "20h", "amanhã 10h", "daqui 15 min", "agora"). Sem horário concreto, essas frases podem se referir a sessões já existentes ou a planos futuros — confirmed=false.
 
 ❌ confirmed=false quando:
-- A Aura só perguntou ("quer marcar?", "que horário?")
-- O usuário respondeu vago ("talvez", "depois", "não sei")
-- A Aura está apenas explicando como funciona
+- A Aura só perguntou ("quer marcar?", "que horário fica melhor?", "podemos começar?")
+- O usuário respondeu vago ("talvez", "depois", "não sei", "deixa eu ver")
+- A Aura está apenas explicando como funciona o produto
+- O aceite do usuário foi em turno antigo (não imediatamente antes)
+- A frase "executiva" da Aura está em mensagem antiga, não na atual
 - Há QUALQUER ambiguidade
 
 Se confirmed=true, extraia o horário sugerido (datetime_hint) — formato livre como "agora", "hoje à noite", "amanhã 20h". Se não houver horário claro, deixe null.`;
