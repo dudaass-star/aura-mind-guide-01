@@ -7,7 +7,11 @@ const FooterV2 = () => (
     <div className="container mx-auto px-6">
       <div className="flex flex-col items-center gap-6 mb-8">
         <Link to="/" className="flex items-center">
-          <img src={logoOlaAura} alt="Olá AURA" className="h-16 md:h-20 w-auto" />
+          <img
+            src={logoOlaAura}
+            alt="Olá AURA"
+            className="h-24 w-auto brightness-0 invert"
+          />
         </Link>
 
         <nav className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
