@@ -6344,7 +6344,36 @@ Exemplo com 4 sessões:
     // ========================================================================
     // PROCESSAR TAGS DE AGENDAMENTO
     // ========================================================================
-    
+
+    // ========================================================================
+    // OBSERVABILIDADE — Detecta tags inventadas pelo LLM (fora da whitelist)
+    // O strip já é catch-all em stripAllInternalTags (linha ~110), aqui só
+    // logamos para diagnóstico. fire-and-forget: NUNCA bloqueia entrega.
+    // ========================================================================
+    try {
+      const allTags = (assistantMessage.match(/\[([A-Z_]+)(?::[^\]]+)?\]/g) || []) as string[];
+      const unknownTags = allTags.filter((t) => {
+        const name = t.replace(/^\[/, '').replace(/[:\]].*$/, '');
+        return !VALID_AURA_TAGS.includes(name);
+      });
+      if (unknownTags.length) {
+        console.warn('🚨 Tags inventadas detectadas:', unknownTags);
+        // fire-and-forget — não usar await
+        supabase.from('failed_message_log').insert({
+          error_type: 'unknown_tag_invented',
+          payload: {
+            tags: unknownTags,
+            user_id: profile?.user_id ?? null,
+            response_excerpt: assistantMessage.slice(0, 500),
+          },
+        } as any)
+          .then(() => {})
+          .catch((e: unknown) => console.error('Falha ao logar tags inventadas (não bloqueia):', e));
+      }
+    } catch (anomalyErr) {
+      console.error('Detector de tags inventadas falhou (ignorado):', anomalyErr);
+    }
+
     // Tag de agendamento: [AGENDAR_SESSAO:YYYY-MM-DD HH:mm:tipo:foco]
     const scheduleMatch = assistantMessage.match(/\[AGENDAR_SESSAO:(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}):?(\w*):?(.*?)\]/);
     if (scheduleMatch && profile?.user_id && sessionsAvailable > 0) {
