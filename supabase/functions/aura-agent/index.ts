@@ -32,6 +32,31 @@ function normalizePlan(planFromDb: string | null): string {
 // Função centralizada para remover TODAS as tags internas da Aura
 // Usada antes de salvar no banco E antes de enviar ao WhatsApp
 // ========================================================================
+// Whitelist canônica de tags que a Aura ou os workers reconhecem.
+// Fonte de verdade para o detector de tags inventadas (logTagAnomalies).
+// Ao adicionar nova tag em qualquer worker, atualize aqui também.
+const VALID_AURA_TAGS = [
+  // controle conversacional
+  'MODO_AUDIO','AGUARDANDO_RESPOSTA','CONVERSA_CONCLUIDA',
+  'ENCERRAR_SESSAO','INICIAR_SESSAO','REATIVAR_SESSAO','VALOR_ENTREGUE',
+  // sessão
+  'AGENDAR_SESSAO','REAGENDAR_SESSAO','SESSAO_PERDIDA_RECUSADA',
+  'SESSION_PREARM','SESSION_START','PAUSADA',
+  // tema
+  'TEMA_NOVO','TEMA_RESOLVIDO','TEMA_PROGREDINDO','TEMA_ESTAGNADO',
+  // compromisso
+  'COMPROMISSO','COMPROMISSO_CUMPRIDO','COMPROMISSO_ABANDONADO',
+  'COMPROMISSO_RENEGOCIADO','COMPROMISSO_LIVRE',
+  // jornada/conteúdo (consumidos por process-webhook-message)
+  'LISTAR_JORNADAS','TROCAR_JORNADA','PAUSAR_JORNADAS',
+  'CONTENT','WEEKLY_REPORT','WELCOME','AURA',
+  // tarefas/automação
+  'NAO_PERTURBE','PAUSAR_SESSOES','AGENDAR_TAREFA','CANCELAR_TAREFA',
+  // feature
+  'CAPSULA_DO_TEMPO','MEDITACAO','UPGRADE','UPGRADE_REFUSED',
+  'INSIGHT','INSIGHTS','CRIAR_AGENDA','MARCO',
+];
+
 function stripAllInternalTags(text: string): string {
   return text
     // Timestamps espúrios gerados pela Aura
