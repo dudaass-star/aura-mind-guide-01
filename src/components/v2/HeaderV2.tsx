@@ -20,7 +20,11 @@ const HeaderV2 = () => {
       <div className="container mx-auto px-6">
         <div className="flex items-center justify-between py-4">
           <Link to="/" className="flex items-center">
-            <img src={logoOlaAura} alt="Olá AURA" className="h-12 md:h-14 w-auto" />
+            <img
+              src={logoOlaAura}
+              alt="Olá AURA"
+              className="h-24 w-auto brightness-0 invert"
+            />
           </Link>
 
           <nav className="hidden md:flex items-center gap-8">
