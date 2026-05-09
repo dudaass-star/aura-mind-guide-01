@@ -1,0 +1,76 @@
+/* Tokens escopados ao tema escuro da landing V2.
+ * Aplica-se apenas dentro de elementos com classe `.theme-v2`,
+ * sem vazar para outras rotas (checkout, portal, admin). */
+.theme-v2 {
+  --background: 222 28% 6%;
+  --foreground: 30 25% 96%;
+
+  --card: 222 24% 10%;
+  --card-foreground: 30 25% 96%;
+
+  --popover: 222 24% 10%;
+  --popover-foreground: 30 25% 96%;
+
+  --primary: 155 45% 62%;
+  --primary-foreground: 222 30% 6%;
+
+  --secondary: 222 20% 14%;
+  --secondary-foreground: 30 20% 90%;
+
+  --muted: 222 18% 14%;
+  --muted-foreground: 220 10% 65%;
+
+  --accent: 270 45% 72%;
+  --accent-foreground: 222 30% 6%;
+
+  --destructive: 0 60% 55%;
+  --destructive-foreground: 30 25% 96%;
+
+  --border: 222 15% 18%;
+  --input: 222 15% 18%;
+  --ring: 155 45% 62%;
+
+  --sage: 155 45% 62%;
+  --sage-soft: 155 30% 18%;
+  --lavender: 270 45% 72%;
+  --lavender-soft: 270 30% 16%;
+
+  color-scheme: dark;
+}
+
+/* Glow cinematográfico reaproveitável */
+.theme-v2 .v2-glow-sage {
+  background: radial-gradient(ellipse at center, hsl(155 45% 50% / 0.22) 0%, transparent 65%);
+}
+.theme-v2 .v2-glow-lavender {
+  background: radial-gradient(ellipse at center, hsl(270 45% 55% / 0.18) 0%, transparent 65%);
+}
+
+/* Animação lenta de respiração para elementos do herói */
+@keyframes v2-breathe {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50%      { opacity: 0.85; transform: scale(1.04); }
+}
+.theme-v2 .v2-breathe {
+  animation: v2-breathe 9s ease-in-out infinite;
+}
+
+/* Fade-up mais lento (1.2s), mais cinematográfico que o padrão */
+@keyframes v2-fade-up {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.theme-v2 .v2-fade-up {
+  opacity: 0;
+  animation: v2-fade-up 1.2s ease-out forwards;
+}
+
+/* Bolha de chat — entrada suave */
+@keyframes v2-bubble-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.theme-v2 .v2-bubble-in {
+  opacity: 0;
+  animation: v2-bubble-in 0.6s ease-out forwards;
+}
