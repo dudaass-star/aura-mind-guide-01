@@ -32,6 +32,31 @@ function normalizePlan(planFromDb: string | null): string {
 // Função centralizada para remover TODAS as tags internas da Aura
 // Usada antes de salvar no banco E antes de enviar ao WhatsApp
 // ========================================================================
+// Whitelist canônica de tags que a Aura ou os workers reconhecem.
+// Fonte de verdade para o detector de tags inventadas (logTagAnomalies).
+// Ao adicionar nova tag em qualquer worker, atualize aqui também.
+const VALID_AURA_TAGS = [
+  // controle conversacional
+  'MODO_AUDIO','AGUARDANDO_RESPOSTA','CONVERSA_CONCLUIDA',
+  'ENCERRAR_SESSAO','INICIAR_SESSAO','REATIVAR_SESSAO','VALOR_ENTREGUE',
+  // sessão
+  'AGENDAR_SESSAO','REAGENDAR_SESSAO','SESSAO_PERDIDA_RECUSADA',
+  'SESSION_PREARM','SESSION_START','PAUSADA',
+  // tema
+  'TEMA_NOVO','TEMA_RESOLVIDO','TEMA_PROGREDINDO','TEMA_ESTAGNADO',
+  // compromisso
+  'COMPROMISSO','COMPROMISSO_CUMPRIDO','COMPROMISSO_ABANDONADO',
+  'COMPROMISSO_RENEGOCIADO','COMPROMISSO_LIVRE',
+  // jornada/conteúdo (consumidos por process-webhook-message)
+  'LISTAR_JORNADAS','TROCAR_JORNADA','PAUSAR_JORNADAS',
+  'CONTENT','WEEKLY_REPORT','WELCOME','AURA',
+  // tarefas/automação
+  'NAO_PERTURBE','PAUSAR_SESSOES','AGENDAR_TAREFA','CANCELAR_TAREFA',
+  // feature
+  'CAPSULA_DO_TEMPO','MEDITACAO','UPGRADE','UPGRADE_REFUSED',
+  'INSIGHT','INSIGHTS','CRIAR_AGENDA','MARCO',
+];
+
 function stripAllInternalTags(text: string): string {
   return text
     // Timestamps espúrios gerados pela Aura
@@ -5805,7 +5830,12 @@ EXEMPLO de turno completo (aceite imediato):
 IMPORTANTE:
 - NÃO faça onboarding/mapeamento longo agora. A sessão É o espaço de exploração.
 - Tom: convite leve e claro, não venda. Você está oferecendo algo valioso.
-- Sem [MODO_AUDIO] obrigatório — use só se fizer sentido emocional.`;
+- Sem [MODO_AUDIO] obrigatório — use só se fizer sentido emocional.
+
+🚫 PROIBIÇÕES ABSOLUTAS NESTE TURNO (1ª sessão D0):
+- NÃO pergunte sobre dias da semana ou horários recorrentes ("quais dias funcionam?", "que horário prefere?"). Setup mensal vem DEPOIS desta sessão acontecer, NUNCA antes.
+- NÃO emita [CRIAR_AGENDA:...] aqui. Essa tag é exclusiva do setup mensal de 4 sessões e NÃO se aplica ao convite D0. Usá-la aqui cria 4 sessões fantasma e quebra o funil.
+- A ÚNICA tag de agendamento aceita neste contexto é [AGENDAR_SESSAO:YYYY-MM-DD HH:MM] (uma única sessão).`;
     }
 
     // ========================================================================
@@ -6314,7 +6344,34 @@ Exemplo com 4 sessões:
     // ========================================================================
     // PROCESSAR TAGS DE AGENDAMENTO
     // ========================================================================
-    
+
+    // ========================================================================
+    // OBSERVABILIDADE — Detecta tags inventadas pelo LLM (fora da whitelist)
+    // O strip já é catch-all em stripAllInternalTags (linha ~110), aqui só
+    // logamos para diagnóstico. fire-and-forget: NUNCA bloqueia entrega.
+    // ========================================================================
+    try {
+      const allTags = (assistantMessage.match(/\[([A-Z_]+)(?::[^\]]+)?\]/g) || []) as string[];
+      const unknownTags = allTags.filter((t) => {
+        const name = t.replace(/^\[/, '').replace(/[:\]].*$/, '');
+        return !VALID_AURA_TAGS.includes(name);
+      });
+      if (unknownTags.length) {
+        console.warn('🚨 Tags inventadas detectadas:', unknownTags);
+        // fire-and-forget — não usar await
+        supabase.from('failed_message_log').insert({
+          function_name: 'aura-agent',
+          user_id: profile?.user_id ?? null,
+          content: assistantMessage.slice(0, 500),
+          error: `unknown_tag_invented: ${unknownTags.join(', ')}`,
+        } as any)
+          .then(() => {})
+          .catch((e: unknown) => console.error('Falha ao logar tags inventadas (não bloqueia):', e));
+      }
+    } catch (anomalyErr) {
+      console.error('Detector de tags inventadas falhou (ignorado):', anomalyErr);
+    }
+
     // Tag de agendamento: [AGENDAR_SESSAO:YYYY-MM-DD HH:mm:tipo:foco]
     const scheduleMatch = assistantMessage.match(/\[AGENDAR_SESSAO:(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}):?(\w*):?(.*?)\]/);
     if (scheduleMatch && profile?.user_id && sessionsAvailable > 0) {
@@ -7110,7 +7167,7 @@ PRIORIDADES (nesta ordem):
    - "O que tá acontecendo na sua vida pra você estar se sentindo assim?"
    - "Me conta: aconteceu alguma coisa específica ou é algo que vem de tempo?"
    - NÃO interprete sentimentos, NÃO nomeie padrões, NÃO aprofunde sem saber a situação concreta.
-3. ${planConfig.sessions > 0 && profile?.needs_schedule_setup ? `Após 3-4 trocas de acolhimento, mencione NATURALMENTE as sessões:
+3. ${planConfig.sessions > 0 && profile?.needs_schedule_setup && !profile?.pending_first_session_invite ? `Após 3-4 trocas de acolhimento, mencione NATURALMENTE as sessões:
    "Ah, e ${profile?.name || 'querido(a)'}, uma coisa importante: no seu plano você tem ${planConfig.sessions} sessões especiais por mês comigo. São 45 minutos só nossos, pra ir mais fundo. Vamos montar sua agenda? Me diz quais dias e horários funcionam melhor pra você 💜"
    NÃO espere o usuário perguntar sobre sessões.` : 'Continue conhecendo o usuário e sua situação de vida.'}
 
