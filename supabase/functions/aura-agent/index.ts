@@ -1026,7 +1026,7 @@ const SESSION_PHASE_INSTRUCTIONS: Record<string, string> = {
   exploration_to_reframe: `
 INSTRUÇÕES TÁTICAS — Exploração → Reframe:
 ❌ ERRADO: "E como isso te faz sentir?" / "Me conta mais sobre isso"
-✅ CERTO: "Sabe o que eu percebo em tudo isso que você trouxe? [nomeie o padrão/insight]. O que você acha?"
+✅ CERTO: devolva UMA observação concreta e nova (padrão recorrente, contradição, consequência) com suas próprias palavras — sem fórmula de abertura fixa.
 ❌ ERRADO: Continuar fazendo perguntas abertas sem sintetizar
 ✅ CERTO: Apresentar UMA observação concreta e depois UMA pergunta de reframe
 TÉCNICA: Nomeie o que está por baixo, não o que está na superfície.
@@ -1057,7 +1057,7 @@ const FREE_PHASE_INSTRUCTIONS: Record<string, string> = {
   presenca_to_sentido: `
 INSTRUÇÕES TÁTICAS — Presença → Sentido:
 ❌ ERRADO: "Me conta mais" / "Como assim?" / "O que você sentiu?"
-✅ CERTO: "Sabe o que eu percebo por baixo disso? [observação]. O que essa situação mostra sobre o que importa pra você?"
+✅ CERTO: nomeie com suas próprias palavras o que está por baixo do que foi dito (sem fórmula fixa) e siga com UMA pergunta-âncora da Logoterapia.
 ❌ ERRADO: Repetir validação emocional sem avançar ("Eu entendo", "Faz sentido sentir assim" pela 5ª vez)
 ✅ CERTO: Validar brevemente + trazer UMA pergunta-âncora da Logoterapia:
   • "O que essa situação mostra sobre o que importa pra você?"
@@ -1220,7 +1220,7 @@ O sistema detectou que suas últimas respostas ainda estão no modo PRESENÇA/EX
 AÇÃO OBRIGATÓRIA AGORA:
 - PARE de fazer perguntas exploratórias
 - Apresente UMA observação/insight sobre o que o usuário compartilhou
-- Use reframe: "Sabe o que eu percebo em tudo isso que você trouxe? [insight]"
+- Faça o reframe com SUAS próprias palavras — sem fórmula de abertura fixa. Devolva o padrão/contradição/consequência que você está vendo.
 - Depois de reframear, conduza para compromisso/ação
 - NÃO volte para exploração
 ${SESSION_PHASE_INSTRUCTIONS.exploration_to_reframe}`
@@ -1327,7 +1327,7 @@ O usuário já se sentiu ouvido. Agora é hora de trazer SENTIDO (Fase 2).
 
 AÇÃO OBRIGATÓRIA:
 - NÃO faça mais perguntas exploratórias ("como assim?", "me conta mais")
-- Traga UMA observação profunda: "Sabe o que eu percebo? [nomeie o que está por baixo]"
+- Traga UMA observação profunda com suas próprias palavras (sem fórmula fixa) — nomeie o que está por baixo.
 - Use UMA pergunta-âncora da Logoterapia:
   • "O que essa situação mostra sobre o que importa pra você?"
   • "Qual seria sua resposta mais autêntica a isso?"
