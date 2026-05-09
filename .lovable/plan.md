@@ -1,109 +1,129 @@
-## Plano final v7 — correção dos bugs do funil D0
+# V2 da Landing Aura — `/v2`
 
-Incorpora: varredura de tags em **todas** as edge functions (não só `aura-agent`) e expansão da whitelist com tags consumidas por workers.
+## Princípios
+- **70% emoção, 30% explicação.** Cada seção sente antes de explicar.
+- **Tema escuro isolado nesta rota.** Home `/`, checkout, portal e admin permanecem como hoje.
+- **Conversas são o herói**, não as features.
+- **Menos blocos, mais respiro.** Tipografia maior, mais silêncio entre seções.
+- **CTA único e recorrente:** `Começar por R$ 6,90` → `/checkout` (mesma rota da home atual, preserva tracking GA4 + Meta Pixel).
 
-### Causa-raiz confirmada
-Em `aura-agent/index.ts` há **dois** blocos que injetam prompt de setup mensal:
+## Estrutura da página (ordem)
 
-| Linha | Bloco | Guard `!pending_first_session_invite`? |
-|---|---|---|
-| 5888 | "📅 CONFIGURAÇÃO DE AGENDA DO MÊS" | ✅ Sim |
-| 7113 | "🆕 USUÁRIO NOVO" item 3 | ❌ **Não** — bug |
-
-No D0, o convite D0 (linha 5762) e o item 3 do bloco USUÁRIO NOVO colidem. A Aura pergunta sobre setup mensal e às vezes emite `[CRIAR_AGENDA:...]`, criando 4 sessões fantasma sem realizar a 1ª D0.
-
-### Fixes
-
-#### Fix 1 — Adicionar guard D0 ao bloco USUÁRIO NOVO (`aura-agent/index.ts:7113`)
-```ts
-3. ${planConfig.sessions > 0 && profile?.needs_schedule_setup && !profile?.pending_first_session_invite
-   ? `Após 3-4 trocas de acolhimento, mencione NATURALMENTE as sessões: ...`
-   : 'Continue conhecendo o usuário e sua situação de vida.'}
+```text
+1. Hero cinematográfico        — identificação imediata
+2. Espelho emocional            — "tem gente que parece normal por fora..."
+3. Conversas reais (herói)     — 4 cenas Usuário ↔ Aura
+4. Transformações (não features)— 3 cards reescritos em linguagem emocional
+5. Comparação com terapia       — versão enxuta da seção atual
+6. Prova social                 — 3 depoimentos curtos, sem cards pesados
+7. Planos                       — versão simplificada do Pricing
+8. FAQ enxuto (4 perguntas)     — só objeções críticas
+9. Fechamento emocional         — "tem noites em que sua mente pesa demais..."
 ```
 
-#### Fix 2 — Reforçar prompt do convite D0 (linhas 5782-5808)
-- "Esta é a 1ª sessão. NÃO pergunte sobre dias da semana ou horários recorrentes neste turno."
-- "NUNCA emita `[CRIAR_AGENDA:...]` — essa tag é só de setup mensal e vem DEPOIS desta sessão acontecer."
-- "A única tag aceita aqui é `[AGENDAR_SESSAO:YYYY-MM-DD HH:MM]`."
+## Conteúdo por seção
 
-#### Fix 3 — Safety Net D0 com critérios temporais estritos (`schedule-tag-extractor/index.ts`)
-Em `SAFETY_NET_SYSTEM_PROMPT`, `confirmed=true` apenas quando TODAS:
-1. Frase ativa **na resposta atual da Aura** ("vou marcar", "vou abrir agora", "começar nossa primeira sessão", "nossos 45 minutos") — não em turnos anteriores.
-2. Aceite do usuário **no turno imediatamente anterior** ("sim", "bora", "pode marcar", "vamos").
-3. Frases ambíguas ("deixei salvo", "travar no calendário") só contam quando há **horário/número concreto** explícito na mesma resposta.
+### 1. Hero
+- **Headline:** "Quando sua mente acelera, a Aura responde."
+- **Sub:** "Converse, descarregue pensamentos e reorganize sua mente — direto no WhatsApp."
+- **CTA:** "Começar por R$ 6,90" + microcopy "7 dias por R$ 6,90 · Cancele quando quiser."
+- **Visual:** fundo escuro `hsl(220 25% 8%)`, glow sage difuso atrás do título, vídeo `aura-intro.mp4` reaproveitado mas com moldura escura e overlay sutil. Animação de fade-up lenta (1.2s).
 
-Regra de ouro mantida: dúvida → false; pergunta da Aura → false.
+### 2. Espelho emocional (nova)
+- Frase grande: "Tem gente que parece normal por fora — mas está lutando contra a própria mente todos os dias."
+- Lista vertical com 6 itens em tipografia média, sem ícones coloridos, só um ponto luminoso à esquerda:
+  overthinking · ansiedade silenciosa · exaustão mental · sensação de vazio · pensamentos em loop · noites sem desligar a mente.
 
-#### Fix 4 — Log de tags inventadas (whitelist + fire-and-forget)
+### 3. Conversas reais (herói da página)
+- Mock de WhatsApp em tela cheia, escuro, com 4 cenas em scroll/fade:
+  1. "Minha mente não para." → "Você está carregando mais do que consegue processar sozinho."
+  2. "São 3h da manhã e a ansiedade bateu." → "Eu tô aqui. Respira comigo — me conta o que tá te tirando o sono."
+  3. "Hoje eu nem sei como eu tô." → "Tudo bem não saber. A gente descobre junto, sem pressa."
+  4. "Acho que tô me afastando de mim mesmo." → "Isso que você acabou de falar é mais lúcido do que parece."
+- Animação de typing entre bolhas (reaproveita `animate-typing-dot` que já existe).
 
-O strip já existe na linha 81 (catch-all em `stripAllInternalTags`) — Fix 4 é puramente **observabilidade**.
+### 4. Transformações (substitui Benefits atual)
+- 3 cards verticais grandes, fundo `hsl(220 22% 12%)`, borda sutil, glow no hover:
+  - "A Aura lembra de quem você é. Mesmo nos dias em que você esquece."
+  - "3h da manhã. A ansiedade bateu. A Aura responde."
+  - "Fale do jeito que conseguir. Texto, áudio, frase solta. A Aura entende."
 
-**Etapa 1 obrigatória — varredura em TODAS as functions, não só aura-agent:**
-```bash
-rg -no '\[[A-Z][A-Z_]+(?::[^\]]+)?\]' supabase/functions/ | sort -u
+### 5. Comparação com terapia
+- Versão visualmente enxuta do `<Comparison />` atual, repaginada para o tema escuro. Mantém a tabela mas remove cards laterais.
+
+### 6. Prova social
+- 3 depoimentos curtos (1-2 linhas cada) em layout horizontal, sem foto, só nome + cidade. Reaproveita dados de `<Testimonials />`.
+
+### 7. Planos
+- Versão enxuta de `<Pricing />`: 3 cards lado a lado, destaque central no Direção, mesmos preços e CTAs.
+
+### 8. FAQ
+- 4 perguntas críticas (Accordion já existente):
+  - Como funciona o trial de R$ 6,90?
+  - Posso cancelar quando quiser?
+  - É terapia? Substitui psicólogo?
+  - Meus dados ficam seguros?
+
+### 9. Fechamento emocional
+- Tela escura, tipografia grande:
+  > "Tem noites em que sua mente pesa demais.
+  > A Aura foi criada para esses momentos."
+- CTA final: "Começar por R$ 6,90".
+
+## Implementação técnica
+
+### Rota
+- Adicionar rota `/v2` em `src/App.tsx` apontando para nova `src/pages/IndexV2.tsx`.
+- Home `/` permanece intacta.
+
+### Estrutura de arquivos
+```text
+src/pages/IndexV2.tsx                — page wrapper, Helmet com canonical /v2 + noindex
+src/components/v2/
+  HeroV2.tsx
+  EmotionalMirror.tsx
+  ConversationShowcase.tsx
+  TransformationsV2.tsx
+  ComparisonV2.tsx        (wrapper escuro do Comparison atual)
+  TestimonialsV2.tsx
+  PricingV2.tsx
+  FAQV2.tsx
+  FinalCTAV2.tsx
+  HeaderV2.tsx            (header escuro, mesmos links)
+  FooterV2.tsx            (footer escuro)
+src/styles/v2-theme.css   — escopo `.theme-v2` com tokens escuros
 ```
-Cruzar resultado com a whitelist. Inclui: `aura-agent`, `process-webhook-message`, `schedule-tag-extractor`, `session-reminder`, `execute-scheduled-tasks`, `choose-next-journey` e qualquer outro consumidor.
 
-**Whitelist canônica** (já refletindo varredura — declarada no topo do `aura-agent/index.ts`):
-```ts
-const VALID_AURA_TAGS = [
-  // tags de saída da Aura — controle conversacional
-  'MODO_AUDIO','AGUARDANDO_RESPOSTA','CONVERSA_CONCLUIDA',
-  'ENCERRAR_SESSAO','INICIAR_SESSAO','REATIVAR_SESSAO','VALOR_ENTREGUE',
-  // tags de sessão
-  'AGENDAR_SESSAO','REAGENDAR_SESSAO','SESSAO_PERDIDA_RECUSADA',
-  'SESSION_PREARM','SESSION_START',
-  // tags de tema
-  'TEMA_NOVO','TEMA_RESOLVIDO','TEMA_PROGREDINDO','TEMA_ESTAGNADO',
-  // tags de compromisso
-  'COMPROMISSO','COMPROMISSO_CUMPRIDO','COMPROMISSO_ABANDONADO',
-  'COMPROMISSO_RENEGOCIADO','COMPROMISSO_LIVRE',
-  // tags de jornada/conteúdo (consumidas por process-webhook-message)
-  'LISTAR_JORNADAS','TROCAR_JORNADA','PAUSAR_JORNADAS',
-  'CONTENT','WEEKLY_REPORT','WELCOME','AURA',
-  // tags de tarefas/automação
-  'NAO_PERTURBE','PAUSAR_SESSOES','AGENDAR_TAREFA','CANCELAR_TAREFA',
-  // tags de feature
-  'CAPSULA_DO_TEMPO','MEDITACAO','UPGRADE','UPGRADE_REFUSED',
-  'INSIGHT','INSIGHTS','CRIAR_AGENDA','MARCO',
-];
-```
+### Tema escuro escopado (não global)
+- Criar `src/styles/v2-theme.css` com bloco `.theme-v2 { --background: 220 25% 8%; --foreground: 30 25% 95%; --card: 220 22% 12%; --primary: 155 40% 60%; --muted-foreground: 220 10% 65%; --border: 220 15% 20%; ... }`.
+- Em `IndexV2.tsx`, aplicar `<div className="theme-v2 bg-background text-foreground">` no root.
+- Tokens semânticos do shadcn (`bg-background`, `text-foreground`, `bg-card`, etc.) reagem automaticamente — zero classe `text-white`/`bg-black` hardcoded.
+- Importar o CSS uma única vez em `IndexV2.tsx` (não em `main.tsx`) para não vazar para outras rotas.
 
-**Validação pré-deploy:**
-1. Varredura completa (etapa 1 acima) — qualquer tag fora da whitelist precisa ser revisada.
-2. Rodar a regex contra os últimos 200 turnos da Aura em `messages` (read-only) — zero falso positivo na amostra.
+### Tracking
+- Mesmos eventos GA4 (`trackCtaClick`, `trackViewItem`) com `item_id: "landing_v2"` para diferenciar nas métricas.
+- Meta Pixel `ViewContent` com `content_category: "homepage_v2"`.
+- CTAs apontam para `/checkout` (preserva todo o funil Stripe atual).
 
-**Detector fire-and-forget (fora do caminho crítico):**
-```ts
-const allTags = response.match(/\[([A-Z_]+)(?::[^\]]+)?\]/g) || [];
-const unknown = allTags.filter(t => !VALID_AURA_TAGS.some(v => t.startsWith(`[${v}`)));
-if (unknown.length) {
-  // fire-and-forget — NUNCA bloqueia entrega
-  supabase.from('failed_message_log').insert({
-    error_type: 'unknown_tag_invented',
-    payload: { tags: unknown, user_id: profile?.user_id, response_excerpt: response.slice(0, 500) }
-  })
-    .then(() => console.warn('🚨 Tags inventadas logadas:', unknown))
-    .catch((e) => console.error('Falha ao logar tags inventadas (não bloqueia):', e));
-}
-// strip continua via stripAllInternalTags (catch-all linha 81)
-```
+### SEO
+- `<meta name="robots" content="noindex, nofollow">` enquanto for página de teste.
+- Canonical aponta para `/` para não competir.
 
-**Pós-deploy — guarda contra ruído:** se `unknown_tag_invented` ultrapassar >50/dia nos primeiros 7 dias, revisar a whitelist antes de tratar como bug — provavelmente alguma tag legítima ficou de fora.
+### Reutilização
+- Vídeo `/videos/aura-intro.mp4` reaproveitado no Hero.
+- Componentes shadcn (`Button`, `Accordion`, `Card`) reutilizados — só mudam tokens.
+- Fontes Fraunces + Nunito mantidas (já carregadas globalmente).
 
-### Ordem de execução
-1. Varredura `rg -no '\[[A-Z][A-Z_]+(?::[^\]]+)?\]' supabase/functions/` cobrindo **todas** as functions + validação contra 200 turnos recentes.
-2. Aplicar Fix 1, 2, 4 em `aura-agent/index.ts`.
-3. Aplicar Fix 3 em `schedule-tag-extractor/index.ts`.
-4. Deploy via `supabase--deploy_edge_functions(["aura-agent","schedule-tag-extractor"])`.
-5. Monitor: 5 min → `failed_message_log` sem erros novos no fluxo D0; 24h → `unknown_tag_invented` calibrado e taxa de re-confirmação Safety Net.
+### Sticky CTA mobile
+- Versão escura do `<StickyMobileCTA />` para `/v2`, mesmo comportamento.
 
-### Memória a atualizar
-- `mem://features/sessions/first-session-invite-d0` — guard D0 precisa estar nos **dois** blocos (5888 e 7113).
-- `mem://features/sessions/safety-net-d0` — critérios temporais estritos.
-- `mem://technical/ai/output-tag-validation` (nova) — `VALID_AURA_TAGS` é fonte de verdade; varredura deve cobrir **toda** `supabase/functions/`; log é fire-and-forget; strip já é catch-all na linha 81.
+## Fora de escopo (não fazemos agora)
+- A/B test automático ou redirect 50/50.
+- Refator do design system global.
+- Novos vídeos ou imagens geradas por IA (usamos os assets atuais).
+- Mudanças no checkout, portal, admin.
 
-### Arquivos
-- `supabase/functions/aura-agent/index.ts` — Fix 1, 2, 4.
-- `supabase/functions/schedule-tag-extractor/index.ts` — Fix 3.
-- Sem migração de schema. Sem recovery dos 5 D0.
+## Como você valida
+- Acesse `/v2` em desktop e mobile.
+- Compare lado a lado com `/`.
+- CTA final: decidir se promove para `/` (substituir) ou mantém em paralelo coletando dados.

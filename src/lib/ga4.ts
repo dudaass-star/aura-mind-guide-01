@@ -3,6 +3,7 @@
 
 const MARKETING_ROUTES = [
   "/",
+  "/v2",
   "/checkout",
   "/obrigado",
   "/experimentar",

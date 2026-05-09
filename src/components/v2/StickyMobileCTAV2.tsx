@@ -1,0 +1,36 @@
+import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { trackCtaClick } from "@/lib/ga4";
+
+const StickyMobileCTAV2 = () => {
+  const isMobile = useIsMobile();
+  const [show, setShow] = useState(false);
+
+  useEffect(() => {
+    if (!isMobile) return;
+    const hero = document.getElementById("hero-section");
+    if (!hero) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setShow(!entry.isIntersecting),
+      { threshold: 0 },
+    );
+    observer.observe(hero);
+    return () => observer.disconnect();
+  }, [isMobile]);
+
+  if (!isMobile || !show) return null;
+
+  return (
+    <div className="fixed bottom-0 left-0 right-0 z-50 p-3 bg-background/85 backdrop-blur-md border-t border-border/40">
+      <Link to="/checkout" className="block" onClick={() => trackCtaClick("sticky", "Começar por R$ 6,90 (v2)")}>
+        <Button variant="sage" size="lg" className="w-full rounded-full">
+          Começar por R$ 6,90
+        </Button>
+      </Link>
+    </div>
+  );
+};
+
+export default StickyMobileCTAV2;

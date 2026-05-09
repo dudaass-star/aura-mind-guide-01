@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 import Index from "./pages/Index";
+import IndexV2 from "./pages/IndexV2";
 import Checkout from "./pages/Checkout";
 import ThankYou from "./pages/ThankYou";
 import CancelSubscription from "./pages/CancelSubscription";
@@ -48,6 +49,7 @@ const App = () => (
           <GA4RouteTracker />
           <Routes>
             <Route path="/" element={<Index />} />
+            <Route path="/v2" element={<IndexV2 />} />
             <Route path="/checkout" element={<Checkout />} />
             <Route path="/obrigado" element={<ThankYou />} />
             <Route path="/cancelar" element={<CancelSubscription />} />
