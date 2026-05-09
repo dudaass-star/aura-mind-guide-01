@@ -1,12 +1,10 @@
-import { Link } from "react-router-dom";
-import { Button } from "@/components/ui/button";
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { trackCtaClick, trackFaqOpen } from "@/lib/ga4";
+import { trackFaqOpen } from "@/lib/ga4";
 
 const faqs = [
   {
@@ -82,20 +80,6 @@ const FAQV2 = () => (
             </AccordionItem>
           ))}
         </Accordion>
-
-        <div className="text-center mt-12">
-          <Link
-            to="/checkout"
-            onClick={() => trackCtaClick("faq", "Começar por R$ 6,90 (v2)")}
-          >
-            <Button variant="sage" size="xl">
-              Começar por R$ 6,90
-            </Button>
-          </Link>
-          <p className="text-sm text-muted-foreground mt-3">
-            7 dias para experimentar • Cancele quando quiser
-          </p>
-        </div>
       </div>
     </div>
   </section>
