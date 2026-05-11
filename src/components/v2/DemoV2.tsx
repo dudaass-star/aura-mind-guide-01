@@ -397,7 +397,7 @@ const DemoV2 = () => {
               Pronto pra descobrir suas pistas?
             </p>
             <Link
-              to="/checkout"
+              to="/v2/checkout"
               onClick={() => trackCtaClick("final", "Começar minha jornada (demo v2)")}
             >
               <Button variant="sage" size="xl">

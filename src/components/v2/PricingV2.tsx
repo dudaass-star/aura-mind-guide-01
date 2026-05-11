@@ -48,7 +48,7 @@ const PricingV2 = () => (
               </li>
             ))}
           </ul>
-          <Link to="/checkout" onClick={() => trackCtaClick("pricing", "Começar agora R$ 6,90 (v2)")}>
+          <Link to="/v2/checkout" onClick={() => trackCtaClick("pricing", "Começar agora R$ 6,90 (v2)")}>
             <Button variant="default" size="lg" className="w-full rounded-xl bg-foreground text-background hover:bg-foreground/90">
               Começar agora por R$ 6,90
             </Button>
@@ -84,7 +84,7 @@ const PricingV2 = () => (
               ))}
             </ul>
             <Link
-              to="/checkout"
+              to="/v2/checkout"
               state={{ plan: p.id, billing: "monthly" }}
               onClick={() => trackCtaClick("pricing", `${p.name} (v2)`)}
             >

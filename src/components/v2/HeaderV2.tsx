@@ -40,7 +40,7 @@ const HeaderV2 = () => {
             <a href="#precos" className={linkBase}>Preços</a>
             <a href="#faq" className={linkBase}>FAQ</a>
             <Link
-              to="/checkout"
+              to="/v2/checkout"
               onClick={() => trackCtaClick("header", "Começar agora (v2 desktop)")}
             >
               <Button variant="sage" size="sm" className="rounded-full px-5">
@@ -66,7 +66,7 @@ const HeaderV2 = () => {
               <a href="#precos" className={linkBase} onClick={() => setIsMenuOpen(false)}>Preços</a>
               <a href="#faq" className={linkBase} onClick={() => setIsMenuOpen(false)}>FAQ</a>
               <Link
-                to="/checkout"
+                to="/v2/checkout"
                 onClick={() => {
                   trackCtaClick("header", "Começar agora (v2 mobile menu)");
                   setIsMenuOpen(false);

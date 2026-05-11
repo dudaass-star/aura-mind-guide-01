@@ -30,7 +30,7 @@ const HeroV2 = () => (
           </p>
 
           <div className="mt-8 flex flex-col items-start gap-2">
-            <Link to="/checkout" onClick={() => trackCtaClick("hero", "Começar por R$ 6,90 (v2)")}>
+            <Link to="/v2/checkout" onClick={() => trackCtaClick("hero", "Começar por R$ 6,90 (v2)")}>
               <Button variant="sage" size="xl" className="rounded-2xl px-10 shadow-lg">
                 Começar por R$ 6,90
               </Button>
