@@ -24,7 +24,7 @@ const StickyMobileCTAV2 = () => {
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 p-3 bg-background/85 backdrop-blur-md border-t border-border/40">
-      <Link to="/checkout" className="block" onClick={() => trackCtaClick("sticky", "Começar por R$ 6,90 (v2)")}>
+      <Link to="/v2/checkout" className="block" onClick={() => trackCtaClick("sticky", "Começar por R$ 6,90 (v2)")}>
         <Button variant="sage" size="lg" className="w-full rounded-full">
           Começar por R$ 6,90
         </Button>

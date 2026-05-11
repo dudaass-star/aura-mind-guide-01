@@ -23,7 +23,7 @@ const FinalCTAV2 = () => (
         </div>
 
         <div className="flex flex-col items-center md:items-end gap-2">
-          <Link to="/checkout" onClick={() => trackCtaClick("final", "Quero começar agora (v2)")}>
+          <Link to="/v2/checkout" onClick={() => trackCtaClick("final", "Quero começar agora (v2)")}>
             <Button variant="sage" size="xl" className="rounded-2xl px-8">
               Quero começar agora
             </Button>

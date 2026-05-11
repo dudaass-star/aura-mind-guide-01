@@ -7,6 +7,7 @@ import { HelmetProvider } from "react-helmet-async";
 import Index from "./pages/Index";
 import IndexV2 from "./pages/IndexV2";
 import Checkout from "./pages/Checkout";
+import CheckoutV2 from "./pages/CheckoutV2";
 import ThankYou from "./pages/ThankYou";
 import CancelSubscription from "./pages/CancelSubscription";
 import TermsOfService from "./pages/TermsOfService";
@@ -51,6 +52,7 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/v2" element={<IndexV2 />} />
             <Route path="/checkout" element={<Checkout />} />
+            <Route path="/v2/checkout" element={<CheckoutV2 />} />
             <Route path="/obrigado" element={<ThankYou />} />
             <Route path="/cancelar" element={<CancelSubscription />} />
             <Route path="/termos" element={<TermsOfService />} />
