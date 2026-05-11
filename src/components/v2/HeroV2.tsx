@@ -66,8 +66,8 @@ const HeroV2 = () => (
         </div>
 
         {/* Coluna direita: foto + bolha */}
-        <div className="relative md:h-[640px] -mx-6 md:mx-0">
-          <div className="relative h-[420px] md:h-full md:absolute md:inset-0 md:-right-12 lg:-right-24">
+        <div className="relative md:h-[640px] -mx-6 md:mx-0 overflow-hidden md:rounded-l-3xl">
+          <div className="relative h-[420px] md:h-full md:absolute md:inset-0">
             <img
               src={heroImg}
               alt="Mulher conversando com a Aura no celular à noite"
@@ -78,7 +78,7 @@ const HeroV2 = () => (
             <div className="absolute inset-0 bg-gradient-to-r from-[hsl(220_35%_10%)] via-transparent to-transparent md:bg-gradient-to-r md:from-[hsl(220_35%_10%)] md:via-[hsl(220_35%_10%/0.2)] md:to-transparent" />
 
             {/* Bolha de chat */}
-            <div className="absolute right-4 md:right-8 top-1/2 -translate-y-1/2 max-w-[260px] v2-fade-up" style={{ animationDelay: "0.6s" }}>
+            <div className="absolute right-4 md:right-6 top-1/2 -translate-y-1/2 w-[230px] md:w-[240px] v2-fade-up" style={{ animationDelay: "0.6s" }}>
               <div className="relative bg-[#f5efe6] text-[#1a2238] rounded-2xl rounded-br-sm px-5 py-4 shadow-2xl">
                 <p className="text-sm leading-relaxed">
                   <span className="font-semibold">Oi, estou aqui.</span>
