@@ -269,9 +269,6 @@ const CheckoutV2 = () => {
     }
   };
 
-  // Tokens visuais V2 reutilizáveis
-  const cardCls =
-    "bg-white/[0.04] border border-white/10 rounded-2xl p-6 backdrop-blur-sm";
   const inputCls =
     "mt-1.5 bg-white/5 border-white/15 text-white placeholder:text-white/40 focus-visible:ring-1 focus-visible:ring-[hsl(140_18%_55%)]";
 
@@ -317,249 +314,159 @@ const CheckoutV2 = () => {
           </div>
         </header>
 
-        <div className="relative container mx-auto px-4 py-12">
-          <div className="max-w-2xl mx-auto">
-            <div className="text-center mb-10">
-              <h1 className="font-display text-3xl md:text-4xl font-semibold mb-3 tracking-tight">
-                Comece sua jornada
+        <div className="relative container mx-auto px-4 py-8 md:py-12 pb-32 md:pb-12">
+          <div className="max-w-xl mx-auto">
+            {/* Cabeçalho enxuto */}
+            <div className="text-center mb-6">
+              <h1 className="font-display text-2xl md:text-3xl font-semibold mb-2 tracking-tight">
+                Comece em 2 minutos
               </h1>
-              <p className="text-white/65">
-                Experimente por 7 dias a partir de R$ 6,90
+              <p className="text-white/65 text-sm">
+                7 dias por R$ {currentPlan.trialPrice} • cancele quando quiser
               </p>
             </div>
 
-            <form id="checkout-form" onSubmit={handleSubmit} className="space-y-6">
-              {/* Período de cobrança */}
-              <div className={cardCls}>
-                <h2 className="font-display text-lg font-semibold mb-4">
-                  Período de cobrança
-                </h2>
-                <div className="flex items-center justify-center gap-2 p-1 bg-white/5 rounded-full border border-white/10">
-                  <button
-                    type="button"
-                    onClick={() => setBillingPeriod("monthly")}
-                    className={`flex-1 px-4 py-2.5 rounded-full text-sm font-medium transition-all ${
-                      billingPeriod === "monthly"
-                        ? "bg-[hsl(140_22%_45%)] text-white shadow-md"
-                        : "text-white/60 hover:text-white"
-                    }`}
-                  >
-                    Mensal
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setBillingPeriod("yearly")}
-                    className={`flex-1 px-4 py-2.5 rounded-full text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+            <form id="checkout-form" onSubmit={handleSubmit} className="space-y-5">
+              {/* Toggle de período — sem moldura de card */}
+              <div className="flex items-center justify-center gap-1 p-1 bg-white/5 rounded-full border border-white/10 max-w-xs mx-auto">
+                <button
+                  type="button"
+                  onClick={() => setBillingPeriod("monthly")}
+                  className={`flex-1 px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                    billingPeriod === "monthly"
+                      ? "bg-[hsl(140_22%_45%)] text-white shadow-md"
+                      : "text-white/60 hover:text-white"
+                  }`}
+                >
+                  Mensal
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBillingPeriod("yearly")}
+                  className={`flex-1 px-4 py-2 rounded-full text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+                    billingPeriod === "yearly"
+                      ? "bg-[hsl(140_22%_45%)] text-white shadow-md"
+                      : "text-white/60 hover:text-white"
+                  }`}
+                >
+                  Anual
+                  <span
+                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
                       billingPeriod === "yearly"
-                        ? "bg-[hsl(140_22%_45%)] text-white shadow-md"
-                        : "text-white/60 hover:text-white"
+                        ? "bg-white/20 text-white"
+                        : "bg-[hsl(35_70%_60%)] text-[hsl(220_35%_12%)]"
                     }`}
                   >
-                    Anual
-                    <span
-                      className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
-                        billingPeriod === "yearly"
-                          ? "bg-white/20 text-white"
-                          : "bg-[hsl(35_70%_60%)] text-[hsl(220_35%_12%)]"
+                    -40%
+                  </span>
+                </button>
+              </div>
+
+              {/* Planos slim */}
+              <RadioGroup
+                value={selectedPlan}
+                onValueChange={(value) => setSelectedPlan(value as PlanId)}
+                className="space-y-2.5"
+              >
+                {(Object.entries(plans) as [PlanId, PlanConfig][]).map(([id, plan]) => {
+                  const price = billingPeriod === "monthly" ? plan.monthlyPrice : plan.yearlyPrice;
+                  const period = billingPeriod === "monthly" ? "mês" : "ano";
+                  const active = selectedPlan === id;
+                  const isPopular = id === "direcao";
+
+                  return (
+                    <label
+                      key={id}
+                      className={`relative flex items-center justify-between gap-3 p-4 rounded-xl border cursor-pointer transition-all ${
+                        active
+                          ? "border-[hsl(140_22%_55%)] bg-[hsl(140_22%_45%/0.14)] shadow-[0_0_0_1px_hsl(140_22%_55%/0.4)]"
+                          : "border-white/10 bg-white/[0.03] hover:border-white/25"
                       }`}
                     >
-                      40% off
-                    </span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Seleção de plano */}
-              <div className={cardCls}>
-                <h2 className="font-display text-lg font-semibold mb-4">
-                  Escolha seu plano
-                </h2>
-
-                <RadioGroup
-                  value={selectedPlan}
-                  onValueChange={(value) => setSelectedPlan(value as PlanId)}
-                  className="space-y-3"
-                >
-                  {(Object.entries(plans) as [PlanId, PlanConfig][]).map(([id, plan]) => {
-                    const price = billingPeriod === "monthly" ? plan.monthlyPrice : plan.yearlyPrice;
-                    const period = billingPeriod === "monthly" ? "mês" : "ano";
-                    const active = selectedPlan === id;
-
-                    return (
-                      <label
-                        key={id}
-                        className={`relative flex items-start justify-between p-4 rounded-xl border cursor-pointer transition-all ${
-                          active
-                            ? "border-[hsl(140_22%_55%)] bg-[hsl(140_22%_45%/0.12)]"
-                            : "border-white/10 bg-white/[0.02] hover:border-white/25"
-                        }`}
-                      >
-                        {id === "direcao" && (
-                          <div className="absolute -top-2 left-4 px-2 py-0.5 bg-[hsl(140_22%_45%)] text-white text-xs font-medium rounded">
-                            Mais popular
-                          </div>
-                        )}
-                        {billingPeriod === "yearly" && (
-                          <div className="absolute -top-2 right-4 px-2 py-0.5 bg-[hsl(12_70%_58%)] text-white text-xs font-medium rounded">
-                            -{plan.yearlyDiscount}%
-                          </div>
-                        )}
-                        <div className="flex items-start gap-3">
-                          <RadioGroupItem
-                            value={id}
-                            id={id}
-                            className="mt-1 border-white/40 text-[hsl(140_22%_55%)]"
-                          />
-                          <div>
-                            <p className="font-medium text-white">{plan.name}</p>
-                            <div className="flex flex-wrap gap-2 mt-2">
-                              {plan.sessions > 0 && (
-                                <span className="inline-flex items-center gap-1 text-xs bg-white/5 text-white/70 px-2 py-1 rounded border border-white/10">
-                                  <Calendar className="w-3 h-3" />
-                                  {plan.sessions} sessões/mês
-                                </span>
-                              )}
-                              <span className="inline-flex items-center gap-1 text-xs bg-white/5 text-white/70 px-2 py-1 rounded border border-white/10">
-                                <MessageCircle className="w-3 h-3" />
-                                Chat ilimitado
-                              </span>
-                            </div>
-                            {billingPeriod === "yearly" && (
-                              <p className="text-xs text-white/55 mt-2">
-                                equivale a R${plan.yearlyMonthlyEquivalent}/mês
-                              </p>
-                            )}
-                          </div>
+                      {isPopular && (
+                        <div className="absolute -top-2 left-4 px-2 py-0.5 bg-[hsl(140_22%_45%)] text-white text-[10px] font-semibold rounded uppercase tracking-wide">
+                          Mais popular
                         </div>
-                        <div className="text-right">
-                          <p className="font-display text-xl font-semibold text-[hsl(140_30%_72%)] whitespace-nowrap">
-                            R$ {plan.trialPrice}
-                          </p>
-                          <p className="text-xs font-medium text-[hsl(140_30%_72%)]">7 dias</p>
-                          <p className="text-xs text-white/50 mt-1">
-                            Após: R$ {price}/{period}
+                      )}
+                      <div className="flex items-center gap-3 min-w-0">
+                        <RadioGroupItem
+                          value={id}
+                          id={id}
+                          className="border-white/40 text-[hsl(140_22%_55%)] shrink-0"
+                        />
+                        <div className="min-w-0">
+                          <p className="font-medium text-white">{plan.name}</p>
+                          <p className="text-xs text-white/55 truncate">
+                            {plan.sessions > 0
+                              ? `${plan.sessions} sessões/mês + chat ilimitado`
+                              : "Chat ilimitado 24/7"}
                           </p>
                         </div>
-                      </label>
-                    );
-                  })}
-                </RadioGroup>
-              </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="font-display text-lg font-semibold text-[hsl(140_30%_72%)] whitespace-nowrap leading-tight">
+                          R$ {plan.trialPrice}
+                        </p>
+                        <p className="text-[11px] text-white/50 leading-tight">
+                          depois R$ {price}/{period}
+                        </p>
+                      </div>
+                    </label>
+                  );
+                })}
+              </RadioGroup>
 
-              {/* Destaques do plano */}
-              <div className={cardCls}>
-                <h3 className="font-medium mb-3">
-                  O que está incluso no plano {currentPlan.name}:
-                </h3>
-                <ul className="space-y-2">
-                  {currentPlan.highlights.map((highlight, index) => (
-                    <li key={index} className="flex items-center gap-2 text-sm text-white/75">
-                      <Check className="w-4 h-4 text-[hsl(140_30%_72%)]" />
-                      {highlight}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              {/* Dados do usuário */}
-              <div className={cardCls}>
-                <h2 className="font-display text-lg font-semibold mb-4">Seus dados</h2>
-
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="name" className="text-white/85">Nome completo</Label>
-                    <Input
-                      id="name"
-                      type="text"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      placeholder="Seu nome"
-                      className={inputCls}
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="email" className="text-white/85">Email</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="seu@email.com"
-                      className={inputCls}
-                    />
-                    <p className="text-xs text-white/50 mt-1.5">
-                      Para recibos e comunicações importantes
-                    </p>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="phone" className="text-white/85">WhatsApp</Label>
-                    <Input
-                      id="phone"
-                      type="tel"
-                      value={phone}
-                      onChange={handlePhoneChange}
-                      placeholder="(11) 99999-9999"
-                      className={inputCls}
-                      maxLength={15}
-                    />
-                    <p className="text-xs text-white/50 mt-1.5">
-                      A AURA vai te enviar mensagem neste número
-                    </p>
-                  </div>
+              {/* Formulário enxuto */}
+              <div className="space-y-3 pt-2">
+                <div>
+                  <Label htmlFor="name" className="text-white/80 text-sm">Nome</Label>
+                  <Input
+                    id="name"
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Seu nome"
+                    className={inputCls}
+                    autoFocus
+                  />
                 </div>
-              </div>
-
-              {/* Resumo */}
-              <div className={cardCls}>
-                <div className="flex justify-between items-center mb-4">
-                  <span className="text-white/65">
-                    Plano {currentPlan.name} ({billingPeriod === "monthly" ? "mensal" : "anual"})
-                  </span>
-                  <span className="font-semibold text-white">
-                    R$ {currentPrice}/{periodLabel}
-                  </span>
+                <div>
+                  <Label htmlFor="email" className="text-white/80 text-sm">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="seu@email.com"
+                    className={inputCls}
+                  />
                 </div>
-                {billingPeriod === "yearly" && (
-                  <div className="flex justify-between items-center mb-4 text-sm">
-                    <span className="text-[hsl(140_30%_72%)]">
-                      Economia de {currentPlan.yearlyDiscount}%
-                    </span>
-                    <span className="text-[hsl(140_30%_72%)] font-medium">
-                      equivale a R${currentPlan.yearlyMonthlyEquivalent}/mês
-                    </span>
-                  </div>
-                )}
-                <div className="flex justify-between items-center pt-4 border-t border-white/10">
-                  <span className="font-medium text-white">Hoje</span>
-                  <span className="font-display text-2xl font-semibold text-[hsl(140_30%_72%)]">
-                    R$ {currentPlan.trialPrice}
-                  </span>
-                </div>
-                <p className="text-sm text-white/55 mt-3 text-center">
-                  7 dias de acesso • Após: R$ {currentPrice}/{periodLabel}
-                </p>
-              </div>
-
-              {/* Prova social + garantia */}
-              <div className="rounded-2xl p-6 border border-[hsl(140_22%_45%/0.35)] bg-[hsl(140_22%_45%/0.08)] space-y-4">
-                <p className="text-white/85 italic text-sm leading-relaxed">
-                  "Eu estava cética, mas em 3 dias já senti que alguém finalmente me ouvia. Hoje não consigo imaginar meu dia sem a AURA."
-                </p>
-                <p className="text-sm font-medium text-white/60">— Ana C.</p>
-                <div className="border-t border-white/10 pt-4">
-                  <p className="text-sm text-white font-medium flex items-center gap-2">
-                    <Shield className="w-4 h-4 text-[hsl(140_30%_72%)]" />
-                    Garantia de satisfação
-                  </p>
-                  <p className="text-xs text-white/60 mt-1">
-                    Se nos primeiros 7 dias você não sentir diferença, devolvemos seu dinheiro. Sem perguntas.
+                <div>
+                  <Label htmlFor="phone" className="text-white/80 text-sm">WhatsApp</Label>
+                  <Input
+                    id="phone"
+                    type="tel"
+                    value={phone}
+                    onChange={handlePhoneChange}
+                    placeholder="(11) 99999-9999"
+                    className={inputCls}
+                    maxLength={15}
+                  />
+                  <p className="text-[11px] text-white/45 mt-1">
+                    A AURA conversa com você por aqui
                   </p>
                 </div>
               </div>
 
-              {/* CTA */}
+              {/* Resumo único acima do CTA */}
+              <div className="text-center text-sm text-white/65 pt-1">
+                Hoje{" "}
+                <span className="text-white font-semibold">R$ {currentPlan.trialPrice}</span>
+                {" "}• depois{" "}
+                <span className="text-white/85">R$ {currentPrice}/{periodLabel}</span>
+              </div>
+
+              {/* CTA principal */}
               <Button
                 type="submit"
                 variant="sage"
@@ -570,24 +477,46 @@ const CheckoutV2 = () => {
                 <CreditCard className="w-5 h-5 mr-2" />
                 {isLoading ? "Processando..." : `Começar por R$ ${currentPlan.trialPrice}`}
               </Button>
+              <p className="text-center text-[11px] text-white/50 -mt-2">
+                Sem compromisso • Cancele em 1 clique no WhatsApp
+              </p>
 
-              {/* Trust badges */}
-              <div className="flex flex-wrap justify-center gap-6 text-sm text-white/55">
-                <div className="flex items-center gap-2">
-                  <Shield className="w-4 h-4 text-[hsl(140_30%_72%)]" />
-                  <span>Pagamento seguro</span>
+              {/* Faixa única de confiança */}
+              <div className="flex flex-wrap justify-center gap-x-5 gap-y-2 text-xs text-white/55 pt-1">
+                <div className="flex items-center gap-1.5">
+                  <Shield className="w-3.5 h-3.5 text-[hsl(140_30%_72%)]" />
+                  Garantia 7 dias
                 </div>
-                <div className="flex items-center gap-2">
-                  <Lock className="w-4 h-4 text-[hsl(140_30%_72%)]" />
-                  <span>Dados protegidos</span>
+                <div className="flex items-center gap-1.5">
+                  <Lock className="w-3.5 h-3.5 text-[hsl(140_30%_72%)]" />
+                  Pagamento Stripe
                 </div>
-                <div className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-[hsl(140_30%_72%)]" />
-                  <span>Cancele quando quiser</span>
+                <div className="flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 text-[hsl(140_30%_72%)]" />
+                  Cancele quando quiser
                 </div>
               </div>
+
+              {/* Mini-depoimento */}
+              <p className="text-center text-xs text-white/55 italic max-w-md mx-auto pt-2">
+                "Em 3 dias senti que alguém finalmente me ouvia." — Ana C.
+              </p>
             </form>
           </div>
+        </div>
+
+        {/* Sticky CTA mobile */}
+        <div className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-[hsl(220_35%_8%/0.95)] backdrop-blur-md border-t border-white/10 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <Button
+            type="submit"
+            form="checkout-form"
+            variant="sage"
+            size="lg"
+            className="w-full rounded-full"
+            disabled={isLoading}
+          >
+            {isLoading ? "Processando..." : `Começar por R$ ${currentPlan.trialPrice}`}
+          </Button>
         </div>
 
         {/* Exit-intent popup */}
