@@ -1,29 +1,32 @@
-## Ajustar links e CTA do header V2 (mantendo visual)
+## Página de Checkout V2 (`/v2/checkout`)
 
-Trocar a navegação e o botão do `HeaderV2` para os mesmos do `Header` V1, sem mexer no visual escuro/sage do V2.
+Criar uma versão visual do checkout com a estética do V2 (navy escuro, sage, tipografia Fraunces, cards translúcidos), reaproveitando 100% da lógica do `Checkout.tsx` atual. A `/checkout` original (V1) **permanece intacta**.
 
-### Mudanças em `src/components/v2/HeaderV2.tsx`
+### Arquivos novos
 
-**Links de navegação (desktop e mobile)** — substituir:
-- `Como funciona`, `Recursos`, `Depoimentos`, `Planos`, `Perguntas`
-  
-Por:
-- `Guia` → `<Link to="/guia">`
-- `Blog` → `<Link to="/blog">`
-- `Preços` → `<a href="#precos">`
-- `FAQ` → `<a href="#faq">`
+**`src/pages/CheckoutV2.tsx`**
+- Mesma lógica do `src/pages/Checkout.tsx`: estados de plano/billing/método, validações, formatação de telefone, `handleSubmit` com Meta Pixel + CAPI + GA4, `useEffect` de ViewContent e exit-intent, chamada `supabase.functions.invoke('create-checkout')`, redirect Stripe e `localStorage.aura_checkout`.
+- Visual reskinado: fundo dark navy, cards `bg-white/[0.04] border-white/10 backdrop-blur-sm`, headings `font-display` (Fraunces), inputs `bg-white/5 border-white/15 text-white`, CTA `Button variant="sage" rounded-full`.
+- Header próprio simples (logo branca + link "Voltar" para `/v2`).
+- `<Helmet>` com title `Checkout - AURA` e canonical `/v2/checkout`.
+- Mantém: toggle Mensal/Anual, seleção dos 3 planos, destaques do plano, formulário (nome/email/telefone), bloco de garantia/segurança, exit-intent popup — todos no estilo V2.
 
-**Botão CTA** — substituir:
-- `Começar por R$ 6,90` → `Começar agora`
-- Eventos GA4: `"Começar agora (v2 desktop)"` e `"Começar agora (v2 mobile menu)"`
-- Mantém `variant="sage"` e `rounded-full` (estilo V2)
+### Arquivos editados
+
+**`src/App.tsx`**
+- `import CheckoutV2 from "./pages/CheckoutV2";`
+- `<Route path="/v2/checkout" element={<CheckoutV2 />} />` acima do catch-all.
+
+**Componentes V2 — apontar para `/v2/checkout`:**
+- `src/components/v2/HeaderV2.tsx` (2 links)
+- `src/components/v2/HeroV2.tsx`
+- `src/components/v2/PricingV2.tsx` (2 links)
+- `src/components/v2/FinalCTAV2.tsx`
+- `src/components/v2/StickyMobileCTAV2.tsx`
+- `src/components/v2/DemoV2.tsx`
 
 ### O que NÃO muda
 
-- Fundo escuro com transição on-scroll (`bg-[hsl(220_35%_10%/0.85)] backdrop-blur-md`)
-- Logo com `brightness-0 invert` (branco)
-- Tipografia, espaçamentos e classe `linkBase` clara
-- Menu mobile com fundo navy
-- Destino do CTA (`/checkout`)
-
-Resultado: header do V2 com visual idêntico ao atual, mas com os mesmos itens de menu e texto de botão do V1.
+- `src/pages/Checkout.tsx` e rota `/checkout` (V1) — totalmente intactos.
+- Edge function `create-checkout` e qualquer lógica de Stripe/GA4/Meta.
+- Nenhuma migração de banco.
