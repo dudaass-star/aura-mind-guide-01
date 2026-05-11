@@ -1,58 +1,74 @@
-/* Tokens escopados ao tema escuro da landing V2.
- * Aplica-se apenas dentro de elementos com classe `.theme-v2`,
- * sem vazar para outras rotas (checkout, portal, admin). */
+/* Tokens escopados à landing V2 — paleta editorial clara (creme/navy/sage).
+ * Aplica-se apenas dentro de `.theme-v2`, sem vazar para outras rotas. */
 .theme-v2 {
-  --background: 222 28% 6%;
-  --foreground: 30 25% 96%;
+  /* Base creme quente */
+  --background: 36 30% 96%;
+  --foreground: 220 35% 12%;
 
-  --card: 222 24% 10%;
-  --card-foreground: 30 25% 96%;
+  --card: 0 0% 100%;
+  --card-foreground: 220 35% 12%;
 
-  --popover: 222 24% 10%;
-  --popover-foreground: 30 25% 96%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 220 35% 12%;
 
-  --primary: 155 45% 62%;
-  --primary-foreground: 222 30% 6%;
+  /* Sage (verde-oliva acolhedor) — usado em CTA e accents */
+  --primary: 130 18% 48%;
+  --primary-foreground: 36 30% 98%;
 
-  --secondary: 222 20% 14%;
-  --secondary-foreground: 30 20% 90%;
+  --secondary: 36 20% 92%;
+  --secondary-foreground: 220 30% 18%;
 
-  --muted: 222 18% 14%;
-  --muted-foreground: 220 10% 65%;
+  --muted: 36 15% 90%;
+  --muted-foreground: 220 10% 42%;
 
-  --accent: 270 45% 72%;
-  --accent-foreground: 222 30% 6%;
+  --accent: 270 35% 70%;
+  --accent-foreground: 220 35% 12%;
 
-  --destructive: 0 60% 55%;
-  --destructive-foreground: 30 25% 96%;
+  --destructive: 0 55% 50%;
+  --destructive-foreground: 36 30% 98%;
 
-  --border: 222 15% 18%;
-  --input: 222 15% 18%;
-  --ring: 155 45% 62%;
+  --border: 30 15% 85%;
+  --input: 30 15% 85%;
+  --ring: 130 18% 48%;
 
-  --sage: 155 45% 62%;
-  --sage-soft: 155 30% 18%;
-  --lavender: 270 45% 72%;
-  --lavender-soft: 270 30% 16%;
+  --sage: 130 18% 48%;
+  --sage-soft: 130 25% 90%;
+  --lavender: 270 35% 70%;
+  --lavender-soft: 270 30% 95%;
 
-  color-scheme: dark;
+  /* Tons usados em seções escuras dentro do V2 */
+  --v2-navy: 220 35% 10%;
+  --v2-navy-foreground: 36 25% 94%;
+  --v2-navy-muted: 220 15% 65%;
+
+  color-scheme: light;
 }
 
-/* Glow cinematográfico reaproveitável */
+/* Bloco escuro reutilizável (FinalCTA, Benefits) */
+.theme-v2 .v2-dark-section {
+  background-color: hsl(var(--v2-navy));
+  color: hsl(var(--v2-navy-foreground));
+}
+.theme-v2 .v2-dark-section .text-foreground { color: hsl(var(--v2-navy-foreground)); }
+.theme-v2 .v2-dark-section .text-muted-foreground { color: hsl(var(--v2-navy-muted)); }
+.theme-v2 .v2-dark-section .border-border\/40,
+.theme-v2 .v2-dark-section .border-border\/60 { border-color: hsl(var(--v2-navy-foreground) / 0.12); }
+
+/* Glow suave (mantido para bg ambient sutil) */
 .theme-v2 .v2-glow-sage {
-  background: radial-gradient(ellipse at center, hsl(155 45% 50% / 0.22) 0%, transparent 65%);
+  background: radial-gradient(ellipse at center, hsl(130 25% 55% / 0.10) 0%, transparent 65%);
 }
 .theme-v2 .v2-glow-lavender {
-  background: radial-gradient(ellipse at center, hsl(270 45% 55% / 0.18) 0%, transparent 65%);
+  background: radial-gradient(ellipse at center, hsl(270 30% 60% / 0.10) 0%, transparent 65%);
 }
+.theme-v2 .v2-breathe { /* desativado no novo tema */ }
 
-/* Animação lenta de respiração para elementos do herói */
-@keyframes v2-breathe {
-  0%, 100% { opacity: 0.55; transform: scale(1); }
-  50%      { opacity: 0.85; transform: scale(1.04); }
-}
-.theme-v2 .v2-breathe {
-  animation: v2-breathe 9s ease-in-out infinite;
+/* Gradient text sage para títulos */
+.theme-v2 .text-gradient-sage {
+  background: linear-gradient(135deg, hsl(130 22% 42%), hsl(130 18% 55%));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 /* Fade-up mais lento (1.2s), mais cinematográfico que o padrão */
