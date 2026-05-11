@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { trackCtaClick } from "@/lib/ga4";
 
 const FinalCTAV2 = () => (
-  <section className="relative py-20 md:py-28 v2-dark-section overflow-hidden">
+  <section id="final-cta" className="relative py-20 md:py-28 v2-dark-section overflow-hidden">
     <div className="container mx-auto px-6">
       <div className="max-w-5xl mx-auto grid md:grid-cols-[auto_1fr_auto] gap-8 items-center">
         <div className="w-20 h-20 rounded-full bg-white flex items-center justify-center mx-auto md:mx-0">
