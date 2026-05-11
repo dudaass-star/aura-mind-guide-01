@@ -9,6 +9,11 @@ const StickyMobileCTAV2 = () => {
   const [pastHero, setPastHero] = useState(false);
   const [nearCta, setNearCta] = useState(false);
 
+  const isInView = (el: Element) => {
+    const r = el.getBoundingClientRect();
+    return r.top < window.innerHeight && r.bottom > 0;
+  };
+
   useEffect(() => {
     if (!isMobile) return;
     const hero = document.getElementById("hero-section");
