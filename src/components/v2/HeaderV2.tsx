@@ -35,17 +35,16 @@ const HeaderV2 = () => {
           </Link>
 
           <nav className="hidden md:flex items-center gap-7">
-            <a href="#como-funciona" className={linkBase}>Como funciona</a>
-            <a href="#recursos" className={linkBase}>Recursos</a>
-            <a href="#depoimentos" className={linkBase}>Depoimentos</a>
-            <a href="#precos" className={linkBase}>Planos</a>
-            <a href="#faq" className={linkBase}>Perguntas</a>
+            <Link to="/guia" className={linkBase}>Guia</Link>
+            <Link to="/blog" className={linkBase}>Blog</Link>
+            <a href="#precos" className={linkBase}>Preços</a>
+            <a href="#faq" className={linkBase}>FAQ</a>
             <Link
               to="/checkout"
-              onClick={() => trackCtaClick("header", "Começar (v2 desktop)")}
+              onClick={() => trackCtaClick("header", "Começar agora (v2 desktop)")}
             >
               <Button variant="sage" size="sm" className="rounded-full px-5">
-                Começar por R$ 6,90
+                Começar agora
               </Button>
             </Link>
           </nav>
@@ -62,20 +61,19 @@ const HeaderV2 = () => {
         {isMenuOpen && (
           <nav className="md:hidden py-4 border-t border-white/10 bg-[hsl(220_35%_10%/0.95)] backdrop-blur-md -mx-6 px-6">
             <div className="flex flex-col gap-4">
-              <a href="#como-funciona" className={linkBase} onClick={() => setIsMenuOpen(false)}>Como funciona</a>
-              <a href="#recursos" className={linkBase} onClick={() => setIsMenuOpen(false)}>Recursos</a>
-              <a href="#depoimentos" className={linkBase} onClick={() => setIsMenuOpen(false)}>Depoimentos</a>
-              <a href="#precos" className={linkBase} onClick={() => setIsMenuOpen(false)}>Planos</a>
-              <a href="#faq" className={linkBase} onClick={() => setIsMenuOpen(false)}>Perguntas</a>
+              <Link to="/guia" className={linkBase} onClick={() => setIsMenuOpen(false)}>Guia</Link>
+              <Link to="/blog" className={linkBase} onClick={() => setIsMenuOpen(false)}>Blog</Link>
+              <a href="#precos" className={linkBase} onClick={() => setIsMenuOpen(false)}>Preços</a>
+              <a href="#faq" className={linkBase} onClick={() => setIsMenuOpen(false)}>FAQ</a>
               <Link
                 to="/checkout"
                 onClick={() => {
-                  trackCtaClick("header", "Começar (v2 mobile)");
+                  trackCtaClick("header", "Começar agora (v2 mobile menu)");
                   setIsMenuOpen(false);
                 }}
               >
                 <Button variant="sage" className="w-full rounded-full">
-                  Começar por R$ 6,90
+                  Começar agora
                 </Button>
               </Link>
             </div>
