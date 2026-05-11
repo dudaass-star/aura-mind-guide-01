@@ -49,7 +49,7 @@ const App = () => (
         <BrowserRouter>
           <GA4RouteTracker />
           <Routes>
-            <Route path="/" element={<Index />} />
+            <Route path="/" element={<Navigate to="/v2" replace />} />
             <Route path="/v2" element={<IndexV2 />} />
             <Route path="/checkout" element={<Checkout />} />
             <Route path="/v2/checkout" element={<CheckoutV2 />} />
