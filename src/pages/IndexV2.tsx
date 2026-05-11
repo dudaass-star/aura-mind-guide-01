@@ -4,10 +4,9 @@ import "@/styles/v2-theme.css";
 
 import HeaderV2 from "@/components/v2/HeaderV2";
 import HeroV2 from "@/components/v2/HeroV2";
-import EmotionalMirror from "@/components/v2/EmotionalMirror";
+import HowItWorksV2 from "@/components/v2/HowItWorksV2";
 import DemoV2 from "@/components/v2/DemoV2";
-import TransformationsV2 from "@/components/v2/TransformationsV2";
-import ComparisonV2 from "@/components/v2/ComparisonV2";
+import BenefitsGridV2 from "@/components/v2/BenefitsGridV2";
 import TestimonialsV2 from "@/components/v2/TestimonialsV2";
 import PricingV2 from "@/components/v2/PricingV2";
 import FAQV2 from "@/components/v2/FAQV2";
@@ -30,12 +29,11 @@ const IndexV2 = () => {
   return (
     <>
       <Helmet>
-        <title>Aura — Quando sua mente precisa, a Aura responde</title>
+        <title>Olá AURA — Presente quando sua mente precisa</title>
         <meta
           name="description"
-          content="Converse, descarregue pensamentos e reorganize sua mente — direto no WhatsApp. 7 dias por R$ 6,90."
+          content="Acompanhamento emocional no WhatsApp. Converse, desabafe e organize seus pensamentos a qualquer hora. 7 dias por R$ 6,90."
         />
-        {/* V2 é página de teste — não competir com / no índice de busca */}
         <meta name="robots" content="noindex, nofollow" />
         <link rel="canonical" href="https://olaaura.com.br" />
       </Helmet>
@@ -44,10 +42,9 @@ const IndexV2 = () => {
         <HeaderV2 />
         <main>
           <HeroV2 />
-          <EmotionalMirror />
+          <HowItWorksV2 />
           <DemoV2 />
-          <TransformationsV2 />
-          <ComparisonV2 />
+          <BenefitsGridV2 />
           <TestimonialsV2 />
           <PricingV2 />
           <FAQV2 />
