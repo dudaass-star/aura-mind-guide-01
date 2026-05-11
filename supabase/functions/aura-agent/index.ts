@@ -6561,16 +6561,31 @@ ${_exampleTag}
         const _hasSessionsInPlan = (planConfig?.sessions ?? 0) > 0;
 
         // Tenta capturar horário concreto (ex: "amanhã 7h30", "hoje 19h",
-        // "segunda às 7:30", "amanhã às 19h"). Se capturar, cria sessão.
+        // "segunda às 7:30", "amanhã às 19h"). Para evitar falsos-positivos
+        // ("trabalho até as 18h", "aguentei até 22h ontem"), exigimos:
+        //   (a) dia explícito (hoje/amanhã/segunda...) OU "às" como preposição,
+        //   (b) hora ≥ 6 (sessões plausíveis 6h-23h),
+        //   (c) timestamp resultante no futuro.
         let _capturedAt: Date | null = null;
         try {
-          const _timeRegex = /(hoje|amanh[ãa]|depois\s*de\s*amanh[ãa]|segunda|ter[çc]a|quarta|quinta|sexta|s[áa]bado|domingo)?\s*(?:[àa]s?\s*)?(\d{1,2})\s*(?:h|:)\s*(\d{0,2})/i;
-          const _m = message.match(_timeRegex);
-          if (_m) {
-            const dayWord = (_m[1] || '').toLowerCase();
-            const hh = parseInt(_m[2], 10);
-            const mm = _m[3] ? parseInt(_m[3], 10) : 0;
-            if (hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59) {
+          const _dayRegex = /(hoje|amanh[ãa]|depois\s*de\s*amanh[ãa]|segunda|ter[çc]a|quarta|quinta|sexta|s[áa]bado|domingo)\s*(?:[àa]s?\s*)?(\d{1,2})\s*(?:h|:)\s*(\d{0,2})/i;
+          const _asRegex = /\b[àa]s\s+(\d{1,2})\s*(?:h|:)\s*(\d{0,2})/i;
+          let dayWord = '';
+          let hh = NaN;
+          let mm = 0;
+          const _md = message.match(_dayRegex);
+          if (_md) {
+            dayWord = (_md[1] || '').toLowerCase();
+            hh = parseInt(_md[2], 10);
+            mm = _md[3] ? parseInt(_md[3], 10) : 0;
+          } else {
+            const _ma = message.match(_asRegex);
+            if (_ma) {
+              hh = parseInt(_ma[1], 10);
+              mm = _ma[2] ? parseInt(_ma[2], 10) : 0;
+            }
+          }
+          if (Number.isFinite(hh) && hh >= 6 && hh <= 23 && mm >= 0 && mm <= 59) {
               const nowBrtMs = Date.now() - 3 * 60 * 60 * 1000;
               const base = new Date(nowBrtMs);
               const baseY = base.getUTCFullYear();
@@ -6599,7 +6614,6 @@ ${_exampleTag}
               // Constrói timestamp BRT (UTC-3) → UTC
               _capturedAt = new Date(Date.UTC(baseY, baseM, targetD, hh + 3, mm, 0));
               if (_capturedAt.getTime() <= Date.now()) _capturedAt = null; // sanity
-            }
           }
         } catch (parseErr) {
           console.warn('⚠️ [D0_REFUSAL] erro ao parsear horário:', parseErr);
