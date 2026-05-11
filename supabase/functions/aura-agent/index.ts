@@ -5792,38 +5792,32 @@ INSTRUÇÃO:
       const mm = String(nowBrt.getUTCMinutes()).padStart(2, '0');
       const exampleNow = `${ymd} ${hh}:${mm}`;
 
-      dynamicContext += `\n\n🎯 CONVITE À 1ª SESSÃO (PRIMEIRA RESPOSTA DO USUÁRIO):
-Esta é a PRIMEIRA mensagem real do usuário depois do WELCOME. Antes de qualquer mapeamento ou conversa longa, **convide-o agora para uma sessão de 45 minutos com tema livre** — ele decide o que trazer.
+      dynamicContext += `\n\n🎯 CONVITE À 1ª SESSÃO — DECISÃO BINÁRIA (D0):
+Esta é a PRIMEIRA mensagem real do usuário depois do WELCOME. Faça UMA pergunta binária: ele topa abrir a 1ª sessão **AGORA** (45 min, tema livre) ou não.
 
-POR QUÊ: o trial é de 7 dias. A sessão é o produto-âncora. Fisgar com valor real no D0 multiplica retenção.
+REGRA DE OURO: Não negocie horários nesta resposta. Só duas saídas possíveis — aceite agora ou não-agora. Se ele recusar, encerre o convite com leveza; o próximo turno cuida do agendamento futuro automaticamente.
 
-COMO CONDUZIR:
-1. Acolha brevemente o que ele acabou de dizer (1-2 frases, sem mergulhar fundo ainda).
-2. Apresente a sessão como o espaço principal: 45 min, ritmo seu, tema livre, você conduz com presença.
-3. Convide para começar **agora**.
-4. Se ele preferir outro horário, faça uma pergunta aberta ("quando faz sentido pra você?").
-5. Se ele recusar ou desconversar, NÃO insista — siga o fio dele com presença, e a sessão vira convite natural mais à frente.
-
-⚠️ OBRIGATÓRIO — CONTRATO DE TAG:
-- Se o usuário aceitar (qualquer "sim", "bora", "vamos", "pode ser", "ok", "agora") sua resposta DEVE TERMINAR com a tag literal:
+## SE O USUÁRIO ACEITAR (qualquer "sim", "bora", "vamos", "pode ser", "ok", "agora", "topo", "partiu"):
+Acolha em 1 frase + abra a sessão. Sua resposta DEVE TERMINAR com a tag literal:
   [AGENDAR_SESSAO:${exampleNow}]
-  (use horário atual BRT ou alguns minutos à frente)
-- Se ele propuser outro horário concreto (ex: "amanhã às 10h"), termine com:
-  [AGENDAR_SESSAO:YYYY-MM-DD HH:MM]
-- SEM ESSA TAG, A SESSÃO NÃO É CRIADA NO BANCO e você quebra a promessa que acabou de fazer. Isso é falha grave.
 
-EXEMPLO de turno completo (aceite imediato):
-"Boa! Bora começar então. Vou abrir nossa sessão agora — 45 min só nossos. Pode trazer o que tiver vindo. [AGENDAR_SESSAO:${exampleNow}]"
+Exemplo: "Boa, bora começar! 45 min só nossos. Pode trazer o que tiver vindo. [AGENDAR_SESSAO:${exampleNow}]"
 
-IMPORTANTE:
-- NÃO faça onboarding/mapeamento longo agora. A sessão É o espaço de exploração.
-- Tom: convite leve e claro, não venda. Você está oferecendo algo valioso.
-- Sem [MODO_AUDIO] obrigatório — use só se fizer sentido emocional.
+## SE O USUÁRIO RECUSAR ("agora não", "depois", "outra hora", "amanhã", "prefiro X", "mais tarde", "não posso", "não dá"):
+Resposta CURTA de acolhimento, SEM tag, SEM perguntar quando, SEM propor horários. Exemplo:
+"Tranquilo 💜 Quando quiser é só me chamar."
 
-🚫 PROIBIÇÕES ABSOLUTAS NESTE TURNO (1ª sessão D0):
-- NÃO pergunte sobre dias da semana ou horários recorrentes ("quais dias funcionam?", "que horário prefere?"). Setup mensal vem DEPOIS desta sessão acontecer, NUNCA antes.
-- NÃO emita [CRIAR_AGENDA:...] aqui. Essa tag é exclusiva do setup mensal de 4 sessões e NÃO se aplica ao convite D0. Usá-la aqui cria 4 sessões fantasma e quebra o funil.
-- A ÚNICA tag de agendamento aceita neste contexto é [AGENDAR_SESSAO:YYYY-MM-DD HH:MM] (uma única sessão).`;
+O backend cuida do resto: se ele mencionou um horário concreto na recusa (ex: "amanhã 7h30"), a sessão é criada automaticamente; se não, no próximo turno você recebe o contexto pra perguntar dia/horário com calma. Não force nada agora.
+
+## SE A MENSAGEM FOR AMBÍGUA (não claramente sim nem não):
+Trate como recusa branda — resposta curta de acolhimento, sem tag. Não tente extrair decisão.
+
+🚫 PROIBIÇÕES ABSOLUTAS NESTE TURNO:
+- NÃO pergunte sobre dias da semana, horários recorrentes ou "quando faz sentido pra você?". Isso é trabalho do próximo turno.
+- NÃO emita [CRIAR_AGENDA:...] — essa tag é do setup mensal e cria sessões fantasma aqui.
+- NÃO emita [AGENDAR_SESSAO:...] na recusa — só no aceite imediato.
+- NÃO faça onboarding longo. A sessão É o espaço de exploração.
+- Sem [MODO_AUDIO] obrigatório.`;
     }
 
     // ========================================================================
