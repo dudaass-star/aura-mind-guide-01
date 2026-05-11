@@ -6457,18 +6457,15 @@ ${_exampleTag}
     }
 
     // ========================================================================
-    // SAFETY NET D0 — re-confirmação quando a Aura esquece [AGENDAR_SESSAO:]
+    // SAFETY NET D0 — DESATIVADO em 11/05/2026
     // ------------------------------------------------------------------------
-    // Dispara micro-agente schedule-tag-extractor SOMENTE quando:
-    //   - estamos no convite D0 da 1ª sessão (pending_first_session_invite)
-    //   - a Aura NÃO emitiu [AGENDAR_SESSAO:] neste turno
-    //   - heurística regex sugere aceite do usuário + confirmação verbal da Aura
-    //   - lock extractor_pending livre (ou expirado >10min)
-    // O micro-agente NUNCA cria sessão — apenas envia re-confirmação proativa.
-    // A criação continua acontecendo via regex literal acima quando o usuário
-    // responder "sim" e a Aura emitir a tag no próximo turno.
+    // O fluxo D0 agora é binário (aceite OU recusa). A recusa é detectada
+    // deterministicamente abaixo (regex), tornando o safety-net
+    // (schedule-tag-extractor) redundante. Mantido como `if (false &&` por
+    // 1 semana para rollback rápido caso o novo fluxo regrida.
     // ========================================================================
     if (
+      false && // <-- DESATIVADO; remover bloco inteiro após 18/05/2026 sem incidentes
       !scheduleMatch &&
       profile?.pending_first_session_invite &&
       profile?.user_id &&
@@ -6531,22 +6528,164 @@ ${_exampleTag}
       }
     }
 
-    // Limpa pending_first_session_invite quando a Aura emite [AGENDAR_SESSAO]
-    // (aceite confirmado da 1ª sessão D0) OU quando atingimos o limite de 3
-    // tentativas (usuário recusou/desconversou). Sem isso a flag pode persistir
-    // ou ser zerada cedo demais. (Bug Anderson Costa, 08/05/2026)
+    // ========================================================================
+    // D0 BINÁRIO — Detecção determinística de recusa + captura de horário
+    // ------------------------------------------------------------------------
+    // Quando pending_first_session_invite=true e a Aura NÃO emitiu
+    // [AGENDAR_SESSAO] (= não houve aceite), tratamos como recusa:
+    //   1. Limpa pending_first_session_invite, zera tentativas
+    //   2. Ativa needs_schedule_setup (se plano tem sessões > 0) →
+    //      próximo turno cai no bloco de setup mensal naturalmente
+    //   3. Se a recusa veio com horário concreto (ex: "amanhã 7h30"),
+    //      cria 1 sessão direto no banco (created_by='backend_regex') e
+    //      envia confirmação proativa via WhatsApp
+    // Se a Aura emitiu [AGENDAR_SESSAO] (aceite), só limpa a flag.
+    // ========================================================================
     if (profile?.pending_first_session_invite && profile?.id) {
-      const _attemptsNow = (profile as any)?.first_session_invite_attempts ?? 0;
-      const _shouldClear = !!scheduleMatch || (_attemptsNow + 1) >= 3;
-      if (_shouldClear) {
+      if (scheduleMatch) {
+        // Aceite: tag emitida e sessão criada acima — só limpa flag
         try {
           await supabase
             .from('profiles')
             .update({ pending_first_session_invite: false })
             .eq('id', profile.id);
-          console.log(`🎯 pending_first_session_invite=false (motivo=${scheduleMatch ? 'tag_emitida' : 'limite_tentativas'})`);
+          console.log('🎯 pending_first_session_invite=false (motivo=tag_emitida)');
         } catch (clearErr) {
-          console.warn('⚠️ Falha ao limpar pending_first_session_invite pós-resposta:', clearErr);
+          console.warn('⚠️ Falha ao limpar pending_first_session_invite (aceite):', clearErr);
+        }
+      } else if (typeof message === 'string') {
+        // Sem tag → tratar como recusa branda (binário)
+        const _refusalRegex = /\b(n[ãa]o|agora\s*n[ãa]o|depois|outra\s*hora|amanh[ãa]|prefiro|mais\s*tarde|n[ãa]o\s*posso|n[ãa]o\s*d[áa]|hoje\s*n[ãa]o|talvez)\b/i;
+        const _isRefusal = _refusalRegex.test(message);
+        // Tratamos qualquer "não-aceite" como recusa (já que aceite emite tag)
+        const _hasSessionsInPlan = (planConfig?.sessions ?? 0) > 0;
+
+        // Tenta capturar horário concreto (ex: "amanhã 7h30", "hoje 19h",
+        // "segunda às 7:30", "amanhã às 19h"). Se capturar, cria sessão.
+        let _capturedAt: Date | null = null;
+        try {
+          const _timeRegex = /(hoje|amanh[ãa]|depois\s*de\s*amanh[ãa]|segunda|ter[çc]a|quarta|quinta|sexta|s[áa]bado|domingo)?\s*(?:[àa]s?\s*)?(\d{1,2})\s*(?:h|:)\s*(\d{0,2})/i;
+          const _m = message.match(_timeRegex);
+          if (_m) {
+            const dayWord = (_m[1] || '').toLowerCase();
+            const hh = parseInt(_m[2], 10);
+            const mm = _m[3] ? parseInt(_m[3], 10) : 0;
+            if (hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59) {
+              const nowBrtMs = Date.now() - 3 * 60 * 60 * 1000;
+              const base = new Date(nowBrtMs);
+              const baseY = base.getUTCFullYear();
+              const baseM = base.getUTCMonth();
+              const baseD = base.getUTCDate();
+              const weekdayMap: Record<string, number> = {
+                'domingo': 0, 'segunda': 1, 'terça': 2, 'terca': 2,
+                'quarta': 3, 'quinta': 4, 'sexta': 5, 'sábado': 6, 'sabado': 6,
+              };
+              let targetD = baseD;
+              if (dayWord === 'amanhã' || dayWord === 'amanha') {
+                targetD = baseD + 1;
+              } else if (dayWord.startsWith('depois')) {
+                targetD = baseD + 2;
+              } else if (dayWord in weekdayMap) {
+                const targetWd = weekdayMap[dayWord];
+                const baseWd = base.getUTCDay();
+                let delta = (targetWd - baseWd + 7) % 7;
+                if (delta === 0) delta = 7;
+                targetD = baseD + delta;
+              } else if (dayWord === 'hoje' || !dayWord) {
+                // Se hora já passou hoje, joga pra amanhã
+                const todayMins = base.getUTCHours() * 60 + base.getUTCMinutes();
+                if (hh * 60 + mm <= todayMins + 5) targetD = baseD + 1;
+              }
+              // Constrói timestamp BRT (UTC-3) → UTC
+              _capturedAt = new Date(Date.UTC(baseY, baseM, targetD, hh + 3, mm, 0));
+              if (_capturedAt.getTime() <= Date.now()) _capturedAt = null; // sanity
+            }
+          }
+        } catch (parseErr) {
+          console.warn('⚠️ [D0_REFUSAL] erro ao parsear horário:', parseErr);
+          _capturedAt = null;
+        }
+
+        // Se capturou horário → cria sessão (anti-duplicação ±30min)
+        let _createdSessionAt: Date | null = null;
+        if (_capturedAt && profile.user_id) {
+          try {
+            const wStart = new Date(_capturedAt.getTime() - 30 * 60 * 1000).toISOString();
+            const wEnd = new Date(_capturedAt.getTime() + 30 * 60 * 1000).toISOString();
+            const { data: existingNearby } = await supabase
+              .from('sessions')
+              .select('id')
+              .eq('user_id', profile.user_id)
+              .in('status', ['scheduled', 'in_progress'])
+              .gte('scheduled_at', wStart)
+              .lte('scheduled_at', wEnd)
+              .limit(1)
+              .maybeSingle();
+            if (existingNearby) {
+              console.log(`🎯 [D0_REFUSAL] sessão já existe próxima de ${_capturedAt.toISOString()} — ignorando`);
+            } else {
+              const { data: newSess, error: sessErr } = await supabase
+                .from('sessions')
+                .insert({
+                  user_id: profile.user_id,
+                  scheduled_at: _capturedAt.toISOString(),
+                  session_type: 'livre',
+                  status: 'scheduled',
+                  duration_minutes: 45,
+                  created_by: 'backend_regex',
+                })
+                .select('id')
+                .single();
+              if (newSess) {
+                _createdSessionAt = _capturedAt;
+                console.log(`🎯 [D0_REFUSAL] sessão criada via regex: ${newSess.id} @ ${_capturedAt.toISOString()}`);
+              } else if (sessErr) {
+                console.error('🎯 [D0_REFUSAL] falha ao criar sessão:', sessErr);
+              }
+            }
+          } catch (insertErr) {
+            console.error('🎯 [D0_REFUSAL] exceção ao criar sessão:', insertErr);
+          }
+        }
+
+        // Limpa flag, zera tentativas, libera setup mensal (se plano permite)
+        try {
+          const updates: Record<string, unknown> = {
+            pending_first_session_invite: false,
+            first_session_invite_attempts: 0,
+          };
+          // Só ativa setup mensal se NÃO criou sessão pelo regex
+          // (se criou, a Aura já tem 1 sessão marcada — setup mensal pode
+          //  ser ativado nos próximos turnos pelo fluxo natural)
+          if (_hasSessionsInPlan && !_createdSessionAt) {
+            updates.needs_schedule_setup = true;
+          }
+          await supabase.from('profiles').update(updates).eq('id', profile.id);
+          console.log(
+            `🎯 D0 binário: pending_first_session_invite=false (recusa=${_isRefusal}, captura=${!!_createdSessionAt}, setup_mensal=${!!updates.needs_schedule_setup})`,
+          );
+        } catch (clearErr) {
+          console.warn('⚠️ Falha ao limpar flags D0:', clearErr);
+        }
+
+        // Se criou sessão pelo regex, envia confirmação proativa fire-and-forget
+        if (_createdSessionAt && profile.phone) {
+          try {
+            const _brt = new Date(_createdSessionAt.getTime() - 3 * 60 * 60 * 1000);
+            const _dd = String(_brt.getUTCDate()).padStart(2, '0');
+            const _mo = String(_brt.getUTCMonth() + 1).padStart(2, '0');
+            const _hh = String(_brt.getUTCHours()).padStart(2, '0');
+            const _mm = String(_brt.getUTCMinutes()).padStart(2, '0');
+            const confirmMsg = `Marquei nossa sessão pra ${_dd}/${_mo} às ${_hh}:${_mm} 💜 Te aviso pertinho da hora.`;
+            const cleanPhone = cleanPhoneNumber(profile.phone);
+            EdgeRuntime.waitUntil(
+              sendMessage(cleanPhone, confirmMsg).catch((e: unknown) =>
+                console.error('🎯 [D0_REFUSAL] falha confirmação proativa:', e),
+              ),
+            );
+          } catch (sendErr) {
+            console.warn('⚠️ [D0_REFUSAL] erro ao enviar confirmação:', sendErr);
+          }
         }
       }
     }
