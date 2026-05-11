@@ -5899,52 +5899,67 @@ SE ele pedir nova sessão / mais sessões agora:
 
     if (profile?.needs_schedule_setup && planConfig.sessions > 0 && !isSessionsPaused && !profile?.pending_first_session_invite) {
       const sessionsCount = planConfig.sessions;
+      // Exemplo condicional por plano (Essencial=1, Direção=4, Transformação=8)
+      let _exampleSchedule: string;
+      let _exampleTag: string;
+      let _distribution: string;
+      if (sessionsCount === 1) {
+        _exampleSchedule = '- Quinta, 14/05 às 19h';
+        _exampleTag = '[CRIAR_AGENDA:2026-05-14 19:00]';
+        _distribution = 'apenas 1 data — pergunte 1 dia da semana e 1 horário';
+      } else if (sessionsCount === 8) {
+        _exampleSchedule = `- Seg, 12/05 às 19h\n- Qui, 15/05 às 19h\n- Seg, 19/05 às 19h\n- Qui, 22/05 às 19h\n- Seg, 26/05 às 19h\n- Qui, 29/05 às 19h\n- Seg, 02/06 às 19h\n- Qui, 05/06 às 19h`;
+        _exampleTag = '[CRIAR_AGENDA:2026-05-12 19:00,2026-05-15 19:00,2026-05-19 19:00,2026-05-22 19:00,2026-05-26 19:00,2026-05-29 19:00,2026-06-02 19:00,2026-06-05 19:00]';
+        _distribution = '2x por semana em dias alternados — pergunte 2 dias e 1 horário';
+      } else {
+        // 4 (Direção) ou qualquer outro valor — fallback semanal
+        _exampleSchedule = `- Segunda, 13/01 às 19h\n- Segunda, 20/01 às 19h\n- Segunda, 27/01 às 19h\n- Segunda, 03/02 às 19h`;
+        _exampleTag = '[CRIAR_AGENDA:2026-01-13 19:00,2026-01-20 19:00,2026-01-27 19:00,2026-02-03 19:00]';
+        _distribution = 'semanalmente (1 por semana) — pergunte 1 dia da semana e 1 horário';
+      }
       dynamicContext += `
 
 # 📅 CONFIGURAÇÃO DE AGENDA DO MÊS (ATIVO!)
 
-O usuário precisa configurar suas ${sessionsCount} sessões do mês.
+O usuário precisa configurar ${sessionsCount === 1 ? 'sua **1 sessão** do mês (plano Essencial)' : `suas **${sessionsCount} sessões** do mês`}.
 
 ## SEU OBJETIVO:
-1. Perguntar quais dias da semana funcionam (ex: segundas, quintas)
+1. Perguntar ${sessionsCount === 1 ? 'qual dia da semana funciona melhor (ex: terça, quinta)' : 'quais dias da semana funcionam (ex: segundas, quintas)'}
 2. Perguntar qual horário prefere (ex: 19h, 20h)
-3. Calcular as próximas ${sessionsCount} datas baseado nas preferências
-4. Propor a agenda completa e pedir confirmação
+3. Calcular ${sessionsCount === 1 ? 'a próxima data' : `as próximas ${sessionsCount} datas`} baseado nas preferências
+4. Propor a ${sessionsCount === 1 ? 'data' : 'agenda completa'} e pedir confirmação
 5. QUANDO O USUÁRIO CONFIRMAR, use a tag [CRIAR_AGENDA:...]
 
 ## COMO CALCULAR AS DATAS:
 - Use a data de HOJE (${dateTimeContext.currentDate}) como referência
-- Para ${sessionsCount} sessões: distribua ${sessionsCount === 4 ? 'semanalmente (1 por semana)' : '2x por semana em dias alternados'}
+- Distribuição: ${_distribution}
 - Comece da próxima ocorrência do dia escolhido
 
 ## EXEMPLO DE CONVERSA:
 
-Usuário: "Segundas às 19h"
-AURA: "Perfeito! Então suas ${sessionsCount} sessões ficam assim:
-- Segunda, 13/01 às 19h
-- Segunda, 20/01 às 19h
-- Segunda, 27/01 às 19h
-- Segunda, 03/02 às 19h
+Usuário: "${sessionsCount === 1 ? 'Quinta às 19h' : 'Segundas às 19h'}"
+AURA: "Perfeito! Então ${sessionsCount === 1 ? 'sua sessão fica' : `suas ${sessionsCount} sessões ficam`} assim:
+${_exampleSchedule}
 
 Confirma pra mim? 💜"
 
 Usuário: "Sim!"
-AURA: "Pronto! Agenda confirmada! 💜 [CRIAR_AGENDA:2026-01-13 19:00,2026-01-20 19:00,2026-01-27 19:00,2026-02-03 19:00]
+AURA: "Pronto! Agenda confirmada! 💜 ${_exampleTag}
 
 Agora me conta: como você está hoje?"
 
 ## REGRAS IMPORTANTES:
+- ⚠️ **Você DEVE emitir EXATAMENTE ${sessionsCount} data(s) na tag [CRIAR_AGENDA] — nem mais, nem menos.** Plano do usuário: ${sessionsCount === 1 ? 'Essencial (1 sessão/mês)' : sessionsCount === 4 ? 'Direção (4 sessões/mês)' : `${sessionsCount} sessões/mês`}.
 - Só use [CRIAR_AGENDA:...] APÓS confirmação explícita ("sim", "ok", "pode ser", "confirmo")
 - Se o usuário quiser mudar algo, negocie naturalmente
-- Se o usuário pedir 2 dias diferentes (ex: segundas e quintas), alterne entre eles
-- Sempre mostre a lista formatada ANTES de pedir confirmação
+${sessionsCount > 1 ? '- Se o usuário pedir 2 dias diferentes (ex: segundas e quintas), alterne entre eles\n' : ''}- Sempre mostre a ${sessionsCount === 1 ? 'data' : 'lista formatada'} ANTES de pedir confirmação
 - Após criar a agenda, mude naturalmente de assunto
 
 ## FORMATO DA TAG (CRÍTICO!):
-[CRIAR_AGENDA:YYYY-MM-DD HH:mm,YYYY-MM-DD HH:mm,YYYY-MM-DD HH:mm,...]
+[CRIAR_AGENDA:${Array(sessionsCount).fill('YYYY-MM-DD HH:mm').join(',')}]
 
-Exemplo com 4 sessões:
-[CRIAR_AGENDA:2026-01-13 19:00,2026-01-20 19:00,2026-01-27 19:00,2026-02-03 19:00]
+Exemplo com ${sessionsCount} ${sessionsCount === 1 ? 'sessão' : 'sessões'}:
+${_exampleTag}
 `;
       console.log('📅 Schedule setup context added for user with', sessionsCount, 'sessions');
     }
