@@ -5792,38 +5792,32 @@ INSTRUÇÃO:
       const mm = String(nowBrt.getUTCMinutes()).padStart(2, '0');
       const exampleNow = `${ymd} ${hh}:${mm}`;
 
-      dynamicContext += `\n\n🎯 CONVITE À 1ª SESSÃO (PRIMEIRA RESPOSTA DO USUÁRIO):
-Esta é a PRIMEIRA mensagem real do usuário depois do WELCOME. Antes de qualquer mapeamento ou conversa longa, **convide-o agora para uma sessão de 45 minutos com tema livre** — ele decide o que trazer.
+      dynamicContext += `\n\n🎯 CONVITE À 1ª SESSÃO — DECISÃO BINÁRIA (D0):
+Esta é a PRIMEIRA mensagem real do usuário depois do WELCOME. Faça UMA pergunta binária: ele topa abrir a 1ª sessão **AGORA** (45 min, tema livre) ou não.
 
-POR QUÊ: o trial é de 7 dias. A sessão é o produto-âncora. Fisgar com valor real no D0 multiplica retenção.
+REGRA DE OURO: Não negocie horários nesta resposta. Só duas saídas possíveis — aceite agora ou não-agora. Se ele recusar, encerre o convite com leveza; o próximo turno cuida do agendamento futuro automaticamente.
 
-COMO CONDUZIR:
-1. Acolha brevemente o que ele acabou de dizer (1-2 frases, sem mergulhar fundo ainda).
-2. Apresente a sessão como o espaço principal: 45 min, ritmo seu, tema livre, você conduz com presença.
-3. Convide para começar **agora**.
-4. Se ele preferir outro horário, faça uma pergunta aberta ("quando faz sentido pra você?").
-5. Se ele recusar ou desconversar, NÃO insista — siga o fio dele com presença, e a sessão vira convite natural mais à frente.
-
-⚠️ OBRIGATÓRIO — CONTRATO DE TAG:
-- Se o usuário aceitar (qualquer "sim", "bora", "vamos", "pode ser", "ok", "agora") sua resposta DEVE TERMINAR com a tag literal:
+## SE O USUÁRIO ACEITAR (qualquer "sim", "bora", "vamos", "pode ser", "ok", "agora", "topo", "partiu"):
+Acolha em 1 frase + abra a sessão. Sua resposta DEVE TERMINAR com a tag literal:
   [AGENDAR_SESSAO:${exampleNow}]
-  (use horário atual BRT ou alguns minutos à frente)
-- Se ele propuser outro horário concreto (ex: "amanhã às 10h"), termine com:
-  [AGENDAR_SESSAO:YYYY-MM-DD HH:MM]
-- SEM ESSA TAG, A SESSÃO NÃO É CRIADA NO BANCO e você quebra a promessa que acabou de fazer. Isso é falha grave.
 
-EXEMPLO de turno completo (aceite imediato):
-"Boa! Bora começar então. Vou abrir nossa sessão agora — 45 min só nossos. Pode trazer o que tiver vindo. [AGENDAR_SESSAO:${exampleNow}]"
+Exemplo: "Boa, bora começar! 45 min só nossos. Pode trazer o que tiver vindo. [AGENDAR_SESSAO:${exampleNow}]"
 
-IMPORTANTE:
-- NÃO faça onboarding/mapeamento longo agora. A sessão É o espaço de exploração.
-- Tom: convite leve e claro, não venda. Você está oferecendo algo valioso.
-- Sem [MODO_AUDIO] obrigatório — use só se fizer sentido emocional.
+## SE O USUÁRIO RECUSAR ("agora não", "depois", "outra hora", "amanhã", "prefiro X", "mais tarde", "não posso", "não dá"):
+Resposta CURTA de acolhimento, SEM tag, SEM perguntar quando, SEM propor horários. Exemplo:
+"Tranquilo 💜 Quando quiser é só me chamar."
 
-🚫 PROIBIÇÕES ABSOLUTAS NESTE TURNO (1ª sessão D0):
-- NÃO pergunte sobre dias da semana ou horários recorrentes ("quais dias funcionam?", "que horário prefere?"). Setup mensal vem DEPOIS desta sessão acontecer, NUNCA antes.
-- NÃO emita [CRIAR_AGENDA:...] aqui. Essa tag é exclusiva do setup mensal de 4 sessões e NÃO se aplica ao convite D0. Usá-la aqui cria 4 sessões fantasma e quebra o funil.
-- A ÚNICA tag de agendamento aceita neste contexto é [AGENDAR_SESSAO:YYYY-MM-DD HH:MM] (uma única sessão).`;
+O backend cuida do resto: se ele mencionou um horário concreto na recusa (ex: "amanhã 7h30"), a sessão é criada automaticamente; se não, no próximo turno você recebe o contexto pra perguntar dia/horário com calma. Não force nada agora.
+
+## SE A MENSAGEM FOR AMBÍGUA (não claramente sim nem não):
+Trate como recusa branda — resposta curta de acolhimento, sem tag. Não tente extrair decisão.
+
+🚫 PROIBIÇÕES ABSOLUTAS NESTE TURNO:
+- NÃO pergunte sobre dias da semana, horários recorrentes ou "quando faz sentido pra você?". Isso é trabalho do próximo turno.
+- NÃO emita [CRIAR_AGENDA:...] — essa tag é do setup mensal e cria sessões fantasma aqui.
+- NÃO emita [AGENDAR_SESSAO:...] na recusa — só no aceite imediato.
+- NÃO faça onboarding longo. A sessão É o espaço de exploração.
+- Sem [MODO_AUDIO] obrigatório.`;
     }
 
     // ========================================================================
@@ -5905,52 +5899,67 @@ SE ele pedir nova sessão / mais sessões agora:
 
     if (profile?.needs_schedule_setup && planConfig.sessions > 0 && !isSessionsPaused && !profile?.pending_first_session_invite) {
       const sessionsCount = planConfig.sessions;
+      // Exemplo condicional por plano (Essencial=1, Direção=4, Transformação=8)
+      let _exampleSchedule: string;
+      let _exampleTag: string;
+      let _distribution: string;
+      if (sessionsCount === 1) {
+        _exampleSchedule = '- Quinta, 14/05 às 19h';
+        _exampleTag = '[CRIAR_AGENDA:2026-05-14 19:00]';
+        _distribution = 'apenas 1 data — pergunte 1 dia da semana e 1 horário';
+      } else if (sessionsCount === 8) {
+        _exampleSchedule = `- Seg, 12/05 às 19h\n- Qui, 15/05 às 19h\n- Seg, 19/05 às 19h\n- Qui, 22/05 às 19h\n- Seg, 26/05 às 19h\n- Qui, 29/05 às 19h\n- Seg, 02/06 às 19h\n- Qui, 05/06 às 19h`;
+        _exampleTag = '[CRIAR_AGENDA:2026-05-12 19:00,2026-05-15 19:00,2026-05-19 19:00,2026-05-22 19:00,2026-05-26 19:00,2026-05-29 19:00,2026-06-02 19:00,2026-06-05 19:00]';
+        _distribution = '2x por semana em dias alternados — pergunte 2 dias e 1 horário';
+      } else {
+        // 4 (Direção) ou qualquer outro valor — fallback semanal
+        _exampleSchedule = `- Segunda, 13/01 às 19h\n- Segunda, 20/01 às 19h\n- Segunda, 27/01 às 19h\n- Segunda, 03/02 às 19h`;
+        _exampleTag = '[CRIAR_AGENDA:2026-01-13 19:00,2026-01-20 19:00,2026-01-27 19:00,2026-02-03 19:00]';
+        _distribution = 'semanalmente (1 por semana) — pergunte 1 dia da semana e 1 horário';
+      }
       dynamicContext += `
 
 # 📅 CONFIGURAÇÃO DE AGENDA DO MÊS (ATIVO!)
 
-O usuário precisa configurar suas ${sessionsCount} sessões do mês.
+O usuário precisa configurar ${sessionsCount === 1 ? 'sua **1 sessão** do mês (plano Essencial)' : `suas **${sessionsCount} sessões** do mês`}.
 
 ## SEU OBJETIVO:
-1. Perguntar quais dias da semana funcionam (ex: segundas, quintas)
+1. Perguntar ${sessionsCount === 1 ? 'qual dia da semana funciona melhor (ex: terça, quinta)' : 'quais dias da semana funcionam (ex: segundas, quintas)'}
 2. Perguntar qual horário prefere (ex: 19h, 20h)
-3. Calcular as próximas ${sessionsCount} datas baseado nas preferências
-4. Propor a agenda completa e pedir confirmação
+3. Calcular ${sessionsCount === 1 ? 'a próxima data' : `as próximas ${sessionsCount} datas`} baseado nas preferências
+4. Propor a ${sessionsCount === 1 ? 'data' : 'agenda completa'} e pedir confirmação
 5. QUANDO O USUÁRIO CONFIRMAR, use a tag [CRIAR_AGENDA:...]
 
 ## COMO CALCULAR AS DATAS:
 - Use a data de HOJE (${dateTimeContext.currentDate}) como referência
-- Para ${sessionsCount} sessões: distribua ${sessionsCount === 4 ? 'semanalmente (1 por semana)' : '2x por semana em dias alternados'}
+- Distribuição: ${_distribution}
 - Comece da próxima ocorrência do dia escolhido
 
 ## EXEMPLO DE CONVERSA:
 
-Usuário: "Segundas às 19h"
-AURA: "Perfeito! Então suas ${sessionsCount} sessões ficam assim:
-- Segunda, 13/01 às 19h
-- Segunda, 20/01 às 19h
-- Segunda, 27/01 às 19h
-- Segunda, 03/02 às 19h
+Usuário: "${sessionsCount === 1 ? 'Quinta às 19h' : 'Segundas às 19h'}"
+AURA: "Perfeito! Então ${sessionsCount === 1 ? 'sua sessão fica' : `suas ${sessionsCount} sessões ficam`} assim:
+${_exampleSchedule}
 
 Confirma pra mim? 💜"
 
 Usuário: "Sim!"
-AURA: "Pronto! Agenda confirmada! 💜 [CRIAR_AGENDA:2026-01-13 19:00,2026-01-20 19:00,2026-01-27 19:00,2026-02-03 19:00]
+AURA: "Pronto! Agenda confirmada! 💜 ${_exampleTag}
 
 Agora me conta: como você está hoje?"
 
 ## REGRAS IMPORTANTES:
+- ⚠️ **Você DEVE emitir EXATAMENTE ${sessionsCount} data(s) na tag [CRIAR_AGENDA] — nem mais, nem menos.** Plano do usuário: ${sessionsCount === 1 ? 'Essencial (1 sessão/mês)' : sessionsCount === 4 ? 'Direção (4 sessões/mês)' : `${sessionsCount} sessões/mês`}.
 - Só use [CRIAR_AGENDA:...] APÓS confirmação explícita ("sim", "ok", "pode ser", "confirmo")
 - Se o usuário quiser mudar algo, negocie naturalmente
-- Se o usuário pedir 2 dias diferentes (ex: segundas e quintas), alterne entre eles
-- Sempre mostre a lista formatada ANTES de pedir confirmação
+${sessionsCount > 1 ? '- Se o usuário pedir 2 dias diferentes (ex: segundas e quintas), alterne entre eles\n' : ''}- Sempre mostre a ${sessionsCount === 1 ? 'data' : 'lista formatada'} ANTES de pedir confirmação
 - Após criar a agenda, mude naturalmente de assunto
 
 ## FORMATO DA TAG (CRÍTICO!):
-[CRIAR_AGENDA:YYYY-MM-DD HH:mm,YYYY-MM-DD HH:mm,YYYY-MM-DD HH:mm,...]
+[CRIAR_AGENDA:${Array(sessionsCount).fill('YYYY-MM-DD HH:mm').join(',')}]
 
-Exemplo com 4 sessões:
-[CRIAR_AGENDA:2026-01-13 19:00,2026-01-20 19:00,2026-01-27 19:00,2026-02-03 19:00]
+Exemplo com ${sessionsCount} ${sessionsCount === 1 ? 'sessão' : 'sessões'}:
+${_exampleTag}
 `;
       console.log('📅 Schedule setup context added for user with', sessionsCount, 'sessions');
     }
@@ -6448,18 +6457,15 @@ Exemplo com 4 sessões:
     }
 
     // ========================================================================
-    // SAFETY NET D0 — re-confirmação quando a Aura esquece [AGENDAR_SESSAO:]
+    // SAFETY NET D0 — DESATIVADO em 11/05/2026
     // ------------------------------------------------------------------------
-    // Dispara micro-agente schedule-tag-extractor SOMENTE quando:
-    //   - estamos no convite D0 da 1ª sessão (pending_first_session_invite)
-    //   - a Aura NÃO emitiu [AGENDAR_SESSAO:] neste turno
-    //   - heurística regex sugere aceite do usuário + confirmação verbal da Aura
-    //   - lock extractor_pending livre (ou expirado >10min)
-    // O micro-agente NUNCA cria sessão — apenas envia re-confirmação proativa.
-    // A criação continua acontecendo via regex literal acima quando o usuário
-    // responder "sim" e a Aura emitir a tag no próximo turno.
+    // O fluxo D0 agora é binário (aceite OU recusa). A recusa é detectada
+    // deterministicamente abaixo (regex), tornando o safety-net
+    // (schedule-tag-extractor) redundante. Mantido como `if (false &&` por
+    // 1 semana para rollback rápido caso o novo fluxo regrida.
     // ========================================================================
     if (
+      false && // <-- DESATIVADO; remover bloco inteiro após 18/05/2026 sem incidentes
       !scheduleMatch &&
       profile?.pending_first_session_invite &&
       profile?.user_id &&
@@ -6522,22 +6528,164 @@ Exemplo com 4 sessões:
       }
     }
 
-    // Limpa pending_first_session_invite quando a Aura emite [AGENDAR_SESSAO]
-    // (aceite confirmado da 1ª sessão D0) OU quando atingimos o limite de 3
-    // tentativas (usuário recusou/desconversou). Sem isso a flag pode persistir
-    // ou ser zerada cedo demais. (Bug Anderson Costa, 08/05/2026)
+    // ========================================================================
+    // D0 BINÁRIO — Detecção determinística de recusa + captura de horário
+    // ------------------------------------------------------------------------
+    // Quando pending_first_session_invite=true e a Aura NÃO emitiu
+    // [AGENDAR_SESSAO] (= não houve aceite), tratamos como recusa:
+    //   1. Limpa pending_first_session_invite, zera tentativas
+    //   2. Ativa needs_schedule_setup (se plano tem sessões > 0) →
+    //      próximo turno cai no bloco de setup mensal naturalmente
+    //   3. Se a recusa veio com horário concreto (ex: "amanhã 7h30"),
+    //      cria 1 sessão direto no banco (created_by='backend_regex') e
+    //      envia confirmação proativa via WhatsApp
+    // Se a Aura emitiu [AGENDAR_SESSAO] (aceite), só limpa a flag.
+    // ========================================================================
     if (profile?.pending_first_session_invite && profile?.id) {
-      const _attemptsNow = (profile as any)?.first_session_invite_attempts ?? 0;
-      const _shouldClear = !!scheduleMatch || (_attemptsNow + 1) >= 3;
-      if (_shouldClear) {
+      if (scheduleMatch) {
+        // Aceite: tag emitida e sessão criada acima — só limpa flag
         try {
           await supabase
             .from('profiles')
             .update({ pending_first_session_invite: false })
             .eq('id', profile.id);
-          console.log(`🎯 pending_first_session_invite=false (motivo=${scheduleMatch ? 'tag_emitida' : 'limite_tentativas'})`);
+          console.log('🎯 pending_first_session_invite=false (motivo=tag_emitida)');
         } catch (clearErr) {
-          console.warn('⚠️ Falha ao limpar pending_first_session_invite pós-resposta:', clearErr);
+          console.warn('⚠️ Falha ao limpar pending_first_session_invite (aceite):', clearErr);
+        }
+      } else if (typeof message === 'string') {
+        // Sem tag → tratar como recusa branda (binário)
+        const _refusalRegex = /\b(n[ãa]o|agora\s*n[ãa]o|depois|outra\s*hora|amanh[ãa]|prefiro|mais\s*tarde|n[ãa]o\s*posso|n[ãa]o\s*d[áa]|hoje\s*n[ãa]o|talvez)\b/i;
+        const _isRefusal = _refusalRegex.test(message);
+        // Tratamos qualquer "não-aceite" como recusa (já que aceite emite tag)
+        const _hasSessionsInPlan = (planConfig?.sessions ?? 0) > 0;
+
+        // Tenta capturar horário concreto (ex: "amanhã 7h30", "hoje 19h",
+        // "segunda às 7:30", "amanhã às 19h"). Se capturar, cria sessão.
+        let _capturedAt: Date | null = null;
+        try {
+          const _timeRegex = /(hoje|amanh[ãa]|depois\s*de\s*amanh[ãa]|segunda|ter[çc]a|quarta|quinta|sexta|s[áa]bado|domingo)?\s*(?:[àa]s?\s*)?(\d{1,2})\s*(?:h|:)\s*(\d{0,2})/i;
+          const _m = message.match(_timeRegex);
+          if (_m) {
+            const dayWord = (_m[1] || '').toLowerCase();
+            const hh = parseInt(_m[2], 10);
+            const mm = _m[3] ? parseInt(_m[3], 10) : 0;
+            if (hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59) {
+              const nowBrtMs = Date.now() - 3 * 60 * 60 * 1000;
+              const base = new Date(nowBrtMs);
+              const baseY = base.getUTCFullYear();
+              const baseM = base.getUTCMonth();
+              const baseD = base.getUTCDate();
+              const weekdayMap: Record<string, number> = {
+                'domingo': 0, 'segunda': 1, 'terça': 2, 'terca': 2,
+                'quarta': 3, 'quinta': 4, 'sexta': 5, 'sábado': 6, 'sabado': 6,
+              };
+              let targetD = baseD;
+              if (dayWord === 'amanhã' || dayWord === 'amanha') {
+                targetD = baseD + 1;
+              } else if (dayWord.startsWith('depois')) {
+                targetD = baseD + 2;
+              } else if (dayWord in weekdayMap) {
+                const targetWd = weekdayMap[dayWord];
+                const baseWd = base.getUTCDay();
+                let delta = (targetWd - baseWd + 7) % 7;
+                if (delta === 0) delta = 7;
+                targetD = baseD + delta;
+              } else if (dayWord === 'hoje' || !dayWord) {
+                // Se hora já passou hoje, joga pra amanhã
+                const todayMins = base.getUTCHours() * 60 + base.getUTCMinutes();
+                if (hh * 60 + mm <= todayMins + 5) targetD = baseD + 1;
+              }
+              // Constrói timestamp BRT (UTC-3) → UTC
+              _capturedAt = new Date(Date.UTC(baseY, baseM, targetD, hh + 3, mm, 0));
+              if (_capturedAt.getTime() <= Date.now()) _capturedAt = null; // sanity
+            }
+          }
+        } catch (parseErr) {
+          console.warn('⚠️ [D0_REFUSAL] erro ao parsear horário:', parseErr);
+          _capturedAt = null;
+        }
+
+        // Se capturou horário → cria sessão (anti-duplicação ±30min)
+        let _createdSessionAt: Date | null = null;
+        if (_capturedAt && profile.user_id) {
+          try {
+            const wStart = new Date(_capturedAt.getTime() - 30 * 60 * 1000).toISOString();
+            const wEnd = new Date(_capturedAt.getTime() + 30 * 60 * 1000).toISOString();
+            const { data: existingNearby } = await supabase
+              .from('sessions')
+              .select('id')
+              .eq('user_id', profile.user_id)
+              .in('status', ['scheduled', 'in_progress'])
+              .gte('scheduled_at', wStart)
+              .lte('scheduled_at', wEnd)
+              .limit(1)
+              .maybeSingle();
+            if (existingNearby) {
+              console.log(`🎯 [D0_REFUSAL] sessão já existe próxima de ${_capturedAt.toISOString()} — ignorando`);
+            } else {
+              const { data: newSess, error: sessErr } = await supabase
+                .from('sessions')
+                .insert({
+                  user_id: profile.user_id,
+                  scheduled_at: _capturedAt.toISOString(),
+                  session_type: 'livre',
+                  status: 'scheduled',
+                  duration_minutes: 45,
+                  created_by: 'backend_regex',
+                })
+                .select('id')
+                .single();
+              if (newSess) {
+                _createdSessionAt = _capturedAt;
+                console.log(`🎯 [D0_REFUSAL] sessão criada via regex: ${newSess.id} @ ${_capturedAt.toISOString()}`);
+              } else if (sessErr) {
+                console.error('🎯 [D0_REFUSAL] falha ao criar sessão:', sessErr);
+              }
+            }
+          } catch (insertErr) {
+            console.error('🎯 [D0_REFUSAL] exceção ao criar sessão:', insertErr);
+          }
+        }
+
+        // Limpa flag, zera tentativas, libera setup mensal (se plano permite)
+        try {
+          const updates: Record<string, unknown> = {
+            pending_first_session_invite: false,
+            first_session_invite_attempts: 0,
+          };
+          // Só ativa setup mensal se NÃO criou sessão pelo regex
+          // (se criou, a Aura já tem 1 sessão marcada — setup mensal pode
+          //  ser ativado nos próximos turnos pelo fluxo natural)
+          if (_hasSessionsInPlan && !_createdSessionAt) {
+            updates.needs_schedule_setup = true;
+          }
+          await supabase.from('profiles').update(updates).eq('id', profile.id);
+          console.log(
+            `🎯 D0 binário: pending_first_session_invite=false (recusa=${_isRefusal}, captura=${!!_createdSessionAt}, setup_mensal=${!!updates.needs_schedule_setup})`,
+          );
+        } catch (clearErr) {
+          console.warn('⚠️ Falha ao limpar flags D0:', clearErr);
+        }
+
+        // Se criou sessão pelo regex, envia confirmação proativa fire-and-forget
+        if (_createdSessionAt && profile.phone) {
+          try {
+            const _brt = new Date(_createdSessionAt.getTime() - 3 * 60 * 60 * 1000);
+            const _dd = String(_brt.getUTCDate()).padStart(2, '0');
+            const _mo = String(_brt.getUTCMonth() + 1).padStart(2, '0');
+            const _hh = String(_brt.getUTCHours()).padStart(2, '0');
+            const _mm = String(_brt.getUTCMinutes()).padStart(2, '0');
+            const confirmMsg = `Marquei nossa sessão pra ${_dd}/${_mo} às ${_hh}:${_mm} 💜 Te aviso pertinho da hora.`;
+            const cleanPhone = cleanPhoneNumber(profile.phone);
+            EdgeRuntime.waitUntil(
+              sendMessage(cleanPhone, confirmMsg).catch((e: unknown) =>
+                console.error('🎯 [D0_REFUSAL] falha confirmação proativa:', e),
+              ),
+            );
+          } catch (sendErr) {
+            console.warn('⚠️ [D0_REFUSAL] erro ao enviar confirmação:', sendErr);
+          }
         }
       }
     }
