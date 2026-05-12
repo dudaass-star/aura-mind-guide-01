@@ -3890,123 +3890,10 @@ Essa é uma oportunidade de celebrar o progresso e reorientar o trabalho.
 // [REMOVED] extractKeyInsightsFromConversation and extractCommitmentsFromConversation
 // These regex-based fallbacks were unreliable. Summary extraction now uses retry with the primary model.
 
-// Função para criar um link curto
-async function createShortLink(url: string, phone: string): Promise<string | null> {
-  const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
-  const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-  
-  try {
-    const response = await fetch(
-      `${SUPABASE_URL}/functions/v1/create-short-link`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
-        },
-        body: JSON.stringify({ url, phone })
-      }
-    );
-    
-    const data = await response.json();
-    
-    if (response.ok && data.shortUrl) {
-      console.log('✅ Short link created:', data.shortUrl);
-      return data.shortUrl;
-    } else {
-      console.error('❌ Failed to create short link:', data.error);
-      return null;
-    }
-  } catch (error) {
-    console.error('❌ Error creating short link:', error);
-    return null;
-  }
-}
-
-// Função para processar tags de upgrade e gerar links de checkout
-async function processUpgradeTags(
-  content: string, 
-  phone: string, 
-  name: string
-): Promise<string> {
-  const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
-  const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-  
-  const upgradeRegex = /\[UPGRADE:(essencial|direcao|transformacao)\]/gi;
-  const matches = content.match(upgradeRegex);
-  
-  if (!matches) return content;
-  
-  console.log('🔗 Processing upgrade tags:', matches);
-  
-  let processedContent = content;
-  
-  for (const match of matches) {
-    const planMatch = match.match(/\[UPGRADE:(.*?)\]/i);
-    const plan = planMatch?.[1]?.toLowerCase();
-    if (!plan) continue;
-    
-    // Trial users on essencial: generate checkout link instead of stripping
-    if (plan === 'essencial') {
-      try {
-        const shortUrl = await createShortLink('https://olaaura.com.br/checkout', phone);
-        processedContent = processedContent.replace(match, shortUrl || 'https://olaaura.com.br/checkout');
-        console.log('🔗 [UPGRADE:essencial] replaced with checkout link:', shortUrl || 'fallback');
-      } catch (e) {
-        processedContent = processedContent.replace(match, 'https://olaaura.com.br/checkout');
-      }
-      continue;
-    }
-    
-    try {
-      console.log('🔗 Generating checkout link for plan:', plan, 'phone:', phone);
-      
-      // Chamar create-checkout para gerar o link
-      const checkoutResponse = await fetch(
-        `${SUPABASE_URL}/functions/v1/create-checkout`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
-          },
-          body: JSON.stringify({ plan, name, phone })
-        }
-      );
-      
-      const checkoutData = await checkoutResponse.json();
-      
-      if (checkoutResponse.ok && checkoutData.url) {
-        console.log('✅ Checkout URL generated:', checkoutData.url.substring(0, 50));
-        
-        // Criar link curto para o checkout
-        const shortUrl = await createShortLink(checkoutData.url, phone);
-        
-        if (shortUrl) {
-          processedContent = processedContent.replace(match, shortUrl);
-        } else {
-          // Fallback para URL completa se o encurtamento falhar
-          processedContent = processedContent.replace(match, checkoutData.url);
-        }
-      } else {
-        console.error('❌ Failed to generate checkout URL:', checkoutData.error);
-        // Se falhar, remove a tag e adiciona mensagem genérica
-        processedContent = processedContent.replace(
-          match, 
-          '(me avisa que você quer fazer o upgrade que eu te ajudo!)'
-        );
-      }
-    } catch (error) {
-      console.error('[AURA] Erro ao gerar link de upgrade:', error);
-      processedContent = processedContent.replace(
-        match, 
-        '(me avisa que você quer fazer o upgrade que eu te ajudo!)'
-      );
-    }
-  }
-  
-  return processedContent;
-}
+// [REMOVED 2026-05-12] createShortLink + processUpgradeTags
+// Aura nunca faz upsell. Tags [UPGRADE:*] são descartadas no pós-processamento
+// (ver bloco "TAGS DE UPGRADE — DESATIVADAS" mais abaixo). Funções deletadas
+// para evitar reativação acidental. Política: mem://persona/no-upsell-policy.
 
 // ============================================================================
 // FECHAMENTO CONDUZIDO COM RETOMADA DATADA
@@ -6248,8 +6135,18 @@ ${_exampleTag}
     // nenhum cooldown/contagem de recusa é gravado.
     // ========================================================================
     if (assistantMessage.includes('[UPGRADE')) {
-      console.warn('🚫 Upsell tag detectada e descartada (Aura não vende):',
-        (assistantMessage.match(/\[UPGRADE[^\]]*\]/g) || []).join(' '));
+      const driftedTags = (assistantMessage.match(/\[UPGRADE[^\]]*\]/g) || []).join(' ');
+      console.warn('🚫 Upsell tag detectada e descartada (Aura não vende):', driftedTags);
+      // Log fire-and-forget para rastrear drift do LLM ao longo do tempo.
+      // Se aparecer com frequência, ajustar o prompt em "PLANOS — REGRA INVIOLÁVEL DE NÃO-VENDA".
+      try {
+        supabase.from('failed_message_log').insert({
+          user_id: profile.user_id,
+          function_name: 'aura-agent:upsell_tag_discarded',
+          content: driftedTags.slice(0, 500),
+          error: 'llm_drift_upsell_tag',
+        }).then(() => {}, () => {});
+      } catch (_e) { /* non-fatal */ }
       assistantMessage = assistantMessage
         .replace(/\[UPGRADE:[^\]]+\]/gi, '')
         .replace(/\[UPGRADE_REFUSED:[^\]]+\]/gi, '')
@@ -6403,6 +6300,7 @@ ${_exampleTag}
           console.error('❌ Error scheduling session:', sessionError);
         }
         }
+        } // close existingNearby-else block (Layer B duplicate guard)
       } else {
         console.log('⚠️ Attempted to schedule session in the past:', scheduledAt.toISOString());
       }

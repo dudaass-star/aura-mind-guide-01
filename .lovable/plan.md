@@ -1,35 +1,39 @@
-# Plano: Isentar ações pós-sessão da quiet hour
+## Status da remoção dos CTAs de upsell
 
-## Princípio
+Verifiquei o `aura-agent/index.ts` linha por linha e nas funções vizinhas (`instagram-agent`, `_shared`). Resultado:
 
-Se a sessão aconteceu em quiet hours, todas as **ações de fechamento da própria sessão** (resumo, rating, mensagem de encerramento) devem ser entregues normalmente. O usuário acabou de interagir — não há risco de incomodar.
+### O que está OK ✅
+- **Prompt**: bloco "PLANOS — REGRA INVIOLÁVEL DE NÃO-VENDA" (linhas 2801-2811) está claro: proibido vender, proibido emitir `[UPGRADE:*]` / `[UPGRADE_REFUSED:*]`, e se o usuário perguntar → redireciona ao `/meu-espaco`.
+- **Cota Essencial esgotada** (linhas 5812-5825): só honestidade, sem upsell, redireciona ao painel.
+- **Sessões disponíveis** (linhas 5795-5810): bloqueia regressão para "peça upgrade".
+- **Pós-processamento** (linhas 6244-6257): se LLM driftar e emitir `[UPGRADE:*]`, a tag é descartada silenciosamente com `console.warn` — nenhum link de checkout é gerado.
+- **`stripAllInternalTags`** (linha 100): catch-all já remove `[UPGRADE:*]` mesmo se passar.
+- **`VALID_AURA_TAGS`** (linha 56): mantém `UPGRADE`/`UPGRADE_REFUSED` na whitelist apenas para evitar falso-positivo no log de "tags inventadas" — comportamento correto.
+- **Sem callers**: `processUpgradeTags` e `shouldSuggestUpgrade` não são mais chamados em lugar nenhum (`rg` confirmou).
+- **Outras funções**: `instagram-agent` e `_shared/*` não tem nenhuma referência a upsell/upgrade.
+- **Logs últimas 4h**: `failed_message_log` zerado — nada quebrou.
 
-A quiet hour continua valendo para tudo que é **proativo não solicitado** (lembretes 24h, jornadas, check-ins, conteúdo).
+### O que falta ajustar 🧹
 
-## Mudanças em `supabase/functions/session-reminder/index.ts`
+**1. Código morto a remover** (`aura-agent/index.ts`):
+- `processUpgradeTags` (linhas 3926-4009) — definida mas nunca chamada.
+- `createShortLink` (linhas 3894-3924) — usada **só** dentro de `processUpgradeTags`. Vira código morto também.
 
-### 1. Rating pós-sessão (linha 583)
+Remover ambas em um único patch. Risco zero (sem callers).
 
-- Remover o bloqueio `isQuietHours ? { data: null }` da query de `completedSessions`.
-- Manter a janela de 2h após `ended_at` (já é suficiente — sessão termina e 5 min depois o rating sai, mesmo às 23h).
+**2. Atualizar o log de descarte** (opcional, linhas 6250-6257):
+- Adicionar insert fire-and-forget em `failed_message_log` com `function_name='aura-agent:upsell_tag_discarded'` para termos rastreabilidade dos drifts do LLM (hoje só `console.warn`). Útil para medir se o prompt está segurando.
 
-### 2. Mensagem de fechamento de sessão abandonada (linha 562)
+### Validação pós-mudança
+- Rodar testes Deno (`phase_thresholds_test.ts`).
+- Deploy do `aura-agent`.
+- Monitorar `failed_message_log` por 24h em busca de:
+  - `function_name='aura-agent:upsell_tag_discarded'` (drift do LLM)
+  - qualquer `error` novo apontando para `processUpgradeTags`/`createShortLink` (não deve aparecer).
 
-- Remover o `else if (isQuietHours)` que suprime a mensagem de encerramento.
-- Sempre enviar — é resposta direta a uma sessão que o usuário iniciou.
+### Arquivos afetados
+- `supabase/functions/aura-agent/index.ts` (1 patch: deletar 2 funções mortas + opcionalmente adicionar insert de log)
 
-### 3. O que **continua bloqueado** por quiet hours
-
-- **Lembrete 24h + confirmação** (linha 87) — mantido. É proativo, não responde a interação ativa.
-- Todo o resto do sistema (`periodic-content`, `schedule-setup-reminder`, `scheduled-checkin`, etc.) — não muda.
-
-## Sessões já perdidas
-
-Não recuperar. Foco apenas nas próximas.
-
-## Detalhes técnicos
-
-- Apenas 1 arquivo alterado: `supabase/functions/session-reminder/index.ts`.
-- Sem migration, sem schema, sem novas secrets.
-- Sem impacto em `aura-agent` (resumo já é enviado imediatamente pelo agent quando a sessão fecha — esta mudança garante apenas o **fallback** e o **rating**).
-- Atualizar memória `mem://features/whatsapp/session-reminder-flow` para refletir: "Rating pós-sessão e mensagem de encerramento ignoram quiet hours, pois respondem a interação ativa do usuário."
+### Fora de escopo
+- Re-revisar o prompt de venda — já está coerente.
+- Mexer em checkout, Stripe, ou landing — nada disso era CTA da Aura.
