@@ -6300,6 +6300,8 @@ ${_exampleTag}
           console.error('❌ Error scheduling session:', sessionError);
         }
         }
+        } // close existingSameDay-else
+        } // close existingNearby-else
       } else {
         console.log('⚠️ Attempted to schedule session in the past:', scheduledAt.toISOString());
       }
