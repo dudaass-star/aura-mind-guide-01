@@ -545,8 +545,10 @@ Se quiser remarcar uma nova sessão, é só me dizer!`;
           .update({ current_session_id: null })
           .eq('user_id', session.user_id);
         
-        // Enviar mensagem de fechamento se tiver telefone E não estiver em quiet hours
-        if (profile?.phone && !isQuietHours) {
+        // Enviar mensagem de fechamento se tiver telefone.
+        // Quiet hours NÃO se aplica aqui: é resposta direta a uma sessão
+        // que o usuário iniciou — fechar sessão é parte da própria interação.
+        if (profile?.phone) {
           try {
             const cleanPhone = cleanPhoneNumber(profile.phone);
             const instanceConfig = await getInstanceConfigForUser(supabase, session.user_id);
@@ -559,8 +561,6 @@ Se quiser remarcar uma nova sessão, é só me dizer!`;
           } catch (sendError) {
             console.error(`❌ Error sending closure message for session ${session.id}:`, sendError);
           }
-        } else if (isQuietHours) {
-          console.log(`🌙 Session ${session.id} closed during quiet hours - closure message suppressed`);
         }
         
         abandonedSessionsClosed++;
@@ -569,7 +569,9 @@ Se quiser remarcar uma nova sessão, é só me dizer!`;
 
     // ========================================================================
     // LEMBRETE PÓS-SESSÃO (fallback: 5 minutos após término se não foi enviado pelo aura-agent)
-    // Skip during quiet hours - will be processed next run
+    // NÃO respeita quiet hours: rating/resumo são fechamento da própria sessão
+    // que o usuário acabou de ter. Bloquear aqui causa perda permanente do rating
+    // (sessão sai da janela de 2h durante o silêncio).
     // ========================================================================
     const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
     // Janela máxima: só enviar rating para sessões finalizadas nas últimas 2h.
@@ -580,7 +582,7 @@ Se quiser remarcar uma nova sessão, é só me dizer!`;
     // porque o aura-agent agora envia o resumo imediatamente e marca
     // post_session_sent=true. O envio do rating "1 a 5" continua sendo
     // responsabilidade do session-reminder, 5 min após o término.
-    const { data: completedSessions, error: errorCompleted } = isQuietHours ? { data: null, error: null } : await supabase
+    const { data: completedSessions, error: errorCompleted } = await supabase
       .from('sessions')
       .select(`id, user_id, session_summary, commitments, key_insights, ended_at, post_session_sent`)
       .eq('status', 'completed')
