@@ -5146,21 +5146,6 @@ REGRAS GERAIS DO ONBOARDING:
 - Compromissos pendentes: ${pendingCommitments}
 - Histórico de conversas: ${messageCount} mensagens
 - Em sessão especial: ${sessionActive ? 'Sim - MODO SESSÃO ATIVO' : 'Não'}
-- Upgrade — status: ${(() => {
-  const refusalCount = profile?.upgrade_refusal_count || 0;
-  const refusalType = profile?.upgrade_refusal_type as string | undefined;
-  const upgradeSuggestedAt = profile?.upgrade_suggested_at;
-  if (refusalCount >= 3) return `BLOQUEADO PERMANENTEMENTE (${refusalCount} recusas). NÃO sugira upgrade proativamente. Responda apenas se o usuário perguntar.`;
-  const cooldownDays = refusalType === 'financial' ? 60 : refusalType === 'timing' ? 21 : 30;
-  if (!upgradeSuggestedAt) return `Nenhum CTA recente — pode sugerir se apropriado e de forma quase imperceptível. Recusas: ${refusalCount}/3`;
-  const lastCTA = new Date(upgradeSuggestedAt);
-  const daysSince = Math.floor((Date.now() - lastCTA.getTime()) / 86400000);
-  if (daysSince < cooldownDays) {
-    const cooldownEnd = new Date(lastCTA.getTime() + cooldownDays * 86400000);
-    return `Último CTA: ${lastCTA.toLocaleDateString('pt-BR')} (há ${daysSince} dias) — cooldown ativo até ${cooldownEnd.toLocaleDateString('pt-BR')} (${cooldownDays}d por recusa "${refusalType || 'no_response'}"). NÃO sugira upgrade. Recusas: ${refusalCount}/3`;
-  }
-  return `Último CTA: há ${daysSince} dias — cooldown expirado, pode sugerir de forma quase imperceptível. Recusas: ${refusalCount}/3`;
-})()}
 
 ## Controle de Tempo da Sessão
 ${sessionTimeContext}
