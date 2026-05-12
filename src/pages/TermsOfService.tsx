@@ -1,8 +1,20 @@
+import { Helmet } from "react-helmet-async";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 
 const TermsOfService = () => {
   return (
+    <>
+      <Helmet>
+        <title>Termos de Uso — AURA</title>
+        <meta name="description" content="Leia os Termos de Uso do serviço AURA. Conheça as condições de acesso e uso do acompanhamento emocional via WhatsApp." />
+        <link rel="canonical" href="https://olaaura.com.br/termos" />
+        <meta property="og:url" content="https://olaaura.com.br/termos" />
+        <meta property="og:title" content="Termos de Uso — AURA" />
+        <meta property="og:description" content="Leia os Termos de Uso do serviço AURA. Conheça as condições de acesso e uso do acompanhamento emocional via WhatsApp." />
+        <meta property="og:type" content="website" />
+      </Helmet>
+
     <div className="min-h-screen bg-background text-foreground">
       <Header />
       

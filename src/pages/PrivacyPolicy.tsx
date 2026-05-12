@@ -1,8 +1,20 @@
+import { Helmet } from "react-helmet-async";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 
 const PrivacyPolicy = () => {
   return (
+    <>
+      <Helmet>
+        <title>Política de Privacidade — AURA</title>
+        <meta name="description" content="Conheça a Política de Privacidade da AURA. Saiba como seus dados são coletados, usados e protegidos em conformidade com a LGPD." />
+        <link rel="canonical" href="https://olaaura.com.br/privacidade" />
+        <meta property="og:url" content="https://olaaura.com.br/privacidade" />
+        <meta property="og:title" content="Política de Privacidade — AURA" />
+        <meta property="og:description" content="Conheça a Política de Privacidade da AURA. Saiba como seus dados são coletados, usados e protegidos em conformidade com a LGPD." />
+        <meta property="og:type" content="website" />
+      </Helmet>
+
     <div className="min-h-screen bg-background text-foreground">
       <Header />
       
