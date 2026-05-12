@@ -74,7 +74,7 @@ const HeroV2 = () => (
               className="absolute inset-0 w-full h-full object-cover md:rounded-l-3xl"
               width={1280}
               height={1280}
-              fetchpriority="high"
+              fetchPriority="high"
             />
             <div className="absolute inset-0 bg-gradient-to-r from-[hsl(220_35%_10%)] via-transparent to-transparent md:bg-gradient-to-r md:from-[hsl(220_35%_10%)] md:via-[hsl(220_35%_10%/0.2)] md:to-transparent" />
 
