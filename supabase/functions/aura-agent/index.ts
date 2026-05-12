@@ -6300,6 +6300,7 @@ ${_exampleTag}
           console.error('❌ Error scheduling session:', sessionError);
         }
         }
+        } // close existingNearby-else block (Layer B duplicate guard)
       } else {
         console.log('⚠️ Attempted to schedule session in the past:', scheduledAt.toISOString());
       }
