@@ -6450,13 +6450,9 @@ ${_exampleTag}
           // Log fire-and-forget em failed_message_log para visibilidade no admin
           supabase.from('failed_message_log').insert({
             user_id: profile.user_id,
-            kind: 'duplicate_schedule_blocked',
-            payload: {
-              reason: 'same_day_brt',
-              attempted_at: scheduledAt.toISOString(),
-              existing_id: existingSameDay.id,
-              existing_at: existingSameDay.scheduled_at,
-            },
+            function_name: 'aura-agent:duplicate_schedule_blocked',
+            content: `attempted=${scheduledAt.toISOString()} existing_id=${existingSameDay.id} existing_at=${existingSameDay.scheduled_at}`,
+            error: 'same_day_brt',
           }).then(() => {}, () => {});
         } else {
         const { data: newSession, error: sessionError } = await supabase
