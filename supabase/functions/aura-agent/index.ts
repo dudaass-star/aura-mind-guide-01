@@ -2798,60 +2798,17 @@ BOM (3-4 balões): observação certeira + conexão + pergunta
 ## CONTROLE DE TEMPO DA SESSÃO:
 Consulte o bloco DADOS DINÂMICOS DO SISTEMA para informações de tempo e fase da sessão atual.
 
-## FLUXO DE UPGRADE PARA SESSOES (USUARIOS DO PLANO ESSENCIAL)
+## PLANOS — REGRA INVIOLÁVEL DE NÃO-VENDA
 
-Quando um usuario do plano Essencial pedir para agendar uma sessao:
+Você NUNCA faz upsell, sugestão de upgrade ou pitch de plano. Em hipótese alguma.
+Vender planos no meio de uma conversa terapêutica destrói sua credibilidade e a confiança do usuário. É proibido.
 
-1. **Seja transparente** (o plano Essencial NAO inclui sessoes):
-   "Aaah [nome], eu adoraria fazer uma sessao especial com voce! 💜 Mas preciso te contar: o plano Essencial e focado nas nossas conversas do dia a dia, sabe?"
-
-2. **Apresente o valor das sessoes:**
-   "As sessoes especiais sao 45 minutos so nossos, com profundidade total. Eu conduzo, voce reflete, e no final mando um resumo com os insights que surgiram."
-
-3. **Pergunte qual prefere e AGUARDE a resposta:**
-   "Se voce quiser ter acesso, tem duas opcoes:
-   - **Direcao**: R$9,90/semana (após 7 dias R$49,90/mes) - 4 sessoes especiais + mensagens ilimitadas
-   - **Transformacao**: R$19,90/semana (após 7 dias R$79,90/mes) - 8 sessoes especiais + mensagens ilimitadas
-   
-   Qual te interessa mais?"
-
-4. **Quando o usuario escolher, USE A TAG DE UPGRADE:**
-   - Se escolher Direcao: "Perfeito! Aqui esta o link pra voce fazer o upgrade: [UPGRADE:direcao]"
-   - Se escolher Transformacao: "Otimo! Aqui esta o link: [UPGRADE:transformacao]"
-
-5. **Finalize sem pressao:**
-   "E so clicar e pronto! Qualquer duvida, to aqui. 💜"
-
-**REGRAS IMPORTANTES:**
-- Use EXATAMENTE a tag [UPGRADE:direcao] ou [UPGRADE:transformacao] — o sistema substitui pelo link real
-- Se o usuario nao quiser fazer upgrade, tudo bem! Continue a conversa normalmente
-- NAO envie a tag de upgrade sem o usuario ter escolhido o plano
-
-## SUGESTAO PROATIVA DE UPGRADE (APENAS PLANO ESSENCIAL):
-
-REGRA INVIOLÁVEL DE UPGRADE:
-- Consulte "Upgrade — status" nos DADOS DINÂMICOS antes de qualquer menção a planos.
-- Se cooldown ativo: NÃO mencione upgrade. Zero.
-- Se status for BLOQUEADO PERMANENTEMENTE: NÃO sugira upgrade proativamente jamais. Só responda se o próprio usuário perguntar.
-- EXCEÇÃO ÚNICA: se o PRÓPRIO usuário perguntar sobre planos, responda normalmente (mesmo com cooldown ou bloqueio).
-- SO use a tag [UPGRADE:plano] quando o usuario CONFIRMAR que quer fazer upgrade.
-
-QUANDO O USUÁRIO RECUSAR:
-Classifique a recusa e use a tag correspondente NO FINAL da sua resposta (invisível para o usuário):
-- Recusa financeira ("não tenho condições", "tá caro", "sem dinheiro", "não posso pagar") → [UPGRADE_REFUSED:financial]
-- Timing / indecisão ("agora não", "depois", "vou pensar", "talvez") → [UPGRADE_REFUSED:timing]
-- Sem resposta clara / ignorou → [UPGRADE_REFUSED:no_response]
-Acolha com carinho e mude de assunto imediatamente. NÃO insista.
-
-QUANDO PUDER SUGERIR (cooldown expirado + usuário acima do target diário + não bloqueado):
-- A sugestão deve ser QUASE IMPERCEPTÍVEL. Nunca um pitch, nunca uma lista de benefícios.
-- Integre organicamente na conversa, como quem comenta de passagem.
-- Exemplo BOM: "Ah, e sabia que tem um jeito da gente conversar sem esse limite? Mas enfim, me conta mais sobre..."
-- Exemplo BOM: "Se um dia quiser, tem como a gente ter esse espaço sem limite nenhum. Mas agora o importante é isso que você tá vivendo."
-- Exemplo RUIM: "Que tal conhecer nossos planos? No plano Direção você tem..."
-- Exemplo RUIM: "Tenho uma sugestão pra você: o plano Transformação oferece..."
-- MÁXIMO 1 frase. Depois siga a conversa como se nada tivesse acontecido.
-- Nos planos Direcao e Transformacao, o usuario pode mandar mensagens O QUANTO QUISER. Diga "pode falar comigo o quanto quiser, sem limite".
+REGRAS:
+1. NUNCA mencione planos Direção, Transformação, "sem limite", "ilimitado", "upgrade" ou similares de forma proativa.
+2. NUNCA sugira que o usuário "tem como ter mais espaço" / "pode conversar sem limite" / "tem outras opções" como gancho de venda.
+3. NUNCA emita as tags [UPGRADE:direcao], [UPGRADE:transformacao] ou [UPGRADE_REFUSED:*]. Elas estão proibidas.
+4. Se o usuário ATINGIR limite do plano Essencial (mensagens diárias ou cota mensal de sessão), seja apenas honesto sobre o limite, sem oferecer caminho de venda.
+5. Se o PRÓPRIO usuário perguntar sobre planos/preços/upgrade: responda curta e direta apenas com "Você consegue ver e ajustar seu plano no seu painel: https://olaaura.com.br/meu-espaco" e volte ao tema da conversa. Nada de pitch, nada de listar benefícios.
 
 
 # MEMÓRIA DE LONGO PRAZO
@@ -5189,21 +5146,6 @@ REGRAS GERAIS DO ONBOARDING:
 - Compromissos pendentes: ${pendingCommitments}
 - Histórico de conversas: ${messageCount} mensagens
 - Em sessão especial: ${sessionActive ? 'Sim - MODO SESSÃO ATIVO' : 'Não'}
-- Upgrade — status: ${(() => {
-  const refusalCount = profile?.upgrade_refusal_count || 0;
-  const refusalType = profile?.upgrade_refusal_type as string | undefined;
-  const upgradeSuggestedAt = profile?.upgrade_suggested_at;
-  if (refusalCount >= 3) return `BLOQUEADO PERMANENTEMENTE (${refusalCount} recusas). NÃO sugira upgrade proativamente. Responda apenas se o usuário perguntar.`;
-  const cooldownDays = refusalType === 'financial' ? 60 : refusalType === 'timing' ? 21 : 30;
-  if (!upgradeSuggestedAt) return `Nenhum CTA recente — pode sugerir se apropriado e de forma quase imperceptível. Recusas: ${refusalCount}/3`;
-  const lastCTA = new Date(upgradeSuggestedAt);
-  const daysSince = Math.floor((Date.now() - lastCTA.getTime()) / 86400000);
-  if (daysSince < cooldownDays) {
-    const cooldownEnd = new Date(lastCTA.getTime() + cooldownDays * 86400000);
-    return `Último CTA: ${lastCTA.toLocaleDateString('pt-BR')} (há ${daysSince} dias) — cooldown ativo até ${cooldownEnd.toLocaleDateString('pt-BR')} (${cooldownDays}d por recusa "${refusalType || 'no_response'}"). NÃO sugira upgrade. Recusas: ${refusalCount}/3`;
-  }
-  return `Último CTA: há ${daysSince} dias — cooldown expirado, pode sugerir de forma quase imperceptível. Recusas: ${refusalCount}/3`;
-})()}
 
 ## Controle de Tempo da Sessão
 ${sessionTimeContext}
@@ -5850,12 +5792,6 @@ Exemplo natural:
 - Usuário interrompe com "mudando de assunto..." → Descarte completamente`;
     }
     
-    const upgradePermBlocked = (profile?.upgrade_refusal_count || 0) >= 3;
-    const shouldSuggestUpgrade = userPlan === 'essencial' && planConfig.dailyMessageTarget > 0 && messagesToday > planConfig.dailyMessageTarget && !upgradePermBlocked;
-    if (shouldSuggestUpgrade) {
-      dynamicContext += `\n\n⚠️ INSTRUÇÃO ESPECIAL: O usuário já mandou ${messagesToday} mensagens hoje. Sugira naturalmente o upgrade para o plano Direção no final da sua resposta. IMPORTANTE: No plano Direção e Transformação, o usuário pode mandar mensagens o quanto quiser, sem limite. NÃO diga "limite maior" — diga que pode falar o quanto quiser.`;
-    }
-
     // INSTRUÇÃO DE PRIORIDADE DE PLANO (evita conflito com histórico)
     // Se o usuário tem sessões disponíveis, garantir que a IA não peça upgrade
     if (planConfig.sessions > 0 && sessionsAvailable > 0) {
@@ -5873,8 +5809,8 @@ REGRAS ABSOLUTAS:
 Se o usuário mencionar algo sobre "finalizar checkout" ou "upgrade", CONFIRME que ele já está no plano certo e ofereça ajuda para agendar a primeira sessão.`;
     }
 
-    // Essencial esgotou a sessão do mês → instrução de upsell suave (Direção/Transformação)
-    if (userPlan === 'essencial' && planConfig.sessions > 0 && sessionsAvailable === 0 && !upgradePermBlocked) {
+    // Essencial esgotou a sessão do mês → apenas honestidade, SEM upsell
+    if (userPlan === 'essencial' && planConfig.sessions > 0 && sessionsAvailable === 0) {
       dynamicContext += `
 
 ⚠️ COTA DE SESSÃO DO MÊS ESGOTADA (PLANO ESSENCIAL):
@@ -5883,9 +5819,9 @@ O usuário já usou a sessão do mês incluída no plano Essencial. NÃO emita [
 SE ele pedir nova sessão / mais sessões agora:
 1. Reconheça com cuidado o desejo dele de ir mais fundo ("faz sentido você querer mais um espaço desses").
 2. Explique de forma honesta e curta: o Essencial inclui 1 sessão por mês, e a próxima abre no início do mês que vem.
-3. Ofereça naturalmente (sem pressão) o upgrade pra **Direção (4 sessões/mês)** ou **Transformação (8 sessões/mês)** como caminho pra ter mais sessões agora.
-4. Termine com pergunta aberta ("quer que eu te mande o link pra fazer o upgrade?"). NÃO mande link sem ele pedir.
-5. Respeite a regra de cooldown de upgrade — se ele recusar, não insista nessa conversa.`;
+3. NÃO ofereça upgrade. NÃO mencione outros planos. NÃO sugira "ter mais sessões agora".
+4. Volte o foco da conversa para o que ele tá vivendo agora — você ainda pode acolher por mensagem mesmo sem sessão formal.
+5. Se ele perguntar diretamente sobre planos, apenas direcione: "Você consegue ver suas opções no seu painel: https://olaaura.com.br/meu-espaco".`;
     }
 
     // ========================================================================
@@ -6306,36 +6242,18 @@ ${_exampleTag}
     }
 
     // ========================================================================
-    // PROCESSAR TAGS DE UPGRADE (gerar links de checkout)
+    // TAGS DE UPGRADE — DESATIVADAS (Aura nunca faz upsell)
+    // Se o LLM driftar e emitir [UPGRADE:*] ou [UPGRADE_REFUSED:*], apenas
+    // removemos a tag silenciosamente. Nenhum link de checkout é gerado,
+    // nenhum cooldown/contagem de recusa é gravado.
     // ========================================================================
-    const userPhone = profile?.phone || phone || '';
-    const userName = profile?.name || '';
-    
-    if (userPhone && assistantMessage.includes('[UPGRADE:')) {
-      assistantMessage = await processUpgradeTags(assistantMessage, userPhone, userName);
-      // Registrar que CTA de upgrade foi enviado — ativa cooldown
-      if (profile?.id) {
-        await supabase.from('profiles')
-          .update({ upgrade_suggested_at: new Date().toISOString() })
-          .eq('id', profile.id);
-        console.log('📊 upgrade_suggested_at updated — cooldown ativado');
-      }
-    }
-
-    // Processar tag de recusa de upgrade [UPGRADE_REFUSED:financial|timing|no_response]
-    const refusedMatch = assistantMessage.match(/\[UPGRADE_REFUSED:(financial|timing|no_response)\]/i);
-    if (refusedMatch && profile?.id) {
-      const refusalType = refusedMatch[1].toLowerCase();
-      assistantMessage = assistantMessage.replace(/\[UPGRADE_REFUSED:[^\]]+\]/gi, '').trim();
-      const newCount = (profile?.upgrade_refusal_count || 0) + 1;
-      await supabase.from('profiles')
-        .update({
-          upgrade_refusal_type: refusalType,
-          upgrade_refusal_count: newCount,
-          upgrade_suggested_at: new Date().toISOString(),
-        })
-        .eq('id', profile.id);
-      console.log(`📊 Upgrade refused — type=${refusalType}, count=${newCount}/3`);
+    if (assistantMessage.includes('[UPGRADE')) {
+      console.warn('🚫 Upsell tag detectada e descartada (Aura não vende):',
+        (assistantMessage.match(/\[UPGRADE[^\]]*\]/g) || []).join(' '));
+      assistantMessage = assistantMessage
+        .replace(/\[UPGRADE:[^\]]+\]/gi, '')
+        .replace(/\[UPGRADE_REFUSED:[^\]]+\]/gi, '')
+        .trim();
     }
 
     // ========================================================================
