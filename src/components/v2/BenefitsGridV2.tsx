@@ -22,7 +22,7 @@ const BenefitsGridV2 = () => (
   <section className="relative py-24 md:py-32 v2-dark-section">
     <div className="container mx-auto px-6">
       <div className="text-center max-w-2xl mx-auto mb-14">
-        <p className="text-xs uppercase tracking-[0.25em] text-white/55 mb-4">tudo isso</p>
+        <p className="text-xs uppercase tracking-[0.25em] text-white/65 mb-4">tudo isso</p>
         <h2 className="font-display text-3xl md:text-5xl font-medium leading-[1.15] tracking-tight text-white">
           Por menos de <span className="italic">R$ 1,00</span> por dia.
         </h2>
@@ -39,7 +39,7 @@ const BenefitsGridV2 = () => (
             </div>
             <div>
               <h3 className="text-sm font-semibold text-white mb-1">{b.title}</h3>
-              <p className="text-xs text-white/60 leading-relaxed">{b.desc}</p>
+              <p className="text-xs text-white/70 leading-relaxed">{b.desc}</p>
             </div>
           </div>
         ))}
