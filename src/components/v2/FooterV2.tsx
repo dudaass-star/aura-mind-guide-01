@@ -25,7 +25,6 @@ const FooterV2 = () => (
           <p className="text-xs uppercase tracking-[0.2em] text-white/45 mb-3">AURA</p>
           <ul className="space-y-2 text-sm text-white/75">
             <li><a href="#como-funciona" className="hover:text-white">Como funciona</a></li>
-            <li><a href="#recursos" className="hover:text-white">Recursos</a></li>
             <li><a href="#depoimentos" className="hover:text-white">Depoimentos</a></li>
             <li><a href="#precos" className="hover:text-white">Planos</a></li>
             <li><Link to="/blog" className="hover:text-white">Blog</Link></li>
