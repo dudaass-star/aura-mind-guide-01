@@ -270,7 +270,7 @@ const CheckoutV2 = () => {
   };
 
   const inputCls =
-    "mt-1.5 bg-white/5 border-white/15 text-white placeholder:text-white/40 focus-visible:ring-1 focus-visible:ring-[hsl(140_18%_55%)]";
+    "mt-1.5 bg-white/5 border-white/15 text-white placeholder:text-white/55 focus-visible:ring-1 focus-visible:ring-[hsl(140_18%_55%)]";
 
   return (
     <>
@@ -302,7 +302,7 @@ const CheckoutV2 = () => {
           <div className="container mx-auto px-6 flex items-center justify-between">
             <Link
               to="/v2"
-              className="inline-flex items-center gap-2 text-white/60 hover:text-white transition-colors"
+              className="inline-flex items-center gap-2 text-white/70 hover:text-white transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
               <span className="text-sm">Voltar</span>
@@ -339,7 +339,7 @@ const CheckoutV2 = () => {
                   className={`flex-1 px-4 py-2 rounded-full text-sm font-medium transition-all ${
                     billingPeriod === "monthly"
                       ? "bg-[hsl(140_22%_45%)] text-white shadow-md"
-                      : "text-white/60 hover:text-white"
+                      : "text-white/70 hover:text-white"
                   }`}
                 >
                   Mensal
@@ -350,7 +350,7 @@ const CheckoutV2 = () => {
                   className={`flex-1 px-4 py-2 rounded-full text-sm font-medium transition-all flex items-center justify-center gap-2 ${
                     billingPeriod === "yearly"
                       ? "bg-[hsl(140_22%_45%)] text-white shadow-md"
-                      : "text-white/60 hover:text-white"
+                      : "text-white/70 hover:text-white"
                   }`}
                 >
                   Anual
@@ -400,7 +400,7 @@ const CheckoutV2 = () => {
                         />
                         <div className="min-w-0">
                           <p className="font-medium text-white">{plan.name}</p>
-                          <p className="text-xs text-white/55 truncate">
+                          <p className="text-xs text-white/65 truncate">
                             {plan.sessions > 0
                               ? `${plan.sessions} sessões/mês + chat ilimitado`
                               : "Chat ilimitado 24/7"}
@@ -411,7 +411,7 @@ const CheckoutV2 = () => {
                         <p className="font-display text-lg font-semibold text-[hsl(140_30%_72%)] whitespace-nowrap leading-tight">
                           R$ {plan.trialPrice}
                         </p>
-                        <p className="text-[11px] text-white/50 leading-tight">
+                        <p className="text-[11px] text-white/65 leading-tight">
                           depois R$ {price}/{period}
                         </p>
                       </div>
@@ -456,7 +456,7 @@ const CheckoutV2 = () => {
                     className={inputCls}
                     maxLength={15}
                   />
-                  <p className="text-[11px] text-white/45 mt-1">
+                  <p className="text-[11px] text-white/60 mt-1">
                     A AURA conversa com você por aqui
                   </p>
                 </div>
