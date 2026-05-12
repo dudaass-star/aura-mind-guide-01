@@ -119,6 +119,7 @@ const TermsOfService = () => {
 
       <Footer />
     </div>
+    </>
   );
 };
 
