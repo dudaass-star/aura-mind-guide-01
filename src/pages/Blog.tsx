@@ -41,6 +41,21 @@ const Blog = () => {
         />
         <meta property="og:type" content="website" />
         <meta property="og:url" content="https://olaaura.com.br/blog" />
+        <script type="application/ld+json">
+          {JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "Blog",
+            "name": "Blog AURA",
+            "url": "https://olaaura.com.br/blog",
+            "description": "Artigos sobre autoconhecimento emocional, ansiedade, meditação e bem-estar mental. Reflexões e práticas guiadas pela AURA.",
+            "publisher": {
+              "@type": "Organization",
+              "name": "Olá AURA",
+              "url": "https://olaaura.com.br"
+            },
+            "inLanguage": "pt-BR"
+          })}
+        </script>
       </Helmet>
 
       <Header />
