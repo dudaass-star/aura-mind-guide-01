@@ -6135,8 +6135,18 @@ ${_exampleTag}
     // nenhum cooldown/contagem de recusa é gravado.
     // ========================================================================
     if (assistantMessage.includes('[UPGRADE')) {
-      console.warn('🚫 Upsell tag detectada e descartada (Aura não vende):',
-        (assistantMessage.match(/\[UPGRADE[^\]]*\]/g) || []).join(' '));
+      const driftedTags = (assistantMessage.match(/\[UPGRADE[^\]]*\]/g) || []).join(' ');
+      console.warn('🚫 Upsell tag detectada e descartada (Aura não vende):', driftedTags);
+      // Log fire-and-forget para rastrear drift do LLM ao longo do tempo.
+      // Se aparecer com frequência, ajustar o prompt em "PLANOS — REGRA INVIOLÁVEL DE NÃO-VENDA".
+      try {
+        supabase.from('failed_message_log').insert({
+          user_id: profile.user_id,
+          function_name: 'aura-agent:upsell_tag_discarded',
+          content: driftedTags.slice(0, 500),
+          error: 'llm_drift_upsell_tag',
+        }).then(() => {}, () => {});
+      } catch (_e) { /* non-fatal */ }
       assistantMessage = assistantMessage
         .replace(/\[UPGRADE:[^\]]+\]/gi, '')
         .replace(/\[UPGRADE_REFUSED:[^\]]+\]/gi, '')
