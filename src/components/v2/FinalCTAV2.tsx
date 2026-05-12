@@ -12,7 +12,7 @@ const FinalCTAV2 = () => (
         </div>
 
         <div className="text-center md:text-left">
-          <p className="text-xs uppercase tracking-[0.25em] text-white/55 mb-3">lembre-se</p>
+          <p className="text-xs uppercase tracking-[0.25em] text-white/65 mb-3">lembre-se</p>
           <h2 className="font-display text-3xl md:text-4xl lg:text-5xl font-medium leading-[1.1] tracking-tight text-white">
             Você não precisa enfrentar
             <br className="hidden md:block" /> tudo <span className="italic text-gradient-sage">sozinho.</span>
@@ -28,7 +28,7 @@ const FinalCTAV2 = () => (
               Quero começar agora
             </Button>
           </Link>
-          <p className="text-xs text-white/55">7 dias por R$ 6,90 · Cancele quando quiser.</p>
+          <p className="text-xs text-white/65">7 dias por R$ 6,90 · Cancele quando quiser.</p>
         </div>
       </div>
     </div>
