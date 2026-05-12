@@ -6421,6 +6421,44 @@ ${_exampleTag}
             console.log(`🎯 [SESSION_PREARM] Reusando sessão existente ${existingNearby.id}`);
           }
         } else {
+        // Camada extra anti-duplicata: mesmo dia BRT (qualquer horário).
+        // Dois agendamentos no mesmo dia quase sempre são reformulação da Aura
+        // ou confusão de fuso (ex.: caso Carla MS↔BRT). Reagendamento legítimo
+        // usa [REAGENDAR_SESSAO], não [AGENDAR_SESSAO].
+        const brtOffsetMs = 3 * 60 * 60 * 1000; // BRT = UTC-3
+        const scheduledBrt = new Date(scheduledAt.getTime() - brtOffsetMs);
+        const dayStartBrt = new Date(Date.UTC(
+          scheduledBrt.getUTCFullYear(),
+          scheduledBrt.getUTCMonth(),
+          scheduledBrt.getUTCDate(),
+          0, 0, 0
+        ));
+        const dayStartUtc = new Date(dayStartBrt.getTime() + brtOffsetMs).toISOString();
+        const dayEndUtc = new Date(dayStartBrt.getTime() + brtOffsetMs + 24 * 60 * 60 * 1000).toISOString();
+        const { data: existingSameDay } = await supabase
+          .from('sessions')
+          .select('id, scheduled_at')
+          .eq('user_id', profile.user_id)
+          .in('status', ['scheduled', 'active'])
+          .gte('scheduled_at', dayStartUtc)
+          .lt('scheduled_at', dayEndUtc)
+          .limit(1)
+          .maybeSingle();
+
+        if (existingSameDay) {
+          console.warn(`⚠️ [AGENDAR_SESSAO] Sessão duplicada evitada (mesmo dia BRT) — já existe ${existingSameDay.id} em ${existingSameDay.scheduled_at}. Tentativa: ${scheduledAt.toISOString()}`);
+          // Log fire-and-forget em failed_message_log para visibilidade no admin
+          supabase.from('failed_message_log').insert({
+            user_id: profile.user_id,
+            kind: 'duplicate_schedule_blocked',
+            payload: {
+              reason: 'same_day_brt',
+              attempted_at: scheduledAt.toISOString(),
+              existing_id: existingSameDay.id,
+              existing_at: existingSameDay.scheduled_at,
+            },
+          }).then(() => {}, () => {});
+        } else {
         const { data: newSession, error: sessionError } = await supabase
           .from('sessions')
           .insert({
