@@ -1,39 +1,24 @@
-## Status da remoção dos CTAs de upsell
+## Plano: Alinhar FooterV2 com Footer V1
 
-Verifiquei o `aura-agent/index.ts` linha por linha e nas funções vizinhas (`instagram-agent`, `_shared`). Resultado:
+### Contexto
+O rodapé da V2 (`FooterV2`) tem um layout em grid de 4 colunas com seções "AURA", "Suporte" e "Siga a AURA". O rodapé da V1 (`Footer`) é centralizado e inclui trust badges e email de suporte mais proeminente. O objetivo é trazer os elementos/informações do V1 para o layout escuro da V2.
 
-### O que está OK ✅
-- **Prompt**: bloco "PLANOS — REGRA INVIOLÁVEL DE NÃO-VENDA" (linhas 2801-2811) está claro: proibido vender, proibido emitir `[UPGRADE:*]` / `[UPGRADE_REFUSED:*]`, e se o usuário perguntar → redireciona ao `/meu-espaco`.
-- **Cota Essencial esgotada** (linhas 5812-5825): só honestidade, sem upsell, redireciona ao painel.
-- **Sessões disponíveis** (linhas 5795-5810): bloqueia regressão para "peça upgrade".
-- **Pós-processamento** (linhas 6244-6257): se LLM driftar e emitir `[UPGRADE:*]`, a tag é descartada silenciosamente com `console.warn` — nenhum link de checkout é gerado.
-- **`stripAllInternalTags`** (linha 100): catch-all já remove `[UPGRADE:*]` mesmo se passar.
-- **`VALID_AURA_TAGS`** (linha 56): mantém `UPGRADE`/`UPGRADE_REFUSED` na whitelist apenas para evitar falso-positivo no log de "tags inventadas" — comportamento correto.
-- **Sem callers**: `processUpgradeTags` e `shouldSuggestUpgrade` não são mais chamados em lugar nenhum (`rg` confirmou).
-- **Outras funções**: `instagram-agent` e `_shared/*` não tem nenhuma referência a upsell/upgrade.
-- **Logs últimas 4h**: `failed_message_log` zerado — nada quebrou.
+### Alterações no FooterV2 (`src/components/v2/FooterV2.tsx`)
 
-### O que falta ajustar 🧹
+1. **Adicionar trust badges**
+   - Inserir os badges "Conforme LGPD" e "Dados criptografados" com ícones (`Shield`, `Lock`) antes do bloco de copyright.
+   - Adaptar cores para o tema escuro da V2: fundo sutil, texto branco, ícones em tom claro.
 
-**1. Código morto a remover** (`aura-agent/index.ts`):
-- `processUpgradeTags` (linhas 3926-4009) — definida mas nunca chamada.
-- `createShortLink` (linhas 3894-3924) — usada **só** dentro de `processUpgradeTags`. Vira código morto também.
+2. **Tornar email de suporte mais visível**
+   - Adicionar o link `suporte@olaaura.com.br` como elemento separado e destacado, igual ao V1.
 
-Remover ambas em um único patch. Risco zero (sem callers).
+3. **Manter estrutura de links do V1 dentro do layout V2**
+   - Garantir que os links principais do V1 (Blog, Termos, Privacidade, Cancelar) estejam presentes.
+   - Blog atualmente só aparece no header do V2, não no footer — adicionar no footer.
 
-**2. Atualizar o log de descarte** (opcional, linhas 6250-6257):
-- Adicionar insert fire-and-forget em `failed_message_log` com `function_name='aura-agent:upsell_tag_discarded'` para termos rastreabilidade dos drifts do LLM (hoje só `console.warn`). Útil para medir se o prompt está segurando.
+4. **Preservar visual escuro da V2**
+   - Manter `v2-dark-section`, bordas `border-white/10`, textos em tons de branco (`text-white/75`, `text-white/55`).
+   - Logo continua com `brightness-0 invert`.
 
-### Validação pós-mudança
-- Rodar testes Deno (`phase_thresholds_test.ts`).
-- Deploy do `aura-agent`.
-- Monitorar `failed_message_log` por 24h em busca de:
-  - `function_name='aura-agent:upsell_tag_discarded'` (drift do LLM)
-  - qualquer `error` novo apontando para `processUpgradeTags`/`createShortLink` (não deve aparecer).
-
-### Arquivos afetados
-- `supabase/functions/aura-agent/index.ts` (1 patch: deletar 2 funções mortas + opcionalmente adicionar insert de log)
-
-### Fora de escopo
-- Re-revisar o prompt de venda — já está coerente.
-- Mexer em checkout, Stripe, ou landing — nada disso era CTA da Aura.
+### Resultado esperado
+Rodapé da V2 mantém o layout escuro, mas passa a ter as mesmas informações e elementos de confiança do rodapé da V1 (trust badges, email visível, links equivalentes).

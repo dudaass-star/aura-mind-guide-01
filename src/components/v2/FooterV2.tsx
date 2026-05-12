@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { Shield, Lock } from "lucide-react";
 import logoOlaAura from "@/assets/logo-ola-aura.png";
 
 const FooterV2 = () => (
@@ -12,6 +13,12 @@ const FooterV2 = () => (
           <p className="text-xs text-white/55 max-w-[220px]">
             Acompanhamento emocional inteligente no WhatsApp.
           </p>
+          <a
+            href="mailto:suporte@olaaura.com.br"
+            className="inline-block mt-3 text-sm text-white hover:text-white/80 transition-colors"
+          >
+            suporte@olaaura.com.br
+          </a>
         </div>
 
         <div>
@@ -21,6 +28,7 @@ const FooterV2 = () => (
             <li><a href="#recursos" className="hover:text-white">Recursos</a></li>
             <li><a href="#depoimentos" className="hover:text-white">Depoimentos</a></li>
             <li><a href="#precos" className="hover:text-white">Planos</a></li>
+            <li><Link to="/blog" className="hover:text-white">Blog</Link></li>
           </ul>
         </div>
 
@@ -40,6 +48,18 @@ const FooterV2 = () => (
             <li><a href="https://instagram.com/olaaura.app" target="_blank" rel="noreferrer" className="hover:text-white">Instagram</a></li>
             <li><Link to="/cancelar" className="hover:text-white">Cancelar assinatura</Link></li>
           </ul>
+        </div>
+      </div>
+
+      {/* Trust badges - mesmo conteúdo da V1, adaptado ao tema escuro */}
+      <div className="flex flex-wrap justify-center gap-4 mb-8">
+        <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-sm text-white/85">
+          <Shield className="w-4 h-4 text-white/70" />
+          <span>Conforme LGPD</span>
+        </div>
+        <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-sm text-white/85">
+          <Lock className="w-4 h-4 text-white/70" />
+          <span>Dados criptografados</span>
         </div>
       </div>
 
