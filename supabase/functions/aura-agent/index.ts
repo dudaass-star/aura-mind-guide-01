@@ -5792,12 +5792,6 @@ Exemplo natural:
 - Usuário interrompe com "mudando de assunto..." → Descarte completamente`;
     }
     
-    const upgradePermBlocked = (profile?.upgrade_refusal_count || 0) >= 3;
-    const shouldSuggestUpgrade = userPlan === 'essencial' && planConfig.dailyMessageTarget > 0 && messagesToday > planConfig.dailyMessageTarget && !upgradePermBlocked;
-    if (shouldSuggestUpgrade) {
-      dynamicContext += `\n\n⚠️ INSTRUÇÃO ESPECIAL: O usuário já mandou ${messagesToday} mensagens hoje. Sugira naturalmente o upgrade para o plano Direção no final da sua resposta. IMPORTANTE: No plano Direção e Transformação, o usuário pode mandar mensagens o quanto quiser, sem limite. NÃO diga "limite maior" — diga que pode falar o quanto quiser.`;
-    }
-
     // INSTRUÇÃO DE PRIORIDADE DE PLANO (evita conflito com histórico)
     // Se o usuário tem sessões disponíveis, garantir que a IA não peça upgrade
     if (planConfig.sessions > 0 && sessionsAvailable > 0) {
@@ -5815,8 +5809,8 @@ REGRAS ABSOLUTAS:
 Se o usuário mencionar algo sobre "finalizar checkout" ou "upgrade", CONFIRME que ele já está no plano certo e ofereça ajuda para agendar a primeira sessão.`;
     }
 
-    // Essencial esgotou a sessão do mês → instrução de upsell suave (Direção/Transformação)
-    if (userPlan === 'essencial' && planConfig.sessions > 0 && sessionsAvailable === 0 && !upgradePermBlocked) {
+    // Essencial esgotou a sessão do mês → apenas honestidade, SEM upsell
+    if (userPlan === 'essencial' && planConfig.sessions > 0 && sessionsAvailable === 0) {
       dynamicContext += `
 
 ⚠️ COTA DE SESSÃO DO MÊS ESGOTADA (PLANO ESSENCIAL):
@@ -5825,9 +5819,9 @@ O usuário já usou a sessão do mês incluída no plano Essencial. NÃO emita [
 SE ele pedir nova sessão / mais sessões agora:
 1. Reconheça com cuidado o desejo dele de ir mais fundo ("faz sentido você querer mais um espaço desses").
 2. Explique de forma honesta e curta: o Essencial inclui 1 sessão por mês, e a próxima abre no início do mês que vem.
-3. Ofereça naturalmente (sem pressão) o upgrade pra **Direção (4 sessões/mês)** ou **Transformação (8 sessões/mês)** como caminho pra ter mais sessões agora.
-4. Termine com pergunta aberta ("quer que eu te mande o link pra fazer o upgrade?"). NÃO mande link sem ele pedir.
-5. Respeite a regra de cooldown de upgrade — se ele recusar, não insista nessa conversa.`;
+3. NÃO ofereça upgrade. NÃO mencione outros planos. NÃO sugira "ter mais sessões agora".
+4. Volte o foco da conversa para o que ele tá vivendo agora — você ainda pode acolher por mensagem mesmo sem sessão formal.
+5. Se ele perguntar diretamente sobre planos, apenas direcione: "Você consegue ver suas opções no seu painel: https://olaaura.com.br/meu-espaco".`;
     }
 
     // ========================================================================
