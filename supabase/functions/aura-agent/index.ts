@@ -6242,36 +6242,18 @@ ${_exampleTag}
     }
 
     // ========================================================================
-    // PROCESSAR TAGS DE UPGRADE (gerar links de checkout)
+    // TAGS DE UPGRADE — DESATIVADAS (Aura nunca faz upsell)
+    // Se o LLM driftar e emitir [UPGRADE:*] ou [UPGRADE_REFUSED:*], apenas
+    // removemos a tag silenciosamente. Nenhum link de checkout é gerado,
+    // nenhum cooldown/contagem de recusa é gravado.
     // ========================================================================
-    const userPhone = profile?.phone || phone || '';
-    const userName = profile?.name || '';
-    
-    if (userPhone && assistantMessage.includes('[UPGRADE:')) {
-      assistantMessage = await processUpgradeTags(assistantMessage, userPhone, userName);
-      // Registrar que CTA de upgrade foi enviado — ativa cooldown
-      if (profile?.id) {
-        await supabase.from('profiles')
-          .update({ upgrade_suggested_at: new Date().toISOString() })
-          .eq('id', profile.id);
-        console.log('📊 upgrade_suggested_at updated — cooldown ativado');
-      }
-    }
-
-    // Processar tag de recusa de upgrade [UPGRADE_REFUSED:financial|timing|no_response]
-    const refusedMatch = assistantMessage.match(/\[UPGRADE_REFUSED:(financial|timing|no_response)\]/i);
-    if (refusedMatch && profile?.id) {
-      const refusalType = refusedMatch[1].toLowerCase();
-      assistantMessage = assistantMessage.replace(/\[UPGRADE_REFUSED:[^\]]+\]/gi, '').trim();
-      const newCount = (profile?.upgrade_refusal_count || 0) + 1;
-      await supabase.from('profiles')
-        .update({
-          upgrade_refusal_type: refusalType,
-          upgrade_refusal_count: newCount,
-          upgrade_suggested_at: new Date().toISOString(),
-        })
-        .eq('id', profile.id);
-      console.log(`📊 Upgrade refused — type=${refusalType}, count=${newCount}/3`);
+    if (assistantMessage.includes('[UPGRADE')) {
+      console.warn('🚫 Upsell tag detectada e descartada (Aura não vende):',
+        (assistantMessage.match(/\[UPGRADE[^\]]*\]/g) || []).join(' '));
+      assistantMessage = assistantMessage
+        .replace(/\[UPGRADE:[^\]]+\]/gi, '')
+        .replace(/\[UPGRADE_REFUSED:[^\]]+\]/gi, '')
+        .trim();
     }
 
     // ========================================================================
