@@ -35,7 +35,12 @@ const IndexV2 = () => {
           content="Acompanhamento emocional no WhatsApp. Converse, desabafe e organize seus pensamentos a qualquer hora. 7 dias por R$ 6,90."
         />
         <meta name="robots" content="noindex, nofollow" />
-        <link rel="canonical" href="https://olaaura.com.br" />
+        <link rel="canonical" href="https://olaaura.com.br/v2" />
+        <meta property="og:url" content="https://olaaura.com.br/v2" />
+        <meta property="og:title" content="Olá AURA — Presente quando sua mente precisa" />
+        <meta property="og:description" content="Acompanhamento emocional no WhatsApp. Converse, desabafe e organize seus pensamentos a qualquer hora. 7 dias por R$ 6,90." />
+        <meta property="og:type" content="website" />
+      </Helmet>
         <script type="application/ld+json">
           {JSON.stringify({
             "@context": "https://schema.org",
