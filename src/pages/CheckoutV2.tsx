@@ -281,6 +281,10 @@ const CheckoutV2 = () => {
           content="Finalize sua assinatura da AURA e comece sua jornada de evolução emocional."
         />
         <link rel="canonical" href="https://olaaura.com.br/v2/checkout" />
+        <meta property="og:url" content="https://olaaura.com.br/v2/checkout" />
+        <meta property="og:title" content="Checkout - AURA" />
+        <meta property="og:description" content="Finalize sua assinatura da AURA e comece sua jornada de evolução emocional." />
+        <meta property="og:type" content="website" />
       </Helmet>
 
       <div className="v2-theme min-h-screen bg-[hsl(220_35%_8%)] text-white">

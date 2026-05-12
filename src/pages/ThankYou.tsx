@@ -45,6 +45,10 @@ const ThankYou = () => {
       <Helmet>
         <title>Bem-vindo à AURA!</title>
         <meta name="description" content="Sua assinatura foi confirmada. Comece sua jornada de evolução emocional agora." />
+        <meta property="og:url" content="https://olaaura.com.br/obrigado" />
+        <meta property="og:title" content="Bem-vindo à AURA!" />
+        <meta property="og:description" content="Sua assinatura foi confirmada. Comece sua jornada de evolução emocional agora." />
+        <meta property="og:type" content="website" />
       </Helmet>
 
       <div className="min-h-screen bg-gradient-hero flex items-center justify-center p-4">

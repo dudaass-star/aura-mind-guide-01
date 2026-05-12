@@ -40,7 +40,11 @@ const UserGuide = () => {
         <meta
           name="description"
           content="Guia completo de como usar a AURA: conversas, sessões, jornadas, meditações e mais." />
-        
+        <link rel="canonical" href="https://olaaura.com.br/guia" />
+        <meta property="og:url" content="https://olaaura.com.br/guia" />
+        <meta property="og:title" content="Guia da AURA — Como Aproveitar ao Máximo" />
+        <meta property="og:description" content="Guia completo de como usar a AURA: conversas, sessões, jornadas, meditações e mais." />
+        <meta property="og:type" content="website" />
       </Helmet>
 
       <div className="min-h-screen bg-background font-body">

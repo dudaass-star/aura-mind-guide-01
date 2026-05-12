@@ -277,6 +277,11 @@ const Checkout = () => {
       <Helmet>
         <title>Checkout - AURA</title>
         <meta name="description" content="Finalize sua assinatura da AURA e comece sua jornada de evolução emocional." />
+        <link rel="canonical" href="https://olaaura.com.br/checkout" />
+        <meta property="og:url" content="https://olaaura.com.br/checkout" />
+        <meta property="og:title" content="Checkout - AURA" />
+        <meta property="og:description" content="Finalize sua assinatura da AURA e comece sua jornada de evolução emocional." />
+        <meta property="og:type" content="website" />
       </Helmet>
 
       <div className="min-h-screen bg-gradient-hero">

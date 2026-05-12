@@ -1,136 +1,125 @@
 <!doctype html>
-<html lang="en">
+<html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AURA — Acompanhamento Emocional via WhatsApp</title>
-    <meta name="description" content="Acompanhe sua saúde emocional com a AURA, uma mentora de IA acessível via WhatsApp, 24h, com memória de longo prazo e metodologia baseada em Logoterapia.">
-    <meta name="author" content="Lovable" />
+    <meta name="description" content="Acompanhe sua saúde emocional com a AURA, uma mentora de IA acessível via WhatsApp, 24h, com memória de longo prazo e metodologia baseada em Logoterapia." />
+    <meta name="author" content="Olá AURA" />
 
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/aura-app-icon.png" />
 
     <link rel="canonical" href="https://olaaura.com.br/" />
+
     <meta property="og:type" content="website" />
-    <meta property="og:image" content="https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/de9440c4-6914-44af-80d9-c5e0d84cc020/id-preview-d26ef3ab--a534aec4-6141-4bea-8ef0-2c1bd0914adb.lovable.app-1777322306507.png">
+    <meta property="og:url" content="https://olaaura.com.br/" />
+    <meta property="og:title" content="AURA — Acompanhamento Emocional via WhatsApp" />
+    <meta property="og:description" content="Acompanhe sua saúde emocional com a AURA, uma mentora de IA acessível via WhatsApp, 24h, com memória de longo prazo e metodologia baseada em Logoterapia." />
+    <meta property="og:image" content="https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/de9440c4-6914-44af-80d9-c5e0d84cc020/id-preview-d26ef3ab--a534aec4-6141-4bea-8ef0-2c1bd0914adb.lovable.app-1777322306507.png" />
 
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:site" content="@Lovable" />
-    <meta name="twitter:image" content="https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/de9440c4-6914-44af-80d9-c5e0d84cc020/id-preview-d26ef3ab--a534aec4-6141-4bea-8ef0-2c1bd0914adb.lovable.app-1777322306507.png">
+    <meta name="twitter:site" content="@olaaura.app" />
+    <meta name="twitter:url" content="https://olaaura.com.br/" />
+    <meta name="twitter:title" content="AURA — Acompanhamento Emocional via WhatsApp" />
+    <meta name="twitter:description" content="Acompanhe sua saúde emocional com a AURA, uma mentora de IA acessível via WhatsApp, 24h, com memória de longo prazo e metodologia baseada em Logoterapia." />
+    <meta name="twitter:image" content="https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/de9440c4-6914-44af-80d9-c5e0d84cc020/id-preview-d26ef3ab--a534aec4-6141-4bea-8ef0-2c1bd0914adb.lovable.app-1777322306507.png" />
 
-  <!-- Meta Pixel Code — only on marketing routes -->
-  <script>
-    (function(){
-      var marketingRoutes = ['/', '/checkout', '/obrigado', '/experimentar', '/trial-iniciado'];
-      var path = window.location.pathname;
-      if (marketingRoutes.indexOf(path) === -1) return;
-
-      !function(f,b,e,v,n,t,s)
-      {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-      n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-      if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-      n.queue=[];t=b.createElement(e);t.async=!0;
-      t.src=v;s=b.getElementsByTagName(e)[0];
-      s.parentNode.insertBefore(t,s)}(window, document,'script',
-      'https://connect.facebook.net/en_US/fbevents.js');
-      fbq('init', '939366085297921');
-      if (path !== '/obrigado') {
-        fbq('track', 'PageView');
-      }
-    })();
-  </script>
-  <noscript><img height="1" width="1" style="display:none"
-    src="https://www.facebook.com/tr?id=939366085297921&ev=PageView&noscript=1"
-  /></noscript>
-  <!-- End Meta Pixel Code -->
-
-  <!-- Google Analytics 4 — only on marketing routes -->
-  <script>
-    (function(){
-      var marketingRoutes = ['/', '/checkout', '/obrigado', '/experimentar', '/trial-iniciado'];
-      var path = window.location.pathname;
-      if (marketingRoutes.indexOf(path) === -1) return;
-
-      var GA4_ID = 'G-2G7T7SJWBK';
-      var s = document.createElement('script');
-      s.async = true;
-      s.src = 'https://www.googletagmanager.com/gtag/js?id=' + GA4_ID;
-      document.head.appendChild(s);
-
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){ window.dataLayer.push(arguments); }
-      window.gtag = gtag;
-      gtag('js', new Date());
-      // send_page_view: false — page_view is dispatched by the React Router hook
-      gtag('config', GA4_ID, { send_page_view: false });
-    })();
-  </script>
-  <!-- End GA4 -->
-
-  <!-- Microsoft Clarity — only on marketing routes -->
-  <script>
-    (function(){
-      var marketingRoutes = ['/', '/v2', '/checkout', '/obrigado', '/experimentar', '/trial-iniciado'];
-      var path = window.location.pathname;
-      if (marketingRoutes.indexOf(path) === -1) return;
-
-      (function(c,l,a,r,i,t,y){
-        c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
-        t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
-        y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
-      })(window, document, "clarity", "script", "won81djogh");
-    })();
-  </script>
-  <!-- End Microsoft Clarity -->
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  <meta property="og:title" content="AURA — Acompanhamento Emocional via WhatsApp">
-  <meta name="twitter:title" content="AURA — Acompanhamento Emocional via WhatsApp">
-  <meta property="og:description" content="Acompanhe sua saúde emocional com a AURA, uma mentora de IA acessível via WhatsApp, 24h, com memória de longo prazo e metodologia baseada em Logoterapia.">
-
-  <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@graph": [
-        {
-          "@type": "Organization",
-          "@id": "https://olaaura.com.br/#organization",
-          "name": "Olá AURA",
-          "url": "https://olaaura.com.br",
-          "logo": {
-            "@type": "ImageObject",
-            "url": "https://olaaura.com.br/aura-app-icon.png",
-            "width": 512,
-            "height": 512
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Organization",
+            "@id": "https://olaaura.com.br/#organization",
+            "name": "Olá AURA",
+            "url": "https://olaaura.com.br",
+            "logo": {
+              "@type": "ImageObject",
+              "url": "https://olaaura.com.br/aura-app-icon.png",
+              "width": 512,
+              "height": 512
+            },
+            "sameAs": ["https://instagram.com/olaaura.app"],
+            "description": "Acompanhamento emocional acessível via WhatsApp, 24/7, com memória de longo prazo e metodologia baseada em Logoterapia."
           },
-          "sameAs": ["https://instagram.com/olaaura.app"],
-          "description": "Acompanhamento emocional acessível via WhatsApp, 24/7, com memória de longo prazo e metodologia baseada em Logoterapia."
-        },
-        {
-          "@type": "WebSite",
-          "@id": "https://olaaura.com.br/#website",
-          "url": "https://olaaura.com.br",
-          "name": "Olá AURA",
-          "publisher": { "@id": "https://olaaura.com.br/#organization" },
-          "inLanguage": "pt-BR"
+          {
+            "@type": "WebSite",
+            "@id": "https://olaaura.com.br/#website",
+            "url": "https://olaaura.com.br",
+            "name": "Olá AURA",
+            "publisher": { "@id": "https://olaaura.com.br/#organization" },
+            "inLanguage": "pt-BR"
+          }
+        ]
+      }
+    </script>
+
+    <!-- Meta Pixel Code — only on marketing routes -->
+    <script>
+      (function(){
+        var marketingRoutes = ['/', '/v2', '/checkout', '/v2/checkout', '/obrigado', '/experimentar', '/trial-iniciado'];
+        var path = window.location.pathname;
+        if (marketingRoutes.indexOf(path) === -1) return;
+
+        !function(f,b,e,v,n,t,s)
+        {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+        n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+        if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+        n.queue=[];t=b.createElement(e);t.async=!0;
+        t.src=v;s=b.getElementsByTagName(e)[0];
+        s.parentNode.insertBefore(t,s)}(window, document,'script',
+        'https://connect.facebook.net/en_US/fbevents.js');
+        fbq('init', '939366085297921');
+        if (path !== '/obrigado') {
+          fbq('track', 'PageView');
         }
-      ]
-    }
-  </script>
-  <meta name="twitter:description" content="Acompanhe sua saúde emocional com a AURA, uma mentora de IA acessível via WhatsApp, 24h, com memória de longo prazo e metodologia baseada em Logoterapia.">
-</head>
+      })();
+    </script>
+    <noscript><img height="1" width="1" style="display:none"
+      src="https://www.facebook.com/tr?id=939366085297921&ev=PageView&noscript=1"
+    /></noscript>
+    <!-- End Meta Pixel Code -->
+
+    <!-- Google Analytics 4 — only on marketing routes -->
+    <script>
+      (function(){
+        var marketingRoutes = ['/', '/v2', '/checkout', '/v2/checkout', '/obrigado', '/experimentar', '/trial-iniciado'];
+        var path = window.location.pathname;
+        if (marketingRoutes.indexOf(path) === -1) return;
+
+        var GA4_ID = 'G-2G7T7SJWBK';
+        var s = document.createElement('script');
+        s.async = true;
+        s.src = 'https://www.googletagmanager.com/gtag/js?id=' + GA4_ID;
+        document.head.appendChild(s);
+
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){ window.dataLayer.push(arguments); }
+        window.gtag = gtag;
+        gtag('js', new Date());
+        gtag('config', GA4_ID, { send_page_view: false });
+      })();
+    </script>
+    <!-- End GA4 -->
+
+    <!-- Microsoft Clarity — only on marketing routes -->
+    <script>
+      (function(){
+        var marketingRoutes = ['/', '/v2', '/checkout', '/v2/checkout', '/obrigado', '/experimentar', '/trial-iniciado'];
+        var path = window.location.pathname;
+        if (marketingRoutes.indexOf(path) === -1) return;
+
+        (function(c,l,a,r,i,t,y){
+          c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+          t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+          y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+        })(window, document, "clarity", "script", "won81djogh");
+      })();
+    </script>
+    <!-- End Microsoft Clarity -->
+  </head>
 
   <body>
     <div id="root"></div>
