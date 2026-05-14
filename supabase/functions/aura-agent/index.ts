@@ -6894,8 +6894,29 @@ ${_exampleTag}
             }
           })
           .catch((err: any) => console.error('⚠️ session-extractor invoke falhou:', err));
+
+        // Após o extractor, dispara session-reminder IMEDIATAMENTE para enviar
+        // resumo + rating enquanto o usuário ainda está com o WhatsApp aberto.
+        // Aguarda ~8s pra dar tempo do extractor persistir summary/insights/commitments.
+        // O cron de session-reminder (a cada 5min) continua como fallback caso falhe.
+        const ratingPromise = extractorPromise
+          .then(() => new Promise((r) => setTimeout(r, 8000)))
+          .then(() =>
+            supabase.functions.invoke('session-reminder', {
+              body: { trigger: 'post_session_immediate', session_id: sessionIdToExtract },
+            }),
+          )
+          .then((res: any) => {
+            if (res?.error) {
+              console.error('⚠️ session-reminder (post-session) erro:', res.error);
+            } else {
+              console.log('📨 session-reminder disparado imediatamente para', sessionIdToExtract);
+            }
+          })
+          .catch((err: any) => console.error('⚠️ session-reminder (post-session) falhou:', err));
+
         try {
-          (globalThis as any).EdgeRuntime.waitUntil(extractorPromise);
+          (globalThis as any).EdgeRuntime.waitUntil(ratingPromise);
         } catch {
           // waitUntil indisponível: deixa rodar fire-and-forget
         }
