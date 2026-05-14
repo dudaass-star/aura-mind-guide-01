@@ -26,7 +26,7 @@ const HowItWorksV2 = () => (
           simples como mandar uma mensagem · profundo como uma sessão de verdade
         </p>
         <h2 className="font-display text-3xl md:text-5xl font-medium leading-[1.15] tracking-tight text-foreground">
-          Como funciona a <span className="italic">AURA</span>
+          Como funciona a <span className="text-gradient-sage">Aura</span>
         </h2>
       </div>
 
