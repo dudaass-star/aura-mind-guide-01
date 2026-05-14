@@ -60,6 +60,22 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // Fast-path: invocação imediata pelo aura-agent logo após despedida.
+    // Body: { trigger: 'post_session_immediate', session_id: '<uuid>' }
+    // Pula o filtro de "5 min de carência" e processa SÓ a sessão indicada.
+    let immediateSessionId: string | null = null;
+    if (req.method === 'POST') {
+      try {
+        const body = await req.json().catch(() => null);
+        if (body?.trigger === 'post_session_immediate' && typeof body.session_id === 'string') {
+          immediateSessionId = body.session_id;
+          console.log(`⚡ Fast-path post-session imediato para sessão ${immediateSessionId}`);
+        }
+      } catch {
+        // body opcional — segue scan normal
+      }
+    }
+
     const now = new Date();
     const brtHour = getBrtHour();
     const isQuietHours = brtHour < 8 || brtHour >= 22;
@@ -578,17 +594,22 @@ Se quiser remarcar uma nova sessão, é só me dizer!`;
     // Isso evita disparos tardios em sessões antigas (ex: legado sem rating_requested marcado,
     // ou sessões reabertas/migradas) que poderiam gerar mensagem "do nada" no WhatsApp.
     const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000);
-    // Filtramos por rating_requested=false (não por post_session_sent),
-    // porque o aura-agent agora envia o resumo imediatamente e marca
-    // post_session_sent=true. O envio do rating "1 a 5" continua sendo
-    // responsabilidade do session-reminder, 5 min após o término.
-    const { data: completedSessions, error: errorCompleted } = await supabase
+    // Filtramos por rating_requested=false (não por post_session_sent).
+    // No fast-path (immediateSessionId), filtra só pela sessão alvo, sem carência de 5min,
+    // para entregar resumo+rating enquanto a usuária ainda está com o WhatsApp aberto.
+    let completedQuery = supabase
       .from('sessions')
       .select(`id, user_id, session_summary, commitments, key_insights, ended_at, post_session_sent`)
       .eq('status', 'completed')
-      .eq('rating_requested', false)
-      .lte('ended_at', fiveMinutesAgo.toISOString())
-      .gte('ended_at', twoHoursAgo.toISOString());
+      .eq('rating_requested', false);
+    if (immediateSessionId) {
+      completedQuery = completedQuery.eq('id', immediateSessionId);
+    } else {
+      completedQuery = completedQuery
+        .lte('ended_at', fiveMinutesAgo.toISOString())
+        .gte('ended_at', twoHoursAgo.toISOString());
+    }
+    const { data: completedSessions, error: errorCompleted } = await completedQuery;
 
     if (errorCompleted) {
       console.error('❌ Error fetching completed sessions:', errorCompleted);
