@@ -35,5 +35,11 @@ O prompt do convite D0 exige explicitamente que a Aura termine a resposta com `[
 - A flag `pending_first_session_invite` NÃO é limpa quando o bloco é injetado. A limpeza ocorre só pós-resposta, em duas condições: (a) `[AGENDAR_SESSAO:` foi emitido pela Aura (aceite consumado) ou (b) `first_session_invite_attempts >= 3` (anti-loop, usuário desconversou).
 - Coluna `profiles.first_session_invite_attempts int default 0` controla o anti-loop. Incrementada a cada turno em que o bloco D0 é injetado.
 
+## Race do limpador (16/05/2026 — Lorena P Marques Chaves)
+- O guard `_looksLikeButtonClick` precisa existir nos DOIS pontos: **injetor** (linha ~5610) E **limpador pós-processamento** (linha ~6413, função `runD0Cleanup`).
+- Sem o guard no limpador, um turno paralelo do worker rodando com `message="Começar"` (clique de Quick Reply) não emite tag, cai na branch "sem tag = recusa branda", e zera `pending_first_session_invite` + ativa `needs_schedule_setup` ANTES da 1ª msg real do usuário.
+- Sintoma: trial novo entra e Aura responde a 1ª msg real com setup mensal ("plano X, N sessões/mês, me diz dia da semana") em vez do D0 binário (sessão 45 min agora).
+- Correção: na entrada do bloco `else if (typeof message === 'string')` do limpador, mesma regex `^(come[çc]ar|bora|sim|ok|acessar|ver|abrir|resumo|conte[úu]do|jornada)\.?!?$` com `length <= 12` — se casar, pula toda a limpeza e mantém flag armada.
+
 ## Arquivos
-- `supabase/functions/aura-agent/index.ts` — set flag (~5630), inject convite + clear (~5697)
+- `supabase/functions/aura-agent/index.ts` — set flag (~4182 fast-path / ~5519 LLM path), inject convite (~5610), pós-processamento de limpeza com guard de button click (~6413, `runD0Cleanup`).
