@@ -18,6 +18,17 @@ Commits do Lovable em `supabase/functions/**` **podem não disparar** automatica
 - Se houver suspeita de drift: usar `supabase--deploy_edge_functions(["aura-agent"])` para republicar manualmente.
 - O workflow agora aceita `workflow_dispatch` — pode ser disparado manualmente também.
 
+### Sintoma diagnóstico — D0 não disparado
+
+Quando o injetor D0 está fora do deploy, 100% dos novos usuários ficam com `profiles.first_session_invite_attempts = 0` mesmo depois de mandarem mensagens reais — porque o counter é incrementado **antes** da chamada ao LLM (linhas 5615-5619). Query rápida:
+```sql
+select name, created_at, pending_first_session_invite, first_session_invite_attempts
+from profiles
+where created_at > now() - interval '24 hours'
+order by created_at desc;
+```
+Se vários perfis recentes têm `attempts=0` com `pending=false`, é drift confirmado. Caso 16/05/2026: ALAN, Andressa, Herony e Fernanda criados no mesmo dia, todos com `attempts=0`. Redeploy do `aura-agent` resolveu.
+
 ## Padrão obrigatório: try/catch em fallbacks opcionais
 
 Qualquer bloco dentro do `aura-agent` que seja **opcional** (fallback de meditação, fallback de tag, recuperação de erro de extractor, etc.) deve estar isolado em `try/catch` próprio com `console.warn` — nunca pode derrubar a resposta principal da Aura.

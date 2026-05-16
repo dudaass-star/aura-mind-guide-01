@@ -1,57 +1,72 @@
-## Problema
+## Diagnóstico final
 
-O agente do Instagram (`instagram-agent`) hoje:
-1. Cita abertamente "Logoterapia, Estoicismo, Investigação Socrática" como base. Você não quer expor a metodologia interna em rede social.
-2. Tem instrução genérica para "críticas sobre IA" — não está blindado para denúncias do tipo "isso é terapia por IA / exercício ilegal da psicologia".
+### Evidência dura no banco
+
+Os 4 perfis novos têm `first_session_invite_attempts = 0`. Esse contador é incrementado **toda vez que o injetor D0 entra** (linhas 5615-5619 de `aura-agent/index.ts`). Zero significa que **o injetor nunca rodou em produção** — nem para o ALAN (msg real "Me sentindo vazio"), nem para Andressa, nem para Herony.
+
+### Evidência nos logs
+
+Nenhuma ocorrência de `D0`, `pending_first_session_invite`, `AGENDAR_SESSAO` ou `SAFETY_NET` nos logs recentes do `aura-agent`, apesar de a função estar processando mensagens normalmente (logs de POST-ANALYSIS, micro-agent e split estão aparecendo).
+
+### Evidência nas conversas
+
+O "convite" que Aura mandou para Andressa e Herony **não é o convite D0 binário** definido no prompt atual (linha 5631). Comparação:
+
+- Prompt D0 atual: "UMA pergunta binária + se aceitar, 1 frase + `[AGENDAR_SESSAO:agora]`"
+- O que a Aura mandou (Herony): "Bora começar? Se você tiver uns 45 minutinhos livres, a gente já pode abrir nossa primeira sessão agora mesmo. Topa?" + na aceitação seguiu pro setup mensal sem tag
+
+Esse formato corresponde a uma versão **anterior** do prompt, onde o convite à 1ª sessão era misturado ao setup mensal e não tinha contrato de tag.
+
+### Hipótese principal
+
+**Drift de deploy Lovable → produção** (memory `mem://technical/ai/aura-agent-deployment-and-fallback-safety`). O código no repositório contém:
+- Injetor D0 binário (linhas 5593-5657)
+- Limpador com guard de button click (linhas 6414-6430, comentário "Bug Lorena 16/05/2026")
+- Detector de recusa determinístico (linhas 6388-6583)
+
+Mas o deploy ativo no Supabase não contém essa lógica. Por isso o fluxo cai no setup mensal direto e nenhuma sessão D0 é criada.
 
 ## Plano
 
-Editar `supabase/functions/instagram-agent/index.ts`. Duas mudanças, sem mexer em mais nada (webhook, classificação de sentimento, envio Graph API, etc. ficam iguais).
+### 1. Confirmar o drift (rápido, antes de qualquer fix)
 
-### 1. Remover menção a métodos no conteúdo público
+Disparar um teste sintético em `aura-agent` via `curl_edge_functions` simulando um user com `pending_first_session_invite=true` e mensagem real. Se os logs do teste **não** mostrarem `🎯 Injetando convite à 1ª sessão (D0)`, drift confirmado.
 
-- Em `AURA_KNOWLEDGE_BASE`, remover a linha "Baseada em Logoterapia, Estoicismo e Investigação Socrática".
-- Substituir por descrição neutra: "metodologia própria de autoconhecimento e direção prática, com base em abordagens consagradas de desenvolvimento humano" (sem nomear escolas).
-- Em `COMMENT_SYSTEM_PROMPT` (bloco "CRÍTICAS sobre IA"), remover a citação explícita das 3 metodologias. Trocar por "metodologia própria validada".
-- Adicionar regra dura no topo dos dois prompts: **"NUNCA nomeie escolas, autores ou correntes (Logoterapia, Frankl, Estoicismo, Sócrates, TCC, etc.). Fale só em 'metodologia própria' / 'abordagem de autoconhecimento'."**
+### 2. Forçar redeploy do aura-agent
 
-### 2. Postura específica para denúncias de "terapia por IA"
+Usar `supabase--deploy_edge_functions` para `aura-agent`. Aguardar status `ACTIVE_HEALTHY`. Refazer o teste sintético — agora deve logar o injetor D0.
 
-Adicionar uma nova seção em ambos os prompts (COMMENT e DM), com prioridade sobre "CRÍTICAS sobre IA":
+### 3. Validar com 3 cenários sintéticos (sem afetar usuários reais)
 
-> **DENÚNCIAS / ACUSAÇÕES DE EXERCÍCIO DA PSICOLOGIA** (palavras-chave: "psicóloga", "psicólogo", "CRP", "exercício ilegal", "terapia", "psicoterapia", "diagnóstico", "tratamento", "CFP", "denunciar"):
-> - Tom: respeitoso, firme, sem defensividade.
-> - Reconhecer a preocupação como legítima.
-> - Esclarecer com clareza que a Aura **não** realiza atividades privativas do psicólogo, citando expressamente:
->   - não faz **diagnóstico** de transtornos mentais,
->   - não oferece **psicoterapia** nem **tratamento** clínico,
->   - não emite **laudos, pareceres ou avaliações psicológicas**,
->   - não **prescreve** condutas terapêuticas.
-> - Posicionar a Aura como: ferramenta de **autoconhecimento, organização de pensamentos e direção prática para o dia a dia**, complementar — nunca substituta — ao trabalho de psicólogo(a) ou psiquiatra.
-> - Em casos de sofrimento intenso, recomendar busca de profissional habilitado (psicólogo/psiquiatra, CVV 188).
-> - Comentário: 2-3 frases. DM: 3-5 frases. Sem emoji defensivo.
+Usar um user UUID de teste. Para cada caso, conferir log + banco:
 
-Exemplo de tom (referência interna, não copy fixo): *"Oi, entendemos a preocupação e ela é legítima. A Aura não faz diagnóstico, psicoterapia, laudos nem prescreve tratamento — atividades privativas de psicólogos. Somos uma ferramenta de autoconhecimento e organização de pensamentos, complementar (nunca substituta) ao trabalho clínico. Para quadros que pedem acompanhamento profissional, sempre orientamos buscar psicólogo(a) ou psiquiatra."*
+- **Aceite**: `pending_first_session_invite=true` + msg "estou triste" → resposta termina em `[AGENDAR_SESSAO:<agora>]` + sessão criada + flag limpa
+- **Recusa simples**: idem + msg "agora não dá" → resposta sem tag + flag limpa + `needs_schedule_setup=true`
+- **Recusa com horário**: idem + msg "amanhã 7h30" → flag limpa + sessão criada via regex (`created_by='backend_regex'`)
 
-### 3. Reforço cruzado
+### 4. Recuperar os 3 usuários afetados (ALAN, Andressa, Herony)
 
-Adicionar regra geral nos dois prompts: **"Sempre que falar do escopo, deixar claro que Aura ≠ terapia, ≠ tratamento de transtorno, ≠ diagnóstico. É autoconhecimento e direção prática."**
+Eles já configuraram setup mensal (4 sessões futuras cada). Não vamos rearmar D0 retroativamente — quebraria a continuidade do que já foi conversado. Apenas garantir que o estado deles está consistente:
 
-### Arquivos afetados
+- Conferir `needs_schedule_setup=false` (já está) e `pending_first_session_invite=false` (já está)
+- Não criar sessão D0 hoje para eles — passou muito tempo, qualquer agendamento "agora" seria invasivo
 
-- `supabase/functions/instagram-agent/index.ts` — só edição dos prompts e knowledge base.
+### 5. Fernanda Maion (caso à parte)
 
-### Fora de escopo
+Sem nenhuma mensagem do usuário, só recebeu um proativo. Verificar se ela está armada corretamente para o convite D0 ser disparado quando ela responder:
+- Esperado: `pending_first_session_invite=true`, `first_session_invite_attempts=0`
+- Atual: `pending_first_session_invite=false` — também queimada pelo bug. Rearmar manualmente (`pending_first_session_invite=true`) já que ela nunca interagiu, então o D0 ainda faz sentido.
 
-- Memória/registro de denúncias (se quiser depois, criamos tabela `instagram_safety_flags`).
-- Mudar modelo (continua `gemini-2.5-flash`).
-- Mexer no fluxo do `webhook-instagram`.
+### 6. Atualizar memória
 
-### Validação
+Adicionar nota em `mem://technical/ai/aura-agent-deployment-and-fallback-safety` documentando esse incidente do dia 16/05 (4 usuários novos com D0 não disparado) e o sintoma diagnóstico: `first_session_invite_attempts=0` em todos os perfis criados após X horas = drift do aura-agent.
 
-- Após deploy, testar via `curl_edge_functions` com 3 payloads:
-  1. "Vocês fazem terapia?" → deve responder com escopo claro, sem citar logoterapia.
-  2. "Isso é exercício ilegal da psicologia, vou denunciar no CRP" → deve disparar o bloco novo, citar não-diagnóstico/não-psicoterapia/não-laudo.
-  3. "Como funciona?" → deve descrever sem nomear métodos.
+## Detalhes técnicos
 
-Confirma e eu já implemento?
+**Por que `first_session_invite_attempts=0` é prova de drift**: o contador é incrementado **antes** de qualquer chamada ao LLM (linha 5618), num bloco `await supabase.update`. Mesmo se a Aura falhasse depois, o contador teria virado 1. Zero = bloco nunca entrou = código não está em produção.
+
+**Por que não é race do limpador**: o guard `_looksLikeButtonClickPost` (linhas 6421-6426) preserva a flag quando o turno é button click. Se ele estivesse rodando, a flag de Andressa/Herony estaria true até a 1ª msg real, e o counter teria incrementado. Counter=0 confirma que tanto o injetor quanto o limpador novos não estão ativos.
+
+**Risco do redeploy**: zero — o código atual já passou pela validação manual de hoje cedo (incidente Lorena). Drift é provavelmente o deploy via Lovable não ter propagado.
+
+**Alternativa se redeploy não resolver**: GitHub Actions deploy manual seguido de `failed_message_log` audit.
