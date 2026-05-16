@@ -88,6 +88,7 @@ export default function AdminUsers() {
   const [total, setTotal] = useState(0);
   const [periodFilter, setPeriodFilter] = useState<'all' | 'today' | '7d' | '30d'>('all');
   const [d0Filter, setD0Filter] = useState<'all' | D0Status>('all');
+  const [sortFilter, setSortFilter] = useState<'newest' | 'oldest' | 'last_contact' | 'highest_rating' | 'lowest_rating'>('newest');
 
   // Edit dialog
   const [editProfile, setEditProfile] = useState<Profile | null>(null);
@@ -102,15 +103,26 @@ export default function AdminUsers() {
 
   useEffect(() => {
     if (isAdmin) fetchProfiles();
-  }, [isAdmin, page, search, periodFilter, d0Filter]);
+  }, [isAdmin, page, search, periodFilter, d0Filter, sortFilter]);
 
   const fetchProfiles = async () => {
     setLoading(true);
     let query = supabase
       .from('profiles')
       .select('id, user_id, name, phone, email, plan, status, created_at, last_user_message_at, current_episode, current_journey_id, sessions_used_this_month, trial_phase, pending_first_session_invite, first_session_invite_attempts, needs_schedule_setup', { count: 'exact' })
-      .order('created_at', { ascending: false })
       .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+
+    // Ordenação server-side (rating é client-side após carregar a página)
+    if (sortFilter === 'newest') {
+      query = query.order('created_at', { ascending: false });
+    } else if (sortFilter === 'oldest') {
+      query = query.order('created_at', { ascending: true });
+    } else if (sortFilter === 'last_contact') {
+      query = query.order('last_user_message_at', { ascending: false, nullsFirst: false });
+    } else {
+      // highest_rating / lowest_rating: ordenação default por created_at desc, reordenado client-side
+      query = query.order('created_at', { ascending: false });
+    }
 
     if (search.trim()) {
       query = query.or(`name.ilike.%${search.trim()}%,phone.ilike.%${search.trim()}%,email.ilike.%${search.trim()}%`);
@@ -145,20 +157,36 @@ export default function AdminUsers() {
       setRatings({});
     } else {
       const list = (data || []) as Profile[];
-      setProfiles(list);
       setTotal(count || 0);
-      await fetchRatings(list.map(p => p.user_id));
+      const ratingsMap = await fetchRatings(list.map(p => p.user_id));
+      // Ordenação client-side por rating
+      let finalList = list;
+      if (sortFilter === 'highest_rating' || sortFilter === 'lowest_rating') {
+        const dir = sortFilter === 'highest_rating' ? -1 : 1;
+        finalList = [...list].sort((a, b) => {
+          const ra = ratingsMap[a.user_id]?.avg ?? -Infinity * dir;
+          const rb = ratingsMap[b.user_id]?.avg ?? -Infinity * dir;
+          // Sem rating sempre por último
+          const aHas = ratingsMap[a.user_id] !== undefined;
+          const bHas = ratingsMap[b.user_id] !== undefined;
+          if (aHas && !bHas) return -1;
+          if (!aHas && bHas) return 1;
+          if (!aHas && !bHas) return 0;
+          return (ra - rb) * dir;
+        });
+      }
+      setProfiles(finalList);
     }
     setLoading(false);
   };
 
-  const fetchRatings = async (userIds: string[]) => {
-    if (!userIds.length) { setRatings({}); return; }
+  const fetchRatings = async (userIds: string[]): Promise<Record<string, RatingAgg>> => {
+    if (!userIds.length) { setRatings({}); return {}; }
     const { data, error } = await supabase
       .from('session_ratings')
       .select('user_id, rating')
       .in('user_id', userIds);
-    if (error) { console.error('Error fetching ratings:', error); setRatings({}); return; }
+    if (error) { console.error('Error fetching ratings:', error); setRatings({}); return {}; }
     const agg: Record<string, { sum: number; count: number }> = {};
     (data || []).forEach((r: any) => {
       if (!agg[r.user_id]) agg[r.user_id] = { sum: 0, count: 0 };
@@ -170,6 +198,7 @@ export default function AdminUsers() {
       result[uid] = { avg: v.sum / v.count, count: v.count };
     });
     setRatings(result);
+    return result;
   };
 
   const openEdit = (p: Profile) => {
@@ -340,6 +369,16 @@ export default function AdminUsers() {
             <SelectItem value="tentando">D0: Tentando</SelectItem>
             <SelectItem value="recusado">D0: Recusou→Setup</SelectItem>
             <SelectItem value="concluido">D0: Concluído</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={sortFilter} onValueChange={(v: any) => { setSortFilter(v); setPage(0); }}>
+          <SelectTrigger className="w-[180px]"><SelectValue placeholder="Ordenar por" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="newest">Mais novos</SelectItem>
+            <SelectItem value="oldest">Mais antigos</SelectItem>
+            <SelectItem value="last_contact">Último contato</SelectItem>
+            <SelectItem value="highest_rating">Maior rating</SelectItem>
+            <SelectItem value="lowest_rating">Menor rating</SelectItem>
           </SelectContent>
         </Select>
       </div>
