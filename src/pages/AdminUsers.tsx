@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, Search, Pencil, RotateCcw, ChevronLeft, ChevronRight, Link, Copy, Check } from 'lucide-react';
+import { ArrowLeft, Search, Pencil, RotateCcw, ChevronLeft, ChevronRight, Link, Copy, Check, Star, RefreshCw } from 'lucide-react';
 
 interface Profile {
   id: string;
@@ -25,7 +25,12 @@ interface Profile {
   current_journey_id: string | null;
   sessions_used_this_month: number | null;
   trial_phase: string | null;
+  pending_first_session_invite: boolean | null;
+  first_session_invite_attempts: number | null;
+  needs_schedule_setup: boolean | null;
 }
+
+interface RatingAgg { avg: number; count: number; }
 
 const PAGE_SIZE = 20;
 
@@ -44,16 +49,45 @@ const planColors: Record<string, string> = {
   trial: 'bg-blue-100 text-blue-800 border-blue-200',
 };
 
+type D0Status = 'pendente' | 'tentando' | 'recusado' | 'concluido';
+
+function getD0Status(p: Profile): D0Status {
+  const pending = p.pending_first_session_invite;
+  const attempts = p.first_session_invite_attempts ?? 0;
+  const needsSetup = p.needs_schedule_setup;
+  if (pending && attempts === 0) return 'pendente';
+  if (pending && attempts >= 1) return 'tentando';
+  if (!pending && needsSetup) return 'recusado';
+  return 'concluido';
+}
+
+const d0Labels: Record<D0Status, string> = {
+  pendente: 'Pendente',
+  tentando: 'Tentando',
+  recusado: 'Recusou→Setup',
+  concluido: 'Concluído',
+};
+
+const d0Colors: Record<D0Status, string> = {
+  pendente: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+  tentando: 'bg-blue-100 text-blue-800 border-blue-200',
+  recusado: 'bg-orange-100 text-orange-800 border-orange-200',
+  concluido: 'bg-green-100 text-green-800 border-green-200',
+};
+
 export default function AdminUsers() {
   const { isLoading: authLoading, isAdmin, redirectIfNotAdmin } = useAdminAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [ratings, setRatings] = useState<Record<string, RatingAgg>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
   const [total, setTotal] = useState(0);
+  const [periodFilter, setPeriodFilter] = useState<'all' | 'today' | '7d' | '30d'>('all');
+  const [d0Filter, setD0Filter] = useState<'all' | D0Status>('all');
 
   // Edit dialog
   const [editProfile, setEditProfile] = useState<Profile | null>(null);
@@ -68,13 +102,13 @@ export default function AdminUsers() {
 
   useEffect(() => {
     if (isAdmin) fetchProfiles();
-  }, [isAdmin, page, search]);
+  }, [isAdmin, page, search, periodFilter, d0Filter]);
 
   const fetchProfiles = async () => {
     setLoading(true);
     let query = supabase
       .from('profiles')
-      .select('id, user_id, name, phone, email, plan, status, created_at, last_user_message_at, current_episode, current_journey_id, sessions_used_this_month, trial_phase', { count: 'exact' })
+      .select('id, user_id, name, phone, email, plan, status, created_at, last_user_message_at, current_episode, current_journey_id, sessions_used_this_month, trial_phase, pending_first_session_invite, first_session_invite_attempts, needs_schedule_setup', { count: 'exact' })
       .order('created_at', { ascending: false })
       .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
 
@@ -82,14 +116,60 @@ export default function AdminUsers() {
       query = query.or(`name.ilike.%${search.trim()}%,phone.ilike.%${search.trim()}%,email.ilike.%${search.trim()}%`);
     }
 
+    // Filtro por período (created_at)
+    if (periodFilter !== 'all') {
+      const now = new Date();
+      const cutoff = new Date(now);
+      if (periodFilter === 'today') cutoff.setHours(0, 0, 0, 0);
+      else if (periodFilter === '7d') cutoff.setDate(now.getDate() - 7);
+      else if (periodFilter === '30d') cutoff.setDate(now.getDate() - 30);
+      query = query.gte('created_at', cutoff.toISOString());
+    }
+
+    // Filtro por status D0
+    if (d0Filter === 'pendente') {
+      query = query.eq('pending_first_session_invite', true).eq('first_session_invite_attempts', 0);
+    } else if (d0Filter === 'tentando') {
+      query = query.eq('pending_first_session_invite', true).gte('first_session_invite_attempts', 1);
+    } else if (d0Filter === 'recusado') {
+      query = query.eq('pending_first_session_invite', false).eq('needs_schedule_setup', true);
+    } else if (d0Filter === 'concluido') {
+      query = query.eq('pending_first_session_invite', false).eq('needs_schedule_setup', false);
+    }
+
     const { data, count, error } = await query;
     if (error) {
       console.error('Error fetching profiles:', error);
+      setProfiles([]);
+      setTotal(0);
+      setRatings({});
     } else {
-      setProfiles(data || []);
+      const list = (data || []) as Profile[];
+      setProfiles(list);
       setTotal(count || 0);
+      await fetchRatings(list.map(p => p.user_id));
     }
     setLoading(false);
+  };
+
+  const fetchRatings = async (userIds: string[]) => {
+    if (!userIds.length) { setRatings({}); return; }
+    const { data, error } = await supabase
+      .from('session_ratings')
+      .select('user_id, rating')
+      .in('user_id', userIds);
+    if (error) { console.error('Error fetching ratings:', error); setRatings({}); return; }
+    const agg: Record<string, { sum: number; count: number }> = {};
+    (data || []).forEach((r: any) => {
+      if (!agg[r.user_id]) agg[r.user_id] = { sum: 0, count: 0 };
+      agg[r.user_id].sum += r.rating;
+      agg[r.user_id].count += 1;
+    });
+    const result: Record<string, RatingAgg> = {};
+    Object.entries(agg).forEach(([uid, v]) => {
+      result[uid] = { avg: v.sum / v.count, count: v.count };
+    });
+    setRatings(result);
   };
 
   const openEdit = (p: Profile) => {
@@ -191,6 +271,31 @@ export default function AdminUsers() {
     }
   };
 
+  const handleRearmD0 = async () => {
+    if (!editProfile) return;
+    setSaving(true);
+    try {
+      const { error } = await supabase.functions.invoke('admin-update-profile', {
+        body: {
+          profile_id: editProfile.id,
+          updates: {
+            pending_first_session_invite: true,
+            first_session_invite_attempts: 0,
+            needs_schedule_setup: false,
+          },
+        },
+      });
+      if (error) throw error;
+      toast({ title: 'D0 rearmado', description: 'O convite à 1ª sessão será disparado na próxima mensagem.' });
+      setEditProfile(null);
+      fetchProfiles();
+    } catch (err: any) {
+      toast({ title: 'Erro', description: err.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const fmt = (d: string | null) => d ? new Date(d).toLocaleDateString('pt-BR') : '—';
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
@@ -208,14 +313,35 @@ export default function AdminUsers() {
       </div>
 
       {/* Search */}
-      <div className="relative mb-4 max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Buscar por nome, telefone ou email..."
-          value={search}
-          onChange={(e) => { setSearch(e.target.value); setPage(0); }}
-          className="pl-10"
-        />
+      <div className="flex flex-wrap gap-3 mb-4 items-center">
+        <div className="relative flex-1 min-w-[240px] max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por nome, telefone ou email..."
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+            className="pl-10"
+          />
+        </div>
+        <Select value={periodFilter} onValueChange={(v: any) => { setPeriodFilter(v); setPage(0); }}>
+          <SelectTrigger className="w-[160px]"><SelectValue placeholder="Período" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos períodos</SelectItem>
+            <SelectItem value="today">Hoje</SelectItem>
+            <SelectItem value="7d">Últimos 7 dias</SelectItem>
+            <SelectItem value="30d">Últimos 30 dias</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={d0Filter} onValueChange={(v: any) => { setD0Filter(v); setPage(0); }}>
+          <SelectTrigger className="w-[180px]"><SelectValue placeholder="Status D0" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">D0: Todos</SelectItem>
+            <SelectItem value="pendente">D0: Pendente</SelectItem>
+            <SelectItem value="tentando">D0: Tentando</SelectItem>
+            <SelectItem value="recusado">D0: Recusou→Setup</SelectItem>
+            <SelectItem value="concluido">D0: Concluído</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Table */}
@@ -227,6 +353,8 @@ export default function AdminUsers() {
               <TableHead>Telefone</TableHead>
               <TableHead>Plano</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>D0</TableHead>
+              <TableHead>Rating</TableHead>
               <TableHead>Criado em</TableHead>
               <TableHead>Último contato</TableHead>
               <TableHead>Ações</TableHead>
@@ -234,10 +362,14 @@ export default function AdminUsers() {
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+              <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
             ) : profiles.length === 0 ? (
-              <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhum usuário encontrado</TableCell></TableRow>
-            ) : profiles.map((p) => (
+              <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Nenhum usuário encontrado</TableCell></TableRow>
+            ) : profiles.map((p) => {
+              const d0 = getD0Status(p);
+              const attempts = p.first_session_invite_attempts ?? 0;
+              const r = ratings[p.user_id];
+              return (
               <TableRow key={p.id}>
                 <TableCell className="font-medium">{p.name || '(sem nome)'}</TableCell>
                 <TableCell className="text-sm">{p.phone || '—'}</TableCell>
@@ -251,6 +383,20 @@ export default function AdminUsers() {
                     {p.status || '—'}
                   </Badge>
                 </TableCell>
+                <TableCell>
+                  <Badge variant="outline" className={d0Colors[d0]}>
+                    {d0Labels[d0]}{d0 === 'tentando' ? ` ${attempts}x` : ''}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-sm whitespace-nowrap">
+                  {r ? (
+                    <span className="inline-flex items-center gap-1">
+                      <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                      {r.avg.toFixed(1)}
+                      <span className="text-muted-foreground">({r.count})</span>
+                    </span>
+                  ) : '—'}
+                </TableCell>
                 <TableCell className="text-sm">{fmt(p.created_at)}</TableCell>
                 <TableCell className="text-sm">{fmt(p.last_user_message_at)}</TableCell>
                 <TableCell>
@@ -259,7 +405,8 @@ export default function AdminUsers() {
                   </Button>
                 </TableCell>
               </TableRow>
-            ))}
+              );
+            })}
           </TableBody>
         </Table>
       </div>
@@ -293,6 +440,17 @@ export default function AdminUsers() {
                 <p>Episódio atual: {editProfile.current_episode ?? 0} | Jornada: {editProfile.current_journey_id || '—'}</p>
                 <p>Sessões usadas: {editProfile.sessions_used_this_month ?? 0}</p>
                 <p>Fase trial: {editProfile.trial_phase || '—'}</p>
+                <p>
+                  D0: <span className="font-medium text-foreground">{d0Labels[getD0Status(editProfile)]}</span>
+                  {' '}· tentativas: {editProfile.first_session_invite_attempts ?? 0}
+                  {' '}· pending: {String(editProfile.pending_first_session_invite ?? false)}
+                  {' '}· setup: {String(editProfile.needs_schedule_setup ?? false)}
+                </p>
+                <p>
+                  Rating médio: {ratings[editProfile.user_id]
+                    ? `${ratings[editProfile.user_id].avg.toFixed(2)} ⭐ em ${ratings[editProfile.user_id].count} sessões`
+                    : '—'}
+                </p>
               </div>
 
               <div className="space-y-3">
@@ -338,6 +496,12 @@ export default function AdminUsers() {
               <Button variant="outline" size="sm" className="w-full" onClick={handleResetSessions} disabled={saving}>
                 <RotateCcw className="h-4 w-4 mr-2" /> Resetar sessões do mês
               </Button>
+
+              {getD0Status(editProfile) !== 'pendente' && (editProfile.first_session_invite_attempts ?? 0) < 3 && (
+                <Button variant="outline" size="sm" className="w-full" onClick={handleRearmD0} disabled={saving}>
+                  <RefreshCw className="h-4 w-4 mr-2" /> Rearmar convite D0
+                </Button>
+              )}
 
               <Button variant="outline" size="sm" className="w-full" onClick={handleCopyPortalLink} disabled={portalLinkLoading}>
                 {portalLinkCopied ? <Check className="h-4 w-4 mr-2 text-green-600" /> : <Link className="h-4 w-4 mr-2" />}
