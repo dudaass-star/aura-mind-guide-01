@@ -6580,6 +6580,7 @@ ${_exampleTag}
             console.warn('⚠️ [D0_REFUSAL] erro ao enviar confirmação:', sendErr);
           }
         }
+        } // fim runD0Cleanup
       }
     }
 
