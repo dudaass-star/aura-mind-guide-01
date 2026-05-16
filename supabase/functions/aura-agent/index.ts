@@ -6411,6 +6411,23 @@ ${_exampleTag}
           console.warn('⚠️ Falha ao limpar pending_first_session_invite (aceite):', clearErr);
         }
       } else if (typeof message === 'string') {
+        // GUARD: turnos de clique de botão ("Começar", "Bora", "Sim"...) NÃO devem
+        // queimar a flag. Eles podem rodar em paralelo ao fast-path do WELCOME
+        // (race do Twilio) e o injetor D0 já os ignora — o limpador precisa
+        // ignorar também, senão o convite D0 nunca chega na 1ª msg real.
+        // (Bug Lorena P Marques Chaves, 16/05/2026 — mesmo padrão do bug
+        //  Anderson Costa 08/05/2026 que foi corrigido só no injetor.)
+        const _msgNormPost = String(message || '').trim().toLowerCase();
+        const _looksLikeButtonClickPost =
+          _msgNormPost.length > 0 &&
+          _msgNormPost.length <= 12 &&
+          /^(come[çc]ar|bora|sim|ok|acessar|ver|abrir|resumo|conte[úu]do|jornada)\.?!?$/i.test(_msgNormPost);
+        if (_looksLikeButtonClickPost) {
+          console.log(`🎯 D0: turno é button click ("${_msgNormPost}") — mantendo pending_first_session_invite=true para próxima msg real`);
+          // pula toda a lógica de recusa/limpeza; flag continua armada
+          return;
+        }
+
         // Sem tag → tratar como recusa branda (binário)
         const _refusalRegex = /\b(n[ãa]o|agora\s*n[ãa]o|depois|outra\s*hora|amanh[ãa]|prefiro|mais\s*tarde|n[ãa]o\s*posso|n[ãa]o\s*d[áa]|hoje\s*n[ãa]o|talvez)\b/i;
         const _isRefusal = _refusalRegex.test(message);
