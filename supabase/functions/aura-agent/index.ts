@@ -6425,9 +6425,14 @@ ${_exampleTag}
         if (_looksLikeButtonClickPost) {
           console.log(`🎯 D0: turno é button click ("${_msgNormPost}") — mantendo pending_first_session_invite=true para próxima msg real`);
           // pula toda a lógica de recusa/limpeza; flag continua armada
-          return;
+        } else {
+          await runD0Cleanup();
         }
 
+        // Função interna agrupa toda a lógica original de recusa/captura/limpeza
+        // (mantida em IIFE async para preservar o escopo de variáveis sem refatoração ampla).
+        // eslint-disable-next-line no-inner-declarations
+        async function runD0Cleanup(): Promise<void> {
         // Sem tag → tratar como recusa branda (binário)
         const _refusalRegex = /\b(n[ãa]o|agora\s*n[ãa]o|depois|outra\s*hora|amanh[ãa]|prefiro|mais\s*tarde|n[ãa]o\s*posso|n[ãa]o\s*d[áa]|hoje\s*n[ãa]o|talvez)\b/i;
         const _isRefusal = _refusalRegex.test(message);
