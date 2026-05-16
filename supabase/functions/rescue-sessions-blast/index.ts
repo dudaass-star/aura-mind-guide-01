@@ -121,8 +121,9 @@ Deno.serve(async (req) => {
               details.push({ user_id: user.user_id, ok: false, error: result.error });
               await supabase.from("failed_message_log").insert({
                 user_id: user.user_id,
-                error_message: `rescue-sessions-blast: ${result.error}`,
-                context: "rescue-sessions-blast",
+                phone: user.phone,
+                error: result.error,
+                function_name: "rescue-sessions-blast",
               }).catch(() => {});
             }
           } catch (err) {
