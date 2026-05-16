@@ -1,10 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { cleanPhoneNumber } from "../_shared/zapi-client.ts";
 import { sendProactive } from "../_shared/whatsapp-provider.ts";
-import {
-  groupByInstance,
-  antiBurstDelayForInstance,
-} from "../_shared/instance-helper.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -88,53 +84,54 @@ Deno.serve(async (req) => {
 
     console.log(`🚑 rescue-sessions-blast: ${targets.length} alvos`);
 
-    const groups = groupByInstance(targets as any);
     let sent = 0;
     let errors = 0;
     const details: Array<{ user_id: string; ok: boolean; error?: string }> = [];
 
-    await Promise.all(
-      Array.from(groups.entries()).map(async ([instanceKey, users]) => {
-        for (const user of users) {
-          try {
-            await antiBurstDelayForInstance(instanceKey);
-            const cleanPhone = cleanPhoneNumber(user.phone);
-            const nome = user.name?.split(" ")[0] || "Ei";
-            // Texto de fallback caso janela 24h esteja aberta (sai como free text)
-            const fallback = `Oi, ${nome}! Tudo bem? Tava pensando em te chamar pra a gente alinhar sua próxima sessão. Bora marcar? 💜`;
-            const result = await sendProactive(cleanPhone, fallback, "checkin", user.user_id);
+    // Twilio (API oficial) aceita rajada — sem anti-burst.
+    // Disparamos em paralelo controlado (lotes de 10 simultâneos).
+    const CONCURRENCY = 10;
+    const sendOne = async (user: any) => {
+      try {
+        const cleanPhone = cleanPhoneNumber(user.phone);
+        const nome = user.name?.split(" ")[0] || "Ei";
+        const fallback = `Oi, ${nome}! Tudo bem? Tava pensando em te chamar pra a gente alinhar sua próxima sessão. Bora marcar? 💜`;
+        const result = await sendProactive(cleanPhone, fallback, "checkin", user.user_id);
 
-            if (result.success) {
-              await supabase
-                .from("profiles")
-                .update({ last_reactivation_sent: new Date().toISOString() })
-                .eq("user_id", user.user_id);
-              await supabase.from("messages").insert({
-                user_id: user.user_id,
-                role: "assistant",
-                content: fallback,
-              });
-              sent++;
-              details.push({ user_id: user.user_id, ok: true });
-            } else {
-              errors++;
-              details.push({ user_id: user.user_id, ok: false, error: result.error });
-              await supabase.from("failed_message_log").insert({
-                user_id: user.user_id,
-                phone: user.phone,
-                error: result.error,
-                function_name: "rescue-sessions-blast",
-              }).catch(() => {});
-            }
-          } catch (err) {
-            errors++;
-            const msg = err instanceof Error ? err.message : String(err);
-            details.push({ user_id: user.user_id, ok: false, error: msg });
-            console.error(`❌ user ${user.user_id}:`, msg);
-          }
+        if (result.success) {
+          await supabase
+            .from("profiles")
+            .update({ last_reactivation_sent: new Date().toISOString() })
+            .eq("user_id", user.user_id);
+          await supabase.from("messages").insert({
+            user_id: user.user_id,
+            role: "assistant",
+            content: fallback,
+          });
+          sent++;
+          details.push({ user_id: user.user_id, ok: true });
+        } else {
+          errors++;
+          details.push({ user_id: user.user_id, ok: false, error: result.error });
+          await supabase.from("failed_message_log").insert({
+            user_id: user.user_id,
+            phone: user.phone,
+            error: result.error,
+            function_name: "rescue-sessions-blast",
+          }).catch(() => {});
         }
-      }),
-    );
+      } catch (err) {
+        errors++;
+        const msg = err instanceof Error ? err.message : String(err);
+        details.push({ user_id: user.user_id, ok: false, error: msg });
+        console.error(`❌ user ${user.user_id}:`, msg);
+      }
+    };
+
+    for (let i = 0; i < targets.length; i += CONCURRENCY) {
+      const batch = targets.slice(i, i + CONCURRENCY);
+      await Promise.all(batch.map(sendOne));
+    }
 
     console.log(`🏁 rescue-sessions-blast: ${sent} enviados, ${errors} erros`);
 
