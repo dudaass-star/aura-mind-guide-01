@@ -1,6 +1,6 @@
 import { Helmet } from "react-helmet-async";
 import { useLocation, Link } from "react-router-dom";
-import { CheckCircle, Smartphone, Sparkles, MessageSquare, BarChart3 } from "lucide-react";
+import { CheckCircle, Smartphone, Sparkles, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
 
@@ -92,19 +92,6 @@ const ThankYou = () => {
             <p className="text-muted-foreground/70 text-center text-sm flex items-center justify-center gap-1.5">
               <BarChart3 className="w-4 h-4 inline-block" />
               Você também receberá o link do seu <strong>painel pessoal</strong> — onde poderá acompanhar jornadas, meditações e resumos mensais.
-            </p>
-          </div>
-
-          {/* WhatsApp CTA */}
-          <div className="mt-6 animate-fade-up delay-250">
-            <a href="https://wa.me/16625255005?text=Oi%20AURA" target="_blank" rel="noopener noreferrer">
-              <Button variant="whatsapp" size="lg" className="gap-2 w-full sm:w-auto">
-                <MessageSquare className="w-5 h-5" />
-                Chamar a AURA no WhatsApp
-              </Button>
-            </a>
-            <p className="text-xs text-muted-foreground mt-2">
-              Ou, se preferir, toque aqui para iniciar a conversa agora mesmo.
             </p>
           </div>
 
