@@ -1,47 +1,31 @@
-## Diagnóstico
+## Objetivo
+Reabrir contato com a Débora Dias (`5581994070448`) usando template aprovado, já que a janela de 24h está fechada desde 10/mai.
 
-Encontrei três pontos importantes sobre a usuária **Débora Dias**:
+## Template a usar
+`cheking_7dias` — é o único check-in proativo aprovado no Twilio (per memória `approved-template-sids`). Usa Quick Reply, então quando ela clicar/responder reabre a janela de 24h e a Aura volta a operar normalmente via texto livre.
 
-1. **Não há mensagens dela chegando no backend desde 10/05 às 21:39 BRT**
-   - O histórico da conversa e a tabela de deduplicação só têm mensagens até esse horário.
-   - Desde o dia 16, o que aparece são tickets de suporte por e-mail reclamando que a Aura não responde.
-   - Isso indica que, desde então, as mensagens dela no WhatsApp não estão chegando ao webhook da Aura, ou ela está falando com outro número/canal.
+## Passos
 
-2. **Ela pagou normalmente**
-   - Encontrei cliente no Stripe com assinatura **active**.
-   - Há pagamento bem-sucedido de **R$ 29,90** e assinatura ativa.
-   - Portanto, não é inadimplência nem cartão recusado.
+1. **Buscar ContentSid do template `cheking_7dias`**
+   - Query em `whatsapp_templates` para pegar o `content_sid` exato.
 
-3. **O perfil interno dela ficou dessincronizado**
-   - No backend, o perfil ainda está como `status: trial`, com `converted_at` vazio e sem `plan_expires_at`.
-   - Isso não explica sozinho o silêncio, porque `trial` não está bloqueado no fluxo atual, mas é um bug de consistência importante: ela pagou e o perfil deveria estar ativo.
+2. **Disparar via `sendProactive`** (função interna que respeita governança Twilio)
+   - Destinatário: `5581994070448`
+   - Template: `cheking_7dias`
+   - Variável `{{1}}`: primeiro nome (`Débora`)
+   - Registrar em `proactive_messages_log` para auditoria.
 
-Também observei que a instância de WhatsApp registrada como **Aura #1** está aparecendo como desconectada nos health checks recentes. Isso pode afetar envio/recebimento dependendo de qual rota está sendo usada para essa usuária.
+3. **Monitorar entrega**
+   - Checar `edge_function_logs` do `send-proactive` por status Twilio (queued/sent/delivered).
+   - Se Twilio retornar erro (número inválido, opt-out, etc.), reportar imediatamente — isso confirma se o problema é no número/canal dela ou no nosso lado.
+   - Se entregar com sucesso e ela responder, a janela reabre e podemos responder o ticket de suporte com texto livre.
 
-## Plano de correção
-
-1. **Sincronizar o perfil da Débora com a assinatura real**
-   - Atualizar o perfil interno dela para refletir assinatura ativa.
-   - Registrar `converted_at` e uma expiração coerente com o ciclo pago.
-   - Manter plano `essencial`.
-
-2. **Normalizar/conferir telefone**
-   - Checkout está com `81994070448`.
-   - Perfil está com `558194070448`, sem o nono dígito.
-   - A busca atual tolera variações, mas para reduzir risco eu alinharia o cadastro ao formato completo: `5581994070448`.
-
-3. **Checar rota de WhatsApp antes de enviar resposta manual**
-   - Confirmar se a instância/canal oficial está conectado.
-   - Se estiver desconectado, reconectar antes de prometer retorno para a usuária.
-
-4. **Depois da correção, testar com uma mensagem controlada**
-   - Enviar uma mensagem curta para o número dela pelo canal oficial.
-   - Verificar se aparece no histórico e se a Aura consegue responder.
-
-5. **Responder o ticket de suporte**
-   - Explicar que o pagamento está reconhecido, que houve falha de ativação/rota e que foi corrigido.
-   - Se necessário, oferecer compensação proporcional pelo período em que ficou sem atendimento.
+4. **Plano B se template falhar na entrega**
+   - Erro `63016` (fora da janela sem template): impossível, estamos usando template.
+   - Erro `21610` (opt-out): ela bloqueou; precisa enviar STAR/UNSTOP manualmente — responder via email do ticket.
+   - Erro `63003` (channel not found): número errado/inativo no WhatsApp — confirmar com ela via email do ticket qual número usa.
 
 ## Observação
+Não vamos enviar nenhuma mensagem de "teste" em texto livre. Apenas o template aprovado, que é seguro e dentro da política Meta/Twilio.
 
-Ainda não fiz alteração nenhuma; apenas investiguei. A correção envolve ajuste de dados do perfil e validação do canal de WhatsApp.
+Confirma que disparo o `cheking_7dias` para ela agora?
