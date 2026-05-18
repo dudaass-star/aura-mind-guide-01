@@ -4234,6 +4234,79 @@ serve(async (req) => {
       sessionsAvailable = Math.max(0, planConfig.sessions - sessionsUsed);
     }
 
+    // ========================================================================
+    // D0 — ACEITE DETERMINÍSTICO (backend-driven, sem depender de tag do LLM)
+    // ------------------------------------------------------------------------
+    // Contexto: o injetor D0 (linha ~5610) pede para a Aura fazer 1 pergunta
+    // binária ("topa abrir a sessão agora?"). O contrato esperava que o LLM
+    // emitisse [AGENDAR_SESSAO] no aceite — mas isso falha quando o usuário
+    // responde com mensagem curta ("Sim", "Bora", "Ok"):
+    //   - o injetor é PULADO no turno seguinte (mensagem parece button click);
+    //   - o LLM responde acolhendo mas sem emitir tag;
+    //   - a próxima mensagem do usuário (longa) cai no cleanup como recusa,
+    //     queima a flag e libera setup mensal — sessão D0 nunca acontece.
+    // (Caso Ernestina/Cacia 18/05/2026.)
+    //
+    // Solução: se a flag D0 já foi armada E a Aura já fez o convite ao menos
+    // 1 vez (first_session_invite_attempts >= 1) E a mensagem atual é um
+    // aceite curto, criamos a sessão D0 ANTES de chamar o LLM. A detecção de
+    // sessão logo abaixo pega o current_session_id e ativa o modo "sessão".
+    // ========================================================================
+    if (
+      profile?.pending_first_session_invite &&
+      profile?.user_id &&
+      !profile?.current_session_id &&
+      ((profile as any)?.first_session_invite_attempts ?? 0) >= 1 &&
+      typeof message === 'string'
+    ) {
+      const _d0Msg = message.trim();
+      // Aceite curto: até 40 chars e bate com palavra de aceite no início
+      const _d0AcceptRegex = /^(sim|bora|vamos|vamo|ok|okay|fechado|combinado|topo|topa|partiu|claro|pode|pode\s+ser|pode\s+come[çc]ar|quero(?:\s+sim)?|simbora|t[áa]\s+bom|beleza|blz|vamos\s+l[áa]|to\s+pronta|t[ôo]\s+pronta|to\s+pronto|t[ôo]\s+pronto|come[çc]ar)\b/i;
+      if (_d0Msg.length > 0 && _d0Msg.length <= 40 && _d0AcceptRegex.test(_d0Msg)) {
+        console.log(`🎯 [D0_ACCEPT] Aceite determinístico detectado para user ${profile.user_id} (msg="${_d0Msg}")`);
+        try {
+          const _nowIso = new Date().toISOString();
+          const { data: newD0Session, error: d0Err } = await supabase
+            .from('sessions')
+            .insert({
+              user_id: profile.user_id,
+              scheduled_at: _nowIso,
+              started_at: _nowIso,
+              status: 'in_progress',
+              session_type: 'livre',
+              duration_minutes: 45,
+              created_by: 'backend_d0_accept',
+            })
+            .select()
+            .single();
+
+          if (newD0Session) {
+            await supabase
+              .from('profiles')
+              .update({
+                current_session_id: newD0Session.id,
+                sessions_used_this_month: (profile.sessions_used_this_month || 0) + 1,
+                pending_first_session_invite: false,
+                first_session_invite_attempts: 0,
+              })
+              .eq('id', profile.id);
+
+            // Atualiza objeto em memória para o resto do fluxo
+            (profile as any).current_session_id = newD0Session.id;
+            (profile as any).pending_first_session_invite = false;
+            (profile as any).first_session_invite_attempts = 0;
+            (profile as any).sessions_used_this_month = (profile.sessions_used_this_month || 0) + 1;
+            sessionsAvailable = Math.max(0, sessionsAvailable - 1);
+            console.log(`✅ [D0_ACCEPT] Sessão D0 criada e iniciada: ${newD0Session.id}`);
+          } else {
+            console.error('❌ [D0_ACCEPT] Falha ao criar sessão D0:', d0Err);
+          }
+        } catch (acceptErr) {
+          console.error('❌ [D0_ACCEPT] Exceção ao criar sessão D0:', acceptErr);
+        }
+      }
+    }
+
     // Verificar sessões agendadas pendentes (dentro de +/- 1 hora)
     let pendingScheduledSession = null;
     let recentMissedSession: any = null;
