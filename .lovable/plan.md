@@ -1,59 +1,96 @@
-# Investigação: ratings não estão chegando
+## Diagnóstico
 
-## O que já confirmei
+A investigação aponta que o problema não é mais corrida entre agenda mensal e D0. O problema atual é de máquina de estados do D0.
 
-Consultei o banco e logs:
+No caso Ernestina/Cacia:
 
-- **4 sessões concluídas** entre 16/05 e 17/05 marcadas com `rating_requested=true` e `post_session_sent=true`:
-  - `ef071ac2` Bárbara — encerrou 14:43 BRT
-  - `dc34a395` Hélia — encerrou 20:05 BRT (mas conversa continuou até 20:12)
-  - `6fac023a` Anderson — encerrou 19:40 BRT
-  - `46b01b49` Camila — encerrou 21:15 BRT ontem
-- **Zero respostas de rating** capturadas nessas 4 sessões.
-- A `pg_cron` (`session-reminder-check`, a cada 5 min) **executa normalmente** (72 sucessos em 6h via `cron.job_run_details`), e o aura-agent dispara um `session-reminder` imediato 8s após o extractor.
-- A flag `rating_requested=true` só é setada se `sendProactive` retornar `success: true` → Twilio recebeu e respondeu OK.
-- **Porém: o texto do rating NÃO é gravado em `public.messages`** (`sendProactive` não persiste). Por isso não consigo confirmar pelo banco o que efetivamente chegou no WhatsApp do usuário.
-- No log de uma das usuárias (Bárbara), só vejo a despedida ("Até terça! Aproveita…"), nenhuma mensagem subsequente — coerente com "mensagem foi enviada mas usuária não respondeu". Mas o mesmo padrão pra 4 usuárias seguidas é suspeito.
-- `failed_message_log` nas últimas 24h tem só 1 entrada não relacionada.
-- A categoria usada é `session_reminder`, cujo título proativo é `"Lembrete de sessão 🕐"` — provavelmente está prefixando a pergunta de rating com esse título, o que **engana o usuário** (parece lembrete de próxima sessão, não pedido de avaliação).
+- 00:41:43 BRT: usuária manda a primeira mensagem real depois do welcome.
+- 00:42:04 BRT: Aura pergunta se ela topa abrir a primeira sessão agora.
+- 00:42:28 BRT: usuária responde “Sim”.
+- Depois disso houve conversa longa com cara de sessão, mas:
+  - nenhuma sessão D0 foi criada/iniciada;
+  - `current_session_id` ficou vazio;
+  - não houve `started_at`, `ended_at`, `rating_requested`, `post_session_sent` nem extractor;
+  - só foram criadas as 4 sessões mensais de quarta-feira.
 
-## Hipóteses prováveis (em ordem)
+A falha está neste padrão do código:
 
-1. **A mensagem está saindo, mas com prefixo "Lembrete de sessão 🕐"** que confunde — usuária lê e descarta achando que é lembrete da próxima sessão.
-2. **Twilio aceita (200) mas não entrega** (instância/conta com algum throttle, número sem janela 24h aberta corretamente detectada, etc.). Não temos visibilidade hoje porque não persistimos nem o `messageId` retornado.
-3. **Regex de captura em `handleSessionRating` é estrita** (`/^([1-5])\b/` com até 40 chars). Respostas tipo "achei legal, daria uns 4" só pegam por `withContext`. Mensagens longas com nota no meio são descartadas.
-4. Hipótese menor: nas sessões em que o usuário continuou conversando depois do `ended_at` (caso Hélia), o aura-agent reabre o fluxo conversacional e a pergunta de rating se perde no meio das outras bolhas.
+1. O bloco D0 injeta a pergunta binária quando `pending_first_session_invite=true`.
+2. No fim do mesmo processamento, como a resposta da Aura ainda não contém `[AGENDAR_SESSAO]`, o cleanup trata isso como “não houve aceite”.
+3. Isso limpa `pending_first_session_invite` cedo demais.
+4. Quando a usuária responde “Sim”, o backend já não está mais em estado D0, então o LLM continua a conversa, mas nenhuma sessão é criada/iniciada.
 
-## Plano de ação
+Também há um segundo detalhe perigoso: respostas curtas como “Sim” e “Bora” são tratadas como possível clique de botão e podem ser ignoradas justamente quando são o aceite real do D0.
 
-### Passo 1 — Instrumentação mínima (sem mudar comportamento)
-- Em `session-reminder/index.ts`, no bloco de rating (linhas ~711–757):
-  - Persistir a `ratingMessage` em `public.messages` como `role='assistant'` quando `ratingResult.success`, para auditoria futura.
-  - Logar `ratingResult.messageId` (Twilio SID) e o `ratingResult.type` (`freetext` vs `template`) com o `session.id`.
-  - Em caso de `!ratingResult.success`, gravar em `failed_message_log` (`function_name='session-reminder/rating'`).
+## Plano de correção
 
-### Passo 2 — Corrigir prefixo confuso
-- Remover o título `"Lembrete de sessão 🕐"` apenas para o caso do rating. Duas opções:
-  - **(A) Preferida:** trocar a categoria do `sendProactive` do rating para `'checkin'` (título vazio) — o rating é dentro da janela 24h então sempre vai por `freetext` e não depende de template aprovado.
-  - (B) Alternativa: passar a mensagem já com o título correto e suprimir prefixo (precisaria adaptar `sendProactive`).
-- Aplico a opção A, mais cirúrgica.
+### 1. Separar os estados do D0
 
-### Passo 3 — Relaxar levemente a captura do rating
-- Em `process-webhook-message/handleSessionRating`, ampliar o limite de 40 chars para 80 e aceitar emojis de estrela (`⭐`) como contexto, ex.: `/(\b|⭐\s*)([1-5])\b/`. Mantém proteção contra falsos positivos exigindo que a sessão recente tenha `rating_requested=true`.
+Ajustar o fluxo para distinguir claramente:
 
-### Passo 4 — Validação end-to-end (sem código)
-- Após deploy, executar um envio manual de rating via teste pra uma sessão sandbox e conferir:
-  - linha em `messages` com a pergunta,
-  - SID Twilio nos logs,
-  - resposta "5" capturada corretamente em `session_ratings`.
-- Acompanhar próximas 24h. Se mesmo com prefixo corrigido + persistência continuar 0 respostas, partir pra investigação direta na Twilio Console pelos SIDs gravados.
+```text
+D0 pendente -> convite perguntado -> usuário aceitou -> sessão iniciada
+                         -> usuário recusou -> setup mensal liberado
+```
 
-## Memórias a atualizar
+Hoje o sistema mistura “acabei de perguntar” com “usuário recusou”.
 
-- `mem://features/sessions/scheduling-tag-contract` ou nova `mem://features/sessions/rating-flow` documentando que o rating é enviado como categoria `checkin` (sem prefixo) e que a mensagem é persistida em `messages` para auditoria.
+### 2. Não limpar D0 no turno em que a Aura apenas fez o convite
 
-## O que NÃO faço agora
+Quando o backend injeta o contexto “pergunte se topa abrir a primeira sessão agora”, ele deve manter `pending_first_session_invite=true` até a próxima mensagem do usuário.
 
-- Não troco a arquitetura `session-reminder` (cron + invocação imediata) — está funcionando.
-- Não mexo no aura-agent (envio do resumo imediato continua igual).
-- Não crio dashboard ainda; primeiro precisamos confiar nos dados.
+A limpeza só deve acontecer quando houver uma resposta real ao convite.
+
+### 3. Tratar “Sim”, “Bora”, “Ok”, “Pode ser” como aceite D0 quando vierem após o convite
+
+A regra de clique curto deve continuar existindo para não queimar o welcome, mas não pode bloquear aceite depois que a Aura já perguntou explicitamente pela sessão.
+
+Critério seguro:
+
+- Se a última resposta da Aura contém convite D0 (“topa abrir sua primeira sessão”, “45 minutos”, “agora mesmo”), então mensagens curtas como `sim`, `bora`, `ok`, `pode ser`, `vamos` são aceite real.
+
+### 4. Iniciar a sessão deterministicamente no aceite, sem depender do LLM emitir tag
+
+No aceite D0:
+
+- criar sessão D0 para agora;
+- marcar `status='in_progress'`;
+- preencher `started_at`;
+- setar `current_session_id` no perfil;
+- incrementar `sessions_used_this_month`;
+- limpar `pending_first_session_invite` e tentativas;
+- manter `needs_schedule_setup=false` nesse momento;
+- injetar contexto na resposta seguinte dizendo que a sessão terapêutica começou.
+
+Isso remove a dependência frágil de o modelo lembrar de emitir `[AGENDAR_SESSAO]`.
+
+### 5. Só liberar setup mensal após recusa real
+
+`needs_schedule_setup=true` só deve ser ativado se:
+
+- o convite D0 já foi perguntado;
+- a resposta do usuário for recusa ou não-agora;
+- não houve aceite nem criação de sessão imediata.
+
+Assim evitamos o mensal aparecer enquanto o D0 ainda está em aberto.
+
+### 6. Cobrir com testes de regressão
+
+Adicionar testes para estes cenários:
+
+- primeira mensagem real após welcome: Aura pergunta D0 e mantém estado ativo;
+- usuário responde “Sim”: sessão D0 inicia imediatamente;
+- usuário responde “Bora”: sessão D0 inicia imediatamente;
+- usuário responde “agora não”: D0 limpa e setup mensal fica disponível;
+- mensagem curta de botão antes do convite não queima D0;
+- agenda mensal não roda antes da resposta ao convite D0.
+
+### 7. Reparar o caso Ernestina separadamente
+
+Depois da correção, recomendo reparar esse caso manualmente:
+
+- criar retroativamente a sessão D0 concluída com base na janela real da conversa;
+- rodar o extractor para salvar resumo, temas, insights e compromissos;
+- decidir se enviaremos rating retroativo ou se apenas preservamos a memória para a sessão de quarta.
+
+Essa reparação é separada da correção do bug para não misturar dado histórico com regra de sistema.
