@@ -240,11 +240,14 @@ async function handleSessionRating(
   // Padrões aceitos: "5", "5!", "nota 4", "5 obrigada", "5/5", "dou 4"
   // Rejeita números soltos no meio de frases longas (>40 chars sem contexto de nota)
   let rating: number | null = null;
-  const standalone = lowerMessage.match(/^([1-5])\b/);
-  const withContext = lowerMessage.match(/\b(?:nota|dou|seria|acho|talvez|uns?)\s+([1-5])\b/);
-  const slashFormat = lowerMessage.match(/^([1-5])\s*\/\s*5\b/);
-  if (standalone && lowerMessage.length <= 40) rating = parseInt(standalone[1]);
+  // Aceita "5", "5 ⭐", "⭐ 5", "5/5", "nota 4", "dou 4 estrelas", etc.
+  const standalone = lowerMessage.match(/^[⭐\s]*([1-5])\b/);
+  const withContext = lowerMessage.match(/\b(?:nota|dou|seria|acho|talvez|uns?|daria|dei)\s+([1-5])\b/);
+  const slashFormat = lowerMessage.match(/^[⭐\s]*([1-5])\s*\/\s*5\b/);
+  const starSuffix = lowerMessage.match(/^([1-5])\s*⭐/);
+  if (standalone && lowerMessage.length <= 80) rating = parseInt(standalone[1]);
   else if (slashFormat) rating = parseInt(slashFormat[1]);
+  else if (starSuffix) rating = parseInt(starSuffix[1]);
   else if (withContext) rating = parseInt(withContext[1]);
   if (rating === null || rating < 1 || rating > 5) return { handled: false };
 

@@ -717,11 +717,27 @@ Me conta durante a semana como está seu progresso! Estou aqui por você. ✨`;
 
 (Só o número tá ótimo! Se quiser comentar o que mais gostou ou o que posso melhorar, adoraria ouvir 💜)`;
 
-            const ratingResult = await sendProactive(cleanPhone, ratingMessage, 'session_reminder', session.user_id);
-            
+            // Categoria 'checkin' = sem prefixo de título no free-text.
+            // Antes usávamos 'session_reminder' que prefixava "Lembrete de sessão 🕐",
+            // o que confundia a usuária (parecia lembrete da próxima sessão, não rating).
+            const ratingResult = await sendProactive(cleanPhone, ratingMessage, 'checkin', session.user_id);
+
             if (ratingResult.success) {
               ratingSuccess = true;
-              console.log(`✅ Rating request sent for session ${session.id}`);
+              console.log(`✅ Rating request sent for session ${session.id} (type=${ratingResult.type}, sid=${(ratingResult as any).messageId ?? 'n/a'})`);
+
+              // Persistir a pergunta de rating em `messages` para auditoria/traceability.
+              // sendProactive não grava em messages — sem isso ficamos cegos pra confirmar
+              // se a mensagem realmente saiu (já vimos casos de Twilio aceitar mas nada chegar).
+              try {
+                await supabase.from('messages').insert({
+                  user_id: session.user_id,
+                  role: 'assistant',
+                  content: ratingMessage,
+                });
+              } catch (persistErr) {
+                console.warn(`⚠️ Could not persist rating message for session ${session.id}:`, persistErr);
+              }
               
               // Agendar follow-up de 24h para compromissos
               const commitments = session.commitments || [];
@@ -741,6 +757,20 @@ Me conta durante a semana como está seu progresso! Estou aqui por você. ✨`;
                   });
                 }
                 console.log(`✅ Created ${commitments.length} commitment follow-ups for session ${session.id}`);
+              }
+            } else {
+              // Falha real: registra em failed_message_log pra investigação.
+              console.error(`❌ Rating send failed for session ${session.id}:`, ratingResult.error);
+              try {
+                await supabase.from('failed_message_log').insert({
+                  user_id: session.user_id,
+                  phone: cleanPhone,
+                  content: ratingMessage,
+                  error: ratingResult.error || 'unknown',
+                  function_name: 'session-reminder/rating',
+                });
+              } catch (logErr) {
+                console.warn(`⚠️ Could not log failed rating for session ${session.id}:`, logErr);
               }
             }
 
