@@ -351,7 +351,7 @@ const CheckoutV2 = () => {
                 <button
                   type="button"
                   onClick={handleResetCheckout}
-                  className="mt-3 text-xs text-white/60 hover:text-white/90 underline underline-offset-4 transition-colors"
+                  className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-white/25 bg-white/10 px-4 py-2 text-sm font-medium text-white hover:bg-white/20 hover:border-white/40 transition-colors"
                 >
                   ← Editar dados
                 </button>
