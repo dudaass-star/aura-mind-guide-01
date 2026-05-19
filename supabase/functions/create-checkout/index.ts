@@ -50,13 +50,13 @@ serve(async (req) => {
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
 
-    const { plan: requestedPlan, billing = "monthly", name, email, phone, trial, paymentMethod, fbp, fbc, gaClientId } = await req.json();
+    const { plan: requestedPlan, billing = "monthly", name, email, phone, trial, paymentMethod, fbp, fbc, gaClientId, embedded } = await req.json();
     
     const plan = requestedPlan;
     const billingOverride = billing;
     const isBoletoPayment = paymentMethod === "boleto" && billingOverride === "yearly";
     
-    logStep("Request received", { plan, billing: billingOverride, name, email, phone, trial: !!trial, paymentMethod, isBoleto: isBoletoPayment, hasFbp: !!fbp, hasFbc: !!fbc, hasGaClientId: !!gaClientId });
+    logStep("Request received", { plan, billing: billingOverride, name, email, phone, trial: !!trial, paymentMethod, isBoleto: isBoletoPayment, embedded: !!embedded, hasFbp: !!fbp, hasFbc: !!fbc, hasGaClientId: !!gaClientId });
 
     const PRICES = getPrices();
     
@@ -226,17 +226,24 @@ serve(async (req) => {
     
 
     // Build checkout session config
+    // Modo embedded: renderiza dentro da nossa página (Stripe Embedded Checkout),
+    // sem salto pro domínio checkout.stripe.com — resolve a quebra de confiança no momento do cartão.
     const sessionConfig: any = {
       customer: customerId,
       locale: "pt-BR",
-      success_url: `${origin}/obrigado?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}/checkout`,
       custom_text: {
         submit: {
           message: `"Eu estava cética, mas em 3 dias já senti que alguém finalmente me ouvia." — Ana C.`,
         },
       },
     };
+    if (embedded) {
+      sessionConfig.ui_mode = "embedded";
+      sessionConfig.return_url = `${origin}/obrigado?session_id={CHECKOUT_SESSION_ID}`;
+    } else {
+      sessionConfig.success_url = `${origin}/obrigado?session_id={CHECKOUT_SESSION_ID}`;
+      sessionConfig.cancel_url = `${origin}/checkout`;
+    }
 
     const planNames: Record<string, string> = { essencial: "Essencial", direcao: "Direção", transformacao: "Transformação" };
     const planDisplayName = planNames[plan] || plan;
@@ -399,7 +406,17 @@ serve(async (req) => {
       console.warn("⚠️ Failed to log checkout session (non-blocking):", dbErr);
     }
 
-    return new Response(JSON.stringify({ url: session.url }), {
+    // Para modo embedded devolvemos client_secret + chave publicável (pra montar <EmbeddedCheckoutProvider>).
+    // Para modo hospedado tradicional, mantemos o comportamento atual (url do Checkout Stripe).
+    const responseBody: Record<string, unknown> = embedded
+      ? {
+          clientSecret: (session as any).client_secret,
+          publishableKey: Deno.env.get("STRIPE_PUBLISHABLE_KEY") || null,
+          sessionId: session.id,
+        }
+      : { url: session.url };
+
+    return new Response(JSON.stringify(responseBody), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
     });

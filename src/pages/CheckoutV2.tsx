@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { ArrowLeft, CreditCard, Check, Shield, Lock, Gift } from "lucide-react";
 import { toast } from "sonner";
@@ -11,6 +11,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { trackBeginCheckout, trackAddPaymentInfo, trackExitIntent, getGaClientId } from "@/lib/ga4";
 import logoOlaAura from "@/assets/logo-ola-aura.png";
 import "@/styles/v2-theme.css";
+import { loadStripe, type Stripe as StripeJs } from "@stripe/stripe-js";
+import { EmbeddedCheckoutProvider, EmbeddedCheckout } from "@stripe/react-stripe-js";
 
 type PlanId = "essencial" | "direcao" | "transformacao";
 type BillingPeriod = "monthly" | "yearly";
@@ -79,6 +81,11 @@ const CheckoutV2 = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showExitPopup, setShowExitPopup] = useState(false);
   const [hasRedirected, setHasRedirected] = useState(false);
+  // Estado do checkout embedado: clientSecret + promise da Stripe.js carregada com a chave pública
+  // devolvida pela edge function. Quando setados, renderizamos <EmbeddedCheckout /> inline,
+  // sem salto pro domínio checkout.stripe.com.
+  const [embeddedClientSecret, setEmbeddedClientSecret] = useState<string | null>(null);
+  const [stripePromise, setStripePromise] = useState<Promise<StripeJs | null> | null>(null);
 
   // ViewContent + GA4 begin_checkout no mount
   useEffect(() => {
@@ -231,6 +238,7 @@ const CheckoutV2 = () => {
           plan: selectedPlan,
           billing: billingPeriod,
           trial: true,
+          embedded: true,
           name: name.trim(),
           email: email.trim(),
           phone: phone,
@@ -242,24 +250,21 @@ const CheckoutV2 = () => {
 
       if (error) throw new Error(error.message || "Erro ao processar pagamento");
 
-      if (data?.url) {
-        const checkoutUrl = data.url as string;
+      if (data?.clientSecret && data?.publishableKey) {
+        // Persistimos os dados pra resgate caso o usuário recarregue durante o pagamento.
         localStorage.setItem(
           "aura_checkout",
           JSON.stringify({ name, phone, plan: selectedPlan, billing: billingPeriod, price: currentPrice }),
         );
         setHasRedirected(true);
-        try {
-          if (window.top && window.top !== window) {
-            window.top.location.href = checkoutUrl;
-          } else {
-            window.location.href = checkoutUrl;
-          }
-        } catch {
-          window.open(checkoutUrl, "_blank");
-        }
+        setStripePromise(loadStripe(data.publishableKey as string));
+        setEmbeddedClientSecret(data.clientSecret as string);
+        // Scroll suave pro topo do bloco de pagamento embed.
+        requestAnimationFrame(() => {
+          document.getElementById("embedded-checkout-block")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
       } else {
-        throw new Error("URL de checkout não recebida");
+        throw new Error("clientSecret não recebido");
       }
     } catch (err) {
       console.error("Checkout V2 error:", err);
@@ -268,6 +273,18 @@ const CheckoutV2 = () => {
       setIsLoading(false);
     }
   };
+
+  // Options memoizado pra evitar re-mount do EmbeddedCheckoutProvider a cada render.
+  const embeddedOptions = useMemo(
+    () => (embeddedClientSecret ? { clientSecret: embeddedClientSecret } : null),
+    [embeddedClientSecret],
+  );
+
+  const handleResetCheckout = useCallback(() => {
+    setEmbeddedClientSecret(null);
+    setStripePromise(null);
+    setHasRedirected(false);
+  }, []);
 
   const inputCls =
     "mt-1.5 bg-white/5 border-white/15 text-white placeholder:text-white/55 focus-visible:ring-1 focus-visible:ring-[hsl(140_18%_55%)]";
@@ -320,6 +337,41 @@ const CheckoutV2 = () => {
 
         <div className="relative container mx-auto px-4 py-8 md:py-12 pb-32 md:pb-12">
           <div className="max-w-xl mx-auto">
+            {embeddedClientSecret && stripePromise && embeddedOptions ? (
+              <div id="embedded-checkout-block" className="space-y-4">
+                <div className="text-center mb-2">
+                  <h1 className="font-display text-2xl md:text-3xl font-semibold mb-2 tracking-tight">
+                    Pagamento seguro
+                  </h1>
+                  <p className="text-white/65 text-sm">
+                    R$ {currentPlan.trialPrice} agora • depois R$ {currentPrice}/{periodLabel}
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-white p-2 md:p-4 shadow-2xl">
+                  <EmbeddedCheckoutProvider stripe={stripePromise} options={embeddedOptions}>
+                    <EmbeddedCheckout />
+                  </EmbeddedCheckoutProvider>
+                </div>
+                <div className="flex flex-wrap justify-center gap-x-5 gap-y-2 text-xs text-white/55 pt-1">
+                  <div className="flex items-center gap-1.5">
+                    <Lock className="w-3.5 h-3.5 text-[hsl(140_30%_72%)]" />
+                    Criptografado de ponta a ponta
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Shield className="w-3.5 h-3.5 text-[hsl(140_30%_72%)]" />
+                    Processado pela Stripe
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleResetCheckout}
+                  className="block mx-auto text-xs text-white/55 hover:text-white/85 underline underline-offset-4 transition-colors"
+                >
+                  ← Voltar e editar dados
+                </button>
+              </div>
+            ) : (
+              <>
             {/* Cabeçalho enxuto */}
             <div className="text-center mb-6">
               <h1 className="font-display text-2xl md:text-3xl font-semibold mb-2 tracking-tight">
@@ -506,10 +558,13 @@ const CheckoutV2 = () => {
                 "Em 3 dias senti que alguém finalmente me ouvia." — Ana C.
               </p>
             </form>
+              </>
+            )}
           </div>
         </div>
 
-        {/* Sticky CTA mobile */}
+        {/* Sticky CTA mobile — escondido quando o checkout embedado está aberto */}
+        {!embeddedClientSecret && (
         <div className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-[hsl(220_35%_8%/0.95)] backdrop-blur-md border-t border-white/10 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <Button
             type="submit"
@@ -522,6 +577,7 @@ const CheckoutV2 = () => {
             {isLoading ? "Processando..." : `Começar por R$ ${currentPlan.trialPrice}`}
           </Button>
         </div>
+        )}
 
         {/* Exit-intent popup */}
         {showExitPopup && (
