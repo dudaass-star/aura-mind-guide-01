@@ -337,52 +337,33 @@ const CheckoutV2 = () => {
 
         <div className="relative container mx-auto px-4 py-8 md:py-12 pb-32 md:pb-12">
           <div className="max-w-xl mx-auto">
-            {embeddedClientSecret && stripePromise && embeddedOptions ? (
-              <div id="embedded-checkout-block" className="space-y-4">
-                <div className="text-center mb-2">
-                  <h1 className="font-display text-2xl md:text-3xl font-semibold mb-2 tracking-tight">
-                    Pagamento seguro
-                  </h1>
-                  <p className="text-white/65 text-sm">
-                    R$ {currentPlan.trialPrice} agora • depois R$ {currentPrice}/{periodLabel}
-                  </p>
-                </div>
-                <div className="rounded-2xl bg-white p-2 md:p-4 shadow-2xl">
-                  <EmbeddedCheckoutProvider stripe={stripePromise} options={embeddedOptions}>
-                    <EmbeddedCheckout />
-                  </EmbeddedCheckoutProvider>
-                </div>
-                <div className="flex flex-wrap justify-center gap-x-5 gap-y-2 text-xs text-white/55 pt-1">
-                  <div className="flex items-center gap-1.5">
-                    <Lock className="w-3.5 h-3.5 text-[hsl(140_30%_72%)]" />
-                    Criptografado de ponta a ponta
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Shield className="w-3.5 h-3.5 text-[hsl(140_30%_72%)]" />
-                    Processado pela Stripe
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleResetCheckout}
-                  className="block mx-auto text-xs text-white/55 hover:text-white/85 underline underline-offset-4 transition-colors"
-                >
-                  ← Voltar e editar dados
-                </button>
-              </div>
-            ) : (
-              <>
             {/* Cabeçalho enxuto */}
             <div className="text-center mb-6">
               <h1 className="font-display text-2xl md:text-3xl font-semibold mb-2 tracking-tight">
-                Comece em 2 minutos
+                {embeddedClientSecret ? "Confirme e pague" : "Comece em 2 minutos"}
               </h1>
               <p className="text-white/65 text-sm">
-                7 dias por R$ {currentPlan.trialPrice} • cancele quando quiser
+                {embeddedClientSecret
+                  ? <>R$ {currentPlan.trialPrice} agora • depois R$ {currentPrice}/{periodLabel}</>
+                  : <>7 dias por R$ {currentPlan.trialPrice} • cancele quando quiser</>}
               </p>
+              {embeddedClientSecret && (
+                <button
+                  type="button"
+                  onClick={handleResetCheckout}
+                  className="mt-3 text-xs text-white/60 hover:text-white/90 underline underline-offset-4 transition-colors"
+                >
+                  ← Editar dados
+                </button>
+              )}
             </div>
 
-            <form id="checkout-form" onSubmit={handleSubmit} className="space-y-5">
+            <form
+              id="checkout-form"
+              onSubmit={handleSubmit}
+              className={`space-y-5 ${embeddedClientSecret ? "opacity-70 pointer-events-none" : ""}`}
+              aria-disabled={!!embeddedClientSecret}
+            >
               {/* Toggle de período — sem moldura de card */}
               <div className="flex items-center justify-center gap-1 p-1 bg-white/5 rounded-full border border-white/10 max-w-xs mx-auto">
                 <button
@@ -558,7 +539,25 @@ const CheckoutV2 = () => {
                 "Em 3 dias senti que alguém finalmente me ouvia." — Ana C.
               </p>
             </form>
-              </>
+
+            {embeddedClientSecret && stripePromise && embeddedOptions && (
+              <div id="embedded-checkout-block" className="space-y-4 pt-8 mt-8 border-t border-white/10">
+                <div className="rounded-2xl bg-white p-2 md:p-4 shadow-2xl">
+                  <EmbeddedCheckoutProvider stripe={stripePromise} options={embeddedOptions}>
+                    <EmbeddedCheckout />
+                  </EmbeddedCheckoutProvider>
+                </div>
+                <div className="flex flex-wrap justify-center gap-x-5 gap-y-2 text-xs text-white/55 pt-1">
+                  <div className="flex items-center gap-1.5">
+                    <Lock className="w-3.5 h-3.5 text-[hsl(140_30%_72%)]" />
+                    Criptografado de ponta a ponta
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Shield className="w-3.5 h-3.5 text-[hsl(140_30%_72%)]" />
+                    Processado pela Stripe
+                  </div>
+                </div>
+              </div>
             )}
           </div>
         </div>
