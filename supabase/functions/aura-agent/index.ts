@@ -1286,6 +1286,31 @@ ${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}`
       }
     }
 
+    // ======== REDE DE SEGURANÇA DE FECHAMENTO ========
+    // Sentido sustentado em reframe/development, sem pergunta de closure
+    // emitida ainda, e já passou de 60% do tempo da sessão → força movimento.
+    // Dispara 1x (detector previne loop no turno seguinte).
+    if (
+      ['reframe', 'development'].includes(sessionPhase) &&
+      detectedPhase === 'sentido' &&
+      sessionElapsedMin >= Math.floor(sessionDurationMin * 0.6)
+    ) {
+      if (commitmentQuestionDetected(messageHistory)) {
+        console.log(`✅ Commitment question already detected — skipping safety net`);
+      } else {
+        console.log(`🛡️ Closure safety net fired (elapsed=${sessionElapsedMin}min, duration=${sessionDurationMin}min)`);
+        return {
+          detectedPhase: 'sentido',
+          stagnationLevel: 1,
+          guidance: `\n\n🛡️ REDE DE SEGURANÇA — FECHAMENTO OBRIGATÓRIO:
+Você já está em SENTIDO há vários turnos e ${sessionElapsedMin} min se passaram (de ${sessionDurationMin} min totais).
+Ainda NÃO houve pergunta de COMPROMISSO/MOVIMENTO nesta sessão.
+AÇÃO OBRIGATÓRIA AGORA: amarre o insight num passo concreto antes do fim.
+${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}`
+        };
+      }
+    }
+
     // Still in opening pattern after 8+ min
     if (sessionPhase === 'exploration' && sessionElapsedMin > 8 && detectedPhase === 'presenca') {
       if (questionCount > 4) {
