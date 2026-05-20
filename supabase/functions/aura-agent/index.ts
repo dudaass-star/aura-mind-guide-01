@@ -1085,6 +1085,49 @@ AMARRAÇÃO TEMPORAL (CRÍTICO): Quando o micro passo emergir e houver bloco "FE
 CONFRONTO CIRÚRGICO (se o usuário evita o passo): "Você sabe o que precisa fazer, mas tá adiando. O que tá no caminho de verdade?" — devolve a evitação, não suaviza.`
 };
 
+// ============================================================
+// Detector leve: a Aura já fez pergunta de compromisso/movimento
+// nos últimos turnos? Evita disparar a rede de segurança em loop.
+// ============================================================
+const COMMITMENT_QUESTION_MARKERS = [
+  'menor passo',
+  'proximo passo',
+  'passo concreto',
+  'passo em direcao',
+  'que faria sentido como',
+  'o que voce vai',
+  'o que voce esta levando',
+  'esta levando de mais importante',
+  'esta levando dessa',
+  'esta levando desse',
+  'leva dessa conversa',
+  'leva desse papo',
+  'compromisso',
+  'essa semana voce',
+  'pra essa semana',
+  'mudar uma coisa pequena',
+];
+
+function normalizeForMatch(s: string): string {
+  return (s || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
+function commitmentQuestionDetected(
+  messageHistory: Array<{ role: string; content: string }>
+): boolean {
+  // Olha as últimas 6 mensagens do assistente — marcador de closure recente
+  const recentAssistant = messageHistory
+    .filter(m => m.role === 'assistant')
+    .slice(-6)
+    .map(m => normalizeForMatch(m.content))
+    .join(' ||| ');
+  if (!recentAssistant) return false;
+  return COMMITMENT_QUESTION_MARKERS.some(marker => recentAssistant.includes(marker));
+}
+
 function evaluateTherapeuticPhase(
   messageHistory: Array<{ role: string; content: string }>,
   sessionActive: boolean,
@@ -1092,7 +1135,8 @@ function evaluateTherapeuticPhase(
   sessionElapsedMin?: number,
   lastUserContext?: UserContextState | null,
   totalMessageCount?: number,
-  insightsCount?: number
+  insightsCount?: number,
+  sessionDurationMin: number = 45
 ): PhaseEvaluation {
   // ======== USER CONTEXT OVERRIDES (from micro-agent, previous turn) ========
   if (lastUserContext) {
