@@ -204,13 +204,14 @@ async function processStage(
 
       const plan = session.plan || "essencial";
       const name = firstName(session.name);
-      const checkoutLink = `https://olaaura.com.br/checkout?plan=${plan}&utm_source=whatsapp&utm_medium=recovery&utm_campaign=${cfg.utmCampaign}`;
+      // Token = porção dinâmica do CTA (a base do botão está fixa no template Twilio).
+      // Ex.: botão configurado como https://olaaura.com.br/{{2}}
+      const token = `checkout?plan=${plan}&utm_source=whatsapp&utm_medium=recovery&utm_campaign=${cfg.utmCampaign}`;
 
-      // ContentVariables: {{1}} nome, {{2}} plano, {{3}} link (botão CTA dinâmico)
+      // ContentVariables: {{1}} = nome, {{2}} = token do CTA
       const result = await sendRecoveryTemplate(session.phone, cfg.contentSid, {
         "1": name,
-        "2": plan,
-        "3": checkoutLink,
+        "2": token,
       });
 
       await supabase.from("checkout_recovery_attempts").insert({
