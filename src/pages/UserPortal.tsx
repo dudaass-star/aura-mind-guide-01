@@ -11,6 +11,8 @@ import { JornadasTab } from "@/components/portal/JornadasTab";
 import { ResumosTab } from "@/components/portal/ResumosTab";
 import { MeditacoesTab } from "@/components/portal/MeditacoesTab";
 import { CapsulasTab } from "@/components/portal/CapsulasTab";
+import { CreditCard, Loader2 } from "lucide-react";
+import { toast } from "@/hooks/use-toast";
 
 type TabId = "jornadas" | "resumos" | "meditacoes" | "capsulas";
 
@@ -26,6 +28,7 @@ const UserPortal = () => {
   const token = searchParams.get("t");
   const initialTab = (searchParams.get("tab") as TabId) || "jornadas";
   const [activeTab, setActiveTab] = useState<TabId>(initialTab);
+  const [portalLoading, setPortalLoading] = useState(false);
 
   const { data: portalToken, isLoading: tokenLoading, error: tokenError } = useQuery({
     queryKey: ["portal-token", token],
@@ -75,6 +78,28 @@ const UserPortal = () => {
   if (tokenError || !portalToken) return <PortalError message="Token não encontrado. Este link pode ter expirado." />;
 
   const firstName = profile?.name?.split(" ")[0] || "você";
+
+  const handleOpenBillingPortal = async () => {
+    if (!token || portalLoading) return;
+    setPortalLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("customer-portal", {
+        body: { token },
+      });
+      if (error) throw error;
+      if (!data?.url) throw new Error("Link não recebido");
+      window.open(data.url, "_blank", "noopener,noreferrer");
+    } catch (err: any) {
+      const msg = err?.context?.error || err?.message || "Não foi possível abrir agora. Tente novamente em instantes.";
+      toast({
+        title: "Ops",
+        description: typeof msg === "string" ? msg : "Não foi possível abrir agora.",
+        variant: "destructive",
+      });
+    } finally {
+      setPortalLoading(false);
+    }
+  };
 
   return (
     <>
@@ -139,6 +164,14 @@ const UserPortal = () => {
 
         {/* Footer */}
         <footer className="border-t border-border/40 py-6 text-center">
+          <button
+            onClick={handleOpenBillingPortal}
+            disabled={portalLoading}
+            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-accent transition-colors font-['Nunito'] mb-3 disabled:opacity-60"
+          >
+            {portalLoading ? <Loader2 size={14} className="animate-spin" /> : <CreditCard size={14} />}
+            <span>Atualizar forma de pagamento</span>
+          </button>
           <p className="text-sm text-muted-foreground font-['Nunito']">Conteúdo exclusivo da Aura</p>
           <a
             href="https://olaaura.com.br"
