@@ -7,10 +7,13 @@
  * - Retry automático em erros transitórios (429 / 5xx / timeout).
  */
 
+import { normalizeBrazilianPhone } from "./zapi-client.ts";
+
 export interface TwilioRecoverySendResult {
   success: boolean;
   messageSid?: string;
   status?: number;
+  to?: string;
   error?: string;
   response?: unknown;
 }
@@ -43,9 +46,19 @@ function getCreds() {
 }
 
 function formatTo(phone: string): string {
-  // Espera E.164 sem prefixo (ex: 5511999998888) ou já com +; normaliza para whatsapp:+...
-  const digits = phone.replace(/\D/g, "");
+  // Normaliza BR cru (ex: 51981519708) para E.164 antes de enviar ao WhatsApp Twilio.
+  const digits = normalizeBrazilianPhone(phone);
   return `whatsapp:+${digits}`;
+}
+
+async function twilioRequest(path: string): Promise<{ ok: boolean; status: number; json: any }> {
+  const { sid, token } = getCreds();
+  const auth = btoa(`${sid}:${token}`);
+  const resp = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}${path}`, {
+    headers: { "Authorization": `Basic ${auth}` },
+  });
+  const json = await resp.json().catch(() => ({}));
+  return { ok: resp.ok, status: resp.status, json };
 }
 
 async function postOnce(
@@ -57,8 +70,9 @@ async function postOnce(
   const url = `https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`;
   const auth = btoa(`${sid}:${token}`);
 
+  const formattedTo = formatTo(to);
   const body = new URLSearchParams({
-    To: formatTo(to),
+    To: formattedTo,
     From: from,
     ContentSid: contentSid,
     ContentVariables: JSON.stringify(contentVariables),
@@ -78,13 +92,38 @@ async function postOnce(
 
     if (!resp.ok) {
       const errMsg = json?.message || `HTTP ${resp.status}`;
-      return { success: false, status: resp.status, error: errMsg, response: json };
+      return { success: false, status: resp.status, to: formattedTo, error: errMsg, response: json };
     }
 
-    return { success: true, status: resp.status, messageSid: json?.sid, response: json };
+    return { success: true, status: resp.status, to: formattedTo, messageSid: json?.sid, response: json };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : String(err) };
   }
+}
+
+export async function getRecoveryMessage(messageSid: string): Promise<TwilioRecoverySendResult> {
+  const result = await twilioRequest(`/Messages/${encodeURIComponent(messageSid)}.json`);
+  const json = result.json;
+  return {
+    success: result.ok,
+    status: result.status,
+    messageSid: json?.sid,
+    to: json?.to,
+    error: result.ok ? (json?.error_message || undefined) : (json?.message || `HTTP ${result.status}`),
+    response: json,
+  };
+}
+
+export async function listRecoveryMessages(phone: string, limit = 10): Promise<TwilioRecoverySendResult> {
+  const params = new URLSearchParams({ Limit: String(limit), To: formatTo(phone) });
+  const result = await twilioRequest(`/Messages.json?${params.toString()}`);
+  return {
+    success: result.ok,
+    status: result.status,
+    to: formatTo(phone),
+    error: result.ok ? undefined : (result.json?.message || `HTTP ${result.status}`),
+    response: result.json,
+  };
 }
 
 /**
