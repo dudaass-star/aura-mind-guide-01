@@ -177,6 +177,9 @@ export type Database = {
           recovery_stage3_sent_at: string | null
           status: string
           stripe_session_id: string | null
+          whatsapp_recovery_15min_sent_at: string | null
+          whatsapp_recovery_24h_sent_at: string | null
+          whatsapp_recovery_last_error: string | null
         }
         Insert: {
           billing?: string | null
@@ -198,6 +201,9 @@ export type Database = {
           recovery_stage3_sent_at?: string | null
           status?: string
           stripe_session_id?: string | null
+          whatsapp_recovery_15min_sent_at?: string | null
+          whatsapp_recovery_24h_sent_at?: string | null
+          whatsapp_recovery_last_error?: string | null
         }
         Update: {
           billing?: string | null
@@ -219,6 +225,9 @@ export type Database = {
           recovery_stage3_sent_at?: string | null
           status?: string
           stripe_session_id?: string | null
+          whatsapp_recovery_15min_sent_at?: string | null
+          whatsapp_recovery_24h_sent_at?: string | null
+          whatsapp_recovery_last_error?: string | null
         }
         Relationships: []
       }
