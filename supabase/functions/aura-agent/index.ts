@@ -1085,6 +1085,49 @@ AMARRAÇÃO TEMPORAL (CRÍTICO): Quando o micro passo emergir e houver bloco "FE
 CONFRONTO CIRÚRGICO (se o usuário evita o passo): "Você sabe o que precisa fazer, mas tá adiando. O que tá no caminho de verdade?" — devolve a evitação, não suaviza.`
 };
 
+// ============================================================
+// Detector leve: a Aura já fez pergunta de compromisso/movimento
+// nos últimos turnos? Evita disparar a rede de segurança em loop.
+// ============================================================
+const COMMITMENT_QUESTION_MARKERS = [
+  'menor passo',
+  'proximo passo',
+  'passo concreto',
+  'passo em direcao',
+  'que faria sentido como',
+  'o que voce vai',
+  'o que voce esta levando',
+  'esta levando de mais importante',
+  'esta levando dessa',
+  'esta levando desse',
+  'leva dessa conversa',
+  'leva desse papo',
+  'compromisso',
+  'essa semana voce',
+  'pra essa semana',
+  'mudar uma coisa pequena',
+];
+
+function normalizeForMatch(s: string): string {
+  return (s || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
+function commitmentQuestionDetected(
+  messageHistory: Array<{ role: string; content: string }>
+): boolean {
+  // Olha as últimas 6 mensagens do assistente — marcador de closure recente
+  const recentAssistant = messageHistory
+    .filter(m => m.role === 'assistant')
+    .slice(-6)
+    .map(m => normalizeForMatch(m.content))
+    .join(' ||| ');
+  if (!recentAssistant) return false;
+  return COMMITMENT_QUESTION_MARKERS.some(marker => recentAssistant.includes(marker));
+}
+
 function evaluateTherapeuticPhase(
   messageHistory: Array<{ role: string; content: string }>,
   sessionActive: boolean,
@@ -1092,7 +1135,8 @@ function evaluateTherapeuticPhase(
   sessionElapsedMin?: number,
   lastUserContext?: UserContextState | null,
   totalMessageCount?: number,
-  insightsCount?: number
+  insightsCount?: number,
+  sessionDurationMin: number = 45
 ): PhaseEvaluation {
   // ======== USER CONTEXT OVERRIDES (from micro-agent, previous turn) ========
   if (lastUserContext) {
@@ -1237,6 +1281,31 @@ Você está trazendo boas reflexões, mas já é hora de MOVIMENTO.
 
 AÇÃO: Converta o insight em compromisso concreto.
 "Então, com base nisso que a gente explorou... o que faria sentido como próximo passo pra você?"
+${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}`
+        };
+      }
+    }
+
+    // ======== REDE DE SEGURANÇA DE FECHAMENTO ========
+    // Sentido sustentado em reframe/development, sem pergunta de closure
+    // emitida ainda, e já passou de 60% do tempo da sessão → força movimento.
+    // Dispara 1x (detector previne loop no turno seguinte).
+    if (
+      ['reframe', 'development'].includes(sessionPhase) &&
+      detectedPhase === 'sentido' &&
+      sessionElapsedMin >= Math.floor(sessionDurationMin * 0.6)
+    ) {
+      if (commitmentQuestionDetected(messageHistory)) {
+        console.log(`✅ Commitment question already detected — skipping safety net`);
+      } else {
+        console.log(`🛡️ Closure safety net fired (elapsed=${sessionElapsedMin}min, duration=${sessionDurationMin}min)`);
+        return {
+          detectedPhase: 'sentido',
+          stagnationLevel: 1,
+          guidance: `\n\n🛡️ REDE DE SEGURANÇA — FECHAMENTO OBRIGATÓRIO:
+Você já está em SENTIDO há vários turnos e ${sessionElapsedMin} min se passaram (de ${sessionDurationMin} min totais).
+Ainda NÃO houve pergunta de COMPROMISSO/MOVIMENTO nesta sessão.
+AÇÃO OBRIGATÓRIA AGORA: amarre o insight num passo concreto antes do fim.
 ${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}`
         };
       }
@@ -5896,7 +5965,8 @@ ${_exampleTag}
         evalSessionPhase = phaseCheck.phase;
         evalElapsedMin = Math.floor((Date.now() - new Date(currentSession.started_at).getTime()) / 60000);
       }
-      const phaseEval = evaluateTherapeuticPhase(messageHistory, sessionActive, evalSessionPhase, evalElapsedMin, last_user_context, messageCount, userInsights.length);
+      const evalDurationMin = currentSession?.duration_minutes ?? 45;
+      const phaseEval = evaluateTherapeuticPhase(messageHistory, sessionActive, evalSessionPhase, evalElapsedMin, last_user_context, messageCount, userInsights.length, evalDurationMin);
       if (phaseEval.guidance) {
         dynamicContext += phaseEval.guidance;
         console.log(`🔄 Phase evaluator: detected=${phaseEval.detectedPhase}, stagnation=${phaseEval.stagnationLevel}, context=${sessionActive ? 'session' : 'free'}`);
