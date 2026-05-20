@@ -35,6 +35,7 @@ import JourneyComplete from "./pages/JourneyComplete";
 import Unsubscribe from "./pages/Unsubscribe";
 import UserPortal from "./pages/UserPortal";
 import Blog from "./pages/Blog";
+import Pagamento from "./pages/Pagamento";
 import NotFound from "./pages/NotFound";
 import GA4RouteTracker from "./components/GA4RouteTracker";
 
@@ -80,6 +81,7 @@ const App = () => (
             <Route path="/unsubscribe" element={<Unsubscribe />} />
             <Route path="/meu-espaco" element={<UserPortal />} />
             <Route path="/blog" element={<Blog />} />
+            <Route path="/pagamento" element={<Pagamento />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
