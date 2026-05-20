@@ -1,4 +1,4 @@
-import { sendRecoveryTemplate } from "../_shared/twilio-recovery-client.ts";
+import { getRecoveryMessage, listRecoveryMessages, sendRecoveryTemplate } from "../_shared/twilio-recovery-client.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -8,7 +8,21 @@ const corsHeaders = {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
-    const { phone, contentSid, name } = await req.json();
+    const { phone, contentSid, name, messageSid, listOnly } = await req.json();
+    if (messageSid) {
+      const status = await getRecoveryMessage(messageSid);
+      return new Response(JSON.stringify(status), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: status.success ? 200 : 500,
+      });
+    }
+    if (listOnly && phone) {
+      const messages = await listRecoveryMessages(phone);
+      return new Response(JSON.stringify(messages), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: messages.success ? 200 : 500,
+      });
+    }
     const sid = contentSid || "HX7ae71f9002839ec0ecdc58f6aa067a8a";
     const result = await sendRecoveryTemplate(phone, sid, { "1": name || "Robson" });
     return new Response(JSON.stringify(result), {
