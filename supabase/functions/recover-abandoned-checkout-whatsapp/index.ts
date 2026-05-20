@@ -250,9 +250,13 @@ async function markSkipped(supabase: any, id: string, cfg: StageConfig, reason: 
     whatsapp_recovery_last_error: `skipped: ${reason}`,
   }).eq("id", id);
 
-  await supabase.from("checkout_recovery_attempts").insert({
-    checkout_session_id: id,
-    status: `wa_stage_${cfg.stage}_skipped`,
-    error_message: reason,
-  }).catch(() => {});
+  try {
+    await supabase.from("checkout_recovery_attempts").insert({
+      checkout_session_id: id,
+      status: `wa_stage_${cfg.stage}_skipped`,
+      error_message: reason,
+    });
+  } catch (_) {
+    // ignore
+  }
 }
