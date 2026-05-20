@@ -1,56 +1,65 @@
-## Recuperação de carrinho abandonado via WhatsApp (Twilio subaccount)
+## Objetivo
 
-Roda **em paralelo** ao fluxo atual de e-mail (1h/25h/97h), em 2 estágios (15min + 24h), via uma **subaccount Twilio dedicada**, respeitando silêncio 22h-08h BRT e pulando clientes já ativos/trial.
+Descobrir, com evidência, **se e quando** o Phase Evaluator transicionou o Alan de **Presença → Sentido → Movimento** na sessão `db5738b1-0bfc-4d65-8f3a-150ba0610bfd` (19/05 20:19→21:35 UTC, ~17h19→18h35 BRT, 76min). Hipótese a validar: a sessão ficou presa em Presença a sessão inteira, sem Reframe cirúrgico nem fechamento com Movimento, o que explicaria a nota 1⭐.
 
-### 1. Secrets (usuário precisa adicionar)
+## O que já sabemos (do contexto)
 
-Após criar a subaccount no Twilio Console:
-- `TWILIO_RECOVERY_ACCOUNT_SID` — AC... da subaccount
-- `TWILIO_RECOVERY_AUTH_TOKEN` — Auth Token da subaccount
-- `TWILIO_RECOVERY_FROM` — número WhatsApp da subaccount no formato `whatsapp:+...`
+- Sessão concluída, `rating_requested=true`, `post_session_sent=true`, `commitments=[]` (sem Movimento gravado).
+- Phase Evaluator é determinístico: dado o histórico de mensagens + `sessionPhase` + `sessionElapsedMin` + `last_user_context.aura_phase`, produz sempre a mesma `detectedPhase` e `guidance`.
+- A tabela `messages` **não persiste** `aura_phase` por turno — só `role`/`content`/`created_at`. Precisamos reconstruir.
+- A tabela `sessions` também não armazena fase atual. A única evidência viva são os logs do `aura-agent` (`🔄 Phase evaluator: ...`), que normalmente já rotacionaram para uma sessão de 24h+ atrás.
 
-Os 2 ContentSids dos templates aprovados também precisam estar prontos para registro no DB.
+## Passos da auditoria
 
-### 2. Migration (schema)
+### 1. Extrair a conversa completa da sessão
+Query nas `messages` do `user_id=ca756632-21b6-4c35-b88e-0d2e8f8a6cb2` entre `started_at` e `ended_at`. Salvar em `/tmp/alan_session.json` com `role`, `content`, `created_at` e o `sessionElapsedMin` calculado a partir de `started_at`.
 
-Adicionar em `checkout_sessions`:
-- `whatsapp_recovery_15min_sent_at timestamptz`
-- `whatsapp_recovery_24h_sent_at timestamptz`
-- `whatsapp_recovery_last_error text`
+### 2. Replay local do Phase Evaluator
+Extrair `evaluateTherapeuticPhase` + `SESSION_PHASE_INSTRUCTIONS` do `supabase/functions/aura-agent/index.ts` para um script Deno isolado (`/tmp/replay_phase.ts`). Para cada turno do usuário na sessão:
+- Montar `messageHistory` acumulada (apenas mensagens até aquele turno).
+- Calcular `sessionElapsedMin` real.
+- Derivar `sessionPhase` (`opening` 0–8min → `exploration` 8–35min → `transition` 35–40min → `closing` 40+min — confirmar limites no código antes de rodar).
+- Como `last_user_context.aura_phase` (micro-agent semântico) não está persistido, rodar duas passadas:
+  - **(a) sem aura_phase** → expõe o que o fallback por palavras-chave (`presencaScore` vs `sentidoScore`) decide.
+  - **(b) forçando `aura_phase='sentido'` a partir do turno em que aparecem palavras-chave de sentido** → expõe o cenário "se o micro-agent tivesse detectado".
+- Para cada turno, registrar: `detectedPhase`, `stagnationLevel`, `guidance` (truncada), e qual gatilho disparou (`>= 4 presenca`, `>= 5 sentido`, `stuck_in_opening` etc.).
 
-Inserir 2 linhas em `whatsapp_templates` com os ContentSids:
-- `HX7ae71f9002839ec0ecdc58f6aa067a8a` (estágio 15min)
-- `HXb34b27fda2f45a0c10fc19960bac61c1` (estágio 24h)
+Saída: tabela CSV `/mnt/documents/alan_phase_replay.csv` com colunas `turn, minute, role, snippet, sessionPhase, detectedPhase, trigger, stagnation, guidance_kind`.
 
-### 3. Helper novo
+### 3. Verificar Reframe e Movimento no diálogo real
+Sobre o transcript já extraído, marcar manualmente (regex + leitura):
+- Presença de **Reframe cirúrgico** durante a sessão (não depois) — buscar viradas como "você passou X construindo Y", "o que isso te custa", "qual o preço de…".
+- Presença de **pergunta de compromisso** da Aura entre min 35–45 ("topa…?", "combinado?", "sua única tarefa…", "como compromisso pra essa semana…").
+- Aceite/recusa do usuário a esse compromisso.
 
-`supabase/functions/_shared/twilio-recovery-client.ts` — cliente REST direto para a subaccount (Basic Auth com SID+Token da subaccount), envio via Content API (`ContentSid` + `ContentVariables`), retry para erros transientes (429/5xx).
+### 4. Cruzar com `session-extractor`
+Comparar o `session_summary` + `key_insights` + `commitments` que o `session-extractor` gravou para `db5738b1` com o que de fato apareceu no diálogo. Se `commitments=[]` mas existiu pergunta-compromisso ignorada pelo usuário, o extrator está correto e o problema é clínico (faltou Aura propor). Se o extrator perdeu um aceite, é bug do extrator.
 
-### 4. Edge function nova
+### 5. Tentar puxar logs originais (best effort)
+Rodar `supabase--edge_function_logs` em `aura-agent` filtrando por `ca756632` e por `🔄 Phase evaluator`. Se ainda existirem logs de 19/05, comparar `detectedPhase` real (com `aura_phase` do micro-agent vivo) contra o replay teórico do passo 2. Se logs já rotacionaram, dependemos só do replay.
 
-`supabase/functions/recover-abandoned-checkout-whatsapp/index.ts`:
+### 6. Diagnóstico final
+Produzir um pequeno relatório (`/mnt/documents/alan_phase_audit.md`) com:
+- Linha do tempo: minuto-a-minuto da fase detectada vs fase esperada.
+- Em que turno o evaluator **deveria** ter forçado `presenca → sentido` (gatilho `recentPairs >= 4`) e se a `guidance` foi injetada.
+- Em que turno **deveria** ter forçado `sentido → movimento` (`recentPairs >= 5`) e se a Aura respondeu com pergunta-compromisso.
+- Veredito: (a) evaluator funcionou e a Aura ignorou a `guidance`, (b) evaluator nunca disparou porque `last_user_context.aura_phase` ficou colado em `presenca`, ou (c) `sessionPhase` não evoluiu por bug de cálculo de `sessionElapsedMin`.
+- Recomendação objetiva de fix (no evaluator, no micro-agent semântico, ou no prompt da fase).
 
-- **Pré-busca de ativos** (igual ao fluxo de e-mail): `SELECT phone, email FROM profiles WHERE status IN ('active','trial')` → monta `activePhoneSet` (com `getPhoneVariations`) e `activeEmailSet`
-- **Skip explícito**: antes de cada envio, se o `phone` ou `email` do `checkout_session` bate com os Sets → grava em `checkout_recovery_attempts` com status `wa_stage_X_skipped:active_customer` e marca o `sent_at` para não reavaliar
-- **Quiet hours BRT**: se hora atual em São Paulo está entre 22h-08h → função retorna sem enviar nada (o cron de 5min reavalia logo depois das 8h)
-- **Estágio 15min**: `status='created'` AND `created_at < now()-15min` AND `whatsapp_recovery_15min_sent_at IS NULL` AND `phone IS NOT NULL` AND `email NOT IN active`
-- **Estágio 24h**: idem + `created_at < now()-24h` AND `whatsapp_recovery_24h_sent_at IS NULL` AND `whatsapp_recovery_15min_sent_at IS NOT NULL`
-- **Variáveis**: `{{1}} = primeiro nome`, `{{2}} = plano` (a confirmar conforme templates)
-- **Link**: `https://olaaura.com.br/checkout?plan=${plan}&utm_source=whatsapp&utm_medium=recovery&utm_campaign=stage${1|2}` (enviado pelo botão CTA do template)
-- Loga sucesso/erro em `checkout_recovery_attempts` (status `wa_stage_X_sent` / `wa_stage_X_failed`)
+## Detalhes técnicos relevantes
 
-### 5. Cron
+- `evaluateTherapeuticPhase` vive em `supabase/functions/aura-agent/index.ts` linhas ~1088–1365.
+- Gatilhos atuais (memorizados): `recentPairs >= 4 && presenca` → força Sentido; `recentPairs >= 5 && sentido` → força Movimento; freio `recentUserCount < 4` mantém Presença.
+- `sessionPhase` (`opening|exploration|transition|closing`) é calculado fora do evaluator e passado como parâmetro — precisamos achar a função que decide isso (provavelmente perto da linha 5899 onde `phaseEval` é chamado) e replicar.
+- A sessão real do Alan no banco é `db5738b1-0bfc-4d65-8f3a-150ba0610bfd` (não o id citado no resumo anterior); horário BRT é **17h19→18h35**, não 20h30. O resumo anterior usou UTC como se fosse BRT — vale corrigir no relatório.
 
-Via `pg_cron + pg_net`: invocar `recover-abandoned-checkout-whatsapp` a cada 5 minutos.
+## Entregáveis
 
-### 6. Sem mudanças em
+- `/mnt/documents/alan_phase_replay.csv` — replay turno-a-turno.
+- `/mnt/documents/alan_phase_audit.md` — diagnóstico + recomendação de fix.
+- Comentário final no chat: 3–5 linhas com o veredito (a/b/c) e o próximo passo recomendado.
 
-- `recover-abandoned-checkout` (e-mail continua igual, 3 estágios)
-- `whatsapp-official.ts` / `TWILIO_WHATSAPP_FROM` (canal da Aura intocado)
-- Qualquer fluxo conversacional
+## Fora de escopo
 
-### Pendências antes de codar
-
-Preciso só que você me passe (ou confirme):
-1. Os 3 secrets da subaccount já estão configurados? Se não, posso disparar o pedido com `add_secret`.
-2. Os 2 templates aprovados têm **quantas variáveis** cada um e o **botão CTA** é dinâmico (URL via variável) ou fixo? Isso muda o `ContentVariables` que vou enviar.
+- Mudar prompt do `aura-agent` agora (fica para um plano de fix separado, depois do diagnóstico).
+- Auditar outras sessões (Bárbara 5⭐, Thatyane sem rating) — pode virar plano (b) depois.
