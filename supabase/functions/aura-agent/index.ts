@@ -5965,7 +5965,8 @@ ${_exampleTag}
         evalSessionPhase = phaseCheck.phase;
         evalElapsedMin = Math.floor((Date.now() - new Date(currentSession.started_at).getTime()) / 60000);
       }
-      const phaseEval = evaluateTherapeuticPhase(messageHistory, sessionActive, evalSessionPhase, evalElapsedMin, last_user_context, messageCount, userInsights.length);
+      const evalDurationMin = currentSession?.duration_minutes ?? 45;
+      const phaseEval = evaluateTherapeuticPhase(messageHistory, sessionActive, evalSessionPhase, evalElapsedMin, last_user_context, messageCount, userInsights.length, evalDurationMin);
       if (phaseEval.guidance) {
         dynamicContext += phaseEval.guidance;
         console.log(`🔄 Phase evaluator: detected=${phaseEval.detectedPhase}, stagnation=${phaseEval.stagnationLevel}, context=${sessionActive ? 'session' : 'free'}`);
