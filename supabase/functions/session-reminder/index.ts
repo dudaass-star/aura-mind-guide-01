@@ -673,6 +673,36 @@ Nossa sessão de hoje foi ótima, mesmo que tenha ficado em silêncio no final. 
 Se quiser retomar de onde paramos ou agendar a próxima, é só me chamar. ✨`;
 
           // key_insights e commitments já foram persistidos pelo session-extractor.
+
+          // Garante summary persistido antes do dispatch inline (extractor já rodou acima,
+          // mas se o extractor devolveu algo, gravamos no banco pra dispatchPostSession ler).
+          if (extracted?.summary) {
+            await supabase
+              .from('sessions')
+              .update({ session_summary: extracted.summary })
+              .eq('id', session.id);
+          }
+
+          // FIX #1: rating imediato. Dispara resumo+rating inline em vez de esperar
+          // o próximo ciclo do cron (gap de 5-10min → ~15s). Em caso de falha,
+          // o loop de completedSessions abaixo segue como fallback no próximo tick.
+          try {
+            const ok = await dispatchPostSession(supabase, session.id, now);
+            if (ok) {
+              console.log(`⚡ Rating inline OK para sessão ${session.id} — pulando mensagem genérica de fechamento`);
+              // Limpar current_session_id antes de continuar (não vamos cair no bloco de update abaixo
+              // porque dispatchPostSession já mandou resumo + rating com o conteúdo real).
+              await supabase
+                .from('profiles')
+                .update({ current_session_id: null })
+                .eq('user_id', session.user_id);
+              abandonedSessionsClosed++;
+              continue;
+            }
+            console.warn(`⚠️ Rating inline falhou para sessão ${session.id} — fallback enviará mensagem genérica e cron tentará rating no próximo ciclo`);
+          } catch (inlineErr) {
+            console.error(`❌ Erro no dispatchPostSession inline para ${session.id}:`, inlineErr);
+          }
         } else {
           // Usuário participou pouco (2-4 msgs) - manter como no_show
           statusToSet = 'no_show';
