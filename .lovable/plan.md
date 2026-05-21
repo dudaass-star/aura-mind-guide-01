@@ -1,76 +1,61 @@
 
-# Rede de segurança de fechamento no Phase Evaluator
+## O que os dados já mostram
 
-## Problema validado (Alan 1⭐ × Bárbara 5⭐)
+Olhei `checkout_sessions` dos últimos 45 dias. O corte é nítido **a partir de 18/05/2026**:
 
-Em `supabase/functions/aura-agent/index.ts`, a função `evaluateTherapeuticPhase` (linhas ~1088–1280) tem um **buraco estrutural** no modo sessão:
+| Período | Iniciados | Completos | Conv |
+|---|---|---|---|
+| 06/04 → 17/05 | ~330 | ~120 | **~36% (com picos de 50-70%)** |
+| 18/05 → 21/05 | 60 | 6 | **~10%** |
 
-- Quando `sessionPhase ∈ ('reframe','development')` **e** `detectedPhase === 'sentido'`, **nenhum branch dispara**.
-- Só existe nudge de fechamento quando `sessionPhase === 'transition'` (últimos minutos).
-- Consequência: se o micro-agente marcar `sentido` cedo, a Aura fica sem orientação tática e **só formula a pergunta de movimento por sorte** — exatamente o que diferenciou Bárbara (formulou no min 27 → 5⭐) de Alan (nunca formulou em 32 min → 1⭐).
+A queda atinge **todos os planos e billings**:
+- Direção mensal: 41% → 10%
+- Essencial mensal: 32% → 20%
+- Transformação mensal: 36% → 0%
 
-`commitments=[]` aconteceu nas duas sessões — então **o extractor não é o culpado**. O diferencial é a pergunta de closure emitida durante a sessão.
+**Dois sinais importantes que já posso afirmar:**
+1. **Não é bug na LP nem no `create-checkout`.** 100% dos cliques continuam gerando `stripe_session_id` com sucesso — todo mundo chega na página da Stripe.
+2. **Não há erro técnico novo do nosso lado.** `recovery_last_error` está vazio nos abandonados, e `failed_message_log` não mostra pico.
 
-## Solução — 3 edições cirúrgicas em 1 único arquivo
+Ou seja: as pessoas estão **chegando na página hospedada do Stripe Checkout e abandonando lá** (ou tendo cartão recusado).
 
-### 1. Novo helper: `commitmentQuestionDetected(messageHistory)`
-Função pura, sem custo de LLM, ao lado de `evaluateTherapeuticPhase`. Olha as últimas ~6 mensagens da assistente e procura marcadores PT-BR (normalizados, sem acento) como:
-`menor passo`, `proximo passo`, `passo concreto`, `que faria sentido como`, `o que voce esta levando`, `compromisso`, `mudar uma coisa pequena`, etc.
+## Hipóteses a testar
 
-Retorna `true` se já houve pergunta de fechamento recente → impede loop.
+Como não é falha de código nosso, a investigação precisa cruzar 3 dimensões:
 
-### 2. Novo branch no Phase Evaluator (modo sessão)
-Adicionar dentro do `if (sessionActive && sessionPhase && sessionElapsedMin !== undefined)`, **após** o branch de `transition` e **antes** do `stuck_in_opening`:
+### H1. Algo mudou na conta Stripe em 17-18/05
+- Stripe Link foi reativado? Radar ficou mais agressivo? 3DS forçando challenge demais?
+- Verificar `payment_intents` com status `requires_payment_method` no período de queda e ler o `last_payment_error.decline_code` de cada um.
+- Olhar logs do `stripe-webhook` (edge logs) procurando picos de `payment_intent.payment_failed`.
 
-```
-if (
-  ['reframe', 'development'].includes(sessionPhase) &&
-  detectedPhase === 'sentido' &&
-  !commitmentQuestionDetected(messageHistory) &&
-  sessionElapsedMin >= Math.floor(sessionDurationMin * 0.6)
-)
-```
+### H2. Mudou a fonte/qualidade do tráfego
+- Coincidência temporal com uma nova campanha Meta/Google? Público novo, criativos novos?
+- Cruzar com Meta Pixel/CAPI: aumentou volume mas caiu intenção de compra?
+- Verificar se em 17/05 entrou novo criativo na campanha (você sabe disso melhor que o banco).
 
-Quando dispara: injeta `SESSION_PHASE_INSTRUCTIONS.transition_to_closing` com cabeçalho `🛡️ REDE DE SEGURANÇA — FECHAMENTO OBRIGATÓRIO`. `stagnationLevel: 1`.
+### H3. Mudou algo na LP /v2 ou no copy/preço
+- Inspecionar git/Lovable history das páginas `/v2` e `/checkout` entre 15-18/05.
+- Olhar `IndexV2.tsx`, `Checkout.tsx`, `ExitIntentPopup`, social proof — qualquer texto que crie expectativa de preço diferente do que aparece no Stripe.
 
-### 3. Passar `sessionDurationMin` pro evaluator
-Adicionar parâmetro opcional `sessionDurationMin: number = 45` na assinatura e propagar do call site (linha ~5899) lendo `currentSession.duration_minutes`.
+### H4. Comportamento sazonal
+- 18/05 caiu numa segunda-feira. Pode haver efeito "segunda pós-recebimento" + concorrência de fim-de-mês. Comparar com mesma janela de semanas anteriores pra descartar.
 
-## Comportamento após o nudge disparar
+## Entregáveis da investigação
 
-1. Dispara **1 vez** → Aura formula a pergunta de movimento
-2. Próximo turno: detector retorna `true` → **branch não re-dispara** (sem loop)
-3. Aura segue o `transition_to_closing` para amarrar e fechar
-4. Se usuário evita o passo: `sentido_to_movimento` já tem cláusula de confronto cirúrgico de evitação
-5. Tempo expira (`closing`) → ciclo de vida existente assume: `ended_at`, `session-extractor`, rating
+1. **Painel/relatório com 3 cortes** (não código novo, só queries):
+   - Conversão diária últimos 60 dias com linha de tendência.
+   - Decline codes Stripe agrupados por dia (Radar/3DS/insufficient_funds/etc).
+   - Tempo médio entre `checkout_sessions.created_at` e abandono (quem nem tentou cartão vs. quem tentou e foi recusado).
 
-## Logs
+2. **Diff visual da LP /v2 e do fluxo de checkout** entre 14/05 e 18/05 (via histórico do Lovable). Quero saber se algum deploy aconteceu nesse intervalo.
 
-- `🛡️ Closure safety net fired (elapsed=Xmin, duration=Ymin)` quando o branch dispara
-- `✅ Commitment question already detected — skipping safety net` quando o detector pula
+3. **Veredicto** com a causa mais provável e 1-2 ações corretivas específicas (ex.: reverter deploy X, desligar Stripe Link, pausar criativo Y, ajustar 3DS de `any` pra `automatic`).
 
-## O que NÃO muda
+## Detalhes técnicos
 
-- `session-extractor` e captura de `commitments` permanecem como estão
-- Prompts base, micro-agente semântico, contrato de tags e ciclo de vida de sessões intactos
-- Modo Livre (fora de sessão agendada) não é afetado
-- Branches existentes (`exploration→reframe`, `transition→closing`, `stuck_in_opening`) intocados
+- Queries usadas: `checkout_sessions` agrupado por dia/plano/billing/payment_method/status; `failed_message_log` por dia.
+- Stripe MCP: `list_payment_intents` + `fetch_stripe_resources` por ID pra extrair `last_payment_error.decline_code` dos PIs em `requires_payment_method` desde 18/05.
+- Edge logs: `stripe-webhook` e `create-checkout` filtrados por janela 17-21/05 procurando erros novos ou aumento de `payment_failed`.
+- Sem mudanças de schema, sem mudanças de código nessa fase — só leitura.
 
-## Critério de aceite
-
-1. Replay da sessão do Alan → branch dispara em torno do min 20–27 (Closure injetada)
-2. Replay da sessão da Bárbara → branch **não dispara** (ela formulou closure no min 27 → detector retorna `true`)
-3. Sessões com `elapsed < 60% da duração` → branch nunca dispara
-4. Sem regressão visível em `failed_message_log` após deploy
-
-## Risco
-
-Baixo. **Um único branch determinístico** atrás de 4 condições, dentro de função existente. Não toca prompt principal, não muda persistência, não muda contrato de tags.
-
-## Arquivos
-
-- `supabase/functions/aura-agent/index.ts` (única edição)
-
-## Memória a atualizar após implementação
-
-- `mem://technical/ai/therapeutic-phase-evaluator-constraints` — registrar a nova rede de segurança de closure (60% do tempo + sentido sustentado + sem closure detectada)
+Se aprovar, eu rodo a investigação e te trago o veredicto com gráfico + recomendação.
