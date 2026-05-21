@@ -26,6 +26,8 @@ const Index = () => {
       (window as any).fbq('track', 'ViewContent', {
         content_name: 'Landing Page',
         content_category: 'homepage',
+        value: 6.90,
+        currency: 'BRL',
       });
     }
     // GA4 view_item — espelha o ViewContent do Meta Pixel
