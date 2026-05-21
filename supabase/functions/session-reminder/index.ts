@@ -46,6 +46,149 @@ async function runSessionExtractor(
   }
 }
 
+// Envia resumo + rating de uma sessão `completed` inline (sem esperar o próximo
+// ciclo do cron de 5min). Marca post_session_sent e rating_requested no fim.
+// Retorna true apenas se o rating foi entregue com sucesso.
+async function dispatchPostSession(
+  supabase: any,
+  sessionId: string,
+  now: Date,
+): Promise<boolean> {
+  try {
+    const { data: session, error: sessionErr } = await supabase
+      .from('sessions')
+      .select('id, user_id, session_summary, commitments, key_insights, ended_at, post_session_sent')
+      .eq('id', sessionId)
+      .maybeSingle();
+
+    if (sessionErr || !session) {
+      console.error(`⚠️ dispatchPostSession: sessão ${sessionId} não encontrada`, sessionErr);
+      return false;
+    }
+    if (session.post_session_sent === true) {
+      console.log(`ℹ️ dispatchPostSession: sessão ${sessionId} já processada`);
+      return true;
+    }
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('name, phone')
+      .eq('user_id', session.user_id)
+      .maybeSingle();
+
+    if (!profile?.phone) {
+      console.log(`⚠️ dispatchPostSession: sem telefone para sessão ${sessionId}`);
+      await supabase.from('sessions').update({ post_session_sent: true }).eq('id', sessionId);
+      return false;
+    }
+
+    if (!session.session_summary) {
+      console.log(`⚠️ dispatchPostSession: sem summary para ${sessionId} — disparando session-extractor`);
+      const recovered = await runSessionExtractor(supabase, sessionId);
+      if (!recovered?.summary) {
+        console.warn(`⚠️ dispatchPostSession: extractor não gerou summary para ${sessionId}`);
+        return false;
+      }
+      session.session_summary = recovered.summary;
+      session.key_insights = recovered.key_insights;
+      session.commitments = recovered.commitments;
+    }
+
+    const userName = profile.name || 'você';
+    const commitments = session.commitments || [];
+    let commitmentsList = 'Nenhum compromisso definido';
+    if (Array.isArray(commitments) && commitments.length > 0) {
+      commitmentsList = commitments.map((c: any, i: number) => {
+        if (typeof c === 'string') return `${i + 1}. ${c}`;
+        if (typeof c === 'object' && c.title) return `${i + 1}. ${c.title}`;
+        return `${i + 1}. ${JSON.stringify(c)}`;
+      }).join('\n');
+    }
+
+    const insights = session.key_insights || [];
+    let insightsList = '';
+    if (Array.isArray(insights) && insights.length > 0) {
+      insightsList = insights.map((ins: any) => {
+        if (typeof ins === 'string') return `• ${ins}`;
+        return `• ${JSON.stringify(ins)}`;
+      }).join('\n');
+    }
+
+    let message = `${userName}, foi incrível nossa sessão hoje! 💜\n\n📝 *Resumo:*\n${session.session_summary}\n\n🎯 *Seus Compromissos:*\n${commitmentsList}`;
+    if (insightsList) {
+      message += `\n\n💡 *Insights:*\n${insightsList}`;
+    }
+    message += `\n\nMe conta durante a semana como está seu progresso! Estou aqui por você. ✨`;
+
+    const cleanPhone = cleanPhoneNumber(profile.phone);
+    const summaryResult = await sendProactive(cleanPhone, message, 'session_reminder', session.user_id);
+    if (!summaryResult.success) {
+      console.error(`❌ dispatchPostSession: falha no resumo de ${sessionId}:`, summaryResult.error);
+      return false;
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    const ratingMessage = `Antes de fechar, me conta rapidinho: ⭐\n\n*De 1 a 5, que nota você dá pra nossa sessão de hoje?*\n\n(Só o número tá ótimo! Se quiser comentar o que mais gostou ou o que posso melhorar, adoraria ouvir 💜)`;
+
+    const ratingResult = await sendProactive(cleanPhone, ratingMessage, 'checkin', session.user_id);
+    let ratingSuccess = false;
+
+    if (ratingResult.success) {
+      ratingSuccess = true;
+      console.log(`✅ dispatchPostSession: rating inline enviado para ${sessionId}`);
+      try {
+        await supabase.from('messages').insert({
+          user_id: session.user_id,
+          role: 'assistant',
+          content: ratingMessage,
+        });
+      } catch (persistErr) {
+        console.warn(`⚠️ dispatchPostSession: não persistiu rating em messages para ${sessionId}:`, persistErr);
+      }
+
+      const cmts = session.commitments || [];
+      if (Array.isArray(cmts) && cmts.length > 0) {
+        const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+        for (const c of cmts) {
+          const title = typeof c === 'string' ? c : c.title || JSON.stringify(c);
+          await supabase.from('commitments').insert({
+            user_id: session.user_id,
+            session_id: sessionId,
+            title,
+            due_date: tomorrow.toISOString(),
+            commitment_status: 'pending',
+          });
+        }
+        console.log(`✅ dispatchPostSession: ${cmts.length} compromissos criados para ${sessionId}`);
+      }
+    } else {
+      console.error(`❌ dispatchPostSession: falha no rating de ${sessionId}:`, ratingResult.error);
+      try {
+        await supabase.from('failed_message_log').insert({
+          user_id: session.user_id,
+          phone: cleanPhone,
+          content: ratingMessage,
+          error: ratingResult.error || 'unknown',
+          function_name: 'session-reminder/rating-inline',
+        });
+      } catch (logErr) {
+        console.warn(`⚠️ dispatchPostSession: não logou falha de rating para ${sessionId}:`, logErr);
+      }
+    }
+
+    await supabase.from('sessions').update({
+      post_session_sent: true,
+      ...(ratingSuccess && { rating_requested: true }),
+    }).eq('id', sessionId);
+
+    return ratingSuccess;
+  } catch (err) {
+    console.error(`❌ dispatchPostSession: erro inesperado para ${sessionId}:`, err);
+    return false;
+  }
+}
+
 function getBrtHour(): number {
   return (new Date().getUTCHours() - 3 + 24) % 24;
 }
