@@ -89,13 +89,15 @@ const CheckoutV2 = () => {
 
   // ViewContent + GA4 begin_checkout no mount
   useEffect(() => {
+    const trialPriceMap: Record<string, number> = { essencial: 6.9, direcao: 9.9, transformacao: 19.9 };
     if (typeof window !== "undefined" && (window as any).fbq) {
       (window as any).fbq("track", "ViewContent", {
         content_name: "Checkout Page V2",
         content_category: "checkout",
+        value: trialPriceMap[selectedPlan],
+        currency: "BRL",
       });
     }
-    const trialPriceMap: Record<string, number> = { essencial: 6.9, direcao: 9.9, transformacao: 19.9 };
     trackBeginCheckout({ plan: selectedPlan, value: trialPriceMap[selectedPlan] });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
