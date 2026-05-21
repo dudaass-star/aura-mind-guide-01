@@ -21,6 +21,8 @@ const IndexV2 = () => {
       (window as any).fbq("track", "ViewContent", {
         content_name: "Landing V2",
         content_category: "homepage_v2",
+        value: 6.90,
+        currency: "BRL",
       });
     }
     trackViewItem({ item_id: "landing_v2", item_name: "Landing V2" });
