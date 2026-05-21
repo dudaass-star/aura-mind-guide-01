@@ -201,13 +201,23 @@ const CheckoutV2 = () => {
         (window as any).fbq(
           "track",
           "Lead",
-          { content_name: `Trial ${plans[selectedPlan].name}`, content_category: "checkout" },
+          {
+            content_name: `Trial ${plans[selectedPlan].name}`,
+            content_category: "checkout",
+            value: ({ essencial: 6.9, direcao: 9.9, transformacao: 19.9 } as Record<string, number>)[selectedPlan],
+            currency: "BRL",
+          },
           { eventID: leadEventId },
         );
         (window as any).fbq(
           "track",
           "InitiateCheckout",
-          { content_name: `Trial ${plans[selectedPlan].name}`, content_category: "checkout" },
+          {
+            content_name: `Trial ${plans[selectedPlan].name}`,
+            content_category: "checkout",
+            value: ({ essencial: 6.9, direcao: 9.9, transformacao: 19.9 } as Record<string, number>)[selectedPlan],
+            currency: "BRL",
+          },
           { eventID: icEventId },
         );
       }
@@ -218,6 +228,8 @@ const CheckoutV2 = () => {
         custom_data: {
           content_name: `Trial ${plans[selectedPlan].name}`,
           content_category: "checkout",
+          value: ({ essencial: 6.9, direcao: 9.9, transformacao: 19.9 } as Record<string, number>)[selectedPlan],
+          currency: "BRL",
         },
       };
 
