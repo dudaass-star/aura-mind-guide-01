@@ -82,14 +82,16 @@ const Checkout = () => {
 
   // ViewContent on page load (browser pixel only — no PII available yet)
   useEffect(() => {
+    const trialPriceMap: Record<string, number> = { essencial: 6.9, direcao: 9.9, transformacao: 19.9 };
     if (typeof window !== 'undefined' && (window as any).fbq) {
       (window as any).fbq('track', 'ViewContent', {
         content_name: 'Checkout Page',
         content_category: 'checkout',
+        value: trialPriceMap[selectedPlan],
+        currency: 'BRL',
       });
     }
     // GA4 begin_checkout — usuário entrou na página de checkout
-    const trialPriceMap: Record<string, number> = { essencial: 6.9, direcao: 9.9, transformacao: 19.9 };
     trackBeginCheckout({ plan: selectedPlan, value: trialPriceMap[selectedPlan] });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
