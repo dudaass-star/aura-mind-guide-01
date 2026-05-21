@@ -195,14 +195,20 @@ const Checkout = () => {
       };
 
       // Browser pixel: Lead + InitiateCheckout with event_id for dedup
+      const trialPriceMap: Record<string, number> = { essencial: 6.9, direcao: 9.9, transformacao: 19.9 };
+      const planValue = trialPriceMap[selectedPlan];
       if (typeof window !== 'undefined' && (window as any).fbq) {
         (window as any).fbq('track', 'Lead', {
           content_name: `Trial ${plans[selectedPlan].name}`,
           content_category: 'checkout',
+          value: planValue,
+          currency: 'BRL',
         }, { eventID: leadEventId });
         (window as any).fbq('track', 'InitiateCheckout', {
           content_name: `Trial ${plans[selectedPlan].name}`,
           content_category: 'checkout',
+          value: planValue,
+          currency: 'BRL',
         }, { eventID: icEventId });
       }
 
@@ -213,6 +219,8 @@ const Checkout = () => {
         custom_data: {
           content_name: `Trial ${plans[selectedPlan].name}`,
           content_category: 'checkout',
+          value: planValue,
+          currency: 'BRL',
         },
       };
 
@@ -226,8 +234,7 @@ const Checkout = () => {
       ]).catch(() => {}); // non-blocking
       
       // GA4 add_payment_info — usuário enviou o formulário, indo pro Stripe
-      const trialPriceMap: Record<string, number> = { essencial: 6.9, direcao: 9.9, transformacao: 19.9 };
-      trackAddPaymentInfo({ plan: selectedPlan, billing: billingPeriod, value: trialPriceMap[selectedPlan] });
+      trackAddPaymentInfo({ plan: selectedPlan, billing: billingPeriod, value: planValue });
 
       // GA4 client_id (cookie _ga) — encaminhado ao Stripe via metadata para Measurement Protocol
       const gaClientId = getGaClientId();
