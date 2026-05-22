@@ -76,8 +76,13 @@ serve(async (req) => {
     const plan = requestedPlan;
     const billingOverride = billing;
     const isBoletoPayment = paymentMethod === "boleto" && billingOverride === "yearly";
+    // V2: cartão recorrente sem trial pra Trim/Sem/Anual.
+    const isRecurringCardV2 =
+      paymentMethod === "card" &&
+      !trial &&
+      (billingOverride === "quarterly" || billingOverride === "semestral" || billingOverride === "yearly");
     
-    logStep("Request received", { plan, billing: billingOverride, name, email, phone, trial: !!trial, paymentMethod, isBoleto: isBoletoPayment, embedded: !!embedded, hasFbp: !!fbp, hasFbc: !!fbc, hasGaClientId: !!gaClientId });
+    logStep("Request received", { plan, billing: billingOverride, name, email, phone, trial: !!trial, paymentMethod, isBoleto: isBoletoPayment, isRecurringCardV2, embedded: !!embedded, hasFbp: !!fbp, hasFbc: !!fbc, hasGaClientId: !!gaClientId });
 
     const PRICES = getPrices();
     
@@ -95,15 +100,34 @@ serve(async (req) => {
       throw new Error("Valid email is required");
     }
 
-    // Validate billing period
-    const billingPeriod = billingOverride === "yearly" ? "yearly" : "monthly";
-    
-    // Select the correct price ID
+    // Anual com trial não é mais permitido (V2).
+    if (trial && billingOverride === "yearly") {
+      throw new Error("Invalid billing: trial não disponível para o plano anual");
+    }
+
+    // Período usado em metadata/labels — preserva valor cru pra V2 (quarterly/semestral/yearly).
+    const billingPeriod = (
+      ["monthly", "quarterly", "semestral", "yearly"].includes(billingOverride)
+        ? billingOverride
+        : "monthly"
+    ) as "monthly" | "quarterly" | "semestral" | "yearly";
+
+    // Resolve o price ID conforme o fluxo:
+    //   - Boleto: STRIPE_PRICE_*_PIX_YEARLY (legado, só anual)
+    //   - Cartão recorrente V2 (trim/sem/anual sem trial): RECURRING_PRICES hardcoded
+    //   - Cartão mensal/anual com trial: STRIPE_PRICE_*_MONTHLY ou _YEARLY (legado)
     let priceId: string;
     if (isBoletoPayment) {
       priceId = PRICES[plan].boletoYearly;
+    } else if (isRecurringCardV2) {
+      const recurring = RECURRING_PRICES[plan];
+      if (!recurring) throw new Error("Plano sem preço recorrente configurado");
+      priceId = recurring[billingPeriod as "quarterly" | "semestral" | "yearly"];
     } else {
-      priceId = PRICES[plan][billingPeriod];
+      // Fluxos legados (mensal cartão e anual trial) usam o mapa antigo,
+      // que só conhece monthly/yearly.
+      const legacyPeriod = billingPeriod === "yearly" ? "yearly" : "monthly";
+      priceId = PRICES[plan][legacyPeriod];
     }
 
     if (!priceId) {
