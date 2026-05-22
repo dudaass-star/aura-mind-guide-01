@@ -49,6 +49,12 @@ verify_jwt = false
 [functions.reactivation-check]
 verify_jwt = false
 
+[functions.criar-pix-asaas]
+verify_jwt = false
+
+[functions.webhook-asaas]
+verify_jwt = false
+
 [functions.start-trial]
 verify_jwt = false
 
