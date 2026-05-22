@@ -3,9 +3,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { ArrowLeft, CreditCard, Check, Shield, Lock, Gift } from "lucide-react";
+import { ArrowLeft, CreditCard, Check, Shield, Lock, Gift, QrCode, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { trackBeginCheckout, trackAddPaymentInfo, trackExitIntent, getGaClientId } from "@/lib/ga4";
@@ -15,7 +22,7 @@ import { loadStripe, type Stripe as StripeJs } from "@stripe/stripe-js";
 import { EmbeddedCheckoutProvider, EmbeddedCheckout } from "@stripe/react-stripe-js";
 
 type PlanId = "essencial" | "direcao" | "transformacao";
-type BillingPeriod = "monthly" | "yearly";
+type BillingPeriod = "monthly" | "quarterly" | "semestral" | "yearly";
 
 interface PlanConfig {
   name: string;
@@ -23,6 +30,12 @@ interface PlanConfig {
   yearlyPrice: string;
   yearlyMonthlyEquivalent: string;
   yearlyDiscount: number;
+  quarterlyPrice: string;
+  quarterlyMonthlyEquivalent: string;
+  quarterlyDiscount: number;
+  semestralPrice: string;
+  semestralMonthlyEquivalent: string;
+  semestralDiscount: number;
   trialPrice: string;
   sessions: number;
   highlights: string[];
@@ -35,6 +48,12 @@ const plans: Record<PlanId, PlanConfig> = {
     yearlyPrice: "214,90",
     yearlyMonthlyEquivalent: "17,91",
     yearlyDiscount: 40,
+    quarterlyPrice: "79,90",
+    quarterlyMonthlyEquivalent: "26,63",
+    quarterlyDiscount: 11,
+    semestralPrice: "125,90",
+    semestralMonthlyEquivalent: "20,98",
+    semestralDiscount: 30,
     trialPrice: "6,90",
     sessions: 0,
     highlights: ["Conversas ilimitadas 24/7", "Check-in diário", "Review semanal"],
@@ -45,6 +64,12 @@ const plans: Record<PlanId, PlanConfig> = {
     yearlyPrice: "359,90",
     yearlyMonthlyEquivalent: "29,99",
     yearlyDiscount: 40,
+    quarterlyPrice: "133,90",
+    quarterlyMonthlyEquivalent: "44,63",
+    quarterlyDiscount: 11,
+    semestralPrice: "209,90",
+    semestralMonthlyEquivalent: "34,98",
+    semestralDiscount: 30,
     trialPrice: "9,90",
     sessions: 4,
     highlights: ["Tudo do Essencial", "4 Sessões Especiais/mês", "Resumo após cada sessão"],
@@ -55,11 +80,81 @@ const plans: Record<PlanId, PlanConfig> = {
     yearlyPrice: "574,90",
     yearlyMonthlyEquivalent: "47,91",
     yearlyDiscount: 40,
+    quarterlyPrice: "213,90",
+    quarterlyMonthlyEquivalent: "71,30",
+    quarterlyDiscount: 11,
+    semestralPrice: "335,90",
+    semestralMonthlyEquivalent: "55,98",
+    semestralDiscount: 30,
     trialPrice: "19,90",
     sessions: 8,
     highlights: ["Tudo do Direção", "8 Sessões Especiais/mês", "Prioridade no agendamento"],
   },
 };
+
+// Helpers de período: PIX é one-time pros 3 planos longos.
+// Cartão (com trial 7 dias) só faz sentido em Mensal/Anual hoje.
+const isPixPeriod = (b: BillingPeriod) => b !== "monthly";
+const periodLabelMap: Record<BillingPeriod, string> = {
+  monthly: "mês",
+  quarterly: "trimestre",
+  semestral: "semestre",
+  yearly: "ano",
+};
+const periodShortMap: Record<BillingPeriod, string> = {
+  monthly: "Mensal",
+  quarterly: "Trim",
+  semestral: "Sem",
+  yearly: "Anual",
+};
+
+function getPeriodPrice(plan: PlanConfig, b: BillingPeriod): string {
+  switch (b) {
+    case "monthly": return plan.monthlyPrice;
+    case "quarterly": return plan.quarterlyPrice;
+    case "semestral": return plan.semestralPrice;
+    case "yearly": return plan.yearlyPrice;
+  }
+}
+function getPeriodDiscount(plan: PlanConfig, b: BillingPeriod): number {
+  switch (b) {
+    case "quarterly": return plan.quarterlyDiscount;
+    case "semestral": return plan.semestralDiscount;
+    case "yearly": return plan.yearlyDiscount;
+    default: return 0;
+  }
+}
+function getPeriodMonthlyEquivalent(plan: PlanConfig, b: BillingPeriod): string | null {
+  switch (b) {
+    case "quarterly": return plan.quarterlyMonthlyEquivalent;
+    case "semestral": return plan.semestralMonthlyEquivalent;
+    case "yearly": return plan.yearlyMonthlyEquivalent;
+    default: return null;
+  }
+}
+
+function formatCpf(value: string): string {
+  const c = value.replace(/\D/g, "").slice(0, 11);
+  if (c.length <= 3) return c;
+  if (c.length <= 6) return `${c.slice(0, 3)}.${c.slice(3)}`;
+  if (c.length <= 9) return `${c.slice(0, 3)}.${c.slice(3, 6)}.${c.slice(6)}`;
+  return `${c.slice(0, 3)}.${c.slice(3, 6)}.${c.slice(6, 9)}-${c.slice(9)}`;
+}
+function isValidCpf(cpf: string): boolean {
+  const c = cpf.replace(/\D/g, "");
+  if (c.length !== 11) return false;
+  if (/^(\d)\1+$/.test(c)) return false;
+  let sum = 0;
+  for (let i = 0; i < 9; i++) sum += parseInt(c[i]) * (10 - i);
+  let d1 = 11 - (sum % 11);
+  if (d1 >= 10) d1 = 0;
+  if (d1 !== parseInt(c[9])) return false;
+  sum = 0;
+  for (let i = 0; i < 10; i++) sum += parseInt(c[i]) * (11 - i);
+  let d2 = 11 - (sum % 11);
+  if (d2 >= 10) d2 = 0;
+  return d2 === parseInt(c[10]);
+}
 
 const CheckoutV2 = () => {
   const location = useLocation();
@@ -90,6 +185,22 @@ const CheckoutV2 = () => {
   // sem salto pro domínio checkout.stripe.com.
   const [embeddedClientSecret, setEmbeddedClientSecret] = useState<string | null>(null);
   const [stripePromise, setStripePromise] = useState<Promise<StripeJs | null> | null>(null);
+
+  // PIX (Asaas): só aparece pra trim/sem/anual. Modal abre com form de CPF
+  // (resto dos dados reusa name/email/phone do form principal) e troca pra
+  // tela de QR depois que a edge function retorna.
+  const [pixOpen, setPixOpen] = useState(false);
+  const [pixStage, setPixStage] = useState<"form" | "qr">("form");
+  const [cpf, setCpf] = useState("");
+  const [cpfError, setCpfError] = useState<string | undefined>(undefined);
+  const [pixLoading, setPixLoading] = useState(false);
+  const [pixData, setPixData] = useState<{
+    qrImage: string;
+    copyPaste: string;
+    expiresAt: string | null;
+    invoiceUrl: string | null;
+    amount: number;
+  } | null>(null);
 
   // ViewContent + GA4 begin_checkout no mount
   useEffect(() => {
@@ -148,8 +259,11 @@ const CheckoutV2 = () => {
   }, [hasRedirected, embeddedClientSecret]);
 
   const currentPlan = plans[selectedPlan];
-  const currentPrice = billingPeriod === "monthly" ? currentPlan.monthlyPrice : currentPlan.yearlyPrice;
-  const periodLabel = billingPeriod === "monthly" ? "mês" : "ano";
+  const currentPrice = getPeriodPrice(currentPlan, billingPeriod);
+  const periodLabel = periodLabelMap[billingPeriod];
+  const currentDiscount = getPeriodDiscount(currentPlan, billingPeriod);
+  const currentMonthlyEquivalent = getPeriodMonthlyEquivalent(currentPlan, billingPeriod);
+  const pixEnabled = isPixPeriod(billingPeriod);
 
   const formatPhone = (value: string) => {
     const numbers = value.replace(/\D/g, "");
@@ -170,6 +284,12 @@ const CheckoutV2 = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Trim/Sem não tem fluxo cartão — Enter no form abre PIX direto.
+    if (billingPeriod === "quarterly" || billingPeriod === "semestral") {
+      handleOpenPix();
+      return;
+    }
 
     // Valida tudo de uma vez e mostra os erros inline. Auto-scroll para o
     // primeiro campo inválido — o WhatsApp costuma estar abaixo da dobra no mobile.
@@ -320,6 +440,82 @@ const CheckoutV2 = () => {
     setStripePromise(null);
     setHasRedirected(false);
   }, []);
+
+  // Abre o modal PIX. Valida os 3 campos comuns antes (mesma regra do CTA cartão).
+  const handleOpenPix = () => {
+    const nextErrors: { name?: string; email?: string; phone?: string } = {};
+    if (phoneDigits.length < 11) nextErrors.phone = "Digite seu WhatsApp com DDD (11 dígitos).";
+    if (!name.trim()) nextErrors.name = "Por favor, digite seu nome.";
+    if (!email.trim() || !emailRegex.test(email)) nextErrors.email = "Digite um email válido.";
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
+      const order = ["phone", "name", "email"] as const;
+      const firstInvalid = order.find((f) => nextErrors[f]);
+      if (firstInvalid) {
+        requestAnimationFrame(() => {
+          const el = document.getElementById(firstInvalid);
+          el?.scrollIntoView({ behavior: "smooth", block: "center" });
+          el?.focus({ preventScroll: true });
+        });
+      }
+      return;
+    }
+    setErrors({});
+    setPixStage("form");
+    setPixData(null);
+    setCpfError(undefined);
+    setPixOpen(true);
+  };
+
+  // Gera a cobrança PIX no Asaas e troca o modal pra tela de QR.
+  const handleGeneratePix = async () => {
+    if (!isValidCpf(cpf)) {
+      setCpfError("CPF inválido. Confira os 11 dígitos.");
+      return;
+    }
+    setCpfError(undefined);
+    setPixLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("criar-pix-asaas", {
+        body: {
+          plan: selectedPlan,
+          billing: billingPeriod,
+          name: name.trim(),
+          email: email.trim(),
+          phone: phone.replace(/\D/g, ""),
+          cpf: cpf.replace(/\D/g, ""),
+        },
+      });
+      if (error) throw new Error(error.message || "Erro ao gerar PIX");
+      if (!data?.qrCodeImage || !data?.copyPaste) {
+        throw new Error("PIX não retornado pelo provedor");
+      }
+      setPixData({
+        qrImage: data.qrCodeImage,
+        copyPaste: data.copyPaste,
+        expiresAt: data.expiresAt || null,
+        invoiceUrl: data.invoiceUrl || null,
+        amount: data.amount || 0,
+      });
+      setPixStage("qr");
+      trackAddPaymentInfo({ plan: selectedPlan, billing: billingPeriod, value: data.amount || 0 });
+    } catch (err) {
+      console.error("PIX V2 error:", err);
+      toast.error(err instanceof Error ? err.message : "Erro ao gerar PIX. Tente novamente.");
+    } finally {
+      setPixLoading(false);
+    }
+  };
+
+  const handleCopyPix = async () => {
+    if (!pixData?.copyPaste) return;
+    try {
+      await navigator.clipboard.writeText(pixData.copyPaste);
+      toast.success("Código PIX copiado!");
+    } catch {
+      toast.error("Não foi possível copiar. Selecione manualmente.");
+    }
+  };
 
   const inputCls =
     "mt-1.5 bg-white/5 border-white/15 text-white placeholder:text-white/55 focus-visible:ring-1 focus-visible:ring-[hsl(140_18%_55%)]";
@@ -479,7 +675,9 @@ const CheckoutV2 = () => {
                 Comece em 2 minutos
               </h1>
               <p className="text-white/65 text-sm">
-                7 dias por R$ {currentPlan.trialPrice} • cancele quando quiser
+                {pixEnabled
+                  ? `Pagamento único à vista no PIX • economia de ${currentDiscount}%`
+                  : `7 dias por R$ ${currentPlan.trialPrice} • cancele quando quiser`}
               </p>
             </div>
 
@@ -488,39 +686,38 @@ const CheckoutV2 = () => {
               onSubmit={handleSubmit}
               className="space-y-5"
             >
-              {/* Toggle de período — sem moldura de card */}
-              <div className="flex items-center justify-center gap-1 p-1 bg-white/5 rounded-full border border-white/10 max-w-xs mx-auto">
-                <button
-                  type="button"
-                  onClick={() => setBillingPeriod("monthly")}
-                  className={`flex-1 px-4 py-2 rounded-full text-sm font-medium transition-all ${
-                    billingPeriod === "monthly"
-                      ? "bg-[hsl(140_22%_45%)] text-white shadow-md"
-                      : "text-white/70 hover:text-white"
-                  }`}
-                >
-                  Mensal
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setBillingPeriod("yearly")}
-                  className={`flex-1 px-4 py-2 rounded-full text-sm font-medium transition-all flex items-center justify-center gap-2 ${
-                    billingPeriod === "yearly"
-                      ? "bg-[hsl(140_22%_45%)] text-white shadow-md"
-                      : "text-white/70 hover:text-white"
-                  }`}
-                >
-                  Anual
-                  <span
-                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                      billingPeriod === "yearly"
-                        ? "bg-white/20 text-white"
-                        : "bg-[hsl(35_70%_60%)] text-[hsl(220_35%_12%)]"
-                    }`}
-                  >
-                    -40%
-                  </span>
-                </button>
+              {/* Toggle de período: 4 opções. Mensal = cartão com trial.
+                  Trim/Sem/Anual = PIX à vista (com card só no anual). */}
+              <div className="grid grid-cols-4 gap-1 p-1 bg-white/5 rounded-2xl border border-white/10">
+                {(["monthly", "quarterly", "semestral", "yearly"] as BillingPeriod[]).map((p) => {
+                  const active = billingPeriod === p;
+                  const discount = p === "monthly" ? 0 : getPeriodDiscount(currentPlan, p);
+                  return (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setBillingPeriod(p)}
+                      className={`relative flex flex-col items-center justify-center px-2 py-2 rounded-xl text-xs font-medium transition-all ${
+                        active
+                          ? "bg-[hsl(140_22%_45%)] text-white shadow-md"
+                          : "text-white/70 hover:text-white"
+                      }`}
+                    >
+                      <span>{periodShortMap[p]}</span>
+                      {discount > 0 && (
+                        <span
+                          className={`mt-0.5 text-[9px] font-bold px-1 py-0.5 rounded ${
+                            active
+                              ? "bg-white/20 text-white"
+                              : "bg-[hsl(35_70%_60%)] text-[hsl(220_35%_12%)]"
+                          }`}
+                        >
+                          -{discount}%
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
 
               {/* Planos slim */}
@@ -530,8 +727,9 @@ const CheckoutV2 = () => {
                 className="space-y-2.5"
               >
                 {(Object.entries(plans) as [PlanId, PlanConfig][]).map(([id, plan]) => {
-                  const price = billingPeriod === "monthly" ? plan.monthlyPrice : plan.yearlyPrice;
-                  const period = billingPeriod === "monthly" ? "mês" : "ano";
+                  const price = getPeriodPrice(plan, billingPeriod);
+                  const period = periodLabelMap[billingPeriod];
+                  const monthlyEquiv = getPeriodMonthlyEquivalent(plan, billingPeriod);
                   const active = selectedPlan === id;
                   const isPopular = id === "direcao";
 
@@ -565,12 +763,25 @@ const CheckoutV2 = () => {
                         </div>
                       </div>
                       <div className="text-right shrink-0">
-                        <p className="font-display text-lg font-semibold text-[hsl(140_30%_72%)] whitespace-nowrap leading-tight">
-                          R$ {plan.trialPrice}
-                        </p>
-                        <p className="text-[11px] text-white/65 leading-tight">
-                          depois R$ {price}/{period}
-                        </p>
+                        {pixEnabled ? (
+                          <>
+                            <p className="font-display text-lg font-semibold text-[hsl(140_30%_72%)] whitespace-nowrap leading-tight">
+                              R$ {price}
+                            </p>
+                            <p className="text-[11px] text-white/65 leading-tight">
+                              {monthlyEquiv ? `≈ R$ ${monthlyEquiv}/mês` : `por ${period}`}
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <p className="font-display text-lg font-semibold text-[hsl(140_30%_72%)] whitespace-nowrap leading-tight">
+                              R$ {plan.trialPrice}
+                            </p>
+                            <p className="text-[11px] text-white/65 leading-tight">
+                              depois R$ {price}/{period}
+                            </p>
+                          </>
+                        )}
                       </div>
                     </label>
                   );
@@ -651,26 +862,69 @@ const CheckoutV2 = () => {
 
               {/* Resumo único acima do CTA */}
               <div className="text-center text-sm text-white/65 pt-1">
-                Hoje{" "}
-                <span className="text-white font-semibold">R$ {currentPlan.trialPrice}</span>
-                {" "}• depois{" "}
-                <span className="text-white/85">R$ {currentPrice}/{periodLabel}</span>
+                {pixEnabled ? (
+                  <>
+                    À vista no PIX:{" "}
+                    <span className="text-white font-semibold">R$ {currentPrice}</span>
+                    {currentMonthlyEquivalent && (
+                      <span className="text-white/60"> (≈ R$ {currentMonthlyEquivalent}/mês)</span>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    Hoje{" "}
+                    <span className="text-white font-semibold">R$ {currentPlan.trialPrice}</span>
+                    {" "}• depois{" "}
+                    <span className="text-white/85">R$ {currentPrice}/{periodLabel}</span>
+                  </>
+                )}
               </div>
 
-              {/* CTA principal */}
-              <Button
-                type="submit"
-                variant="sage"
-                size="xl"
-                className={`w-full rounded-full transition-opacity ${!isFormValid ? "opacity-70" : ""}`}
-                disabled={isLoading}
-                aria-disabled={!isFormValid || isLoading}
-              >
-                <CreditCard className="w-5 h-5 mr-2" />
-                {isLoading ? "Processando..." : `Começar trial por R$ ${currentPlan.trialPrice}`}
-              </Button>
+              {/* CTA principal: cartão (Mensal/Anual) ou PIX (Trim/Sem). */}
+              {billingPeriod === "monthly" || billingPeriod === "yearly" ? (
+                <Button
+                  type="submit"
+                  variant="sage"
+                  size="xl"
+                  className={`w-full rounded-full transition-opacity ${!isFormValid ? "opacity-70" : ""}`}
+                  disabled={isLoading}
+                  aria-disabled={!isFormValid || isLoading}
+                >
+                  <CreditCard className="w-5 h-5 mr-2" />
+                  {isLoading ? "Processando..." : `Começar trial por R$ ${currentPlan.trialPrice}`}
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  variant="sage"
+                  size="xl"
+                  onClick={handleOpenPix}
+                  className={`w-full rounded-full transition-opacity ${!isFormValid ? "opacity-70" : ""}`}
+                  aria-disabled={!isFormValid}
+                >
+                  <QrCode className="w-5 h-5 mr-2" />
+                  Pagar com PIX — R$ {currentPrice}
+                </Button>
+              )}
+
+              {/* CTA secundário PIX no plano Anual (cartão fica como principal). */}
+              {billingPeriod === "yearly" && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  onClick={handleOpenPix}
+                  className="w-full rounded-full bg-transparent border-white/25 text-white hover:bg-white/10 hover:text-white"
+                >
+                  <QrCode className="w-4 h-4 mr-2" />
+                  Ou pague à vista no PIX — R$ {currentPrice}
+                </Button>
+              )}
+
               <p className="text-center text-[11px] text-white/50 -mt-2">
-                7 dias completos • Sem cobrança se cancelar antes do 8º dia
+                {pixEnabled && billingPeriod !== "yearly"
+                  ? "Pagamento único • liberação automática após confirmação"
+                  : "7 dias completos • Sem cobrança se cancelar antes do 8º dia"}
               </p>
 
               {/* Faixa única de confiança */}
@@ -750,6 +1004,149 @@ const CheckoutV2 = () => {
             </div>
           </div>
         )}
+
+        {/* Modal PIX: form de CPF → QR code + copia-e-cola */}
+        <Dialog open={pixOpen} onOpenChange={(open) => {
+          setPixOpen(open);
+          if (!open) {
+            // ao fechar, reseta pra começar limpo na próxima abertura
+            setTimeout(() => {
+              setPixStage("form");
+              setPixData(null);
+              setCpfError(undefined);
+            }, 200);
+          }
+        }}>
+          <DialogContent className="bg-[hsl(220_35%_12%)] border-white/10 text-white max-w-md">
+            {pixStage === "form" ? (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="font-display text-xl text-white">
+                    Pagar com PIX
+                  </DialogTitle>
+                  <DialogDescription className="text-white/65">
+                    Plano <span className="text-white font-medium">{currentPlan.name}</span> · {periodShortMap[billingPeriod]} —{" "}
+                    <span className="text-[hsl(140_30%_72%)] font-semibold">R$ {currentPrice}</span> à vista
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-4 pt-2">
+                  <div>
+                    <Label htmlFor="cpf" className="text-white/80 text-sm">CPF</Label>
+                    <Input
+                      id="cpf"
+                      type="text"
+                      value={cpf}
+                      onChange={(e) => {
+                        setCpf(formatCpf(e.target.value));
+                        if (cpfError) setCpfError(undefined);
+                      }}
+                      placeholder="000.000.000-00"
+                      className={`${inputCls} ${cpfError ? "border-red-400/70 focus-visible:ring-red-400/60" : ""}`}
+                      inputMode="numeric"
+                      autoComplete="off"
+                      maxLength={14}
+                    />
+                    {cpfError ? (
+                      <p className="text-[11px] text-red-300 mt-1">{cpfError}</p>
+                    ) : (
+                      <p className="text-[11px] text-white/55 mt-1">
+                        Obrigatório pra emissão da cobrança PIX no banco.
+                      </p>
+                    )}
+                  </div>
+
+                  <Button
+                    variant="sage"
+                    size="lg"
+                    className="w-full rounded-full"
+                    onClick={handleGeneratePix}
+                    disabled={pixLoading}
+                  >
+                    {pixLoading ? "Gerando PIX..." : `Gerar PIX — R$ ${currentPrice}`}
+                  </Button>
+
+                  <p className="text-[11px] text-white/55 text-center">
+                    Liberação automática assim que o pagamento for confirmado.
+                  </p>
+                </div>
+              </>
+            ) : pixData ? (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="font-display text-xl text-white">
+                    Escaneie ou copie o código
+                  </DialogTitle>
+                  <DialogDescription className="text-white/65">
+                    <span className="text-[hsl(140_30%_72%)] font-semibold">
+                      R$ {pixData.amount.toFixed(2).replace(".", ",")}
+                    </span>
+                    {" "}· {currentPlan.name} {periodShortMap[billingPeriod]}
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-4 pt-2">
+                  <div className="bg-white rounded-xl p-4 flex justify-center">
+                    <img
+                      src={`data:image/png;base64,${pixData.qrImage}`}
+                      alt="QR Code PIX"
+                      className="w-56 h-56"
+                    />
+                  </div>
+
+                  <div>
+                    <Label className="text-white/80 text-sm">Código copia-e-cola</Label>
+                    <div className="mt-1.5 flex gap-2">
+                      <Input
+                        readOnly
+                        value={pixData.copyPaste}
+                        className={`${inputCls} text-xs font-mono`}
+                        onFocus={(e) => e.currentTarget.select()}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={handleCopyPix}
+                        className="bg-transparent border-white/25 text-white hover:bg-white/10 hover:text-white shrink-0"
+                        title="Copiar código"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="bg-white/5 border border-white/10 rounded-xl p-3 text-xs text-white/70 space-y-1.5">
+                    <p>1. Abra o app do seu banco e escolha pagar com PIX.</p>
+                    <p>2. Escaneie o QR Code ou cole o código copia-e-cola.</p>
+                    <p>3. Confirme o pagamento — você recebe a confirmação no WhatsApp em segundos.</p>
+                  </div>
+
+                  <Button
+                    variant="sage"
+                    size="lg"
+                    className="w-full rounded-full"
+                    onClick={handleCopyPix}
+                  >
+                    <Copy className="w-4 h-4 mr-2" />
+                    Copiar código PIX
+                  </Button>
+
+                  {pixData.invoiceUrl && (
+                    <a
+                      href={pixData.invoiceUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block text-center text-xs text-white/60 hover:text-white underline"
+                    >
+                      Ver fatura em nova aba
+                    </a>
+                  )}
+                </div>
+              </>
+            ) : null}
+          </DialogContent>
+        </Dialog>
       </div>
     </>
   );
