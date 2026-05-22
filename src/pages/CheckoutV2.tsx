@@ -591,6 +591,9 @@ const CheckoutV2 = () => {
                     maxLength={15}
                     aria-invalid={!!errors.phone}
                     aria-describedby={errors.phone ? "phone-error" : "phone-hint"}
+                    autoFocus
+                    inputMode="numeric"
+                    autoComplete="tel-national"
                   />
                   {errors.phone ? (
                     <p id="phone-error" className="text-[11px] text-red-300 mt-1">{errors.phone}</p>
@@ -614,6 +617,8 @@ const CheckoutV2 = () => {
                     className={`${inputCls} ${errors.name ? "border-red-400/70 focus-visible:ring-red-400/60" : ""}`}
                     aria-invalid={!!errors.name}
                     aria-describedby={errors.name ? "name-error" : undefined}
+                    autoComplete="name"
+                    autoCapitalize="words"
                   />
                   {errors.name && (
                     <p id="name-error" className="text-[11px] text-red-300 mt-1">{errors.name}</p>
@@ -633,6 +638,10 @@ const CheckoutV2 = () => {
                     className={`${inputCls} ${errors.email ? "border-red-400/70 focus-visible:ring-red-400/60" : ""}`}
                     aria-invalid={!!errors.email}
                     aria-describedby={errors.email ? "email-error" : undefined}
+                    autoComplete="email"
+                    inputMode="email"
+                    autoCapitalize="none"
+                    spellCheck={false}
                   />
                   {errors.email && (
                     <p id="email-error" className="text-[11px] text-red-300 mt-1">{errors.email}</p>
@@ -658,10 +667,10 @@ const CheckoutV2 = () => {
                 aria-disabled={!isFormValid || isLoading}
               >
                 <CreditCard className="w-5 h-5 mr-2" />
-                {isLoading ? "Processando..." : `Começar por R$ ${currentPlan.trialPrice}`}
+                {isLoading ? "Processando..." : `Começar trial por R$ ${currentPlan.trialPrice}`}
               </Button>
               <p className="text-center text-[11px] text-white/50 -mt-2">
-                Sem compromisso • Cancele em 1 clique no WhatsApp
+                7 dias completos • Sem cobrança se cancelar antes do 8º dia
               </p>
 
               {/* Faixa única de confiança */}
