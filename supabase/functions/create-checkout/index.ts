@@ -231,6 +231,10 @@ serve(async (req) => {
     const sessionConfig: any = {
       customer: customerId,
       locale: "pt-BR",
+      // Desliga o Adaptive Pricing da Stripe (que oferece seletor de moeda US$/R$
+      // baseado no IP/locale do browser). Nosso público é 100% Brasil — cobramos
+      // sempre em BRL e mostramos só o preço em real, sem ruído cognitivo.
+      adaptive_pricing: { enabled: false },
       custom_text: {
         submit: {
           message: `"Eu estava cética, mas em 3 dias já senti que alguém finalmente me ouvia." — Ana C.`,
