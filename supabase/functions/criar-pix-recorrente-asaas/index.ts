@@ -189,6 +189,12 @@ Deno.serve(async (req) => {
         });
         asaasCustomerId = created.id;
       }
+      // Aplica padrão de notificações Aura no novo customer (fire-and-forget).
+      if (asaasCustomerId) {
+        applyAuraNotificationDefaults(asaasFetch, asaasCustomerId).catch((e) =>
+          console.warn("[criar-pix-recorrente-asaas] notif defaults falhou:", e?.message || e)
+        );
+      }
       if (existingProfileId && asaasCustomerId) {
         await supabase
           .from("profiles")
