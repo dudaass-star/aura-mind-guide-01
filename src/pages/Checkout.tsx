@@ -5,20 +5,26 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useState, useEffect, useCallback } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { ArrowLeft, CreditCard, Check, Shield, Lock, Gift, MessageCircle, Calendar, FileText } from "lucide-react";
+import { ArrowLeft, CreditCard, Check, Shield, Lock, Gift, MessageCircle, Calendar, FileText, QrCode, Copy, X } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { trackBeginCheckout, trackAddPaymentInfo, trackExitIntent, getGaClientId } from "@/lib/ga4";
 
 type PlanId = "essencial" | "direcao" | "transformacao";
-type BillingPeriod = "monthly" | "yearly";
-type PaymentMethod = "card";
+type BillingPeriod = "monthly" | "quarterly" | "semestral" | "yearly";
+type PaymentMethod = "card" | "pix";
 
 interface PlanConfig {
   name: string;
   monthlyPrice: string;
+  quarterlyPrice: string;
+  semestralPrice: string;
   yearlyPrice: string;
+  quarterlyMonthlyEquivalent: string;
+  semestralMonthlyEquivalent: string;
   yearlyMonthlyEquivalent: string;
+  quarterlyDiscount: number;
+  semestralDiscount: number;
   yearlyDiscount: number;
   trialPrice: string;
   sessions: number;
@@ -29,8 +35,14 @@ const plans: Record<PlanId, PlanConfig> = {
   essencial: {
     name: "Essencial",
     monthlyPrice: "29,90",
+    quarterlyPrice: "79,90",
+    semestralPrice: "125,90",
     yearlyPrice: "214,90",
+    quarterlyMonthlyEquivalent: "26,63",
+    semestralMonthlyEquivalent: "20,98",
     yearlyMonthlyEquivalent: "17,91",
+    quarterlyDiscount: 11,
+    semestralDiscount: 30,
     yearlyDiscount: 40,
     trialPrice: "6,90",
     sessions: 0,
@@ -39,8 +51,14 @@ const plans: Record<PlanId, PlanConfig> = {
   direcao: {
     name: "Direção",
     monthlyPrice: "49,90",
+    quarterlyPrice: "133,90",
+    semestralPrice: "209,90",
     yearlyPrice: "359,90",
+    quarterlyMonthlyEquivalent: "44,63",
+    semestralMonthlyEquivalent: "34,98",
     yearlyMonthlyEquivalent: "29,99",
+    quarterlyDiscount: 11,
+    semestralDiscount: 30,
     yearlyDiscount: 40,
     trialPrice: "9,90",
     sessions: 4,
@@ -49,14 +67,54 @@ const plans: Record<PlanId, PlanConfig> = {
   transformacao: {
     name: "Transformação",
     monthlyPrice: "79,90",
+    quarterlyPrice: "213,90",
+    semestralPrice: "335,90",
     yearlyPrice: "574,90",
+    quarterlyMonthlyEquivalent: "71,30",
+    semestralMonthlyEquivalent: "55,98",
     yearlyMonthlyEquivalent: "47,91",
+    quarterlyDiscount: 11,
+    semestralDiscount: 30,
     yearlyDiscount: 40,
     trialPrice: "19,90",
     sessions: 8,
     highlights: ["Tudo do Direção", "8 Sessões Especiais/mês", "Prioridade no agendamento"],
   },
 };
+
+// Mapas auxiliares por período
+const periodLabels: Record<BillingPeriod, string> = {
+  monthly: "Mensal",
+  quarterly: "Trimestral",
+  semestral: "Semestral",
+  yearly: "Anual",
+};
+
+const periodSuffix: Record<BillingPeriod, string> = {
+  monthly: "mês",
+  quarterly: "trimestre",
+  semestral: "semestre",
+  yearly: "ano",
+};
+
+function getPrice(plan: PlanConfig, period: BillingPeriod): string {
+  if (period === "monthly") return plan.monthlyPrice;
+  if (period === "quarterly") return plan.quarterlyPrice;
+  if (period === "semestral") return plan.semestralPrice;
+  return plan.yearlyPrice;
+}
+function getMonthlyEquivalent(plan: PlanConfig, period: BillingPeriod): string | null {
+  if (period === "quarterly") return plan.quarterlyMonthlyEquivalent;
+  if (period === "semestral") return plan.semestralMonthlyEquivalent;
+  if (period === "yearly") return plan.yearlyMonthlyEquivalent;
+  return null;
+}
+function getDiscount(plan: PlanConfig, period: BillingPeriod): number {
+  if (period === "quarterly") return plan.quarterlyDiscount;
+  if (period === "semestral") return plan.semestralDiscount;
+  if (period === "yearly") return plan.yearlyDiscount;
+  return 0;
+}
 
 const Checkout = () => {
   const location = useLocation();
@@ -76,9 +134,18 @@ const Checkout = () => {
   const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [cpf, setCpf] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isPixLoading, setIsPixLoading] = useState(false);
   const [showExitPopup, setShowExitPopup] = useState(false);
   const [hasRedirected, setHasRedirected] = useState(false);
+  const [pixModal, setPixModal] = useState<{
+    open: boolean;
+    qrCodeImage?: string;
+    copyPaste?: string;
+    amount?: number;
+    expiresAt?: string;
+  }>({ open: false });
 
   // ViewContent on page load (browser pixel only — no PII available yet)
   useEffect(() => {
@@ -134,8 +201,11 @@ const Checkout = () => {
   }, [hasRedirected]);
 
   const currentPlan = plans[selectedPlan];
-  const currentPrice = billingPeriod === "monthly" ? currentPlan.monthlyPrice : currentPlan.yearlyPrice;
-  const periodLabel = billingPeriod === "monthly" ? "mês" : "ano";
+  const currentPrice = getPrice(currentPlan, billingPeriod);
+  const periodLabel = periodSuffix[billingPeriod];
+  const monthlyEquivalent = getMonthlyEquivalent(currentPlan, billingPeriod);
+  const currentDiscount = getDiscount(currentPlan, billingPeriod);
+  const pixAvailable = billingPeriod !== "monthly";
 
   const formatPhone = (value: string) => {
     const numbers = value.replace(/\D/g, "");
@@ -146,6 +216,100 @@ const Checkout = () => {
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setPhone(formatPhone(e.target.value));
+  };
+
+  const formatCpf = (value: string) => {
+    const numbers = value.replace(/\D/g, "").slice(0, 11);
+    if (numbers.length <= 3) return numbers;
+    if (numbers.length <= 6) return `${numbers.slice(0, 3)}.${numbers.slice(3)}`;
+    if (numbers.length <= 9) return `${numbers.slice(0, 3)}.${numbers.slice(3, 6)}.${numbers.slice(6)}`;
+    return `${numbers.slice(0, 3)}.${numbers.slice(3, 6)}.${numbers.slice(6, 9)}-${numbers.slice(9)}`;
+  };
+  const handleCpfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCpf(formatCpf(e.target.value));
+  };
+
+  // Validação simples de CPF (mesmo algoritmo da edge function)
+  const isValidCPF = (raw: string): boolean => {
+    const c = raw.replace(/\D/g, "");
+    if (c.length !== 11) return false;
+    if (/^(\d)\1+$/.test(c)) return false;
+    let sum = 0;
+    for (let i = 0; i < 9; i++) sum += parseInt(c[i]) * (10 - i);
+    let d1 = 11 - (sum % 11);
+    if (d1 >= 10) d1 = 0;
+    if (d1 !== parseInt(c[9])) return false;
+    sum = 0;
+    for (let i = 0; i < 10; i++) sum += parseInt(c[i]) * (11 - i);
+    let d2 = 11 - (sum % 11);
+    if (d2 >= 10) d2 = 0;
+    return d2 === parseInt(c[10]);
+  };
+
+  const validateBaseFields = (): boolean => {
+    if (!name.trim()) {
+      toast.error("Por favor, insira seu nome");
+      return false;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email.trim() || !emailRegex.test(email)) {
+      toast.error("Por favor, insira um email válido");
+      return false;
+    }
+    if (phone.replace(/\D/g, "").length < 11) {
+      toast.error("Por favor, insira um telefone válido");
+      return false;
+    }
+    return true;
+  };
+
+  const handlePixSubmit = async () => {
+    if (!pixAvailable) return;
+    if (!validateBaseFields()) return;
+    if (!isValidCPF(cpf)) {
+      toast.error("CPF inválido. Confira os números.");
+      return;
+    }
+
+    setIsPixLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("criar-pix-asaas", {
+        body: {
+          plan: selectedPlan,
+          billing: billingPeriod,
+          name: name.trim(),
+          email: email.trim(),
+          phone: phone.replace(/\D/g, ""),
+          cpf: cpf.replace(/\D/g, ""),
+        },
+      });
+
+      if (error) throw new Error(error.message || "Erro ao gerar PIX");
+      if (!data?.copyPaste) throw new Error("PIX não retornou QR Code");
+
+      setPixModal({
+        open: true,
+        qrCodeImage: data.qrCodeImage,
+        copyPaste: data.copyPaste,
+        amount: data.amount,
+        expiresAt: data.expiresAt,
+      });
+    } catch (err) {
+      console.error("PIX error:", err);
+      toast.error(err instanceof Error ? err.message : "Erro ao gerar PIX. Tente novamente.");
+    } finally {
+      setIsPixLoading(false);
+    }
+  };
+
+  const copyPixCode = async () => {
+    if (!pixModal.copyPaste) return;
+    try {
+      await navigator.clipboard.writeText(pixModal.copyPaste);
+      toast.success("Código PIX copiado!");
+    } catch {
+      toast.error("Não consegui copiar. Selecione o texto manualmente.");
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -321,37 +485,43 @@ const Checkout = () => {
                 <h2 className="font-display text-lg font-semibold text-foreground mb-4">
                   Período de cobrança
                 </h2>
-                <div className="flex items-center justify-center gap-3 p-1 bg-secondary/50 rounded-full">
-                  <button
-                    type="button"
-                    onClick={() => setBillingPeriod("monthly")}
-                    className={`flex-1 px-4 py-2.5 rounded-full text-sm font-medium transition-all ${
-                      billingPeriod === "monthly"
-                        ? "bg-primary text-primary-foreground shadow-md"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    Mensal
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setBillingPeriod("yearly")}
-                    className={`flex-1 px-4 py-2.5 rounded-full text-sm font-medium transition-all flex items-center justify-center gap-2 ${
-                      billingPeriod === "yearly"
-                        ? "bg-primary text-primary-foreground shadow-md"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    Anual
-                    <span className={`text-sm font-bold px-3 py-1 rounded-full transition-all ${
-                      billingPeriod === "yearly" 
-                        ? "bg-accent/30 text-primary-foreground" 
-                        : "bg-accent text-accent-foreground shadow-sm animate-pulse-soft"
-                    }`}>
-                      40% off
-                    </span>
-                  </button>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-1 bg-secondary/50 rounded-2xl">
+                  {(Object.keys(periodLabels) as BillingPeriod[]).map((p) => {
+                    const active = billingPeriod === p;
+                    const disc =
+                      p === "quarterly" ? 11 : p === "semestral" ? 30 : p === "yearly" ? 40 : 0;
+                    return (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => setBillingPeriod(p)}
+                        className={`flex flex-col items-center justify-center px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                          active
+                            ? "bg-primary text-primary-foreground shadow-md"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        <span>{periodLabels[p]}</span>
+                        {disc > 0 && (
+                          <span
+                            className={`text-[10px] font-bold mt-0.5 px-1.5 py-0.5 rounded-full ${
+                              active
+                                ? "bg-accent/30 text-primary-foreground"
+                                : "bg-accent text-accent-foreground"
+                            }`}
+                          >
+                            -{disc}%
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
+                {pixAvailable && (
+                  <p className="text-xs text-muted-foreground mt-3 text-center">
+                    Pague com cartão (recorrente) ou PIX à vista
+                  </p>
+                )}
               </div>
 
 
@@ -367,8 +537,10 @@ const Checkout = () => {
                   className="space-y-3"
                 >
                   {(Object.entries(plans) as [PlanId, PlanConfig][]).map(([id, plan]) => {
-                    const price = billingPeriod === "monthly" ? plan.monthlyPrice : plan.yearlyPrice;
-                    const period = billingPeriod === "monthly" ? "mês" : "ano";
+                    const price = getPrice(plan, billingPeriod);
+                    const period = periodSuffix[billingPeriod];
+                    const monthlyEq = getMonthlyEquivalent(plan, billingPeriod);
+                    const disc = getDiscount(plan, billingPeriod);
                     
                     return (
                       <label
@@ -384,9 +556,9 @@ const Checkout = () => {
                             Mais popular
                           </div>
                         )}
-                        {billingPeriod === "yearly" && (
+                        {disc > 0 && (
                           <div className="absolute -top-2 right-4 px-2 py-0.5 bg-destructive text-destructive-foreground text-xs font-medium rounded">
-                            -{plan.yearlyDiscount}%
+                            -{disc}%
                           </div>
                         )}
                         <div className="flex items-start gap-3">
@@ -405,21 +577,32 @@ const Checkout = () => {
                                 Chat ilimitado
                               </span>
                             </div>
-                            {billingPeriod === "yearly" && (
+                            {monthlyEq && (
                               <p className="text-xs text-muted-foreground mt-2">
-                                equivale a R${plan.yearlyMonthlyEquivalent}/mês
+                                equivale a R${monthlyEq}/mês
                               </p>
                             )}
                           </div>
                         </div>
                         <div className="text-right">
-                          <p className="font-display text-xl font-semibold text-primary whitespace-nowrap">
-                            R$ {plan.trialPrice}
-                          </p>
-                          <p className="text-xs font-medium text-primary">7 dias</p>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Após: R$ {price}/{period}
-                          </p>
+                          {billingPeriod === "monthly" ? (
+                            <>
+                              <p className="font-display text-xl font-semibold text-primary whitespace-nowrap">
+                                R$ {plan.trialPrice}
+                              </p>
+                              <p className="text-xs font-medium text-primary">7 dias</p>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Após: R$ {price}/{period}
+                              </p>
+                            </>
+                          ) : (
+                            <>
+                              <p className="font-display text-xl font-semibold text-primary whitespace-nowrap">
+                                R$ {price}
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-1">/{period}</p>
+                            </>
+                          )}
                         </div>
                       </label>
                     );
@@ -491,6 +674,24 @@ const Checkout = () => {
                       A AURA vai te enviar mensagem neste número
                     </p>
                   </div>
+
+                  {pixAvailable && (
+                    <div>
+                      <Label htmlFor="cpf" className="text-foreground">
+                        CPF <span className="text-xs text-muted-foreground">(obrigatório só para pagamento via PIX)</span>
+                      </Label>
+                      <Input
+                        id="cpf"
+                        type="text"
+                        inputMode="numeric"
+                        value={cpf}
+                        onChange={handleCpfChange}
+                        placeholder="000.000.000-00"
+                        className="mt-1.5 bg-secondary/50 border-border/50"
+                        maxLength={14}
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -498,26 +699,28 @@ const Checkout = () => {
               <div className="bg-secondary/30 rounded-2xl p-6 border border-border/50">
                 <div className="flex justify-between items-center mb-4">
                   <span className="text-muted-foreground">
-                    Plano {currentPlan.name} ({billingPeriod === "monthly" ? "mensal" : "anual"})
+                    Plano {currentPlan.name} ({periodLabels[billingPeriod].toLowerCase()})
                   </span>
                   <span className="font-semibold text-foreground">R$ {currentPrice}/{periodLabel}</span>
                 </div>
-                {billingPeriod === "yearly" && (
+                {currentDiscount > 0 && monthlyEquivalent && (
                   <div className="flex justify-between items-center mb-4 text-sm">
-                    <span className="text-primary">Economia de {currentPlan.yearlyDiscount}%</span>
+                    <span className="text-primary">Economia de {currentDiscount}%</span>
                     <span className="text-primary font-medium">
-                      equivale a R${currentPlan.yearlyMonthlyEquivalent}/mês
+                      equivale a R${monthlyEquivalent}/mês
                     </span>
                   </div>
                 )}
                 <div className="flex justify-between items-center pt-4 border-t border-border/50">
                   <span className="font-medium text-foreground">Hoje</span>
                   <span className="font-display text-2xl font-semibold text-primary">
-                    R$ {currentPlan.trialPrice}
+                    R$ {billingPeriod === "monthly" ? currentPlan.trialPrice : currentPrice}
                   </span>
                 </div>
                 <p className="text-sm text-muted-foreground mt-3 text-center">
-                  7 dias de acesso • Após: R$ {currentPrice}/{periodLabel}
+                  {billingPeriod === "monthly"
+                    ? `7 dias de acesso • Após: R$ ${currentPrice}/${periodLabel}`
+                    : `Acesso por 1 ${periodLabel} • Pagamento à vista`}
                 </p>
               </div>
 
@@ -547,8 +750,27 @@ const Checkout = () => {
                 disabled={isLoading}
               >
                 <CreditCard className="w-5 h-5 mr-2" />
-                {isLoading ? "Processando..." : `Começar por R$ ${currentPlan.trialPrice}`}
+                {isLoading
+                  ? "Processando..."
+                  : billingPeriod === "monthly"
+                    ? `Começar por R$ ${currentPlan.trialPrice}`
+                    : `Pagar com cartão — R$ ${currentPrice}`}
               </Button>
+
+              {/* Botão PIX (apenas para trimestral, semestral e anual) */}
+              {pixAvailable && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="xl"
+                  className="w-full"
+                  disabled={isPixLoading}
+                  onClick={handlePixSubmit}
+                >
+                  <QrCode className="w-5 h-5 mr-2" />
+                  {isPixLoading ? "Gerando PIX..." : `Pagar com PIX — R$ ${currentPrice}`}
+                </Button>
+              )}
 
               {/* Trust badges */}
               <div className="flex flex-wrap justify-center gap-6 text-sm text-muted-foreground">
@@ -568,6 +790,81 @@ const Checkout = () => {
             </form>
           </div>
         </div>
+
+        {/* Modal QR Code PIX */}
+        {pixModal.open && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/60 backdrop-blur-sm px-4"
+            onClick={() => setPixModal({ open: false })}
+          >
+            <div
+              className="bg-card rounded-2xl p-6 max-w-md w-full shadow-xl border border-border/50 space-y-5 animate-in fade-in zoom-in-95 duration-300 max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between">
+                <div>
+                  <h2 className="font-display text-xl font-semibold text-foreground">
+                    Pague com PIX
+                  </h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Valor: <span className="font-semibold text-primary">R$ {pixModal.amount?.toFixed(2).replace(".", ",")}</span>
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPixModal({ open: false })}
+                  className="text-muted-foreground hover:text-foreground p-1"
+                  aria-label="Fechar"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {pixModal.qrCodeImage && (
+                <div className="flex justify-center bg-white p-4 rounded-xl border border-border/50">
+                  <img
+                    src={`data:image/png;base64,${pixModal.qrCodeImage}`}
+                    alt="QR Code PIX"
+                    className="w-56 h-56"
+                  />
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <Label className="text-foreground text-sm">PIX copia-e-cola</Label>
+                <div className="flex gap-2">
+                  <Input
+                    readOnly
+                    value={pixModal.copyPaste || ""}
+                    className="bg-secondary/50 border-border/50 text-xs font-mono"
+                    onFocus={(e) => e.currentTarget.select()}
+                  />
+                  <Button type="button" variant="outline" size="default" onClick={copyPixCode}>
+                    <Copy className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+
+              <div className="bg-secondary/30 rounded-xl p-4 text-sm text-muted-foreground space-y-2">
+                <p className="font-medium text-foreground">Como pagar:</p>
+                <ol className="list-decimal list-inside space-y-1 text-xs">
+                  <li>Abra o app do seu banco</li>
+                  <li>Escolha pagar via PIX → QR Code ou Copia-e-cola</li>
+                  <li>Confirme o valor e finalize</li>
+                </ol>
+                {pixModal.expiresAt && (
+                  <p className="text-xs pt-2 border-t border-border/50">
+                    Válido até {new Date(pixModal.expiresAt).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}
+                  </p>
+                )}
+              </div>
+
+              <p className="text-xs text-center text-muted-foreground">
+                Assim que o pagamento for confirmado, você receberá uma mensagem no WhatsApp.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Exit-intent popup */}
         {showExitPopup && (

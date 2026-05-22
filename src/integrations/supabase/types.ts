@@ -14,6 +14,86 @@ export type Database = {
   }
   public: {
     Tables: {
+      asaas_payments: {
+        Row: {
+          amount_cents: number
+          asaas_customer_id: string
+          asaas_payment_id: string
+          billing_period: string
+          created_at: string
+          customer_cpf: string
+          customer_email: string
+          customer_name: string
+          customer_phone: string | null
+          id: string
+          invoice_url: string | null
+          paid_at: string | null
+          payment_method: string
+          pix_copy_paste: string | null
+          pix_expires_at: string | null
+          pix_qr_code: string | null
+          plan: string
+          raw_payload: Json | null
+          status: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          amount_cents: number
+          asaas_customer_id: string
+          asaas_payment_id: string
+          billing_period: string
+          created_at?: string
+          customer_cpf: string
+          customer_email: string
+          customer_name: string
+          customer_phone?: string | null
+          id?: string
+          invoice_url?: string | null
+          paid_at?: string | null
+          payment_method?: string
+          pix_copy_paste?: string | null
+          pix_expires_at?: string | null
+          pix_qr_code?: string | null
+          plan: string
+          raw_payload?: Json | null
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          amount_cents?: number
+          asaas_customer_id?: string
+          asaas_payment_id?: string
+          billing_period?: string
+          created_at?: string
+          customer_cpf?: string
+          customer_email?: string
+          customer_name?: string
+          customer_phone?: string | null
+          id?: string
+          invoice_url?: string | null
+          paid_at?: string | null
+          payment_method?: string
+          pix_copy_paste?: string | null
+          pix_expires_at?: string | null
+          pix_qr_code?: string | null
+          plan?: string
+          raw_payload?: Json | null
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asaas_payments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       aura_response_state: {
         Row: {
           is_responding: boolean | null
@@ -1014,6 +1094,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          asaas_customer_id: string | null
           audio_reset_date: string | null
           audio_seconds_used_this_month: number | null
           awaiting_time_capsule: string | null
@@ -1072,6 +1153,7 @@ export type Database = {
           whatsapp_instance_id: string | null
         }
         Insert: {
+          asaas_customer_id?: string | null
           audio_reset_date?: string | null
           audio_seconds_used_this_month?: number | null
           awaiting_time_capsule?: string | null
@@ -1130,6 +1212,7 @@ export type Database = {
           whatsapp_instance_id?: string | null
         }
         Update: {
+          asaas_customer_id?: string | null
           audio_reset_date?: string | null
           audio_seconds_used_this_month?: number | null
           awaiting_time_capsule?: string | null
