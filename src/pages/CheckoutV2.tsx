@@ -138,6 +138,7 @@ const CheckoutV2 = () => {
       }
     };
 
+    document.addEventListener("mouseleave", handleMouseLeave);
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
