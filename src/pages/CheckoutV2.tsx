@@ -1004,6 +1004,149 @@ const CheckoutV2 = () => {
             </div>
           </div>
         )}
+
+        {/* Modal PIX: form de CPF → QR code + copia-e-cola */}
+        <Dialog open={pixOpen} onOpenChange={(open) => {
+          setPixOpen(open);
+          if (!open) {
+            // ao fechar, reseta pra começar limpo na próxima abertura
+            setTimeout(() => {
+              setPixStage("form");
+              setPixData(null);
+              setCpfError(undefined);
+            }, 200);
+          }
+        }}>
+          <DialogContent className="bg-[hsl(220_35%_12%)] border-white/10 text-white max-w-md">
+            {pixStage === "form" ? (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="font-display text-xl text-white">
+                    Pagar com PIX
+                  </DialogTitle>
+                  <DialogDescription className="text-white/65">
+                    Plano <span className="text-white font-medium">{currentPlan.name}</span> · {periodShortMap[billingPeriod]} —{" "}
+                    <span className="text-[hsl(140_30%_72%)] font-semibold">R$ {currentPrice}</span> à vista
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-4 pt-2">
+                  <div>
+                    <Label htmlFor="cpf" className="text-white/80 text-sm">CPF</Label>
+                    <Input
+                      id="cpf"
+                      type="text"
+                      value={cpf}
+                      onChange={(e) => {
+                        setCpf(formatCpf(e.target.value));
+                        if (cpfError) setCpfError(undefined);
+                      }}
+                      placeholder="000.000.000-00"
+                      className={`${inputCls} ${cpfError ? "border-red-400/70 focus-visible:ring-red-400/60" : ""}`}
+                      inputMode="numeric"
+                      autoComplete="off"
+                      maxLength={14}
+                    />
+                    {cpfError ? (
+                      <p className="text-[11px] text-red-300 mt-1">{cpfError}</p>
+                    ) : (
+                      <p className="text-[11px] text-white/55 mt-1">
+                        Obrigatório pra emissão da cobrança PIX no banco.
+                      </p>
+                    )}
+                  </div>
+
+                  <Button
+                    variant="sage"
+                    size="lg"
+                    className="w-full rounded-full"
+                    onClick={handleGeneratePix}
+                    disabled={pixLoading}
+                  >
+                    {pixLoading ? "Gerando PIX..." : `Gerar PIX — R$ ${currentPrice}`}
+                  </Button>
+
+                  <p className="text-[11px] text-white/55 text-center">
+                    Liberação automática assim que o pagamento for confirmado.
+                  </p>
+                </div>
+              </>
+            ) : pixData ? (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="font-display text-xl text-white">
+                    Escaneie ou copie o código
+                  </DialogTitle>
+                  <DialogDescription className="text-white/65">
+                    <span className="text-[hsl(140_30%_72%)] font-semibold">
+                      R$ {pixData.amount.toFixed(2).replace(".", ",")}
+                    </span>
+                    {" "}· {currentPlan.name} {periodShortMap[billingPeriod]}
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-4 pt-2">
+                  <div className="bg-white rounded-xl p-4 flex justify-center">
+                    <img
+                      src={`data:image/png;base64,${pixData.qrImage}`}
+                      alt="QR Code PIX"
+                      className="w-56 h-56"
+                    />
+                  </div>
+
+                  <div>
+                    <Label className="text-white/80 text-sm">Código copia-e-cola</Label>
+                    <div className="mt-1.5 flex gap-2">
+                      <Input
+                        readOnly
+                        value={pixData.copyPaste}
+                        className={`${inputCls} text-xs font-mono`}
+                        onFocus={(e) => e.currentTarget.select()}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={handleCopyPix}
+                        className="bg-transparent border-white/25 text-white hover:bg-white/10 hover:text-white shrink-0"
+                        title="Copiar código"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="bg-white/5 border border-white/10 rounded-xl p-3 text-xs text-white/70 space-y-1.5">
+                    <p>1. Abra o app do seu banco e escolha pagar com PIX.</p>
+                    <p>2. Escaneie o QR Code ou cole o código copia-e-cola.</p>
+                    <p>3. Confirme o pagamento — você recebe a confirmação no WhatsApp em segundos.</p>
+                  </div>
+
+                  <Button
+                    variant="sage"
+                    size="lg"
+                    className="w-full rounded-full"
+                    onClick={handleCopyPix}
+                  >
+                    <Copy className="w-4 h-4 mr-2" />
+                    Copiar código PIX
+                  </Button>
+
+                  {pixData.invoiceUrl && (
+                    <a
+                      href={pixData.invoiceUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block text-center text-xs text-white/60 hover:text-white underline"
+                    >
+                      Ver fatura em nova aba
+                    </a>
+                  )}
+                </div>
+              </>
+            ) : null}
+          </DialogContent>
+        </Dialog>
       </div>
     </>
   );
