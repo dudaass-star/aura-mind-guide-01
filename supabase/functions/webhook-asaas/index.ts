@@ -243,6 +243,7 @@ async function handleActivation(
 
     // 3) Cria ou atualiza profile.
     let profileUserId: string;
+    let profileRowId: string | null = null;
     const today = new Date().toISOString().split("T")[0];
     const newExpiryBase =
       existingProfile && (existingProfile as any).plan_expires_at &&
@@ -254,7 +255,7 @@ async function handleActivation(
 
     if (isNew) {
       profileUserId = crypto.randomUUID();
-      const { error: insErr } = await supabase.from("profiles").insert({
+      const { data: insertedProfile, error: insErr } = await supabase.from("profiles").insert({
         user_id: profileUserId,
         name: customerName,
         phone: formattedPhone || cleanPhone || null,
@@ -272,19 +273,16 @@ async function handleActivation(
         current_episode: 0,
         plan_expires_at: newExpiry,
         asaas_customer_id: updated.asaas_customer_id || null,
-      });
+      }).select("id").maybeSingle();
       if (insErr) {
         console.error("[webhook-asaas] Erro criando profile:", insErr);
       } else {
+        profileRowId = insertedProfile?.id ?? null;
         console.log(`[webhook-asaas] ✅ Profile novo criado: ${profileUserId} (${customerEmail})`);
       }
-      // Atualiza user_id no payment para vínculo direto.
-      await supabase
-        .from("asaas_payments")
-        .update({ user_id: profileUserId })
-        .eq("asaas_payment_id", paymentId);
     } else {
       profileUserId = existingProfile!.user_id;
+      profileRowId = (existingProfile as any).id ?? null;
       const updatePayload: Record<string, unknown> = {
         plan: customerPlan,
         status: "active",
@@ -308,6 +306,14 @@ async function handleActivation(
           `[webhook-asaas] ✅ Profile ${profileUserId} (${isRenewal ? "renovação" : isReturning ? "returning" : isUpgrade ? "upgrade" : "update"}) estendido até ${newExpiry}`,
         );
       }
+    }
+
+    // Vincula payment ao profile via FK (asaas_payments.user_id → profiles.id).
+    if (profileRowId) {
+      await supabase
+        .from("asaas_payments")
+        .update({ user_id: profileRowId })
+        .eq("asaas_payment_id", paymentId);
     }
 
     // Renovação → para por aqui (sem welcome novo).
