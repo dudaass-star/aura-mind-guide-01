@@ -440,6 +440,23 @@ const CheckoutV2 = () => {
                   </p>
                 </div>
 
+                {/* Trust signals colados ao widget — ficam no campo de visão exato
+                    do momento em que o usuário vai digitar o cartão. */}
+                <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 text-[11px] text-white/75 bg-white/5 border border-white/10 rounded-full px-4 py-2">
+                  <div className="flex items-center gap-1.5">
+                    <Lock className="w-3.5 h-3.5 text-[hsl(140_30%_72%)]" />
+                    Pagamento seguro Stripe
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Shield className="w-3.5 h-3.5 text-[hsl(140_30%_72%)]" />
+                    Garantia 7 dias
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Check className="w-3.5 h-3.5 text-[hsl(140_30%_72%)]" />
+                    Cancele em 1 clique
+                  </div>
+                </div>
+
                 <div className="relative rounded-2xl bg-white p-2 md:p-4 shadow-2xl min-h-[480px]">
                   {/* Skeleton enquanto o iframe da Stripe carrega (~2-3s).
                       O EmbeddedCheckout pinta por cima quando estiver pronto. */}
@@ -451,21 +468,6 @@ const CheckoutV2 = () => {
                     <EmbeddedCheckoutProvider stripe={stripePromise} options={embeddedOptions}>
                       <EmbeddedCheckout />
                     </EmbeddedCheckoutProvider>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap justify-center gap-x-5 gap-y-2 text-xs text-white/55">
-                  <div className="flex items-center gap-1.5">
-                    <Lock className="w-3.5 h-3.5 text-[hsl(140_30%_72%)]" />
-                    Criptografado de ponta a ponta
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Shield className="w-3.5 h-3.5 text-[hsl(140_30%_72%)]" />
-                    Garantia de 7 dias
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Check className="w-3.5 h-3.5 text-[hsl(140_30%_72%)]" />
-                    Cancele quando quiser
                   </div>
                 </div>
               </div>
