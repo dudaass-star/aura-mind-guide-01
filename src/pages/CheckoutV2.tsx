@@ -893,7 +893,7 @@ const CheckoutV2 = () => {
                     type="submit"
                     variant="sage"
                     size="xl"
-                    className={`w-full rounded-full transition-opacity ${!isFormValid ? "opacity-70" : ""}`}
+                    className={`w-full rounded-full transition-opacity whitespace-normal leading-tight px-4 sm:px-10 text-base sm:text-lg ${!isFormValid ? "opacity-70" : ""}`}
                     disabled={isLoading}
                     aria-disabled={!isFormValid || isLoading}
                   >
@@ -905,10 +905,10 @@ const CheckoutV2 = () => {
                     variant="outline"
                     size="lg"
                     onClick={() => handleOpenPix("subscription")}
-                    className="w-full rounded-full bg-transparent border-white/25 text-white hover:bg-white/10 hover:text-white"
+                    className="w-full rounded-full bg-transparent border-white/25 text-white hover:bg-white/10 hover:text-white whitespace-normal leading-tight px-3 sm:px-8 text-sm sm:text-base h-auto min-h-11 py-2"
                   >
                     <QrCode className="w-4 h-4 mr-2" />
-                    Pagar com PIX recorrente — R$ {currentPrice}/mês
+                    PIX Automático — R$ {currentPrice}/mês
                   </Button>
                 </>
               ) : (
@@ -918,21 +918,21 @@ const CheckoutV2 = () => {
                     variant="sage"
                     size="xl"
                     onClick={() => handleOpenPix("subscription")}
-                    className={`w-full rounded-full transition-opacity ${!isFormValid ? "opacity-70" : ""}`}
+                    className={`w-full rounded-full transition-opacity whitespace-normal leading-tight px-4 sm:px-10 text-base sm:text-lg h-auto min-h-14 py-3 ${!isFormValid ? "opacity-70" : ""}`}
                     aria-disabled={!isFormValid}
                   >
                     <QrCode className="w-5 h-5 mr-2" />
-                    Pagar com PIX Automático — R$ {currentPrice}/{periodLabel}
+                    PIX Automático — R$ {currentPrice}/{periodLabel}
                   </Button>
                   <Button
                     type="submit"
                     variant="outline"
                     size="lg"
                     disabled={isLoading}
-                    className="w-full rounded-full bg-transparent border-white/25 text-white hover:bg-white/10 hover:text-white"
+                    className="w-full rounded-full bg-transparent border-white/25 text-white hover:bg-white/10 hover:text-white whitespace-normal leading-tight px-3 sm:px-8 text-sm sm:text-base h-auto min-h-11 py-2"
                   >
                     <CreditCard className="w-4 h-4 mr-2" />
-                    {isLoading ? "Processando..." : `Pagar no cartão — R$ ${currentPrice} a cada ${periodLabel}`}
+                    {isLoading ? "Processando..." : `Cartão — R$ ${currentPrice}/${periodLabel}`}
                   </Button>
                 </>
               )}
