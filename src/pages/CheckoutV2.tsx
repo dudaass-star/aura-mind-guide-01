@@ -641,8 +641,9 @@ const CheckoutV2 = () => {
             form="checkout-form"
             variant="sage"
             size="lg"
-            className="w-full rounded-full"
+            className={`w-full rounded-full transition-opacity ${!isFormValid ? "opacity-70" : ""}`}
             disabled={isLoading}
+            aria-disabled={!isFormValid || isLoading}
           >
             {isLoading ? "Processando..." : `Começar por R$ ${currentPlan.trialPrice}`}
           </Button>
