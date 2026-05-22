@@ -1138,6 +1138,19 @@ const CheckoutV2 = () => {
                     <p>3. Confirme o pagamento — você recebe a confirmação no WhatsApp em segundos.</p>
                   </div>
 
+                  {pixMode === "subscription" && (
+                    <div className="bg-[hsl(140_30%_72%)]/10 border border-[hsl(140_30%_72%)]/30 rounded-xl p-3 text-xs text-white/85 space-y-1">
+                      <p className="font-semibold text-[hsl(140_30%_82%)]">
+                        ⚡ Ative o Pix Automático
+                      </p>
+                      <p className="text-white/70">
+                        No app do seu banco, ao pagar, marque a opção{" "}
+                        <span className="font-semibold text-white/90">"Autorizar Pix Automático"</span>{" "}
+                        — assim as próximas cobranças entram sozinhas, sem precisar pagar QR de novo.
+                      </p>
+                    </div>
+                  )}
+
                   <Button
                     variant="sage"
                     size="lg"
