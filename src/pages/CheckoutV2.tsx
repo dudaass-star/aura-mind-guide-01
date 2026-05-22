@@ -372,6 +372,40 @@ const CheckoutV2 = () => {
 
         <div className="relative container mx-auto px-4 py-8 md:py-12 pb-12">
           <div className="max-w-xl mx-auto">
+            {/* Stepper — orienta o usuário sobre o tamanho real do fluxo (só 2 passos).
+                Reduz a ansiedade de "será que tem mais etapa depois?". */}
+            <div className="flex items-center justify-center gap-3 mb-6 text-xs">
+              <div className="flex items-center gap-2">
+                <span
+                  className={`flex items-center justify-center w-5 h-5 rounded-full border text-[10px] font-semibold transition-colors ${
+                    embeddedClientSecret
+                      ? "bg-[hsl(140_22%_45%)] border-[hsl(140_22%_45%)] text-white"
+                      : "bg-[hsl(140_22%_45%)] border-[hsl(140_22%_45%)] text-white"
+                  }`}
+                >
+                  {embeddedClientSecret ? <Check className="w-3 h-3" /> : "1"}
+                </span>
+                <span className={embeddedClientSecret ? "text-white/55" : "text-white font-medium"}>
+                  Seus dados
+                </span>
+              </div>
+              <span className="w-6 h-px bg-white/20" />
+              <div className="flex items-center gap-2">
+                <span
+                  className={`flex items-center justify-center w-5 h-5 rounded-full border text-[10px] font-semibold transition-colors ${
+                    embeddedClientSecret
+                      ? "bg-[hsl(140_22%_45%)] border-[hsl(140_22%_45%)] text-white"
+                      : "bg-transparent border-white/30 text-white/50"
+                  }`}
+                >
+                  2
+                </span>
+                <span className={embeddedClientSecret ? "text-white font-medium" : "text-white/50"}>
+                  Pagamento
+                </span>
+              </div>
+            </div>
+
             {embeddedClientSecret && stripePromise && embeddedOptions ? (
               /* PaymentView — tela dedicada de pagamento.
                  Form some completamente; usuário vê só o widget Stripe + contexto mínimo.
