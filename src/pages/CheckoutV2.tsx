@@ -486,29 +486,6 @@ const CheckoutV2 = () => {
               {/* Formulário enxuto */}
               <div className="space-y-3 pt-2">
                 <div>
-                  <Label htmlFor="name" className="text-white/80 text-sm">Nome</Label>
-                  <Input
-                    id="name"
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Seu nome"
-                    className={inputCls}
-                    autoFocus
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="email" className="text-white/80 text-sm">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="seu@email.com"
-                    className={inputCls}
-                  />
-                </div>
-                <div>
                   <Label htmlFor="phone" className="text-white/80 text-sm">WhatsApp</Label>
                   <Input
                     id="phone"
@@ -516,12 +493,56 @@ const CheckoutV2 = () => {
                     value={phone}
                     onChange={handlePhoneChange}
                     placeholder="(11) 99999-9999"
-                    className={inputCls}
+                    className={`${inputCls} ${errors.phone ? "border-red-400/70 focus-visible:ring-red-400/60" : ""}`}
                     maxLength={15}
+                    aria-invalid={!!errors.phone}
+                    aria-describedby={errors.phone ? "phone-error" : "phone-hint"}
                   />
-                  <p className="text-[11px] text-white/60 mt-1">
-                    A AURA conversa com você por aqui
-                  </p>
+                  {errors.phone ? (
+                    <p id="phone-error" className="text-[11px] text-red-300 mt-1">{errors.phone}</p>
+                  ) : (
+                    <p id="phone-hint" className="text-[11px] text-white/60 mt-1">
+                      A AURA conversa com você por aqui
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <Label htmlFor="name" className="text-white/80 text-sm">Nome</Label>
+                  <Input
+                    id="name"
+                    type="text"
+                    value={name}
+                    onChange={(e) => {
+                      setName(e.target.value);
+                      if (errors.name) setErrors((prev) => ({ ...prev, name: undefined }));
+                    }}
+                    placeholder="Seu nome"
+                    className={`${inputCls} ${errors.name ? "border-red-400/70 focus-visible:ring-red-400/60" : ""}`}
+                    aria-invalid={!!errors.name}
+                    aria-describedby={errors.name ? "name-error" : undefined}
+                  />
+                  {errors.name && (
+                    <p id="name-error" className="text-[11px] text-red-300 mt-1">{errors.name}</p>
+                  )}
+                </div>
+                <div>
+                  <Label htmlFor="email" className="text-white/80 text-sm">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      if (errors.email) setErrors((prev) => ({ ...prev, email: undefined }));
+                    }}
+                    placeholder="seu@email.com"
+                    className={`${inputCls} ${errors.email ? "border-red-400/70 focus-visible:ring-red-400/60" : ""}`}
+                    aria-invalid={!!errors.email}
+                    aria-describedby={errors.email ? "email-error" : undefined}
+                  />
+                  {errors.email && (
+                    <p id="email-error" className="text-[11px] text-red-300 mt-1">{errors.email}</p>
+                  )}
                 </div>
               </div>
 
