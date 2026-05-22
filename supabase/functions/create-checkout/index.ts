@@ -34,6 +34,27 @@ const getPrices = (): Record<string, { monthly: string; yearly: string; boletoYe
   },
 });
 
+// Preços RECORRENTES sem trial para Trim/Sem/Anual (V2).
+// Hardcoded aqui pra evitar criar 9 secrets — IDs são públicos (visíveis no dashboard).
+// Stripe: interval=month, interval_count=3/6 para trim/sem; interval=year, interval_count=1 para anual.
+const RECURRING_PRICES: Record<string, { quarterly: string; semestral: string; yearly: string }> = {
+  essencial: {
+    quarterly: "price_1TZyoCQU15XnZ7VvyI45t8um",
+    semestral: "price_1TZyoDQU15XnZ7VvOegMIXQi",
+    yearly:    "price_1TZyoEQU15XnZ7Vvx02qKKPF",
+  },
+  direcao: {
+    quarterly: "price_1TZyoFQU15XnZ7VvAfRFoTOh",
+    semestral: "price_1TZyoGQU15XnZ7VvZiGk2ifY",
+    yearly:    "price_1TZyoHQU15XnZ7VvwUFUX9Bm",
+  },
+  transformacao: {
+    quarterly: "price_1TZyoIQU15XnZ7VvCMjzuaZr",
+    semestral: "price_1TZyoJQU15XnZ7Vv3FqH75Nb",
+    yearly:    "price_1TZyoKQU15XnZ7VvJzJNnub7",
+  },
+};
+
 const logStep = (step: string, details?: any) => {
   const detailsStr = details ? ` - ${JSON.stringify(details)}` : '';
   console.log(`[CREATE-CHECKOUT] ${step}${detailsStr}`);
