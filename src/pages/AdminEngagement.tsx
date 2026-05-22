@@ -220,6 +220,7 @@ export default function AdminEngagement() {
   const [dateFrom, setDateFrom] = useState<Date>(new Date());
   const [dateTo, setDateTo] = useState<Date>(new Date());
   const [recoverySessions, setRecoverySessions] = useState<RecoverySession[]>([]);
+  const [recoveryStats, setRecoveryStats] = useState<{ raw: number; accepted: number }>({ raw: 0, accepted: 0 });
   const [dunningAttempts, setDunningAttempts] = useState<DunningAttempt[]>([]);
   const [recoveryOpen, setRecoveryOpen] = useState(false);
   const [dunningOpen, setDunningOpen] = useState(false);
@@ -319,6 +320,20 @@ export default function AdminEngagement() {
 
   const fetchRecoverySessions = async () => {
     try {
+      // Contagem bruta de tentativas (sem dedup) — todas as sessões com recovery_sent=true
+      const { count: rawCount } = await supabase
+        .from('checkout_sessions')
+        .select('id', { count: 'exact', head: true })
+        .eq('recovery_sent', true);
+
+      // Contagem de tentativas aceitas pela API (status do último attempt)
+      const { count: acceptedCount } = await supabase
+        .from('checkout_recovery_attempts')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'api_accepted');
+
+      setRecoveryStats({ raw: rawCount || 0, accepted: acceptedCount || 0 });
+
       const { data: abandoned, error } = await supabase
         .from('checkout_sessions')
         .select('id, name, phone, email, plan, created_at, status, recovery_sent, recovery_sent_at, recovery_last_error, recovery_attempts_count')
@@ -1417,7 +1432,7 @@ export default function AdminEngagement() {
                             <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${recoveryOpen ? 'rotate-180' : ''}`} />
                           </div>
                           <p className="text-xs text-muted-foreground">
-                            {recoverySessions.length} tentativas — {recoverySessions.filter(s => s.attempt_status === 'api_accepted').length} aceitas pela API — {recoverySessions.filter(s => s.converted).length} converteram
+                            {recoveryStats.raw} tentativas brutas — {recoverySessions.length} usuários únicos — {recoveryStats.accepted} aceitas pela API — {recoverySessions.filter(s => s.converted).length} converteram
                           </p>
                         </CardHeader>
                       </CollapsibleTrigger>
@@ -1428,6 +1443,7 @@ export default function AdminEngagement() {
                               <TableRow>
                                 <TableHead>Nome</TableHead>
                                 <TableHead>Email</TableHead>
+                                <TableHead>WhatsApp</TableHead>
                                 <TableHead>Plano</TableHead>
                                 <TableHead>Abandono</TableHead>
                                 <TableHead>Envio</TableHead>
@@ -1450,6 +1466,19 @@ export default function AdminEngagement() {
                                   <TableRow key={s.id}>
                                     <TableCell className="font-medium">{s.name || '—'}</TableCell>
                                     <TableCell className="text-xs">{maskedEmail}</TableCell>
+                                    <TableCell className="text-xs">
+                                      {s.phone ? (
+                                        <a
+                                          href={`https://wa.me/${s.phone.replace(/\D/g, '')}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="text-primary hover:underline"
+                                          title="Abrir conversa no WhatsApp"
+                                        >
+                                          {s.phone}
+                                        </a>
+                                      ) : '—'}
+                                    </TableCell>
                                     <TableCell>{planNames[s.plan || ''] || s.plan || '—'}</TableCell>
                                     <TableCell className="text-xs">{format(new Date(s.created_at), 'dd/MM HH:mm')}</TableCell>
                                     <TableCell>{sendBadge}</TableCell>
