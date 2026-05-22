@@ -5,20 +5,26 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useState, useEffect, useCallback } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { ArrowLeft, CreditCard, Check, Shield, Lock, Gift, MessageCircle, Calendar, FileText } from "lucide-react";
+import { ArrowLeft, CreditCard, Check, Shield, Lock, Gift, MessageCircle, Calendar, FileText, QrCode, Copy, X } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { trackBeginCheckout, trackAddPaymentInfo, trackExitIntent, getGaClientId } from "@/lib/ga4";
 
 type PlanId = "essencial" | "direcao" | "transformacao";
-type BillingPeriod = "monthly" | "yearly";
-type PaymentMethod = "card";
+type BillingPeriod = "monthly" | "quarterly" | "semestral" | "yearly";
+type PaymentMethod = "card" | "pix";
 
 interface PlanConfig {
   name: string;
   monthlyPrice: string;
+  quarterlyPrice: string;
+  semestralPrice: string;
   yearlyPrice: string;
+  quarterlyMonthlyEquivalent: string;
+  semestralMonthlyEquivalent: string;
   yearlyMonthlyEquivalent: string;
+  quarterlyDiscount: number;
+  semestralDiscount: number;
   yearlyDiscount: number;
   trialPrice: string;
   sessions: number;
@@ -29,8 +35,14 @@ const plans: Record<PlanId, PlanConfig> = {
   essencial: {
     name: "Essencial",
     monthlyPrice: "29,90",
+    quarterlyPrice: "79,90",
+    semestralPrice: "125,90",
     yearlyPrice: "214,90",
+    quarterlyMonthlyEquivalent: "26,63",
+    semestralMonthlyEquivalent: "20,98",
     yearlyMonthlyEquivalent: "17,91",
+    quarterlyDiscount: 11,
+    semestralDiscount: 30,
     yearlyDiscount: 40,
     trialPrice: "6,90",
     sessions: 0,
@@ -39,8 +51,14 @@ const plans: Record<PlanId, PlanConfig> = {
   direcao: {
     name: "Direção",
     monthlyPrice: "49,90",
+    quarterlyPrice: "133,90",
+    semestralPrice: "209,90",
     yearlyPrice: "359,90",
+    quarterlyMonthlyEquivalent: "44,63",
+    semestralMonthlyEquivalent: "34,98",
     yearlyMonthlyEquivalent: "29,99",
+    quarterlyDiscount: 11,
+    semestralDiscount: 30,
     yearlyDiscount: 40,
     trialPrice: "9,90",
     sessions: 4,
@@ -49,14 +67,54 @@ const plans: Record<PlanId, PlanConfig> = {
   transformacao: {
     name: "Transformação",
     monthlyPrice: "79,90",
+    quarterlyPrice: "213,90",
+    semestralPrice: "335,90",
     yearlyPrice: "574,90",
+    quarterlyMonthlyEquivalent: "71,30",
+    semestralMonthlyEquivalent: "55,98",
     yearlyMonthlyEquivalent: "47,91",
+    quarterlyDiscount: 11,
+    semestralDiscount: 30,
     yearlyDiscount: 40,
     trialPrice: "19,90",
     sessions: 8,
     highlights: ["Tudo do Direção", "8 Sessões Especiais/mês", "Prioridade no agendamento"],
   },
 };
+
+// Mapas auxiliares por período
+const periodLabels: Record<BillingPeriod, string> = {
+  monthly: "Mensal",
+  quarterly: "Trimestral",
+  semestral: "Semestral",
+  yearly: "Anual",
+};
+
+const periodSuffix: Record<BillingPeriod, string> = {
+  monthly: "mês",
+  quarterly: "trimestre",
+  semestral: "semestre",
+  yearly: "ano",
+};
+
+function getPrice(plan: PlanConfig, period: BillingPeriod): string {
+  if (period === "monthly") return plan.monthlyPrice;
+  if (period === "quarterly") return plan.quarterlyPrice;
+  if (period === "semestral") return plan.semestralPrice;
+  return plan.yearlyPrice;
+}
+function getMonthlyEquivalent(plan: PlanConfig, period: BillingPeriod): string | null {
+  if (period === "quarterly") return plan.quarterlyMonthlyEquivalent;
+  if (period === "semestral") return plan.semestralMonthlyEquivalent;
+  if (period === "yearly") return plan.yearlyMonthlyEquivalent;
+  return null;
+}
+function getDiscount(plan: PlanConfig, period: BillingPeriod): number {
+  if (period === "quarterly") return plan.quarterlyDiscount;
+  if (period === "semestral") return plan.semestralDiscount;
+  if (period === "yearly") return plan.yearlyDiscount;
+  return 0;
+}
 
 const Checkout = () => {
   const location = useLocation();
