@@ -917,12 +917,12 @@ const CheckoutV2 = () => {
                     type="button"
                     variant="sage"
                     size="xl"
-                    onClick={() => handleOpenPix("one-time")}
+                    onClick={() => handleOpenPix("subscription")}
                     className={`w-full rounded-full transition-opacity ${!isFormValid ? "opacity-70" : ""}`}
                     aria-disabled={!isFormValid}
                   >
                     <QrCode className="w-5 h-5 mr-2" />
-                    Pagar à vista no PIX — R$ {currentPrice}
+                    Pagar com PIX Automático — R$ {currentPrice}/{periodLabel}
                   </Button>
                   <Button
                     type="submit"
@@ -938,9 +938,9 @@ const CheckoutV2 = () => {
               )}
 
               <p className="text-center text-[11px] text-white/50 -mt-2">
-                {pixEnabled && billingPeriod !== "yearly"
-                  ? "Pagamento único • liberação automática após confirmação"
-                  : "7 dias completos • Sem cobrança se cancelar antes do 8º dia"}
+                {billingPeriod === "monthly"
+                  ? "7 dias completos • Sem cobrança se cancelar antes do 8º dia"
+                  : "Autorize 1x no app do banco • renovação automática • cancele quando quiser"}
               </p>
 
               {/* Faixa única de confiança */}
