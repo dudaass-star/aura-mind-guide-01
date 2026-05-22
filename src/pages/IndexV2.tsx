@@ -73,7 +73,6 @@ const IndexV2 = () => {
           <FinalCTAV2 />
         </main>
         <FooterV2 />
-        <StickyMobileCTAV2 />
       </div>
     </>
   );
