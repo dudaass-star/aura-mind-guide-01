@@ -370,7 +370,7 @@ const CheckoutV2 = () => {
           </div>
         </header>
 
-        <div className="relative container mx-auto px-4 py-8 md:py-12 pb-32 md:pb-12">
+        <div className="relative container mx-auto px-4 py-8 md:py-12 pb-12">
           <div className="max-w-xl mx-auto">
             {embeddedClientSecret && stripePromise && embeddedOptions ? (
               /* PaymentView — tela dedicada de pagamento.
@@ -654,23 +654,6 @@ const CheckoutV2 = () => {
             )}
           </div>
         </div>
-
-        {/* Sticky CTA mobile — escondido quando o checkout embedado está aberto */}
-        {!embeddedClientSecret && (
-        <div className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-[hsl(220_35%_8%/0.95)] backdrop-blur-md border-t border-white/10 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-          <Button
-            type="submit"
-            form="checkout-form"
-            variant="sage"
-            size="lg"
-            className={`w-full rounded-full transition-opacity ${!isFormValid ? "opacity-70" : ""}`}
-            disabled={isLoading}
-            aria-disabled={!isFormValid || isLoading}
-          >
-            {isLoading ? "Processando..." : `Começar por R$ ${currentPlan.trialPrice}`}
-          </Button>
-        </div>
-        )}
 
         {/* Exit-intent popup */}
         {showExitPopup && (
