@@ -162,6 +162,12 @@ Deno.serve(async (req) => {
           }),
         });
         asaasCustomerId = created.id;
+
+        // Aplica o padrão Aura de notificações ao cliente (só email em PAYMENT_RECEIVED/OVERDUE).
+        // Fire-and-forget: não bloqueia o checkout se falhar.
+        applyAuraNotificationDefaults(asaasFetch, asaasCustomerId).catch((e) =>
+          console.warn("[criar-pix-asaas] notif defaults falhou:", e?.message || e)
+        );
       }
 
       // Salvar customer no profile (se existir)
