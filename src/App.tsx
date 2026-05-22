@@ -38,6 +38,7 @@ import Blog from "./pages/Blog";
 import Pagamento from "./pages/Pagamento";
 import NotFound from "./pages/NotFound";
 import GA4RouteTracker from "./components/GA4RouteTracker";
+import ScrollToTop from "./components/ScrollToTop";
 
 const queryClient = new QueryClient();
 
@@ -48,6 +49,7 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
+          <ScrollToTop />
           <GA4RouteTracker />
           <Routes>
             <Route path="/" element={<Navigate to="/v2" replace />} />
