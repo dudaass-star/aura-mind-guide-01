@@ -81,6 +81,10 @@ const CheckoutV2 = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showExitPopup, setShowExitPopup] = useState(false);
   const [hasRedirected, setHasRedirected] = useState(false);
+  // Erros inline de validação dos 3 campos do formulário. Substituem o toast,
+  // que sumia em 3s e deixava o usuário perdido (especialmente no mobile, onde
+  // o campo WhatsApp ficava abaixo da dobra e o usuário clicava no CTA sem ver).
+  const [errors, setErrors] = useState<{ name?: string; email?: string; phone?: string }>({});
   // Estado do checkout embedado: clientSecret + promise da Stripe.js carregada com a chave pública
   // devolvida pela edge function. Quando setados, renderizamos <EmbeddedCheckout /> inline,
   // sem salto pro domínio checkout.stripe.com.
