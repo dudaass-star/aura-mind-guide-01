@@ -112,7 +112,12 @@ const CheckoutV2 = () => {
     if (exitShown) return;
 
     const handleMouseLeave = (e: MouseEvent) => {
-      if (e.clientY <= 0 && !hasRedirected && !sessionStorage.getItem("aura_exit_popup_shown")) {
+      if (
+        e.clientY <= 0 &&
+        !hasRedirected &&
+        !embeddedClientSecret &&
+        !sessionStorage.getItem("aura_exit_popup_shown")
+      ) {
         sessionStorage.setItem("aura_exit_popup_shown", "true");
         setShowExitPopup(true);
         trackExitIntent("open");
@@ -124,6 +129,7 @@ const CheckoutV2 = () => {
         window.innerWidth >= 768 &&
         document.visibilityState === "hidden" &&
         !hasRedirected &&
+        !embeddedClientSecret &&
         !sessionStorage.getItem("aura_exit_popup_shown")
       ) {
         sessionStorage.setItem("aura_exit_popup_shown", "true");
@@ -139,7 +145,7 @@ const CheckoutV2 = () => {
       document.removeEventListener("mouseleave", handleMouseLeave);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [hasRedirected]);
+  }, [hasRedirected, embeddedClientSecret]);
 
   const currentPlan = plans[selectedPlan];
   const currentPrice = billingPeriod === "monthly" ? currentPlan.monthlyPrice : currentPlan.yearlyPrice;
@@ -289,10 +295,9 @@ const CheckoutV2 = () => {
         setHasRedirected(true);
         setStripePromise(loadStripe(data.publishableKey as string));
         setEmbeddedClientSecret(data.clientSecret as string);
-        // Scroll suave pro topo do bloco de pagamento embed.
-        requestAnimationFrame(() => {
-          document.getElementById("embedded-checkout-block")?.scrollIntoView({ behavior: "smooth", block: "start" });
-        });
+        // Vai pro topo da página: a PaymentView substitui o form e o widget
+        // Stripe fica logo abaixo do header — visível na dobra mobile.
+        window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
       } else {
         throw new Error("clientSecret não recebido");
       }
@@ -367,32 +372,85 @@ const CheckoutV2 = () => {
 
         <div className="relative container mx-auto px-4 py-8 md:py-12 pb-32 md:pb-12">
           <div className="max-w-xl mx-auto">
-            {/* Cabeçalho enxuto */}
-            <div className="text-center mb-6">
-              <h1 className="font-display text-2xl md:text-3xl font-semibold mb-2 tracking-tight">
-                {embeddedClientSecret ? "Confirme e pague" : "Comece em 2 minutos"}
-              </h1>
-              <p className="text-white/65 text-sm">
-                {embeddedClientSecret
-                  ? <>R$ {currentPlan.trialPrice} agora • depois R$ {currentPrice}/{periodLabel}</>
-                  : <>7 dias por R$ {currentPlan.trialPrice} • cancele quando quiser</>}
-              </p>
-              {embeddedClientSecret && (
+            {embeddedClientSecret && stripePromise && embeddedOptions ? (
+              /* PaymentView — tela dedicada de pagamento.
+                 Form some completamente; usuário vê só o widget Stripe + contexto mínimo.
+                 Isso elimina a ambiguidade dos dois CTAs e do form duplicado embaixo. */
+              <div className="space-y-5">
                 <button
                   type="button"
                   onClick={handleResetCheckout}
-                  className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-white/25 bg-white/10 px-4 py-2 text-sm font-medium text-white hover:bg-white/20 hover:border-white/40 transition-colors"
+                  className="inline-flex items-center gap-1.5 text-sm text-white/65 hover:text-white transition-colors"
                 >
-                  ← Editar dados
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  Editar dados
                 </button>
-              )}
+
+                <div className="text-center">
+                  <h1 className="font-display text-2xl md:text-3xl font-semibold mb-2 tracking-tight">
+                    Confirme e pague
+                  </h1>
+                  <p className="text-white/70 text-sm">
+                    Plano <span className="text-white font-medium">{currentPlan.name}</span> •{" "}
+                    <span className="text-[hsl(140_30%_72%)] font-semibold">R$ {currentPlan.trialPrice}</span>{" "}
+                    agora • depois R$ {currentPrice}/{periodLabel}
+                  </p>
+                </div>
+
+                <div className="text-center">
+                  <p className="font-display text-base md:text-lg font-semibold text-[hsl(140_30%_72%)]">
+                    Preencha seu cartão abaixo para finalizar ↓
+                  </p>
+                  <p className="text-[11px] text-white/55 mt-1">
+                    Pagamento seguro processado pela Stripe
+                  </p>
+                </div>
+
+                <div className="relative rounded-2xl bg-white p-2 md:p-4 shadow-2xl min-h-[480px]">
+                  {/* Skeleton enquanto o iframe da Stripe carrega (~2-3s).
+                      O EmbeddedCheckout pinta por cima quando estiver pronto. */}
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 pointer-events-none">
+                    <div className="w-8 h-8 rounded-full border-2 border-[hsl(140_22%_45%)]/30 border-t-[hsl(140_22%_45%)] animate-spin" />
+                    <p className="text-xs text-gray-500">Carregando pagamento seguro…</p>
+                  </div>
+                  <div className="relative z-10">
+                    <EmbeddedCheckoutProvider stripe={stripePromise} options={embeddedOptions}>
+                      <EmbeddedCheckout />
+                    </EmbeddedCheckoutProvider>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap justify-center gap-x-5 gap-y-2 text-xs text-white/55">
+                  <div className="flex items-center gap-1.5">
+                    <Lock className="w-3.5 h-3.5 text-[hsl(140_30%_72%)]" />
+                    Criptografado de ponta a ponta
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Shield className="w-3.5 h-3.5 text-[hsl(140_30%_72%)]" />
+                    Garantia de 7 dias
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Check className="w-3.5 h-3.5 text-[hsl(140_30%_72%)]" />
+                    Cancele quando quiser
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <>
+            {/* Cabeçalho enxuto */}
+            <div className="text-center mb-6">
+              <h1 className="font-display text-2xl md:text-3xl font-semibold mb-2 tracking-tight">
+                Comece em 2 minutos
+              </h1>
+              <p className="text-white/65 text-sm">
+                7 dias por R$ {currentPlan.trialPrice} • cancele quando quiser
+              </p>
             </div>
 
             <form
               id="checkout-form"
               onSubmit={handleSubmit}
-              className={`space-y-5 ${embeddedClientSecret ? "opacity-70 pointer-events-none" : ""}`}
-              aria-disabled={!!embeddedClientSecret}
+              className="space-y-5"
             >
               {/* Toggle de período — sem moldura de card */}
               <div className="flex items-center justify-center gap-1 p-1 bg-white/5 rounded-full border border-white/10 max-w-xs mx-auto">
@@ -592,43 +650,7 @@ const CheckoutV2 = () => {
               </p>
             </form>
 
-            {embeddedClientSecret && stripePromise && embeddedOptions && (
-              <div id="embedded-checkout-block" className="space-y-4 pt-8 mt-8 border-t border-white/10">
-                {/* Instrução clara: depois do submit o widget Stripe demora ~3s pra
-                    montar e aparece como uma área branca. Sem essa frase + skeleton,
-                    o usuário pensava que travou e abandonava. */}
-                <div className="text-center">
-                  <p className="font-display text-lg font-semibold text-[hsl(140_30%_72%)]">
-                    Preencha seu cartão abaixo para finalizar ↓
-                  </p>
-                  <p className="text-xs text-white/60 mt-1">
-                    Pagamento seguro processado pela Stripe • 7 dias por R$ {currentPlan.trialPrice}
-                  </p>
-                </div>
-                <div className="relative rounded-2xl bg-white p-2 md:p-4 shadow-2xl min-h-[420px]">
-                  {/* Skeleton enquanto o iframe da Stripe carrega.
-                      O próprio EmbeddedCheckout pinta por cima quando estiver pronto. */}
-                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 pointer-events-none">
-                    <div className="w-8 h-8 rounded-full border-2 border-[hsl(140_22%_45%)]/30 border-t-[hsl(140_22%_45%)] animate-spin" />
-                    <p className="text-xs text-gray-500">Carregando pagamento seguro…</p>
-                  </div>
-                  <div className="relative z-10">
-                    <EmbeddedCheckoutProvider stripe={stripePromise} options={embeddedOptions}>
-                      <EmbeddedCheckout />
-                    </EmbeddedCheckoutProvider>
-                  </div>
-                </div>
-                <div className="flex flex-wrap justify-center gap-x-5 gap-y-2 text-xs text-white/55 pt-1">
-                  <div className="flex items-center gap-1.5">
-                    <Lock className="w-3.5 h-3.5 text-[hsl(140_30%_72%)]" />
-                    Criptografado de ponta a ponta
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Shield className="w-3.5 h-3.5 text-[hsl(140_30%_72%)]" />
-                    Processado pela Stripe
-                  </div>
-                </div>
-              </div>
+              </>
             )}
           </div>
         </div>
