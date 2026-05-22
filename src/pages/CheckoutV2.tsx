@@ -295,10 +295,9 @@ const CheckoutV2 = () => {
         setHasRedirected(true);
         setStripePromise(loadStripe(data.publishableKey as string));
         setEmbeddedClientSecret(data.clientSecret as string);
-        // Scroll suave pro topo do bloco de pagamento embed.
-        requestAnimationFrame(() => {
-          document.getElementById("embedded-checkout-block")?.scrollIntoView({ behavior: "smooth", block: "start" });
-        });
+        // Vai pro topo da página: a PaymentView substitui o form e o widget
+        // Stripe fica logo abaixo do header — visível na dobra mobile.
+        window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
       } else {
         throw new Error("clientSecret não recebido");
       }
