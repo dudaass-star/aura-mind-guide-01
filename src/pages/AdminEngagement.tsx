@@ -320,6 +320,20 @@ export default function AdminEngagement() {
 
   const fetchRecoverySessions = async () => {
     try {
+      // Contagem bruta de tentativas (sem dedup) — todas as sessões com recovery_sent=true
+      const { count: rawCount } = await supabase
+        .from('checkout_sessions')
+        .select('id', { count: 'exact', head: true })
+        .eq('recovery_sent', true);
+
+      // Contagem de tentativas aceitas pela API (status do último attempt)
+      const { count: acceptedCount } = await supabase
+        .from('checkout_recovery_attempts')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'api_accepted');
+
+      setRecoveryStats({ raw: rawCount || 0, accepted: acceptedCount || 0 });
+
       const { data: abandoned, error } = await supabase
         .from('checkout_sessions')
         .select('id, name, phone, email, plan, created_at, status, recovery_sent, recovery_sent_at, recovery_last_error, recovery_attempts_count')
