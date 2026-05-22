@@ -674,6 +674,24 @@ const Checkout = () => {
                       A AURA vai te enviar mensagem neste número
                     </p>
                   </div>
+
+                  {pixAvailable && (
+                    <div>
+                      <Label htmlFor="cpf" className="text-foreground">
+                        CPF <span className="text-xs text-muted-foreground">(obrigatório só para pagamento via PIX)</span>
+                      </Label>
+                      <Input
+                        id="cpf"
+                        type="text"
+                        inputMode="numeric"
+                        value={cpf}
+                        onChange={handleCpfChange}
+                        placeholder="000.000.000-00"
+                        className="mt-1.5 bg-secondary/50 border-border/50"
+                        maxLength={14}
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -681,26 +699,28 @@ const Checkout = () => {
               <div className="bg-secondary/30 rounded-2xl p-6 border border-border/50">
                 <div className="flex justify-between items-center mb-4">
                   <span className="text-muted-foreground">
-                    Plano {currentPlan.name} ({billingPeriod === "monthly" ? "mensal" : "anual"})
+                    Plano {currentPlan.name} ({periodLabels[billingPeriod].toLowerCase()})
                   </span>
                   <span className="font-semibold text-foreground">R$ {currentPrice}/{periodLabel}</span>
                 </div>
-                {billingPeriod === "yearly" && (
+                {currentDiscount > 0 && monthlyEquivalent && (
                   <div className="flex justify-between items-center mb-4 text-sm">
-                    <span className="text-primary">Economia de {currentPlan.yearlyDiscount}%</span>
+                    <span className="text-primary">Economia de {currentDiscount}%</span>
                     <span className="text-primary font-medium">
-                      equivale a R${currentPlan.yearlyMonthlyEquivalent}/mês
+                      equivale a R${monthlyEquivalent}/mês
                     </span>
                   </div>
                 )}
                 <div className="flex justify-between items-center pt-4 border-t border-border/50">
                   <span className="font-medium text-foreground">Hoje</span>
                   <span className="font-display text-2xl font-semibold text-primary">
-                    R$ {currentPlan.trialPrice}
+                    R$ {billingPeriod === "monthly" ? currentPlan.trialPrice : currentPrice}
                   </span>
                 </div>
                 <p className="text-sm text-muted-foreground mt-3 text-center">
-                  7 dias de acesso • Após: R$ {currentPrice}/{periodLabel}
+                  {billingPeriod === "monthly"
+                    ? `7 dias de acesso • Após: R$ ${currentPrice}/${periodLabel}`
+                    : `Acesso por 1 ${periodLabel} • Pagamento à vista`}
                 </p>
               </div>
 
