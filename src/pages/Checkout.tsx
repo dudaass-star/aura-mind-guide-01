@@ -485,37 +485,43 @@ const Checkout = () => {
                 <h2 className="font-display text-lg font-semibold text-foreground mb-4">
                   Período de cobrança
                 </h2>
-                <div className="flex items-center justify-center gap-3 p-1 bg-secondary/50 rounded-full">
-                  <button
-                    type="button"
-                    onClick={() => setBillingPeriod("monthly")}
-                    className={`flex-1 px-4 py-2.5 rounded-full text-sm font-medium transition-all ${
-                      billingPeriod === "monthly"
-                        ? "bg-primary text-primary-foreground shadow-md"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    Mensal
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setBillingPeriod("yearly")}
-                    className={`flex-1 px-4 py-2.5 rounded-full text-sm font-medium transition-all flex items-center justify-center gap-2 ${
-                      billingPeriod === "yearly"
-                        ? "bg-primary text-primary-foreground shadow-md"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    Anual
-                    <span className={`text-sm font-bold px-3 py-1 rounded-full transition-all ${
-                      billingPeriod === "yearly" 
-                        ? "bg-accent/30 text-primary-foreground" 
-                        : "bg-accent text-accent-foreground shadow-sm animate-pulse-soft"
-                    }`}>
-                      40% off
-                    </span>
-                  </button>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-1 bg-secondary/50 rounded-2xl">
+                  {(Object.keys(periodLabels) as BillingPeriod[]).map((p) => {
+                    const active = billingPeriod === p;
+                    const disc =
+                      p === "quarterly" ? 11 : p === "semestral" ? 30 : p === "yearly" ? 40 : 0;
+                    return (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => setBillingPeriod(p)}
+                        className={`flex flex-col items-center justify-center px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                          active
+                            ? "bg-primary text-primary-foreground shadow-md"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        <span>{periodLabels[p]}</span>
+                        {disc > 0 && (
+                          <span
+                            className={`text-[10px] font-bold mt-0.5 px-1.5 py-0.5 rounded-full ${
+                              active
+                                ? "bg-accent/30 text-primary-foreground"
+                                : "bg-accent text-accent-foreground"
+                            }`}
+                          >
+                            -{disc}%
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
+                {pixAvailable && (
+                  <p className="text-xs text-muted-foreground mt-3 text-center">
+                    Pague com cartão (recorrente) ou PIX à vista
+                  </p>
+                )}
               </div>
 
 
