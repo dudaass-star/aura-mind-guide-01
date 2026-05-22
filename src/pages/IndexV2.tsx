@@ -12,6 +12,7 @@ import PricingV2 from "@/components/v2/PricingV2";
 import FAQV2 from "@/components/v2/FAQV2";
 import FinalCTAV2 from "@/components/v2/FinalCTAV2";
 import FooterV2 from "@/components/v2/FooterV2";
+import StickyMobileCTAV2 from "@/components/v2/StickyMobileCTAV2";
 import { trackViewItem } from "@/lib/ga4";
 
 const IndexV2 = () => {
@@ -73,6 +74,7 @@ const IndexV2 = () => {
           <FinalCTAV2 />
         </main>
         <FooterV2 />
+        <StickyMobileCTAV2 />
       </div>
     </>
   );
