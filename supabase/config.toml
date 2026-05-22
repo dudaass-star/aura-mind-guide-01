@@ -52,6 +52,9 @@ verify_jwt = false
 [functions.criar-pix-asaas]
 verify_jwt = false
 
+[functions.criar-pix-recorrente-asaas]
+verify_jwt = false
+
 [functions.webhook-asaas]
 verify_jwt = false
 
