@@ -19,6 +19,7 @@ export type Database = {
           amount_cents: number
           asaas_customer_id: string
           asaas_payment_id: string
+          asaas_subscription_id: string | null
           billing_period: string
           created_at: string
           customer_cpf: string
@@ -42,6 +43,7 @@ export type Database = {
           amount_cents: number
           asaas_customer_id: string
           asaas_payment_id: string
+          asaas_subscription_id?: string | null
           billing_period: string
           created_at?: string
           customer_cpf: string
@@ -65,6 +67,7 @@ export type Database = {
           amount_cents?: number
           asaas_customer_id?: string
           asaas_payment_id?: string
+          asaas_subscription_id?: string | null
           billing_period?: string
           created_at?: string
           customer_cpf?: string
