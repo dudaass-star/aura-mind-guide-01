@@ -3,9 +3,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { ArrowLeft, CreditCard, Check, Shield, Lock, Gift } from "lucide-react";
+import { ArrowLeft, CreditCard, Check, Shield, Lock, Gift, QrCode, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { trackBeginCheckout, trackAddPaymentInfo, trackExitIntent, getGaClientId } from "@/lib/ga4";
@@ -15,7 +22,7 @@ import { loadStripe, type Stripe as StripeJs } from "@stripe/stripe-js";
 import { EmbeddedCheckoutProvider, EmbeddedCheckout } from "@stripe/react-stripe-js";
 
 type PlanId = "essencial" | "direcao" | "transformacao";
-type BillingPeriod = "monthly" | "yearly";
+type BillingPeriod = "monthly" | "quarterly" | "semestral" | "yearly";
 
 interface PlanConfig {
   name: string;
@@ -23,6 +30,12 @@ interface PlanConfig {
   yearlyPrice: string;
   yearlyMonthlyEquivalent: string;
   yearlyDiscount: number;
+  quarterlyPrice: string;
+  quarterlyMonthlyEquivalent: string;
+  quarterlyDiscount: number;
+  semestralPrice: string;
+  semestralMonthlyEquivalent: string;
+  semestralDiscount: number;
   trialPrice: string;
   sessions: number;
   highlights: string[];
@@ -35,6 +48,12 @@ const plans: Record<PlanId, PlanConfig> = {
     yearlyPrice: "214,90",
     yearlyMonthlyEquivalent: "17,91",
     yearlyDiscount: 40,
+    quarterlyPrice: "79,90",
+    quarterlyMonthlyEquivalent: "26,63",
+    quarterlyDiscount: 11,
+    semestralPrice: "125,90",
+    semestralMonthlyEquivalent: "20,98",
+    semestralDiscount: 30,
     trialPrice: "6,90",
     sessions: 0,
     highlights: ["Conversas ilimitadas 24/7", "Check-in diário", "Review semanal"],
@@ -45,6 +64,12 @@ const plans: Record<PlanId, PlanConfig> = {
     yearlyPrice: "359,90",
     yearlyMonthlyEquivalent: "29,99",
     yearlyDiscount: 40,
+    quarterlyPrice: "133,90",
+    quarterlyMonthlyEquivalent: "44,63",
+    quarterlyDiscount: 11,
+    semestralPrice: "209,90",
+    semestralMonthlyEquivalent: "34,98",
+    semestralDiscount: 30,
     trialPrice: "9,90",
     sessions: 4,
     highlights: ["Tudo do Essencial", "4 Sessões Especiais/mês", "Resumo após cada sessão"],
@@ -55,11 +80,81 @@ const plans: Record<PlanId, PlanConfig> = {
     yearlyPrice: "574,90",
     yearlyMonthlyEquivalent: "47,91",
     yearlyDiscount: 40,
+    quarterlyPrice: "213,90",
+    quarterlyMonthlyEquivalent: "71,30",
+    quarterlyDiscount: 11,
+    semestralPrice: "335,90",
+    semestralMonthlyEquivalent: "55,98",
+    semestralDiscount: 30,
     trialPrice: "19,90",
     sessions: 8,
     highlights: ["Tudo do Direção", "8 Sessões Especiais/mês", "Prioridade no agendamento"],
   },
 };
+
+// Helpers de período: PIX é one-time pros 3 planos longos.
+// Cartão (com trial 7 dias) só faz sentido em Mensal/Anual hoje.
+const isPixPeriod = (b: BillingPeriod) => b !== "monthly";
+const periodLabelMap: Record<BillingPeriod, string> = {
+  monthly: "mês",
+  quarterly: "trimestre",
+  semestral: "semestre",
+  yearly: "ano",
+};
+const periodShortMap: Record<BillingPeriod, string> = {
+  monthly: "Mensal",
+  quarterly: "Trim",
+  semestral: "Sem",
+  yearly: "Anual",
+};
+
+function getPeriodPrice(plan: PlanConfig, b: BillingPeriod): string {
+  switch (b) {
+    case "monthly": return plan.monthlyPrice;
+    case "quarterly": return plan.quarterlyPrice;
+    case "semestral": return plan.semestralPrice;
+    case "yearly": return plan.yearlyPrice;
+  }
+}
+function getPeriodDiscount(plan: PlanConfig, b: BillingPeriod): number {
+  switch (b) {
+    case "quarterly": return plan.quarterlyDiscount;
+    case "semestral": return plan.semestralDiscount;
+    case "yearly": return plan.yearlyDiscount;
+    default: return 0;
+  }
+}
+function getPeriodMonthlyEquivalent(plan: PlanConfig, b: BillingPeriod): string | null {
+  switch (b) {
+    case "quarterly": return plan.quarterlyMonthlyEquivalent;
+    case "semestral": return plan.semestralMonthlyEquivalent;
+    case "yearly": return plan.yearlyMonthlyEquivalent;
+    default: return null;
+  }
+}
+
+function formatCpf(value: string): string {
+  const c = value.replace(/\D/g, "").slice(0, 11);
+  if (c.length <= 3) return c;
+  if (c.length <= 6) return `${c.slice(0, 3)}.${c.slice(3)}`;
+  if (c.length <= 9) return `${c.slice(0, 3)}.${c.slice(3, 6)}.${c.slice(6)}`;
+  return `${c.slice(0, 3)}.${c.slice(3, 6)}.${c.slice(6, 9)}-${c.slice(9)}`;
+}
+function isValidCpf(cpf: string): boolean {
+  const c = cpf.replace(/\D/g, "");
+  if (c.length !== 11) return false;
+  if (/^(\d)\1+$/.test(c)) return false;
+  let sum = 0;
+  for (let i = 0; i < 9; i++) sum += parseInt(c[i]) * (10 - i);
+  let d1 = 11 - (sum % 11);
+  if (d1 >= 10) d1 = 0;
+  if (d1 !== parseInt(c[9])) return false;
+  sum = 0;
+  for (let i = 0; i < 10; i++) sum += parseInt(c[i]) * (11 - i);
+  let d2 = 11 - (sum % 11);
+  if (d2 >= 10) d2 = 0;
+  return d2 === parseInt(c[10]);
+}
 
 const CheckoutV2 = () => {
   const location = useLocation();
