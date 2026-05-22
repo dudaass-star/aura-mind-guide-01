@@ -285,6 +285,12 @@ const CheckoutV2 = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Trim/Sem não tem fluxo cartão — Enter no form abre PIX direto.
+    if (billingPeriod === "quarterly" || billingPeriod === "semestral") {
+      handleOpenPix();
+      return;
+    }
+
     // Valida tudo de uma vez e mostra os erros inline. Auto-scroll para o
     // primeiro campo inválido — o WhatsApp costuma estar abaixo da dobra no mobile.
     const nextErrors: { name?: string; email?: string; phone?: string } = {};
