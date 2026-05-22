@@ -1432,7 +1432,7 @@ export default function AdminEngagement() {
                             <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${recoveryOpen ? 'rotate-180' : ''}`} />
                           </div>
                           <p className="text-xs text-muted-foreground">
-                            {recoverySessions.length} tentativas — {recoverySessions.filter(s => s.attempt_status === 'api_accepted').length} aceitas pela API — {recoverySessions.filter(s => s.converted).length} converteram
+                            {recoveryStats.raw} tentativas brutas — {recoverySessions.length} usuários únicos — {recoveryStats.accepted} aceitas pela API — {recoverySessions.filter(s => s.converted).length} converteram
                           </p>
                         </CardHeader>
                       </CollapsibleTrigger>
@@ -1443,6 +1443,7 @@ export default function AdminEngagement() {
                               <TableRow>
                                 <TableHead>Nome</TableHead>
                                 <TableHead>Email</TableHead>
+                                <TableHead>WhatsApp</TableHead>
                                 <TableHead>Plano</TableHead>
                                 <TableHead>Abandono</TableHead>
                                 <TableHead>Envio</TableHead>
@@ -1465,6 +1466,19 @@ export default function AdminEngagement() {
                                   <TableRow key={s.id}>
                                     <TableCell className="font-medium">{s.name || '—'}</TableCell>
                                     <TableCell className="text-xs">{maskedEmail}</TableCell>
+                                    <TableCell className="text-xs">
+                                      {s.phone ? (
+                                        <a
+                                          href={`https://wa.me/${s.phone.replace(/\D/g, '')}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="text-primary hover:underline"
+                                          title="Abrir conversa no WhatsApp"
+                                        >
+                                          {s.phone}
+                                        </a>
+                                      ) : '—'}
+                                    </TableCell>
                                     <TableCell>{planNames[s.plan || ''] || s.plan || '—'}</TableCell>
                                     <TableCell className="text-xs">{format(new Date(s.created_at), 'dd/MM HH:mm')}</TableCell>
                                     <TableCell>{sendBadge}</TableCell>
