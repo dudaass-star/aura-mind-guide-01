@@ -220,6 +220,7 @@ export default function AdminEngagement() {
   const [dateFrom, setDateFrom] = useState<Date>(new Date());
   const [dateTo, setDateTo] = useState<Date>(new Date());
   const [recoverySessions, setRecoverySessions] = useState<RecoverySession[]>([]);
+  const [recoveryStats, setRecoveryStats] = useState<{ raw: number; accepted: number }>({ raw: 0, accepted: 0 });
   const [dunningAttempts, setDunningAttempts] = useState<DunningAttempt[]>([]);
   const [recoveryOpen, setRecoveryOpen] = useState(false);
   const [dunningOpen, setDunningOpen] = useState(false);
