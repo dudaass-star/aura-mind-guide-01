@@ -791,6 +791,81 @@ const Checkout = () => {
           </div>
         </div>
 
+        {/* Modal QR Code PIX */}
+        {pixModal.open && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/60 backdrop-blur-sm px-4"
+            onClick={() => setPixModal({ open: false })}
+          >
+            <div
+              className="bg-card rounded-2xl p-6 max-w-md w-full shadow-xl border border-border/50 space-y-5 animate-in fade-in zoom-in-95 duration-300 max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between">
+                <div>
+                  <h2 className="font-display text-xl font-semibold text-foreground">
+                    Pague com PIX
+                  </h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Valor: <span className="font-semibold text-primary">R$ {pixModal.amount?.toFixed(2).replace(".", ",")}</span>
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPixModal({ open: false })}
+                  className="text-muted-foreground hover:text-foreground p-1"
+                  aria-label="Fechar"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {pixModal.qrCodeImage && (
+                <div className="flex justify-center bg-white p-4 rounded-xl border border-border/50">
+                  <img
+                    src={`data:image/png;base64,${pixModal.qrCodeImage}`}
+                    alt="QR Code PIX"
+                    className="w-56 h-56"
+                  />
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <Label className="text-foreground text-sm">PIX copia-e-cola</Label>
+                <div className="flex gap-2">
+                  <Input
+                    readOnly
+                    value={pixModal.copyPaste || ""}
+                    className="bg-secondary/50 border-border/50 text-xs font-mono"
+                    onFocus={(e) => e.currentTarget.select()}
+                  />
+                  <Button type="button" variant="outline" size="default" onClick={copyPixCode}>
+                    <Copy className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+
+              <div className="bg-secondary/30 rounded-xl p-4 text-sm text-muted-foreground space-y-2">
+                <p className="font-medium text-foreground">Como pagar:</p>
+                <ol className="list-decimal list-inside space-y-1 text-xs">
+                  <li>Abra o app do seu banco</li>
+                  <li>Escolha pagar via PIX → QR Code ou Copia-e-cola</li>
+                  <li>Confirme o valor e finalize</li>
+                </ol>
+                {pixModal.expiresAt && (
+                  <p className="text-xs pt-2 border-t border-border/50">
+                    Válido até {new Date(pixModal.expiresAt).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}
+                  </p>
+                )}
+              </div>
+
+              <p className="text-xs text-center text-muted-foreground">
+                Assim que o pagamento for confirmado, você receberá uma mensagem no WhatsApp.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Exit-intent popup */}
         {showExitPopup && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/50 backdrop-blur-sm px-4" onClick={() => setShowExitPopup(false)}>
