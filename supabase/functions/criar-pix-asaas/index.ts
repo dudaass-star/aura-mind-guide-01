@@ -31,6 +31,30 @@ function cleanDigits(s: string): string {
   return (s || "").replace(/\D/g, "");
 }
 
+// Aplica o padrão de notificações Aura para um novo customer Asaas.
+// Regra: só email em PAYMENT_RECEIVED e PAYMENT_OVERDUE. SMS/WhatsApp/voz desligados em tudo.
+// Demais eventos (CREATED, DUEDATE_WARNING, UPDATED, SEND_LINHA_DIGITAVEL) ficam desabilitados.
+async function applyAuraNotificationDefaults(
+  asaasFetch: (path: string, init?: RequestInit) => Promise<any>,
+  customerId: string,
+): Promise<void> {
+  const KEEP = new Set(["PAYMENT_RECEIVED", "PAYMENT_OVERDUE"]);
+  const list = await asaasFetch(`/customers/${customerId}/notifications`);
+  for (const n of (list?.data || [])) {
+    const keep = KEEP.has(n.event);
+    await asaasFetch(`/notifications/${n.id}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        enabled: keep,
+        emailEnabledForCustomer: keep,
+        smsEnabledForCustomer: false,
+        phoneCallEnabledForCustomer: false,
+        whatsappEnabledForCustomer: false,
+      }),
+    }).catch((e) => console.warn(`[notif-defaults] ${n.id} (${n.event}):`, e?.message || e));
+  }
+}
+
 function isValidCPF(cpf: string): boolean {
   const c = cleanDigits(cpf);
   if (c.length !== 11) return false;
@@ -162,6 +186,12 @@ Deno.serve(async (req) => {
           }),
         });
         asaasCustomerId = created.id;
+
+        // Aplica o padrão Aura de notificações ao cliente (só email em PAYMENT_RECEIVED/OVERDUE).
+        // Fire-and-forget: não bloqueia o checkout se falhar.
+        applyAuraNotificationDefaults(asaasFetch, asaasCustomerId).catch((e) =>
+          console.warn("[criar-pix-asaas] notif defaults falhou:", e?.message || e)
+        );
       }
 
       // Salvar customer no profile (se existir)
