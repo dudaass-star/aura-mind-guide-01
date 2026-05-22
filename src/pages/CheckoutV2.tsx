@@ -669,7 +669,9 @@ const CheckoutV2 = () => {
                 Comece em 2 minutos
               </h1>
               <p className="text-white/65 text-sm">
-                7 dias por R$ {currentPlan.trialPrice} • cancele quando quiser
+                {pixEnabled
+                  ? `Pagamento único à vista no PIX • economia de ${currentDiscount}%`
+                  : `7 dias por R$ ${currentPlan.trialPrice} • cancele quando quiser`}
               </p>
             </div>
 
@@ -678,39 +680,38 @@ const CheckoutV2 = () => {
               onSubmit={handleSubmit}
               className="space-y-5"
             >
-              {/* Toggle de período — sem moldura de card */}
-              <div className="flex items-center justify-center gap-1 p-1 bg-white/5 rounded-full border border-white/10 max-w-xs mx-auto">
-                <button
-                  type="button"
-                  onClick={() => setBillingPeriod("monthly")}
-                  className={`flex-1 px-4 py-2 rounded-full text-sm font-medium transition-all ${
-                    billingPeriod === "monthly"
-                      ? "bg-[hsl(140_22%_45%)] text-white shadow-md"
-                      : "text-white/70 hover:text-white"
-                  }`}
-                >
-                  Mensal
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setBillingPeriod("yearly")}
-                  className={`flex-1 px-4 py-2 rounded-full text-sm font-medium transition-all flex items-center justify-center gap-2 ${
-                    billingPeriod === "yearly"
-                      ? "bg-[hsl(140_22%_45%)] text-white shadow-md"
-                      : "text-white/70 hover:text-white"
-                  }`}
-                >
-                  Anual
-                  <span
-                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                      billingPeriod === "yearly"
-                        ? "bg-white/20 text-white"
-                        : "bg-[hsl(35_70%_60%)] text-[hsl(220_35%_12%)]"
-                    }`}
-                  >
-                    -40%
-                  </span>
-                </button>
+              {/* Toggle de período: 4 opções. Mensal = cartão com trial.
+                  Trim/Sem/Anual = PIX à vista (com card só no anual). */}
+              <div className="grid grid-cols-4 gap-1 p-1 bg-white/5 rounded-2xl border border-white/10">
+                {(["monthly", "quarterly", "semestral", "yearly"] as BillingPeriod[]).map((p) => {
+                  const active = billingPeriod === p;
+                  const discount = p === "monthly" ? 0 : getPeriodDiscount(currentPlan, p);
+                  return (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setBillingPeriod(p)}
+                      className={`relative flex flex-col items-center justify-center px-2 py-2 rounded-xl text-xs font-medium transition-all ${
+                        active
+                          ? "bg-[hsl(140_22%_45%)] text-white shadow-md"
+                          : "text-white/70 hover:text-white"
+                      }`}
+                    >
+                      <span>{periodShortMap[p]}</span>
+                      {discount > 0 && (
+                        <span
+                          className={`mt-0.5 text-[9px] font-bold px-1 py-0.5 rounded ${
+                            active
+                              ? "bg-white/20 text-white"
+                              : "bg-[hsl(35_70%_60%)] text-[hsl(220_35%_12%)]"
+                          }`}
+                        >
+                          -{discount}%
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
 
               {/* Planos slim */}
@@ -720,8 +721,9 @@ const CheckoutV2 = () => {
                 className="space-y-2.5"
               >
                 {(Object.entries(plans) as [PlanId, PlanConfig][]).map(([id, plan]) => {
-                  const price = billingPeriod === "monthly" ? plan.monthlyPrice : plan.yearlyPrice;
-                  const period = billingPeriod === "monthly" ? "mês" : "ano";
+                  const price = getPeriodPrice(plan, billingPeriod);
+                  const period = periodLabelMap[billingPeriod];
+                  const monthlyEquiv = getPeriodMonthlyEquivalent(plan, billingPeriod);
                   const active = selectedPlan === id;
                   const isPopular = id === "direcao";
 
@@ -755,12 +757,25 @@ const CheckoutV2 = () => {
                         </div>
                       </div>
                       <div className="text-right shrink-0">
-                        <p className="font-display text-lg font-semibold text-[hsl(140_30%_72%)] whitespace-nowrap leading-tight">
-                          R$ {plan.trialPrice}
-                        </p>
-                        <p className="text-[11px] text-white/65 leading-tight">
-                          depois R$ {price}/{period}
-                        </p>
+                        {pixEnabled ? (
+                          <>
+                            <p className="font-display text-lg font-semibold text-[hsl(140_30%_72%)] whitespace-nowrap leading-tight">
+                              R$ {price}
+                            </p>
+                            <p className="text-[11px] text-white/65 leading-tight">
+                              {monthlyEquiv ? `≈ R$ ${monthlyEquiv}/mês` : `por ${period}`}
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <p className="font-display text-lg font-semibold text-[hsl(140_30%_72%)] whitespace-nowrap leading-tight">
+                              R$ {plan.trialPrice}
+                            </p>
+                            <p className="text-[11px] text-white/65 leading-tight">
+                              depois R$ {price}/{period}
+                            </p>
+                          </>
+                        )}
                       </div>
                     </label>
                   );
@@ -841,26 +856,69 @@ const CheckoutV2 = () => {
 
               {/* Resumo único acima do CTA */}
               <div className="text-center text-sm text-white/65 pt-1">
-                Hoje{" "}
-                <span className="text-white font-semibold">R$ {currentPlan.trialPrice}</span>
-                {" "}• depois{" "}
-                <span className="text-white/85">R$ {currentPrice}/{periodLabel}</span>
+                {pixEnabled ? (
+                  <>
+                    À vista no PIX:{" "}
+                    <span className="text-white font-semibold">R$ {currentPrice}</span>
+                    {currentMonthlyEquivalent && (
+                      <span className="text-white/60"> (≈ R$ {currentMonthlyEquivalent}/mês)</span>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    Hoje{" "}
+                    <span className="text-white font-semibold">R$ {currentPlan.trialPrice}</span>
+                    {" "}• depois{" "}
+                    <span className="text-white/85">R$ {currentPrice}/{periodLabel}</span>
+                  </>
+                )}
               </div>
 
-              {/* CTA principal */}
-              <Button
-                type="submit"
-                variant="sage"
-                size="xl"
-                className={`w-full rounded-full transition-opacity ${!isFormValid ? "opacity-70" : ""}`}
-                disabled={isLoading}
-                aria-disabled={!isFormValid || isLoading}
-              >
-                <CreditCard className="w-5 h-5 mr-2" />
-                {isLoading ? "Processando..." : `Começar trial por R$ ${currentPlan.trialPrice}`}
-              </Button>
+              {/* CTA principal: cartão (Mensal/Anual) ou PIX (Trim/Sem). */}
+              {billingPeriod === "monthly" || billingPeriod === "yearly" ? (
+                <Button
+                  type="submit"
+                  variant="sage"
+                  size="xl"
+                  className={`w-full rounded-full transition-opacity ${!isFormValid ? "opacity-70" : ""}`}
+                  disabled={isLoading}
+                  aria-disabled={!isFormValid || isLoading}
+                >
+                  <CreditCard className="w-5 h-5 mr-2" />
+                  {isLoading ? "Processando..." : `Começar trial por R$ ${currentPlan.trialPrice}`}
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  variant="sage"
+                  size="xl"
+                  onClick={handleOpenPix}
+                  className={`w-full rounded-full transition-opacity ${!isFormValid ? "opacity-70" : ""}`}
+                  aria-disabled={!isFormValid}
+                >
+                  <QrCode className="w-5 h-5 mr-2" />
+                  Pagar com PIX — R$ {currentPrice}
+                </Button>
+              )}
+
+              {/* CTA secundário PIX no plano Anual (cartão fica como principal). */}
+              {billingPeriod === "yearly" && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  onClick={handleOpenPix}
+                  className="w-full rounded-full bg-transparent border-white/25 text-white hover:bg-white/10 hover:text-white"
+                >
+                  <QrCode className="w-4 h-4 mr-2" />
+                  Ou pague à vista no PIX — R$ {currentPrice}
+                </Button>
+              )}
+
               <p className="text-center text-[11px] text-white/50 -mt-2">
-                7 dias completos • Sem cobrança se cancelar antes do 8º dia
+                {pixEnabled && billingPeriod !== "yearly"
+                  ? "Pagamento único • liberação automática após confirmação"
+                  : "7 dias completos • Sem cobrança se cancelar antes do 8º dia"}
               </p>
 
               {/* Faixa única de confiança */}
