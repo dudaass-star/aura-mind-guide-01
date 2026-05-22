@@ -1,11 +1,38 @@
 // Webhook do Asaas: recebe eventos PAYMENT_* e atualiza status no banco
 // Autenticação: header "asaas-access-token" deve bater com ASAAS_WEBHOOK_TOKEN
+// Paridade com stripe-webhook: cria profile, gera portal token, dispara welcome
+// (template WhatsApp via sendProactive + email + pending_insight). Sem allocateInstance:
+// Meta oficial via Twilio não usa instância (zapi está PROIBIDO).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { resolveProfile } from "../_shared/profile-resolver.ts";
+import { normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
+import { sendProactive } from "../_shared/whatsapp-provider.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+// Mapeamento de nomes de plano (idêntico ao stripe-webhook).
+const PLAN_NAMES: Record<string, string> = {
+  essencial: "Essencial",
+  direcao: "Direção",
+  transformacao: "Transformação",
+};
+
+// Sessões/mês por plano. Essencial = 0 (a 1ª é o convite D0).
+const PLAN_SESSIONS: Record<string, number> = {
+  essencial: 0,
+  direcao: 4,
+  transformacao: 8,
+};
+
+const CYCLE_DAYS: Record<string, number> = {
+  monthly: 31,
+  quarterly: 93,
+  semestral: 186,
+  yearly: 372,
 };
 
 Deno.serve(async (req) => {
@@ -130,38 +157,7 @@ Deno.serve(async (req) => {
 
     // Concede / estende acesso no profile quando o pagamento é confirmado.
     if (isPaid && updated?.customer_email) {
-      const cycleDays: Record<string, number> = {
-        monthly: 31, quarterly: 93, semestral: 186, yearly: 372,
-      };
-      const days = cycleDays[updated.billing_period as string] ?? 31;
-
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("user_id, plan_expires_at")
-        .eq("email", updated.customer_email)
-        .maybeSingle();
-
-      if (profile?.user_id) {
-        const base = profile.plan_expires_at && new Date(profile.plan_expires_at) > new Date()
-          ? new Date(profile.plan_expires_at)
-          : new Date();
-        const newExpiry = new Date(base.getTime() + days * 24 * 60 * 60 * 1000);
-        const { error: profErr } = await supabase
-          .from("profiles")
-          .update({
-            plan: updated.plan,
-            status: "active",
-            plan_expires_at: newExpiry.toISOString(),
-          })
-          .eq("user_id", profile.user_id);
-        if (profErr) {
-          console.error("[webhook-asaas] Erro atualizando profile:", profErr);
-        } else {
-          console.log(`[webhook-asaas] Profile ${profile.user_id} estendido até ${newExpiry.toISOString()}`);
-        }
-      } else {
-        console.warn(`[webhook-asaas] Profile não encontrado para ${updated.customer_email} (pagamento ok, criação manual?)`);
-      }
+      await handleActivation(supabase, updated, payment);
     }
 
     // Eventos terminais de assinatura → marca status e expira acesso no fim do ciclo atual.
@@ -195,3 +191,233 @@ Deno.serve(async (req) => {
     });
   }
 });
+
+// ============================================================
+// Ativação de assinatura — paridade com stripe-webhook.
+// Detecta novo / returning / upgrade / renovação e dispara welcome
+// (profile + portal token + template WhatsApp + email + pending_insight).
+// ============================================================
+async function handleActivation(
+  supabase: any,
+  updated: any,
+  payment: Record<string, unknown>,
+): Promise<void> {
+  try {
+    const customerEmail = (updated.customer_email as string).toLowerCase();
+    const customerPhone = (updated.customer_phone as string) || "";
+    const customerName = (updated.customer_name as string) || "Cliente";
+    const customerPlan = (updated.plan as string) || "essencial";
+    const billingPeriod = (updated.billing_period as string) || "monthly";
+    const subscriptionId = (updated.asaas_subscription_id as string) || null;
+    const paymentId = payment.id as string;
+    const days = CYCLE_DAYS[billingPeriod] ?? 31;
+
+    // 1) Idempotência: se já existe outro payment pago para esta subscription,
+    //    é renovação → só estende plan_expires_at e sai.
+    let isRenewal = false;
+    if (subscriptionId) {
+      const { data: priorPaid } = await supabase
+        .from("asaas_payments")
+        .select("id")
+        .eq("asaas_subscription_id", subscriptionId)
+        .in("status", ["CONFIRMED", "RECEIVED"])
+        .neq("asaas_payment_id", paymentId)
+        .limit(1);
+      isRenewal = !!(priorPaid && priorPaid.length > 0);
+    }
+
+    // 2) Resolve profile (phone + email fallback).
+    const resolveResult = await resolveProfile(supabase, customerPhone, customerEmail);
+    const existingProfile = resolveResult.profile;
+    const isReturning = !isRenewal && existingProfile?.status === "canceled";
+    const isUpgrade =
+      !isRenewal &&
+      !!existingProfile &&
+      !isReturning &&
+      existingProfile.plan !== customerPlan;
+    const isNew = !isRenewal && !existingProfile;
+
+    // Telefone normalizado p/ Meta oficial (Twilio).
+    const cleanPhone = (customerPhone || "").replace(/\D/g, "");
+    const formattedPhone = cleanPhone ? normalizeBrazilianPhone(cleanPhone) : "";
+
+    // 3) Cria ou atualiza profile.
+    let profileUserId: string;
+    const today = new Date().toISOString().split("T")[0];
+    const newExpiryBase =
+      existingProfile && (existingProfile as any).plan_expires_at &&
+      new Date((existingProfile as any).plan_expires_at) > new Date()
+        ? new Date((existingProfile as any).plan_expires_at)
+        : new Date();
+    const newExpiry = new Date(newExpiryBase.getTime() + days * 24 * 60 * 60 * 1000).toISOString();
+    const sessionsCount = PLAN_SESSIONS[customerPlan] ?? 0;
+
+    if (isNew) {
+      profileUserId = crypto.randomUUID();
+      const { error: insErr } = await supabase.from("profiles").insert({
+        user_id: profileUserId,
+        name: customerName,
+        phone: formattedPhone || cleanPhone || null,
+        email: customerEmail,
+        plan: customerPlan,
+        status: "active",
+        sessions_used_this_month: 0,
+        sessions_reset_date: today,
+        messages_today: 0,
+        last_message_date: today,
+        needs_schedule_setup: sessionsCount > 0,
+        trial_started_at: new Date().toISOString(),
+        trial_phase: "listening",
+        current_journey_id: "j1-ansiedade",
+        current_episode: 0,
+        plan_expires_at: newExpiry,
+        asaas_customer_id: updated.asaas_customer_id || null,
+      });
+      if (insErr) {
+        console.error("[webhook-asaas] Erro criando profile:", insErr);
+      } else {
+        console.log(`[webhook-asaas] ✅ Profile novo criado: ${profileUserId} (${customerEmail})`);
+      }
+      // Atualiza user_id no payment para vínculo direto.
+      await supabase
+        .from("asaas_payments")
+        .update({ user_id: profileUserId })
+        .eq("asaas_payment_id", paymentId);
+    } else {
+      profileUserId = existingProfile!.user_id;
+      const updatePayload: Record<string, unknown> = {
+        plan: customerPlan,
+        status: "active",
+        plan_expires_at: newExpiry,
+        updated_at: new Date().toISOString(),
+      };
+      if (isReturning) {
+        updatePayload.sessions_used_this_month = 0;
+        updatePayload.sessions_reset_date = today;
+        updatePayload.trial_phase = "listening";
+        updatePayload.needs_schedule_setup = sessionsCount > 0;
+      }
+      const { error: updErr } = await supabase
+        .from("profiles")
+        .update(updatePayload)
+        .eq("user_id", profileUserId);
+      if (updErr) {
+        console.error("[webhook-asaas] Erro atualizando profile:", updErr);
+      } else {
+        console.log(
+          `[webhook-asaas] ✅ Profile ${profileUserId} (${isRenewal ? "renovação" : isReturning ? "returning" : isUpgrade ? "upgrade" : "update"}) estendido até ${newExpiry}`,
+        );
+      }
+    }
+
+    // Renovação → para por aqui (sem welcome novo).
+    if (isRenewal) return;
+
+    // 4) Portal token.
+    let portalLink = "";
+    try {
+      await supabase
+        .from("user_portal_tokens")
+        .upsert({ user_id: profileUserId }, { onConflict: "user_id" });
+      const { data: tokenData } = await supabase
+        .from("user_portal_tokens")
+        .select("token")
+        .eq("user_id", profileUserId)
+        .single();
+      if (tokenData?.token) {
+        portalLink = `https://olaaura.com.br/meu-espaco?t=${tokenData.token}`;
+      }
+    } catch (tokenErr) {
+      console.warn("[webhook-asaas] ⚠️ Portal token falhou (non-blocking):", tokenErr);
+    }
+    const portalLine = portalLink ? `\n\nAcesse seu painel pessoal: ${portalLink} ✨` : "";
+
+    // 5) Monta welcome (3 variantes idênticas ao stripe-webhook).
+    const planName = PLAN_NAMES[customerPlan] || "Essencial";
+    const guideLinkText = "https://olaaura.com.br/guia";
+    let welcomeMessage: string;
+    if (isReturning) {
+      welcomeMessage = `Oi, ${customerName}! 💜\n\nQue bom ter você de volta! 🌟\n\nVocê escolheu o plano ${planName}.${portalLine}\n\nVamos retomar de onde paramos?`;
+    } else if (isUpgrade) {
+      welcomeMessage = `Oi, ${customerName}! 💜 Que notícia boa!\n\nAgora somos oficiais. Você escolheu o plano ${planName}.${portalLine}\n\nVamos continuar de onde paramos?`;
+    } else {
+      welcomeMessage = `Oi, ${customerName}! 🌟 Que bom te receber por aqui.\n\nEu sou a AURA — e vou ficar com você nessa jornada.\n\nVocê escolheu o plano ${planName}.\n\nComigo, você pode falar com liberdade: sem julgamento, no seu ritmo.\n\nSe preferir, pode me mandar áudio também! 🎙️\n\nDá uma olhada no que você vai ter acesso: ${guideLinkText}${portalLine}\n\nMe diz: como você está hoje?`;
+    }
+
+    // 6) Salva pending_insight com marker [WELCOME] (entrega ao clicar "Começar").
+    try {
+      await supabase
+        .from("profiles")
+        .update({ pending_insight: `[WELCOME]${welcomeMessage}` })
+        .eq("user_id", profileUserId);
+      console.log("[webhook-asaas] ✅ Pending welcome salvo");
+    } catch (pendErr) {
+      console.warn("[webhook-asaas] ⚠️ Pending welcome falhou:", pendErr);
+    }
+
+    // 7) Template WhatsApp curto via sendProactive (Meta oficial via Twilio). Retry 3s.
+    if (formattedPhone) {
+      if (isReturning) {
+        // Returning → mensagem de welcome back direta (texto livre se janela aberta).
+        const welcomeBackMessage = `Oi, ${customerName}! 💜\n\nQue bom ter você de volta! 🌟\n\nSua assinatura AURA foi reativada e estou aqui, pronta pra continuar nossa jornada.\n\nMe conta: como você está hoje?`;
+        try {
+          let res = await sendProactive(formattedPhone, welcomeBackMessage, "welcome", profileUserId);
+          if (!res.success) {
+            await new Promise((r) => setTimeout(r, 3000));
+            res = await sendProactive(formattedPhone, welcomeBackMessage, "welcome", profileUserId);
+          }
+          if (res.success) {
+            console.log("[webhook-asaas] ✅ Welcome back enviado via", res.provider);
+            await supabase.from("messages").insert({
+              user_id: profileUserId,
+              role: "assistant",
+              content: welcomeBackMessage,
+            });
+          } else {
+            console.error("[webhook-asaas] ❌ Welcome back falhou após retry:", res.error);
+          }
+        } catch (e) {
+          console.error("[webhook-asaas] ❌ Erro welcome back:", e);
+        }
+      } else {
+        const templateText = `Olá, ${customerName}. Sua assinatura da Aura foi ativada com sucesso.`;
+        try {
+          let res = await sendProactive(formattedPhone, templateText, "welcome", profileUserId);
+          if (!res.success) {
+            console.warn("[webhook-asaas] ⚠️ Welcome template falhou, retry 3s:", res.error);
+            await new Promise((r) => setTimeout(r, 3000));
+            res = await sendProactive(formattedPhone, templateText, "welcome", profileUserId);
+          }
+          if (res.success) {
+            console.log("[webhook-asaas] ✅ Welcome template enviado via", res.provider);
+          } else {
+            console.error("[webhook-asaas] ❌ Welcome template falhou após retry:", res.error);
+          }
+        } catch (e) {
+          console.error("[webhook-asaas] ❌ Erro welcome template:", e);
+        }
+      }
+    } else {
+      console.warn("[webhook-asaas] ⚠️ Sem telefone — pulando template WhatsApp");
+    }
+
+    // 8) Email welcome (backup caso template WhatsApp esteja pendente).
+    if (customerEmail) {
+      try {
+        await supabase.functions.invoke("send-transactional-email", {
+          body: {
+            templateName: "welcome",
+            recipientEmail: customerEmail,
+            idempotencyKey: `welcome-asaas-${paymentId}`,
+            templateData: { name: customerName, portalUrl: portalLink || undefined },
+          },
+        });
+        console.log("[webhook-asaas] ✅ Welcome email enfileirado");
+      } catch (emailErr) {
+        console.warn("[webhook-asaas] ⚠️ Welcome email falhou (non-blocking):", emailErr);
+      }
+    }
+  } catch (err) {
+    console.error("[webhook-asaas] ❌ handleActivation erro fatal (non-blocking):", err);
+  }
+}
