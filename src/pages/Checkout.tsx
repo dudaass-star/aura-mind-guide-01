@@ -537,8 +537,10 @@ const Checkout = () => {
                   className="space-y-3"
                 >
                   {(Object.entries(plans) as [PlanId, PlanConfig][]).map(([id, plan]) => {
-                    const price = billingPeriod === "monthly" ? plan.monthlyPrice : plan.yearlyPrice;
-                    const period = billingPeriod === "monthly" ? "mês" : "ano";
+                    const price = getPrice(plan, billingPeriod);
+                    const period = periodSuffix[billingPeriod];
+                    const monthlyEq = getMonthlyEquivalent(plan, billingPeriod);
+                    const disc = getDiscount(plan, billingPeriod);
                     
                     return (
                       <label
@@ -554,9 +556,9 @@ const Checkout = () => {
                             Mais popular
                           </div>
                         )}
-                        {billingPeriod === "yearly" && (
+                        {disc > 0 && (
                           <div className="absolute -top-2 right-4 px-2 py-0.5 bg-destructive text-destructive-foreground text-xs font-medium rounded">
-                            -{plan.yearlyDiscount}%
+                            -{disc}%
                           </div>
                         )}
                         <div className="flex items-start gap-3">
@@ -575,21 +577,32 @@ const Checkout = () => {
                                 Chat ilimitado
                               </span>
                             </div>
-                            {billingPeriod === "yearly" && (
+                            {monthlyEq && (
                               <p className="text-xs text-muted-foreground mt-2">
-                                equivale a R${plan.yearlyMonthlyEquivalent}/mês
+                                equivale a R${monthlyEq}/mês
                               </p>
                             )}
                           </div>
                         </div>
                         <div className="text-right">
-                          <p className="font-display text-xl font-semibold text-primary whitespace-nowrap">
-                            R$ {plan.trialPrice}
-                          </p>
-                          <p className="text-xs font-medium text-primary">7 dias</p>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Após: R$ {price}/{period}
-                          </p>
+                          {billingPeriod === "monthly" ? (
+                            <>
+                              <p className="font-display text-xl font-semibold text-primary whitespace-nowrap">
+                                R$ {plan.trialPrice}
+                              </p>
+                              <p className="text-xs font-medium text-primary">7 dias</p>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Após: R$ {price}/{period}
+                              </p>
+                            </>
+                          ) : (
+                            <>
+                              <p className="font-display text-xl font-semibold text-primary whitespace-nowrap">
+                                R$ {price}
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-1">/{period}</p>
+                            </>
+                          )}
                         </div>
                       </label>
                     );
