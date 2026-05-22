@@ -134,9 +134,18 @@ const Checkout = () => {
   const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [cpf, setCpf] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isPixLoading, setIsPixLoading] = useState(false);
   const [showExitPopup, setShowExitPopup] = useState(false);
   const [hasRedirected, setHasRedirected] = useState(false);
+  const [pixModal, setPixModal] = useState<{
+    open: boolean;
+    qrCodeImage?: string;
+    copyPaste?: string;
+    amount?: number;
+    expiresAt?: string;
+  }>({ open: false });
 
   // ViewContent on page load (browser pixel only — no PII available yet)
   useEffect(() => {
@@ -192,8 +201,11 @@ const Checkout = () => {
   }, [hasRedirected]);
 
   const currentPlan = plans[selectedPlan];
-  const currentPrice = billingPeriod === "monthly" ? currentPlan.monthlyPrice : currentPlan.yearlyPrice;
-  const periodLabel = billingPeriod === "monthly" ? "mês" : "ano";
+  const currentPrice = getPrice(currentPlan, billingPeriod);
+  const periodLabel = periodSuffix[billingPeriod];
+  const monthlyEquivalent = getMonthlyEquivalent(currentPlan, billingPeriod);
+  const currentDiscount = getDiscount(currentPlan, billingPeriod);
+  const pixAvailable = billingPeriod !== "monthly";
 
   const formatPhone = (value: string) => {
     const numbers = value.replace(/\D/g, "");
@@ -204,6 +216,100 @@ const Checkout = () => {
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setPhone(formatPhone(e.target.value));
+  };
+
+  const formatCpf = (value: string) => {
+    const numbers = value.replace(/\D/g, "").slice(0, 11);
+    if (numbers.length <= 3) return numbers;
+    if (numbers.length <= 6) return `${numbers.slice(0, 3)}.${numbers.slice(3)}`;
+    if (numbers.length <= 9) return `${numbers.slice(0, 3)}.${numbers.slice(3, 6)}.${numbers.slice(6)}`;
+    return `${numbers.slice(0, 3)}.${numbers.slice(3, 6)}.${numbers.slice(6, 9)}-${numbers.slice(9)}`;
+  };
+  const handleCpfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCpf(formatCpf(e.target.value));
+  };
+
+  // Validação simples de CPF (mesmo algoritmo da edge function)
+  const isValidCPF = (raw: string): boolean => {
+    const c = raw.replace(/\D/g, "");
+    if (c.length !== 11) return false;
+    if (/^(\d)\1+$/.test(c)) return false;
+    let sum = 0;
+    for (let i = 0; i < 9; i++) sum += parseInt(c[i]) * (10 - i);
+    let d1 = 11 - (sum % 11);
+    if (d1 >= 10) d1 = 0;
+    if (d1 !== parseInt(c[9])) return false;
+    sum = 0;
+    for (let i = 0; i < 10; i++) sum += parseInt(c[i]) * (11 - i);
+    let d2 = 11 - (sum % 11);
+    if (d2 >= 10) d2 = 0;
+    return d2 === parseInt(c[10]);
+  };
+
+  const validateBaseFields = (): boolean => {
+    if (!name.trim()) {
+      toast.error("Por favor, insira seu nome");
+      return false;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email.trim() || !emailRegex.test(email)) {
+      toast.error("Por favor, insira um email válido");
+      return false;
+    }
+    if (phone.replace(/\D/g, "").length < 11) {
+      toast.error("Por favor, insira um telefone válido");
+      return false;
+    }
+    return true;
+  };
+
+  const handlePixSubmit = async () => {
+    if (!pixAvailable) return;
+    if (!validateBaseFields()) return;
+    if (!isValidCPF(cpf)) {
+      toast.error("CPF inválido. Confira os números.");
+      return;
+    }
+
+    setIsPixLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("criar-pix-asaas", {
+        body: {
+          plan: selectedPlan,
+          billing: billingPeriod,
+          name: name.trim(),
+          email: email.trim(),
+          phone: phone.replace(/\D/g, ""),
+          cpf: cpf.replace(/\D/g, ""),
+        },
+      });
+
+      if (error) throw new Error(error.message || "Erro ao gerar PIX");
+      if (!data?.copyPaste) throw new Error("PIX não retornou QR Code");
+
+      setPixModal({
+        open: true,
+        qrCodeImage: data.qrCodeImage,
+        copyPaste: data.copyPaste,
+        amount: data.amount,
+        expiresAt: data.expiresAt,
+      });
+    } catch (err) {
+      console.error("PIX error:", err);
+      toast.error(err instanceof Error ? err.message : "Erro ao gerar PIX. Tente novamente.");
+    } finally {
+      setIsPixLoading(false);
+    }
+  };
+
+  const copyPixCode = async () => {
+    if (!pixModal.copyPaste) return;
+    try {
+      await navigator.clipboard.writeText(pixModal.copyPaste);
+      toast.success("Código PIX copiado!");
+    } catch {
+      toast.error("Não consegui copiar. Selecione o texto manualmente.");
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
