@@ -885,45 +885,56 @@ const CheckoutV2 = () => {
                 )}
               </div>
 
-              {/* CTA principal: cartão (Mensal/Anual) ou PIX (Trim/Sem). */}
-              {billingPeriod === "monthly" || billingPeriod === "yearly" ? (
-                <Button
-                  type="submit"
-                  variant="sage"
-                  size="xl"
-                  className={`w-full rounded-full transition-opacity ${!isFormValid ? "opacity-70" : ""}`}
-                  disabled={isLoading}
-                  aria-disabled={!isFormValid || isLoading}
-                >
-                  <CreditCard className="w-5 h-5 mr-2" />
-                  {isLoading ? "Processando..." : `Começar trial por R$ ${currentPlan.trialPrice}`}
-                </Button>
+              {/* Mensal: cartão trial principal + PIX recorrente secundário.
+                  Trim/Sem/Anual: PIX à vista principal + cartão recorrente secundário (sem trial). */}
+              {billingPeriod === "monthly" ? (
+                <>
+                  <Button
+                    type="submit"
+                    variant="sage"
+                    size="xl"
+                    className={`w-full rounded-full transition-opacity ${!isFormValid ? "opacity-70" : ""}`}
+                    disabled={isLoading}
+                    aria-disabled={!isFormValid || isLoading}
+                  >
+                    <CreditCard className="w-5 h-5 mr-2" />
+                    {isLoading ? "Processando..." : `Começar trial por R$ ${currentPlan.trialPrice}`}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="lg"
+                    onClick={() => handleOpenPix("subscription")}
+                    className="w-full rounded-full bg-transparent border-white/25 text-white hover:bg-white/10 hover:text-white"
+                  >
+                    <QrCode className="w-4 h-4 mr-2" />
+                    Pagar com PIX recorrente — R$ {currentPrice}/mês
+                  </Button>
+                </>
               ) : (
-                <Button
-                  type="button"
-                  variant="sage"
-                  size="xl"
-                  onClick={handleOpenPix}
-                  className={`w-full rounded-full transition-opacity ${!isFormValid ? "opacity-70" : ""}`}
-                  aria-disabled={!isFormValid}
-                >
-                  <QrCode className="w-5 h-5 mr-2" />
-                  Pagar com PIX — R$ {currentPrice}
-                </Button>
-              )}
-
-              {/* CTA secundário PIX no plano Anual (cartão fica como principal). */}
-              {billingPeriod === "yearly" && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="lg"
-                  onClick={handleOpenPix}
-                  className="w-full rounded-full bg-transparent border-white/25 text-white hover:bg-white/10 hover:text-white"
-                >
-                  <QrCode className="w-4 h-4 mr-2" />
-                  Ou pague à vista no PIX — R$ {currentPrice}
-                </Button>
+                <>
+                  <Button
+                    type="button"
+                    variant="sage"
+                    size="xl"
+                    onClick={() => handleOpenPix("one-time")}
+                    className={`w-full rounded-full transition-opacity ${!isFormValid ? "opacity-70" : ""}`}
+                    aria-disabled={!isFormValid}
+                  >
+                    <QrCode className="w-5 h-5 mr-2" />
+                    Pagar à vista no PIX — R$ {currentPrice}
+                  </Button>
+                  <Button
+                    type="submit"
+                    variant="outline"
+                    size="lg"
+                    disabled={isLoading}
+                    className="w-full rounded-full bg-transparent border-white/25 text-white hover:bg-white/10 hover:text-white"
+                  >
+                    <CreditCard className="w-4 h-4 mr-2" />
+                    {isLoading ? "Processando..." : `Pagar no cartão — R$ ${currentPrice} a cada ${periodLabel}`}
+                  </Button>
+                </>
               )}
 
               <p className="text-center text-[11px] text-white/50 -mt-2">
