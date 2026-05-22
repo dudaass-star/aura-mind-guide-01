@@ -34,6 +34,27 @@ const getPrices = (): Record<string, { monthly: string; yearly: string; boletoYe
   },
 });
 
+// Preços RECORRENTES sem trial para Trim/Sem/Anual (V2).
+// Hardcoded aqui pra evitar criar 9 secrets — IDs são públicos (visíveis no dashboard).
+// Stripe: interval=month, interval_count=3/6 para trim/sem; interval=year, interval_count=1 para anual.
+const RECURRING_PRICES: Record<string, { quarterly: string; semestral: string; yearly: string }> = {
+  essencial: {
+    quarterly: "price_1TZyoCQU15XnZ7VvyI45t8um",
+    semestral: "price_1TZyoDQU15XnZ7VvOegMIXQi",
+    yearly:    "price_1TZyoEQU15XnZ7Vvx02qKKPF",
+  },
+  direcao: {
+    quarterly: "price_1TZyoFQU15XnZ7VvAfRFoTOh",
+    semestral: "price_1TZyoGQU15XnZ7VvZiGk2ifY",
+    yearly:    "price_1TZyoHQU15XnZ7VvwUFUX9Bm",
+  },
+  transformacao: {
+    quarterly: "price_1TZyoIQU15XnZ7VvCMjzuaZr",
+    semestral: "price_1TZyoJQU15XnZ7Vv3FqH75Nb",
+    yearly:    "price_1TZyoKQU15XnZ7VvJzJNnub7",
+  },
+};
+
 const logStep = (step: string, details?: any) => {
   const detailsStr = details ? ` - ${JSON.stringify(details)}` : '';
   console.log(`[CREATE-CHECKOUT] ${step}${detailsStr}`);
@@ -55,8 +76,13 @@ serve(async (req) => {
     const plan = requestedPlan;
     const billingOverride = billing;
     const isBoletoPayment = paymentMethod === "boleto" && billingOverride === "yearly";
+    // V2: cartão recorrente sem trial pra Trim/Sem/Anual.
+    const isRecurringCardV2 =
+      paymentMethod === "card" &&
+      !trial &&
+      (billingOverride === "quarterly" || billingOverride === "semestral" || billingOverride === "yearly");
     
-    logStep("Request received", { plan, billing: billingOverride, name, email, phone, trial: !!trial, paymentMethod, isBoleto: isBoletoPayment, embedded: !!embedded, hasFbp: !!fbp, hasFbc: !!fbc, hasGaClientId: !!gaClientId });
+    logStep("Request received", { plan, billing: billingOverride, name, email, phone, trial: !!trial, paymentMethod, isBoleto: isBoletoPayment, isRecurringCardV2, embedded: !!embedded, hasFbp: !!fbp, hasFbc: !!fbc, hasGaClientId: !!gaClientId });
 
     const PRICES = getPrices();
     
@@ -74,15 +100,34 @@ serve(async (req) => {
       throw new Error("Valid email is required");
     }
 
-    // Validate billing period
-    const billingPeriod = billingOverride === "yearly" ? "yearly" : "monthly";
-    
-    // Select the correct price ID
+    // Anual com trial não é mais permitido (V2).
+    if (trial && billingOverride === "yearly") {
+      throw new Error("Invalid billing: trial não disponível para o plano anual");
+    }
+
+    // Período usado em metadata/labels — preserva valor cru pra V2 (quarterly/semestral/yearly).
+    const billingPeriod = (
+      ["monthly", "quarterly", "semestral", "yearly"].includes(billingOverride)
+        ? billingOverride
+        : "monthly"
+    ) as "monthly" | "quarterly" | "semestral" | "yearly";
+
+    // Resolve o price ID conforme o fluxo:
+    //   - Boleto: STRIPE_PRICE_*_PIX_YEARLY (legado, só anual)
+    //   - Cartão recorrente V2 (trim/sem/anual sem trial): RECURRING_PRICES hardcoded
+    //   - Cartão mensal/anual com trial: STRIPE_PRICE_*_MONTHLY ou _YEARLY (legado)
     let priceId: string;
     if (isBoletoPayment) {
       priceId = PRICES[plan].boletoYearly;
+    } else if (isRecurringCardV2) {
+      const recurring = RECURRING_PRICES[plan];
+      if (!recurring) throw new Error("Plano sem preço recorrente configurado");
+      priceId = recurring[billingPeriod as "quarterly" | "semestral" | "yearly"];
     } else {
-      priceId = PRICES[plan][billingPeriod];
+      // Fluxos legados (mensal cartão e anual trial) usam o mapa antigo,
+      // que só conhece monthly/yearly.
+      const legacyPeriod = billingPeriod === "yearly" ? "yearly" : "monthly";
+      priceId = PRICES[plan][legacyPeriod];
     }
 
     if (!priceId) {
@@ -215,14 +260,20 @@ serve(async (req) => {
 
     const origin = req.headers.get("origin") || "https://olaaura.com.br";
 
-    // Plan display prices for custom_text
-    const planPrices: Record<string, { monthly: string; yearly: string }> = {
-      essencial: { monthly: "29,90", yearly: "214,90" },
-      direcao: { monthly: "49,90", yearly: "359,90" },
-      transformacao: { monthly: "79,90", yearly: "574,90" },
+    // Plan display prices for custom_text — agora cobre os 4 períodos.
+    const planPrices: Record<string, Record<string, string>> = {
+      essencial:     { monthly: "29,90", quarterly: "79,90",  semestral: "125,90", yearly: "214,90" },
+      direcao:       { monthly: "49,90", quarterly: "133,90", semestral: "209,90", yearly: "359,90" },
+      transformacao: { monthly: "79,90", quarterly: "213,90", semestral: "335,90", yearly: "574,90" },
     };
     const displayPrice = planPrices[plan]?.[billingPeriod] || "";
-    const periodLabel = billingPeriod === "yearly" ? "ano" : "mês";
+    const periodLabelMap: Record<string, string> = {
+      monthly: "mês",
+      quarterly: "trimestre",
+      semestral: "semestre",
+      yearly: "ano",
+    };
+    const periodLabel = periodLabelMap[billingPeriod] || "mês";
     
 
     // Build checkout session config
@@ -369,6 +420,7 @@ serve(async (req) => {
         email: email,
         plan: plan,
         billing: billingPeriod,
+        ...(isRecurringCardV2 && { payment_method: "card_recurring_v2", v2_no_trial: "true" }),
         ...(fbp && { fbp }),
         ...(fbc && { fbc }),
         ...(gaClientId && { ga_client_id: gaClientId }),
@@ -380,6 +432,7 @@ serve(async (req) => {
           email: email,
           plan: plan,
           billing: billingPeriod,
+          ...(isRecurringCardV2 && { payment_method: "card_recurring_v2", v2_no_trial: "true" }),
           ...(gaClientId && { ga_client_id: gaClientId }),
         },
       };

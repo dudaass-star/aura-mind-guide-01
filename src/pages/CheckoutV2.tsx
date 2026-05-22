@@ -191,6 +191,9 @@ const CheckoutV2 = () => {
   // tela de QR depois que a edge function retorna.
   const [pixOpen, setPixOpen] = useState(false);
   const [pixStage, setPixStage] = useState<"form" | "qr">("form");
+  // Modo do PIX no modal: one-time (criar-pix-asaas) ou subscription (criar-pix-recorrente-asaas).
+  // Mensal usa subscription; Trim/Sem/Anual usam one-time (à vista).
+  const [pixMode, setPixMode] = useState<"one-time" | "subscription">("one-time");
   const [cpf, setCpf] = useState("");
   const [cpfError, setCpfError] = useState<string | undefined>(undefined);
   const [pixLoading, setPixLoading] = useState(false);
@@ -285,11 +288,8 @@ const CheckoutV2 = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Trim/Sem não tem fluxo cartão — Enter no form abre PIX direto.
-    if (billingPeriod === "quarterly" || billingPeriod === "semestral") {
-      handleOpenPix();
-      return;
-    }
+    // Submit padrão: cartão. Mensal = trial 7d; Trim/Sem/Anual = recorrente sem trial.
+    // (CTAs PIX em qualquer período chamam handleOpenPix direto, não passam por aqui.)
 
     // Valida tudo de uma vez e mostra os erros inline. Auto-scroll para o
     // primeiro campo inválido — o WhatsApp costuma estar abaixo da dobra no mobile.
@@ -389,11 +389,13 @@ const CheckoutV2 = () => {
 
       const gaClientId = getGaClientId();
 
+      const isMonthlyTrial = billingPeriod === "monthly";
       const { data, error } = await supabase.functions.invoke("create-checkout", {
         body: {
           plan: selectedPlan,
           billing: billingPeriod,
-          trial: true,
+          trial: isMonthlyTrial,
+          paymentMethod: "card",
           embedded: true,
           name: name.trim(),
           email: email.trim(),
@@ -442,7 +444,8 @@ const CheckoutV2 = () => {
   }, []);
 
   // Abre o modal PIX. Valida os 3 campos comuns antes (mesma regra do CTA cartão).
-  const handleOpenPix = () => {
+  // `mode` define se vamos chamar a edge one-time ou a de subscription.
+  const handleOpenPix = (mode: "one-time" | "subscription" = "one-time") => {
     const nextErrors: { name?: string; email?: string; phone?: string } = {};
     if (phoneDigits.length < 11) nextErrors.phone = "Digite seu WhatsApp com DDD (11 dígitos).";
     if (!name.trim()) nextErrors.name = "Por favor, digite seu nome.";
@@ -461,6 +464,7 @@ const CheckoutV2 = () => {
       return;
     }
     setErrors({});
+    setPixMode(mode);
     setPixStage("form");
     setPixData(null);
     setCpfError(undefined);
@@ -476,7 +480,8 @@ const CheckoutV2 = () => {
     setCpfError(undefined);
     setPixLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("criar-pix-asaas", {
+      const edgeName = pixMode === "subscription" ? "criar-pix-recorrente-asaas" : "criar-pix-asaas";
+      const { data, error } = await supabase.functions.invoke(edgeName, {
         body: {
           plan: selectedPlan,
           billing: billingPeriod,
@@ -880,45 +885,56 @@ const CheckoutV2 = () => {
                 )}
               </div>
 
-              {/* CTA principal: cartão (Mensal/Anual) ou PIX (Trim/Sem). */}
-              {billingPeriod === "monthly" || billingPeriod === "yearly" ? (
-                <Button
-                  type="submit"
-                  variant="sage"
-                  size="xl"
-                  className={`w-full rounded-full transition-opacity ${!isFormValid ? "opacity-70" : ""}`}
-                  disabled={isLoading}
-                  aria-disabled={!isFormValid || isLoading}
-                >
-                  <CreditCard className="w-5 h-5 mr-2" />
-                  {isLoading ? "Processando..." : `Começar trial por R$ ${currentPlan.trialPrice}`}
-                </Button>
+              {/* Mensal: cartão trial principal + PIX recorrente secundário.
+                  Trim/Sem/Anual: PIX à vista principal + cartão recorrente secundário (sem trial). */}
+              {billingPeriod === "monthly" ? (
+                <>
+                  <Button
+                    type="submit"
+                    variant="sage"
+                    size="xl"
+                    className={`w-full rounded-full transition-opacity ${!isFormValid ? "opacity-70" : ""}`}
+                    disabled={isLoading}
+                    aria-disabled={!isFormValid || isLoading}
+                  >
+                    <CreditCard className="w-5 h-5 mr-2" />
+                    {isLoading ? "Processando..." : `Começar trial por R$ ${currentPlan.trialPrice}`}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="lg"
+                    onClick={() => handleOpenPix("subscription")}
+                    className="w-full rounded-full bg-transparent border-white/25 text-white hover:bg-white/10 hover:text-white"
+                  >
+                    <QrCode className="w-4 h-4 mr-2" />
+                    Pagar com PIX recorrente — R$ {currentPrice}/mês
+                  </Button>
+                </>
               ) : (
-                <Button
-                  type="button"
-                  variant="sage"
-                  size="xl"
-                  onClick={handleOpenPix}
-                  className={`w-full rounded-full transition-opacity ${!isFormValid ? "opacity-70" : ""}`}
-                  aria-disabled={!isFormValid}
-                >
-                  <QrCode className="w-5 h-5 mr-2" />
-                  Pagar com PIX — R$ {currentPrice}
-                </Button>
-              )}
-
-              {/* CTA secundário PIX no plano Anual (cartão fica como principal). */}
-              {billingPeriod === "yearly" && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="lg"
-                  onClick={handleOpenPix}
-                  className="w-full rounded-full bg-transparent border-white/25 text-white hover:bg-white/10 hover:text-white"
-                >
-                  <QrCode className="w-4 h-4 mr-2" />
-                  Ou pague à vista no PIX — R$ {currentPrice}
-                </Button>
+                <>
+                  <Button
+                    type="button"
+                    variant="sage"
+                    size="xl"
+                    onClick={() => handleOpenPix("one-time")}
+                    className={`w-full rounded-full transition-opacity ${!isFormValid ? "opacity-70" : ""}`}
+                    aria-disabled={!isFormValid}
+                  >
+                    <QrCode className="w-5 h-5 mr-2" />
+                    Pagar à vista no PIX — R$ {currentPrice}
+                  </Button>
+                  <Button
+                    type="submit"
+                    variant="outline"
+                    size="lg"
+                    disabled={isLoading}
+                    className="w-full rounded-full bg-transparent border-white/25 text-white hover:bg-white/10 hover:text-white"
+                  >
+                    <CreditCard className="w-4 h-4 mr-2" />
+                    {isLoading ? "Processando..." : `Pagar no cartão — R$ ${currentPrice} a cada ${periodLabel}`}
+                  </Button>
+                </>
               )}
 
               <p className="text-center text-[11px] text-white/50 -mt-2">
