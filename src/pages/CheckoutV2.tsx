@@ -112,7 +112,12 @@ const CheckoutV2 = () => {
     if (exitShown) return;
 
     const handleMouseLeave = (e: MouseEvent) => {
-      if (e.clientY <= 0 && !hasRedirected && !sessionStorage.getItem("aura_exit_popup_shown")) {
+      if (
+        e.clientY <= 0 &&
+        !hasRedirected &&
+        !embeddedClientSecret &&
+        !sessionStorage.getItem("aura_exit_popup_shown")
+      ) {
         sessionStorage.setItem("aura_exit_popup_shown", "true");
         setShowExitPopup(true);
         trackExitIntent("open");
@@ -124,6 +129,7 @@ const CheckoutV2 = () => {
         window.innerWidth >= 768 &&
         document.visibilityState === "hidden" &&
         !hasRedirected &&
+        !embeddedClientSecret &&
         !sessionStorage.getItem("aura_exit_popup_shown")
       ) {
         sessionStorage.setItem("aura_exit_popup_shown", "true");
@@ -132,14 +138,13 @@ const CheckoutV2 = () => {
       }
     };
 
-    document.addEventListener("mouseleave", handleMouseLeave);
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       document.removeEventListener("mouseleave", handleMouseLeave);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [hasRedirected]);
+  }, [hasRedirected, embeddedClientSecret]);
 
   const currentPlan = plans[selectedPlan];
   const currentPrice = billingPeriod === "monthly" ? currentPlan.monthlyPrice : currentPlan.yearlyPrice;
