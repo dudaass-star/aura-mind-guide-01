@@ -807,7 +807,6 @@ const CheckoutV2 = () => {
                     maxLength={15}
                     aria-invalid={!!errors.phone}
                     aria-describedby={errors.phone ? "phone-error" : "phone-hint"}
-                    autoFocus
                     inputMode="numeric"
                     autoComplete="tel-national"
                   />
