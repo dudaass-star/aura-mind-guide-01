@@ -559,8 +559,9 @@ const CheckoutV2 = () => {
                 type="submit"
                 variant="sage"
                 size="xl"
-                className="w-full rounded-full"
+                className={`w-full rounded-full transition-opacity ${!isFormValid ? "opacity-70" : ""}`}
                 disabled={isLoading}
+                aria-disabled={!isFormValid || isLoading}
               >
                 <CreditCard className="w-5 h-5 mr-2" />
                 {isLoading ? "Processando..." : `Começar por R$ ${currentPlan.trialPrice}`}
@@ -593,10 +594,29 @@ const CheckoutV2 = () => {
 
             {embeddedClientSecret && stripePromise && embeddedOptions && (
               <div id="embedded-checkout-block" className="space-y-4 pt-8 mt-8 border-t border-white/10">
-                <div className="rounded-2xl bg-white p-2 md:p-4 shadow-2xl">
-                  <EmbeddedCheckoutProvider stripe={stripePromise} options={embeddedOptions}>
-                    <EmbeddedCheckout />
-                  </EmbeddedCheckoutProvider>
+                {/* Instrução clara: depois do submit o widget Stripe demora ~3s pra
+                    montar e aparece como uma área branca. Sem essa frase + skeleton,
+                    o usuário pensava que travou e abandonava. */}
+                <div className="text-center">
+                  <p className="font-display text-lg font-semibold text-[hsl(140_30%_72%)]">
+                    Preencha seu cartão abaixo para finalizar ↓
+                  </p>
+                  <p className="text-xs text-white/60 mt-1">
+                    Pagamento seguro processado pela Stripe • 7 dias por R$ {currentPlan.trialPrice}
+                  </p>
+                </div>
+                <div className="relative rounded-2xl bg-white p-2 md:p-4 shadow-2xl min-h-[420px]">
+                  {/* Skeleton enquanto o iframe da Stripe carrega.
+                      O próprio EmbeddedCheckout pinta por cima quando estiver pronto. */}
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 pointer-events-none">
+                    <div className="w-8 h-8 rounded-full border-2 border-[hsl(140_22%_45%)]/30 border-t-[hsl(140_22%_45%)] animate-spin" />
+                    <p className="text-xs text-gray-500">Carregando pagamento seguro…</p>
+                  </div>
+                  <div className="relative z-10">
+                    <EmbeddedCheckoutProvider stripe={stripePromise} options={embeddedOptions}>
+                      <EmbeddedCheckout />
+                    </EmbeddedCheckoutProvider>
+                  </div>
                 </div>
                 <div className="flex flex-wrap justify-center gap-x-5 gap-y-2 text-xs text-white/55 pt-1">
                   <div className="flex items-center gap-1.5">
