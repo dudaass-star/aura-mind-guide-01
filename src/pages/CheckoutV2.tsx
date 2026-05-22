@@ -186,6 +186,22 @@ const CheckoutV2 = () => {
   const [embeddedClientSecret, setEmbeddedClientSecret] = useState<string | null>(null);
   const [stripePromise, setStripePromise] = useState<Promise<StripeJs | null> | null>(null);
 
+  // PIX (Asaas): só aparece pra trim/sem/anual. Modal abre com form de CPF
+  // (resto dos dados reusa name/email/phone do form principal) e troca pra
+  // tela de QR depois que a edge function retorna.
+  const [pixOpen, setPixOpen] = useState(false);
+  const [pixStage, setPixStage] = useState<"form" | "qr">("form");
+  const [cpf, setCpf] = useState("");
+  const [cpfError, setCpfError] = useState<string | undefined>(undefined);
+  const [pixLoading, setPixLoading] = useState(false);
+  const [pixData, setPixData] = useState<{
+    qrImage: string;
+    copyPaste: string;
+    expiresAt: string | null;
+    invoiceUrl: string | null;
+    amount: number;
+  } | null>(null);
+
   // ViewContent + GA4 begin_checkout no mount
   useEffect(() => {
     const trialPriceMap: Record<string, number> = { essencial: 6.9, direcao: 9.9, transformacao: 19.9 };
@@ -243,8 +259,11 @@ const CheckoutV2 = () => {
   }, [hasRedirected, embeddedClientSecret]);
 
   const currentPlan = plans[selectedPlan];
-  const currentPrice = billingPeriod === "monthly" ? currentPlan.monthlyPrice : currentPlan.yearlyPrice;
-  const periodLabel = billingPeriod === "monthly" ? "mês" : "ano";
+  const currentPrice = getPeriodPrice(currentPlan, billingPeriod);
+  const periodLabel = periodLabelMap[billingPeriod];
+  const currentDiscount = getPeriodDiscount(currentPlan, billingPeriod);
+  const currentMonthlyEquivalent = getPeriodMonthlyEquivalent(currentPlan, billingPeriod);
+  const pixEnabled = isPixPeriod(billingPeriod);
 
   const formatPhone = (value: string) => {
     const numbers = value.replace(/\D/g, "");
@@ -415,6 +434,82 @@ const CheckoutV2 = () => {
     setStripePromise(null);
     setHasRedirected(false);
   }, []);
+
+  // Abre o modal PIX. Valida os 3 campos comuns antes (mesma regra do CTA cartão).
+  const handleOpenPix = () => {
+    const nextErrors: { name?: string; email?: string; phone?: string } = {};
+    if (phoneDigits.length < 11) nextErrors.phone = "Digite seu WhatsApp com DDD (11 dígitos).";
+    if (!name.trim()) nextErrors.name = "Por favor, digite seu nome.";
+    if (!email.trim() || !emailRegex.test(email)) nextErrors.email = "Digite um email válido.";
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
+      const order = ["phone", "name", "email"] as const;
+      const firstInvalid = order.find((f) => nextErrors[f]);
+      if (firstInvalid) {
+        requestAnimationFrame(() => {
+          const el = document.getElementById(firstInvalid);
+          el?.scrollIntoView({ behavior: "smooth", block: "center" });
+          el?.focus({ preventScroll: true });
+        });
+      }
+      return;
+    }
+    setErrors({});
+    setPixStage("form");
+    setPixData(null);
+    setCpfError(undefined);
+    setPixOpen(true);
+  };
+
+  // Gera a cobrança PIX no Asaas e troca o modal pra tela de QR.
+  const handleGeneratePix = async () => {
+    if (!isValidCpf(cpf)) {
+      setCpfError("CPF inválido. Confira os 11 dígitos.");
+      return;
+    }
+    setCpfError(undefined);
+    setPixLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("criar-pix-asaas", {
+        body: {
+          plan: selectedPlan,
+          billing: billingPeriod,
+          name: name.trim(),
+          email: email.trim(),
+          phone: phone.replace(/\D/g, ""),
+          cpf: cpf.replace(/\D/g, ""),
+        },
+      });
+      if (error) throw new Error(error.message || "Erro ao gerar PIX");
+      if (!data?.qrCodeImage || !data?.copyPaste) {
+        throw new Error("PIX não retornado pelo provedor");
+      }
+      setPixData({
+        qrImage: data.qrCodeImage,
+        copyPaste: data.copyPaste,
+        expiresAt: data.expiresAt || null,
+        invoiceUrl: data.invoiceUrl || null,
+        amount: data.amount || 0,
+      });
+      setPixStage("qr");
+      trackAddPaymentInfo({ plan: selectedPlan, billing: billingPeriod, value: data.amount || 0 });
+    } catch (err) {
+      console.error("PIX V2 error:", err);
+      toast.error(err instanceof Error ? err.message : "Erro ao gerar PIX. Tente novamente.");
+    } finally {
+      setPixLoading(false);
+    }
+  };
+
+  const handleCopyPix = async () => {
+    if (!pixData?.copyPaste) return;
+    try {
+      await navigator.clipboard.writeText(pixData.copyPaste);
+      toast.success("Código PIX copiado!");
+    } catch {
+      toast.error("Não foi possível copiar. Selecione manualmente.");
+    }
+  };
 
   const inputCls =
     "mt-1.5 bg-white/5 border-white/15 text-white placeholder:text-white/55 focus-visible:ring-1 focus-visible:ring-[hsl(140_18%_55%)]";
