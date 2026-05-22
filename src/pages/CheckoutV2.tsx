@@ -81,6 +81,10 @@ const CheckoutV2 = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showExitPopup, setShowExitPopup] = useState(false);
   const [hasRedirected, setHasRedirected] = useState(false);
+  // Erros inline de validação dos 3 campos do formulário. Substituem o toast,
+  // que sumia em 3s e deixava o usuário perdido (especialmente no mobile, onde
+  // o campo WhatsApp ficava abaixo da dobra e o usuário clicava no CTA sem ver).
+  const [errors, setErrors] = useState<{ name?: string; email?: string; phone?: string }>({});
   // Estado do checkout embedado: clientSecret + promise da Stripe.js carregada com a chave pública
   // devolvida pela edge function. Quando setados, renderizamos <EmbeddedCheckout /> inline,
   // sem salto pro domínio checkout.stripe.com.
@@ -150,26 +154,38 @@ const CheckoutV2 = () => {
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setPhone(formatPhone(e.target.value));
+    if (errors.phone) setErrors((prev) => ({ ...prev, phone: undefined }));
   };
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const phoneDigits = phone.replace(/\D/g, "");
+  const isFormValid =
+    name.trim().length > 0 && emailRegex.test(email.trim()) && phoneDigits.length >= 11;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!name.trim()) {
-      toast.error("Por favor, insira seu nome");
-      return;
-    }
+    // Valida tudo de uma vez e mostra os erros inline. Auto-scroll para o
+    // primeiro campo inválido — o WhatsApp costuma estar abaixo da dobra no mobile.
+    const nextErrors: { name?: string; email?: string; phone?: string } = {};
+    if (phoneDigits.length < 11) nextErrors.phone = "Digite seu WhatsApp com DDD (11 dígitos).";
+    if (!name.trim()) nextErrors.name = "Por favor, digite seu nome.";
+    if (!email.trim() || !emailRegex.test(email)) nextErrors.email = "Digite um email válido.";
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!email.trim() || !emailRegex.test(email)) {
-      toast.error("Por favor, insira um email válido");
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
+      const order = ["phone", "name", "email"] as const;
+      const firstInvalid = order.find((field) => nextErrors[field]);
+      if (firstInvalid) {
+        requestAnimationFrame(() => {
+          const el = document.getElementById(firstInvalid);
+          el?.scrollIntoView({ behavior: "smooth", block: "center" });
+          el?.focus({ preventScroll: true });
+        });
+      }
       return;
     }
-
-    if (phone.replace(/\D/g, "").length < 11) {
-      toast.error("Por favor, insira um telefone válido");
-      return;
-    }
+    setErrors({});
 
     setIsLoading(true);
 
@@ -470,29 +486,6 @@ const CheckoutV2 = () => {
               {/* Formulário enxuto */}
               <div className="space-y-3 pt-2">
                 <div>
-                  <Label htmlFor="name" className="text-white/80 text-sm">Nome</Label>
-                  <Input
-                    id="name"
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Seu nome"
-                    className={inputCls}
-                    autoFocus
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="email" className="text-white/80 text-sm">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="seu@email.com"
-                    className={inputCls}
-                  />
-                </div>
-                <div>
                   <Label htmlFor="phone" className="text-white/80 text-sm">WhatsApp</Label>
                   <Input
                     id="phone"
@@ -500,12 +493,56 @@ const CheckoutV2 = () => {
                     value={phone}
                     onChange={handlePhoneChange}
                     placeholder="(11) 99999-9999"
-                    className={inputCls}
+                    className={`${inputCls} ${errors.phone ? "border-red-400/70 focus-visible:ring-red-400/60" : ""}`}
                     maxLength={15}
+                    aria-invalid={!!errors.phone}
+                    aria-describedby={errors.phone ? "phone-error" : "phone-hint"}
                   />
-                  <p className="text-[11px] text-white/60 mt-1">
-                    A AURA conversa com você por aqui
-                  </p>
+                  {errors.phone ? (
+                    <p id="phone-error" className="text-[11px] text-red-300 mt-1">{errors.phone}</p>
+                  ) : (
+                    <p id="phone-hint" className="text-[11px] text-white/60 mt-1">
+                      A AURA conversa com você por aqui
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <Label htmlFor="name" className="text-white/80 text-sm">Nome</Label>
+                  <Input
+                    id="name"
+                    type="text"
+                    value={name}
+                    onChange={(e) => {
+                      setName(e.target.value);
+                      if (errors.name) setErrors((prev) => ({ ...prev, name: undefined }));
+                    }}
+                    placeholder="Seu nome"
+                    className={`${inputCls} ${errors.name ? "border-red-400/70 focus-visible:ring-red-400/60" : ""}`}
+                    aria-invalid={!!errors.name}
+                    aria-describedby={errors.name ? "name-error" : undefined}
+                  />
+                  {errors.name && (
+                    <p id="name-error" className="text-[11px] text-red-300 mt-1">{errors.name}</p>
+                  )}
+                </div>
+                <div>
+                  <Label htmlFor="email" className="text-white/80 text-sm">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      if (errors.email) setErrors((prev) => ({ ...prev, email: undefined }));
+                    }}
+                    placeholder="seu@email.com"
+                    className={`${inputCls} ${errors.email ? "border-red-400/70 focus-visible:ring-red-400/60" : ""}`}
+                    aria-invalid={!!errors.email}
+                    aria-describedby={errors.email ? "email-error" : undefined}
+                  />
+                  {errors.email && (
+                    <p id="email-error" className="text-[11px] text-red-300 mt-1">{errors.email}</p>
+                  )}
                 </div>
               </div>
 
@@ -522,8 +559,9 @@ const CheckoutV2 = () => {
                 type="submit"
                 variant="sage"
                 size="xl"
-                className="w-full rounded-full"
+                className={`w-full rounded-full transition-opacity ${!isFormValid ? "opacity-70" : ""}`}
                 disabled={isLoading}
+                aria-disabled={!isFormValid || isLoading}
               >
                 <CreditCard className="w-5 h-5 mr-2" />
                 {isLoading ? "Processando..." : `Começar por R$ ${currentPlan.trialPrice}`}
@@ -556,10 +594,29 @@ const CheckoutV2 = () => {
 
             {embeddedClientSecret && stripePromise && embeddedOptions && (
               <div id="embedded-checkout-block" className="space-y-4 pt-8 mt-8 border-t border-white/10">
-                <div className="rounded-2xl bg-white p-2 md:p-4 shadow-2xl">
-                  <EmbeddedCheckoutProvider stripe={stripePromise} options={embeddedOptions}>
-                    <EmbeddedCheckout />
-                  </EmbeddedCheckoutProvider>
+                {/* Instrução clara: depois do submit o widget Stripe demora ~3s pra
+                    montar e aparece como uma área branca. Sem essa frase + skeleton,
+                    o usuário pensava que travou e abandonava. */}
+                <div className="text-center">
+                  <p className="font-display text-lg font-semibold text-[hsl(140_30%_72%)]">
+                    Preencha seu cartão abaixo para finalizar ↓
+                  </p>
+                  <p className="text-xs text-white/60 mt-1">
+                    Pagamento seguro processado pela Stripe • 7 dias por R$ {currentPlan.trialPrice}
+                  </p>
+                </div>
+                <div className="relative rounded-2xl bg-white p-2 md:p-4 shadow-2xl min-h-[420px]">
+                  {/* Skeleton enquanto o iframe da Stripe carrega.
+                      O próprio EmbeddedCheckout pinta por cima quando estiver pronto. */}
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 pointer-events-none">
+                    <div className="w-8 h-8 rounded-full border-2 border-[hsl(140_22%_45%)]/30 border-t-[hsl(140_22%_45%)] animate-spin" />
+                    <p className="text-xs text-gray-500">Carregando pagamento seguro…</p>
+                  </div>
+                  <div className="relative z-10">
+                    <EmbeddedCheckoutProvider stripe={stripePromise} options={embeddedOptions}>
+                      <EmbeddedCheckout />
+                    </EmbeddedCheckoutProvider>
+                  </div>
                 </div>
                 <div className="flex flex-wrap justify-center gap-x-5 gap-y-2 text-xs text-white/55 pt-1">
                   <div className="flex items-center gap-1.5">
@@ -584,8 +641,9 @@ const CheckoutV2 = () => {
             form="checkout-form"
             variant="sage"
             size="lg"
-            className="w-full rounded-full"
+            className={`w-full rounded-full transition-opacity ${!isFormValid ? "opacity-70" : ""}`}
             disabled={isLoading}
+            aria-disabled={!isFormValid || isLoading}
           >
             {isLoading ? "Processando..." : `Começar por R$ ${currentPlan.trialPrice}`}
           </Button>
