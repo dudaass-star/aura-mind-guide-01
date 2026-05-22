@@ -260,14 +260,20 @@ serve(async (req) => {
 
     const origin = req.headers.get("origin") || "https://olaaura.com.br";
 
-    // Plan display prices for custom_text
-    const planPrices: Record<string, { monthly: string; yearly: string }> = {
-      essencial: { monthly: "29,90", yearly: "214,90" },
-      direcao: { monthly: "49,90", yearly: "359,90" },
-      transformacao: { monthly: "79,90", yearly: "574,90" },
+    // Plan display prices for custom_text — agora cobre os 4 períodos.
+    const planPrices: Record<string, Record<string, string>> = {
+      essencial:     { monthly: "29,90", quarterly: "79,90",  semestral: "125,90", yearly: "214,90" },
+      direcao:       { monthly: "49,90", quarterly: "133,90", semestral: "209,90", yearly: "359,90" },
+      transformacao: { monthly: "79,90", quarterly: "213,90", semestral: "335,90", yearly: "574,90" },
     };
     const displayPrice = planPrices[plan]?.[billingPeriod] || "";
-    const periodLabel = billingPeriod === "yearly" ? "ano" : "mês";
+    const periodLabelMap: Record<string, string> = {
+      monthly: "mês",
+      quarterly: "trimestre",
+      semestral: "semestre",
+      yearly: "ano",
+    };
+    const periodLabel = periodLabelMap[billingPeriod] || "mês";
     
 
     // Build checkout session config
@@ -414,6 +420,7 @@ serve(async (req) => {
         email: email,
         plan: plan,
         billing: billingPeriod,
+        ...(isRecurringCardV2 && { payment_method: "card_recurring_v2", v2_no_trial: "true" }),
         ...(fbp && { fbp }),
         ...(fbc && { fbc }),
         ...(gaClientId && { ga_client_id: gaClientId }),
@@ -425,6 +432,7 @@ serve(async (req) => {
           email: email,
           plan: plan,
           billing: billingPeriod,
+          ...(isRecurringCardV2 && { payment_method: "card_recurring_v2", v2_no_trial: "true" }),
           ...(gaClientId && { ga_client_id: gaClientId }),
         },
       };
