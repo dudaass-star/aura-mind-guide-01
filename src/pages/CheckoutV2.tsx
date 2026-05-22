@@ -372,6 +372,40 @@ const CheckoutV2 = () => {
 
         <div className="relative container mx-auto px-4 py-8 md:py-12 pb-12">
           <div className="max-w-xl mx-auto">
+            {/* Stepper — orienta o usuário sobre o tamanho real do fluxo (só 2 passos).
+                Reduz a ansiedade de "será que tem mais etapa depois?". */}
+            <div className="flex items-center justify-center gap-3 mb-6 text-xs">
+              <div className="flex items-center gap-2">
+                <span
+                  className={`flex items-center justify-center w-5 h-5 rounded-full border text-[10px] font-semibold transition-colors ${
+                    embeddedClientSecret
+                      ? "bg-[hsl(140_22%_45%)] border-[hsl(140_22%_45%)] text-white"
+                      : "bg-[hsl(140_22%_45%)] border-[hsl(140_22%_45%)] text-white"
+                  }`}
+                >
+                  {embeddedClientSecret ? <Check className="w-3 h-3" /> : "1"}
+                </span>
+                <span className={embeddedClientSecret ? "text-white/55" : "text-white font-medium"}>
+                  Seus dados
+                </span>
+              </div>
+              <span className="w-6 h-px bg-white/20" />
+              <div className="flex items-center gap-2">
+                <span
+                  className={`flex items-center justify-center w-5 h-5 rounded-full border text-[10px] font-semibold transition-colors ${
+                    embeddedClientSecret
+                      ? "bg-[hsl(140_22%_45%)] border-[hsl(140_22%_45%)] text-white"
+                      : "bg-transparent border-white/30 text-white/50"
+                  }`}
+                >
+                  2
+                </span>
+                <span className={embeddedClientSecret ? "text-white font-medium" : "text-white/50"}>
+                  Pagamento
+                </span>
+              </div>
+            </div>
+
             {embeddedClientSecret && stripePromise && embeddedOptions ? (
               /* PaymentView — tela dedicada de pagamento.
                  Form some completamente; usuário vê só o widget Stripe + contexto mínimo.
@@ -406,6 +440,23 @@ const CheckoutV2 = () => {
                   </p>
                 </div>
 
+                {/* Trust signals colados ao widget — ficam no campo de visão exato
+                    do momento em que o usuário vai digitar o cartão. */}
+                <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 text-[11px] text-white/75 bg-white/5 border border-white/10 rounded-full px-4 py-2">
+                  <div className="flex items-center gap-1.5">
+                    <Lock className="w-3.5 h-3.5 text-[hsl(140_30%_72%)]" />
+                    Pagamento seguro Stripe
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Shield className="w-3.5 h-3.5 text-[hsl(140_30%_72%)]" />
+                    Garantia 7 dias
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Check className="w-3.5 h-3.5 text-[hsl(140_30%_72%)]" />
+                    Cancele em 1 clique
+                  </div>
+                </div>
+
                 <div className="relative rounded-2xl bg-white p-2 md:p-4 shadow-2xl min-h-[480px]">
                   {/* Skeleton enquanto o iframe da Stripe carrega (~2-3s).
                       O EmbeddedCheckout pinta por cima quando estiver pronto. */}
@@ -417,21 +468,6 @@ const CheckoutV2 = () => {
                     <EmbeddedCheckoutProvider stripe={stripePromise} options={embeddedOptions}>
                       <EmbeddedCheckout />
                     </EmbeddedCheckoutProvider>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap justify-center gap-x-5 gap-y-2 text-xs text-white/55">
-                  <div className="flex items-center gap-1.5">
-                    <Lock className="w-3.5 h-3.5 text-[hsl(140_30%_72%)]" />
-                    Criptografado de ponta a ponta
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Shield className="w-3.5 h-3.5 text-[hsl(140_30%_72%)]" />
-                    Garantia de 7 dias
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Check className="w-3.5 h-3.5 text-[hsl(140_30%_72%)]" />
-                    Cancele quando quiser
                   </div>
                 </div>
               </div>
@@ -555,6 +591,9 @@ const CheckoutV2 = () => {
                     maxLength={15}
                     aria-invalid={!!errors.phone}
                     aria-describedby={errors.phone ? "phone-error" : "phone-hint"}
+                    autoFocus
+                    inputMode="numeric"
+                    autoComplete="tel-national"
                   />
                   {errors.phone ? (
                     <p id="phone-error" className="text-[11px] text-red-300 mt-1">{errors.phone}</p>
@@ -578,6 +617,8 @@ const CheckoutV2 = () => {
                     className={`${inputCls} ${errors.name ? "border-red-400/70 focus-visible:ring-red-400/60" : ""}`}
                     aria-invalid={!!errors.name}
                     aria-describedby={errors.name ? "name-error" : undefined}
+                    autoComplete="name"
+                    autoCapitalize="words"
                   />
                   {errors.name && (
                     <p id="name-error" className="text-[11px] text-red-300 mt-1">{errors.name}</p>
@@ -597,6 +638,10 @@ const CheckoutV2 = () => {
                     className={`${inputCls} ${errors.email ? "border-red-400/70 focus-visible:ring-red-400/60" : ""}`}
                     aria-invalid={!!errors.email}
                     aria-describedby={errors.email ? "email-error" : undefined}
+                    autoComplete="email"
+                    inputMode="email"
+                    autoCapitalize="none"
+                    spellCheck={false}
                   />
                   {errors.email && (
                     <p id="email-error" className="text-[11px] text-red-300 mt-1">{errors.email}</p>
@@ -622,10 +667,10 @@ const CheckoutV2 = () => {
                 aria-disabled={!isFormValid || isLoading}
               >
                 <CreditCard className="w-5 h-5 mr-2" />
-                {isLoading ? "Processando..." : `Começar por R$ ${currentPlan.trialPrice}`}
+                {isLoading ? "Processando..." : `Começar trial por R$ ${currentPlan.trialPrice}`}
               </Button>
               <p className="text-center text-[11px] text-white/50 -mt-2">
-                Sem compromisso • Cancele em 1 clique no WhatsApp
+                7 dias completos • Sem cobrança se cancelar antes do 8º dia
               </p>
 
               {/* Faixa única de confiança */}
