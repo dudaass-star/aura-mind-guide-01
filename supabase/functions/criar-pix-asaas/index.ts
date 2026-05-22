@@ -173,10 +173,14 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 2) Criar payment PIX com vencimento em 24h
-    const dueDate = new Date(Date.now() + 24 * 60 * 60 * 1000)
-      .toISOString()
-      .slice(0, 10);
+    // 2) Criar payment PIX com vencimento no dia atual em BRT.
+    // Sem chave Pix própria cadastrada no Asaas, o QR dinâmico imediato só é aceito até 23:59 do mesmo dia.
+    const dueDate = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Sao_Paulo",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
 
     const payment = await asaasFetch("/payments", {
       method: "POST",
