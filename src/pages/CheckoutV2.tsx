@@ -154,26 +154,38 @@ const CheckoutV2 = () => {
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setPhone(formatPhone(e.target.value));
+    if (errors.phone) setErrors((prev) => ({ ...prev, phone: undefined }));
   };
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const phoneDigits = phone.replace(/\D/g, "");
+  const isFormValid =
+    name.trim().length > 0 && emailRegex.test(email.trim()) && phoneDigits.length >= 11;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!name.trim()) {
-      toast.error("Por favor, insira seu nome");
-      return;
-    }
+    // Valida tudo de uma vez e mostra os erros inline. Auto-scroll para o
+    // primeiro campo inválido — o WhatsApp costuma estar abaixo da dobra no mobile.
+    const nextErrors: { name?: string; email?: string; phone?: string } = {};
+    if (phoneDigits.length < 11) nextErrors.phone = "Digite seu WhatsApp com DDD (11 dígitos).";
+    if (!name.trim()) nextErrors.name = "Por favor, digite seu nome.";
+    if (!email.trim() || !emailRegex.test(email)) nextErrors.email = "Digite um email válido.";
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!email.trim() || !emailRegex.test(email)) {
-      toast.error("Por favor, insira um email válido");
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
+      const order = ["phone", "name", "email"] as const;
+      const firstInvalid = order.find((field) => nextErrors[field]);
+      if (firstInvalid) {
+        requestAnimationFrame(() => {
+          const el = document.getElementById(firstInvalid);
+          el?.scrollIntoView({ behavior: "smooth", block: "center" });
+          el?.focus({ preventScroll: true });
+        });
+      }
       return;
     }
-
-    if (phone.replace(/\D/g, "").length < 11) {
-      toast.error("Por favor, insira um telefone válido");
-      return;
-    }
+    setErrors({});
 
     setIsLoading(true);
 
