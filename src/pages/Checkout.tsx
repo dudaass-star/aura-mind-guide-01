@@ -750,8 +750,27 @@ const Checkout = () => {
                 disabled={isLoading}
               >
                 <CreditCard className="w-5 h-5 mr-2" />
-                {isLoading ? "Processando..." : `Começar por R$ ${currentPlan.trialPrice}`}
+                {isLoading
+                  ? "Processando..."
+                  : billingPeriod === "monthly"
+                    ? `Começar por R$ ${currentPlan.trialPrice}`
+                    : `Pagar com cartão — R$ ${currentPrice}`}
               </Button>
+
+              {/* Botão PIX (apenas para trimestral, semestral e anual) */}
+              {pixAvailable && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="xl"
+                  className="w-full"
+                  disabled={isPixLoading}
+                  onClick={handlePixSubmit}
+                >
+                  <QrCode className="w-5 h-5 mr-2" />
+                  {isPixLoading ? "Gerando PIX..." : `Pagar com PIX — R$ ${currentPrice}`}
+                </Button>
+              )}
 
               {/* Trust badges */}
               <div className="flex flex-wrap justify-center gap-6 text-sm text-muted-foreground">
