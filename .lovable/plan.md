@@ -1,76 +1,77 @@
-Objetivo: Reduzir o atrito psicológico no checkout V2 com 4 melhorias puramente frontend, sem mexer no Stripe Dashboard nem em edge functions. Foco: dar segurança e clareza ao usuário no momento do clique.
+Objetivo
+--------
+Descobrir **por que a conversão despencou nos últimos 3–4 dias** (de 25–66% para 0–13%) antes de mexer em qualquer coisa. As mudanças de ontem no `CheckoutV2` (stepper, trust signals, microcópia, Embedded Checkout) são a hipótese principal — mas precisamos confirmar com dados, não suposição.
 
-Escopo
-------
-Apenas `src/pages/CheckoutV2.tsx`. Nenhum outro arquivo é tocado.
-
----
-
-### 5. Progress indicator (Passo 1 de 2 / Passo 2 de 2)
-
-Adicionar um stepper minimalista no topo do conteúdo, logo abaixo do header, que muda conforme o estado do checkout:
-
-- **FormView** (embeddedClientSecret = null): `● Seus dados — ○ Pagamento`
-- **PaymentView** (embeddedClientSecret presente): `✓ Seus dados — ● Pagamento`
-
-Visual: dois pequenos círculos + labels, com cor sage para ativo/completo e branco/40 para pendente. Sem caixa, sem fundo — só um respirinho. Reduz a ansiedade de "será que tem mais etapa depois?".
+Contexto observado
+------------------
+- 14 dias de dados: 22 sessões/dia em média.
+- **Quebra clara em 19/mai**: dias anteriores convertiam 25–66%, dias seguintes 0–13%.
+- Plano "Direção" concentra 60% do tráfego — qualquer regressão nele dói desproporcionalmente.
+- Stripe mostra muitos PaymentIntents em `requires_payment_method` (cartão recusado/abandonado no widget) misturados com sucessos.
+- Não existe tabela `payment_attempts` no banco — só temos `checkout_sessions` (criado/completado) e PaymentIntents do Stripe.
 
 ---
 
-### 6. Auto-foco + teclado mobile correto
+### Passo 1 — Quantificar onde está o vazamento (1 query)
 
-No FormView, ajustar os 3 inputs para acelerar preenchimento mobile:
+Cruzar `checkout_sessions` x PaymentIntents do Stripe para os últimos 14 dias e classificar cada sessão em um de 4 baldes:
 
-- **WhatsApp**: adicionar `autoFocus`, `inputMode="numeric"`, `autoComplete="tel-national"`
-- **Nome**: adicionar `autoComplete="name"`, `autoCapitalize="words"`
-- **Email**: adicionar `autoComplete="email"`, `inputMode="email"`, `autoCapitalize="none"`, `spellCheck={false}`
-
-Resultado: teclado numérico abre direto no WhatsApp, navegador oferece autopreenchimento, sem capitalização errada no email. Em mobile é o tipo de detalhe que economiza 5-10 segundos e evita erros de digitação que levam ao abandono.
-
----
-
-### 7. Trust signals colados ao widget Stripe
-
-Hoje a faixa de confiança (Garantia/Stripe/Cancele) está abaixo do widget, distante demais do momento da decisão. Mover para **logo acima do widget**, dentro do PaymentView, em formato compacto:
-
-```
-[🔒 Pagamento seguro Stripe]  [🛡️ Garantia 7 dias]  [✓ Cancele em 1 clique]
+```text
+[A] Criou sessão → nunca abriu widget Stripe          (zero PI)
+[B] Abriu widget → nunca submeteu cartão              (PI em requires_payment_method, sem charge)
+[C] Submeteu cartão → recusado/3DS falhou             (PI failed/canceled com last_payment_error)
+[D] Pagou                                              (PI succeeded)
 ```
 
-Visual: linha única, ícones pequenos sage, texto branco/70, fundo sutil `bg-white/5` com border-radius. Fica entre o resumo do plano e o widget branco da Stripe. O olho do usuário bate nesses selos *no segundo antes* de começar a digitar o cartão — é onde a confiança importa.
+Hoje só sabemos A+B+C juntos ("abandonaram"). Separar isso é o que diz se a alavanca certa é:
+- **A grande** → problema é confiança/UX **antes** do widget (form, copy, percepção de pegadinha)
+- **B grande** → problema é dentro do widget Stripe (algo no Embedded está travando, talvez mobile)
+- **C grande** → problema é aceitação de cartão (PIX, 3DS, antifraude)
 
-A faixa que existe hoje abaixo do widget pode ficar (reforço) ou ser removida pra não duplicar. Proposta: **remover a de baixo** e deixar só a de cima, mais próxima do ponto de decisão.
-
----
-
-### 8. Microcópia do CTA final
-
-Hoje: `Começar por R$ 6,90`
-
-Proposta: `Começar trial por R$ 6,90 — cancele quando quiser`
-
-E o helper abaixo do botão:
-- Hoje: `Sem compromisso • Cancele em 1 clique no WhatsApp`
-- Novo: `7 dias completos • Sem cobrança se cancelar antes do 8º dia`
-
-A mudança é cirúrgica: troca "sem compromisso" (vago) por uma promessa específica e datada que neutraliza o medo #1 do trial pago ("vou esquecer e ser cobrado").
+Comparar a distribuição A/B/C/D entre o período "saudável" (08–18/mai) e o "quebrado" (19–22/mai). A categoria que cresceu é a culpada.
 
 ---
 
-Validação
----------
-1. Visualizar `/v2/checkout` em mobile 390x844:
-   - Stepper visível, "Seus dados" ativo
-   - Foco automático no campo WhatsApp, teclado numérico abre
-   - CTA com nova cópia
-2. Preencher form e clicar "Começar trial":
-   - Stepper atualiza para "Pagamento" ativo
-   - Trust signals aparecem em linha única acima do widget branco
-   - Widget Stripe carrega normalmente
-3. Conferir desktop 1280x720: layout do stepper e trust signals não quebra.
+### Passo 2 — Investigar a hipótese principal (regressão do deploy)
 
-Não-objetivos
--------------
-- Não mexer em `create-checkout/index.ts` (item 3 da lista anterior fica para outra rodada)
-- Não habilitar Apple Pay/PIX (itens 1, 2 dependem do Stripe Dashboard)
-- Não criar fluxo de WhatsApp recovery (item 4 é backend)
+Em paralelo ao Passo 1:
+
+1. Ler o histórico de mudanças do `CheckoutV2.tsx` dos últimos 3 dias (stepper, trust signals, microcópia, switch para EmbeddedCheckout).
+2. Testar o fluxo completo em **mobile real 390x844** (Safari iOS + Chrome Android), porque é onde 70%+ do tráfego está e onde regressões silenciosas mais machucam:
+   - Form preenche normal?
+   - Widget Stripe carrega? Demora? Some?
+   - Botão "Pagar" do widget aparece e funciona?
+   - Há erro silencioso no console?
+3. Conferir `edge function logs` da `create-checkout` no período da queda — taxa de erro, latência.
+4. Conferir GA4 events `add_payment_info` x `purchase` no mesmo período (se `add_payment_info` continua disparando mas `purchase` caiu, confirma que é dentro do widget).
+
+---
+
+### Passo 3 — Decidir a alavanca certa
+
+Só depois dos passos 1 e 2, apresentar um plano de correção que ataca **a causa identificada**, não chutes:
+
+- Se for regressão do deploy → reverter a mudança específica.
+- Se for problema dentro do widget Embedded em mobile → considerar voltar para `redirect mode` do Stripe nesse breakpoint.
+- Se for cartão recusado → aí sim faz sentido habilitar PIX e/ou ajustar 3DS.
+- Se for problema de confiança antes do widget → microcópia, prova social inline, garantia mais forte.
+
+---
+
+Não-objetivos desta rodada
+--------------------------
+- **Não** mexer no Stripe Dashboard (PIX, Apple Pay domain).
+- **Não** mudar oferta/preço.
+- **Não** adicionar features novas no `/v2/checkout`.
+- **Não** mexer em edge functions.
+
+Entregável final do diagnóstico
+-------------------------------
+Um resumo em 5 linhas com:
+- Distribuição A/B/C/D nos dois períodos
+- Causa mais provável da queda
+- 1 ação corretiva específica (não 4 alavancas genéricas)
+- Estimativa de impacto
+- Risco da correção
+
+A partir desse resumo, abrimos uma rodada de implementação focada.
