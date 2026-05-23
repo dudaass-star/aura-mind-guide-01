@@ -1,10 +1,11 @@
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, Navigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Helmet } from "react-helmet-async";
 import { useState } from "react";
 import logoOlaAura from "@/assets/logo-ola-aura.png";
-import { Target, BarChart3, Headphones, Heart, Lock } from "lucide-react";
+import { Target, BarChart3, Headphones, Heart, Lock, LogOut } from "lucide-react";
+import { usePortalAuth } from "@/contexts/PortalAuthContext";
 
 import { PortalHeader, PortalLoading, ProgressBadges } from "@/components/portal/shared";
 import { JornadasTab } from "@/components/portal/JornadasTab";
@@ -25,26 +26,12 @@ const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
 
 const UserPortal = () => {
   const [searchParams] = useSearchParams();
-  const token = searchParams.get("t");
   const initialTab = (searchParams.get("tab") as TabId) || "jornadas";
   const [activeTab, setActiveTab] = useState<TabId>(initialTab);
   const [portalLoading, setPortalLoading] = useState(false);
+  const { session, loading: authLoading, signOut } = usePortalAuth();
 
-  const { data: portalToken, isLoading: tokenLoading, error: tokenError } = useQuery({
-    queryKey: ["portal-token", token],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("user_portal_tokens")
-        .select("user_id")
-        .eq("token", token!)
-        .single();
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!token,
-  });
-
-  const userId = portalToken?.user_id;
+  const userId = session?.user?.id;
 
   const { data: profile } = useQuery({
     queryKey: ["portal-profile", userId],
@@ -73,18 +60,17 @@ const UserPortal = () => {
     enabled: !!userId,
   });
 
-  if (!token) return <PortalError message="Link inválido. Verifique o link que você recebeu." />;
-  if (tokenLoading) return <PortalLoading />;
-  if (tokenError || !portalToken) return <PortalError message="Token não encontrado. Este link pode ter expirado." />;
+  if (authLoading) return <PortalLoading />;
+  if (!session) return <Navigate to="/meu-espaco/entrar" replace />;
 
   const firstName = profile?.name?.split(" ")[0] || "você";
 
   const handleOpenBillingPortal = async () => {
-    if (!token || portalLoading) return;
+    if (portalLoading) return;
     setPortalLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke("customer-portal", {
-        body: { token },
+        body: { userId },
       });
       if (error) throw error;
       if (!data?.url) throw new Error("Link não recebido");
@@ -156,7 +142,7 @@ const UserPortal = () => {
 
         {/* Content */}
         <div className="flex-1 max-w-2xl mx-auto w-full px-5 py-6">
-          {activeTab === "jornadas" && <JornadasTab userId={userId!} profile={profile} portalToken={token!} />}
+          {activeTab === "jornadas" && <JornadasTab userId={userId!} profile={profile} portalToken={""} />}
           {activeTab === "resumos" && <ResumosTab userId={userId!} />}
           {activeTab === "meditacoes" && <MeditacoesTab />}
           {activeTab === "capsulas" && <CapsulasTab userId={userId!} />}
@@ -171,6 +157,13 @@ const UserPortal = () => {
           >
             {portalLoading ? <Loader2 size={14} className="animate-spin" /> : <CreditCard size={14} />}
             <span>Atualizar forma de pagamento</span>
+          </button>
+          <button
+            onClick={signOut}
+            className="block mx-auto mb-3 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-accent transition-colors font-['Nunito']"
+          >
+            <LogOut size={14} />
+            <span>Sair</span>
           </button>
           <p className="text-sm text-muted-foreground font-['Nunito']">Conteúdo exclusivo da Aura</p>
           <a
