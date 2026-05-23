@@ -349,8 +349,16 @@ serve(async (req) => {
         console.error('❌ Storage upload error:', uploadError);
         storagePath = null;
       } else {
-        const { data: pub } = storageClient.storage.from('aura-tts-audios').getPublicUrl(storagePath);
-        audioUrl = pub.publicUrl;
+        // Bucket privado: gera signed URL com validade longa (7 dias)
+        // para que Twilio/Meta consigam baixar o arquivo
+        const { data: signed, error: signErr } = await storageClient.storage
+          .from('aura-tts-audios')
+          .createSignedUrl(storagePath, 60 * 60 * 24 * 7);
+        if (signErr || !signed?.signedUrl) {
+          console.error('❌ Signed URL error:', signErr);
+        } else {
+          audioUrl = signed.signedUrl;
+        }
       }
     } catch (uploadErr) {
       console.error('❌ Upload exception:', uploadErr);
