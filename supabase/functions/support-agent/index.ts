@@ -191,7 +191,7 @@ serve(async (req) => {
 
         const paymentsQuery = supabase
           .from("asaas_payments")
-          .select("asaas_payment_id, asaas_subscription_id, status, value, billing_type, billing_period, due_date, created_at")
+          .select("asaas_payment_id, asaas_subscription_id, status, amount_cents, billing_period, plan, paid_at, created_at")
           .order("created_at", { ascending: false })
           .limit(5);
         const { data: payments } = asaasCustomerId
@@ -200,9 +200,9 @@ serve(async (req) => {
 
         if ((payments && payments.length > 0) || asaasCustomerId) {
           const subs = new Map<string, { id: string; last_status: string; last_due: string | null }>();
-          for (const p of (payments || []) as Array<{ asaas_subscription_id: string | null; status: string; due_date: string | null }>) {
+          for (const p of (payments || []) as Array<{ asaas_subscription_id: string | null; status: string; created_at: string | null }>) {
             if (p.asaas_subscription_id && !subs.has(p.asaas_subscription_id)) {
-              subs.set(p.asaas_subscription_id, { id: p.asaas_subscription_id, last_status: p.status, last_due: p.due_date });
+              subs.set(p.asaas_subscription_id, { id: p.asaas_subscription_id, last_status: p.status, last_due: p.created_at });
             }
           }
           context.asaas = {
