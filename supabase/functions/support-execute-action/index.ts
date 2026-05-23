@@ -52,6 +52,76 @@ serve(async (req) => {
     let errorMessage: string | null = null;
     const params = action.params || {};
 
+    // ============ AUTO-RESOLVE de IDs faltantes ============
+    // A IA do support-agent às vezes sugere a ação certa mas esquece de preencher
+    // o ID concreto. Em vez de falhar, o backend resolve automaticamente a partir
+    // do email do ticket (Stripe customer + última invoice/sub paga, ou Asaas pelo profile).
+    const needsStripeInvoice = action.type === "refund_invoice" && !params.invoice_id;
+    const needsStripeSub = ["cancel_subscription", "pause_subscription", "change_plan"].includes(action.type) && !params.subscription_id;
+    const needsAsaasPayment = action.type === "refund_asaas_payment" && !params.asaas_payment_id;
+    const needsAsaasSub = action.type === "cancel_asaas_subscription" && !params.asaas_subscription_id;
+
+    if ((needsStripeInvoice || needsStripeSub) && ticket.customer_email) {
+      try {
+        const customers = await stripe.customers.list({ email: ticket.customer_email, limit: 1 });
+        const cust = customers.data[0];
+        if (cust) {
+          if (needsStripeInvoice) {
+            const invs = await stripe.invoices.list({ customer: cust.id, status: "paid", limit: 1 });
+            if (invs.data[0]) {
+              params.invoice_id = invs.data[0].id;
+              log("Auto-resolved invoice_id", { invoice_id: params.invoice_id });
+            }
+          }
+          if (needsStripeSub) {
+            // Prioriza ativa, senão pega a mais recente
+            let subs = await stripe.subscriptions.list({ customer: cust.id, status: "active", limit: 1 });
+            if (subs.data.length === 0) {
+              subs = await stripe.subscriptions.list({ customer: cust.id, status: "all", limit: 1 });
+            }
+            if (subs.data[0]) {
+              params.subscription_id = subs.data[0].id;
+              log("Auto-resolved subscription_id", { subscription_id: params.subscription_id });
+            }
+          }
+        }
+      } catch (e) {
+        log("Stripe auto-resolve failed", { error: String(e) });
+      }
+    }
+
+    if ((needsAsaasPayment || needsAsaasSub) && ticket.profile_user_id) {
+      try {
+        const { data: prof } = await supabase
+          .from("profiles").select("asaas_customer_id").eq("user_id", ticket.profile_user_id).maybeSingle();
+        const asaasCustomerId = (prof as { asaas_customer_id?: string } | null)?.asaas_customer_id;
+        const pq = supabase
+          .from("asaas_payments")
+          .select("asaas_payment_id, asaas_subscription_id, status")
+          .order("created_at", { ascending: false })
+          .limit(5);
+        const { data: pays } = asaasCustomerId
+          ? await pq.eq("asaas_customer_id", asaasCustomerId)
+          : await pq.eq("customer_email", ticket.customer_email);
+        if (needsAsaasPayment) {
+          const paid = (pays || []).find((p: { status: string }) => ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"].includes(p.status));
+          if (paid) {
+            params.asaas_payment_id = (paid as { asaas_payment_id: string }).asaas_payment_id;
+            log("Auto-resolved asaas_payment_id", { id: params.asaas_payment_id });
+          }
+        }
+        if (needsAsaasSub) {
+          const withSub = (pays || []).find((p: { asaas_subscription_id: string | null }) => p.asaas_subscription_id);
+          if (withSub) {
+            params.asaas_subscription_id = (withSub as { asaas_subscription_id: string }).asaas_subscription_id;
+            log("Auto-resolved asaas_subscription_id", { id: params.asaas_subscription_id });
+          }
+        }
+      } catch (e) {
+        log("Asaas auto-resolve failed", { error: String(e) });
+      }
+    }
+
     try {
       switch (action.type) {
         case "none":
