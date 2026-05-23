@@ -1,42 +1,59 @@
-## Trava de execução + cobertura Asaas no suporte
 
-Hoje o fluxo de aprovação em `AdminSupport.tsx` envia o **email primeiro** e depois tenta a ação no Stripe — se a ação falha, o cliente já recebeu a promessa. Além disso, `support-execute-action` e `support-agent` só conhecem Stripe, ignorando clientes PIX/Asaas.
+## Sintomas observados no banco
 
-### 1. Backend — `support-execute-action/index.ts`
+Olhando `checkout_recovery_attempts` (últimos dias):
 
-Adicionar dois novos `action.type`:
+- 419 mensagens com `status = wa_stage_1_sent` e 408 com `wa_stage_2_sent` — pelo lado da Aura "deu certo" (Twilio aceitou e devolveu um SID `MM...`).
+- Mas o `provider_response` mostra todas presas em `status: "queued"`, `date_sent: null`, `error_code: null`. Ou seja: o Twilio recebeu, mas a mensagem **nunca foi entregue** ao usuário no WhatsApp.
+- Além disso, há **2 problemas reais** já visíveis nos logs:
+  1. **136 falhas com erro "Authenticate"** — credenciais da subaccount (`TWILIO_RECOVERY_ACCOUNT_SID` / `TWILIO_RECOVERY_AUTH_TOKEN`) ficaram inválidas em algum momento (token rotacionado? subaccount suspensa?).
+  2. **Bug de normalização de telefone**: números BR com 11 dígitos que já incluem `55` no começo (ex.: `55889314183`, DDD 88) recebem mais um `55` e viram `5555889314183` (15 dígitos, inválido). Outros casos viraram `+11978060363` (sem o 55, US-like) — Twilio rejeita com "not a valid phone number".
 
-- **`refund_asaas_payment`** — params: `asaas_payment_id` (obrigatório). Chama `POST {ASAAS_API}/payments/{id}/refund` com `access_token: ASAAS_API_KEY`. Base URL conforme `ASAAS_ENV` (`api-sandbox.asaas.com/v3` ou `api.asaas.com/v3`).
-- **`cancel_asaas_subscription`** — params: `asaas_subscription_id` (obrigatório). Chama `DELETE {ASAAS_API}/subscriptions/{id}`. Após sucesso, atualiza `profiles.status = 'canceled'` se houver `profile_user_id`.
+A hipótese inicial ("número não tem nome aprovado pela Meta") já foi descartada pelo usuário: o número principal da Aura roda sem name approval e funciona. Então o problema é **configuração da subaccount + bug de normalização + falta de visibilidade do status final**, não Meta name approval.
 
-Ambos seguem o padrão atual: `success/errorMessage` capturados no try/catch e registrados em `support_ticket_actions` (action_type, success, error_message, response_payload).
+## O que vou fazer
 
-### 2. Backend — `support-agent/index.ts`
+### 1. Diagnóstico real (script de leitura, não muda nada)
 
-- Estender o `enum` de `suggested_action.type` (linha ~285) com `refund_asaas_payment` e `cancel_asaas_subscription`.
-- Atualizar o catálogo de ações no prompt (linha ~49) descrevendo quando usar cada uma (cliente PIX = usar variantes Asaas; cartão = Stripe).
-- Injetar no contexto do ticket o `asaas_customer_id` e a última cobrança PIX do cliente (lookup em `profiles` + `asaas_payments` por email), igual já é feito hoje para Stripe.
+Script que pega os últimos 20 SIDs `MM...` salvos em `provider_response` e consulta a API do Twilio (`GET /Messages/{sid}.json`) para descobrir o **status final real** de cada um: `sent`, `delivered`, `failed`, `undelivered` + `error_code` + `error_message`.
 
-### 3. Frontend — `src/pages/AdminSupport.tsx` (`handleApproveSend`)
+Isso vai dizer **exatamente** porque não chega:
+- Se vier `error_code: 63016` → fora da janela de 24h e template não casou (precisa de template aprovado para conversa nova).
+- Se vier `63007` → sender `whatsapp:+15559875290` não está habilitado para WhatsApp Business.
+- Se vier `63018` → opt-in obrigatório.
+- Se vier `delivered` → mensagem chega, problema é só percepção.
 
-Implementar a trava agnóstica de provedor:
+### 2. Corrigir bug de normalização de telefone BR
 
-```text
-CRITICAL = [
-  "refund_invoice", "pause_subscription", "change_plan", "cancel_subscription",
-  "refund_asaas_payment", "cancel_asaas_subscription"
-]
-```
+Em `supabase/functions/_shared/zapi-client.ts`, `normalizeBrazilianPhone`:
 
-Novo fluxo:
+- Hoje: se input tem 10 ou 11 dígitos, prefixa `55` cegamente. Isso quebra para DDDs que começam com `5` ou `8` quando o usuário já digitou `55` no começo.
+- Correção: antes de prefixar, **detectar se já começa com `55` e tem 12-13 dígitos válidos** (DDD BR válido 11-99). Se sim, não prefixa. Adicionar também tratamento explícito para números que entram como `+5511...` vs `5511...` vs `11...`.
 
-1. Se `executeAction && draft.suggested_action.type ∈ CRITICAL`:
-   - Executar `support-execute-action` **primeiro**.
-   - Se falhar → toast vermelho "Ação X falhou — email NÃO enviado. Corrija manualmente ou desmarque Executar.", manter ticket aberto, sair sem enviar.
-   - Se ok → seguir para envio do email.
-2. Caso contrário (ação não-crítica como `send_portal_link`/`none`, ou checkbox desmarcado): manter ordem atual (email primeiro, ação best-effort depois).
+### 3. Validar credenciais da subaccount
 
-### Escopo / fora de escopo
+Adicionar um endpoint de health-check (`test-recovery-template` já existe — estender com um modo `healthcheck` que faz `GET /Accounts/{sid}.json`). Se voltar 401, peço para reconfigurar `TWILIO_RECOVERY_AUTH_TOKEN`.
 
-- **Dentro**: 3 arquivos acima.
-- **Fora**: mudanças visuais no card de ações, webhook Asaas, novos tipos de ação além de refund/cancel PIX, alterações no `admin-engagement-metrics`.
+### 4. Adicionar `StatusCallback` no envio
+
+Em `twilio-recovery-client.ts → postOnce`, incluir parâmetro `StatusCallback` apontando para uma nova edge function `twilio-recovery-status-webhook` que:
+- Recebe o webhook do Twilio com status final (`delivered`, `failed`, etc.) + `ErrorCode`.
+- Atualiza a linha correspondente em `checkout_recovery_attempts` com status real e mensagem de erro.
+
+Assim a gente para de "achar" que enviou 800+ mensagens com sucesso quando na verdade o Meta pode estar rejeitando todas.
+
+### 5. (Depende do passo 1) Ajuste de sender/template
+
+Com o diagnóstico em mãos, aplico a correção pontual:
+- Se for problema de janela 24h + template não-utility, ajusto categoria.
+- Se for sender não habilitado, oriento a habilitação no console Twilio (não dá para automatizar).
+- Se for problema de variable mismatch (ex.: template tem `{{1}}` e `{{2}}` mas mando só `{{1}}`), corrijo no payload.
+
+## Ordem de execução
+
+1. Rodar diagnóstico (passo 1) — leitura pura, sem deploy.
+2. Mostrar resultado para você e confirmar a causa raiz.
+3. Aplicar correções 2, 3, 4 em paralelo (mudanças seguras e isoladas).
+4. Aplicar correção 5 conforme o diagnóstico.
+
+Quer que eu siga assim?
