@@ -1,59 +1,56 @@
 
-## Sintomas observados no banco
+## Objetivo
 
-Olhando `checkout_recovery_attempts` (últimos dias):
+Parar de adivinhar. Mandar **1 mensagem real** pelo template de recuperação pro seu número (`+5551981519708`) usando a mesma subaccount/sender/template do fluxo de carrinho abandonado, e ler o **status final + error_code** que o Twilio devolver. A partir desse código a correção é cirúrgica.
 
-- 419 mensagens com `status = wa_stage_1_sent` e 408 com `wa_stage_2_sent` — pelo lado da Aura "deu certo" (Twilio aceitou e devolveu um SID `MM...`).
-- Mas o `provider_response` mostra todas presas em `status: "queued"`, `date_sent: null`, `error_code: null`. Ou seja: o Twilio recebeu, mas a mensagem **nunca foi entregue** ao usuário no WhatsApp.
-- Além disso, há **2 problemas reais** já visíveis nos logs:
-  1. **136 falhas com erro "Authenticate"** — credenciais da subaccount (`TWILIO_RECOVERY_ACCOUNT_SID` / `TWILIO_RECOVERY_AUTH_TOKEN`) ficaram inválidas em algum momento (token rotacionado? subaccount suspensa?).
-  2. **Bug de normalização de telefone**: números BR com 11 dígitos que já incluem `55` no começo (ex.: `55889314183`, DDD 88) recebem mais um `55` e viram `5555889314183` (15 dígitos, inválido). Outros casos viraram `+11978060363` (sem o 55, US-like) — Twilio rejeita com "not a valid phone number".
+## Passos
 
-A hipótese inicial ("número não tem nome aprovado pela Meta") já foi descartada pelo usuário: o número principal da Aura roda sem name approval e funciona. Então o problema é **configuração da subaccount + bug de normalização + falta de visibilidade do status final**, não Meta name approval.
+### 1. Disparo controlado (1 mensagem, seu número)
+Chamar `test-recovery-template` com:
+- `phone: "+5551981519708"`
+- `contentSid: "HX7ae71f9002839ec0ecdc58f6aa067a8a"` (template 15min)
+- `vars: { "1": "Robson" }`
 
-## O que vou fazer
+Isso passa pelo mesmo caminho do cron: `sendRecoveryTemplate` → `postOnce` → `POST /Accounts/{TWILIO_RECOVERY_ACCOUNT_SID}/Messages.json` com `From = TWILIO_RECOVERY_FROM` (`whatsapp:+15559875290`).
 
-### 1. Diagnóstico real (script de leitura, não muda nada)
+Retorno esperado: `messageSid` (`MM...`) + status HTTP da criação (não da entrega).
 
-Script que pega os últimos 20 SIDs `MM...` salvos em `provider_response` e consulta a API do Twilio (`GET /Messages/{sid}.json`) para descobrir o **status final real** de cada um: `sent`, `delivered`, `failed`, `undelivered` + `error_code` + `error_message`.
+### 2. Leitura do status final
+Esperar ~10s e chamar `test-recovery-template` de novo com `messageSid` do passo 1. Isso faz `GET /Messages/{sid}.json` e devolve o campo crítico:
 
-Isso vai dizer **exatamente** porque não chega:
-- Se vier `error_code: 63016` → fora da janela de 24h e template não casou (precisa de template aprovado para conversa nova).
-- Se vier `63007` → sender `whatsapp:+15559875290` não está habilitado para WhatsApp Business.
-- Se vier `63018` → opt-in obrigatório.
-- Se vier `delivered` → mensagem chega, problema é só percepção.
+```
+status:        queued | sent | delivered | undelivered | failed
+error_code:    null | 63016 | 63018 | 63007 | 63032 | 131026 | ...
+error_message: texto da Meta
+date_sent:     null = nunca saiu da fila Twilio
+```
 
-### 2. Corrigir bug de normalização de telefone BR
+### 3. Decisão pelo error_code
 
-Em `supabase/functions/_shared/zapi-client.ts`, `normalizeBrazilianPhone`:
+| error_code | Causa real | Correção |
+|---|---|---|
+| `null` + `delivered` | Chega normal | Problema é só nos **outros** números (normalização BR ou opt-in) — aplico fix do `normalizeBrazilianPhone` |
+| `63016` | Fora de janela 24h sem template casado | ContentVariables não bate com `{{1}}` do template aprovado — ajusto payload |
+| `63018` / `131047` | Janela 24h fechada / re-engagement | Template precisa ser categoria Utility, não Marketing |
+| `63032` | Bloqueio por opt-in | Adiciono opt-in implícito ou trato no fluxo |
+| `131026` | Receiver incapaz | Número de destino sem WhatsApp — caso específico, ignoro |
+| `63007` | Channel não habilitado | Sender precisa habilitação no console Twilio |
+| `63013` / `63021` | Template rejeitado ou usuário bloqueou | Reaprovar template / remover do alvo |
 
-- Hoje: se input tem 10 ou 11 dígitos, prefixa `55` cegamente. Isso quebra para DDDs que começam com `5` ou `8` quando o usuário já digitou `55` no começo.
-- Correção: antes de prefixar, **detectar se já começa com `55` e tem 12-13 dígitos válidos** (DDD BR válido 11-99). Se sim, não prefixa. Adicionar também tratamento explícito para números que entram como `+5511...` vs `5511...` vs `11...`.
+### 4. Bug colateral certo (independente do passo 3)
+Mesmo se o teste passar, a `callback_url` da sender `+15559875290` aponta pro `webhook-twilio` (webhook da Aura principal). Respostas dos usuários do template de recuperação caem no fluxo errado.
 
-### 3. Validar credenciais da subaccount
+Correção: apontar `callback_url` da sender pra um endpoint próprio (`webhook-twilio-recovery`, no-op + log) ou desativar callback nessa sender. Isso é ajuste no Twilio Console, não código — só sinalizo.
 
-Adicionar um endpoint de health-check (`test-recovery-template` já existe — estender com um modo `healthcheck` que faz `GET /Accounts/{sid}.json`). Se voltar 401, peço para reconfigurar `TWILIO_RECOVERY_AUTH_TOKEN`.
+### 5. Reaplicar pelos lotes presos
+Após corrigir a causa raiz, rodar `recover-abandoned-checkout-whatsapp` manualmente uma vez pra observar o novo comportamento em 3-5 mensagens, antes de deixar o cron destravado.
 
-### 4. Adicionar `StatusCallback` no envio
+## O que NÃO vou fazer agora
 
-Em `twilio-recovery-client.ts → postOnce`, incluir parâmetro `StatusCallback` apontando para uma nova edge function `twilio-recovery-status-webhook` que:
-- Recebe o webhook do Twilio com status final (`delivered`, `failed`, etc.) + `ErrorCode`.
-- Atualiza a linha correspondente em `checkout_recovery_attempts` com status real e mensagem de erro.
+- Não vou mexer no `normalizeBrazilianPhone` antes do passo 2 (seu teste vai dizer se o problema é phone ou template).
+- Não vou trocar categoria do template antes de ver `error_code`.
+- Não vou tocar no fluxo de e-mail nem no webhook principal da Aura.
 
-Assim a gente para de "achar" que enviou 800+ mensagens com sucesso quando na verdade o Meta pode estar rejeitando todas.
+## Próxima ação ao aprovar
 
-### 5. (Depende do passo 1) Ajuste de sender/template
-
-Com o diagnóstico em mãos, aplico a correção pontual:
-- Se for problema de janela 24h + template não-utility, ajusto categoria.
-- Se for sender não habilitado, oriento a habilitação no console Twilio (não dá para automatizar).
-- Se for problema de variable mismatch (ex.: template tem `{{1}}` e `{{2}}` mas mando só `{{1}}`), corrijo no payload.
-
-## Ordem de execução
-
-1. Rodar diagnóstico (passo 1) — leitura pura, sem deploy.
-2. Mostrar resultado para você e confirmar a causa raiz.
-3. Aplicar correções 2, 3, 4 em paralelo (mudanças seguras e isoladas).
-4. Aplicar correção 5 conforme o diagnóstico.
-
-Quer que eu siga assim?
+Executar passo 1 + passo 2 e te trazer o JSON exato do Twilio (status, error_code, error_message). Depois aplico a correção da linha que aparecer na tabela.
