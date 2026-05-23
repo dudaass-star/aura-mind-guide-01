@@ -51,6 +51,13 @@ AÇÕES SUGERIDAS (escolha APENAS UMA):
 - refund_invoice: reembolsar fatura específica (informe invoice_id e amount_cents se parcial)
 - retry_payment: tentar cobrar de novo com método salvo
 - change_plan: trocar plano (informe new_plan: essencial|direcao|transformacao e billing: monthly|yearly)
+- refund_asaas_payment: reembolsar cobrança PIX/Asaas (informe asaas_payment_id e amount_cents se parcial)
+- cancel_asaas_subscription: cancelar assinatura PIX/Asaas (informe asaas_subscription_id)
+
+REGRA DE PROVEDOR:
+- Cliente pagou com cartão (tem stripe.subscriptions/invoices no contexto) → use ações Stripe (refund_invoice, cancel_subscription, etc).
+- Cliente pagou com PIX (tem asaas.subscriptions/payments no contexto) → use ações Asaas (refund_asaas_payment, cancel_asaas_subscription).
+- Se houver os dois, prefira o provedor da cobrança em questão.
 
 IMPORTANTE:
 - Toda ação será REVISADA por um humano antes de executar
@@ -284,7 +291,7 @@ Analise e responda com a estrutura solicitada.`;
                   properties: {
                     type: { type: "string", enum: ["none","send_portal_link","send_stripe_billing_portal","cancel_subscription","pause_subscription","refund_invoice","retry_payment","change_plan"] },
                     reason: { type: "string", description: "Por que essa ação" },
-                    params: { type: "object", description: "Parâmetros: subscription_id, invoice_id, amount_cents, pause_days, new_plan, billing", additionalProperties: true },
+                    params: { type: "object", description: "Parâmetros: subscription_id, invoice_id, amount_cents, pause_days, new_plan, billing, asaas_payment_id, asaas_subscription_id", additionalProperties: true },
                   },
                   required: ["type", "reason"],
                 },
