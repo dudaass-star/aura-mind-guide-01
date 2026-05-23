@@ -1217,6 +1217,108 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ============================================================
+    // 💠 ASAAS / PIX — unificação com métricas Stripe
+    // ------------------------------------------------------------
+    // PIX não tem assinatura recorrente automática nem trial semanal.
+    // Tratamos cada pagamento CONFIRMED/RECEIVED como receita do ciclo
+    // (monthly/quarterly/yearly normalizados para mensal equivalente).
+    // Excluímos contas de teste E2E pra não inflar a métrica.
+    // ============================================================
+    let asaasMrrCents = 0;
+    let asaasActiveUsersCount = 0;
+    let asaasCheckoutCreatedInPeriod = 0;
+    let asaasCheckoutConfirmedInPeriod = 0;
+    let asaasChurnCount = 0;
+    const PAID_STATUSES = ['CONFIRMED', 'RECEIVED'];
+    const E2E_EMAIL_PATTERN = 'e2e+%@olaaura.com.br';
+
+    try {
+      // Janela de "ativo": último pagamento dentro do ciclo vigente.
+      // monthly = 35d, quarterly = 100d, yearly = 380d (margem pra atraso).
+      const nowMs = Date.now();
+      const DAY_MS = 24 * 60 * 60 * 1000;
+      const monthlyCutoff = new Date(nowMs - 35 * DAY_MS).toISOString();
+      const quarterlyCutoff = new Date(nowMs - 100 * DAY_MS).toISOString();
+      const yearlyCutoff = new Date(nowMs - 380 * DAY_MS).toISOString();
+      const churnCutoff = new Date(nowMs - 35 * DAY_MS).toISOString();
+
+      // 1) Pagamentos pagos para MRR + Active users
+      const { data: asaasPaidPayments } = await supabase
+        .from('asaas_payments')
+        .select('customer_email, plan, billing_period, amount_cents, paid_at, status')
+        .in('status', PAID_STATUSES)
+        .not('customer_email', 'ilike', E2E_EMAIL_PATTERN)
+        .order('paid_at', { ascending: false })
+        .limit(2000);
+
+      // Active users: 1 entry mais recente por email dentro do ciclo vigente
+      const lastPaidByEmail = new Map<string, { paid_at: string; billing_period: string; amount_cents: number }>();
+      for (const p of asaasPaidPayments || []) {
+        if (!p.customer_email || !p.paid_at) continue;
+        const existing = lastPaidByEmail.get(p.customer_email);
+        if (!existing || (p.paid_at as string) > existing.paid_at) {
+          lastPaidByEmail.set(p.customer_email, {
+            paid_at: p.paid_at as string,
+            billing_period: (p.billing_period as string) || 'monthly',
+            amount_cents: (p.amount_cents as number) || 0,
+          });
+        }
+      }
+
+      for (const { paid_at, billing_period, amount_cents } of lastPaidByEmail.values()) {
+        const cutoff =
+          billing_period === 'yearly' ? yearlyCutoff :
+          billing_period === 'quarterly' ? quarterlyCutoff :
+          monthlyCutoff;
+        if (paid_at < cutoff) continue; // expirou — não conta como ativo
+
+        asaasActiveUsersCount++;
+        if (billing_period === 'yearly') {
+          asaasMrrCents += Math.round(amount_cents / 12);
+        } else if (billing_period === 'quarterly') {
+          asaasMrrCents += Math.round(amount_cents / 3);
+        } else {
+          asaasMrrCents += amount_cents;
+        }
+      }
+
+      // 2) Funil de checkout PIX no período
+      const { data: asaasCreatedInPeriod } = await supabase
+        .from('asaas_payments')
+        .select('id, status, customer_email')
+        .gte('created_at', periodStart)
+        .lt('created_at', periodEnd)
+        .not('customer_email', 'ilike', E2E_EMAIL_PATTERN);
+
+      for (const p of asaasCreatedInPeriod || []) {
+        asaasCheckoutCreatedInPeriod++;
+        if (PAID_STATUSES.includes(p.status as string)) asaasCheckoutConfirmedInPeriod++;
+      }
+
+      // 3) Churn PIX: profile com asaas_customer_id, sem pagamento confirmado nos últimos 35d
+      const { data: asaasProfiles } = await supabase
+        .from('profiles')
+        .select('user_id, email')
+        .not('asaas_customer_id', 'is', null);
+
+      for (const prof of asaasProfiles || []) {
+        const email = prof.email as string | null;
+        if (!email) continue;
+        if (email.startsWith('e2e+') && email.endsWith('@olaaura.com.br')) continue;
+        const last = lastPaidByEmail.get(email);
+        if (!last || last.paid_at < churnCutoff) {
+          asaasChurnCount++;
+        }
+      }
+
+      console.log(`💠 Asaas/PIX: active=${asaasActiveUsersCount}, mrr=R$${(asaasMrrCents/100).toFixed(2)}, checkout(${asaasCheckoutCreatedInPeriod}→${asaasCheckoutConfirmedInPeriod}), churn=${asaasChurnCount}`);
+    } catch (e) {
+      console.warn('⚠️ Falha ao computar métricas Asaas:', e);
+    }
+
+    const mrrPixBRL = Math.round(asaasMrrCents / 100 * 100) / 100;
+
     const mrrTotalCents = mrrCommittedCents + weeklyRevenueCents;
     const mrrCommittedBRL = Math.round(mrrCommittedCents / 100 * 100) / 100;
     const mrrWeeklyEquivBRL = Math.round(weeklyRevenueCents / 100 * 100) / 100;
@@ -1378,6 +1480,11 @@ Deno.serve(async (req) => {
       checkoutCompletionRate,
       checkoutCreatedAllTime: checkoutCreatedAllTime || 0,
       checkoutCompletedAllTime: checkoutCompletedAllTime || 0,
+      // 💠 Asaas / PIX (somados separadamente para visibilidade)
+      asaasCheckoutCreatedInPeriod,
+      asaasCheckoutConfirmedInPeriod,
+      checkoutCreatedTotalInPeriod: (checkoutCreatedInPeriod || 0) + asaasCheckoutCreatedInPeriod,
+      checkoutCompletedTotalInPeriod: (checkoutCompletedInPeriod || 0) + asaasCheckoutConfirmedInPeriod,
       // Billing
       billingSuccessInPeriod,
       billingTotalInPeriod,
@@ -1418,6 +1525,12 @@ Deno.serve(async (req) => {
       mrrCommittedBRL,
       mrrWeeklyEquivBRL,
       mrrTotalBRL,
+      // 💠 Asaas / PIX MRR (somado ao total Stripe via mrrGrandTotalBRL)
+      mrrPixBRL,
+      mrrGrandTotalBRL: Math.round((mrrTotalBRL + mrrPixBRL) * 100) / 100,
+      asaasActiveUsersCount,
+      activeSubscriptionsTotalCount: activeSubscriptionsCount + asaasActiveUsersCount,
+      asaasChurnCount,
       mrrAtRiskBRL,
       mrrAtRiskRecentBRL,
       mrrAtRiskCriticalBRL,
