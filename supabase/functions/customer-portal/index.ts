@@ -12,31 +12,41 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { token } = await req.json();
-    if (!token || typeof token !== "string") {
-      return json({ error: "token obrigatório" }, 400);
-    }
+    const body = await req.json().catch(() => ({}));
+    const token: string | undefined = body?.token;
+    let userId: string | undefined = body?.userId;
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceKey);
 
-    // 1. Valida token do portal passwordless
-    const { data: portalToken, error: tokenErr } = await supabase
-      .from("user_portal_tokens")
-      .select("user_id")
-      .eq("token", token)
-      .maybeSingle();
-
-    if (tokenErr || !portalToken) {
-      return json({ error: "Token inválido" }, 401);
+    // 1. Fonte do user_id: JWT autenticado (preferido) ou token legacy
+    if (!userId) {
+      const authHeader = req.headers.get("Authorization");
+      if (authHeader?.startsWith("Bearer ")) {
+        const jwt = authHeader.replace("Bearer ", "");
+        const anonClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!);
+        const { data: claims } = await anonClient.auth.getClaims(jwt);
+        userId = claims?.claims?.sub as string | undefined;
+      }
+    }
+    if (!userId && token) {
+      const { data: pt } = await supabase
+        .from("user_portal_tokens")
+        .select("user_id")
+        .eq("token", token)
+        .maybeSingle();
+      userId = pt?.user_id;
+    }
+    if (!userId) {
+      return json({ error: "Sessão necessária" }, 401);
     }
 
     // 2. Pega email/phone do profile pra achar customer no Stripe
     const { data: profile } = await supabase
       .from("profiles")
       .select("email, phone, name")
-      .eq("user_id", portalToken.user_id)
+      .eq("user_id", userId)
       .maybeSingle();
 
     if (!profile) {
@@ -74,7 +84,7 @@ Deno.serve(async (req) => {
     const origin = req.headers.get("origin") || "https://olaaura.com.br";
     const portalSession = await stripe.billingPortal.sessions.create({
       customer: customerId,
-      return_url: `${origin}/meu-espaco?t=${token}`,
+      return_url: `${origin}/meu-espaco`,
     });
 
     return json({ url: portalSession.url }, 200);

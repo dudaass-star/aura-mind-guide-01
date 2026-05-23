@@ -34,6 +34,8 @@ import Episode from "./pages/Episode";
 import JourneyComplete from "./pages/JourneyComplete";
 import Unsubscribe from "./pages/Unsubscribe";
 import UserPortal from "./pages/UserPortal";
+import PortalLogin from "./pages/PortalLogin";
+import { PortalAuthProvider } from "./contexts/PortalAuthContext";
 import Blog from "./pages/Blog";
 import Pagamento from "./pages/Pagamento";
 import NotFound from "./pages/NotFound";
@@ -51,6 +53,7 @@ const App = () => (
         <BrowserRouter>
           <ScrollToTop />
           <GA4RouteTracker />
+          <PortalAuthProvider>
           <Routes>
             <Route path="/" element={<Navigate to="/v2" replace />} />
             <Route path="/v2" element={<IndexV2 />} />
@@ -82,11 +85,13 @@ const App = () => (
             <Route path="/jornada-completa/:journeyId/:userId" element={<JourneyComplete />} />
             <Route path="/unsubscribe" element={<Unsubscribe />} />
             <Route path="/meu-espaco" element={<UserPortal />} />
+            <Route path="/meu-espaco/entrar" element={<PortalLogin />} />
             <Route path="/blog" element={<Blog />} />
             <Route path="/pagamento" element={<Pagamento />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
+          </PortalAuthProvider>
         </BrowserRouter>
       </TooltipProvider>
     </QueryClientProvider>
