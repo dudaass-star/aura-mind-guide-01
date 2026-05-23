@@ -175,6 +175,47 @@ serve(async (req) => {
       }
     }
 
+    // Asaas (PIX) context if email available
+    if (ticket.customer_email) {
+      try {
+        // Tenta achar asaas_customer_id pelo profile (se vinculado) ou pelo email em asaas_payments
+        let asaasCustomerId: string | null = null;
+        if (ticket.profile_user_id) {
+          const { data: prof } = await supabase
+            .from("profiles")
+            .select("asaas_customer_id")
+            .eq("user_id", ticket.profile_user_id)
+            .maybeSingle();
+          asaasCustomerId = (prof as { asaas_customer_id?: string } | null)?.asaas_customer_id || null;
+        }
+
+        const paymentsQuery = supabase
+          .from("asaas_payments")
+          .select("asaas_payment_id, asaas_subscription_id, status, value, billing_type, billing_period, due_date, created_at")
+          .order("created_at", { ascending: false })
+          .limit(5);
+        const { data: payments } = asaasCustomerId
+          ? await paymentsQuery.eq("asaas_customer_id", asaasCustomerId)
+          : await paymentsQuery.eq("customer_email", ticket.customer_email);
+
+        if ((payments && payments.length > 0) || asaasCustomerId) {
+          const subs = new Map<string, { id: string; last_status: string; last_due: string | null }>();
+          for (const p of (payments || []) as Array<{ asaas_subscription_id: string | null; status: string; due_date: string | null }>) {
+            if (p.asaas_subscription_id && !subs.has(p.asaas_subscription_id)) {
+              subs.set(p.asaas_subscription_id, { id: p.asaas_subscription_id, last_status: p.status, last_due: p.due_date });
+            }
+          }
+          context.asaas = {
+            customer_id: asaasCustomerId,
+            subscriptions: Array.from(subs.values()),
+            payments: payments || [],
+          };
+        }
+      } catch (e) {
+        log("Asaas lookup failed", { error: String(e) });
+      }
+    }
+
     const inboundEmails = (messages || [])
       .filter((m) => m.direction === "inbound")
       .map((m) => `[${m.from_email}]: ${m.body_text || "(sem texto)"}`)
