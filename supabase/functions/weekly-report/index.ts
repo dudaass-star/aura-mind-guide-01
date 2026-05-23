@@ -458,7 +458,7 @@ Deno.serve(async (req) => {
         // Get portal token and create short link
         const portalToken = await getOrCreatePortalToken(supabase, profile.user_id);
         const portalUrl = portalToken
-          ? `https://olaaura.com.br/meu-espaco?t=${portalToken}&tab=resumos`
+          ? `https://olaaura.com.br/meu-espaco?tab=resumos`
           : 'https://olaaura.com.br';
         
         const shortLink = await createShortLink(supabaseUrl, supabaseServiceKey, portalUrl, profile.phone) || portalUrl;

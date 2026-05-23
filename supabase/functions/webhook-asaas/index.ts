@@ -331,7 +331,7 @@ async function handleActivation(
         .eq("user_id", profileUserId)
         .single();
       if (tokenData?.token) {
-        portalLink = `https://olaaura.com.br/meu-espaco?t=${tokenData.token}`;
+        portalLink = `https://olaaura.com.br/meu-espaco`;
       }
     } catch (tokenErr) {
       console.warn("[webhook-asaas] ⚠️ Portal token falhou (non-blocking):", tokenErr);

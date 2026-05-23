@@ -62,7 +62,7 @@ serve(async (req) => {
               .insert({ user_id: ticket.profile_user_id }).select("token").single();
             token = created?.token;
           }
-          stripeResponse = { portal_url: `https://olaaura.com.br/meu-espaco?token=${token}` };
+          stripeResponse = { portal_url: `https://olaaura.com.br/meu-espaco` };
           success = true;
           break;
         }

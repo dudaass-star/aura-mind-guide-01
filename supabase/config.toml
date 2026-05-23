@@ -1,218 +1,149 @@
 project_id = "uhyogifgmutfmbyhzzyo"
 
-[functions.admin-update-profile]
-verify_jwt = false
-
-[functions.admin-send-message]
-verify_jwt = false
-
-[functions.aura-agent]
-verify_jwt = false
-
-[functions.aura-tts]
-verify_jwt = false
-
-[functions.webhook-zapi]
-verify_jwt = false
-
-[functions.send-zapi-message]
-verify_jwt = false
-
-
-[functions.scheduled-followup]
-verify_jwt = false
-
-[functions.weekly-report]
-verify_jwt = false
-
-[functions.conversation-followup]
-verify_jwt = false
-
-[functions.create-checkout]
-verify_jwt = false
-
-[functions.stripe-webhook]
-verify_jwt = false
-
-[functions.cancel-subscription]
-verify_jwt = false
-
-[functions.session-reminder]
-verify_jwt = false
-
-[functions.create-short-link]
-verify_jwt = false
-
-[functions.redirect-link]
-verify_jwt = false
-
-[functions.reactivation-check]
-verify_jwt = false
-
-[functions.criar-pix-asaas]
-verify_jwt = false
-
-[functions.criar-pix-recorrente-asaas]
-verify_jwt = false
-
-[functions.webhook-asaas]
-verify_jwt = false
-
-[functions.start-trial]
-verify_jwt = false
-
-[functions.monthly-schedule-renewal]
-verify_jwt = false
-
-[functions.schedule-setup-reminder]
-verify_jwt = false
-
-[functions.periodic-content]
-verify_jwt = false
-
-[functions.generate-episode-manifesto]
-verify_jwt = false
-
-[functions.generate-meditation-audio]
-verify_jwt = false
-
-[functions.send-meditation]
-verify_jwt = false
-
-[functions.batch-generate-meditations]
-verify_jwt = false
-
-[functions.generate-chunk]
-verify_jwt = false
-
-[functions.finalize-meditation-audio]
-verify_jwt = false
-
-[functions.cleanup-inactive-users]
-verify_jwt = false
-
-[functions.run-system-tests]
-verify_jwt = false
-
-[functions.check-instance-health]
-verify_jwt = false
-
-[functions.reconcile-subscriptions]
-verify_jwt = false
-
-[functions.deliver-time-capsule]
-verify_jwt = false
-
-[functions.pattern-analysis]
-verify_jwt = false
-
-[functions.execute-scheduled-tasks]
-verify_jwt = false
-
-[functions.admin-engagement-metrics]
-verify_jwt = false
-
-[functions.meta-capi]
-verify_jwt = false
-
-[functions.reactivation-blast]
-verify_jwt = false
-
-[functions.admin-messages]
-verify_jwt = false
-
-[functions.process-webhook-message]
-verify_jwt = false
-
-[functions.recover-abandoned-checkout]
-verify_jwt = false
-
-[functions.reprocess-dunning]
-verify_jwt = false
-
-[functions.notify-users-email]
-verify_jwt = false
-
-[functions.instance-reconnect-notify]
-verify_jwt = false
-
-[functions.process-email-queue]
-verify_jwt = false
-
-[functions.webhook-twilio]
-verify_jwt = false
-
-[functions.choose-next-journey]
-verify_jwt = false
-
-[functions.send-transactional-email]
-verify_jwt = false
-
-[functions.preview-transactional-email]
-verify_jwt = false
-
-[functions.handle-email-unsubscribe]
-verify_jwt = false
-
-[functions.handle-email-suppression]
-verify_jwt = false
-
-[functions.admin-preview-emails]
-verify_jwt = false
-
-[functions.reengagement-blast]
-verify_jwt = false
-
-[functions.audit-stripe-duplicates]
-verify_jwt = false
-
-[functions.webhook-instagram]
-verify_jwt = false
-
-[functions.instagram-agent]
-verify_jwt = false
-
-[functions.refresh-meta-token]
-verify_jwt = false
-
-[functions.audit-recovered-payments]
-verify_jwt = false
-
-[functions.support-imap-poll]
-verify_jwt = false
-
-[functions.support-agent]
-verify_jwt = false
-
-[functions.support-send-reply]
-verify_jwt = true
-
-[functions.support-execute-action]
-verify_jwt = true
-
-[functions.support-attachment-url]
-verify_jwt = true
-
-[functions.support-kb-embed]
-verify_jwt = true
-
-[functions.support-kb-search]
-verify_jwt = true
-
-[functions.support-auto-respond]
-verify_jwt = false
-
-[functions.audit-orphan-subscribers]
-verify_jwt = false
-
-[functions.cleanup-tts-audios]
-verify_jwt = false
-
-[functions.audit-decline-codes]
-verify_jwt = false
-
-[functions.session-extractor]
-verify_jwt = false
-
-[functions.schedule-tag-extractor]
-verify_jwt = false
+[functions]
+  [functions.admin-engagement-metrics]
+    verify_jwt = false
+  [functions.admin-messages]
+    verify_jwt = false
+  [functions.admin-preview-emails]
+    verify_jwt = false
+  [functions.admin-send-message]
+    verify_jwt = false
+  [functions.admin-update-profile]
+    verify_jwt = false
+  [functions.audit-decline-codes]
+    verify_jwt = false
+  [functions.audit-orphan-subscribers]
+    verify_jwt = false
+  [functions.audit-recovered-payments]
+    verify_jwt = false
+  [functions.audit-stripe-duplicates]
+    verify_jwt = false
+  [functions.aura-agent]
+    verify_jwt = false
+  [functions.aura-tts]
+    verify_jwt = false
+  [functions.auth-email-hook]
+    verify_jwt = false
+  [functions.batch-generate-meditations]
+    verify_jwt = false
+  [functions.cancel-subscription]
+    verify_jwt = false
+  [functions.check-instance-health]
+    verify_jwt = false
+  [functions.choose-next-journey]
+    verify_jwt = false
+  [functions.cleanup-inactive-users]
+    verify_jwt = false
+  [functions.cleanup-tts-audios]
+    verify_jwt = false
+  [functions.conversation-followup]
+    verify_jwt = false
+  [functions.create-checkout]
+    verify_jwt = false
+  [functions.create-short-link]
+    verify_jwt = false
+  [functions.criar-pix-asaas]
+    verify_jwt = false
+  [functions.criar-pix-recorrente-asaas]
+    verify_jwt = false
+  [functions.deliver-time-capsule]
+    verify_jwt = false
+  [functions.execute-scheduled-tasks]
+    verify_jwt = false
+  [functions.finalize-meditation-audio]
+    verify_jwt = false
+  [functions.generate-chunk]
+    verify_jwt = false
+  [functions.generate-episode-manifesto]
+    verify_jwt = false
+  [functions.generate-meditation-audio]
+    verify_jwt = false
+  [functions.handle-email-suppression]
+    verify_jwt = false
+  [functions.handle-email-unsubscribe]
+    verify_jwt = false
+  [functions.instagram-agent]
+    verify_jwt = false
+  [functions.instance-reconnect-notify]
+    verify_jwt = false
+  [functions.meta-capi]
+    verify_jwt = false
+  [functions.monthly-schedule-renewal]
+    verify_jwt = false
+  [functions.notify-users-email]
+    verify_jwt = false
+  [functions.pattern-analysis]
+    verify_jwt = false
+  [functions.periodic-content]
+    verify_jwt = false
+  [functions.preview-transactional-email]
+    verify_jwt = false
+  [functions.process-email-queue]
+    verify_jwt = false
+  [functions.process-webhook-message]
+    verify_jwt = false
+  [functions.reactivation-blast]
+    verify_jwt = false
+  [functions.reactivation-check]
+    verify_jwt = false
+  [functions.reconcile-subscriptions]
+    verify_jwt = false
+  [functions.recover-abandoned-checkout]
+    verify_jwt = false
+  [functions.redirect-link]
+    verify_jwt = false
+  [functions.reengagement-blast]
+    verify_jwt = false
+  [functions.refresh-meta-token]
+    verify_jwt = false
+  [functions.reprocess-dunning]
+    verify_jwt = false
+  [functions.run-system-tests]
+    verify_jwt = false
+  [functions.schedule-setup-reminder]
+    verify_jwt = false
+  [functions.schedule-tag-extractor]
+    verify_jwt = false
+  [functions.scheduled-followup]
+    verify_jwt = false
+  [functions.send-meditation]
+    verify_jwt = false
+  [functions.send-transactional-email]
+    verify_jwt = false
+  [functions.send-zapi-message]
+    verify_jwt = false
+  [functions.session-extractor]
+    verify_jwt = false
+  [functions.session-reminder]
+    verify_jwt = false
+  [functions.start-trial]
+    verify_jwt = false
+  [functions.stripe-webhook]
+    verify_jwt = false
+  [functions.support-agent]
+    verify_jwt = false
+  [functions.support-attachment-url]
+    verify_jwt = true
+  [functions.support-auto-respond]
+    verify_jwt = false
+  [functions.support-execute-action]
+    verify_jwt = true
+  [functions.support-imap-poll]
+    verify_jwt = false
+  [functions.support-kb-embed]
+    verify_jwt = true
+  [functions.support-kb-search]
+    verify_jwt = true
+  [functions.support-send-reply]
+    verify_jwt = true
+  [functions.webhook-asaas]
+    verify_jwt = false
+  [functions.webhook-instagram]
+    verify_jwt = false
+  [functions.webhook-twilio]
+    verify_jwt = false
+  [functions.webhook-zapi]
+    verify_jwt = false
+  [functions.weekly-report]
+    verify_jwt = false

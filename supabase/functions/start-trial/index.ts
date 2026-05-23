@@ -146,7 +146,7 @@ Deno.serve(async (req) => {
       const { data: tokenData } = await supabase.from('user_portal_tokens')
         .select('token').eq('user_id', userId).single();
       if (tokenData?.token) {
-        portalLink = `https://olaaura.com.br/meu-espaco?t=${tokenData.token}`;
+        portalLink = `https://olaaura.com.br/meu-espaco`;
       }
     } catch { /* non-blocking */ }
 

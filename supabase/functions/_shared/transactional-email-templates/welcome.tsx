@@ -89,7 +89,7 @@ export const template = {
   component: WelcomeEmail,
   subject: 'Bem-vindo à AURA — comece sua jornada agora 💜',
   displayName: 'Boas-vindas',
-  previewData: { name: 'Maria', portalUrl: 'https://olaaura.com.br/meu-espaco?t=example-token' },
+  previewData: { name: 'Maria', portalUrl: 'https://olaaura.com.br/meu-espaco' },
 } satisfies TemplateEntry
 
 const main = { backgroundColor: '#ffffff', fontFamily: "'Nunito', Arial, sans-serif" }

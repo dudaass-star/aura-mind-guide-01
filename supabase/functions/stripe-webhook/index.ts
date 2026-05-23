@@ -431,7 +431,7 @@ Deno.serve(async (req) => {
             const { data: tokenData } = await supabase.from('user_portal_tokens')
               .select('token').eq('user_id', profileUserId).single();
             if (tokenData?.token) {
-              portalLinkTrial = `https://olaaura.com.br/meu-espaco?t=${tokenData.token}`;
+              portalLinkTrial = `https://olaaura.com.br/meu-espaco`;
             }
           } catch { /* non-blocking */ }
           const portalLineTrial = portalLinkTrial ? `\n\nAcesse seu painel pessoal: ${portalLinkTrial} ✨` : '';
@@ -711,7 +711,7 @@ Deno.serve(async (req) => {
           { onConflict: 'user_id' }
         ).select('token').single();
         if (tokenData?.token) {
-          portalLink = `https://olaaura.com.br/meu-espaco?t=${tokenData.token}`;
+          portalLink = `https://olaaura.com.br/meu-espaco`;
           console.log('✅ Portal token created for paid user');
         }
       } catch (tokenErr) {
