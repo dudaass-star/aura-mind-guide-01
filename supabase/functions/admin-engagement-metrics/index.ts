@@ -1480,6 +1480,11 @@ Deno.serve(async (req) => {
       checkoutCompletionRate,
       checkoutCreatedAllTime: checkoutCreatedAllTime || 0,
       checkoutCompletedAllTime: checkoutCompletedAllTime || 0,
+      // 💠 Asaas / PIX (somados separadamente para visibilidade)
+      asaasCheckoutCreatedInPeriod,
+      asaasCheckoutConfirmedInPeriod,
+      checkoutCreatedTotalInPeriod: (checkoutCreatedInPeriod || 0) + asaasCheckoutCreatedInPeriod,
+      checkoutCompletedTotalInPeriod: (checkoutCompletedInPeriod || 0) + asaasCheckoutConfirmedInPeriod,
       // Billing
       billingSuccessInPeriod,
       billingTotalInPeriod,
@@ -1520,6 +1525,12 @@ Deno.serve(async (req) => {
       mrrCommittedBRL,
       mrrWeeklyEquivBRL,
       mrrTotalBRL,
+      // 💠 Asaas / PIX MRR (somado ao total Stripe via mrrGrandTotalBRL)
+      mrrPixBRL,
+      mrrGrandTotalBRL: Math.round((mrrTotalBRL + mrrPixBRL) * 100) / 100,
+      asaasActiveUsersCount,
+      activeSubscriptionsTotalCount: activeSubscriptionsCount + asaasActiveUsersCount,
+      asaasChurnCount,
       mrrAtRiskBRL,
       mrrAtRiskRecentBRL,
       mrrAtRiskCriticalBRL,
