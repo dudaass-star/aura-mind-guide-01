@@ -126,6 +126,22 @@ export async function listRecoveryMessages(phone: string, limit = 10): Promise<T
   };
 }
 
+export async function getRecoveryAlerts(messageSid: string): Promise<TwilioRecoverySendResult> {
+  // Monitor API vive em monitor.twilio.com, não em api.twilio.com
+  const { sid, token } = getCreds();
+  const auth = btoa(`${sid}:${token}`);
+  const url = `https://monitor.twilio.com/v1/Alerts?ResourceSid=${encodeURIComponent(messageSid)}&PageSize=10`;
+  const resp = await fetch(url, { headers: { "Authorization": `Basic ${auth}` } });
+  const json = await resp.json().catch(() => ({}));
+  return {
+    success: resp.ok,
+    status: resp.status,
+    messageSid,
+    error: resp.ok ? undefined : (json?.message || `HTTP ${resp.status}`),
+    response: json,
+  };
+}
+
 /**
  * Envia um template aprovado via subaccount Twilio.
  * Faz 1 retry em erros transitórios (2s de espera).
