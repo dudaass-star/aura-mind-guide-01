@@ -74,6 +74,15 @@ REGRA DE PROVEDOR:
 - Cliente pagou com PIX (tem asaas.subscriptions/payments no contexto) → use ações Asaas (refund_asaas_payment, cancel_asaas_subscription).
 - Se houver os dois, prefira o provedor da cobrança em questão.
 
+PREENCHIMENTO DE PARAMS (OBRIGATÓRIO):
+- Toda ação com ID DEVE vir com o ID concreto extraído do CONTEXTO DO CLIENTE em "params".
+  • refund_invoice → params.invoice_id = stripe.invoices[0].id (ou o invoice específico citado), e amount_cents se parcial.
+  • cancel_subscription / pause_subscription / change_plan → params.subscription_id = stripe.subscriptions[0].id (a ativa).
+  • refund_asaas_payment → params.asaas_payment_id = asaas.payments[0].asaas_payment_id (paga).
+  • cancel_asaas_subscription → params.asaas_subscription_id = asaas.subscriptions[0].id.
+- Se o ID não estiver claramente disponível no contexto, sugira "none" e peça os dados no rascunho. NÃO chute IDs.
+- O backend tem fallback que resolve o ID pelo email do cliente, mas você ainda deve tentar preencher.
+
 IMPORTANTE:
 - Toda ação será REVISADA por um humano antes de executar
 - Se não tiver certeza, sugira "none" e peça mais informação no rascunho
