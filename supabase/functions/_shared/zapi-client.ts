@@ -64,21 +64,69 @@ export function cleanPhoneNumber(phone: string): string {
 export function normalizeBrazilianPhone(phone: string): string {
   let clean = cleanPhoneNumber(phone);
 
-  // If it's 10 or 11 digits, it's missing country code 55
-  if (clean.length === 10 || clean.length === 11) {
-    clean = '55' + clean;
+  // DDDs BR válidos (Anatel). Usado para desambiguar prefixos "55".
+  const VALID_BR_DDDS = new Set<string>([
+    "11","12","13","14","15","16","17","18","19",
+    "21","22","24","27","28",
+    "31","32","33","34","35","37","38",
+    "41","42","43","44","45","46","47","48","49",
+    "51","53","54","55",
+    "61","62","63","64","65","66","67","68","69",
+    "71","73","74","75","77","79",
+    "81","82","83","84","85","86","87","88","89",
+    "91","92","93","94","95","96","97","98","99",
+  ]);
+
+  // 13 dígitos começando com 55 → já está em E.164 BR completo
+  if (clean.length === 13 && clean.startsWith("55") && VALID_BR_DDDS.has(clean.substring(2, 4))) {
+    return clean;
   }
 
-  // Now should be 12 or 13 digits starting with 55
-  if (clean.startsWith('55') && clean.length === 12) {
-    // 55 + DDD(2) + 8 digits → add 9th digit
+  // 12 dígitos começando com 55 (DDD válido) → falta o 9 do celular
+  if (clean.length === 12 && clean.startsWith("55") && VALID_BR_DDDS.has(clean.substring(2, 4))) {
     const ddd = clean.substring(2, 4);
-    const rest = clean.substring(4);
-    if (rest.length === 8) {
-      clean = '55' + ddd + '9' + rest;
-    }
+    const rest = clean.substring(4); // 8 dígitos
+    return "55" + ddd + "9" + rest;
   }
 
+  // 11 dígitos: ambíguo. Pode ser
+  //  (a) DDD(2) + 9 + 8d  (celular sem DDI 55)  → prefixar 55
+  //  (b) 55 + DDD(2) + 7d (lixo, número incompleto)  → NÃO prefixar de novo
+  if (clean.length === 11) {
+    const dddA = clean.substring(0, 2);
+    const ninthA = clean.substring(2, 3);
+    const startsWith55 = clean.startsWith("55");
+    const dddB = clean.substring(2, 4);
+
+    // Caso (a): DDD válido + 9º dígito "9" → celular BR sem código de país
+    if (VALID_BR_DDDS.has(dddA) && ninthA === "9") {
+      return "55" + clean;
+    }
+
+    // Caso (b): já começa com 55 e os 2 dígitos seguintes formam DDD válido → não duplicar 55
+    // Mantém como está (Twilio rejeita com erro claro em vez de inflar pra 5555...)
+    if (startsWith55 && VALID_BR_DDDS.has(dddB)) {
+      return clean;
+    }
+
+    // Fallback: prefixa 55 mesmo assim (comportamento legado para DDDs raros sem o 9)
+    return "55" + clean;
+  }
+
+  // 10 dígitos: DDD(2) + 8d (fixo OU celular antigo sem o 9) → adicionar 55 + 9 se DDD válido
+  if (clean.length === 10) {
+    const ddd = clean.substring(0, 2);
+    if (VALID_BR_DDDS.has(ddd)) {
+      const rest = clean.substring(2); // 8 dígitos
+      // Heurística: se começa com 6/7/8/9 trata como celular e adiciona o 9; senão mantém como fixo
+      const isMobile = /^[6-9]/.test(rest);
+      return isMobile ? "55" + ddd + "9" + rest : "55" + clean;
+    }
+    return "55" + clean; // fallback legado
+  }
+
+  // Qualquer outro tamanho (< 10, 14, 15+ etc): retornar limpo sem inflar.
+  // Twilio devolverá 21211 com mensagem clara em vez de mascarar com prefixo errado.
   return clean;
 }
 
