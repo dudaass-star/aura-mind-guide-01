@@ -1138,14 +1138,12 @@ const CheckoutV2 = () => {
                   </div>
 
                   {pixMode === "subscription" && (
-                    <div className="bg-[hsl(140_30%_72%)]/10 border border-[hsl(140_30%_72%)]/30 rounded-xl p-3 text-xs text-white/85 space-y-1">
-                      <p className="font-semibold text-[hsl(140_30%_82%)]">
-                        ⚡ Ative o Pix Automático
+                    <div className="bg-[hsl(35_70%_60%)]/15 border border-[hsl(35_70%_60%)]/40 rounded-xl p-3 text-xs space-y-2">
+                      <p className="font-semibold text-[hsl(35_70%_75%)]">
+                        ⚠️ Ação obrigatória no app do banco
                       </p>
-                      <p className="text-white/70">
-                        No app do seu banco, ao pagar, marque a opção{" "}
-                        <span className="font-semibold text-white/90">"Autorizar Pix Automático"</span>{" "}
-                        — assim as próximas cobranças entram sozinhas, sem precisar pagar QR de novo.
+                      <p className="text-white/80">
+                        Ao confirmar o pagamento, <strong>marque "Autorizar Pix Automático"</strong>. Sem isso, a assinatura não será ativada.
                       </p>
                     </div>
                   )}
