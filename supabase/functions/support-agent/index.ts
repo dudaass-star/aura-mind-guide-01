@@ -51,6 +51,13 @@ AÇÕES SUGERIDAS (escolha APENAS UMA):
 - refund_invoice: reembolsar fatura específica (informe invoice_id e amount_cents se parcial)
 - retry_payment: tentar cobrar de novo com método salvo
 - change_plan: trocar plano (informe new_plan: essencial|direcao|transformacao e billing: monthly|yearly)
+- refund_asaas_payment: reembolsar cobrança PIX/Asaas (informe asaas_payment_id e amount_cents se parcial)
+- cancel_asaas_subscription: cancelar assinatura PIX/Asaas (informe asaas_subscription_id)
+
+REGRA DE PROVEDOR:
+- Cliente pagou com cartão (tem stripe.subscriptions/invoices no contexto) → use ações Stripe (refund_invoice, cancel_subscription, etc).
+- Cliente pagou com PIX (tem asaas.subscriptions/payments no contexto) → use ações Asaas (refund_asaas_payment, cancel_asaas_subscription).
+- Se houver os dois, prefira o provedor da cobrança em questão.
 
 IMPORTANTE:
 - Toda ação será REVISADA por um humano antes de executar
@@ -168,6 +175,47 @@ serve(async (req) => {
       }
     }
 
+    // Asaas (PIX) context if email available
+    if (ticket.customer_email) {
+      try {
+        // Tenta achar asaas_customer_id pelo profile (se vinculado) ou pelo email em asaas_payments
+        let asaasCustomerId: string | null = null;
+        if (ticket.profile_user_id) {
+          const { data: prof } = await supabase
+            .from("profiles")
+            .select("asaas_customer_id")
+            .eq("user_id", ticket.profile_user_id)
+            .maybeSingle();
+          asaasCustomerId = (prof as { asaas_customer_id?: string } | null)?.asaas_customer_id || null;
+        }
+
+        const paymentsQuery = supabase
+          .from("asaas_payments")
+          .select("asaas_payment_id, asaas_subscription_id, status, amount_cents, billing_period, plan, paid_at, created_at")
+          .order("created_at", { ascending: false })
+          .limit(5);
+        const { data: payments } = asaasCustomerId
+          ? await paymentsQuery.eq("asaas_customer_id", asaasCustomerId)
+          : await paymentsQuery.eq("customer_email", ticket.customer_email);
+
+        if ((payments && payments.length > 0) || asaasCustomerId) {
+          const subs = new Map<string, { id: string; last_status: string; last_due: string | null }>();
+          for (const p of (payments || []) as Array<{ asaas_subscription_id: string | null; status: string; created_at: string | null }>) {
+            if (p.asaas_subscription_id && !subs.has(p.asaas_subscription_id)) {
+              subs.set(p.asaas_subscription_id, { id: p.asaas_subscription_id, last_status: p.status, last_due: p.created_at });
+            }
+          }
+          context.asaas = {
+            customer_id: asaasCustomerId,
+            subscriptions: Array.from(subs.values()),
+            payments: payments || [],
+          };
+        }
+      } catch (e) {
+        log("Asaas lookup failed", { error: String(e) });
+      }
+    }
+
     const inboundEmails = (messages || [])
       .filter((m) => m.direction === "inbound")
       .map((m) => `[${m.from_email}]: ${m.body_text || "(sem texto)"}`)
@@ -282,9 +330,9 @@ Analise e responda com a estrutura solicitada.`;
                 suggested_action: {
                   type: "object",
                   properties: {
-                    type: { type: "string", enum: ["none","send_portal_link","send_stripe_billing_portal","cancel_subscription","pause_subscription","refund_invoice","retry_payment","change_plan"] },
+                    type: { type: "string", enum: ["none","send_portal_link","send_stripe_billing_portal","cancel_subscription","pause_subscription","refund_invoice","retry_payment","change_plan","refund_asaas_payment","cancel_asaas_subscription"] },
                     reason: { type: "string", description: "Por que essa ação" },
-                    params: { type: "object", description: "Parâmetros: subscription_id, invoice_id, amount_cents, pause_days, new_plan, billing", additionalProperties: true },
+                    params: { type: "object", description: "Parâmetros: subscription_id, invoice_id, amount_cents, pause_days, new_plan, billing, asaas_payment_id, asaas_subscription_id", additionalProperties: true },
                   },
                   required: ["type", "reason"],
                 },

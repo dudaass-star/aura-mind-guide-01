@@ -40,6 +40,13 @@ serve(async (req) => {
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY")!;
     const stripe = new Stripe(stripeKey, { apiVersion: "2023-10-16" });
 
+    // Asaas (PIX) config
+    const asaasKey = Deno.env.get("ASAAS_API_KEY");
+    const asaasEnv = (Deno.env.get("ASAAS_ENV") || "sandbox").toLowerCase();
+    const asaasBase = asaasEnv === "production" || asaasEnv === "prod"
+      ? "https://api.asaas.com/v3"
+      : "https://api-sandbox.asaas.com/v3";
+
     let stripeResponse: unknown = null;
     let success = false;
     let errorMessage: string | null = null;
@@ -156,6 +163,46 @@ serve(async (req) => {
           stripeResponse = { id: updated.id, new_price: newPrice };
           if (ticket.profile_user_id) {
             await supabase.from("profiles").update({ plan: newPlan }).eq("user_id", ticket.profile_user_id);
+          }
+          success = true;
+          break;
+        }
+
+        case "refund_asaas_payment": {
+          const paymentId = params.asaas_payment_id;
+          if (!paymentId) throw new Error("asaas_payment_id required");
+          if (!asaasKey) throw new Error("ASAAS_API_KEY not configured");
+          const body: Record<string, unknown> = {};
+          if (params.amount_cents) body.value = Number(params.amount_cents) / 100;
+          if (params.description) body.description = String(params.description);
+          const resp = await fetch(`${asaasBase}/payments/${paymentId}/refund`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "access_token": asaasKey,
+            },
+            body: JSON.stringify(body),
+          });
+          const json = await resp.json().catch(() => ({}));
+          if (!resp.ok) throw new Error(`Asaas refund failed (${resp.status}): ${JSON.stringify(json)}`);
+          stripeResponse = json;
+          success = true;
+          break;
+        }
+
+        case "cancel_asaas_subscription": {
+          const subId = params.asaas_subscription_id;
+          if (!subId) throw new Error("asaas_subscription_id required");
+          if (!asaasKey) throw new Error("ASAAS_API_KEY not configured");
+          const resp = await fetch(`${asaasBase}/subscriptions/${subId}`, {
+            method: "DELETE",
+            headers: { "access_token": asaasKey },
+          });
+          const json = await resp.json().catch(() => ({}));
+          if (!resp.ok) throw new Error(`Asaas cancel failed (${resp.status}): ${JSON.stringify(json)}`);
+          stripeResponse = json;
+          if (ticket.profile_user_id) {
+            await supabase.from("profiles").update({ status: "canceled" }).eq("user_id", ticket.profile_user_id);
           }
           success = true;
           break;

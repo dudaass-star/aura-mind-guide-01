@@ -1,47 +1,42 @@
-## Objetivo
+## Trava de execução + cobertura Asaas no suporte
 
-Unificar `asaas_payments` (PIX) com Stripe nas métricas do dashboard admin (`admin-engagement-metrics`), pra parar de "perder" clientes PIX nos números.
+Hoje o fluxo de aprovação em `AdminSupport.tsx` envia o **email primeiro** e depois tenta a ação no Stripe — se a ação falha, o cliente já recebeu a promessa. Além disso, `support-execute-action` e `support-agent` só conhecem Stripe, ignorando clientes PIX/Asaas.
 
-## O que muda
+### 1. Backend — `support-execute-action/index.ts`
 
-Só o edge function `supabase/functions/admin-engagement-metrics/index.ts`. Nada de UI, nada de schema.
+Adicionar dois novos `action.type`:
 
-### 1. MRR
-Somar `asaas_payments` com `status IN ('CONFIRMED','RECEIVED')` e `billing_period = 'monthly'` ao MRR Stripe. Para `quarterly`/`yearly`, normalizar pra valor mensal equivalente (÷3, ÷12).
+- **`refund_asaas_payment`** — params: `asaas_payment_id` (obrigatório). Chama `POST {ASAAS_API}/payments/{id}/refund` com `access_token: ASAAS_API_KEY`. Base URL conforme `ASAAS_ENV` (`api-sandbox.asaas.com/v3` ou `api.asaas.com/v3`).
+- **`cancel_asaas_subscription`** — params: `asaas_subscription_id` (obrigatório). Chama `DELETE {ASAAS_API}/subscriptions/{id}`. Após sucesso, atualiza `profiles.status = 'canceled'` se houver `profile_user_id`.
 
-### 2. Clientes Ativos (segmentado)
-Hoje só conta Stripe `active`/`trialing`. Incluir profiles com `asaas_customer_id` presente E que tenham pelo menos 1 `asaas_payments` com status `CONFIRMED`/`RECEIVED` no período vigente da cobrança (monthly = últimos 31d, quarterly = últimos 93d).
+Ambos seguem o padrão atual: `success/errorMessage` capturados no try/catch e registrados em `support_ticket_actions` (action_type, success, error_message, response_payload).
 
-### 3. Funil de Checkout
-Adicionar linha "PIX (Asaas)" no breakdown: total de `asaas_payments` criados no dia vs. quantos viraram `CONFIRMED`/`RECEIVED`. Mantém o funil Stripe separado visualmente, mas soma no totalizador.
+### 2. Backend — `support-agent/index.ts`
 
-### 4. Funil de Conversão (semanal→mensal)
-**Não aplicar.** Asaas não tem trial semanal — fluxo PIX entra direto no mensal. Manter funnel exclusivo Stripe e adicionar nota explicativa "(apenas cartão)".
+- Estender o `enum` de `suggested_action.type` (linha ~285) com `refund_asaas_payment` e `cancel_asaas_subscription`.
+- Atualizar o catálogo de ações no prompt (linha ~49) descrevendo quando usar cada uma (cliente PIX = usar variantes Asaas; cartão = Stripe).
+- Injetar no contexto do ticket o `asaas_customer_id` e a última cobrança PIX do cliente (lookup em `profiles` + `asaas_payments` por email), igual já é feito hoje para Stripe.
 
-### 5. Churn
-Adicionar churn PIX: profile com último `asaas_payments` recebido há mais de 35 dias (monthly) sem renovação. Somar ao churn involuntário Stripe. Reportar `churnSourcePix` separadamente no payload pra rastreabilidade.
+### 3. Frontend — `src/pages/AdminSupport.tsx` (`handleApproveSend`)
 
-### 6. Taxa de finalização
-Recalcular: `(stripe_checkouts_completed + asaas_payments_confirmed) / (stripe_sessions + asaas_payments_created)` no dia.
+Implementar a trava agnóstica de provedor:
 
-## Payload de resposta
+```text
+CRITICAL = [
+  "refund_invoice", "pause_subscription", "change_plan", "cancel_subscription",
+  "refund_asaas_payment", "cancel_asaas_subscription"
+]
+```
 
-Adicionar campos novos sem quebrar os existentes:
-- `mrrPix`, `mrrTotal` (= stripe + pix)
-- `activeUsersPix`, `activeUsersTotal`
-- `checkoutFunnelPix: { created, confirmed }`
-- `churnPixCount`
+Novo fluxo:
 
-Frontend admin (`/admin/engagement`) só precisa exibir os totais novos — sugiro fazer numa segunda rodada após validar os números.
+1. Se `executeAction && draft.suggested_action.type ∈ CRITICAL`:
+   - Executar `support-execute-action` **primeiro**.
+   - Se falhar → toast vermelho "Ação X falhou — email NÃO enviado. Corrija manualmente ou desmarque Executar.", manter ticket aberto, sair sem enviar.
+   - Se ok → seguir para envio do email.
+2. Caso contrário (ação não-crítica como `send_portal_link`/`none`, ou checkbox desmarcado): manter ordem atual (email primeiro, ação best-effort depois).
 
-## Filtros importantes
+### Escopo / fora de escopo
 
-- Excluir emails `e2e+*@olaaura.com.br` em todas as contagens novas (consistência com a discussão anterior).
-- Status PIX válidos pra "pago": `CONFIRMED`, `RECEIVED`. Ignorar `PENDING`, `OVERDUE`, `REFUNDED`.
-- Timezone BRT pra todos os recortes diários.
-
-## Fora de escopo
-
-- Mudanças na UI admin (faço depois que confirmar os números no payload).
-- Webhook Asaas (já funciona).
-- Funil de conversão semanal (PIX não tem esse fluxo).
+- **Dentro**: 3 arquivos acima.
+- **Fora**: mudanças visuais no card de ações, webhook Asaas, novos tipos de ação além de refund/cancel PIX, alterações no `admin-engagement-metrics`.
