@@ -185,13 +185,15 @@ export default function AdminSupport() {
 
       // 1. Executar ação crítica PRIMEIRO (gate do email)
       if (isCritical) {
-        const { error: actErr } = await supabase.functions.invoke('support-execute-action', {
+        const { data: actData, error: actErr } = await supabase.functions.invoke('support-execute-action', {
           body: { ticket_id: selectedTicket.id, action: draft!.suggested_action },
         });
-        if (actErr) {
+        const actOk = !actErr && actData && (actData as any).ok === true;
+        if (!actOk) {
+          const reason = (actData as any)?.error || actErr?.message || 'erro desconhecido';
           toast({
             title: `Ação "${actionType}" falhou — email NÃO enviado`,
-            description: `${actErr.message}. Corrija manualmente no provedor ou desmarque "Executar" para apenas responder.`,
+            description: `${reason}. Corrija manualmente no provedor ou desmarque "Executar" para apenas responder.`,
             variant: 'destructive',
           });
           setSending(false);
