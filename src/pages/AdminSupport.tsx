@@ -169,16 +169,46 @@ export default function AdminSupport() {
     if (!selectedTicket || !editedBody.trim()) return;
     setSending(true);
     try {
-      // 1. Send email
-      const { data: sendData, error: sendErr } = await supabase.functions.invoke('support-send-reply', {
+      // Ações críticas: executam ANTES do email. Se falhar, email NÃO é enviado
+      // para não prometer ao cliente algo que não aconteceu.
+      const CRITICAL_ACTIONS = new Set([
+        'refund_invoice',
+        'pause_subscription',
+        'change_plan',
+        'cancel_subscription',
+        'refund_asaas_payment',
+        'cancel_asaas_subscription',
+      ]);
+      const actionType = draft?.suggested_action.type;
+      const willExecute = executeAction && draft && actionType && actionType !== 'none';
+      const isCritical = willExecute && CRITICAL_ACTIONS.has(actionType);
+
+      // 1. Executar ação crítica PRIMEIRO (gate do email)
+      if (isCritical) {
+        const { error: actErr } = await supabase.functions.invoke('support-execute-action', {
+          body: { ticket_id: selectedTicket.id, action: draft!.suggested_action },
+        });
+        if (actErr) {
+          toast({
+            title: `Ação "${actionType}" falhou — email NÃO enviado`,
+            description: `${actErr.message}. Corrija manualmente no provedor ou desmarque "Executar" para apenas responder.`,
+            variant: 'destructive',
+          });
+          setSending(false);
+          return;
+        }
+      }
+
+      // 2. Enviar email
+      const { error: sendErr } = await supabase.functions.invoke('support-send-reply', {
         body: { ticket_id: selectedTicket.id, body: editedBody, draft_id: draft?.id },
       });
       if (sendErr) throw sendErr;
 
-      // 2. Execute action if enabled and not "none"
-      if (executeAction && draft && draft.suggested_action.type !== 'none') {
+      // 3. Executar ação NÃO-crítica depois (best-effort, padrão antigo)
+      if (willExecute && !isCritical) {
         const { error: actErr } = await supabase.functions.invoke('support-execute-action', {
-          body: { ticket_id: selectedTicket.id, action: draft.suggested_action },
+          body: { ticket_id: selectedTicket.id, action: draft!.suggested_action },
         });
         if (actErr) {
           toast({ title: 'Email enviado, mas ação falhou', description: actErr.message, variant: 'destructive' });
