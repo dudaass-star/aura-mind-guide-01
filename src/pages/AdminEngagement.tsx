@@ -1326,46 +1326,46 @@ export default function AdminEngagement() {
           </TabsContent>
 
           <TabsContent value="trial" className="mt-3 space-y-4">
+            <Card className="border-primary/20 bg-primary/5">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-semibold flex items-center gap-2">
+                  <MessageCircle className="h-4 w-4" />
+                  Recuperação por WhatsApp
+                </CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  Checkout abandonado — disparos automáticos de 15min e 24h
+                </p>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                  <div>
+                    <div className="text-xl font-bold text-foreground">{whatsappStats.stage1}</div>
+                    <p className="text-[11px] text-muted-foreground">enviados 15min</p>
+                  </div>
+                  <div>
+                    <div className="text-xl font-bold text-foreground">{whatsappStats.stage2}</div>
+                    <p className="text-[11px] text-muted-foreground">enviados 24h</p>
+                  </div>
+                  <div>
+                    <div className="text-xl font-bold text-foreground">{whatsappStats.unique}</div>
+                    <p className="text-[11px] text-muted-foreground">usuários únicos</p>
+                  </div>
+                  <div>
+                    <div className="text-xl font-bold text-foreground">{whatsappStats.converted}</div>
+                    <p className="text-[11px] text-muted-foreground">converteram</p>
+                  </div>
+                  <div>
+                    <div className={`text-xl font-bold ${whatsappStats.errors > 0 ? 'text-destructive' : 'text-foreground'}`}>{whatsappStats.errors}</div>
+                    <p className="text-[11px] text-muted-foreground">erros</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
             {loading && !metrics ? <SkeletonCards /> : (
               <>
                 {/* 1. Cards de métricas */}
                 <MetricCards cards={trialCards} />
-
-                <Card className="border-primary/20 bg-primary/5">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-base font-semibold flex items-center gap-2">
-                      <MessageCircle className="h-4 w-4" />
-                      Recuperação por WhatsApp
-                    </CardTitle>
-                    <p className="text-xs text-muted-foreground">
-                      Checkout abandonado — disparos automáticos de 15min e 24h
-                    </p>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                      <div>
-                        <div className="text-xl font-bold text-foreground">{whatsappStats.stage1}</div>
-                        <p className="text-[11px] text-muted-foreground">enviados 15min</p>
-                      </div>
-                      <div>
-                        <div className="text-xl font-bold text-foreground">{whatsappStats.stage2}</div>
-                        <p className="text-[11px] text-muted-foreground">enviados 24h</p>
-                      </div>
-                      <div>
-                        <div className="text-xl font-bold text-foreground">{whatsappStats.unique}</div>
-                        <p className="text-[11px] text-muted-foreground">usuários únicos</p>
-                      </div>
-                      <div>
-                        <div className="text-xl font-bold text-foreground">{whatsappStats.converted}</div>
-                        <p className="text-[11px] text-muted-foreground">converteram</p>
-                      </div>
-                      <div>
-                        <div className={`text-xl font-bold ${whatsappStats.errors > 0 ? 'text-destructive' : 'text-foreground'}`}>{whatsappStats.errors}</div>
-                        <p className="text-[11px] text-muted-foreground">erros</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
 
                 {/* 2. Cobranças no Período */}
                 {metrics && (
