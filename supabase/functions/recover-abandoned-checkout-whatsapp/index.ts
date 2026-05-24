@@ -23,6 +23,10 @@ const corsHeaders = {
 const TEMPLATE_15MIN = "HX7ae71f9002839ec0ecdc58f6aa067a8a";
 const TEMPLATE_24H = "HXb34b27fda2f45a0c10fc19960bac61c1";
 
+// Cutoff de ativação: só dispara WhatsApp para checkouts criados a partir desta data.
+// Todo backlog anterior fica restrito ao fluxo de e-mail (recover-abandoned-checkout).
+const WHATSAPP_RECOVERY_CUTOFF = "2026-05-24T00:00:00Z";
+
 interface StageConfig {
   stage: 1 | 2;
   label: "15min" | "24h";
@@ -153,6 +157,7 @@ async function processStage(
     .select("id, phone, name, plan, email")
     .eq("status", "created")
     .not("phone", "is", null)
+    .gte("created_at", WHATSAPP_RECOVERY_CUTOFF)
     .lt("created_at", createdBefore)
     .is(cfg.sentColumn, null)
     .limit(50);
