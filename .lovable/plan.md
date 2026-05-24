@@ -1,40 +1,45 @@
-## Novos SIDs aprovados
-- `copy_of_aura_recuperacao` → **HX988544a4c9dd6f79db19dc1427331f02** (15min)
-- `copy_of_aura_recuperacao_24hs` → **HX8d40a27b45761678a88c53ec9aa58b32** (24h)
+## Objetivo
+Adicionar métricas da recuperação por **WhatsApp** no card "Recuperação de Checkout Abandonado" do painel `/admin/engagement`. Hoje esse bloco só mostra a recuperação por **e-mail** (flag `recovery_sent` + tabela `checkout_recovery_attempts`).
 
-## Passos
+## O que será mostrado
 
-### 1. Trocar SIDs nos 3 arquivos
-- `supabase/functions/recover-abandoned-checkout-whatsapp/index.ts` (cron de produção — `TEMPLATE_15MIN` e `TEMPLATE_24H`)
-- `supabase/functions/test-whatsapp-recovery/index.ts` (endpoint de teste)
-- `supabase/functions/test-recovery-template/index.ts` (fallback default)
+No mesmo card colapsável de Recuperação, abaixo da linha resumo de e-mail, adicionar uma segunda linha resumo de **WhatsApp**:
 
-### 2. Deploy das 3 edge functions
+- **Estágio 1 (15min):** quantos disparos
+- **Estágio 2 (24h):** quantos disparos
+- **Usuários únicos** alcançados pelo WhatsApp
+- **Converteram após WhatsApp** (sessão `completed` posterior ao envio, pelo telefone)
+- **Falhas** (`whatsapp_recovery_last_error` preenchido)
 
-### 3. Testar entrega real
-- Disparar `test-whatsapp-recovery` para `+51981519708` com `stage=15min` e depois `stage=24h`
-- Confirmar via `test-whatsapp-recovery-status` que o status final é `delivered` (sem 63027)
+E na tabela de sessões abandonadas, adicionar uma coluna **"WhatsApp"** com badges indicando os estágios enviados:
+- `15min ✓` (verde) se `whatsapp_recovery_15min_sent_at` preenchido
+- `24h ✓` (verde) se `whatsapp_recovery_24h_sent_at` preenchido
+- `Erro` (vermelho, com tooltip) se `whatsapp_recovery_last_error` preenchido
+- `—` se nenhum dos estágios foi enviado
 
-### 4. Reabilitar entregas que falharam com 63027
-Migration única para resetar timestamps de checkouts pós-cutoff que travaram com erro 63027, fazendo o cron re-disparar no próximo ciclo:
-```sql
-UPDATE abandoned_checkouts
-SET whatsapp_recovery_15min_sent_at = NULL
-WHERE whatsapp_recovery_last_error LIKE '%63027%'
-  AND whatsapp_recovery_15min_sent_at IS NOT NULL;
+## Implementação técnica
 
-UPDATE abandoned_checkouts
-SET whatsapp_recovery_24h_sent_at = NULL
-WHERE whatsapp_recovery_last_error LIKE '%63027%'
-  AND whatsapp_recovery_24h_sent_at IS NOT NULL;
-```
-(ajustar nome real da coluna/tabela conforme o schema antes de rodar)
+**Arquivo único:** `src/pages/AdminEngagement.tsx`
 
-### 5. Confirmar no próximo ciclo do cron
-Olhar logs de `recover-abandoned-checkout-whatsapp` após a próxima execução para garantir que os reenvios saem com `delivered` e não com 63027.
+1. Em `fetchRecoverySessions()`:
+   - Adicionar 3 counts em paralelo: 
+     - `checkout_sessions` com `whatsapp_recovery_15min_sent_at IS NOT NULL`
+     - `checkout_sessions` com `whatsapp_recovery_24h_sent_at IS NOT NULL`
+     - `checkout_sessions` com `whatsapp_recovery_last_error IS NOT NULL`
+   - Ampliar a query principal de sessões para incluir os 3 campos WhatsApp.
+   - Mudar o filtro de `eq('recovery_sent', true)` para `.or('recovery_sent.eq.true,whatsapp_recovery_15min_sent_at.not.is.null')` — assim o painel passa a listar sessões recuperadas por qualquer canal, não só e-mail.
+   - Calcular `wa_converted` adicional baseado no mesmo `completedPhones` que já existe.
+   - Salvar em novo estado `whatsappStats: { stage1, stage2, errors, unique, converted }`.
 
-## Arquivos afetados
-- `supabase/functions/recover-abandoned-checkout-whatsapp/index.ts`
-- `supabase/functions/test-whatsapp-recovery/index.ts`
-- `supabase/functions/test-recovery-template/index.ts`
-- 1 migration para resetar tentativas falhas
+2. Na UI do card:
+   - Adicionar segunda linha de resumo em `CardHeader` com ícone do WhatsApp (lucide `MessageCircle`):
+     `📱 WhatsApp: X em 15min · Y em 24h · Z únicos · N converteram · E erros`
+   - Adicionar `<TableHead>WhatsApp</TableHead>` entre "Envio" e "Resultado"
+   - Adicionar `<TableCell>` com badges dos estágios
+
+3. Renomear o título do card de "Recuperação de Checkout Abandonado" para deixar claro que cobre os 2 canais (manter título, só ajustar subtítulo).
+
+## Fora de escopo
+- Não mexer em edge functions nem no fluxo de envio.
+- Não criar nova tabela de tracking — usar os campos já existentes em `checkout_sessions`.
+- Não alterar o painel admin de templates.
