@@ -30,7 +30,7 @@ Deno.serve(async (req) => {
         status: messages.success ? 200 : 500,
       });
     }
-    const sid = contentSid || "HX7ae71f9002839ec0ecdc58f6aa067a8a";
+    const sid = contentSid || "HX988544a4c9dd6f79db19dc1427331f02";
     const contentVars = vars && typeof vars === "object" ? vars : { "1": name || "Robson" };
     const result = await sendRecoveryTemplate(phone, sid, contentVars);
     return new Response(JSON.stringify(result), {
