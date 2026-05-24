@@ -234,6 +234,7 @@ export default function AdminEngagement() {
   const navigate = useNavigate();
   const requestIdRef = useRef(0);
   const [elapsedSec, setElapsedSec] = useState(0);
+  const hasRecoveryActivity = recoverySessions.length > 0 || recoveryStats.raw > 0 || recoveryStats.accepted > 0 || whatsappStats.stage1 > 0 || whatsappStats.stage2 > 0 || whatsappStats.errors > 0;
 
   // Cronômetro do botão "Atualizar" para feedback visual durante esperas longas.
   useEffect(() => {
@@ -352,7 +353,7 @@ export default function AdminEngagement() {
       const { data: abandoned, error } = await supabase
         .from('checkout_sessions')
         .select('id, name, phone, email, plan, created_at, status, recovery_sent, recovery_sent_at, recovery_last_error, recovery_attempts_count, whatsapp_recovery_15min_sent_at, whatsapp_recovery_24h_sent_at, whatsapp_recovery_last_error')
-        .or('recovery_sent.eq.true,whatsapp_recovery_15min_sent_at.not.is.null')
+        .or('recovery_sent.eq.true,whatsapp_recovery_15min_sent_at.not.is.null,whatsapp_recovery_24h_sent_at.not.is.null,whatsapp_recovery_last_error.not.is.null')
         .order('created_at', { ascending: false })
         .limit(50);
 
