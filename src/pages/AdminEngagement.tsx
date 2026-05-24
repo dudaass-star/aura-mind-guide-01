@@ -5,7 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Users, MessageSquare, Clock, BarChart3, RefreshCw, TrendingUp, UserPlus, Percent, Timer, XCircle, ArrowRightLeft, ArrowDown, Send, CalendarIcon, DollarSign, UserMinus, ShoppingCart, RotateCcw, CheckCircle2, AlertCircle, CreditCard, Mail, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Users, MessageSquare, Clock, BarChart3, RefreshCw, TrendingUp, UserPlus, Percent, Timer, XCircle, ArrowRightLeft, ArrowDown, Send, CalendarIcon, DollarSign, UserMinus, ShoppingCart, RotateCcw, CheckCircle2, AlertCircle, CreditCard, Mail, ChevronDown, MessageCircle } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { useNavigate } from 'react-router-dom';
@@ -166,6 +166,9 @@ interface RecoverySession {
   recovery_attempts_count: number;
   converted: boolean;
   attempt_status: string | null;
+  whatsapp_recovery_15min_sent_at: string | null;
+  whatsapp_recovery_24h_sent_at: string | null;
+  whatsapp_recovery_last_error: string | null;
 }
 
 interface DunningAttempt {
@@ -221,6 +224,7 @@ export default function AdminEngagement() {
   const [dateTo, setDateTo] = useState<Date>(new Date());
   const [recoverySessions, setRecoverySessions] = useState<RecoverySession[]>([]);
   const [recoveryStats, setRecoveryStats] = useState<{ raw: number; accepted: number }>({ raw: 0, accepted: 0 });
+  const [whatsappStats, setWhatsappStats] = useState<{ stage1: number; stage2: number; errors: number; unique: number; converted: number }>({ stage1: 0, stage2: 0, errors: 0, unique: 0, converted: 0 });
   const [dunningAttempts, setDunningAttempts] = useState<DunningAttempt[]>([]);
   const [recoveryOpen, setRecoveryOpen] = useState(false);
   const [dunningOpen, setDunningOpen] = useState(false);
@@ -334,10 +338,21 @@ export default function AdminEngagement() {
 
       setRecoveryStats({ raw: rawCount || 0, accepted: acceptedCount || 0 });
 
+      // Contagens de recuperação via WhatsApp (campos próprios em checkout_sessions)
+      const [
+        { count: waStage1Count },
+        { count: waStage2Count },
+        { count: waErrorsCount },
+      ] = await Promise.all([
+        supabase.from('checkout_sessions').select('id', { count: 'exact', head: true }).not('whatsapp_recovery_15min_sent_at', 'is', null),
+        supabase.from('checkout_sessions').select('id', { count: 'exact', head: true }).not('whatsapp_recovery_24h_sent_at', 'is', null),
+        supabase.from('checkout_sessions').select('id', { count: 'exact', head: true }).not('whatsapp_recovery_last_error', 'is', null),
+      ]);
+
       const { data: abandoned, error } = await supabase
         .from('checkout_sessions')
-        .select('id, name, phone, email, plan, created_at, status, recovery_sent, recovery_sent_at, recovery_last_error, recovery_attempts_count')
-        .eq('recovery_sent', true)
+        .select('id, name, phone, email, plan, created_at, status, recovery_sent, recovery_sent_at, recovery_last_error, recovery_attempts_count, whatsapp_recovery_15min_sent_at, whatsapp_recovery_24h_sent_at, whatsapp_recovery_last_error')
+        .or('recovery_sent.eq.true,whatsapp_recovery_15min_sent_at.not.is.null')
         .order('created_at', { ascending: false })
         .limit(50);
 
@@ -383,11 +398,23 @@ export default function AdminEngagement() {
       }
       const uniqueSessions = Array.from(byKey.values());
 
-      setRecoverySessions(uniqueSessions.map(s => ({
+      const enriched = uniqueSessions.map(s => ({
         ...s,
         converted: (s.email && completedEmails.has(s.email.toLowerCase())) || completedPhones.has(s.phone),
         attempt_status: attemptMap.get(s.id) || null,
-      })));
+      }));
+      setRecoverySessions(enriched as RecoverySession[]);
+
+      // Stats WhatsApp: únicos = sessões com algum estágio enviado; convertidos = desses, quantos completaram
+      const waSessions = enriched.filter(s => s.whatsapp_recovery_15min_sent_at || s.whatsapp_recovery_24h_sent_at);
+      const waConverted = waSessions.filter(s => s.converted).length;
+      setWhatsappStats({
+        stage1: waStage1Count || 0,
+        stage2: waStage2Count || 0,
+        errors: waErrorsCount || 0,
+        unique: waSessions.length,
+        converted: waConverted,
+      });
     } catch (err) {
       console.error('Error fetching recovery sessions:', err);
     }
@@ -1432,7 +1459,12 @@ export default function AdminEngagement() {
                             <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${recoveryOpen ? 'rotate-180' : ''}`} />
                           </div>
                           <p className="text-xs text-muted-foreground">
-                            {recoveryStats.raw} tentativas brutas — {recoverySessions.length} usuários únicos — {recoveryStats.accepted} aceitas pela API — {recoverySessions.filter(s => s.converted).length} converteram
+                            <Mail className="inline h-3 w-3 mr-1" />
+                            <strong>E-mail:</strong> {recoveryStats.raw} tentativas brutas — {recoverySessions.length} usuários únicos — {recoveryStats.accepted} aceitas pela API — {recoverySessions.filter(s => s.converted).length} converteram
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            <MessageCircle className="inline h-3 w-3 mr-1 text-emerald-600" />
+                            <strong>WhatsApp:</strong> {whatsappStats.stage1} em 15min · {whatsappStats.stage2} em 24h · {whatsappStats.unique} únicos · {whatsappStats.converted} converteram · {whatsappStats.errors} erros
                           </p>
                         </CardHeader>
                       </CollapsibleTrigger>
@@ -1447,6 +1479,7 @@ export default function AdminEngagement() {
                                 <TableHead>Plano</TableHead>
                                 <TableHead>Abandono</TableHead>
                                 <TableHead>Envio</TableHead>
+                                <TableHead>WhatsApp</TableHead>
                                 <TableHead>Resultado</TableHead>
                               </TableRow>
                             </TableHeader>
@@ -1482,6 +1515,24 @@ export default function AdminEngagement() {
                                     <TableCell>{planNames[s.plan || ''] || s.plan || '—'}</TableCell>
                                     <TableCell className="text-xs">{format(new Date(s.created_at), 'dd/MM HH:mm')}</TableCell>
                                     <TableCell>{sendBadge}</TableCell>
+                                    <TableCell>
+                                      <div className="flex flex-col gap-1">
+                                        {s.whatsapp_recovery_15min_sent_at && (
+                                          <Badge className="bg-emerald-600 text-white text-[10px] w-fit">15min ✓</Badge>
+                                        )}
+                                        {s.whatsapp_recovery_24h_sent_at && (
+                                          <Badge className="bg-emerald-600 text-white text-[10px] w-fit">24h ✓</Badge>
+                                        )}
+                                        {s.whatsapp_recovery_last_error && (
+                                          <Badge variant="destructive" className="text-[10px] w-fit" title={s.whatsapp_recovery_last_error}>
+                                            <AlertCircle className="h-3 w-3 mr-1" />Erro
+                                          </Badge>
+                                        )}
+                                        {!s.whatsapp_recovery_15min_sent_at && !s.whatsapp_recovery_24h_sent_at && !s.whatsapp_recovery_last_error && (
+                                          <span className="text-xs text-muted-foreground">—</span>
+                                        )}
+                                      </div>
+                                    </TableCell>
                                     <TableCell>
                                       {s.converted ? (
                                         <Badge className="bg-green-600 text-white"><CheckCircle2 className="h-3 w-3 mr-1" />Converteu</Badge>
