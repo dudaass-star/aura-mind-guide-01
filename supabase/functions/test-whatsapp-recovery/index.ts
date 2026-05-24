@@ -27,12 +27,30 @@ Deno.serve(async (req) => {
     const phone: string = body.phone ?? "51981519708";
     const name: string = body.name ?? "Gustavo";
     const stage: string = body.stage ?? "15min";
+    // variant: "1var" (default), "empty", "2vars", "0vars" (manda {} mesmo)
+    const variant: string = body.variant ?? "1var";
 
     const contentSid = stage === "24h" ? TEMPLATE_24H : TEMPLATE_15MIN;
 
-    console.log(`🧪 [TEST-WA-RECOVERY] phone=${phone} stage=${stage} sid=${contentSid}`);
+    let vars: Record<string, string>;
+    switch (variant) {
+      case "empty":
+      case "0vars":
+        vars = {};
+        break;
+      case "2vars":
+        vars = { "1": name, "2": "https://olaaura.com.br/v2/checkout" };
+        break;
+      case "3vars":
+        vars = { "1": name, "2": "https://olaaura.com.br/v2/checkout", "3": "extra" };
+        break;
+      default:
+        vars = { "1": name };
+    }
 
-    const result = await sendRecoveryTemplate(phone, contentSid, { "1": name });
+    console.log(`🧪 [TEST-WA-RECOVERY] phone=${phone} stage=${stage} variant=${variant} vars=${JSON.stringify(vars)}`);
+
+    const result = await sendRecoveryTemplate(phone, contentSid, vars);
 
     console.log(`📤 [TEST-WA-RECOVERY] result:`, result);
 
