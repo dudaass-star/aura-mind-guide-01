@@ -5,7 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, Users, MessageSquare, Clock, BarChart3, RefreshCw, TrendingUp, UserPlus, Percent, Timer, XCircle, ArrowRightLeft, ArrowDown, Send, CalendarIcon, DollarSign, UserMinus, ShoppingCart, RotateCcw, CheckCircle2, AlertCircle, CreditCard, Mail, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Users, MessageSquare, Clock, BarChart3, RefreshCw, TrendingUp, UserPlus, Percent, Timer, XCircle, ArrowRightLeft, ArrowDown, Send, CalendarIcon, DollarSign, UserMinus, ShoppingCart, RotateCcw, CheckCircle2, AlertCircle, CreditCard, Mail, ChevronDown, MessageCircle } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { useNavigate } from 'react-router-dom';
@@ -166,6 +166,9 @@ interface RecoverySession {
   recovery_attempts_count: number;
   converted: boolean;
   attempt_status: string | null;
+  whatsapp_recovery_15min_sent_at: string | null;
+  whatsapp_recovery_24h_sent_at: string | null;
+  whatsapp_recovery_last_error: string | null;
 }
 
 interface DunningAttempt {
@@ -221,6 +224,7 @@ export default function AdminEngagement() {
   const [dateTo, setDateTo] = useState<Date>(new Date());
   const [recoverySessions, setRecoverySessions] = useState<RecoverySession[]>([]);
   const [recoveryStats, setRecoveryStats] = useState<{ raw: number; accepted: number }>({ raw: 0, accepted: 0 });
+  const [whatsappStats, setWhatsappStats] = useState<{ stage1: number; stage2: number; errors: number; unique: number; converted: number }>({ stage1: 0, stage2: 0, errors: 0, unique: 0, converted: 0 });
   const [dunningAttempts, setDunningAttempts] = useState<DunningAttempt[]>([]);
   const [recoveryOpen, setRecoveryOpen] = useState(false);
   const [dunningOpen, setDunningOpen] = useState(false);
