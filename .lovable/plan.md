@@ -1,45 +1,40 @@
-# Resolver 63027 — estratégia real via duplicação de templates
+## Novos SIDs aprovados
+- `copy_of_aura_recuperacao` → **HX988544a4c9dd6f79db19dc1427331f02** (15min)
+- `copy_of_aura_recuperacao_24hs` → **HX8d40a27b45761678a88c53ec9aa58b32** (24h)
 
-## Contexto confirmado
-- Templates `aura_recuperacao` (`HX7ae71f9002839ec0ecdc58f6aa067a8a`) e `aura_recuperacao_24hs` (`HXb34b27fda2f45a0c10fc19960bac61c1`)
-- Tipo: Call to Action com botão **estático** para checkout, sem variável dinâmica no botão
-- Ambos aparecem como **Approved** no Twilio Content API
-- A tela do Twilio não permite “Submit for WhatsApp approval” novamente no template já aprovado; só permite **Duplicate**
-- Erro 63027 continua sendo rejeição da Meta no envio, não problema de renderização do corpo pelo Twilio
+## Passos
 
-## Diagnóstico ajustado
-Como não existe reenvio de aprovação para o mesmo Content SID, o caminho operacional é:
+### 1. Trocar SIDs nos 3 arquivos
+- `supabase/functions/recover-abandoned-checkout-whatsapp/index.ts` (cron de produção — `TEMPLATE_15MIN` e `TEMPLATE_24H`)
+- `supabase/functions/test-whatsapp-recovery/index.ts` (endpoint de teste)
+- `supabase/functions/test-recovery-template/index.ts` (fallback default)
 
-1. Duplicar `aura_recuperacao`
-2. Duplicar `aura_recuperacao_24hs`
-3. Submeter os duplicados para aprovação no WABA/sender atual
-4. Depois de aprovados, trocar os Content SIDs usados no cron de recuperação
+### 2. Deploy das 3 edge functions
 
-## Plano
+### 3. Testar entrega real
+- Disparar `test-whatsapp-recovery` para `+51981519708` com `stage=15min` e depois `stage=24h`
+- Confirmar via `test-whatsapp-recovery-status` que o status final é `delivered` (sem 63027)
 
-### 1. Criar novos templates duplicados no Twilio
-- Duplicar `aura_recuperacao`
-- Duplicar `aura_recuperacao_24hs`
-- Manter texto, CTA e URL estática iguais
-- Submeter os duplicados para WhatsApp approval
+### 4. Reabilitar entregas que falharam com 63027
+Migration única para resetar timestamps de checkouts pós-cutoff que travaram com erro 63027, fazendo o cron re-disparar no próximo ciclo:
+```sql
+UPDATE abandoned_checkouts
+SET whatsapp_recovery_15min_sent_at = NULL
+WHERE whatsapp_recovery_last_error LIKE '%63027%'
+  AND whatsapp_recovery_15min_sent_at IS NOT NULL;
 
-### 2. Após aprovação, atualizar os SIDs no backend
-Arquivo provável:
+UPDATE abandoned_checkouts
+SET whatsapp_recovery_24h_sent_at = NULL
+WHERE whatsapp_recovery_last_error LIKE '%63027%'
+  AND whatsapp_recovery_24h_sent_at IS NOT NULL;
+```
+(ajustar nome real da coluna/tabela conforme o schema antes de rodar)
+
+### 5. Confirmar no próximo ciclo do cron
+Olhar logs de `recover-abandoned-checkout-whatsapp` após a próxima execução para garantir que os reenvios saem com `delivered` e não com 63027.
+
+## Arquivos afetados
 - `supabase/functions/recover-abandoned-checkout-whatsapp/index.ts`
-
-Trocar:
-- SID antigo 15min → novo SID duplicado aprovado
-- SID antigo 24h → novo SID duplicado aprovado
-
-### 3. Retestar envio real
-- Rodar teste de recuperação para `+51981519708`
-- Verificar status da mensagem até sair de `queued/sent` para `delivered` ou erro final
-
-### 4. Reabilitar entregas falhas
-Depois de confirmar entrega com os novos SIDs:
-- Resetar `whatsapp_recovery_15min_sent_at` e/ou `whatsapp_recovery_24h_sent_at` para checkouts pós-cutoff que falharam com `63027`
-- Assim o cron tenta reenviar no próximo ciclo
-
-## Arquivos afetados depois que os novos SIDs existirem
-- `supabase/functions/recover-abandoned-checkout-whatsapp/index.ts`
-- Migration pontual para resetar tentativas falhas
+- `supabase/functions/test-whatsapp-recovery/index.ts`
+- `supabase/functions/test-recovery-template/index.ts`
+- 1 migration para resetar tentativas falhas

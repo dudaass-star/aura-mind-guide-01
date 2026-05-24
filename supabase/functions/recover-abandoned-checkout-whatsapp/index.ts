@@ -20,8 +20,8 @@ const corsHeaders = {
 };
 
 // ContentSids dos templates aprovados na subaccount
-const TEMPLATE_15MIN = "HX7ae71f9002839ec0ecdc58f6aa067a8a";
-const TEMPLATE_24H = "HXb34b27fda2f45a0c10fc19960bac61c1";
+const TEMPLATE_15MIN = "HX988544a4c9dd6f79db19dc1427331f02";
+const TEMPLATE_24H = "HX8d40a27b45761678a88c53ec9aa58b32";
 
 // Cutoff de ativação: só dispara WhatsApp para checkouts criados a partir desta data.
 // Todo backlog anterior fica restrito ao fluxo de e-mail (recover-abandoned-checkout).
