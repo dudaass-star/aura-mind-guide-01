@@ -338,10 +338,21 @@ export default function AdminEngagement() {
 
       setRecoveryStats({ raw: rawCount || 0, accepted: acceptedCount || 0 });
 
+      // Contagens de recuperação via WhatsApp (campos próprios em checkout_sessions)
+      const [
+        { count: waStage1Count },
+        { count: waStage2Count },
+        { count: waErrorsCount },
+      ] = await Promise.all([
+        supabase.from('checkout_sessions').select('id', { count: 'exact', head: true }).not('whatsapp_recovery_15min_sent_at', 'is', null),
+        supabase.from('checkout_sessions').select('id', { count: 'exact', head: true }).not('whatsapp_recovery_24h_sent_at', 'is', null),
+        supabase.from('checkout_sessions').select('id', { count: 'exact', head: true }).not('whatsapp_recovery_last_error', 'is', null),
+      ]);
+
       const { data: abandoned, error } = await supabase
         .from('checkout_sessions')
-        .select('id, name, phone, email, plan, created_at, status, recovery_sent, recovery_sent_at, recovery_last_error, recovery_attempts_count')
-        .eq('recovery_sent', true)
+        .select('id, name, phone, email, plan, created_at, status, recovery_sent, recovery_sent_at, recovery_last_error, recovery_attempts_count, whatsapp_recovery_15min_sent_at, whatsapp_recovery_24h_sent_at, whatsapp_recovery_last_error')
+        .or('recovery_sent.eq.true,whatsapp_recovery_15min_sent_at.not.is.null')
         .order('created_at', { ascending: false })
         .limit(50);
 
@@ -387,11 +398,23 @@ export default function AdminEngagement() {
       }
       const uniqueSessions = Array.from(byKey.values());
 
-      setRecoverySessions(uniqueSessions.map(s => ({
+      const enriched = uniqueSessions.map(s => ({
         ...s,
         converted: (s.email && completedEmails.has(s.email.toLowerCase())) || completedPhones.has(s.phone),
         attempt_status: attemptMap.get(s.id) || null,
-      })));
+      }));
+      setRecoverySessions(enriched as RecoverySession[]);
+
+      // Stats WhatsApp: únicos = sessões com algum estágio enviado; convertidos = desses, quantos completaram
+      const waSessions = enriched.filter(s => s.whatsapp_recovery_15min_sent_at || s.whatsapp_recovery_24h_sent_at);
+      const waConverted = waSessions.filter(s => s.converted).length;
+      setWhatsappStats({
+        stage1: waStage1Count || 0,
+        stage2: waStage2Count || 0,
+        errors: waErrorsCount || 0,
+        unique: waSessions.length,
+        converted: waConverted,
+      });
     } catch (err) {
       console.error('Error fetching recovery sessions:', err);
     }
