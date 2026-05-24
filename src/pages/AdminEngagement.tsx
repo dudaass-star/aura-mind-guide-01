@@ -363,13 +363,31 @@ export default function AdminEngagement() {
       const emails = (abandoned || []).filter(s => s.email).map(s => s.email!);
       const phones = (abandoned || []).map(s => s.phone);
       const { data: completedByEmail } = emails.length > 0
-        ? await supabase.from('checkout_sessions').select('email').eq('status', 'completed').in('email', emails)
+        ? await supabase.from('checkout_sessions').select('email, completed_at, created_at').eq('status', 'completed').in('email', emails)
         : { data: [] };
       const { data: completedByPhone } = await supabase
-        .from('checkout_sessions').select('phone').eq('status', 'completed').in('phone', phones);
+        .from('checkout_sessions').select('phone, completed_at, created_at').eq('status', 'completed').in('phone', phones);
 
       const completedEmails = new Set((completedByEmail || []).map(c => c.email?.toLowerCase()));
       const completedPhones = new Set((completedByPhone || []).map(c => c.phone));
+
+      // Mapa email/telefone -> timestamp mais recente de conclusão (para validar
+      // se a conversão veio DEPOIS do WhatsApp ser disparado).
+      const completedAtByEmail = new Map<string, number>();
+      for (const c of (completedByEmail || [])) {
+        if (!c.email) continue;
+        const ts = new Date(c.completed_at || c.created_at).getTime();
+        const key = c.email.toLowerCase();
+        const prev = completedAtByEmail.get(key) || 0;
+        if (ts > prev) completedAtByEmail.set(key, ts);
+      }
+      const completedAtByPhone = new Map<string, number>();
+      for (const c of (completedByPhone || [])) {
+        if (!c.phone) continue;
+        const ts = new Date(c.completed_at || c.created_at).getTime();
+        const prev = completedAtByPhone.get(c.phone) || 0;
+        if (ts > prev) completedAtByPhone.set(c.phone, ts);
+      }
 
       // Fetch latest attempt status for each session
       const sessionIds = (abandoned || []).map(s => s.id);
@@ -406,9 +424,21 @@ export default function AdminEngagement() {
       }));
       setRecoverySessions(enriched as RecoverySession[]);
 
-      // Stats WhatsApp: únicos = sessões com algum estágio enviado; convertidos = desses, quantos completaram
+      // Stats WhatsApp: únicos = sessões com algum estágio enviado;
+      // converted = pagaram ESTRITAMENTE DEPOIS do primeiro envio WhatsApp.
       const waSessions = enriched.filter(s => s.whatsapp_recovery_15min_sent_at || s.whatsapp_recovery_24h_sent_at);
-      const waConverted = waSessions.filter(s => s.converted).length;
+      const waConverted = waSessions.filter(s => {
+        const sentTimes = [s.whatsapp_recovery_15min_sent_at, s.whatsapp_recovery_24h_sent_at]
+          .filter(Boolean)
+          .map(t => new Date(t as string).getTime());
+        if (sentTimes.length === 0) return false;
+        const firstSentAt = Math.min(...sentTimes);
+        const completedAt = Math.max(
+          s.email ? (completedAtByEmail.get(s.email.toLowerCase()) || 0) : 0,
+          completedAtByPhone.get(s.phone) || 0,
+        );
+        return completedAt > firstSentAt;
+      }).length;
       setWhatsappStats({
         stage1: waStage1Count || 0,
         stage2: waStage2Count || 0,
