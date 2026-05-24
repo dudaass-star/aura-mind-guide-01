@@ -1459,7 +1459,12 @@ export default function AdminEngagement() {
                             <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${recoveryOpen ? 'rotate-180' : ''}`} />
                           </div>
                           <p className="text-xs text-muted-foreground">
-                            {recoveryStats.raw} tentativas brutas — {recoverySessions.length} usuários únicos — {recoveryStats.accepted} aceitas pela API — {recoverySessions.filter(s => s.converted).length} converteram
+                            <Mail className="inline h-3 w-3 mr-1" />
+                            <strong>E-mail:</strong> {recoveryStats.raw} tentativas brutas — {recoverySessions.length} usuários únicos — {recoveryStats.accepted} aceitas pela API — {recoverySessions.filter(s => s.converted).length} converteram
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            <MessageCircle className="inline h-3 w-3 mr-1 text-emerald-600" />
+                            <strong>WhatsApp:</strong> {whatsappStats.stage1} em 15min · {whatsappStats.stage2} em 24h · {whatsappStats.unique} únicos · {whatsappStats.converted} converteram · {whatsappStats.errors} erros
                           </p>
                         </CardHeader>
                       </CollapsibleTrigger>
@@ -1474,6 +1479,7 @@ export default function AdminEngagement() {
                                 <TableHead>Plano</TableHead>
                                 <TableHead>Abandono</TableHead>
                                 <TableHead>Envio</TableHead>
+                                <TableHead>WhatsApp</TableHead>
                                 <TableHead>Resultado</TableHead>
                               </TableRow>
                             </TableHeader>
@@ -1509,6 +1515,24 @@ export default function AdminEngagement() {
                                     <TableCell>{planNames[s.plan || ''] || s.plan || '—'}</TableCell>
                                     <TableCell className="text-xs">{format(new Date(s.created_at), 'dd/MM HH:mm')}</TableCell>
                                     <TableCell>{sendBadge}</TableCell>
+                                    <TableCell>
+                                      <div className="flex flex-col gap-1">
+                                        {s.whatsapp_recovery_15min_sent_at && (
+                                          <Badge className="bg-emerald-600 text-white text-[10px] w-fit">15min ✓</Badge>
+                                        )}
+                                        {s.whatsapp_recovery_24h_sent_at && (
+                                          <Badge className="bg-emerald-600 text-white text-[10px] w-fit">24h ✓</Badge>
+                                        )}
+                                        {s.whatsapp_recovery_last_error && (
+                                          <Badge variant="destructive" className="text-[10px] w-fit" title={s.whatsapp_recovery_last_error}>
+                                            <AlertCircle className="h-3 w-3 mr-1" />Erro
+                                          </Badge>
+                                        )}
+                                        {!s.whatsapp_recovery_15min_sent_at && !s.whatsapp_recovery_24h_sent_at && !s.whatsapp_recovery_last_error && (
+                                          <span className="text-xs text-muted-foreground">—</span>
+                                        )}
+                                      </div>
+                                    </TableCell>
                                     <TableCell>
                                       {s.converted ? (
                                         <Badge className="bg-green-600 text-white"><CheckCircle2 className="h-3 w-3 mr-1" />Converteu</Badge>
