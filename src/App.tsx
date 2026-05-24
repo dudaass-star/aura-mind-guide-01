@@ -29,6 +29,7 @@ import AdminInstagram from "./pages/AdminInstagram";
 import AdminSupport from "./pages/AdminSupport";
 import AdminSupportKnowledge from "./pages/AdminSupportKnowledge";
 import AdminSupportGaps from "./pages/AdminSupportGaps";
+import AdminWhatsappRecovery from "./pages/AdminWhatsappRecovery";
 import UserGuide from "./pages/UserGuide";
 import Episode from "./pages/Episode";
 import JourneyComplete from "./pages/JourneyComplete";
