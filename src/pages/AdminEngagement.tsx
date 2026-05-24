@@ -1475,11 +1475,11 @@ export default function AdminEngagement() {
                               <TableRow>
                                 <TableHead>Nome</TableHead>
                                 <TableHead>Email</TableHead>
-                                <TableHead>WhatsApp</TableHead>
+                                <TableHead>Telefone</TableHead>
                                 <TableHead>Plano</TableHead>
                                 <TableHead>Abandono</TableHead>
-                                <TableHead>Envio</TableHead>
-                                <TableHead>WhatsApp</TableHead>
+                                <TableHead>Envio e-mail</TableHead>
+                                <TableHead>Recup. WhatsApp</TableHead>
                                 <TableHead>Resultado</TableHead>
                               </TableRow>
                             </TableHeader>
