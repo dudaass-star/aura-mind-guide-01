@@ -8,10 +8,15 @@ async function inspectTemplate(contentSid: string) {
   const sid = Deno.env.get("TWILIO_RECOVERY_ACCOUNT_SID")!;
   const token = Deno.env.get("TWILIO_RECOVERY_AUTH_TOKEN")!;
   const auth = btoa(`${sid}:${token}`);
-  const resp = await fetch(`https://content.twilio.com/v1/Content/${contentSid}`, {
-    headers: { Authorization: `Basic ${auth}` },
-  });
-  return { status: resp.status, body: await resp.json().catch(() => ({})) };
+  const [tpl, approval] = await Promise.all([
+    fetch(`https://content.twilio.com/v1/Content/${contentSid}`, {
+      headers: { Authorization: `Basic ${auth}` },
+    }).then(async r => ({ status: r.status, body: await r.json().catch(() => ({})) })),
+    fetch(`https://content.twilio.com/v1/Content/${contentSid}/ApprovalRequests`, {
+      headers: { Authorization: `Basic ${auth}` },
+    }).then(async r => ({ status: r.status, body: await r.json().catch(() => ({})) })),
+  ]);
+  return { template: tpl, approval };
 }
 
 const corsHeaders = {
