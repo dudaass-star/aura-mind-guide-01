@@ -108,6 +108,25 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Pré-busca checkouts já pagos (defesa contra race: profile ainda não virou active
+    // mas o usuário já pagou em outra sessão). Janela larga para cobrir backlog.
+    const { data: completedCheckouts } = await supabase
+      .from("checkout_sessions")
+      .select("phone, email")
+      .eq("status", "completed")
+      .gte("created_at", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString());
+
+    const completedPhoneSet = new Set<string>();
+    const completedEmailSet = new Set<string>();
+    if (completedCheckouts) {
+      for (const c of completedCheckouts) {
+        if (c.phone) {
+          for (const v of getPhoneVariations(c.phone)) completedPhoneSet.add(v);
+        }
+        if (c.email) completedEmailSet.add(c.email.toLowerCase());
+      }
+    }
+
     const totals = {
       sent: 0,
       failed: 0,
@@ -116,7 +135,14 @@ Deno.serve(async (req) => {
     };
 
     for (const cfg of STAGES) {
-      const result = await processStage(supabase, cfg, activeEmailSet, activePhoneSet);
+      const result = await processStage(
+        supabase,
+        cfg,
+        activeEmailSet,
+        activePhoneSet,
+        completedEmailSet,
+        completedPhoneSet,
+      );
       totals.sent += result.sent;
       totals.failed += result.failed;
       totals.skipped += result.skipped;
@@ -148,6 +174,8 @@ async function processStage(
   cfg: StageConfig,
   activeEmailSet: Set<string>,
   activePhoneSet: Set<string>,
+  completedEmailSet: Set<string>,
+  completedPhoneSet: Set<string>,
 ): Promise<{ sent: number; failed: number; skipped: number }> {
   const now = Date.now();
   const createdBefore = new Date(now - cfg.minAgeMinutes * 60 * 1000).toISOString();
@@ -203,6 +231,18 @@ async function processStage(
       const phoneVars = getPhoneVariations(session.phone);
       if (phoneVars.some(v => activePhoneSet.has(v))) {
         await markSkipped(supabase, session.id, cfg, "active_customer_phone");
+        skipped++;
+        continue;
+      }
+
+      // Skip se já existe checkout pago para esse email/telefone (mesmo sem profile ativo)
+      if (session.email && completedEmailSet.has(session.email.toLowerCase())) {
+        await markSkipped(supabase, session.id, cfg, "already_paid_email");
+        skipped++;
+        continue;
+      }
+      if (phoneVars.some(v => completedPhoneSet.has(v))) {
+        await markSkipped(supabase, session.id, cfg, "already_paid_phone");
         skipped++;
         continue;
       }
