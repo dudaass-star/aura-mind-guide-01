@@ -1297,6 +1297,78 @@ export type Database = {
           },
         ]
       }
+      recovery_conversations: {
+        Row: {
+          checkout_session_id: string | null
+          created_at: string
+          last_admin_read_at: string | null
+          last_inbound_at: string | null
+          last_message_preview: string | null
+          last_outbound_at: string | null
+          name: string | null
+          phone: string
+          updated_at: string
+        }
+        Insert: {
+          checkout_session_id?: string | null
+          created_at?: string
+          last_admin_read_at?: string | null
+          last_inbound_at?: string | null
+          last_message_preview?: string | null
+          last_outbound_at?: string | null
+          name?: string | null
+          phone: string
+          updated_at?: string
+        }
+        Update: {
+          checkout_session_id?: string | null
+          created_at?: string
+          last_admin_read_at?: string | null
+          last_inbound_at?: string | null
+          last_message_preview?: string | null
+          last_outbound_at?: string | null
+          name?: string | null
+          phone?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      recovery_messages: {
+        Row: {
+          body: string | null
+          created_at: string
+          direction: string
+          id: string
+          media_url: string | null
+          message_sid: string | null
+          metadata: Json | null
+          phone: string
+          sent_by_admin: boolean
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          direction: string
+          id?: string
+          media_url?: string | null
+          message_sid?: string | null
+          metadata?: Json | null
+          phone: string
+          sent_by_admin?: boolean
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          direction?: string
+          id?: string
+          media_url?: string | null
+          message_sid?: string | null
+          metadata?: Json | null
+          phone?: string
+          sent_by_admin?: boolean
+        }
+        Relationships: []
+      }
       scheduled_tasks: {
         Row: {
           created_at: string

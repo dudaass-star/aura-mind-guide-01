@@ -615,6 +615,14 @@ export default function AdminEngagement() {
             <h1 className="text-2xl font-bold text-foreground">Métricas de Engajamento</h1>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 px-3 text-xs"
+              onClick={() => navigate('/admin/whatsapp-inbox')}
+            >
+              Inbox WhatsApp
+            </Button>
             <div className="flex gap-1">
               {[
                 { label: '7d', days: 7 },

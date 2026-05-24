@@ -270,6 +270,35 @@ async function processStage(
         }).eq("id", session.id);
         sent++;
         console.log(`✅ [WA stage ${cfg.label}] enviado → ${session.phone.substring(0, 6)}*** sid=${result.messageSid}`);
+
+        // Loga outbound no inbox admin (template aprovado)
+        try {
+          const cleanPhone = normalizeBrazilianPhone(session.phone);
+          const previewBody = `[Template ${cfg.label}] Olá ${name}, finalize sua assinatura.`;
+          const nowIso = new Date().toISOString();
+          await supabase.from("recovery_messages").insert({
+            phone: cleanPhone,
+            direction: "out",
+            body: previewBody,
+            message_sid: result.messageSid || null,
+            sent_by_admin: false,
+            metadata: {
+              template: cfg.label,
+              content_sid: cfg.contentSid,
+              checkout_session_id: session.id,
+            },
+          });
+          await supabase.from("recovery_conversations").upsert({
+            phone: cleanPhone,
+            name: session.name || null,
+            last_outbound_at: nowIso,
+            last_message_preview: previewBody.substring(0, 200),
+            checkout_session_id: session.id,
+            updated_at: nowIso,
+          }, { onConflict: "phone" });
+        } catch (logErr) {
+          console.warn(`⚠️ [WA stage ${cfg.label}] log inbox falhou:`, logErr);
+        }
       } else {
         await supabase.from("checkout_sessions").update({
           whatsapp_recovery_last_error: result.error || "unknown",
