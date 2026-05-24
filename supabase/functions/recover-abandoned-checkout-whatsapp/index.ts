@@ -157,6 +157,7 @@ async function processStage(
     .select("id, phone, name, plan, email")
     .eq("status", "created")
     .not("phone", "is", null)
+    .gte("created_at", WHATSAPP_RECOVERY_CUTOFF)
     .lt("created_at", createdBefore)
     .is(cfg.sentColumn, null)
     .limit(50);
