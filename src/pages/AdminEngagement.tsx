@@ -234,6 +234,7 @@ export default function AdminEngagement() {
   const navigate = useNavigate();
   const requestIdRef = useRef(0);
   const [elapsedSec, setElapsedSec] = useState(0);
+  const hasRecoveryActivity = recoverySessions.length > 0 || recoveryStats.raw > 0 || recoveryStats.accepted > 0 || whatsappStats.stage1 > 0 || whatsappStats.stage2 > 0 || whatsappStats.errors > 0;
 
   // Cronômetro do botão "Atualizar" para feedback visual durante esperas longas.
   useEffect(() => {
@@ -352,7 +353,7 @@ export default function AdminEngagement() {
       const { data: abandoned, error } = await supabase
         .from('checkout_sessions')
         .select('id, name, phone, email, plan, created_at, status, recovery_sent, recovery_sent_at, recovery_last_error, recovery_attempts_count, whatsapp_recovery_15min_sent_at, whatsapp_recovery_24h_sent_at, whatsapp_recovery_last_error')
-        .or('recovery_sent.eq.true,whatsapp_recovery_15min_sent_at.not.is.null')
+        .or('recovery_sent.eq.true,whatsapp_recovery_15min_sent_at.not.is.null,whatsapp_recovery_24h_sent_at.not.is.null,whatsapp_recovery_last_error.not.is.null')
         .order('created_at', { ascending: false })
         .limit(50);
 
@@ -1325,6 +1326,42 @@ export default function AdminEngagement() {
           </TabsContent>
 
           <TabsContent value="trial" className="mt-3 space-y-4">
+            <Card className="border-primary/20 bg-primary/5">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-semibold flex items-center gap-2">
+                  <MessageCircle className="h-4 w-4" />
+                  Recuperação por WhatsApp
+                </CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  Checkout abandonado — disparos automáticos de 15min e 24h
+                </p>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                  <div>
+                    <div className="text-xl font-bold text-foreground">{whatsappStats.stage1}</div>
+                    <p className="text-[11px] text-muted-foreground">enviados 15min</p>
+                  </div>
+                  <div>
+                    <div className="text-xl font-bold text-foreground">{whatsappStats.stage2}</div>
+                    <p className="text-[11px] text-muted-foreground">enviados 24h</p>
+                  </div>
+                  <div>
+                    <div className="text-xl font-bold text-foreground">{whatsappStats.unique}</div>
+                    <p className="text-[11px] text-muted-foreground">usuários únicos</p>
+                  </div>
+                  <div>
+                    <div className="text-xl font-bold text-foreground">{whatsappStats.converted}</div>
+                    <p className="text-[11px] text-muted-foreground">converteram</p>
+                  </div>
+                  <div>
+                    <div className={`text-xl font-bold ${whatsappStats.errors > 0 ? 'text-destructive' : 'text-foreground'}`}>{whatsappStats.errors}</div>
+                    <p className="text-[11px] text-muted-foreground">erros</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
             {loading && !metrics ? <SkeletonCards /> : (
               <>
                 {/* 1. Cards de métricas */}
@@ -1446,7 +1483,7 @@ export default function AdminEngagement() {
                 )}
 
                 {/* 6. Recuperação de Checkout (colapsável) */}
-                {recoverySessions.length > 0 && (
+                {hasRecoveryActivity && (
                   <Collapsible open={recoveryOpen} onOpenChange={setRecoveryOpen}>
                     <Card>
                       <CollapsibleTrigger asChild>
