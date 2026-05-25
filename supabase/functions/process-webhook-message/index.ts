@@ -101,7 +101,7 @@ async function transcribeAudio(audioUrl: string): Promise<string | null> {
     }
 
     const formData = new FormData();
-    formData.append('file', audioBlob, 'audio.ogg');
+    formData.append('file', audioBlob!, 'audio.ogg');
     formData.append('model', 'whisper-1');
     formData.append('language', 'pt');
 
