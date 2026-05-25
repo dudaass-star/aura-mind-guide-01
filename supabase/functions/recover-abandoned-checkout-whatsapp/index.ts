@@ -2,10 +2,12 @@
  * Recuperação de carrinho abandonado via WhatsApp (Twilio subaccount dedicada).
  *
  * - Roda EM PARALELO ao fluxo de e-mail (recover-abandoned-checkout).
- * - 2 estágios: 15min e 24h após criação do checkout_session.
+ * - 2 estágios: 15min e 24h após criação do checkout.
+ * - Fontes: checkout_sessions (Stripe/cartão) + asaas_payments (PIX).
  * - Respeita silêncio 22h-08h BRT.
  * - Pula clientes já ativos/trial (mesma lógica do fluxo de e-mail).
  * - Usa subaccount Twilio separada → NÃO interfere no número da Aura.
+ * - Dedup cross-source por telefone normalizado dentro do mesmo estágio.
  *
  * Cron sugerido: a cada 5 minutos.
  */
@@ -127,6 +129,22 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Pré-busca PIX já pagos (RECEIVED/CONFIRMED): mesmo telefone/email não recebe lembrete.
+    const { data: paidPix } = await supabase
+      .from("asaas_payments")
+      .select("customer_phone, customer_email")
+      .in("status", ["RECEIVED", "CONFIRMED"])
+      .gte("created_at", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString());
+
+    if (paidPix) {
+      for (const p of paidPix) {
+        if (p.customer_phone) {
+          for (const v of getPhoneVariations(p.customer_phone)) completedPhoneSet.add(v);
+        }
+        if (p.customer_email) completedEmailSet.add(p.customer_email.toLowerCase());
+      }
+    }
+
     const totals = {
       sent: 0,
       failed: 0,
@@ -135,18 +153,32 @@ Deno.serve(async (req) => {
     };
 
     for (const cfg of STAGES) {
-      const result = await processStage(
+      // Set compartilhado de telefones contatados neste ciclo (dedup cross-source).
+      const contactedThisStage = new Set<string>();
+
+      const r1 = await processStage(
         supabase,
         cfg,
         activeEmailSet,
         activePhoneSet,
         completedEmailSet,
         completedPhoneSet,
+        contactedThisStage,
       );
-      totals.sent += result.sent;
-      totals.failed += result.failed;
-      totals.skipped += result.skipped;
-      totals.by_stage[cfg.label] = result.sent;
+      const r2 = await processStageAsaas(
+        supabase,
+        cfg,
+        activeEmailSet,
+        activePhoneSet,
+        completedEmailSet,
+        completedPhoneSet,
+        contactedThisStage,
+      );
+      totals.sent += r1.sent + r2.sent;
+      totals.failed += r1.failed + r2.failed;
+      totals.skipped += r1.skipped + r2.skipped;
+      totals.by_stage[`stripe_${cfg.label}`] = r1.sent;
+      totals.by_stage[`pix_${cfg.label}`] = r2.sent;
     }
 
     console.log(
