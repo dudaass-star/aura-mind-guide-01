@@ -450,6 +450,7 @@ async function processStageAsaas(
   completedEmailSet: Set<string>,
   completedPhoneSet: Set<string>,
   contactedThisStage: Set<string>,
+  lifetimeBannedPhones: Set<string>,
 ): Promise<{ sent: number; failed: number; skipped: number }> {
   const now = Date.now();
   const createdBefore = new Date(now - cfg.minAgeMinutes * 60 * 1000).toISOString();
@@ -504,6 +505,13 @@ async function processStageAsaas(
       const phoneVars = getPhoneVariations(payment.customer_phone);
       if (phoneVars.some(v => activePhoneSet.has(v))) {
         await markSkippedAsaas(supabase, payment.id, cfg, "active_customer_phone");
+        skipped++;
+        continue;
+      }
+
+      // LIFETIME CAP: telefone já recebeu >=2 envios OU já falhou alguma vez.
+      if (phoneVars.some(v => lifetimeBannedPhones.has(v))) {
+        await markSkippedAsaas(supabase, payment.id, cfg, "phone_lifetime_cap");
         skipped++;
         continue;
       }
