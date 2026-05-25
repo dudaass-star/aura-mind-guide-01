@@ -208,6 +208,7 @@ async function processStage(
   activePhoneSet: Set<string>,
   completedEmailSet: Set<string>,
   completedPhoneSet: Set<string>,
+  contactedThisStage: Set<string>,
 ): Promise<{ sent: number; failed: number; skipped: number }> {
   const now = Date.now();
   const createdBefore = new Date(now - cfg.minAgeMinutes * 60 * 1000).toISOString();
@@ -279,6 +280,13 @@ async function processStage(
         continue;
       }
 
+      // Dedup cross-source: telefone já contatado neste estágio (ex: PIX da mesma pessoa).
+      if (phoneVars.some(v => contactedThisStage.has(v))) {
+        await markSkipped(supabase, session.id, cfg, "already_contacted_this_stage");
+        skipped++;
+        continue;
+      }
+
       const name = firstName(session.name);
       // Templates aprovados têm apenas {{1}} = nome.
       // Botão CTA tem URL fixa (https://olaaura.com.br/v2/checkout) no próprio template.
@@ -301,6 +309,7 @@ async function processStage(
           whatsapp_recovery_last_error: null,
         }).eq("id", session.id);
         sent++;
+        for (const v of phoneVars) contactedThisStage.add(v);
         console.log(`✅ [WA stage ${cfg.label}] enviado → ${session.phone.substring(0, 6)}*** sid=${result.messageSid}`);
 
         // Loga outbound no inbox admin (template aprovado)
@@ -365,4 +374,181 @@ async function markSkipped(supabase: any, id: string, cfg: StageConfig, reason: 
   } catch (_) {
     // ignore
   }
+}
+
+// ============================================================
+// Recuperação de PIX abandonado (asaas_payments)
+// Mesma cadência e mesmos templates. Dedup cross-source via contactedThisStage.
+// ============================================================
+async function processStageAsaas(
+  supabase: any,
+  cfg: StageConfig,
+  activeEmailSet: Set<string>,
+  activePhoneSet: Set<string>,
+  completedEmailSet: Set<string>,
+  completedPhoneSet: Set<string>,
+  contactedThisStage: Set<string>,
+): Promise<{ sent: number; failed: number; skipped: number }> {
+  const now = Date.now();
+  const createdBefore = new Date(now - cfg.minAgeMinutes * 60 * 1000).toISOString();
+
+  let query = supabase
+    .from("asaas_payments")
+    .select("id, customer_phone, customer_name, customer_email, plan, billing_period, payment_method")
+    .eq("status", "PENDING")
+    .not("customer_phone", "is", null)
+    .gte("created_at", WHATSAPP_RECOVERY_CUTOFF)
+    .lt("created_at", createdBefore)
+    .is(cfg.sentColumn, null)
+    .limit(50);
+
+  if (cfg.prevSentColumn) {
+    query = query.not(cfg.prevSentColumn, "is", null);
+  }
+
+  const { data: rows, error } = await query;
+  if (error) {
+    console.error(`❌ [WA-PIX stage ${cfg.label}] Query error:`, error);
+    return { sent: 0, failed: 0, skipped: 0 };
+  }
+  if (!rows || rows.length === 0) {
+    return { sent: 0, failed: 0, skipped: 0 };
+  }
+
+  console.log(`📋 [WA-PIX stage ${cfg.label}] ${rows.length} candidatos.`);
+
+  // Dedup por telefone (mesmo cliente costuma ter PIX one-time + PIX_SUBSCRIPTION).
+  const byKey = new Map<string, typeof rows[number]>();
+  for (const p of rows) {
+    const key = p.customer_phone || p.customer_email || `__${p.id}`;
+    if (!byKey.has(key)) byKey.set(key, p);
+  }
+
+  let sent = 0, failed = 0, skipped = 0;
+
+  for (const payment of byKey.values()) {
+    try {
+      if (!payment.customer_phone) {
+        await markSkippedAsaas(supabase, payment.id, cfg, "no_phone");
+        skipped++;
+        continue;
+      }
+
+      if (payment.customer_email && activeEmailSet.has(payment.customer_email.toLowerCase())) {
+        await markSkippedAsaas(supabase, payment.id, cfg, "active_customer_email");
+        skipped++;
+        continue;
+      }
+      const phoneVars = getPhoneVariations(payment.customer_phone);
+      if (phoneVars.some(v => activePhoneSet.has(v))) {
+        await markSkippedAsaas(supabase, payment.id, cfg, "active_customer_phone");
+        skipped++;
+        continue;
+      }
+
+      if (payment.customer_email && completedEmailSet.has(payment.customer_email.toLowerCase())) {
+        await markSkippedAsaas(supabase, payment.id, cfg, "already_paid_email");
+        skipped++;
+        continue;
+      }
+      if (phoneVars.some(v => completedPhoneSet.has(v))) {
+        await markSkippedAsaas(supabase, payment.id, cfg, "already_paid_phone");
+        skipped++;
+        continue;
+      }
+
+      // Dedup cross-source: telefone já contatado por checkout_sessions OU outra cobrança PIX.
+      if (phoneVars.some(v => contactedThisStage.has(v))) {
+        await markSkippedAsaas(supabase, payment.id, cfg, "already_contacted_this_stage");
+        skipped++;
+        continue;
+      }
+
+      const name = firstName(payment.customer_name);
+      const result = await sendRecoveryTemplate(payment.customer_phone, cfg.contentSid, {
+        "1": name,
+      });
+
+      await supabase.from("checkout_recovery_attempts").insert({
+        // sem checkout_session_id (origem PIX); referência via provider_response.
+        checkout_session_id: null,
+        phone_raw: payment.customer_phone,
+        phone_normalized: normalizeBrazilianPhone(payment.customer_phone),
+        status: result.success
+          ? `wa_pix_stage_${cfg.stage}_sent`
+          : `wa_pix_stage_${cfg.stage}_failed`,
+        error_message: result.success ? null : (result.error || "unknown"),
+        provider_response: {
+          source: "asaas_payments",
+          asaas_payment_id: payment.id,
+          plan: payment.plan,
+          billing_period: payment.billing_period,
+          payment_method: payment.payment_method,
+          twilio: result.response ?? null,
+        },
+      });
+
+      if (result.success) {
+        await supabase.from("asaas_payments").update({
+          [cfg.sentColumn]: new Date().toISOString(),
+          whatsapp_recovery_last_error: null,
+        }).eq("id", payment.id);
+        sent++;
+        for (const v of phoneVars) contactedThisStage.add(v);
+        console.log(`✅ [WA-PIX stage ${cfg.label}] enviado → ${payment.customer_phone.substring(0, 6)}*** sid=${result.messageSid}`);
+
+        // Loga outbound no inbox admin.
+        try {
+          const cleanPhone = normalizeBrazilianPhone(payment.customer_phone);
+          const previewBody = `[Template ${cfg.label} • PIX] Olá ${name}, finalize sua assinatura.`;
+          const nowIso = new Date().toISOString();
+          await supabase.from("recovery_messages").insert({
+            phone: cleanPhone,
+            direction: "out",
+            body: previewBody,
+            message_sid: result.messageSid || null,
+            sent_by_admin: false,
+            metadata: {
+              template: cfg.label,
+              content_sid: cfg.contentSid,
+              source: "asaas_payments",
+              asaas_payment_id: payment.id,
+              plan: payment.plan,
+              billing_period: payment.billing_period,
+            },
+          });
+          await supabase.from("recovery_conversations").upsert({
+            phone: cleanPhone,
+            name: payment.customer_name || null,
+            last_outbound_at: nowIso,
+            last_message_preview: previewBody.substring(0, 200),
+            // checkout_session_id fica null (origem PIX) — UI deve cair no fallback de metadata.
+            updated_at: nowIso,
+          }, { onConflict: "phone" });
+        } catch (logErr) {
+          console.warn(`⚠️ [WA-PIX stage ${cfg.label}] log inbox falhou:`, logErr);
+        }
+      } else {
+        await supabase.from("asaas_payments").update({
+          whatsapp_recovery_last_error: result.error || "unknown",
+        }).eq("id", payment.id);
+        failed++;
+        console.error(`❌ [WA-PIX stage ${cfg.label}] falhou:`, result.error);
+      }
+    } catch (err) {
+      console.error(`❌ [WA-PIX stage ${cfg.label}] exceção:`, err);
+      failed++;
+    }
+
+    await new Promise(r => setTimeout(r, 300));
+  }
+
+  return { sent, failed, skipped };
+}
+
+async function markSkippedAsaas(supabase: any, id: string, cfg: StageConfig, reason: string) {
+  await supabase.from("asaas_payments").update({
+    [cfg.sentColumn]: new Date().toISOString(),
+    whatsapp_recovery_last_error: `skipped: ${reason}`,
+  }).eq("id", id);
 }
