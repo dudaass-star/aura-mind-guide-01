@@ -1,52 +1,89 @@
-## Reorientação do diagnóstico
+## Migração WhatsApp Twilio → Meta Cloud API (Estratégia A — paralelo, Twilio segue ativo)
 
-Aceitando tuas restrições:
-- Janela 24h é grátis → conta principal **não pode** ser a fonte do gasto contínuo.
-- Recovery de checkout deve ser **2x por usuário (15min + 24h) — fim**.
-- O gasto é **diário desde início de maio**, então não é o pico isolado de 20/05 do recovery (recovery escalou bem depois).
+Conforme combinado nas mensagens #7955–#7959: **Twilio continua 100% no ar** até validarmos o stack Meta. Construímos um cliente Meta novo em paralelo, com feature flag default `twilio`, e só viramos depois de testes manuais OK.
 
-Indícios novos do banco:
-- `zapi_message_dedup` saltou de 83 em 25/04 para **700–960 entradas/dia** durante maio. Volume cai junto com a queda de mensagens da Aura nos últimos dias.
-- `instance_health_logs`: instância Z-API marcada **disconnected 288x/dia** (todo poll de 5min), mas `alert_sent=0`. Z-API está fora do ar o mês inteiro.
-- Memória do projeto diz "100% Twilio gateway, Meta webhook latent" — mas os secrets `ZAPI_TOKEN`, `ZAPI_INSTANCE_ID`, `ZAPI_CLIENT_TOKEN` continuam ativos e a dedup tabela só cresce.
+### Estado atual (auditado)
 
-Hipótese forte: **algum caminho ainda chama Z-API e, quando falha, faz fallback automático para Twilio**, ou pior, manda **pelos dois**. Combinado a webhook Meta + Twilio recebendo inbound em paralelo, gera tarifa fixa diária mesmo sem ninguém clicar.
+- `_shared/whatsapp-official.ts` → na verdade é Twilio (chama `connector-gateway.lovable.dev/twilio`).
+- `_shared/whatsapp-provider.ts` → roteia entre `zapi` e `'official'` (=Twilio hoje) via `system_config.whatsapp_provider`.
+- `webhook-meta/index.ts` → já existe, valida `META_WEBHOOK_VERIFY_TOKEN` e `X-Hub-Signature-256` com `INSTAGRAM_APP_SECRET`. Inbound pronto.
+- `process-webhook-message/index.ts` → `transcribeAudio` só sabe baixar mídia via gateway Twilio.
+- Secrets prontos: `META_WHATSAPP_ACCESS_TOKEN`, `META_WHATSAPP_PHONE_NUMBER_ID`, `META_WEBHOOK_VERIFY_TOKEN`.
+- WABA: `2153650951869969` | número novo: `+1 555-959-6770` (App AURA `1491408882345218`).
 
-## Plano de ação (build mode)
+### Fases 1 + 2 + 3 (agora, sem ativar nada)
 
-### Etapa A — Auditar TODO caminho de saída WhatsApp (1ª prioridade)
-Rodar `rg` em `supabase/functions/_shared/` e `supabase/functions/*` procurando:
-- Quem importa `zapi-client`, `twilio-client`, `whatsapp-official`, `sendProactive`.
-- Quem ainda chama `Z-API` URL (`api.z-api.io`).
-- Onde há fallback `Twilio → Z-API` ou `Z-API → Twilio` que possa estar disparando **duplicado**.
+**Fase 1 — Cliente Meta paralelo** (arquivo NOVO, não toca o Twilio):
 
-Resultado entregue como tabela: `função → gateway usado → quando dispara → volume estimado/dia`.
+`supabase/functions/_shared/meta-whatsapp-client.ts` — espelha a interface do `whatsapp-official.ts`:
+- `sendFreeText(phone, text)` → `POST graph.facebook.com/v21.0/{META_WHATSAPP_PHONE_NUMBER_ID}/messages` com `{ messaging_product:"whatsapp", to, type:"text", text:{ body, preview_url:false } }`.
+- `sendTemplateMessage(phone, templateName, languageCode, variables)` → `type:"template"` com `components:[{ type:"body", parameters: vars.map(v=>({type:"text",text:v})) }]`.
+- `sendAudioFromUrl(phone, audioUrl)` → `type:"audio", audio:{ link: audioUrl }`.
+- `sendTemplateOnly(phone, category, userId, vars)` e `sendProactiveMessage(...)` — mesma assinatura/regras (janela 24h, lookup em `whatsapp_templates`, mas lendo `template_name + language_code` no lugar do `twilio_content_sid`).
+- Auth: `Authorization: Bearer ${META_WHATSAPP_ACCESS_TOKEN}`.
+- Telefone: E.164 só dígitos (`5511...`), sem `whatsapp:` e sem `+`.
+- Resposta: `messages[0].id` (wamid) → `messageId`.
+- Reusa `PROACTIVE_TITLES`, `prefixWithTitle`, `isWithin24hWindow`, `splitMessageForTemplate` (importa do `whatsapp-official.ts` ou move pra um util compartilhado).
 
-### Etapa B — Corrigir o recovery do jeito que você definiu
-Reescrever `recover-abandoned-checkout-whatsapp`:
-- **2 envios por telefone NA VIDA** (15min + 24h), independente de quantos `checkout_sessions`/`asaas_payments` o lead criar.
-- Dedup por telefone normalizado em **todo o estágio** antes de processar (Stripe + PIX juntos).
-- Para `wa_stage_*_failed`: marcar permanentemente como `phone_failed_lifetime` (não retentar — confirma tua tese de que Twilio cobra mesmo quando Meta rejeita).
-- Backfill: marcar `*_sent_at = now() + last_error='cleanup: phone_lifetime_cap'` para qualquer linha pendente cujo telefone já recebeu ≥2 wa_*_sent ou ≥1 wa_*_failed.
+**Fase 2 — Coluna `meta_template_name` em `whatsapp_templates`** (migration):
+- `ALTER TABLE whatsapp_templates ADD COLUMN meta_template_name text, ADD COLUMN meta_language_code text DEFAULT 'pt_BR';`
+- Populo os 3 conhecidos: `cheking_7dias`, `jornada_disponivel`, `aura_weekly_report_v2` (mesmos nomes; aprovação Meta acontece pela sua mão no painel).
+- `twilio_content_sid` continua intocado — Twilio segue lendo daí.
 
-### Etapa C — Pedido objetivo para você no console Twilio
-Sem o CSV do console eu não consigo nomear o SKU exato. Preciso de **uma coisa só**:
-1. Twilio Console → **Monitor → Logs → Messaging** → filtrar últimos 7 dias.
-2. Exportar CSV (ou screenshot da tabela com colunas `Date, From, To, Status, Direction, Price, ErrorCode`).
-3. Me manda — eu cruzo `From`/`To` com nossos telefones e te digo exatamente qual função do projeto está mandando.
+**Fase 3 — Roteamento via feature flag (default Twilio)**:
+- Em `_shared/whatsapp-provider.ts` adiciono terceiro provider `'meta'`, lendo `system_config.whatsapp_provider`. Default permanece **`'official'` (Twilio)**.
+- `system_config.whatsapp_provider` aceita: `'zapi' | 'official' | 'meta'`.
+- Quando `'meta'`, despacha pras funções de `meta-whatsapp-client.ts`. Nada muda no comportamento de `'official'`.
 
-Alternativa mais rápida: **Twilio Console → Usage → Usage Records → últimos 30 dias, agrupar por `Category` (`messaging-outbound`, `messaging-inbound`, `messaging-mms`, `conversations-*`)** e me mostra a tela. Em 30 segundos eu identifico se é template, conversation fee, ou inbound de webhook.
+**Fase 3.5 — Suporte a download de mídia Meta no `transcribeAudio`**:
+- No `process-webhook-message/index.ts`, adicionar branch para prefixo `meta-media:<media_id>`:
+  1. `GET graph.facebook.com/v21.0/{media_id}` com Bearer → retorna `{ url }` (URL assinada curta).
+  2. `GET <url>` com mesmo Bearer → baixa o blob.
+- Branch Twilio antigo permanece.
 
-### Etapa D — Kill switch enquanto investigamos
-Adicionar `system_config.twilio_recovery_enabled` e `system_config.zapi_send_enabled`. Default `true`. Se você suspeitar, desativa por SQL e o cron pula tudo no próximo ciclo. Custo zero, reversível.
+### Fase 4 — Testes manuais (você + eu, antes de virar a flag)
 
-### Etapa E — Cost audit dashboard (depois que identificarmos a fonte)
-Tab `/admin/whatsapp-recovery` ganha cards: "Envios por gateway × dia", "Telefones com >2 envios na vida", "Falhas Twilio/Meta separadas por errorCode". Aí você enxerga novo pico assim que aparecer.
+Com a flag ainda em `'official'`, posso testar o cliente Meta de forma isolada via uma função QA temporária (ou chamando direto via `curl_edge_functions`):
+- Texto livre pro seu número.
+- Áudio TTS (URL pública do nosso storage).
+- Template `cheking_7dias` com variável `{{1}}`.
+- Inbound: você manda mensagem pro `+1 555-959-6770` → confere `webhook-meta` recebendo e o worker processando.
+- Webhook precisa estar configurado no app Meta AURA → `Callback URL: https://uhyogifgmutfmbyhzzyo.supabase.co/functions/v1/webhook-meta` + verify token + subscribe em `messages`.
 
-## O que eu **não** vou fazer sem tua confirmação
-- Desligar Z-API completamente (pode estar servindo algum fluxo legítimo).
-- Mexer no `aura-agent` ou em qualquer prompt.
-- Mudar templates aprovados Meta.
+### Fase 5 — Cutover gradual (depois dos testes OK)
 
-## Próximo passo
-Sai do plan mode e eu começo pela **Etapa A + B + D** em paralelo (auditoria de gateways + correção recovery + kill switch). A Etapa C depende de você puxar a tela do Twilio Console — manda assim que tiver e eu fecho o diagnóstico.
+- Inverter flag: `UPDATE system_config SET value='meta' WHERE key='whatsapp_provider';`
+- Twilio webhook fica ligado por 30 dias (rollback fácil).
+- Monitorar `failed_message_log` e logs do `webhook-meta` por 48h.
+
+### Fase 6 — Limpeza (>= 95% sucesso, ~2 semanas depois)
+
+- Migrar `twilio-recovery-client.ts` (Dunning) → `meta-recovery-client.ts`. **Fora deste escopo agora.**
+- Cancelar número Twilio `+1 662 525 5005` (você no painel Twilio).
+- Manter código Twilio mais 30 dias antes de apagar.
+
+### Fora de escopo nesta entrega
+
+- Aura prompts, comportamento conversacional, Stripe, Asaas, Instagram, prompts de sessão.
+- Migração do fluxo de Dunning/Recovery (fica no Twilio sub-account até Fase 6).
+- Apagar `whatsapp-official.ts` ou qualquer função Twilio.
+- Mudar default da flag pra `'meta'` (só depois dos testes manuais).
+
+### Arquivos tocados nesta entrega (Fases 1–3.5)
+
+- **Novo**: `supabase/functions/_shared/meta-whatsapp-client.ts`
+- **Editado**: `supabase/functions/_shared/whatsapp-provider.ts` (adiciona branch `'meta'`)
+- **Editado**: `supabase/functions/process-webhook-message/index.ts` (branch `meta-media:` no `transcribeAudio`)
+- **Migration**: colunas `meta_template_name`, `meta_language_code` em `whatsapp_templates` + populate dos 3 templates conhecidos
+- **Intocados**: `whatsapp-official.ts`, `webhook-twilio`, `webhook-twilio-recovery`, `twilio-recovery-client.ts`, todo o fluxo de Dunning.
+
+### Riscos
+
+- Templates `cheking_7dias`, `jornada_disponivel`, `aura_weekly_report_v2` precisam ser **recriados/aprovados na WABA nova** (`2153650951869969`) antes da Fase 5. Aprovação Meta leva 24–72h. (Você faz no painel.)
+- System User Token "Never expires" só se foi gerado com essa opção. Se não foi, expira em 60 dias — endereçamos com `refresh-meta-token` adaptado depois.
+- Webhook do app AURA precisa ser apontado pro `webhook-meta` antes da Fase 4. (Você faz.)
+
+### Memórias a atualizar (após cutover, não agora)
+
+- `mem://technical/whatsapp/integration-provider-status`
+- `mem://technical/whatsapp/twilio-template-constraint` (passa a aceitar `meta_template_name` quando provider=meta)

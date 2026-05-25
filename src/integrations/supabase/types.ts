@@ -2495,6 +2495,8 @@ export type Database = {
           is_active: boolean
           language_code: string
           meta_category: string
+          meta_language_code: string
+          meta_template_name: string | null
           prefix: string
           template_name: string
           twilio_content_sid: string
@@ -2506,6 +2508,8 @@ export type Database = {
           is_active?: boolean
           language_code?: string
           meta_category?: string
+          meta_language_code?: string
+          meta_template_name?: string | null
           prefix: string
           template_name: string
           twilio_content_sid?: string
@@ -2517,6 +2521,8 @@ export type Database = {
           is_active?: boolean
           language_code?: string
           meta_category?: string
+          meta_language_code?: string
+          meta_template_name?: string | null
           prefix?: string
           template_name?: string
           twilio_content_sid?: string

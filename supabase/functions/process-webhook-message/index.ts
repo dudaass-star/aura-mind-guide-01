@@ -55,6 +55,22 @@ async function createShortLink(url: string, phone: string): Promise<string | nul
 async function transcribeAudio(audioUrl: string): Promise<string | null> {
   try {
     console.log('🎙️ Downloading audio from:', audioUrl);
+    let audioBlob: Blob | null = null;
+
+    // Branch Meta Cloud API: prefixo "meta-media:<media_id>" enviado pelo webhook-meta
+    const metaMatch = audioUrl.match(/^meta-media:(.+)$/);
+    if (metaMatch) {
+      const mediaId = metaMatch[1];
+      console.log(`🔐 Using Meta Graph API for media download (media_id=${mediaId})`);
+      const { downloadMetaMedia } = await import("../_shared/meta-whatsapp-client.ts");
+      audioBlob = await downloadMetaMedia(mediaId);
+      if (!audioBlob) {
+        console.error('❌ Meta media download failed');
+        return null;
+      }
+      console.log('📦 Audio downloaded via Meta, size:', audioBlob.size, 'bytes');
+    } else {
+      // Branch Twilio (legado): URLs api.twilio.com via gateway autenticado
     // Twilio media URLs (api.twilio.com) são privadas e exigem autenticação.
     // Roteamos via connector gateway, que injeta as credenciais automaticamente
     // e prepende /2010-04-01/Accounts/{AccountSid}.
@@ -80,11 +96,12 @@ async function transcribeAudio(audioUrl: string): Promise<string | null> {
       console.error('❌ Failed to download audio:', audioResponse.status);
       return null;
     }
-    const audioBlob = await audioResponse.blob();
+      audioBlob = await audioResponse.blob();
     console.log('📦 Audio downloaded, size:', audioBlob.size, 'bytes');
+    }
 
     const formData = new FormData();
-    formData.append('file', audioBlob, 'audio.ogg');
+    formData.append('file', audioBlob!, 'audio.ogg');
     formData.append('model', 'whisper-1');
     formData.append('language', 'pt');
 

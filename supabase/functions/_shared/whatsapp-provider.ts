@@ -10,12 +10,18 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendTextMessage, sendAudioMessage, sendAudioFromUrl as zapiSendAudioFromUrl, type ZapiConfig } from "./zapi-client.ts";
 import { sendFreeText, sendAudioFromUrl as twilioSendAudioFromUrl, sendProactiveMessage, sendTemplateOnly, type TemplateCategory, type ProactiveMessageResult } from "./whatsapp-official.ts";
+import {
+  sendFreeText as metaSendFreeText,
+  sendAudioFromUrl as metaSendAudioFromUrl,
+  sendProactiveMessage as metaSendProactiveMessage,
+  sendTemplateOnly as metaSendTemplateOnly,
+} from "./meta-whatsapp-client.ts";
 
 // ============================================================================
 // PROVIDER DETECTION
 // ============================================================================
 
-export type WhatsAppProvider = 'zapi' | 'official';
+export type WhatsAppProvider = 'zapi' | 'official' | 'meta';
 
 /**
  * Lê o provider ativo da tabela system_config.
@@ -35,6 +41,7 @@ export async function getProvider(): Promise<WhatsAppProvider> {
 
     const provider = data?.value as string | undefined;
     if (provider === 'zapi') return 'zapi';
+    if (provider === 'meta') return 'meta';
     return 'official';
   } catch (error) {
     console.warn('⚠️ [WhatsApp Provider] Could not read provider config, defaulting to official:', error);
@@ -107,6 +114,11 @@ export async function sendMessage(
       return { success: result.success, provider: 'zapi', error: result.error };
     }
 
+    if (provider === 'meta') {
+      const result = await metaSendFreeText(phone, text);
+      return { success: result.success, provider: 'meta', error: result.error };
+    }
+
     // Official API: texto livre via Meta Cloud API
     const result = await sendFreeText(phone, text);
     return { success: result.success, provider: 'official', error: result.error };
@@ -135,6 +147,11 @@ export async function sendProactive(
       return { success: result.success, provider: 'zapi', error: result.error };
     }
 
+    if (provider === 'meta') {
+      const r: ProactiveMessageResult = await metaSendProactiveMessage(phone, text, templateCategory, userId, teaserText, templateVariables);
+      return { success: r.success, provider: 'meta', error: r.error };
+    }
+
     // Official API: template envelope + split (teaser avoids split)
     const result: ProactiveMessageResult = await sendProactiveMessage(phone, text, templateCategory, userId, teaserText, templateVariables);
     return { success: result.success, provider: 'official', error: result.error };
@@ -157,13 +174,14 @@ export async function sendForcedTemplate(
   templateVariables?: string[],
 ): Promise<SendResult & { type?: 'template' | 'freetext' }> {
   return withRetry(async () => {
+    const provider = await getProvider();
+    if (provider === 'meta') {
+      const result = await metaSendTemplateOnly(phone, templateCategory, userId, templateVariables);
+      return { success: result.success, provider: 'meta', error: result.error, type: result.type };
+    }
+    // Default: Twilio (official) — QA legado continua usando ContentSid
     const result = await sendTemplateOnly(phone, templateCategory, userId, templateVariables);
-    return {
-      success: result.success,
-      provider: 'official' as WhatsAppProvider,
-      error: result.error,
-      type: result.type,
-    };
+    return { success: result.success, provider: 'official', error: result.error, type: result.type };
   }, `sendForcedTemplate(${templateCategory},${phone.substring(0, 4)}***)`);
 }
 
@@ -184,11 +202,11 @@ export async function sendAudio(
       return { success: result.success, provider: 'zapi', error: result.error };
     }
 
-    // Official API: base64 não suportado
-    console.warn('⚠️ [WhatsApp Provider] Official API does not support base64 audio. Use sendAudioUrl() with a public URL instead.');
+    // Official/Meta API: base64 não suportado — só URL pública
+    console.warn(`⚠️ [WhatsApp Provider] ${provider} does not support base64 audio. Use sendAudioUrl() with a public URL instead.`);
     return {
       success: false,
-      provider: 'official',
+      provider,
       error: 'Official API does not support base64 audio. Upload to storage and use sendAudioUrl() instead.',
     };
   }, `sendAudio(${phone.substring(0, 4)}***)`);
@@ -208,6 +226,11 @@ export async function sendAudioUrl(
     if (provider === 'zapi') {
       const result = await zapiSendAudioFromUrl(phone, audioUrl, configOverride);
       return { success: result.success, provider: 'zapi', error: result.error };
+    }
+
+    if (provider === 'meta') {
+      const result = await metaSendAudioFromUrl(phone, audioUrl);
+      return { success: result.success, provider: 'meta', error: result.error };
     }
 
     // Official API: audio via Meta Cloud API
