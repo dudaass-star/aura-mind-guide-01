@@ -38,6 +38,9 @@ export type Database = {
           status: string
           updated_at: string
           user_id: string | null
+          whatsapp_recovery_15min_sent_at: string | null
+          whatsapp_recovery_24h_sent_at: string | null
+          whatsapp_recovery_last_error: string | null
         }
         Insert: {
           amount_cents: number
@@ -62,6 +65,9 @@ export type Database = {
           status?: string
           updated_at?: string
           user_id?: string | null
+          whatsapp_recovery_15min_sent_at?: string | null
+          whatsapp_recovery_24h_sent_at?: string | null
+          whatsapp_recovery_last_error?: string | null
         }
         Update: {
           amount_cents?: number
@@ -86,6 +92,9 @@ export type Database = {
           status?: string
           updated_at?: string
           user_id?: string | null
+          whatsapp_recovery_15min_sent_at?: string | null
+          whatsapp_recovery_24h_sent_at?: string | null
+          whatsapp_recovery_last_error?: string | null
         }
         Relationships: [
           {
