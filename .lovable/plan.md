@@ -1,44 +1,52 @@
-## Contexto
+## Reorientação do diagnóstico
 
-Hoje a função `recover-abandoned-checkout-whatsapp` roda a cada 5min e varre apenas `checkout_sessions` (Stripe/cartão). O PIX via Asaas — ativado ontem e já com leads reais pendentes (Raiana, Ana Paula nas últimas 24h) — grava em `asaas_payments` e fica **fora** desse fluxo. Resultado: ninguém que abandona o PIX recebe WhatsApp.
+Aceitando tuas restrições:
+- Janela 24h é grátis → conta principal **não pode** ser a fonte do gasto contínuo.
+- Recovery de checkout deve ser **2x por usuário (15min + 24h) — fim**.
+- O gasto é **diário desde início de maio**, então não é o pico isolado de 20/05 do recovery (recovery escalou bem depois).
 
-## O que muda
+Indícios novos do banco:
+- `zapi_message_dedup` saltou de 83 em 25/04 para **700–960 entradas/dia** durante maio. Volume cai junto com a queda de mensagens da Aura nos últimos dias.
+- `instance_health_logs`: instância Z-API marcada **disconnected 288x/dia** (todo poll de 5min), mas `alert_sent=0`. Z-API está fora do ar o mês inteiro.
+- Memória do projeto diz "100% Twilio gateway, Meta webhook latent" — mas os secrets `ZAPI_TOKEN`, `ZAPI_INSTANCE_ID`, `ZAPI_CLIENT_TOKEN` continuam ativos e a dedup tabela só cresce.
 
-Mesma cadência, mesmo número (subaccount Twilio), mesmos 2 templates aprovados (15min e 24h) — só amplio a fonte de dados pra incluir `asaas_payments` com `status='PENDING'`.
+Hipótese forte: **algum caminho ainda chama Z-API e, quando falha, faz fallback automático para Twilio**, ou pior, manda **pelos dois**. Combinado a webhook Meta + Twilio recebendo inbound em paralelo, gera tarifa fixa diária mesmo sem ninguém clicar.
 
-## Mudanças
+## Plano de ação (build mode)
 
-### 1. Migration: colunas de controle em `asaas_payments`
-- `whatsapp_recovery_15min_sent_at timestamptz`
-- `whatsapp_recovery_24h_sent_at timestamptz`
-- `whatsapp_recovery_last_error text`
+### Etapa A — Auditar TODO caminho de saída WhatsApp (1ª prioridade)
+Rodar `rg` em `supabase/functions/_shared/` e `supabase/functions/*` procurando:
+- Quem importa `zapi-client`, `twilio-client`, `whatsapp-official`, `sendProactive`.
+- Quem ainda chama `Z-API` URL (`api.z-api.io`).
+- Onde há fallback `Twilio → Z-API` ou `Z-API → Twilio` que possa estar disparando **duplicado**.
 
-(Mesmo padrão de `checkout_sessions`, pra marcar "já mandei" e evitar reenvio.)
+Resultado entregue como tabela: `função → gateway usado → quando dispara → volume estimado/dia`.
 
-### 2. Edge function `recover-abandoned-checkout-whatsapp` (estender)
-Adicionar um segundo loop em paralelo aos `STAGES` existentes que processa `asaas_payments`:
+### Etapa B — Corrigir o recovery do jeito que você definiu
+Reescrever `recover-abandoned-checkout-whatsapp`:
+- **2 envios por telefone NA VIDA** (15min + 24h), independente de quantos `checkout_sessions`/`asaas_payments` o lead criar.
+- Dedup por telefone normalizado em **todo o estágio** antes de processar (Stripe + PIX juntos).
+- Para `wa_stage_*_failed`: marcar permanentemente como `phone_failed_lifetime` (não retentar — confirma tua tese de que Twilio cobra mesmo quando Meta rejeita).
+- Backfill: marcar `*_sent_at = now() + last_error='cleanup: phone_lifetime_cap'` para qualquer linha pendente cujo telefone já recebeu ≥2 wa_*_sent ou ≥1 wa_*_failed.
 
-- Query: `status='PENDING'`, `customer_phone IS NOT NULL`, `created_at >= WHATSAPP_RECOVERY_CUTOFF`, `created_at < now() - minAgeMinutes`, coluna do estágio ainda nula.
-- Aplica os **mesmos** filtros de skip (cliente ativo por email/telefone, checkout Stripe já pago, telefone já com PIX `RECEIVED`).
-- **Dedupe cross-source**: monta um set global de telefones que já receberam template naquele estágio (vindos de `checkout_sessions` + `asaas_payments`) pra não disparar 2x pro mesmo número quando o lead tentou cartão e PIX.
-- Dispara o mesmo `sendRecoveryTemplate` (`{{1}} = primeiro nome`).
-- Loga em `checkout_recovery_attempts` (campo novo `asaas_payment_id` opcional, ou só registra no `error_message` o contexto — pra evitar nova coluna, uso o campo `provider_response` com `{ asaas_payment_id }`).
-- Loga outbound em `recovery_messages` / `recovery_conversations` com `metadata.asaas_payment_id` (sem `checkout_session_id`).
+### Etapa C — Pedido objetivo para você no console Twilio
+Sem o CSV do console eu não consigo nomear o SKU exato. Preciso de **uma coisa só**:
+1. Twilio Console → **Monitor → Logs → Messaging** → filtrar últimos 7 dias.
+2. Exportar CSV (ou screenshot da tabela com colunas `Date, From, To, Status, Direction, Price, ErrorCode`).
+3. Me manda — eu cruzo `From`/`To` com nossos telefones e te digo exatamente qual função do projeto está mandando.
 
-### 3. Sem mudança em UI
-O painel `/admin/whatsapp-inbox` já lê `recovery_conversations` por telefone — vai aparecer automaticamente, com ou sem `checkout_session_id`. Pequeno tweak no card de contexto pra mostrar "Tentou PIX – plano X" quando `checkout_session_id` é null mas há `metadata.asaas_payment_id` (busca em `asaas_payments`).
+Alternativa mais rápida: **Twilio Console → Usage → Usage Records → últimos 30 dias, agrupar por `Category` (`messaging-outbound`, `messaging-inbound`, `messaging-mms`, `conversations-*`)** e me mostra a tela. Em 30 segundos eu identifico se é template, conversation fee, ou inbound de webhook.
 
-## Fora do escopo
-- E-mail de recuperação PIX (fluxo de e-mail continua só Stripe).
-- Cobrir leads anteriores ao `WHATSAPP_RECOVERY_CUTOFF` (2026-05-24) — backlog fica como está.
-- PIX expirado: continuamos mandando o template de 24h mesmo se o QR original expirou, porque o template já redireciona para `/v2/checkout` onde o lead gera um novo.
+### Etapa D — Kill switch enquanto investigamos
+Adicionar `system_config.twilio_recovery_enabled` e `system_config.zapi_send_enabled`. Default `true`. Se você suspeitar, desativa por SQL e o cron pula tudo no próximo ciclo. Custo zero, reversível.
 
-## Detalhes técnicos
-- Reusa `sendRecoveryTemplate`, `normalizeBrazilianPhone`, `getPhoneVariations`.
-- Reusa `TEMPLATE_15MIN` e `TEMPLATE_24H` (`{{1}} = nome`).
-- Quiet hours 22h-08h BRT mantidas.
-- Dedup por telefone normalizado dentro do mesmo estágio.
-- Skip também por `phone` já presente em `asaas_payments` com `status IN ('RECEIVED','CONFIRMED')` (cliente já pagou via PIX em outra cobrança).
+### Etapa E — Cost audit dashboard (depois que identificarmos a fonte)
+Tab `/admin/whatsapp-recovery` ganha cards: "Envios por gateway × dia", "Telefones com >2 envios na vida", "Falhas Twilio/Meta separadas por errorCode". Aí você enxerga novo pico assim que aparecer.
 
-## Após deploy
-Próximo cron (≤5min) pega os 2 PENDING das últimas horas (Raiana, Ana Paula) e dispara o template 15min — você vê chegando no inbox `/admin/whatsapp-inbox`.
+## O que eu **não** vou fazer sem tua confirmação
+- Desligar Z-API completamente (pode estar servindo algum fluxo legítimo).
+- Mexer no `aura-agent` ou em qualquer prompt.
+- Mudar templates aprovados Meta.
+
+## Próximo passo
+Sai do plan mode e eu começo pela **Etapa A + B + D** em paralelo (auditoria de gateways + correção recovery + kill switch). A Etapa C depende de você puxar a tela do Twilio Console — manda assim que tiver e eu fecho o diagnóstico.

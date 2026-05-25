@@ -85,6 +85,20 @@ Deno.serve(async (req) => {
 
     console.log("📱 [WA-RECOVERY] Iniciando recuperação WhatsApp (subaccount)...");
 
+    // Kill switch (system_config.twilio_recovery_enabled). Default true.
+    const { data: killCfg } = await supabase
+      .from("system_config")
+      .select("value")
+      .eq("key", "twilio_recovery_enabled")
+      .maybeSingle();
+    if (killCfg && killCfg.value === false) {
+      console.warn("🛑 [WA-RECOVERY] Disabled via system_config.twilio_recovery_enabled=false. Skipping.");
+      return new Response(
+        JSON.stringify({ status: "disabled_by_config" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     if (isQuietHourBRT()) {
       console.log("🌙 [WA-RECOVERY] Quiet hours (22h-08h BRT). Aguardando próximo ciclo.");
       return new Response(
@@ -145,6 +159,44 @@ Deno.serve(async (req) => {
       }
     }
 
+    // === LIFETIME CAP: telefones que já receberam >=2 envios ou já falharam alguma vez ===
+    // Twilio cobra mesmo quando Meta rejeita; tratamos qualquer falha como banimento vitalício.
+    const lifetimeBannedPhones = new Set<string>();
+
+    const { data: outboundLog } = await supabase
+      .from("recovery_messages")
+      .select("phone")
+      .eq("direction", "out")
+      .eq("sent_by_admin", false);
+    if (outboundLog) {
+      const counts = new Map<string, number>();
+      for (const m of outboundLog) {
+        if (!m.phone) continue;
+        const norm = normalizeBrazilianPhone(m.phone);
+        counts.set(norm, (counts.get(norm) ?? 0) + 1);
+      }
+      for (const [norm, c] of counts) {
+        if (c >= 2) {
+          for (const v of getPhoneVariations(norm)) lifetimeBannedPhones.add(v);
+        }
+      }
+    }
+
+    const { data: failedAttempts } = await supabase
+      .from("checkout_recovery_attempts")
+      .select("phone_normalized")
+      .like("status", "wa_%failed")
+      .not("phone_normalized", "is", null);
+    if (failedAttempts) {
+      for (const a of failedAttempts) {
+        if (a.phone_normalized) {
+          for (const v of getPhoneVariations(a.phone_normalized)) lifetimeBannedPhones.add(v);
+        }
+      }
+    }
+
+    console.log(`🚫 [WA-RECOVERY] Lifetime cap: ${lifetimeBannedPhones.size} variações de telefone banidas.`);
+
     const totals = {
       sent: 0,
       failed: 0,
@@ -164,6 +216,7 @@ Deno.serve(async (req) => {
         completedEmailSet,
         completedPhoneSet,
         contactedThisStage,
+        lifetimeBannedPhones,
       );
       const r2 = await processStageAsaas(
         supabase,
@@ -173,6 +226,7 @@ Deno.serve(async (req) => {
         completedEmailSet,
         completedPhoneSet,
         contactedThisStage,
+        lifetimeBannedPhones,
       );
       totals.sent += r1.sent + r2.sent;
       totals.failed += r1.failed + r2.failed;
@@ -209,6 +263,7 @@ async function processStage(
   completedEmailSet: Set<string>,
   completedPhoneSet: Set<string>,
   contactedThisStage: Set<string>,
+  lifetimeBannedPhones: Set<string>,
 ): Promise<{ sent: number; failed: number; skipped: number }> {
   const now = Date.now();
   const createdBefore = new Date(now - cfg.minAgeMinutes * 60 * 1000).toISOString();
@@ -264,6 +319,13 @@ async function processStage(
       const phoneVars = getPhoneVariations(session.phone);
       if (phoneVars.some(v => activePhoneSet.has(v))) {
         await markSkipped(supabase, session.id, cfg, "active_customer_phone");
+        skipped++;
+        continue;
+      }
+
+      // LIFETIME CAP: telefone já recebeu >=2 envios OU já falhou alguma vez.
+      if (phoneVars.some(v => lifetimeBannedPhones.has(v))) {
+        await markSkipped(supabase, session.id, cfg, "phone_lifetime_cap");
         skipped++;
         continue;
       }
@@ -388,6 +450,7 @@ async function processStageAsaas(
   completedEmailSet: Set<string>,
   completedPhoneSet: Set<string>,
   contactedThisStage: Set<string>,
+  lifetimeBannedPhones: Set<string>,
 ): Promise<{ sent: number; failed: number; skipped: number }> {
   const now = Date.now();
   const createdBefore = new Date(now - cfg.minAgeMinutes * 60 * 1000).toISOString();
@@ -442,6 +505,13 @@ async function processStageAsaas(
       const phoneVars = getPhoneVariations(payment.customer_phone);
       if (phoneVars.some(v => activePhoneSet.has(v))) {
         await markSkippedAsaas(supabase, payment.id, cfg, "active_customer_phone");
+        skipped++;
+        continue;
+      }
+
+      // LIFETIME CAP: telefone já recebeu >=2 envios OU já falhou alguma vez.
+      if (phoneVars.some(v => lifetimeBannedPhones.has(v))) {
+        await markSkippedAsaas(supabase, payment.id, cfg, "phone_lifetime_cap");
         skipped++;
         continue;
       }
