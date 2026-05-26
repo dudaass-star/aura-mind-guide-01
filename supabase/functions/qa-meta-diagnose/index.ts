@@ -30,6 +30,16 @@ async function gpost(path: string, token: string, payload?: Record<string, unkno
   return { status: r.status, body };
 }
 
+async function gpostForm(path: string, token: string, payload: Record<string, string>): Promise<{ status: number; body: any }> {
+  const r = await fetch(`https://graph.facebook.com/${V}/${path}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams(payload),
+  });
+  const body = await r.json().catch(() => ({}));
+  return { status: r.status, body };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
@@ -43,6 +53,7 @@ Deno.serve(async (req) => {
 
   const url = new URL(req.url);
   const shouldSubscribe = url.searchParams.get('subscribe') === '1';
+  const shouldConfigureWebhook = url.searchParams.get('configureWebhook') === '1';
   const fields = url.searchParams.get('fields') || 'messages,message_template_status_update,account_update';
   const wabaOverride = url.searchParams.get('waba') || null;
 
@@ -51,7 +62,7 @@ Deno.serve(async (req) => {
 
   // 2) Inspeciona o número e descobre a WABA dona dele
   const phoneInfo = await gget(
-    `${phoneId}?fields=display_phone_number,verified_name,id,whatsapp_business_account{id,name,owner_business_info}`,
+    `${phoneId}?fields=display_phone_number,verified_name,id,quality_rating,code_verification_status,platform_type,name_status,new_name_status,status,throughput`,
     token,
   );
 
@@ -63,12 +74,42 @@ Deno.serve(async (req) => {
 
   // 3) Lista as subscrições da WABA (apps inscritos e campos)
   let wabaSubs: any = null;
+  let wabaPhoneNumbers: any = null;
   if (wabaId) {
     wabaSubs = await gget(`${wabaId}/subscribed_apps`, token);
+    wabaPhoneNumbers = await gget(
+      `${wabaId}/phone_numbers?fields=display_phone_number,verified_name,id,quality_rating,code_verification_status,platform_type,name_status,new_name_status,status,throughput`,
+      token,
+    );
   }
 
   // 4) Tenta descobrir o app id do token
   const appId = debugToken.body?.data?.app_id || null;
+
+  // 4.1) Inspeciona/configura a assinatura de Webhooks do APP para o objeto WhatsApp.
+  // Importante: assinar a WABA no app não basta se o app não tiver callback
+  // configurado para `whatsapp_business_account` com o campo `messages`.
+  const appSecret = Deno.env.get('META_WHATSAPP_APP_SECRET') || Deno.env.get('INSTAGRAM_APP_SECRET');
+  const verifyToken = Deno.env.get('META_WEBHOOK_VERIFY_TOKEN');
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  const callbackUrl = url.searchParams.get('callbackUrl') || (supabaseUrl ? `${supabaseUrl}/functions/v1/webhook-meta` : null);
+  const appAccessToken = appId && appSecret ? `${appId}|${appSecret}` : null;
+
+  let appSubscriptions: any = null;
+  let configureWebhookResult: any = null;
+  if (appId && appAccessToken) {
+    appSubscriptions = await gget(`${appId}/subscriptions`, appAccessToken);
+    if (shouldConfigureWebhook && callbackUrl && verifyToken) {
+      configureWebhookResult = await gpostForm(`${appId}/subscriptions`, appAccessToken, {
+        object: 'whatsapp_business_account',
+        callback_url: callbackUrl,
+        verify_token: verifyToken,
+        fields,
+        include_values: 'true',
+      });
+      appSubscriptions = await gget(`${appId}/subscriptions`, appAccessToken);
+    }
+  }
 
   // 5) Se pediram, tenta inscrever a WABA no app dono do token
   let subscribeResult: any = null;
@@ -100,14 +141,21 @@ Deno.serve(async (req) => {
       tokenDataExpiresAt: debugToken.body?.data?.data_access_expires_at,
       tokenScopes: debugToken.body?.data?.scopes,
       tokenGranular: debugToken.body?.data?.granular_scopes,
+      callbackUrl,
+      hasAppSecret: !!appSecret,
+      hasVerifyToken: !!verifyToken,
     },
     raw: {
       debugToken: debugToken.body,
       phoneInfo: phoneInfo.body,
+      wabaPhoneNumbers: wabaPhoneNumbers?.body,
       wabaSubs: wabaSubs?.body,
+      appSubscriptions: appSubscriptions?.body,
     },
     subscribeAttempted: shouldSubscribe,
     subscribeResult,
+    configureWebhookAttempted: shouldConfigureWebhook,
+    configureWebhookResult,
   }, null, 2), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
