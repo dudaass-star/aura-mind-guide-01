@@ -44,6 +44,7 @@ Deno.serve(async (req) => {
   const url = new URL(req.url);
   const shouldSubscribe = url.searchParams.get('subscribe') === '1';
   const fields = url.searchParams.get('fields') || 'messages,message_template_status_update,account_update';
+  const wabaOverride = url.searchParams.get('waba') || null;
 
   // 1) Inspeciona o token
   const debugToken = await gget(`debug_token?input_token=${token}`, token);
@@ -55,6 +56,7 @@ Deno.serve(async (req) => {
   );
 
   const wabaId =
+    wabaOverride ||
     phoneInfo.body?.whatsapp_business_account?.id ||
     debugToken.body?.data?.granular_scopes?.find((s: any) => s.scope === 'whatsapp_business_messaging')?.target_ids?.[0] ||
     null;
