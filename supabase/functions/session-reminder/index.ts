@@ -400,11 +400,28 @@ Confirma que tá tudo certo? Me responde com "confirmo" ou me avisa se precisar 
 
         const { data: profile } = await supabase
           .from('profiles')
-          .select('name, phone, whatsapp_instance_id')
+          .select('name, phone, whatsapp_instance_id, last_message_date')
           .eq('user_id', session.user_id)
           .maybeSingle();
 
         if (!profile?.phone) { console.log(`⚠️ No phone for session ${session.id}`); continue; }
+
+        // Cutoff de 14 dias: cancela sessão se usuário sumiu há 14+ dias.
+        const lastMsg5m = profile.last_message_date ? new Date(profile.last_message_date) : null;
+        if (lastMsg5m && (Date.now() - lastMsg5m.getTime()) > 14 * 24 * 60 * 60 * 1000) {
+          console.log(`📅 [SESSION_CUTOFF_14D] user=${session.user_id} session=${session.id} last_msg=${profile.last_message_date} (5min reminder)`);
+          await supabase.from('sessions').update({ status: 'cancelled' }).eq('id', session.id);
+          const { data: curProf5 } = await supabase
+            .from('profiles')
+            .select('pending_insight')
+            .eq('user_id', session.user_id)
+            .maybeSingle();
+          const cur5 = curProf5?.pending_insight as string | null | undefined;
+          if (cur5 && cur5.includes(session.id)) {
+            await supabase.from('profiles').update({ pending_insight: null }).eq('user_id', session.user_id);
+          }
+          continue;
+        }
 
         const userName = profile.name || 'você';
         const message = `Faltam 5 minutinhos pra nossa sessão, ${userName}! ✨\n\nJá estou aqui te esperando. Quando estiver pronta, é só me mandar uma mensagem que a gente começa. 💜`;
