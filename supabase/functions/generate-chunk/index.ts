@@ -1,73 +1,19 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { create } from "https://deno.land/x/djwt@v3.0.2/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Configuração de voz para meditações (mais lenta que conversação normal)
-const MEDITATION_VOICE_CONFIG = {
-  voiceName: "Erinome",
-  speakingRate: 1.15,
-  stylePrompt: "O tom é muito calmo, suave e hipnótico. Voz serena como uma guia de meditação. Pausas naturais entre frases. Respiração tranquila, sem pressa. Como uma guia espiritual gentil conduzindo uma jornada interior."
+// Inworld TTS — mesma voz usada pela Aura no chat, cadência mais lenta para meditação
+const INWORLD_CONFIG = {
+  voiceId: "default-m-ple0rtxdeidhocwm57qw__aura",
+  modelId: "inworld-tts-1.5-max",
+  speakingRate: 1.0,
+  temperature: 1.0,
 };
-
-interface ServiceAccountCredentials {
-  project_id: string;
-  private_key: string;
-  client_email: string;
-}
-
-// Converte PEM para CryptoKey
-async function importPrivateKey(pem: string): Promise<CryptoKey> {
-  const pemContents = pem
-    .replace("-----BEGIN PRIVATE KEY-----", "")
-    .replace("-----END PRIVATE KEY-----", "")
-    .replace(/\n/g, "");
-  
-  const binaryKey = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0));
-  
-  return await crypto.subtle.importKey(
-    "pkcs8",
-    binaryKey,
-    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
-    false,
-    ["sign"]
-  );
-}
-
-// Gera JWT e troca por Access Token
-async function getAccessToken(serviceAccount: ServiceAccountCredentials): Promise<string> {
-  const now = Math.floor(Date.now() / 1000);
-  
-  const jwt = await create(
-    { alg: "RS256", typ: "JWT" },
-    {
-      iss: serviceAccount.client_email,
-      scope: "https://www.googleapis.com/auth/cloud-platform",
-      aud: "https://oauth2.googleapis.com/token",
-      iat: now,
-      exp: now + 3600,
-    },
-    await importPrivateKey(serviceAccount.private_key)
-  );
-
-  const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`,
-  });
-
-  if (!tokenResponse.ok) {
-    throw new Error(`Failed to get access token: ${tokenResponse.status}`);
-  }
-
-  const tokenData = await tokenResponse.json();
-  return tokenData.access_token;
-}
 
 // Divide script em chunks de ~1200 chars
 function splitScriptIntoChunks(script: string, maxChars = 1200): string[] {
@@ -95,59 +41,39 @@ function splitScriptIntoChunks(script: string, maxChars = 1200): string[] {
   return chunks;
 }
 
-// Gera áudio para um texto
-async function generateAudio(
-  text: string,
-  accessToken: string,
-  projectId: string
-): Promise<Uint8Array> {
-  console.log(`🎙️ Generating audio for ${text.length} chars...`);
-  
-  const response = await fetch(
-    "https://texttospeech.googleapis.com/v1/text:synthesize",
-    {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-        "x-goog-user-project": projectId,
-      },
-      body: JSON.stringify({
-        input: {
-          prompt: MEDITATION_VOICE_CONFIG.stylePrompt,
-          text: text,
-        },
-        voice: {
-          languageCode: "pt-BR",
-          name: MEDITATION_VOICE_CONFIG.voiceName,
-          modelName: "gemini-2.5-pro-tts",
-        },
-        audioConfig: {
-          audioEncoding: "MP3",
-          speakingRate: MEDITATION_VOICE_CONFIG.speakingRate,
-        },
-      }),
-    }
-  );
+// Gera áudio MP3 via Inworld TTS (voz Aura)
+async function generateAudio(text: string, apiKey: string): Promise<Uint8Array> {
+  console.log(`🎙️ Generating audio for ${text.length} chars via Inworld (voz Aura)...`);
+
+  const response = await fetch("https://api.inworld.ai/tts/v1/voice", {
+    method: "POST",
+    headers: {
+      "Authorization": `Basic ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      text,
+      voiceId: INWORLD_CONFIG.voiceId,
+      modelId: INWORLD_CONFIG.modelId,
+      speakingRate: INWORLD_CONFIG.speakingRate,
+      temperature: INWORLD_CONFIG.temperature,
+    }),
+  });
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error("TTS error:", response.status, errorText);
-    throw new Error(`TTS API error: ${response.status}`);
+    console.error("Inworld TTS error:", response.status, errorText);
+    throw new Error(`Inworld TTS error: ${response.status}`);
   }
 
   const data = await response.json();
-  
   if (!data.audioContent) {
-    throw new Error("No audio content in response");
+    throw new Error("No audio content in Inworld response");
   }
 
   const binaryString = atob(data.audioContent);
   const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  
+  for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
   return bytes;
 }
 
@@ -236,17 +162,14 @@ async function processChunkAsync(
     const chunkText = chunks[chunk_index];
     console.log(`📝 Chunk ${chunk_index}: ${chunkText.length} chars`);
 
-    // Carregar credenciais GCP
-    const gcpServiceAccountJson = Deno.env.get('GCP_SERVICE_ACCOUNT');
-    if (!gcpServiceAccountJson) {
-      throw new Error('GCP credentials not configured');
+    // Carregar credencial Inworld (mesma voz da Aura)
+    const inworldApiKey = Deno.env.get('INWORLD_API_KEY');
+    if (!inworldApiKey) {
+      throw new Error('Inworld credentials not configured');
     }
 
-    const serviceAccount: ServiceAccountCredentials = JSON.parse(gcpServiceAccountJson);
-    const accessToken = await getAccessToken(serviceAccount);
-
     // Gerar áudio
-    const audioBytes = await generateAudio(chunkText, accessToken, serviceAccount.project_id);
+    const audioBytes = await generateAudio(chunkText, inworldApiKey);
     console.log(`✅ Audio generated: ${audioBytes.byteLength} bytes`);
 
     // Log TTS usage for meditation chunk
@@ -254,7 +177,7 @@ async function processChunkAsync(
       await supabase.from('token_usage_logs').insert({
         function_name: 'generate-chunk',
         call_type: 'tts-meditation',
-        model: 'google/gemini-2.5-pro-tts',
+        model: 'inworld/aura',
         prompt_tokens: chunkText.length,
         completion_tokens: audioBytes.byteLength,
         total_tokens: chunkText.length,
@@ -426,17 +349,14 @@ serve(async (req) => {
     const chunkText = chunks[chunk_index];
     console.log(`📝 Chunk ${chunk_index}: ${chunkText.length} chars`);
 
-    // Carregar credenciais GCP
-    const gcpServiceAccountJson = Deno.env.get('GCP_SERVICE_ACCOUNT');
-    if (!gcpServiceAccountJson) {
-      throw new Error('GCP credentials not configured');
+    // Carregar credencial Inworld (mesma voz da Aura)
+    const inworldApiKey = Deno.env.get('INWORLD_API_KEY');
+    if (!inworldApiKey) {
+      throw new Error('Inworld credentials not configured');
     }
 
-    const serviceAccount: ServiceAccountCredentials = JSON.parse(gcpServiceAccountJson);
-    const accessToken = await getAccessToken(serviceAccount);
-
     // Gerar áudio
-    const audioBytes = await generateAudio(chunkText, accessToken, serviceAccount.project_id);
+    const audioBytes = await generateAudio(chunkText, inworldApiKey);
     console.log(`✅ Audio generated: ${audioBytes.byteLength} bytes`);
 
     // Log TTS usage for meditation chunk (sync mode)
@@ -444,7 +364,7 @@ serve(async (req) => {
       await supabase.from('token_usage_logs').insert({
         function_name: 'generate-chunk',
         call_type: 'tts-meditation',
-        model: 'google/gemini-2.5-pro-tts',
+        model: 'inworld/aura',
         prompt_tokens: chunkText.length,
         completion_tokens: audioBytes.byteLength,
         total_tokens: chunkText.length,
