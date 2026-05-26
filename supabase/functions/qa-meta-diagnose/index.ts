@@ -64,7 +64,7 @@ Deno.serve(async (req) => {
 
   // 2) Inspeciona o número e descobre a WABA dona dele
   const phoneInfo = await gget(
-    `${phoneId}?fields=display_phone_number,verified_name,id,quality_rating,code_verification_status,platform_type,name_status,new_name_status,status,throughput,whatsapp_business_account`,
+    `${phoneId}?fields=display_phone_number,verified_name,id,quality_rating,code_verification_status,platform_type,name_status,new_name_status,status,throughput`,
     token,
   );
 
@@ -132,7 +132,7 @@ Deno.serve(async (req) => {
 
   const subscribedApps = Array.isArray(wabaSubs?.body?.data) ? wabaSubs.body.data : [];
   const appSubscribedToWaba = appId
-    ? subscribedApps.some((app: any) => String(app.id) === String(appId))
+    ? subscribedApps.some((app: any) => String(app.id ?? app.whatsapp_business_api_data?.id) === String(appId))
     : false;
 
   return new Response(JSON.stringify({
