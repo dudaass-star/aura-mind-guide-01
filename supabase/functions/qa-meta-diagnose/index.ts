@@ -5,6 +5,7 @@
 //   GET  /qa-meta-diagnose                -> diagnóstico read-only
 //   GET  /qa-meta-diagnose?subscribe=1    -> tenta inscrever a WABA no app
 //   GET  /qa-meta-diagnose?subscribeWaba=1 -> alias explícito para inscrição da WABA
+//   GET  /qa-meta-diagnose?clearOverride=1 -> remove override de callback do número e da WABA
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -56,6 +57,7 @@ Deno.serve(async (req) => {
   const url = new URL(req.url);
   const shouldSubscribe = url.searchParams.get('subscribe') === '1' || url.searchParams.get('subscribeWaba') === '1';
   const shouldConfigureWebhook = url.searchParams.get('configureWebhook') === '1';
+  const shouldClearOverride = url.searchParams.get('clearOverride') === '1';
   const fields = url.searchParams.get('fields') || 'messages,message_template_status_update,account_update';
   const wabaOverride = url.searchParams.get('waba') || null;
 
@@ -64,7 +66,7 @@ Deno.serve(async (req) => {
 
   // 2) Inspeciona o número e descobre a WABA dona dele
   const phoneInfo = await gget(
-    `${phoneId}?fields=display_phone_number,verified_name,id,quality_rating,code_verification_status,platform_type,name_status,new_name_status,status,throughput`,
+    `${phoneId}?fields=display_phone_number,verified_name,id,quality_rating,code_verification_status,platform_type,name_status,new_name_status,status,throughput,webhook_configuration`,
     token,
   );
 
@@ -78,6 +80,7 @@ Deno.serve(async (req) => {
   let wabaSubs: any = null;
   let wabaPhoneNumbers: any = null;
   if (wabaId) {
+    // Inclui override_callback_uri para detectar redirecionamento da WABA
     wabaSubs = await gget(`${wabaId}/subscribed_apps`, token);
     wabaPhoneNumbers = await gget(
       `${wabaId}/phone_numbers?fields=display_phone_number,verified_name,id,quality_rating,code_verification_status,platform_type,name_status,new_name_status,status,throughput`,
@@ -135,12 +138,65 @@ Deno.serve(async (req) => {
     ? subscribedApps.some((app: any) => String(app.id ?? app.whatsapp_business_api_data?.id) === String(appId))
     : false;
 
+  // ============================================================================
+  // Detecção de override de webhook (callback redirecionado para outro endpoint)
+  // Doc: https://developers.facebook.com/docs/whatsapp/cloud-api/webhooks/override
+  // ============================================================================
+  const phoneWebhookConfig = phoneInfo.body?.webhook_configuration || null;
+  const phoneOverrideCallback = phoneWebhookConfig?.phone_number || null;
+  const wabaOverrideCallback = subscribedApps
+    .map((app: any) => app?.override_callback_uri)
+    .find((u: any) => typeof u === 'string' && u.length > 0) || null;
+
+  const expectedCallback = callbackUrl;
+  const effectiveCallback = phoneOverrideCallback || wabaOverrideCallback || expectedCallback;
+  const overrideMismatch =
+    !!(phoneOverrideCallback || wabaOverrideCallback) &&
+    effectiveCallback !== expectedCallback;
+
+  // Opcionalmente remove overrides para forçar a Meta a usar o callback do App
+  let clearOverrideResult: any = null;
+  if (shouldClearOverride) {
+    const clearPhone = await gpost(`${phoneId}`, token, {
+      webhook_configuration: { override_callback_uri: '', verify_token: '' },
+    });
+    // Re-subscribe sem body remove o override no nível da WABA
+    const clearWaba = wabaId ? await gpost(`${wabaId}/subscribed_apps`, token) : null;
+    clearOverrideResult = { clearPhone, clearWaba };
+  }
+
+  // Diagnóstico humano-legível: o que pode estar bloqueando inbound
+  const blockers: string[] = [];
+  if (!appSubscribedToWaba) blockers.push('App não está inscrito na WABA via /{WABA_ID}/subscribed_apps.');
+  const hasMessagesField =
+    Array.isArray(appSubscriptions?.body?.data) &&
+    appSubscriptions.body.data.some(
+      (s: any) =>
+        s.object === 'whatsapp_business_account' &&
+        Array.isArray(s.fields) &&
+        s.fields.some((f: any) => f.name === 'messages' && s.active),
+    );
+  if (!hasMessagesField) blockers.push('App não tem subscription ativa para object=whatsapp_business_account com field=messages.');
+  if (overrideMismatch) {
+    blockers.push(
+      `Override de callback aponta para ${effectiveCallback} em vez de ${expectedCallback}. ` +
+      'Mensagens estão indo para outro endpoint. Rode ?clearOverride=1 para remover.',
+    );
+  }
+
   return new Response(JSON.stringify({
     summary: {
       phoneNumberId: phoneId,
       wabaId,
       appId,
       appSubscribedToWaba,
+      hasMessagesField,
+      expectedCallback,
+      effectiveCallback,
+      phoneOverrideCallback,
+      wabaOverrideCallback,
+      overrideMismatch,
+      blockers,
       displayPhoneNumber: phoneInfo.body?.display_phone_number,
       verifiedName: phoneInfo.body?.verified_name,
       tokenIsValid: debugToken.body?.data?.is_valid,
@@ -164,6 +220,8 @@ Deno.serve(async (req) => {
     subscribeResult,
     configureWebhookAttempted: shouldConfigureWebhook,
     configureWebhookResult,
+    clearOverrideAttempted: shouldClearOverride,
+    clearOverrideResult,
   }, null, 2), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
