@@ -162,17 +162,14 @@ async function processChunkAsync(
     const chunkText = chunks[chunk_index];
     console.log(`📝 Chunk ${chunk_index}: ${chunkText.length} chars`);
 
-    // Carregar credenciais GCP
-    const gcpServiceAccountJson = Deno.env.get('GCP_SERVICE_ACCOUNT');
-    if (!gcpServiceAccountJson) {
-      throw new Error('GCP credentials not configured');
+    // Carregar credencial Inworld (mesma voz da Aura)
+    const inworldApiKey = Deno.env.get('INWORLD_API_KEY');
+    if (!inworldApiKey) {
+      throw new Error('Inworld credentials not configured');
     }
 
-    const serviceAccount: ServiceAccountCredentials = JSON.parse(gcpServiceAccountJson);
-    const accessToken = await getAccessToken(serviceAccount);
-
     // Gerar áudio
-    const audioBytes = await generateAudio(chunkText, accessToken, serviceAccount.project_id);
+    const audioBytes = await generateAudio(chunkText, inworldApiKey);
     console.log(`✅ Audio generated: ${audioBytes.byteLength} bytes`);
 
     // Log TTS usage for meditation chunk
@@ -180,7 +177,7 @@ async function processChunkAsync(
       await supabase.from('token_usage_logs').insert({
         function_name: 'generate-chunk',
         call_type: 'tts-meditation',
-        model: 'google/gemini-2.5-pro-tts',
+        model: 'inworld/aura',
         prompt_tokens: chunkText.length,
         completion_tokens: audioBytes.byteLength,
         total_tokens: chunkText.length,
@@ -352,17 +349,14 @@ serve(async (req) => {
     const chunkText = chunks[chunk_index];
     console.log(`📝 Chunk ${chunk_index}: ${chunkText.length} chars`);
 
-    // Carregar credenciais GCP
-    const gcpServiceAccountJson = Deno.env.get('GCP_SERVICE_ACCOUNT');
-    if (!gcpServiceAccountJson) {
-      throw new Error('GCP credentials not configured');
+    // Carregar credencial Inworld (mesma voz da Aura)
+    const inworldApiKey = Deno.env.get('INWORLD_API_KEY');
+    if (!inworldApiKey) {
+      throw new Error('Inworld credentials not configured');
     }
 
-    const serviceAccount: ServiceAccountCredentials = JSON.parse(gcpServiceAccountJson);
-    const accessToken = await getAccessToken(serviceAccount);
-
     // Gerar áudio
-    const audioBytes = await generateAudio(chunkText, accessToken, serviceAccount.project_id);
+    const audioBytes = await generateAudio(chunkText, inworldApiKey);
     console.log(`✅ Audio generated: ${audioBytes.byteLength} bytes`);
 
     // Log TTS usage for meditation chunk (sync mode)
@@ -370,7 +364,7 @@ serve(async (req) => {
       await supabase.from('token_usage_logs').insert({
         function_name: 'generate-chunk',
         call_type: 'tts-meditation',
-        model: 'google/gemini-2.5-pro-tts',
+        model: 'inworld/aura',
         prompt_tokens: chunkText.length,
         completion_tokens: audioBytes.byteLength,
         total_tokens: chunkText.length,
