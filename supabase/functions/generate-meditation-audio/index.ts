@@ -1,127 +1,58 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
-import { create } from "https://deno.land/x/djwt@v3.0.2/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Configuração de voz para meditações (mais lenta que conversação normal)
-const MEDITATION_VOICE_CONFIG = {
-  voiceName: "Erinome",
-  speakingRate: 1.15,
-  stylePrompt: "O tom é muito calmo, suave e hipnótico. Voz serena como uma guia de meditação. Pausas naturais entre frases. Respiração tranquila, sem pressa. Como uma guia espiritual gentil conduzindo uma jornada interior."
+// Inworld TTS — mesma voz usada pela Aura no chat, cadência mais lenta para meditação
+const INWORLD_CONFIG = {
+  voiceId: "default-m-ple0rtxdeidhocwm57qw__aura",
+  modelId: "inworld-tts-1.5-max",
+  speakingRate: 1.0,
+  temperature: 1.0,
 };
 
-interface ServiceAccountCredentials {
-  project_id: string;
-  private_key: string;
-  client_email: string;
-}
-
-// Converte PEM para CryptoKey
-async function importPrivateKey(pem: string): Promise<CryptoKey> {
-  const pemContents = pem
-    .replace("-----BEGIN PRIVATE KEY-----", "")
-    .replace("-----END PRIVATE KEY-----", "")
-    .replace(/\n/g, "");
-  
-  const binaryKey = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0));
-  
-  return await crypto.subtle.importKey(
-    "pkcs8",
-    binaryKey,
-    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
-    false,
-    ["sign"]
-  );
-}
-
-// Gera JWT e troca por Access Token
-async function getAccessToken(serviceAccount: ServiceAccountCredentials): Promise<string> {
-  const now = Math.floor(Date.now() / 1000);
-  
-  const jwt = await create(
-    { alg: "RS256", typ: "JWT" },
-    {
-      iss: serviceAccount.client_email,
-      scope: "https://www.googleapis.com/auth/cloud-platform",
-      aud: "https://oauth2.googleapis.com/token",
-      iat: now,
-      exp: now + 3600,
-    },
-    await importPrivateKey(serviceAccount.private_key)
-  );
-
-  const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`,
-  });
-
-  if (!tokenResponse.ok) {
-    throw new Error(`Failed to get access token: ${tokenResponse.status}`);
-  }
-
-  const tokenData = await tokenResponse.json();
-  return tokenData.access_token;
-}
-
-// Gera áudio para um chunk de texto (limite 2000 chars)
-async function generateAudioChunk(
-  text: string,
-  accessToken: string,
-  projectId: string
-): Promise<Uint8Array | null> {
-  const response = await fetch(
-    "https://texttospeech.googleapis.com/v1/text:synthesize",
-    {
+// Gera áudio MP3 de um chunk via Inworld TTS
+async function generateInworldChunk(text: string, apiKey: string): Promise<Uint8Array | null> {
+  try {
+    const response = await fetch("https://api.inworld.ai/tts/v1/voice", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${accessToken}`,
+        "Authorization": `Basic ${apiKey}`,
         "Content-Type": "application/json",
-        "x-goog-user-project": projectId,
       },
       body: JSON.stringify({
-        input: {
-          prompt: MEDITATION_VOICE_CONFIG.stylePrompt,
-          text: text,
-        },
-        voice: {
-          languageCode: "pt-BR",
-          name: MEDITATION_VOICE_CONFIG.voiceName,
-          modelName: "gemini-2.5-pro-tts",
-        },
-        audioConfig: {
-          audioEncoding: "MP3",
-          speakingRate: MEDITATION_VOICE_CONFIG.speakingRate,
-        },
+        text,
+        voiceId: INWORLD_CONFIG.voiceId,
+        modelId: INWORLD_CONFIG.modelId,
+        speakingRate: INWORLD_CONFIG.speakingRate,
+        temperature: INWORLD_CONFIG.temperature,
       }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Inworld TTS chunk error:", response.status, errorText);
+      return null;
     }
-  );
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error("TTS chunk error:", response.status, errorText);
+    const data = await response.json();
+    if (!data.audioContent) {
+      console.error("Inworld TTS: resposta sem audioContent");
+      return null;
+    }
+
+    const binaryString = atob(data.audioContent);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
+    return bytes;
+  } catch (err) {
+    console.error("Inworld TTS exception:", err);
     return null;
   }
-
-  const data = await response.json();
-  
-  if (!data.audioContent) {
-    return null;
-  }
-
-  const binaryString = atob(data.audioContent);
-  const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  
-  return bytes;
 }
 
 // Divide script em chunks de ~1200 chars para geração mais rápida
@@ -208,17 +139,15 @@ serve(async (req) => {
       });
     }
 
-    // Carregar credenciais GCP
-    const gcpServiceAccountJson = Deno.env.get('GCP_SERVICE_ACCOUNT');
-    if (!gcpServiceAccountJson) {
-      return new Response(JSON.stringify({ error: 'GCP credentials not configured' }), {
+    // Carregar credencial Inworld (mesma voz usada pela Aura)
+    const inworldApiKey = Deno.env.get('INWORLD_API_KEY');
+    if (!inworldApiKey) {
+      console.error('❌ INWORLD_API_KEY not configured');
+      return new Response(JSON.stringify({ error: 'Inworld credentials not configured' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-
-    const serviceAccount: ServiceAccountCredentials = JSON.parse(gcpServiceAccountJson);
-    const accessToken = await getAccessToken(serviceAccount);
 
     // Dividir script em chunks
     const chunks = splitScriptIntoChunks(meditation.script);
@@ -233,9 +162,9 @@ serve(async (req) => {
       const batchPromises: Promise<void>[] = [];
       
       for (let i = batchStart; i < batchEnd; i++) {
-        console.log(`🎙️ Generating chunk ${i + 1}/${chunks.length}...`);
+        console.log(`🎙️ Generating chunk ${i + 1}/${chunks.length} via Inworld (voz Aura)...`);
         batchPromises.push(
-          generateAudioChunk(chunks[i], accessToken, serviceAccount.project_id)
+          generateInworldChunk(chunks[i], inworldApiKey)
             .then(audioBytes => {
               if (!audioBytes) {
                 throw new Error(`Failed to generate audio chunk ${i + 1}`);
@@ -260,13 +189,13 @@ serve(async (req) => {
     const finalAudio = concatenateAudioBuffers(audioBuffers);
     console.log(`✅ Final audio: ${finalAudio.byteLength} bytes`);
 
-    // Log consolidated TTS usage for the entire meditation
+    // Log consolidado de uso TTS (Inworld)
     try {
       const totalChars = meditation.script.length;
       await supabase.from('token_usage_logs').insert({
         function_name: 'generate-meditation-audio',
         call_type: 'tts-meditation',
-        model: 'google/gemini-2.5-pro-tts',
+        model: 'inworld/aura',
         prompt_tokens: totalChars,
         completion_tokens: finalAudio.byteLength,
         total_tokens: totalChars,
