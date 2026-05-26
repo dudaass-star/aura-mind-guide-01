@@ -23,29 +23,44 @@ function isValidPhone(phone: string): boolean {
  * Verifica assinatura do webhook Meta (X-Hub-Signature-256)
  */
 async function verifySignature(body: string, signature: string | null): Promise<boolean> {
-  const appSecret = Deno.env.get('INSTAGRAM_APP_SECRET');
-  if (!appSecret) {
-    console.warn('⚠️ INSTAGRAM_APP_SECRET not set, skipping signature verification');
-    return true;
-  }
   if (!signature) return false;
 
   const expectedPrefix = 'sha256=';
   if (!signature.startsWith(expectedPrefix)) return false;
 
   const expectedHash = signature.substring(expectedPrefix.length);
-  const key = await crypto.subtle.importKey(
-    'raw',
-    new TextEncoder().encode(appSecret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  );
-  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(body));
-  const hashArray = Array.from(new Uint8Array(sig));
-  const computedHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 
-  return computedHash === expectedHash;
+  // Tenta validar com múltiplos app secrets (WhatsApp e Instagram podem estar
+  // em apps Meta diferentes). O primeiro que bater valida o webhook.
+  const candidates = [
+    { name: 'META_WHATSAPP_APP_SECRET', value: Deno.env.get('META_WHATSAPP_APP_SECRET') },
+    { name: 'INSTAGRAM_APP_SECRET', value: Deno.env.get('INSTAGRAM_APP_SECRET') },
+  ].filter((s): s is { name: string; value: string } => Boolean(s.value));
+
+  if (candidates.length === 0) {
+    console.warn('⚠️ Nenhum app secret configurado; pulando verificação de assinatura');
+    return true;
+  }
+
+  for (const secret of candidates) {
+    const key = await crypto.subtle.importKey(
+      'raw',
+      new TextEncoder().encode(secret.value),
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign'],
+    );
+    const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(body));
+    const hashArray = Array.from(new Uint8Array(sig));
+    const computedHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    if (computedHash === expectedHash) {
+      console.log(`✅ Assinatura Meta válida via ${secret.name}`);
+      return true;
+    }
+  }
+
+  console.warn('❌ Assinatura não bateu com nenhum app secret configurado');
+  return false;
 }
 
 Deno.serve(async (req) => {
