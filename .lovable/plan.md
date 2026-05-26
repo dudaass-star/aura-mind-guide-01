@@ -1,33 +1,22 @@
-## Problema
+## Adicionar botão para visualizar texto completo da meditação no Admin
 
-O card "Recuperação por WhatsApp" mostra **1 converteram**, mas no banco há **5 conversões reais** após disparos de WhatsApp (consulta validada agora). Ontem houve recuperações que não estão aparecendo.
+### Contexto
+O painel admin de meditações (`AdminMeditations.tsx`) exibe uma tabela com todas as meditações, incluindo colunas para título, categoria, script (tamanho em chars), chunks, status, etc. Cada meditação já tem o campo `script` carregado no objeto. O objetivo é permitir que o administrador visualize o texto completo do script diretamente no painel.
 
-## Causa
+### Implementação
 
-Em `src/pages/AdminEngagement.tsx` (`fetchRecoverySessions`), as métricas `stage1`, `stage2`, `errors` e `unique` são calculadas via `count: 'exact'` sobre toda a tabela `checkout_sessions` (por isso aparecem 499 / 483 / 46 / 63 corretamente).
+1. **Imports**: Adicionar `Dialog`, `DialogContent`, `DialogHeader`, `DialogTitle`, `DialogTrigger` e o ícone `FileText` do lucide-react.
 
-Mas o `converted` é calculado em cima de `waSessions = enriched.filter(...)`, e `enriched` vem de `uniqueSessions`, que por sua vez é construído a partir de uma query com **`.limit(50)`** (linha 358). Só as 50 sessões abandonadas mais recentes entram no cálculo — sessões mais antigas que converteram (inclusive as de ontem) ficam fora.
+2. **Estado local**: Adicionar estado `selectedScript` para controlar qual script está aberto no modal (ou usar um Dialog inline por linha).
 
-Resultado: 1 conversão visível ≠ 5 conversões reais.
+3. **Botão na tabela**: Na coluna "Ações" (`TableCell className="text-right"`), adicionar um botão com ícone `FileText` (tamanho `sm`, variante `ghost`, title="Ver script") que abre um Dialog com o texto completo do `med.script`.
 
-## Plano
+4. **Modal de exibição**: O Dialog conterá:
+   - Título: o título da meditação + " — Script"
+   - Corpo: área de texto somente leitura ou `<pre>`/`<div className="whitespace-pre-wrap">` com o conteúdo de `med.script`, dentro de um container scrollável (`max-h-[60vh] overflow-y-auto`) para não quebrar o layout em scripts longos.
 
-Calcular `whatsappStats.converted` no servidor, sem depender do `limit(50)` usado para popular a tabela de detalhes.
+### Onde colocar
+- Botão na coluna de ações, antes dos demais botões (Play, Download, Upload, Delete, Gerar).
+- Dialog renderizado inline dentro do `TableRow`, com trigger no botão.
 
-Em `src/pages/AdminEngagement.tsx`, dentro de `fetchRecoverySessions`:
-
-1. Adicionar uma query dedicada que traga **todas** as sessões com `whatsapp_recovery_15min_sent_at` ou `whatsapp_recovery_24h_sent_at` não nulos, selecionando apenas `email, phone, whatsapp_recovery_15min_sent_at, whatsapp_recovery_24h_sent_at` (campos leves).
-2. Trazer também todas as `checkout_sessions` com `status='completed'` cujos `email`/`phone` batam com esse conjunto (mesma estratégia atual de `completedByEmail` / `completedByPhone`, mas aplicada ao conjunto completo de WA).
-3. Calcular `converted` como o número de sessões WA em que existe um checkout `completed` posterior ao primeiro `sent_at` (lógica idêntica à atual, só que sobre o universo completo).
-4. Usar esse valor em `setWhatsappStats({ ..., converted })`.
-5. A tabela de detalhes "Recuperações abandonadas" continua usando o `.limit(50)` atual — não muda nada na UI fora do número do card.
-
-## Validação
-
-- Após o deploy, o card deve mostrar **5 converteram** (estado atual do banco), não 1.
-- Os outros números (499 / 483 / 46 / 63) seguem inalterados.
-- Confirmar visualmente em `/admin/engagement`.
-
-## Escopo
-
-Mudança isolada em uma função do front-end (`fetchRecoverySessions`). Sem alteração de schema, edge functions ou lógica de envio.
+### Nenhuma mudança de schema ou backend necessária — o campo `script` já está presente no objeto `MeditationWithAudio`.

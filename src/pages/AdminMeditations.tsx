@@ -12,7 +12,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { RefreshCw, Play, CheckCircle, XCircle, Clock, Loader2, Pause, X, Download, Upload, Trash2, ShieldAlert } from "lucide-react";
+import { RefreshCw, Play, CheckCircle, XCircle, Clock, Loader2, Pause, X, Download, Upload, Trash2, ShieldAlert, FileText } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
