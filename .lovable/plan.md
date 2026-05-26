@@ -1,63 +1,33 @@
-## Contexto
+## Problema
 
-Direção/Transformação já agendam normalmente após D0 — não há bug. O único gap real é no **Essencial**:
+O card "Recuperação por WhatsApp" mostra **1 converteram**, mas no banco há **5 conversões reais** após disparos de WhatsApp (consulta validada agora). Ontem houve recuperações que não estão aparecendo.
 
-- D0 é a única sessão do mês (correto pelo plano). Se ela é concluída, a próxima vem só no dia 1 do mês seguinte via `monthly-schedule-renewal`. **Manter essa regra.**
-- O problema: quando o usuário Essencial **não responde ao convite D0** (ou recusa sem horário), nenhum cron lembra ele depois — `schedule-setup-reminder` exclui Essencial no filtro `.in('plan', ['direcao', 'transformacao'])`. Resultado: usuários ficam com `pending_first_session_invite=true` ou `needs_schedule_setup=true` parados por dias sem reativação.
+## Causa
 
-Vou fazer **2 mudanças cirúrgicas**, sem mexer no fluxo pós-D0 dos outros planos.
+Em `src/pages/AdminEngagement.tsx` (`fetchRecoverySessions`), as métricas `stage1`, `stage2`, `errors` e `unique` são calculadas via `count: 'exact'` sobre toda a tabela `checkout_sessions` (por isso aparecem 499 / 483 / 46 / 63 corretamente).
 
----
+Mas o `converted` é calculado em cima de `waSessions = enriched.filter(...)`, e `enriched` vem de `uniqueSessions`, que por sua vez é construído a partir de uma query com **`.limit(50)`** (linha 358). Só as 50 sessões abandonadas mais recentes entram no cálculo — sessões mais antigas que converteram (inclusive as de ontem) ficam fora.
 
-## Mudanças
+Resultado: 1 conversão visível ≠ 5 conversões reais.
 
-### 1. `schedule-setup-reminder/index.ts` — incluir Essencial
+## Plano
 
-Trocar nos 2 blocos (primeiro lembrete 48–96h e lembrete urgente):
-```
-.in('plan', ['direcao', 'transformacao'])
-```
-por:
-```
-.in('plan', ['essencial', 'direcao', 'transformacao'])
-```
+Calcular `whatsappStats.converted` no servidor, sem depender do `limit(50)` usado para popular a tabela de detalhes.
 
-Efeito: usuários Essencial com `needs_schedule_setup=true` (D0 recusada/não respondida) passam a receber os mesmos 2 toques que os outros planos. Como o plano só tem 1 sessão/mês, o bloco `CRIAR_AGENDA` do prompt da Aura (linha 5868 do `aura-agent`) já injeta o exemplo certo de 1 data via memória `setup-mensal-essential-aware`.
+Em `src/pages/AdminEngagement.tsx`, dentro de `fetchRecoverySessions`:
 
-### 2. `session-reminder/index.ts` — cutoff de 14 dias
+1. Adicionar uma query dedicada que traga **todas** as sessões com `whatsapp_recovery_15min_sent_at` ou `whatsapp_recovery_24h_sent_at` não nulos, selecionando apenas `email, phone, whatsapp_recovery_15min_sent_at, whatsapp_recovery_24h_sent_at` (campos leves).
+2. Trazer também todas as `checkout_sessions` com `status='completed'` cujos `email`/`phone` batam com esse conjunto (mesma estratégia atual de `completedByEmail` / `completedByPhone`, mas aplicada ao conjunto completo de WA).
+3. Calcular `converted` como o número de sessões WA em que existe um checkout `completed` posterior ao primeiro `sent_at` (lógica idêntica à atual, só que sobre o universo completo).
+4. Usar esse valor em `setWhatsappStats({ ..., converted })`.
+5. A tabela de detalhes "Recuperações abandonadas" continua usando o `.limit(50)` atual — não muda nada na UI fora do número do card.
 
-Antes de enviar lembrete T-24h ou T-5min de uma sessão `scheduled`, verificar `last_message_date`:
+## Validação
 
-- Se `last_message_date < now() - 14 days`:
-  - `UPDATE sessions SET status='cancelled'` para a sessão alvo
-  - Limpar `pending_insight` relacionado, se houver
-  - Pular envio do template
-  - Log: `📅 [SESSION_CUTOFF_14D] user=<id> session=<id> last_msg=<date>`
-- Caso contrário: comportamento atual (envia lembrete).
+- Após o deploy, o card deve mostrar **5 converteram** (estado atual do banco), não 1.
+- Os outros números (499 / 483 / 46 / 63) seguem inalterados.
+- Confirmar visualmente em `/admin/engagement`.
 
-Substitui o cutoff antigo de 7 dias (que apenas silenciava o T-24h e nada fazia no T-5min).
+## Escopo
 
-### 3. Memória
-
-Atualizar `mem://features/whatsapp/session-reminder-flow` adicionando a regra de 14 dias (cancela sessão + limpa insight). Atualizar a entrada `setup-mensal-essential-aware` no índice para refletir que `schedule-setup-reminder` agora cobre Essencial.
-
----
-
-## Detalhes técnicos
-
-- **Sem migrações**: colunas já existem (`profiles.last_message_date`, `sessions.status`, `pending_insight.session_id`).
-- **Quiet hours**: cutoff roda antes do gate de envio; cancelamento ocorre 24/7, envio respeita 22h–08h normalmente.
-- **`in_progress` não é afetado**: cutoff filtra só `status='scheduled'`.
-- **Não toca em `pending_first_session_invite`**: o convite inicial D0 segue como está; o reminder cobre o caso pós-recusa onde `needs_schedule_setup=true`.
-
-## Verificação
-
-1. `SELECT count(*) FROM profiles WHERE plan='essencial' AND needs_schedule_setup=true AND status='active' AND schedule_reminder_first_sent_at IS NULL AND updated_at < now()-interval '48 hours';` → após próximo tick deve cair (lembretes enviados).
-2. `SELECT count(*) FROM sessions s JOIN profiles p USING(user_id) WHERE s.status='scheduled' AND s.scheduled_at < now()+interval '48 hours' AND p.last_message_date < now()-interval '14 days';` → deve ir a 0 após o próximo tick do `session-reminder`.
-3. Logs de edge function devem mostrar `📅 [SESSION_CUTOFF_14D]` para casos cancelados.
-
-## Fora de escopo (confirmado)
-
-- Não mexer no fluxo pós-D0 de Direção/Transformação (já funciona).
-- Não forçar `needs_schedule_setup` extra após D0 do Essencial (D0 = sessão do mês, regra mantida).
-- Não criar agendamento semanal para Essencial.
+Mudança isolada em uma função do front-end (`fetchRecoverySessions`). Sem alteração de schema, edge functions ou lógica de envio.

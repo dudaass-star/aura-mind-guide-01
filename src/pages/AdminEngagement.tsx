@@ -426,24 +426,61 @@ export default function AdminEngagement() {
 
       // Stats WhatsApp: únicos = sessões com algum estágio enviado;
       // converted = pagaram ESTRITAMENTE DEPOIS do primeiro envio WhatsApp.
-      const waSessions = enriched.filter(s => s.whatsapp_recovery_15min_sent_at || s.whatsapp_recovery_24h_sent_at);
-      const waConverted = waSessions.filter(s => {
+      // IMPORTANTE: calculamos `converted` sobre o UNIVERSO COMPLETO de sessões WA
+      // (não só sobre o .limit(50) de abandoned usado para popular a tabela de detalhes).
+      // Sem isso, conversões antigas não entram na contagem do card.
+      const { data: allWaSessions } = await supabase
+        .from('checkout_sessions')
+        .select('email, phone, whatsapp_recovery_15min_sent_at, whatsapp_recovery_24h_sent_at')
+        .or('whatsapp_recovery_15min_sent_at.not.is.null,whatsapp_recovery_24h_sent_at.not.is.null');
+
+      const waList = allWaSessions || [];
+      const waEmails = waList.filter(s => s.email).map(s => s.email!.toLowerCase());
+      const waPhones = waList.map(s => s.phone).filter(Boolean);
+
+      const [{ data: waCompletedByEmail }, { data: waCompletedByPhone }] = await Promise.all([
+        waEmails.length > 0
+          ? supabase.from('checkout_sessions').select('email, completed_at, created_at').eq('status', 'completed').in('email', waEmails)
+          : Promise.resolve({ data: [] as any[] }),
+        waPhones.length > 0
+          ? supabase.from('checkout_sessions').select('phone, completed_at, created_at').eq('status', 'completed').in('phone', waPhones)
+          : Promise.resolve({ data: [] as any[] }),
+      ]);
+
+      const waCompletedAtByEmail = new Map<string, number>();
+      for (const c of (waCompletedByEmail || [])) {
+        if (!c.email) continue;
+        const ts = new Date(c.completed_at || c.created_at).getTime();
+        const key = c.email.toLowerCase();
+        const prev = waCompletedAtByEmail.get(key) || 0;
+        if (ts > prev) waCompletedAtByEmail.set(key, ts);
+      }
+      const waCompletedAtByPhone = new Map<string, number>();
+      for (const c of (waCompletedByPhone || [])) {
+        if (!c.phone) continue;
+        const ts = new Date(c.completed_at || c.created_at).getTime();
+        const prev = waCompletedAtByPhone.get(c.phone) || 0;
+        if (ts > prev) waCompletedAtByPhone.set(c.phone, ts);
+      }
+
+      const waConverted = waList.filter(s => {
         const sentTimes = [s.whatsapp_recovery_15min_sent_at, s.whatsapp_recovery_24h_sent_at]
           .filter(Boolean)
           .map(t => new Date(t as string).getTime());
         if (sentTimes.length === 0) return false;
         const firstSentAt = Math.min(...sentTimes);
         const completedAt = Math.max(
-          s.email ? (completedAtByEmail.get(s.email.toLowerCase()) || 0) : 0,
-          completedAtByPhone.get(s.phone) || 0,
+          s.email ? (waCompletedAtByEmail.get(s.email.toLowerCase()) || 0) : 0,
+          s.phone ? (waCompletedAtByPhone.get(s.phone) || 0) : 0,
         );
         return completedAt > firstSentAt;
       }).length;
+
       setWhatsappStats({
         stage1: waStage1Count || 0,
         stage2: waStage2Count || 0,
         errors: waErrorsCount || 0,
-        unique: waSessions.length,
+        unique: waList.length,
         converted: waConverted,
       });
     } catch (err) {
