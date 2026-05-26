@@ -4,6 +4,7 @@
 // Uso:
 //   GET  /qa-meta-diagnose                -> diagnóstico read-only
 //   GET  /qa-meta-diagnose?subscribe=1    -> tenta inscrever a WABA no app
+//   GET  /qa-meta-diagnose?subscribeWaba=1 -> alias explícito para inscrição da WABA
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -11,6 +12,7 @@ const corsHeaders = {
 };
 
 const V = 'v21.0';
+const DEFAULT_META_WABA_ID = '2153650951869969';
 
 async function gget(path: string, token: string): Promise<{ status: number; body: any }> {
   const r = await fetch(`https://graph.facebook.com/${V}/${path}`, {
@@ -52,7 +54,7 @@ Deno.serve(async (req) => {
   }
 
   const url = new URL(req.url);
-  const shouldSubscribe = url.searchParams.get('subscribe') === '1';
+  const shouldSubscribe = url.searchParams.get('subscribe') === '1' || url.searchParams.get('subscribeWaba') === '1';
   const shouldConfigureWebhook = url.searchParams.get('configureWebhook') === '1';
   const fields = url.searchParams.get('fields') || 'messages,message_template_status_update,account_update';
   const wabaOverride = url.searchParams.get('waba') || null;
@@ -70,7 +72,7 @@ Deno.serve(async (req) => {
     wabaOverride ||
     phoneInfo.body?.whatsapp_business_account?.id ||
     debugToken.body?.data?.granular_scopes?.find((s: any) => s.scope === 'whatsapp_business_messaging')?.target_ids?.[0] ||
-    null;
+    DEFAULT_META_WABA_ID;
 
   // 3) Lista as subscrições da WABA (apps inscritos e campos)
   let wabaSubs: any = null;
@@ -128,11 +130,17 @@ Deno.serve(async (req) => {
     wabaSubs = await gget(`${wabaId}/subscribed_apps`, token);
   }
 
+  const subscribedApps = Array.isArray(wabaSubs?.body?.data) ? wabaSubs.body.data : [];
+  const appSubscribedToWaba = appId
+    ? subscribedApps.some((app: any) => String(app.id ?? app.whatsapp_business_api_data?.id) === String(appId))
+    : false;
+
   return new Response(JSON.stringify({
     summary: {
       phoneNumberId: phoneId,
       wabaId,
       appId,
+      appSubscribedToWaba,
       displayPhoneNumber: phoneInfo.body?.display_phone_number,
       verifiedName: phoneInfo.body?.verified_name,
       tokenIsValid: debugToken.body?.data?.is_valid,
