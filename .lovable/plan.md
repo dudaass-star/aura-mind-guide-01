@@ -1,82 +1,63 @@
-# Plano: novo App Meta + reconexão limpa do número Aura
+## Contexto
 
-A ideia é abandonar o app `AURA` (1491408882345218) atual, criar um App novo dentro do **mesmo Business Manager onde está o WABA `2153650951869969`**, e refazer toda a ligação (permissions → subscription → webhook) seguindo exatamente o passo a passo da documentação oficial da Cloud API. Assim eliminamos qualquer config legada invisível que esteja segurando os webhooks inbound do número `+1 555-959-6770` (Phone Number ID `1174296905760754`).
+Direção/Transformação já agendam normalmente após D0 — não há bug. O único gap real é no **Essencial**:
+
+- D0 é a única sessão do mês (correto pelo plano). Se ela é concluída, a próxima vem só no dia 1 do mês seguinte via `monthly-schedule-renewal`. **Manter essa regra.**
+- O problema: quando o usuário Essencial **não responde ao convite D0** (ou recusa sem horário), nenhum cron lembra ele depois — `schedule-setup-reminder` exclui Essencial no filtro `.in('plan', ['direcao', 'transformacao'])`. Resultado: usuários ficam com `pending_first_session_invite=true` ou `needs_schedule_setup=true` parados por dias sem reativação.
+
+Vou fazer **2 mudanças cirúrgicas**, sem mexer no fluxo pós-D0 dos outros planos.
 
 ---
 
-## Parte 1 — Criar o novo App no Meta
+## Mudanças
 
-Tudo isso é feito por você no painel do Meta. Eu só preciso do **App ID** e do **System User Token** novo no final.
+### 1. `schedule-setup-reminder/index.ts` — incluir Essencial
 
-1. **developers.facebook.com** → logado com a conta que administra o Business Manager do WABA.
-2. **My Apps → Create App**
-   - Use case: **Other**
-   - App type: **Business**
-   - App name: `Aura WhatsApp` (ou o que preferir)
-   - **Business Account**: selecionar o **mesmo Business Manager** onde está o WABA `2153650951869969`. Esse passo é o mais crítico — se errar aqui, a subscription nunca funciona.
-3. Dentro do app → **Add products** → **WhatsApp → Set up**.
-   - Selecionar o WABA existente `2153650951869969`.
-   - Selecionar o número `+1 555-959-6770`.
-4. App Review → **App Mode: Live** (botão no topo).
+Trocar nos 2 blocos (primeiro lembrete 48–96h e lembrete urgente):
+```
+.in('plan', ['direcao', 'transformacao'])
+```
+por:
+```
+.in('plan', ['essencial', 'direcao', 'transformacao'])
+```
 
-## Parte 2 — System User Token novo (Business Manager)
+Efeito: usuários Essencial com `needs_schedule_setup=true` (D0 recusada/não respondida) passam a receber os mesmos 2 toques que os outros planos. Como o plano só tem 1 sessão/mês, o bloco `CRIAR_AGENDA` do prompt da Aura (linha 5868 do `aura-agent`) já injeta o exemplo certo de 1 data via memória `setup-mensal-essential-aware`.
 
-5. **business.facebook.com → Configurações do negócio → Usuários → Usuários do sistema**.
-6. Criar (ou reusar) um System User com role **Admin**.
-7. **Adicionar ativos** → adicionar:
-   - **Apps** → o novo app criado → permissão **Gerenciar app**.
-   - **Contas do WhatsApp** → WABA `2153650951869969` → permissão **Gerenciar conta do WhatsApp**.
-8. **Gerar novo token** com scopes:
-   - `whatsapp_business_messaging`
-   - `whatsapp_business_management`
-   - Expiração: **Nunca**.
-9. Copiar o token e o **App ID** novo.
+### 2. `session-reminder/index.ts` — cutoff de 14 dias
 
-## Parte 3 — O que eu faço (após você me passar token + App ID)
+Antes de enviar lembrete T-24h ou T-5min de uma sessão `scheduled`, verificar `last_message_date`:
 
-10. Atualizo o secret `META_ACCESS_TOKEN` com o token novo.
-11. Atualizo a constante `META_APP_ID` (e onde mais for referenciado) para o novo App ID.
-12. Rodo `qa-meta-diagnose` para validar:
-    - token vivo, type `SYSTEM_USER`, scopes corretos
-    - app está em Live mode
-    - WABA visível pelo token
-    - número CONNECTED/VERIFIED
-13. Disparo a **subscription do app no WABA** via API:
-    `POST /2153650951869969/subscribed_apps` com o token novo
-    e confirmo via `GET /2153650951869969/subscribed_apps` que o novo App ID aparece com `messages` ativo e **sem** `override_callback_uri`.
-14. Configuro o **Webhook do produto WhatsApp** no novo app:
-    - Callback URL: `https://uhyogifgmutfmbyhzzyo.supabase.co/functions/v1/webhook-meta`
-    - Verify token: o mesmo já configurado no secret `META_WEBHOOK_VERIFY_TOKEN`
-    - Subscribe ao field **messages** (e `message_status` se quiser delivery receipts)
-    - (Aqui você precisa clicar "Verify and Save" no painel — eu te aviso o momento exato e te passo o verify token.)
-15. Teste end-to-end: você manda WhatsApp do `+55 51 98151-9708` para `+1 555-959-6770` e eu confirmo no log do `webhook-meta` que o `entry` chegou e o pipeline da Aura processou.
+- Se `last_message_date < now() - 14 days`:
+  - `UPDATE sessions SET status='cancelled'` para a sessão alvo
+  - Limpar `pending_insight` relacionado, se houver
+  - Pular envio do template
+  - Log: `📅 [SESSION_CUTOFF_14D] user=<id> session=<id> last_msg=<date>`
+- Caso contrário: comportamento atual (envia lembrete).
 
-## Parte 4 — Limpeza pós-migração
+Substitui o cutoff antigo de 7 dias (que apenas silenciava o T-24h e nada fazia no T-5min).
 
-16. Após confirmar que o novo app recebe mensagens, **desinscrever o app antigo** (`1491408882345218`) do WABA:
-    `DELETE /2153650951869969/subscribed_apps` autenticado como o app antigo, para garantir que não fica um segundo callback fantasma.
-17. Manter o app antigo desativado em Dev mode (não precisa deletar).
+### 3. Memória
+
+Atualizar `mem://features/whatsapp/session-reminder-flow` adicionando a regra de 14 dias (cancela sessão + limpa insight). Atualizar a entrada `setup-mensal-essential-aware` no índice para refletir que `schedule-setup-reminder` agora cobre Essencial.
 
 ---
 
 ## Detalhes técnicos
 
-- Endpoints Graph API v21.0:
-  - `GET /me?fields=id,name` (sanity do token)
-  - `GET /{APP_ID}?fields=id,name,link` (confirmar Live)
-  - `GET /{WABA_ID}?fields=id,name,owner_business_info`
-  - `GET /{WABA_ID}/subscribed_apps?fields=whatsapp_business_api_data,override_callback_uri`
-  - `POST /{WABA_ID}/subscribed_apps` (sem body)
-  - `GET /{PHONE_NUMBER_ID}?fields=verified_name,display_phone_number,code_verification_status,status,quality_rating,platform_type,webhook_configuration`
-- Secrets a atualizar:
-  - `META_ACCESS_TOKEN` (novo SU token)
-  - `META_APP_ID` (se existir como secret; caso esteja hardcoded, edito o código)
-  - `META_WEBHOOK_VERIFY_TOKEN` permanece o atual `aura_ig_verify_2026` (a menos que você queira rotacionar)
-- Não vou tocar em `webhook-meta/index.ts` — o handler já está validado e recebendo do Twilio/Instagram. O problema é só de subscription do app.
-- Não vou mexer em nada do Twilio nem do número principal da Aura.
+- **Sem migrações**: colunas já existem (`profiles.last_message_date`, `sessions.status`, `pending_insight.session_id`).
+- **Quiet hours**: cutoff roda antes do gate de envio; cancelamento ocorre 24/7, envio respeita 22h–08h normalmente.
+- **`in_progress` não é afetado**: cutoff filtra só `status='scheduled'`.
+- **Não toca em `pending_first_session_invite`**: o convite inicial D0 segue como está; o reminder cobre o caso pós-recusa onde `needs_schedule_setup=true`.
 
-## O que eu preciso de você para arrancar a Parte 3
+## Verificação
 
-1. **App ID** do novo app criado.
-2. **System User Token** novo (cole no chat depois que eu pedir o secret — não cole agora).
-3. Confirmação de que o WABA `2153650951869969` aparece atribuído ao novo app no Business Manager.
+1. `SELECT count(*) FROM profiles WHERE plan='essencial' AND needs_schedule_setup=true AND status='active' AND schedule_reminder_first_sent_at IS NULL AND updated_at < now()-interval '48 hours';` → após próximo tick deve cair (lembretes enviados).
+2. `SELECT count(*) FROM sessions s JOIN profiles p USING(user_id) WHERE s.status='scheduled' AND s.scheduled_at < now()+interval '48 hours' AND p.last_message_date < now()-interval '14 days';` → deve ir a 0 após o próximo tick do `session-reminder`.
+3. Logs de edge function devem mostrar `📅 [SESSION_CUTOFF_14D]` para casos cancelados.
+
+## Fora de escopo (confirmado)
+
+- Não mexer no fluxo pós-D0 de Direção/Transformação (já funciona).
+- Não forçar `needs_schedule_setup` extra após D0 do Essencial (D0 = sessão do mês, regra mantida).
+- Não criar agendamento semanal para Essencial.
