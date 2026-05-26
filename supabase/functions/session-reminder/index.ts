@@ -273,10 +273,21 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // Auto-silence: skip 24h reminder if user hasn't messaged in 7+ days
+        // Cutoff de 14 dias: se usuário sumiu há 14+ dias, cancela a sessão
+        // (não apenas silencia) e limpa pending_insight relacionado.
         const lastMsg = profile.last_message_date ? new Date(profile.last_message_date) : null;
-        if (lastMsg && (Date.now() - lastMsg.getTime()) > 7 * 24 * 60 * 60 * 1000) {
-          console.log(`🔇 Auto-silenced 24h reminder for session ${session.id}: ${profile.name} (7+ days inactive)`);
+        if (lastMsg && (Date.now() - lastMsg.getTime()) > 14 * 24 * 60 * 60 * 1000) {
+          console.log(`📅 [SESSION_CUTOFF_14D] user=${session.user_id} session=${session.id} last_msg=${profile.last_message_date} (24h reminder)`);
+          await supabase.from('sessions').update({ status: 'cancelled' }).eq('id', session.id);
+          const { data: curProf } = await supabase
+            .from('profiles')
+            .select('pending_insight')
+            .eq('user_id', session.user_id)
+            .maybeSingle();
+          const cur = curProf?.pending_insight as string | null | undefined;
+          if (cur && (cur.includes(session.id))) {
+            await supabase.from('profiles').update({ pending_insight: null }).eq('user_id', session.user_id);
+          }
           continue;
         }
 
