@@ -1,32 +1,17 @@
-## Objetivo
-Validar a integração Meta Cloud API enviando mensagens de teste para `5551981519708` e confirmando entrega + recepção via webhook.
+Confirmado: você está certo — a etapa de configuração já foi feita e eu não deveria ter voltado nela.
 
-## Passos
+O que eu verifiquei agora:
 
-1. **Diagnóstico prévio (read-only)**
-   - Conferir logs do `webhook-meta` — ainda mostram 0 invocações, então a mensagem que você enviou ao número Meta não chegou. Provável: o campo `messages` não está realmente assinado **na app do WABA novo** (`2153650951869969`) ou o Phone Number ID configurado no secret não bate com o número que recebeu a mensagem.
-   - Validar `META_WHATSAPP_PHONE_NUMBER_ID` vs número físico no Meta Business Manager via chamada GET na Graph API.
+- Procurei logs recentes da função `webhook-meta`.
+- Não apareceu nenhum log de recebimento para o novo número Meta `+1 555-959-6770`.
+- Isso significa que, neste momento, a mensagem que você acabou de enviar não chegou na nossa função `webhook-meta`.
 
-2. **Teste outbound — texto livre (não exige template)**
-   - Chamar Graph API direto com `META_WHATSAPP_ACCESS_TOKEN` + `META_WHATSAPP_PHONE_NUMBER_ID` enviando `text` para `5551981519708`.
-   - ⚠️ Só funciona se a janela de 24h estiver aberta (você já enviou msg, então **deveria** estar aberta — mas só se a msg chegou no número certo da WABA Meta).
-   - Se Meta rejeitar com erro 131047 (fora da janela), confirma que a msg inbound não foi recebida pela WABA correta.
+Próximo plano de investigação, sem repetir configuração já feita:
 
-3. **Teste outbound — template (caso janela esteja fechada)**
-   - Depende dos 3 templates (`cheking_7dias`, `jornada_disponivel`, `aura_weekly_report_v2`) estarem **aprovados** na nova WABA. Você disse que ainda não criou — então esse teste fica pendente.
+1. Verificar se a função `webhook-meta` está recebendo qualquer evento recente do Meta, não só filtrado pelo telefone.
+2. Conferir se existe divergência entre o `phone_number_id` configurado no backend e o número novo `+1 555-959-6770`.
+3. Conferir se o envio de saída pelo Meta está usando o mesmo `phone_number_id` do número novo.
+4. Se saída funciona mas entrada não chega, isolar o problema no caminho Meta → webhook, não no código da Aura.
+5. Se entrada chega mas não processa, aí sim investigar o payload e o roteamento interno.
 
-4. **Teste inbound**
-   - Você reenvia uma msg pro número da WABA Meta.
-   - Eu checo logs do `webhook-meta` em tempo real pra confirmar que Meta está chamando a URL e o handler está processando.
-
-## Detalhes técnicos
-- Endpoint: `POST https://graph.facebook.com/v21.0/{PHONE_NUMBER_ID}/messages`
-- Headers: `Authorization: Bearer {META_WHATSAPP_ACCESS_TOKEN}`
-- Payload texto: `{messaging_product:"whatsapp", to:"5551981519708", type:"text", text:{body:"..."}}`
-- Vou rodar via `code--exec curl` (não precisa criar edge function temporária).
-
-## Saída esperada
-- ✅ Caso sucesso: você recebe a msg no WhatsApp + log de inbound no `webhook-meta` quando responder.
-- ❌ Caso falha: erro Meta específico (token inválido, janela fechada, phone number id errado) → corrijo na hora.
-
-Aprove pra eu sair do plano e executar.
+Resultado atual: ainda não há evidência de webhook real chegando do número novo na função `webhook-meta`.
