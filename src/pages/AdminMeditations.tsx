@@ -12,7 +12,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { RefreshCw, Play, CheckCircle, XCircle, Clock, Loader2, Pause, X, Download, Upload, Trash2, ShieldAlert } from "lucide-react";
+import { RefreshCw, Play, CheckCircle, XCircle, Clock, Loader2, Pause, X, Download, Upload, Trash2, ShieldAlert, FileText } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -935,6 +942,23 @@ export default function AdminMeditations() {
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex items-center justify-end gap-2">
+                              {/* Ver script */}
+                              <Dialog>
+                                <DialogTrigger asChild>
+                                  <Button size="sm" variant="ghost" title="Ver script">
+                                    <FileText className="h-4 w-4" />
+                                  </Button>
+                                </DialogTrigger>
+                                <DialogContent className="max-w-2xl">
+                                  <DialogHeader>
+                                    <DialogTitle>{med.title} — Script</DialogTitle>
+                                  </DialogHeader>
+                                  <div className="max-h-[60vh] overflow-y-auto whitespace-pre-wrap text-sm text-foreground/90 leading-relaxed font-['Nunito']">
+                                    {med.script || "(sem script)"}
+                                  </div>
+                                </DialogContent>
+                              </Dialog>
+
                               {/* Play */}
                               {med.audio && (
                                 <Button
