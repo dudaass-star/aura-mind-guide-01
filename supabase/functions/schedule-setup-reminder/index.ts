@@ -91,7 +91,7 @@ Deno.serve(async (req) => {
       .from('profiles')
       .select('*')
       .eq('needs_schedule_setup', true)
-      .in('plan', ['direcao', 'transformacao'])
+      .in('plan', ['essencial', 'direcao', 'transformacao'])
       .eq('status', 'active')
       .or('sessions_paused_until.is.null,sessions_paused_until.lt.' + today)
       .is('schedule_reminder_first_sent_at', null) // DEDUP: not yet sent
@@ -163,7 +163,7 @@ Fico esperando! 🌟`;
       .from('profiles')
       .select('*')
       .eq('needs_schedule_setup', true)
-      .in('plan', ['direcao', 'transformacao'])
+      .in('plan', ['essencial', 'direcao', 'transformacao'])
       .eq('status', 'active')
       .or('sessions_paused_until.is.null,sessions_paused_until.lt.' + today)
       .is('schedule_reminder_urgent_sent_at', null) // DEDUP: not yet sent
