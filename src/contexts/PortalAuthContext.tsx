@@ -89,7 +89,17 @@ export function PortalAuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = async () => {
-    await supabasePortal.auth.signOut();
+    // scope: "local" garante limpeza imediata do storage do portal,
+    // sem depender da resposta do servidor (evita ficar travado se o
+    // token já estiver inválido).
+    try {
+      await supabasePortal.auth.signOut({ scope: "local" });
+    } catch (e) {
+      console.warn("portal signOut failed", e);
+    }
+    try { sessionStorage.removeItem("aura-oauth-target"); } catch {}
+    setSession(null);
+    setLinkStatus("idle");
   };
 
   return (
