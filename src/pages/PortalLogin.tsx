@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
+import { lovable } from "@/integrations/lovable";
 import { usePortalAuth } from "@/contexts/PortalAuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,13 +33,13 @@ export default function PortalLogin() {
   }, [loading, session, navigate]);
 
   const handleGoogle = async () => {
-    const { error } = await supabasePortal.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: window.location.origin + "/meu-espaco",
-      },
+    // O Google é gerenciado pelo broker Lovable (sem client secret no Supabase).
+    // O callback grava a sessão no cliente Supabase padrão; ela é migrada pro
+    // cliente do portal pelo PortalAuthContext ao aterrissar em /meu-espaco.
+    const result = await lovable.auth.signInWithOAuth("google", {
+      redirect_uri: window.location.origin + "/meu-espaco",
     });
-    if (error) {
+    if (result.error) {
       toast({
         title: "Não conseguimos entrar",
         description: "Tente de novo em instantes.",
