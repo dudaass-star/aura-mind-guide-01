@@ -23,6 +23,23 @@ export function useAdminAuth() {
   useEffect(() => {
     const checkAdminStatus = async () => {
       try {
+        // Se o usuário acabou de iniciar um login Google pelo /meu-espaco,
+        // a sessão do broker cai temporariamente no cliente padrão.
+        // Nesse caso, NÃO tratamos como admin: limpamos local e aguardamos
+        // o PortalAuthContext migrar a sessão para o cliente do portal.
+        let oauthTarget: string | null = null;
+        try { oauthTarget = sessionStorage.getItem("aura-oauth-target"); } catch {}
+        if (oauthTarget === "portal") {
+          try { await supabase.auth.signOut({ scope: "local" }); } catch {}
+          setState({
+            isLoading: false,
+            isAuthenticated: false,
+            isAdmin: false,
+            userId: null,
+          });
+          return;
+        }
+
         // Check if user is authenticated
         const { data: { user }, error: authError } = await supabase.auth.getUser();
         
