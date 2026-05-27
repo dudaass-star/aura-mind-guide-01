@@ -1,52 +1,51 @@
 ## Problema
 
-O `src/integrations/supabase/client.ts` é um único cliente Supabase compartilhado entre `/admin` e `/meu-espaco` — ambos leem/escrevem a sessão na mesma chave do `localStorage`. Por isso:
+O login Google do portal foi trocado para `supabasePortal.auth.signInWithOAuth("google")` direto. Mas o Google neste projeto é OAuth gerenciado pela Lovable (broker), sem client secret configurado no Supabase — por isso o `/auth/v1/authorize?provider=google` responde `validation_failed: Unsupported provider: missing OAuth secret`.
 
-- Logar com Google em `/meu-espaco` reaproveita a sessão do admin (mesmo `auth.uid`) e cai na tela "Você está logado como admin".
-- O "Sair" do portal chama `supabase.auth.signOut()` no cliente compartilhado → desloga o admin junto.
+A função que funciona é `lovable.auth.signInWithOAuth("google", ...)`. Mas ela grava a sessão no **cliente Supabase padrão** (`storageKey` default), o mesmo do admin — anulando o isolamento que acabamos de construir.
 
 ## Solução
 
-Criar um **segundo cliente Supabase exclusivo do portal**, com `storageKey` próprio, e usá-lo apenas no fluxo do portal (`PortalAuthContext`, `PortalLogin`, `link-portal-account` invoke). O admin e o resto do app continuam usando o cliente padrão intocado.
+Voltar a usar `lovable.auth.signInWithOAuth("google", ...)` no botão e, ao voltar do callback em `/meu-espaco`, **migrar a sessão** do cliente padrão para o `supabasePortal` e limpar a sessão do cliente padrão (local apenas, sem chamar o endpoint de logout que invalida o refresh token).
 
-Assim:
-- Sessão do admin e sessão do portal ficam totalmente independentes no mesmo navegador.
-- Login Google em `/meu-espaco` cria/usa uma sessão separada — não "herda" o admin.
-- Logout no portal só afeta o portal.
+Fluxo:
+1. Usuário clica em "Continuar com Google" no `/meu-espaco/entrar`.
+2. Lovable broker faz o OAuth e devolve tokens; o callback grava no `supabase` padrão e redireciona para `/meu-espaco`.
+3. Em `/meu-espaco`, um efeito detecta: "o cliente padrão tem sessão e o cliente do portal não tem". Nesse caso:
+   - Lê `{ access_token, refresh_token }` do padrão.
+   - Chama `supabasePortal.auth.setSession({ access_token, refresh_token })` → grava em `aura-portal-auth`.
+   - Chama `supabase.auth.signOut({ scope: "local" })` → remove só do `localStorage` padrão, sem invalidar o token no servidor (continua válido no portal).
+4. Daí pra frente o `PortalAuthContext` (já listenando `supabasePortal`) assume e segue o fluxo normal de link por email/telefone.
+
+Isso preserva o isolamento: admin não é deslogado, e a sessão Google do usuário fica só no storage do portal.
 
 ### Mudanças
 
-1. **Novo arquivo** `src/integrations/supabase/portal-client.ts`
-   - `createClient` com mesma URL/anon key, mas:
-     - `auth.storageKey: "aura-portal-auth"`
-     - `auth.storage: localStorage`, `persistSession: true`, `autoRefreshToken: true`
-   - Exporta `supabasePortal`.
-   - Não tocar em `client.ts` (gerado automaticamente).
+1. **`src/pages/PortalLogin.tsx`**
+   - Reverter `handleGoogle` para `lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin + "/meu-espaco" })` (mantendo o tratamento de erro/redirected atual).
+   - Reimportar `lovable` de `@/integrations/lovable`.
+   - As chamadas de OTP por email continuam no `supabasePortal` (já funcionam corretamente, sem broker).
 
-2. **`src/contexts/PortalAuthContext.tsx`**
-   - Trocar import `supabase` → `supabasePortal`.
-   - `onAuthStateChange`, `getSession`, `signOut`, e `functions.invoke("link-portal-account", ...)` passam pelo `supabasePortal` (a invoke usa o JWT do portal, que é o que queremos pra vincular o profile à conta certa).
+2. **Novo helper** `src/contexts/portalSessionBridge.ts` (ou inline em um `useEffect` no `PortalAuthContext`)
+   - Função `migrateDefaultSessionToPortal()`:
+     - `const { data } = await supabase.auth.getSession()`
+     - se houver sessão E `supabasePortal.auth.getSession()` estiver vazio:
+       - `await supabasePortal.auth.setSession({ access_token, refresh_token })`
+       - `await supabase.auth.signOut({ scope: "local" })`
+   - Importa `supabase` (default) e `supabasePortal`.
 
-3. **`src/pages/PortalLogin.tsx`**
-   - Trocar `supabase` → `supabasePortal` em `signInWithOtp`, `verifyOtp`.
-   - O botão Google hoje usa `lovable.auth.signInWithOAuth`; trocar por `supabasePortal.auth.signInWithOAuth({ provider: "google", options: { redirectTo: window.location.origin + "/meu-espaco" } })` para que o callback OAuth grave a sessão no storage do portal, não no do admin.
-
-4. **`src/pages/UserPortal.tsx`**
-   - As queries de `profiles` / `monthly_reports` / `user_roles` continuam usando o `supabase` padrão (são SELECTs com RLS que aceitam o JWT do portal só se passado explicitamente). Para garantir que rodem com o JWT da sessão do portal, trocar essas chamadas para `supabasePortal` também. Mantém RLS correta (auth.uid() = sessão do portal).
-   - Remover o ramo "Você está logado como admin": com sessões separadas ele deixa de ser necessário. Se mesmo assim o usuário entrar com uma conta admin no portal e não tiver profile vinculado, ele simplesmente cai no `PhoneLinkPrompt` como qualquer outro.
-
-5. **`customer-portal` invoke em `UserPortal.tsx`**
-   - Também passar pelo `supabasePortal` (usa o JWT certo do dono da assinatura).
+3. **`src/contexts/PortalAuthContext.tsx`**
+   - No `useEffect` de boot, antes de `supabasePortal.auth.getSession()`, chamar `await migrateDefaultSessionToPortal()`.
+   - Isso cobre o caso de o usuário aterrissar em `/meu-espaco` direto do callback Google.
 
 ### Fora de escopo
 
-- Nenhuma mudança em edge functions, RLS, Stripe ou no cliente compartilhado.
-- Sem alteração no fluxo de admin (`useAdminAuth`, `/admin/*`).
-- Sem mexer em `client.ts` nem em `types.ts`.
+- Não mexer no `lovable.auth` ou tentar configurar Google OAuth próprio no Supabase.
+- Não alterar `/admin` nem o cliente padrão.
+- Sem mudanças em edge functions/RLS.
 
 ### Validação
 
-- Logado como admin em `/admin/usuarios`, abrir `/meu-espaco/entrar` em outra aba → pede login (não reaproveita sessão admin).
-- Entrar com Google do Eduardo no portal → vincula por email/telefone e mostra jornadas; admin segue logado em `/admin`.
-- Clicar em "Sair" no portal → só sai do portal; `/admin/usuarios` continua acessível sem novo login.
-- Logout em `/admin/login` não derruba a sessão do portal.
+- Botão Google em `/meu-espaco/entrar` → vai pro Google → volta pra `/meu-espaco` → portal abre logado, admin (se estava aberto em outra aba) **continua logado**.
+- OTP por email no portal → continua funcionando isolado.
+- "Sair" no portal → só desloga portal; admin intacto.

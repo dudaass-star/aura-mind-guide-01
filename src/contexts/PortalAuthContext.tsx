@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
+import { migrateDefaultSessionToPortal } from "./portalSessionBridge";
 import type { Session, User } from "@supabase/supabase-js";
 
 export type LinkStatus =
@@ -74,11 +75,15 @@ export function PortalAuthProvider({ children }: { children: ReactNode }) {
       }
     });
 
-    supabasePortal.auth.getSession().then(({ data }) => {
+    (async () => {
+      // Se o usuário acabou de voltar do OAuth do Lovable, a sessão está no
+      // cliente padrão — migramos pro storage do portal antes de tudo.
+      await migrateDefaultSessionToPortal();
+      const { data } = await supabasePortal.auth.getSession();
       setSession(data.session);
       setLoading(false);
       if (data.session?.user) runLink();
-    });
+    })();
 
     return () => sub.subscription.unsubscribe();
   }, []);
