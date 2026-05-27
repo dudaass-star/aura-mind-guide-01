@@ -1,6 +1,6 @@
 import { useSearchParams, Navigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { Helmet } from "react-helmet-async";
 import { useState } from "react";
 import logoOlaAura from "@/assets/logo-ola-aura.png";
@@ -37,7 +37,7 @@ const UserPortal = () => {
   const { data: profile, isLoading: profileLoading } = useQuery({
     queryKey: ["portal-profile", userId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await supabasePortal
         .from("profiles")
         .select("name, current_journey_id, current_episode, journeys_completed, plan")
         .eq("user_id", userId!)
@@ -48,24 +48,10 @@ const UserPortal = () => {
     enabled: !!userId && linkStatus === "linked",
   });
 
-  const { data: isAdmin } = useQuery({
-    queryKey: ["portal-is-admin", userId],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", userId!)
-        .eq("role", "admin")
-        .maybeSingle();
-      return !!data;
-    },
-    enabled: !!userId,
-  });
-
   const { data: reportsCount } = useQuery({
     queryKey: ["portal-reports-count", userId],
     queryFn: async () => {
-      const { count, error } = await supabase
+      const { count, error } = await supabasePortal
         .from("monthly_reports")
         .select("id", { count: "exact", head: true })
         .eq("user_id", userId!);
@@ -81,29 +67,6 @@ const UserPortal = () => {
   // Aguardando vinculação ao profile legado
   if (linkStatus === "idle" || linkStatus === "linking") return <PortalLoading />;
 
-  // Admin logado sem profile próprio → não cai no fluxo de captura de telefone
-  if (linkStatus !== "linked" && isAdmin) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center px-6">
-        <div className="max-w-md text-center animate-fade-in">
-          <h1 className="text-xl font-semibold text-foreground mb-2 font-['Fraunces']">
-            Você está logado como admin
-          </h1>
-          <p className="text-muted-foreground font-['Nunito'] mb-6">
-            Saia e entre com uma conta de usuário pra testar o portal.
-          </p>
-          <button
-            onClick={signOut}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-accent text-accent-foreground font-['Nunito']"
-          >
-            <LogOut size={14} />
-            <span>Sair</span>
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   // Não achou profile por email → pede telefone
   if (linkStatus === "needs_phone" || linkStatus === "phone_taken" || linkStatus === "error") {
     return <PhoneLinkPrompt />;
@@ -117,7 +80,7 @@ const UserPortal = () => {
     if (portalLoading) return;
     setPortalLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("customer-portal", {
+      const { data, error } = await supabasePortal.functions.invoke("customer-portal", {
         body: { userId },
       });
       if (error) throw error;

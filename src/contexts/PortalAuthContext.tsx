@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { supabasePortal } from "@/integrations/supabase/portal-client";
 import type { Session, User } from "@supabase/supabase-js";
 
 export type LinkStatus =
@@ -36,7 +36,7 @@ export function PortalAuthProvider({ children }: { children: ReactNode }) {
   const runLink = async (phone?: string): Promise<LinkStatus> => {
     setLinkStatus("linking");
     try {
-      const { data, error } = await supabase.functions.invoke("link-portal-account", {
+      const { data, error } = await supabasePortal.functions.invoke("link-portal-account", {
         body: phone ? { phone } : undefined,
       });
       if (error) {
@@ -64,7 +64,7 @@ export function PortalAuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     // Listener PRIMEIRO para não perder evento
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
+    const { data: sub } = supabasePortal.auth.onAuthStateChange((_event, s) => {
       setSession(s);
       if (s?.user) {
         // Primeiro tenta vincular por email (sem body).
@@ -74,7 +74,7 @@ export function PortalAuthProvider({ children }: { children: ReactNode }) {
       }
     });
 
-    supabase.auth.getSession().then(({ data }) => {
+    supabasePortal.auth.getSession().then(({ data }) => {
       setSession(data.session);
       setLoading(false);
       if (data.session?.user) runLink();
@@ -84,7 +84,7 @@ export function PortalAuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    await supabasePortal.auth.signOut();
   };
 
   return (
