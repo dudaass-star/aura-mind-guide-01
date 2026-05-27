@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
-import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable";
+import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { usePortalAuth } from "@/contexts/PortalAuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,10 +32,13 @@ export default function PortalLogin() {
   }, [loading, session, navigate]);
 
   const handleGoogle = async () => {
-    const result = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin + "/meu-espaco",
+    const { error } = await supabasePortal.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: window.location.origin + "/meu-espaco",
+      },
     });
-    if (result.error) {
+    if (error) {
       toast({
         title: "Não conseguimos entrar",
         description: "Tente de novo em instantes.",
@@ -53,7 +55,7 @@ export default function PortalLogin() {
       return;
     }
     setSending(true);
-    const { error } = await supabase.auth.signInWithOtp({
+    const { error } = await supabasePortal.auth.signInWithOtp({
       email: normalized,
       options: {
         shouldCreateUser: true,
@@ -80,7 +82,7 @@ export default function PortalLogin() {
     e.preventDefault();
     if (otp.length < 6) return;
     setVerifying(true);
-    const { error } = await supabase.auth.verifyOtp({
+    const { error } = await supabasePortal.auth.verifyOtp({
       email: email.trim().toLowerCase(),
       token: otp.trim(),
       type: "email",
