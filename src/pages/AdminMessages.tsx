@@ -8,11 +8,13 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ArrowLeft, MessageSquare, Search, Send, User, Circle, Loader2 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import RecoveryInbox from '@/components/admin/RecoveryInbox';
 
 interface UserWithMessages {
   user_id: string;
@@ -45,6 +47,10 @@ export default function AdminMessages() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const isMobile = useIsMobile();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialTab = searchParams.get('tab') === 'recuperacao' ? 'recuperacao' : 'oficial';
+  const [activeTab, setActiveTab] = useState<string>(initialTab);
+  const [recoveryUnread, setRecoveryUnread] = useState<number>(0);
 
   const [users, setUsers] = useState<UserWithMessages[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<UserWithMessages[]>([]);
@@ -71,6 +77,35 @@ export default function AdminMessages() {
   useEffect(() => {
     if (isAdmin) fetchUsers();
   }, [isAdmin]);
+
+  // Conta conversas de recuperação não lidas (badge da aba)
+  useEffect(() => {
+    if (!isAdmin) return;
+    const fetchUnread = async () => {
+      const { data } = await supabase
+        .from('recovery_conversations')
+        .select('last_inbound_at, last_admin_read_at')
+        .not('last_inbound_at', 'is', null)
+        .limit(200);
+      const count = (data || []).filter(c =>
+        !c.last_admin_read_at || new Date(c.last_inbound_at!) > new Date(c.last_admin_read_at)
+      ).length;
+      setRecoveryUnread(count);
+    };
+    fetchUnread();
+    const ch = supabase
+      .channel('recovery_unread_badge')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'recovery_conversations' }, fetchUnread)
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [isAdmin]);
+
+  const handleTabChange = (v: string) => {
+    setActiveTab(v);
+    const next = new URLSearchParams(searchParams);
+    if (v === 'oficial') next.delete('tab'); else next.set('tab', v);
+    setSearchParams(next, { replace: true });
+  };
 
   useEffect(() => {
     const q = searchQuery.toLowerCase();
@@ -301,7 +336,23 @@ export default function AdminMessages() {
           )}
         </div>
 
-        <div className="flex flex-1 overflow-hidden">
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="flex flex-col flex-1 overflow-hidden">
+          <div className="px-4 pt-2 border-b border-border bg-card">
+            <TabsList>
+              <TabsTrigger value="oficial">Aura (oficial)</TabsTrigger>
+              <TabsTrigger value="recuperacao" className="gap-2">
+                Recuperação
+                {recoveryUnread > 0 && (
+                  <Badge variant="default" className="text-[10px] px-1.5 py-0">
+                    {recoveryUnread}
+                  </Badge>
+                )}
+              </TabsTrigger>
+            </TabsList>
+          </div>
+
+          <TabsContent value="oficial" className="flex-1 overflow-hidden mt-0 data-[state=inactive]:hidden">
+            <div className="flex h-full overflow-hidden">
           {/* User List Panel */}
           {showUserList && (
             <div className={`${isMobile ? 'w-full' : 'w-[380px]'} border-r border-border flex flex-col bg-card`}>
