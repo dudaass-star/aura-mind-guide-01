@@ -618,7 +618,13 @@ export default function AdminMessages() {
               )}
             </div>
           )}
-        </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="recuperacao" className="flex-1 overflow-auto mt-0 p-4 data-[state=inactive]:hidden">
+            <RecoveryInbox heightClass="h-[calc(100vh-150px)]" />
+          </TabsContent>
+        </Tabs>
       </div>
     </TooltipProvider>
   );
