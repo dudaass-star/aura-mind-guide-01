@@ -1,34 +1,26 @@
-## Plano
+## Vincular e-mail à conta Aura do Eduardo
 
-1. **Marcar o login como fluxo do portal antes de abrir o Google**
-   - Ao clicar em “Continuar com Google” em `/meu-espaco/entrar`, gravar uma flag curta no `sessionStorage`, por exemplo `aura-oauth-target=portal`.
-   - Isso permite identificar que a sessão recém-criada pelo broker do Google deve ser tratada como portal, não como admin.
+Atualizar o perfil Aura `329ebadd…` (Eduardo Santos, telefone `51981519708`) gravando `email = 'duda.ass@gmail.com'`.
 
-2. **Impedir o hook do admin de aceitar sessão do Google quando o alvo for portal**
-   - Ajustar `useAdminAuth` para, ao detectar essa flag, limpar apenas a sessão local do cliente padrão e manter `isAdmin=false`.
-   - Assim o admin não “pisca” logado nem assume o usuário do portal enquanto a migração acontece.
+### Migração de dados
 
-3. **Finalizar a migração no portal e limpar a flag**
-   - Manter a ponte que copia a sessão do cliente padrão para `supabasePortal`.
-   - Depois de migrar com sucesso, limpar a sessão local padrão e remover a flag `aura-oauth-target`.
-   - O portal continua usando `aura-portal-auth`, e o admin continua usando o storage padrão.
+```sql
+UPDATE public.profiles
+SET email = 'duda.ass@gmail.com',
+    updated_at = now()
+WHERE id = '329ebadd-...'  -- perfil Aura do Eduardo
+  AND email IS NULL;
+```
 
-4. **Proteger o botão de sair do portal**
-   - Garantir que “Sair” no `/meu-espaco` chame apenas `supabasePortal.auth.signOut()`, sem invalidar o token do admin.
-   - Se sobrar sessão temporária do broker no storage padrão durante fluxo portal, limpar localmente, não globalmente.
+(uso a tool `supabase--insert` por ser UPDATE de dados, não mudança de schema)
 
-## Resultado esperado
+### Resultado esperado
 
-- Clicar em Google no `/meu-espaco/entrar` entra somente no portal.
-- `/admin` não aparece logado por causa desse clique.
-- Sair do portal não derruba o admin.
-- Login normal do `/admin` continua funcionando como antes.
+- Próximo login Google com `duda.ass@gmail.com` em `/meu-espaco/entrar` → `link-portal-account` casa por e-mail e vincula automaticamente ao perfil Aura.
+- `/admin` continua funcionando normalmente (role admin segue no `user_roles`).
+- Nenhuma alteração de código necessária — só dados.
 
-## Detalhes técnicos
+### Validação
 
-Arquivos previstos:
-- `src/pages/PortalLogin.tsx`
-- `src/contexts/portalSessionBridge.ts`
-- `src/hooks/useAdminAuth.ts`
-
-Sem mudanças em banco, RLS, edge functions ou configuração de OAuth.
+1. Você desloga de `/meu-espaco`, loga de novo com Google.
+2. Confere que aparece "Eduardo Santos" e os dados da sua jornada Aura (não a tela admin).
