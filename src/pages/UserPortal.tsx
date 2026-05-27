@@ -12,6 +12,7 @@ import { JornadasTab } from "@/components/portal/JornadasTab";
 import { ResumosTab } from "@/components/portal/ResumosTab";
 import { MeditacoesTab } from "@/components/portal/MeditacoesTab";
 import { CapsulasTab } from "@/components/portal/CapsulasTab";
+import { PhoneLinkPrompt } from "@/components/portal/PhoneLinkPrompt";
 import { CreditCard, Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
@@ -29,20 +30,34 @@ const UserPortal = () => {
   const initialTab = (searchParams.get("tab") as TabId) || "jornadas";
   const [activeTab, setActiveTab] = useState<TabId>(initialTab);
   const [portalLoading, setPortalLoading] = useState(false);
-  const { session, loading: authLoading, signOut } = usePortalAuth();
+  const { session, loading: authLoading, signOut, linkStatus } = usePortalAuth();
 
   const userId = session?.user?.id;
 
-  const { data: profile } = useQuery({
+  const { data: profile, isLoading: profileLoading } = useQuery({
     queryKey: ["portal-profile", userId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
         .select("name, current_journey_id, current_episode, journeys_completed, plan")
         .eq("user_id", userId!)
-        .single();
+        .maybeSingle();
       if (error) throw error;
       return data;
+    },
+    enabled: !!userId && linkStatus === "linked",
+  });
+
+  const { data: isAdmin } = useQuery({
+    queryKey: ["portal-is-admin", userId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId!)
+        .eq("role", "admin")
+        .maybeSingle();
+      return !!data;
     },
     enabled: !!userId,
   });
@@ -57,11 +72,44 @@ const UserPortal = () => {
       if (error) throw error;
       return count || 0;
     },
-    enabled: !!userId,
+    enabled: !!userId && linkStatus === "linked",
   });
 
   if (authLoading) return <PortalLoading />;
   if (!session) return <Navigate to="/meu-espaco/entrar" replace />;
+
+  // Aguardando vinculação ao profile legado
+  if (linkStatus === "idle" || linkStatus === "linking") return <PortalLoading />;
+
+  // Admin logado sem profile próprio → não cai no fluxo de captura de telefone
+  if (linkStatus !== "linked" && isAdmin) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center px-6">
+        <div className="max-w-md text-center animate-fade-in">
+          <h1 className="text-xl font-semibold text-foreground mb-2 font-['Fraunces']">
+            Você está logado como admin
+          </h1>
+          <p className="text-muted-foreground font-['Nunito'] mb-6">
+            Saia e entre com uma conta de usuário pra testar o portal.
+          </p>
+          <button
+            onClick={signOut}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-accent text-accent-foreground font-['Nunito']"
+          >
+            <LogOut size={14} />
+            <span>Sair</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Não achou profile por email → pede telefone
+  if (linkStatus === "needs_phone" || linkStatus === "phone_taken" || linkStatus === "error") {
+    return <PhoneLinkPrompt />;
+  }
+
+  if (profileLoading) return <PortalLoading />;
 
   const firstName = profile?.name?.split(" ")[0] || "você";
 
