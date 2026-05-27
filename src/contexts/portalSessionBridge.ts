@@ -23,6 +23,7 @@ export async function migrateDefaultSessionToPortal(): Promise<boolean> {
     // signOut local: limpa só o storage do cliente padrão, não invalida o
     // refresh token no servidor (o portal continua usando).
     await supabase.auth.signOut({ scope: "local" });
+    try { sessionStorage.removeItem("aura-oauth-target"); } catch {}
     return true;
   } catch (e) {
     console.warn("migrateDefaultSessionToPortal failed", e);
