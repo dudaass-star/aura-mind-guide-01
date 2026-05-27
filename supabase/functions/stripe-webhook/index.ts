@@ -885,7 +885,16 @@ Cuide-se. 🌟`;
         if (profile) {
           const { error: updateError } = await supabase
             .from('profiles')
-            .update({ status: 'canceled', updated_at: new Date().toISOString() })
+            .update({
+              status: 'canceled',
+              canceled_at: new Date().toISOString(),
+              // Reset winback markers para permitir nova janela D+3/D+14/D+30
+              winback_d3_sent_at: null,
+              winback_d14_sent_at: null,
+              winback_d30_sent_at: null,
+              last_winback_reactive_sent_at: null,
+              updated_at: new Date().toISOString(),
+            })
             .eq('id', profile.id);
 
           if (updateError) {
@@ -960,7 +969,12 @@ Me conta: como você está hoje?`;
         if (profile) {
           const { error: updateError } = await supabase
             .from('profiles')
-            .update({ status: 'active', updated_at: new Date().toISOString() })
+            .update({
+              status: 'active',
+              converted_at: new Date().toISOString(),
+              canceled_at: null,
+              updated_at: new Date().toISOString(),
+            })
             .eq('id', profile.id);
 
           if (updateError) {
