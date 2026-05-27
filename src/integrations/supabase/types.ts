@@ -1306,39 +1306,132 @@ export type Database = {
           },
         ]
       }
+      recovery_agent_config: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          id: number
+          max_auto_replies: number
+          model: string
+          silent_hours_end: number
+          silent_hours_start: number
+          system_prompt: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          id?: number
+          max_auto_replies?: number
+          model?: string
+          silent_hours_end?: number
+          silent_hours_start?: number
+          system_prompt?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          id?: number
+          max_auto_replies?: number
+          model?: string
+          silent_hours_end?: number
+          silent_hours_start?: number
+          system_prompt?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       recovery_conversations: {
         Row: {
+          auto_paused_reason: string | null
+          auto_reply_count: number
           checkout_session_id: string | null
           created_at: string
           last_admin_read_at: string | null
+          last_bot_reply_at: string | null
           last_inbound_at: string | null
           last_message_preview: string | null
           last_outbound_at: string | null
           name: string | null
+          needs_human: boolean
           phone: string
           updated_at: string
         }
         Insert: {
+          auto_paused_reason?: string | null
+          auto_reply_count?: number
           checkout_session_id?: string | null
           created_at?: string
           last_admin_read_at?: string | null
+          last_bot_reply_at?: string | null
           last_inbound_at?: string | null
           last_message_preview?: string | null
           last_outbound_at?: string | null
           name?: string | null
+          needs_human?: boolean
           phone: string
           updated_at?: string
         }
         Update: {
+          auto_paused_reason?: string | null
+          auto_reply_count?: number
           checkout_session_id?: string | null
           created_at?: string
           last_admin_read_at?: string | null
+          last_bot_reply_at?: string | null
           last_inbound_at?: string | null
           last_message_preview?: string | null
           last_outbound_at?: string | null
           name?: string | null
+          needs_human?: boolean
           phone?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      recovery_knowledge_base: {
+        Row: {
+          answer: string
+          approved_count: number
+          category: string
+          created_at: string
+          id: string
+          is_active: boolean
+          keywords: string[]
+          priority: number
+          question: string
+          rejected_count: number
+          updated_at: string
+          usage_count: number
+        }
+        Insert: {
+          answer: string
+          approved_count?: number
+          category: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          keywords?: string[]
+          priority?: number
+          question: string
+          rejected_count?: number
+          updated_at?: string
+          usage_count?: number
+        }
+        Update: {
+          answer?: string
+          approved_count?: number
+          category?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          keywords?: string[]
+          priority?: number
+          question?: string
+          rejected_count?: number
+          updated_at?: string
+          usage_count?: number
         }
         Relationships: []
       }
@@ -2603,6 +2696,10 @@ export type Database = {
         Returns: boolean
       }
       increment_kb_usage: { Args: { kb_ids: string[] }; Returns: undefined }
+      increment_recovery_kb_usage: {
+        Args: { _ids: string[] }
+        Returns: undefined
+      }
       match_support_kb: {
         Args: {
           match_count?: number

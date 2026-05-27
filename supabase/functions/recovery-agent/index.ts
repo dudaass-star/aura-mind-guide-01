@@ -1,0 +1,347 @@
+/**
+ * Agente de resposta automática para leads que responderam ao template de
+ * recuperação de carrinho abandonado (subaccount Twilio de recovery).
+ *
+ * Fluxo (chamado fire-and-forget pelo webhook-twilio-recovery):
+ *  1. Carrega config (kill switch)
+ *  2. GUARD: telefone pertence a usuário ativo/trial/canceling? → pausa, NÃO responde
+ *  3. Quiet hours 22-08 BRT → skip
+ *  4. Conversa já bateu limite ou foi pausada → skip
+ *  5. Saudação muito curta → skip
+ *  6. Stop words (atendente/humano/parar) → pausa, NÃO responde
+ *  7. Carrega histórico + contexto checkout + KB injetada
+ *  8. Chama Lovable AI Gateway (Gemini Flash)
+ *  9. Parse tags [ENVIAR_LINK]/[ESCALAR_HUMANO]/[STOP]
+ * 10. Envia via Twilio subaccount, grava recovery_messages, atualiza conversa
+ */
+
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getPhoneVariations, normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+const CHECKOUT_URL = "https://olaaura.com.br/v2/checkout?utm_source=whatsapp&utm_medium=recovery_agent&utm_campaign=auto_reply";
+const SUPPORT_EMAIL = "suporte@olaaura.com.br";
+const ALWAYS_CATEGORIES = ["preco", "garantia", "como_funciona", "pagamento", "seguranca"];
+const HISTORY_LIMIT = 12;
+const MAX_KB_ITEMS = 12;
+
+const STOP_WORDS = [
+  /\batendente\b/i, /\bhumano\b/i, /\bpessoa de verdade\b/i,
+  /\bn[aã]o quero\b/i, /\bpara de me mandar\b/i, /\bparem? de mandar\b/i,
+  /\bremove(r)? meu n[uú]mero\b/i, /\bdescadastr/i, /\bsair da lista\b/i,
+];
+
+function isShortGreeting(text: string): boolean {
+  const cleaned = text.trim().toLowerCase().replace(/[!.?,;]+/g, "");
+  if (cleaned.length === 0) return true;
+  const words = cleaned.split(/\s+/);
+  if (words.length > 3) return false;
+  const greetingTokens = new Set([
+    "oi", "ola", "olá", "bom", "boa", "dia", "tarde", "noite",
+    "obrigado", "obrigada", "obg", "vlw", "valeu", "blz", "ok",
+    "👍", "🙏", "❤", "❤️", "👋", "🌿",
+  ]);
+  return words.every(w => greetingTokens.has(w) || /^[\p{Emoji}]+$/u.test(w));
+}
+
+function isQuietHourBRT(start: number, end: number): boolean {
+  // BRT = UTC-3
+  const nowUtc = new Date();
+  const brtHour = (nowUtc.getUTCHours() - 3 + 24) % 24;
+  if (start === end) return false;
+  if (start < end) return brtHour >= start && brtHour < end;
+  // janela cruza meia-noite (ex: 22 → 8)
+  return brtHour >= start || brtHour < end;
+}
+
+interface KbItem { id: string; category: string; question: string; answer: string; keywords: string[]; }
+
+async function loadKb(supabase: any, lastInbound: string): Promise<KbItem[]> {
+  // Always-include base
+  const { data: base } = await supabase
+    .from("recovery_knowledge_base")
+    .select("id, category, question, answer, keywords, priority")
+    .eq("is_active", true)
+    .in("category", ALWAYS_CATEGORIES)
+    .order("priority", { ascending: false });
+
+  const lowered = (lastInbound || "").toLowerCase();
+  const tokens = lowered.split(/[^\p{L}\p{N}]+/u).filter(w => w.length >= 3);
+
+  // Keyword match (fora dos always)
+  const { data: matches } = await supabase
+    .from("recovery_knowledge_base")
+    .select("id, category, question, answer, keywords, priority")
+    .eq("is_active", true)
+    .not("category", "in", `(${ALWAYS_CATEGORIES.map(c => `"${c}"`).join(",")})`);
+
+  const scored = (matches || []).map((m: any) => {
+    let score = 0;
+    for (const kw of (m.keywords || [])) {
+      if (lowered.includes(String(kw).toLowerCase())) score += 3;
+    }
+    for (const t of tokens) {
+      if ((m.question || "").toLowerCase().includes(t)) score += 1;
+    }
+    return { item: m, score };
+  }).filter((x: any) => x.score > 0)
+    .sort((a: any, b: any) => b.score - a.score)
+    .slice(0, 5)
+    .map((x: any) => x.item);
+
+  const merged: KbItem[] = [...(base || []), ...scored].slice(0, MAX_KB_ITEMS);
+  // dedupe por id
+  const seen = new Set<string>();
+  return merged.filter(m => { if (seen.has(m.id)) return false; seen.add(m.id); return true; });
+}
+
+function renderKb(items: KbItem[]): string {
+  return items.map(it => `- (${it.category}) ${it.question}\n  → ${it.answer}`).join("\n");
+}
+
+async function isActiveUser(supabase: any, phone: string): Promise<boolean> {
+  const variations = getPhoneVariations(phone);
+  const { data } = await supabase
+    .from("profiles")
+    .select("id, status")
+    .in("phone", variations)
+    .in("status", ["active", "trial", "canceling", "past_due"])
+    .limit(1)
+    .maybeSingle();
+  return !!data;
+}
+
+async function sendTwilioFreeText(phone: string, text: string): Promise<{ ok: boolean; sid?: string; error?: string }> {
+  const sid = Deno.env.get("TWILIO_RECOVERY_ACCOUNT_SID");
+  const token = Deno.env.get("TWILIO_RECOVERY_AUTH_TOKEN");
+  const from = Deno.env.get("TWILIO_RECOVERY_FROM");
+  if (!sid || !token || !from) return { ok: false, error: "twilio_recovery_secrets_missing" };
+  const fromFormatted = from.startsWith("whatsapp:") ? from : `whatsapp:${from}`;
+  const toFormatted = `whatsapp:+${normalizeBrazilianPhone(phone)}`;
+  const basic = btoa(`${sid}:${token}`);
+  const resp = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
+    method: "POST",
+    headers: { "Authorization": `Basic ${basic}`, "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ To: toFormatted, From: fromFormatted, Body: text }),
+  });
+  const json = await resp.json().catch(() => ({}));
+  if (!resp.ok) return { ok: false, error: json?.message || `HTTP ${resp.status}` };
+  return { ok: true, sid: json?.sid };
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
+
+  try {
+    const { phone: rawPhone, inbound_text } = await req.json();
+    if (!rawPhone || typeof rawPhone !== "string") {
+      return new Response(JSON.stringify({ skipped: "missing_phone" }), { status: 200, headers: corsHeaders });
+    }
+    const phone = rawPhone.replace(/\D/g, "");
+    const text = (inbound_text || "").toString();
+
+    // 1. Config + kill switch
+    const { data: cfg } = await supabase.from("recovery_agent_config").select("*").eq("id", 1).maybeSingle();
+    if (!cfg || !cfg.enabled) {
+      console.log(`[recovery-agent] disabled (cfg.enabled=${cfg?.enabled})`);
+      return new Response(JSON.stringify({ skipped: "disabled" }), { status: 200, headers: corsHeaders });
+    }
+
+    // 2. GUARD usuário ativo
+    if (await isActiveUser(supabase, phone)) {
+      await supabase.from("recovery_conversations").update({
+        needs_human: true, auto_paused_reason: "active_user", updated_at: new Date().toISOString(),
+      }).eq("phone", phone);
+      console.log(`[recovery-agent] active_user, paused phone=${phone.slice(0,6)}***`);
+      return new Response(JSON.stringify({ skipped: "active_user" }), { status: 200, headers: corsHeaders });
+    }
+
+    // 3. Quiet hours
+    if (isQuietHourBRT(cfg.silent_hours_start, cfg.silent_hours_end)) {
+      console.log("[recovery-agent] quiet_hours");
+      return new Response(JSON.stringify({ skipped: "quiet_hours" }), { status: 200, headers: corsHeaders });
+    }
+
+    // 4. Conversa
+    const { data: conv } = await supabase
+      .from("recovery_conversations")
+      .select("phone, auto_reply_count, needs_human, checkout_session_id, name")
+      .eq("phone", phone).maybeSingle();
+
+    if (conv?.needs_human) {
+      console.log("[recovery-agent] needs_human");
+      return new Response(JSON.stringify({ skipped: "needs_human" }), { status: 200, headers: corsHeaders });
+    }
+    if ((conv?.auto_reply_count ?? 0) >= cfg.max_auto_replies) {
+      await supabase.from("recovery_conversations").update({
+        needs_human: true, auto_paused_reason: "limit_reached", updated_at: new Date().toISOString(),
+      }).eq("phone", phone);
+      console.log("[recovery-agent] limit_reached");
+      return new Response(JSON.stringify({ skipped: "limit_reached" }), { status: 200, headers: corsHeaders });
+    }
+
+    // 5. Saudação curta
+    if (isShortGreeting(text)) {
+      console.log("[recovery-agent] short_greeting");
+      return new Response(JSON.stringify({ skipped: "short_greeting" }), { status: 200, headers: corsHeaders });
+    }
+
+    // 6. Stop words
+    if (STOP_WORDS.some(re => re.test(text))) {
+      await supabase.from("recovery_conversations").update({
+        needs_human: true, auto_paused_reason: "user_requested_human", updated_at: new Date().toISOString(),
+      }).eq("phone", phone);
+      console.log("[recovery-agent] stop_word");
+      return new Response(JSON.stringify({ skipped: "stop_word" }), { status: 200, headers: corsHeaders });
+    }
+
+    // 7. Contexto
+    const { data: history } = await supabase
+      .from("recovery_messages")
+      .select("direction, body, created_at, sent_by_admin, metadata")
+      .eq("phone", phone)
+      .order("created_at", { ascending: false })
+      .limit(HISTORY_LIMIT);
+    const historyAsc = (history || []).reverse();
+
+    let checkout: any = null;
+    if (conv?.checkout_session_id) {
+      const { data: ck } = await supabase
+        .from("checkout_sessions")
+        .select("plan, billing, name, email, created_at")
+        .eq("id", conv.checkout_session_id).maybeSingle();
+      checkout = ck;
+    }
+
+    const kbItems = await loadKb(supabase, text);
+
+    // 8. Monta prompt
+    const planTxt = checkout?.plan ? `${checkout.plan}${checkout.billing ? ` (${checkout.billing})` : ""}` : "não identificado";
+    const nameTxt = conv?.name || checkout?.name || "alguém";
+    const historyTxt = historyAsc.map(m => {
+      const who = m.direction === "in" ? "Lead" : (m.sent_by_admin ? "Admin" : "Aura");
+      return `${who}: ${(m.body || "[mídia]").slice(0, 300)}`;
+    }).join("\n");
+
+    const contextBlock = `
+BASE DE CONHECIMENTO:
+${renderKb(kbItems)}
+
+CONTEXTO DO CHECKOUT:
+- Nome: ${nameTxt}
+- Plano iniciado: ${planTxt}
+- Link pra retomar (envie SOMENTE se emitir [ENVIAR_LINK]): ${CHECKOUT_URL}
+- Email de suporte: ${SUPPORT_EMAIL}
+
+HISTÓRICO DA CONVERSA:
+${historyTxt}
+
+MENSAGEM ATUAL DO LEAD:
+"${text}"
+
+Responda agora em 1 a 3 frases. Termine com UMA das tags em linha separada: [ENVIAR_LINK], [ESCALAR_HUMANO], [STOP] ou nenhuma.`;
+
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!LOVABLE_API_KEY) {
+      console.error("[recovery-agent] LOVABLE_API_KEY missing");
+      return new Response(JSON.stringify({ skipped: "no_api_key" }), { status: 200, headers: corsHeaders });
+    }
+
+    const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: cfg.model || "google/gemini-2.5-flash",
+        messages: [
+          { role: "system", content: cfg.system_prompt },
+          { role: "user", content: contextBlock },
+        ],
+      }),
+    });
+
+    if (!aiResp.ok) {
+      const errTxt = await aiResp.text().catch(() => "");
+      console.error("[recovery-agent] AI error", aiResp.status, errTxt.slice(0, 200));
+      return new Response(JSON.stringify({ error: "ai_failed", status: aiResp.status }), { status: 200, headers: corsHeaders });
+    }
+
+    const aiJson = await aiResp.json();
+    let raw = (aiJson?.choices?.[0]?.message?.content || "").trim();
+    if (!raw) {
+      console.warn("[recovery-agent] empty response");
+      return new Response(JSON.stringify({ skipped: "empty_response" }), { status: 200, headers: corsHeaders });
+    }
+
+    // 9. Parse tags
+    const sendLink = /\[ENVIAR_LINK\]/i.test(raw);
+    const escalate = /\[ESCALAR_HUMANO\]/i.test(raw);
+    const stop = /\[STOP\]/i.test(raw);
+    let body = raw.replace(/\[(ENVIAR_LINK|ESCALAR_HUMANO|STOP)\]/gi, "").trim();
+
+    if (sendLink && !body.includes(CHECKOUT_URL)) {
+      body = `${body}\n\n${CHECKOUT_URL}`;
+    }
+    if (escalate && !body.toLowerCase().includes(SUPPORT_EMAIL)) {
+      body = `${body}\n\nSe quiser, manda um email pra ${SUPPORT_EMAIL} que o time responde por aí.`;
+    }
+
+    if (!body) {
+      console.warn("[recovery-agent] body empty after tag strip");
+      return new Response(JSON.stringify({ skipped: "empty_after_strip" }), { status: 200, headers: corsHeaders });
+    }
+
+    // 10. Envia
+    const send = await sendTwilioFreeText(phone, body);
+    if (!send.ok) {
+      console.error("[recovery-agent] Twilio send failed", send.error);
+      return new Response(JSON.stringify({ error: "twilio_failed", details: send.error }), { status: 200, headers: corsHeaders });
+    }
+
+    const nowIso = new Date().toISOString();
+    const kbIds = kbItems.map(k => k.id);
+
+    await supabase.from("recovery_messages").insert({
+      phone, direction: "out", body, message_sid: send.sid || null, sent_by_admin: false,
+      metadata: { bot: true, kb_used: kbIds, tags: { sendLink, escalate, stop } },
+    });
+
+    const newCount = (conv?.auto_reply_count ?? 0) + 1;
+    const shouldPause = stop || escalate || newCount >= cfg.max_auto_replies;
+    const pauseReason = stop ? "lead_declined" : (escalate ? "escalated_email" : (newCount >= cfg.max_auto_replies ? "limit_reached" : null));
+
+    await supabase.from("recovery_conversations").upsert({
+      phone,
+      last_outbound_at: nowIso,
+      last_bot_reply_at: nowIso,
+      last_message_preview: body.slice(0, 200),
+      auto_reply_count: newCount,
+      needs_human: shouldPause,
+      auto_paused_reason: pauseReason,
+      updated_at: nowIso,
+    }, { onConflict: "phone" });
+
+    if (kbIds.length > 0) {
+      // Best-effort: incrementa usage_count via RPC dedicado
+      await supabase.rpc("increment_recovery_kb_usage", { _ids: kbIds }).catch((e: any) => {
+        console.warn("[recovery-agent] increment_recovery_kb_usage falhou:", e?.message);
+      });
+    }
+
+    console.log(`[recovery-agent] sent phone=${phone.slice(0,6)}*** count=${newCount} tags=${JSON.stringify({sendLink,escalate,stop})}`);
+    return new Response(JSON.stringify({ ok: true, sid: send.sid, auto_reply_count: newCount, paused: shouldPause }), {
+      status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (err) {
+    console.error("[recovery-agent] fatal", err);
+    return new Response(JSON.stringify({ error: "internal" }), { status: 500, headers: corsHeaders });
+  }
+});
