@@ -1,53 +1,48 @@
-# Retomada contextual para os 30 usuários sem resposta
-
 ## Objetivo
 
-Para cada um dos 30 usuários cuja última mensagem ficou pendurada por causa do bug do Meta (131037), a Aura envia **uma mensagem só**, escrita sob medida, que:
+Trazer as conversas do número de Recuperação para dentro do painel `/admin/mensagens`, em uma nova aba lado a lado com as conversas do número oficial da Aura — em vez de viver numa página separada (`/admin/whatsapp-inbox`).
 
-1. Reconhece de forma breve e honesta a instabilidade (sem se desculpar de joelhos, no tom dela).
-2. **Referencia o conteúdo concreto da última mensagem do usuário** — mostra que leu, que não está começando do zero.
-3. Devolve a bola de um jeito que continua o fio (não um "como você tá?" genérico).
+## Mudanças
 
-Sem reenviar respostas antigas descontextualizadas. Sem disparar pra quem já voltou a conversar sozinho depois do fix.
+### 1. Extrair o inbox de Recuperação em um componente reutilizável
 
-## Passo a passo
+Novo arquivo: `src/components/admin/RecoveryInbox.tsx`
 
-### 1. Montar a lista final de destinatários
-- Pegar os 30 user_ids de `failed_message_log` (últimas ~24h, error 131037, resolved=false).
-- **Filtrar fora** quem já recebeu resposta da Aura *depois* do fix (ou seja, já tem `messages` com `role='assistant'` posterior ao último `failed_message_log`) — esses já foram atendidos organicamente.
-- Para cada user_id restante: buscar a **última mensagem do usuário** (`messages` onde `role='user'`, ordem desc, limit 1) + nome do perfil + janela 24h aberta sim/não.
+- Recebe todo o miolo atual de `AdminWhatsappRecovery.tsx` (lista de `recovery_conversations`, painel de conversa, realtime, envio via `whatsapp-recovery-admin-reply`, badge de janela 24h, contexto de checkout).
+- Remove o `<header>`, o `<Tabs>` interno e o wrapper `min-h-screen` — fica só o grid `[320px_1fr]` para encaixar dentro de outro layout.
+- Sem mudança de lógica nem de estilo dos cards/bolhas.
 
-### 2. Gerar a mensagem de retomada (uma por usuário, via LLM)
-Chamada única ao `aura-agent` (ou um endpoint enxuto novo `recover-stuck-users`) com prompt curto e específico:
+### 2. Adicionar abas no painel oficial
 
-> "A última mensagem que [NOME] te mandou foi: '[ÚLTIMA_MSG]'. Você não respondeu por uma instabilidade técnica que durou algumas horas. Escreva UMA mensagem de retomada (max 3 bubbles, separadas por |||) que: (1) reconheça brevemente a falha sem dramatizar, (2) mostre que você leu o que ela disse, referenciando o conteúdo, (3) continue o fio de forma natural — sem 'como você tá?' genérico. Tom Aura padrão (informal PT-BR, presente, honesto)."
+Editar: `src/pages/AdminMessages.tsx`
 
-Modelo: `google/gemini-2.5-flash` (basta, não precisa Pro pra isso).
+- Envolver o conteúdo principal (abaixo do header existente) em `<Tabs defaultValue="oficial">` com duas abas:
+  - **Aura (oficial)** → todo o conteúdo atual (lista + conversa).
+  - **Recuperação** → renderiza `<RecoveryInbox />`.
+- A `TabsList` fica logo abaixo do header, alinhada à esquerda. Mantém o título "Mensagens" + ícone atuais.
+- Badge de contagem na aba "Recuperação" mostrando total de conversas não lidas (opcional, busca leve por `recovery_conversations` com `last_inbound_at > last_admin_read_at`).
 
-### 3. Envio
-- Rota: `sendProactive()` → cai em `whatsapp-official.ts` (Twilio), já funcionando.
-- Janela 24h aberta (todos esses usuários mandaram msg recente) → texto livre direto, sem template, sem custo de conversation.
-- Respeitar quiet hours 22h–08h BRT: se rodar fora do horário, agendar pra 08h.
-- Gravar cada bubble em `messages` com `role='assistant'` (pra Aura ter contexto da retomada na próxima troca).
-- Marcar os `failed_message_log` correspondentes como `resolved=true`.
+### 3. Simplificar a página antiga
 
-### 4. Log & verificação
-- Tabela `failed_message_log` com `function_name='recover-stuck-users'` se algum falhar.
-- Print no console: total enviados / pulados (já respondidos) / falhados.
+Editar: `src/pages/AdminWhatsappRecovery.tsx`
+
+- Vira um wrapper fino que reusa `<RecoveryInbox />` com o header próprio, para não quebrar links existentes (`/admin/whatsapp-inbox` continua funcionando).
+- Remove a aba "Número Oficial" interna (redundante agora).
+
+### 4. Atalho visual
+
+- O botão/atalho de "Recovery" que já existe no `AdminEngagement` permanece, mas ele pode opcionalmente abrir direto na aba certa via query param `?tab=recuperacao` em `/admin/mensagens` (read em `useSearchParams` no AdminMessages para setar a `defaultValue` da Tab).
 
 ## Detalhes técnicos
 
-- **Edge function nova**: `supabase/functions/recover-stuck-users/index.ts`, invocada uma vez manualmente (sem cron).
-- Roda sequencial com ~1.5s de delay entre usuários (segurança Twilio + parecer humano).
-- Sem alteração em `system_config`, sem alteração de prompt da Aura, sem mudança no agente principal.
+- Nenhuma alteração em RLS, edge functions ou tabelas — `recovery_conversations` / `recovery_messages` já são lidas pelo client com policies admin.
+- Realtime e marcação de leitura (`last_admin_read_at`) continuam dentro do `RecoveryInbox` — funcionam igual nas duas páginas que o renderizam.
+- Mobile: a aba ativa ocupa toda a largura; cada inbox já tem seu próprio comportamento responsivo, então não há conflito.
 
-## O que não vou fazer
-
-- Não vou disparar template — todos estão dentro da janela 24h.
-- Não vou reenviar o conteúdo original perdido da Aura (era resposta a um ponto específico que pode estar defasado).
-- Não vou tocar nos ~30 outros usuários que já voltaram a conversar e foram atendidos.
-- Não vou criar UI no admin pra isso — é um one-shot.
-
-## Pergunta de confirmação antes de implementar
-
-Quer revisar a mensagem de **1 usuário-exemplo** (gerada pelo LLM) antes de eu disparar pros 30, ou pode mandar direto pra todos?
+```text
+/admin/mensagens
+├── Header (Mensagens)
+└── Tabs
+    ├── Aura (oficial)  ← lista + conversa atual
+    └── Recuperação     ← <RecoveryInbox />
+```
