@@ -437,38 +437,101 @@ Deno.serve(async (req) => {
     if (blockedStatuses.includes(profile.status || '') && !isLegitTrial) {
       console.log(`🚫 User ${profile.user_id} blocked: status is '${profile.status}'`);
 
-      // Instance config no longer needed — provider handles routing
+      try {
+        // Persiste a mensagem do usuário no histórico ANTES de qualquer envio
+        if (messageText) {
+          await supabase.from('messages').insert({
+            user_id: profile.user_id,
+            role: 'user',
+            content: messageText,
+          });
+        }
 
-      // Save user message to history before blocking
-      if (messageText) {
-        await supabase.from('messages').insert({
-          user_id: profile.user_id,
-          role: 'user',
-          content: messageText,
+        // Rate-limit reativo: 1 winback a cada 7 dias por usuário
+        // (evita spam se o cliente cancelado mandar várias mensagens seguidas)
+        const lastReactive = (profile as any).last_winback_reactive_sent_at
+          ? new Date((profile as any).last_winback_reactive_sent_at).getTime()
+          : 0;
+        const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+        const withinRateLimit = lastReactive > 0 && (Date.now() - lastReactive) < sevenDaysMs;
+
+        if (withinRateLimit) {
+          console.log(`⏸️ Skipping reactive winback for ${profile.user_id}: sent ${Math.round((Date.now() - lastReactive) / 1000 / 3600)}h ago`);
+          return new Response(JSON.stringify({ success: true, action: 'subscription_blocked_rate_limited', status: profile.status }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        let blockMessage: string;
+        if (profile.status === 'trial_expired') {
+          blockMessage = `Oi, ${profile.name || 'querido(a)'}! 💜\n\nSeu período de experiência terminou, mas não precisa ser um adeus.\n\nPra continuar conversando comigo, é só escolher o plano que faz sentido pra você:\n👉 https://olaaura.com.br/checkout\n\nTô aqui te esperando. ✨`;
+        } else {
+          // Tenta short link com try/catch e fallback para o link canônico
+          let checkoutLink = 'https://olaaura.com.br/checkout';
+          try {
+            console.log(`🔗 [winback-reactive] creating short link for ${cleanPhone}`);
+            const short = await createShortLink('https://olaaura.com.br/checkout', cleanPhone || '');
+            if (short) checkoutLink = short;
+            console.log(`🔗 [winback-reactive] link resolved: ${checkoutLink}`);
+          } catch (linkErr) {
+            console.error(`⚠️ [winback-reactive] createShortLink threw, using fallback:`, linkErr);
+          }
+
+          if (profile.status === 'canceled') {
+            // Copy segmentada por motivo do cancelamento
+            if ((profile as any).payment_failed_at) {
+              // Dunning: foco prático em atualizar pagamento
+              blockMessage = `Oi, ${profile.name || 'querido(a)'}! 💜\n\nSeu pagamento não passou e sua assinatura acabou sendo encerrada.\n\nSe quiser voltar, é só atualizar o cartão por aqui:\n👉 ${checkoutLink}\n\nQualquer coisa eu tô por aqui. ✨`;
+            } else {
+              // Cancelamento ativo: foco afetivo
+              blockMessage = `Oi, ${profile.name || 'querido(a)'}! 💜\n\nQue bom te ver por aqui. Sua assinatura tá encerrada, mas se quiser voltar a conversar comigo é só reativar:\n👉 ${checkoutLink}\n\nTô aqui te esperando. ✨`;
+            }
+          } else if (profile.status === 'inactive') {
+            blockMessage = `Oi, ${profile.name || 'querido(a)'}! 💜\n\nSua conta tá inativa no momento.\n\nPra continuarmos nossas conversas, é só assinar um plano:\n👉 ${checkoutLink}\n\nEstou aqui te esperando! ✨`;
+          } else {
+            blockMessage = `Oi, ${profile.name || 'querido(a)'}! 💜\n\nSua assinatura tá pausada no momento.\n\nQuando estiver pronto(a) pra voltar, é só reativar:\n👉 ${checkoutLink}\n\nEstarei aqui quando você precisar! ✨`;
+          }
+        }
+
+        console.log(`📤 [winback-reactive] sending message to ${cleanPhone}`);
+        const blockResult = await sendMessage(cleanPhone!, blockMessage);
+        console.log(`📤 [winback-reactive] sendMessage result: success=${blockResult.success}`);
+
+        if (!blockResult.success) {
+          console.error(`❌ Failed to send block message: ${blockResult.error}`);
+          await logFailedMessage(supabase, profile.user_id, cleanPhone, blockMessage, blockResult.error, 'process-webhook-message:subscription_blocked');
+        } else {
+          // Persiste resposta da Aura no histórico
+          await supabase.from('messages').insert({
+            user_id: profile.user_id,
+            role: 'assistant',
+            content: blockMessage,
+          });
+          // Marca rate-limit
+          await supabase
+            .from('profiles')
+            .update({ last_winback_reactive_sent_at: new Date().toISOString() })
+            .eq('id', profile.id);
+        }
+
+        return new Response(JSON.stringify({ success: true, action: 'subscription_blocked', status: profile.status }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      } catch (blockErr) {
+        console.error(`❌ [winback-reactive] uncaught error in subscription_blocked branch:`, blockErr);
+        await logFailedMessage(
+          supabase,
+          profile.user_id,
+          cleanPhone,
+          `[uncaught] ${messageText || ''}`,
+          (blockErr as Error)?.message || String(blockErr),
+          'process-webhook-message:subscription_blocked',
+        );
+        return new Response(JSON.stringify({ success: false, action: 'subscription_blocked_error', status: profile.status }), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
-
-      let blockMessage: string;
-      if (profile.status === 'trial_expired') {
-        blockMessage = `Oi, ${profile.name || 'querido(a)'}! 💜\n\nSeu período de experiência terminou, mas não precisa ser um adeus.\n\nPra continuar conversando comigo, é só escolher o plano que faz sentido pra você:\n👉 https://olaaura.com.br/checkout\n\nTô aqui te esperando. ✨`;
-      } else {
-        const checkoutLink = await createShortLink('https://olaaura.com.br/checkout', cleanPhone || '') || 'https://olaaura.com.br/checkout';
-        const statusMessages: Record<string, string> = {
-          canceled: `Oi, ${profile.name || 'querido(a)'}! 💜\n\nSua assinatura foi encerrada. Sinto sua falta!\n\nSe quiser voltar a conversar comigo, é só assinar novamente:\n👉 ${checkoutLink}\n\nVou adorar te receber de volta! ✨`,
-          inactive: `Oi, ${profile.name || 'querido(a)'}! 💜\n\nSua conta está inativa no momento.\n\nPara continuarmos nossas conversas, assine um plano:\n👉 ${checkoutLink}\n\nEstou aqui te esperando! ✨`,
-          paused: `Oi, ${profile.name || 'querido(a)'}! 💜\n\nSua assinatura está pausada no momento.\n\nQuando estiver pronto(a) para voltar, é só reativar:\n👉 ${checkoutLink}\n\nEstarei aqui quando você precisar! ✨`,
-        };
-        blockMessage = statusMessages[profile.status!];
-      }
-
-      const blockResult = await sendMessage(cleanPhone!, blockMessage);
-      if (!blockResult.success) {
-        console.error(`❌ Failed to send block message: ${blockResult.error}`);
-        await logFailedMessage(supabase, profile.user_id, cleanPhone, blockMessage, blockResult.error);
-      }
-      return new Response(JSON.stringify({ success: true, action: 'subscription_blocked', status: profile.status }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
     }
 
     // ========================================================================
