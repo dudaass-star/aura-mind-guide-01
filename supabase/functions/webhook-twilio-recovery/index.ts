@@ -123,6 +123,23 @@ Deno.serve(async (req) => {
       console.log(`✅ [recovery-webhook] inbound registrado phone=${cleanPhone.substring(0, 6)}***`);
     }
 
+    // Dispara o agente de resposta (fire-and-forget). Não bloqueia o 200 OK para o Twilio.
+    try {
+      const invokePromise = supabase.functions.invoke("recovery-agent", {
+        body: { phone: cleanPhone, inbound_text: finalBody || "" },
+      }).then(
+        (r) => console.log("[recovery-webhook] recovery-agent ->", JSON.stringify(r?.data || r?.error || {})),
+        (e) => console.error("[recovery-webhook] recovery-agent invoke falhou:", e?.message || e),
+      );
+      // @ts-ignore - EdgeRuntime existe no runtime Deno deploy
+      if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) {
+        // @ts-ignore
+        EdgeRuntime.waitUntil(invokePromise);
+      }
+    } catch (e) {
+      console.error("[recovery-webhook] erro ao agendar recovery-agent:", e);
+    }
+
     return new Response("", { status: 200, headers: { ...corsHeaders, "Content-Type": "text/plain" } });
   } catch (err) {
     console.error("❌ [recovery-webhook] erro:", err);
