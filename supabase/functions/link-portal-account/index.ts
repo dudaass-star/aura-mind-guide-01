@@ -1,6 +1,8 @@
-// Vincula o auth.uid() recém-criado ao profile existente (lookup por email)
+// Vincula o auth.uid() recém-criado ao profile existente.
+// Lookup primário: email. Fallback: telefone enviado no body { phone }.
 // Idempotente: roda no primeiro login de cada usuário do portal.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getPhoneVariations, normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -39,11 +41,14 @@ Deno.serve(async (req) => {
     const newUserId = claims.claims.sub as string;
     const email = (claims.claims.email as string | undefined)?.toLowerCase().trim();
 
-    if (!email) {
-      return new Response(JSON.stringify({ linked: false, reason: "no_email" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    // Lê telefone opcional do body (fallback quando email não bate).
+    let phoneInput: string | undefined;
+    try {
+      if (req.headers.get("content-length") && req.headers.get("content-length") !== "0") {
+        const body = await req.json().catch(() => ({}));
+        if (body && typeof body.phone === "string") phoneInput = body.phone;
+      }
+    } catch (_) { /* body opcional */ }
 
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
@@ -59,20 +64,64 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 2) Procurar profile legado pelo email.
-    const { data: legacy, error: lookupErr } = await admin
-      .from("profiles")
-      .select("id, user_id, email")
-      .ilike("email", email)
-      .limit(1)
-      .maybeSingle();
+    // 2) Procurar profile legado pelo email (caminho preferencial).
+    let legacy: { id: string; user_id: string | null; email: string | null; phone: string | null } | null = null;
+    let matchedBy: "email" | "phone" | null = null;
 
-    if (lookupErr) {
-      console.error("lookup error", lookupErr);
-      return new Response(JSON.stringify({ error: "lookup_failed" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    if (email) {
+      const { data, error } = await admin
+        .from("profiles")
+        .select("id, user_id, email, phone")
+        .ilike("email", email)
+        .limit(1)
+        .maybeSingle();
+      if (error) {
+        console.error("lookup error (email)", error);
+        return new Response(JSON.stringify({ error: "lookup_failed" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (data) {
+        legacy = data as any;
+        matchedBy = "email";
+      }
+    }
+
+    // 3) Fallback por telefone (só se veio phone no body).
+    if (!legacy && phoneInput) {
+      const normalized = normalizeBrazilianPhone(phoneInput);
+      const variations = Array.from(new Set([normalized, ...getPhoneVariations(phoneInput)])).filter(Boolean);
+      if (variations.length > 0) {
+        const { data, error } = await admin
+          .from("profiles")
+          .select("id, user_id, email, phone")
+          .in("phone", variations)
+          .limit(1)
+          .maybeSingle();
+        if (error) {
+          console.error("lookup error (phone)", error);
+          return new Response(JSON.stringify({ error: "lookup_failed" }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        if (data) {
+          legacy = data as any;
+          matchedBy = "phone";
+
+          // Proteção: se o profile já está vinculado a outro auth user ativo, recusa.
+          if (data.user_id && data.user_id !== newUserId) {
+            const { data: existingUser } = await admin.auth.admin.getUserById(data.user_id);
+            const lastSignIn = existingUser?.user?.last_sign_in_at;
+            if (lastSignIn) {
+              return new Response(JSON.stringify({ linked: false, reason: "phone_taken" }), {
+                headers: { ...corsHeaders, "Content-Type": "application/json" },
+              });
+            }
+          }
+        }
+      }
     }
 
     if (!legacy) {
@@ -81,10 +130,16 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 3) Atualiza user_id do profile existente para o novo auth.uid().
+    // 4) Atualiza user_id do profile existente para o novo auth.uid() (e preenche email se faltava).
+    const updatePayload: Record<string, unknown> = {
+      user_id: newUserId,
+      updated_at: new Date().toISOString(),
+    };
+    if (!legacy.email && email) updatePayload.email = email;
+
     const { error: updErr } = await admin
       .from("profiles")
-      .update({ user_id: newUserId, updated_at: new Date().toISOString() })
+      .update(updatePayload)
       .eq("id", legacy.id);
 
     if (updErr) {
@@ -95,7 +150,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 4) Propaga o novo user_id para tabelas relacionadas que usavam o user_id antigo.
+    // 5) Propaga o novo user_id para tabelas relacionadas que usavam o user_id antigo.
     const oldUserId = legacy.user_id;
     if (oldUserId && oldUserId !== newUserId) {
       const tables = [
@@ -112,9 +167,9 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log(`✅ Linked auth uid ${newUserId} to legacy profile (email: ${email})`);
+    console.log(`✅ Linked auth uid ${newUserId} to legacy profile (matchedBy: ${matchedBy})`);
 
-    return new Response(JSON.stringify({ linked: true, migrated: true }), {
+    return new Response(JSON.stringify({ linked: true, migrated: true, matchedBy }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
