@@ -1110,6 +1110,7 @@ export type Database = {
           audio_reset_date: string | null
           audio_seconds_used_this_month: number | null
           awaiting_time_capsule: string | null
+          canceled_at: string | null
           converted_at: string | null
           created_at: string | null
           current_episode: number | null
@@ -1129,6 +1130,7 @@ export type Database = {
           last_proactive_insight_at: string | null
           last_reactivation_sent: string | null
           last_user_message_at: string | null
+          last_winback_reactive_sent_at: string | null
           main_challenges: string[] | null
           messages_today: number | null
           name: string | null
@@ -1163,12 +1165,16 @@ export type Database = {
           upgrade_suggested_at: string | null
           user_id: string
           whatsapp_instance_id: string | null
+          winback_d14_sent_at: string | null
+          winback_d3_sent_at: string | null
+          winback_d30_sent_at: string | null
         }
         Insert: {
           asaas_customer_id?: string | null
           audio_reset_date?: string | null
           audio_seconds_used_this_month?: number | null
           awaiting_time_capsule?: string | null
+          canceled_at?: string | null
           converted_at?: string | null
           created_at?: string | null
           current_episode?: number | null
@@ -1188,6 +1194,7 @@ export type Database = {
           last_proactive_insight_at?: string | null
           last_reactivation_sent?: string | null
           last_user_message_at?: string | null
+          last_winback_reactive_sent_at?: string | null
           main_challenges?: string[] | null
           messages_today?: number | null
           name?: string | null
@@ -1222,12 +1229,16 @@ export type Database = {
           upgrade_suggested_at?: string | null
           user_id: string
           whatsapp_instance_id?: string | null
+          winback_d14_sent_at?: string | null
+          winback_d3_sent_at?: string | null
+          winback_d30_sent_at?: string | null
         }
         Update: {
           asaas_customer_id?: string | null
           audio_reset_date?: string | null
           audio_seconds_used_this_month?: number | null
           awaiting_time_capsule?: string | null
+          canceled_at?: string | null
           converted_at?: string | null
           created_at?: string | null
           current_episode?: number | null
@@ -1247,6 +1258,7 @@ export type Database = {
           last_proactive_insight_at?: string | null
           last_reactivation_sent?: string | null
           last_user_message_at?: string | null
+          last_winback_reactive_sent_at?: string | null
           main_challenges?: string[] | null
           messages_today?: number | null
           name?: string | null
@@ -1281,6 +1293,9 @@ export type Database = {
           upgrade_suggested_at?: string | null
           user_id?: string
           whatsapp_instance_id?: string | null
+          winback_d14_sent_at?: string | null
+          winback_d3_sent_at?: string | null
+          winback_d30_sent_at?: string | null
         }
         Relationships: [
           {
