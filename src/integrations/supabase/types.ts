@@ -2696,6 +2696,10 @@ export type Database = {
         Returns: boolean
       }
       increment_kb_usage: { Args: { kb_ids: string[] }; Returns: undefined }
+      increment_recovery_kb_usage: {
+        Args: { _ids: string[] }
+        Returns: undefined
+      }
       match_support_kb: {
         Args: {
           match_count?: number
