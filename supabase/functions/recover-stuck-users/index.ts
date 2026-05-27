@@ -32,25 +32,28 @@ interface StuckUser {
 async function generateRecoveryMessage(
   apiKey: string,
   userName: string,
-  lastUserMessage: string,
+  recentUserMessages: string[],
 ): Promise<string> {
   const firstName = (userName || '').split(' ')[0] || 'aí';
+  const conversa = recentUserMessages
+    .map((m, i) => `${i + 1}. "${m}"`)
+    .join('\n');
 
   const prompt = `Você é a Aura, mentora terapêutica (logoterapia, tom informal PT-BR, presente, honesta, sem dramatização).
 
-CONTEXTO: ${firstName} te mandou uma mensagem há algumas horas e você NÃO respondeu por uma instabilidade técnica do WhatsApp (já resolvida agora). A última mensagem dela foi:
+CONTEXTO: ${firstName} te mandou algumas mensagens há algumas horas e você NÃO respondeu por uma instabilidade técnica do WhatsApp (já resolvida agora). As últimas mensagens dela (mais antigas no topo, mais recentes embaixo) foram:
 
-"${lastUserMessage}"
+${conversa}
 
 TAREFA: Escreva UMA mensagem de retomada (máximo 3 bubbles, separadas por |||) que:
 
-1. Reconheça brevemente que demorou (uma frase, sem dramatizar nem se desculpar de joelhos — algo como "ei, demorei aqui" ou "voltei").
-2. Mostre que você LEU o que ela disse, referenciando o conteúdo específico — pegue o ponto principal da mensagem dela e devolva algo concreto sobre ele.
-3. Continue o fio de forma natural — uma pergunta ou observação que dê seguimento ao que ela trouxe. NUNCA use "como você tá?" genérico.
+1. Reconheça brevemente que demorou (uma frase, sem dramatizar nem se desculpar de joelhos — algo como "ei, demorei aqui pra responder" ou "voltei").
+2. Mostre que você LEU o que ela trouxe, referenciando o CONTEÚDO ESPECÍFICO das mensagens — se ela disse que precisava conversar sobre algo, retome esse algo. Se ela trouxe um sentimento/situação concreta, devolva sobre isso.
+3. Convide ela a continuar de onde parou — se ela tinha pedido ajuda com X, abra espaço pra X. NUNCA pergunte "como você tá?" genérico nem "o que queria conversar?" — ela JÁ disse o que queria, leia direito as mensagens acima.
 
 Regras:
 - Informal, sem emoji excessivo (no máx 1 se fizer sentido).
-- Bubbles curtas, separadas por |||.
+- Bubbles curtas, separadas EXATAMENTE por ||| (três barras verticais).
 - Sem preâmbulo técnico ("tive uma falha no sistema..."). Resolva isso em poucas palavras humanas.
 - Não invente fatos que ela não disse.
 - Responda APENAS o texto da mensagem (com os |||). Sem aspas, sem explicação.`;
@@ -175,24 +178,34 @@ Deno.serve(async (req) => {
 
     for (const u of stuckUsers) {
       try {
-        const { data: lastMsg } = await supabase
+        const { data: recentMsgs } = await supabase
           .from('messages')
-          .select('content')
+          .select('content, created_at')
           .eq('user_id', u.user_id)
           .eq('role', 'user')
           .order('created_at', { ascending: false })
-          .limit(1)
-          .single();
+          .limit(5);
 
-        const recoveryText = await generateRecoveryMessage(apiKey, u.name ?? '', lastMsg!.content);
+        const recent = (recentMsgs ?? [])
+          .map((m: { content: string }) => m.content)
+          .reverse(); // ordem cronológica
+
+        if (recent.length === 0) continue;
+
+        const recoveryText = await generateRecoveryMessage(apiKey, u.name ?? '', recent);
+
+        // Normaliza separadores: aceita || ou \n\n vindos do modelo
+        const normalized = recoveryText
+          .replace(/\n{2,}/g, '|||')
+          .replace(/(?<!\|)\|\|(?!\|)/g, '|||');
 
         if (dryRun) {
-          results.push({ user_id: u.user_id, name: u.name, preview: recoveryText });
+          results.push({ user_id: u.user_id, name: u.name, last_msgs: recent, preview: normalized });
           continue;
         }
 
         // Envia cada bubble separada (split por |||)
-        const bubbles = recoveryText.split('|||').map((b) => b.trim()).filter(Boolean);
+        const bubbles = normalized.split('|||').map((b) => b.trim()).filter(Boolean);
         let allOk = true;
         for (let i = 0; i < bubbles.length; i++) {
           const res = await sendFreeText(u.phone, bubbles[i]);
