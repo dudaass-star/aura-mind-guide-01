@@ -1,40 +1,37 @@
-## Plano: Resolver os 8 findings do scanner de segurança
+# Restaurar envio da Aura via Twilio
 
-### Contexto
-Após revisar o schema, confirmei que **nenhum dos findings representa vulnerabilidade real**. Todas as tabelas citadas têm RLS habilitado e acesso restrito a `service_role` por design — o app sempre passa por edge functions. O scanner reclama porque é uma checagem genérica que não conhece a arquitetura.
+## Causa raiz (confirmada com evidência)
 
-### Ação 1 — Migração SQL (corrige o único "error")
-Adicionar política de INSERT/UPDATE/DELETE explicitamente **bloqueando** usuários autenticados em `user_roles`, deixando claro no schema que só `service_role` pode gravar:
+A flag `system_config.whatsapp_provider` foi alterada para `'meta'` (provavelmente ontem ao configurar o número novo). A função `sendMessage()` lê essa flag e roteia **todo envio da Aura** para `meta-whatsapp-client.ts` → `graph.facebook.com/{META_WHATSAPP_PHONE_NUMBER_ID}/messages`.
 
-```sql
--- Bloqueio explícito: nenhum usuário autenticado pode inserir/alterar roles
-CREATE POLICY "Block authenticated inserts on user_roles"
-ON public.user_roles FOR INSERT TO authenticated WITH CHECK (false);
-
-CREATE POLICY "Block authenticated updates on user_roles"
-ON public.user_roles FOR UPDATE TO authenticated USING (false);
-
-CREATE POLICY "Block authenticated deletes on user_roles"
-ON public.user_roles FOR DELETE TO authenticated USING (false);
+A Meta rejeita 100% das tentativas com:
+```
+400 — (#131037) WhatsApp provided number needs display name approval before message can be sent.
 ```
 
-Isso elimina o finding **PRIVILEGE_ESCALATION** (o único vermelho) e torna a intenção auditável.
+Evidência: sua mensagem 01:16:33 hoje (telefone `555181519708`) → falha logada em `failed_message_log` com `function_name=process-webhook-message`. Mesmo padrão se repete em ~30 usuários nas últimas 48h.
 
-### Ação 2 — Marcar os 6 warnings como "ignored" com justificativa
+O recebimento via `webhook-twilio` continua funcionando (por isso as mensagens entram), mas o envio nunca chega no WhatsApp do usuário.
 
-| Finding | Justificativa |
-|---|---|
-| `asaas_payments_no_user_select_policy` | PII de pagamento — leitura apenas via painel admin |
-| `aura_response_state_no_user_policy` | Estado interno do agente, nunca exposto ao cliente |
-| `aura_tts_audios_no_user_read_policy` | Áudios servidos via signed URL gerada por edge function |
-| `monthly_reports_no_user_select` | Lidos pelo Portal `/meu-espaco` via token (service_role) |
-| `short_links_no_public_read` | Resolvidos pela edge `redirect-link` (service_role) |
-| `SUPA_*_security_definer_function_executable` | Funções `has_role`, `claim_pending_tasks`, etc. precisam ser DEFINER para o RBAC funcionar |
+## A correção
 
-### Ação 3 — Atualizar `security memory`
-Documentar a postura: "App 100% client-server via edge functions com service_role; tabelas sensíveis intencionalmente sem políticas user-facing". Isso evita que os mesmos warnings reapareçam no próximo scan.
+Uma única migration:
 
-### Resultado esperado
-- 1 erro vermelho → resolvido com 3 policies de bloqueio
-- 6 warnings amarelos → silenciados com justificativa documentada
-- Próximos scans ficam limpos
+```sql
+UPDATE system_config 
+SET value = '"official"', updated_at = now()
+WHERE key = 'whatsapp_provider';
+```
+
+## Efeito imediato
+
+- `sendMessage()` volta a rotear pra `whatsapp-official.ts` → Twilio Gateway → `+16625255005`
+- Próxima mensagem sua chega normalmente
+- Templates, recovery, dunning, Instagram — nada muda
+- Integração Meta no código continua existindo (dormente) até você terminar a aprovação do display name; quando estiver pronta, basta virar a flag de volta
+
+## O que não vou tocar
+
+- Secrets `META_*` ficam onde estão
+- `meta-whatsapp-client.ts`, `webhook-meta`, `qa-meta-*` permanecem no código
+- Nenhum código TypeScript precisa mudar
