@@ -330,19 +330,10 @@ Responda agora em 1 a 3 frases. Termine com UMA das tags em linha separada: [ENV
     }, { onConflict: "phone" });
 
     if (kbIds.length > 0) {
-      // best-effort: incrementa usage
-      await supabase.rpc("increment_kb_usage", { kb_ids: kbIds }).then(() => {}, () => {
-        // RPC existe pra support_knowledge_base; pra recovery_kb fazemos update direto
+      // Best-effort: incrementa usage_count via RPC dedicado
+      await supabase.rpc("increment_recovery_kb_usage", { _ids: kbIds }).catch((e: any) => {
+        console.warn("[recovery-agent] increment_recovery_kb_usage falhou:", e?.message);
       });
-      await supabase
-        .from("recovery_knowledge_base")
-        .update({ usage_count: undefined }) // placeholder — usaremos SQL abaixo
-        .eq("id", kbIds[0]).then(() => {}, () => {});
-      // increment manual (sem RPC dedicado)
-      for (const id of kbIds) {
-        // eslint-disable-next-line no-await-in-loop
-        await supabase.rpc("recovery_kb_increment", { _id: id }).catch(() => {});
-      }
     }
 
     console.log(`[recovery-agent] sent phone=${phone.slice(0,6)}*** count=${newCount} tags=${JSON.stringify({sendLink,escalate,stop})}`);
