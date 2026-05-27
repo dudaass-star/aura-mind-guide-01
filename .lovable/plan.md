@@ -1,91 +1,59 @@
-## Objetivo
 
-Resolver o bug que impede a Aura de responder usuários cancelados (caso Jéssica) e implementar uma estratégia completa de winback (reativo + proativo) para recapturar receita.
+## Resumo
 
-## Escopo
+Hoje o portal `/meu-espaco` só consegue vincular o `auth.users` (login Google/OTP) ao `profiles` legado **pelo email**. Usuários que assinaram via WhatsApp/Stripe e cujo `profiles.email` está vazio (caso do Eduardo Santos, 51981519708) entram no portal e veem tudo zerado, mesmo tendo dados completos no banco.
 
-- **Dentro**: branch `subscription_blocked` em `process-webhook-message`, novo cron de winback proativo, instrumentação/logs, copy segmentada por motivo de cancelamento.
-- **Fora**: prompt da Aura, sessões, checkout, `webhook-twilio`, `stripe-webhook` (exceto hook de `recovered_at`).
+Vou adicionar um **fallback por telefone**: se o email não bater, o portal pede o WhatsApp do usuário e usa esse número pra encontrar o profile legado.
 
----
+## Mudanças
 
-## Parte 1 — Corrigir o bug do winback reativo
+### 1. `link-portal-account` — aceitar telefone como fallback
 
-**Arquivo**: `supabase/functions/process-webhook-message/index.ts` (linhas 437–471, branch `subscription_blocked`)
+Editar `supabase/functions/link-portal-account/index.ts`:
 
-Hoje o worker morre silenciosamente: a Jéssica mandou "Oi" (20/05) e "Iniciar" (27/05), nenhuma mensagem foi persistida em `messages` nem em `failed_message_log`.
+- Aceitar body opcional `{ phone?: string }`.
+- Fluxo:
+  1. Se já existe profile pro `auth.uid()` → retorna `alreadyLinked: true`.
+  2. Tenta match por **email** no `profiles` (caminho atual).
+  3. Se não achou e veio `phone` no body → normaliza com `normalizeBrazilianPhone` / `getPhoneVariations` (helpers em `_shared/zapi-client.ts`) e procura `profiles` por essas variações.
+  4. Match encontrado → atualiza `profiles.user_id` para o novo `auth.uid()`, preenche `profiles.email` com o email do `auth.users` (se vazio), e propaga `user_id` nas mesmas 16 tabelas relacionadas que já estão hoje na função.
+  5. Antes de vincular por telefone, valida que aquele profile **não está já vinculado a outro `auth.uid()` ativo** (proteção contra "roubar" conta de outra pessoa). Se já tem dono diferente → retorna `{ linked: false, reason: 'phone_taken' }`.
+  6. Não encontrou nem por email nem por telefone → retorna `{ linked: false, reason: 'no_profile' }`.
 
-Mudanças:
+### 2. UX no portal — pedir telefone quando email não bate
 
-1. **Try/catch em volta de `createShortLink`** com fallback para `https://olaaura.com.br/checkout` (suspeita principal da falha silenciosa).
-2. **Try/catch externo no branch inteiro** gravando em `failed_message_log` (`function_name: 'process-webhook-message:subscription_blocked'`) qualquer exceção não tratada.
-3. **`console.log` antes/depois** de `createShortLink` e `sendMessage` para diagnóstico futuro.
-4. **Persistir a mensagem da Aura** em `messages` (`role: 'assistant'`) quando `sendMessage` retornar sucesso — hoje não persiste, então o histórico fica vazio.
-5. **Rate-limit reativo**: 1 winback reativo a cada 7 dias por usuário, usando novo campo `last_winback_reactive_sent_at` em `profiles` (evita spam se o usuário mandar várias mensagens).
+Editar `src/pages/UserPortal.tsx` (ou onde o `link-portal-account` é chamado hoje):
 
-## Parte 2 — Copy segmentada por motivo de cancelamento
+- Após o login Supabase, chamar `link-portal-account` sem body (tenta por email).
+- Se retornar `{ linked: false, reason: 'no_profile' }` → renderizar um pequeno componente `<PhoneLinkPrompt />` em vez das abas:
+  - Texto: "Pra encontrar sua conta, confirma o WhatsApp que você usa com a Aura."
+  - Input de telefone (máscara `(DD) 9XXXX-XXXX`).
+  - Botão "Confirmar" → chama `link-portal-account` com `{ phone }`.
+  - Sucesso → recarrega a página e o portal renderiza normal.
+  - `phone_taken` → erro "Esse número já está vinculado a outra conta. Fale com o suporte."
+  - `no_profile` (telefone também não bateu) → erro "Não encontramos esse número. Confere o DDD ou fale com o suporte."
 
-No mesmo branch, escolher a mensagem com base em `profiles.payment_failed_at`:
+### 3. Bloquear sessão admin no portal
 
-- **Dunning** (`payment_failed_at IS NOT NULL`): foco em "seu pagamento falhou, atualize o cartão" + link de checkout. Tom prático.
-- **Cancelamento ativo** (`payment_failed_at IS NULL`): foco em "senti sua falta" + convite empático + link. Tom afetivo.
+Em `UserPortal.tsx`, se `profile` é `null` **e** o usuário logado tem role `admin` (via `has_role`) → renderizar aviso "Você está logado como admin. Saia e entre com uma conta de usuário pra testar o portal." sem cair no fluxo de captura de telefone (evita admin testar e confundir dados).
 
-Ambas terminam com o short link de reativação.
+## Fora de escopo
 
-## Parte 3 — Winback proativo (novo cron)
-
-**Nova edge function**: `winback-canceled-users` (cron diário 10h BRT).
-
-Seleciona `profiles.status = 'canceled'` em três janelas após o cancelamento (usando `updated_at` ou novo campo `canceled_at` se existir):
-
-- **D+3**: "Senti sua falta nesses dias. Tudo bem por aí?" + link
-- **D+14**: lembrete mais leve, reforça benefício de continuidade + link
-- **D+30**: última tentativa, opcionalmente com cupom de desconto + link
-
-**Idempotência**: novos campos em `profiles`:
-- `winback_d3_sent_at`
-- `winback_d14_sent_at`
-- `winback_d30_sent_at`
-
-**Guardrails** (reutilizar lógica existente do `sendProactive`):
-- Quiet hours 22h–08h BRT
-- Não envia se houver sessão ativa ou interação recente (<24h)
-- Usa subconta Twilio de recovery (`TWILIO_RECOVERY_*`) para isolar risco de ban
-- Template aprovado (precisa criar/usar Content SID novo `winback_canceled`)
-
-**Tracking**: log em `failed_message_log` para falhas; sucesso vira `recovery_messages` (direction: `outbound`).
-
-## Parte 4 — Migration
-
-Adicionar em `profiles`:
-```sql
-ALTER TABLE public.profiles
-  ADD COLUMN last_winback_reactive_sent_at timestamptz,
-  ADD COLUMN winback_d3_sent_at timestamptz,
-  ADD COLUMN winback_d14_sent_at timestamptz,
-  ADD COLUMN winback_d30_sent_at timestamptz;
-```
-
-## Parte 5 — Hook de reconversão
-
-Em `stripe-webhook` (quando assinatura volta a `active` após estar `canceled`): setar `profiles.converted_at = now()` e zerar os 4 campos de winback acima — permite que o ciclo recomece se cancelar de novo no futuro.
-
-## Parte 6 — Observabilidade
-
-- Dashboard admin já existente: adicionar contadores simples de "winbacks enviados (reativo/proativo) últimos 30d" e "reconvertidos pós-winback" (join entre `winback_*_sent_at` e `converted_at`).
-
----
-
-## Ordem de execução
-
-1. Migration (campos novos em `profiles`)
-2. Fix do branch `subscription_blocked` + copy segmentada (resolve Jéssica imediatamente)
-3. Hook de reset no `stripe-webhook`
-4. Cron `winback-canceled-users` + template Twilio
-5. Métricas no admin
+- Sem código OTP por WhatsApp/SMS (decisão atual — manter simples).
+- Sem mudanças em RLS, Stripe, webhooks, ou no método de login (continua Google + OTP por email).
+- Sem fix manual no banco pro Eduardo — ele vai usar o fluxo novo (item 2) na primeira vez que logar.
 
 ## Validação
 
-- Após deploy do Passo 2: reenviar "Oi" manualmente em conta de teste cancelada e confirmar resposta + entrada em `messages` + (se falhar) entrada em `failed_message_log`.
-- Após 24–48h: revisar logs para identificar a causa raiz original da morte silenciosa do worker.
-- Após 1 semana do cron: revisar taxa de resposta e reconversão por janela (D+3 / D+14 / D+30) para calibrar copy e cupom.
+1. Logar com Google/email cujo email **não existe** em `profiles` → portal mostra a tela do item 2.
+2. Digitar `(51) 98151-9708` (Eduardo) → portal recarrega com 3 jornadas, plano `direcao`, resumos visíveis.
+3. Logar de novo na mesma conta → cai em `alreadyLinked: true` (sem repetir a tela).
+4. Tentar usar o telefone do Eduardo a partir de outra conta Google nova → retorna `phone_taken`.
+5. Logar como admin e abrir `/meu-espaco` → vê o aviso do item 3.
+
+## Detalhes técnicos
+
+- A função `link-portal-account` já roda com `SERVICE_ROLE_KEY` e validação de JWT via `getClaims()` ([JWT Claims Borda](mem://technical/auth/edge-function-jwt-validation)).
+- Helpers de telefone: `normalizeBrazilianPhone` e `getPhoneVariations` em `supabase/functions/_shared/zapi-client.ts` (mesmo padrão usado em `_shared/profile-resolver.ts` e `webhook-asaas`).
+- Tabelas que recebem a propagação de `user_id` (mantém a lista atual): messages, sessions, session_themes, session_ratings, commitments, checkins, monthly_letters, monthly_reports, time_capsules, user_milestones, user_evolution_summary, weekly_questions, user_journey_history, scheduled_tasks, conversation_followups, aura_response_state.
+- Validação do input de telefone com Zod no client antes de mandar pra função.
