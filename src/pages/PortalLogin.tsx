@@ -36,10 +36,16 @@ export default function PortalLogin() {
     // O Google é gerenciado pelo broker Lovable (sem client secret no Supabase).
     // O callback grava a sessão no cliente Supabase padrão; ela é migrada pro
     // cliente do portal pelo PortalAuthContext ao aterrissar em /meu-espaco.
+    // Marca o alvo como "portal" para o useAdminAuth ignorar essa sessão
+    // e não logar o usuário no /admin por engano.
+    try {
+      sessionStorage.setItem("aura-oauth-target", "portal");
+    } catch {}
     const result = await lovable.auth.signInWithOAuth("google", {
       redirect_uri: window.location.origin + "/meu-espaco",
     });
     if (result.error) {
+      try { sessionStorage.removeItem("aura-oauth-target"); } catch {}
       toast({
         title: "Não conseguimos entrar",
         description: "Tente de novo em instantes.",
