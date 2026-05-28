@@ -518,6 +518,16 @@ export default function AdminUsers() {
             <SelectItem value="concluido">D0: Concluído</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={sessionFilter} onValueChange={(v: any) => { setSessionFilter(v); setPage(0); }}>
+          <SelectTrigger className="w-[220px]"><SelectValue placeholder="Sessões" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Sessões: Todas</SelectItem>
+            <SelectItem value="with_abandoned">Com sessão abandonada</SelectItem>
+            <SelectItem value="with_noshow">Com no-show</SelectItem>
+            <SelectItem value="done_without_rating">Concluída sem rating</SelectItem>
+            <SelectItem value="low_rating">Rating médio ≤ 3</SelectItem>
+          </SelectContent>
+        </Select>
         <Select value={sortFilter} onValueChange={(v: any) => { setSortFilter(v); setPage(0); }}>
           <SelectTrigger className="w-[180px]"><SelectValue placeholder="Ordenar por" /></SelectTrigger>
           <SelectContent>
