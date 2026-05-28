@@ -231,10 +231,25 @@ serve(async (req) => {
             in_reply_to: inReplyTo,
           });
 
-          // Trigger AI agent (fire & forget)
-          supabase.functions.invoke("support-agent", { body: { ticket_id: ticketId } }).catch((e) =>
-            log("support-agent invoke error", { error: String(e) }),
-          );
+          // Dispara o agente de IA de forma síncrona para garantir que o rascunho
+          // reflita a última mensagem do cliente. Em caso de falha, marca o ticket
+          // com needs_draft_regen=true para que a UI/admin possa regerar depois.
+          try {
+            const { error: agentErr } = await supabase.functions.invoke("support-agent", {
+              body: { ticket_id: ticketId },
+            });
+            if (agentErr) {
+              log("support-agent invoke error", { ticket_id: ticketId, error: String(agentErr.message || agentErr) });
+              await supabase.from("support_tickets")
+                .update({ needs_draft_regen: true })
+                .eq("id", ticketId);
+            }
+          } catch (e) {
+            log("support-agent invoke threw", { ticket_id: ticketId, error: String(e) });
+            await supabase.from("support_tickets")
+              .update({ needs_draft_regen: true })
+              .eq("id", ticketId);
+          }
 
           await client.messageFlagsAdd(String(uid), ["\\Seen"], { uid: true });
           processed.push(messageId);
