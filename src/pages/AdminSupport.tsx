@@ -34,6 +34,7 @@ interface Ticket {
   recurring_customer?: boolean;
   reopened_at?: string | null;
   auto_reply_attempts?: number;
+  needs_draft_regen?: boolean;
 }
 
 interface TicketMessage {
@@ -155,14 +156,60 @@ export default function AdminSupport() {
       supabase.from('support_ticket_drafts').select('*').eq('ticket_id', ticket.id).eq('is_current', true).maybeSingle(),
     ]);
 
-    setMessages((msgsRes.data || []) as unknown as TicketMessage[]);
+    const loadedMessages = (msgsRes.data || []) as unknown as TicketMessage[];
+    setMessages(loadedMessages);
+    let currentDraft: Draft | null = null;
     if (draftRes.data) {
-      const d = draftRes.data as unknown as Draft;
-      setDraft(d);
-      setEditedBody(d.draft_body);
-      setActionEnabled(d.suggested_action?.type !== 'none');
+      currentDraft = draftRes.data as unknown as Draft;
+      setDraft(currentDraft);
+      setEditedBody(currentDraft.draft_body);
+      setActionEnabled(currentDraft.suggested_action?.type !== 'none');
     }
     setLoadingDetail(false);
+
+    // Auto-regenera se: não há rascunho, ou rascunho é mais antigo que a última
+    // mensagem inbound, ou ticket está marcado como needing regen pelo backend.
+    const latestInboundAt = loadedMessages
+      .filter((m) => m.direction === 'inbound')
+      .map((m) => new Date(m.created_at).getTime())
+      .reduce((a, b) => Math.max(a, b), 0);
+    const draftAt = currentDraft ? new Date(currentDraft.generated_at).getTime() : 0;
+    const isStale = ticket.needs_draft_regen === true || (!currentDraft && latestInboundAt > 0) || (latestInboundAt > 0 && draftAt < latestInboundAt);
+    if (isStale) {
+      autoRegenerateDraft(ticket);
+    }
+  };
+
+  // Regenera silenciosamente quando o rascunho está defasado em relação à
+  // última mensagem do cliente. Não usa o hint manual.
+  const autoRegenerateDraft = async (ticket: Ticket) => {
+    setRegenerating(true);
+    try {
+      const { error } = await supabase.functions.invoke('support-agent', {
+        body: { ticket_id: ticket.id },
+      });
+      if (error) throw error;
+      const { data: freshDraft } = await supabase
+        .from('support_ticket_drafts')
+        .select('*')
+        .eq('ticket_id', ticket.id)
+        .eq('is_current', true)
+        .maybeSingle();
+      if (freshDraft) {
+        const d = freshDraft as unknown as Draft;
+        setDraft(d);
+        setEditedBody(d.draft_body);
+        setActionEnabled(d.suggested_action?.type !== 'none');
+      }
+    } catch (e) {
+      toast({
+        title: 'Não foi possível regerar o rascunho',
+        description: e instanceof Error ? e.message : String(e),
+        variant: 'destructive',
+      });
+    } finally {
+      setRegenerating(false);
+    }
   };
 
   const handleApproveSend = async (executeAction: boolean) => {
