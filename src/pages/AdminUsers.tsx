@@ -428,6 +428,51 @@ export default function AdminUsers() {
   };
 
   const fmt = (d: string | null) => d ? new Date(d).toLocaleDateString('pt-BR') : '—';
+  const fmtRelative = (d: string | null): string => {
+    if (!d) return '—';
+    const diffMs = Date.now() - new Date(d).getTime();
+    const days = Math.floor(diffMs / 86_400_000);
+    if (days === 0) return 'hoje';
+    if (days === 1) return 'ontem';
+    if (days < 7) return `há ${days}d`;
+    if (days < 30) return `há ${Math.floor(days / 7)}sem`;
+    return `há ${Math.floor(days / 30)}m`;
+  };
+
+  const openAbandonDetails = async (p: Profile) => {
+    const stats = sessionStats[p.user_id];
+    if (!stats || stats.abandonedList.length === 0) return;
+    setAbandonProfile(p);
+    setAbandonLoading(true);
+    setAbandonDetails([]);
+    try {
+      // Para cada sessão abandonada, buscar a última mensagem do usuário no período
+      const enriched = await Promise.all(stats.abandonedList.map(async (sess) => {
+        const fromIso = sess.started_at!;
+        const toIso = sess.ended_at
+          || new Date(new Date(sess.scheduled_at).getTime() + (sess.duration_minutes || 45) * 60_000 + 30 * 60_000).toISOString();
+        const { data } = await supabase
+          .from('messages')
+          .select('content, created_at')
+          .eq('user_id', p.user_id)
+          .eq('role', 'user')
+          .gte('created_at', fromIso)
+          .lte('created_at', toIso)
+          .order('created_at', { ascending: false })
+          .limit(1);
+        const last = (data || [])[0] as any;
+        return {
+          ...sess,
+          lastUserMessage: last?.content as string | undefined,
+          lastUserMessageAt: last?.created_at as string | undefined,
+        };
+      }));
+      setAbandonDetails(enriched);
+    } finally {
+      setAbandonLoading(false);
+    }
+  };
+
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
   if (authLoading || !isAdmin) return <div className="flex items-center justify-center min-h-screen text-muted-foreground">Carregando...</div>;
