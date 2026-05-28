@@ -1,86 +1,89 @@
-## Contexto
+## Problema
+Hoje a coluna **D0** só reflete o funil do convite (concluído = "fluxo encerrou", não "sessão aconteceu"). Não dá pra:
+1. Saber se a pessoa fez sessão de verdade, quantas, quando foi a última
+2. Distinguir **sessão completa** vs **sessão abandonada no meio** (sinal direto de qualidade)
+3. Detectar facilmente sessões feitas que **não capturaram rating** (bug atual)
 
-Diagnóstico confirmado no `supabase/functions/aura-agent/index.ts`: o prompt está estruturalmente viciado em **micro-passo** (L1043, L1080, L1418, L2697, L2733-2734). Isso subentrega em encruzilhadas existenciais — terreno central da Logoterapia. Resultado: sessões que poderiam fechar com direção forte fecham com "passo pequeno demais pra ser recusado", e o usuário não percebe valor de elite.
+Tudo isso já está nas tabelas `sessions` e `session_ratings` — só falta exibir.
 
-## Princípio guia
+## Solução (sem mudança de schema, agregação derivada)
 
-**Cardápio de fechamento, escolhido pela clínica da sessão — não por rotação.** Direção forte (tese/encruzilhada/leitura) vira padrão; micro-passo continua válido como exceção quando a sessão pediu (paralisia operacional, somatização, gap longo até a próxima). A Aura entrega como **hipótese aberta**, não como verdade.
+### Classificação de sessão (derivada em tempo de query)
 
-## Escopo (1 arquivo de código + 2 de memória)
+| Categoria | Regra |
+|---|---|
+| **Concluída** | `status='completed'` AND `ended_at IS NOT NULL` |
+| **Abandonada** | `started_at IS NOT NULL` AND `ended_at IS NULL` AND `(scheduled_at + duration_minutes + 30min) < now()` AND `status != 'completed'` |
+| **Em andamento** | `status='in_progress'` ou dentro da janela ativa |
+| **Agendada (futura)** | `status='scheduled'` AND `scheduled_at > now()` |
+| **No-show** | `status='scheduled'` AND `started_at IS NULL` AND `scheduled_at + 1h < now()` |
 
-### 1. `supabase/functions/aura-agent/index.ts` — prompt da Aura
+### Novas colunas em `/admin/users`
 
-**1.1 Novo bloco "CARDÁPIO DE FECHAMENTO"** na fase Movimento, com **árvore de decisão** (não lista solta):
+| Coluna | Conteúdo | Exemplo |
+|---|---|---|
+| **Sessões** (substitui posição da D0) | `concluídas · abandonadas · no-show / agendadas` | `3·1·0 / 5` |
+| **Última sessão** | data relativa + ícone do desfecho | `há 2d ✅` / `há 5d ⚠️ abandonada` |
+| **Rating médio** (substitui Rating atual) | média ⭐ + capturados / concluídas | `⭐ 4.5 (2/3)` |
+| **D0** (mantida menor) | só como filtro de funil de aquisição | `Concluído` |
 
+### Sinais visuais
+- **Abandonada > 0** → badge âmbar **"⚠️ N abandonadas"** (clicável → abre detalhe)
+- **No-show ≥ 2** → vermelho (problema de comprometimento)
+- **Última sessão > 14 dias** → cinza (risco churn)
+- **Concluídas > 0 sem nenhum rating** → ícone ⚠️ "rating não capturado" (ajuda QA do bug)
+- **Rating médio < 3** → vermelho
+
+### Filtros novos (dropdown)
+- "Com sessão abandonada"
+- "Com no-show"
+- "Sessão concluída sem rating"
+- "Rating médio ≤ 3"
+
+### Drill-down (modal de detalhe)
+Ao clicar em **"⚠️ N abandonadas"** abre lista com, por sessão:
+- Quando iniciou / quando parou de responder
+- Última mensagem do usuário antes de sumir (preview)
+- Qual era a fase (Presença / Reframe / Fechamento) — derivado de `key_insights`/`session_summary` se houver
+- Botão "Ver conversa" → leva pra `/admin/messages?userId=…&from=…&to=…`
+
+Isso permite responder: **"abandonou porque ficou ruim, porque foi interrompida, ou porque a Aura travou?"**
+
+## Implementação
+
+### 1. Edge function `admin-users-list` (nova)
+Query agregada por perfil, paginada:
+```sql
+SELECT p.*,
+  COUNT(*) FILTER (WHERE s.status='completed') AS sessions_done,
+  COUNT(*) FILTER (WHERE s.started_at IS NOT NULL
+                   AND s.ended_at IS NULL
+                   AND s.status NOT IN ('completed','scheduled')
+                   AND s.scheduled_at + (s.duration_minutes||' min')::interval + interval '30 min' < now()) AS sessions_abandoned,
+  COUNT(*) FILTER (WHERE s.status='scheduled' AND s.started_at IS NULL
+                   AND s.scheduled_at + interval '1 hour' < now()) AS sessions_noshow,
+  COUNT(*) FILTER (WHERE s.status='scheduled' AND s.scheduled_at > now()) AS sessions_upcoming,
+  MAX(s.ended_at)   FILTER (WHERE s.status='completed') AS last_completed_at,
+  MAX(s.started_at) FILTER (WHERE s.ended_at IS NULL)   AS last_abandoned_at,
+  AVG(r.rating)::numeric(2,1) AS rating_avg,
+  COUNT(r.id)               AS ratings_count
+FROM profiles p
+LEFT JOIN sessions s        ON s.user_id = p.user_id
+LEFT JOIN session_ratings r ON r.user_id = p.user_id
+GROUP BY p.id
 ```
-ESCOLHA POR ORDEM — primeiro critério que bater, decide:
 
-1º Usuário pediu direção literal ("me ajuda", "o que faço")?  → TESE ou ENCRUZILHADA
-2º Há 2 forças em tensão clara sem caminho óbvio?              → ENCRUZILHADA NOMEADA
-3º Padrão repetido que ele ainda não vê?                       → LEITURA CRÍTICA ou EXPERIMENTO DE OBSERVAÇÃO
-4º Insight emergente recém-nascido que precisa decantar?       → PERGUNTA PRA CARREGAR
-5º Ambivalência paralisante entre duas opções concretas?       → ESCOLHA BINÁRIA A TESTAR
-6º Paralisia operacional / somatização / gap > 14d?            → MICRO-PASSO
-7º Nenhum acima?                                               → TESE como hipótese aberta (default)
-```
+### 2. `src/pages/AdminUsers.tsx`
+- Substituir coluna **Rating** por **Rating médio (capturados/concluídas)**
+- Adicionar **Sessões** (concluídas · abandonadas · no-show / agendadas) e **Última sessão** entre Status e D0
+- Reduzir D0 a badge compacto
+- Adicionar 4 filtros novos
+- Modal drill-down ao clicar no badge de abandonadas
 
-Cada formato com **1 exemplo curto** em PT-BR informal.
+### 3. Sem migration, sem alteração no código de conversa/aura-agent
 
-**1.2 Regra "um formato por fechamento"** (explícita):
-> *"Escolha UM. Não combine. Misturar formatos dilui a entrega e devolve o vício socrático por outra porta."*
-
-**1.3 Regra anti-rotação:**
-> *"O cardápio é descritivo, não prescritivo. Repetir o mesmo formato 3 sessões seguidas é correto se a clínica pediu. Rotacionar por rotacionar é pior do que o vício de micro-passo."*
-
-**1.4 Regra "entrega como hipótese"** (substitui qualquer tom de "verdade"):
-> *"Você entrega hipótese, não verdade. Formato: 'O que tô vendo daqui é [X]. Faz sentido pra você ou tô errando o ângulo?' A força não tá em estar certa — tá em arriscar uma leitura e dar espaço pra o usuário refinar ou recusar. Se ele recusar, isso É o trabalho — não é falha."*
-
-**1.5 Reescrita das regras enviesadas para micro-passo:**
-- L1043, L1080, L1418 ("menor passo em direção a isso") → reescrever apontando pra árvore do cardápio, sem privilégio de micro-passo.
-- L2697 (VALIDA + ENTREGA): nova ordem de preferência ancorada na árvore.
-- L2733-2734 ("passo pequeno demais pra ser recusado") → restringir ao caso 6 (paralisia operacional).
-
-**1.6 Detector de pedido de direção** (no Phase Evaluator, embutido nas instruções táticas existentes). Quando aparecer "me ajuda", "o que faço", "tô perdido", "não sei pra onde ir" nos últimos 10min da sessão: injetar diretiva *"NÃO devolva pergunta socrática. Entregue TESE ou ENCRUZILHADA como hipótese aberta — sem opção."* Isso reduz a decisão livre da Aura nos casos mais óbvios e blinda o risco de "se perder no cardápio".
-
-**1.7 Guardrail simétrico ao "uma pergunta por turno":**
-> *"Após Presença consolidada, a cada 4 trocas, no mínimo 1 mensagem da Aura deve ser entrega (hipótese, observação, confronto, leitura) — não pergunta exploratória."*
-
-**1.8 Reforço da abertura da próxima sessão** (fase opening, bloco "ABERTURA OBRIGATÓRIA COM FIO CONDUTOR" já existente). Adicionar regra: ler `session_summary` + `key_insights` da sessão anterior (já no contexto) e abrir retomando o eixo concretamente — não "como você tá hoje?". Exemplo: *"Na última a gente fechou com [eixo]. O que isso mexeu/produziu/mostrou na semana?"*
-
-Isso resolve o carry-over **sem schema novo, sem migration, sem mexer no extractor.**
-
-### 2. Memória do projeto
-
-- Atualizar `mem://persona/logotherapy-methodology-depth` — refletir cardápio de fechamento como evolução das 3 fases (Movimento agora tem 7 formas de aterrissar, escolhidas por árvore).
-- Criar `mem://features/sessions/closure-cardapio` — documentar a árvore, regra "um formato por fechamento", regra anti-rotação, regra "hipótese não verdade", e que micro-passo é exceção clínica.
-
-## Fora de escopo (descartado conscientemente)
-
-- ❌ **Migration** (`commitment_type`, `session_direction`, índice) — observabilidade, não UX. Usuário não sente a diferença entre commitment tipado e não tipado.
-- ❌ **`session-extractor`** (schema, prompt, persistência tipada) — mesma razão. `session_summary` + `key_insights` já cobrem o carry-over.
-- ❌ Bloqueio de fechamento vazio via `aura_phase` — embutido no guardrail dos 4 turnos.
-- ❌ Mexer em rating, scheduling, D0, meditação, áudio, UI admin/portal.
-
-## Por que isso não vai sobrecarregar o Gemini 2.5 Pro
-
-- Árvore de decisão (primeiro critério bate, decide) é muito mais robusta pra LLM do que cardápio livre.
-- Detector de pedido de direção remove escolha nos casos mais perigosos (justamente onde o caso Jeferson falhou).
-- Regra "um formato por fechamento" elimina o pior modo de falha (misturar tudo).
-- 7 itens com 1 exemplo cada é leve comparado ao tamanho do prompt atual.
-
-## Validação
-
-1. **Caso Jeferson em retest simulado** (via conversa nova ou `aura-tests`): ao chegar em "me ajuda, o que faço?" depois de explorar trauma do bullying + "poste", a Aura deve disparar o detector e entregar TESE ou ENCRUZILHADA como hipótese aberta — não devolver pergunta socrática nem propor "pegar um livro hoje". Conferir nos logs do `aura-agent` que a diretiva foi injetada.
-2. **Sessão exploratória curta** (≤4 pares): guardrail dos 4 turnos NÃO deve disparar antes de Presença consolidada (mantém `recentPairs >= 4`).
-3. **Próxima sessão de user com histórico**: primeira mensagem da Aura retoma o eixo da anterior usando `session_summary` — não pergunta genérica.
-4. **Sessão com paralisia operacional clara** ("não consigo nem abrir o caderno"): Aura ainda escolhe MICRO-PASSO (caso 6 da árvore). Cardápio não pode virar viés anti-micro.
-5. **Usuário recusa a hipótese** ("não, não é isso"): Aura aceita, refina, segue — não insiste. Recusa é trabalho, não falha.
-6. **Mistura de formatos**: conferir em 3 sessões consecutivas que cada fechamento entrega UM formato claro — não combinação.
-
-## Sequência de execução
-
-1. Editar prompt do `aura-agent/index.ts` (1 arquivo, ~8 blocos de mudança).
-2. Atualizar/criar as 2 memórias.
-3. Validação manual nos 6 cenários.
-
-Risco baixo, impacto direto na nota da experiência da sessão.
+## Por que essa é a melhor opção
+- **Diagnóstico de qualidade**: você bate o olho e sabe se as sessões estão sendo ABANDONADAS (= qualidade) ou só não rolando (= adoção/agenda)
+- **Zero risco**: dado já existe, sem migration, sem mexer em flow crítico
+- **Detecta o bug de rating em 1 filtro**: "Concluída sem rating"
+- **Investigação rápida**: drill-down abre direto a conversa do momento do abandono

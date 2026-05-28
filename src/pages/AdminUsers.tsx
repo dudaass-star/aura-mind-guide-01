@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, Search, Pencil, RotateCcw, ChevronLeft, ChevronRight, Link, Copy, Check, Star, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Search, Pencil, RotateCcw, ChevronLeft, ChevronRight, Link, Copy, Check, Star, RefreshCw, AlertTriangle, MessageSquare } from 'lucide-react';
 
 interface Profile {
   id: string;
@@ -31,6 +31,25 @@ interface Profile {
 }
 
 interface RatingAgg { avg: number; count: number; }
+
+interface AbandonedSession {
+  id: string;
+  scheduled_at: string;
+  started_at: string | null;
+  ended_at: string | null;
+  duration_minutes: number;
+  focus_topic: string | null;
+}
+
+interface SessionStats {
+  done: number;
+  abandoned: number;
+  noshow: number;
+  upcoming: number;
+  lastCompletedAt: string | null;
+  lastAbandonedAt: string | null;
+  abandonedList: AbandonedSession[];
+}
 
 const PAGE_SIZE = 20;
 
@@ -82,12 +101,14 @@ export default function AdminUsers() {
 
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [ratings, setRatings] = useState<Record<string, RatingAgg>>({});
+  const [sessionStats, setSessionStats] = useState<Record<string, SessionStats>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
   const [total, setTotal] = useState(0);
   const [periodFilter, setPeriodFilter] = useState<'all' | 'today' | '7d' | '30d'>('all');
   const [d0Filter, setD0Filter] = useState<'all' | D0Status>('all');
+  const [sessionFilter, setSessionFilter] = useState<'all' | 'with_abandoned' | 'with_noshow' | 'done_without_rating' | 'low_rating'>('all');
   const [sortFilter, setSortFilter] = useState<'newest' | 'oldest' | 'last_contact' | 'highest_rating' | 'lowest_rating'>('newest');
 
   // Edit dialog
@@ -97,13 +118,18 @@ export default function AdminUsers() {
   const [portalLinkLoading, setPortalLinkLoading] = useState(false);
   const [portalLinkCopied, setPortalLinkCopied] = useState(false);
 
+  // Abandono drill-down dialog
+  const [abandonProfile, setAbandonProfile] = useState<Profile | null>(null);
+  const [abandonDetails, setAbandonDetails] = useState<Array<AbandonedSession & { lastUserMessage?: string; lastUserMessageAt?: string }>>([]);
+  const [abandonLoading, setAbandonLoading] = useState(false);
+
   useEffect(() => {
     if (!authLoading) redirectIfNotAdmin();
   }, [authLoading, isAdmin]);
 
   useEffect(() => {
     if (isAdmin) fetchProfiles();
-  }, [isAdmin, page, search, periodFilter, d0Filter, sortFilter]);
+  }, [isAdmin, page, search, periodFilter, d0Filter, sortFilter, sessionFilter]);
 
   const fetchProfiles = async () => {
     setLoading(true);
@@ -158,7 +184,11 @@ export default function AdminUsers() {
     } else {
       const list = (data || []) as Profile[];
       setTotal(count || 0);
-      const ratingsMap = await fetchRatings(list.map(p => p.user_id));
+      const userIds = list.map(p => p.user_id);
+      const [ratingsMap, statsMap] = await Promise.all([
+        fetchRatings(userIds),
+        fetchSessionStats(userIds),
+      ]);
       // Ordenação client-side por rating
       let finalList = list;
       if (sortFilter === 'highest_rating' || sortFilter === 'lowest_rating') {
@@ -173,6 +203,18 @@ export default function AdminUsers() {
           if (!aHas && bHas) return 1;
           if (!aHas && !bHas) return 0;
           return (ra - rb) * dir;
+        });
+      }
+      // Filtros client-side baseados em sessões/ratings (operam sobre a página atual)
+      if (sessionFilter !== 'all') {
+        finalList = finalList.filter(p => {
+          const s = statsMap[p.user_id];
+          const r = ratingsMap[p.user_id];
+          if (sessionFilter === 'with_abandoned') return (s?.abandoned ?? 0) > 0;
+          if (sessionFilter === 'with_noshow') return (s?.noshow ?? 0) > 0;
+          if (sessionFilter === 'done_without_rating') return (s?.done ?? 0) > 0 && !r;
+          if (sessionFilter === 'low_rating') return !!r && r.avg <= 3;
+          return true;
         });
       }
       setProfiles(finalList);
@@ -198,6 +240,66 @@ export default function AdminUsers() {
       result[uid] = { avg: v.sum / v.count, count: v.count };
     });
     setRatings(result);
+    return result;
+  };
+
+  const fetchSessionStats = async (userIds: string[]): Promise<Record<string, SessionStats>> => {
+    if (!userIds.length) { setSessionStats({}); return {}; }
+    const { data, error } = await supabase
+      .from('sessions')
+      .select('id, user_id, status, started_at, ended_at, scheduled_at, duration_minutes, focus_topic')
+      .in('user_id', userIds);
+    if (error) { console.error('Error fetching session stats:', error); setSessionStats({}); return {}; }
+
+    const now = Date.now();
+    const result: Record<string, SessionStats> = {};
+    const ensure = (uid: string): SessionStats => {
+      if (!result[uid]) result[uid] = {
+        done: 0, abandoned: 0, noshow: 0, upcoming: 0,
+        lastCompletedAt: null, lastAbandonedAt: null, abandonedList: [],
+      };
+      return result[uid];
+    };
+
+    (data || []).forEach((s: any) => {
+      const stats = ensure(s.user_id);
+      const scheduledMs = s.scheduled_at ? new Date(s.scheduled_at).getTime() : 0;
+      const durationMs = (s.duration_minutes || 45) * 60_000;
+      const startedMs = s.started_at ? new Date(s.started_at).getTime() : 0;
+      const endedMs = s.ended_at ? new Date(s.ended_at).getTime() : 0;
+
+      if (s.status === 'completed' && endedMs) {
+        stats.done += 1;
+        if (!stats.lastCompletedAt || endedMs > new Date(stats.lastCompletedAt).getTime()) {
+          stats.lastCompletedAt = s.ended_at;
+        }
+      } else if (s.status === 'scheduled' && !startedMs) {
+        // Sem início: futura ou no-show
+        if (scheduledMs > now) {
+          stats.upcoming += 1;
+        } else if (scheduledMs + 60 * 60_000 < now) {
+          stats.noshow += 1;
+        }
+      } else if (startedMs && !endedMs && s.status !== 'canceled') {
+        // Iniciou e nunca terminou: abandonada se passou da janela esperada
+        if (scheduledMs + durationMs + 30 * 60_000 < now) {
+          stats.abandoned += 1;
+          if (!stats.lastAbandonedAt || startedMs > new Date(stats.lastAbandonedAt).getTime()) {
+            stats.lastAbandonedAt = s.started_at;
+          }
+          stats.abandonedList.push({
+            id: s.id,
+            scheduled_at: s.scheduled_at,
+            started_at: s.started_at,
+            ended_at: s.ended_at,
+            duration_minutes: s.duration_minutes,
+            focus_topic: s.focus_topic,
+          });
+        }
+      }
+    });
+
+    setSessionStats(result);
     return result;
   };
 
@@ -326,6 +428,51 @@ export default function AdminUsers() {
   };
 
   const fmt = (d: string | null) => d ? new Date(d).toLocaleDateString('pt-BR') : '—';
+  const fmtRelative = (d: string | null): string => {
+    if (!d) return '—';
+    const diffMs = Date.now() - new Date(d).getTime();
+    const days = Math.floor(diffMs / 86_400_000);
+    if (days === 0) return 'hoje';
+    if (days === 1) return 'ontem';
+    if (days < 7) return `há ${days}d`;
+    if (days < 30) return `há ${Math.floor(days / 7)}sem`;
+    return `há ${Math.floor(days / 30)}m`;
+  };
+
+  const openAbandonDetails = async (p: Profile) => {
+    const stats = sessionStats[p.user_id];
+    if (!stats || stats.abandonedList.length === 0) return;
+    setAbandonProfile(p);
+    setAbandonLoading(true);
+    setAbandonDetails([]);
+    try {
+      // Para cada sessão abandonada, buscar a última mensagem do usuário no período
+      const enriched = await Promise.all(stats.abandonedList.map(async (sess) => {
+        const fromIso = sess.started_at!;
+        const toIso = sess.ended_at
+          || new Date(new Date(sess.scheduled_at).getTime() + (sess.duration_minutes || 45) * 60_000 + 30 * 60_000).toISOString();
+        const { data } = await supabase
+          .from('messages')
+          .select('content, created_at')
+          .eq('user_id', p.user_id)
+          .eq('role', 'user')
+          .gte('created_at', fromIso)
+          .lte('created_at', toIso)
+          .order('created_at', { ascending: false })
+          .limit(1);
+        const last = (data || [])[0] as any;
+        return {
+          ...sess,
+          lastUserMessage: last?.content as string | undefined,
+          lastUserMessageAt: last?.created_at as string | undefined,
+        };
+      }));
+      setAbandonDetails(enriched);
+    } finally {
+      setAbandonLoading(false);
+    }
+  };
+
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
   if (authLoading || !isAdmin) return <div className="flex items-center justify-center min-h-screen text-muted-foreground">Carregando...</div>;
@@ -371,6 +518,16 @@ export default function AdminUsers() {
             <SelectItem value="concluido">D0: Concluído</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={sessionFilter} onValueChange={(v: any) => { setSessionFilter(v); setPage(0); }}>
+          <SelectTrigger className="w-[220px]"><SelectValue placeholder="Sessões" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Sessões: Todas</SelectItem>
+            <SelectItem value="with_abandoned">Com sessão abandonada</SelectItem>
+            <SelectItem value="with_noshow">Com no-show</SelectItem>
+            <SelectItem value="done_without_rating">Concluída sem rating</SelectItem>
+            <SelectItem value="low_rating">Rating médio ≤ 3</SelectItem>
+          </SelectContent>
+        </Select>
         <Select value={sortFilter} onValueChange={(v: any) => { setSortFilter(v); setPage(0); }}>
           <SelectTrigger className="w-[180px]"><SelectValue placeholder="Ordenar por" /></SelectTrigger>
           <SelectContent>
@@ -392,8 +549,10 @@ export default function AdminUsers() {
               <TableHead>Telefone</TableHead>
               <TableHead>Plano</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Sessões</TableHead>
+              <TableHead>Última sessão</TableHead>
               <TableHead>D0</TableHead>
-              <TableHead>Rating</TableHead>
+              <TableHead>Rating médio</TableHead>
               <TableHead>Criado em</TableHead>
               <TableHead>Último contato</TableHead>
               <TableHead>Ações</TableHead>
@@ -401,13 +560,19 @@ export default function AdminUsers() {
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+              <TableRow><TableCell colSpan={11} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
             ) : profiles.length === 0 ? (
-              <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Nenhum usuário encontrado</TableCell></TableRow>
+              <TableRow><TableCell colSpan={11} className="text-center py-8 text-muted-foreground">Nenhum usuário encontrado</TableCell></TableRow>
             ) : profiles.map((p) => {
               const d0 = getD0Status(p);
               const attempts = p.first_session_invite_attempts ?? 0;
               const r = ratings[p.user_id];
+              const s = sessionStats[p.user_id];
+              const done = s?.done ?? 0;
+              const abandoned = s?.abandoned ?? 0;
+              const noshow = s?.noshow ?? 0;
+              const upcoming = s?.upcoming ?? 0;
+              const doneWithoutRating = done > 0 && !r;
               return (
               <TableRow key={p.id}>
                 <TableCell className="font-medium">{p.name || '(sem nome)'}</TableCell>
@@ -422,6 +587,44 @@ export default function AdminUsers() {
                     {p.status || '—'}
                   </Badge>
                 </TableCell>
+                <TableCell className="text-sm whitespace-nowrap">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-mono text-xs">
+                      <span className="text-green-700 font-semibold">{done}</span>
+                      <span className="text-muted-foreground">·</span>
+                      <span className={abandoned > 0 ? 'text-amber-700 font-semibold' : 'text-muted-foreground'}>{abandoned}</span>
+                      <span className="text-muted-foreground">·</span>
+                      <span className={noshow >= 2 ? 'text-red-700 font-semibold' : 'text-muted-foreground'}>{noshow}</span>
+                      <span className="text-muted-foreground"> / {upcoming}</span>
+                    </span>
+                    {abandoned > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => openAbandonDetails(p)}
+                        className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 hover:bg-amber-100"
+                        title="Ver sessões abandonadas"
+                      >
+                        <AlertTriangle className="h-3 w-3" /> {abandoned}
+                      </button>
+                    )}
+                  </div>
+                  <div className="text-[10px] text-muted-foreground mt-0.5">
+                    feitas · abandono · no-show / agendadas
+                  </div>
+                </TableCell>
+                <TableCell className="text-sm whitespace-nowrap">
+                  {s?.lastCompletedAt ? (
+                    <span className="inline-flex items-center gap-1">
+                      <Check className="h-3 w-3 text-green-600" />
+                      {fmtRelative(s.lastCompletedAt)}
+                    </span>
+                  ) : s?.lastAbandonedAt ? (
+                    <span className="inline-flex items-center gap-1 text-amber-700">
+                      <AlertTriangle className="h-3 w-3" />
+                      {fmtRelative(s.lastAbandonedAt)}
+                    </span>
+                  ) : '—'}
+                </TableCell>
                 <TableCell>
                   <Badge variant="outline" className={d0Colors[d0]}>
                     {d0Labels[d0]}{d0 === 'tentando' ? ` ${attempts}x` : ''}
@@ -431,8 +634,12 @@ export default function AdminUsers() {
                   {r ? (
                     <span className="inline-flex items-center gap-1">
                       <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-                      {r.avg.toFixed(1)}
-                      <span className="text-muted-foreground">({r.count})</span>
+                      <span className={r.avg <= 3 ? 'text-red-700 font-semibold' : ''}>{r.avg.toFixed(1)}</span>
+                      <span className="text-muted-foreground">({r.count}/{done || '–'})</span>
+                    </span>
+                  ) : doneWithoutRating ? (
+                    <span className="inline-flex items-center gap-1 text-amber-700" title="Sessão concluída sem rating capturado">
+                      <AlertTriangle className="h-3.5 w-3.5" /> sem captura (0/{done})
                     </span>
                   ) : '—'}
                 </TableCell>
@@ -551,6 +758,77 @@ export default function AdminUsers() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditProfile(null)}>Cancelar</Button>
             <Button onClick={handleSave} disabled={saving}>{saving ? 'Salvando...' : 'Salvar'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Abandono drill-down */}
+      <Dialog open={!!abandonProfile} onOpenChange={(open) => !open && setAbandonProfile(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              Sessões abandonadas — {abandonProfile?.name || '(sem nome)'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+            {abandonLoading ? (
+              <p className="text-sm text-muted-foreground text-center py-6">Carregando detalhes…</p>
+            ) : abandonDetails.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-6">Sem detalhes disponíveis.</p>
+            ) : abandonDetails.map((d) => (
+              <div key={d.id} className="border rounded-lg p-3 bg-card space-y-2">
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>Agendada: {new Date(d.scheduled_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</span>
+                  <Badge variant="outline" className="bg-amber-50 text-amber-800 border-amber-200">
+                    <AlertTriangle className="h-3 w-3 mr-1" /> abandonada
+                  </Badge>
+                </div>
+                <div className="text-xs space-y-0.5">
+                  <p>
+                    <span className="text-muted-foreground">Iniciou:</span>{' '}
+                    {d.started_at ? new Date(d.started_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '—'}
+                  </p>
+                  <p>
+                    <span className="text-muted-foreground">Duração planejada:</span> {d.duration_minutes ?? 45} min
+                  </p>
+                  {d.focus_topic && (
+                    <p>
+                      <span className="text-muted-foreground">Foco:</span> {d.focus_topic}
+                    </p>
+                  )}
+                </div>
+                {d.lastUserMessage ? (
+                  <div className="bg-muted/50 rounded-md p-2 border border-border/40">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
+                      Última mensagem do usuário antes de sumir
+                      {d.lastUserMessageAt && (
+                        <span className="normal-case ml-1">
+                          ({new Date(d.lastUserMessageAt).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })})
+                        </span>
+                      )}
+                    </p>
+                    <p className="text-xs italic">"{d.lastUserMessage.slice(0, 280)}{d.lastUserMessage.length > 280 ? '…' : ''}"</p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground italic">Sem mensagens do usuário no período da sessão.</p>
+                )}
+                <div className="flex justify-end">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      if (!abandonProfile) return;
+                      navigate(`/admin/mensagens?userId=${abandonProfile.user_id}`);
+                    }}
+                  >
+                    <MessageSquare className="h-3 w-3 mr-1.5" /> Ver conversa
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAbandonProfile(null)}>Fechar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
