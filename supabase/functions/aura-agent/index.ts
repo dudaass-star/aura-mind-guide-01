@@ -5541,6 +5541,7 @@ REGRA: ${behaviorInstruction}`;
           phaseBlock += `\n📌 PRIMEIROS MINUTOS. Faça abertura e check-in.`;
           phaseBlock += `\n🔗 ABERTURA OBRIGATÓRIA COM FIO CONDUTOR: Se houver resumo da última sessão, memórias hierárquicas ou compromissos anteriores no contexto, COMECE puxando o fio explicitamente — antes de qualquer outra coisa.`;
           phaseBlock += `\nExemplo: "Semana passada você terminou pensando em [X]. O que aconteceu com isso desde então?" ou "Você tinha combinado de [Y]. Como foi?"`;
+          phaseBlock += `\n⚠️ NÃO abra com pergunta genérica ("como você tá hoje?"). Use o session_summary + key_insights da última sessão (já no contexto) para retomar o EIXO concretamente. Reabrir o eixo é o que cria continuidade e percepção de valor entre sessões.`;
           phaseBlock += `\nSe NÃO houver material de sessão anterior no contexto (primeira sessão), faça abertura padrão. NUNCA invente memórias.`;
         } else if (phaseInfo.phase === 'exploration') {
           phaseBlock += `\n📌 EXPLORAÇÃO. Vá mais fundo. Uma observação + uma pergunta.`;
