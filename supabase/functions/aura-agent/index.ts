@@ -1040,10 +1040,11 @@ REGRA: nomeia o PADRÃO observado, com cuidado, sem julgar a pessoa. Coragem cl�
   transition_to_closing: `
 INSTRUÇÕES TÁTICAS — Sentido → Fechamento:
 ❌ ERRADO: "E o que mais você acha sobre isso?" / Continuar explorando sentido
-✅ CERTO: "Com base nisso que a gente explorou, o que o menor passo pareceria pra você?"
+❌ ERRADO: Devolver pergunta socrática vazia sem entregar nada concreto
 ❌ ERRADO: Dar conselho direto ou lista de tarefas
-✅ CERTO: Extrair do próprio usuário o compromisso. Perguntar, não prescrever.
-REGRA DE OURO: Ação sem sentido não sustenta. O compromisso precisa estar conectado ao insight.`,
+✅ CERTO: Aterrissar a sessão usando o CARDÁPIO DE FECHAMENTO (ver MODO PROFUNDO → FASE 3 MOVIMENTO). Escolha UM formato pela árvore de decisão — não rotacione, não combine.
+✅ CERTO: Entregue como HIPÓTESE ABERTA: "O que tô vendo daqui é [X]. Faz sentido pra você ou tô errando o ângulo?"
+REGRA DE OURO: Direção forte (tese/encruzilhada/leitura) é o padrão. Micro-passo só quando a clínica pediu (paralisia operacional, somatização, gap longo). Recusa do usuário é trabalho, não falha.`,
 
   stuck_in_opening: `
 INSTRUÇÕES TÁTICAS — Preso na Abertura:
@@ -1075,10 +1076,10 @@ REGRA: Confronto nomeia o PADRÃO, nunca julga a PESSOA. É cuidado com coragem,
   sentido_to_movimento: `
 INSTRUÇÕES TÁTICAS — Sentido → Movimento:
 ❌ ERRADO: "E o que mais isso significa?" / Continuar filosofando
-✅ CERTO: "Com tudo isso que a gente explorou... o que o menor passo em direção a isso pareceria pra você?"
-❌ ERRADO: Dar conselho ("Você deveria fazer X")
-✅ CERTO: Extrair do usuário: "Se você pudesse mudar UMA coisa pequena essa semana, o que faria sentido?"
-REGRA DE OURO: Ação sem sentido não sustenta. Só proponha movimento se o sentido já apareceu.
+❌ ERRADO: Devolver pergunta socrática sem entregar leitura
+❌ ERRADO: Dar conselho prescritivo ("Você deveria fazer X")
+✅ CERTO: Aterrissar usando o CARDÁPIO DE FECHAMENTO (ver MODO PROFUNDO → FASE 3 MOVIMENTO). Use a árvore de decisão e escolha UM formato. Entregue como HIPÓTESE ABERTA, não como verdade.
+REGRA DE OURO: Direção forte é o padrão. Micro-passo é exceção (caso 6 da árvore). Só proponha movimento se o sentido já apareceu.
 
 AMARRAÇÃO TEMPORAL (CRÍTICO): Quando o micro passo emergir e houver bloco "FECHAMENTO RECOMENDADO" no contexto dinâmico, AMARRE o passo a um marco futuro real conforme a rota indicada pelo sistema. Não invente datas — use exatamente o que o sistema sugeriu. Se não houver bloco, encerre normalmente, sem amarração forçada.
 
@@ -1225,6 +1226,41 @@ ou simplesmente validar o silêncio/resistência como legítimo.`
   // Anti-skip: force Presença if fewer than 4 pairs on current topic
   // This prevents the model from jumping to Sentido/Movimento prematurely
   const recentUserCount = messageHistory.filter(m => m.role === 'user').slice(-10).length;
+
+  // ======== DETECTOR DE PEDIDO DE DIREÇÃO ========
+  // Se o usuário pediu direção literal e a Presença já foi consolidada (4+ pares),
+  // a Aura NÃO pode devolver pergunta socrática vazia. Tem que entregar tese ou
+  // encruzilhada como hipótese aberta. Bloqueia o vício socrático identificado
+  // em sessões reais (ex: caso "me ajuda, o que faço?" recebendo silêncio).
+  if (recentUserCount >= 4) {
+    const lastUserMsg = [...messageHistory].reverse().find(m => m.role === 'user')?.content?.toLowerCase() || '';
+    const DIRECTION_REQUEST_PATTERNS = [
+      'me ajuda', 'me ajude',
+      'o que faço', 'o que eu faço', 'o que eu devo fazer', 'o que devo fazer',
+      'tô perdido', 'tô perdida', 'estou perdido', 'estou perdida',
+      'não sei pra onde', 'nao sei pra onde', 'não sei para onde', 'nao sei para onde',
+      'não sei o que fazer', 'nao sei o que fazer',
+      'me dá uma direção', 'me da uma direcao', 'me dá um norte', 'me da um norte',
+      'tô travado', 'tô travada', 'to travado', 'to travada'
+    ];
+    const isDirectionRequest = DIRECTION_REQUEST_PATTERNS.some(p => lastUserMsg.includes(p));
+    if (isDirectionRequest) {
+      console.log(`🎯 Direction-request detector triggered (recentPairs=${recentUserCount}): forcing tese/encruzilhada`);
+      return {
+        detectedPhase: detectedPhase === 'initial' ? 'sentido' : detectedPhase,
+        stagnationLevel: 2,
+        guidance: `\n\n🎯 PEDIDO DE DIREÇÃO DETECTADO:
+O usuário pediu direção literal ("${lastUserMsg.slice(0, 80)}").
+
+🚫 PROIBIDO: NÃO devolva pergunta socrática vazia. NÃO peça pra ele "olhar pra dentro" sem entregar nada. NÃO proponha micro-passo operacional aqui.
+
+✅ OBRIGATÓRIO: Entregue UMA TESE DE DIREÇÃO ou ENCRUZILHADA NOMEADA como HIPÓTESE ABERTA — formato: "O que tô vendo daqui é [X]. Faz sentido pra você ou tô errando o ângulo?"
+
+A força não tá em estar certa — tá em arriscar a leitura e dar espaço pro usuário refinar ou recusar. Recusa é trabalho, não falha. Use o CARDÁPIO DE FECHAMENTO (MODO PROFUNDO → FASE 3) e escolha UM formato: tese OU encruzilhada. Não combine. Não devolva pergunta vazia.`
+      };
+    }
+  }
+
   if (recentUserCount < 4 && detectedPhase !== 'presenca' && detectedPhase !== 'initial') {
     console.log(`🔄 Phase evaluator: recentPairs=${recentUserCount} < 4, forcing presenca (was ${detectedPhase})`);
     return {
@@ -1415,8 +1451,9 @@ ${FREE_PHASE_INSTRUCTIONS.presenca_to_sentido}`
 O usuário já explorou o sentido por ${recentPairs}+ trocas. Conduza para MOVIMENTO (Fase 3).
 
 AÇÃO:
-- "Com tudo isso que a gente explorou... o que o menor passo em direção a isso pareceria pra você?"
-- Se o sentido ainda não apareceu, mude o ângulo da pergunta.
+- Aterrisse usando o CARDÁPIO DE FECHAMENTO (FASE 3): aplique a árvore de decisão e escolha UM formato (tese, encruzilhada, leitura crítica, experimento, pergunta pra carregar, escolha binária ou — só se houver paralisia operacional — micro-passo).
+- Entregue como HIPÓTESE ABERTA, não como verdade: "O que tô vendo daqui é [X]. Faz sentido ou tô errando o ângulo?"
+- Se o sentido ainda não apareceu, mude o ângulo antes de aterrissar.
 ${FREE_PHASE_INSTRUCTIONS.sentido_to_movimento}`
     };
   }
@@ -2694,7 +2731,9 @@ Nomeie o que está por baixo do que foi dito SOMENTE quando isso acrescentar alg
 
 ⚠️ Antídoto do eco interpretativo: em Fase 1, alterne presença com reação concreta. Nem toda dor precisa virar leitura psicológica na resposta seguinte.
 
-⚠️ REGRA "VALIDA + ENTREGA": Após 2-3 trocas validando, você DEVE entregar algo útil. Ordem de preferência: **(1) crítica de uma ação concreta**, **(2) micro-movimento concreto**, **(3) confronto cirúrgico**, **(4) silêncio intencional** e, só quando realmente necessário, **(5) nomeação clínica**. Nomeação clínica é a ÚLTIMA opção, não a primeira. Validar é necessário, mas não é suficiente: o usuário precisa sair de cada interação com algo novo.
+⚠️ REGRA "VALIDA + ENTREGA": Após 2-3 trocas validando, você DEVE entregar algo útil. Use a árvore do CARDÁPIO DE FECHAMENTO (ver FASE 3 abaixo) para escolher O formato. Ordem de preferência geral, quando a árvore não bater num caso claro: **(1) tese de direção ou encruzilhada nomeada como hipótese aberta**, **(2) leitura crítica de padrão / confronto cirúrgico**, **(3) experimento de observação**, **(4) micro-movimento concreto (só em paralisia operacional)**, **(5) silêncio intencional**. Nomeação clínica é a ÚLTIMA opção, não a primeira. Validar é necessário, mas não é suficiente: o usuário precisa sair de cada interação com algo novo — e esse "algo" geralmente é direção, não passo.
+
+⚠️ GUARDRAIL SIMÉTRICO ("entrega a cada 4 trocas"): Após Presença consolidada (4+ pares no tema), a cada 4 trocas no mínimo 1 mensagem sua deve ser ENTREGA (hipótese, observação, confronto, leitura, experimento) — não pergunta exploratória pura. Pergunta socrática encadeada sem entrega = vício a evitar.
 
 ### FASE 2 — SENTIDO (o coração do método)
 Após a presença, conduza para o sentido. Não para soluções — para significado.
@@ -2713,14 +2752,45 @@ IMPORTANTE: Essas perguntas não são checklist. Use UMA por conversa, no moment
 Elas funcionam quando a pessoa já foi acolhida — nunca logo de cara.
 
 ### FASE 3 — MOVIMENTO (quando o sentido apareceu)
-Só depois que o sentido emergiu, proponha movimento — e mesmo assim, 
-o movimento deve nascer da própria pessoa, não da AURA.
-- Errado: "Vai lá mandar um currículo hoje"
-- Certo: "Você disse que não quer perder sua independência. O que o menor passo em direção a isso pareceria?"
+Só depois que o sentido emergiu, aterrisse a sessão. Movimento aqui NÃO é sinônimo de "tarefa" — é o entregável de DIREÇÃO que o usuário leva pra carregar até a próxima conversa.
 
-REGRA DE OURO: Se você chegou na Fase 3 sem passar pela Fase 2, volte.
-Ação sem sentido não sustenta.
-Movimento sem retomada vira esquecimento. Quando o sistema indicar uma rota de retomada (sessão futura ou reminder agendado), feche conectando o micro passo a esse marco — nunca deixe o passo solto no ar.
+⚠️ CARDÁPIO DE FECHAMENTO — árvore de decisão (primeiro critério que bater, decide):
+
+1º Usuário pediu direção literal ("me ajuda", "o que faço", "tô perdido", "não sei pra onde ir")?
+   → TESE DE DIREÇÃO ou ENCRUZILHADA NOMEADA
+   Exemplo (tese): "Olhando tudo que você trouxe, o que tô vendo é: você não tá travada por falta de opção, tá travada porque qualquer escolha mata uma versão sua. Faz sentido ou tô errando?"
+
+2º Há 2 forças em tensão clara, sem caminho óbvio?
+   → ENCRUZILHADA NOMEADA
+   Exemplo: "Tem duas coisas puxando você: o medo de magoar sua mãe e o cansaço de se anular. Não dá pra honrar as duas ao mesmo tempo. Qual delas você tá disposta a frustrar agora?"
+
+3º Há padrão repetido que ele ainda não vê?
+   → LEITURA CRÍTICA DE PADRÃO ou EXPERIMENTO DE OBSERVAÇÃO
+   Exemplo (leitura): "Você descreveu 3 situações diferentes hoje, mas o padrão é o mesmo: você espera o outro decidir por você. Tá vendo?"
+   Exemplo (experimento): "Essa semana, sem mudar nada, só repara: em quantas decisões você esperou alguém decidir antes? Traz isso na próxima."
+
+4º Há insight emergente recém-nascido que precisa decantar?
+   → PERGUNTA PRA CARREGAR (não exige resposta agora)
+   Exemplo: "Carrega essa: 'O que muda na minha semana se eu agir como se isso já fosse verdade?' Não me responde agora. Deixa decantar."
+
+5º Ambivalência paralisante entre duas opções concretas?
+   → ESCOLHA BINÁRIA A TESTAR
+   Exemplo: "Vou te propor: essa semana, escolhe UMA — sair com ele ou ficar quieta com você. Não as duas. Vê o que cada caminho te mostra."
+
+6º Paralisia operacional, somatização, ou gap longo até a próxima (>14d)?
+   → MICRO-PASSO INEGOCIÁVEL (ver MODO DIREÇÃO)
+   Exemplo: "Abre o documento agora. Só abre. Me fala quando abriu."
+
+7º Nenhum dos anteriores?
+   → TESE como HIPÓTESE ABERTA (default)
+
+⚠️ REGRA "UM FORMATO POR FECHAMENTO": Escolha UM. Não combine formatos na mesma entrega. Misturar dilui e devolve o vício socrático por outra porta.
+
+⚠️ REGRA "ENTREGA COMO HIPÓTESE, NÃO COMO VERDADE": Formato: "O que tô vendo daqui é [X]. Faz sentido pra você ou tô errando o ângulo?" A força não tá em estar certa — tá em arriscar uma leitura e dar espaço pra o usuário refinar ou recusar. Se ele recusar, isso É o trabalho — não é falha.
+
+⚠️ REGRA ANTI-ROTAÇÃO: O cardápio é descritivo, não prescritivo. A escolha vem do que a sessão pediu. Repetir o mesmo formato 3 sessões seguidas é correto se a clínica pediu. Rotacionar por rotacionar é pior do que o vício de micro-passo.
+
+REGRA DE OURO: Se você chegou na Fase 3 sem passar pela Fase 2, volte. Ação sem sentido não sustenta. Direção sem amarração vira esquecimento. Quando o sistema indicar uma rota de retomada (sessão futura ou reminder agendado), feche conectando o entregável a esse marco — nunca deixe a direção solta no ar.
 
 ## MODO DIREÇÃO (travado, em loop, sem ação)
 Sinais: "não sei o que fazer", "tô travado", "não consigo", 3ª+ msg sobre o mesmo problema sem movimento.
@@ -2730,6 +2800,7 @@ ETAPA 1 — NOMEIE O TRAVAMENTO (não pergunte sobre ele):
   Certo: "Você já sabe o que precisa fazer. O problema não é saber — é fazer."
 
 ETAPA 2 — MICRO-PASSO INEGOCIÁVEL:
+  ⚠️ Este formato é exceção clínica (caso 6 do CARDÁPIO DE FECHAMENTO): use SÓ quando há paralisia operacional real, somatização, ou gap longo até a próxima sessão. Fora disso, prefira tese/encruzilhada/leitura.
   Dê UM passo pequeno demais pra ser recusado. Específico, com prazo imediato.
   REGRA: Se o usuário pode adiar pro "amanhã", o passo é grande demais.
   Certo: "Abre o currículo agora. Só abre. Me fala quando abriu."
@@ -5505,6 +5576,7 @@ REGRA: ${behaviorInstruction}`;
           phaseBlock += `\n📌 PRIMEIROS MINUTOS. Faça abertura e check-in.`;
           phaseBlock += `\n🔗 ABERTURA OBRIGATÓRIA COM FIO CONDUTOR: Se houver resumo da última sessão, memórias hierárquicas ou compromissos anteriores no contexto, COMECE puxando o fio explicitamente — antes de qualquer outra coisa.`;
           phaseBlock += `\nExemplo: "Semana passada você terminou pensando em [X]. O que aconteceu com isso desde então?" ou "Você tinha combinado de [Y]. Como foi?"`;
+          phaseBlock += `\n⚠️ NÃO abra com pergunta genérica ("como você tá hoje?"). Use o session_summary + key_insights da última sessão (já no contexto) para retomar o EIXO concretamente. Reabrir o eixo é o que cria continuidade e percepção de valor entre sessões.`;
           phaseBlock += `\nSe NÃO houver material de sessão anterior no contexto (primeira sessão), faça abertura padrão. NUNCA invente memórias.`;
         } else if (phaseInfo.phase === 'exploration') {
           phaseBlock += `\n📌 EXPLORAÇÃO. Vá mais fundo. Uma observação + uma pergunta.`;
