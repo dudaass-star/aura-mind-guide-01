@@ -2019,6 +2019,7 @@ export type Database = {
           in_reply_to: string | null
           last_inbound_at: string
           last_outbound_at: string | null
+          needs_draft_regen: boolean
           profile_user_id: string | null
           recurring_customer: boolean
           reopened_at: string | null
@@ -2042,6 +2043,7 @@ export type Database = {
           in_reply_to?: string | null
           last_inbound_at?: string
           last_outbound_at?: string | null
+          needs_draft_regen?: boolean
           profile_user_id?: string | null
           recurring_customer?: boolean
           reopened_at?: string | null
@@ -2065,6 +2067,7 @@ export type Database = {
           in_reply_to?: string | null
           last_inbound_at?: string
           last_outbound_at?: string | null
+          needs_draft_regen?: boolean
           profile_user_id?: string | null
           recurring_customer?: boolean
           reopened_at?: string | null
