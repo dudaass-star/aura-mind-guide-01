@@ -761,6 +761,77 @@ export default function AdminUsers() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Abandono drill-down */}
+      <Dialog open={!!abandonProfile} onOpenChange={(open) => !open && setAbandonProfile(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              Sessões abandonadas — {abandonProfile?.name || '(sem nome)'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+            {abandonLoading ? (
+              <p className="text-sm text-muted-foreground text-center py-6">Carregando detalhes…</p>
+            ) : abandonDetails.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-6">Sem detalhes disponíveis.</p>
+            ) : abandonDetails.map((d) => (
+              <div key={d.id} className="border rounded-lg p-3 bg-card space-y-2">
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>Agendada: {new Date(d.scheduled_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</span>
+                  <Badge variant="outline" className="bg-amber-50 text-amber-800 border-amber-200">
+                    <AlertTriangle className="h-3 w-3 mr-1" /> abandonada
+                  </Badge>
+                </div>
+                <div className="text-xs space-y-0.5">
+                  <p>
+                    <span className="text-muted-foreground">Iniciou:</span>{' '}
+                    {d.started_at ? new Date(d.started_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '—'}
+                  </p>
+                  <p>
+                    <span className="text-muted-foreground">Duração planejada:</span> {d.duration_minutes ?? 45} min
+                  </p>
+                  {d.focus_topic && (
+                    <p>
+                      <span className="text-muted-foreground">Foco:</span> {d.focus_topic}
+                    </p>
+                  )}
+                </div>
+                {d.lastUserMessage ? (
+                  <div className="bg-muted/50 rounded-md p-2 border border-border/40">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
+                      Última mensagem do usuário antes de sumir
+                      {d.lastUserMessageAt && (
+                        <span className="normal-case ml-1">
+                          ({new Date(d.lastUserMessageAt).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })})
+                        </span>
+                      )}
+                    </p>
+                    <p className="text-xs italic">"{d.lastUserMessage.slice(0, 280)}{d.lastUserMessage.length > 280 ? '…' : ''}"</p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground italic">Sem mensagens do usuário no período da sessão.</p>
+                )}
+                <div className="flex justify-end">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      if (!abandonProfile) return;
+                      navigate(`/admin/mensagens?userId=${abandonProfile.user_id}`);
+                    }}
+                  >
+                    <MessageSquare className="h-3 w-3 mr-1.5" /> Ver conversa
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAbandonProfile(null)}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
