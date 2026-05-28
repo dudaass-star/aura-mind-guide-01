@@ -129,7 +129,7 @@ export default function AdminUsers() {
 
   useEffect(() => {
     if (isAdmin) fetchProfiles();
-  }, [isAdmin, page, search, periodFilter, d0Filter, sortFilter]);
+  }, [isAdmin, page, search, periodFilter, d0Filter, sortFilter, sessionFilter]);
 
   const fetchProfiles = async () => {
     setLoading(true);
