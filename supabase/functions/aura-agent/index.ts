@@ -1226,6 +1226,41 @@ ou simplesmente validar o silêncio/resistência como legítimo.`
   // Anti-skip: force Presença if fewer than 4 pairs on current topic
   // This prevents the model from jumping to Sentido/Movimento prematurely
   const recentUserCount = messageHistory.filter(m => m.role === 'user').slice(-10).length;
+
+  // ======== DETECTOR DE PEDIDO DE DIREÇÃO ========
+  // Se o usuário pediu direção literal e a Presença já foi consolidada (4+ pares),
+  // a Aura NÃO pode devolver pergunta socrática vazia. Tem que entregar tese ou
+  // encruzilhada como hipótese aberta. Bloqueia o vício socrático identificado
+  // em sessões reais (ex: caso "me ajuda, o que faço?" recebendo silêncio).
+  if (recentUserCount >= 4) {
+    const lastUserMsg = [...messageHistory].reverse().find(m => m.role === 'user')?.content?.toLowerCase() || '';
+    const DIRECTION_REQUEST_PATTERNS = [
+      'me ajuda', 'me ajude',
+      'o que faço', 'o que eu faço', 'o que eu devo fazer', 'o que devo fazer',
+      'tô perdido', 'tô perdida', 'estou perdido', 'estou perdida',
+      'não sei pra onde', 'nao sei pra onde', 'não sei para onde', 'nao sei para onde',
+      'não sei o que fazer', 'nao sei o que fazer',
+      'me dá uma direção', 'me da uma direcao', 'me dá um norte', 'me da um norte',
+      'tô travado', 'tô travada', 'to travado', 'to travada'
+    ];
+    const isDirectionRequest = DIRECTION_REQUEST_PATTERNS.some(p => lastUserMsg.includes(p));
+    if (isDirectionRequest) {
+      console.log(`🎯 Direction-request detector triggered (recentPairs=${recentUserCount}): forcing tese/encruzilhada`);
+      return {
+        detectedPhase: detectedPhase === 'initial' ? 'sentido' : detectedPhase,
+        stagnationLevel: 2,
+        guidance: `\n\n🎯 PEDIDO DE DIREÇÃO DETECTADO:
+O usuário pediu direção literal ("${lastUserMsg.slice(0, 80)}").
+
+🚫 PROIBIDO: NÃO devolva pergunta socrática vazia. NÃO peça pra ele "olhar pra dentro" sem entregar nada. NÃO proponha micro-passo operacional aqui.
+
+✅ OBRIGATÓRIO: Entregue UMA TESE DE DIREÇÃO ou ENCRUZILHADA NOMEADA como HIPÓTESE ABERTA — formato: "O que tô vendo daqui é [X]. Faz sentido pra você ou tô errando o ângulo?"
+
+A força não tá em estar certa — tá em arriscar a leitura e dar espaço pro usuário refinar ou recusar. Recusa é trabalho, não falha. Use o CARDÁPIO DE FECHAMENTO (MODO PROFUNDO → FASE 3) e escolha UM formato: tese OU encruzilhada. Não combine. Não devolva pergunta vazia.`
+      };
+    }
+  }
+
   if (recentUserCount < 4 && detectedPhase !== 'presenca' && detectedPhase !== 'initial') {
     console.log(`🔄 Phase evaluator: recentPairs=${recentUserCount} < 4, forcing presenca (was ${detectedPhase})`);
     return {
