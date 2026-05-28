@@ -265,6 +265,11 @@ async function processStage(
   const now = Date.now();
   const createdBefore = new Date(now - cfg.minAgeMinutes * 60 * 1000).toISOString();
 
+  if (cfg.respectsQuietHours && isQuietHourBRT()) {
+    console.log(`🌙 [WA stage ${cfg.label}] quiet hours 22h-08h BRT, pulando este estágio.`);
+    return { sent: 0, failed: 0, skipped: 0 };
+  }
+
   let query = supabase
     .from("checkout_sessions")
     .select("id, phone, name, plan, email")
@@ -451,6 +456,11 @@ async function processStageAsaas(
 ): Promise<{ sent: number; failed: number; skipped: number }> {
   const now = Date.now();
   const createdBefore = new Date(now - cfg.minAgeMinutes * 60 * 1000).toISOString();
+
+  if (cfg.respectsQuietHours && isQuietHourBRT()) {
+    console.log(`🌙 [WA-PIX stage ${cfg.label}] quiet hours 22h-08h BRT, pulando este estágio.`);
+    return { sent: 0, failed: 0, skipped: 0 };
+  }
 
   let query = supabase
     .from("asaas_payments")
