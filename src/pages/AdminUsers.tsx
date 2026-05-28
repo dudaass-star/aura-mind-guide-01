@@ -184,7 +184,11 @@ export default function AdminUsers() {
     } else {
       const list = (data || []) as Profile[];
       setTotal(count || 0);
-      const ratingsMap = await fetchRatings(list.map(p => p.user_id));
+      const userIds = list.map(p => p.user_id);
+      const [ratingsMap, statsMap] = await Promise.all([
+        fetchRatings(userIds),
+        fetchSessionStats(userIds),
+      ]);
       // Ordenação client-side por rating
       let finalList = list;
       if (sortFilter === 'highest_rating' || sortFilter === 'lowest_rating') {
@@ -199,6 +203,18 @@ export default function AdminUsers() {
           if (!aHas && bHas) return 1;
           if (!aHas && !bHas) return 0;
           return (ra - rb) * dir;
+        });
+      }
+      // Filtros client-side baseados em sessões/ratings (operam sobre a página atual)
+      if (sessionFilter !== 'all') {
+        finalList = finalList.filter(p => {
+          const s = statsMap[p.user_id];
+          const r = ratingsMap[p.user_id];
+          if (sessionFilter === 'with_abandoned') return (s?.abandoned ?? 0) > 0;
+          if (sessionFilter === 'with_noshow') return (s?.noshow ?? 0) > 0;
+          if (sessionFilter === 'done_without_rating') return (s?.done ?? 0) > 0 && !r;
+          if (sessionFilter === 'low_rating') return !!r && r.avg <= 3;
+          return true;
         });
       }
       setProfiles(finalList);
