@@ -1,0 +1,1 @@
+ALTER TABLE public.support_tickets ADD COLUMN IF NOT EXISTS needs_draft_regen boolean NOT NULL DEFAULT false;

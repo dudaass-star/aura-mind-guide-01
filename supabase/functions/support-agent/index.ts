@@ -443,11 +443,12 @@ Analise e responda com a estrutura solicitada.`;
       await supabase.rpc("increment_kb_usage", { kb_ids: kbUsedIds });
     }
 
-    // Update ticket classification
+    // Atualiza classificação e zera a flag de regeneração pendente
     await supabase.from("support_tickets").update({
       category: args.category,
       severity: args.severity,
       recurring_customer: recurringCustomer,
+      needs_draft_regen: false,
     }).eq("id", ticket_id);
 
     return new Response(JSON.stringify({ ok: true, draft, auto_eligible: autoEligible }), {
