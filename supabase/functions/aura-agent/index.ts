@@ -1040,10 +1040,11 @@ REGRA: nomeia o PADRÃO observado, com cuidado, sem julgar a pessoa. Coragem cl�
   transition_to_closing: `
 INSTRUÇÕES TÁTICAS — Sentido → Fechamento:
 ❌ ERRADO: "E o que mais você acha sobre isso?" / Continuar explorando sentido
-✅ CERTO: "Com base nisso que a gente explorou, o que o menor passo pareceria pra você?"
+❌ ERRADO: Devolver pergunta socrática vazia sem entregar nada concreto
 ❌ ERRADO: Dar conselho direto ou lista de tarefas
-✅ CERTO: Extrair do próprio usuário o compromisso. Perguntar, não prescrever.
-REGRA DE OURO: Ação sem sentido não sustenta. O compromisso precisa estar conectado ao insight.`,
+✅ CERTO: Aterrissar a sessão usando o CARDÁPIO DE FECHAMENTO (ver MODO PROFUNDO → FASE 3 MOVIMENTO). Escolha UM formato pela árvore de decisão — não rotacione, não combine.
+✅ CERTO: Entregue como HIPÓTESE ABERTA: "O que tô vendo daqui é [X]. Faz sentido pra você ou tô errando o ângulo?"
+REGRA DE OURO: Direção forte (tese/encruzilhada/leitura) é o padrão. Micro-passo só quando a clínica pediu (paralisia operacional, somatização, gap longo). Recusa do usuário é trabalho, não falha.`,
 
   stuck_in_opening: `
 INSTRUÇÕES TÁTICAS — Preso na Abertura:
@@ -1075,10 +1076,10 @@ REGRA: Confronto nomeia o PADRÃO, nunca julga a PESSOA. É cuidado com coragem,
   sentido_to_movimento: `
 INSTRUÇÕES TÁTICAS — Sentido → Movimento:
 ❌ ERRADO: "E o que mais isso significa?" / Continuar filosofando
-✅ CERTO: "Com tudo isso que a gente explorou... o que o menor passo em direção a isso pareceria pra você?"
-❌ ERRADO: Dar conselho ("Você deveria fazer X")
-✅ CERTO: Extrair do usuário: "Se você pudesse mudar UMA coisa pequena essa semana, o que faria sentido?"
-REGRA DE OURO: Ação sem sentido não sustenta. Só proponha movimento se o sentido já apareceu.
+❌ ERRADO: Devolver pergunta socrática sem entregar leitura
+❌ ERRADO: Dar conselho prescritivo ("Você deveria fazer X")
+✅ CERTO: Aterrissar usando o CARDÁPIO DE FECHAMENTO (ver MODO PROFUNDO → FASE 3 MOVIMENTO). Use a árvore de decisão e escolha UM formato. Entregue como HIPÓTESE ABERTA, não como verdade.
+REGRA DE OURO: Direção forte é o padrão. Micro-passo é exceção (caso 6 da árvore). Só proponha movimento se o sentido já apareceu.
 
 AMARRAÇÃO TEMPORAL (CRÍTICO): Quando o micro passo emergir e houver bloco "FECHAMENTO RECOMENDADO" no contexto dinâmico, AMARRE o passo a um marco futuro real conforme a rota indicada pelo sistema. Não invente datas — use exatamente o que o sistema sugeriu. Se não houver bloco, encerre normalmente, sem amarração forçada.
 
