@@ -549,8 +549,10 @@ export default function AdminUsers() {
               <TableHead>Telefone</TableHead>
               <TableHead>Plano</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Sessões</TableHead>
+              <TableHead>Última sessão</TableHead>
               <TableHead>D0</TableHead>
-              <TableHead>Rating</TableHead>
+              <TableHead>Rating médio</TableHead>
               <TableHead>Criado em</TableHead>
               <TableHead>Último contato</TableHead>
               <TableHead>Ações</TableHead>
@@ -558,13 +560,19 @@ export default function AdminUsers() {
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+              <TableRow><TableCell colSpan={11} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
             ) : profiles.length === 0 ? (
-              <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Nenhum usuário encontrado</TableCell></TableRow>
+              <TableRow><TableCell colSpan={11} className="text-center py-8 text-muted-foreground">Nenhum usuário encontrado</TableCell></TableRow>
             ) : profiles.map((p) => {
               const d0 = getD0Status(p);
               const attempts = p.first_session_invite_attempts ?? 0;
               const r = ratings[p.user_id];
+              const s = sessionStats[p.user_id];
+              const done = s?.done ?? 0;
+              const abandoned = s?.abandoned ?? 0;
+              const noshow = s?.noshow ?? 0;
+              const upcoming = s?.upcoming ?? 0;
+              const doneWithoutRating = done > 0 && !r;
               return (
               <TableRow key={p.id}>
                 <TableCell className="font-medium">{p.name || '(sem nome)'}</TableCell>
@@ -579,6 +587,44 @@ export default function AdminUsers() {
                     {p.status || '—'}
                   </Badge>
                 </TableCell>
+                <TableCell className="text-sm whitespace-nowrap">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-mono text-xs">
+                      <span className="text-green-700 font-semibold">{done}</span>
+                      <span className="text-muted-foreground">·</span>
+                      <span className={abandoned > 0 ? 'text-amber-700 font-semibold' : 'text-muted-foreground'}>{abandoned}</span>
+                      <span className="text-muted-foreground">·</span>
+                      <span className={noshow >= 2 ? 'text-red-700 font-semibold' : 'text-muted-foreground'}>{noshow}</span>
+                      <span className="text-muted-foreground"> / {upcoming}</span>
+                    </span>
+                    {abandoned > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => openAbandonDetails(p)}
+                        className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 hover:bg-amber-100"
+                        title="Ver sessões abandonadas"
+                      >
+                        <AlertTriangle className="h-3 w-3" /> {abandoned}
+                      </button>
+                    )}
+                  </div>
+                  <div className="text-[10px] text-muted-foreground mt-0.5">
+                    feitas · abandono · no-show / agendadas
+                  </div>
+                </TableCell>
+                <TableCell className="text-sm whitespace-nowrap">
+                  {s?.lastCompletedAt ? (
+                    <span className="inline-flex items-center gap-1">
+                      <Check className="h-3 w-3 text-green-600" />
+                      {fmtRelative(s.lastCompletedAt)}
+                    </span>
+                  ) : s?.lastAbandonedAt ? (
+                    <span className="inline-flex items-center gap-1 text-amber-700">
+                      <AlertTriangle className="h-3 w-3" />
+                      {fmtRelative(s.lastAbandonedAt)}
+                    </span>
+                  ) : '—'}
+                </TableCell>
                 <TableCell>
                   <Badge variant="outline" className={d0Colors[d0]}>
                     {d0Labels[d0]}{d0 === 'tentando' ? ` ${attempts}x` : ''}
@@ -588,8 +634,12 @@ export default function AdminUsers() {
                   {r ? (
                     <span className="inline-flex items-center gap-1">
                       <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-                      {r.avg.toFixed(1)}
-                      <span className="text-muted-foreground">({r.count})</span>
+                      <span className={r.avg <= 3 ? 'text-red-700 font-semibold' : ''}>{r.avg.toFixed(1)}</span>
+                      <span className="text-muted-foreground">({r.count}/{done || '–'})</span>
+                    </span>
+                  ) : doneWithoutRating ? (
+                    <span className="inline-flex items-center gap-1 text-amber-700" title="Sessão concluída sem rating capturado">
+                      <AlertTriangle className="h-3.5 w-3.5" /> sem captura (0/{done})
                     </span>
                   ) : '—'}
                 </TableCell>
