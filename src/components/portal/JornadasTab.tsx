@@ -54,7 +54,11 @@ export function JornadasTab({ userId, profile, portalToken }: JornadasTabProps) 
     },
   });
 
-  const completedJourneyIds = new Set((journeyHistory || []).map((h: any) => h.journey_id));
+  // Mapa journey_id -> completed_at para ordenar concluídas pela mais recente
+  const completedAtMap = new Map<string, string>(
+    (journeyHistory || []).map((h: any) => [h.journey_id, h.completed_at]),
+  );
+  const completedJourneyIds = new Set(completedAtMap.keys());
 
   const episodesByJourney = (allEpisodes || []).reduce((acc: Record<string, any[]>, ep: any) => {
     if (!acc[ep.journey_id]) acc[ep.journey_id] = [];
@@ -62,11 +66,16 @@ export function JornadasTab({ userId, profile, portalToken }: JornadasTabProps) 
     return acc;
   }, {});
 
-  const visibleJourneys = (allJourneys || []).filter(
-    (j: any) => j.id === currentJourneyId || completedJourneyIds.has(j.id)
-  );
+  // Mostra todas as jornadas ativas, classificadas em três estados
+  type JourneyStatus = "current" | "completed" | "available";
+  const journeysWithStatus = (allJourneys || []).map((j: any) => {
+    let status: JourneyStatus = "available";
+    if (j.id === currentJourneyId) status = "current";
+    else if (completedJourneyIds.has(j.id)) status = "completed";
+    return { ...j, status };
+  });
 
-  if (visibleJourneys.length === 0) {
+  if (journeysWithStatus.length === 0) {
     return (
       <EmptyState
         icon={Target}
@@ -76,33 +85,57 @@ export function JornadasTab({ userId, profile, portalToken }: JornadasTabProps) 
     );
   }
 
-  const sortedJourneys = visibleJourneys.sort((a: any, b: any) => {
-    if (a.id === currentJourneyId) return -1;
-    if (b.id === currentJourneyId) return 1;
+  // Ordem: Atual → Concluídas (mais recente primeiro) → Disponíveis (ordem do catálogo)
+  const statusRank: Record<JourneyStatus, number> = { current: 0, completed: 1, available: 2 };
+  const sortedJourneys = [...journeysWithStatus].sort((a: any, b: any) => {
+    const r = statusRank[a.status as JourneyStatus] - statusRank[b.status as JourneyStatus];
+    if (r !== 0) return r;
+    if (a.status === "completed") {
+      const da = completedAtMap.get(a.id) || "";
+      const db = completedAtMap.get(b.id) || "";
+      return db.localeCompare(da);
+    }
     return 0;
   });
+
+  const completedCount = profile?.journeys_completed || 0;
+  const hasHistoryGap = completedCount > completedJourneyIds.size;
 
   return (
     <div className="space-y-5">
       <SectionHeader icon={Target} title="Suas Jornadas" />
 
-      {(profile?.journeys_completed || 0) > 0 && (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground font-['Nunito'] animate-fade-in">
-          <CheckCircle2 size={16} className="text-accent" />
-          <span>
-            {profile.journeys_completed} jornada{profile.journeys_completed > 1 ? "s" : ""} completada{profile.journeys_completed > 1 ? "s" : ""}
-          </span>
+      {completedCount > 0 && (
+        <div className="space-y-1 animate-fade-in">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground font-['Nunito']">
+            <CheckCircle2 size={16} className="text-accent" />
+            <span>
+              {completedCount} jornada{completedCount > 1 ? "s" : ""} completada{completedCount > 1 ? "s" : ""}
+            </span>
+          </div>
+          {hasHistoryGap && (
+            <p className="text-xs text-muted-foreground/80 font-['Nunito'] pl-6">
+              Algumas jornadas antigas podem não estar disponíveis para revisita.
+            </p>
+          )}
         </div>
       )}
 
       {sortedJourneys.map((journey: any, idx: number) => {
-        const isCurrent = journey.id === currentJourneyId;
-        const isCompleted = completedJourneyIds.has(journey.id);
+        const isCurrent = journey.status === "current";
+        const isCompleted = journey.status === "completed";
+        const isAvailable = journey.status === "available";
         const isExpanded = expandedJourney === journey.id;
         const episodes = episodesByJourney[journey.id] || [];
         const totalEpisodes = journey.total_episodes || 8;
-        const completedEps = isCurrent ? currentEpisode : totalEpisodes;
+        const completedEps = isCurrent ? currentEpisode : isCompleted ? totalEpisodes : 0;
         const progressPercent = (completedEps / totalEpisodes) * 100;
+
+        const badgeLabel = isCurrent
+          ? "Jornada Atual"
+          : isCompleted
+            ? "Jornada Completada"
+            : "Disponível";
 
         return (
           <div key={journey.id} className={`space-y-2 animate-fade-up`} style={{ animationDelay: `${idx * 100}ms` }}>
@@ -110,19 +143,27 @@ export function JornadasTab({ userId, profile, portalToken }: JornadasTabProps) 
               className={`rounded-2xl border p-5 cursor-pointer transition-all hover:shadow-card ${
                 isCurrent
                   ? "border-accent/20 bg-gradient-to-br from-accent/5 to-transparent"
-                  : "border-border bg-card hover:shadow-sm"
+                  : isCompleted
+                    ? "border-border bg-card hover:shadow-sm"
+                    : "border-border/60 bg-muted/20 hover:shadow-sm"
               }`}
               onClick={() => setExpandedJourney(isExpanded ? null : journey.id)}
             >
               <div className="flex items-start justify-between mb-2">
                 <div>
                   <p className={`text-xs uppercase tracking-wider font-semibold font-['Nunito'] ${isCurrent ? "text-accent" : "text-muted-foreground"}`}>
-                    {isCurrent ? "Jornada Atual" : "Jornada Completada"}
+                    {badgeLabel}
                   </p>
                   <p className="font-['Fraunces'] font-semibold text-foreground text-lg mt-1">{journey.title}</p>
                 </div>
                 <div className={`rounded-full p-2 ${isCurrent ? "bg-accent/10" : "bg-muted"}`}>
-                  {isCurrent ? <Target size={20} className="text-accent" /> : <CheckCircle2 size={20} className="text-accent" />}
+                  {isCurrent ? (
+                    <Target size={20} className="text-accent" />
+                  ) : isCompleted ? (
+                    <CheckCircle2 size={20} className="text-accent" />
+                  ) : (
+                    <Lock size={18} className="text-muted-foreground" />
+                  )}
                 </div>
               </div>
               {journey.description && (
@@ -144,8 +185,14 @@ export function JornadasTab({ userId, profile, portalToken }: JornadasTabProps) 
             {isExpanded && episodes.length > 0 && (
               <div className="space-y-2 pl-2">
                 <p className="text-sm font-semibold text-foreground font-['Nunito']">Episódios</p>
+                {isAvailable && (
+                  <p className="text-xs text-muted-foreground font-['Nunito']">
+                    A Aura vai te guiar até esta jornada na hora certa.
+                  </p>
+                )}
                 {episodes.map((ep: any, epIdx: number) => {
-                  const isUnlocked = isCompleted || (isCurrent && ep.episode_number <= currentEpisode);
+                  const isUnlocked =
+                    isCompleted || (isCurrent && ep.episode_number <= currentEpisode);
                   return (
                     <div
                       key={ep.id}
@@ -155,6 +202,7 @@ export function JornadasTab({ userId, profile, portalToken }: JornadasTabProps) 
                           : "border-border/50 bg-muted/30 opacity-60"
                       }`}
                       style={{ animationDelay: `${epIdx * 50}ms` }}
+                      title={!isUnlocked && isAvailable ? "A Aura vai te guiar até esta jornada na hora certa" : undefined}
                       onClick={() => {
                         if (!isUnlocked) return;
                         const params = new URLSearchParams({ u: userId });
