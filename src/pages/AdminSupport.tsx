@@ -144,6 +144,32 @@ export default function AdminSupport() {
     return () => { supabase.removeChannel(channel); };
   }, [isAdmin, fetchTickets]);
 
+  // Realtime do ticket aberto: se chegar novo inbound, recarrega detalhe
+  // (que vai disparar a auto-regeneração do rascunho quando estiver defasado).
+  useEffect(() => {
+    if (!selectedTicket) return;
+    const channel = supabase
+      .channel(`support-ticket-msgs-${selectedTicket.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'support_ticket_messages',
+          filter: `ticket_id=eq.${selectedTicket.id}`,
+        },
+        (payload) => {
+          const row = payload.new as { direction?: string };
+          if (row?.direction === 'inbound') {
+            loadTicketDetail(selectedTicket);
+          }
+        },
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTicket?.id]);
+
   const loadTicketDetail = async (ticket: Ticket) => {
     setSelectedTicket(ticket);
     setLoadingDetail(true);
@@ -561,6 +587,24 @@ export default function AdminSupport() {
                     <> · KB match {(draft.kb_top_score * 100).toFixed(0)}%</>
                   )}
                 </p>
+                {(() => {
+                  const latestInboundAt = messages
+                    .filter((m) => m.direction === 'inbound')
+                    .map((m) => new Date(m.created_at).getTime())
+                    .reduce((a, b) => Math.max(a, b), 0);
+                  const draftAt = new Date(draft.generated_at).getTime();
+                  if (latestInboundAt > 0 && draftAt < latestInboundAt) {
+                    return (
+                      <div className="flex items-center gap-1.5 text-[11px] text-amber-700 dark:text-amber-400">
+                        <Loader2 className={`h-3 w-3 ${regenerating ? 'animate-spin' : ''}`} />
+                        {regenerating
+                          ? 'Regerando com a última mensagem do cliente…'
+                          : 'Rascunho desatualizado — clique em regenerar'}
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
 
               <Textarea value={editedBody} onChange={(e) => setEditedBody(e.target.value)} className="flex-1 min-h-[180px] text-sm" />
