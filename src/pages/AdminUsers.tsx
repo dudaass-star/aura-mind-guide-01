@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, Search, Pencil, RotateCcw, ChevronLeft, ChevronRight, Link, Copy, Check, Star, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Search, Pencil, RotateCcw, ChevronLeft, ChevronRight, Link, Copy, Check, Star, RefreshCw, AlertTriangle, MessageSquare } from 'lucide-react';
 
 interface Profile {
   id: string;
@@ -31,6 +31,25 @@ interface Profile {
 }
 
 interface RatingAgg { avg: number; count: number; }
+
+interface AbandonedSession {
+  id: string;
+  scheduled_at: string;
+  started_at: string | null;
+  ended_at: string | null;
+  duration_minutes: number;
+  focus_topic: string | null;
+}
+
+interface SessionStats {
+  done: number;
+  abandoned: number;
+  noshow: number;
+  upcoming: number;
+  lastCompletedAt: string | null;
+  lastAbandonedAt: string | null;
+  abandonedList: AbandonedSession[];
+}
 
 const PAGE_SIZE = 20;
 
@@ -82,12 +101,14 @@ export default function AdminUsers() {
 
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [ratings, setRatings] = useState<Record<string, RatingAgg>>({});
+  const [sessionStats, setSessionStats] = useState<Record<string, SessionStats>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
   const [total, setTotal] = useState(0);
   const [periodFilter, setPeriodFilter] = useState<'all' | 'today' | '7d' | '30d'>('all');
   const [d0Filter, setD0Filter] = useState<'all' | D0Status>('all');
+  const [sessionFilter, setSessionFilter] = useState<'all' | 'with_abandoned' | 'with_noshow' | 'done_without_rating' | 'low_rating'>('all');
   const [sortFilter, setSortFilter] = useState<'newest' | 'oldest' | 'last_contact' | 'highest_rating' | 'lowest_rating'>('newest');
 
   // Edit dialog
@@ -96,6 +117,11 @@ export default function AdminUsers() {
   const [saving, setSaving] = useState(false);
   const [portalLinkLoading, setPortalLinkLoading] = useState(false);
   const [portalLinkCopied, setPortalLinkCopied] = useState(false);
+
+  // Abandono drill-down dialog
+  const [abandonProfile, setAbandonProfile] = useState<Profile | null>(null);
+  const [abandonDetails, setAbandonDetails] = useState<Array<AbandonedSession & { lastUserMessage?: string; lastUserMessageAt?: string }>>([]);
+  const [abandonLoading, setAbandonLoading] = useState(false);
 
   useEffect(() => {
     if (!authLoading) redirectIfNotAdmin();
