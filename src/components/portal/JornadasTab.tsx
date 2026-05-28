@@ -98,26 +98,20 @@ export function JornadasTab({ userId, profile, portalToken }: JornadasTabProps) 
     return 0;
   });
 
-  const completedCount = profile?.journeys_completed || 0;
-  const hasHistoryGap = completedCount > completedJourneyIds.size;
+  // Fonte única de verdade: user_journey_history. Evita dissonância com o
+  // contador inflado em profile.journeys_completed (perfis antigos sem histórico).
+  const completedCount = completedJourneyIds.size;
 
   return (
     <div className="space-y-5">
       <SectionHeader icon={Target} title="Suas Jornadas" />
 
       {completedCount > 0 && (
-        <div className="space-y-1 animate-fade-in">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground font-['Nunito']">
-            <CheckCircle2 size={16} className="text-accent" />
-            <span>
-              {completedCount} jornada{completedCount > 1 ? "s" : ""} completada{completedCount > 1 ? "s" : ""}
-            </span>
-          </div>
-          {hasHistoryGap && (
-            <p className="text-xs text-muted-foreground/80 font-['Nunito'] pl-6">
-              Algumas jornadas antigas podem não estar disponíveis para revisita.
-            </p>
-          )}
+        <div className="flex items-center gap-2 text-sm text-muted-foreground font-['Nunito'] animate-fade-in">
+          <CheckCircle2 size={16} className="text-accent" />
+          <span>
+            {completedCount} jornada{completedCount > 1 ? "s" : ""} completada{completedCount > 1 ? "s" : ""}
+          </span>
         </div>
       )}
 
