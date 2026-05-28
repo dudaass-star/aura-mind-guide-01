@@ -243,6 +243,66 @@ export default function AdminUsers() {
     return result;
   };
 
+  const fetchSessionStats = async (userIds: string[]): Promise<Record<string, SessionStats>> => {
+    if (!userIds.length) { setSessionStats({}); return {}; }
+    const { data, error } = await supabase
+      .from('sessions')
+      .select('id, user_id, status, started_at, ended_at, scheduled_at, duration_minutes, focus_topic')
+      .in('user_id', userIds);
+    if (error) { console.error('Error fetching session stats:', error); setSessionStats({}); return {}; }
+
+    const now = Date.now();
+    const result: Record<string, SessionStats> = {};
+    const ensure = (uid: string): SessionStats => {
+      if (!result[uid]) result[uid] = {
+        done: 0, abandoned: 0, noshow: 0, upcoming: 0,
+        lastCompletedAt: null, lastAbandonedAt: null, abandonedList: [],
+      };
+      return result[uid];
+    };
+
+    (data || []).forEach((s: any) => {
+      const stats = ensure(s.user_id);
+      const scheduledMs = s.scheduled_at ? new Date(s.scheduled_at).getTime() : 0;
+      const durationMs = (s.duration_minutes || 45) * 60_000;
+      const startedMs = s.started_at ? new Date(s.started_at).getTime() : 0;
+      const endedMs = s.ended_at ? new Date(s.ended_at).getTime() : 0;
+
+      if (s.status === 'completed' && endedMs) {
+        stats.done += 1;
+        if (!stats.lastCompletedAt || endedMs > new Date(stats.lastCompletedAt).getTime()) {
+          stats.lastCompletedAt = s.ended_at;
+        }
+      } else if (s.status === 'scheduled' && !startedMs) {
+        // Sem início: futura ou no-show
+        if (scheduledMs > now) {
+          stats.upcoming += 1;
+        } else if (scheduledMs + 60 * 60_000 < now) {
+          stats.noshow += 1;
+        }
+      } else if (startedMs && !endedMs && s.status !== 'canceled') {
+        // Iniciou e nunca terminou: abandonada se passou da janela esperada
+        if (scheduledMs + durationMs + 30 * 60_000 < now) {
+          stats.abandoned += 1;
+          if (!stats.lastAbandonedAt || startedMs > new Date(stats.lastAbandonedAt).getTime()) {
+            stats.lastAbandonedAt = s.started_at;
+          }
+          stats.abandonedList.push({
+            id: s.id,
+            scheduled_at: s.scheduled_at,
+            started_at: s.started_at,
+            ended_at: s.ended_at,
+            duration_minutes: s.duration_minutes,
+            focus_topic: s.focus_topic,
+          });
+        }
+      }
+    });
+
+    setSessionStats(result);
+    return result;
+  };
+
   const openEdit = (p: Profile) => {
     setEditProfile(p);
     setPortalLinkCopied(false);
