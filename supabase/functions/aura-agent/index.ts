@@ -1416,8 +1416,9 @@ ${FREE_PHASE_INSTRUCTIONS.presenca_to_sentido}`
 O usuário já explorou o sentido por ${recentPairs}+ trocas. Conduza para MOVIMENTO (Fase 3).
 
 AÇÃO:
-- "Com tudo isso que a gente explorou... o que o menor passo em direção a isso pareceria pra você?"
-- Se o sentido ainda não apareceu, mude o ângulo da pergunta.
+- Aterrisse usando o CARDÁPIO DE FECHAMENTO (FASE 3): aplique a árvore de decisão e escolha UM formato (tese, encruzilhada, leitura crítica, experimento, pergunta pra carregar, escolha binária ou — só se houver paralisia operacional — micro-passo).
+- Entregue como HIPÓTESE ABERTA, não como verdade: "O que tô vendo daqui é [X]. Faz sentido ou tô errando o ângulo?"
+- Se o sentido ainda não apareceu, mude o ângulo antes de aterrissar.
 ${FREE_PHASE_INSTRUCTIONS.sentido_to_movimento}`
     };
   }
