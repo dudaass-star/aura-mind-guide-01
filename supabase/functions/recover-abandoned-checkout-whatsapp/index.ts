@@ -4,7 +4,7 @@
  * - Roda EM PARALELO ao fluxo de e-mail (recover-abandoned-checkout).
  * - 2 estágios: 15min e 24h após criação do checkout.
  * - Fontes: checkout_sessions (Stripe/cartão) + asaas_payments (PIX).
- * - Respeita silêncio 22h-08h BRT.
+ * - Respeita silêncio 22h-08h BRT APENAS no estágio 24h (estágio 15min é continuação de interação ativa e ignora quiet hours).
  * - Pula clientes já ativos/trial (mesma lógica do fluxo de e-mail).
  * - Usa subaccount Twilio separada → NÃO interfere no número da Aura.
  * - Dedup cross-source por telefone normalizado dentro do mesmo estágio.
@@ -37,6 +37,7 @@ interface StageConfig {
   sentColumn: string;
   prevSentColumn: string | null;
   utmCampaign: string;
+  respectsQuietHours: boolean;
 }
 
 const STAGES: StageConfig[] = [
@@ -48,6 +49,8 @@ const STAGES: StageConfig[] = [
     sentColumn: "whatsapp_recovery_15min_sent_at",
     prevSentColumn: null,
     utmCampaign: "wa_stage1_15min",
+    // Continuação de interação ativa: usuário acabou de quase contratar, ainda quente.
+    respectsQuietHours: false,
   },
   {
     stage: 2,
@@ -57,6 +60,8 @@ const STAGES: StageConfig[] = [
     sentColumn: "whatsapp_recovery_24h_sent_at",
     prevSentColumn: "whatsapp_recovery_15min_sent_at",
     utmCampaign: "wa_stage2_24h",
+    // Cold outreach 24h depois: respeita silêncio noturno.
+    respectsQuietHours: true,
   },
 ];
 
@@ -95,14 +100,6 @@ Deno.serve(async (req) => {
       console.warn("🛑 [WA-RECOVERY] Disabled via system_config.twilio_recovery_enabled=false. Skipping.");
       return new Response(
         JSON.stringify({ status: "disabled_by_config" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
-
-    if (isQuietHourBRT()) {
-      console.log("🌙 [WA-RECOVERY] Quiet hours (22h-08h BRT). Aguardando próximo ciclo.");
-      return new Response(
-        JSON.stringify({ status: "skipped_quiet_hours" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }

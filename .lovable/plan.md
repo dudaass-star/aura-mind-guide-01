@@ -1,37 +1,39 @@
-## Diagnóstico
+# Quiet hours seletivo no recovery WhatsApp
 
-Verifiquei no banco e o problema é geral, não só do Eduardo:
+## Contexto
 
-- A tabela `user_journey_history` tem apenas **7 linhas no total** (todos os usuários somados).
-- Vários perfis têm `profiles.journeys_completed` inflado sem nenhuma linha correspondente em `user_journey_history` (Eduardo=3/0, Letícia=3/0, Clara=3/0, etc.).
-- Causa raiz: em algum momento o contador `journeys_completed` foi incrementado sem o `insert` em `user_journey_history` (versão antiga da `periodic-content` ou backfill manual). Hoje as duas escritas estão no mesmo bloco, mas o histórico de quem completou antes disso está perdido — **não há como recuperar quais jornadas específicas foram concluídas**, só o número.
+Hoje `recover-abandoned-checkout-whatsapp` aplica um bloqueio global de quiet hours (22h-08h BRT) logo no início da função (linhas 102-108). Isso afeta tanto o estágio 1 (15 min após abandono) quanto o estágio 2 (24h após).
 
-Por isso a UI atual fala "3 jornadas completadas" mas não consegue listar nenhuma: ela depende do `user_journey_history` para saber *qual* jornada marcar como Concluída, e esse dado simplesmente não existe.
+O estágio 1 é continuação direta de uma interação ativa do usuário — ele acabou de quase contratar e provavelmente ainda está online. Bloquear faz com que o lembrete saia muito depois do momento de maior intenção, ou até no dia seguinte. Mesma lógica que já adotamos em `post-session-quiet-hours-bypass` (rating/resumo de sessão ignoram silêncio porque respondem a interação ativa).
 
-## Solução (UI-only, geral para todos)
+O estágio 2, por outro lado, é cold outreach 24h depois — faz sentido respeitar o silêncio noturno.
 
-Tratar `user_journey_history` como **única fonte de verdade** na aba Jornadas e parar de usar `profile.journeys_completed` como contador visível.
+## Mudança
 
-Mudanças em `src/components/portal/JornadasTab.tsx`:
+**Arquivo:** `supabase/functions/recover-abandoned-checkout-whatsapp/index.ts`
 
-1. **Contador "X jornadas completadas"** passa a usar `completedJourneyIds.size` (derivado de `user_journey_history`) em vez de `profile.journeys_completed`. O número mostrado sempre bate com os cards Concluídos visíveis logo abaixo — zero dissonância.
-2. **Remover a nota "Algumas jornadas antigas podem não estar disponíveis para revisita"**. Sem o contador inflado, não há mais gap para explicar.
-3. **Esconder o bloco do contador** quando `completedJourneyIds.size === 0` (em vez de "0 jornadas completadas", simplesmente não mostra nada — mais limpo para usuários novos).
-4. Resto da estrutura permanece igual: cards Atual / Concluída / Disponível na mesma ordem, episódios clicáveis nas Concluídas, lock + tooltip nas Disponíveis.
+1. Remover o bloqueio global de quiet hours no início do handler (linhas 102-108).
+2. Adicionar um campo `respectsQuietHours: boolean` em `StageConfig`:
+   - Estágio 1 (15min): `false` → envia a qualquer hora.
+   - Estágio 2 (24h): `true` → bloqueia 22h-08h BRT.
+3. Dentro de `processStage` e `processStageAsaas`, no topo, checar:
+   ```ts
+   if (cfg.respectsQuietHours && isQuietHourBRT()) {
+     console.log(`🌙 [WA stage ${cfg.label}] quiet hours, pulando este estágio.`);
+     return { sent: 0, failed: 0, skipped: 0 };
+   }
+   ```
+4. Manter `isQuietHourBRT()` como está (já implementada).
+5. Atualizar o comentário no topo do arquivo: "Respeita silêncio 22h-08h BRT **apenas no estágio 24h**".
 
-## Por que essa abordagem
+Sem mudanças no fluxo de e-mail (`recover-abandoned-checkout`), sem mudanças de schema, sem alterar dedup/lifetime cap/skip de clientes ativos.
 
-- **Honestidade**: o usuário vê exatamente o que pode revisitar.
-- **Sem backfill arriscado**: não inventamos histórico que não existe (não sabemos *quais* 3 jornadas Eduardo concluiu).
-- **Convergência natural**: conforme novas jornadas forem concluídas pela `periodic-content` (que hoje já escreve nos dois lugares), contador e histórico crescem juntos.
-- **Sem backend, sem migração, sem mexer em dados de usuário.**
+## Memória
 
-## Arquivos afetados
-
-- `src/components/portal/JornadasTab.tsx` — única alteração.
+Atualizar `mem/features/recovery/whatsapp-subaccount-recovery.md` para registrar que o estágio 15min ignora quiet hours por ser continuação de interação ativa (mesmo princípio do `post-session-quiet-hours-bypass`).
 
 ## Validação
 
-1. Eduardo: contador some (history=0), vê só "Construindo Autoconfiança" como Atual e as demais como Disponíveis. Sem mensagens contraditórias.
-2. Usuário que completar uma jornada via fluxo normal a partir de agora: aparece o contador "1 jornada completada" + card Concluída clicável.
-3. Usuário novo sem jornada atual: vê catálogo inteiro como Disponível, sem bloco de contador.
+- Checkout abandonado às 23:50 BRT → estágio 1 dispara no próximo ciclo (a cada 5 min), idealmente entre 00:05-00:10.
+- Estágio 2 desse mesmo checkout só dispara após as 08h do dia seguinte (24h + janela permitida).
+- Logs `[WA stage 15min]` aparecem em horário noturno; `[WA stage 24h]` continuam bloqueados com `quiet hours, pulando este estágio.`
