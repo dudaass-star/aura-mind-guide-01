@@ -13,8 +13,9 @@ import { ResumosTab } from "@/components/portal/ResumosTab";
 import { MeditacoesTab } from "@/components/portal/MeditacoesTab";
 import { CapsulasTab } from "@/components/portal/CapsulasTab";
 import { PhoneLinkPrompt } from "@/components/portal/PhoneLinkPrompt";
-import { CreditCard, Loader2 } from "lucide-react";
+import { CreditCard, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { ChangePlanDialog } from "@/components/portal/ChangePlanDialog";
 
 type TabId = "jornadas" | "resumos" | "meditacoes" | "capsulas";
 
@@ -30,6 +31,7 @@ const UserPortal = () => {
   const initialTab = (searchParams.get("tab") as TabId) || "jornadas";
   const [activeTab, setActiveTab] = useState<TabId>(initialTab);
   const [portalLoading, setPortalLoading] = useState(false);
+  const [changePlanOpen, setChangePlanOpen] = useState(false);
   const { session, loading: authLoading, signOut, linkStatus } = usePortalAuth();
 
   const userId = session?.user?.id;
@@ -170,6 +172,13 @@ const UserPortal = () => {
             <span>Atualizar forma de pagamento</span>
           </button>
           <button
+            onClick={() => setChangePlanOpen(true)}
+            className="block mx-auto mb-3 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-accent transition-colors font-['Nunito']"
+          >
+            <RefreshCw size={14} />
+            <span>Trocar de plano</span>
+          </button>
+          <button
             onClick={signOut}
             className="block mx-auto mb-3 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-accent transition-colors font-['Nunito']"
           >
@@ -187,6 +196,15 @@ const UserPortal = () => {
           </a>
         </footer>
       </div>
+
+      {userId && (
+        <ChangePlanDialog
+          open={changePlanOpen}
+          onOpenChange={setChangePlanOpen}
+          userId={userId}
+          currentPlan={(profile?.plan as "essencial" | "direcao" | "transformacao" | null) ?? null}
+        />
+      )}
     </>
   );
 };
