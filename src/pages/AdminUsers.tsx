@@ -68,15 +68,22 @@ const planColors: Record<string, string> = {
   trial: 'bg-blue-100 text-blue-800 border-blue-200',
 };
 
-type D0Status = 'pendente' | 'tentando' | 'recusado' | 'concluido';
+type D0Status = 'pendente' | 'tentando' | 'recusado' | 'agendado' | 'concluido' | 'sem_dados';
 
-function getD0Status(p: Profile): D0Status {
+function getD0Status(p: Profile, s?: SessionStats): D0Status {
   const pending = p.pending_first_session_invite;
   const attempts = p.first_session_invite_attempts ?? 0;
   const needsSetup = p.needs_schedule_setup;
   if (pending && attempts === 0) return 'pendente';
   if (pending && attempts >= 1) return 'tentando';
   if (!pending && needsSetup) return 'recusado';
+  // Profile não distingue mais — usa sessions
+  if (s) {
+    if (s.done >= 1) return 'concluido';
+    if (s.upcoming >= 1 || s.abandoned >= 1 || s.noshow >= 1) return 'agendado';
+    return 'sem_dados';
+  }
+  // Sem dados de sessões carregados ainda — fallback conservador
   return 'concluido';
 }
 
@@ -84,14 +91,18 @@ const d0Labels: Record<D0Status, string> = {
   pendente: 'Pendente',
   tentando: 'Tentando',
   recusado: 'Recusou→Setup',
-  concluido: 'Concluído',
+  agendado: 'Agendado',
+  concluido: 'Fez 1ª sessão',
+  sem_dados: 'Sem dados',
 };
 
 const d0Colors: Record<D0Status, string> = {
   pendente: 'bg-yellow-100 text-yellow-800 border-yellow-200',
   tentando: 'bg-blue-100 text-blue-800 border-blue-200',
   recusado: 'bg-orange-100 text-orange-800 border-orange-200',
+  agendado: 'bg-indigo-100 text-indigo-800 border-indigo-200',
   concluido: 'bg-green-100 text-green-800 border-green-200',
+  sem_dados: 'bg-gray-100 text-gray-700 border-gray-200',
 };
 
 export default function AdminUsers() {
