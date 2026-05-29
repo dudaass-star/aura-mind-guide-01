@@ -1,41 +1,43 @@
+## Diagnóstico
 
-## Problema
-O card **Funil de Checkout (período)** em `/admin/engajamento` só conta sessões de cartão (tabela `checkout_sessions`). Vendas via PIX (tabela `asaas_payments`) ficam invisíveis no funil, embora já sejam computadas separadamente para MRR.
+Hoje (29/05 BRT) os dados reais são:
+- Cartão: 3 sessões criadas, 1 finalizada (elaine.eclm)
+- PIX: 1 RECEIVED (Caiane 03:43 UTC) + 3 PENDING
 
-Hoje (29/05) temos 1 venda PIX confirmada (Caiane Malta Vitalli, R$ 29,90 Essencial, `RECEIVED` 03:45) que não aparece no contador "Finalizaram Pagamento".
+O backend já calcula `asaasCheckoutCreatedInPeriod=2` e `asaasCheckoutConfirmedInPeriod=1` (log `💠 Asaas/PIX: checkout(2→1)` em 14:18Z), e o payload inclui `checkoutCreatedTotalInPeriod = 3+2 = 5` e `checkoutCompletedTotalInPeriod = 1+1 = 2`.
 
-## Solução
-Unificar cartão + PIX no mesmo funil, mantendo a mesma UI. Sem mudar nenhuma outra métrica.
+Mas a UI mostra **3 criados / 1 finalizado** — exatamente o número do cartão sozinho. Significa que os campos `*TotalInPeriod` não estão chegando renderizados — ou por cache do edge (payload antigo persistido na memória do worker antes do redeploy completar) ou porque o build do front ainda não trocou para os novos campos.
 
-### Backend — `supabase/functions/admin-engagement-metrics/index.ts`
+Há também um bug latente: o contador PIX no período filtra por `created_at`. Se um PIX foi criado ontem e confirmado hoje, ele não conta nem como "criado hoje" nem como "finalizado hoje". O correto é usar `paid_at` para o contador de confirmados.
 
-1. O bloco PIX (linhas ~1286-1297) já calcula `asaasCheckoutCreatedInPeriod` e `asaasCheckoutConfirmedInPeriod` no período. Mover esse cálculo para fora do bloco condicional de MRR (ou garantir que sempre rode quando houver `dateFrom/dateTo`), pois hoje depende do mesmo guard de Asaas.
+## Mudanças
 
-2. Adicionar também o equivalente **all-time** (já não existe):
-   - `asaasCheckoutCreatedAllTime`: count distinto de `asaas_payments` (todos os tempos).
-   - `asaasCheckoutCompletedAllTime`: idem com `status IN ('RECEIVED','CONFIRMED','RECEIVED_IN_CASH')`.
-   - Deduplicar por `customer_phone` (igual ao que já é feito para cartão via `uniquePhonesCreated`), pra evitar inflar quando o mesmo usuário gera várias cobranças PIX recorrentes.
+### 1. Backend — `supabase/functions/admin-engagement-metrics/index.ts`
 
-3. Somar tudo no retorno:
-   - `checkoutCreatedInPeriod = cartão + pix`
-   - `checkoutCompletedInPeriod = cartão + pix`
-   - `checkoutCreatedAllTime = cartão + pix`
-   - `checkoutCompletedAllTime = cartão + pix`
-   - Recalcular `checkoutDropoffInPeriod` e `checkoutCompletionRate` em cima dos totais já combinados.
+No bloco PIX (linhas ~1288-1299), separar criados (por `created_at`) de confirmados (por `paid_at`):
 
-4. Manter o cache de 5 min e a invalidação por `forceRefresh` como estão. A chave de cache não muda.
+- Manter a query atual de `asaasCreatedInPeriod` (por `created_at`) só para o contador "criados".
+- Adicionar uma segunda query: `asaas_payments` com `status IN ('CONFIRMED','RECEIVED')` e `paid_at` dentro de `[periodStart, periodEnd)`, ignorando E2E, para preencher `asaasCheckoutConfirmedInPeriod`.
+- Deduplicar confirmados por `customer_email` (consistente com o cartão por telefone único).
 
-### Frontend — `src/pages/AdminEngagement.tsx`
+### 2. Backend — invalidar cache stale
 
-Nenhuma mudança de componente necessária — `FunnelStep` continua igual. Os campos exibidos (`checkoutCreatedInPeriod`, `checkoutCompletedInPeriod`, `checkoutDropoffInPeriod`, `checkoutCompletionRate`, `checkoutCreatedAllTime`, `checkoutCompletedAllTime`) passam a refletir cartão + PIX automaticamente.
+Bumpar a versão da chave de cache (ex.: prefixo `v2:` em `cacheKey`) para forçar recomputo na próxima chamada, garantindo que workers com payload antigo não sirvam respostas sem `checkoutCreatedTotalInPeriod`/`checkoutCompletedTotalInPeriod`.
 
-Opcional (se quiser deixar transparente pro admin): mudar o subtítulo do card de `"All-time: X criados, Y finalizados"` para `"All-time: X criados, Y finalizados (cartão + PIX)"`. Pequena mudança textual no JSX da linha ~1492.
+### 3. Frontend — `src/pages/AdminEngagement.tsx`
 
-### Validação
-- Após deploy, abrir `/admin/engajamento` com filtro "Hoje" e clicar **Atualizar** (forceRefresh): "Finalizaram Pagamento" deve passar de 0 → ≥1 (Caiane).
-- Conferir que o `Funil de Trial` (card separado, baseado em `profiles.trial_started_at`) **não foi tocado** — continua só cartão, como pretendido.
+Nenhuma mudança lógica. Confirmar que o `??` em `metrics.checkoutCreatedTotalInPeriod ?? metrics.checkoutCreatedInPeriod` está nos pontos certos (já está). Após o deploy do backend + refresh com "Atualizar", o card deve mostrar **5 criados / 2 finalizados** para 29/05.
+
+## Validação
+
+1. Após deploy, abrir `/admin/engajamento` com filtro "Hoje" e clicar **Atualizar**.
+2. No log da edge function, conferir nova linha `💠 Asaas/PIX: checkout(2→1)`.
+3. UI deve passar a mostrar:
+   - Clicaram para Pagar: **5**
+   - Finalizaram Pagamento: **2** (elaine cartão + Caiane PIX)
+   - Taxa: 40%
 
 ## Fora de escopo
-- Não mexer no funil de trial, MRR, churn, ou em qualquer outra aba.
-- Não alterar o `RecoveryInbox` nem o fluxo de Sessões/Aura.
-- Não criar nova tabela nem migration — só leitura de `asaas_payments` que já existe.
+
+- Trial funnel, MRR, churn, RecoveryInbox: intocados.
+- Nenhuma migration nova.
