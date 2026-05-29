@@ -1229,6 +1229,8 @@ Deno.serve(async (req) => {
     let asaasActiveUsersCount = 0;
     let asaasCheckoutCreatedInPeriod = 0;
     let asaasCheckoutConfirmedInPeriod = 0;
+    let asaasCheckoutCreatedAllTime = 0;
+    let asaasCheckoutConfirmedAllTime = 0;
     let asaasChurnCount = 0;
     const PAID_STATUSES = ['CONFIRMED', 'RECEIVED'];
     const E2E_EMAIL_PATTERN = 'e2e+%@olaaura.com.br';
@@ -1295,6 +1297,23 @@ Deno.serve(async (req) => {
         asaasCheckoutCreatedInPeriod++;
         if (PAID_STATUSES.includes(p.status as string)) asaasCheckoutConfirmedInPeriod++;
       }
+
+      // 2b) Funil all-time PIX (dedup por email pra alinhar com cartão)
+      const { data: asaasAllTime } = await supabase
+        .from('asaas_payments')
+        .select('status, customer_email')
+        .not('customer_email', 'ilike', E2E_EMAIL_PATTERN);
+
+      const pixEmailsCreated = new Set<string>();
+      const pixEmailsConfirmed = new Set<string>();
+      for (const p of asaasAllTime || []) {
+        const em = (p.customer_email as string | null) || '';
+        if (!em) continue;
+        pixEmailsCreated.add(em);
+        if (PAID_STATUSES.includes(p.status as string)) pixEmailsConfirmed.add(em);
+      }
+      asaasCheckoutCreatedAllTime = pixEmailsCreated.size;
+      asaasCheckoutConfirmedAllTime = pixEmailsConfirmed.size;
 
       // 3) Churn PIX: profile com asaas_customer_id, sem pagamento confirmado nos últimos 35d
       const { data: asaasProfiles } = await supabase
