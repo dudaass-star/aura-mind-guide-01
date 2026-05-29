@@ -182,7 +182,8 @@ export default function AdminUsers() {
       query = query.eq('pending_first_session_invite', true).gte('first_session_invite_attempts', 1);
     } else if (d0Filter === 'recusado') {
       query = query.eq('pending_first_session_invite', false).eq('needs_schedule_setup', true);
-    } else if (d0Filter === 'concluido') {
+    } else if (d0Filter === 'concluido' || d0Filter === 'agendado' || d0Filter === 'sem_dados') {
+      // Server: filtra o bucket amplo; refinamento real é client-side via sessionStats
       query = query.eq('pending_first_session_invite', false).eq('needs_schedule_setup', false);
     }
 
@@ -227,6 +228,10 @@ export default function AdminUsers() {
           if (sessionFilter === 'low_rating') return !!r && r.avg <= 3;
           return true;
         });
+      }
+      // Refinamento client-side do filtro D0 quando dependente de sessions
+      if (d0Filter === 'concluido' || d0Filter === 'agendado' || d0Filter === 'sem_dados') {
+        finalList = finalList.filter(p => getD0Status(p, statsMap[p.user_id]) === d0Filter);
       }
       setProfiles(finalList);
     }
