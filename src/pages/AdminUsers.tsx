@@ -582,10 +582,10 @@ export default function AdminUsers() {
             ) : profiles.length === 0 ? (
               <TableRow><TableCell colSpan={11} className="text-center py-8 text-muted-foreground">Nenhum usuário encontrado</TableCell></TableRow>
             ) : profiles.map((p) => {
-              const d0 = getD0Status(p);
+              const s = sessionStats[p.user_id];
+              const d0 = getD0Status(p, s);
               const attempts = p.first_session_invite_attempts ?? 0;
               const r = ratings[p.user_id];
-              const s = sessionStats[p.user_id];
               const done = s?.done ?? 0;
               const abandoned = s?.abandoned ?? 0;
               const noshow = s?.noshow ?? 0;
