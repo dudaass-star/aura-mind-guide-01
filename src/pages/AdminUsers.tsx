@@ -705,7 +705,7 @@ export default function AdminUsers() {
                 <p>Sessões usadas: {editProfile.sessions_used_this_month ?? 0}</p>
                 <p>Fase trial: {editProfile.trial_phase || '—'}</p>
                 <p>
-                  D0: <span className="font-medium text-foreground">{d0Labels[getD0Status(editProfile)]}</span>
+                  D0: <span className="font-medium text-foreground">{d0Labels[getD0Status(editProfile, sessionStats[editProfile.user_id])]}</span>
                   {' '}· tentativas: {editProfile.first_session_invite_attempts ?? 0}
                   {' '}· pending: {String(editProfile.pending_first_session_invite ?? false)}
                   {' '}· setup: {String(editProfile.needs_schedule_setup ?? false)}
@@ -761,7 +761,7 @@ export default function AdminUsers() {
                 <RotateCcw className="h-4 w-4 mr-2" /> Resetar sessões do mês
               </Button>
 
-              {getD0Status(editProfile) !== 'pendente' && (editProfile.first_session_invite_attempts ?? 0) < 3 && (
+              {getD0Status(editProfile, sessionStats[editProfile.user_id]) !== 'pendente' && (editProfile.first_session_invite_attempts ?? 0) < 3 && (
                 <Button variant="outline" size="sm" className="w-full" onClick={handleRearmD0} disabled={saving}>
                   <RefreshCw className="h-4 w-4 mr-2" /> Rearmar convite D0
                 </Button>
