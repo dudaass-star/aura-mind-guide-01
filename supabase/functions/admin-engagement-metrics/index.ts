@@ -165,7 +165,7 @@ Deno.serve(async (req) => {
     console.log(`📊 Period: ${periodStart} → ${periodEnd} (BRT-aligned)`);
 
     // ⚡ Cache check
-    const cacheKey = `${dateFrom || defaultFrom}:${dateTo || defaultTo}`;
+    const cacheKey = `v2:${dateFrom || defaultFrom}:${dateTo || defaultTo}`;
     if (!forceRefresh) {
       const cached = getCached(cacheKey);
       if (cached) {
@@ -1286,17 +1286,36 @@ Deno.serve(async (req) => {
       }
 
       // 2) Funil de checkout PIX no período
+      // Criados: conta por created_at (intenção de pagar via PIX no período)
       const { data: asaasCreatedInPeriod } = await supabase
         .from('asaas_payments')
-        .select('id, status, customer_email')
+        .select('id, customer_email')
         .gte('created_at', periodStart)
         .lt('created_at', periodEnd)
         .not('customer_email', 'ilike', E2E_EMAIL_PATTERN);
 
+      const pixCreatedEmails = new Set<string>();
       for (const p of asaasCreatedInPeriod || []) {
-        asaasCheckoutCreatedInPeriod++;
-        if (PAID_STATUSES.includes(p.status as string)) asaasCheckoutConfirmedInPeriod++;
+        const em = (p.customer_email as string | null) || `__nokey_${p.id}`;
+        pixCreatedEmails.add(em);
       }
+      asaasCheckoutCreatedInPeriod = pixCreatedEmails.size;
+
+      // Confirmados: conta por paid_at (dinheiro entrou no período, mesmo se PIX criado antes)
+      const { data: asaasConfirmedInPeriod } = await supabase
+        .from('asaas_payments')
+        .select('id, customer_email, paid_at, status')
+        .in('status', PAID_STATUSES)
+        .gte('paid_at', periodStart)
+        .lt('paid_at', periodEnd)
+        .not('customer_email', 'ilike', E2E_EMAIL_PATTERN);
+
+      const pixConfirmedEmails = new Set<string>();
+      for (const p of asaasConfirmedInPeriod || []) {
+        const em = (p.customer_email as string | null) || `__nokey_${p.id}`;
+        pixConfirmedEmails.add(em);
+      }
+      asaasCheckoutConfirmedInPeriod = pixConfirmedEmails.size;
 
       // 2b) Funil all-time PIX (dedup por email pra alinhar com cartão)
       const { data: asaasAllTime } = await supabase
