@@ -123,6 +123,31 @@ serve(async (req) => {
             // Skip own comments
             if (val.from?.id === igAccountId) continue;
 
+            // Skip replies to comments de terceiros — só respondemos top-level
+            // ou replies a comentários nossos. Evita invadir conversa alheia.
+            const parentId = val.parent_id;
+            if (parentId) {
+              try {
+                const token = config.meta_access_token || Deno.env.get("META_ACCESS_TOKEN") || "";
+                const parentResp = await fetch(
+                  `https://graph.facebook.com/v21.0/${parentId}?fields=from&access_token=${encodeURIComponent(token)}`
+                );
+                if (!parentResp.ok) {
+                  console.log(`Skip reply: falha ao verificar autor do pai (parent=${parentId}, status=${parentResp.status})`);
+                  continue;
+                }
+                const parentData = await parentResp.json();
+                const parentAuthorId = parentData?.from?.id;
+                if (!parentAuthorId || parentAuthorId !== igAccountId) {
+                  console.log(`Skip reply a comentário de terceiro (parent=${parentId}, author=${parentAuthorId})`);
+                  continue;
+                }
+              } catch (e) {
+                console.log(`Skip reply: erro ao verificar pai (parent=${parentId})`, e);
+                continue;
+              }
+            }
+
             const interaction = {
               ig_user_id: val.from?.id || "unknown",
               ig_username: val.from?.username || null,
