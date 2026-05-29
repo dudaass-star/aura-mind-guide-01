@@ -531,7 +531,9 @@ export default function AdminUsers() {
             <SelectItem value="pendente">D0: Pendente</SelectItem>
             <SelectItem value="tentando">D0: Tentando</SelectItem>
             <SelectItem value="recusado">D0: Recusou→Setup</SelectItem>
-            <SelectItem value="concluido">D0: Concluído</SelectItem>
+            <SelectItem value="agendado">D0: Agendado</SelectItem>
+            <SelectItem value="concluido">D0: Fez 1ª sessão</SelectItem>
+            <SelectItem value="sem_dados">D0: Sem dados</SelectItem>
           </SelectContent>
         </Select>
         <Select value={sessionFilter} onValueChange={(v: any) => { setSessionFilter(v); setPage(0); }}>
