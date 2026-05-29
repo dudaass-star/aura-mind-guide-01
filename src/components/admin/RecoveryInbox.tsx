@@ -78,13 +78,18 @@ export default function RecoveryInbox({ heightClass = 'h-[calc(100vh-180px)]' }:
     const { data, error } = await supabase
       .from('recovery_conversations')
       .select('*')
-      .order('last_inbound_at', { ascending: false, nullsFirst: false })
       .limit(200);
     if (error) {
       console.error(error);
       toast({ title: 'Erro ao carregar conversas', variant: 'destructive' });
     } else {
-      setConversations(data || []);
+      const ts = (v: string | null) => (v ? new Date(v).getTime() : 0);
+      const sorted = (data || []).slice().sort((a: any, b: any) => {
+        const ta = Math.max(ts(a.last_inbound_at), ts(a.last_outbound_at));
+        const tb = Math.max(ts(b.last_inbound_at), ts(b.last_outbound_at));
+        return tb - ta;
+      });
+      setConversations(sorted);
     }
     setLoadingList(false);
   };
@@ -231,6 +236,12 @@ export default function RecoveryInbox({ heightClass = 'h-[calc(100vh-180px)]' }:
               new Date(conv.last_inbound_at) > new Date(conv.last_admin_read_at)
             );
             const active = selectedPhone === conv.phone;
+            const inboundTs = conv.last_inbound_at ? new Date(conv.last_inbound_at).getTime() : 0;
+            const outboundTs = conv.last_outbound_at ? new Date(conv.last_outbound_at).getTime() : 0;
+            const lastIsInbound = inboundTs >= outboundTs && inboundTs > 0;
+            const lastActivityAt = lastIsInbound
+              ? conv.last_inbound_at
+              : (conv.last_outbound_at || conv.last_inbound_at);
             return (
               <button
                 key={conv.phone}
@@ -249,9 +260,10 @@ export default function RecoveryInbox({ heightClass = 'h-[calc(100vh-180px)]' }:
                 <p className="text-xs text-muted-foreground truncate mt-1">
                   {conv.last_message_preview || '—'}
                 </p>
-                {conv.last_inbound_at && (
+                {lastActivityAt && (
                   <p className="text-[10px] text-muted-foreground mt-1">
-                    {formatDistanceToNow(new Date(conv.last_inbound_at), { addSuffix: true, locale: ptBR })}
+                    {lastIsInbound ? 'respondeu ' : 'enviado '}
+                    {formatDistanceToNow(new Date(lastActivityAt), { addSuffix: true, locale: ptBR })}
                   </p>
                 )}
               </button>
