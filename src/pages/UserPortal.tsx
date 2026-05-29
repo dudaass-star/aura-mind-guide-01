@@ -196,6 +196,15 @@ const UserPortal = () => {
           </a>
         </footer>
       </div>
+
+      {userId && (
+        <ChangePlanDialog
+          open={changePlanOpen}
+          onOpenChange={setChangePlanOpen}
+          userId={userId}
+          currentPlan={(profile?.plan as "essencial" | "direcao" | "transformacao" | null) ?? null}
+        />
+      )}
     </>
   );
 };
