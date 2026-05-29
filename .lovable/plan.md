@@ -1,61 +1,41 @@
+
 ## Problema
+O card **Funil de Checkout (período)** em `/admin/engajamento` só conta sessões de cartão (tabela `checkout_sessions`). Vendas via PIX (tabela `asaas_payments`) ficam invisíveis no funil, embora já sejam computadas separadamente para MRR.
 
-No painel `/admin/mensagens?tab=recuperacao` (componente `RecoveryInbox`), conversas que receberam template/mensagem outbound mas o usuário ainda não respondeu parecem não aparecer. Na verdade aparecem, mas ficam no fim da lista porque a ordenação considera apenas `last_inbound_at`. Quando um novo template é enviado, a conversa não sobe — o que dá sensação de "sumiço".
+Hoje (29/05) temos 1 venda PIX confirmada (Caiane Malta Vitalli, R$ 29,90 Essencial, `RECEIVED` 03:45) que não aparece no contador "Finalizaram Pagamento".
 
-Os dados estão íntegros: 49 conversas em `recovery_conversations` (42 sem inbound, 7 com), todas registradas corretamente pela função de envio.
+## Solução
+Unificar cartão + PIX no mesmo funil, mantendo a mesma UI. Sem mudar nenhuma outra métrica.
 
-## Mudança
+### Backend — `supabase/functions/admin-engagement-metrics/index.ts`
 
-Ajustar apenas o componente `src/components/admin/RecoveryInbox.tsx`:
+1. O bloco PIX (linhas ~1286-1297) já calcula `asaasCheckoutCreatedInPeriod` e `asaasCheckoutConfirmedInPeriod` no período. Mover esse cálculo para fora do bloco condicional de MRR (ou garantir que sempre rode quando houver `dateFrom/dateTo`), pois hoje depende do mesmo guard de Asaas.
 
-1. **Ordenação por última atividade (inbound OU outbound)**
-   - Substituir `.order('last_inbound_at', { ascending: false, nullsFirst: false })` por ordenação combinada: ordenar localmente após o fetch usando `GREATEST(last_inbound_at, last_outbound_at)`.
-   - Buscar todas as 200 conversas e ordenar no client por `Math.max(last_inbound_at, last_outbound_at)`.
+2. Adicionar também o equivalente **all-time** (já não existe):
+   - `asaasCheckoutCreatedAllTime`: count distinto de `asaas_payments` (todos os tempos).
+   - `asaasCheckoutCompletedAllTime`: idem com `status IN ('RECEIVED','CONFIRMED','RECEIVED_IN_CASH')`.
+   - Deduplicar por `customer_phone` (igual ao que já é feito para cartão via `uniquePhonesCreated`), pra evitar inflar quando o mesmo usuário gera várias cobranças PIX recorrentes.
 
-2. **Timestamp exibido no item da lista**
-   - Hoje mostra `formatDistanceToNow(last_inbound_at)` só quando há inbound.
-   - Passar a mostrar sempre o timestamp do evento mais recente (inbound ou outbound), com um pequeno indicador textual quando for outbound — ex: prefixo "enviado " para outbound e "respondeu " para inbound (em pt-BR, usando `date-fns/locale/ptBR`).
+3. Somar tudo no retorno:
+   - `checkoutCreatedInPeriod = cartão + pix`
+   - `checkoutCompletedInPeriod = cartão + pix`
+   - `checkoutCreatedAllTime = cartão + pix`
+   - `checkoutCompletedAllTime = cartão + pix`
+   - Recalcular `checkoutDropoffInPeriod` e `checkoutCompletionRate` em cima dos totais já combinados.
 
-3. **Realtime também para outbound**
-   - O canal `recovery_conversations_admin` já escuta `*` em `recovery_conversations`, então um upsert de outbound já dispara `fetchList`. Verificar que isso é suficiente (é — a função de envio faz upsert atualizando `last_outbound_at`).
+4. Manter o cache de 5 min e a invalidação por `forceRefresh` como estão. A chave de cache não muda.
 
-4. **Sem mudanças em**: badge "novo" (continua só para inbound não lido — semântica correta), envio de resposta, layout, RLS, edge functions ou schema.
+### Frontend — `src/pages/AdminEngagement.tsx`
 
-## Detalhes técnicos
+Nenhuma mudança de componente necessária — `FunnelStep` continua igual. Os campos exibidos (`checkoutCreatedInPeriod`, `checkoutCompletedInPeriod`, `checkoutDropoffInPeriod`, `checkoutCompletionRate`, `checkoutCreatedAllTime`, `checkoutCompletedAllTime`) passam a refletir cartão + PIX automaticamente.
 
-Arquivo único: `src/components/admin/RecoveryInbox.tsx`.
+Opcional (se quiser deixar transparente pro admin): mudar o subtítulo do card de `"All-time: X criados, Y finalizados"` para `"All-time: X criados, Y finalizados (cartão + PIX)"`. Pequena mudança textual no JSX da linha ~1492.
 
-```ts
-// fetchList: remover .order, manter limit 200
-const { data } = await supabase
-  .from('recovery_conversations')
-  .select('*')
-  .limit(200);
+### Validação
+- Após deploy, abrir `/admin/engajamento` com filtro "Hoje" e clicar **Atualizar** (forceRefresh): "Finalizaram Pagamento" deve passar de 0 → ≥1 (Caiane).
+- Conferir que o `Funil de Trial` (card separado, baseado em `profiles.trial_started_at`) **não foi tocado** — continua só cartão, como pretendido.
 
-// Ordenar localmente:
-const sorted = (data || []).sort((a, b) => {
-  const ta = Math.max(
-    a.last_inbound_at ? new Date(a.last_inbound_at).getTime() : 0,
-    a.last_outbound_at ? new Date(a.last_outbound_at).getTime() : 0,
-  );
-  const tb = Math.max(
-    b.last_inbound_at ? new Date(b.last_inbound_at).getTime() : 0,
-    b.last_outbound_at ? new Date(b.last_outbound_at).getTime() : 0,
-  );
-  return tb - ta;
-});
-setConversations(sorted);
-```
-
-No render do item da lista, derivar `lastActivityAt` e `lastDirection` (in/out) e exibir algo como:
-
-```
-respondeu há 2 horas      ← se inbound mais recente
-enviado há 1 dia          ← se outbound mais recente
-```
-
-## Resultado esperado
-
-- Todas as conversas que receberam mensagens (com ou sem resposta) aparecem listadas.
-- Lista ordenada por última atividade real (envio do template ou resposta), então novos envios sobem ao topo.
-- Conversas sem resposta ficam visíveis e identificáveis pelo prefixo "enviado".
+## Fora de escopo
+- Não mexer no funil de trial, MRR, churn, ou em qualquer outra aba.
+- Não alterar o `RecoveryInbox` nem o fluxo de Sessões/Aura.
+- Não criar nova tabela nem migration — só leitura de `asaas_payments` que já existe.

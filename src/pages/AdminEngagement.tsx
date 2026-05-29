@@ -78,6 +78,11 @@ interface Metrics {
   checkoutCompletionRate: number;
   checkoutCreatedAllTime: number;
   checkoutCompletedAllTime: number;
+  // Checkout funnel — totais (cartão + PIX)
+  checkoutCreatedTotalInPeriod?: number;
+  checkoutCompletedTotalInPeriod?: number;
+  checkoutCreatedTotalAllTime?: number;
+  checkoutCompletedTotalAllTime?: number;
   // Weekly Plans (Stripe)
   totalWeeklyPlans: number;
   weeklyPlansInPeriod: number;
@@ -1492,23 +1497,31 @@ export default function AdminEngagement() {
                       Funil de Checkout (período)
                     </CardTitle>
                     <p className="text-xs text-muted-foreground">
-                      {periodLabel} — All-time: {metrics?.checkoutCreatedAllTime ?? 0} criados, {metrics?.checkoutCompletedAllTime ?? 0} finalizados
+                      {periodLabel} — All-time: {metrics?.checkoutCreatedTotalAllTime ?? metrics?.checkoutCreatedAllTime ?? 0} criados, {metrics?.checkoutCompletedTotalAllTime ?? metrics?.checkoutCompletedAllTime ?? 0} finalizados (cartão + PIX)
                     </p>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     {metrics && (
-                      <>
-                        <FunnelStep label="Clicaram para Pagar (sessão criada)" value={metrics.checkoutCreatedInPeriod} total={metrics.checkoutCreatedInPeriod} color="bg-blue-500" />
-                        <FunnelStep label="Finalizaram Pagamento" value={metrics.checkoutCompletedInPeriod} total={metrics.checkoutCreatedInPeriod} color="bg-green-500" />
-                        <div className="flex justify-between text-sm pt-2 border-t border-border">
-                          <span className="text-muted-foreground">Desistiram no pagamento</span>
-                          <span className="font-semibold text-destructive">{metrics.checkoutDropoffInPeriod} <span className="text-muted-foreground font-normal">({metrics.checkoutCreatedInPeriod > 0 ? Math.round(metrics.checkoutDropoffInPeriod / metrics.checkoutCreatedInPeriod * 100) : 0}%)</span></span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Taxa de finalização</span>
-                          <span className="font-semibold text-foreground">{metrics.checkoutCompletionRate}%</span>
-                        </div>
-                      </>
+                      (() => {
+                        const created = metrics.checkoutCreatedTotalInPeriod ?? metrics.checkoutCreatedInPeriod;
+                        const completed = metrics.checkoutCompletedTotalInPeriod ?? metrics.checkoutCompletedInPeriod;
+                        const dropoff = Math.max(0, created - completed);
+                        const rate = created > 0 ? Math.round((completed / created) * 1000) / 10 : 0;
+                        return (
+                          <>
+                            <FunnelStep label="Clicaram para Pagar (sessão criada)" value={created} total={created} color="bg-blue-500" />
+                            <FunnelStep label="Finalizaram Pagamento" value={completed} total={created} color="bg-green-500" />
+                            <div className="flex justify-between text-sm pt-2 border-t border-border">
+                              <span className="text-muted-foreground">Desistiram no pagamento</span>
+                              <span className="font-semibold text-destructive">{dropoff} <span className="text-muted-foreground font-normal">({created > 0 ? Math.round((dropoff / created) * 100) : 0}%)</span></span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">Taxa de finalização</span>
+                              <span className="font-semibold text-foreground">{rate}%</span>
+                            </div>
+                          </>
+                        );
+                      })()
                     )}
                   </CardContent>
                 </Card>
