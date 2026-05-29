@@ -422,11 +422,22 @@ export default function AdminEngagement() {
       }
       const uniqueSessions = Array.from(byKey.values());
 
-      const enriched = uniqueSessions.map(s => ({
-        ...s,
-        converted: (s.email && completedEmails.has(s.email.toLowerCase())) || completedPhones.has(s.phone),
-        attempt_status: attemptMap.get(s.id) || null,
-      }));
+      const enriched = uniqueSessions.map(s => {
+        // Só conta como "Converteu" se existe um checkout completed
+        // ESTRITAMENTE POSTERIOR ao abandono desta linha. Sem essa checagem,
+        // ex-clientes que pagaram no passado e abandonaram uma nova tentativa
+        // herdam o badge "Converteu" indevidamente.
+        const abandonedAt = new Date(s.created_at).getTime();
+        const latestCompletedAt = Math.max(
+          s.email ? (completedAtByEmail.get(s.email.toLowerCase()) || 0) : 0,
+          s.phone ? (completedAtByPhone.get(s.phone) || 0) : 0,
+        );
+        return {
+          ...s,
+          converted: latestCompletedAt > abandonedAt,
+          attempt_status: attemptMap.get(s.id) || null,
+        };
+      });
       setRecoverySessions(enriched as RecoverySession[]);
 
       // Stats WhatsApp: únicos = sessões com algum estágio enviado;
