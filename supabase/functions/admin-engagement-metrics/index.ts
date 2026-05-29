@@ -1504,6 +1504,10 @@ Deno.serve(async (req) => {
       asaasCheckoutConfirmedInPeriod,
       checkoutCreatedTotalInPeriod: (checkoutCreatedInPeriod || 0) + asaasCheckoutCreatedInPeriod,
       checkoutCompletedTotalInPeriod: (checkoutCompletedInPeriod || 0) + asaasCheckoutConfirmedInPeriod,
+      asaasCheckoutCreatedAllTime,
+      asaasCheckoutConfirmedAllTime,
+      checkoutCreatedTotalAllTime: (checkoutCreatedAllTime || 0) + asaasCheckoutCreatedAllTime,
+      checkoutCompletedTotalAllTime: (checkoutCompletedAllTime || 0) + asaasCheckoutConfirmedAllTime,
       // Billing
       billingSuccessInPeriod,
       billingTotalInPeriod,
