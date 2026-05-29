@@ -68,15 +68,22 @@ const planColors: Record<string, string> = {
   trial: 'bg-blue-100 text-blue-800 border-blue-200',
 };
 
-type D0Status = 'pendente' | 'tentando' | 'recusado' | 'concluido';
+type D0Status = 'pendente' | 'tentando' | 'recusado' | 'agendado' | 'concluido' | 'sem_dados';
 
-function getD0Status(p: Profile): D0Status {
+function getD0Status(p: Profile, s?: SessionStats): D0Status {
   const pending = p.pending_first_session_invite;
   const attempts = p.first_session_invite_attempts ?? 0;
   const needsSetup = p.needs_schedule_setup;
   if (pending && attempts === 0) return 'pendente';
   if (pending && attempts >= 1) return 'tentando';
   if (!pending && needsSetup) return 'recusado';
+  // Profile não distingue mais — usa sessions
+  if (s) {
+    if (s.done >= 1) return 'concluido';
+    if (s.upcoming >= 1 || s.abandoned >= 1 || s.noshow >= 1) return 'agendado';
+    return 'sem_dados';
+  }
+  // Sem dados de sessões carregados ainda — fallback conservador
   return 'concluido';
 }
 
@@ -84,14 +91,18 @@ const d0Labels: Record<D0Status, string> = {
   pendente: 'Pendente',
   tentando: 'Tentando',
   recusado: 'Recusou→Setup',
-  concluido: 'Concluído',
+  agendado: 'Agendado',
+  concluido: 'Fez 1ª sessão',
+  sem_dados: 'Sem dados',
 };
 
 const d0Colors: Record<D0Status, string> = {
   pendente: 'bg-yellow-100 text-yellow-800 border-yellow-200',
   tentando: 'bg-blue-100 text-blue-800 border-blue-200',
   recusado: 'bg-orange-100 text-orange-800 border-orange-200',
+  agendado: 'bg-indigo-100 text-indigo-800 border-indigo-200',
   concluido: 'bg-green-100 text-green-800 border-green-200',
+  sem_dados: 'bg-gray-100 text-gray-700 border-gray-200',
 };
 
 export default function AdminUsers() {
@@ -171,7 +182,8 @@ export default function AdminUsers() {
       query = query.eq('pending_first_session_invite', true).gte('first_session_invite_attempts', 1);
     } else if (d0Filter === 'recusado') {
       query = query.eq('pending_first_session_invite', false).eq('needs_schedule_setup', true);
-    } else if (d0Filter === 'concluido') {
+    } else if (d0Filter === 'concluido' || d0Filter === 'agendado' || d0Filter === 'sem_dados') {
+      // Server: filtra o bucket amplo; refinamento real é client-side via sessionStats
       query = query.eq('pending_first_session_invite', false).eq('needs_schedule_setup', false);
     }
 
@@ -216,6 +228,10 @@ export default function AdminUsers() {
           if (sessionFilter === 'low_rating') return !!r && r.avg <= 3;
           return true;
         });
+      }
+      // Refinamento client-side do filtro D0 quando dependente de sessions
+      if (d0Filter === 'concluido' || d0Filter === 'agendado' || d0Filter === 'sem_dados') {
+        finalList = finalList.filter(p => getD0Status(p, statsMap[p.user_id]) === d0Filter);
       }
       setProfiles(finalList);
     }
@@ -515,7 +531,9 @@ export default function AdminUsers() {
             <SelectItem value="pendente">D0: Pendente</SelectItem>
             <SelectItem value="tentando">D0: Tentando</SelectItem>
             <SelectItem value="recusado">D0: Recusou→Setup</SelectItem>
-            <SelectItem value="concluido">D0: Concluído</SelectItem>
+            <SelectItem value="agendado">D0: Agendado</SelectItem>
+            <SelectItem value="concluido">D0: Fez 1ª sessão</SelectItem>
+            <SelectItem value="sem_dados">D0: Sem dados</SelectItem>
           </SelectContent>
         </Select>
         <Select value={sessionFilter} onValueChange={(v: any) => { setSessionFilter(v); setPage(0); }}>
@@ -564,10 +582,10 @@ export default function AdminUsers() {
             ) : profiles.length === 0 ? (
               <TableRow><TableCell colSpan={11} className="text-center py-8 text-muted-foreground">Nenhum usuário encontrado</TableCell></TableRow>
             ) : profiles.map((p) => {
-              const d0 = getD0Status(p);
+              const s = sessionStats[p.user_id];
+              const d0 = getD0Status(p, s);
               const attempts = p.first_session_invite_attempts ?? 0;
               const r = ratings[p.user_id];
-              const s = sessionStats[p.user_id];
               const done = s?.done ?? 0;
               const abandoned = s?.abandoned ?? 0;
               const noshow = s?.noshow ?? 0;
@@ -687,7 +705,7 @@ export default function AdminUsers() {
                 <p>Sessões usadas: {editProfile.sessions_used_this_month ?? 0}</p>
                 <p>Fase trial: {editProfile.trial_phase || '—'}</p>
                 <p>
-                  D0: <span className="font-medium text-foreground">{d0Labels[getD0Status(editProfile)]}</span>
+                  D0: <span className="font-medium text-foreground">{d0Labels[getD0Status(editProfile, sessionStats[editProfile.user_id])]}</span>
                   {' '}· tentativas: {editProfile.first_session_invite_attempts ?? 0}
                   {' '}· pending: {String(editProfile.pending_first_session_invite ?? false)}
                   {' '}· setup: {String(editProfile.needs_schedule_setup ?? false)}
@@ -743,7 +761,7 @@ export default function AdminUsers() {
                 <RotateCcw className="h-4 w-4 mr-2" /> Resetar sessões do mês
               </Button>
 
-              {getD0Status(editProfile) !== 'pendente' && (editProfile.first_session_invite_attempts ?? 0) < 3 && (
+              {getD0Status(editProfile, sessionStats[editProfile.user_id]) !== 'pendente' && (editProfile.first_session_invite_attempts ?? 0) < 3 && (
                 <Button variant="outline" size="sm" className="w-full" onClick={handleRearmD0} disabled={saving}>
                   <RefreshCw className="h-4 w-4 mr-2" /> Rearmar convite D0
                 </Button>
