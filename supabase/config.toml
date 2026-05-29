@@ -29,6 +29,8 @@ project_id = "uhyogifgmutfmbyhzzyo"
     verify_jwt = false
   [functions.cancel-subscription]
     verify_jwt = false
+  [functions.change-subscription-plan]
+    verify_jwt = false
   [functions.check-instance-health]
     verify_jwt = false
   [functions.choose-next-journey]
