@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
-import { Sparkles, Heart, Trophy, Calendar } from "lucide-react";
+import { Sparkles, Heart, Trophy, Calendar, Share2 } from "lucide-react";
 import { SectionHeader, EmptyState, PortalLoadingInline } from "./shared";
+import { useToast } from "@/hooks/use-toast";
 
 type TimelineItem = {
   id: string;
@@ -145,6 +146,27 @@ function TimelineCard({ item, idx }: { item: TimelineItem; idx: number }) {
         year: "numeric",
       })
     : "";
+  const { toast } = useToast();
+
+  const handleShare = async () => {
+    const text = item.extra ? `${item.text}\n\n"${item.extra}"` : item.text;
+    const payload = `${text}\n\n— da minha jornada com a Aura`;
+    try {
+      if (typeof navigator !== "undefined" && (navigator as any).share) {
+        await (navigator as any).share({ text: payload });
+        return;
+      }
+    } catch {
+      // segue pro fallback
+    }
+    try {
+      await navigator.clipboard.writeText(payload);
+      toast({ description: "Insight copiado pra você compartilhar." });
+    } catch {
+      toast({ description: "Não consegui copiar. Tenta de novo." });
+    }
+  };
+
   return (
     <div
       className="rounded-2xl border border-border bg-card p-5 space-y-2 shadow-sm animate-fade-up"
@@ -162,6 +184,14 @@ function TimelineCard({ item, idx }: { item: TimelineItem; idx: number }) {
           {item.extra}
         </p>
       )}
+      <div className="flex justify-end pt-1">
+        <button
+          onClick={handleShare}
+          className="inline-flex items-center gap-1.5 text-xs font-['Nunito'] text-muted-foreground hover:text-accent transition-colors"
+        >
+          <Share2 size={12} /> Compartilhar
+        </button>
+      </div>
     </div>
   );
 }
