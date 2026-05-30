@@ -21,6 +21,9 @@ const corsHeaders = {
 // Prompt clínico de extração — migrado tal qual do aura-agent (linhas ~6546-6605
 // pré-refactor) para preservar a lógica clínica de identificação de aceite
 // minimalista ("💜", "ok", "topo") e diferenciação entre compromisso vs insight.
+// Fase 2 do redesign /meu-espaco: também extrai theme_label, reframe_text,
+// closure_type e closure_text para alimentar a aba "Hoje" (card "O que ficou
+// da última sessão") e o histórico em "Sessões".
 const EXTRACTION_SYSTEM_PROMPT = `Você é um assistente especializado em analisar o FECHAMENTO de sessões de mentoria emocional (Logoterapia).
 Sua missão é extrair fielmente o que foi acordado, sem inventar nada.
 
@@ -66,6 +69,33 @@ AURA: "Por hoje, nosso tempo se encerrou. Fico orgulhosa do que você construiu 
 → commitments: []  (válido: nem toda sessão precisa gerar compromisso prático)
 
 ──────────────────────────────────────────
+CARDÁPIO DE FECHAMENTO (identificar UM formato):
+──────────────────────────────────────────
+Toda sessão termina com UM dos 7 formatos abaixo. Identifique qual a AURA usou no
+fechamento (últimas mensagens dela). Se não der pra identificar com clareza, use null.
+
+- "tese": a AURA fechou com uma afirmação/leitura sintética do que está em jogo.
+  Ex.: "O que tá em jogo aqui é menos sobre ele e mais sobre você se permitir descansar."
+- "encruzilhada": a AURA explicitou duas direções/caminhos possíveis, sem escolher.
+  Ex.: "De um lado, você cuida. Do outro, você se cobra. Os dois lados são reais."
+- "leitura": a AURA devolveu uma leitura do que percebeu na pessoa (espelho).
+  Ex.: "O que eu vejo é uma pessoa que aprendeu a ser forte cedo demais."
+- "experimento": a AURA propôs uma experiência prática pra fazer entre sessões.
+  Ex.: "Topa testar essa semana: toda vez que sentir, anote uma palavra."
+- "pergunta-pra-carregar": a AURA deixou UMA pergunta forte pra a pessoa carregar.
+  Ex.: "Carrega isso essa semana: o que essa raiva tá protegendo?"
+- "escolha-binaria": a AURA colocou uma escolha clara entre duas opções concretas.
+  Ex.: "Você quer continuar tentando ou quer começar a se preparar pra soltar?"
+- "micro-passo": a AURA propôs UMA ação pequena e concreta (exceção, não padrão).
+  Ex.: "Antes de dormir hoje, escreva uma frase pra você mesma."
+
+REGRAS:
+- closure_text = a frase/pergunta/proposta literal da AURA que fecha o ciclo (até 240 chars).
+- closure_type = qual dos 7 formatos. null se ambíguo ou ausente.
+- reframe_text = a síntese do reframe da sessão (a virada de perspectiva que a AURA devolveu). Pode ser null se a sessão foi puramente exploratória.
+- theme_label = 2-5 palavras nomeando o tema central (ex.: "limites com a mãe", "medo de errar no trabalho"). Sem ponto final.
+
+──────────────────────────────────────────
 REGRAS GERAIS:
 ──────────────────────────────────────────
 - summary: 2-3 frases sobre o tema central e a virada que aconteceu na sessão
@@ -102,8 +132,42 @@ const EXTRACTION_TOOL = {
           },
           description: "Compromissos práticos assumidos (pode ser vazio se sessão foi puramente emocional)",
         },
+        theme_label: {
+          type: ["string", "null"],
+          description: "2-5 palavras nomeando o tema central da sessão. Ex.: 'limites com a mãe'. null se ambíguo.",
+        },
+        reframe_text: {
+          type: ["string", "null"],
+          description: "Síntese da virada de perspectiva (reframe) entregue pela AURA. null se a sessão foi puramente exploratória.",
+        },
+        closure_type: {
+          type: ["string", "null"],
+          enum: [
+            "tese",
+            "encruzilhada",
+            "leitura",
+            "experimento",
+            "pergunta-pra-carregar",
+            "escolha-binaria",
+            "micro-passo",
+            null,
+          ],
+          description: "Qual dos 7 formatos do Cardápio de Fechamento a AURA usou. null se ambíguo/ausente.",
+        },
+        closure_text: {
+          type: ["string", "null"],
+          description: "Frase/pergunta/proposta literal da AURA que fecha o ciclo (até 240 caracteres). null se não houve fechamento claro.",
+        },
       },
-      required: ["summary", "key_insights", "commitments"],
+      required: [
+        "summary",
+        "key_insights",
+        "commitments",
+        "theme_label",
+        "reframe_text",
+        "closure_type",
+        "closure_text",
+      ],
       additionalProperties: false,
     },
   },
@@ -113,6 +177,10 @@ interface ExtractionResult {
   summary: string;
   key_insights: string[];
   commitments: Array<{ title: string }>;
+  theme_label: string | null;
+  reframe_text: string | null;
+  closure_type: string | null;
+  closure_text: string | null;
 }
 
 /**
@@ -155,12 +223,41 @@ async function callExtractor(
 
   try {
     const parsed = JSON.parse(toolCall.function.arguments);
+    const ALLOWED_CLOSURE = new Set([
+      "tese",
+      "encruzilhada",
+      "leitura",
+      "experimento",
+      "pergunta-pra-carregar",
+      "escolha-binaria",
+      "micro-passo",
+    ]);
+    const rawClosureType =
+      typeof parsed.closure_type === "string" ? parsed.closure_type.trim().toLowerCase() : null;
+    const closure_type =
+      rawClosureType && ALLOWED_CLOSURE.has(rawClosureType) ? rawClosureType : null;
+    const closure_text =
+      typeof parsed.closure_text === "string" && parsed.closure_text.trim()
+        ? parsed.closure_text.trim().slice(0, 240)
+        : null;
+    const reframe_text =
+      typeof parsed.reframe_text === "string" && parsed.reframe_text.trim()
+        ? parsed.reframe_text.trim().slice(0, 800)
+        : null;
+    const theme_label =
+      typeof parsed.theme_label === "string" && parsed.theme_label.trim()
+        ? parsed.theme_label.trim().slice(0, 80)
+        : null;
     return {
       summary: typeof parsed.summary === "string" ? parsed.summary : "",
       key_insights: Array.isArray(parsed.key_insights) ? parsed.key_insights : [],
       commitments: Array.isArray(parsed.commitments)
         ? parsed.commitments.filter((c: any) => c && typeof c.title === "string")
         : [],
+      theme_label,
+      reframe_text,
+      closure_type,
+      closure_text,
     };
   } catch (err) {
     console.error("❌ session-extractor: falha ao decodificar tool arguments:", err);
@@ -263,6 +360,10 @@ Deno.serve(async (req) => {
         session_summary: result.summary,
         key_insights: result.key_insights,
         commitments: result.commitments,
+        theme_label: result.theme_label,
+        reframe_text: result.reframe_text,
+        closure_type: result.closure_type,
+        closure_text: result.closure_text,
       })
       .eq("id", sessionId);
 
@@ -275,7 +376,7 @@ Deno.serve(async (req) => {
     }
 
     console.log(
-      `✅ session-extractor: ${sessionId} → summary(${result.summary.length}c), insights(${result.key_insights.length}), commitments(${result.commitments.length})`,
+      `✅ session-extractor: ${sessionId} → summary(${result.summary.length}c), insights(${result.key_insights.length}), commitments(${result.commitments.length}), closure(${result.closure_type ?? "null"})`,
     );
 
     return new Response(
