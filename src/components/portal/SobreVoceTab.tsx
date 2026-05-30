@@ -3,26 +3,24 @@ import { useQuery } from "@tanstack/react-query";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 import {
   Heart,
-  MessageCircle,
   Tag,
   User,
   Users,
-  Sparkles,
   Compass,
   Activity,
   Trophy,
   ShieldAlert,
   ChevronDown,
   ChevronUp,
+  MessageCircle,
 } from "lucide-react";
 import { SectionHeader, EmptyState, PortalLoadingInline } from "./shared";
 import { auraWhatsAppLink } from "./whatsapp";
 
 // ============================================================
-// Aba "Sobre você" — versão curada
-// Lê public.user_insights (category ∈ pessoa | preferencia | objetivo |
-// padrao | conquista | trauma | contexto) e session_themes.
-// "contexto" nunca aparece (é estado operacional efêmero do agente).
+// Aba "Sobre você" — versão retrato pessoal
+// Lê public.user_insights (sem "contexto") e session_themes.
+// Curadoria agressiva + layout diferenciado por seção.
 // ============================================================
 
 type Insight = {
@@ -35,35 +33,11 @@ type Insight = {
   last_mentioned_at: string | null;
 };
 
-type SectionConfig = {
-  id: string;
-  title: string;
-  description?: string;
-  icon: React.ElementType;
-  category: string;
-  minImportance: number;
-  sensitive?: boolean;
-};
+// ---------- BLACKLISTS / WHITELISTS ----------
 
-const SECTIONS: SectionConfig[] = [
-  { id: "pessoas", title: "Pessoas da sua vida", icon: Users, category: "pessoa", minImportance: 0 },
-  { id: "preferencias", title: "Preferências e gostos", icon: Sparkles, category: "preferencia", minImportance: 6 },
-  { id: "objetivos", title: "O que você busca", icon: Compass, category: "objetivo", minImportance: 6 },
-  { id: "padroes", title: "Padrões que a Aura percebeu", icon: Activity, category: "padrao", minImportance: 6 },
-  { id: "conquistas", title: "Conquistas", icon: Trophy, category: "conquista", minImportance: 0 },
-  {
-    id: "sensiveis",
-    title: "Pontos sensíveis",
-    description: "Tópicos delicados que você compartilhou com a Aura.",
-    icon: ShieldAlert,
-    category: "trauma",
-    minImportance: 0,
-    sensitive: true,
-  },
-];
-
-// Chaves operacionais que não dizem nada sobre o usuário.
+// Chaves operacionais ou vazias que nunca devem aparecer.
 const KEY_BLACKLIST = new Set([
+  // Operacional do agente
   "audio",
   "conversar_audio",
   "confusao_texto_audio",
@@ -75,6 +49,7 @@ const KEY_BLACKLIST = new Set([
   "assunto_nao_discutir",
   "recusa_de_ajuda",
   "recusa de ajuda",
+  "recusa_de_agendamento",
   "mudanca de assunto",
   "mudanca_de_assunto",
   "tipo de interação",
@@ -92,6 +67,23 @@ const KEY_BLACKLIST = new Set([
   "episodio_atual",
   "episodio_anterior",
   "pessoa_mencionada",
+  "interesse_em_sessoes",
+  "interesse em sessões",
+  // Chaves "vazias" que não dizem nada por si só
+  "habilidade",
+  "mentor",
+  "passo",
+  "passo_de_hoje",
+  "acao",
+  "fazer",
+  "sentir",
+  "desejo",
+  "quebrar_o_padrao",
+  "quebrar o padrão",
+  "autoconfianca",
+  "autoconfiança",
+  "retomar_treinos",
+  "prioridade",
 ]);
 
 const KEY_PREFIX_BLACKLIST = ["kit_", "estatistica_", "episodio_"];
@@ -110,7 +102,56 @@ const VALUE_PLACEHOLDERS = new Set([
   "nao",
 ]);
 
-function isJunk(it: Insight): boolean {
+// Relações reconhecidas como "pessoas da vida"
+const PEOPLE_KEYS = new Set([
+  "filha", "filho", "filhas", "filhos",
+  "esposa", "marido", "parceira", "parceiro",
+  "mae", "mãe", "pai",
+  "irma", "irmã", "irmao", "irmão",
+  "sobrinha", "sobrinho",
+  "amiga", "amigo",
+  "chefe", "colega",
+  "ex", "namorada", "namorado",
+  "avo", "avó", "avô",
+  "tia", "tio",
+  "cunhada", "cunhado",
+  "sogra", "sogro",
+  "prima", "primo",
+  "neta", "neto",
+  "madrinha", "padrinho",
+]);
+
+// ---------- HELPERS ----------
+
+function stripSuffixNumber(key: string): string {
+  return key.replace(/_\d+$/, "").replace(/\s+\d+$/, "");
+}
+
+function isPeopleKey(rawKey: string): boolean {
+  const base = stripSuffixNumber(rawKey.trim().toLowerCase());
+  return PEOPLE_KEYS.has(base);
+}
+
+function looksLikeProperName(value: string): boolean {
+  const v = value.trim();
+  if (!v) return false;
+  if (v.length > 40) return false;
+  // 1-3 palavras, cada uma começando com maiúscula
+  const parts = v.split(/\s+/);
+  if (parts.length > 3) return false;
+  return parts.every((p) => /^[A-ZÀ-Ý][a-zà-ÿ'-]+$/.test(p));
+}
+
+function isGenericAiPhrase(value: string): boolean {
+  const v = value.trim().toLowerCase();
+  // Frases vagas tipo "fazer as coisas", "dar um passo", "conquistar um espaço novo"
+  if (/^(fazer|dar|conquistar|sentir|ser|ter|construir|realizar)\s+(as coisas|um passo|um espaço|mais)/i.test(v)) {
+    return true;
+  }
+  return false;
+}
+
+function isJunkBase(it: Insight): boolean {
   const rawKey = (it.key || "").trim().toLowerCase();
   const rawValue = (it.value || "").trim();
   if (!rawValue || rawValue.length <= 2) return true;
@@ -119,79 +160,112 @@ function isJunk(it: Insight): boolean {
   if (/^EP\s/i.test(rawValue)) return true;
   if (KEY_BLACKLIST.has(rawKey)) return true;
   if (KEY_PREFIX_BLACKLIST.some((p) => rawKey.startsWith(p))) return true;
+  if (rawValue.length > 120) return true;
+  if (isGenericAiPhrase(rawValue)) return true;
   return false;
 }
 
-function prettifyKey(key: string | null): string {
+function prettyLabel(key: string | null): string {
   if (!key) return "";
-  const cleaned = key.replace(/_/g, " ").replace(/\s+/g, " ").trim();
-  if (!cleaned) return "";
-  // Title case na primeira letra apenas (preserva acentuação).
-  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+  const base = stripSuffixNumber(key).replace(/_/g, " ").trim();
+  if (!base) return "";
+  return base.charAt(0).toUpperCase() + base.slice(1);
 }
 
-type DedupedItem = {
-  id: string;
-  key: string | null;
-  values: string[];
-  importance: number;
-  last_mentioned_at: string | null;
+function asSentence(s: string): string {
+  const t = s.trim();
+  if (!t) return "";
+  const first = t.charAt(0).toUpperCase() + t.slice(1);
+  return /[.!?…]$/.test(first) ? first : first + ".";
+}
+
+// ---------- TIPOS DE CURADORIA ----------
+
+type PersonGroup = {
+  label: string; // ex: "Filhas"
+  names: string[];
 };
 
-function dedupeBySection(items: Insight[], aggregateValues: boolean): DedupedItem[] {
-  const map = new Map<string, DedupedItem>();
-  for (const it of items) {
-    const norm = (it.key || "").trim().toLowerCase();
-    const valueTrim = (it.value || "").trim();
+function extractUserName(insights: Insight[]): string | null {
+  const candidates = insights.filter(
+    (i) => (i.key || "").trim().toLowerCase() === "nome" && i.value,
+  );
+  if (!candidates.length) return null;
+  const best = candidates.sort(
+    (a, b) => (b.importance ?? 0) - (a.importance ?? 0),
+  )[0];
+  const v = (best.value || "").trim();
+  return looksLikeProperName(v) ? v.split(/\s+/)[0] : null;
+}
+
+function curatePeople(insights: Insight[]): PersonGroup[] {
+  const byBase = new Map<string, Set<string>>();
+  for (const it of insights) {
+    if (it.category !== "pessoa") continue;
+    if (isJunkBase(it)) continue;
+    const rawKey = (it.key || "").trim().toLowerCase();
+    if (!isPeopleKey(rawKey)) continue;
+    const v = (it.value || "").trim();
+    if (!looksLikeProperName(v)) continue;
+    const base = stripSuffixNumber(rawKey);
+    const set = byBase.get(base) || new Set<string>();
+    set.add(v);
+    byBase.set(base, set);
+  }
+  // Pluraliza label quando há 2+ nomes na mesma relação
+  const pluralMap: Record<string, string> = {
+    filha: "Filhas", filho: "Filhos",
+    irma: "Irmãs", irmã: "Irmãs", irmao: "Irmãos", irmão: "Irmãos",
+    sobrinha: "Sobrinhas", sobrinho: "Sobrinhos",
+    amiga: "Amigas", amigo: "Amigos",
+    prima: "Primas", primo: "Primos",
+    tia: "Tias", tio: "Tios",
+    neta: "Netas", neto: "Netos",
+  };
+  return Array.from(byBase.entries())
+    .map(([base, set]) => {
+      const names = Array.from(set);
+      const singular = prettyLabel(base);
+      const label = names.length > 1 && pluralMap[base] ? pluralMap[base] : singular;
+      return { label, names };
+    })
+    .sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
+}
+
+function curateProseSection(
+  insights: Insight[],
+  category: string,
+  minImportance: number,
+  limit: number,
+): string[] {
+  const filtered = insights
+    .filter((i) => i.category === category)
+    .filter((i) => (i.importance ?? 0) >= minImportance)
+    .filter((i) => !isJunkBase(i));
+  // Dedup por valor (case-insensitive), mantendo o de maior importance
+  const map = new Map<string, { value: string; importance: number; date: number }>();
+  for (const it of filtered) {
+    const v = (it.value || "").trim();
+    if (!v) continue;
+    const norm = v.toLowerCase();
+    const importance = it.importance ?? 0;
+    const date = it.last_mentioned_at ? Date.parse(it.last_mentioned_at) : 0;
     const existing = map.get(norm);
-    if (!existing) {
-      map.set(norm, {
-        id: it.id,
-        key: it.key,
-        values: [valueTrim],
-        importance: it.importance ?? 0,
-        last_mentioned_at: it.last_mentioned_at,
-      });
-      continue;
-    }
-    if (aggregateValues) {
-      // Agrega valores únicos (case-insensitive) até 3 entradas.
-      const lowerExisting = new Set(existing.values.map((v) => v.toLowerCase()));
-      if (!lowerExisting.has(valueTrim.toLowerCase()) && existing.values.length < 3) {
-        existing.values.push(valueTrim);
-      }
-      if ((it.importance ?? 0) > existing.importance) {
-        existing.importance = it.importance ?? 0;
-      }
-      const dateA = existing.last_mentioned_at ? Date.parse(existing.last_mentioned_at) : 0;
-      const dateB = it.last_mentioned_at ? Date.parse(it.last_mentioned_at) : 0;
-      if (dateB > dateA) existing.last_mentioned_at = it.last_mentioned_at;
-    } else {
-      // Mantém o registro mais relevante (importance, depois data).
-      const dateExisting = existing.last_mentioned_at ? Date.parse(existing.last_mentioned_at) : 0;
-      const dateNew = it.last_mentioned_at ? Date.parse(it.last_mentioned_at) : 0;
-      const better =
-        (it.importance ?? 0) > existing.importance ||
-        ((it.importance ?? 0) === existing.importance && dateNew > dateExisting);
-      if (better) {
-        map.set(norm, {
-          id: it.id,
-          key: it.key,
-          values: [valueTrim],
-          importance: it.importance ?? 0,
-          last_mentioned_at: it.last_mentioned_at,
-        });
-      }
+    if (!existing || importance > existing.importance ||
+        (importance === existing.importance && date > existing.date)) {
+      map.set(norm, { value: v, importance, date });
     }
   }
-  // Ordena por importance desc, depois data desc.
-  return Array.from(map.values()).sort((a, b) => {
-    if (b.importance !== a.importance) return b.importance - a.importance;
-    const dateA = a.last_mentioned_at ? Date.parse(a.last_mentioned_at) : 0;
-    const dateB = b.last_mentioned_at ? Date.parse(b.last_mentioned_at) : 0;
-    return dateB - dateA;
-  });
+  return Array.from(map.values())
+    .sort((a, b) => b.importance - a.importance || b.date - a.date)
+    .slice(0, limit)
+    .map((x) => asSentence(x.value));
 }
+
+// ---------- COMPONENTES ----------
+
+const MAX_PROSE = 5;
+const MAX_THEMES = 12;
 
 export function SobreVoceTab({ userId }: { userId: string }) {
   const { data: insights, isLoading } = useQuery({
@@ -226,17 +300,17 @@ export function SobreVoceTab({ userId }: { userId: string }) {
     enabled: !!userId,
   });
 
-  const sections = useMemo(() => {
+  const curated = useMemo(() => {
     const all = insights || [];
-    return SECTIONS.map((cfg) => {
-      const filtered = all
-        .filter((it) => it.category === cfg.category)
-        .filter((it) => (it.importance ?? 0) >= cfg.minImportance)
-        .filter((it) => !isJunk(it));
-      // Para "pessoas" agrega valores diferentes da mesma chave (filha: Selena, Bella).
-      const deduped = dedupeBySection(filtered, cfg.category === "pessoa");
-      return { ...cfg, items: deduped };
-    });
+    return {
+      name: extractUserName(all),
+      people: curatePeople(all),
+      objetivos: curateProseSection(all, "objetivo", 6, MAX_PROSE),
+      padroes: curateProseSection(all, "padrao", 6, MAX_PROSE),
+      preferencias: curateProseSection(all, "preferencia", 6, MAX_PROSE),
+      conquistas: curateProseSection(all, "conquista", 0, MAX_PROSE),
+      sensiveis: curateProseSection(all, "trauma", 0, MAX_PROSE),
+    };
   }, [insights]);
 
   const dedupedThemes = useMemo(() => {
@@ -250,22 +324,28 @@ export function SobreVoceTab({ userId }: { userId: string }) {
       } else {
         existing.session_count = (existing.session_count || 0) + (t.session_count || 0);
         if (t.status === "active") existing.status = "active";
-        const dateA = existing.last_mentioned_at ? Date.parse(existing.last_mentioned_at) : 0;
-        const dateB = t.last_mentioned_at ? Date.parse(t.last_mentioned_at) : 0;
-        if (dateB > dateA) existing.last_mentioned_at = t.last_mentioned_at;
       }
     }
     return Array.from(map.values()).sort((a, b) => {
-      // Ativos primeiro, depois por contagem.
       if (a.status !== b.status) return a.status === "active" ? -1 : 1;
       return (b.session_count || 0) - (a.session_count || 0);
     });
   }, [themes]);
 
+  const activeThemes = dedupedThemes.filter((t) => t.status !== "resolved").slice(0, MAX_THEMES);
+  const resolvedThemes = dedupedThemes.filter((t) => t.status === "resolved").slice(0, MAX_THEMES);
+
   if (isLoading) return <PortalLoadingInline />;
 
   const hasAny =
-    sections.some((s) => s.items.length > 0) || dedupedThemes.length > 0;
+    curated.people.length > 0 ||
+    curated.objetivos.length > 0 ||
+    curated.padroes.length > 0 ||
+    curated.preferencias.length > 0 ||
+    curated.conquistas.length > 0 ||
+    curated.sensiveis.length > 0 ||
+    activeThemes.length > 0 ||
+    resolvedThemes.length > 0;
 
   if (!hasAny) {
     return (
@@ -280,143 +360,234 @@ export function SobreVoceTab({ userId }: { userId: string }) {
     );
   }
 
-  return (
-    <div className="space-y-6">
-      <SectionHeader icon={User} title="Sobre você" />
-      <p className="text-sm text-muted-foreground font-['Nunito'] -mt-2">
-        O que a Aura aprendeu sobre você até aqui. Se algo estiver errado, é só pedir pra ela
-        corrigir no WhatsApp.
-      </p>
+  const greeting = curated.name ? `Oi, ${curated.name}` : "Sobre você";
 
-      {sections.map(
-        (section) =>
-          section.items.length > 0 && (
-            <Section
-              key={section.id}
-              title={section.title}
-              description={section.description}
-              icon={section.icon}
-              items={section.items}
-              sensitive={section.sensitive}
-            />
-          ),
+  return (
+    <div className="space-y-7">
+      {/* Header com avatar gradient + saudação */}
+      <div className="flex items-center gap-4">
+        <div className="w-14 h-14 rounded-full bg-gradient-to-br from-accent to-primary flex items-center justify-center shrink-0">
+          <User size={24} className="text-primary-foreground" />
+        </div>
+        <div className="min-w-0">
+          <h2 className="text-xl font-semibold text-foreground font-['Nunito'] truncate">
+            {greeting}
+          </h2>
+          <p className="text-xs text-muted-foreground font-['Nunito']">
+            O que a Aura aprendeu sobre você até aqui.
+          </p>
+        </div>
+      </div>
+
+      {/* Pessoas — chips grid */}
+      {curated.people.length > 0 && (
+        <SectionShell title="Pessoas da sua vida" icon={Users}>
+          <div className="grid grid-cols-2 gap-2">
+            {curated.people.map((p) => (
+              <div
+                key={p.label}
+                className="rounded-xl border border-border bg-card px-3 py-2.5"
+              >
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold font-['Nunito']">
+                  {p.label}
+                </p>
+                <p className="text-sm text-foreground font-['Nunito'] leading-snug mt-0.5">
+                  {p.names.join(", ")}
+                </p>
+              </div>
+            ))}
+          </div>
+        </SectionShell>
       )}
 
-      {dedupedThemes.length > 0 && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <Tag size={14} className="text-accent" />
-            <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold font-['Nunito']">
-              Temas em movimento
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {dedupedThemes.map((t: any) => (
-              <span
-                key={t.id}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium font-['Nunito'] ${
-                  t.status === "resolved"
-                    ? "bg-muted text-muted-foreground line-through"
-                    : "bg-accent/10 text-accent"
-                }`}
+      {/* Objetivos — bullets em prosa */}
+      {curated.objetivos.length > 0 && (
+        <SectionShell title="O que te move" icon={Compass}>
+          <ul className="space-y-2">
+            {curated.objetivos.map((s, i) => (
+              <li key={i} className="flex items-start gap-2.5">
+                <span className="mt-2 w-1.5 h-1.5 rounded-full bg-accent shrink-0" />
+                <p className="text-sm text-foreground font-['Nunito'] leading-relaxed">{s}</p>
+              </li>
+            ))}
+          </ul>
+        </SectionShell>
+      )}
+
+      {/* Padrões — blockquote */}
+      {curated.padroes.length > 0 && (
+        <SectionShell title="Padrões que a Aura percebeu" icon={Activity}>
+          <div className="space-y-3">
+            {curated.padroes.map((s, i) => (
+              <blockquote
+                key={i}
+                className="border-l-2 border-accent/40 pl-3 text-sm text-foreground/90 font-['Nunito'] italic leading-relaxed"
               >
-                {t.theme_name}
-                {t.session_count > 1 && (
-                  <span className="ml-1 opacity-70">· {t.session_count}</span>
-                )}
+                {s}
+              </blockquote>
+            ))}
+          </div>
+        </SectionShell>
+      )}
+
+      {/* Preferências — bullets simples */}
+      {curated.preferencias.length > 0 && (
+        <SectionShell title="Preferências e gostos" icon={Heart}>
+          <ul className="space-y-2">
+            {curated.preferencias.map((s, i) => (
+              <li key={i} className="flex items-start gap-2.5">
+                <span className="mt-2 w-1.5 h-1.5 rounded-full bg-accent shrink-0" />
+                <p className="text-sm text-foreground font-['Nunito'] leading-relaxed">{s}</p>
+              </li>
+            ))}
+          </ul>
+        </SectionShell>
+      )}
+
+      {/* Conquistas — badges horizontais */}
+      {curated.conquistas.length > 0 && (
+        <SectionShell title="Conquistas" icon={Trophy}>
+          <div className="flex flex-wrap gap-2">
+            {curated.conquistas.map((s, i) => (
+              <span
+                key={i}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-accent/10 text-accent text-xs font-medium font-['Nunito']"
+              >
+                <Trophy size={12} />
+                {s.replace(/\.$/, "")}
               </span>
             ))}
           </div>
+        </SectionShell>
+      )}
+
+      {/* Sensíveis — colapsado */}
+      {curated.sensiveis.length > 0 && (
+        <CollapsibleShell title="Pontos sensíveis" icon={ShieldAlert}>
+          <p className="text-xs text-muted-foreground italic font-['Nunito']">
+            Tópicos delicados que você compartilhou com a Aura.
+          </p>
+          <ul className="space-y-2">
+            {curated.sensiveis.map((s, i) => (
+              <li key={i} className="flex items-start gap-2.5">
+                <span className="mt-2 w-1.5 h-1.5 rounded-full bg-muted-foreground shrink-0" />
+                <p className="text-sm text-foreground font-['Nunito'] leading-relaxed">{s}</p>
+              </li>
+            ))}
+          </ul>
+        </CollapsibleShell>
+      )}
+
+      {/* Temas em movimento */}
+      {(activeThemes.length > 0 || resolvedThemes.length > 0) && (
+        <div className="space-y-4">
+          {activeThemes.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Tag size={14} className="text-accent" />
+                <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold font-['Nunito']">
+                  Temas em movimento
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {activeThemes.map((t: any) => (
+                  <span
+                    key={t.id}
+                    className="inline-flex items-center px-3 py-1.5 rounded-full bg-accent/10 text-accent text-xs font-medium font-['Nunito']"
+                  >
+                    {t.theme_name}
+                    {t.session_count > 1 && (
+                      <span className="ml-1 opacity-70">· {t.session_count}</span>
+                    )}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          {resolvedThemes.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs uppercase tracking-wider text-muted-foreground/70 font-semibold font-['Nunito']">
+                Já trabalhados
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {resolvedThemes.map((t: any) => (
+                  <span
+                    key={t.id}
+                    className="inline-flex items-center px-3 py-1.5 rounded-full bg-muted text-muted-foreground text-xs font-medium font-['Nunito'] line-through opacity-70"
+                  >
+                    {t.theme_name}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
+
+      {/* Rodapé: corrigir no WhatsApp */}
+      <a
+        href={auraWhatsAppLink("Oi Aura, queria corrigir uma coisa no que você sabe sobre mim.")}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center justify-center gap-2 mt-2 px-4 py-3 rounded-xl border border-border bg-card text-sm text-muted-foreground hover:text-accent hover:border-accent/40 transition-colors font-['Nunito']"
+      >
+        <MessageCircle size={14} />
+        Algo aqui não bate? Me corrige no WhatsApp →
+      </a>
     </div>
   );
 }
 
-const MAX_VISIBLE = 8;
+// ---------- SHELLS ----------
 
-function Section({
+function SectionShell({
   title,
-  description,
   icon: Icon,
-  items,
-  sensitive,
+  children,
 }: {
   title: string;
-  description?: string;
   icon: React.ElementType;
-  items: DedupedItem[];
-  sensitive?: boolean;
+  children: React.ReactNode;
 }) {
-  const [expanded, setExpanded] = useState(!sensitive);
-  const [showAll, setShowAll] = useState(false);
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <Icon size={14} className="text-accent" />
+        <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold font-['Nunito']">
+          {title}
+        </p>
+      </div>
+      {children}
+    </div>
+  );
+}
 
-  const visible = showAll ? items : items.slice(0, MAX_VISIBLE);
-  const hasMore = items.length > MAX_VISIBLE;
-
+function CollapsibleShell({
+  title,
+  icon: Icon,
+  children,
+}: {
+  title: string;
+  icon: React.ElementType;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
   return (
     <div className="space-y-3">
       <button
         type="button"
-        onClick={() => sensitive && setExpanded((v) => !v)}
-        className={`flex items-center gap-2 w-full text-left ${sensitive ? "cursor-pointer" : "cursor-default"}`}
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-2 w-full text-left"
       >
         <Icon size={14} className="text-accent" />
         <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold font-['Nunito']">
           {title}
         </p>
-        {sensitive && (
-          <span className="ml-auto text-muted-foreground">
-            {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-          </span>
-        )}
+        <span className="ml-auto text-muted-foreground">
+          {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        </span>
       </button>
-      {sensitive && description && expanded && (
-        <p className="text-xs text-muted-foreground font-['Nunito'] italic">{description}</p>
-      )}
-      {expanded && (
-        <>
-          <div className="space-y-2">
-            {visible.map((it) => (
-              <InsightRow key={it.id} item={it} />
-            ))}
-          </div>
-          {hasMore && (
-            <button
-              type="button"
-              onClick={() => setShowAll((v) => !v)}
-              className="text-xs text-accent hover:underline font-['Nunito'] font-medium"
-            >
-              {showAll ? "Ver menos" : `Ver mais (${items.length - MAX_VISIBLE})`}
-            </button>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
-function InsightRow({ item }: { item: DedupedItem }) {
-  const label = prettifyKey(item.key);
-  const valueDisplay = item.values.join(", ");
-  const correction = auraWhatsAppLink(
-    `Oi Aura, sobre "${valueDisplay.slice(0, 80)}" — quero corrigir uma coisa.`,
-  );
-  return (
-    <div className="rounded-xl border border-border bg-card p-4 flex items-start justify-between gap-3 group">
-      <p className="text-sm text-foreground font-['Nunito'] leading-relaxed">
-        {label && <span className="text-muted-foreground">{label}: </span>}
-        <span>{valueDisplay}</span>
-      </p>
-      <a
-        href={correction}
-        target="_blank"
-        rel="noopener noreferrer"
-        title="Corrigir com a Aura"
-        className="opacity-60 hover:opacity-100 text-muted-foreground hover:text-accent transition-all shrink-0"
-      >
-        <MessageCircle size={14} />
-      </a>
+      {open && <div className="space-y-3">{children}</div>}
     </div>
   );
 }

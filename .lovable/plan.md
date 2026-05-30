@@ -1,68 +1,91 @@
+## Problema
 
-## Diagnóstico
+A aba "Sobre você" ainda mostra ruído ("Habilidade: fazer as coisas", "Mentor: Aura", "Nome" como pessoa, "Autoconfiança: construir", "Fazer: as coisas sem medo"), e o formato é uma lista de cards key:value que não conta nenhuma história sobre o usuário — parece um dump de banco.
 
-A aba está mostrando dados crus da `user_insights` porque o filtro é só por `importance`. Isso joga tudo que tem `importance=10` na "Identidade" (incluindo lixo como `habilidade: fazer as coisas`, `audio: confirmar...`, `continuar_conversando: true`) e deixa "Valores" quase vazio (quase nada tem 7–9).
+## Objetivo
 
-A tabela já tem um campo `category` com 7 valores fixos:
+1. Filtragem mais agressiva: só mostrar o que realmente diz algo sobre o usuário.
+2. Reformatar visualmente: deixar de ser uma listagem de pares e virar um **retrato pessoal** com hierarquia, agrupamentos visuais e densidade variada.
 
-| category | count | uso |
-|---|---|---|
-| contexto | 6861 | operacional/efêmero — **não mostrar** |
-| preferencia | 3054 | preferências e gostos |
-| pessoa | 2265 | pessoas da vida |
-| padrao | 1443 | padrões de comportamento |
-| objetivo | 1216 | metas e direções |
-| trauma | 1052 | pontos sensíveis |
-| conquista | 604 | vitórias |
+Sem mudanças de backend, extractor ou banco. Só `src/components/portal/SobreVoceTab.tsx`.
 
-O bug visível ("Temas em movimento" aparecendo concatenado, ex.: `ansiedadeAnsiedade...`) também é dado duplicado por caixa (`ansiedade` e `Ansiedade` viraram dois temas diferentes).
+---
 
-## O que muda
+## Mudanças de conteúdo (curadoria)
 
-Só `src/components/portal/SobreVoceTab.tsx`. Sem migration, sem edge function, sem mexer no extractor.
+**1. "Pessoas da sua vida" vira só pessoas de verdade.**
+- Whitelist de chaves de relação: `filha`, `filho`, `esposa`, `marido`, `parceira`, `parceiro`, `mae`, `pai`, `irma`, `irmao`, `sobrinha`, `sobrinho`, `amiga`, `amigo`, `chefe`, `colega`, `ex`, `namorada`, `namorado`, `avo`, `avó`, `tia`, `tio`, `cunhada`, `cunhado`, `sogra`, `sogro`, `prima`, `primo` (com sufixos numéricos tipo `filha_1`).
+- Item só entra se o **valor for um nome próprio** (regex: começa com maiúscula, sem espaços longos, sem verbo). Descarta valores como "ficou brava com o débito automático" — isso é evento, não pessoa.
+- "Nome: Eduardo" vira o **nome do usuário no topo da aba** (cabeçalho "Oi, Eduardo"), não item de lista.
+- Agrega filha_1, filha_2, filha → "Filhas: Bella, Selena".
 
-### Nova estrutura de seções (orientada por `category`, não por `importance`)
+**2. Blacklist adicional de chaves "vazias".**
+- `habilidade`, `mentor`, `passo`, `passo_de_hoje`, `acao`, `fazer`, `sentir`, `desejo`, `quebrar_o_padrao`, `quebrar o padrão`, `autoconfianca`, `autoconfiança`, `retomar_treinos`, `prioridade`, `interesse_em_sessoes`, `interesse em sessões`, `assunto_nao_discutir`, `recusa_de_agendamento`.
+  - Motivo: ou são instruções operacionais do agente, ou valores derivados de uma fala única sem virar padrão. Se for relevante, vira tema (session_themes), não insight permanente.
+- Valor mínimo: descartar valores >120 caracteres (são frases de sessão, não atributos).
+- Descartar valores que começam com verbo no infinitivo seguido de "as coisas / um passo / um espaço" (padrões genéricos da IA).
 
-1. **Pessoas da sua vida** — `category = 'pessoa'`
-2. **Preferências e gostos** — `category = 'preferencia'` AND `importance >= 6`
-3. **O que você busca** — `category = 'objetivo'` AND `importance >= 6`
-4. **Padrões que a Aura percebeu** — `category = 'padrao'` AND `importance >= 6`
-5. **Conquistas** — `category = 'conquista'`
-6. **Pontos sensíveis** — `category = 'trauma'` (colapsado por padrão, expansível, com aviso "tópicos delicados")
-7. **Temas em movimento** — `session_themes`, deduplicados
+**3. Limite de qualidade.**
+- Cada seção limita a **5 itens** (em vez de 8), ordenados por `importance` + `mentioned_count`. "Ver mais" só aparece se sobrar muito.
+- Seção só renderiza se tiver ≥1 item após curadoria.
 
-`category = 'contexto'` nunca aparece.
+**4. Temas em movimento.**
+- Bug visual atual: tags grudadas. Forçar `inline-flex items-center` no badge e garantir `gap-2` no wrap.
+- Mostrar no máximo 12 temas, priorizando `status='active'`.
+- Resolved fica numa linha separada abaixo, em opacidade reduzida, com label "Já trabalhados".
 
-### Limpeza por item (aplicada antes de agrupar)
+---
 
-Descarta o registro se qualquer uma:
+## Mudanças visuais (retrato, não lista)
 
-- `value` vazia, só whitespace, ou ≤ 2 caracteres
-- `value` é placeholder: `nao_nomeada`, `não nomeada`, `n/a`, `null`, `true`, `false`, `sim`, `não`, ou só dígitos
-- `key` está no blacklist de chaves operacionais: `audio`, `conversar_audio`, `confusao_texto_audio`, `compreensao_aura`, `compreensao_processo`, `continuar_conversando`, `interacao_anterior`, `topico_anterior`, `assunto_nao_discutir`, `recusa_de_ajuda`, `recusa de ajuda`, `mudanca de assunto`, `tipo de interação`, `tipo de serviço`, `estado`, `clima`, `localizacao`, `kit_*`, `frase_ancora`, `estatistica_*`, `episodio_*`, `jornada_concluida`, `tema_episodio`, `tema_principal`
-- `value` começa com `EP ` (referência de episódio)
+Trocar o layout `space-y-6` de seções idênticas por uma composição com hierarquia:
 
-### Deduplicação
+```text
+┌──────────────────────────────────────────┐
+│  Avatar circular     Oi, Eduardo         │  ← header com nome
+│  (gradient)          O que a Aura sabe…  │
+└──────────────────────────────────────────┘
 
-- Por seção, agrupa por `lower(trim(key))` e mantém o registro com maior `importance`; empate desempata pelo `last_mentioned_at` mais recente.
-- Para `pessoa`: se mesma `key` aparece com valores diferentes (ex.: `filha: Selena` e `filha: Bella`), agrega em uma linha "filha: Selena, Bella" (até 3 valores).
-- `session_themes`: dedup case-insensitive em `theme_name`, soma `session_count`, mantém pior `status` (active > resolved).
+┌─ Pessoas da sua vida ────────────────────┐
+│  [chip-pessoa] [chip-pessoa] [chip-…]    │  ← chips arredondados com
+│   Filhas        Esposa                   │     ícone + label + nome
+│   Bella, Selena Maria                    │
+└──────────────────────────────────────────┘
 
-### Apresentação
+┌─ O que te move ──────────────────────────┐   ← objetivos como
+│  • frase curta destacada                 │     "highlights" em prosa,
+│  • frase curta destacada                 │     não key:value
+└──────────────────────────────────────────┘
 
-- Cada item vira uma linha mais legível: chave em title case sem underscore (`relacionamento_amoroso` → `Relacionamento amoroso`), valor em texto normal.
-- Limite de 8 itens por seção com botão "Ver mais" pra expandir.
-- Se a seção fica vazia após filtros, ela some.
-- Empty state geral só aparece se TODAS as seções estiverem vazias.
-- Botão "Corrigir no WhatsApp" permanece em cada item.
+┌─ Padrões que a Aura percebeu ────────────┐
+│  citação em itálico…                     │   ← formato blockquote
+│  citação em itálico…                     │
+└──────────────────────────────────────────┘
 
-### Temas em movimento
+┌─ Conquistas ─ Trophy  ───────────────────┐
+│  badges horizontais                      │
+└──────────────────────────────────────────┘
 
-- Render continua em pills (já está com `flex flex-wrap gap-2`, o "concatenado" do print é só copy-paste).
-- Adiciona dedup por `lower(theme_name)` pra eliminar `ansiedade` vs `Ansiedade`.
-- Resolvidos ficam no fim, riscados.
+┌─ Pontos sensíveis (colapsado) ▾ ─────────┐
+└──────────────────────────────────────────┘
 
-## Fora de escopo
+[ Temas em movimento ]  chips ativos
+[ Já trabalhados ]      chips resolvidos
+```
 
-- Curador via Gemini Flash-Lite escrevendo um "resumo do usuário". Vale fazer depois se você quiser uma versão narrativa ("A Aura te enxerga como..."), mas pode ser uma fase posterior — a limpeza acima já resolve o que tá feio agora.
-- Mudar como o agente popula `user_insights` (corrige o problema na raiz, mas é prompt change separado).
+Detalhes:
+- **Pessoas** vira grid de "chips" 2-col no mobile (`grid grid-cols-2 gap-2`), cada chip com ícone Users pequeno + label do parentesco em cima + nome embaixo. Não usa formato linha key:value.
+- **Objetivos** e **Padrões** ficam como bullets em prosa — só o valor, sem prefixo "Chave:" (a chave era ruído). Cada bullet vira frase com primeira letra maiúscula e ponto final.
+- **Conquistas** vira badges/pills horizontais com ícone Trophy.
+- **Sensíveis** continua colapsado por padrão.
+- **Temas**: dois grupos separados (ativos colorido, resolvidos cinza) com label entre eles, garantindo `flex flex-wrap gap-2` real.
+- Header da aba mostra "Oi, {nome}" se houver `nome` extraído da curadoria de pessoas.
+- "Corrigir com a Aura" deixa de ser ícone por linha (poluído) e vira **um único link no rodapé da aba** apontando pro WhatsApp ("Algo aqui não bate? Me corrige no WhatsApp →").
+
+---
+
+## Arquivos
+
+- `src/components/portal/SobreVoceTab.tsx` — único arquivo afetado, rewrite completo.
+
+Sem migrations, sem mudanças no extractor, sem mudanças em outros tabs.
