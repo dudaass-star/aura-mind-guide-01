@@ -4,7 +4,7 @@ import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { Helmet } from "react-helmet-async";
 import { useState } from "react";
 import logoOlaAura from "@/assets/logo-ola-aura.png";
-import { Target, Sparkles, Headphones, Heart, Lock, LogOut, Sun, Calendar, User } from "lucide-react";
+import { Target, Sparkles, Headphones, Lock, LogOut, Sun, Calendar, User } from "lucide-react";
 import { usePortalAuth } from "@/contexts/PortalAuthContext";
 
 import { PortalLoading } from "@/components/portal/shared";
