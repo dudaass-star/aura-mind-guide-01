@@ -173,7 +173,7 @@ const UserPortal = () => {
           {activeTab === "jornadas" && (
             <JornadasTab userId={userId!} profile={profile} portalToken={""} />
           )}
-          {activeTab === "meditacoes" && <MeditacoesTab />}
+          {activeTab === "meditacoes" && <MeditacoesTab userId={userId!} />}
         </div>
 
         {/* CTA flutuante presente em todas as abas */}

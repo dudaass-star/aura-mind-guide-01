@@ -1,7 +1,15 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Target, CheckCircle2, Lock, Play } from "lucide-react";
+import { Target, CheckCircle2, Lock, Play, Search } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { SectionHeader, EmptyState } from "./shared";
 
 interface JornadasTabProps {
@@ -14,6 +22,8 @@ export function JornadasTab({ userId, profile, portalToken }: JornadasTabProps) 
   const currentJourneyId = profile?.current_journey_id;
   const currentEpisode = profile?.current_episode || 0;
   const [expandedJourney, setExpandedJourney] = useState<string | null>(currentJourneyId || null);
+  const [query, setQuery] = useState("");
+  const [lengthFilter, setLengthFilter] = useState<string>("all");
 
   const { data: journeyHistory } = useQuery({
     queryKey: ["portal-journey-history", userId],
@@ -102,6 +112,21 @@ export function JornadasTab({ userId, profile, portalToken }: JornadasTabProps) 
   // contador inflado em profile.journeys_completed (perfis antigos sem histórico).
   const completedCount = completedJourneyIds.size;
 
+  const q = query.trim().toLowerCase();
+  const filteredJourneys = useMemo(() => {
+    return sortedJourneys.filter((j: any) => {
+      const total = j.total_episodes || 8;
+      if (lengthFilter === "short" && total > 4) return false;
+      if (lengthFilter === "medium" && (total <= 4 || total > 8)) return false;
+      if (lengthFilter === "long" && total <= 8) return false;
+      if (q) {
+        const haystack = `${j.title || ""} ${j.description || ""} ${j.topic || ""}`.toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [sortedJourneys, q, lengthFilter]);
+
   return (
     <div className="space-y-5">
       <SectionHeader icon={Target} title="Suas Jornadas" />
@@ -115,7 +140,36 @@ export function JornadasTab({ userId, profile, portalToken }: JornadasTabProps) 
         </div>
       )}
 
-      {sortedJourneys.map((journey: any, idx: number) => {
+      <div className="space-y-2 animate-fade-in">
+        <div className="relative">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Buscar jornada..."
+            className="pl-9 h-10 font-['Nunito'] text-sm"
+          />
+        </div>
+        <Select value={lengthFilter} onValueChange={setLengthFilter}>
+          <SelectTrigger className="h-9 text-xs font-['Nunito']">
+            <SelectValue placeholder="Duração" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Qualquer duração</SelectItem>
+            <SelectItem value="short">Curtas (até 4 episódios)</SelectItem>
+            <SelectItem value="medium">Médias (5–8 episódios)</SelectItem>
+            <SelectItem value="long">Longas (9+ episódios)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {filteredJourneys.length === 0 && (
+        <p className="text-sm text-muted-foreground font-['Nunito'] text-center py-6">
+          Nenhuma jornada corresponde aos filtros.
+        </p>
+      )}
+
+      {filteredJourneys.map((journey: any, idx: number) => {
         const isCurrent = journey.status === "current";
         const isCompleted = journey.status === "completed";
         const isAvailable = journey.status === "available";
