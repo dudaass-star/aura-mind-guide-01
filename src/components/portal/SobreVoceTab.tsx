@@ -69,21 +69,6 @@ const KEY_BLACKLIST = new Set([
   "pessoa_mencionada",
   "interesse_em_sessoes",
   "interesse em sessões",
-  // Chaves "vazias" que não dizem nada por si só
-  "habilidade",
-  "mentor",
-  "passo",
-  "passo_de_hoje",
-  "acao",
-  "fazer",
-  "sentir",
-  "desejo",
-  "quebrar_o_padrao",
-  "quebrar o padrão",
-  "autoconfianca",
-  "autoconfiança",
-  "retomar_treinos",
-  "prioridade",
 ]);
 
 const KEY_PREFIX_BLACKLIST = ["kit_", "estatistica_", "episodio_"];
@@ -183,7 +168,7 @@ function asSentence(s: string): string {
 
 type PersonGroup = {
   label: string; // ex: "Filhas"
-  names: string[];
+  names: string[]; // pode ser vazio quando a relação foi mencionada mas sem nome próprio
 };
 
 function extractUserName(insights: Insight[]): string | null {
@@ -206,10 +191,10 @@ function curatePeople(insights: Insight[]): PersonGroup[] {
     const rawKey = (it.key || "").trim().toLowerCase();
     if (!isPeopleKey(rawKey)) continue;
     const v = (it.value || "").trim();
-    if (!looksLikeProperName(v)) continue;
     const base = stripSuffixNumber(rawKey);
     const set = byBase.get(base) || new Set<string>();
-    set.add(v);
+    // Só adiciona o valor se parecer nome próprio; chips sem nome ainda aparecem.
+    if (looksLikeProperName(v)) set.add(v);
     byBase.set(base, set);
   }
   // Pluraliza label quando há 2+ nomes na mesma relação
@@ -232,18 +217,20 @@ function curatePeople(insights: Insight[]): PersonGroup[] {
     .sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
 }
 
+type ProseItem = { key: string | null; value: string };
+
 function curateProseSection(
   insights: Insight[],
   category: string,
   minImportance: number,
   limit: number,
-): string[] {
+): ProseItem[] {
   const filtered = insights
     .filter((i) => i.category === category)
     .filter((i) => (i.importance ?? 0) >= minImportance)
     .filter((i) => !isJunkBase(i));
   // Dedup por valor (case-insensitive), mantendo o de maior importance
-  const map = new Map<string, { value: string; importance: number; date: number }>();
+  const map = new Map<string, { key: string | null; value: string; importance: number; date: number }>();
   for (const it of filtered) {
     const v = (it.value || "").trim();
     if (!v) continue;
@@ -253,18 +240,19 @@ function curateProseSection(
     const existing = map.get(norm);
     if (!existing || importance > existing.importance ||
         (importance === existing.importance && date > existing.date)) {
-      map.set(norm, { value: v, importance, date });
+      map.set(norm, { key: it.key, value: v, importance, date });
     }
   }
   return Array.from(map.values())
     .sort((a, b) => b.importance - a.importance || b.date - a.date)
     .slice(0, limit)
-    .map((x) => asSentence(x.value));
+    .map((x) => ({ key: x.key, value: asSentence(x.value) }));
 }
 
 // ---------- COMPONENTES ----------
 
-const MAX_PROSE = 5;
+const MAX_PROSE = 6;
+const MAX_PEOPLE = 8;
 const MAX_THEMES = 12;
 
 export function SobreVoceTab({ userId }: { userId: string }) {
@@ -304,10 +292,10 @@ export function SobreVoceTab({ userId }: { userId: string }) {
     const all = insights || [];
     return {
       name: extractUserName(all),
-      people: curatePeople(all),
-      objetivos: curateProseSection(all, "objetivo", 6, MAX_PROSE),
-      padroes: curateProseSection(all, "padrao", 6, MAX_PROSE),
-      preferencias: curateProseSection(all, "preferencia", 6, MAX_PROSE),
+      people: curatePeople(all).slice(0, MAX_PEOPLE),
+      objetivos: curateProseSection(all, "objetivo", 4, MAX_PROSE),
+      padroes: curateProseSection(all, "padrao", 4, MAX_PROSE),
+      preferencias: curateProseSection(all, "preferencia", 4, MAX_PROSE),
       conquistas: curateProseSection(all, "conquista", 0, MAX_PROSE),
       sensiveis: curateProseSection(all, "trauma", 0, MAX_PROSE),
     };
@@ -364,19 +352,14 @@ export function SobreVoceTab({ userId }: { userId: string }) {
 
   return (
     <div className="space-y-7">
-      {/* Header com avatar gradient + saudação */}
-      <div className="flex items-center gap-4">
-        <div className="w-14 h-14 rounded-full bg-gradient-to-br from-accent to-primary flex items-center justify-center shrink-0">
-          <User size={24} className="text-primary-foreground" />
-        </div>
-        <div className="min-w-0">
-          <h2 className="text-xl font-semibold text-foreground font-['Nunito'] truncate">
-            {greeting}
-          </h2>
-          <p className="text-xs text-muted-foreground font-['Nunito']">
-            O que a Aura aprendeu sobre você até aqui.
-          </p>
-        </div>
+      {/* Header simples — sem avatar */}
+      <div>
+        <h2 className="text-xl font-semibold text-foreground font-['Nunito']">
+          {greeting}
+        </h2>
+        <p className="text-xs text-muted-foreground font-['Nunito'] mt-1">
+          O que a Aura aprendeu sobre você até aqui.
+        </p>
       </div>
 
       {/* Pessoas — chips grid */}
@@ -391,9 +374,11 @@ export function SobreVoceTab({ userId }: { userId: string }) {
                 <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold font-['Nunito']">
                   {p.label}
                 </p>
-                <p className="text-sm text-foreground font-['Nunito'] leading-snug mt-0.5">
-                  {p.names.join(", ")}
-                </p>
+                {p.names.length > 0 && (
+                  <p className="text-sm text-foreground font-['Nunito'] leading-snug mt-0.5">
+                    {p.names.join(", ")}
+                  </p>
+                )}
               </div>
             ))}
           </div>
@@ -403,14 +388,11 @@ export function SobreVoceTab({ userId }: { userId: string }) {
       {/* Objetivos — bullets em prosa */}
       {curated.objetivos.length > 0 && (
         <SectionShell title="O que te move" icon={Compass}>
-          <ul className="space-y-2">
-            {curated.objetivos.map((s, i) => (
-              <li key={i} className="flex items-start gap-2.5">
-                <span className="mt-2 w-1.5 h-1.5 rounded-full bg-accent shrink-0" />
-                <p className="text-sm text-foreground font-['Nunito'] leading-relaxed">{s}</p>
-              </li>
+          <div className="space-y-3">
+            {curated.objetivos.map((it, i) => (
+              <ProseCard key={i} item={it} />
             ))}
-          </ul>
+          </div>
         </SectionShell>
       )}
 
@@ -418,12 +400,19 @@ export function SobreVoceTab({ userId }: { userId: string }) {
       {curated.padroes.length > 0 && (
         <SectionShell title="Padrões que a Aura percebeu" icon={Activity}>
           <div className="space-y-3">
-            {curated.padroes.map((s, i) => (
+            {curated.padroes.map((it, i) => (
               <blockquote
                 key={i}
-                className="border-l-2 border-accent/40 pl-3 text-sm text-foreground/90 font-['Nunito'] italic leading-relaxed"
+                className="border-l-2 border-accent/40 pl-3"
               >
-                {s}
+                {it.key && (
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold font-['Nunito'] mb-0.5">
+                    {prettyLabel(it.key)}
+                  </p>
+                )}
+                <p className="text-sm text-foreground/90 font-['Nunito'] italic leading-relaxed">
+                  {it.value}
+                </p>
               </blockquote>
             ))}
           </div>
@@ -433,14 +422,11 @@ export function SobreVoceTab({ userId }: { userId: string }) {
       {/* Preferências — bullets simples */}
       {curated.preferencias.length > 0 && (
         <SectionShell title="Preferências e gostos" icon={Heart}>
-          <ul className="space-y-2">
-            {curated.preferencias.map((s, i) => (
-              <li key={i} className="flex items-start gap-2.5">
-                <span className="mt-2 w-1.5 h-1.5 rounded-full bg-accent shrink-0" />
-                <p className="text-sm text-foreground font-['Nunito'] leading-relaxed">{s}</p>
-              </li>
+          <div className="space-y-3">
+            {curated.preferencias.map((it, i) => (
+              <ProseCard key={i} item={it} />
             ))}
-          </ul>
+          </div>
         </SectionShell>
       )}
 
@@ -448,13 +434,13 @@ export function SobreVoceTab({ userId }: { userId: string }) {
       {curated.conquistas.length > 0 && (
         <SectionShell title="Conquistas" icon={Trophy}>
           <div className="flex flex-wrap gap-2">
-            {curated.conquistas.map((s, i) => (
+            {curated.conquistas.map((it, i) => (
               <span
                 key={i}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-accent/10 text-accent text-xs font-medium font-['Nunito']"
               >
                 <Trophy size={12} />
-                {s.replace(/\.$/, "")}
+                {it.value.replace(/\.$/, "")}
               </span>
             ))}
           </div>
@@ -467,14 +453,11 @@ export function SobreVoceTab({ userId }: { userId: string }) {
           <p className="text-xs text-muted-foreground italic font-['Nunito']">
             Tópicos delicados que você compartilhou com a Aura.
           </p>
-          <ul className="space-y-2">
-            {curated.sensiveis.map((s, i) => (
-              <li key={i} className="flex items-start gap-2.5">
-                <span className="mt-2 w-1.5 h-1.5 rounded-full bg-muted-foreground shrink-0" />
-                <p className="text-sm text-foreground font-['Nunito'] leading-relaxed">{s}</p>
-              </li>
+          <div className="space-y-3">
+            {curated.sensiveis.map((it, i) => (
+              <ProseCard key={i} item={it} muted />
             ))}
-          </ul>
+          </div>
         </CollapsibleShell>
       )}
 
@@ -588,6 +571,25 @@ function CollapsibleShell({
         </span>
       </button>
       {open && <div className="space-y-3">{children}</div>}
+    </div>
+  );
+}
+
+function ProseCard({ item, muted }: { item: ProseItem; muted?: boolean }) {
+  return (
+    <div className="space-y-0.5">
+      {item.key && (
+        <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold font-['Nunito']">
+          {prettyLabel(item.key)}
+        </p>
+      )}
+      <p
+        className={`text-sm font-['Nunito'] leading-relaxed ${
+          muted ? "text-foreground/85" : "text-foreground"
+        }`}
+      >
+        {item.value}
+      </p>
     </div>
   );
 }
