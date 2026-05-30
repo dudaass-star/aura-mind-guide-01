@@ -292,10 +292,10 @@ export function SobreVoceTab({ userId }: { userId: string }) {
     const all = insights || [];
     return {
       name: extractUserName(all),
-      people: curatePeople(all),
-      objetivos: curateProseSection(all, "objetivo", 6, MAX_PROSE),
-      padroes: curateProseSection(all, "padrao", 6, MAX_PROSE),
-      preferencias: curateProseSection(all, "preferencia", 6, MAX_PROSE),
+      people: curatePeople(all).slice(0, MAX_PEOPLE),
+      objetivos: curateProseSection(all, "objetivo", 4, MAX_PROSE),
+      padroes: curateProseSection(all, "padrao", 4, MAX_PROSE),
+      preferencias: curateProseSection(all, "preferencia", 4, MAX_PROSE),
       conquistas: curateProseSection(all, "conquista", 0, MAX_PROSE),
       sensiveis: curateProseSection(all, "trauma", 0, MAX_PROSE),
     };
