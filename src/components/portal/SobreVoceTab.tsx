@@ -574,3 +574,22 @@ function CollapsibleShell({
     </div>
   );
 }
+
+function ProseCard({ item, muted }: { item: ProseItem; muted?: boolean }) {
+  return (
+    <div className="space-y-0.5">
+      {item.key && (
+        <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold font-['Nunito']">
+          {prettyLabel(item.key)}
+        </p>
+      )}
+      <p
+        className={`text-sm font-['Nunito'] leading-relaxed ${
+          muted ? "text-foreground/85" : "text-foreground"
+        }`}
+      >
+        {item.value}
+      </p>
+    </div>
+  );
+}
