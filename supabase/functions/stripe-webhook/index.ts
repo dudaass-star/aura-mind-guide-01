@@ -17,6 +17,43 @@ const PLAN_NAMES: Record<string, string> = {
   transformacao: "Transformação",
 };
 
+// Mapa reverso priceId → {plan, billing_cycle}. Mensal vem de env; Trim/Sem/Anual
+// são os RECURRING_PRICES hardcoded em create-checkout/change-subscription-plan.
+const RECURRING_PRICES: Record<string, { plan: string; billing_cycle: string }> = {
+  // Essencial
+  "price_1TZyoCQU15XnZ7VvyI45t8um": { plan: "essencial", billing_cycle: "quarterly" },
+  "price_1TZyoDQU15XnZ7VvOegMIXQi": { plan: "essencial", billing_cycle: "semiannual" },
+  "price_1TZyoEQU15XnZ7Vvx02qKKPF": { plan: "essencial", billing_cycle: "yearly" },
+  // Direção
+  "price_1TZyoFQU15XnZ7VvAfRFoTOh": { plan: "direcao", billing_cycle: "quarterly" },
+  "price_1TZyoGQU15XnZ7VvZiGk2ifY": { plan: "direcao", billing_cycle: "semiannual" },
+  "price_1TZyoHQU15XnZ7VvwUFUX9Bm": { plan: "direcao", billing_cycle: "yearly" },
+  // Transformação
+  "price_1TZyoIQU15XnZ7VvCMjzuaZr": { plan: "transformacao", billing_cycle: "quarterly" },
+  "price_1TZyoJQU15XnZ7Vv3FqH75Nb": { plan: "transformacao", billing_cycle: "semiannual" },
+  "price_1TZyoKQU15XnZ7VvJzJNnub7": { plan: "transformacao", billing_cycle: "yearly" },
+};
+
+function detectPlanCycleFromPrice(priceId: string | null | undefined): { plan: string; billing_cycle: string } | null {
+  if (!priceId) return null;
+  // Mensal: lookup via env
+  const monthlyMap: Record<string, string> = {
+    [Deno.env.get("STRIPE_PRICE_ESSENCIAL_MONTHLY") || ""]: "essencial",
+    [Deno.env.get("STRIPE_PRICE_DIRECAO_MONTHLY") || ""]: "direcao",
+    [Deno.env.get("STRIPE_PRICE_TRANSFORMACAO_MONTHLY") || ""]: "transformacao",
+  };
+  if (monthlyMap[priceId]) return { plan: monthlyMap[priceId], billing_cycle: "monthly" };
+  // Anual legado (envs): mantém yearly
+  const yearlyMap: Record<string, string> = {
+    [Deno.env.get("STRIPE_PRICE_ESSENCIAL_YEARLY") || ""]: "essencial",
+    [Deno.env.get("STRIPE_PRICE_DIRECAO_YEARLY") || ""]: "direcao",
+    [Deno.env.get("STRIPE_PRICE_TRANSFORMACAO_YEARLY") || ""]: "transformacao",
+  };
+  if (yearlyMap[priceId]) return { plan: yearlyMap[priceId], billing_cycle: "yearly" };
+  // Trim/Sem/Anual V2 hardcoded
+  return RECURRING_PRICES[priceId] ?? null;
+}
+
 // Sessions per plan
 // Sessões/mês — para flag `needs_schedule_setup` no signup.
 // Essencial fica 0 de propósito: a 1ª sessão dele é coberta pelo convite D0
