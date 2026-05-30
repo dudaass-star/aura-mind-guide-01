@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Loader2, Check, Info } from "lucide-react";
+import { Loader2, Check } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
@@ -31,8 +31,8 @@ interface Props {
   userId: string;
   currentPlan: PlanId | null;
   currentBilling?: BillingCycle | null;
-  /** Quando true, usuário está em PIX Asaas recorrente — troca não é self-service. */
-  isAsaasPix?: boolean;
+  /** Método de pagamento atual — roteia para a edge function correta. */
+  paymentMethod: "card" | "pix";
 }
 
 export function ChangePlanDialog({
@@ -41,18 +41,26 @@ export function ChangePlanDialog({
   userId,
   currentPlan,
   currentBilling,
-  isAsaasPix,
+  paymentMethod,
 }: Props) {
   const [billing, setBilling] = useState<BillingCycle>(currentBilling ?? "monthly");
   const [selected, setSelected] = useState<PlanId | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState<{
+    planName: string;
+    nextChargeDate?: string;
+    nextChargeAmount?: number;
+  } | null>(null);
   const queryClient = useQueryClient();
+
+  const isPix = paymentMethod === "pix";
 
   const reset = () => {
     setSelected(null);
     setConfirming(false);
     setLoading(false);
+    setSuccess(null);
   };
 
   const handleClose = (next: boolean) => {
@@ -65,10 +73,10 @@ export function ChangePlanDialog({
     if (!selected) return;
     setLoading(true);
     try {
-      const { data, error } = await supabasePortal.functions.invoke(
-        "change-subscription-plan",
-        { body: { userId, targetPlan: selected, billing } },
-      );
+      const functionName = isPix ? "change-asaas-plan" : "change-subscription-plan";
+      const { data, error } = await supabasePortal.functions.invoke(functionName, {
+        body: { userId, targetPlan: selected, billing },
+      });
       if (error) {
         const msg =
           (error as any)?.context?.error ||
@@ -79,20 +87,30 @@ export function ChangePlanDialog({
       }
       if ((data as any)?.error) throw new Error((data as any).error);
 
-      toast({
-        title: "Plano atualizado",
-        description: `Agora você está no ${(data as any)?.newPlanName ?? "novo plano"}.`,
-      });
       await queryClient.invalidateQueries({ queryKey: ["portal-profile", userId] });
-      reset();
-      onOpenChange(false);
+
+      if (isPix) {
+        // PIX: mostra tela de sucesso com próxima cobrança
+        setSuccess({
+          planName: (data as any)?.newPlanName ?? PLAN_LABELS[selected],
+          nextChargeDate: (data as any)?.nextChargeDate,
+          nextChargeAmount: (data as any)?.nextChargeAmount,
+        });
+        setLoading(false);
+      } else {
+        toast({
+          title: "Plano atualizado",
+          description: `Agora você está no ${(data as any)?.newPlanName ?? "novo plano"}.`,
+        });
+        reset();
+        onOpenChange(false);
+      }
     } catch (e: any) {
       toast({
         title: "Ops",
         description: e?.message ?? "Não foi possível trocar agora.",
         variant: "destructive",
       });
-    } finally {
       setLoading(false);
     }
   };
@@ -105,37 +123,36 @@ export function ChangePlanDialog({
         <DialogHeader>
           <DialogTitle className="font-['Nunito']">Trocar de plano</DialogTitle>
           <DialogDescription className="font-['Nunito']">
-            A diferença é cobrada (ou creditada) hoje no cartão já cadastrado.
+            {isPix
+              ? "A troca vale a partir da próxima cobrança PIX. Hoje não rola cobrança nenhuma."
+              : "A diferença é cobrada (ou creditada) hoje no cartão já cadastrado."}
           </DialogDescription>
         </DialogHeader>
 
-        {isAsaasPix && (
-          <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm font-['Nunito'] space-y-3">
-            <div className="flex items-start gap-2">
-              <Info size={16} className="mt-0.5 text-accent shrink-0" />
-              <p>
-                Sua assinatura é <strong>PIX recorrente</strong>. Pra trocar de plano,
-                fala com a gente no WhatsApp que a gente ajeita pra você — leva uns minutinhos.
+        {success && (
+          <>
+            <div className="rounded-lg border border-border bg-muted/20 p-4 text-sm font-['Nunito'] space-y-2">
+              <div className="flex items-center gap-2">
+                <Check size={16} className="text-accent" />
+                <span className="font-semibold">Plano trocado para {success.planName}.</span>
+              </div>
+              {success.nextChargeDate && success.nextChargeAmount != null && (
+                <p className="text-muted-foreground">
+                  Sua próxima cobrança PIX, no dia <strong>{success.nextChargeDate}</strong>,
+                  já vem no valor novo: <strong>{fmtBRL(success.nextChargeAmount)}</strong>.
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground pt-1">
+                Nada foi cobrado agora. Sua assinatura atual segue valendo até a próxima fatura.
               </p>
             </div>
             <DialogFooter className="gap-2 sm:gap-2">
-              <Button variant="ghost" onClick={() => handleClose(false)}>
-                Fechar
-              </Button>
-              <Button asChild>
-                <a
-                  href="https://wa.me/16625255005?text=Quero%20trocar%20meu%20plano%20(PIX)"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Falar no WhatsApp
-                </a>
-              </Button>
+              <Button onClick={() => handleClose(false)}>Fechar</Button>
             </DialogFooter>
-          </div>
+          </>
         )}
 
-        {!isAsaasPix && !confirming && (
+        {!success && !confirming && (
           <>
             {/* Toggle de ciclo (4 opções) */}
             <div className="flex justify-center mb-2">
@@ -221,7 +238,7 @@ export function ChangePlanDialog({
           </>
         )}
 
-        {!isAsaasPix && confirming && selected && (
+        {!success && confirming && selected && (
           <>
             <div className="rounded-lg border border-border bg-muted/20 p-4 text-sm font-['Nunito'] space-y-2">
               <div>
@@ -239,7 +256,9 @@ export function ChangePlanDialog({
                 </span>
               </div>
               <p className="text-xs text-muted-foreground pt-1">
-                A diferença é cobrada agora no seu cartão. Se for downgrade, vira crédito no próximo ciclo.
+                {isPix
+                  ? "Sua próxima cobrança PIX já vem com o novo valor. Nada é cobrado agora."
+                  : "A diferença é cobrada agora no seu cartão. Se for downgrade, vira crédito no próximo ciclo."}
               </p>
             </div>
 
