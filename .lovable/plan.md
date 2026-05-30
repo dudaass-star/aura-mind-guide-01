@@ -1,43 +1,66 @@
-## Objetivo
 
-Fechar as lacunas do fluxo de troca de plano para que funcione corretamente em todos os cenários reais (cartão M/Trim/Sem/Anual, PIX Asaas recorrente), com cobrança proporcional imediata e sem risco de cobrança dupla.
+# Troca de plano PIX Asaas — self-service automática (sem proração)
+
+Hoje quem paga via PIX recorrente Asaas vê "fale com a gente no WhatsApp". Vamos remover essa fricção e fazer a troca rodar 100% no backend, sem intervenção humana e **sem cálculo de proporção** — o ciclo atual continua valendo até a próxima cobrança, e a partir daí o usuário já paga o novo plano.
+
+## Como vai funcionar para o usuário
+
+1. No `/meu-espaco`, usuário PIX clica em "Trocar plano" → abre o mesmo `ChangePlanDialog`, **sem** o bloco do WhatsApp.
+2. Escolhe plano + ciclo → clica em "Confirmar troca".
+3. Backend cancela a subscription Asaas atual e cria uma nova com o novo `value`/`cycle`, mantendo o **mesmo `nextDueDate`** da assinatura antiga (não cobra nada hoje).
+4. UI mostra: "Plano trocado. Sua próxima cobrança PIX, no dia X, já vem no valor novo: R$ Y."
+
+Simples. Sem QR code de ajuste. Sem crédito. Sem tabela nova.
 
 ## Mudanças
 
-### 1. `supabase/functions/change-subscription-plan/index.ts`
+### 1. Nova edge function `change-asaas-plan`
+- Input: `{ userId, targetPlan, billing }`
+- Resolve `profile.asaas_customer_id`
+- Busca subscription Asaas ativa em `asaas_payments` (último `asaas_subscription_id` com status ativo/overdue)
+- Consulta a subscription antiga no Asaas (`GET /subscriptions/{id}`) pra extrair `nextDueDate`
+- Chama Asaas API:
+  - `POST /subscriptions` com novo `value`, `cycle` e `nextDueDate = nextDueDate antigo` (mesma data, valor novo)
+  - `DELETE /subscriptions/{id antigo}` (cancela a antiga só depois que a nova foi criada com sucesso)
+- Persiste em `profiles`: `plan`, `billing_cycle`, novo `asaas_subscription_id`
+- Retorna `{ ok, newPlan, newPlanName, newBilling, nextChargeDate, nextChargeAmount }`
+- Logs com prefixo `[CHANGE-ASAAS-PLAN]`, mensagens PT-BR amigáveis
 
-- **Importar `RECURRING_PRICES`** (ou replicar o mesmo mapa hardcoded usado em `create-checkout`) como fonte única de verdade para Trim/Sem/Anual. Mensal continua via `STRIPE_PRICE_*_MONTHLY` (env).
-- **Suportar 4 ciclos** em `billing`: `monthly | quarterly | semiannual | yearly`. Atualizar validação e `resolvePriceId`.
-- **Trocar `proration_behavior` para `always_invoice`** + manter `payment_behavior: 'error_if_incomplete'` para que a diferença seja cobrada agora no cartão e a UI fale a verdade.
-- **Persistir `billing_cycle`** no `profiles.update` junto com `plan`, evitando lag se webhook falhar.
-- **Bloquear explicitamente `provider='asaas'`**: ler `profiles.provider` (ou tabela de assinatura) e retornar 409 com mensagem clara ("Sua assinatura é PIX recorrente; troca de plano via suporte por enquanto").
-- **Customer lookup**: quando `stripe.customers.list` retornar >1, escolher o que tem subscription ativa em vez de `limit:1` cego.
+### 2. UI — `ChangePlanDialog.tsx`
+- Remover o early-return do bloco `isAsaasPix` (linhas que mostram "Falar no WhatsApp")
+- Substituir prop `isAsaasPix?: boolean` por `paymentMethod: 'card' | 'pix'`
+- Quando `paymentMethod === 'pix'`:
+  - Header description muda: "A troca vale a partir da próxima cobrança PIX. Hoje não rola cobrança nenhuma."
+  - Tela de confirmação: substitui "A diferença é cobrada agora no seu cartão..." por "Sua próxima cobrança PIX (dia X) já vem com o novo valor: R$ Y. Nada é cobrado agora."
+  - `handleConfirm` invoca `change-asaas-plan` em vez de `change-subscription-plan`
+  - Toast de sucesso: "Plano trocado. Próxima cobrança PIX no dia X."
+- Reutiliza `PLAN_MONTHLY_EQUIVALENT` da `src/lib/plan-pricing.ts`
 
-### 2. `src/components/portal/ChangePlanDialog.tsx`
+### 3. `UserPortal.tsx`
+- Passar `paymentMethod` para o dialog em vez de `isAsaasPix` (mesma lógica de detecção atual)
 
-- **Receber `provider` e `currentBilling` como props** (vindos do perfil já carregado no Portal).
-- **Bloquear abertura/CTA quando `provider==='asaas'`**: trocar botão "Trocar plano" por aviso "Pra trocar de plano no PIX, fala com a gente" + link de suporte.
-- **Toggle de ciclo com 4 opções** (Mensal / Trimestral / Semestral / Anual), refletindo os preços reais do `RECURRING_PRICES`.
-- **Centralizar preços num único objeto** compartilhado (novo `src/lib/plan-pricing.ts`) consumido pelo dialog e por qualquer outro componente que mostre preço, evitando divergência com o backend.
-- Texto do confirm: "A diferença é cobrada agora no seu cartão" (alinhado com `always_invoice`).
+### 4. `supabase/config.toml`
+- Adicionar `[functions.change-asaas-plan] verify_jwt = false`
 
-### 3. `src/lib/plan-pricing.ts` (novo)
+## Bordas tratadas
 
-- Exporta `PLAN_PRICES[plan][cycle] = { displayMonthly, totalCharge, label }` para os 12 SKUs cartão.
-- Fonte única de verdade entre Portal, CheckoutV2 e qualquer dialog futuro.
+- **Mesmo plano + mesmo ciclo** → 409 "você já está nesse plano"
+- **Subscription Asaas não encontrada** → 404 "não encontramos sua assinatura, tenta de novo"
+- **Usuário em OVERDUE** → bloqueia troca: "tem cobrança pendente, paga ela primeiro" (link pro QR no portal)
+- **Falha no `POST /subscriptions`** → não cancela a antiga, retorna 500 e mantém estado anterior
+- **Falha no `DELETE` da antiga (após criar a nova)** → loga `[CHANGE-ASAAS-PLAN] WARN orphan old subscription` e segue (a nova já está ativa; admin limpa depois). Não bloqueia o usuário.
+- **Sem `nextDueDate` na sub antiga** (caso raro) → usa `hoje + 30 dias` como fallback
 
-### 4. Memória
+## Detalhes técnicos
 
-- Atualizar `mem://features/subscription/plan-change-limits`: agora cobre M/Trim/Sem/Anual cartão + bloqueio explícito de PIX Asaas + uso de `always_invoice`.
-- Atualizar `mem://technical/stripe/recurring-prices-v2`: passa a ser importado também pelo `change-subscription-plan`.
+- **API Asaas**: `ASAAS_API_KEY` + `ASAAS_ENV` (já configurados como secrets)
+- **Endpoints**: `GET /v3/subscriptions/{id}`, `POST /v3/subscriptions`, `DELETE /v3/subscriptions/{id}`
+- **Validação de identidade**: portal usa token UUID; a edge valida cruzando `userId` recebido com `profiles.asaas_customer_id` antes de chamar Asaas (impede troca por terceiros)
+- **Sem mudança no `change-subscription-plan` Stripe** — segue só para cartão
+- **Sem nova tabela, sem migration**
 
-## Fora de escopo (fica pra depois, com aviso na memória)
+## Fora de escopo
 
-- **Troca de plano para usuários PIX Asaas**: exige criar nova `subscription` no Asaas, cancelar a antiga e reconciliar. Tratado via suporte por enquanto — UI já bloqueia.
-- **Downgrade com crédito**: `always_invoice` em downgrade gera invoice de R$ 0 + crédito no próximo ciclo (comportamento padrão Stripe, ok).
-
-## Verificação
-
-- `curl_edge_functions` em `change-subscription-plan` com um `userId` de teste cartão mensal → trimestral; conferir invoice criada com `prorate` no Stripe Dashboard.
-- Conferir no Portal que botão fica desabilitado para usuário PIX Asaas.
-- Conferir que `profiles.plan` e `profiles.billing_cycle` foram atualizados após sucesso.
+- Trocar de **PIX para cartão** ou vice-versa (continua sem fluxo automático — caso raro)
+- Cobrança/crédito proporcional (decisão explícita: simplicidade > precisão de centavos)
+- Testes automatizados (segue débito conhecido)
