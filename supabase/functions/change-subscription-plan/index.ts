@@ -146,9 +146,9 @@ serve(async (req) => {
       const { data: asaasActive } = await supabase
         .from("asaas_payments")
         .select("asaas_subscription_id, status")
-        .eq("user_id", userId)
+        .eq("asaas_customer_id", profile.asaas_customer_id)
         .not("asaas_subscription_id", "is", null)
-        .in("status", ["CONFIRMED", "RECEIVED", "PENDING", "ACTIVE", "RECEIVED_IN_CASH"])
+        .in("status", ["CONFIRMED", "RECEIVED", "PENDING", "ACTIVE", "RECEIVED_IN_CASH", "OVERDUE"])
         .order("created_at", { ascending: false })
         .limit(1);
       if (asaasActive && asaasActive.length > 0) {
