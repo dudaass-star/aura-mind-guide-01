@@ -52,6 +52,7 @@ const UserPortal = () => {
 
   // Detecta PIX Asaas recorrente: tem asaas_customer_id E pelo menos uma payment
   // com asaas_subscription_id ativo (status corrente).
+  // Match por asaas_customer_id (FK histórica de user_id aponta pra profiles.id, não auth.uid()).
   const { data: isAsaasPix } = useQuery({
     queryKey: ["portal-asaas-active", userId],
     queryFn: async () => {
@@ -59,9 +60,9 @@ const UserPortal = () => {
       const { data, error } = await supabasePortal
         .from("asaas_payments")
         .select("asaas_subscription_id")
-        .eq("user_id", userId!)
+        .eq("asaas_customer_id", profile.asaas_customer_id)
         .not("asaas_subscription_id", "is", null)
-        .in("status", ["CONFIRMED", "RECEIVED", "PENDING", "ACTIVE", "RECEIVED_IN_CASH"])
+        .in("status", ["CONFIRMED", "RECEIVED", "PENDING", "ACTIVE", "RECEIVED_IN_CASH", "OVERDUE"])
         .limit(1);
       if (error) return false;
       return (data?.length ?? 0) > 0;
