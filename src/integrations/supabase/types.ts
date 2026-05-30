@@ -1110,6 +1110,7 @@ export type Database = {
           audio_reset_date: string | null
           audio_seconds_used_this_month: number | null
           awaiting_time_capsule: string | null
+          billing_cycle: string | null
           canceled_at: string | null
           converted_at: string | null
           created_at: string | null
@@ -1174,6 +1175,7 @@ export type Database = {
           audio_reset_date?: string | null
           audio_seconds_used_this_month?: number | null
           awaiting_time_capsule?: string | null
+          billing_cycle?: string | null
           canceled_at?: string | null
           converted_at?: string | null
           created_at?: string | null
@@ -1238,6 +1240,7 @@ export type Database = {
           audio_reset_date?: string | null
           audio_seconds_used_this_month?: number | null
           awaiting_time_capsule?: string | null
+          billing_cycle?: string | null
           canceled_at?: string | null
           converted_at?: string | null
           created_at?: string | null
