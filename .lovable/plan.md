@@ -1,122 +1,68 @@
 
-# Repaginação do /meu-espaco — Espelho Vivo da relação com a Aura
+## Diagnóstico
 
-Transformar o portal de catálogo passivo em espaço vivo de retenção. Nova ordem de abas: **Hoje → Sessões → Insights → Sobre Você → Jornadas → Meditações**.
+A aba está mostrando dados crus da `user_insights` porque o filtro é só por `importance`. Isso joga tudo que tem `importance=10` na "Identidade" (incluindo lixo como `habilidade: fazer as coisas`, `audio: confirmar...`, `continuar_conversando: true`) e deixa "Valores" quase vazio (quase nada tem 7–9).
 
-## Aba "Hoje" (nova — landing principal)
+A tabela já tem um campo `category` com 7 valores fixos:
 
-Cards dinâmicos, na ordem:
+| category | count | uso |
+|---|---|---|
+| contexto | 6861 | operacional/efêmero — **não mostrar** |
+| preferencia | 3054 | preferências e gostos |
+| pessoa | 2265 | pessoas da vida |
+| padrao | 1443 | padrões de comportamento |
+| objetivo | 1216 | metas e direções |
+| trauma | 1052 | pontos sensíveis |
+| conquista | 604 | vitórias |
 
-1. **Saudação contextual** — "Bom dia, {nome}" + última interação com a Aura ("Vocês conversaram há 2h").
-2. **O que ficou da última sessão** (substitui "micro-passo")
-   - Mostra o `closure` da sessão concluída mais recente, **independente do formato** (tese, encruzilhada, leitura, experimento, pergunta-pra-carregar, escolha-binária, micro-passo).
-   - Título do card adapta ao formato:
-     - `pergunta-pra-carregar` → "Pergunta pra carregar"
-     - `leitura` → "Leitura da Aura"
-     - `experimento` → "Experimento dessa semana"
-     - `escolha-binária` → "Escolha aberta"
-     - `tese` → "Tese da Aura"
-     - `encruzilhada` → "Encruzilhada"
-     - `micro-passo` → "Próximo passo"
-     - fallback (sem tipo) → "O que ficou da última sessão"
-   - Botão adapta:
-     - pergunta/leitura → "Responder pra Aura" (deep link WhatsApp)
-     - experimento/escolha-binária/micro-passo → "Contar pra Aura como foi"
-     - tese/encruzilhada → "Continuar essa conversa"
-3. **Próxima sessão** — data/hora BRT + countdown + botão "Reagendar pelo WhatsApp".
-4. **Último insight da Aura** (Efeito Oráculo) — frase + data, com "Ver todos os insights".
-5. **Meditação sugerida** — escolha contextual (tag mais recente do usuário). Botão "Ouvir agora".
-6. **Citação/frase da semana** (opcional, do relatório mensal).
+O bug visível ("Temas em movimento" aparecendo concatenado, ex.: `ansiedadeAnsiedade...`) também é dado duplicado por caixa (`ansiedade` e `Ansiedade` viraram dois temas diferentes).
 
-**Empty state** (usuário novo sem sessão): card "Sua primeira sessão" com convite e CTA WhatsApp.
+## O que muda
 
-## Aba "Sessões"
+Só `src/components/portal/SobreVoceTab.tsx`. Sem migration, sem edge function, sem mexer no extractor.
 
-- Card grande "Próxima sessão" no topo.
-- Contador do mês: "3 de 4 sessões usadas no plano Essencial".
-- Lista cronológica de sessões concluídas: data, tema, reframe curto, fechamento (com badge do formato), rating do usuário.
-- Clique abre detalhe expandido (summary completo, reframe, closure).
-- Empty state para quem ainda não fez sessão.
+### Nova estrutura de seções (orientada por `category`, não por `importance`)
 
-## Aba "Insights" (substitui parcialmente "Resumos")
+1. **Pessoas da sua vida** — `category = 'pessoa'`
+2. **Preferências e gostos** — `category = 'preferencia'` AND `importance >= 6`
+3. **O que você busca** — `category = 'objetivo'` AND `importance >= 6`
+4. **Padrões que a Aura percebeu** — `category = 'padrao'` AND `importance >= 6`
+5. **Conquistas** — `category = 'conquista'`
+6. **Pontos sensíveis** — `category = 'trauma'` (colapsado por padrão, expansível, com aviso "tópicos delicados")
+7. **Temas em movimento** — `session_themes`, deduplicados
 
-- Timeline de insights do Efeito Oráculo + cápsulas do tempo entregues.
-- Bloco "Padrões dessa semana / desse mês" (extraído de `monthly_reports.analysis_text` + tags recorrentes).
-- Botão "Compartilhar" em cada insight (gera card visual).
-- Empty state: "A Aura ainda está te conhecendo".
+`category = 'contexto'` nunca aparece.
 
-## Aba "Sobre Você" (substitui parcialmente "Resumos")
+### Limpeza por item (aplicada antes de agrupar)
 
-Conhecimento curado que a Aura tem do usuário, agrupado por prioridade da `user_memories`:
+Descarta o registro se qualquer uma:
 
-- **Identidade** (prioridade 10)
-- **Valores** (7–9)
-- **Temas recorrentes** (tags agregadas)
-- **Marcos da jornada** (timeline determinística: 1ª sessão, primeira meditação, X sessões, etc.)
-- **Evolução emocional** (gráfico simples do relatório mensal).
+- `value` vazia, só whitespace, ou ≤ 2 caracteres
+- `value` é placeholder: `nao_nomeada`, `não nomeada`, `n/a`, `null`, `true`, `false`, `sim`, `não`, ou só dígitos
+- `key` está no blacklist de chaves operacionais: `audio`, `conversar_audio`, `confusao_texto_audio`, `compreensao_aura`, `compreensao_processo`, `continuar_conversando`, `interacao_anterior`, `topico_anterior`, `assunto_nao_discutir`, `recusa_de_ajuda`, `recusa de ajuda`, `mudanca de assunto`, `tipo de interação`, `tipo de serviço`, `estado`, `clima`, `localizacao`, `kit_*`, `frase_ancora`, `estatistica_*`, `episodio_*`, `jornada_concluida`, `tema_episodio`, `tema_principal`
+- `value` começa com `EP ` (referência de episódio)
 
-Cada item tem "Corrigir" / "Remover" via WhatsApp (deep link com texto pré-preenchido).
+### Deduplicação
 
-## Aba "Jornadas" (polida)
+- Por seção, agrupa por `lower(trim(key))` e mantém o registro com maior `importance`; empate desempata pelo `last_mentioned_at` mais recente.
+- Para `pessoa`: se mesma `key` aparece com valores diferentes (ex.: `filha: Selena` e `filha: Bella`), agrega em uma linha "filha: Selena, Bella" (até 3 valores).
+- `session_themes`: dedup case-insensitive em `theme_name`, soma `session_count`, mantém pior `status` (active > resolved).
 
-- Busca + filtro por duração.
-- Marker "Já ouvi" / "Em andamento".
-- Seção "Recomendadas pra você" no topo (baseado em tags).
+### Apresentação
 
-## Aba "Meditações" (polida)
+- Cada item vira uma linha mais legível: chave em title case sem underscore (`relacionamento_amoroso` → `Relacionamento amoroso`), valor em texto normal.
+- Limite de 8 itens por seção com botão "Ver mais" pra expandir.
+- Se a seção fica vazia após filtros, ela some.
+- Empty state geral só aparece se TODAS as seções estiverem vazias.
+- Botão "Corrigir no WhatsApp" permanece em cada item.
 
-- Busca + filtro por duração/categoria.
-- Marker "Já ouvi".
-- "Sugeridas agora" no topo.
+### Temas em movimento
 
-## Floating CTA
+- Render continua em pills (já está com `flex flex-wrap gap-2`, o "concatenado" do print é só copy-paste).
+- Adiciona dedup por `lower(theme_name)` pra eliminar `ansiedade` vs `Ansiedade`.
+- Resolvidos ficam no fim, riscados.
 
-Botão flutuante "Falar com a Aura" presente em todas as abas (deep link WhatsApp para o número oficial).
+## Fora de escopo
 
----
-
-## Mudanças técnicas
-
-### Banco
-
-- **Migration**: adicionar `closure_type TEXT` em `public.sessions` (valores: `tese | encruzilhada | leitura | experimento | pergunta-pra-carregar | escolha-binaria | micro-passo`). Nullable, sem default.
-- **Nova tabela `public.user_insights`**: `user_id`, `insight_text`, `source` (`oraculo | session | capsula`), `delivered_at`, `metadata jsonb`. RLS por token de portal (mesmo padrão de `monthly_reports`) + GRANTs (`authenticated`, `service_role`, `anon` só onde policy permite via token).
-- **Nova tabela `public.user_milestones`** (computada): `user_id`, `milestone_type`, `achieved_at`, `metadata`. Preenchida por edge function determinística.
-
-### Edge functions
-
-- `session-extractor` (já existe): passar a popular `closure_type` via tool calling (Flash-lite).
-- `efeito-oraculo-*` (já existe): gravar em `user_insights` toda vez que entrega um insight.
-- **Nova** `compute-user-milestones`: determinística, roda diária via cron, agrega marcos.
-- **Nova** `extract-user-themes`: Gemini Flash-Lite, agrega tags recorrentes das últimas N sessões.
-- **Nova** `portal-today`: agrega tudo da aba Hoje em 1 request (última sessão + closure, próxima sessão, último insight, sugestão de meditação, saudação).
-
-### Frontend
-
-- Refatorar `src/pages/UserPortal.tsx` para 6 abas na nova ordem.
-- Componentes novos em `src/components/portal/`:
-  - `HojeTab.tsx` (orquestrador de cards)
-  - `cards/UltimaSessaoCard.tsx` (com lógica de título/botão por `closure_type`)
-  - `cards/ProximaSessaoCard.tsx`
-  - `cards/UltimoInsightCard.tsx`
-  - `cards/MeditacaoSugeridaCard.tsx`
-  - `SessoesTab.tsx`
-  - `InsightsTab.tsx`
-  - `SobreVoceTab.tsx`
-  - `FloatingWhatsAppCTA.tsx`
-- Reaproveitar `JornadasTab`, `MeditacoesTab` (adicionar busca + markers).
-- Deletar `ResumosTab.tsx` (conteúdo migra).
-- Tokens semânticos do design system (sem cores hardcoded).
-
-### Fora de escopo
-
-Fluxos de pagamento, comportamento da Aura no WhatsApp, novos meios de pagamento, login passwordless.
-
----
-
-## Fases de entrega
-
-1. **Fase 1** — Migration (`closure_type`, `user_insights`, `user_milestones`) + refator do frontend com 6 abas usando dados já existentes (sessões, monthly_reports, user_memories, time_capsules, próxima sessão). Card "O que ficou" usa `closure` atual; quando `closure_type` for null, mostra título genérico.
-2. **Fase 2** — `session-extractor` populando `closure_type`; `efeito-oraculo-*` gravando em `user_insights`; aba Insights ganha dados reais.
-3. **Fase 3** — `extract-user-themes` + `compute-user-milestones`; aba "Sobre Você" ganha temas e marcos automáticos.
-4. **Fase 4** — Polimento: busca/filtros em Jornadas e Meditações, "Recomendadas pra você", compartilhamento de insights.
+- Curador via Gemini Flash-Lite escrevendo um "resumo do usuário". Vale fazer depois se você quiser uma versão narrativa ("A Aura te enxerga como..."), mas pode ser uma fase posterior — a limpeza acima já resolve o que tá feio agora.
+- Mudar como o agente popula `user_insights` (corrige o problema na raiz, mas é prompt change separado).
