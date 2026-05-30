@@ -69,21 +69,6 @@ const KEY_BLACKLIST = new Set([
   "pessoa_mencionada",
   "interesse_em_sessoes",
   "interesse em sessões",
-  // Chaves "vazias" que não dizem nada por si só
-  "habilidade",
-  "mentor",
-  "passo",
-  "passo_de_hoje",
-  "acao",
-  "fazer",
-  "sentir",
-  "desejo",
-  "quebrar_o_padrao",
-  "quebrar o padrão",
-  "autoconfianca",
-  "autoconfiança",
-  "retomar_treinos",
-  "prioridade",
 ]);
 
 const KEY_PREFIX_BLACKLIST = ["kit_", "estatistica_", "episodio_"];
