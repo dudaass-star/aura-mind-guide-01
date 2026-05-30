@@ -1,66 +1,122 @@
 
-# Troca de plano PIX Asaas — self-service automática (sem proração)
+# Repaginação do /meu-espaco — Espelho Vivo da relação com a Aura
 
-Hoje quem paga via PIX recorrente Asaas vê "fale com a gente no WhatsApp". Vamos remover essa fricção e fazer a troca rodar 100% no backend, sem intervenção humana e **sem cálculo de proporção** — o ciclo atual continua valendo até a próxima cobrança, e a partir daí o usuário já paga o novo plano.
+Transformar o portal de catálogo passivo em espaço vivo de retenção. Nova ordem de abas: **Hoje → Sessões → Insights → Sobre Você → Jornadas → Meditações**.
 
-## Como vai funcionar para o usuário
+## Aba "Hoje" (nova — landing principal)
 
-1. No `/meu-espaco`, usuário PIX clica em "Trocar plano" → abre o mesmo `ChangePlanDialog`, **sem** o bloco do WhatsApp.
-2. Escolhe plano + ciclo → clica em "Confirmar troca".
-3. Backend cancela a subscription Asaas atual e cria uma nova com o novo `value`/`cycle`, mantendo o **mesmo `nextDueDate`** da assinatura antiga (não cobra nada hoje).
-4. UI mostra: "Plano trocado. Sua próxima cobrança PIX, no dia X, já vem no valor novo: R$ Y."
+Cards dinâmicos, na ordem:
 
-Simples. Sem QR code de ajuste. Sem crédito. Sem tabela nova.
+1. **Saudação contextual** — "Bom dia, {nome}" + última interação com a Aura ("Vocês conversaram há 2h").
+2. **O que ficou da última sessão** (substitui "micro-passo")
+   - Mostra o `closure` da sessão concluída mais recente, **independente do formato** (tese, encruzilhada, leitura, experimento, pergunta-pra-carregar, escolha-binária, micro-passo).
+   - Título do card adapta ao formato:
+     - `pergunta-pra-carregar` → "Pergunta pra carregar"
+     - `leitura` → "Leitura da Aura"
+     - `experimento` → "Experimento dessa semana"
+     - `escolha-binária` → "Escolha aberta"
+     - `tese` → "Tese da Aura"
+     - `encruzilhada` → "Encruzilhada"
+     - `micro-passo` → "Próximo passo"
+     - fallback (sem tipo) → "O que ficou da última sessão"
+   - Botão adapta:
+     - pergunta/leitura → "Responder pra Aura" (deep link WhatsApp)
+     - experimento/escolha-binária/micro-passo → "Contar pra Aura como foi"
+     - tese/encruzilhada → "Continuar essa conversa"
+3. **Próxima sessão** — data/hora BRT + countdown + botão "Reagendar pelo WhatsApp".
+4. **Último insight da Aura** (Efeito Oráculo) — frase + data, com "Ver todos os insights".
+5. **Meditação sugerida** — escolha contextual (tag mais recente do usuário). Botão "Ouvir agora".
+6. **Citação/frase da semana** (opcional, do relatório mensal).
 
-## Mudanças
+**Empty state** (usuário novo sem sessão): card "Sua primeira sessão" com convite e CTA WhatsApp.
 
-### 1. Nova edge function `change-asaas-plan`
-- Input: `{ userId, targetPlan, billing }`
-- Resolve `profile.asaas_customer_id`
-- Busca subscription Asaas ativa em `asaas_payments` (último `asaas_subscription_id` com status ativo/overdue)
-- Consulta a subscription antiga no Asaas (`GET /subscriptions/{id}`) pra extrair `nextDueDate`
-- Chama Asaas API:
-  - `POST /subscriptions` com novo `value`, `cycle` e `nextDueDate = nextDueDate antigo` (mesma data, valor novo)
-  - `DELETE /subscriptions/{id antigo}` (cancela a antiga só depois que a nova foi criada com sucesso)
-- Persiste em `profiles`: `plan`, `billing_cycle`, novo `asaas_subscription_id`
-- Retorna `{ ok, newPlan, newPlanName, newBilling, nextChargeDate, nextChargeAmount }`
-- Logs com prefixo `[CHANGE-ASAAS-PLAN]`, mensagens PT-BR amigáveis
+## Aba "Sessões"
 
-### 2. UI — `ChangePlanDialog.tsx`
-- Remover o early-return do bloco `isAsaasPix` (linhas que mostram "Falar no WhatsApp")
-- Substituir prop `isAsaasPix?: boolean` por `paymentMethod: 'card' | 'pix'`
-- Quando `paymentMethod === 'pix'`:
-  - Header description muda: "A troca vale a partir da próxima cobrança PIX. Hoje não rola cobrança nenhuma."
-  - Tela de confirmação: substitui "A diferença é cobrada agora no seu cartão..." por "Sua próxima cobrança PIX (dia X) já vem com o novo valor: R$ Y. Nada é cobrado agora."
-  - `handleConfirm` invoca `change-asaas-plan` em vez de `change-subscription-plan`
-  - Toast de sucesso: "Plano trocado. Próxima cobrança PIX no dia X."
-- Reutiliza `PLAN_MONTHLY_EQUIVALENT` da `src/lib/plan-pricing.ts`
+- Card grande "Próxima sessão" no topo.
+- Contador do mês: "3 de 4 sessões usadas no plano Essencial".
+- Lista cronológica de sessões concluídas: data, tema, reframe curto, fechamento (com badge do formato), rating do usuário.
+- Clique abre detalhe expandido (summary completo, reframe, closure).
+- Empty state para quem ainda não fez sessão.
 
-### 3. `UserPortal.tsx`
-- Passar `paymentMethod` para o dialog em vez de `isAsaasPix` (mesma lógica de detecção atual)
+## Aba "Insights" (substitui parcialmente "Resumos")
 
-### 4. `supabase/config.toml`
-- Adicionar `[functions.change-asaas-plan] verify_jwt = false`
+- Timeline de insights do Efeito Oráculo + cápsulas do tempo entregues.
+- Bloco "Padrões dessa semana / desse mês" (extraído de `monthly_reports.analysis_text` + tags recorrentes).
+- Botão "Compartilhar" em cada insight (gera card visual).
+- Empty state: "A Aura ainda está te conhecendo".
 
-## Bordas tratadas
+## Aba "Sobre Você" (substitui parcialmente "Resumos")
 
-- **Mesmo plano + mesmo ciclo** → 409 "você já está nesse plano"
-- **Subscription Asaas não encontrada** → 404 "não encontramos sua assinatura, tenta de novo"
-- **Usuário em OVERDUE** → bloqueia troca: "tem cobrança pendente, paga ela primeiro" (link pro QR no portal)
-- **Falha no `POST /subscriptions`** → não cancela a antiga, retorna 500 e mantém estado anterior
-- **Falha no `DELETE` da antiga (após criar a nova)** → loga `[CHANGE-ASAAS-PLAN] WARN orphan old subscription` e segue (a nova já está ativa; admin limpa depois). Não bloqueia o usuário.
-- **Sem `nextDueDate` na sub antiga** (caso raro) → usa `hoje + 30 dias` como fallback
+Conhecimento curado que a Aura tem do usuário, agrupado por prioridade da `user_memories`:
 
-## Detalhes técnicos
+- **Identidade** (prioridade 10)
+- **Valores** (7–9)
+- **Temas recorrentes** (tags agregadas)
+- **Marcos da jornada** (timeline determinística: 1ª sessão, primeira meditação, X sessões, etc.)
+- **Evolução emocional** (gráfico simples do relatório mensal).
 
-- **API Asaas**: `ASAAS_API_KEY` + `ASAAS_ENV` (já configurados como secrets)
-- **Endpoints**: `GET /v3/subscriptions/{id}`, `POST /v3/subscriptions`, `DELETE /v3/subscriptions/{id}`
-- **Validação de identidade**: portal usa token UUID; a edge valida cruzando `userId` recebido com `profiles.asaas_customer_id` antes de chamar Asaas (impede troca por terceiros)
-- **Sem mudança no `change-subscription-plan` Stripe** — segue só para cartão
-- **Sem nova tabela, sem migration**
+Cada item tem "Corrigir" / "Remover" via WhatsApp (deep link com texto pré-preenchido).
 
-## Fora de escopo
+## Aba "Jornadas" (polida)
 
-- Trocar de **PIX para cartão** ou vice-versa (continua sem fluxo automático — caso raro)
-- Cobrança/crédito proporcional (decisão explícita: simplicidade > precisão de centavos)
-- Testes automatizados (segue débito conhecido)
+- Busca + filtro por duração.
+- Marker "Já ouvi" / "Em andamento".
+- Seção "Recomendadas pra você" no topo (baseado em tags).
+
+## Aba "Meditações" (polida)
+
+- Busca + filtro por duração/categoria.
+- Marker "Já ouvi".
+- "Sugeridas agora" no topo.
+
+## Floating CTA
+
+Botão flutuante "Falar com a Aura" presente em todas as abas (deep link WhatsApp para o número oficial).
+
+---
+
+## Mudanças técnicas
+
+### Banco
+
+- **Migration**: adicionar `closure_type TEXT` em `public.sessions` (valores: `tese | encruzilhada | leitura | experimento | pergunta-pra-carregar | escolha-binaria | micro-passo`). Nullable, sem default.
+- **Nova tabela `public.user_insights`**: `user_id`, `insight_text`, `source` (`oraculo | session | capsula`), `delivered_at`, `metadata jsonb`. RLS por token de portal (mesmo padrão de `monthly_reports`) + GRANTs (`authenticated`, `service_role`, `anon` só onde policy permite via token).
+- **Nova tabela `public.user_milestones`** (computada): `user_id`, `milestone_type`, `achieved_at`, `metadata`. Preenchida por edge function determinística.
+
+### Edge functions
+
+- `session-extractor` (já existe): passar a popular `closure_type` via tool calling (Flash-lite).
+- `efeito-oraculo-*` (já existe): gravar em `user_insights` toda vez que entrega um insight.
+- **Nova** `compute-user-milestones`: determinística, roda diária via cron, agrega marcos.
+- **Nova** `extract-user-themes`: Gemini Flash-Lite, agrega tags recorrentes das últimas N sessões.
+- **Nova** `portal-today`: agrega tudo da aba Hoje em 1 request (última sessão + closure, próxima sessão, último insight, sugestão de meditação, saudação).
+
+### Frontend
+
+- Refatorar `src/pages/UserPortal.tsx` para 6 abas na nova ordem.
+- Componentes novos em `src/components/portal/`:
+  - `HojeTab.tsx` (orquestrador de cards)
+  - `cards/UltimaSessaoCard.tsx` (com lógica de título/botão por `closure_type`)
+  - `cards/ProximaSessaoCard.tsx`
+  - `cards/UltimoInsightCard.tsx`
+  - `cards/MeditacaoSugeridaCard.tsx`
+  - `SessoesTab.tsx`
+  - `InsightsTab.tsx`
+  - `SobreVoceTab.tsx`
+  - `FloatingWhatsAppCTA.tsx`
+- Reaproveitar `JornadasTab`, `MeditacoesTab` (adicionar busca + markers).
+- Deletar `ResumosTab.tsx` (conteúdo migra).
+- Tokens semânticos do design system (sem cores hardcoded).
+
+### Fora de escopo
+
+Fluxos de pagamento, comportamento da Aura no WhatsApp, novos meios de pagamento, login passwordless.
+
+---
+
+## Fases de entrega
+
+1. **Fase 1** — Migration (`closure_type`, `user_insights`, `user_milestones`) + refator do frontend com 6 abas usando dados já existentes (sessões, monthly_reports, user_memories, time_capsules, próxima sessão). Card "O que ficou" usa `closure` atual; quando `closure_type` for null, mostra título genérico.
+2. **Fase 2** — `session-extractor` populando `closure_type`; `efeito-oraculo-*` gravando em `user_insights`; aba Insights ganha dados reais.
+3. **Fase 3** — `extract-user-themes` + `compute-user-milestones`; aba "Sobre Você" ganha temas e marcos automáticos.
+4. **Fase 4** — Polimento: busca/filtros em Jornadas e Meditações, "Recomendadas pra você", compartilhamento de insights.

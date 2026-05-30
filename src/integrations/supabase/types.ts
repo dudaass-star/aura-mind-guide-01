@@ -1593,6 +1593,8 @@ export type Database = {
       sessions: {
         Row: {
           audio_sent_count: number | null
+          closure_text: string | null
+          closure_type: string | null
           commitments: Json | null
           confirmation_requested: boolean | null
           created_at: string
@@ -1604,6 +1606,7 @@ export type Database = {
           key_insights: Json | null
           post_session_sent: boolean | null
           rating_requested: boolean | null
+          reframe_text: string | null
           reminder_15m_sent: boolean | null
           reminder_1h_sent: boolean | null
           reminder_24h_sent: boolean | null
@@ -1615,12 +1618,15 @@ export type Database = {
           session_type: Database["public"]["Enums"]["session_type"]
           started_at: string | null
           status: Database["public"]["Enums"]["session_status"]
+          theme_label: string | null
           user_confirmed: boolean | null
           user_id: string
           waiting_for_scheduled_time: boolean | null
         }
         Insert: {
           audio_sent_count?: number | null
+          closure_text?: string | null
+          closure_type?: string | null
           commitments?: Json | null
           confirmation_requested?: boolean | null
           created_at?: string
@@ -1632,6 +1638,7 @@ export type Database = {
           key_insights?: Json | null
           post_session_sent?: boolean | null
           rating_requested?: boolean | null
+          reframe_text?: string | null
           reminder_15m_sent?: boolean | null
           reminder_1h_sent?: boolean | null
           reminder_24h_sent?: boolean | null
@@ -1643,12 +1650,15 @@ export type Database = {
           session_type?: Database["public"]["Enums"]["session_type"]
           started_at?: string | null
           status?: Database["public"]["Enums"]["session_status"]
+          theme_label?: string | null
           user_confirmed?: boolean | null
           user_id: string
           waiting_for_scheduled_time?: boolean | null
         }
         Update: {
           audio_sent_count?: number | null
+          closure_text?: string | null
+          closure_type?: string | null
           commitments?: Json | null
           confirmation_requested?: boolean | null
           created_at?: string
@@ -1660,6 +1670,7 @@ export type Database = {
           key_insights?: Json | null
           post_session_sent?: boolean | null
           rating_requested?: boolean | null
+          reframe_text?: string | null
           reminder_15m_sent?: boolean | null
           reminder_1h_sent?: boolean | null
           reminder_24h_sent?: boolean | null
@@ -1671,6 +1682,7 @@ export type Database = {
           session_type?: Database["public"]["Enums"]["session_type"]
           started_at?: string | null
           status?: Database["public"]["Enums"]["session_status"]
+          theme_label?: string | null
           user_confirmed?: boolean | null
           user_id?: string
           waiting_for_scheduled_time?: boolean | null
