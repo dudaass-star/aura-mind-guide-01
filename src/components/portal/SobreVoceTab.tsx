@@ -352,19 +352,14 @@ export function SobreVoceTab({ userId }: { userId: string }) {
 
   return (
     <div className="space-y-7">
-      {/* Header com avatar gradient + saudação */}
-      <div className="flex items-center gap-4">
-        <div className="w-14 h-14 rounded-full bg-gradient-to-br from-accent to-primary flex items-center justify-center shrink-0">
-          <User size={24} className="text-primary-foreground" />
-        </div>
-        <div className="min-w-0">
-          <h2 className="text-xl font-semibold text-foreground font-['Nunito'] truncate">
-            {greeting}
-          </h2>
-          <p className="text-xs text-muted-foreground font-['Nunito']">
-            O que a Aura aprendeu sobre você até aqui.
-          </p>
-        </div>
+      {/* Header simples — sem avatar */}
+      <div>
+        <h2 className="text-xl font-semibold text-foreground font-['Nunito']">
+          {greeting}
+        </h2>
+        <p className="text-xs text-muted-foreground font-['Nunito'] mt-1">
+          O que a Aura aprendeu sobre você até aqui.
+        </p>
       </div>
 
       {/* Pessoas — chips grid */}
@@ -379,9 +374,11 @@ export function SobreVoceTab({ userId }: { userId: string }) {
                 <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold font-['Nunito']">
                   {p.label}
                 </p>
-                <p className="text-sm text-foreground font-['Nunito'] leading-snug mt-0.5">
-                  {p.names.join(", ")}
-                </p>
+                {p.names.length > 0 && (
+                  <p className="text-sm text-foreground font-['Nunito'] leading-snug mt-0.5">
+                    {p.names.join(", ")}
+                  </p>
+                )}
               </div>
             ))}
           </div>
@@ -391,14 +388,11 @@ export function SobreVoceTab({ userId }: { userId: string }) {
       {/* Objetivos — bullets em prosa */}
       {curated.objetivos.length > 0 && (
         <SectionShell title="O que te move" icon={Compass}>
-          <ul className="space-y-2">
-            {curated.objetivos.map((s, i) => (
-              <li key={i} className="flex items-start gap-2.5">
-                <span className="mt-2 w-1.5 h-1.5 rounded-full bg-accent shrink-0" />
-                <p className="text-sm text-foreground font-['Nunito'] leading-relaxed">{s}</p>
-              </li>
+          <div className="space-y-3">
+            {curated.objetivos.map((it, i) => (
+              <ProseCard key={i} item={it} />
             ))}
-          </ul>
+          </div>
         </SectionShell>
       )}
 
@@ -406,12 +400,19 @@ export function SobreVoceTab({ userId }: { userId: string }) {
       {curated.padroes.length > 0 && (
         <SectionShell title="Padrões que a Aura percebeu" icon={Activity}>
           <div className="space-y-3">
-            {curated.padroes.map((s, i) => (
+            {curated.padroes.map((it, i) => (
               <blockquote
                 key={i}
-                className="border-l-2 border-accent/40 pl-3 text-sm text-foreground/90 font-['Nunito'] italic leading-relaxed"
+                className="border-l-2 border-accent/40 pl-3"
               >
-                {s}
+                {it.key && (
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold font-['Nunito'] mb-0.5">
+                    {prettyLabel(it.key)}
+                  </p>
+                )}
+                <p className="text-sm text-foreground/90 font-['Nunito'] italic leading-relaxed">
+                  {it.value}
+                </p>
               </blockquote>
             ))}
           </div>
@@ -421,14 +422,11 @@ export function SobreVoceTab({ userId }: { userId: string }) {
       {/* Preferências — bullets simples */}
       {curated.preferencias.length > 0 && (
         <SectionShell title="Preferências e gostos" icon={Heart}>
-          <ul className="space-y-2">
-            {curated.preferencias.map((s, i) => (
-              <li key={i} className="flex items-start gap-2.5">
-                <span className="mt-2 w-1.5 h-1.5 rounded-full bg-accent shrink-0" />
-                <p className="text-sm text-foreground font-['Nunito'] leading-relaxed">{s}</p>
-              </li>
+          <div className="space-y-3">
+            {curated.preferencias.map((it, i) => (
+              <ProseCard key={i} item={it} />
             ))}
-          </ul>
+          </div>
         </SectionShell>
       )}
 
@@ -436,13 +434,13 @@ export function SobreVoceTab({ userId }: { userId: string }) {
       {curated.conquistas.length > 0 && (
         <SectionShell title="Conquistas" icon={Trophy}>
           <div className="flex flex-wrap gap-2">
-            {curated.conquistas.map((s, i) => (
+            {curated.conquistas.map((it, i) => (
               <span
                 key={i}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-accent/10 text-accent text-xs font-medium font-['Nunito']"
               >
                 <Trophy size={12} />
-                {s.replace(/\.$/, "")}
+                {it.value.replace(/\.$/, "")}
               </span>
             ))}
           </div>
@@ -455,14 +453,11 @@ export function SobreVoceTab({ userId }: { userId: string }) {
           <p className="text-xs text-muted-foreground italic font-['Nunito']">
             Tópicos delicados que você compartilhou com a Aura.
           </p>
-          <ul className="space-y-2">
-            {curated.sensiveis.map((s, i) => (
-              <li key={i} className="flex items-start gap-2.5">
-                <span className="mt-2 w-1.5 h-1.5 rounded-full bg-muted-foreground shrink-0" />
-                <p className="text-sm text-foreground font-['Nunito'] leading-relaxed">{s}</p>
-              </li>
+          <div className="space-y-3">
+            {curated.sensiveis.map((it, i) => (
+              <ProseCard key={i} item={it} muted />
             ))}
-          </ul>
+          </div>
         </CollapsibleShell>
       )}
 
