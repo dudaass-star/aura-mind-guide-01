@@ -224,7 +224,7 @@ const UserPortal = () => {
           userId={userId}
           currentPlan={(profile?.plan as "essencial" | "direcao" | "transformacao" | null) ?? null}
           currentBilling={(profile?.billing_cycle as any) ?? null}
-          isAsaasPix={!!isAsaasPix}
+          paymentMethod={isAsaasPix ? "pix" : "card"}
         />
       )}
     </>
