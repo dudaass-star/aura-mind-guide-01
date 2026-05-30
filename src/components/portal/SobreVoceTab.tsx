@@ -168,7 +168,7 @@ function asSentence(s: string): string {
 
 type PersonGroup = {
   label: string; // ex: "Filhas"
-  names: string[];
+  names: string[]; // pode ser vazio quando a relação foi mencionada mas sem nome próprio
 };
 
 function extractUserName(insights: Insight[]): string | null {
@@ -191,10 +191,10 @@ function curatePeople(insights: Insight[]): PersonGroup[] {
     const rawKey = (it.key || "").trim().toLowerCase();
     if (!isPeopleKey(rawKey)) continue;
     const v = (it.value || "").trim();
-    if (!looksLikeProperName(v)) continue;
     const base = stripSuffixNumber(rawKey);
     const set = byBase.get(base) || new Set<string>();
-    set.add(v);
+    // Só adiciona o valor se parecer nome próprio; chips sem nome ainda aparecem.
+    if (looksLikeProperName(v)) set.add(v);
     byBase.set(base, set);
   }
   // Pluraliza label quando há 2+ nomes na mesma relação
@@ -217,18 +217,20 @@ function curatePeople(insights: Insight[]): PersonGroup[] {
     .sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
 }
 
+type ProseItem = { key: string | null; value: string };
+
 function curateProseSection(
   insights: Insight[],
   category: string,
   minImportance: number,
   limit: number,
-): string[] {
+): ProseItem[] {
   const filtered = insights
     .filter((i) => i.category === category)
     .filter((i) => (i.importance ?? 0) >= minImportance)
     .filter((i) => !isJunkBase(i));
   // Dedup por valor (case-insensitive), mantendo o de maior importance
-  const map = new Map<string, { value: string; importance: number; date: number }>();
+  const map = new Map<string, { key: string | null; value: string; importance: number; date: number }>();
   for (const it of filtered) {
     const v = (it.value || "").trim();
     if (!v) continue;
@@ -238,18 +240,19 @@ function curateProseSection(
     const existing = map.get(norm);
     if (!existing || importance > existing.importance ||
         (importance === existing.importance && date > existing.date)) {
-      map.set(norm, { value: v, importance, date });
+      map.set(norm, { key: it.key, value: v, importance, date });
     }
   }
   return Array.from(map.values())
     .sort((a, b) => b.importance - a.importance || b.date - a.date)
     .slice(0, limit)
-    .map((x) => asSentence(x.value));
+    .map((x) => ({ key: x.key, value: asSentence(x.value) }));
 }
 
 // ---------- COMPONENTES ----------
 
-const MAX_PROSE = 5;
+const MAX_PROSE = 6;
+const MAX_PEOPLE = 8;
 const MAX_THEMES = 12;
 
 export function SobreVoceTab({ userId }: { userId: string }) {
