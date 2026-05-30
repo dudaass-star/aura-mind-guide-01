@@ -19,7 +19,7 @@ const logStep = (step: string, details?: unknown) => {
 };
 
 type PlanId = "essencial" | "direcao" | "transformacao";
-type BillingCycle = "monthly" | "yearly";
+type BillingCycle = "monthly" | "quarterly" | "semiannual" | "yearly";
 
 const PLAN_NAMES: Record<PlanId, string> = {
   essencial: "Essencial",
@@ -27,10 +27,33 @@ const PLAN_NAMES: Record<PlanId, string> = {
   transformacao: "Transformação",
 };
 
+// Mesmos IDs hardcoded em create-checkout/index.ts (RECURRING_PRICES).
+// Fonte única pra Trim/Sem/Anual. Mensal continua via env.
+const RECURRING_PRICES: Record<PlanId, { quarterly: string; semiannual: string; yearly: string }> = {
+  essencial: {
+    quarterly: "price_1TZyoCQU15XnZ7VvyI45t8um",
+    semiannual: "price_1TZyoDQU15XnZ7VvOegMIXQi",
+    yearly:     "price_1TZyoEQU15XnZ7Vvx02qKKPF",
+  },
+  direcao: {
+    quarterly: "price_1TZyoFQU15XnZ7VvAfRFoTOh",
+    semiannual: "price_1TZyoGQU15XnZ7VvZiGk2ifY",
+    yearly:     "price_1TZyoHQU15XnZ7VvwUFUX9Bm",
+  },
+  transformacao: {
+    quarterly: "price_1TZyoIQU15XnZ7VvCMjzuaZr",
+    semiannual: "price_1TZyoJQU15XnZ7Vv3FqH75Nb",
+    yearly:     "price_1TZyoKQU15XnZ7VvJzJNnub7",
+  },
+};
+
 function resolvePriceId(plan: PlanId, billing: BillingCycle): string | null {
-  const key = `STRIPE_PRICE_${plan.toUpperCase()}_${billing.toUpperCase()}`;
-  const value = Deno.env.get(key);
-  return value && value.length > 0 ? value : null;
+  if (billing === "monthly") {
+    const value = Deno.env.get(`STRIPE_PRICE_${plan.toUpperCase()}_MONTHLY`);
+    return value && value.length > 0 ? value : null;
+  }
+  const cycleKey = billing as "quarterly" | "semiannual" | "yearly";
+  return RECURRING_PRICES[plan]?.[cycleKey] ?? null;
 }
 
 // Conjunto de price IDs "bloqueados" (PIX/Boleto/Trial) — usuário precisa falar
@@ -53,7 +76,7 @@ function detectPlanAndBilling(
   priceId: string,
 ): { plan: PlanId; billing: BillingCycle } | null {
   const plans: PlanId[] = ["essencial", "direcao", "transformacao"];
-  const billings: BillingCycle[] = ["monthly", "yearly"];
+  const billings: BillingCycle[] = ["monthly", "quarterly", "semiannual", "yearly"];
   for (const plan of plans) {
     for (const billing of billings) {
       if (resolvePriceId(plan, billing) === priceId) return { plan, billing };
@@ -86,7 +109,7 @@ serve(async (req) => {
     if (!["essencial", "direcao", "transformacao"].includes(targetPlan ?? "")) {
       return jsonError("Plano inválido", 400);
     }
-    if (!["monthly", "yearly"].includes(billing ?? "")) {
+    if (!["monthly", "quarterly", "semiannual", "yearly"].includes(billing ?? "")) {
       return jsonError("Ciclo de cobrança inválido", 400);
     }
     const plan = targetPlan as PlanId;
@@ -109,7 +132,7 @@ serve(async (req) => {
 
     const { data: profile, error: profileErr } = await supabase
       .from("profiles")
-      .select("user_id, email, phone, plan")
+      .select("user_id, email, phone, plan, asaas_customer_id")
       .eq("user_id", userId)
       .maybeSingle();
 
@@ -117,16 +140,52 @@ serve(async (req) => {
     if (!profile) return jsonError("Perfil não encontrado", 404);
     logStep("Profile loaded", { email: profile.email, plan: profile.plan });
 
+    // Bloqueia troca direta pra usuários PIX Asaas (sub recorrente).
+    // Detecção: existe pelo menos uma asaas_payment com asaas_subscription_id ativo.
+    if (profile.asaas_customer_id) {
+      const { data: asaasActive } = await supabase
+        .from("asaas_payments")
+        .select("asaas_subscription_id, status")
+        .eq("user_id", userId)
+        .not("asaas_subscription_id", "is", null)
+        .in("status", ["CONFIRMED", "RECEIVED", "PENDING", "ACTIVE", "RECEIVED_IN_CASH"])
+        .order("created_at", { ascending: false })
+        .limit(1);
+      if (asaasActive && asaasActive.length > 0) {
+        logStep("Asaas PIX recurring detected, blocking", { subId: asaasActive[0].asaas_subscription_id });
+        return jsonError(
+          "Sua assinatura é PIX recorrente. Pra trocar de plano, fala com a gente que ajeitamos.",
+          409,
+        );
+      }
+    }
+
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
 
-    // Procura customer por email primeiro, com fallback no metadata phone
+    // Procura customer por email; se houver duplicados, escolhe o que tem sub ativa.
     let customer: Stripe.Customer | null = null;
+    let activeSub: Stripe.Subscription | null = null;
     if (profile.email) {
       const list = await stripe.customers.list({
         email: profile.email,
-        limit: 1,
+        limit: 10,
       });
-      customer = list.data[0] ?? null;
+      for (const c of list.data) {
+        const subs = await stripe.subscriptions.list({
+          customer: c.id,
+          status: "all",
+          limit: 10,
+        });
+        const sub = subs.data.find((s) =>
+          ["active", "trialing", "past_due"].includes(s.status)
+        );
+        if (sub) {
+          customer = c;
+          activeSub = sub;
+          break;
+        }
+        if (!customer) customer = c; // fallback se nenhum tiver sub ativa
+      }
     }
     if (!customer && profile.phone) {
       const phoneClean = profile.phone.replace(/\D/g, "");
@@ -145,14 +204,16 @@ serve(async (req) => {
       );
     }
 
-    const subs = await stripe.subscriptions.list({
-      customer: customer.id,
-      status: "all",
-      limit: 10,
-    });
-    const activeSub = subs.data.find((s) =>
-      ["active", "trialing", "past_due"].includes(s.status)
-    );
+    if (!activeSub) {
+      const subs = await stripe.subscriptions.list({
+        customer: customer.id,
+        status: "all",
+        limit: 10,
+      });
+      activeSub = subs.data.find((s) =>
+        ["active", "trialing", "past_due"].includes(s.status)
+      ) ?? null;
+    }
 
     if (!activeSub) {
       return jsonError(
@@ -203,7 +264,9 @@ serve(async (req) => {
     try {
       updated = await stripe.subscriptions.update(activeSub.id, {
         items: [{ id: item.id, price: targetPriceId }],
-        proration_behavior: "create_prorations",
+        // always_invoice: cria invoice imediatamente cobrando/creditando a diferença
+        // no cartão já cadastrado. Alinha com o texto "cobrança proporcional hoje" da UI.
+        proration_behavior: "always_invoice",
         payment_behavior: "error_if_incomplete",
         metadata: {
           ...(activeSub.metadata ?? {}),
@@ -224,7 +287,7 @@ serve(async (req) => {
     // Reflete imediatamente no profile (webhook também atualiza, mas evita lag na UI)
     const { error: updateErr } = await supabase
       .from("profiles")
-      .update({ plan })
+      .update({ plan, billing_cycle: cycle })
       .eq("user_id", userId);
     if (updateErr) {
       logStep("WARN profile update failed", { msg: updateErr.message });

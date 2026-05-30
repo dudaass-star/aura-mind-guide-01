@@ -41,13 +41,32 @@ const UserPortal = () => {
     queryFn: async () => {
       const { data, error } = await supabasePortal
         .from("profiles")
-        .select("name, current_journey_id, current_episode, journeys_completed, plan")
+        .select("name, current_journey_id, current_episode, journeys_completed, plan, billing_cycle, asaas_customer_id")
         .eq("user_id", userId!)
         .maybeSingle();
       if (error) throw error;
       return data;
     },
     enabled: !!userId && linkStatus === "linked",
+  });
+
+  // Detecta PIX Asaas recorrente: tem asaas_customer_id E pelo menos uma payment
+  // com asaas_subscription_id ativo (status corrente).
+  const { data: isAsaasPix } = useQuery({
+    queryKey: ["portal-asaas-active", userId],
+    queryFn: async () => {
+      if (!profile?.asaas_customer_id) return false;
+      const { data, error } = await supabasePortal
+        .from("asaas_payments")
+        .select("asaas_subscription_id")
+        .eq("user_id", userId!)
+        .not("asaas_subscription_id", "is", null)
+        .in("status", ["CONFIRMED", "RECEIVED", "PENDING", "ACTIVE", "RECEIVED_IN_CASH"])
+        .limit(1);
+      if (error) return false;
+      return (data?.length ?? 0) > 0;
+    },
+    enabled: !!userId && !!profile?.asaas_customer_id,
   });
 
   const { data: reportsCount } = useQuery({
@@ -203,6 +222,8 @@ const UserPortal = () => {
           onOpenChange={setChangePlanOpen}
           userId={userId}
           currentPlan={(profile?.plan as "essencial" | "direcao" | "transformacao" | null) ?? null}
+          currentBilling={(profile?.billing_cycle as any) ?? null}
+          isAsaasPix={!!isAsaasPix}
         />
       )}
     </>
