@@ -17,6 +17,43 @@ const PLAN_NAMES: Record<string, string> = {
   transformacao: "Transformação",
 };
 
+// Mapa reverso priceId → {plan, billing_cycle}. Mensal vem de env; Trim/Sem/Anual
+// são os RECURRING_PRICES hardcoded em create-checkout/change-subscription-plan.
+const RECURRING_PRICES: Record<string, { plan: string; billing_cycle: string }> = {
+  // Essencial
+  "price_1TZyoCQU15XnZ7VvyI45t8um": { plan: "essencial", billing_cycle: "quarterly" },
+  "price_1TZyoDQU15XnZ7VvOegMIXQi": { plan: "essencial", billing_cycle: "semiannual" },
+  "price_1TZyoEQU15XnZ7Vvx02qKKPF": { plan: "essencial", billing_cycle: "yearly" },
+  // Direção
+  "price_1TZyoFQU15XnZ7VvAfRFoTOh": { plan: "direcao", billing_cycle: "quarterly" },
+  "price_1TZyoGQU15XnZ7VvZiGk2ifY": { plan: "direcao", billing_cycle: "semiannual" },
+  "price_1TZyoHQU15XnZ7VvwUFUX9Bm": { plan: "direcao", billing_cycle: "yearly" },
+  // Transformação
+  "price_1TZyoIQU15XnZ7VvCMjzuaZr": { plan: "transformacao", billing_cycle: "quarterly" },
+  "price_1TZyoJQU15XnZ7Vv3FqH75Nb": { plan: "transformacao", billing_cycle: "semiannual" },
+  "price_1TZyoKQU15XnZ7VvJzJNnub7": { plan: "transformacao", billing_cycle: "yearly" },
+};
+
+function detectPlanCycleFromPrice(priceId: string | null | undefined): { plan: string; billing_cycle: string } | null {
+  if (!priceId) return null;
+  // Mensal: lookup via env
+  const monthlyMap: Record<string, string> = {
+    [Deno.env.get("STRIPE_PRICE_ESSENCIAL_MONTHLY") || ""]: "essencial",
+    [Deno.env.get("STRIPE_PRICE_DIRECAO_MONTHLY") || ""]: "direcao",
+    [Deno.env.get("STRIPE_PRICE_TRANSFORMACAO_MONTHLY") || ""]: "transformacao",
+  };
+  if (monthlyMap[priceId]) return { plan: monthlyMap[priceId], billing_cycle: "monthly" };
+  // Anual legado (envs): mantém yearly
+  const yearlyMap: Record<string, string> = {
+    [Deno.env.get("STRIPE_PRICE_ESSENCIAL_YEARLY") || ""]: "essencial",
+    [Deno.env.get("STRIPE_PRICE_DIRECAO_YEARLY") || ""]: "direcao",
+    [Deno.env.get("STRIPE_PRICE_TRANSFORMACAO_YEARLY") || ""]: "transformacao",
+  };
+  if (yearlyMap[priceId]) return { plan: yearlyMap[priceId], billing_cycle: "yearly" };
+  // Trim/Sem/Anual V2 hardcoded
+  return RECURRING_PRICES[priceId] ?? null;
+}
+
 // Sessions per plan
 // Sessões/mês — para flag `needs_schedule_setup` no signup.
 // Essencial fica 0 de propósito: a 1ª sessão dele é coberta pelo convite D0
@@ -1318,6 +1355,41 @@ Me conta: como você está hoje?`;
       const subscription = event.data.object as Stripe.Subscription;
       const previousAttributes = (event.data as any).previous_attributes;
       console.log('🔄 Subscription updated:', subscription.id, 'status:', subscription.status);
+
+      // Sincroniza plan + billing_cycle no profile sempre que o item de preço muda
+      // (cobre troca via Customer Portal, change-subscription-plan, etc).
+      try {
+        const item = subscription.items?.data?.[0];
+        const priceId = item?.price?.id ?? null;
+        const detected = detectPlanCycleFromPrice(priceId);
+        if (detected && ['active', 'trialing', 'past_due'].includes(subscription.status)) {
+          const customerId = subscription.customer as string;
+          const customer = await stripe.customers.retrieve(customerId);
+          if (!customer.deleted) {
+            const { profile } = await resolveProfileFromCustomer(supabase, customer as Stripe.Customer);
+            if (profile && (profile.plan !== detected.plan || profile.billing_cycle !== detected.billing_cycle)) {
+              const { error: planSyncErr } = await supabase
+                .from('profiles')
+                .update({
+                  plan: detected.plan,
+                  billing_cycle: detected.billing_cycle,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('id', profile.id);
+              if (planSyncErr) {
+                console.error('❌ Plan/cycle sync failed:', planSyncErr.message);
+              } else {
+                console.log(`🔁 Plan/cycle synced: ${profile.phone} → ${detected.plan}/${detected.billing_cycle}`);
+              }
+            }
+          }
+        } else if (priceId && !detected) {
+          console.warn(`⚠️ Unknown priceId in subscription.updated: ${priceId}`);
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error('❌ Plan/cycle sync error:', msg);
+      }
 
       if (previousAttributes?.status === 'trialing' && subscription.status === 'active') {
         const customerId = subscription.customer as string;
