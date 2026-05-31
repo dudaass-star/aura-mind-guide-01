@@ -1,52 +1,32 @@
-## Diagnóstico
+## Objetivo
+Destravar o Luiz (`6c88c2a1-e2cb-4f13-afbc-4bf0458fb0b8`) em dois pontos: (1) áudios de meditação não chegando, e (2) acesso ao `/meu-espaco` travado na tela "Confirma seu WhatsApp".
 
-Confirmado o bug. O funil "Pagaram Plano Semanal / Responderam / Converteram" e a métrica `trialRespondedCount` usam o campo `profiles.trial_conversations_count` para contar quem respondeu pelo menos uma mensagem.
+## Causa raiz comum
+O telefone dele no banco está com **12 dígitos** (`556999825570`) — falta o `9` do nono dígito que o padrão BR exige. O Twilio entrega texto nesse formato em alguns casos, mas mídia (áudio) e variações de lookup falham. Corrigir o número resolve as duas frentes ao mesmo tempo.
 
-**O contador só é incrementado quando `profile.status === 'trial'`** (em `supabase/functions/process-webhook-message/index.ts`, linha 940):
+## Passos
 
-```ts
-if (profile.status === 'trial' && inboundSaved) {
-  await supabase.from('profiles')
-    .update({ trial_conversations_count: (profile.trial_conversations_count || 0) + 1 })
-    ...
-}
-```
+### 1. Backfill cirúrgico do telefone do Luiz
+Migration única que normaliza só o profile dele:
+- `UPDATE profiles SET phone = '5569999825570' WHERE id = <id_do_luiz> AND phone = '556999825570'`
+- Idempotente (condicionado ao valor antigo)
 
-**Problema com PIX**: `webhook-asaas` cria o profile já com `status: "active"` (PIX é pago à vista, não trial) e ainda assim seta `trial_started_at` e `plan` — então o usuário **entra no funil** (que filtra `trial_started_at NOT NULL` + `plan NOT NULL`), mas **nunca tem o contador incrementado**, porque o status nunca é `'trial'`.
+### 2. Investigar entrega do áudio
+- Ler `edge_function_logs` de `send-meditation` filtrado pelo `user_id` do Luiz nos últimos 7 dias
+- Conferir `failed_message_log` e a tabela `messages` (registros com `media_url` para esse user)
+- Cruzar com `aura-agent` logs procurando tags `[MEDITACAO:*]` que dispararam mas não geraram áudio
+- Diagnóstico esperado: ou (a) tag não está sendo emitida, (b) `send-meditation` falha silenciosamente no Twilio por causa do telefone curto, ou (c) `audio_seconds_used = 0` mas a entrega não está sendo contabilizada
 
-Resultado visível no print: `Pagaram 1 / Responderam 0 / Converteram 1` — matematicamente impossível, e exatamente o sintoma que você descreveu.
-
-O mesmo problema afeta:
-- `trialRespondedCount` (período)
-- `funnelResponded` (all-time)
-- `avgMsgsConverted` / `avgMsgsNonConverted` (PIX puxa as médias pra baixo)
-
-Observação: o nome do funil ("Pagaram Plano Semanal") é herdado da era trial-de-cartão. Como PIX também cai nele (por ter `trial_started_at` + `plan`), o label hoje está enganoso, mas isso é outra discussão — esta correção foca apenas em contar resposta corretamente.
-
-## Correção
-
-### 1. `supabase/functions/process-webhook-message/index.ts`
-Trocar o gate por uma condição que inclua usuários PIX/ativos que entraram no funil:
-
-```ts
-// Antes
-if (profile.status === 'trial' && inboundSaved) { ... }
-
-// Depois
-if (inboundSaved && profile.trial_started_at && ['trial', 'active'].includes(profile.status)) { ... }
-```
-
-Mantém o contador como "respondeu pelo menos N vezes desde a entrada no funil" — válido tanto pra trial Stripe quanto pra ativo PIX. Custo: 1 update extra por mensagem inbound de ativo (negligível).
-
-### 2. Backfill único dos PIX já existentes
-Edge function temporária `backfill-trial-conversations-count` (ou um script SQL via migration) que, pra cada profile com `trial_started_at NOT NULL` e `trial_conversations_count = 0`, conta `SELECT count(*) FROM messages WHERE user_id = X AND role = 'user'` e grava o valor real. Roda 1x e descarta. Isso conserta o histórico do print atual sem esperar nova mensagem.
-
-### 3. Sem mudança no frontend nem no `admin-engagement-metrics`
-A lógica de leitura continua igual; só passa a refletir a realidade.
+### 3. Validação
+- Após o backfill, conferir que o profile do Luiz mostra `phone = '5569999825570'` e `length(phone) = 13`
+- Pedir um teste manual: ele tenta entrar no Espaço (a tela `PhoneLinkPrompt` agora deve achar o profile pelo número correto)
+- Em paralelo, com base no diagnóstico do passo 2, reportar o que causou a falha do áudio e propor o fix mínimo (sem aplicar agora)
 
 ## Fora de escopo
+- Backfill em massa de outros profiles com 12 dígitos
+- Mudanças no PhoneLinkPrompt, na UX de login ou no fluxo de OAuth
+- Log estruturado em `failed_message_log` para `send-meditation`
+- Qualquer alteração no `aura-agent`, `process-webhook-message`, ou normalização de phone no `_shared`
 
-- Renomear "Pagaram Plano Semanal" para algo que englobe PIX (pode virar follow-up se quiser).
-- Mexer em outras métricas (MRR, churn, activation).
-
-Aprova que eu sigo com a correção + backfill?
+## Entrega
+Após o passo 1 e 2, te trago: (a) confirmação de que o Luiz consegue logar, (b) diagnóstico da causa real do áudio não chegar, (c) recomendação de próximo passo (que pode ser um fix maior, se for sistêmico).
