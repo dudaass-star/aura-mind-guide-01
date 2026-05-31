@@ -1,126 +1,86 @@
 ## Diagnóstico do estado atual
 
-A aba já tem boa estrutura, mas o resultado ainda é "lista de dados crus" porque estamos exibindo `key + value` direto do `user_insights`. As chaves vêm do extrator (Flash-lite) e são arbitrárias — viram rótulos sem sentido quando expostas:
+Olhando o retrato do Eduardo, dá pra separar o que está bom do que ainda destoa do "UAU":
 
-- "Fazer / As coisas sem medo" — chave é verbo solto
-- "Sentir / Mais livre" — fragmento
-- "Comida / Felicidade", "Sorvete / Resolveu o conflito" — pares nonsense
-- "Padrão de comportamento / Adiamento" + "Comportamento / Adiamento" — duplicata semântica
-- "Esposa" sozinha sem nome nem contexto — chip vazio
-- Temas grudados visualmente (artefato de paste, mas vale revisar o `gap`)
+**Bom:** intro narrativa, "O que te move", "Padrões", "Preferências" e "Conquistas" leem como retrato real.
 
-A raiz do problema: **dados brutos do extrator não foram desenhados para leitura humana**. Refinar regex/blacklist é enxugar gelo — sempre vai vazar lixo novo. Pra entregar UAU, a aba precisa parar de mostrar dados e passar a mostrar **um retrato**.
+**Problemas concretos:**
 
-## Proposta: Retrato curado por IA, com cache
+1. **Pessoas com lixo semântico**
+   - `Mentor: Aura` — a Aura aparecendo como pessoa da vida dele é cringe e quebra a imersão.
+   - `Esposa: ficou brava com o débito automático` — evento episódico tratado como descrição de pessoa. A nota deveria ser um traço relacional estável ("parceira de longa data", "com quem ele evita discutir planos"), não fofoca de um dia.
 
-Em vez de renderizar insights crus, geramos um **retrato narrativo** via Gemini Flash, atualizado de forma incremental e cacheado. O frontend lê o retrato pronto + alguns chips selecionados, e a tela vira algo que parece feito à mão pela Aura.
+2. **Temas em movimento poluídos e sem espaçamento legível**
+   - Entram itens **operacionais/meta** que não são temas de vida: `mudança de assunto`, `recusa de ajuda`, `recusa de agendamento de sessões`, `organizar sessões do mês`. Esses são comportamentos de conversa, não temas terapêuticos.
+   - Inconsistência de capitalização: `ansiedade`, `conexão com as filhas` (lowercase) vs `Desejo de mais liberdade`, `Dominando a Ansiedade` (Title Case). Tudo deveria seguir um padrão.
+   - Duplicata semântica: `ansiedade · 2` + `Dominando a Ansiedade` (deveriam se fundir).
 
-### Arquitetura
+3. **Padrões com ruído operacional**
+   - `Você insiste em áudios em vez de texto e busca soluções como medicação` — mistura preferência de canal (operacional) com tentativa de tratamento. Não é um padrão de vida, é meta-conversa.
 
-1. **Nova tabela `user_portraits`** (cache por usuário):
-   - `user_id` (pk)
-   - `intro` (1 frase de abertura personalizada, ex: "Eduardo, pai da Bella e da Selena, em transição de hábitos.")
-   - `pessoas` (jsonb: `[{label, names, nota?}]` — já curado, sem duplicatas)
-   - `o_que_te_move` (jsonb: `[{titulo, descricao}]` — 3-5 itens, frases inteiras)
-   - `padroes` (jsonb: `[{titulo, descricao}]` — 2-4 padrões reais, sem duplicata semântica)
-   - `preferencias` (jsonb: `[{titulo, descricao}]` — opcional, só se houver sinal real)
-   - `conquistas` (jsonb: `string[]` — frases curtas)
-   - `sensiveis` (jsonb: `string[]`)
-   - `generated_at`, `insights_version` (hash do conteúdo bruto pra invalidar cache)
+4. **Seção "Pontos sensíveis" aparecendo vazia**
+   - Mesmo com array vazio, o header aparece (porque o backend está gravando array vazio mas o guard frontend trata `length > 0`). Confirmar no código se está realmente escondendo ou só colapsado sugerindo conteúdo.
 
-2. **Edge function `generate-user-portrait`** (Gemini Flash):
-   - Lê `user_insights` (não-contexto) + `session_themes` + nome do `profiles`
-   - Prompt pede pra escrever em PT-BR informal, na voz da Aura, em 3ª pessoa íntima, **agrupando temas similares** e **descartando lixo operacional**
-   - Output JSON estruturado (schema acima)
-   - Grava em `user_portraits` com `insights_version = md5(...)`
-   - Reaproveita cache se hash não mudou
+5. **Conquistas: separação visual fraca**
+   - Os chips estão lendo como bloco contínuo ("AutoconfiançaVocê compreendeu..."). Precisa de mais respiro entre badges e talvez quebra de linha consistente em mobile (390px).
 
-3. **Trigger de regeneração**:
-   - Async, fire-and-forget, chamado pelo próprio frontend quando detecta cache stale (>24h ou versão divergente)
-   - Loading state: mostra a versão antiga enquanto regenera
+---
 
-### Tela nova (`SobreVoceTab.tsx`)
+## Plano de ajustes
 
-Layout reescrito pra parecer uma carta da Aura, não um dump:
+### A) Prompt do `generate-user-portrait` (regras mais duras)
 
-```text
-┌────────────────────────────────────┐
-│ Oi, Eduardo 👋                      │  ← header com micro-fade-in
-│ Aqui está o que eu fui aprendendo  │
-│ sobre você nas nossas conversas.   │
-└────────────────────────────────────┘
+Reforçar no system prompt:
 
-┌────────────────────────────────────┐
-│ {intro em itálico, 1 frase}        │  ← card destaque com gradient sutil
-└────────────────────────────────────┘
+- **Pessoas — banlist explícita:**
+  - Nunca incluir `Aura`, `aura`, `mentor`, `terapeuta`, `coach`, `assistente`.
+  - Nota de pessoa deve ser um **traço relacional estável** (papel, relação, dinâmica recorrente), nunca um evento isolado ("ficou brava com X", "disse Y ontem"). Se só houver evento episódico, omitir a nota.
+  - Se o label é uma pessoa mas não tem nome próprio nem nota relacional válida, **descartar a entrada**.
 
-Pessoas da sua vida
-[Esposa]  [Filhas · Bella, Selena]    ← só chips com info real
+- **Padrões — escopo de vida, não de conversa:**
+  - Excluir padrões sobre o canal/formato da própria conversa com a Aura (áudio vs texto, frequência de uso, preferência de mensagem).
+  - Excluir comportamentos do tipo "muda de assunto", "recusa ajuda no chat".
 
-O que te move
-• Quebrar a inércia do test drive...   ← cada item é UMA frase
-• Voltar aos treinos no horário do...
-• Sentir mais liberdade no dia a dia
+- **Conquistas — frase curta, autônoma e pontuada:**
+  - Cada conquista deve ser uma frase completa terminando em ponto (ou sem ponto, mas consistente), max ~80 chars, para o chip não virar parágrafo.
 
-Padrões que percebi
-" Você costuma adiar sessões quando   ← blockquote, sem rótulo-chave
-   os projetos engatam. "
+### B) Curadoria de temas no frontend (`SobreVoceTab.tsx`)
 
-Preferências
-• Conversas leves e gostosas
-• Evita psicologia de manual
+Aplicar um filtro local em `dedupedThemes` antes de renderizar:
 
-Conquistas              [badges]
+- **Banlist de temas operacionais** (case-insensitive, regex parcial):
+  - `mudança de assunto`, `recusa de agendamento`, `recusa de ajuda`, `organizar sessões`, `agendar sessão`, `cancelar sessão`, `setup mensal`.
+- **Normalização de capitalização:** aplicar `toLowerCase()` consistente OU sentence-case para todos (preferência: sentence-case — primeira letra maiúscula, resto natural). Padronizar para que `Desejo de mais liberdade` e `ansiedade` virem `Desejo de mais liberdade` e `Ansiedade`.
+- **Dedup semântico leve** (já existe por chave lowercase) — adicionar match por substring inclusiva: se um tema curto (`ansiedade`) está contido em outro (`Dominando a Ansiedade`), somar `session_count` e manter o de maior contagem.
 
-Pontos sensíveis (colapsado)
+### C) Visual: respiro e legibilidade
 
-Temas em movimento     [chips com gap correto]
-Já trabalhados         [chips riscados]
+- `Conquistas`: aumentar `gap-2` → `gap-2.5`, garantir `max-w-full` no chip e `whitespace-normal` para quebrar texto longo em vez de extrudar. Adicionar `leading-snug`.
+- `Temas em movimento`: já tem `flex-wrap gap-2`, mas reforçar `gap-2.5` e `py-2` no chip para dar mais ar; garantir `whitespace-nowrap` no chip individual e wrap só entre chips.
+- `Pontos sensíveis`: só renderizar a seção colapsável se `sensiveis.length > 0` (já é o caso) — auditar pra ter certeza que não está vindo array `[""]` ou com strings vazias depois do `.trim()`. Adicionar filtro `.filter(Boolean)` no `normalize` do edge.
 
-→ "Algo não bate? Me corrige no WhatsApp"
-```
+### D) Reprocessar retrato existente
 
-### Mudanças visuais (UAU)
+Como o retrato cacheado do Eduardo já foi gerado com as regras antigas, após o deploy do prompt novo:
+- Forçar regeneração: hook do frontend já checa staleness >24h, mas pra acelerar, adicionar fallback de "regenera se `insights_version` é diferente do hash atual". Isso já está implementado no edge — só precisa o usuário abrir o portal pra disparar (ou pode-se invocar manualmente uma vez via SQL/edge call).
 
-- Header: micro-animação de fade+slide na entrada (Motion), tipografia maior
-- Card de intro: `bg-gradient-to-br from-accent/5 to-transparent`, borda sutil, ícone Sparkles
-- Seções: ícone + título em uppercase mantido, mas com `divider` fino entre blocos pra dar respiração
-- ProseCard removido — **sem mais `key` em cima**. Itens viram frases completas, em lista com bullet `•` accent
-- People chips: **omite** entradas sem nome E sem nota (resolve "Esposa" solta)
-- Temas: garantir `flex-wrap gap-2` correto, e `theme_name` com `.trim()` defensivo
-- Loading: skeleton elegante em vez de spinner
-- Empty state já está bom
+---
 
-### Arquivos
+## Arquivos a tocar
 
-- **Nova migration**: tabela `user_portraits` + grants + RLS (read via token portal, write via service_role)
-- **Nova edge function**: `supabase/functions/generate-user-portrait/index.ts`
-- **Reescrita**: `src/components/portal/SobreVoceTab.tsx` (remove curadoria heurística, lê do retrato)
-- **Hook utilitário**: `src/components/portal/usePortrait.ts` (query + trigger de regeneração stale)
+- `supabase/functions/generate-user-portrait/index.ts` — endurecer prompt (seção REGRAS DURAS), endurecer `normalize` (filtrar `Aura` em pessoas, `.filter(Boolean)` em todos os arrays).
+- `src/components/portal/SobreVoceTab.tsx` — adicionar `THEME_BLACKLIST` + normalização de capitalização + dedup por substring no `useMemo` de `dedupedThemes`; ajustar classes Tailwind de chips de Conquistas e Temas.
 
-### Por que isso resolve
+## Fora de escopo
 
-| Problema atual | Solução |
-|---|---|
-| Chaves arbitrárias expostas ("Fazer", "Sorvete") | LLM reescreve em frases, descarta chaves |
-| Duplicatas semânticas ("Padrão" + "Comportamento") | LLM agrupa antes de escrever |
-| "Esposa" sem nome ocupando espaço | LLM decide se vale citar; frontend filtra entradas vazias |
-| Cards parecem dump de dados | Vira narrativa em 1ª pessoa da Aura |
-| Curadoria heurística sempre vaza lixo novo | Sem regex frágil — modelo decide |
-| Tela "sem UAU" | Intro narrativa + tipografia + microinterações |
+- Não mexer em `session-extractor`, `user_insights`, nem `session_themes` (dados brutos continuam como estão; a curadoria é toda no edge + frontend).
+- Não adicionar avatar/foto de perfil (já decidido anteriormente).
+- Não mudar o schema do `user_portraits`.
 
-### Custos
+## Resultado esperado
 
-Gemini Flash, ~2-4k tokens input, ~800 output por usuário, regenerado no máx 1x/dia → centavos por usuário/mês. Cache evita custo recorrente.
-
-### Riscos
-
-- LLM pode alucinar — mitigamos com prompt restritivo ("só use o que está no input, não invente") + temperatura baixa
-- Primeira carga lenta se cache vazio — mostramos skeleton + texto "Aura está organizando o que sabe sobre você…"
-- Schema JSON pode falhar — usar `responseMimeType: application/json` + tool calling pra forçar estrutura
-
-### Fora de escopo
-
-- Não mexer no extrator (`session-extractor` ou agente principal)
-- Não mexer em `session_themes` (já está OK)
-- Não adicionar foto/avatar (já decidimos remover)
+Eduardo abre `/meu-espaco` e vê:
+- Pessoas reais: apenas Filhas (Bella, Selena) e Esposa (sem fofoca episódica) — Aura sumiu da lista.
+- Temas só de vida: ansiedade, conexão com filhas, equilíbrio trabalho e família, sono, liberdade — todos com capitalização consistente, dedupados, com respiro visual.
+- Padrões sem meta-conversa.
+- Chips de conquistas legíveis com espaçamento real.

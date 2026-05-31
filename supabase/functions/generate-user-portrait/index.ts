@@ -44,8 +44,13 @@ REGRAS DUROS:
 - Máx 4 itens por seção. Menos é mais.
 - Se não tem sinal pra uma seção, devolve array vazio. Não invente.
 - "intro": 1 frase curta (até 140 char) sintetizando quem é a pessoa hoje. Ex: "Eduardo, pai da Bella e da Selena, em transição de hábitos e procurando mais liberdade no dia a dia."
-- "pessoas": só relações reais com nome próprio OU com nota de contexto curta. Sem chip vazio.
+- "pessoas": SÓ relações humanas reais da vida do usuário (família, parceira, filhos, amigos, colegas, terapeuta humano).
+  * NUNCA inclua: "Aura", "aura", "mentor" (referência à própria IA), "terapeuta" (quando se referir à Aura), "coach", "assistente", "IA", "bot".
+  * A "nota" deve ser um TRAÇO RELACIONAL ESTÁVEL (papel, dinâmica recorrente, característica duradoura). Ex bom: "parceira de longa data, com quem ele evita falar de planos". Ex RUIM: "ficou brava com o débito automático" (evento isolado, fofoca de um dia).
+  * Se a pessoa não tem nome próprio E não tem nota relacional estável válida, DESCARTE a entrada inteira.
+- "padroes": SÓ padrões da VIDA do usuário (relacionamentos, trabalho, emoções, hábitos, corpo). NUNCA padrões sobre a própria conversa com a Aura: não cite preferência por áudio vs texto, frequência de uso do app, "muda de assunto no chat", "recusa ajuda da Aura", "insiste em pedir X pra Aura". Esses são meta-conversa e devem ser DESCARTADOS.
 - "sensiveis": frases curtas e respeitosas; só temas de trauma/medo/dor reais.
+- "conquistas": cada item é UMA frase curta autônoma, máx 80 caracteres, terminando em ponto final. Sem emendar duas conquistas no mesmo item.
 
 SCHEMA (retorne SÓ JSON válido):
 {
@@ -91,21 +96,40 @@ async function callGemini(prompt: string): Promise<any> {
 
 function normalize(parsed: any) {
   const arr = (v: any) => (Array.isArray(v) ? v : []);
+  const cleanStr = (s: any) => (typeof s === "string" ? s.trim() : "");
+  const cleanList = (v: any, max: number) =>
+    arr(v).map(cleanStr).filter((s: string) => s.length > 0).slice(0, max);
+  const FORBIDDEN_PERSON = /^(aura|mentor|terapeuta|coach|assistente|ia|bot|chatbot)$/i;
+  const isEpisodicNota = (s: string) =>
+    /\b(ficou|ficaram|disse|falou|mandou|escreveu|ontem|hoje|agora|esse dia|nesse dia|naquele dia)\b/i.test(s);
   return {
-    intro: typeof parsed.intro === "string" ? parsed.intro.trim() : null,
+    intro: cleanStr(parsed.intro) || null,
     pessoas: arr(parsed.pessoas)
       .filter((p: any) => p && typeof p.label === "string")
-      .map((p: any) => ({
-        label: String(p.label).trim(),
-        names: Array.isArray(p.names) ? p.names.filter((n: any) => typeof n === "string") : [],
-        nota: typeof p.nota === "string" ? p.nota.trim() : null,
-      }))
-      .filter((p: any) => p.names.length > 0 || (p.nota && p.nota.length > 0)),
-    o_que_te_move: arr(parsed.o_que_te_move).filter((s: any) => typeof s === "string").map((s: string) => s.trim()).slice(0, 4),
-    padroes: arr(parsed.padroes).filter((s: any) => typeof s === "string").map((s: string) => s.trim()).slice(0, 4),
-    preferencias: arr(parsed.preferencias).filter((s: any) => typeof s === "string").map((s: string) => s.trim()).slice(0, 4),
-    conquistas: arr(parsed.conquistas).filter((s: any) => typeof s === "string").map((s: string) => s.trim()).slice(0, 6),
-    sensiveis: arr(parsed.sensiveis).filter((s: any) => typeof s === "string").map((s: string) => s.trim()).slice(0, 4),
+      .map((p: any) => {
+        const label = String(p.label).trim();
+        const names = Array.isArray(p.names)
+          ? p.names
+              .filter((n: any) => typeof n === "string")
+              .map((n: string) => n.trim())
+              .filter((n: string) => n.length > 0 && !FORBIDDEN_PERSON.test(n))
+          : [];
+        let nota = cleanStr(p.nota);
+        if (nota && isEpisodicNota(nota)) nota = ""; // descarta nota episódica
+        return { label, names, nota: nota || null };
+      })
+      .filter((p: any) => {
+        if (FORBIDDEN_PERSON.test(p.label)) return false;
+        // precisa ter pelo menos nome real OU nota relacional estável
+        return p.names.length > 0 || (p.nota && p.nota.length > 0);
+      }),
+    o_que_te_move: cleanList(parsed.o_que_te_move, 4),
+    padroes: cleanList(parsed.padroes, 4),
+    preferencias: cleanList(parsed.preferencias, 4),
+    conquistas: cleanList(parsed.conquistas, 6).map((s: string) =>
+      s.length > 0 && !/[.!?]$/.test(s) ? s + "." : s,
+    ),
+    sensiveis: cleanList(parsed.sensiveis, 4),
   };
 }
 
