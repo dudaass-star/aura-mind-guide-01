@@ -100,19 +100,25 @@ export function SobreVoceTab({ userId }: { userId: string }) {
     enabled: !!userId,
   });
 
-  // Dispara geração em background se: não tem retrato OU >24h
+  // Sempre invoca generate-user-portrait ao montar. O backend tem cache por
+  // hash dos insights/temas + PROMPT_VERSION: se nada mudou retorna em ms
+  // sem chamar LLM (custo zero). Refetch só quando o conteúdo realmente
+  // mudou — evita o portal mostrar versão antiga em cache do react-query.
   useEffect(() => {
     if (!userId) return;
     if (isLoading) return;
-    const stale = !portrait ||
-      (Date.now() - new Date(portrait.generated_at).getTime()) / 36e5 > 24;
-    if (!stale) return;
     supabasePortal.functions
       .invoke("generate-user-portrait", { body: { user_id: userId } })
-      .then(() => refetch())
+      .then((res: any) => {
+        const cached = res?.data?.cached;
+        const newGeneratedAt = res?.data?.portrait?.generated_at;
+        if (cached === false || (newGeneratedAt && newGeneratedAt !== portrait?.generated_at)) {
+          refetch();
+        }
+      })
       .catch((e) => console.warn("generate-user-portrait failed", e));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, isLoading, portrait?.generated_at]);
+  }, [userId, isLoading]);
 
   const { data: themes } = useQuery({
     queryKey: ["portal-session-themes", userId],
