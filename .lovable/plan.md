@@ -1,26 +1,52 @@
 ## Diagnóstico
 
-A regeneração nova **já gravou no banco** o retrato limpo (sem "Mentor: Aura", sem nota episódica da esposa, sem padrão de áudio/medicação). O que aparece no `/meu-espaco` é o **retrato antigo** que ficou em cache de carregamento anterior.
+Confirmado o bug. O funil "Pagaram Plano Semanal / Responderam / Converteram" e a métrica `trialRespondedCount` usam o campo `profiles.trial_conversations_count` para contar quem respondeu pelo menos uma mensagem.
 
-Causa: o `useEffect` atual só dispara a regeneração se o retrato não existe OU se está com mais de 24h. Como tinha sido gerado há minutos, ele não dispara — e o react-query mantém o objeto antigo até um remount completo.
+**O contador só é incrementado quando `profile.status === 'trial'`** (em `supabase/functions/process-webhook-message/index.ts`, linha 940):
 
-**Sobre os "chips grudados"** (Conquistas e Temas): visualmente NÃO estão grudados (têm `gap-2.5` entre chips). É artefato de copy-paste — chips `inline-flex` adjacentes sem texto separador entre as tags HTML colam o texto ao copiar. No render real, há espaço entre eles. Não é bug.
+```ts
+if (profile.status === 'trial' && inboundSaved) {
+  await supabase.from('profiles')
+    .update({ trial_conversations_count: (profile.trial_conversations_count || 0) + 1 })
+    ...
+}
+```
 
----
+**Problema com PIX**: `webhook-asaas` cria o profile já com `status: "active"` (PIX é pago à vista, não trial) e ainda assim seta `trial_started_at` e `plan` — então o usuário **entra no funil** (que filtra `trial_started_at NOT NULL` + `plan NOT NULL`), mas **nunca tem o contador incrementado**, porque o status nunca é `'trial'`.
 
-## Ajuste único
+Resultado visível no print: `Pagaram 1 / Responderam 0 / Converteram 1` — matematicamente impossível, e exatamente o sintoma que você descreveu.
 
-**Arquivo:** `src/components/portal/SobreVoceTab.tsx`
+O mesmo problema afeta:
+- `trialRespondedCount` (período)
+- `funnelResponded` (all-time)
+- `avgMsgsConverted` / `avgMsgsNonConverted` (PIX puxa as médias pra baixo)
 
-Trocar o `useEffect` que dispara `generate-user-portrait`:
+Observação: o nome do funil ("Pagaram Plano Semanal") é herdado da era trial-de-cartão. Como PIX também cai nele (por ter `trial_started_at` + `plan`), o label hoje está enganoso, mas isso é outra discussão — esta correção foca apenas em contar resposta corretamente.
 
-- **Antes:** só invoca se `!portrait || >24h`.
-- **Depois:** invoca em todo mount. O backend já tem cache por hash dos `user_insights` + `session_themes` + `PROMPT_VERSION` — então quando os dados brutos não mudaram, ele retorna em milissegundos sem chamar LLM (custo zero). Quando mudaram (ou quando o `PROMPT_VERSION` muda), ele regenera. Refetch só roda se a resposta indicar `cached: false` OU se o `generated_at` difere do que está em tela.
+## Correção
 
-Resultado: retrato sempre se auto-cura no próximo carregamento sem custo extra, e o Eduardo verá a versão limpa assim que recarregar.
+### 1. `supabase/functions/process-webhook-message/index.ts`
+Trocar o gate por uma condição que inclua usuários PIX/ativos que entraram no funil:
+
+```ts
+// Antes
+if (profile.status === 'trial' && inboundSaved) { ... }
+
+// Depois
+if (inboundSaved && profile.trial_started_at && ['trial', 'active'].includes(profile.status)) { ... }
+```
+
+Mantém o contador como "respondeu pelo menos N vezes desde a entrada no funil" — válido tanto pra trial Stripe quanto pra ativo PIX. Custo: 1 update extra por mensagem inbound de ativo (negligível).
+
+### 2. Backfill único dos PIX já existentes
+Edge function temporária `backfill-trial-conversations-count` (ou um script SQL via migration) que, pra cada profile com `trial_started_at NOT NULL` e `trial_conversations_count = 0`, conta `SELECT count(*) FROM messages WHERE user_id = X AND role = 'user'` e grava o valor real. Roda 1x e descarta. Isso conserta o histórico do print atual sem esperar nova mensagem.
+
+### 3. Sem mudança no frontend nem no `admin-engagement-metrics`
+A lógica de leitura continua igual; só passa a refletir a realidade.
 
 ## Fora de escopo
 
-- Não vou mexer no prompt nem no `normalize` (já estão corretos — DB confirma).
-- Não vou mexer nos estilos dos chips (não há bug visual real).
-- Não vou tocar em outras abas do portal.
+- Renomear "Pagaram Plano Semanal" para algo que englobe PIX (pode virar follow-up se quiser).
+- Mexer em outras métricas (MRR, churn, activation).
+
+Aprova que eu sigo com a correção + backfill?
