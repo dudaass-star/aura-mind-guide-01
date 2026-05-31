@@ -936,16 +936,18 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Increment trial_conversations_count for trial users
-    if (profile.status === 'trial' && inboundSaved) {
+    // Incrementa trial_conversations_count para usuários que entraram no funil
+    // (qualquer um com trial_started_at): cobre trial Stripe + ativos PIX,
+    // que entram já como 'active' mas precisam aparecer em "Responderam".
+    if (inboundSaved && profile.trial_started_at && ['trial', 'active'].includes(profile.status)) {
       try {
         await supabase
           .from('profiles')
           .update({ trial_conversations_count: (profile.trial_conversations_count || 0) + 1 })
           .eq('id', profile.id);
-        console.log(`📊 Trial counter incremented for ${profile.user_id}: ${(profile.trial_conversations_count || 0) + 1}`);
+        console.log(`📊 Funnel reply counter incremented for ${profile.user_id} (${profile.status}): ${(profile.trial_conversations_count || 0) + 1}`);
       } catch (e) {
-        console.warn('⚠️ Failed to increment trial counter:', e);
+        console.warn('⚠️ Failed to increment funnel reply counter:', e);
       }
     }
 
