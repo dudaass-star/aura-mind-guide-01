@@ -64,7 +64,7 @@ export function SobreVoceTab({ userId }: { userId: string }) {
         .select("*")
         .eq("user_id", userId)
         .maybeSingle();
-      return (data as Portrait | null) ?? null;
+      return (data as unknown as Portrait | null) ?? null;
     },
     enabled: !!userId,
   });
@@ -373,21 +373,21 @@ function CollapsibleShell({
   );
 }
 
-function ProseCard({ item, muted }: { item: ProseItem; muted?: boolean }) {
+function ProseList({ items, muted }: { items: string[]; muted?: boolean }) {
   return (
-    <div className="space-y-0.5">
-      {item.key && (
-        <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold font-['Nunito']">
-          {prettyLabel(item.key)}
-        </p>
-      )}
-      <p
-        className={`text-sm font-['Nunito'] leading-relaxed ${
-          muted ? "text-foreground/85" : "text-foreground"
-        }`}
-      >
-        {item.value}
-      </p>
-    </div>
+    <ul className="space-y-2.5">
+      {items.map((v, i) => (
+        <li key={i} className="flex gap-2.5">
+          <span className="text-accent mt-1.5 select-none leading-none">•</span>
+          <span
+            className={`text-[14px] font-['Nunito'] leading-relaxed ${
+              muted ? "text-foreground/85" : "text-foreground"
+            }`}
+          >
+            {v}
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }
