@@ -2470,6 +2470,48 @@ export type Database = {
         }
         Relationships: []
       }
+      user_portraits: {
+        Row: {
+          conquistas: Json
+          generated_at: string
+          insights_version: string | null
+          intro: string | null
+          o_que_te_move: Json
+          padroes: Json
+          pessoas: Json
+          preferencias: Json
+          sensiveis: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          conquistas?: Json
+          generated_at?: string
+          insights_version?: string | null
+          intro?: string | null
+          o_que_te_move?: Json
+          padroes?: Json
+          pessoas?: Json
+          preferencias?: Json
+          sensiveis?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          conquistas?: Json
+          generated_at?: string
+          insights_version?: string | null
+          intro?: string | null
+          o_que_te_move?: Json
+          padroes?: Json
+          pessoas?: Json
+          preferencias?: Json
+          sensiveis?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string | null
