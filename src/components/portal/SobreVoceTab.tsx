@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 import {
@@ -13,25 +13,32 @@ import {
   ChevronDown,
   ChevronUp,
   MessageCircle,
+  Sparkles,
 } from "lucide-react";
 import { SectionHeader, EmptyState, PortalLoadingInline } from "./shared";
 import { auraWhatsAppLink } from "./whatsapp";
 
 // ============================================================
-// Aba "Sobre você" — versão retrato pessoal
-// Lê public.user_insights (sem "contexto") e session_themes.
-// Curadoria agressiva + layout diferenciado por seção.
+// Aba "Sobre você" — versão retrato narrativo
+// Lê o retrato curado em public.user_portraits (gerado por edge function via Gemini Flash).
+// Se cache estiver vazio/stale, dispara generate-user-portrait em background.
+// Temas continuam vindo de session_themes (já curados).
 // ============================================================
 
-type Insight = {
-  id: string;
-  category: string;
-  key: string | null;
-  value: string | null;
-  importance: number | null;
-  mentioned_count: number | null;
-  last_mentioned_at: string | null;
+type Portrait = {
+  user_id: string;
+  intro: string | null;
+  pessoas: { label: string; names: string[]; nota?: string | null }[];
+  o_que_te_move: string[];
+  padroes: string[];
+  preferencias: string[];
+  conquistas: string[];
+  sensiveis: string[];
+  insights_version: string | null;
+  generated_at: string;
 };
+
+const MAX_THEMES = 12;
 
 // ---------- BLACKLISTS / WHITELISTS ----------
 
@@ -256,22 +263,45 @@ const MAX_PEOPLE = 8;
 const MAX_THEMES = 12;
 
 export function SobreVoceTab({ userId }: { userId: string }) {
-  const { data: insights, isLoading } = useQuery({
-    queryKey: ["portal-user-insights", userId],
+  const { data: profile } = useQuery({
+    queryKey: ["portal-profile-name", userId],
     queryFn: async () => {
-      const { data, error } = await supabasePortal
-        .from("user_insights")
-        .select("id, category, key, value, importance, mentioned_count, last_mentioned_at")
+      const { data } = await supabasePortal
+        .from("profiles")
+        .select("name")
         .eq("user_id", userId)
-        .neq("category", "contexto")
-        .order("importance", { ascending: false })
-        .order("last_mentioned_at", { ascending: false })
-        .limit(400);
-      if (error) return [] as Insight[];
-      return (data || []) as Insight[];
+        .maybeSingle();
+      return data;
     },
     enabled: !!userId,
   });
+
+  const { data: portrait, isLoading, refetch } = useQuery({
+    queryKey: ["portal-user-portrait", userId],
+    queryFn: async () => {
+      const { data } = await supabasePortal
+        .from("user_portraits" as any)
+        .select("*")
+        .eq("user_id", userId)
+        .maybeSingle();
+      return (data as Portrait | null) ?? null;
+    },
+    enabled: !!userId,
+  });
+
+  // Dispara geração em background se: não tem retrato OU >24h
+  useEffect(() => {
+    if (!userId) return;
+    if (isLoading) return;
+    const stale = !portrait ||
+      (Date.now() - new Date(portrait.generated_at).getTime()) / 36e5 > 24;
+    if (!stale) return;
+    supabasePortal.functions
+      .invoke("generate-user-portrait", { body: { user_id: userId } })
+      .then(() => refetch())
+      .catch((e) => console.warn("generate-user-portrait failed", e));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, isLoading, portrait?.generated_at]);
 
   const { data: themes } = useQuery({
     queryKey: ["portal-session-themes", userId],
@@ -288,27 +318,15 @@ export function SobreVoceTab({ userId }: { userId: string }) {
     enabled: !!userId,
   });
 
-  const curated = useMemo(() => {
-    const all = insights || [];
-    return {
-      name: extractUserName(all),
-      people: curatePeople(all).slice(0, MAX_PEOPLE),
-      objetivos: curateProseSection(all, "objetivo", 4, MAX_PROSE),
-      padroes: curateProseSection(all, "padrao", 4, MAX_PROSE),
-      preferencias: curateProseSection(all, "preferencia", 4, MAX_PROSE),
-      conquistas: curateProseSection(all, "conquista", 0, MAX_PROSE),
-      sensiveis: curateProseSection(all, "trauma", 0, MAX_PROSE),
-    };
-  }, [insights]);
-
   const dedupedThemes = useMemo(() => {
     const map = new Map<string, any>();
     for (const t of themes || []) {
-      const key = (t.theme_name || "").trim().toLowerCase();
+      const name = (t.theme_name || "").trim();
+      const key = name.toLowerCase();
       if (!key) continue;
       const existing = map.get(key);
       if (!existing) {
-        map.set(key, { ...t });
+        map.set(key, { ...t, theme_name: name });
       } else {
         existing.session_count = (existing.session_count || 0) + (t.session_count || 0);
         if (t.status === "active") existing.status = "active";
@@ -325,13 +343,16 @@ export function SobreVoceTab({ userId }: { userId: string }) {
 
   if (isLoading) return <PortalLoadingInline />;
 
+  const firstName = (profile?.name || "").trim().split(/\s+/)[0] || null;
+
   const hasAny =
-    curated.people.length > 0 ||
-    curated.objetivos.length > 0 ||
-    curated.padroes.length > 0 ||
-    curated.preferencias.length > 0 ||
-    curated.conquistas.length > 0 ||
-    curated.sensiveis.length > 0 ||
+    !!portrait?.intro ||
+    (portrait?.pessoas?.length ?? 0) > 0 ||
+    (portrait?.o_que_te_move?.length ?? 0) > 0 ||
+    (portrait?.padroes?.length ?? 0) > 0 ||
+    (portrait?.preferencias?.length ?? 0) > 0 ||
+    (portrait?.conquistas?.length ?? 0) > 0 ||
+    (portrait?.sensiveis?.length ?? 0) > 0 ||
     activeThemes.length > 0 ||
     resolvedThemes.length > 0;
 
@@ -341,34 +362,46 @@ export function SobreVoceTab({ userId }: { userId: string }) {
         <SectionHeader icon={User} title="Sobre você" />
         <EmptyState
           icon={Heart}
-          title="A Aura ainda está te conhecendo"
-          description="Conforme vocês conversam, ela vai mapear identidade, valores e temas recorrentes seus aqui."
+          title={portrait ? "A Aura ainda está te conhecendo" : "Organizando o que sei sobre você…"}
+          description={portrait
+            ? "Conforme vocês conversam, ela vai mapear identidade, valores e temas recorrentes seus aqui."
+            : "Isso leva alguns segundos. Volte daqui a pouco e o seu retrato vai estar aqui."}
         />
       </div>
     );
   }
 
-  const greeting = curated.name ? `Oi, ${curated.name}` : "Sobre você";
+  const greeting = firstName ? `Oi, ${firstName}` : "Sobre você";
 
   return (
     <div className="space-y-7">
-      {/* Header simples — sem avatar */}
-      <div>
-        <h2 className="text-xl font-semibold text-foreground font-['Nunito']">
+      {/* Header */}
+      <div className="animate-in fade-in slide-in-from-top-2 duration-500">
+        <h2 className="text-2xl font-semibold text-foreground font-['Nunito'] tracking-tight">
           {greeting}
         </h2>
-        <p className="text-xs text-muted-foreground font-['Nunito'] mt-1">
-          O que a Aura aprendeu sobre você até aqui.
+        <p className="text-sm text-muted-foreground font-['Nunito'] mt-1">
+          Aqui está o que eu fui aprendendo sobre você nas nossas conversas.
         </p>
       </div>
 
-      {/* Pessoas — chips grid */}
-      {curated.people.length > 0 && (
+      {/* Intro narrativa — card destaque */}
+      {portrait?.intro && (
+        <div className="relative overflow-hidden rounded-2xl border border-accent/20 bg-gradient-to-br from-accent/8 via-accent/3 to-transparent p-5 animate-in fade-in duration-700">
+          <Sparkles size={16} className="text-accent absolute top-4 right-4 opacity-60" />
+          <p className="text-[15px] text-foreground font-['Nunito'] leading-relaxed italic pr-6">
+            {portrait.intro}
+          </p>
+        </div>
+      )}
+
+      {/* Pessoas — chips */}
+      {portrait?.pessoas && portrait.pessoas.length > 0 && (
         <SectionShell title="Pessoas da sua vida" icon={Users}>
           <div className="grid grid-cols-2 gap-2">
-            {curated.people.map((p) => (
+            {portrait.pessoas.map((p, i) => (
               <div
-                key={p.label}
+                key={`${p.label}-${i}`}
                 className="rounded-xl border border-border bg-card px-3 py-2.5"
               >
                 <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold font-['Nunito']">
@@ -379,39 +412,32 @@ export function SobreVoceTab({ userId }: { userId: string }) {
                     {p.names.join(", ")}
                   </p>
                 )}
+                {p.nota && (
+                  <p className="text-xs text-muted-foreground font-['Nunito'] leading-snug mt-0.5 italic">
+                    {p.nota}
+                  </p>
+                )}
               </div>
             ))}
           </div>
         </SectionShell>
       )}
 
-      {/* Objetivos — bullets em prosa */}
-      {curated.objetivos.length > 0 && (
+      {/* O que te move */}
+      {portrait?.o_que_te_move && portrait.o_que_te_move.length > 0 && (
         <SectionShell title="O que te move" icon={Compass}>
-          <div className="space-y-3">
-            {curated.objetivos.map((it, i) => (
-              <ProseCard key={i} item={it} />
-            ))}
-          </div>
+          <ProseList items={portrait.o_que_te_move} />
         </SectionShell>
       )}
 
-      {/* Padrões — blockquote */}
-      {curated.padroes.length > 0 && (
+      {/* Padrões */}
+      {portrait?.padroes && portrait.padroes.length > 0 && (
         <SectionShell title="Padrões que a Aura percebeu" icon={Activity}>
           <div className="space-y-3">
-            {curated.padroes.map((it, i) => (
-              <blockquote
-                key={i}
-                className="border-l-2 border-accent/40 pl-3"
-              >
-                {it.key && (
-                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold font-['Nunito'] mb-0.5">
-                    {prettyLabel(it.key)}
-                  </p>
-                )}
+            {portrait.padroes.map((v, i) => (
+              <blockquote key={i} className="border-l-2 border-accent/40 pl-3">
                 <p className="text-sm text-foreground/90 font-['Nunito'] italic leading-relaxed">
-                  {it.value}
+                  {v}
                 </p>
               </blockquote>
             ))}
@@ -419,45 +445,37 @@ export function SobreVoceTab({ userId }: { userId: string }) {
         </SectionShell>
       )}
 
-      {/* Preferências — bullets simples */}
-      {curated.preferencias.length > 0 && (
+      {/* Preferências */}
+      {portrait?.preferencias && portrait.preferencias.length > 0 && (
         <SectionShell title="Preferências e gostos" icon={Heart}>
-          <div className="space-y-3">
-            {curated.preferencias.map((it, i) => (
-              <ProseCard key={i} item={it} />
-            ))}
-          </div>
+          <ProseList items={portrait.preferencias} />
         </SectionShell>
       )}
 
-      {/* Conquistas — badges horizontais */}
-      {curated.conquistas.length > 0 && (
+      {/* Conquistas */}
+      {portrait?.conquistas && portrait.conquistas.length > 0 && (
         <SectionShell title="Conquistas" icon={Trophy}>
           <div className="flex flex-wrap gap-2">
-            {curated.conquistas.map((it, i) => (
+            {portrait.conquistas.map((v, i) => (
               <span
                 key={i}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-accent/10 text-accent text-xs font-medium font-['Nunito']"
               >
                 <Trophy size={12} />
-                {it.value.replace(/\.$/, "")}
+                {v.replace(/\.$/, "")}
               </span>
             ))}
           </div>
         </SectionShell>
       )}
 
-      {/* Sensíveis — colapsado */}
-      {curated.sensiveis.length > 0 && (
+      {/* Sensíveis */}
+      {portrait?.sensiveis && portrait.sensiveis.length > 0 && (
         <CollapsibleShell title="Pontos sensíveis" icon={ShieldAlert}>
           <p className="text-xs text-muted-foreground italic font-['Nunito']">
             Tópicos delicados que você compartilhou com a Aura.
           </p>
-          <div className="space-y-3">
-            {curated.sensiveis.map((it, i) => (
-              <ProseCard key={i} item={it} muted />
-            ))}
-          </div>
+          <ProseList items={portrait.sensiveis} muted />
         </CollapsibleShell>
       )}
 
