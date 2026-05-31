@@ -293,14 +293,14 @@ export function SobreVoceTab({ userId }: { userId: string }) {
       {/* Conquistas */}
       {portrait?.conquistas && portrait.conquistas.length > 0 && (
         <SectionShell title="Conquistas" icon={Trophy}>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2.5">
             {portrait.conquistas.map((v, i) => (
               <span
                 key={i}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-accent/10 text-accent text-xs font-medium font-['Nunito']"
+                className="inline-flex items-start gap-1.5 px-3 py-2 rounded-2xl bg-accent/10 text-accent text-xs font-medium font-['Nunito'] leading-snug max-w-full whitespace-normal"
               >
-                <Trophy size={12} />
-                {v.replace(/\.$/, "")}
+                <Trophy size={12} className="mt-0.5 shrink-0" />
+                <span>{v.replace(/\.$/, "")}</span>
               </span>
             ))}
           </div>
@@ -328,11 +328,11 @@ export function SobreVoceTab({ userId }: { userId: string }) {
                   Temas em movimento
                 </p>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2.5">
                 {activeThemes.map((t: any) => (
                   <span
                     key={t.id}
-                    className="inline-flex items-center px-3 py-1.5 rounded-full bg-accent/10 text-accent text-xs font-medium font-['Nunito']"
+                    className="inline-flex items-center px-3 py-2 rounded-full bg-accent/10 text-accent text-xs font-medium font-['Nunito'] whitespace-nowrap"
                   >
                     {t.theme_name}
                     {t.session_count > 1 && (
@@ -348,11 +348,11 @@ export function SobreVoceTab({ userId }: { userId: string }) {
               <p className="text-xs uppercase tracking-wider text-muted-foreground/70 font-semibold font-['Nunito']">
                 Já trabalhados
               </p>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2.5">
                 {resolvedThemes.map((t: any) => (
                   <span
                     key={t.id}
-                    className="inline-flex items-center px-3 py-1.5 rounded-full bg-muted text-muted-foreground text-xs font-medium font-['Nunito'] line-through opacity-70"
+                    className="inline-flex items-center px-3 py-2 rounded-full bg-muted text-muted-foreground text-xs font-medium font-['Nunito'] line-through opacity-70 whitespace-nowrap"
                   >
                     {t.theme_name}
                   </span>
