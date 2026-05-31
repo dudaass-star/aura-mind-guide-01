@@ -40,6 +40,37 @@ type Portrait = {
 
 const MAX_THEMES = 12;
 
+// Temas operacionais / meta-conversa que não devem aparecer como "temas de vida".
+const THEME_BLACKLIST = [
+  "mudança de assunto",
+  "mudanca de assunto",
+  "recusa de agendamento",
+  "recusa de ajuda",
+  "organizar sessões",
+  "organizar sessoes",
+  "agendar sessão",
+  "agendar sessao",
+  "cancelar sessão",
+  "cancelar sessao",
+  "reagendar sessão",
+  "reagendar sessao",
+  "setup mensal",
+  "preferência por áudio",
+  "preferencia por audio",
+];
+
+// Normaliza pra sentence-case: primeira letra maiúscula, resto preservando case interno.
+// Se vier tudo em lowercase, capitaliza só a inicial; se vier Title Case, mantém.
+function normalizeThemeName(raw: string): string {
+  const s = raw.trim().replace(/\s+/g, " ");
+  if (!s) return s;
+  // Se está todo em lowercase → capitaliza só a 1ª letra
+  if (s === s.toLowerCase()) {
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }
+  return s;
+}
+
 // ---------- COMPONENTES ----------
 
 export function SobreVoceTab({ userId }: { userId: string }) {
@@ -101,9 +132,13 @@ export function SobreVoceTab({ userId }: { userId: string }) {
   const dedupedThemes = useMemo(() => {
     const map = new Map<string, any>();
     for (const t of themes || []) {
-      const name = (t.theme_name || "").trim();
+      const rawName = (t.theme_name || "").trim();
+      if (!rawName) continue;
+      const lower = rawName.toLowerCase();
+      // Banlist operacional (substring)
+      if (THEME_BLACKLIST.some((b) => lower.includes(b))) continue;
+      const name = normalizeThemeName(rawName);
       const key = name.toLowerCase();
-      if (!key) continue;
       const existing = map.get(key);
       if (!existing) {
         map.set(key, { ...t, theme_name: name });
@@ -112,7 +147,30 @@ export function SobreVoceTab({ userId }: { userId: string }) {
         if (t.status === "active") existing.status = "active";
       }
     }
-    return Array.from(map.values()).sort((a, b) => {
+    // Dedup semântico por substring: se "ansiedade" está contido em "Dominando a ansiedade",
+    // fundir no mais longo (mais descritivo), somando session_count.
+    const items = Array.from(map.values());
+    const removed = new Set<string>();
+    for (let i = 0; i < items.length; i++) {
+      if (removed.has(items[i].theme_name.toLowerCase())) continue;
+      for (let j = 0; j < items.length; j++) {
+        if (i === j) continue;
+        const a = items[i].theme_name.toLowerCase();
+        const b = items[j].theme_name.toLowerCase();
+        if (removed.has(b)) continue;
+        // a contido em b (a mais curto), e mesmo status-família → mesclar em b
+        if (a !== b && b.includes(a) && a.length >= 4) {
+          items[j].session_count =
+            (items[j].session_count || 0) + (items[i].session_count || 0);
+          if (items[i].status === "active") items[j].status = "active";
+          removed.add(a);
+          break;
+        }
+      }
+    }
+    return items
+      .filter((it) => !removed.has(it.theme_name.toLowerCase()))
+      .sort((a, b) => {
       if (a.status !== b.status) return a.status === "active" ? -1 : 1;
       return (b.session_count || 0) - (a.session_count || 0);
     });
@@ -235,14 +293,14 @@ export function SobreVoceTab({ userId }: { userId: string }) {
       {/* Conquistas */}
       {portrait?.conquistas && portrait.conquistas.length > 0 && (
         <SectionShell title="Conquistas" icon={Trophy}>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2.5">
             {portrait.conquistas.map((v, i) => (
               <span
                 key={i}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-accent/10 text-accent text-xs font-medium font-['Nunito']"
+                className="inline-flex items-start gap-1.5 px-3 py-2 rounded-2xl bg-accent/10 text-accent text-xs font-medium font-['Nunito'] leading-snug max-w-full whitespace-normal"
               >
-                <Trophy size={12} />
-                {v.replace(/\.$/, "")}
+                <Trophy size={12} className="mt-0.5 shrink-0" />
+                <span>{v.replace(/\.$/, "")}</span>
               </span>
             ))}
           </div>
@@ -270,11 +328,11 @@ export function SobreVoceTab({ userId }: { userId: string }) {
                   Temas em movimento
                 </p>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2.5">
                 {activeThemes.map((t: any) => (
                   <span
                     key={t.id}
-                    className="inline-flex items-center px-3 py-1.5 rounded-full bg-accent/10 text-accent text-xs font-medium font-['Nunito']"
+                    className="inline-flex items-center px-3 py-2 rounded-full bg-accent/10 text-accent text-xs font-medium font-['Nunito'] whitespace-nowrap"
                   >
                     {t.theme_name}
                     {t.session_count > 1 && (
@@ -290,11 +348,11 @@ export function SobreVoceTab({ userId }: { userId: string }) {
               <p className="text-xs uppercase tracking-wider text-muted-foreground/70 font-semibold font-['Nunito']">
                 Já trabalhados
               </p>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2.5">
                 {resolvedThemes.map((t: any) => (
                   <span
                     key={t.id}
-                    className="inline-flex items-center px-3 py-1.5 rounded-full bg-muted text-muted-foreground text-xs font-medium font-['Nunito'] line-through opacity-70"
+                    className="inline-flex items-center px-3 py-2 rounded-full bg-muted text-muted-foreground text-xs font-medium font-['Nunito'] line-through opacity-70 whitespace-nowrap"
                   >
                     {t.theme_name}
                   </span>
