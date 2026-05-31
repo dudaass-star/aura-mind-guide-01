@@ -9,6 +9,8 @@ const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
 
 const STALE_HOURS = 24;
+// Bump quando mudar prompt/normalize pra invalidar caches antigos.
+const PROMPT_VERSION = "v2-2026-05-31";
 
 type Insight = {
   category: string;
@@ -167,6 +169,7 @@ Deno.serve(async (req) => {
 
     // 2. Hash de versão pra cache
     const versionInput = JSON.stringify({
+      pv: PROMPT_VERSION,
       i: insightsArr.map((x) => [x.category, x.key, x.value, x.importance]),
       t: themesArr.map((x: any) => [x.theme_name, x.status, x.session_count]),
     });
