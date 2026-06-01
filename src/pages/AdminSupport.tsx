@@ -105,6 +105,7 @@ export default function AdminSupport() {
   const [regenerating, setRegenerating] = useState(false);
   const [hint, setHint] = useState('');
   const [polling, setPolling] = useState(false);
+  const [activeTab, setActiveTab] = useState<'email' | 'draft'>('email');
 
   useEffect(() => {
     redirectIfNotAdmin();
