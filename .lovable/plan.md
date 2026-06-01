@@ -1,22 +1,44 @@
-## Verificação sem incomodar o Luiz
+## Problema
 
-Confirmei no banco:
-- `auth.users` do Luiz: `7cc08615...` (novo, último login 01/06 17:50).
-- `profiles` do Luiz ainda aponta para o user_id legado `6c88c2a1...` — ou seja, a última tentativa dele realmente falhou pelo erro de FK em `messages` que vimos no log.
+Encontrei **13 usuários no mesmo estado do Luiz**: já criaram conta auth (loginaram em `/meu-espaco`) mas o `profiles.user_id` ainda aponta para o ID legado, então toda vez que entram caem na tela de "informar telefone" e ao confirmar dá erro (mesmo bug que o Luiz tinha antes do cascade).
 
-Para validar a correção **sem pedir nova tentativa pra ele**, vou rodar manualmente via SQL exatamente o que a função `link-portal-account` corrigida faz:
+Lista (email — último login):
+- antunesmarce@gmail.com — 01/06
+- ivanfreitas70@gmail.com — 31/05
+- natyliborio25@gmail.com — 29/05
+- elaine.eclm@gmail.com — 29/05
+- jairoaugusto30@gmail.com — 28/05
+- jefmarper@gmail.com — 28/05
+- nathaliaeira@gmail.com — 28/05
+- studiokelyoliveira@gmail.com — 28/05
+- samuelvenuto@gmail.com — 28/05
+- milla.salles12@gmail.com — 26/05
+- tainarxavier1@gmail.com — 25/05
+- magalhaesrute25@gmail.com — 24/05
+- daianecristinaah@gmail.com — 24/05
+- sandraoliver2002@hotmail.com — nunca logou (ignorar, sem urgência)
 
-1. `UPDATE` em cada tabela com FK para `profiles.user_id` (messages, sessions, checkins, commitments, conversation_followups, time_capsules, user_insights, user_meditation_history, weekly_plans, asaas_payments e demais já mapeadas) trocando `6c88c2a1...` → `7cc08615...`.
-2. `UPDATE profiles SET user_id = '7cc08615...'` no profile do Luiz.
+## Plano
 
-Se tudo passar:
-- O profile do Luiz fica vinculado ao auth user novo.
-- Na próxima vez que ele abrir `/meu-espaco` (sem precisar refazer nada agora), a função entra no ramo `already-linked` e o portal passa direto da tela de WhatsApp.
-- Isso prova tanto que a ordem nova de operações resolve o erro de FK quanto que o portal vai funcionar pra ele sem nova interação.
+**Backfill em lote** aproveitando o `ON UPDATE CASCADE` já aplicado na migration anterior:
 
-Se algum `UPDATE` falhar (alguma FK que esquecemos no array), eu adiciono a tabela na função e redeployo antes de avisar.
+Para cada um dos 13 perfis (match por email entre `profiles` e `auth.users`), rodar:
+```sql
+UPDATE profiles
+SET user_id = <auth.users.id>, updated_at = now()
+WHERE id = <profile.id>;
+```
 
-## Fora do escopo
+O cascade propaga automaticamente para messages, checkins, commitments, conversation_followups, time_capsules, user_insights, user_meditation_history e weekly_plans. Nenhum usuário precisa tentar de novo — na próxima visita ao `/meu-espaco` já caem direto no estado "vinculado".
 
-- Não vou tocar em outros usuários.
-- Sem mudanças de UI ou schema.
+Vou executar como um único `UPDATE ... FROM auth.users WHERE profiles.email = auth.users.email AND profiles.user_id != auth.users.id` para cobrir todos de uma vez.
+
+## Validação
+
+Depois do update, rodo o mesmo SELECT de diagnóstico — deve retornar 0 linhas (exceto a Sandra que nunca logou e não tem o que vincular ainda).
+
+## Fora de escopo
+
+- Mexer no edge function `link-portal-account` (já corrigido na rodada anterior).
+- Sandra (sem login) — quando ela logar pela primeira vez o fluxo corrigido cuida sozinho.
+- UI, schema, RLS.
