@@ -241,16 +241,44 @@ serve(async (req) => {
           ]);
           context.stripe = {
             customer_id: customer.id,
-            subscriptions: subs.data.map((s) => ({
-              id: s.id, status: s.status,
-              current_period_end: s.current_period_end,
-              cancel_at_period_end: s.cancel_at_period_end,
-              price_id: s.items.data[0]?.price.id,
-              amount: s.items.data[0]?.price.unit_amount,
-            })),
+            subscriptions: subs.data.map((s) => {
+              const item = s.items.data[0];
+              const isActiveNow = (s.status === "active" || s.status === "trialing")
+                && !s.cancel_at_period_end
+                && !s.canceled_at
+                && !s.ended_at;
+              return {
+                id: s.id, status: s.status,
+                cancel_at_period_end: s.cancel_at_period_end,
+                is_active_now: isActiveNow,
+                price_id: item?.price.id,
+                amount_cents: item?.price.unit_amount,
+                amount_brl: fmtBRL(item?.price.unit_amount ?? null),
+                // Datas brutas (Unix) e formatadas em BRT — use SEMPRE as *_brt no draft
+                created: s.created,
+                created_at_brt: fmtBRT(s.created),
+                trial_start: s.trial_start,
+                trial_start_brt: fmtBRT(s.trial_start),
+                trial_end: s.trial_end,
+                trial_end_brt: fmtBRT(s.trial_end),
+                current_period_start: (item as { current_period_start?: number } | undefined)?.current_period_start ?? null,
+                current_period_start_brt: fmtBRT((item as { current_period_start?: number } | undefined)?.current_period_start ?? null),
+                current_period_end: (item as { current_period_end?: number } | undefined)?.current_period_end ?? null,
+                current_period_end_brt: fmtBRT((item as { current_period_end?: number } | undefined)?.current_period_end ?? null),
+                canceled_at: s.canceled_at,
+                canceled_at_brt: fmtBRT(s.canceled_at),
+                ended_at: s.ended_at,
+                ended_at_brt: fmtBRT(s.ended_at),
+              };
+            }),
             invoices: invoices.data.map((i) => ({
-              id: i.id, status: i.status, amount_paid: i.amount_paid,
-              amount_due: i.amount_due, created: i.created,
+              id: i.id, status: i.status,
+              amount_paid: i.amount_paid,
+              amount_paid_brl: fmtBRL(i.amount_paid),
+              amount_due: i.amount_due,
+              amount_due_brl: fmtBRL(i.amount_due),
+              created: i.created,
+              created_at_brt: fmtBRT(i.created),
               hosted_invoice_url: i.hosted_invoice_url,
             })),
           };
