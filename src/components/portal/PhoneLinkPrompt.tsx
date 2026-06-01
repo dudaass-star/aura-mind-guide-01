@@ -25,6 +25,7 @@ export function PhoneLinkPrompt() {
     setSubmitting(true);
     setError(null);
     const result = await linkByPhone(digits);
+    console.warn("[PhoneLinkPrompt] linkByPhone result:", result);
     setSubmitting(false);
     if (result === "phone_taken") {
       setError("Esse número já está vinculado a outra conta. Fala com a gente pelo suporte.");

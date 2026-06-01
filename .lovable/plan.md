@@ -1,45 +1,67 @@
-## Problema
+## Diagnóstico
 
-Para o ticket de cobrança falhada do Marcelo, o `support-agent` gerou rascunho dizendo "atualize seus dados de pagamento diretamente no portal do nosso parceiro de pagamentos, a Stripe". Isso está errado por dois motivos:
+### 1. Meditação (imagem 1) — já está funcionando
 
-1. **O portal `/meu-espaco` já tem o botão "Atualizar forma de pagamento"** no rodapé (`UserPortal.tsx` linhas 184–191), que abre o Billing Portal Stripe via edge `customer-portal`. O fluxo correto é: cliente entra no `/meu-espaco` (Google ou OTP) → clica em "Atualizar forma de pagamento" no rodapé.
-2. **Expõe "Stripe" pro cliente final**, o que polui a marca e abre porta pra ele tentar logar direto no Stripe (não vai conseguir).
+Logs do `send-meditation` mostram entrega completa **hoje 17:02 BRT** para o telefone do Luiz (`+55 69 99825-5570`):
 
-A raiz é que o SYSTEM_PROMPT do `support-agent` tem dois caminhos concorrentes — `send_portal_link` (canônico) e `send_stripe_billing_portal` (técnico) — e nenhuma regra força o primeiro para tickets de cartão recusado / atualizar pagamento. A IA escolhe o "Stripe" porque o nome bate com o problema.
+- Intro enviado via Twilio (free text, 24h aberta) — SID `SM4ee10cd9...`
+- Áudio enviado via Twilio (URL pública do storage) — SID `MM23d4132c...`
+- Categoria: `foco` → `med-foco-clareza` ("Clareza Mental")
 
-## Solução
+A imagem do Luiz é compatível com isso (intro chegou; o balão de áudio provavelmente está fora do print, abaixo). **Conclusão: o fluxo está rodando.** O teste anterior dele foi antes do deploy. Nenhuma ação de código necessária aqui — só confirmar pro Luiz que está OK e pedir pra ele rolar o WhatsApp pra baixo do print.
 
-Tornar `send_portal_link` (URL `https://olaaura.com.br/meu-espaco`) o **único caminho** que a IA oferece pro cliente final em tickets de cobrança falhada / atualizar cartão, mencionando explicitamente o botão "Atualizar forma de pagamento" no rodapé. Deprecar `send_stripe_billing_portal` do catálogo visível à IA (mantém o case no executor pra uso admin futuro, mas não está mais nas opções do prompt).
+### 2. Portal `/meu-espaco` — Luiz trava em "Confirma seu WhatsApp" (imagem 2)
 
-### Arquivos a alterar
+Profile existe: `user_id=6c88c2a1...`, `email=luiz.junior@fogas.com.br`, `phone=556999825570`.
 
-**1. `supabase/functions/support-agent/index.ts` (SYSTEM_PROMPT)**
+Fluxo atual em `link-portal-account`:
+1. Login Google → `runLink()` sem body.
+2. Lookup por email do Google. Se Luiz logou com Gmail pessoal (≠ `luiz.junior@fogas.com.br`), não acha → retorna `needs_phone` → mostra `PhoneLinkPrompt`.
+3. Usuário digita `(69) 9 9825-5570` → `runLink(phone)` → busca por variações de telefone → deveria achar `556999825570`.
+4. Profile encontrado tem `user_id=6c88c2a1` (UUID gerado pelo fluxo WhatsApp, **não é um `auth.users` real**). `getUserById(6c88c2a1)` provavelmente retorna vazio → `lastSignIn` falsy → segue pro update → deveria retornar `linked:true`.
 
-- Remover `send_stripe_billing_portal` da lista de "AÇÕES SUGERIDAS" e do enum do tool schema (`suggested_action.type`), pra IA nunca mais sugerir.
-- Estender a "REGRA DE ACESSO AO PORTAL (INVIOLÁVEL)" para cobrir também cobrança/atualização de pagamento:
-  - Se o ticket é sobre **cobrança falhada, cartão recusado, atualizar cartão/forma de pagamento, "minha cobrança não passou", acesso bloqueado por falta de pagamento** → `suggested_action.type` DEVE ser `send_portal_link`.
-  - `draft_body` DEVE conter literalmente a URL `https://olaaura.com.br/meu-espaco` e instruir: "entre com o mesmo email da sua conta (Google ou código por email) e clique em **Atualizar forma de pagamento** no rodapé pra trocar o cartão. Assim que a cobrança passar, o acesso volta automaticamente."
-  - PROIBIDO mencionar "Stripe", "parceiro de pagamentos", "portal do Stripe" no texto pro cliente. A marca é Aura; o backend resolve.
-  - Exceção PIX/Asaas: se o contexto mostra que o cliente paga via Asaas (sem `stripe.subscriptions`), o rascunho deve oferecer **gerar nova cobrança PIX** e pedir confirmação — não apontar pro botão (que só funciona pra cartão Stripe).
+Pelos analytics, vejo 6 POSTs `200` recentes em `link-portal-account` (várias tentativas do Luiz), mas **sem nenhum `console.log` capturado** — a função só loga no caminho de sucesso final (`✅ Linked...`) e em erros. Os retornos `linked:false` (no_profile / phone_taken) e o caminho de update bem-sucedido por phone passam mudos. Por isso não dá pra dizer **qual ramo** está disparando sem instrumentar.
 
-**2. `supabase/functions/support-execute-action/index.ts`**
+Suspeitas mais prováveis:
+- **(A)** Email lookup encontra o profile, mas o `update` falha silenciosamente por algum motivo (RLS / constraint) — improvável porque usa service role.
+- **(B)** Phone lookup não casa porque Luiz está digitando formato diferente (ex.: sem DDD, com DDI duplicado, ou outro número). `normalizeBrazilianPhone` cobre bem, mas vale logar o que chegou.
+- **(C)** O profile foi achado mas o ramo `phone_taken` disparou (porque `getUserById` do user_id antigo retornou algo com `last_sign_in_at`).
+- **(D)** Caso de fato `no_profile` (telefone digitado errado), mas a UI mostra a mensagem certa "Não encontramos esse número" — então o Luiz veria erro, não ficaria mudo.
 
-- Manter o case `send_stripe_billing_portal` existente (não quebrar histórico), mas como o enum do prompt não o oferece mais, ele só pode ser disparado manualmente por admin — comportamento ok.
-- Nenhuma mudança de runtime necessária aqui.
+## Plano
 
-**3. `mem/features/support/portal-access-resolution.md`**
+### Mudança 1 — `supabase/functions/link-portal-account/index.ts`: instrumentar e blindar
 
-- Adicionar parágrafo: o portal `/meu-espaco` tem o botão "Atualizar forma de pagamento" no rodapé que abre o Billing Portal Stripe via `customer-portal`. Tickets de cobrança falhada / cartão recusado seguem o mesmo fluxo: `send_portal_link` + instrução pra clicar no botão. Nunca expor "Stripe" pro cliente. PIX/Asaas é exceção (oferecer nova cobrança).
+Adicionar `console.log` estruturado em cada ramo decisivo (sem logar PII completo — só prefixo do email + últimos 4 dígitos do phone):
 
-### Fora de escopo
+- Entrada: `newUserId`, `email` (mascarado), `phoneInput` presente?
+- Resultado do lookup por email: hit/miss + `legacy.id`/`legacy.user_id` (sem expor email).
+- Resultado do lookup por phone: `variations.length`, hit/miss.
+- Ramo `phone_taken`: logar `existingUser?.user?.id` e `last_sign_in_at`.
+- Update: sucesso/erro.
+- Retorno final: `{linked, reason, matchedBy}`.
 
-- `customer-portal/index.ts`, `UserPortal.tsx`, `ChangePlanDialog.tsx`, RLS, schema, UI.
-- Renderização de assinatura/plano no portal.
-- Asaas refund/cancel (não é o assunto).
+Blindagem extra:
+- No ramo `phone_taken`, exigir **também** que o `auth.users.id` legado seja UUID real (já tá) **E** que tenha `last_sign_in_at` **dentro dos últimos 30 dias**. Profile órfão de token antigo (que nunca foi logado recentemente) não deve bloquear o vínculo legítimo. Hoje basta ter qualquer `last_sign_in_at` pra bloquear — risco de falso positivo.
+
+### Mudança 2 — `src/components/portal/PhoneLinkPrompt.tsx`: feedback de erro melhor
+
+- Adicionar console.warn com o `result` recebido (pra ele me mandar print do DevTools se ainda travar).
+- Mensagens de erro permanecem iguais; nada visual muda além disso.
+
+### Out of scope
+
+- `meditation`, `support-agent`, `support-execute-action`, RLS, schema, UI do `UserPortal`.
+- Refactor maior do `link-portal-account` ou do `PortalAuthContext`.
 
 ### Validação
 
-Após deploy, regenerar o rascunho do ticket do Marcelo (cobranca_falhou) e confirmar:
-- `suggested_action.type === "send_portal_link"`.
-- `draft_body` contém a URL `https://olaaura.com.br/meu-espaco` e a instrução "Atualizar forma de pagamento" (rodapé).
-- `draft_body` **não** contém "Stripe" nem "parceiro de pagamentos".
+1. Deploy.
+2. Pedir pro Luiz tentar de novo no portal.
+3. Ler `supabase--edge_function_logs` de `link-portal-account` → ver exatamente qual ramo dispara.
+4. Se for `phone_taken`, ver `last_sign_in_at` do user antigo no log e decidir se relaxa mais a regra ou faz cleanup manual.
+5. Se for `no_profile`, ver o que ele digitou (últimos 4 dígitos) vs `556999825570` esperado.
+
+### Memória
+
+Atualizar `mem/features/support/portal-access-resolution.md` com uma nota curta sobre a regra de `phone_taken` (janela de 30 dias).
