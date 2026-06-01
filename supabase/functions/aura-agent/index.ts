@@ -7514,7 +7514,7 @@ Só DEPOIS de saber a situação, explore as emoções com profundidade.`;
     // DETECTAR TAG [MEDITACAO:categoria] E ENVIAR MEDITAÇÃO PRÉ-GRAVADA
     // ========================================================================
     const meditationMatch = assistantMessage.match(/\[MEDITACAO:(\w+)\]/i);
-    if (meditationMatch && (profile?.user_id || userPhone)) {
+    if (meditationMatch && (profile?.user_id || phone || profile?.phone)) {
       const meditationCategory = meditationMatch[1].toLowerCase();
       console.log(`🧘 Meditation tag detected: [MEDITACAO:${meditationCategory}]`);
       
@@ -7560,7 +7560,7 @@ Só DEPOIS de saber a situação, explore as emoções com profundidade.`;
             body: JSON.stringify({
               category: meditationCategory,
               user_id: profile?.user_id || null,
-              phone: userPhone,
+              phone: phone || profile?.phone,
               context: `aura-agent-tag`,
             }),
           });
@@ -7759,7 +7759,7 @@ Só DEPOIS de saber a situação, explore as emoções com profundidade.`;
     // Envolvido em try/catch defensivo: se este bloco opcional falhar,
     // a resposta principal da Aura NÃO pode ser derrubada.
     try {
-    if (!meditationMatch && (profile?.user_id || userPhone)) {
+    if (!meditationMatch && (profile?.user_id || phone || profile?.phone)) {
       const userLower = message.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
       const meditationKeywords = ['meditacao', 'meditar', 'meditando', 'meditation', 'medita pra', 'medita para'];
       const userAskedMeditation = meditationKeywords.some(k => userLower.includes(k));
@@ -7815,7 +7815,7 @@ Só DEPOIS de saber a situação, explore as emoções com profundidade.`;
           body: JSON.stringify({
             category: fallbackCategory,
             user_id: profile?.user_id || null,
-            phone: userPhone,
+            phone: phone || profile?.phone,
             context: auraPromisedMeditation ? 'aura-agent-fallback-aura-promised' : 'aura-agent-fallback-user-keyword',
           }),
         }).then(res => {
