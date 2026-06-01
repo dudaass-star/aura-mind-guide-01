@@ -152,7 +152,36 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 4) Atualiza user_id do profile existente para o novo auth.uid() (e preenche email se faltava).
+    // 4) Propaga o novo user_id para tabelas relacionadas ANTES de atualizar o profile,
+    // porque várias delas têm FK para profiles.user_id e bloqueariam o update.
+    const oldUserId = legacy.user_id;
+    if (oldUserId && oldUserId !== newUserId) {
+      const tables = [
+        "messages", "sessions", "session_themes", "session_ratings",
+        "commitments", "checkins", "monthly_letters", "monthly_reports",
+        "time_capsules", "user_milestones", "user_evolution_summary",
+        "weekly_questions", "user_journey_history", "scheduled_tasks",
+        "conversation_followups", "aura_response_state",
+        "user_insights", "user_meditation_history", "weekly_plans",
+        "asaas_payments",
+      ];
+      const results = await Promise.allSettled(
+        tables.map((t) =>
+          admin.from(t).update({ user_id: newUserId }).eq("user_id", oldUserId)
+        )
+      );
+      const failed = results
+        .map((r, i) => ({ r, t: tables[i] }))
+        .filter(({ r }) => r.status === "rejected" || (r.status === "fulfilled" && (r.value as any)?.error));
+      if (failed.length > 0) {
+        for (const { r, t } of failed) {
+          const err = r.status === "rejected" ? r.reason : (r.value as any)?.error;
+          console.error(`🔗 [link] propagate-fail table=${t}`, err);
+        }
+      }
+    }
+
+    // 5) Atualiza user_id do profile existente para o novo auth.uid() (e preenche email se faltava).
     const updatePayload: Record<string, unknown> = {
       user_id: newUserId,
       updated_at: new Date().toISOString(),
@@ -165,30 +194,13 @@ Deno.serve(async (req) => {
       .eq("id", legacy.id);
 
     if (updErr) {
-      console.error("update error", updErr);
-      return new Response(JSON.stringify({ error: "link_failed" }), {
+      console.error("🔗 [link] update error", updErr);
+      return new Response(JSON.stringify({ error: "link_failed", detail: updErr.message }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
     console.log(`🔗 [link] update-ok profile=${legacy.id} newUid=${newUserId.slice(0, 8)} matchedBy=${matchedBy}`);
-
-    // 5) Propaga o novo user_id para tabelas relacionadas que usavam o user_id antigo.
-    const oldUserId = legacy.user_id;
-    if (oldUserId && oldUserId !== newUserId) {
-      const tables = [
-        "messages", "sessions", "session_themes", "session_ratings",
-        "commitments", "checkins", "monthly_letters", "monthly_reports",
-        "time_capsules", "user_milestones", "user_evolution_summary",
-        "weekly_questions", "user_journey_history", "scheduled_tasks",
-        "conversation_followups", "aura_response_state",
-      ];
-      await Promise.allSettled(
-        tables.map((t) =>
-          admin.from(t).update({ user_id: newUserId }).eq("user_id", oldUserId)
-        )
-      );
-    }
 
     console.log(`✅ Linked auth uid ${newUserId} to legacy profile (matchedBy: ${matchedBy})`);
 
