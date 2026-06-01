@@ -465,17 +465,41 @@ export default function AdminSupport() {
           </ScrollArea>
         </Card>
 
-        {/* CENTER: thread */}
-        <Card className="flex flex-col overflow-hidden">
-          {!selectedTicket ? (
+        {/* CENTER: tabs (email do cliente + rascunho da IA) */}
+        {!selectedTicket ? (
+          <Card className="flex flex-col overflow-hidden">
             <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
               Selecione um ticket à esquerda
             </div>
-          ) : loadingDetail ? (
+          </Card>
+        ) : loadingDetail ? (
+          <Card className="flex flex-col overflow-hidden">
             <div className="flex-1 flex items-center justify-center"><Loader2 className="animate-spin" /></div>
-          ) : (
-            <>
-              <CardHeader className="border-b">
+          </Card>
+        ) : (
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'email' | 'draft')} className="flex flex-col overflow-hidden min-h-0">
+            <TabsList className="w-full justify-start rounded-none border-b bg-transparent h-auto p-0 flex-shrink-0">
+              <TabsTrigger
+                value="email"
+                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-3 text-sm"
+              >
+                <Mail className="h-4 w-4 mr-2" /> Email do cliente
+              </TabsTrigger>
+              <TabsTrigger
+                value="draft"
+                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 py-3 text-sm gap-2"
+              >
+                <Sparkles className="h-4 w-4 mr-2" /> Rascunho da IA
+                {draft && selectedTicket.status === 'pending_review' && (
+                  <span className="ml-1 h-2 w-2 rounded-full bg-primary" aria-hidden />
+                )}
+              </TabsTrigger>
+            </TabsList>
+
+            {/* ====== TAB: EMAIL DO CLIENTE ====== */}
+            <TabsContent value="email" className="flex-1 mt-0 overflow-hidden data-[state=inactive]:hidden">
+              <Card className="flex flex-col overflow-hidden h-full rounded-t-none">
+                <CardHeader className="border-b">
                 <CardTitle className="text-base">{selectedTicket.subject}</CardTitle>
                 <p className="text-xs text-muted-foreground">
                   {selectedTicket.customer_name && `${selectedTicket.customer_name} · `}
@@ -511,7 +535,7 @@ export default function AdminSupport() {
                 )}
               </CardHeader>
               <ScrollArea className="flex-1">
-                <CardContent className="p-4 space-y-3">
+                <CardContent className="p-4 space-y-3 max-w-3xl mx-auto">
                   {messages.map((m) => (
                     <div key={m.id} className={`p-3 rounded-md border ${m.direction === 'inbound' ? 'bg-muted/50' : 'bg-primary/5 border-primary/20'}`}>
                       <div className="flex items-center justify-between mb-2 text-xs text-muted-foreground">
@@ -548,20 +572,14 @@ export default function AdminSupport() {
                   )}
                 </CardContent>
               </ScrollArea>
-            </>
-          )}
-        </Card>
+              </Card>
+            </TabsContent>
 
-        {/* RIGHT: action panel */}
-        <Card className="flex flex-col overflow-hidden">
-          {!selectedTicket ? (
-            <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm p-4 text-center">
-              Selecione um ticket para ver o rascunho da Aura
-            </div>
-          ) : loadingDetail ? (
-            <div className="flex-1 flex items-center justify-center"><Loader2 className="animate-spin" /></div>
-          ) : !draft ? (
-            <CardContent className="p-4 space-y-3 flex-1 flex flex-col">
+            {/* ====== TAB: RASCUNHO DA IA ====== */}
+            <TabsContent value="draft" className="flex-1 mt-0 overflow-hidden data-[state=inactive]:hidden">
+              <Card className="flex flex-col overflow-hidden h-full rounded-t-none">
+              {!draft ? (
+                <CardContent className="p-6 space-y-3 flex-1 flex flex-col max-w-3xl mx-auto w-full">
               <div className="text-sm text-muted-foreground flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4" /> Sem rascunho ainda
               </div>
@@ -573,10 +591,12 @@ export default function AdminSupport() {
               <Button onClick={() => handleApproveSend(false)} disabled={sending || !editedBody.trim()} className="w-full">
                 {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Enviar manual
               </Button>
-            </CardContent>
-          ) : (
-            <CardContent className="p-4 space-y-3 flex-1 flex flex-col overflow-hidden">
-              <div className="space-y-1">
+                </CardContent>
+              ) : (
+                <>
+                <ScrollArea className="flex-1">
+                <CardContent className="p-6 space-y-4 max-w-3xl mx-auto w-full">
+                  <div className="space-y-1">
                 <div className="flex items-center gap-2 text-xs">
                   <Sparkles className="h-3 w-3 text-primary" />
                   <span className="text-muted-foreground">Rascunho · {draft.ai_model}</span>
@@ -610,11 +630,15 @@ export default function AdminSupport() {
                   }
                   return null;
                 })()}
-              </div>
+                  </div>
 
-              <Textarea value={editedBody} onChange={(e) => setEditedBody(e.target.value)} className="flex-1 min-h-[180px] text-sm" />
+                  <Textarea
+                    value={editedBody}
+                    onChange={(e) => setEditedBody(e.target.value)}
+                    className="min-h-[360px] text-sm leading-relaxed font-normal"
+                  />
 
-              <div className="rounded-md border p-3 space-y-2 bg-muted/30">
+                  <div className="rounded-md border p-3 space-y-2 bg-muted/30">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-medium">Ação sugerida</span>
                   {draft.suggested_action.type !== 'none' && (
@@ -631,9 +655,13 @@ export default function AdminSupport() {
                 {draft.suggested_action.params && Object.keys(draft.suggested_action.params).length > 0 && (
                   <pre className="text-[10px] bg-background p-1.5 rounded">{JSON.stringify(draft.suggested_action.params, null, 2)}</pre>
                 )}
-              </div>
+                  </div>
+                </CardContent>
+                </ScrollArea>
 
-              <div className="space-y-2">
+                {/* Barra de ações fixa no rodapé */}
+                <div className="border-t bg-background/95 backdrop-blur p-4 flex-shrink-0">
+                  <div className="max-w-3xl mx-auto space-y-2">
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <Button disabled={sending || !editedBody.trim()} className="w-full" variant="default">
@@ -673,10 +701,14 @@ export default function AdminSupport() {
                     <X className="h-3 w-3" /> Fechar
                   </Button>
                 </div>
-              </div>
-            </CardContent>
-          )}
-        </Card>
+                  </div>
+                </div>
+                </>
+              )}
+              </Card>
+            </TabsContent>
+          </Tabs>
+        )}
       </div>
     </div>
   );
