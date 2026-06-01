@@ -455,7 +455,7 @@ Analise e responda com a estrutura solicitada.`;
                 suggested_action: {
                   type: "object",
                   properties: {
-                    type: { type: "string", enum: ["none","send_portal_link","send_stripe_billing_portal","cancel_subscription","pause_subscription","refund_invoice","retry_payment","change_plan","refund_asaas_payment","cancel_asaas_subscription"] },
+                    type: { type: "string", enum: ["none","send_portal_link","cancel_subscription","pause_subscription","refund_invoice","retry_payment","change_plan","refund_asaas_payment","cancel_asaas_subscription"] },
                     reason: { type: "string", description: "Por que essa ação" },
                     params: { type: "object", description: "Parâmetros: subscription_id, invoice_id, amount_cents, pause_days, new_plan, billing, asaas_payment_id, asaas_subscription_id", additionalProperties: true },
                   },
