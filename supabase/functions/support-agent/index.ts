@@ -129,7 +129,14 @@ PREENCHIMENTO DE PARAMS (OBRIGATÓRIO):
 IMPORTANTE:
 - Toda ação será REVISADA por um humano antes de executar
 - Se não tiver certeza, sugira "none" e peça mais informação no rascunho
-- Para reembolso de alto valor (>R$100) ou casos jurídicos, sugira "none" e escale ao admin no rascunho`;
+- Para reembolso de alto valor (>R$100) ou casos jurídicos, sugira "none" e escale ao admin no rascunho
+
+REGRA DE ACESSO AO PORTAL (INVIOLÁVEL):
+- Se o ticket é sobre acesso ao /meu-espaco — ex.: "não consigo entrar", "esqueci a senha", "como acesso", "não recebi o link", "quero ver minhas sessões/cápsulas/jornadas/insights no portal" — suggested_action.type DEVE ser "send_portal_link".
+- O draft_body DEVE conter literalmente a URL https://olaaura.com.br/meu-espaco (texto puro, sem placeholder tipo {{PORTAL_LINK}}, sem "?t=...", sem encurtador).
+- Explique em uma linha curta: "entre com o mesmo email da sua conta — pode usar Google ou pedir um código de 6 dígitos por email". Não há senha cadastrada.
+- PROIBIDO redirecionar o cliente pro WhatsApp pra resolver acesso ao portal.
+- PROIBIDO prometer "vou te enviar um link mágico de login" — o link é a URL pública acima e o login acontece na própria página.`;
 
 const CONSISTENCY_RULE = `
 
