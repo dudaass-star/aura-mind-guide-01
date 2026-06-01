@@ -1,37 +1,22 @@
-## Diagnóstico
+## Verificação sem incomodar o Luiz
 
-O usuário não está mais preso por cache/publicação. A chamada chegou na função `link-portal-account` e falhou no banco com:
+Confirmei no banco:
+- `auth.users` do Luiz: `7cc08615...` (novo, último login 01/06 17:50).
+- `profiles` do Luiz ainda aponta para o user_id legado `6c88c2a1...` — ou seja, a última tentativa dele realmente falhou pelo erro de FK em `messages` que vimos no log.
 
-```text
-update or delete on table "profiles" violates foreign key constraint "messages_user_id_fkey"
-```
+Para validar a correção **sem pedir nova tentativa pra ele**, vou rodar manualmente via SQL exatamente o que a função `link-portal-account` corrigida faz:
 
-Ou seja: a função tenta trocar o `profiles.user_id` do usuário antigo para o novo auth.uid **antes** de migrar as tabelas relacionadas (`messages`, etc.). Como essas tabelas têm chave estrangeira apontando para `profiles.user_id`, o banco bloqueia a alteração. A UI então volta para pedir o WhatsApp de novo, dando a impressão de loop.
+1. `UPDATE` em cada tabela com FK para `profiles.user_id` (messages, sessions, checkins, commitments, conversation_followups, time_capsules, user_insights, user_meditation_history, weekly_plans, asaas_payments e demais já mapeadas) trocando `6c88c2a1...` → `7cc08615...`.
+2. `UPDATE profiles SET user_id = '7cc08615...'` no profile do Luiz.
 
-## Plano de correção
+Se tudo passar:
+- O profile do Luiz fica vinculado ao auth user novo.
+- Na próxima vez que ele abrir `/meu-espaco` (sem precisar refazer nada agora), a função entra no ramo `already-linked` e o portal passa direto da tela de WhatsApp.
+- Isso prova tanto que a ordem nova de operações resolve o erro de FK quanto que o portal vai funcionar pra ele sem nova interação.
 
-1. **Corrigir a ordem em `link-portal-account`**
-   - Primeiro migrar as tabelas filhas que referenciam `profiles.user_id` do `oldUserId` para o `newUserId`.
-   - Depois atualizar o `profiles.user_id`.
-   - Isso elimina o erro de chave estrangeira.
+Se algum `UPDATE` falhar (alguma FK que esquecemos no array), eu adiciono a tabela na função e redeployo antes de avisar.
 
-2. **Adicionar retry seguro para concorrência**
-   - Como `PortalAuthContext` pode chamar `runLink()` mais de uma vez no login, a função deve ser idempotente:
-     - se já estiver vinculado ao novo usuário, retorna `linked: true`;
-     - se uma tentativa paralela já migrou parte dos dados, não deve quebrar o vínculo.
+## Fora do escopo
 
-3. **Melhorar a resposta de erro para o portal**
-   - Quando a função retornar `link_failed`, o frontend deve mostrar uma mensagem clara em vez de só voltar para o campo:
-     - “Não consegui vincular agora. Tente novamente em alguns segundos ou fale com o suporte.”
-   - Manter o número preenchido.
-
-4. **Validar em produção**
-   - Deploy da função `link-portal-account`.
-   - Conferir logs com prefixo `🔗 [link]`.
-   - Luiz deve refazer o teste; se chegar `update-ok`, o portal deve passar da tela do WhatsApp.
-
-## Fora do escopo agora
-
-- Meditação/envio de áudio.
-- Mudanças em pagamento, suporte ou UI geral.
-- Migração de schema/RLS, a princípio não necessária.
+- Não vou tocar em outros usuários.
+- Sem mudanças de UI ou schema.
