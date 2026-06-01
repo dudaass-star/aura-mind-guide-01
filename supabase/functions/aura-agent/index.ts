@@ -2576,9 +2576,29 @@ Se o usuário pedir texto ("prefiro texto", "pode escrever"), respeite a prefer�
 
 # MEDITAÇÕES GUIADAS
 
-Você tem uma biblioteca de meditações guiadas pré-gravadas. Quando o usuário pedir ou a situação indicar (ansiedade forte, insônia), ofereça naturalmente.
-O sistema detecta automaticamente a necessidade emocional e seleciona a meditação adequada — você NÃO precisa especificar categoria ou usar tags.
-Apenas converse naturalmente: "Vou te mandar uma meditação pra relaxar 💜"
+Você tem uma BIBLIOTECA FIXA de meditações pré-gravadas (categorias listadas
+na seção "Meditações Disponíveis" mais abaixo, gravadas com a voz da Aura).
+
+REGRAS INEGOCIÁVEIS:
+
+1. NUNCA escreva uma meditação no chat. Sem roteiros de respiração em texto
+   ("Inspire... segure... solte..."), sem instruções passo-a-passo guiando
+   a prática em prosa. O áudio gravado faz isso melhor — texto vira ruído.
+
+2. SEMPRE que oferecer/prometer mandar uma meditação, inclua no FINAL da
+   MESMA resposta a tag [MEDITACAO:categoria] usando UMA categoria EXATA
+   do catálogo abaixo (ex: [MEDITACAO:respiracao], [MEDITACAO:sono],
+   [MEDITACAO:ansiedade], [MEDITACAO:estresse], [MEDITACAO:foco],
+   [MEDITACAO:gratidao]). SEM essa tag, o áudio NÃO é enviado e o usuário
+   fica esperando — quebra de confiança grave.
+
+3. Se nenhuma categoria do catálogo casa com o momento, NÃO ofereça meditação.
+   Conduza pela conversa (presença, logoterapia) em vez de inventar uma.
+
+Exemplo correto:
+"Vou te mandar uma meditação pra acalmar a respiração 💜 [MEDITACAO:respiracao]"
+
+A tag é técnica — o usuário não a vê. Ela só dispara o áudio do catálogo.
 
 # CÁPSULA DO TEMPO EMOCIONAL
 
@@ -7743,30 +7763,45 @@ Só DEPOIS de saber a situação, explore as emoções com profundidade.`;
       const userLower = message.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
       const meditationKeywords = ['meditacao', 'meditar', 'meditando', 'meditation', 'medita pra', 'medita para'];
       const userAskedMeditation = meditationKeywords.some(k => userLower.includes(k));
-      
-      if (userAskedMeditation) {
+
+      // Segundo gatilho: a própria Aura prometeu mandar meditação mas esqueceu a tag.
+      // Cobre o caso comum em que ela oferece proativamente e o usuário só responde "sim/bora/manda".
+      const assistantLower = assistantMessage.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const auraPromisedMeditation =
+        /\b(vou|vamos|posso)\s+(te\s+|lhe\s+)?(mandar|soltar|enviar|colocar|botar|por|p[oô]r)\b[^.!?\n]{0,80}meditac/i.test(assistantLower) ||
+        /\bte\s+mando\b[^.!?\n]{0,80}meditac/i.test(assistantLower) ||
+        /\bmeditac\w*\s+(de|pra|para)\b/i.test(assistantLower) && /\b(vou|mando|envio|solto)\b/i.test(assistantLower);
+
+      if (userAskedMeditation || auraPromisedMeditation) {
         // Inferir categoria usando triggers do catálogo dinâmico
         let fallbackCategory = 'respiracao'; // default
-        
+
+        // Fonte de inferência: prioriza texto da Aura (mais específico — "meditação de sono"),
+        // cai pra mensagem do usuário se a Aura não der pista.
+        const inferenceSource = auraPromisedMeditation ? assistantLower : userLower;
+
         // Tentar match com triggers do catálogo
         for (const [category, info] of meditationCatalog) {
           const allTriggers = info.triggers.map(t => t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
-          if (allTriggers.some(t => userLower.includes(t))) {
+          if (allTriggers.some(t => inferenceSource.includes(t))) {
             fallbackCategory = category;
             break;
           }
         }
-        
+
         // Fallback por keywords genéricos se triggers não matcharam
         if (fallbackCategory === 'respiracao') {
-          if (userLower.match(/dorm|sono|insonia|noite/)) fallbackCategory = 'sono';
-          else if (userLower.match(/ansie|nervos|panico/)) fallbackCategory = 'ansiedade';
-          else if (userLower.match(/estress|tens|press/)) fallbackCategory = 'estresse';
-          else if (userLower.match(/foco|concentr|dispers/)) fallbackCategory = 'foco';
-          else if (userLower.match(/gratid|agrade/)) fallbackCategory = 'gratidao';
+          if (inferenceSource.match(/dorm|sono|insonia|noite/)) fallbackCategory = 'sono';
+          else if (inferenceSource.match(/ansie|nervos|panico/)) fallbackCategory = 'ansiedade';
+          else if (inferenceSource.match(/estress|tens|press/)) fallbackCategory = 'estresse';
+          else if (inferenceSource.match(/foco|concentr|dispers/)) fallbackCategory = 'foco';
+          else if (inferenceSource.match(/gratid|agrade/)) fallbackCategory = 'gratidao';
         }
-        
-        console.log(`⚠️ FALLBACK: User asked for meditation but LLM forgot tag. Using [MEDITACAO:${fallbackCategory}]`);
+
+        const fallbackReason = auraPromisedMeditation
+          ? 'FALLBACK-AURA-FORGOT-TAG'
+          : 'FALLBACK-USER-KEYWORD';
+        console.log(`⚠️ ${fallbackReason}: disparando [MEDITACAO:${fallbackCategory}] (Aura prometeu sem tag ou user pediu)`);
         
         const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
         const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -7781,7 +7816,7 @@ Só DEPOIS de saber a situação, explore as emoções com profundidade.`;
             category: fallbackCategory,
             user_id: profile?.user_id || null,
             phone: userPhone,
-            context: `aura-agent-fallback`,
+            context: auraPromisedMeditation ? 'aura-agent-fallback-aura-promised' : 'aura-agent-fallback-user-keyword',
           }),
         }).then(res => {
           console.log(`🧘 FALLBACK send-meditation response: ${res.status}`);
