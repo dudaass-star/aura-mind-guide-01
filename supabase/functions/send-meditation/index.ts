@@ -145,7 +145,7 @@ serve(async (req) => {
       await sendProactive(
         userPhone,
         "🧘 Ops, parece que essa meditação ainda não está pronta. Me perdoa! Vou providenciar e te aviso quando estiver disponível. 💜",
-        'content',
+        'meditation',
         userId
       );
       
@@ -168,7 +168,7 @@ serve(async (req) => {
     const durationMinutes = Math.round((audioData.duration_seconds || meditation?.duration_seconds || 300) / 60);
     const introMessage = `🧘 *${meditation?.title || 'Meditação Guiada'}*\n\nDuração: ~${durationMinutes} minutos\n\nEncontre um lugar tranquilo, feche os olhos e me deixe te guiar... 💜`;
     
-    await sendProactive(userPhone, introMessage, 'content', userId);
+    await sendProactive(userPhone, introMessage, 'meditation', userId);
 
     // Register intro message in messages table for admin visibility
     if (userId) {
@@ -188,7 +188,7 @@ serve(async (req) => {
       console.error('Failed to send audio:', audioResult.error);
       
       const fallbackMsg = `🎧 Tive um probleminha para enviar o áudio direto. Você pode ouvir aqui: ${audioData.public_url}`;
-      await sendProactive(userPhone, fallbackMsg, 'content', userId);
+      await sendProactive(userPhone, fallbackMsg, 'meditation', userId);
       
       if (userId) {
         await supabase.from('messages').insert({
