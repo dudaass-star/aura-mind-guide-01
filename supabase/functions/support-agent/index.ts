@@ -9,6 +9,27 @@ const corsHeaders = {
 
 const log = (s: string, d?: unknown) => console.log(`[SUPPORT-AGENT] ${s}${d ? ` - ${JSON.stringify(d)}` : ""}`);
 
+// Formata timestamp Unix (segundos) em string BRT legível: "26/05/2026 14:30 BRT".
+// Retorna null se o input for null/undefined/0.
+const fmtBRT = (unixSec: number | null | undefined): string | null => {
+  if (!unixSec) return null;
+  try {
+    const d = new Date(unixSec * 1000);
+    const fmt = new Intl.DateTimeFormat("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      day: "2-digit", month: "2-digit", year: "numeric",
+      hour: "2-digit", minute: "2-digit",
+    });
+    return `${fmt.format(d)} BRT`;
+  } catch { return null; }
+};
+
+// Formata valor em centavos BRL como "R$ 79,90". Retorna null se input nulo.
+const fmtBRL = (cents: number | null | undefined): string | null => {
+  if (cents === null || cents === undefined) return null;
+  return `R$ ${(cents / 100).toFixed(2).replace(".", ",")}`;
+};
+
 const SYSTEM_PROMPT = `Você é a Aura Support, assistente de IA de suporte ao cliente da Aura (terapia conversacional via WhatsApp).
 
 CONTEXTO DA AURA:
