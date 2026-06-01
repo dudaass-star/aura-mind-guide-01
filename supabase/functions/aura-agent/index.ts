@@ -7763,30 +7763,45 @@ Só DEPOIS de saber a situação, explore as emoções com profundidade.`;
       const userLower = message.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
       const meditationKeywords = ['meditacao', 'meditar', 'meditando', 'meditation', 'medita pra', 'medita para'];
       const userAskedMeditation = meditationKeywords.some(k => userLower.includes(k));
-      
-      if (userAskedMeditation) {
+
+      // Segundo gatilho: a própria Aura prometeu mandar meditação mas esqueceu a tag.
+      // Cobre o caso comum em que ela oferece proativamente e o usuário só responde "sim/bora/manda".
+      const assistantLower = assistantMessage.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const auraPromisedMeditation =
+        /\b(vou|vamos|posso)\s+(te\s+|lhe\s+)?(mandar|soltar|enviar|colocar|botar|por|p[oô]r)\b[^.!?\n]{0,80}meditac/i.test(assistantLower) ||
+        /\bte\s+mando\b[^.!?\n]{0,80}meditac/i.test(assistantLower) ||
+        /\bmeditac\w*\s+(de|pra|para)\b/i.test(assistantLower) && /\b(vou|mando|envio|solto)\b/i.test(assistantLower);
+
+      if (userAskedMeditation || auraPromisedMeditation) {
         // Inferir categoria usando triggers do catálogo dinâmico
         let fallbackCategory = 'respiracao'; // default
-        
+
+        // Fonte de inferência: prioriza texto da Aura (mais específico — "meditação de sono"),
+        // cai pra mensagem do usuário se a Aura não der pista.
+        const inferenceSource = auraPromisedMeditation ? assistantLower : userLower;
+
         // Tentar match com triggers do catálogo
         for (const [category, info] of meditationCatalog) {
           const allTriggers = info.triggers.map(t => t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
-          if (allTriggers.some(t => userLower.includes(t))) {
+          if (allTriggers.some(t => inferenceSource.includes(t))) {
             fallbackCategory = category;
             break;
           }
         }
-        
+
         // Fallback por keywords genéricos se triggers não matcharam
         if (fallbackCategory === 'respiracao') {
-          if (userLower.match(/dorm|sono|insonia|noite/)) fallbackCategory = 'sono';
-          else if (userLower.match(/ansie|nervos|panico/)) fallbackCategory = 'ansiedade';
-          else if (userLower.match(/estress|tens|press/)) fallbackCategory = 'estresse';
-          else if (userLower.match(/foco|concentr|dispers/)) fallbackCategory = 'foco';
-          else if (userLower.match(/gratid|agrade/)) fallbackCategory = 'gratidao';
+          if (inferenceSource.match(/dorm|sono|insonia|noite/)) fallbackCategory = 'sono';
+          else if (inferenceSource.match(/ansie|nervos|panico/)) fallbackCategory = 'ansiedade';
+          else if (inferenceSource.match(/estress|tens|press/)) fallbackCategory = 'estresse';
+          else if (inferenceSource.match(/foco|concentr|dispers/)) fallbackCategory = 'foco';
+          else if (inferenceSource.match(/gratid|agrade/)) fallbackCategory = 'gratidao';
         }
-        
-        console.log(`⚠️ FALLBACK: User asked for meditation but LLM forgot tag. Using [MEDITACAO:${fallbackCategory}]`);
+
+        const fallbackReason = auraPromisedMeditation
+          ? 'FALLBACK-AURA-FORGOT-TAG'
+          : 'FALLBACK-USER-KEYWORD';
+        console.log(`⚠️ ${fallbackReason}: disparando [MEDITACAO:${fallbackCategory}] (Aura prometeu sem tag ou user pediu)`);
         
         const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
         const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -7801,7 +7816,7 @@ Só DEPOIS de saber a situação, explore as emoções com profundidade.`;
             category: fallbackCategory,
             user_id: profile?.user_id || null,
             phone: userPhone,
-            context: `aura-agent-fallback`,
+            context: auraPromisedMeditation ? 'aura-agent-fallback-aura-promised' : 'aura-agent-fallback-user-keyword',
           }),
         }).then(res => {
           console.log(`🧘 FALLBACK send-meditation response: ${res.status}`);
