@@ -1,49 +1,90 @@
-## Problema
+## Contexto factual (Stripe)
 
-No painel `/admin/support` o rascunho da IA fica numa coluna fixa de `400px` à direita. Em telas como a sua (~920px CSS de preview, mas também em laptops 1366px reais), o texto sai com 4-5 palavras por linha, dentro de um `ScrollArea` curto — fica difícil de ler e revisar.
+- Customer: `cus_UMf3wZDSC6HrTm` (Mayle Carla Coelho Pinto, dramaylecoelho@gmail.com)
+- Subscription: `sub_1TNvjNQU15XnZ7VvhAQakYCf` — plano Transformação mensal R$ 79,90
+- Criada: 19/abr/2026 • Trial: 19/abr → 26/abr • 1ª cobrança: 26/abr
+- Última cobrança: **26/mai/2026** (invoice `in_1TbLN6QU15XnZ7VvbrWmYqpB`, payment_intent `pi_3TbMJWQU15XnZ7Vv1sKbKeoa`, R$ 79,90)
+- Status atual: `active`, `cancel_at_period_end=false`, `canceled_at=null` → **assinatura NÃO foi cancelada**
+- Sem perfil no banco (nunca conectou WhatsApp ou perfil foi limpo); ação tem que ser direto no Stripe
 
-Hoje o grid é:
+O rascunho atual da IA está com 4 erros factuais (data da última cobrança, mês de início, "cancelamento confirmado", "acesso até 24/mai") e violou a memória `support — cancellation-retention` (confirmou cancelamento na 1ª resposta).
+
+---
+
+## Parte 1 — Ação no ticket (one-off, via tools Stripe)
+
+1. **Refund de R$ 79,90 na invoice de 26/mai**
+   - `stripe--create_refund` em `pi_3TbMJWQU15XnZ7Vv1sKbKeoa`, reason `requested_by_customer`, amount completo (7990 BRL minor).
+2. **Cancelar a subscription imediatamente** (cliente pediu cancelamento + estorno, não pediu manter acesso)
+   - `stripe--cancel_subscription` em `sub_1TNvjNQU15XnZ7VvhAQakYCf`.
+3. **Regenerar o rascunho do ticket** no painel /admin/support
+   - Opção A (preferida): clicar "regenerar" com hint no painel após eu confirmar refund+cancel. O support-agent vai reler o contexto Stripe atualizado e gerar resposta correta.
+   - Opção B: se preferir, eu escrevo aqui o texto e você cola.
+
+Eu executo (1) e (2) via tools Stripe (vão pedir confirmação humana), depois te aviso para regenerar (3) no painel — ou já redigir o texto novo aqui, como você preferir.
+
+---
+
+## Parte 2 — Causa raiz no support-agent (fix de prompt + contexto)
+
+Erros do LLM vieram de duas falhas no `supabase/functions/support-agent/index.ts`:
+
+**A. Contexto Stripe enviado em formato cru (Unix epoch + centavos), sem campos críticos**
+
+Hoje em `context.stripe` (linhas 203-217) mando apenas:
+- `current_period_end` como Unix
+- `amount` em centavos
+- não mando `created` da subscription, `trial_start`, `trial_end`, `canceled_at`, nem `created` formatado das invoices
+
+→ LLM tem que inferir datas legíveis e termina alucinando ("março", "24 de abril", "24 de maio").
+
+**Fix:** enriquecer `context.stripe` com strings ISO BRT pré-formatadas:
+- Para cada subscription: `created_at_brt`, `trial_start_brt`, `trial_end_brt`, `current_period_start_brt`, `current_period_end_brt`, `canceled_at_brt`, `is_active_now` (boolean derivado de `status==='active'/'trialing' && !cancel_at_period_end`).
+- Para cada invoice: `created_at_brt`, `amount_paid_brl` (já dividido por 100 com símbolo).
+- Manter os campos Unix originais para auditoria.
+
+**B. Prompt não trava "afirmar fato que requer ação não executada"**
+
+Hoje o prompt diz "não prometa reembolso/cancelamento baseado só no que o cliente afirmou" mas não diz "**não afirme no corpo que a assinatura foi cancelada / o reembolso foi feito a menos que `suggested_action.type` seja `cancel_subscription` / `refund_invoice`**". O LLM gerou texto declarando cancelamento mesmo com `suggested_action=none`.
+
+**Fix:** adicionar bloco no SYSTEM_PROMPT:
 ```
-[ lista 320px | email 1fr | rascunho 400px ]
+REGRA DE CONSISTÊNCIA AÇÃO×TEXTO (inviolável):
+- Se suggested_action.type = "none", o draft NÃO pode afirmar que algo foi feito ("cancelei", "reembolsei", "confirmei o cancelamento", "garantimos que não haverá cobrança"). Apenas pode dizer o que VAI fazer após confirmação.
+- Se subscription.is_active_now = true E suggested_action.type != "cancel_subscription"/"cancel_asaas_subscription", PROIBIDO escrever que a assinatura está/foi cancelada.
+- Datas no corpo do email DEVEM vir dos campos *_brt do contexto. PROIBIDO inferir datas de timestamps Unix ou inventar meses.
 ```
 
-## Proposta
+**C. (Opcional, mas recomendado) Validação server-side antes de enviar**
 
-Trocar para um layout de **2 colunas** com **abas no painel central**, dando à área de leitura/edição toda a largura disponível:
+Em `supabase/functions/support-send-reply/index.ts` (ou no fluxo de save do draft), adicionar lint simples: se draft contém regex `/cancel(ei|amos|ado|amento confirmado)/i` e a subscription do customer ainda está `active` sem `cancel_at_period_end`, marcar ticket como `needs_human_review` e bloquear auto-send. Esse passo não muda comportamento de aprovação manual, só evita auto-send acidental.
 
+---
+
+## Arquivos tocados (Parte 2)
+
+```text
+supabase/functions/support-agent/index.ts
+  - enriquecer context.stripe com campos *_brt e is_active_now (linhas ~203-217)
+  - adicionar bloco "REGRA DE CONSISTÊNCIA AÇÃO×TEXTO" no SYSTEM_PROMPT (linhas ~30-65)
+  - helper local fmtBRT(unixSec): string usando Intl.DateTimeFormat com timeZone 'America/Sao_Paulo'
+
+supabase/functions/support-send-reply/index.ts  (opcional, item C)
+  - regex de coerência draft × estado da subscription antes de enviar
+
+mem/features/support/cancellation-retention-and-privacy.md
+  - registrar regra de consistência ação×texto e formato BRT obrigatório
 ```
-[ lista 300px | painel principal 1fr ]
-                 ├─ Tabs: [Email do cliente] [Rascunho da IA ●]
-                 └─ Conteúdo da aba ocupa 100% da largura
-```
 
-- A lista de tickets à esquerda fica igual (um pouco mais estreita: 300px).
-- O painel central vira um container com duas abas controladas:
-  - **Email do cliente** — assunto, remetente, thread original, link "Ver contexto do cliente".
-  - **Rascunho da IA** — header (modelo, KB match), corpo do rascunho num `Textarea` grande (ou área de leitura larga), bloco "Ação sugerida", input de hint, e a barra de ações fixa no rodapé (`Aprovar e enviar`, `Snooze 24h`, `Fechar`).
-- A aba "Rascunho" recebe um ponto/badge quando há rascunho pronto e abre automaticamente ao selecionar um ticket que já tenha rascunho.
-- O corpo do rascunho passa a usar `max-w-3xl` centralizado dentro da aba, com altura `flex-1` (sem `ScrollArea` apertado), garantindo leitura confortável (~80 caracteres por linha).
-- A barra de ações (Aprovar / Snooze / Fechar / Hint) fica fixa no rodapé do painel, sempre visível.
+Não toco em UI/painel, edge functions de billing, nem RLS.
 
-Em telas muito largas (≥1536px) podemos opcionalmente mostrar email + rascunho lado a lado novamente (split 1:1), mas o default passa a ser tabs — resolve o problema atual sem regressão em monitores grandes.
+---
 
-## Mudanças técnicas
+## Ordem de execução (após você aprovar)
 
-Arquivo único: `src/pages/AdminSupport.tsx`
-
-1. Trocar o grid da linha 402:
-   ```
-   lg:grid-cols-[300px_1fr]   // era [320px_1fr_400px]
-   ```
-2. Envolver os dois cards atuais (email do cliente + rascunho) num componente com `Tabs` do shadcn (`Tabs`, `TabsList`, `TabsTrigger`, `TabsContent` — já usados no projeto).
-3. Estado `activeTab` ('email' | 'draft'); ao carregar ticket com `draft_response`, setar `'draft'`.
-4. Badge/dot no `TabsTrigger` "Rascunho" quando `draft_response` existe e status = `pending_review`.
-5. Mover a barra de ações (Aprovar/Snooze/Fechar/Hint) para um rodapé `sticky bottom-0` dentro da aba Rascunho, com `max-w-3xl mx-auto`.
-6. Trocar o `ScrollArea` curto do rascunho por um container `flex-1 overflow-auto` para ocupar toda a altura disponível.
-7. Manter todo o comportamento existente (handlers, polling, ações, regenerar, etc.) — apenas reorganização visual.
-
-## Fora de escopo
-
-- Lógica de IA, edge functions, schema.
-- Mudar comportamento de aprovação, snooze, regenerar.
-- Responsivo mobile (continua stack vertical como hoje).
+1. Refund (`pi_3TbMJWQU15XnZ7Vv1sKbKeoa`) — confirmação humana via tool Stripe.
+2. Cancel subscription (`sub_1TNvjNQU15XnZ7VvhAQakYCf`) — confirmação humana via tool Stripe.
+3. Patch no `support-agent/index.ts` (contexto BRT + regra de consistência).
+4. Patch opcional no `support-send-reply/index.ts` (lint de coerência).
+5. Atualizar memória de retenção com a nova regra.
+6. Te aviso para regenerar o rascunho no painel (ou colo o texto correto aqui).

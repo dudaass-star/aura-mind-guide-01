@@ -9,6 +9,27 @@ const corsHeaders = {
 
 const log = (s: string, d?: unknown) => console.log(`[SUPPORT-AGENT] ${s}${d ? ` - ${JSON.stringify(d)}` : ""}`);
 
+// Formata timestamp Unix (segundos) em string BRT legível: "26/05/2026 14:30 BRT".
+// Retorna null se o input for null/undefined/0.
+const fmtBRT = (unixSec: number | null | undefined): string | null => {
+  if (!unixSec) return null;
+  try {
+    const d = new Date(unixSec * 1000);
+    const fmt = new Intl.DateTimeFormat("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      day: "2-digit", month: "2-digit", year: "numeric",
+      hour: "2-digit", minute: "2-digit",
+    });
+    return `${fmt.format(d)} BRT`;
+  } catch { return null; }
+};
+
+// Formata valor em centavos BRL como "R$ 79,90". Retorna null se input nulo.
+const fmtBRL = (cents: number | null | undefined): string | null => {
+  if (cents === null || cents === undefined) return null;
+  return `R$ ${(cents / 100).toFixed(2).replace(".", ",")}`;
+};
+
 const SYSTEM_PROMPT = `Você é a Aura Support, assistente de IA de suporte ao cliente da Aura (terapia conversacional via WhatsApp).
 
 CONTEXTO DA AURA:
@@ -110,6 +131,24 @@ IMPORTANTE:
 - Se não tiver certeza, sugira "none" e peça mais informação no rascunho
 - Para reembolso de alto valor (>R$100) ou casos jurídicos, sugira "none" e escale ao admin no rascunho`;
 
+const CONSISTENCY_RULE = `
+
+REGRA DE CONSISTÊNCIA AÇÃO × TEXTO (INVIOLÁVEL):
+- O draft NUNCA pode afirmar que uma ação foi executada se ela ainda não foi. Só descreva como já-feito aquilo que o backend efetivamente vai executar a partir do suggested_action.
+- Se suggested_action.type = "none", PROIBIDO escrever frases como: "cancelei", "cancelamos", "confirmei o cancelamento", "reembolsei", "estornei", "garantimos que nenhuma cobrança será feita", "sua assinatura foi encerrada". Use apenas linguagem de intenção condicional ("se confirmar, faço o cancelamento agora").
+- Se em stripe.subscriptions houver alguma com is_active_now = true e suggested_action.type NÃO for cancel_subscription, PROIBIDO afirmar no draft que a assinatura está cancelada / foi encerrada / não terá novas cobranças.
+- Mesma regra vale para asaas.subscriptions com is_active_now = true e cancel_asaas_subscription.
+
+REGRA DE DATAS (INVIOLÁVEL):
+- Toda data citada no draft DEVE vir literal de algum campo *_brt do contexto (ex: stripe.subscriptions[0].created_at_brt, stripe.invoices[0].created_at_brt, profile.trial_started_at).
+- PROIBIDO inferir mês, dia ou ano a partir de timestamps Unix crus, ou "calcular" datas de memória. Se o campo *_brt necessário não existir, escreva genericamente ("recentemente", "no início do trial") e jamais invente o mês.
+- Toda data exibida ao cliente deve estar em formato BR (DD/MM/AAAA) — copie do *_brt.
+
+REGRA DE VALORES:
+- Use os campos *_brl pré-formatados (ex: stripe.invoices[0].amount_paid_brl). Nunca divida centavos de cabeça nem invente valor.`;
+
+const FULL_SYSTEM_PROMPT = SYSTEM_PROMPT + CONSISTENCY_RULE;
+
 // Categorias seguras pra auto-resposta (nunca incluem ações financeiras/sensíveis)
 const SAFE_AUTO_REPLY_CATEGORIES = new Set(["duvida_tecnica", "elogio", "outro"]);
 const AUTO_REPLY_KB_THRESHOLD = 0.82;
@@ -202,16 +241,44 @@ serve(async (req) => {
           ]);
           context.stripe = {
             customer_id: customer.id,
-            subscriptions: subs.data.map((s) => ({
-              id: s.id, status: s.status,
-              current_period_end: s.current_period_end,
-              cancel_at_period_end: s.cancel_at_period_end,
-              price_id: s.items.data[0]?.price.id,
-              amount: s.items.data[0]?.price.unit_amount,
-            })),
+            subscriptions: subs.data.map((s) => {
+              const item = s.items.data[0];
+              const isActiveNow = (s.status === "active" || s.status === "trialing")
+                && !s.cancel_at_period_end
+                && !s.canceled_at
+                && !s.ended_at;
+              return {
+                id: s.id, status: s.status,
+                cancel_at_period_end: s.cancel_at_period_end,
+                is_active_now: isActiveNow,
+                price_id: item?.price.id,
+                amount_cents: item?.price.unit_amount,
+                amount_brl: fmtBRL(item?.price.unit_amount ?? null),
+                // Datas brutas (Unix) e formatadas em BRT — use SEMPRE as *_brt no draft
+                created: s.created,
+                created_at_brt: fmtBRT(s.created),
+                trial_start: s.trial_start,
+                trial_start_brt: fmtBRT(s.trial_start),
+                trial_end: s.trial_end,
+                trial_end_brt: fmtBRT(s.trial_end),
+                current_period_start: (item as { current_period_start?: number } | undefined)?.current_period_start ?? null,
+                current_period_start_brt: fmtBRT((item as { current_period_start?: number } | undefined)?.current_period_start ?? null),
+                current_period_end: (item as { current_period_end?: number } | undefined)?.current_period_end ?? null,
+                current_period_end_brt: fmtBRT((item as { current_period_end?: number } | undefined)?.current_period_end ?? null),
+                canceled_at: s.canceled_at,
+                canceled_at_brt: fmtBRT(s.canceled_at),
+                ended_at: s.ended_at,
+                ended_at_brt: fmtBRT(s.ended_at),
+              };
+            }),
             invoices: invoices.data.map((i) => ({
-              id: i.id, status: i.status, amount_paid: i.amount_paid,
-              amount_due: i.amount_due, created: i.created,
+              id: i.id, status: i.status,
+              amount_paid: i.amount_paid,
+              amount_paid_brl: fmtBRL(i.amount_paid),
+              amount_due: i.amount_due,
+              amount_due_brl: fmtBRL(i.amount_due),
+              created: i.created,
+              created_at_brt: fmtBRT(i.created),
               hosted_invoice_url: i.hosted_invoice_url,
             })),
           };
@@ -359,7 +426,7 @@ Analise e responda com a estrutura solicitada.`;
       body: JSON.stringify({
         model: "google/gemini-2.5-pro",
         messages: [
-          { role: "system", content: SYSTEM_PROMPT },
+          { role: "system", content: FULL_SYSTEM_PROMPT },
           { role: "user", content: userPrompt },
         ],
         tools: [{
