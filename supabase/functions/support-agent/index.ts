@@ -102,7 +102,7 @@ SEVERIDADES:
 
 AÇÕES SUGERIDAS (escolha APENAS UMA):
 - none: só responder, sem ação
-- send_portal_link: enviar link do portal /meu-espaco
+- send_portal_link: enviar link de acesso ao /meu-espaco (login com Google ou código de 6 dígitos por email — sem token na URL)
 - send_stripe_billing_portal: link de gestão Stripe (atualizar cartão, baixar faturas)
 - cancel_subscription: cancelar assinatura agora
 - pause_subscription: pausar por X dias (informe pause_days)
