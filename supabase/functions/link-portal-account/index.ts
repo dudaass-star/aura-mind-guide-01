@@ -50,6 +50,11 @@ Deno.serve(async (req) => {
       }
     } catch (_) { /* body opcional */ }
 
+    // Diagnóstico (mascarado): prefixo do email e últimos 4 dígitos do phone.
+    const emailMask = email ? `${email.slice(0, 3)}***@${email.split("@")[1] ?? "?"}` : "(none)";
+    const phoneMask = phoneInput ? `***${phoneInput.replace(/\D/g, "").slice(-4)}` : "(none)";
+    console.log(`🔗 [link] start uid=${newUserId.slice(0, 8)} email=${emailMask} phoneInput=${phoneMask}`);
+
     const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
     // 1) Se já existe profile para este auth.uid, nada a fazer.
@@ -59,6 +64,7 @@ Deno.serve(async (req) => {
       .eq("user_id", newUserId)
       .maybeSingle();
     if (own) {
+      console.log(`🔗 [link] already-linked uid=${newUserId.slice(0, 8)}`);
       return new Response(JSON.stringify({ linked: true, alreadyLinked: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -85,6 +91,9 @@ Deno.serve(async (req) => {
       if (data) {
         legacy = data as any;
         matchedBy = "email";
+        console.log(`🔗 [link] email-hit profile=${data.id} legacyUid=${data.user_id?.slice(0, 8) ?? "null"}`);
+      } else {
+        console.log(`🔗 [link] email-miss email=${emailMask}`);
       }
     }
 
@@ -92,6 +101,7 @@ Deno.serve(async (req) => {
     if (!legacy && phoneInput) {
       const normalized = normalizeBrazilianPhone(phoneInput);
       const variations = Array.from(new Set([normalized, ...getPhoneVariations(phoneInput)])).filter(Boolean);
+      console.log(`🔗 [link] phone-lookup variations=${variations.length} normalized=***${normalized.slice(-4)}`);
       if (variations.length > 0) {
         const { data, error } = await admin
           .from("profiles")
@@ -109,22 +119,34 @@ Deno.serve(async (req) => {
         if (data) {
           legacy = data as any;
           matchedBy = "phone";
+          console.log(`🔗 [link] phone-hit profile=${data.id} legacyUid=${data.user_id?.slice(0, 8) ?? "null"}`);
 
           // Proteção: se o profile já está vinculado a outro auth user ativo, recusa.
           if (data.user_id && data.user_id !== newUserId) {
             const { data: existingUser } = await admin.auth.admin.getUserById(data.user_id);
             const lastSignIn = existingUser?.user?.last_sign_in_at;
-            if (lastSignIn) {
+            // Só bloqueia se o outro auth user existir E tiver logado nos últimos 30 dias.
+            // Profiles com user_id "fantasma" (UUID gerado pelo WhatsApp sem auth real)
+            // ou auth users antigos que nunca voltaram não devem travar o vínculo legítimo.
+            const recentlyActive = lastSignIn
+              ? (Date.now() - new Date(lastSignIn).getTime()) < 30 * 24 * 60 * 60 * 1000
+              : false;
+            console.log(`🔗 [link] phone-taken-check existingUser=${existingUser?.user?.id?.slice(0, 8) ?? "null"} lastSignIn=${lastSignIn ?? "null"} recentlyActive=${recentlyActive}`);
+            if (recentlyActive) {
+              console.log(`🔗 [link] phone_taken (recent activity within 30d)`);
               return new Response(JSON.stringify({ linked: false, reason: "phone_taken" }), {
                 headers: { ...corsHeaders, "Content-Type": "application/json" },
               });
             }
           }
+        } else {
+          console.log(`🔗 [link] phone-miss variations=${variations.length}`);
         }
       }
     }
 
     if (!legacy) {
+      console.log(`🔗 [link] no_profile email=${emailMask} phoneInput=${phoneMask}`);
       return new Response(JSON.stringify({ linked: false, reason: "no_profile" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -149,6 +171,7 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    console.log(`🔗 [link] update-ok profile=${legacy.id} newUid=${newUserId.slice(0, 8)} matchedBy=${matchedBy}`);
 
     // 5) Propaga o novo user_id para tabelas relacionadas que usavam o user_id antigo.
     const oldUserId = legacy.user_id;

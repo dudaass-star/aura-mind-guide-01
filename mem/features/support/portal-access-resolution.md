@@ -19,3 +19,9 @@ type: feature
 - **Nunca mencionar "Stripe" / "parceiro de pagamentos" / "gateway" pro cliente** — a marca é Aura, o backend resolve o provedor.
 - A ação `send_stripe_billing_portal` foi removida do enum/catálogo da IA. O case ainda existe no `support-execute-action` pra uso admin manual, mas o agente não pode mais sugerir.
 - **Exceção PIX/Asaas**: clientes sem `stripe.subscriptions` (pagam via Asaas) NÃO devem ser direcionados ao botão (ele só funciona pra cartão Stripe). Oferecer gerar nova cobrança PIX e pedir confirmação.
+
+## Vínculo de conta no portal (`link-portal-account`)
+
+- Lookup ordem: (1) profile já vinculado ao `auth.uid()`, (2) email do JWT, (3) telefone informado no body.
+- Ramo `phone_taken` só bloqueia se o `auth.users` antigo do profile existir **E** tiver `last_sign_in_at` nos últimos **30 dias**. Profiles com `user_id` "fantasma" (UUID gerado pelo fluxo WhatsApp sem auth real) ou auth users abandonados não travam o vínculo legítimo.
+- Logs com prefixo `🔗 [link]` cobrem entrada, hit/miss de email e phone, ramo `phone_taken` e sucesso do update — usar pra diagnosticar travas em "Confirma seu WhatsApp".
