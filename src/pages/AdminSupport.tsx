@@ -404,7 +404,7 @@ export default function AdminSupport() {
         </div>
       </div>
 
-      <div className="container mx-auto px-4 py-4 grid grid-cols-1 lg:grid-cols-[320px_1fr_400px] gap-4 h-[calc(100vh-80px)]">
+      <div className="container mx-auto px-4 py-4 grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-4 h-[calc(100vh-80px)]">
         {/* LEFT: ticket list */}
         <Card className="flex flex-col overflow-hidden">
           <CardHeader className="pb-3 space-y-2">
