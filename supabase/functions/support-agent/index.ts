@@ -131,6 +131,24 @@ IMPORTANTE:
 - Se não tiver certeza, sugira "none" e peça mais informação no rascunho
 - Para reembolso de alto valor (>R$100) ou casos jurídicos, sugira "none" e escale ao admin no rascunho`;
 
+const CONSISTENCY_RULE = `
+
+REGRA DE CONSISTÊNCIA AÇÃO × TEXTO (INVIOLÁVEL):
+- O draft NUNCA pode afirmar que uma ação foi executada se ela ainda não foi. Só descreva como já-feito aquilo que o backend efetivamente vai executar a partir do suggested_action.
+- Se suggested_action.type = "none", PROIBIDO escrever frases como: "cancelei", "cancelamos", "confirmei o cancelamento", "reembolsei", "estornei", "garantimos que nenhuma cobrança será feita", "sua assinatura foi encerrada". Use apenas linguagem de intenção condicional ("se confirmar, faço o cancelamento agora").
+- Se em stripe.subscriptions houver alguma com is_active_now = true e suggested_action.type NÃO for cancel_subscription, PROIBIDO afirmar no draft que a assinatura está cancelada / foi encerrada / não terá novas cobranças.
+- Mesma regra vale para asaas.subscriptions com is_active_now = true e cancel_asaas_subscription.
+
+REGRA DE DATAS (INVIOLÁVEL):
+- Toda data citada no draft DEVE vir literal de algum campo *_brt do contexto (ex: stripe.subscriptions[0].created_at_brt, stripe.invoices[0].created_at_brt, profile.trial_started_at).
+- PROIBIDO inferir mês, dia ou ano a partir de timestamps Unix crus, ou "calcular" datas de memória. Se o campo *_brt necessário não existir, escreva genericamente ("recentemente", "no início do trial") e jamais invente o mês.
+- Toda data exibida ao cliente deve estar em formato BR (DD/MM/AAAA) — copie do *_brt.
+
+REGRA DE VALORES:
+- Use os campos *_brl pré-formatados (ex: stripe.invoices[0].amount_paid_brl). Nunca divida centavos de cabeça nem invente valor.`;
+
+const FULL_SYSTEM_PROMPT = SYSTEM_PROMPT + CONSISTENCY_RULE;
+
 // Categorias seguras pra auto-resposta (nunca incluem ações financeiras/sensíveis)
 const SAFE_AUTO_REPLY_CATEGORIES = new Set(["duvida_tecnica", "elogio", "outro"]);
 const AUTO_REPLY_KB_THRESHOLD = 0.82;
