@@ -1,23 +1,37 @@
-Plano para fechar esse problema:
+## Diagnóstico
 
-1. Confirmar se a tentativa do Luiz chegou no backend
-- Verificar novamente os logs de `link-portal-account` filtrando pelo horário exato da tentativa.
-- Conferir os logs HTTP das funções para confirmar se houve chamada real ao endpoint.
-- Se não houver chamada, tratar como problema de versão/publicação do frontend ou sessão usando build antigo.
+O usuário não está mais preso por cache/publicação. A chamada chegou na função `link-portal-account` e falhou no banco com:
 
-2. Corrigir a causa provável do loop no portal
-- Ajustar o fluxo do `PhoneLinkPrompt`/`PortalAuthContext` para não “voltar silenciosamente” ao formulário quando a chamada falhar ou quando o retorno for `no_profile`.
-- Exibir erro claro na tela quando não vincular: número não encontrado, número já vinculado, erro de sessão ou erro backend.
-- Manter o telefone digitado no campo após erro, para o usuário não achar que resetou sem motivo.
+```text
+update or delete on table "profiles" violates foreign key constraint "messages_user_id_fkey"
+```
 
-3. Fortalecer a função `link-portal-account`
-- Reimplantar a função para garantir que a versão com logs e regra de `phone_taken` esteja ativa.
-- Adicionar uma resposta mais explícita com `reason` e `matchedBy` para facilitar diagnóstico no cliente.
-- Garantir que, quando o telefone `556999825570` bater no perfil do Luiz, o retorno seja `linked: true` e o `user_id` do perfil seja atualizado.
+Ou seja: a função tenta trocar o `profiles.user_id` do usuário antigo para o novo auth.uid **antes** de migrar as tabelas relacionadas (`messages`, etc.). Como essas tabelas têm chave estrangeira apontando para `profiles.user_id`, o banco bloqueia a alteração. A UI então volta para pedir o WhatsApp de novo, dando a impressão de loop.
 
-4. Validar com teste controlado
-- Rodar uma chamada direta na função para confirmar que o telefone do Luiz encontra o perfil correto.
-- Depois da implementação, pedir novo teste no link publicado.
-- Se a chamada continuar não aparecendo nos logs, a conclusão é que o usuário está acessando uma versão publicada antiga e aí precisa publicar o app para o frontend novo entrar em produção.
+## Plano de correção
 
-Observação importante: pelo que consultei agora, não apareceu nenhuma chamada recente de `link-portal-account` nos logs apesar da tentativa relatada. Isso aponta mais para frontend publicado antigo/não chegando na função do que para erro na regra `phone_taken` em si.
+1. **Corrigir a ordem em `link-portal-account`**
+   - Primeiro migrar as tabelas filhas que referenciam `profiles.user_id` do `oldUserId` para o `newUserId`.
+   - Depois atualizar o `profiles.user_id`.
+   - Isso elimina o erro de chave estrangeira.
+
+2. **Adicionar retry seguro para concorrência**
+   - Como `PortalAuthContext` pode chamar `runLink()` mais de uma vez no login, a função deve ser idempotente:
+     - se já estiver vinculado ao novo usuário, retorna `linked: true`;
+     - se uma tentativa paralela já migrou parte dos dados, não deve quebrar o vínculo.
+
+3. **Melhorar a resposta de erro para o portal**
+   - Quando a função retornar `link_failed`, o frontend deve mostrar uma mensagem clara em vez de só voltar para o campo:
+     - “Não consegui vincular agora. Tente novamente em alguns segundos ou fale com o suporte.”
+   - Manter o número preenchido.
+
+4. **Validar em produção**
+   - Deploy da função `link-portal-account`.
+   - Conferir logs com prefixo `🔗 [link]`.
+   - Luiz deve refazer o teste; se chegar `update-ok`, o portal deve passar da tela do WhatsApp.
+
+## Fora do escopo agora
+
+- Meditação/envio de áudio.
+- Mudanças em pagamento, suporte ou UI geral.
+- Migração de schema/RLS, a princípio não necessária.
