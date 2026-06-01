@@ -195,6 +195,9 @@ export default function AdminSupport() {
     }
     setLoadingDetail(false);
 
+    // Abre direto na aba de rascunho quando já existe um para revisar.
+    setActiveTab(currentDraft ? 'draft' : 'email');
+
     // Auto-regenera se: não há rascunho, ou rascunho é mais antigo que a última
     // mensagem inbound, ou ticket está marcado como needing regen pelo backend.
     const latestInboundAt = loadedMessages
