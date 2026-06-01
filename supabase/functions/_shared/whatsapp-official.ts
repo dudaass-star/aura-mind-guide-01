@@ -25,7 +25,8 @@ export type TemplateCategory =
   | 'weekly_report'
   | 'welcome'
   | 'reconnect'
-  | 'session_reminder';
+  | 'session_reminder'
+  | 'meditation';
 
 export interface TwilioSendResult {
   success: boolean;
@@ -70,6 +71,7 @@ export const PROACTIVE_TITLES: Record<TemplateCategory, string> = {
   welcome: 'Bem-vinda à AURA 💜',
   reconnect: 'Estou de volta! 💜',
   session_reminder: 'Lembrete de sessão 🕐',
+  meditation: 'Sua meditação chegou 🧘',
 };
 
 // Títulos para conteúdos entregues no fast-path de cliques de botão
