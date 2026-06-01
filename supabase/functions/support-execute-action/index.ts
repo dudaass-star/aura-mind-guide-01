@@ -130,16 +130,9 @@ serve(async (req) => {
           break;
 
         case "send_portal_link": {
-          if (!ticket.profile_user_id) throw new Error("No profile_user_id on ticket");
-          const { data: existing } = await supabase
-            .from("user_portal_tokens").select("token").eq("user_id", ticket.profile_user_id).maybeSingle();
-          let token = existing?.token;
-          if (!token) {
-            const { data: created } = await supabase.from("user_portal_tokens")
-              .insert({ user_id: ticket.profile_user_id }).select("token").single();
-            token = created?.token;
-          }
-          stripeResponse = { portal_url: `https://olaaura.com.br/meu-espaco` };
+          // Portal usa login direto (Google + OTP por email) em /meu-espaco.
+          // Não há mais token UUID na URL — link é público e estático.
+          stripeResponse = { portal_url: "https://olaaura.com.br/meu-espaco" };
           success = true;
           break;
         }
