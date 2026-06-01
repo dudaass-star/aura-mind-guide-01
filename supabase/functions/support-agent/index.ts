@@ -426,7 +426,7 @@ Analise e responda com a estrutura solicitada.`;
       body: JSON.stringify({
         model: "google/gemini-2.5-pro",
         messages: [
-          { role: "system", content: SYSTEM_PROMPT },
+          { role: "system", content: FULL_SYSTEM_PROMPT },
           { role: "user", content: userPrompt },
         ],
         tools: [{
