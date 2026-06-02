@@ -16,21 +16,38 @@ import {
 interface MagicLinkEmailProps {
   siteName: string
   confirmationUrl: string
+  token?: string
 }
 
 export const MagicLinkEmail = ({
   siteName,
   confirmationUrl,
+  token,
 }: MagicLinkEmailProps) => (
-  <Html lang="en" dir="ltr">
+  <Html lang="pt-BR" dir="ltr">
     <Head />
-    <Preview>Seu link de acesso à Aura</Preview>
+    <Preview>Seu código de acesso à Aura</Preview>
     <Body style={main}>
       <Container style={container}>
-        <Heading style={h1}>Seu link de acesso 💜</Heading>
+        <Heading style={h1}>Seu acesso 💜</Heading>
         <Text style={text}>
-          Toque no botão abaixo para entrar no seu espaço na Aura. O link expira em alguns minutos.
+          Use o código abaixo para entrar no seu espaço na Aura. Ele expira em alguns minutos.
         </Text>
+
+        {token && (
+          <>
+            <Text style={codeLabel}>Código de acesso</Text>
+            <Text style={codeValue}>{token}</Text>
+            <Text style={codeHelper}>Ou toque no botão para entrar direto:</Text>
+          </>
+        )}
+
+        {!token && (
+          <Text style={text}>
+            Toque no botão abaixo para entrar no seu espaço na Aura.
+          </Text>
+        )}
+
         <Button style={button} href={confirmationUrl}>
           Entrar na Aura
         </Button>
@@ -51,6 +68,9 @@ const main = {
 const container = { padding: '32px 28px', maxWidth: '520px' }
 const h1 = { fontSize: '24px', fontWeight: 600 as const, color: 'hsl(220, 25%, 20%)', margin: '0 0 20px' }
 const text = { fontSize: '15px', color: 'hsl(220, 15%, 35%)', lineHeight: '1.6', margin: '0 0 24px' }
+const codeLabel = { fontSize: '12px', color: 'hsl(220, 10%, 55%)', textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 8px' }
+const codeValue = { fontSize: '36px', fontWeight: 700 as const, color: 'hsl(155, 30%, 35%)', letterSpacing: '6px', margin: '0 0 16px' }
+const codeHelper = { fontSize: '14px', color: 'hsl(220, 15%, 35%)', margin: '0 0 20px' }
 const button = {
   backgroundColor: 'hsl(155, 30%, 45%)',
   color: '#ffffff',
