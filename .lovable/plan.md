@@ -1,31 +1,46 @@
 ## Objetivo
-Validar envio outbound pelo número novo (Meta Cloud API) para `5551981519708`, sem tocar no número oficial Twilio.
+Resolver o cliente travado no acesso ao /meu-espaco, cobrindo os 3 problemas identificados (loop do WhatsApp, fallback de telefone fraco, e código de 6 dígitos ausente no email).
 
-## Execução (1 passo único)
-Invocar `qa-meta-send` via GET:
-- `to=5551981519708`
-- `body=Teste Aura via Meta Cloud API ✅ (outbound isolado, sem Twilio)`
+## Mudanças
 
-Essa função chama `graph.facebook.com/v21.0/{META_WHATSAPP_PHONE_NUMBER_ID}/messages` direto com `META_WHATSAPP_ACCESS_TOKEN`. Não passa por `whatsapp-provider`, não lê `system_config`, não grava em `messages`, não toca templates. Twilio prod fica 100% intocado.
+### 1. Email de Magic Link — incluir código + link
+- Atualizar o template de Magic Link do Supabase Auth para entregar **ambos**: `{{ .Token }}` (código de 6 dígitos) e `{{ .ConfirmationURL }}` (link clicável).
+- Texto sugerido (PT-BR, tom Aura):
+  - "Seu código de acesso: **{{ .Token }}**"
+  - "Ou clique aqui para entrar direto: {{ .ConfirmationURL }}"
+  - "O código expira em 1 hora."
 
-## Verificação
-Retorno do Graph API mostra:
-- `phoneNumberInfo` (display_phone_number + verified_name) — confirma que o nome aprovado está ativo
-- `sendStatus` (200 esperado) e `sendResponse.messages[0].id` (wamid)
+### 2. UI do PortalLogin — clareza no fluxo
+- Mensagem após envio: "Enviamos um **código de 6 dígitos** e um **link** pro seu email. Use qualquer um dos dois."
+- Texto auxiliar no campo do código: "Não chegou? Confere o spam ou clica no link do email."
+- Garantir que `onAuthStateChange` continua tratando o caso do link (já tratado pelo `PortalAuthContext`, só validar).
 
-Se falhar, leio o `error.code` da Meta sem retry e sem mudar nada mais.
+### 3. Tela "Confirma seu WhatsApp" — sem loop e sem placeholder confuso
+- Trocar o placeholder hardcoded `(51) 98151-9708` por `(DDD) 90000-0000`.
+- Mensagem mais clara: explicar que é o WhatsApp cadastrado na assinatura.
+- Em caso de falha (email + telefone não batem), mostrar mensagem de erro explícita ao invés de voltar pra mesma tela em loop. Oferecer botão "Falar com suporte".
 
-## Observação importante (fora do escopo deste teste)
-Você mandou msg pro número novo Meta e a Aura respondeu pelo Twilio. Isso é esperado com a config atual: `webhook-meta` recebe o inbound e entrega pro `aura-agent`, que envia a resposta pelo provider definido em `system_config.whatsapp_provider` (= `twilio` hoje). Ou seja:
-- Inbound Meta → processado normalmente
-- Outbound da resposta → sai pelo Twilio (número oficial)
+### 4. `link-portal-account` — fallback de telefone robusto
+- Normalizar comparação aceitando variantes:
+  - com/sem prefixo `55`
+  - com/sem 9º dígito
+  - formatos nacionais com máscara
+- Logar tentativa (sucesso/falha) pra auditoria.
 
-Isso **não quebra nada**, mas cria a sensação de "número trocado" pro usuário final. Quando formos migrar de verdade, o plano é:
-1. Criar templates aprovados no Meta
-2. Trocar `system_config.whatsapp_provider` para `meta`
-3. Aposentar Twilio
+### 5. `/meu-espaco` — compatibilidade com `?t=<token>` legado
+- Reconhecer query param `t` na rota e resolver via função segura (sem expor dados via RLS pública).
+- Se token válido → cria sessão do portal automaticamente.
+- Se inválido/expirado → redireciona pra `PortalLogin` com mensagem clara.
 
-Por enquanto, mantemos assim e seguimos só com o teste outbound isolado acima.
+### 6. Validação específica do Marcelo (antunesmarce@gmail.com)
+- Confirmar/criar `user_portal_token` pra ele.
+- Testar 3 caminhos: Google login, email+código, link direto.
+- Confirmar que não cai mais no loop do "Confirma seu WhatsApp".
 
-## Próximo passo após aprovação
-Rodo o `qa-meta-send` e te devolvo o status + wamid. Você confirma se chegou no WhatsApp pelo número novo.
+## Detalhes Técnicos
+
+- **Template Auth**: editado via Supabase Dashboard (Authentication → Email Templates → Magic Link). O `signInWithOtp()` já envia `{{ .Token }}` se presente no template — sem mudança de código.
+- **PortalLogin.tsx**: ajuste só de copy + microcopy.
+- **WhatsAppConfirm screen**: placeholder + tratamento de erro (não loopar, mostrar mensagem).
+- **link-portal-account edge function**: nova helper `normalizePhoneVariants(phone)` que gera array de variantes e busca `profiles` por `IN`.
+- **MeuEspaco route**: parsing do `?t=` no `useEffect` inicial, chamada a nova edge function `resolve-portal-token` (já existente ou criar) que retorna `magic_link` pra completar auth.

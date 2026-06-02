@@ -28,11 +28,11 @@ export function PhoneLinkPrompt() {
     console.warn("[PhoneLinkPrompt] linkByPhone result:", result);
     setSubmitting(false);
     if (result === "phone_taken") {
-      setError("Esse número já está vinculado a outra conta. Fala com a gente pelo suporte.");
+      setError("Esse número já está vinculado a outra conta. Fala com a gente pelo WhatsApp da Aura pra ajustar.");
     } else if (result === "needs_phone") {
-      setError("Não encontramos esse número. Confere o DDD ou fala com o suporte.");
+      setError("Não encontramos esse número. Confere se é o mesmo WhatsApp que você usa pra falar com a Aura (com DDD).");
     } else if (result === "error") {
-      setError("Algo deu errado. Tenta de novo em instantes.");
+      setError("Algo deu errado de momento. Tenta de novo em instantes.");
     }
     // 'linked' → o UserPortal vai re-renderizar com as abas.
   };
@@ -51,7 +51,7 @@ export function PhoneLinkPrompt() {
             Confirma seu WhatsApp
           </h1>
           <p className="text-sm text-muted-foreground text-center mb-6 font-['Nunito']">
-            Pra encontrar sua conta, digita o número que você usa pra falar com a Aura.
+            Pra encontrar sua conta, digita o WhatsApp que você cadastrou na assinatura (o mesmo que usa pra conversar com a Aura).
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-3">
@@ -64,12 +64,22 @@ export function PhoneLinkPrompt() {
                 setPhone(formatPhone(e.target.value));
                 if (error) setError(null);
               }}
-              placeholder="(51) 98151-9708"
+              placeholder="(DDD) 90000-0000"
               className="w-full px-4 py-3 rounded-lg border border-border bg-card text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-accent font-['Nunito']"
             />
 
             {error && (
-              <p className="text-sm text-destructive font-['Nunito']">{error}</p>
+              <div className="text-sm text-destructive font-['Nunito'] space-y-2">
+                <p>{error}</p>
+                <a
+                  href="https://wa.me/16625255005"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-block text-xs underline text-accent hover:opacity-80"
+                >
+                  Falar com o suporte da Aura
+                </a>
+              </div>
             )}
 
             <button
