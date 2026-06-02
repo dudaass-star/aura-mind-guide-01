@@ -19,6 +19,7 @@ interface SignupEmailProps {
   siteUrl: string
   recipient: string
   confirmationUrl: string
+  token?: string
 }
 
 export const SignupEmail = ({
@@ -26,6 +27,7 @@ export const SignupEmail = ({
   siteUrl,
   recipient,
   confirmationUrl,
+  token,
 }: SignupEmailProps) => (
   <Html lang="en" dir="ltr">
     <Head />
@@ -38,6 +40,13 @@ export const SignupEmail = ({
           <Link href={`mailto:${recipient}`} style={link}>{recipient}</Link>
           ) para liberar seu espaço pessoal.
         </Text>
+        {token && (
+          <>
+            <Text style={codeLabel}>Código de acesso</Text>
+            <Text style={codeValue}>{token}</Text>
+            <Text style={codeHelper}>Ou toque no botão para confirmar direto:</Text>
+          </>
+        )}
         <Button style={button} href={confirmationUrl}>
           Confirmar e-mail
         </Button>
@@ -80,3 +89,6 @@ const button = {
   display: 'inline-block',
 }
 const footer = { fontSize: '12px', color: 'hsl(220, 10%, 55%)', margin: '32px 0 0', lineHeight: '1.5' }
+const codeLabel = { fontSize: '12px', color: 'hsl(220, 10%, 55%)', textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 8px' }
+const codeValue = { fontSize: '36px', fontWeight: 700 as const, color: 'hsl(155, 30%, 35%)', letterSpacing: '6px', margin: '0 0 16px' }
+const codeHelper = { fontSize: '14px', color: 'hsl(220, 15%, 35%)', margin: '0 0 20px' }
