@@ -68,6 +68,9 @@ const main = {
 const container = { padding: '32px 28px', maxWidth: '520px' }
 const h1 = { fontSize: '24px', fontWeight: 600 as const, color: 'hsl(220, 25%, 20%)', margin: '0 0 20px' }
 const text = { fontSize: '15px', color: 'hsl(220, 15%, 35%)', lineHeight: '1.6', margin: '0 0 24px' }
+const codeLabel = { fontSize: '12px', color: 'hsl(220, 10%, 55%)', textTransform: 'uppercase' as const, letterSpacing: '1px', margin: '0 0 8px' }
+const codeValue = { fontSize: '36px', fontWeight: 700 as const, color: 'hsl(155, 30%, 35%)', letterSpacing: '6px', margin: '0 0 16px' }
+const codeHelper = { fontSize: '14px', color: 'hsl(220, 15%, 35%)', margin: '0 0 20px' }
 const button = {
   backgroundColor: 'hsl(155, 30%, 45%)',
   color: '#ffffff',
