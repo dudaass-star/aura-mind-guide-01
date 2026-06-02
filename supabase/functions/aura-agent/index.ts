@@ -4213,7 +4213,7 @@ serve(async (req) => {
       console.warn('Failed to read AI model config, using default:', e);
     }
 
-    const { message: rawMessage, user_id, phone, pending_content, pending_context, last_user_context, minimal_context, quoted_message, inbound_message_created_at } = await req.json();
+    const { message: rawMessage, user_id, phone, pending_content, pending_context, last_user_context, minimal_context, quoted_message, proactive_context, inbound_message_created_at } = await req.json();
     const inboundMessageDate = inbound_message_created_at ? new Date(inbound_message_created_at) : null;
     const reminderReferenceDate = inboundMessageDate && !isNaN(inboundMessageDate.getTime()) ? inboundMessageDate : new Date();
 
@@ -4230,6 +4230,22 @@ serve(async (req) => {
       const quoted = quoted_message.length > 600 ? quoted_message.substring(0, 600) + '…' : quoted_message;
       message = `[O usuário está respondendo à sua mensagem anterior: "${quoted}"]\n\n${rawMessage}`;
       console.log('💬 [AURA] quoted_message injetada no prompt do usuário');
+    }
+
+    // ========================================================================
+    // CONTEXTO PROATIVO — Pergunta da Semana (ou outro envio proativo)
+    // ------------------------------------------------------------------------
+    // Quando a usuária recebeu um disparo proativo (ex: Pergunta da Semana)
+    // nas últimas horas, a próxima mensagem dela é provavelmente reação a
+    // isso — e não continuação da última sessão. Ancoramos explicitamente.
+    // ========================================================================
+    if (proactive_context && typeof proactive_context === 'object' && proactive_context.question) {
+      const q = String(proactive_context.question).substring(0, 600);
+      const mins = Number(proactive_context.minutesAgo) || 0;
+      const kindLabel = proactive_context.kind === 'pergunta_semanal' ? 'Pergunta da Semana' : 'mensagem proativa';
+      const ancor = `[CONTEXTO IMPORTANTE: há ~${mins}min você enviou para o usuário uma ${kindLabel}: "${q}". A mensagem abaixo é provavelmente uma reação a essa pergunta — e NÃO continuação da última sessão. Se a pessoa demonstrar confusão ("não entendi", "como assim", "que pergunta"), reconheça que a referência é à ${kindLabel} e reformule com naturalidade, em linguagem simples.]\n\n`;
+      message = ancor + message;
+      console.log(`🧭 [AURA] proactive_context injetado: ${kindLabel} há ${mins}min`);
     }
 
     if (minimal_context) {
