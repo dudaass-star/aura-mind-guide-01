@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate, Link, useSearchParams } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { lovable } from "@/integrations/lovable";
@@ -22,10 +22,7 @@ const GoogleIcon = () => (
 export default function PortalLogin() {
   const { session, loading } = usePortalAuth();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const prefillEmail = searchParams.get("email") || "";
-  const autoSend = searchParams.get("autoSend") === "1";
-  const [email, setEmail] = useState(prefillEmail);
+  const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
   const [step, setStep] = useState<"email" | "otp">("email");
   const [sending, setSending] = useState(false);
@@ -59,11 +56,7 @@ export default function PortalLogin() {
 
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    return sendOtpFor(email);
-  };
-
-  const sendOtpFor = async (raw: string) => {
-    const normalized = raw.trim().toLowerCase();
+    const normalized = email.trim().toLowerCase();
     if (!normalized || !normalized.includes("@")) {
       toast({ title: "Email inválido", variant: "destructive" });
       return;
@@ -91,15 +84,6 @@ export default function PortalLogin() {
       description: "Confere o email — tem um código e um link. Use qualquer um dos dois.",
     });
   };
-
-  // Se chegou com ?email=...&autoSend=1 (vindo de link legado /meu-espaco?t=...),
-  // dispara o envio do código automaticamente.
-  useEffect(() => {
-    if (autoSend && prefillEmail && step === "email" && !sending) {
-      sendOtpFor(prefillEmail);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
