@@ -16,21 +16,38 @@ import {
 interface MagicLinkEmailProps {
   siteName: string
   confirmationUrl: string
+  token?: string
 }
 
 export const MagicLinkEmail = ({
   siteName,
   confirmationUrl,
+  token,
 }: MagicLinkEmailProps) => (
-  <Html lang="en" dir="ltr">
+  <Html lang="pt-BR" dir="ltr">
     <Head />
-    <Preview>Seu link de acesso à Aura</Preview>
+    <Preview>Seu código de acesso à Aura</Preview>
     <Body style={main}>
       <Container style={container}>
-        <Heading style={h1}>Seu link de acesso 💜</Heading>
+        <Heading style={h1}>Seu acesso 💜</Heading>
         <Text style={text}>
-          Toque no botão abaixo para entrar no seu espaço na Aura. O link expira em alguns minutos.
+          Use o código abaixo para entrar no seu espaço na Aura. Ele expira em alguns minutos.
         </Text>
+
+        {token && (
+          <>
+            <Text style={codeLabel}>Código de acesso</Text>
+            <Text style={codeValue}>{token}</Text>
+            <Text style={codeHelper}>Ou toque no botão para entrar direto:</Text>
+          </>
+        )}
+
+        {!token && (
+          <Text style={text}>
+            Toque no botão abaixo para entrar no seu espaço na Aura.
+          </Text>
+        )}
+
         <Button style={button} href={confirmationUrl}>
           Entrar na Aura
         </Button>
