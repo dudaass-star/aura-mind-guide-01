@@ -1236,6 +1236,40 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ========================================================================
+    // CONTEXTO PROATIVO — Pergunta da Semana entregue há pouco
+    // ------------------------------------------------------------------------
+    // Quando a usuária responde até 3h depois de receber a Pergunta da Semana
+    // via template, o agente precisa saber a que pergunta ela está reagindo.
+    // Sem isso, mensagens curtas como "Como assim não entende" ficam soltas
+    // e o LLM tenta ancorar na última sessão (erro). Try/catch fire-and-forget
+    // safe: se a query falhar, segue sem contexto extra.
+    // ========================================================================
+    let proactiveContext: { kind: string; question: string; minutesAgo: number } | null = null;
+    try {
+      const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
+      const { data: recentWeekly } = await supabase
+        .from('weekly_questions')
+        .select('id, question_text, delivered_at')
+        .eq('user_id', profile.user_id)
+        .not('delivered_at', 'is', null)
+        .gte('delivered_at', threeHoursAgo)
+        .order('delivered_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (recentWeekly?.question_text && recentWeekly?.delivered_at) {
+        const minutesAgo = Math.round((Date.now() - new Date(recentWeekly.delivered_at).getTime()) / 60000);
+        proactiveContext = {
+          kind: 'pergunta_semanal',
+          question: recentWeekly.question_text,
+          minutesAgo,
+        };
+        console.log(`🧭 [PROACTIVE_CTX] Pergunta da Semana ativa (há ${minutesAgo}min): "${recentWeekly.question_text.substring(0, 80)}..."`);
+      }
+    } catch (ctxErr) {
+      console.warn('⚠️ [PROACTIVE_CTX] lookup falhou (non-fatal):', (ctxErr as Error)?.message);
+    }
+
     // Helper: call aura-agent with timeout and optional minimal context
     async function callAuraAgent(useMinimalContext = false): Promise<any> {
       const controller = new AbortController();
@@ -1252,6 +1286,8 @@ Deno.serve(async (req) => {
           inbound_message_created_at: inboundMessageCreatedAt,
           // Conteúdo da mensagem citada via "Responder" nativo do WhatsApp
           quoted_message: quotedMessageBody,
+          // Contexto de mensagem proativa recente (Pergunta da Semana, etc.)
+          proactive_context: proactiveContext,
         };
         if (useMinimalContext) {
           body.minimal_context = true;
