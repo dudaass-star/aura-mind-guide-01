@@ -115,7 +115,13 @@ REGRAS:
 - NÃO mencione terapia, sessão, jornada explicitamente.
 - Use o contexto do usuário para personalizar — não seja vaga.
 - Se não houver contexto, faça pergunta universal mas afiada (ex: identidade, autoengano, evitação).
-- Retorne APENAS via tool calling.`;
+- Retorne APENAS via tool calling.
+
+CRÍTICO — A pergunta chega via WhatsApp HORAS depois da última conversa, isolada e sem preâmbulo. Por isso:
+- Use linguagem CONCRETA, não metafórica. Evite abstrações tipo "se sua dignidade acordou", "quando seu silêncio fala", "agora que sua sombra apareceu" — pessoa lê fora de contexto e não entende.
+- NÃO pressuponha estados internos não confirmados pela própria pessoa (não comece com "se você sentiu X...", "agora que você percebeu Y...").
+- Ancore em UM fato observável e específico dos temas/insights recentes (ex: "Você disse que tem cansado de X — o que acontece se você parar?"). Se não houver fato concreto disponível, prefira pergunta universal e direta.
+- A pergunta precisa fazer sentido lida sozinha, sem contexto da sessão anterior.`;
 
   const userPrompt = `Contexto do usuário ${ctx.name || ''}:
 ${contextBlock}
