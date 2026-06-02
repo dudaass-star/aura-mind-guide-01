@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { lovable } from "@/integrations/lovable";
@@ -22,7 +22,10 @@ const GoogleIcon = () => (
 export default function PortalLogin() {
   const { session, loading } = usePortalAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState("");
+  const [searchParams] = useSearchParams();
+  const prefillEmail = searchParams.get("email") || "";
+  const autoSend = searchParams.get("autoSend") === "1";
+  const [email, setEmail] = useState(prefillEmail);
   const [otp, setOtp] = useState("");
   const [step, setStep] = useState<"email" | "otp">("email");
   const [sending, setSending] = useState(false);
@@ -56,7 +59,11 @@ export default function PortalLogin() {
 
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    const normalized = email.trim().toLowerCase();
+    return sendOtpFor(email);
+  };
+
+  const sendOtpFor = async (raw: string) => {
+    const normalized = raw.trim().toLowerCase();
     if (!normalized || !normalized.includes("@")) {
       toast({ title: "Email inválido", variant: "destructive" });
       return;
@@ -81,9 +88,18 @@ export default function PortalLogin() {
     setStep("otp");
     toast({
       title: "Código enviado",
-      description: "Confira seu email (e também a caixa de spam).",
+      description: "Confere o email — tem um código e um link. Use qualquer um dos dois.",
     });
   };
+
+  // Se chegou com ?email=...&autoSend=1 (vindo de link legado /meu-espaco?t=...),
+  // dispara o envio do código automaticamente.
+  useEffect(() => {
+    if (autoSend && prefillEmail && step === "email" && !sending) {
+      sendOtpFor(prefillEmail);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -188,9 +204,11 @@ export default function PortalLogin() {
             {step === "otp" && (
               <form onSubmit={handleVerify} className="space-y-4">
                 <p className="text-sm text-muted-foreground font-['Nunito'] text-center">
-                  Enviamos um código de 6 dígitos para
+                  Enviamos um <strong className="text-foreground">código de 6 dígitos</strong> e um <strong className="text-foreground">link</strong> para
                   <br />
                   <strong className="text-foreground">{email}</strong>
+                  <br />
+                  <span className="text-xs">Use qualquer um dos dois pra entrar.</span>
                 </p>
                 <Input
                   type="text"
@@ -203,6 +221,9 @@ export default function PortalLogin() {
                   autoFocus
                   className="h-12 text-center text-lg tracking-[0.5em] font-mono"
                 />
+                <p className="text-xs text-muted-foreground text-center font-['Nunito']">
+                  Não chegou? Confere o spam ou clica no link do email.
+                </p>
                 <Button
                   type="submit"
                   disabled={verifying || otp.length < 6}
