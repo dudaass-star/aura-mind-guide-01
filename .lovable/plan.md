@@ -1,44 +1,31 @@
-## Problema
+## Objetivo
+Validar envio outbound pelo número novo (Meta Cloud API) para `5551981519708`, sem tocar no número oficial Twilio.
 
-Encontrei **13 usuários no mesmo estado do Luiz**: já criaram conta auth (loginaram em `/meu-espaco`) mas o `profiles.user_id` ainda aponta para o ID legado, então toda vez que entram caem na tela de "informar telefone" e ao confirmar dá erro (mesmo bug que o Luiz tinha antes do cascade).
+## Execução (1 passo único)
+Invocar `qa-meta-send` via GET:
+- `to=5551981519708`
+- `body=Teste Aura via Meta Cloud API ✅ (outbound isolado, sem Twilio)`
 
-Lista (email — último login):
-- antunesmarce@gmail.com — 01/06
-- ivanfreitas70@gmail.com — 31/05
-- natyliborio25@gmail.com — 29/05
-- elaine.eclm@gmail.com — 29/05
-- jairoaugusto30@gmail.com — 28/05
-- jefmarper@gmail.com — 28/05
-- nathaliaeira@gmail.com — 28/05
-- studiokelyoliveira@gmail.com — 28/05
-- samuelvenuto@gmail.com — 28/05
-- milla.salles12@gmail.com — 26/05
-- tainarxavier1@gmail.com — 25/05
-- magalhaesrute25@gmail.com — 24/05
-- daianecristinaah@gmail.com — 24/05
-- sandraoliver2002@hotmail.com — nunca logou (ignorar, sem urgência)
+Essa função chama `graph.facebook.com/v21.0/{META_WHATSAPP_PHONE_NUMBER_ID}/messages` direto com `META_WHATSAPP_ACCESS_TOKEN`. Não passa por `whatsapp-provider`, não lê `system_config`, não grava em `messages`, não toca templates. Twilio prod fica 100% intocado.
 
-## Plano
+## Verificação
+Retorno do Graph API mostra:
+- `phoneNumberInfo` (display_phone_number + verified_name) — confirma que o nome aprovado está ativo
+- `sendStatus` (200 esperado) e `sendResponse.messages[0].id` (wamid)
 
-**Backfill em lote** aproveitando o `ON UPDATE CASCADE` já aplicado na migration anterior:
+Se falhar, leio o `error.code` da Meta sem retry e sem mudar nada mais.
 
-Para cada um dos 13 perfis (match por email entre `profiles` e `auth.users`), rodar:
-```sql
-UPDATE profiles
-SET user_id = <auth.users.id>, updated_at = now()
-WHERE id = <profile.id>;
-```
+## Observação importante (fora do escopo deste teste)
+Você mandou msg pro número novo Meta e a Aura respondeu pelo Twilio. Isso é esperado com a config atual: `webhook-meta` recebe o inbound e entrega pro `aura-agent`, que envia a resposta pelo provider definido em `system_config.whatsapp_provider` (= `twilio` hoje). Ou seja:
+- Inbound Meta → processado normalmente
+- Outbound da resposta → sai pelo Twilio (número oficial)
 
-O cascade propaga automaticamente para messages, checkins, commitments, conversation_followups, time_capsules, user_insights, user_meditation_history e weekly_plans. Nenhum usuário precisa tentar de novo — na próxima visita ao `/meu-espaco` já caem direto no estado "vinculado".
+Isso **não quebra nada**, mas cria a sensação de "número trocado" pro usuário final. Quando formos migrar de verdade, o plano é:
+1. Criar templates aprovados no Meta
+2. Trocar `system_config.whatsapp_provider` para `meta`
+3. Aposentar Twilio
 
-Vou executar como um único `UPDATE ... FROM auth.users WHERE profiles.email = auth.users.email AND profiles.user_id != auth.users.id` para cobrir todos de uma vez.
+Por enquanto, mantemos assim e seguimos só com o teste outbound isolado acima.
 
-## Validação
-
-Depois do update, rodo o mesmo SELECT de diagnóstico — deve retornar 0 linhas (exceto a Sandra que nunca logou e não tem o que vincular ainda).
-
-## Fora de escopo
-
-- Mexer no edge function `link-portal-account` (já corrigido na rodada anterior).
-- Sandra (sem login) — quando ela logar pela primeira vez o fluxo corrigido cuida sozinho.
-- UI, schema, RLS.
+## Próximo passo após aprovação
+Rodo o `qa-meta-send` e te devolvo o status + wamid. Você confirma se chegou no WhatsApp pelo número novo.
