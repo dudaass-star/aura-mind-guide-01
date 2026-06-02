@@ -1,8 +1,8 @@
-import { useSearchParams, Navigate, useNavigate } from "react-router-dom";
+import { useSearchParams, Navigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { Helmet } from "react-helmet-async";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import logoOlaAura from "@/assets/logo-ola-aura.png";
 import { Target, Sparkles, Headphones, Lock, LogOut, Sun, Calendar, User } from "lucide-react";
 import { usePortalAuth } from "@/contexts/PortalAuthContext";
@@ -33,43 +33,11 @@ const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
 
 const UserPortal = () => {
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
   const initialTab = (searchParams.get("tab") as TabId) || "hoje";
-  const legacyToken = searchParams.get("t");
   const [activeTab, setActiveTab] = useState<TabId>(initialTab);
   const [portalLoading, setPortalLoading] = useState(false);
   const [changePlanOpen, setChangePlanOpen] = useState(false);
-  const [resolvingLegacy, setResolvingLegacy] = useState(!!legacyToken);
   const { session, loading: authLoading, signOut, linkStatus } = usePortalAuth();
-
-  // Compatibilidade com links legados /meu-espaco?t=<token>.
-  // Se não há sessão, resolve o token para o email do dono e redireciona
-  // pro fluxo de login com o email pré-preenchido + envio automático do código.
-  useEffect(() => {
-    if (!legacyToken) return;
-    if (authLoading) return;
-    if (session) {
-      // Já está logado — só limpa o token da URL pra não vazar em referers.
-      setResolvingLegacy(false);
-      navigate("/meu-espaco" + (initialTab !== "hoje" ? `?tab=${initialTab}` : ""), { replace: true });
-      return;
-    }
-    (async () => {
-      try {
-        const { data, error } = await supabasePortal.functions.invoke("resolve-portal-token", {
-          body: { token: legacyToken },
-        });
-        if (error || !data?.resolved || !data?.email) {
-          navigate("/meu-espaco/entrar", { replace: true });
-          return;
-        }
-        const params = new URLSearchParams({ email: data.email, autoSend: "1" });
-        navigate(`/meu-espaco/entrar?${params.toString()}`, { replace: true });
-      } catch {
-        navigate("/meu-espaco/entrar", { replace: true });
-      }
-    })();
-  }, [legacyToken, authLoading, session, navigate, initialTab]);
 
   const userId = session?.user?.id;
 
@@ -109,7 +77,7 @@ const UserPortal = () => {
     enabled: !!userId && !!profile?.asaas_customer_id,
   });
 
-  if (authLoading || resolvingLegacy) return <PortalLoading />;
+  if (authLoading) return <PortalLoading />;
   if (!session) return <Navigate to="/meu-espaco/entrar" replace />;
 
   // Aguardando vinculação ao profile legado

@@ -103,8 +103,6 @@ project_id = "uhyogifgmutfmbyhzzyo"
     verify_jwt = false
   [functions.reprocess-dunning]
     verify_jwt = false
-  [functions.resolve-portal-token]
-    verify_jwt = false
   [functions.run-system-tests]
     verify_jwt = false
   [functions.schedule-setup-reminder]
