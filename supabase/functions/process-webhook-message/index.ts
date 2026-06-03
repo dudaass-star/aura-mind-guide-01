@@ -1389,7 +1389,9 @@ Deno.serve(async (req) => {
     const now = new Date().toISOString();
     const conversationStatus = agentData.conversation_status || 'neutral';
     const isSessionActive = agentData.session_active === true;
-    const shouldEnableFollowup = conversationStatus === 'awaiting' || isSessionActive;
+    // Follow-ups automáticos de conversa comum foram desativados — soavam forçados.
+    // Mantemos APENAS quando há sessão formal ativa (45 min), pra retomar interrupções.
+    const shouldEnableFollowup = isSessionActive;
 
     // Context is always cleared so conversation-followup regenerates it fresh
     // from the current messages via AI — prevents old topics leaking across sessions.
