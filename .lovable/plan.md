@@ -1,56 +1,54 @@
 ## Diagnóstico
 
-A Aura **já tem** o handler `[PAUSAR_SESSOES data="YYYY-MM-DD"]` em `aura-agent/index.ts` (linhas 7094-7121) que zera `needs_schedule_setup` e grava `sessions_paused_until`. O problema: **o prompt não ensina ela a emitir essa tag**.
+O follow-up da imagem veio da função `conversation-followup`, não de uma resposta normal da Aura.
 
-No caso do Eduardo (02/06 11:16): pediu pra pular o mês, Aura confirmou verbalmente mas não emitiu tag → `needs_schedule_setup` continuou `true` → no dia seguinte (03/06 14:46) ela voltou: "Como você tem 4 sessões pra usar esse mês...".
+Fluxo provável:
+1. A Aura respondeu às 15:31 com pergunta: “A febre deu uma trégua?”
+2. Como qualquer resposta com `?` vira `conversation_status = awaiting`, o webhook marcou a conversa como “pendente”.
+3. Depois de 15 minutos sem resposta, o cron `conversation-followup` rodou.
+4. A IA extraiu o contexto das mensagens recentes, misturou o tema de agenda/sessões com o assunto da febre, e gerou: “E aí, tudo certo com os agendamentos? 😉 Adoraria saber se deu certo!”
 
-A seção `# 📅 CONFIGURAÇÃO DE AGENDA DO MÊS` (linha ~5980) só explica **como criar** a agenda — não cobre recusa/adiamento.
+O problema não é só a frase. É o mecanismo: ele tenta “reabrir” qualquer conversa que terminou com pergunta, mesmo quando o silêncio é natural. Isso fica invasivo, ansioso e anti-natural.
 
-## Mudanças
+## Plano
 
-### 1. `aura-agent/index.ts` — adicionar bloco "PULAR/ADIAR" no prompt de setup mensal
+### 1. Desativar follow-ups automáticos de conversa comum
+Alterar `process-webhook-message/index.ts` para não habilitar `conversation_followups` quando a conversa comum fica em `awaiting`.
 
-Dentro do `if (profile?.needs_schedule_setup && ...)` (perto da linha 6043), acrescentar guia **sem frases prontas literais** para evitar repetição robótica:
-
-```
-## SE O USUÁRIO QUISER PULAR/ADIAR O MÊS:
-Sinais: "deixar sem sessões esse mês", "não quero marcar agora", "me chama no mês que vem", "pular esse mês", "depois a gente vê", "tô sem cabeça pra sessão agora".
-
-Postura:
-- NÃO insista. NÃO faça upsell. NÃO repita pergunta.
-- Você PODE fazer no máximo UMA checagem honesta e curta sobre a motivação (cansaço real vs. esquiva), mas **formule com suas próprias palavras a cada vez — nunca repita uma frase pronta**. Se ele reafirmar, ACEITE de primeira.
-
-Quando ele confirmar que quer pular:
-1. Acolha curto e honesto (varie a forma — não use sempre "Beleza, anotado").
-2. Confirme verbalmente a data em que você volta a chamar (default: dia 1 do próximo mês; se ele pediu data específica, use ela).
-3. **OBRIGATÓRIO: emita a tag [PAUSAR_SESSOES data="YYYY-MM-DD"]** no final da resposta com a data em que deve voltar a oferecer setup.
-   - Sem a tag, NADA é gravado — você continua perguntando todo dia e o usuário acha você chata.
-4. Mude de assunto naturalmente — siga a conversa sem sessão formal.
-
-Formato da tag: [PAUSAR_SESSOES data="YYYY-MM-DD"] (máximo 90 dias no futuro).
+Hoje:
+```ts
+const shouldEnableFollowup = conversationStatus === 'awaiting' || isSessionActive;
 ```
 
-**Sem bloco "EXEMPLO DE CONVERSA"** — só o contrato da tag. Evita virar muleta repetida. Mantém a regra anti-eco já existente.
+Novo comportamento:
+```ts
+const shouldEnableFollowup = isSessionActive;
+```
 
-### 2. `mem/features/sessions/pausar-sessoes-tag.md` (novo)
+Resultado: perguntas normais da Aura não geram mais “ei, você sumiu?” depois de 15 minutos.
 
-Documentar:
-- Tag `[PAUSAR_SESSOES data="YYYY-MM-DD"]` existe no handler desde sempre, mas o prompt não ensinava — corrigido em jun/2026.
-- Sem tag = promessa vazia (mesmo bug histórico do `[AGENDAR_SESSAO]` da Larissa, 22/04).
-- Default da data: dia 1 do próximo mês. Máximo 90 dias.
-- O `schedule-setup-reminder` respeita `sessions_paused_until` automaticamente.
-- ⚠️ Prompt **não** inclui frases-exemplo literais — só contrato — pra evitar Aura repetir bordões tipo "é cansaço real ou aquele 'deixa pra depois'?".
+### 2. Manter apenas segurança para sessão ativa
+Preservar follow-up somente quando existir sessão ativa (`current_session_id` / `session_active = true`), porque ali o usuário está dentro de uma sessão de 45 minutos e uma interrupção pode precisar de retomada.
 
-### 3. `mem/index.md`
+Isso remove o incômodo em ping-pong/casual sem quebrar sessões formais.
 
-Adicionar 1 linha na seção Memories referenciando o novo arquivo.
+### 3. Blindar a função `conversation-followup`
+Adicionar uma guarda dentro de `conversation-followup/index.ts` para pular qualquer caso que não esteja em sessão ativa.
+
+Mesmo se algum registro antigo ficar na tabela, a função não enviará follow-up comum.
+
+### 4. Limpar/neutralizar registros pendentes
+Adicionar uma limpeza segura para registros já existentes em `conversation_followups` que não sejam sessão ativa, evitando que follow-ups antigos ainda disparem depois do deploy.
+
+### 5. Atualizar memória do projeto
+Criar/atualizar memória dizendo:
+- follow-up automático de conversa comum foi removido porque soa forçado;
+- Aura deve deixar ping-pong morrer naturalmente;
+- follow-up só permanece para sessão ativa ou fluxos determinísticos específicos.
 
 ## Fora de escopo
 
-- Não mexo no `scheduled-checkin` nem nas guardas de PING-PONG (turno anterior).
-- `monthly-schedule-renewal` já zera `sessions_paused_until` no dia 1 — comportamento certo.
-- Não crio `[AGENDAR_TAREFA]` paralela — a renovação mensal já cobre.
-
-## Risco
-
-Baixo. Mudança é prompt-only + 1 doc. Handler já existe.
+- Não mexer em lembretes de sessão agendada.
+- Não mexer em tarefas explicitamente pedidas pelo usuário (`AGENDAR_TAREFA`).
+- Não mexer em check-ins proativos planejados, pergunta semanal, cápsula do tempo ou relatórios.
+- Não reescrever o tom geral da Aura neste passo.

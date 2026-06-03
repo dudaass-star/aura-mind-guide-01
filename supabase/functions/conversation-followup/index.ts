@@ -350,6 +350,20 @@ Deno.serve(async (req) => {
 
         const userPlan = profile.plan || 'essencial';
         const isSessionActive = !!profile.current_session_id;
+
+        // GUARD: Follow-ups automáticos de conversa comum foram desativados —
+        // só seguimos adiante se houver sessão formal ativa (45 min em andamento).
+        // Isso evita mensagens forçadas tipo "tudo certo? adoraria saber se deu certo!"
+        // depois de qualquer pergunta da Aura no ping-pong casual.
+        if (!isSessionActive) {
+          console.log(`⏭️ Skipping ${followup.user_id}: no active session — casual follow-ups disabled`);
+          // Neutraliza o registro pra não ser reavaliado a cada tick.
+          await supabase
+            .from('conversation_followups')
+            .update({ last_user_message_at: null, followup_count: 99 })
+            .eq('id', followup.id);
+          continue;
+        }
         
         // Buscar últimas mensagens para análise
         const { data: recentMessages } = await supabase
