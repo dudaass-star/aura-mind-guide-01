@@ -3,6 +3,71 @@ import { cleanPhoneNumber } from "../_shared/zapi-client.ts";
 import { sendMessage, sendAudio, sendProactive } from "../_shared/whatsapp-provider.ts";
 import { getInstanceConfigForUser } from "../_shared/instance-helper.ts";
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Reescreve um texto de lembrete que foi gravado N dias atrás para a data de
+// hoje (BRT). Resolve o bug clássico: lembrete criado ontem com "amanhã às 11h"
+// é disparado hoje e o usuário lê "amanhã" no dia errado.
+//
+// Estratégia:
+//   1. Se o texto NÃO contém expressões relativas a dia, devolve igual.
+//   2. Se contém ("amanhã", "hoje", "ontem", dias da semana), pede pro Gemini
+//      Flash-Lite reescrever curto, mantendo o mesmo conteúdo, mas usando
+//      "hoje" como referência. Fallback silencioso pro texto original.
+// ─────────────────────────────────────────────────────────────────────────────
+const RELATIVE_DAY_REGEX = /\b(amanh[ãa]|hoje|ontem|depois\s+de\s+amanh[ãa]|segunda|ter[çc]a|quarta|quinta|sexta|s[áa]bado|domingo)\b/i;
+
+async function rewriteReminderForToday(originalText: string, createdAtIso: string): Promise<string> {
+  try {
+    if (!originalText) return originalText;
+    if (!RELATIVE_DAY_REGEX.test(originalText)) return originalText;
+
+    // Só reescreve se o lembrete foi criado em outro dia BRT (senão "amanhã" pode estar correto)
+    const createdDateBrt = new Date(new Date(createdAtIso).getTime() - 3 * 3600 * 1000).toISOString().slice(0, 10);
+    const todayBrt = new Date(Date.now() - 3 * 3600 * 1000).toISOString().slice(0, 10);
+    if (createdDateBrt === todayBrt) return originalText;
+
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!LOVABLE_API_KEY) return originalText;
+
+    const nowBrt = new Date(Date.now() - 3 * 3600 * 1000);
+    const weekdayNames = ['domingo','segunda','terça','quarta','quinta','sexta','sábado'];
+    const weekday = weekdayNames[nowBrt.getUTCDay()];
+    const dateStr = `${String(nowBrt.getUTCDate()).padStart(2,'0')}/${String(nowBrt.getUTCMonth()+1).padStart(2,'0')}`;
+
+    const systemPrompt = `Você reescreve lembretes curtos do WhatsApp para que façam sentido HOJE.
+Regras:
+- HOJE é ${weekday}, ${dateStr} (BRT).
+- Reescreva mantendo conteúdo, tom e tamanho originais.
+- Substitua expressões relativas (amanhã/ontem/dia da semana) pela referência correta a partir de HOJE.
+- Se o lembrete originalmente dizia "amanhã" e amanhã é HOJE, use "hoje".
+- Não invente fatos. Não adicione perguntas novas. Não use mais de 2 frases.
+- Responda APENAS o texto reescrito, sem aspas, sem prefixo.`;
+
+    const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash-lite",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: `Lembrete original (criado em ${createdDateBrt} BRT):\n"${originalText}"` },
+        ],
+      }),
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (!aiResp.ok) return originalText;
+    const json = await aiResp.json();
+    const rewritten = (json?.choices?.[0]?.message?.content || "").trim().replace(/^["']|["']$/g, "");
+    if (!rewritten || rewritten.length > originalText.length * 2.5) return originalText;
+    console.log(`📝 Reminder rewritten for today: "${originalText.slice(0,60)}" → "${rewritten.slice(0,60)}"`);
+    return rewritten;
+  } catch (e) {
+    console.warn("⚠️ rewriteReminderForToday falhou, usando texto original:", (e as Error).message);
+    return originalText;
+  }
+}
+
 // Helper to create short links for checkout URLs
 async function createShortLink(url: string, phone: string): Promise<string> {
   const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
@@ -115,7 +180,8 @@ Deno.serve(async (req) => {
         // ====================================================================
         switch (task.task_type) {
           case 'reminder': {
-            const reminderText = payload.text || 'Ei, aqui é a Aura! Você me pediu pra te lembrar disso 💜';
+            const rawText = payload.text || 'Ei, aqui é a Aura! Você me pediu pra te lembrar disso 💜';
+            const reminderText = await rewriteReminderForToday(rawText, task.created_at);
             await sendProactive(profile.phone, reminderText, 'checkin', task.user_id);
             console.log(`✅ Reminder sent to ${profile.phone.substring(0, 4)}***`);
             break;
@@ -144,8 +210,9 @@ Deno.serve(async (req) => {
           }
 
           case 'message': {
-            const messageText = payload.text || '';
-            if (messageText) {
+            const rawMessageText = payload.text || '';
+            if (rawMessageText) {
+              const messageText = await rewriteReminderForToday(rawMessageText, task.created_at);
               await sendProactive(profile.phone, messageText, 'checkin', task.user_id);
               console.log(`✅ Scheduled message sent to ${profile.phone.substring(0, 4)}***`);
             }
