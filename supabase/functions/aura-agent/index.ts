@@ -6041,6 +6041,24 @@ ${sessionsCount > 1 ? '- Se o usuário pedir 2 dias diferentes (ex: segundas e q
 Exemplo com ${sessionsCount} ${sessionsCount === 1 ? 'sessão' : 'sessões'}:
 ${_exampleTag}
 `;
+      dynamicContext += `
+
+## SE O USUÁRIO QUISER PULAR/ADIAR O MÊS:
+Sinais: "deixar sem sessões esse mês", "não quero marcar agora", "me chama no mês que vem", "pular esse mês", "depois a gente vê", "tô sem cabeça pra sessão agora".
+
+Postura:
+- NÃO insista. NÃO faça upsell. NÃO repita pergunta.
+- Você PODE fazer no máximo UMA checagem honesta e curta sobre a motivação (cansaço real vs. esquiva), mas **formule com suas próprias palavras a cada vez — nunca repita uma frase pronta**. Se ele reafirmar, ACEITE de primeira.
+
+Quando ele confirmar que quer pular:
+1. Acolha curto e honesto (varie a forma — não use sempre a mesma abertura).
+2. Confirme verbalmente a data em que você volta a chamar (default: dia 1 do próximo mês; se ele pediu data específica, use ela).
+3. **OBRIGATÓRIO: emita a tag [PAUSAR_SESSOES data="YYYY-MM-DD"]** no final da resposta com a data em que deve voltar a oferecer setup.
+   - Sem a tag, NADA é gravado — você continua perguntando todo dia e o usuário acha você chata.
+4. Mude de assunto naturalmente — siga a conversa sem sessão formal.
+
+Formato da tag: [PAUSAR_SESSOES data="YYYY-MM-DD"] (máximo 90 dias no futuro).
+`;
       console.log('📅 Schedule setup context added for user with', sessionsCount, 'sessions');
     }
 
