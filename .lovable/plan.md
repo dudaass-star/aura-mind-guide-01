@@ -1,58 +1,105 @@
-## Diagnóstico — caso Débora (558194070448)
+## Diagnóstico — caso Eduardo (d2d4526a)
 
-Investiguei a conversa e identifiquei **um caso concreto** que explica a sensação de "pergunta sem sentido":
+Puxei a conversa completa do banco. As duas dores que você sentiu são reais e têm causa distinta.
 
-**Linha do tempo (02/06):**
-- 14:44 → Aura entrega proativamente a Pergunta da Semana via template WhatsApp: *"Se tua dignidade acordou, o que ela te impede de aceitar ou fazer, hoje?"*
-- 14:45 → Débora responde: *"Como assim não entende"* (estranhou a pergunta isolada, sem o contexto da sessão anterior do dia 01/06 à noite)
-- 14:45 → Aura responde: *"Eita, acho que eu que me enrolei na pergunta e ficou confuso, Débora... desculpa."* — e pivota pra falar de "feridas" (assunto da sessão da noite anterior), sem se referir à pergunta semanal.
+### Dor 1 — Gestão de tempo/dias
 
-**Raiz técnica:**
+O que aconteceu (BRT):
+- **02/06 11:19** Eduardo confirma os treinos: *"11hs amanhã e 13hs na sexta"*. Aura responde *"Anotado. Amanhã às 11h e sexta às 13h"*. ✅ correto.
+- **03/06 11:00** (dia do treino, hora do treino) a Aura dispara proativamente: *"E aí, já pensou nos seus primeiros treinos? 💪"* — **genérica**, sem reconhecer que **agora** é o horário marcado.
+- **12:05** Eduardo: *"Era hj as 11hs"*. Aura: *"Verdade, me perdi total no dia aqui 😅"*.
 
-Em `process-webhook-message/index.ts` (linhas 783-813) a resposta da pergunta é **gravada** em `weekly_questions.response_text` para fins analíticos, mas o **texto da pergunta nunca é injetado no contexto do `aura-agent`**. O LLM recebe só o "Como assim não entende" e tenta adivinhar a que se refere — usa a última sessão como âncora e produz uma resposta desconexa.
+Raiz: a proativa (scheduled checkin/follow-up) é gerada **sem consultar os compromissos concretos do dia já extraídos**. Ela manda um teaser amigável genérico, o usuário interpreta como esquecimento, e a Aura ainda confirma o erro pedindo desculpa.
 
-Conclusão: não é "alucinação" da Aura. É **falta de contexto** quando a usuária responde fora da janela imediata de uma pergunta proativa (semanal, mensal, cápsula, insight).
+Não é alucinação do LLM. É **falta de contexto**: a tabela de compromissos extraídos (`commitments` / scheduled_tasks) já tem "treino quarta 11h" registrado, mas o gerador da proativa não injeta isso no prompt.
+
+### Dor 2 — Chatice em PING-PONG (perguntas demais, eco)
+
+Trecho final (15:07-15:10):
+```
+User: Bella já passou eu acho. E a Bella um pouco. Está por casa
+Aura: Vish, que fase...
+Aura: Cuidar de criança doente já drena... prova de resistência real.
+Aura: Você tá conseguindo descansar pelo menos um pouquinho enquanto elas dormem?
+User: Sim. A Letícia tá em casa ajudando com elas
+Aura: Menos mal que a Letícia tá aí pra dividir o peso, né?
+Aura: Cuidar de criança doente já drena a gente, mas fazer isso com febre é uma prova de resistência real.  ← REPETIU
+Aura: Como você tá se sentindo agora?
+User: Tô bem aura. Tudo certo. Logo passa.
+Aura: Isso aí, logo você tá novo.
+Aura: Aproveita que a Letícia tá aí... tá conseguindo desligar um pouco das coisas?  ← MAIS UMA pergunta depois de "tudo certo"
+```
+
+Dois problemas claros:
+1. **Repetição quase literal** da frase "drena a gente... resistência real".
+2. **Pergunta forçada depois de sinal de fechamento** ("tô bem", "logo passa") — usuária quer só atualizar e seguir, Aura empurra mais profundidade.
+
+Raiz no prompt: a `REGRA DE VALOR` ("cada conversa deve terminar com a pessoa saindo com ALGO") + `VALIDA + ENTREGA após 2-3 trocas` + `GUARDRAIL SIMÉTRICO (entrega a cada 4 trocas)` foram escritas para **MODO PROFUNDO**, mas o prompt não diz explicitamente "isso NÃO se aplica em PING-PONG". O modelo aplica em qualquer modo e força pergunta/aprofundamento mesmo quando o usuário só quer fechar leve.
 
 ---
 
-## Plano
+## Plano (3 ajustes pequenos, nada de seção nova)
 
-### 1. Injetar âncora da Pergunta da Semana no prompt do agente
+### 1. Proativa consciente de compromisso do dia
 
-Em `process-webhook-message/index.ts`, **antes** de invocar o `aura-agent`, se houver `weekly_questions` pendente (entregue nas últimas 3h e sem `responded_at`), montar uma nota de sistema curta e anexar ao payload enviado ao agente, ex.:
+**Arquivo:** `supabase/functions/scheduled-checkin/index.ts` (e/ou `scheduled-followup/index.ts` — o que disparou às 11:00 BRT do dia 03/06; confirmo no momento do build).
+
+**Mudança:** antes de chamar o LLM gerador, fazer query simples em compromissos/agenda extraídos do usuário com janela `[hoje 00:00, hoje 23:59 BRT]`. Se houver match (ex.: "treino 11h"), injetar no system/user prompt:
 
 ```
-[CONTEXTO_PROATIVO]
-Há ~Xmin você enviou a Pergunta da Semana: "<texto>"
-A próxima mensagem da usuária é provavelmente uma resposta/reação a essa pergunta.
-Se ela disser "não entendi", "como assim", etc → reconheça que foi a pergunta da semana e reformule com naturalidade.
+COMPROMISSO DE HOJE: o usuário combinou "treino às 11h" hoje (quarta).
+Ancore a mensagem nisso (ex.: "Faltam 10min pro treino, tá com tudo no jeito?"). 
+NÃO mande mensagem genérica de "já pensou nos primeiros treinos?".
 ```
 
-Essa janela deve cobrir os 3 tipos proativos que já têm tabela: `weekly_questions`, `monthly_letters`, e `pending_insights` (efeito oráculo) — mas começamos só com a semanal pra escopo enxuto. Mensal e oráculo ficam pra um follow-up se o usuário pedir.
+Se não houver compromisso, mantém comportamento atual.
 
-### 2. Reduzir abstração das próprias perguntas semanais
+### 2. PING-PONG: blindar contra REGRA DE VALOR e guardrails de ENTREGA
 
-A pergunta da Débora ("Se tua dignidade acordou...") é gerada por LLM no `send-weekly-question` com tool calling. Vou revisar o system prompt dessa função para exigir:
-- linguagem concreta (não metafórica)
-- ancorar em **um fato observável** da semana da usuária (não em conceito abstrato como "dignidade")
-- evitar pressupostos não confirmados (ex.: "se sua dignidade acordou" assume que isso aconteceu)
+**Arquivo:** `supabase/functions/aura-agent/index.ts`, seção `## MODO PING-PONG` (linha ~2732).
 
-### 3. Validação
+Adicionar 2-3 bullets curtos no bloco existente (sem criar seção nova):
 
-- Buscar nos últimos 30 dias outros casos `weekly_questions` cuja `response_text` contenha *"não entendi"*, *"como assim"*, *"o quê"*, *"hein"*, *"que pergunta"* — para medir frequência real do problema.
-- Após deploy, monitorar `failed_message_log` e amostrar 5 respostas para confirmar que a Aura passou a reconhecer o contexto.
+```
+- ⚠️ EXCEÇÃO: em PING-PONG, NÃO se aplica a REGRA DE VALOR, VALIDA+ENTREGA, GUARDRAIL SIMÉTRICO ou CARDÁPIO DE FECHAMENTO. 
+  Esses guardrails valem só em MODO PROFUNDO.
+- ⚠️ FECHAMENTO LEVE: se o usuário sinalizou que tá ok ("tô bem", "tudo certo", "logo passa", "tranquilo", "deu certo"), 
+  responda breve e ENCERRE. Não force mais 1 pergunta exploratória.
+- ⚠️ ANTI-ECO: se você já disse algo parecido nas últimas 3 mensagens suas, NÃO reformule. 
+  Siga adiante ou encerre.
+```
+
+E na `## REGRA DE VALOR` (linha ~2846), trocar o "Cada conversa" por "Cada conversa **em modo PROFUNDO ou DIREÇÃO**".
+
+### 3. Remover gatilho que empurra pergunta no fim
+
+Na linha 2737 (`Reaja brevemente e comente OU faça 1 pergunta leve`), trocar por:
+
+```
+- Reaja brevemente. Pergunta leve é OPCIONAL — só se a fala do usuário abrir um gancho natural.
+  Resposta sem pergunta é resposta válida.
+```
+
+Pequeno, mas muda o equilíbrio: hoje o "OU faça 1 pergunta" é lido como obrigatório.
 
 ---
 
-## Detalhes técnicos
+## O que NÃO vamos mexer
 
-- **Arquivos editados:** `supabase/functions/process-webhook-message/index.ts` (montar contexto + passar pro agent), `supabase/functions/aura-agent/index.ts` (aceitar e renderizar o bloco `[CONTEXTO_PROATIVO]` no system message), `supabase/functions/send-weekly-question/index.ts` (refinar prompt do extractor).
-- **Sem migrations** — usamos tabelas existentes.
-- **Deploy:** lembrar do drift conhecido (memória `aura-agent-deployment-and-fallback-safety`) — usar `supabase--deploy_edge_functions(["aura-agent","process-webhook-message","send-weekly-question"])` manualmente.
-- **Risco:** baixo. A injeção é aditiva (só adiciona contexto quando há pergunta pendente). Se a query falhar, envolvemos em try/catch fire-and-forget.
+- Cardápio de fechamento, fases da sessão, Logoterapia, confronto cirúrgico — tudo intocado.
+- Não adicionar nova seção no prompt. Só edição cirúrgica em 3 pontos existentes + 1 query na proativa.
 
-## Não faz parte deste plano
+## Validação
 
-- Mudar como a Pergunta é entregue (continua como template proativo). 
-- Mexer em monthly_letters / pending_insights (fica pra iteração futura se a Débora reportar de novo).
-- Avisar a Débora — a decisão de comunicar com ela é sua.
+- Após deploy, monitorar `messages` nos próximos 7 dias procurando:
+  - Proativas no horário de compromisso sem ancoragem ao compromisso.
+  - Eco/repetição (mesma frase em 2 turnos consecutivos do assistant).
+  - Pergunta exploratória após sinal de fechamento ("tô bem", "tudo certo").
+
+## Risco
+
+Baixo. Mudanças são aditivas/restritivas (não removem capacidade), e não tocam SESSÃO/PROFUNDO — só o PING-PONG.
+
+## Não comunicar com o Eduardo
+
+Decisão sua se quer avisar — o ajuste por si só já melhora a próxima conversa dele.
