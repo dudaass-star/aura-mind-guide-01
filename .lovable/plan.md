@@ -1,41 +1,42 @@
-## Objetivo
-Alinhar `whatsapp_templates` com os 7 templates aprovados no novo número Meta (WABA `2153650951869969`), mantendo Twilio como fallback nos casos sem template Meta.
+## Próximos passos sugeridos
 
-## Mudanças no banco (UPDATE em `whatsapp_templates`)
+Agora que os 7 templates Meta estão alinhados e os 3 recovery/reconnect caem automaticamente no Twilio, faltam validações de ponta-a-ponta antes de virar a chave em produção.
 
-**Corrigir nomes Meta (4 linhas):**
-| Categoria | meta_template_name antigo | novo |
-|---|---|---|
-| content | jornada_disponivel | `jornada_disponivel2` |
-| session_reminder | aura_session_reminder_v2 | `sessao_inicio` |
-| weekly_report | aura_weekly_report_v2 | `relatorio_semanal` |
-| welcome | aura_welcome_v2 | `welcome` |
+### 1. Smoke test do fallback Meta→Twilio
+- Forçar 1 usuário de teste com `whatsapp_provider = 'meta'`.
+- Disparar manualmente:
+  - `checkin` (deve sair via Meta — `cheking_7dias`)
+  - `reconnect` (deve cair no Twilio automaticamente)
+- Conferir em `failed_message_log` e nos logs da edge function que:
+  - Meta respondeu 200 no checkin.
+  - O fallback Twilio foi acionado no reconnect sem erro silencioso.
 
-**Ajustar idioma (1 linha):**
-- `weekly_question` → `meta_language_code = 'en'` (conteúdo continua PT-BR, só o rótulo do template é `en`)
+### 2. Validar variáveis de cada template Meta
+Cada um dos 7 templates aprovados tem placeholders próprios (`{{1}}`, `{{2}}`...). Conferir no código de envio (`sendProactive` / chamadas específicas por categoria) se a ordem/quantidade de variáveis bate com o que está aprovado no Meta — divergência aqui causa erro 132000 silencioso.
 
-**Limpar mapeamento Meta (3 linhas — sem template aprovado no Meta, ficam só via Twilio):**
-- `checkout_recovery_wa_15min` → `meta_template_name = NULL`, `meta_language_code = NULL`
-- `checkout_recovery_wa_24h` → idem
-- `reconnect` → idem
+Categorias a revisar:
+- `cheking_7dias`
+- `carta_mensal`
+- `jornada_disponivel2`
+- `sessao_inicio`
+- `relatorio_semanal`
+- `welcome`
+- `pergunta_semanal`
 
-**Mantidas como já estão:**
-- `checkin` (`cheking_7dias`) ✅
-- `monthly_letter` (`carta_mensal`) ✅
+### 3. Rollout controlado do provider Meta
+- Hoje só usuário(s) de teste em `meta`. Definir critério para migrar em lote (ex.: novos cadastros primeiro, depois ativos).
+- Manter Twilio como default até o smoke test passar 100%.
 
-Twilio `twilio_content_sid` permanece intacto em todas as 10 linhas (fallback/reserva).
+### 4. Observabilidade
+- Adicionar contador no admin (ou query salva) de envios Meta vs Twilio nas últimas 24h, para acompanhar o rollout sem precisar abrir logs.
 
-## Ajuste no provider (`supabase/functions/_shared/whatsapp-provider.ts`)
-Garantir que, quando `whatsapp_provider = 'meta'` e a linha não tiver `meta_template_name`, o envio caia automaticamente no Twilio (fallback por categoria) em vez de falhar. Isso cobre os 3 templates de recovery + reconnect, que ainda só existem no Twilio.
+### 5. Documentação
+- Atualizar `mem://technical/whatsapp/integration-provider-status` quando o rollout Meta começar de fato (hoje ainda diz "100% Twilio gateway, Meta webhook latente").
 
-## Ajuste cosmético no painel (`src/pages/AdminTemplates.tsx`)
-Contador "Meta" passa a contar apenas linhas com `meta_template_name IS NOT NULL`. Resultado esperado: **7 Meta + 3 só Twilio**, batendo com o sync.
+---
 
-## Validação
-1. Rodar UPDATEs.
-2. Clicar "Sincronizar com Meta" no painel — confirmar 7 aprovados.
-3. Conferir que painel mostra 7 com badge Meta e 3 só Twilio.
-4. Teste com 1 usuário em `whatsapp_provider = 'meta'`: disparar um `checkin` (Meta) e um `reconnect` (deve cair pra Twilio via fallback).
-
-## Memória a atualizar
-- `mem://technical/whatsapp/approved-template-sids` → adicionar mapa Meta (7 templates) + nota de fallback Twilio para recovery/reconnect.
+**Pergunta antes de eu detalhar qualquer um:** quer que eu comece por qual?
+1. Smoke test (eu monto o script de disparo + checagem de logs)
+2. Auditoria de variáveis dos 7 templates (eu leio o código de envio e comparo com o Meta)
+3. Widget de observabilidade Meta vs Twilio no admin
+4. Outro / combinar
