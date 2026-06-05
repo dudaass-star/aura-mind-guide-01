@@ -7,8 +7,9 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Loader2, RefreshCw, Pencil, Check, X } from 'lucide-react';
+import { ArrowLeft, Loader2, RefreshCw, Pencil, Check, X, Cloud } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface Template {
@@ -19,15 +20,33 @@ interface Template {
   prefix: string;
   meta_category: string;
   is_active: boolean;
+  meta_template_name: string | null;
+  meta_language_code: string;
 }
+
+interface MetaApprovedTemplate {
+  name: string;
+  language: string;
+  category: string;
+  body_text: string;
+  header_text: string | null;
+  footer_text: string | null;
+  button_labels: string[];
+  variables_count: number;
+}
+
+type EditField = 'twilio_content_sid' | 'meta_template_name' | 'meta_language_code';
 
 export default function AdminTemplates() {
   const { isLoading: authLoading, isAdmin, redirectIfNotAdmin } = useAdminAuth();
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingCell, setEditingCell] = useState<{ id: string; field: EditField } | null>(null);
   const [editValue, setEditValue] = useState('');
   const [updating, setUpdating] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [metaTemplates, setMetaTemplates] = useState<MetaApprovedTemplate[] | null>(null);
+  const [metaDialogOpen, setMetaDialogOpen] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -54,7 +73,10 @@ export default function AdminTemplates() {
     if (isAdmin) fetchTemplates();
   }, [isAdmin, fetchTemplates]);
 
-  const updateTemplate = async (id: string, updates: { twilio_content_sid?: string; is_active?: boolean }) => {
+  const updateTemplate = async (
+    id: string,
+    updates: { twilio_content_sid?: string; is_active?: boolean; meta_template_name?: string | null; meta_language_code?: string },
+  ) => {
     setUpdating(id);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -72,18 +94,44 @@ export default function AdminTemplates() {
       toast({ title: 'Erro ao atualizar', description: err.message, variant: 'destructive' });
     } finally {
       setUpdating(null);
-      setEditingId(null);
+      setEditingCell(null);
     }
   };
 
-  const startEdit = (template: Template) => {
-    setEditingId(template.id);
-    setEditValue(template.twilio_content_sid);
+  const startEdit = (template: Template, field: EditField) => {
+    setEditingCell({ id: template.id, field });
+    const current =
+      field === 'twilio_content_sid' ? template.twilio_content_sid :
+      field === 'meta_template_name' ? (template.meta_template_name || '') :
+      template.meta_language_code;
+    setEditValue(current);
   };
 
-  const saveEdit = (id: string) => {
-    if (editValue.trim()) {
-      updateTemplate(id, { twilio_content_sid: editValue.trim() });
+  const saveEdit = (id: string, field: EditField) => {
+    const v = editValue.trim();
+    if (field === 'twilio_content_sid' && !v) return;
+    if (field === 'meta_template_name') {
+      updateTemplate(id, { meta_template_name: v || null });
+    } else if (field === 'meta_language_code') {
+      updateTemplate(id, { meta_language_code: v || 'pt_BR' });
+    } else if (field === 'twilio_content_sid') {
+      updateTemplate(id, { twilio_content_sid: v });
+    }
+  };
+
+  const syncMeta = async () => {
+    setSyncing(true);
+    try {
+      const res = await supabase.functions.invoke('meta-templates-sync', { body: {} });
+      if (res.error) throw new Error(res.error.message);
+      const data = res.data as { approved: MetaApprovedTemplate[]; approved_count: number };
+      setMetaTemplates(data.approved || []);
+      setMetaDialogOpen(true);
+      toast({ title: 'Sincronizado', description: `${data.approved_count} templates aprovados encontrados no Meta.` });
+    } catch (err: any) {
+      toast({ title: 'Erro ao sincronizar com Meta', description: err.message, variant: 'destructive' });
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -107,11 +155,15 @@ export default function AdminTemplates() {
             <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
             Atualizar
           </Button>
+          <Button variant="default" size="sm" onClick={syncMeta} disabled={syncing}>
+            <Cloud className={`h-4 w-4 mr-2 ${syncing ? 'animate-pulse' : ''}`} />
+            {syncing ? 'Sincronizando...' : 'Sincronizar com Meta'}
+          </Button>
         </div>
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Templates Twilio</CardTitle>
+            <CardTitle className="text-lg">Templates WhatsApp (Twilio + Meta)</CardTitle>
           </CardHeader>
           <CardContent>
             {loading ? (
@@ -124,7 +176,9 @@ export default function AdminTemplates() {
                   <TableRow>
                     <TableHead>Categoria</TableHead>
                     <TableHead>Template Name</TableHead>
-                    <TableHead>Content SID</TableHead>
+                    <TableHead>Twilio Content SID</TableHead>
+                    <TableHead>Meta Template Name</TableHead>
+                    <TableHead>Meta Lang</TableHead>
                     <TableHead>Meta Category</TableHead>
                     <TableHead>Ativo</TableHead>
                   </TableRow>
@@ -135,32 +189,88 @@ export default function AdminTemplates() {
                       <TableCell className="font-medium">{t.category}</TableCell>
                       <TableCell className="text-muted-foreground">{t.template_name}</TableCell>
                       <TableCell>
-                        {editingId === t.id ? (
+                        {editingCell?.id === t.id && editingCell.field === 'twilio_content_sid' ? (
                           <div className="flex items-center gap-2">
                             <Input
                               value={editValue}
                               onChange={(e) => setEditValue(e.target.value)}
                               onKeyDown={(e) => {
-                                if (e.key === 'Enter') saveEdit(t.id);
-                                if (e.key === 'Escape') setEditingId(null);
+                                if (e.key === 'Enter') saveEdit(t.id, 'twilio_content_sid');
+                                if (e.key === 'Escape') setEditingCell(null);
                               }}
                               className="h-8 w-64 font-mono text-xs"
                               autoFocus
                             />
-                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => saveEdit(t.id)} disabled={updating === t.id}>
+                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => saveEdit(t.id, 'twilio_content_sid')} disabled={updating === t.id}>
                               <Check className="h-4 w-4" />
                             </Button>
-                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditingId(null)}>
+                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditingCell(null)}>
                               <X className="h-4 w-4" />
                             </Button>
                           </div>
                         ) : (
-                          <div className="flex items-center gap-2 cursor-pointer group" onClick={() => startEdit(t)}>
+                          <div className="flex items-center gap-2 cursor-pointer group" onClick={() => startEdit(t, 'twilio_content_sid')}>
                             {t.twilio_content_sid === 'PENDING_APPROVAL' ? (
                               <Badge variant="destructive" className="font-mono text-xs">PENDING</Badge>
                             ) : (
                               <span className="font-mono text-xs text-muted-foreground">{t.twilio_content_sid}</span>
                             )}
+                            <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {editingCell?.id === t.id && editingCell.field === 'meta_template_name' ? (
+                          <div className="flex items-center gap-2">
+                            <Input
+                              value={editValue}
+                              onChange={(e) => setEditValue(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') saveEdit(t.id, 'meta_template_name');
+                                if (e.key === 'Escape') setEditingCell(null);
+                              }}
+                              className="h-8 w-48 font-mono text-xs"
+                              placeholder="nome_template_meta"
+                              autoFocus
+                            />
+                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => saveEdit(t.id, 'meta_template_name')} disabled={updating === t.id}>
+                              <Check className="h-4 w-4" />
+                            </Button>
+                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditingCell(null)}>
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 cursor-pointer group" onClick={() => startEdit(t, 'meta_template_name')}>
+                            {t.meta_template_name ? (
+                              <span className="font-mono text-xs text-muted-foreground">{t.meta_template_name}</span>
+                            ) : (
+                              <Badge variant="outline" className="text-xs">— não mapeado —</Badge>
+                            )}
+                            <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {editingCell?.id === t.id && editingCell.field === 'meta_language_code' ? (
+                          <div className="flex items-center gap-1">
+                            <Input
+                              value={editValue}
+                              onChange={(e) => setEditValue(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') saveEdit(t.id, 'meta_language_code');
+                                if (e.key === 'Escape') setEditingCell(null);
+                              }}
+                              className="h-8 w-20 font-mono text-xs"
+                              autoFocus
+                            />
+                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => saveEdit(t.id, 'meta_language_code')} disabled={updating === t.id}>
+                              <Check className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 cursor-pointer group" onClick={() => startEdit(t, 'meta_language_code')}>
+                            <span className="font-mono text-xs text-muted-foreground">{t.meta_language_code}</span>
                             <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                           </div>
                         )}
@@ -185,6 +295,64 @@ export default function AdminTemplates() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={metaDialogOpen} onOpenChange={setMetaDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Templates aprovados no Meta (WABA)</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            {!metaTemplates || metaTemplates.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nenhum template aprovado encontrado.</p>
+            ) : (
+              <>
+                <p className="text-xs text-muted-foreground">
+                  Copie o <strong>name</strong> e <strong>language</strong> abaixo e cole nas colunas "Meta Template Name" e "Meta Lang" da linha correspondente.
+                </p>
+                {metaTemplates.map((mt, i) => (
+                  <Card key={i}>
+                    <CardContent className="pt-4 space-y-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <code className="font-mono text-sm bg-muted px-2 py-1 rounded">{mt.name}</code>
+                        <Badge variant="outline" className="font-mono text-xs">{mt.language}</Badge>
+                        <Badge variant="secondary" className="text-xs">{mt.category}</Badge>
+                        {mt.variables_count > 0 && (
+                          <Badge variant="outline" className="text-xs">{mt.variables_count} var(s)</Badge>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 ml-auto"
+                          onClick={() => navigator.clipboard.writeText(mt.name)}
+                        >
+                          Copiar name
+                        </Button>
+                      </div>
+                      {mt.header_text && (
+                        <p className="text-xs text-muted-foreground"><strong>Header:</strong> {mt.header_text}</p>
+                      )}
+                      <p className="text-xs whitespace-pre-wrap text-foreground">{mt.body_text}</p>
+                      {mt.footer_text && (
+                        <p className="text-[10px] text-muted-foreground italic">{mt.footer_text}</p>
+                      )}
+                      {mt.button_labels.length > 0 && (
+                        <div className="flex gap-1 flex-wrap">
+                          {mt.button_labels.map((b, j) => (
+                            <Badge key={j} variant="outline" className="text-xs">▸ {b}</Badge>
+                          ))}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setMetaDialogOpen(false)}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

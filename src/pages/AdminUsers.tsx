@@ -28,6 +28,7 @@ interface Profile {
   pending_first_session_invite: boolean | null;
   first_session_invite_attempts: number | null;
   needs_schedule_setup: boolean | null;
+  whatsapp_provider: string | null;
 }
 
 interface RatingAgg { avg: number; count: number; }
@@ -124,7 +125,7 @@ export default function AdminUsers() {
 
   // Edit dialog
   const [editProfile, setEditProfile] = useState<Profile | null>(null);
-  const [editForm, setEditForm] = useState({ name: '', email: '', phone: '', plan: '', status: '' });
+  const [editForm, setEditForm] = useState({ name: '', email: '', phone: '', plan: '', status: '', whatsapp_provider: 'default' });
   const [saving, setSaving] = useState(false);
   const [portalLinkLoading, setPortalLinkLoading] = useState(false);
   const [portalLinkCopied, setPortalLinkCopied] = useState(false);
@@ -147,6 +148,7 @@ export default function AdminUsers() {
     let query = supabase
       .from('profiles')
       .select('id, user_id, name, phone, email, plan, status, created_at, last_user_message_at, current_episode, current_journey_id, sessions_used_this_month, trial_phase, pending_first_session_invite, first_session_invite_attempts, needs_schedule_setup', { count: 'exact' })
+      // whatsapp_provider lido separado p/ não quebrar tipagem antiga; ver fetch abaixo
       .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
 
     // Ordenação server-side (rating é client-side após carregar a página)
