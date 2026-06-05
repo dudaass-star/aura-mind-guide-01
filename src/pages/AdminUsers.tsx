@@ -758,6 +758,21 @@ export default function AdminUsers() {
                     </SelectContent>
                   </Select>
                 </div>
+                <div>
+                  <label className="text-sm font-medium text-foreground">Canal WhatsApp</label>
+                  <Select value={editForm.whatsapp_provider} onValueChange={(v) => setEditForm(f => ({ ...f, whatsapp_provider: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="default">Default (config global)</SelectItem>
+                      <SelectItem value="meta">Meta Cloud API direta (novo nº)</SelectItem>
+                      <SelectItem value="official">Twilio (oficial atual)</SelectItem>
+                      <SelectItem value="zapi">Z-API (legado)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    Override por usuário. "Default" usa o canal global em system_config.
+                  </p>
+                </div>
               </div>
 
               <Button variant="outline" size="sm" className="w-full" onClick={handleResetSessions} disabled={saving}>
