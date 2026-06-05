@@ -147,8 +147,7 @@ export default function AdminUsers() {
     setLoading(true);
     let query = supabase
       .from('profiles')
-      .select('id, user_id, name, phone, email, plan, status, created_at, last_user_message_at, current_episode, current_journey_id, sessions_used_this_month, trial_phase, pending_first_session_invite, first_session_invite_attempts, needs_schedule_setup', { count: 'exact' })
-      // whatsapp_provider lido separado p/ não quebrar tipagem antiga; ver fetch abaixo
+      .select('id, user_id, name, phone, email, plan, status, created_at, last_user_message_at, current_episode, current_journey_id, sessions_used_this_month, trial_phase, pending_first_session_invite, first_session_invite_attempts, needs_schedule_setup, whatsapp_provider', { count: 'exact' })
       .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
 
     // Ordenação server-side (rating é client-side após carregar a página)
@@ -330,6 +329,7 @@ export default function AdminUsers() {
       phone: p.phone || '',
       plan: p.plan || 'essencial',
       status: p.status || 'active',
+      whatsapp_provider: p.whatsapp_provider || 'default',
     });
   };
 
@@ -387,6 +387,7 @@ export default function AdminUsers() {
             phone: editForm.phone || null,
             plan: editForm.plan,
             status: editForm.status,
+            whatsapp_provider: editForm.whatsapp_provider === 'default' ? null : editForm.whatsapp_provider,
           },
         },
       });
