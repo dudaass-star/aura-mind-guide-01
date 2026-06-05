@@ -169,10 +169,12 @@ export async function sendProactive(
 
     if (provider === 'meta') {
       const r: ProactiveMessageResult = await metaSendProactiveMessage(phone, text, templateCategory, userId, teaserText, templateVariables);
-      // Fallback automático para Twilio quando a categoria ainda não tem template aprovado no Meta
-      // (ex.: checkout_recovery_wa_15min/24h e reconnect — vivem só no número Twilio dedicado).
-      if (!r.success && r.error && /has no meta_template_name configured/i.test(r.error)) {
-        console.warn(`↩️ [WhatsApp Provider] Meta sem template para "${templateCategory}", fallback Twilio.`);
+      // Fallback automático para Twilio em QUALQUER falha do Meta proativo:
+      // - sem meta_template_name configurado (reconnect / checkout_recovery)
+      // - erros do Meta (132000 params mismatch, 131037 display name pendente,
+      //   131026 message undeliverable, 131056 pair rate limit, etc).
+      if (!r.success && r.error) {
+        console.warn(`↩️ [WhatsApp Provider] Meta falhou em "${templateCategory}" (${r.error?.slice(0,160)}), fallback Twilio.`);
         const fb: ProactiveMessageResult = await sendProactiveMessage(phone, text, templateCategory, userId, teaserText, templateVariables);
         return { success: fb.success, provider: 'official', error: fb.error };
       }
@@ -204,8 +206,8 @@ export async function sendForcedTemplate(
     const provider = await getProvider(userId);
     if (provider === 'meta') {
       const result = await metaSendTemplateOnly(phone, templateCategory, userId, templateVariables);
-      if (!result.success && result.error && /has no meta_template_name configured/i.test(result.error)) {
-        console.warn(`↩️ [WhatsApp Provider] Meta sem template para "${templateCategory}" (forced), fallback Twilio.`);
+      if (!result.success && result.error) {
+        console.warn(`↩️ [WhatsApp Provider] Meta forced falhou em "${templateCategory}" (${result.error?.slice(0,160)}), fallback Twilio.`);
         const fb = await sendTemplateOnly(phone, templateCategory, userId, templateVariables);
         return { success: fb.success, provider: 'official', error: fb.error, type: fb.type };
       }
