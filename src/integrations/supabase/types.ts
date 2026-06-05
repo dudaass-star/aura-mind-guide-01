@@ -2668,6 +2668,7 @@ export type Database = {
           meta_category: string
           meta_language_code: string
           meta_template_name: string | null
+          meta_variable_count: number
           prefix: string
           template_name: string
           twilio_content_sid: string
@@ -2681,6 +2682,7 @@ export type Database = {
           meta_category?: string
           meta_language_code?: string
           meta_template_name?: string | null
+          meta_variable_count?: number
           prefix: string
           template_name: string
           twilio_content_sid?: string
@@ -2694,6 +2696,7 @@ export type Database = {
           meta_category?: string
           meta_language_code?: string
           meta_template_name?: string | null
+          meta_variable_count?: number
           prefix?: string
           template_name?: string
           twilio_content_sid?: string

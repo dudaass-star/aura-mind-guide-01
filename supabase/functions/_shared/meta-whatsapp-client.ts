@@ -228,7 +228,7 @@ export async function sendTemplateOnly(
 
     const { data: templateConfig } = await supabase
       .from('whatsapp_templates')
-      .select('template_name, meta_template_name, meta_language_code, is_active')
+      .select('template_name, meta_template_name, meta_language_code, is_active, meta_variable_count')
       .eq('category', templateCategory)
       .single();
 
@@ -243,21 +243,30 @@ export async function sendTemplateOnly(
       return { success: false, parts: 0, type: 'template', error: `Template "${templateCategory}" has no meta_template_name configured` };
     }
     const langCode = templateConfig.meta_language_code || 'pt_BR';
+    const expectedVars = typeof templateConfig.meta_variable_count === 'number'
+      ? templateConfig.meta_variable_count
+      : 1;
 
-    // Resolve variables: explicit > first name > "there"
-    let variables = templateVariables ?? [];
-    if (variables.length === 0 && userId) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('name')
-        .eq('user_id', userId)
-        .single();
-      const firstName = profile?.name ? profile.name.split(' ')[0] : 'there';
-      variables = [firstName];
+    // Resolve variables respeitando meta_variable_count
+    let variables: string[] = [];
+    if (expectedVars > 0) {
+      if (templateVariables && templateVariables.length > 0) {
+        variables = templateVariables.slice(0, expectedVars);
+      } else {
+        let firstName = 'there';
+        if (userId) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('name')
+            .eq('user_id', userId)
+            .single();
+          firstName = profile?.name ? profile.name.split(' ')[0] : 'there';
+        }
+        variables = Array(expectedVars).fill(firstName);
+      }
     }
-    if (variables.length === 0) variables = ['there'];
 
-    console.log(`📨 [Meta][TemplateOnly] Sending "${metaName}" (${langCode}) to ${phone.substring(0, 4)}*** vars=${JSON.stringify(variables)}`);
+    console.log(`📨 [Meta][TemplateOnly] Sending "${metaName}" (${langCode}) to ${phone.substring(0, 4)}*** vars=${JSON.stringify(variables)} (expected=${expectedVars})`);
 
     const result = await sendTemplateMessage(phone, metaName, langCode, variables);
     return { success: result.success, parts: 1, type: 'template', error: result.error, messageId: result.messageId };
@@ -325,7 +334,7 @@ export async function sendProactiveMessage(
     // Janela fechada → template aprovado
     const { data: templateConfig } = await supabase
       .from('whatsapp_templates')
-      .select('template_name, meta_template_name, meta_language_code, is_active')
+      .select('template_name, meta_template_name, meta_language_code, is_active, meta_variable_count')
       .eq('category', templateCategory)
       .single();
 
@@ -342,11 +351,22 @@ export async function sendProactiveMessage(
       return { success: false, parts: 0, type: 'template', error: `Template "${templateCategory}" has no meta_template_name configured` };
     }
     const langCode = templateConfig.meta_language_code || 'pt_BR';
+    const expectedVars = typeof templateConfig.meta_variable_count === 'number'
+      ? templateConfig.meta_variable_count
+      : 1;
 
     // Variáveis explícitas têm prioridade
     if (templateVariables && templateVariables.length > 0) {
-      console.log(`📨 [Meta] Sending template "${metaName}" with ${templateVariables.length} structured variable(s)`);
-      const r = await sendTemplateMessage(phone, metaName, langCode, templateVariables);
+      const trimmed = templateVariables.slice(0, expectedVars);
+      console.log(`📨 [Meta] Sending template "${metaName}" with ${trimmed.length}/${expectedVars} structured variable(s)`);
+      const r = await sendTemplateMessage(phone, metaName, langCode, trimmed);
+      return { success: r.success, parts: 1, type: 'template', error: r.error, messageId: r.messageId };
+    }
+
+    // Template sem variáveis — envia direto
+    if (expectedVars === 0) {
+      console.log(`📨 [Meta] Sending template "${metaName}" with no variables (meta_variable_count=0)`);
+      const r = await sendTemplateMessage(phone, metaName, langCode, []);
       return { success: r.success, parts: 1, type: 'template', error: r.error, messageId: r.messageId };
     }
 
@@ -354,7 +374,9 @@ export async function sendProactiveMessage(
     const firstName = userName ? userName.split(' ')[0] : 'there';
     console.log(`📨 [Meta] Sending template "${metaName}" with auto-resolved name: "${firstName}"`);
 
-    const r = await sendTemplateMessage(phone, metaName, langCode, [firstName]);
+    // Repete o nome até preencher o número esperado de variáveis (defensivo).
+    const autoVars = Array(expectedVars).fill(firstName);
+    const r = await sendTemplateMessage(phone, metaName, langCode, autoVars);
     return { success: r.success, parts: 1, type: 'template', error: r.error, messageId: r.messageId };
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Unknown error';
