@@ -28,6 +28,7 @@ interface Profile {
   pending_first_session_invite: boolean | null;
   first_session_invite_attempts: number | null;
   needs_schedule_setup: boolean | null;
+  whatsapp_provider: string | null;
 }
 
 interface RatingAgg { avg: number; count: number; }
@@ -124,7 +125,7 @@ export default function AdminUsers() {
 
   // Edit dialog
   const [editProfile, setEditProfile] = useState<Profile | null>(null);
-  const [editForm, setEditForm] = useState({ name: '', email: '', phone: '', plan: '', status: '' });
+  const [editForm, setEditForm] = useState({ name: '', email: '', phone: '', plan: '', status: '', whatsapp_provider: 'default' });
   const [saving, setSaving] = useState(false);
   const [portalLinkLoading, setPortalLinkLoading] = useState(false);
   const [portalLinkCopied, setPortalLinkCopied] = useState(false);
@@ -146,7 +147,7 @@ export default function AdminUsers() {
     setLoading(true);
     let query = supabase
       .from('profiles')
-      .select('id, user_id, name, phone, email, plan, status, created_at, last_user_message_at, current_episode, current_journey_id, sessions_used_this_month, trial_phase, pending_first_session_invite, first_session_invite_attempts, needs_schedule_setup', { count: 'exact' })
+      .select('id, user_id, name, phone, email, plan, status, created_at, last_user_message_at, current_episode, current_journey_id, sessions_used_this_month, trial_phase, pending_first_session_invite, first_session_invite_attempts, needs_schedule_setup, whatsapp_provider', { count: 'exact' })
       .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
 
     // Ordenação server-side (rating é client-side após carregar a página)
@@ -328,6 +329,7 @@ export default function AdminUsers() {
       phone: p.phone || '',
       plan: p.plan || 'essencial',
       status: p.status || 'active',
+      whatsapp_provider: p.whatsapp_provider || 'default',
     });
   };
 
@@ -385,6 +387,7 @@ export default function AdminUsers() {
             phone: editForm.phone || null,
             plan: editForm.plan,
             status: editForm.status,
+            whatsapp_provider: editForm.whatsapp_provider === 'default' ? null : editForm.whatsapp_provider,
           },
         },
       });
@@ -754,6 +757,21 @@ export default function AdminUsers() {
                       <SelectItem value="trial">Trial</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-foreground">Canal WhatsApp</label>
+                  <Select value={editForm.whatsapp_provider} onValueChange={(v) => setEditForm(f => ({ ...f, whatsapp_provider: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="default">Default (config global)</SelectItem>
+                      <SelectItem value="meta">Meta Cloud API direta (novo nº)</SelectItem>
+                      <SelectItem value="official">Twilio (oficial atual)</SelectItem>
+                      <SelectItem value="zapi">Z-API (legado)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    Override por usuário. "Default" usa o canal global em system_config.
+                  </p>
                 </div>
               </div>
 

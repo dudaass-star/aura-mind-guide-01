@@ -1,54 +1,102 @@
-## Diagnóstico
+## Contexto
 
-O follow-up da imagem veio da função `conversation-followup`, não de uma resposta normal da Aura.
+- O cliente Meta direto (`meta-whatsapp-client.ts`) já existe e funciona — testes passaram.
+- A tabela `whatsapp_templates` já tem as colunas `meta_template_name` + `meta_language_code` (hoje vazias).
+- Hoje o provider é global: `system_config.whatsapp_provider = "official"` (Twilio). Para cutover gradual precisamos de override por usuário.
+- Twilio fica vivo como fallback/reserva — nada é apagado.
 
-Fluxo provável:
-1. A Aura respondeu às 15:31 com pergunta: “A febre deu uma trégua?”
-2. Como qualquer resposta com `?` vira `conversation_status = awaiting`, o webhook marcou a conversa como “pendente”.
-3. Depois de 15 minutos sem resposta, o cron `conversation-followup` rodou.
-4. A IA extraiu o contexto das mensagens recentes, misturou o tema de agenda/sessões com o assunto da febre, e gerou: “E aí, tudo certo com os agendamentos? 😉 Adoraria saber se deu certo!”
+## O que vamos construir
 
-O problema não é só a frase. É o mecanismo: ele tenta “reabrir” qualquer conversa que terminou com pergunta, mesmo quando o silêncio é natural. Isso fica invasivo, ansioso e anti-natural.
+### 1. Feature flag por usuário (mantém Twilio como default)
 
-## Plano
+- Adicionar coluna `profiles.whatsapp_provider text` (nullable). Valores: `null` (segue global) | `"meta"` | `"official"` | `"zapi"`.
+- Em `_shared/whatsapp-provider.ts`, mudar `getProvider()` para aceitar `userId?: string`:
+  - Se `userId` informado e `profiles.whatsapp_provider` ≠ null → usa esse valor.
+  - Senão → cai no `system_config.whatsapp_provider` (lógica atual).
+- Propagar `userId` em `sendMessage` / `sendProactive` / `sendAudio` / `sendAudioUrl` (todos já recebem userId em vários callers; onde não recebem, fica no default global).
+- Global continua `"official"` (Twilio). Você liga Meta um usuário por vez.
 
-### 1. Desativar follow-ups automáticos de conversa comum
-Alterar `process-webhook-message/index.ts` para não habilitar `conversation_followups` quando a conversa comum fica em `awaiting`.
+### 2. Sincronizador de templates Meta → DB
 
-Hoje:
-```ts
-const shouldEnableFollowup = conversationStatus === 'awaiting' || isSessionActive;
+Nova edge function `meta-templates-sync` (admin-only, verify_jwt em código):
+- Lê `WABA_ID` (novo secret) e usa `META_WHATSAPP_ACCESS_TOKEN`.
+- Chama `GET https://graph.facebook.com/v21.0/{WABA_ID}/message_templates?fields=name,language,status,category,components&limit=200` (com paginação).
+- Filtra `status = "APPROVED"`.
+- Retorna JSON com a lista: `{ name, language, category, body_text, button_labels[], variables_count }`.
+- **Não escreve** automaticamente — você decide o mapeamento (já que `whatsapp_templates.category` é semântica nossa: `checkin`, `weekly_question`, `session_reminder`, etc.).
+
+### 3. UI admin pra mapear templates Meta
+
+Em `src/pages/AdminTemplates.tsx`:
+- Botão "Sincronizar com Meta" → chama `meta-templates-sync`, abre dialog com a lista de templates aprovados (nome, idioma, categoria, preview do corpo).
+- Em cada linha da tabela atual, adicionar duas colunas editáveis: **Meta Template Name** + **Meta Language Code** (hoje só dá pra editar Twilio ContentSid).
+- Salvar via `admin-update-template` (estender allowlist pra incluir `meta_template_name` e `meta_language_code`).
+- Coluna nova "Provider Override por Usuário" não — isso fica fora dessa tela; vai numa coluna nova em `AdminUsers.tsx` (dropdown Default / Meta / Twilio) na linha 4.
+
+### 4. Override por usuário na tela Admin Users
+
+- Em `src/pages/AdminUsers.tsx`, adicionar dropdown "Canal WhatsApp" por usuário (Default | Meta | Twilio | Z-API).
+- Persistir via `admin-update-profile` (já existe; estender allowlist com `whatsapp_provider`).
+
+### 5. Secret novo
+
+Você precisa me passar o **WhatsApp Business Account ID (WABA ID)** do número +1 555-959-6770. Encontra em:
+- Meta Business Suite → Configurações → Contas → Contas do WhatsApp → ID da conta (número de 15-16 dígitos)
+- Ou Meta App Dashboard → WhatsApp → API Setup → "WhatsApp Business Account ID"
+
+Eu cadastro como secret `META_WHATSAPP_BUSINESS_ACCOUNT_ID`.
+
+Pergunta: o `META_WHATSAPP_ACCESS_TOKEN` e `META_WHATSAPP_PHONE_NUMBER_ID` que já estão nos secrets **são do número novo +1 555-959-6770** (que você testou e funciona), correto? Se sim, reaproveitamos. Se forem de outro número, me avisa pra trocar.
+
+## Detalhes técnicos
+
+```text
+Fluxo de envio com flag por usuário:
+  caller (ex: session-reminder)
+    → sendProactive(phone, text, category, userId)
+      → getProvider(userId)
+          ├─ profiles.whatsapp_provider = "meta"  → metaSendProactiveMessage
+          ├─ profiles.whatsapp_provider = null    → system_config.whatsapp_provider ("official") → Twilio
+          └─ "zapi" → Z-API
 ```
 
-Novo comportamento:
-```ts
-const shouldEnableFollowup = isSessionActive;
+Mapeamento de categorias → templates Meta (você confirma no dialog após sync):
+
+```text
+checkin                    → cheking_7dias (ou nome novo no Meta)
+weekly_question            → pergunta_semanal
+monthly_letter             → carta_mensal
+session_reminder           → aura_session_reminder_v2
+welcome                    → aura_welcome_v2
+content                    → jornada_disponivel
+weekly_report              → aura_weekly_report_v2
+reconnect                  → aura_reconnect_v2
+checkout_recovery_wa_15min → checkout_recovery_wa_15min
+checkout_recovery_wa_24h   → checkout_recovery_wa_24h
 ```
 
-Resultado: perguntas normais da Aura não geram mais “ei, você sumiu?” depois de 15 minutos.
+Migration:
+```sql
+ALTER TABLE public.profiles ADD COLUMN whatsapp_provider text;
+-- sem default, sem CHECK (validado no app); null = segue config global
+```
 
-### 2. Manter apenas segurança para sessão ativa
-Preservar follow-up somente quando existir sessão ativa (`current_session_id` / `session_active = true`), porque ali o usuário está dentro de uma sessão de 45 minutos e uma interrupção pode precisar de retomada.
-
-Isso remove o incômodo em ping-pong/casual sem quebrar sessões formais.
-
-### 3. Blindar a função `conversation-followup`
-Adicionar uma guarda dentro de `conversation-followup/index.ts` para pular qualquer caso que não esteja em sessão ativa.
-
-Mesmo se algum registro antigo ficar na tabela, a função não enviará follow-up comum.
-
-### 4. Limpar/neutralizar registros pendentes
-Adicionar uma limpeza segura para registros já existentes em `conversation_followups` que não sejam sessão ativa, evitando que follow-ups antigos ainda disparem depois do deploy.
-
-### 5. Atualizar memória do projeto
-Criar/atualizar memória dizendo:
-- follow-up automático de conversa comum foi removido porque soa forçado;
-- Aura deve deixar ping-pong morrer naturalmente;
-- follow-up só permanece para sessão ativa ou fluxos determinísticos específicos.
+Arquivos tocados:
+- `supabase/migrations/<ts>_profile_whatsapp_provider.sql` (nova)
+- `supabase/functions/meta-templates-sync/index.ts` (nova)
+- `supabase/functions/_shared/whatsapp-provider.ts` (getProvider aceita userId)
+- `supabase/functions/admin-update-template/index.ts` (allowlist + meta_template_name/meta_language_code)
+- `supabase/functions/admin-update-profile/index.ts` (allowlist + whatsapp_provider)
+- `src/pages/AdminTemplates.tsx` (botão sync + dialog + colunas Meta editáveis)
+- `src/pages/AdminUsers.tsx` (dropdown canal WhatsApp por usuário)
 
 ## Fora de escopo
 
-- Não mexer em lembretes de sessão agendada.
-- Não mexer em tarefas explicitamente pedidas pelo usuário (`AGENDAR_TAREFA`).
-- Não mexer em check-ins proativos planejados, pergunta semanal, cápsula do tempo ou relatórios.
-- Não reescrever o tom geral da Aura neste passo.
+- Migrar webhook de inbound do Twilio pro Meta (Meta webhook já existe latente — `webhook-meta`). Quem usa o número novo já vai entrar por lá automaticamente porque a Meta dispara pro webhook do app dela. Mas confirma comigo se quer que eu valide isso também.
+- Desligar Twilio. Continua ativo como reserva, exatamente como você pediu.
+
+## Próximo passo antes de implementar
+
+Me confirme:
+1. O **WABA ID** do número novo (vou pedir o secret).
+2. Se os secrets `META_WHATSAPP_ACCESS_TOKEN` / `META_WHATSAPP_PHONE_NUMBER_ID` atuais já são do número novo.

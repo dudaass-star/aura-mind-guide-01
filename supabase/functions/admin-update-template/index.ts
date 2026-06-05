@@ -37,6 +37,8 @@ Deno.serve(async (req) => {
     const allowed: Record<string, unknown> = {};
     if ('twilio_content_sid' in updates) allowed.twilio_content_sid = updates.twilio_content_sid;
     if ('is_active' in updates) allowed.is_active = updates.is_active;
+    if ('meta_template_name' in updates) allowed.meta_template_name = updates.meta_template_name || null;
+    if ('meta_language_code' in updates) allowed.meta_language_code = updates.meta_language_code || 'pt_BR';
 
     if (Object.keys(allowed).length === 0) throw new Error('No valid fields to update');
 

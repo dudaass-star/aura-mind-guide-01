@@ -24,15 +24,32 @@ import {
 export type WhatsAppProvider = 'zapi' | 'official' | 'meta';
 
 /**
- * Lê o provider ativo da tabela system_config.
- * Default: 'official' (API Oficial do WhatsApp).
+ * Lê o provider ativo. Se userId for fornecido e o perfil tiver
+ * `whatsapp_provider` setado, esse override vence. Caso contrário,
+ * cai no `system_config.whatsapp_provider` (default global).
+ *
+ * Default: 'official' (Twilio Gateway).
  */
-export async function getProvider(): Promise<WhatsAppProvider> {
+export async function getProvider(userId?: string): Promise<WhatsAppProvider> {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // 1. Override por usuário (feature flag pro cutover gradual Twilio → Meta)
+    if (userId) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('whatsapp_provider')
+        .eq('user_id', userId)
+        .maybeSingle();
+      const override = profile?.whatsapp_provider as string | null | undefined;
+      if (override === 'meta' || override === 'zapi' || override === 'official') {
+        return override;
+      }
+    }
+
+    // 2. Config global
     const { data } = await supabase
       .from('system_config')
       .select('value')
@@ -105,9 +122,10 @@ export async function sendMessage(
   phone: string,
   text: string,
   configOverride?: ZapiConfig,
+  userId?: string,
 ): Promise<SendResult> {
   return withRetry(async () => {
-    const provider = await getProvider();
+    const provider = await getProvider(userId);
 
     if (provider === 'zapi') {
       const result = await sendTextMessage(phone, text, undefined, configOverride);
@@ -140,7 +158,7 @@ export async function sendProactive(
   templateVariables?: string[],
 ): Promise<SendResult> {
   return withRetry(async () => {
-    const provider = await getProvider();
+    const provider = await getProvider(userId);
 
     if (provider === 'zapi') {
       const result = await sendTextMessage(phone, text, undefined, configOverride);
@@ -174,7 +192,7 @@ export async function sendForcedTemplate(
   templateVariables?: string[],
 ): Promise<SendResult & { type?: 'template' | 'freetext' }> {
   return withRetry(async () => {
-    const provider = await getProvider();
+    const provider = await getProvider(userId);
     if (provider === 'meta') {
       const result = await metaSendTemplateOnly(phone, templateCategory, userId, templateVariables);
       return { success: result.success, provider: 'meta', error: result.error, type: result.type };
@@ -193,9 +211,10 @@ export async function sendAudio(
   phone: string,
   audioBase64: string,
   configOverride?: ZapiConfig,
+  userId?: string,
 ): Promise<SendResult> {
   return withRetry(async () => {
-    const provider = await getProvider();
+    const provider = await getProvider(userId);
 
     if (provider === 'zapi') {
       const result = await sendAudioMessage(phone, audioBase64, configOverride);
@@ -219,9 +238,10 @@ export async function sendAudioUrl(
   phone: string,
   audioUrl: string,
   configOverride?: ZapiConfig,
+  userId?: string,
 ): Promise<SendResult> {
   return withRetry(async () => {
-    const provider = await getProvider();
+    const provider = await getProvider(userId);
 
     if (provider === 'zapi') {
       const result = await zapiSendAudioFromUrl(phone, audioUrl, configOverride);

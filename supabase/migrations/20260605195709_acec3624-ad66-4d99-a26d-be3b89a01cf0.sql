@@ -1,0 +1,2 @@
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS whatsapp_provider text;
+COMMENT ON COLUMN public.profiles.whatsapp_provider IS 'Override do canal WhatsApp por usuário. null = segue system_config.whatsapp_provider. Valores: meta | official | zapi';
