@@ -228,7 +228,7 @@ export async function sendTemplateOnly(
 
     const { data: templateConfig } = await supabase
       .from('whatsapp_templates')
-      .select('template_name, meta_template_name, meta_language_code, is_active')
+      .select('template_name, meta_template_name, meta_language_code, is_active, meta_variable_count')
       .eq('category', templateCategory)
       .single();
 
@@ -243,21 +243,30 @@ export async function sendTemplateOnly(
       return { success: false, parts: 0, type: 'template', error: `Template "${templateCategory}" has no meta_template_name configured` };
     }
     const langCode = templateConfig.meta_language_code || 'pt_BR';
+    const expectedVars = typeof templateConfig.meta_variable_count === 'number'
+      ? templateConfig.meta_variable_count
+      : 1;
 
-    // Resolve variables: explicit > first name > "there"
-    let variables = templateVariables ?? [];
-    if (variables.length === 0 && userId) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('name')
-        .eq('user_id', userId)
-        .single();
-      const firstName = profile?.name ? profile.name.split(' ')[0] : 'there';
-      variables = [firstName];
+    // Resolve variables respeitando meta_variable_count
+    let variables: string[] = [];
+    if (expectedVars > 0) {
+      if (templateVariables && templateVariables.length > 0) {
+        variables = templateVariables.slice(0, expectedVars);
+      } else {
+        let firstName = 'there';
+        if (userId) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('name')
+            .eq('user_id', userId)
+            .single();
+          firstName = profile?.name ? profile.name.split(' ')[0] : 'there';
+        }
+        variables = Array(expectedVars).fill(firstName);
+      }
     }
-    if (variables.length === 0) variables = ['there'];
 
-    console.log(`📨 [Meta][TemplateOnly] Sending "${metaName}" (${langCode}) to ${phone.substring(0, 4)}*** vars=${JSON.stringify(variables)}`);
+    console.log(`📨 [Meta][TemplateOnly] Sending "${metaName}" (${langCode}) to ${phone.substring(0, 4)}*** vars=${JSON.stringify(variables)} (expected=${expectedVars})`);
 
     const result = await sendTemplateMessage(phone, metaName, langCode, variables);
     return { success: result.success, parts: 1, type: 'template', error: result.error, messageId: result.messageId };
