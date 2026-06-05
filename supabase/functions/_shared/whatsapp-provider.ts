@@ -38,10 +38,12 @@ export async function getProvider(userId?: string): Promise<WhatsAppProvider> {
 
     // 1. Override por usuário (feature flag pro cutover gradual Twilio → Meta)
     if (userId) {
+      // Aceita tanto profiles.user_id quanto profiles.id (alguns callers
+      // do admin enviam o próprio id do perfil).
       const { data: profile } = await supabase
         .from('profiles')
         .select('whatsapp_provider')
-        .eq('user_id', userId)
+        .or(`user_id.eq.${userId},id.eq.${userId}`)
         .maybeSingle();
       const override = profile?.whatsapp_provider as string | null | undefined;
       if (override === 'meta' || override === 'zapi' || override === 'official') {
