@@ -1,36 +1,41 @@
-## Próximos passos pra ativar os templates do número novo
+## Objetivo
+Alinhar `whatsapp_templates` com os 7 templates aprovados no novo número Meta (WABA `2153650951869969`), mantendo Twilio como fallback nos casos sem template Meta.
 
-### 1. Cadastrar o WABA ID como secret
-Adicionar `META_WHATSAPP_BUSINESS_ACCOUNT_ID = 2153650951869969` nos secrets da Lovable Cloud. A função `meta-templates-sync` já está pronta esperando esse secret.
+## Mudanças no banco (UPDATE em `whatsapp_templates`)
 
-### 2. Rodar a sincronização (admin)
-Em `/admin/templates`, clicar em **"Sincronizar com Meta"**. A função vai:
-- Chamar `graph.facebook.com/v21.0/2153650951869969/message_templates`
-- Filtrar só os com `status = APPROVED`
-- Retornar lista com `name`, `language`, `category`, `body_text`, variáveis e botões
+**Corrigir nomes Meta (4 linhas):**
+| Categoria | meta_template_name antigo | novo |
+|---|---|---|
+| content | jornada_disponivel | `jornada_disponivel2` |
+| session_reminder | aura_session_reminder_v2 | `sessao_inicio` |
+| weekly_report | aura_weekly_report_v2 | `relatorio_semanal` |
+| welcome | aura_welcome_v2 | `welcome` |
 
-Nada é gravado automaticamente — você decide o mapeamento.
+**Ajustar idioma (1 linha):**
+- `weekly_question` → `meta_language_code = 'en'` (conteúdo continua PT-BR, só o rótulo do template é `en`)
 
-### 3. Mapear cada template Meta → categoria interna
-Na tabela de templates do admin, preencher para cada linha (`checkin`, `weekly_report`, `content`, etc.):
-- **Meta Template Name** (ex: `cheking_7dias`)
-- **Meta Language Code** (ex: `pt_BR`)
+**Limpar mapeamento Meta (3 linhas — sem template aprovado no Meta, ficam só via Twilio):**
+- `checkout_recovery_wa_15min` → `meta_template_name = NULL`, `meta_language_code = NULL`
+- `checkout_recovery_wa_24h` → idem
+- `reconnect` → idem
 
-Esses campos já existem na tabela `whatsapp_templates` e a UI de edição já aceita.
+**Mantidas como já estão:**
+- `checkin` (`cheking_7dias`) ✅
+- `monthly_letter` (`carta_mensal`) ✅
 
-### 4. Testar com 1 usuário antes do rollout
-Em `/admin/users`, abrir um perfil de teste (recomendo o seu próprio) e setar **Canal WhatsApp = Meta**. Disparar uma proativa (ex: weekly report) e validar:
-- Janela 24h aberta → texto livre via Meta Cloud API
-- Janela fechada → template aprovado pelo nome + idioma mapeado
+Twilio `twilio_content_sid` permanece intacto em todas as 10 linhas (fallback/reserva).
 
-Logs aparecem com prefixo `[Meta]` em `edge_function_logs`.
+## Ajuste no provider (`supabase/functions/_shared/whatsapp-provider.ts`)
+Garantir que, quando `whatsapp_provider = 'meta'` e a linha não tiver `meta_template_name`, o envio caia automaticamente no Twilio (fallback por categoria) em vez de falhar. Isso cobre os 3 templates de recovery + reconnect, que ainda só existem no Twilio.
 
-### 5. Rollout gradual
-Conforme combinado (feature flag por usuário):
-- Cohort 1: novos cadastros → `whatsapp_provider = 'meta'`
-- Cohort 2: usuários ativos engajados
-- Cohort 3: base toda
-- Twilio fica como fallback global (`system_config.whatsapp_provider = 'official'`) — não vai ser desligado.
+## Ajuste cosmético no painel (`src/pages/AdminTemplates.tsx`)
+Contador "Meta" passa a contar apenas linhas com `meta_template_name IS NOT NULL`. Resultado esperado: **7 Meta + 3 só Twilio**, batendo com o sync.
 
-### O que preciso de você agora
-Confirmar: **posso cadastrar o secret `META_WHATSAPP_BUSINESS_ACCOUNT_ID = 2153650951869969`?** Depois disso, é só você clicar em "Sincronizar com Meta" no admin e mandar print/lista dos nomes pra eu te ajudar com o mapeamento das categorias.
+## Validação
+1. Rodar UPDATEs.
+2. Clicar "Sincronizar com Meta" no painel — confirmar 7 aprovados.
+3. Conferir que painel mostra 7 com badge Meta e 3 só Twilio.
+4. Teste com 1 usuário em `whatsapp_provider = 'meta'`: disparar um `checkin` (Meta) e um `reconnect` (deve cair pra Twilio via fallback).
+
+## Memória a atualizar
+- `mem://technical/whatsapp/approved-template-sids` → adicionar mapa Meta (7 templates) + nota de fallback Twilio para recovery/reconnect.

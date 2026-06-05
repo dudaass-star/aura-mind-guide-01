@@ -167,6 +167,13 @@ export async function sendProactive(
 
     if (provider === 'meta') {
       const r: ProactiveMessageResult = await metaSendProactiveMessage(phone, text, templateCategory, userId, teaserText, templateVariables);
+      // Fallback automático para Twilio quando a categoria ainda não tem template aprovado no Meta
+      // (ex.: checkout_recovery_wa_15min/24h e reconnect — vivem só no número Twilio dedicado).
+      if (!r.success && r.error && /has no meta_template_name configured/i.test(r.error)) {
+        console.warn(`↩️ [WhatsApp Provider] Meta sem template para "${templateCategory}", fallback Twilio.`);
+        const fb: ProactiveMessageResult = await sendProactiveMessage(phone, text, templateCategory, userId, teaserText, templateVariables);
+        return { success: fb.success, provider: 'official', error: fb.error };
+      }
       return { success: r.success, provider: 'meta', error: r.error };
     }
 
@@ -195,6 +202,11 @@ export async function sendForcedTemplate(
     const provider = await getProvider(userId);
     if (provider === 'meta') {
       const result = await metaSendTemplateOnly(phone, templateCategory, userId, templateVariables);
+      if (!result.success && result.error && /has no meta_template_name configured/i.test(result.error)) {
+        console.warn(`↩️ [WhatsApp Provider] Meta sem template para "${templateCategory}" (forced), fallback Twilio.`);
+        const fb = await sendTemplateOnly(phone, templateCategory, userId, templateVariables);
+        return { success: fb.success, provider: 'official', error: fb.error, type: fb.type };
+      }
       return { success: result.success, provider: 'meta', error: result.error, type: result.type };
     }
     // Default: Twilio (official) — QA legado continua usando ContentSid

@@ -164,6 +164,19 @@ export default function AdminTemplates() {
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Templates WhatsApp (Twilio + Meta)</CardTitle>
+            {!loading && templates.length > 0 && (
+              <div className="flex gap-2 pt-1">
+                <Badge variant="secondary" className="text-xs">
+                  Meta: {templates.filter(t => t.meta_template_name).length}
+                </Badge>
+                <Badge variant="outline" className="text-xs">
+                  Só Twilio: {templates.filter(t => !t.meta_template_name).length}
+                </Badge>
+                <Badge variant="outline" className="text-xs">
+                  Total: {templates.length}
+                </Badge>
+              </div>
+            )}
           </CardHeader>
           <CardContent>
             {loading ? (
