@@ -3619,7 +3619,12 @@ function splitIntoMessages(
   const wantsAudioByTag = response.trimStart().startsWith('[MODO_AUDIO]');
   // Áudio forçado pelo backend SEMPRE prevalece sobre a ausência da tag.
   // Caso contrário, respeita a decisão híbrida (tag + permissão de orçamento).
+  // Áudio dispara em 3 cenários:
+  // 1. mandatory=true (crise, abertura/fechamento de sessão)
+  // 2. usuário pediu explicitamente (reason='user_requested') — não depende da tag do LLM
+  // 3. LLM emitiu [MODO_AUDIO] organicamente E o orçamento permite
   const isAudioMode = audioDecision.mandatory
+    || audioDecision.reason === 'user_requested'
     || (wantsAudioByTag && audioDecision.shouldUseAudio);
 
   if (audioDecision.mandatory && !wantsAudioByTag) {
