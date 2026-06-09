@@ -1,30 +1,37 @@
-## Plano — Fix do layout "embolado" do post do blog
+## O que está acontecendo
 
-### Diagnóstico
+A Débora dias (plano Essencial, 46s de áudio usados de 1800s — orçamento sobrando) pediu várias vezes pra Aura responder em voz e continuou recebendo texto:
 
-DNS do `olaaura.com.br` **já está correto** apontando pro Lovable (validei agora via DNS-over-HTTPS). O domínio serve nosso código — `/blog/como-acalmar-a-mente` retorna 200 da nossa deployment.
+- "Fala o texto por áudio"
+- "Preciso que fale por audio"
+- "Preciso que fale por audio e não por texto"
+- "Você não consegue conversar por audio?"
 
-O problema do post "embolado" é só um: o plugin `@tailwindcss/typography` está instalado no `package.json` mas **não está registrado** em `tailwind.config.ts`. Isso faz com que as classes `prose prose-neutral dark:prose-invert prose-headings:* prose-p:* prose-a:* prose-strong:* prose-li:*` aplicadas em `src/pages/BlogPost.tsx` (linha do `<ReactMarkdown>`) sejam **no-op** — markdown renderiza sem espaçamento entre parágrafos, sem hierarquia de H2/H3, sem estilo de listas, sem links destacados.
+Causa: o detector determinístico `userWantsAudio()` em `supabase/functions/aura-agent/index.ts` (linhas 3105-3115) só reconhece frases como "manda um áudio", "em áudio", "mensagem de voz", "fala comigo", "um áudio", "sua voz". Nenhuma das frases da Débora bate — então `wantsAudio=false`, decisão cai em `default_text`, e a Aura responde escrita.
 
-### Mudança
+## Mudança
 
-**1 arquivo, 1 linha** — `tailwind.config.ts`:
+Arquivo único: `supabase/functions/aura-agent/index.ts`, função `userWantsAudio()`.
 
-```ts
-plugins: [require("tailwindcss-animate"), require("@tailwindcss/typography")],
-```
+Substituir a lista atual por uma combinação de:
 
-### Validação
+1. **Lista expandida de frases** (manter as atuais + adicionar): "por áudio", "por audio", "no áudio", "no audio", "em voz", "responde em áudio", "responde em audio", "fala pra mim", "me fala".
+2. **Regex de cobertura** para variações naturais:
+   ```
+   /(fala|fale|responde|responder|respondendo|conversa|conversar|manda|mande|mandando)\s+(em|por|no|na|de)\s+(á?udio|voz)/i
+   ```
+   Pega "fale por áudio", "responde no audio", "conversar em voz", "me manda em áudio", etc.
 
-Depois do fix, abro `https://olaaura.com.br/blog/como-acalmar-a-mente` (ou o preview) e confirmo visualmente:
-- Parágrafos com espaço entre si
-- H2/H3 com hierarquia clara
-- Listas com bullet/numeração
-- Links em cor primária
-- Citações com borda lateral
+Prioridade segue: `userWantsText` é avaliado primeiro (já está), então quem pede "só texto" / "sem áudio" continua sendo respeitado. "não por texto" não dispara `userWantsText` (lista atual não cobre essa frase) — fica como está.
 
-### Fora de escopo
+## Validação
 
-- Sem mudança em DNS (já está OK)
-- Sem mudança no `BlogPost.tsx` (as classes já estão corretas, só faltava o plugin ativar)
-- Sem mudança em conteúdo ou banco
+1. Após eu salvar, o deploy do `aura-agent` roda via GitHub Actions. Se houver drift, redeployo manualmente.
+2. Em 5 min: checar `failed_message_log` por erro novo.
+3. Quando a Débora repetir "fala por áudio", os logs devem mostrar `🎙️ Audio control: { decision: 'user_requested', mandatory: false, ... }` e a resposta sai em voz.
+
+## Fora de escopo
+
+- Não vou adicionar classifier LLM por turno (custo recorrente sem necessidade).
+- Não vou criar campo `audio_preference` persistente no profile agora — fica como evolução separada se virar dor recorrente.
+- Não mexo no orçamento mensal de áudio do Essencial nem no fluxo de sessões.
