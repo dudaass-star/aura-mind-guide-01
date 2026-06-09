@@ -139,6 +139,113 @@ export type Database = {
         }
         Relationships: []
       }
+      blog_clusters: {
+        Row: {
+          created_at: string
+          cta_copy: string
+          description: string | null
+          display_order: number
+          id: string
+          name: string
+          slug: string
+        }
+        Insert: {
+          created_at?: string
+          cta_copy: string
+          description?: string | null
+          display_order?: number
+          id?: string
+          name: string
+          slug: string
+        }
+        Update: {
+          created_at?: string
+          cta_copy?: string
+          description?: string | null
+          display_order?: number
+          id?: string
+          name?: string
+          slug?: string
+        }
+        Relationships: []
+      }
+      blog_posts: {
+        Row: {
+          cluster_id: string | null
+          content_md: string
+          cover_alt: string | null
+          cover_url: string | null
+          created_at: string
+          excerpt: string
+          faq: Json
+          id: string
+          is_pillar: boolean
+          json_ld: Json
+          meta_description: string
+          meta_title: string
+          published_at: string | null
+          reading_minutes: number
+          slug: string
+          status: string
+          tags: string[]
+          title: string
+          updated_at: string
+          word_count: number
+        }
+        Insert: {
+          cluster_id?: string | null
+          content_md: string
+          cover_alt?: string | null
+          cover_url?: string | null
+          created_at?: string
+          excerpt: string
+          faq?: Json
+          id?: string
+          is_pillar?: boolean
+          json_ld?: Json
+          meta_description: string
+          meta_title: string
+          published_at?: string | null
+          reading_minutes?: number
+          slug: string
+          status?: string
+          tags?: string[]
+          title: string
+          updated_at?: string
+          word_count?: number
+        }
+        Update: {
+          cluster_id?: string | null
+          content_md?: string
+          cover_alt?: string | null
+          cover_url?: string | null
+          created_at?: string
+          excerpt?: string
+          faq?: Json
+          id?: string
+          is_pillar?: boolean
+          json_ld?: Json
+          meta_description?: string
+          meta_title?: string
+          published_at?: string | null
+          reading_minutes?: number
+          slug?: string
+          status?: string
+          tags?: string[]
+          title?: string
+          updated_at?: string
+          word_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "blog_posts_cluster_id_fkey"
+            columns: ["cluster_id"]
+            isOneToOne: false
+            referencedRelation: "blog_clusters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cancellation_feedback: {
         Row: {
           action_taken: string
@@ -507,6 +614,72 @@ export type Database = {
           whatsapp_sent?: boolean
         }
         Relationships: []
+      }
+      editorial_calendar: {
+        Row: {
+          attempts: number
+          blog_post_id: string | null
+          briefing: string
+          cluster_id: string
+          created_at: string
+          error_message: string | null
+          id: string
+          is_pillar: boolean
+          keyword: string
+          proposed_title: string
+          requires_manual_review: boolean
+          scheduled_for: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          blog_post_id?: string | null
+          briefing: string
+          cluster_id: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          is_pillar?: boolean
+          keyword: string
+          proposed_title: string
+          requires_manual_review?: boolean
+          scheduled_for: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          blog_post_id?: string | null
+          briefing?: string
+          cluster_id?: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          is_pillar?: boolean
+          keyword?: string
+          proposed_title?: string
+          requires_manual_review?: boolean
+          scheduled_for?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "editorial_calendar_blog_post_id_fkey"
+            columns: ["blog_post_id"]
+            isOneToOne: false
+            referencedRelation: "blog_posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "editorial_calendar_cluster_id_fkey"
+            columns: ["cluster_id"]
+            isOneToOne: false
+            referencedRelation: "blog_clusters"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       email_send_log: {
         Row: {

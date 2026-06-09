@@ -38,6 +38,7 @@ import UserPortal from "./pages/UserPortal";
 import PortalLogin from "./pages/PortalLogin";
 import { PortalAuthProvider } from "./contexts/PortalAuthContext";
 import Blog from "./pages/Blog";
+import BlogPost from "./pages/BlogPost";
 import Pagamento from "./pages/Pagamento";
 import NotFound from "./pages/NotFound";
 import GA4RouteTracker from "./components/GA4RouteTracker";
@@ -89,6 +90,7 @@ const App = () => (
             <Route path="/meu-espaco" element={<UserPortal />} />
             <Route path="/meu-espaco/entrar" element={<PortalLogin />} />
             <Route path="/blog" element={<Blog />} />
+            <Route path="/blog/:slug" element={<BlogPost />} />
             <Route path="/pagamento" element={<Pagamento />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
