@@ -55,7 +55,7 @@ const BlogPost = () => {
         setLoading(false);
         return;
       }
-      setPost(p as Post);
+      setPost(p as unknown as Post);
 
       const [{ data: c }, { data: r }] = await Promise.all([
         p.cluster_id
@@ -74,7 +74,7 @@ const BlogPost = () => {
       ]);
       if (!active) return;
       setCluster((c as Cluster) || null);
-      setRelated((r || []) as Post[]);
+      setRelated((r || []) as unknown as Post[]);
       setLoading(false);
     })();
     return () => {
