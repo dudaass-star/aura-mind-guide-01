@@ -19,6 +19,7 @@ const corsHeaders = {
 const LOVABLE_AI_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const IMAGE_URL = "https://ai.gateway.lovable.dev/v1/images/generations";
 const SITE_BASE = "https://olaaura.com.br";
+const INDEXNOW_KEY = "f7e3b1c4d8a94e6b9c2f1a3e5d8b7c4a";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -266,6 +267,33 @@ function buildJsonLd(post: GeneratedPost, coverUrl: string | null, publishedAt: 
   };
 }
 
+// Notifica buscadores quando um post novo é publicado (fire-and-forget)
+async function notifySearchEngines(slug: string): Promise<void> {
+  const postUrl = `${SITE_BASE}/blog/${slug}`;
+  const sitemapUrl = `${SITE_BASE}/sitemap.xml`;
+
+  // Google ping (descontinuado oficialmente em 2023 mas ainda responde — best-effort)
+  const googlePing = fetch(
+    `https://www.google.com/ping?sitemap=${encodeURIComponent(sitemapUrl)}`,
+    { method: "GET" },
+  ).catch((e) => console.warn("google ping falhou:", String(e).slice(0, 200)));
+
+  // IndexNow (Bing, Yandex, Seznam, Naver)
+  const indexNow = fetch("https://api.indexnow.org/indexnow", {
+    method: "POST",
+    headers: { "Content-Type": "application/json; charset=utf-8" },
+    body: JSON.stringify({
+      host: "olaaura.com.br",
+      key: INDEXNOW_KEY,
+      keyLocation: `${SITE_BASE}/${INDEXNOW_KEY}.txt`,
+      urlList: [postUrl, sitemapUrl],
+    }),
+  }).catch((e) => console.warn("indexnow falhou:", String(e).slice(0, 200)));
+
+  await Promise.allSettled([googlePing, indexNow]);
+  console.log(`[search-engines] notificados para ${postUrl}`);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -370,6 +398,11 @@ Deno.serve(async (req) => {
         error_message: validationError, // se virou draft por validação
       })
       .eq("id", slot.id);
+
+    // Notifica buscadores se foi publicado (não bloqueia resposta)
+    if (inserted.status === "published") {
+      await notifySearchEngines(inserted.slug);
+    }
 
     return new Response(
       JSON.stringify({ ok: true, post: inserted, validationError }),
