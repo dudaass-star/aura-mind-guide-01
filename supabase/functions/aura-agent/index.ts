@@ -3109,9 +3109,18 @@ function userWantsAudio(message: string): boolean {
     'em áudio', 'em audio', 'mensagem de voz', 'quero ouvir sua voz',
     'quero ouvir você', 'fala comigo', 'manda voz', 'grava um áudio',
     'grava um audio', 'áudio por favor', 'audio por favor', 'um áudio',
-    'um audio', 'sua voz'
+    'um audio', 'sua voz',
+    // Variações adicionais comuns no WhatsApp (PT-BR)
+    'por áudio', 'por audio', 'no áudio', 'no audio',
+    'em voz', 'me responde em áudio', 'me responde em audio',
+    'responde em áudio', 'responde em audio',
+    'fala pra mim', 'me fala'
   ];
-  return audioPhrases.some(phrase => lowerMsg.includes(phrase));
+  if (audioPhrases.some(phrase => lowerMsg.includes(phrase))) return true;
+  // Regex de cobertura: "fale por áudio", "responde no audio", "conversar em voz",
+  // "me manda em áudio", "mande de voz", etc.
+  const audioIntentRegex = /(fala|fale|responde|responder|respondendo|conversa|conversar|manda|mande|mandando)\s+(em|por|no|na|de)\s+(á?udio|voz)/i;
+  return audioIntentRegex.test(lowerMsg);
 }
 
 // Detecta crise emocional (inclui ideação passiva — para forçar áudio de acolhimento)
