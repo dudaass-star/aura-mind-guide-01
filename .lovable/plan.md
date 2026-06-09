@@ -1,58 +1,53 @@
-## Por que ela não aparece em /admin/users
+## Objetivo
+Desativar completamente o sistema **Pergunta da Semana** para eliminar risco de envio de perguntas com gramática quebrada ou sentido confuso geradas pelo LLM.
 
-A Marina pagou, mas **nunca virou `profile`** — o webhook do Stripe falhou em criar o registro. Por isso ela não aparece em nenhuma lista de usuários do admin.
+## Escopo do que será removido/desativado
 
-## O que eu encontrei
+### 1. Cron job (parar disparo automático)
+- Remover/desabilitar o `cron.schedule` que invoca `send-weekly-question` toda terça 12h UTC.
+- Verificar via `cron.job` quais entradas existem e dropar a relacionada.
 
-**Identificação**
-- Nome: marina da silva godoi
-- Email: marinas.godoi@gmail.com
-- Telefone: 11943960112 (sem 55+9 — número antigo de São Paulo)
+### 2. Edge Function `send-weekly-question`
+- **Opção escolhida**: deletar a function (`supabase/functions/send-weekly-question/`) e remover do `supabase/config.toml`.
+- Mais limpo que deixar "morta" — evita disparo manual acidental pelo admin.
 
-**Banco (Supabase)**
-- `profiles`: **0 registros** (nunca foi criada)
-- `checkout_sessions`: 1 registro `completed` em **18/04/2026 14:51** — plano `direcao`, mensal, cartão, session `cs_live_a14qSGz3nUHZIw...`
-- `cancellation_feedback`: 1 registro em **03/06/2026 16:54** com `action_taken='canceled'` e `user_id=NULL` — ou seja, o fluxo público de cancelamento gravou o feedback, mas **não cancelou nada no Stripe** (provavelmente o `cancel-subscription` não achou customer pelas variações de telefone — ela usou 11943960112, sem 9 extra).
-- `support_tickets`: 1 ticket aberto `pending_review` `CANCELAMENTO` em 03/06/2026 16:56, sem `profile_user_id` (consistente).
+### 3. Fast-path de entrega no `process-webhook-message`
+- Bloco que detecta clique no botão `Ver pergunta` (template `pergunta_semanal`) e entrega `weekly_questions.question_text`.
+- Remover a lógica específica de weekly_questions, mantendo intacto o fast-path de `monthly_letters` e jornadas/weekly_report.
 
-**Stripe**
-- Customer: `cus_UMIoUxvOnc794A`
-- Subscription: `sub_1TNaDkQU15XnZ7VvZyJ6HlMh` — **ACTIVE**, AURA Direção mensal R$ 49,90, criada 18/04/2026, período atual termina ~22/06/2026.
-- A assinatura está rodando há quase **2 meses** sem profile, e ela está reclamando com razão: pediu cancelamento em 25/04, ninguém cancelou, continuou sendo cobrada.
+### 4. Seed em `template_definitions`
+- Remover (ou marcar `is_active=false`) a linha `pergunta_semanal → Ver pergunta → weekly_question` para não reativar inadvertidamente.
 
-## Causa raiz
+### 5. Template Twilio `pergunta_semanal`
+- **Manter aprovado na Twilio/Meta** (não dá pra "desaprovar" e custo zero parado).
+- Marcar `whatsapp_templates.is_active = false` para não aparecer em UIs admin.
 
-1. Webhook do Stripe não materializou o profile no onboarding (caso isolado a investigar depois — não é a prioridade agora).
-2. Sem profile, `cancel-subscription` provavelmente buscou pelo telefone normalizado `5511999439601112` (com 9 extra) e não achou o customer no Stripe — daí o feedback ter ficado como "canceled" sem ação real.
-3. O ticket veio para o admin mas como `profile_user_id` é null, o painel não mostra contexto.
+### 6. Tabela `weekly_questions`
+- **Manter** com dados históricos (audit trail).
+- Não dropar — barato e pode ser útil pra retro.
 
-## Plano de ação proposto
-
-### Passo 1 — Cancelar a assinatura no Stripe (imediato)
-Cancelar `sub_1TNaDkQU15XnZ7VvZyJ6HlMh` **com efeito imediato** (não no fim do período) — ela já pediu cancelamento há 40 dias e está reclamando de cobrança indevida. Faço via `stripe_api_write` (DeleteSubscriptionsSubscriptionExposedId).
-
-### Passo 2 — Reembolsar cobranças pós-25/04
-Listar invoices/charges desse customer a partir de 25/04/2026 e emitir refund total das que forem após o pedido de cancelamento. Confirmo com você o valor antes de executar.
-
-### Passo 3 — Responder o ticket de suporte
-Rascunho honesto em PT-BR no ticket:
-- Reconhece a falha (cobrança indevida pós-pedido de cancelamento).
-- Confirma o cancelamento da assinatura.
-- Confirma o reembolso (valor e prazo Stripe ~5-10 dias úteis).
-- Sem culpar sistema, sem detalhes técnicos.
-
-### Passo 4 — Registrar caso em memória (opcional)
-Anotar em `mem://features/payments/cancel-subscription-phone-mismatch` que `cancel-subscription` precisa tentar variações com **e sem** o 9 extra antes de marcar `action_taken=canceled` no feedback. Hoje gera feedback fantasma.
+### 7. Atualizar memórias do projeto
+- Atualizar `mem://features/whatsapp/trigger-and-deliver-pattern.md` removendo Pergunta da Semana da cobertura do fast-path.
+- Atualizar `mem://technical/whatsapp/approved-template-sids` removendo referência ativa ao template.
+- Atualizar `mem://index.md` se houver referência.
 
 ## Detalhes técnicos
 
-- Cancelar via Stripe API: `DeleteSubscriptionsSubscriptionExposedId` com `subscription=sub_1TNaDkQU15XnZ7VvZyJ6HlMh`.
-- Refund via `PostRefunds` com `charge=<id>` ou `payment_intent=<id>` por invoice.
-- Não vou criar profile retroativo (não há ganho, ela está saindo).
-- Não vou tocar no webhook do Stripe nessa rodada — escopo é resolver o caso.
+```text
+Cron (Postgres):     cron.unschedule('<nome_do_job_weekly_question>')
+Config:              remover bloco [functions.send-weekly-question] de supabase/config.toml
+Function:            rm -rf supabase/functions/send-weekly-question/
+process-webhook-msg: remover branch de weekly_question dentro do isButtonClick handler
+SQL:                 UPDATE template_definitions SET is_active=false WHERE content_type='weekly_question';
+                     UPDATE whatsapp_templates SET is_active=false WHERE name='pergunta_semanal';
+```
 
-## O que preciso de você
+## O que NÃO será mexido
+- `monthly_letters` (carta mensal) — segue ativa com seu próprio LLM e fast-path.
+- Jornadas, Weekly Report, Sessões — independentes.
+- Conteúdo histórico em `weekly_questions` — preservado.
 
-1. **Confirmo cancelar imediato + reembolsar todas as cobranças pós-25/04?** (recomendado)
-2. Ou prefere cancelar imediato + reembolsar **só a última cobrança**?
-3. Ou cancelar imediato **sem reembolso** (não recomendo — ela tem ticket com prints provando que pediu).
+## Verificação pós-implantação
+1. `select * from cron.job where command ilike '%send-weekly-question%'` → vazio.
+2. Chamar `supabase.functions.invoke('send-weekly-question')` → erro 404.
+3. Simular clique no botão `Ver pergunta` (caso template legado seja reenviado por engano) → cai em conversa livre com Aura, sem tentar buscar weekly_question.
