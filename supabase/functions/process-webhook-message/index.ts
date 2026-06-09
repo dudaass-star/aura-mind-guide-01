@@ -585,64 +585,7 @@ Deno.serve(async (req) => {
           const ONE_DAY_AGO = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
           let deliveryDone = false;
 
-          if (contentType === 'weekly_question') {
-            // Match por SID
-            let { data: rec } = await supabase
-              .from('weekly_questions')
-              .select('id, question_text, sent_at')
-              .eq('user_id', profile.user_id)
-              .eq('trigger_message_sid', originalRepliedMessageSid)
-              .is('delivered_at', null)
-              .maybeSingle();
-
-            // Fallback: registro mais recente sem SID gravado, dentro de 24h
-            if (!rec) {
-              const { data: fb } = await supabase
-                .from('weekly_questions')
-                .select('id, question_text, sent_at')
-                .eq('user_id', profile.user_id)
-                .is('delivered_at', null)
-                .gte('sent_at', ONE_DAY_AGO)
-                .order('sent_at', { ascending: false })
-                .limit(1)
-                .maybeSingle();
-              if (fb) {
-                console.log(`↪️ [BUTTON] Fallback weekly_question por janela (id=${fb.id}) — SID não casou`);
-                rec = fb;
-              }
-            }
-
-            if (rec?.id && rec.question_text) {
-              const { data: claimed } = await supabase
-                .from('weekly_questions')
-                .update({ delivered_at: new Date().toISOString() })
-                .eq('id', rec.id)
-                .is('delivered_at', null)
-                .select('id')
-                .maybeSingle();
-
-              if (claimed) {
-                const titledQuestion = prefixWithTitle(CLICK_DELIVERY_TITLES.weekly_question, rec.question_text);
-                const sendResult = await sendMessage(cleanPhone, titledQuestion, profile.user_id);
-                if (!sendResult.success) {
-                  await supabase.from('weekly_questions').update({ delivered_at: null }).eq('id', rec.id);
-                  console.warn(`⚠️ [BUTTON] Falha envio Pergunta da Semana (${rec.id}): ${sendResult.error}`);
-                } else {
-                  // Persiste como mensagem assistant pra Aura ter o contexto da pergunta
-                  // ao processar a próxima resposta livre do usuário.
-                  await supabase.from('messages').insert({
-                    user_id: profile.user_id,
-                    role: 'assistant',
-                    content: titledQuestion,
-                  });
-                  console.log(`💌 [BUTTON] Pergunta da Semana entregue (id=${rec.id})`);
-                  deliveryDone = true;
-                }
-              }
-            } else {
-              console.warn(`⚠️ [BUTTON] Nenhuma weekly_question pendente encontrada para user ${profile.user_id}`);
-            }
-          } else if (contentType === 'monthly_letter') {
+          if (contentType === 'monthly_letter') {
             let { data: rec } = await supabase
               .from('monthly_letters')
               .select('id, preview_text')
@@ -774,42 +717,6 @@ Deno.serve(async (req) => {
       } catch (btnErr) {
         console.error('❌ [BUTTON] Erro no handler determinístico (caindo no fluxo normal):', btnErr);
       }
-    }
-
-    // ========================================================================
-    // CAPTURA ANALÍTICA DE RESPOSTA DA PERGUNTA DA SEMANA
-    // (texto livre que vem depois do clique — linka resposta à pergunta entregue)
-    // ========================================================================
-    if (messageText && messageText.trim().length > 0) {
-      (async () => {
-        try {
-          const NOW = Date.now();
-          const threeDaysAgo = new Date(NOW - 3 * 24 * 60 * 60 * 1000).toISOString();
-          const { data: pendingQuestion } = await supabase
-            .from('weekly_questions')
-            .select('id')
-            .eq('user_id', profile.user_id)
-            .not('delivered_at', 'is', null)
-            .is('response_text', null)
-            .gte('sent_at', threeDaysAgo)
-            .order('sent_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-          if (pendingQuestion?.id) {
-            await supabase
-              .from('weekly_questions')
-              .update({
-                response_text: messageText.substring(0, 4000),
-                responded_at: new Date().toISOString(),
-              })
-              .eq('id', pendingQuestion.id);
-            console.log(`💌 Resposta da Pergunta da Semana capturada (id=${pendingQuestion.id})`);
-          }
-        } catch (e) {
-          console.warn('⚠️ Erro na captura analítica de resposta da Pergunta:', e);
-        }
-      })();
     }
 
     // Ensure row exists for atomic lock
@@ -1237,38 +1144,9 @@ Deno.serve(async (req) => {
     }
 
     // ========================================================================
-    // CONTEXTO PROATIVO — Pergunta da Semana entregue há pouco
-    // ------------------------------------------------------------------------
-    // Quando a usuária responde até 3h depois de receber a Pergunta da Semana
-    // via template, o agente precisa saber a que pergunta ela está reagindo.
-    // Sem isso, mensagens curtas como "Como assim não entende" ficam soltas
-    // e o LLM tenta ancorar na última sessão (erro). Try/catch fire-and-forget
-    // safe: se a query falhar, segue sem contexto extra.
+    // CONTEXTO PROATIVO desativado — Pergunta da Semana removida do produto.
     // ========================================================================
-    let proactiveContext: { kind: string; question: string; minutesAgo: number } | null = null;
-    try {
-      const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
-      const { data: recentWeekly } = await supabase
-        .from('weekly_questions')
-        .select('id, question_text, delivered_at')
-        .eq('user_id', profile.user_id)
-        .not('delivered_at', 'is', null)
-        .gte('delivered_at', threeHoursAgo)
-        .order('delivered_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (recentWeekly?.question_text && recentWeekly?.delivered_at) {
-        const minutesAgo = Math.round((Date.now() - new Date(recentWeekly.delivered_at).getTime()) / 60000);
-        proactiveContext = {
-          kind: 'pergunta_semanal',
-          question: recentWeekly.question_text,
-          minutesAgo,
-        };
-        console.log(`🧭 [PROACTIVE_CTX] Pergunta da Semana ativa (há ${minutesAgo}min): "${recentWeekly.question_text.substring(0, 80)}..."`);
-      }
-    } catch (ctxErr) {
-      console.warn('⚠️ [PROACTIVE_CTX] lookup falhou (non-fatal):', (ctxErr as Error)?.message);
-    }
+    const proactiveContext: { kind: string; question: string; minutesAgo: number } | null = null;
 
     // Helper: call aura-agent with timeout and optional minimal context
     async function callAuraAgent(useMinimalContext = false): Promise<any> {
