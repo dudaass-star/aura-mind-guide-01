@@ -1,50 +1,79 @@
-## Correção cirúrgica: áudio orgânico no Flash
+# Diagnóstico — Por que o áudio não veio
 
-### Diagnóstico
+Eduardo mandou às 23:41 BRT: **"Tudo bem. Vc pode me mandar um áudio por favor?"**
 
-- `determineAudioMode` (linha 1522) só dispara `ai_decision` quando `aiIncludedAudioTag === true`, ou seja, a resposta da LLM precisa começar com `[MODO_AUDIO]`.
-- O prompt menciona `[MODO_AUDIO]` em **apenas 2 lugares** (linhas 3511 e 3536), ambos em fechamento de sessão — casos que o backend já trata como `mandatory: true`. Logo, a tag ali é redundante.
-- Para áudio orgânico fora desses contextos, o prompt **não ensina a tag** e ainda diz (linha 2567): *"VOCÊ TEM VOZ! O sistema decide automaticamente quando enviar áudio."*
-- Pro inferia intenção e às vezes marcava mesmo sem instrução. Flash segue prompt ao pé da letra → nunca marca → tudo cai em `default_text`. Por isso parou de funcionar.
+A Aura respondeu em **texto**: "Oi, Eduardo... claro que mando, é bom falar com você! Me conta..."
 
-### Mudança (uma só, no prompt)
+Investiguei o fluxo e encontrei **2 bugs distintos**, ambos cirúrgicos.
 
-Substituir o bloco "REGRA TÉCNICA DE ÁUDIO (PARA VOZ)" em `supabase/functions/aura-agent/index.ts` (linhas 2565-2575) por uma instrução que ensina **quando** emitir `[MODO_AUDIO]` organicamente:
+---
 
-```
-# QUANDO USAR ÁUDIO ([MODO_AUDIO])
+## Bug 1 — Pedido explícito de áudio é ignorado se o LLM não emitir a tag
 
-Você decide quando converter sua resposta em áudio. Inclua [MODO_AUDIO]
-no INÍCIO da resposta nestes momentos:
+**Arquivo:** `supabase/functions/aura-agent/index.ts`, linhas **3622-3623** (função `splitIntoMessages`).
 
-- Acolher dor real (choro, exaustão, solidão, perda, medo, vazio)
-- Devolver presença depois de algo pesado que a pessoa trouxe
-- Resposta mais longa que carrega emoção, não só informação
-
-NÃO use [MODO_AUDIO] quando:
-- Resposta curta/objetiva (ok, sim, agendamento, dúvida prática)
-- A pessoa pediu texto explicitamente
-- Conversa casual sem peso emocional
-
-Quando marcar [MODO_AUDIO]: escreva como se estivesse FALANDO — frases
-curtas, "..." pra pausas, no máximo 1 emoji, 4-6 frases (300-450 chars).
-
-O backend cuida do resto (orçamento, abertura/fechamento de sessão, crise).
+Código atual:
+```ts
+const isAudioMode = audioDecision.mandatory
+  || (wantsAudioByTag && audioDecision.shouldUseAudio);
 ```
 
-### Fora de escopo
+O `determineAudioMode` (linha 1517) detecta corretamente o pedido do usuário e retorna:
+```
+{ shouldUseAudio: true, reason: 'user_requested', mandatory: false }
+```
 
-- Não mexo em `determineAudioMode`, `splitIntoMessages`, `userWantsText`, nem em nenhum detector backend novo.
-- Não toco em TTS, Twilio, Meta, sessões, meditação.
-- Os dois `[MODO_AUDIO]` dentro dos blocos de fechamento ficam como estão (redundantes mas inofensivos).
+Mas `splitIntoMessages` só liga o modo áudio quando `mandatory === true` **OU** quando o LLM colocou `[MODO_AUDIO]` no início da resposta. Como `user_requested` tem `mandatory:false` e o Flash quase nunca emite a tag espontaneamente, **o áudio nunca dispara em pedido explícito do usuário**.
 
-### Validação
+**Fix (1 linha):**
+```ts
+const isAudioMode = audioDecision.mandatory
+  || audioDecision.reason === 'user_requested'
+  || (wantsAudioByTag && audioDecision.shouldUseAudio);
+```
 
-- Deploy `aura-agent`.
-- Conversa emocional fora de sessão → log `decision: ai_decision` + áudio enviado + `aura-tts` invocado.
-- Mensagem trivial ("ok", "valeu") → `default_text`.
-- Pedido explícito ("prefiro texto") → `user_prefers_text`.
+Agora qualquer pedido detectado pelas frases/regex do `userWantsAudio` (linha 3112) força o áudio, independente da tag.
 
-### Rollback
+---
 
-Reverter um único bloco de texto no prompt. Zero risco estrutural.
+## Bug 2 — `ReferenceError: sessionSummary is not defined` no fechamento de sessão
+
+**Arquivo:** `supabase/functions/aura-agent/index.ts`, bloco linhas **~7380-7460**.
+
+Log capturado às 23:42:35:
+```
+❌ aura-agent attempt 1 failed (Agent HTTP 500: ... "error":"sessionSummary is not defined")
+ReferenceError: sessionSummary is not defined
+    at file:///.../aura-agent/index.ts:6852:18
+```
+
+O bloco "ENVIO IMEDIATO DO RESUMO" (linhas 7388-7455) referencia 3 variáveis que **não existem mais no escopo local** (`sessionSummary`, `keyInsights`, `commitments`). Elas foram removidas quando a extração migrou para o micro-agent assíncrono `session-extractor` (refator documentado em `mem://technical/session/data-integrity-and-ratings`).
+
+O `session-extractor` + `session-reminder` (fast-path imediato) já cuidam de enviar resumo + rating — log confirma:
+```
+⚡ Fast-path post-session imediato para sessão ...
+✅ Post-session complete for session ... (rating: true)
+```
+
+**Fix:** remover o bloco morto `if (profile.phone && sessionSummary) { ... }` inteiro (linhas ~7388-7455) e o `summary: sessionSummary.substring(0, 50)` no log da linha 7382 (substituir por `'(extraído async)'`).
+
+Isso elimina o erro 500 que está fazendo o aura-agent cair em retry/fallback em todo encerramento de sessão.
+
+---
+
+## Validação
+
+1. Deploy `aura-agent`.
+2. Eduardo (ou eu, simulando) manda **"me manda um áudio"** → log deve mostrar `decision: user_requested` e `has_audio: true`.
+3. Encerrar uma sessão → log NÃO deve mostrar `sessionSummary is not defined`; resumo continua chegando via `session-reminder` (fast-path).
+
+## Escopo (o que NÃO muda)
+
+- `determineAudioMode`, `userWantsAudio`, `userWantsText` — intactos.
+- Prompt e regra de `[MODO_AUDIO]` organico (mudança anterior) — intacta.
+- `aura-tts`, Twilio, sessões, orçamento de áudio — intactos.
+- `session-extractor` / `session-reminder` — intactos (já fazem o envio do resumo).
+
+## Rollback
+
+Ambos os fixes são surgical (1 linha + remoção de bloco morto). Reverter é trivial.
