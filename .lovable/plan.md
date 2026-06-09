@@ -1,47 +1,50 @@
-## Teste isolado do novo número Meta — só pro Eduardo (51981519708)
+## Correção cirúrgica: áudio orgânico no Flash
 
-Twilio (`+1 662 525-5005`) segue como oficial e **não é tocado**. O novo número Meta (`+1 555-958-6099`, WABA `4389879528007597`, Phone Number ID `1102172772986795`) entra só em modo teste, restrito ao seu número.
+### Diagnóstico
 
-### Estratégia
+- `determineAudioMode` (linha 1522) só dispara `ai_decision` quando `aiIncludedAudioTag === true`, ou seja, a resposta da LLM precisa começar com `[MODO_AUDIO]`.
+- O prompt menciona `[MODO_AUDIO]` em **apenas 2 lugares** (linhas 3511 e 3536), ambos em fechamento de sessão — casos que o backend já trata como `mandatory: true`. Logo, a tag ali é redundante.
+- Para áudio orgânico fora desses contextos, o prompt **não ensina a tag** e ainda diz (linha 2567): *"VOCÊ TEM VOZ! O sistema decide automaticamente quando enviar áudio."*
+- Pro inferia intenção e às vezes marcava mesmo sem instrução. Flash segue prompt ao pé da letra → nunca marca → tudo cai em `default_text`. Por isso parou de funcionar.
 
-**Não** vou trocar os secrets globais `META_WHATSAPP_PHONE_NUMBER_ID` / `META_WHATSAPP_BUSINESS_ACCOUNT_ID` agora — se trocasse, qualquer fallback Meta→Twilio que rodar pra outros usuários iria sair pelo número novo sem querer.
+### Mudança (uma só, no prompt)
 
-Em vez disso, crio uma **edge function isolada de teste** que aponta direto pro Phone Number ID novo, usando o mesmo `META_WHATSAPP_ACCESS_TOKEN` (você confirmou que tem permissão nos dois WABAs).
+Substituir o bloco "REGRA TÉCNICA DE ÁUDIO (PARA VOZ)" em `supabase/functions/aura-agent/index.ts` (linhas 2565-2575) por uma instrução que ensina **quando** emitir `[MODO_AUDIO]` organicamente:
 
-### Passos
+```
+# QUANDO USAR ÁUDIO ([MODO_AUDIO])
 
-1. **Criar `supabase/functions/test-meta-new-number/index.ts`**
-   - Chama `graph.facebook.com/v21.0/1102172772986795/messages` direto.
-   - Hardcoded `to = 5551981519708` (whitelist defensivo: só aceita esse número, qualquer outro retorna 403). Evita disparo acidental.
-   - Aceita body `{ mode: "template" | "freetext", template?: "cheking_7dias" | "jornada_disponivel" | "aura_weekly_report_v2", text?: string }`.
-   - Loga `wamid`, status HTTP e corpo da resposta da Meta.
+Você decide quando converter sua resposta em áudio. Inclua [MODO_AUDIO]
+no INÍCIO da resposta nestes momentos:
 
-2. **Smoke tests via `supabase--curl_edge_functions`**:
-   - **Teste 1 — Template fora de janela**: `{ mode: "template", template: "cheking_7dias" }` → deve chegar com nome "Aura" aprovado.
-   - Aguardo você responder qualquer coisa no WhatsApp pra abrir janela 24h.
-   - **Teste 2 — Free text dentro da janela**: `{ mode: "freetext", text: "teste janela aberta novo número" }` → deve chegar como texto livre.
-   - **Teste 3 — Outros 2 templates**: `jornada_disponivel` e `aura_weekly_report_v2` pra confirmar que todos os 3 estão aprovados no WABA novo.
+- Acolher dor real (choro, exaustão, solidão, perda, medo, vazio)
+- Devolver presença depois de algo pesado que a pessoa trouxe
+- Resposta mais longa que carrega emoção, não só informação
 
-3. **Validação**:
-   - Conferir nome do remetente no WhatsApp (deve ser "Aura").
-   - Conferir logs por erro `132000` (variáveis), `100` (template não encontrado nesse WABA), `131030` (número não na allowlist do WABA novo).
-   - Se template falhar por nome diferente, te aviso pra reaprovar ou mapear.
+NÃO use [MODO_AUDIO] quando:
+- Resposta curta/objetiva (ok, sim, agendamento, dúvida prática)
+- A pessoa pediu texto explicitamente
+- Conversa casual sem peso emocional
 
-### O que NÃO faço agora
+Quando marcar [MODO_AUDIO]: escreva como se estivesse FALANDO — frases
+curtas, "..." pra pausas, no máximo 1 emoji, 4-6 frases (300-450 chars).
 
-- Não mexo em `META_WHATSAPP_PHONE_NUMBER_ID` nem `META_WHATSAPP_BUSINESS_ACCOUNT_ID` (secrets globais ficam apontando pro número Meta antigo, que segue silencioso já que produção roda 100% Twilio).
-- Não mexo em `meta-whatsapp-client.ts`, `whatsapp-provider.ts`, `sendProactive` ou qualquer fluxo de produção.
-- Não toco no webhook Meta.
-- Não mexo no Twilio oficial em nada.
+O backend cuida do resto (orçamento, abertura/fechamento de sessão, crise).
+```
 
-### Plano de migração (próximo passo, depois que o teste passar)
+### Fora de escopo
 
-Quando você confirmar que os 3 templates chegam como "Aura" no seu número, abrimos um plano separado pra:
-- Trocar os 2 secrets globais pro Phone Number ID e WABA ID novos.
-- Apontar webhook Meta do WABA novo pra `meta-whatsapp-webhook`.
-- Decidir se Meta novo vira primário (com Twilio como fallback) ou continua só como fallback do Twilio.
-- Arquivar o WABA antigo no Meta Business Manager.
+- Não mexo em `determineAudioMode`, `splitIntoMessages`, `userWantsText`, nem em nenhum detector backend novo.
+- Não toco em TTS, Twilio, Meta, sessões, meditação.
+- Os dois `[MODO_AUDIO]` dentro dos blocos de fechamento ficam como estão (redundantes mas inofensivos).
+
+### Validação
+
+- Deploy `aura-agent`.
+- Conversa emocional fora de sessão → log `decision: ai_decision` + áudio enviado + `aura-tts` invocado.
+- Mensagem trivial ("ok", "valeu") → `default_text`.
+- Pedido explícito ("prefiro texto") → `user_prefers_text`.
 
 ### Rollback
 
-Função de teste é isolada — basta deletar `test-meta-new-number/` que tudo volta ao normal. Zero risco pro fluxo atual.
+Reverter um único bloco de texto no prompt. Zero risco estrutural.
