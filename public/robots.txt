@@ -23,4 +23,4 @@ User-agent: facebookexternalhit
 Allow: /
 
 # Sitemap
-Sitemap: https://olaaura.com.br/sitemap.xml
+Sitemap: https://uhyogifgmutfmbyhzzyo.supabase.co/functions/v1/blog-sitemap
