@@ -70,6 +70,11 @@ export default function RecoveryInbox({ heightClass = 'h-[calc(100vh-180px)]' }:
   const [reply, setReply] = useState('');
   const [sending, setSending] = useState(false);
   const [search, setSearch] = useState('');
+  // Mapas auxiliares para enriquecer a lista
+  const [stageByPhone, setStageByPhone] = useState<Record<string, number>>({});
+  const [lastInboundByPhone, setLastInboundByPhone] = useState<Record<string, string>>({});
+  type FilterKey = 'unread' | 'replied' | 'sent_only' | 'all';
+  const [filter, setFilter] = useState<FilterKey>('unread');
 
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -90,8 +95,62 @@ export default function RecoveryInbox({ heightClass = 'h-[calc(100vh-180px)]' }:
         return tb - ta;
       });
       setConversations(sorted);
+      void enrichConversations(sorted);
     }
     setLoadingList(false);
+  };
+
+  // Carrega estágio de recuperação (por checkout_session) e última mensagem
+  // inbound real (para sobrescrever o preview quando o lead respondeu).
+  const enrichConversations = async (convs: Conversation[]) => {
+    const checkoutIds = convs
+      .map(c => c.checkout_session_id)
+      .filter((x): x is string => !!x);
+    const phonesWithInbound = convs
+      .filter(c => c.last_inbound_at)
+      .map(c => c.phone);
+
+    const [stagesRes, inboundRes] = await Promise.all([
+      checkoutIds.length
+        ? supabase
+            .from('checkout_sessions')
+            .select('id, recovery_stage')
+            .in('id', checkoutIds)
+        : Promise.resolve({ data: [] as any[], error: null }),
+      phonesWithInbound.length
+        ? supabase
+            .from('recovery_messages')
+            .select('phone, body, created_at, direction')
+            .in('phone', phonesWithInbound)
+            .eq('direction', 'in')
+            .order('created_at', { ascending: false })
+            .limit(500)
+        : Promise.resolve({ data: [] as any[], error: null }),
+    ]);
+
+    const stageMap: Record<string, number> = {};
+    if (stagesRes.data) {
+      const byId: Record<string, number> = {};
+      for (const row of stagesRes.data as any[]) {
+        byId[row.id] = row.recovery_stage ?? 0;
+      }
+      for (const c of convs) {
+        if (c.checkout_session_id && byId[c.checkout_session_id] != null) {
+          stageMap[c.phone] = byId[c.checkout_session_id];
+        }
+      }
+    }
+    setStageByPhone(stageMap);
+
+    const inboundMap: Record<string, string> = {};
+    if (inboundRes.data) {
+      for (const row of inboundRes.data as any[]) {
+        if (!inboundMap[row.phone] && row.body) {
+          inboundMap[row.phone] = row.body;
+        }
+      }
+    }
+    setLastInboundByPhone(inboundMap);
   };
 
   useEffect(() => {
@@ -164,11 +223,56 @@ export default function RecoveryInbox({ heightClass = 'h-[calc(100vh-180px)]' }:
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
-    if (!q) return conversations;
-    return conversations.filter(c =>
-      (c.phone || '').includes(q) || (c.name || '').toLowerCase().includes(q)
-    );
-  }, [conversations, search]);
+    const matchesSearch = (c: Conversation) =>
+      !q || (c.phone || '').includes(q) || (c.name || '').toLowerCase().includes(q);
+
+    const isUnread = (c: Conversation) =>
+      !!c.last_inbound_at && (
+        !c.last_admin_read_at ||
+        new Date(c.last_inbound_at) > new Date(c.last_admin_read_at)
+      );
+
+    let list = conversations.filter(matchesSearch);
+    if (filter === 'unread') list = list.filter(isUnread);
+    else if (filter === 'replied') list = list.filter(c => !!c.last_inbound_at);
+    else if (filter === 'sent_only') list = list.filter(c => !c.last_inbound_at);
+
+    // Em filtros focados em resposta, ordena por última inbound primeiro.
+    if (filter === 'unread' || filter === 'replied') {
+      list = list.slice().sort((a, b) => {
+        const ta = a.last_inbound_at ? new Date(a.last_inbound_at).getTime() : 0;
+        const tb = b.last_inbound_at ? new Date(b.last_inbound_at).getTime() : 0;
+        return tb - ta;
+      });
+    }
+    return list;
+  }, [conversations, search, filter]);
+
+  const counts = useMemo(() => {
+    let unread = 0, replied = 0, sentOnly = 0;
+    for (const c of conversations) {
+      const hasInbound = !!c.last_inbound_at;
+      if (hasInbound) {
+        replied++;
+        if (!c.last_admin_read_at || new Date(c.last_inbound_at!) > new Date(c.last_admin_read_at)) {
+          unread++;
+        }
+      } else {
+        sentOnly++;
+      }
+    }
+    return { unread, replied, sentOnly, total: conversations.length };
+  }, [conversations]);
+
+  // Se o filtro default "Não lidas" estiver vazio mas existirem respostas,
+  // cai pra "Responderam"; senão, "Todas".
+  useEffect(() => {
+    if (loadingList) return;
+    if (filter === 'unread' && counts.unread === 0) {
+      setFilter(counts.replied > 0 ? 'replied' : 'all');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadingList, counts.unread, counts.replied]);
 
   const selectedConv = useMemo(
     () => conversations.find(c => c.phone === selectedPhone) || null,
@@ -220,6 +324,26 @@ export default function RecoveryInbox({ heightClass = 'h-[calc(100vh-180px)]' }:
               className="pl-8 h-9"
             />
           </div>
+          <div className="flex flex-wrap gap-1 mt-2">
+            {([
+              { key: 'unread',    label: 'Não lidas', n: counts.unread },
+              { key: 'replied',   label: 'Responderam', n: counts.replied },
+              { key: 'sent_only', label: 'Só envio', n: counts.sentOnly },
+              { key: 'all',       label: 'Todas', n: counts.total },
+            ] as { key: FilterKey; label: string; n: number }[]).map(opt => (
+              <button
+                key={opt.key}
+                onClick={() => setFilter(opt.key)}
+                className={`text-[11px] px-2 py-1 rounded-full border transition-colors ${
+                  filter === opt.key
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'bg-background hover:bg-muted border-border text-muted-foreground'
+                }`}
+              >
+                {opt.label} <span className="opacity-70">({opt.n})</span>
+              </button>
+            ))}
+          </div>
         </div>
         <ScrollArea className="flex-1">
           {loadingList ? (
@@ -228,7 +352,7 @@ export default function RecoveryInbox({ heightClass = 'h-[calc(100vh-180px)]' }:
             </div>
           ) : filtered.length === 0 ? (
             <p className="p-6 text-sm text-muted-foreground text-center">
-              Nenhuma conversa ainda.
+              Nenhuma conversa neste filtro.
             </p>
           ) : filtered.map(conv => {
             const unread = conv.last_inbound_at && (
@@ -242,23 +366,42 @@ export default function RecoveryInbox({ heightClass = 'h-[calc(100vh-180px)]' }:
             const lastActivityAt = lastIsInbound
               ? conv.last_inbound_at
               : (conv.last_outbound_at || conv.last_inbound_at);
+            const hasInbound = !!conv.last_inbound_at;
+            const stage = stageByPhone[conv.phone];
+            const inboundPreview = lastInboundByPhone[conv.phone];
+            const previewText = hasInbound
+              ? `↩ Lead: ${inboundPreview || conv.last_message_preview || '—'}`
+              : (conv.last_message_preview || '—');
             return (
               <button
                 key={conv.phone}
                 onClick={() => setSelectedPhone(conv.phone)}
-                className={`w-full text-left p-3 border-b hover:bg-muted/50 transition-colors ${active ? 'bg-muted' : ''}`}
+                className={`w-full text-left p-3 border-b hover:bg-muted/50 transition-colors ${
+                  active ? 'bg-muted' : (unread ? 'bg-primary/5' : '')
+                }`}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-medium text-sm truncate">
+                  <span className={`text-sm truncate ${unread ? 'font-semibold' : 'font-medium'}`}>
                     {conv.name || formatPhone(conv.phone)}
                   </span>
-                  {unread && <Badge variant="default" className="text-[10px] px-1.5 py-0">novo</Badge>}
+                  <div className="flex items-center gap-1 shrink-0">
+                    {stage ? (
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                        Estágio {stage}
+                      </Badge>
+                    ) : null}
+                    {unread ? (
+                      <Badge variant="default" className="text-[10px] px-1.5 py-0">novo</Badge>
+                    ) : hasInbound ? (
+                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0">respondeu</Badge>
+                    ) : null}
+                  </div>
                 </div>
                 {conv.name && (
                   <div className="text-xs text-muted-foreground">{formatPhone(conv.phone)}</div>
                 )}
-                <p className="text-xs text-muted-foreground truncate mt-1">
-                  {conv.last_message_preview || '—'}
+                <p className={`text-xs truncate mt-1 ${hasInbound ? 'text-foreground' : 'text-muted-foreground'}`}>
+                  {previewText}
                 </p>
                 {lastActivityAt && (
                   <p className="text-[10px] text-muted-foreground mt-1">
