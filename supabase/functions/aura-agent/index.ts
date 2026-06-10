@@ -1431,7 +1431,7 @@ O usuário já se sentiu ouvido. Agora é hora de trazer SENTIDO (Fase 2).
 
 AÇÃO OBRIGATÓRIA:
 - NÃO faça mais perguntas exploratórias ("como assim?", "me conta mais")
-- Traga UMA observação profunda com suas próprias palavras (sem fórmula fixa) — nomeie o que está por baixo.
+- Traga UMA observação concreta sobre o que o usuário descreveu (sem fórmula fixa).
 - Use UMA pergunta-âncora da Logoterapia:
   • "O que essa situação mostra sobre o que importa pra você?"
   • "Qual seria sua resposta mais autêntica a isso?"
