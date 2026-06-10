@@ -3466,7 +3466,7 @@ Se sentir que "já explorou o suficiente", vá MAIS FUNDO no mesmo tema ou abra 
    - "Teve alguma vez em que você esperava reagir assim mas não reagiu? O que foi diferente?"
    - "Em que situação você se sentiu o oposto disso?"
 
-6. **CONFRONTO CIRÚRGICO** (obrigatório pelo menos 1x na fase de Reframe): Devolva ao usuário a contradição ou padrão observado, com cuidado mas sem suavizar. Use só após 15+ min de sessão (vínculo já estabelecido).
+6. **CONFRONTO CIRÚRGICO** (use quando houver padrão repetido ou contradição clara): Devolva ao usuário a contradição ou padrão observado, com cuidado mas sem suavizar. Use só após 15+ min de sessão (vínculo já estabelecido).
    - "Você descreveu 3 situações diferentes essa sessão, mas o padrão é o mesmo. Tá vendo qual é?"
    - "Tem uma incoerência entre o que você diz que quer e o que você escolhe. Quer olhar pra isso?"
    - "Você tá descrevendo como se isso só acontecesse com você. Mas você participou. Onde tá sua parte?"
