@@ -790,6 +790,10 @@ interface ExtractedActions {
   topic_continuity?: 'same_topic' | 'shifted' | 'new_topic';
   engagement_level?: 'engaged' | 'short_answers' | 'disengaged';
   aura_phase?: 'presenca' | 'sentido' | 'movimento';
+  // Fase 1 — sinais novos para o Phase Evaluator enxergar conteúdo (não só clock/contagem).
+  information_density?: 'low' | 'medium' | 'saturated';
+  user_reflection_mode?: boolean;
+  user_engaged_with_commitment?: boolean;
 }
 
 interface UserContextState {
@@ -798,6 +802,9 @@ interface UserContextState {
   engagement_level?: string;
   short_answer_streak?: number;
   aura_phase?: string;
+  information_density?: string;
+  user_reflection_mode?: boolean;
+  user_engaged_with_commitment?: boolean;
 }
 
 async function extractActionsFromResponse(
@@ -835,7 +842,10 @@ Retorne um JSON com APENAS os campos relevantes (omita campos vazios/null):
   "user_emotional_state": "stable|vulnerable|crisis|resistant",
   "topic_continuity": "same_topic|shifted|new_topic",
   "engagement_level": "engaged|short_answers|disengaged",
-  "aura_phase": "presenca|sentido|movimento"
+  "aura_phase": "presenca|sentido|movimento",
+  "information_density": "low|medium|saturated",
+  "user_reflection_mode": true,
+  "user_engaged_with_commitment": true
 }
 
 REGRAS:
@@ -849,14 +859,26 @@ REGRAS:
 - engagement_level: "disengaged" = respostas evasivas/monossilábicas sem conteúdo, "short_answers" = respostas curtas mas com conteúdo, "engaged" = participando ativamente
 - IMPORTANTE sobre engagement_level: Alguns usuários são naturalmente sucintos. Só classifique como "disengaged" se houver mudança clara de padrão OU evasão ativa (ex: "tanto faz", "sei lá", "ok"). Respostas curtas com conteúdo emocional genuíno = "engaged", não "short_answers".
 - aura_phase: classifique a fase terapêutica da RESPOSTA DA ASSISTENTE (não do usuário). "presenca" = acolhimento, perguntas exploratórias, validação. "sentido" = reflexões profundas, reframes, nomeação de padrões. "movimento" = compromissos, próximos passos, ações concretas.
-- SEMPRE inclua user_emotional_state, topic_continuity, engagement_level e aura_phase
-- Se nada mais for relevante, retorne apenas esses 4 campos
+- information_density: avalia a SATURAÇÃO de material terapêutico na conversa do USUÁRIO até aqui. Use definição ESTRITA:
+  • "saturated" = TODOS os 3 elementos presentes em mensagens do usuário: (1) CONTEXTO CONCRETO (situação específica, ex "meu chefe me chamou ontem", não "tenho problemas no trabalho"); (2) EMOÇÃO NOMEADA (o usuário nomeou ou descreveu o que sentiu, não só citou o fato); (3) CRENÇA/ORIGEM (apareceu algo sobre o "porquê" — uma crença sobre si, padrão antigo, ou primeira vez que sentiu isso).
+  • "medium" = se faltar QUALQUER UM dos três elementos acima.
+  • "low" = conversa ainda superficial, sem contexto concreto OU sem emoção nomeada.
+  • IMPORTANTE: volume de texto NÃO conta. Repetir o mesmo elemento 3 vezes NÃO conta. Os três precisam estar presentes em conteúdo distinto.
+- user_reflection_mode: true APENAS se o USUÁRIO ele mesmo trouxe uma conexão/insight novo de forma reflexiva, ex:
+  • "agora que você falou, percebi que…"
+  • "acho que sempre fui assim porque…"
+  • "talvez seja porque quando criança…"
+  • "nunca tinha pensado, mas…"
+  NÃO marque true para concordância passiva ("ah faz sentido", "é verdade", "exatamente", "concordo", "tem razão"). Concordar com a assistente ≠ refletir. Em dúvida, marque false.
+- user_engaged_with_commitment: true APENAS se a ÚLTIMA pergunta de COMPROMISSO/PRÓXIMO PASSO/MOVIMENTO da assistente foi respondida pelo usuário de forma CONCRETA (nomeou ação, prazo, intenção objetiva). false se o usuário evadiu, mudou de assunto, ignorou, ou respondeu vago ("vou pensar", "talvez", "sei lá"). Se a assistente NÃO fez pergunta de compromisso, marque false.
+- SEMPRE inclua user_emotional_state, topic_continuity, engagement_level, aura_phase, information_density, user_reflection_mode, user_engaged_with_commitment
+- Se nada mais for relevante, retorne apenas esses 7 campos
 Apenas o JSON, sem markdown.`;
 
     const extractionBody = {
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       generationConfig: {
-        maxOutputTokens: 300,
+        maxOutputTokens: 400,
         temperature: 0.1,
         responseMimeType: 'application/json'
       },
@@ -1216,6 +1238,13 @@ ou simplesmente validar o silêncio/resistência como legítimo.`
   if (lastUserContext?.aura_phase) {
     detectedPhase = lastUserContext.aura_phase;
     console.log(`🔄 Phase evaluator: using semantic aura_phase="${detectedPhase}" from micro-agent`);
+    // Fase 1 — upgrade por reflexão genuína do usuário:
+    // Se o USUÁRIO ele mesmo entrou em modo reflexivo (não concordância passiva),
+    // o evaluator pode avançar de presenca → sentido sem depender de keyword da Aura.
+    if (lastUserContext.user_reflection_mode === true && detectedPhase === 'presenca') {
+      console.log(`🔄 Phase evaluator: user_reflection_mode=true → upgrading presenca → sentido`);
+      detectedPhase = 'sentido';
+    }
   } else {
     // Fallback to keyword-based detection only if micro-agent didn't provide aura_phase
     function countIndicators(messages: string[], keywords: string[]): number {
@@ -1272,8 +1301,12 @@ A força não tá em estar certa — tá em arriscar a leitura e dar espaço pro
     }
   }
 
-  if (recentUserCount < 4 && detectedPhase !== 'presenca' && detectedPhase !== 'initial') {
-    console.log(`🔄 Phase evaluator: recentPairs=${recentUserCount} < 4, forcing presenca (was ${detectedPhase})`);
+  // Fase 1 — relaxa o freio rígido de pares: se o conteúdo já está saturado
+  // (contexto + emoção nomeada + crença/origem), permite avanço mesmo com <4 pares.
+  // Sem isso, usuário denso em 2 mensagens ficava preso esperando contagem cega.
+  const densitySaturated = lastUserContext?.information_density === 'saturated';
+  if (recentUserCount < 4 && detectedPhase !== 'presenca' && detectedPhase !== 'initial' && !densitySaturated) {
+    console.log(`🔄 Phase evaluator: recentPairs=${recentUserCount} < 4 (density=${lastUserContext?.information_density ?? 'unknown'}), forcing presenca (was ${detectedPhase})`);
     return {
       detectedPhase: 'presenca',
       stagnationLevel: 0,
@@ -1283,6 +1316,9 @@ NÃO avance para interpretação ou sentido ainda.
 AÇÃO: Valide o que o usuário trouxe, pergunte sobre a situação concreta, mostre que está ouvindo.
 Reframes e perguntas-âncora só DEPOIS de mapear o contexto.`
     };
+  }
+  if (recentUserCount < 4 && densitySaturated && detectedPhase !== 'presenca' && detectedPhase !== 'initial') {
+    console.log(`🔄 Phase evaluator: recentPairs=${recentUserCount} < 4 MAS information_density=saturated → permitindo avanço para ${detectedPhase}`);
   }
 
   const questionCount = recentAssistant.reduce((sum, msg) => 
@@ -1342,10 +1378,18 @@ ${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}`
       detectedPhase === 'sentido' &&
       sessionElapsedMin >= Math.floor(sessionDurationMin * 0.6)
     ) {
-      if (commitmentQuestionDetected(messageHistory)) {
-        console.log(`✅ Commitment question already detected — skipping safety net`);
+      // Fase 1 — só desarma a rede de segurança se o USUÁRIO respondeu à pergunta
+      // de compromisso de forma concreta. Antes, bastava a Aura ter perguntado
+      // (falso-positivo): isso desligava a rede sem fechamento real.
+      const userClosedLoop = lastUserContext?.user_engaged_with_commitment === true;
+      const auraAskedCommitment = commitmentQuestionDetected(messageHistory);
+      if (userClosedLoop) {
+        console.log(`✅ user_engaged_with_commitment=true — closure efetivo, skipping safety net`);
+      } else if (auraAskedCommitment && lastUserContext?.user_engaged_with_commitment === undefined) {
+        // Sinal indisponível (extractor ainda não rodou): fallback ao comportamento antigo.
+        console.log(`✅ Commitment question detected, signal indisponível — fallback antigo, skipping safety net`);
       } else {
-        console.log(`🛡️ Closure safety net fired (elapsed=${sessionElapsedMin}min, duration=${sessionDurationMin}min)`);
+        console.log(`🛡️ Closure safety net fired (elapsed=${sessionElapsedMin}min, duration=${sessionDurationMin}min, auraAsked=${auraAskedCommitment}, userEngaged=${lastUserContext?.user_engaged_with_commitment})`);
         return {
           detectedPhase: 'sentido',
           stagnationLevel: 1,
@@ -1356,6 +1400,26 @@ AÇÃO OBRIGATÓRIA AGORA: amarre o insight num passo concreto antes do fim.
 ${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}`
         };
       }
+    }
+
+    // ======== NUDGE INTERMEDIÁRIO (Vale da Morte 10-25 min) ========
+    // Fase 1 — só dispara se o conteúdo já está saturado E ainda estamos em presença.
+    // Sem o gate de density=saturated, viraria outra muleta de clock — exatamente
+    // o que estamos eliminando. É descritivo, não AÇÃO OBRIGATÓRIA.
+    if (
+      sessionPhase === 'exploration' &&
+      sessionElapsedMin >= 15 &&
+      detectedPhase === 'presenca' &&
+      densitySaturated
+    ) {
+      console.log(`💡 Nudge intermediário disparado (elapsed=${sessionElapsedMin}min, density=saturated, phase=presenca)`);
+      return {
+        detectedPhase: 'presenca',
+        stagnationLevel: 1,
+        guidance: `\n\n💡 NOTA DE TIMING:
+O usuário já trouxe material suficiente (contexto, emoção e algo sobre o porquê) e ${sessionElapsedMin} min se passaram.
+Se houver leitura possível, considere oferecer como HIPÓTESE ABERTA agora — sem forçar. Se ainda faltar um ângulo, vá uma camada mais funda no que JÁ apareceu, sem repetir perguntas exploratórias do início.`
+      };
     }
 
     // Still in opening pattern after 8+ min
@@ -1653,6 +1717,9 @@ async function processExtractedActions(
         engagement_level: actions.engagement_level,
         short_answer_streak: shortAnswerStreak,
         aura_phase: actions.aura_phase,
+        information_density: actions.information_density,
+        user_reflection_mode: actions.user_reflection_mode,
+        user_engaged_with_commitment: actions.user_engaged_with_commitment,
       };
       // Use partial UPDATE to avoid overwriting concurrent fields (is_responding, pending_content, etc.)
       await supabase.from('aura_response_state')

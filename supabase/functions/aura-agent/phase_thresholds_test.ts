@@ -90,3 +90,100 @@ Deno.test("Fase 2 — Postura Clínica: princípio mestre está no prompt geral"
     "Salvaguarda 'Quando NÃO ir contra a corrente' sumiu — risco de confronto sem propósito."
   );
 });
+
+// =============================================================================
+// Fase 1 (rodada de "olhos do evaluator") — 5 cenários determinísticos
+// =============================================================================
+
+Deno.test("Fase 1 — extractor: schema declara information_density / user_reflection_mode / user_engaged_with_commitment", () => {
+  assert(
+    /"information_density":\s*"low\|medium\|saturated"/.test(SOURCE),
+    "Campo information_density sumiu do schema do micro-agent extractor."
+  );
+  assert(
+    /"user_reflection_mode":\s*true/.test(SOURCE),
+    "Campo user_reflection_mode sumiu do schema do micro-agent extractor."
+  );
+  assert(
+    /"user_engaged_with_commitment":\s*true/.test(SOURCE),
+    "Campo user_engaged_with_commitment sumiu do schema do micro-agent extractor."
+  );
+});
+
+Deno.test("Fase 1 — extractor: definição ESTRITA de information_density (3 elementos)", () => {
+  // Sem os 3 elementos obrigatórios o Flash-lite classifica `saturated` por volume.
+  assert(
+    /CONTEXTO CONCRETO/.test(SOURCE) && /EMO[ÇC][ÃA]O NOMEADA/.test(SOURCE) && /CREN[ÇC]A\/ORIGEM/.test(SOURCE),
+    "Os 3 elementos obrigatórios (CONTEXTO/EMOÇÃO/CRENÇA) sumiram da definição de information_density."
+  );
+  assert(
+    /volume de texto N[ÃA]O conta/i.test(SOURCE),
+    "Salvaguarda 'volume de texto NÃO conta' sumiu — risco de falso-positivo por verbosidade."
+  );
+});
+
+Deno.test("Fase 1 — extractor: user_reflection_mode tem guarda anti concordância passiva", () => {
+  assert(
+    /Concordar com a assistente ≠ refletir/.test(SOURCE),
+    "Guarda 'Concordar ≠ refletir' sumiu — risco de falso-positivo em 'ah faz sentido'."
+  );
+});
+
+Deno.test("Cenário A — evaluator permite avanço com <4 pares se density=saturated", () => {
+  // Bypass do freio rígido quando o conteúdo já está saturado.
+  assert(
+    /densitySaturated\s*=\s*lastUserContext\?\.information_density\s*===\s*['"]saturated['"]/.test(SOURCE),
+    "Bypass densitySaturated no freio de pares sumiu — usuário denso voltaria a travar em presença."
+  );
+  assert(
+    /recentUserCount\s*<\s*4\s*&&\s*detectedPhase\s*!==\s*['"]presenca['"]\s*&&\s*detectedPhase\s*!==\s*['"]initial['"]\s*&&\s*!densitySaturated/.test(SOURCE),
+    "Condição do freio não incorpora !densitySaturated — bypass não está ativo."
+  );
+});
+
+Deno.test("Cenário B — evaluator não avança por contagem se density!=saturated", () => {
+  // O freio de pares continua armado quando não há saturação real (proteção contra avanço por clock puro).
+  // Garantido pelo teste anterior + presença do freio original.
+  assert(
+    /recentUserCount\s*<\s*4\s*&&\s*detectedPhase\s*!==\s*['"]presenca['"]/.test(SOURCE),
+    "Freio de pares (<4) sumiu — risco de avanço prematuro por contagem cega."
+  );
+});
+
+Deno.test("Cenário C — evaluator promove presenca→sentido quando user_reflection_mode=true", () => {
+  assert(
+    /user_reflection_mode\s*===\s*true\s*&&\s*detectedPhase\s*===\s*['"]presenca['"]/.test(SOURCE),
+    "Upgrade por user_reflection_mode sumiu — usuário reflexivo continuaria preso em presença."
+  );
+});
+
+Deno.test("Cenário D — rede de segurança permanece armada se user_engaged_with_commitment!=true", () => {
+  // Disarm só por commitmentQuestionDetected era falso-positivo (Aura pergunta, usuário ignora, rede desarma).
+  assert(
+    /user_engaged_with_commitment\s*===\s*true/.test(SOURCE),
+    "Checagem de user_engaged_with_commitment=true sumiu da rede de segurança."
+  );
+  assert(
+    /userClosedLoop/.test(SOURCE),
+    "Variável userClosedLoop sumiu — rede de segurança volta a desarmar por falso-positivo."
+  );
+});
+
+Deno.test("Cenário E — fallback compatível quando sinal user_engaged_with_commitment indisponível", () => {
+  // Extractor pode ainda não ter rodado num turno; nesse caso, mantém comportamento antigo.
+  assert(
+    /user_engaged_with_commitment\s*===\s*undefined/.test(SOURCE),
+    "Fallback 'sinal indisponível' sumiu — risco de regressão em primeiros turnos."
+  );
+});
+
+Deno.test("Nudge intermediário: só dispara com density=saturated (sem virar muleta de clock)", () => {
+  assert(
+    /sessionElapsedMin\s*>=\s*15[\s\S]{0,400}densitySaturated/.test(SOURCE),
+    "Nudge intermediário (15min) sem gate de densitySaturated viraria muleta de clock — gate sumiu."
+  );
+  assert(
+    /NOTA DE TIMING/.test(SOURCE),
+    "Header 'NOTA DE TIMING' sumiu — nudge precisa ser descritivo, não AÇÃO OBRIGATÓRIA."
+  );
+});
