@@ -6124,7 +6124,23 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
         evalElapsedMin = Math.floor((Date.now() - new Date(currentSession.started_at).getTime()) / 60000);
       }
       const evalDurationMin = currentSession?.duration_minutes ?? 45;
-      const phaseEval = evaluateTherapeuticPhase(messageHistory, sessionActive, evalSessionPhase, evalElapsedMin, last_user_context, messageCount, userInsights.length, evalDurationMin);
+      // Guarda de idade: busca updated_at de aura_response_state só quando o label é de alto risco.
+      // Evita que label 'vulnerable'/'crisis' antigo force acolhimento em conversa neutra do dia seguinte.
+      let lastUserContextUpdatedAt: string | null = null;
+      if (last_user_context?.user_emotional_state === 'vulnerable' ||
+          last_user_context?.user_emotional_state === 'crisis') {
+        try {
+          const { data: ars } = await supabase
+            .from('aura_response_state')
+            .select('updated_at')
+            .eq('user_id', profile.id)
+            .maybeSingle();
+          lastUserContextUpdatedAt = ars?.updated_at ?? null;
+        } catch (err) {
+          console.warn('⚠️ [phase-evaluator-age-guard] fetch updated_at skipped (non-fatal):', err);
+        }
+      }
+      const phaseEval = evaluateTherapeuticPhase(messageHistory, sessionActive, evalSessionPhase, evalElapsedMin, last_user_context, messageCount, userInsights.length, evalDurationMin, lastUserContextUpdatedAt);
       if (phaseEval.guidance) {
         dynamicContext += phaseEval.guidance;
         console.log(`🔄 Phase evaluator: detected=${phaseEval.detectedPhase}, stagnation=${phaseEval.stagnationLevel}, context=${sessionActive ? 'session' : 'free'}`);
