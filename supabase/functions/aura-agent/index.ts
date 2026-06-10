@@ -1057,7 +1057,7 @@ const FREE_PHASE_INSTRUCTIONS: Record<string, string> = {
   presenca_to_sentido: `
 INSTRUÇÕES TÁTICAS — Presença → Sentido:
 ❌ ERRADO: "Me conta mais" / "Como assim?" / "O que você sentiu?"
-✅ CERTO: nomeie com suas próprias palavras o que está por baixo do que foi dito (sem fórmula fixa) e siga com UMA pergunta-âncora da Logoterapia.
+✅ CERTO: devolva com suas próprias palavras o que o usuário trouxe (sem fórmula fixa) e siga com UMA pergunta-âncora da Logoterapia.
 ❌ ERRADO: Repetir validação emocional sem avançar ("Eu entendo", "Faz sentido sentir assim" pela 5ª vez)
 ✅ CERTO: Validar brevemente + trazer UMA pergunta-âncora da Logoterapia:
   • "O que essa situação mostra sobre o que importa pra você?"
