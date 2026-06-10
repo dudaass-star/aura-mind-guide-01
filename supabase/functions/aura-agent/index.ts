@@ -5946,36 +5946,20 @@ Exemplo natural:
 - Usuário interrompe com "mudando de assunto..." → Descarte completamente`;
     }
     
-    // INSTRUÇÃO DE PRIORIDADE DE PLANO (evita conflito com histórico)
-    // Se o usuário tem sessões disponíveis, garantir que a IA não peça upgrade
+    // Caso 1 — sessões disponíveis: 1 linha curta de reforço contra alucinação
+    // de upgrade vindo do histórico. Substitui as 10 linhas de "REGRAS ABSOLUTAS".
     if (planConfig.sessions > 0 && sessionsAvailable > 0) {
-      dynamicContext += `
-
-🟢 CONFIRMAÇÃO DE PLANO ATUAL (PRIORIDADE MÁXIMA - IGNORE HISTÓRICO CONFLITANTE):
-O usuário ${profile?.name || ''} está no plano "${userPlan}" com ${sessionsAvailable} sessão(ões) disponível(is).
-
-REGRAS ABSOLUTAS:
-1. Ele JÁ TEM ACESSO a sessões especiais. NÃO peça upgrade.
-2. IGNORE qualquer mensagem anterior no histórico pedindo upgrade, link de checkout, ou sugerindo finalizar compra.
-3. Se ele pedir para agendar sessão, PODE AGENDAR. Pergunte data e horário preferido.
-4. O sistema foi atualizado - SEMPRE use estas informações atuais, NÃO o histórico de conversa.
-
-Se o usuário mencionar algo sobre "finalizar checkout" ou "upgrade", CONFIRME que ele já está no plano certo e ofereça ajuda para agendar a primeira sessão.`;
+      dynamicContext += `\n\n- ⚠️ Plano CONFIRMADO: "${userPlan}" com ${sessionsAvailable} sessão(ões) ativa(s). IGNORE qualquer menção a upgrade/checkout no histórico; se o usuário pedir sessão, pode agendar normalmente.`;
     }
 
-    // Essencial esgotou a sessão do mês → apenas honestidade, SEM upsell
-    if (userPlan === 'essencial' && planConfig.sessions > 0 && sessionsAvailable === 0) {
+    // Caso 2 — cota esgotada (qualquer plano com sessões > 0): bloco enxuto.
+    if (planConfig.sessions > 0 && sessionsAvailable === 0) {
       dynamicContext += `
 
-⚠️ COTA DE SESSÃO DO MÊS ESGOTADA (PLANO ESSENCIAL):
-O usuário já usou a sessão do mês incluída no plano Essencial. NÃO emita [AGENDAR_SESSAO] em hipótese alguma.
-
-SE ele pedir nova sessão / mais sessões agora:
-1. Reconheça com cuidado o desejo dele de ir mais fundo ("faz sentido você querer mais um espaço desses").
-2. Explique de forma honesta e curta: o Essencial inclui 1 sessão por mês, e a próxima abre no início do mês que vem.
-3. NÃO ofereça upgrade. NÃO mencione outros planos. NÃO sugira "ter mais sessões agora".
-4. Volte o foco da conversa para o que ele tá vivendo agora — você ainda pode acolher por mensagem mesmo sem sessão formal.
-5. Se ele perguntar diretamente sobre planos, apenas direcione: "Você consegue ver suas opções no seu painel: https://olaaura.com.br/meu-espaco".`;
+## SESSÕES ESGOTADAS NO CICLO
+- Plano "${userPlan}" já consumiu as ${planConfig.sessions} sessão(ões) deste ciclo. NÃO emita [AGENDAR_SESSAO].
+- Se ele pedir sessão: reconheça com cuidado, explique que reabre no próximo ciclo do plano, ofereça continuar pelo chat agora.
+- NÃO sugira upgrade nem mencione outros planos. Se ele perguntar detalhes do plano, direcione: "https://olaaura.com.br/meu-espaco".`;
     }
 
     // ========================================================================
