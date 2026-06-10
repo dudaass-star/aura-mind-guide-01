@@ -842,7 +842,10 @@ Retorne um JSON com APENAS os campos relevantes (omita campos vazios/null):
   "user_emotional_state": "stable|vulnerable|crisis|resistant",
   "topic_continuity": "same_topic|shifted|new_topic",
   "engagement_level": "engaged|short_answers|disengaged",
-  "aura_phase": "presenca|sentido|movimento"
+  "aura_phase": "presenca|sentido|movimento",
+  "information_density": "low|medium|saturated",
+  "user_reflection_mode": true,
+  "user_engaged_with_commitment": true
 }
 
 REGRAS:
@@ -856,14 +859,26 @@ REGRAS:
 - engagement_level: "disengaged" = respostas evasivas/monossilábicas sem conteúdo, "short_answers" = respostas curtas mas com conteúdo, "engaged" = participando ativamente
 - IMPORTANTE sobre engagement_level: Alguns usuários são naturalmente sucintos. Só classifique como "disengaged" se houver mudança clara de padrão OU evasão ativa (ex: "tanto faz", "sei lá", "ok"). Respostas curtas com conteúdo emocional genuíno = "engaged", não "short_answers".
 - aura_phase: classifique a fase terapêutica da RESPOSTA DA ASSISTENTE (não do usuário). "presenca" = acolhimento, perguntas exploratórias, validação. "sentido" = reflexões profundas, reframes, nomeação de padrões. "movimento" = compromissos, próximos passos, ações concretas.
-- SEMPRE inclua user_emotional_state, topic_continuity, engagement_level e aura_phase
-- Se nada mais for relevante, retorne apenas esses 4 campos
+- information_density: avalia a SATURAÇÃO de material terapêutico na conversa do USUÁRIO até aqui. Use definição ESTRITA:
+  • "saturated" = TODOS os 3 elementos presentes em mensagens do usuário: (1) CONTEXTO CONCRETO (situação específica, ex "meu chefe me chamou ontem", não "tenho problemas no trabalho"); (2) EMOÇÃO NOMEADA (o usuário nomeou ou descreveu o que sentiu, não só citou o fato); (3) CRENÇA/ORIGEM (apareceu algo sobre o "porquê" — uma crença sobre si, padrão antigo, ou primeira vez que sentiu isso).
+  • "medium" = se faltar QUALQUER UM dos três elementos acima.
+  • "low" = conversa ainda superficial, sem contexto concreto OU sem emoção nomeada.
+  • IMPORTANTE: volume de texto NÃO conta. Repetir o mesmo elemento 3 vezes NÃO conta. Os três precisam estar presentes em conteúdo distinto.
+- user_reflection_mode: true APENAS se o USUÁRIO ele mesmo trouxe uma conexão/insight novo de forma reflexiva, ex:
+  • "agora que você falou, percebi que…"
+  • "acho que sempre fui assim porque…"
+  • "talvez seja porque quando criança…"
+  • "nunca tinha pensado, mas…"
+  NÃO marque true para concordância passiva ("ah faz sentido", "é verdade", "exatamente", "concordo", "tem razão"). Concordar com a assistente ≠ refletir. Em dúvida, marque false.
+- user_engaged_with_commitment: true APENAS se a ÚLTIMA pergunta de COMPROMISSO/PRÓXIMO PASSO/MOVIMENTO da assistente foi respondida pelo usuário de forma CONCRETA (nomeou ação, prazo, intenção objetiva). false se o usuário evadiu, mudou de assunto, ignorou, ou respondeu vago ("vou pensar", "talvez", "sei lá"). Se a assistente NÃO fez pergunta de compromisso, marque false.
+- SEMPRE inclua user_emotional_state, topic_continuity, engagement_level, aura_phase, information_density, user_reflection_mode, user_engaged_with_commitment
+- Se nada mais for relevante, retorne apenas esses 7 campos
 Apenas o JSON, sem markdown.`;
 
     const extractionBody = {
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       generationConfig: {
-        maxOutputTokens: 300,
+        maxOutputTokens: 400,
         temperature: 0.1,
         responseMimeType: 'application/json'
       },
