@@ -93,17 +93,18 @@ export default function AdminSessions() {
 
       const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
+      const SELECT = "id, user_id, status, scheduled_at, started_at, ended_at, duration_minutes, focus_topic, theme_label";
       const [upcomingRes, completedRes] = await Promise.all([
         supabase
           .from("sessions")
-          .select("id, user_id, status, scheduled_at, started_at, ended_at, duration_minutes, focus_topic, theme_label, profiles:profiles!sessions_user_id_fkey(name, phone, plan)")
+          .select(SELECT)
           .gte("scheduled_at", tomorrowISO)
           .in("status", ["scheduled"])
           .order("scheduled_at", { ascending: true })
           .limit(50),
         supabase
           .from("sessions")
-          .select("id, user_id, status, scheduled_at, started_at, ended_at, duration_minutes, focus_topic, theme_label, profiles:profiles!sessions_user_id_fkey(name, phone, plan)")
+          .select(SELECT)
           .eq("status", "completed")
           .gte("ended_at", thirtyDaysAgo)
           .order("ended_at", { ascending: false })
@@ -115,8 +116,22 @@ export default function AdminSessions() {
 
       const upcomingRows = (upcomingRes.data ?? []) as unknown as SessionRow[];
       const completedRows = (completedRes.data ?? []) as unknown as SessionRow[];
-      setUpcoming(upcomingRows);
-      setCompleted(completedRows);
+
+      // Junta profiles em uma única query (FK não existe — join manual).
+      const allUserIds = Array.from(new Set([...upcomingRows, ...completedRows].map((r) => r.user_id)));
+      const profilesMap: Record<string, { name: string | null; phone: string | null; plan: string | null }> = {};
+      if (allUserIds.length > 0) {
+        const { data: profs } = await supabase
+          .from("profiles")
+          .select("user_id, name, phone, plan")
+          .in("user_id", allUserIds);
+        (profs ?? []).forEach((p: any) => {
+          profilesMap[p.user_id] = { name: p.name, phone: p.phone, plan: p.plan };
+        });
+      }
+      const attach = (rows: SessionRow[]) => rows.map((r) => ({ ...r, profiles: profilesMap[r.user_id] ?? null }));
+      setUpcoming(attach(upcomingRows));
+      setCompleted(attach(completedRows));
 
       // Buscar análises existentes para as completed
       const ids = completedRows.map((r) => r.id);
