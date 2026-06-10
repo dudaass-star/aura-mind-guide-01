@@ -1136,22 +1136,34 @@ function evaluateTherapeuticPhase(
   lastUserContext?: UserContextState | null,
   totalMessageCount?: number,
   insightsCount?: number,
-  sessionDurationMin: number = 45
+  sessionDurationMin: number = 45,
+  lastUserContextUpdatedAt?: string | null
 ): PhaseEvaluation {
   // ======== USER CONTEXT OVERRIDES (from micro-agent, previous turn) ========
   if (lastUserContext) {
     // Priority 1: Emotional regression → force Presença
     if (lastUserContext.user_emotional_state === 'crisis' || lastUserContext.user_emotional_state === 'vulnerable') {
-      console.log(`🔄 Phase evaluator: user_emotional_state=${lastUserContext.user_emotional_state} → forcing presenca`);
-      return {
-        detectedPhase: 'presenca',
-        stagnationLevel: 0,
-        guidance: `\n\n🔄 RESET DE FASE (DETECÇÃO AUTOMÁTICA):
+      // Guarda de idade: só aplica reset se o label foi gerado nos últimos 10 min.
+      // Sem isso, label antigo (ex.: 'vulnerable' de uma sessão de ontem) força
+      // "PRIORIDADE ABSOLUTA: Acolhimento" no turno atual mesmo em conversa neutra.
+      const ageMs = lastUserContextUpdatedAt
+        ? Date.now() - new Date(lastUserContextUpdatedAt).getTime()
+        : Number.POSITIVE_INFINITY;
+      const isFresh = ageMs < 10 * 60 * 1000;
+      if (!isFresh) {
+        console.log(`🔄 Phase evaluator: user_emotional_state=${lastUserContext.user_emotional_state} ignorado (label antigo, idade=${Math.round(ageMs / 60000)}min)`);
+      } else {
+        console.log(`🔄 Phase evaluator: user_emotional_state=${lastUserContext.user_emotional_state} → forcing presenca`);
+        return {
+          detectedPhase: 'presenca',
+          stagnationLevel: 0,
+          guidance: `\n\n🔄 RESET DE FASE (DETECÇÃO AUTOMÁTICA):
 O sistema detectou que o usuário está em estado ${lastUserContext.user_emotional_state === 'crisis' ? 'de CRISE' : 'VULNERÁVEL'}.
 PRIORIDADE ABSOLUTA: Acolhimento e presença. NÃO avance fase. NÃO faça perguntas profundas agora.
 Apenas esteja presente, valide o que ele sente, e ofereça segurança emocional.
 ${lastUserContext.user_emotional_state === 'crisis' ? 'Se houver risco, siga o protocolo de segurança.' : ''}`
-      };
+        };
+      }
     }
 
     // Priority 2: Short answer streak (check BEFORE topic shift so it's not silenced)
