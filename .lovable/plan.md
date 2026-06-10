@@ -1,123 +1,101 @@
-# Plano: consertar phase evaluator antes de remover muletas
+# Painel de análise de cobertura de sessões
 
-## Princípio
+## Objetivo
 
-As muletas C9 (`AÇÃO OBRIGATÓRIA AGORA`) e C10 (`REDE DE SEGURANÇA — FECHAMENTO OBRIGATÓRIO`) existem porque o evaluator é **cego** a dois sinais:
-- Se o **conteúdo já está saturado** (só conta pares de troca)
-- Se o **usuário** já entrou em modo reflexivo (só lê palavras-chave do que a Aura disse)
+Auditar, sob demanda, se cada sessão real cobriu o que o prompt promete: **4 camadas investigativas** (FATO/EMOÇÃO/CRENÇA/ORIGEM), **3 fases** (presença/sentido/movimento), qualidade do reframe e do fechamento. Análise post-hoc via LLM lendo a transcrição completa.
 
-Resultado: trava em `presenca`, fica circulando, e quando o cronômetro estoura as muletas chutam a porta forçando entrega sem material → produz a dramatização que queremos eliminar.
+Escopo: sessões agendadas a partir de amanhã + sessões `completed` que rodarem daqui pra frente. Sem retroativo bulk.
 
-**Estratégia:** dar olhos ao evaluator primeiro. Quando ele transicionar bem sozinho, as muletas viram redundância e podem ser removidas (ou viram suaves) sem regredir.
+## 1. Nova rota admin: `/admin/sessoes`
 
-## Fase 1 — Dar olhos ao evaluator (consertar a causa-raiz)
+Adicionar ao `App.tsx` ao lado de `/admin/engajamento`. Página `AdminSessions.tsx` com duas seções:
 
-Mudanças no `evaluateTherapeuticPhase` em `supabase/functions/aura-agent/index.ts:1131` e no micro-agent extractor (Flash-lite com tool calling).
+- **Próximas sessões** (agendadas, scheduled_at >= amanhã 00h BRT): lista quem/quando/plano/topic. Sem análise (não rodaram). Só visibilidade.
+- **Sessões para auditar** (status=`completed`, ended_at nos últimos 30 dias): tabela com usuário, duração real, status da análise (`pendente` / `analisada`), botão **Analisar** ou **Ver análise**.
 
-### 1.1. Novo sinal `information_density`
+Acesso restrito via `has_role(uid, 'admin')`. Reaproveita padrão já existente em `/admin/engajamento`.
 
-Valores: `low` / `medium` / `saturated`.
+## 2. Nova tabela: `session_coverage_analyses`
 
-**Definição estrita no prompt do micro-agente** (anti-falso-positivo por volume):
+Cache da análise para não re-chamar LLM por sessão.
 
-> `saturated` exige os **três** elementos presentes na conversa:
-> 1. **Contexto concreto**: situação específica, não abstrata ("meu chefe me chamou ontem", não "tenho problemas no trabalho").
-> 2. **Emoção nomeada**: o usuário nomeou ou descreveu o que sentiu, não só citou o fato.
-> 3. **Crença/origem**: apareceu algo sobre o "porquê" — uma crença sobre si, padrão antigo, ou primeira vez que sentiu isso.
->
-> Se faltar qualquer um dos três → `medium`. Volume de texto NÃO conta. Repetir o mesmo elemento três vezes NÃO conta.
+Colunas:
+- `id uuid pk`
+- `session_id uuid unique fk sessions(id) on delete cascade`
+- `analyzed_at timestamptz default now()`
+- `model text` (ex. `google/gemini-3-flash-preview`)
+- `coverage jsonb` (estrutura abaixo)
+- `overall_score int` (1–5)
+- `diagnosis text` (3–5 linhas, PT-BR)
+- `red_flags text[]` (lista curta)
 
-### 1.2. Novo sinal `user_reflection_mode`
+RLS: SELECT/INSERT só para `has_role(uid, 'admin')`; service_role full. GRANTs explícitos.
 
-Boolean — detecta quando o **usuário** entra em postura reflexiva, permitindo avanço para `sentido` sem depender de keyword da Aura.
+Shape do `coverage`:
 
-**Guarda contra falso-positivo** (não confundir reflexão com concordância superficial):
+```json
+{
+  "camadas": {
+    "fato":    { "coberta": true, "evidencia": "..." },
+    "emocao":  { "coberta": true, "evidencia": "..." },
+    "crenca":  { "coberta": false, "evidencia": null },
+    "origem":  { "coberta": false, "evidencia": null }
+  },
+  "fases": {
+    "presenca":  { "coberta": true, "comentario": "..." },
+    "sentido":   { "coberta": true, "comentario": "..." },
+    "movimento": { "coberta": false, "comentario": "..." }
+  },
+  "reframe":     { "emergiu": true, "como_hipotese_aberta": true, "qualidade_1_5": 4, "trecho": "..." },
+  "fechamento":  { "formato_cardapio": "tese|encruzilhada|leitura|experimento|pergunta|escolha-binaria|micro-passo|nenhum", "usuario_se_comprometeu": false, "trecho": "..." }
+}
+```
 
-> Marca `true` SÓ se o usuário **ele mesmo** trouxe uma conexão nova:
-> - "agora que você falou, percebi que…"
-> - "acho que sempre fui assim porque…"
-> - "talvez seja porque quando criança…"
-> - "nunca tinha pensado, mas…"
->
-> NÃO marca `true` para concordância passiva: "ah faz sentido", "é verdade", "exatamente", "concordo". Concordar com a Aura ≠ refletir.
+## 3. Nova edge function: `analyze-session-coverage`
 
-### 1.3. Novo sinal `user_engaged_with_commitment`
+`supabase/functions/analyze-session-coverage/index.ts`.
 
-Boolean — detecta se o usuário **respondeu concretamente** à última pergunta de compromisso/movimento da Aura (vs evasiva, mudou de assunto, ou ignorou).
+Entrada: `{ session_id }`. Validação: caller precisa ser admin (JWT claims + `has_role`).
 
-Conserta o falso-positivo do `commitmentQuestionDetected` atual (L1345), que desarma a rede de segurança só porque a Aura perguntou — sem checar se o usuário respondeu.
+Fluxo:
+1. Carrega `sessions` row + todas as `messages` da sessão (ordem cronológica), e `last_user_context` final do `aura_response_state` (pra cross-check).
+2. Se já existe linha em `session_coverage_analyses` para o `session_id` e `force=false`, retorna a cache.
+3. Strip de tags internas no histórico (reusa `stripAllInternalTags` — copiar helper enxuto, sem importar de `aura-agent`).
+4. Monta prompt em PT-BR com transcrição completa + definições estritas das 4 camadas e das 3 fases (mesmo dicionário usado no extractor da Fase 1, evita drift).
+5. Chama Lovable AI Gateway com `google/gemini-3-flash-preview` via `generateText` + `Output.object` (schema Zod compacto correspondendo ao `coverage` acima + `overall_score` + `diagnosis` + `red_flags`).
+6. UPSERT em `session_coverage_analyses` pelo `session_id`.
+7. Retorna a análise.
 
-### 1.4. Relaxar o freio rígido de pares (L1275)
+Tamanho da sessão: cap de ~30k chars de transcrição (truncar mensagens muito longas no meio, manter início e fim). Em prática uma sessão de 45 min cabe.
 
-- Hoje: `recentPairs < 4` força `presenca`.
-- Novo: `recentPairs < 4 AND information_density !== 'saturated'` força `presenca`.
+Red flags candidatos a detectar (lista fechada no prompt pra evitar enum dinâmico): `dramatizacao`, `perguntas_socraticas_vazias`, `reframe_imposto_sem_hipotese`, `clock_muleta_acionado`, `fechamento_forcado_sem_material`, `concordancia_passiva_tratada_como_reflexao`, `interrupcao_fase_presenca`.
 
-Se o usuário entregou os três elementos em 2 mensagens densas, o evaluator pode avançar.
+## 4. UI de análise
 
-### 1.5. Nudge intermediário (preencher o "Vale da Morte" 10–25 min)
+Componente `SessionCoverageCard.tsx` consumido pela página admin.
 
-Aos ~15 min, **se E somente se** `information_density === 'saturated'` E ainda em `presenca`, sugerir suavemente avanço para reframe — **como nota descritiva** no PHASE_INSTRUCTIONS, não AÇÃO OBRIGATÓRIA.
-
-Sem o gate de `saturated`, vira outra muleta de clock — é exatamente o que estamos tentando eliminar.
-
-## Fase 2 — Validação determinística (análise estática)
-
-Estender `phase_thresholds_test.ts` com 5 cenários:
-
-- **A**: usuário denso (2 pares, `saturated`) → avança para `sentido` sem esperar 4 pares.
-- **B**: usuário evasivo (8 pares, `low`) → permanece em `presenca`, NÃO avança por contagem.
-- **C**: usuário entra em modo reflexivo sozinho (`user_reflection_mode=true`) → evaluator marca `sentido` mesmo sem keyword da Aura.
-- **D**: Aura perguntou compromisso, usuário ignorou (`user_engaged_with_commitment=false`) → rede de segurança continua armada.
-- **E**: Aura perguntou compromisso, usuário respondeu concretamente (`user_engaged_with_commitment=true`) → rede de segurança desarma.
-
-Só passa para Fase 2.5 com todos os 5 cenários verdes.
-
-## Fase 2.5 — Validação em produção (5–10 sessões reais)
-
-**Crítica e nova.** A Fase 2 valida lógica determinística, mas não valida se o Flash-lite está classificando os sinais corretamente em conversa real.
-
-Após Fase 1 em produção, coletar 5–10 sessões reais e verificar manualmente nos logs:
-
-- `information_density` está marcando `saturated` apenas quando os 3 elementos realmente apareceram?
-- `user_reflection_mode` está marcando `true` apenas em reflexão genuína, não em "ah, faz sentido"?
-- `user_engaged_with_commitment` distingue resposta concreta de evasiva?
-
-**Critério de prosseguimento:** ≥80% de classificação correta nos três sinais. Abaixo disso, refinar prompt do micro-agente e repetir — **não** prosseguir para Fase 3.
-
-Se algum sinal ficar instável, a Fase 3 não acontece — as muletas continuam como rede de proteção até o evaluator merecer confiança.
-
-## Fase 3 — Desarmar as muletas no prompt
-
-Com o evaluator transicionando bem sozinho e os sinais validados em produção, as muletas viram redundância.
-
-**Substituir (não remover bruto):**
-- **C9 (`AÇÃO OBRIGATÓRIA AGORA`)** → "Você está na janela de reframe e o conteúdo está saturado — se houver leitura possível, ofereça como hipótese; se ainda não houver, continue investigando uma camada mais profunda."
-- **C10 (`REDE DE SEGURANÇA — FECHAMENTO OBRIGATÓRIO`)** → "Faltam X minutos e ainda não houve aterrissagem em passo concreto — quando o material permitir, amarre."
-
-**Remover sem substituir:**
-- C7 (`DEVE entregar após 2-3 trocas`) — coberto por `information_density`.
-- C8 (`GUARDRAIL SIMÉTRICO a cada 4 trocas`) — clock puro, redundante.
-- C1 ("vá MAIS FUNDO no mesmo tema") — instrução de tom errado.
-- C2 (few-shot "vou te provocar quando precisar") — template dramático.
-- C5 ("Isso é a superfície. O que está por baixo?") — template de pressão.
-- A2, A4, A6, A9 conforme rodada anterior.
-
-## Critério de sucesso (smoke test pós-Fase 3)
-
-Em sessão real:
-- Evaluator avança presenca→sentido antes de 4 pares quando há saturação
-- Aura não dispara "Isso é a superfície" nem "vá mais fundo"
-- Reframe emerge quando há material, não por clock
-- Fechamento emerge quando usuário se engajou; rede de segurança só dispara em vácuo real
-- Sem anúncios de "estamos na metade da sessão"
+- Botão **Analisar** dispara `supabase.functions.invoke('analyze-session-coverage', { body: { session_id } })`. Estado loading com spinner (10–25s típico).
+- Resultado renderiza:
+  - **Checklist camadas**: 4 itens com ✅/❌ + evidência colapsável.
+  - **Checklist fases**: 3 itens com ✅/❌ + comentário curto.
+  - **Reframe**: badge ("emergiu como hipótese aberta" / "imposto" / "não emergiu") + nota 1–5.
+  - **Fechamento**: formato do cardápio + se usuário se comprometeu.
+  - **Red flags**: chips vermelhos quando presentes.
+  - **Diagnóstico**: bloco de texto livre (3–5 linhas).
+  - **Nota geral**: 1–5 em destaque.
+- Botão **Re-analisar** (passa `force=true`, sobrescreve a linha).
+- Link "abrir conversa" leva pra `/admin/usuarios?user_id=...` (se já existir esse padrão; senão, só mostra o telefone).
 
 ## Fora de escopo
 
-- Não trocar evaluator de determinístico para LLM (custo, latência, perda de previsibilidade).
-- Não mexer em `SESSION_PHASE_INSTRUCTIONS` estrutural — só os blocos dinâmicos C1–C10.
-- Não mexer no áudio obrigatório (C3, C6) — decisão de produto separada.
-- Não mexer no roteamento de modelo (Flash 3 Preview continua).
+- Análise automática ao fim da sessão (fica para depois, evita custo recorrente até validar utilidade).
+- Backfill retroativo das sessões antigas (só roda sob demanda; quem quiser analisa).
+- Métricas agregadas / gráficos (primeira versão é por-sessão; agregação vem depois com 20+ análises).
+- Comparação entre sessões do mesmo usuário (futuro).
+- Nada mexe em `aura-agent`, `phase evaluator`, ou prompt da Aura — é puramente leitura.
 
-## Risco principal
+## Risco e mitigação
 
-A definição estrita de `information_density` é o ponto mais delicado. Se o Flash-lite for permissivo demais, `saturated` dispara cedo e a Fase 1 quebra mais do que conserta. A Fase 2.5 (validação manual em produção) é a rede de segurança contra isso — sem ela, é tentação prosseguir cego para a Fase 3.
+**Drift de definição**: as 4 camadas no analisador precisam usar o mesmo vocabulário do prompt da Aura (FATO/EMOÇÃO/CRENÇA/ORIGEM) e da Fase 1 (information_density). Mitigação: copiar literalmente as definições estritas no prompt do analisador, comentário no código apontando pra fonte.
+
+**Falso-positivo de "coberta"**: Flash pode marcar `crenca.coberta=true` por menção superficial. Mitigação: schema exige `evidencia` literal (trecho curto da conversa); se evidência vazia, considerar `false` na UI.

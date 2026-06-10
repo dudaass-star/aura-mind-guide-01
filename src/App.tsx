@@ -30,6 +30,7 @@ import AdminSupport from "./pages/AdminSupport";
 import AdminSupportKnowledge from "./pages/AdminSupportKnowledge";
 import AdminSupportGaps from "./pages/AdminSupportGaps";
 import AdminWhatsappRecovery from "./pages/AdminWhatsappRecovery";
+import AdminSessions from "./pages/AdminSessions";
 import UserGuide from "./pages/UserGuide";
 import Episode from "./pages/Episode";
 import JourneyComplete from "./pages/JourneyComplete";
@@ -83,6 +84,7 @@ const App = () => (
             <Route path="/admin/suporte/conhecimento" element={<AdminSupportKnowledge />} />
             <Route path="/admin/suporte/gaps" element={<AdminSupportGaps />} />
             <Route path="/admin/whatsapp-inbox" element={<AdminWhatsappRecovery />} />
+            <Route path="/admin/sessoes" element={<AdminSessions />} />
             <Route path="/guia" element={<UserGuide />} />
             <Route path="/episodio/:id" element={<Episode />} />
             <Route path="/jornada-completa/:journeyId/:userId" element={<JourneyComplete />} />

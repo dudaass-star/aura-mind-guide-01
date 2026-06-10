@@ -1698,6 +1698,47 @@ export type Database = {
         }
         Relationships: []
       }
+      session_coverage_analyses: {
+        Row: {
+          analyzed_at: string
+          coverage: Json
+          diagnosis: string | null
+          id: string
+          model: string
+          overall_score: number | null
+          red_flags: string[]
+          session_id: string
+        }
+        Insert: {
+          analyzed_at?: string
+          coverage: Json
+          diagnosis?: string | null
+          id?: string
+          model: string
+          overall_score?: number | null
+          red_flags?: string[]
+          session_id: string
+        }
+        Update: {
+          analyzed_at?: string
+          coverage?: Json
+          diagnosis?: string | null
+          id?: string
+          model?: string
+          overall_score?: number | null
+          red_flags?: string[]
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_coverage_analyses_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: true
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       session_ratings: {
         Row: {
           created_at: string
