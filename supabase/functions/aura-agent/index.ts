@@ -5430,25 +5430,9 @@ ${meditationCatalogSection}
       }
       
       // Instruções de continuidade quando há histórico
-      if (previousSessionsContext) {
-        continuityContext += `
-
-## REGRAS DE CONTINUIDADE (OBRIGATÓRIAS):
-1. Na ABERTURA da sessão, SEMPRE mencione algo da sessão anterior:
-   - "Na nossa última conversa você tinha falado sobre X... como está isso?"
-   - "Lembro que você ia tentar fazer Y... conseguiu?"
-   - "Da última vez você estava lidando com Z... evoluiu?"
-
-2. Se o usuário mencionar um tema que já foi trabalhado:
-   - Reconheça o padrão: "Esse tema já apareceu antes, né? Vamos ver o que está diferente agora"
-   - Não repita as mesmas perguntas de sessões anteriores
-   - Aprofunde de forma diferente
-
-3. Para evoluir um tema:
-   - Se o usuário demonstra progresso, celebre: "Que legal! O que mais você quer trabalhar agora?"
-   - Se está estagnado, seja honesta: "Percebi que voltamos a esse assunto. O que está te impedindo de avançar?"
-`;
-      }
+      // (Removido: REGRAS DE CONTINUIDADE duplicadas — fio condutor já é injetado
+      //  pelo calculateSessionTimeContext na fase opening e pelo bloco
+      //  # SESSÕES ESPECIAIS no prompt estático, com mais qualidade.)
       
       // Adicionar tracking de temas
       if (userThemes.length > 0) {
