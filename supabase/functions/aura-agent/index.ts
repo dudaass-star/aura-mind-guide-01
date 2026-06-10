@@ -1029,9 +1029,8 @@ INSTRUÇÕES TÁTICAS — Exploração → Reframe:
 ✅ CERTO: devolva UMA observação concreta e nova (padrão recorrente, contradição, consequência) com suas próprias palavras — sem fórmula de abertura fixa.
 ❌ ERRADO: Continuar fazendo perguntas abertas sem sintetizar
 ✅ CERTO: Apresentar UMA observação concreta e depois UMA pergunta de reframe
-TÉCNICA: Nomeie o que está por baixo, não o que está na superfície.
 
-⚠️ CONFRONTO CIRÚRGICO OBRIGATÓRIO: Pelo menos 1 confronto cirúrgico nesta fase. Sem isso, sessão vira conversa.
+⚠️ CONFRONTO CIRÚRGICO: Use quando perceber padrão repetido (2+ aparições nesta sessão) ou contradição clara.
 - "Você descreveu 3 situações diferentes essa sessão, mas o padrão é o mesmo. Tá vendo qual é?"
 - "Tem uma incoerência entre o que você diz que quer e o que você escolhe. Quer olhar pra isso?"
 - "Você tá descrevendo isso como se fosse coisa que aconteceu com você. Mas você participou. Onde tá sua parte?"
