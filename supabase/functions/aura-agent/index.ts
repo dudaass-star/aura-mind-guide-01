@@ -6103,10 +6103,37 @@ Formato da tag: [PAUSAR_SESSOES data="YYYY-MM-DD"] (máximo 90 dias no futuro).
 6. NÃO faça perguntas ou prolongue a conversa`;
     }
 
-    // Lembrete anti-eco condicional — só para mensagens curtas (≤5 palavras)
-    const userWordCount = message.trim().split(/\s+/).length;
-    if (userWordCount <= 5) {
-      dynamicContext += `\nLEMBRETE ANTI-ECO: Mensagem curta detectada. Sua resposta NÃO pode começar reformulando o que o usuário disse. Reaja com emoção própria, observação nova ou pergunta que avança. Varie a forma de reagir — não comece com a mesma interjeição da resposta anterior, e evite o padrão "Interjeição, [nome]...".`;
+    // ===== ABERTURA LEVE / SAUDAÇÃO PURA (apenas fora de sessão) =====
+    // Quando o usuário só cumprimenta ou manda mensagem leve, a Aura tende a puxar
+    // tema antigo (memória, evolution summary, compromissos). Bloqueio explícito aqui.
+    const userMessageRaw = (message || '').trim();
+    const userMessageNorm = userMessageRaw
+      .toLowerCase()
+      .replace(/[.!?,;:…]+$/g, '')
+      .trim();
+    const userWordCount = userMessageRaw.length === 0 ? 0 : userMessageRaw.split(/\s+/).length;
+
+    const PURE_GREETING_REGEX = /^(oi+|olá+|ola+|e\s*a[ií]|hey+|hi+|hello+|bom\s*dia|boa\s*tarde|boa\s*noite|opa+|al[oô]+|tudo\s*bem\??|tudo\s*certo\??)[.!?]*\s*$/i;
+    const EMOTIONAL_LOAD_REGEX = /(trist|ansios|medo|raiva|sozinh|cansad|perdid|chorand|surto|crise|ajuda|\bdor\b|peso|vazio|culp|ang[uú]st|p[âa]nico|desesper|sofr|deprim|chate|magoa|frustr|exaust|esgotad|ferid|ódio|odeio|odi[ae]|mal\b)/i;
+
+    const isPureGreeting = PURE_GREETING_REGEX.test(userMessageNorm);
+    const isLightMessage =
+      !isPureGreeting &&
+      userWordCount > 0 &&
+      userWordCount <= 8 &&
+      !EMOTIONAL_LOAD_REGEX.test(userMessageNorm);
+
+    if (!sessionActive && (isPureGreeting || isLightMessage)) {
+      dynamicContext += `\n\n## ABERTURA LEVE DETECTADA
+A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional clara.
+
+- Responda APENAS ao que foi dito: cumprimente de volta + 1 devolutiva curta e neutra (ex: "e aí, como cê tá?", "tô por aqui, o que te traz hoje?").
+- PROIBIDO nesta resposta: referenciar memória, insights, evolution summary, compromissos pendentes, temas de sessões anteriores ou padrões observados.
+- Espere o usuário trazer o tema antes de qualquer aprofundamento.
+- Máximo 2 balões curtos.`;
+    } else if (userWordCount > 0 && userWordCount <= 5) {
+      // Lembrete anti-eco suavizado — só para mensagens curtas que não caíram no bloco acima
+      dynamicContext += `\nLEMBRETE ANTI-ECO: Mensagem curta detectada. Espelhe o tamanho da mensagem dele — responda curto. Só pergunte se houver gancho real no que ele disse; caso contrário, devolva presença sem puxar tema novo ou antigo. Não comece reformulando o que ele disse, e varie a forma de reagir.`;
     }
 
     // ========================================================================
