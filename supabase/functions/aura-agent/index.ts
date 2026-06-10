@@ -1378,10 +1378,18 @@ ${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}`
       detectedPhase === 'sentido' &&
       sessionElapsedMin >= Math.floor(sessionDurationMin * 0.6)
     ) {
-      if (commitmentQuestionDetected(messageHistory)) {
-        console.log(`✅ Commitment question already detected — skipping safety net`);
+      // Fase 1 — só desarma a rede de segurança se o USUÁRIO respondeu à pergunta
+      // de compromisso de forma concreta. Antes, bastava a Aura ter perguntado
+      // (falso-positivo): isso desligava a rede sem fechamento real.
+      const userClosedLoop = lastUserContext?.user_engaged_with_commitment === true;
+      const auraAskedCommitment = commitmentQuestionDetected(messageHistory);
+      if (userClosedLoop) {
+        console.log(`✅ user_engaged_with_commitment=true — closure efetivo, skipping safety net`);
+      } else if (auraAskedCommitment && lastUserContext?.user_engaged_with_commitment === undefined) {
+        // Sinal indisponível (extractor ainda não rodou): fallback ao comportamento antigo.
+        console.log(`✅ Commitment question detected, signal indisponível — fallback antigo, skipping safety net`);
       } else {
-        console.log(`🛡️ Closure safety net fired (elapsed=${sessionElapsedMin}min, duration=${sessionDurationMin}min)`);
+        console.log(`🛡️ Closure safety net fired (elapsed=${sessionElapsedMin}min, duration=${sessionDurationMin}min, auraAsked=${auraAskedCommitment}, userEngaged=${lastUserContext?.user_engaged_with_commitment})`);
         return {
           detectedPhase: 'sentido',
           stagnationLevel: 1,
@@ -1392,6 +1400,26 @@ AÇÃO OBRIGATÓRIA AGORA: amarre o insight num passo concreto antes do fim.
 ${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}`
         };
       }
+    }
+
+    // ======== NUDGE INTERMEDIÁRIO (Vale da Morte 10-25 min) ========
+    // Fase 1 — só dispara se o conteúdo já está saturado E ainda estamos em presença.
+    // Sem o gate de density=saturated, viraria outra muleta de clock — exatamente
+    // o que estamos eliminando. É descritivo, não AÇÃO OBRIGATÓRIA.
+    if (
+      sessionPhase === 'exploration' &&
+      sessionElapsedMin >= 15 &&
+      detectedPhase === 'presenca' &&
+      densitySaturated
+    ) {
+      console.log(`💡 Nudge intermediário disparado (elapsed=${sessionElapsedMin}min, density=saturated, phase=presenca)`);
+      return {
+        detectedPhase: 'presenca',
+        stagnationLevel: 1,
+        guidance: `\n\n💡 NOTA DE TIMING:
+O usuário já trouxe material suficiente (contexto, emoção e algo sobre o porquê) e ${sessionElapsedMin} min se passaram.
+Se houver leitura possível, considere oferecer como HIPÓTESE ABERTA agora — sem forçar. Se ainda faltar um ângulo, vá uma camada mais funda no que JÁ apareceu, sem repetir perguntas exploratórias do início.`
+      };
     }
 
     // Still in opening pattern after 8+ min
