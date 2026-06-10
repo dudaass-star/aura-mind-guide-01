@@ -5578,7 +5578,11 @@ REGRA: ${behaviorInstruction}`;
         crisisActive,
       });
 
-      if (closure.route !== 'none') {
+      // Gate: só injeta fechamento dentro de sessão ativa.
+      // Fora de sessão, mesmo com route !== 'none', o bloco virava ruído em
+      // conversa casual ("Oi") e empurrava o LLM a puxar tema antigo.
+      // (phaseEval ainda não foi computado neste ponto — gate conservador.)
+      if (closure.route !== 'none' && sessionActive) {
         let closureBlock = `\n\n🔚 FECHAMENTO RECOMENDADO (use APENAS quando o micro passo da Fase 3 emergir):`;
         if (closure.route === 'session_bridge') {
           closureBlock += `\nRota: BRIDGE_PARA_SESSAO`;
