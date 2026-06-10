@@ -1238,6 +1238,13 @@ ou simplesmente validar o silêncio/resistência como legítimo.`
   if (lastUserContext?.aura_phase) {
     detectedPhase = lastUserContext.aura_phase;
     console.log(`🔄 Phase evaluator: using semantic aura_phase="${detectedPhase}" from micro-agent`);
+    // Fase 1 — upgrade por reflexão genuína do usuário:
+    // Se o USUÁRIO ele mesmo entrou em modo reflexivo (não concordância passiva),
+    // o evaluator pode avançar de presenca → sentido sem depender de keyword da Aura.
+    if (lastUserContext.user_reflection_mode === true && detectedPhase === 'presenca') {
+      console.log(`🔄 Phase evaluator: user_reflection_mode=true → upgrading presenca → sentido`);
+      detectedPhase = 'sentido';
+    }
   } else {
     // Fallback to keyword-based detection only if micro-agent didn't provide aura_phase
     function countIndicators(messages: string[], keywords: string[]): number {
@@ -1294,8 +1301,12 @@ A força não tá em estar certa — tá em arriscar a leitura e dar espaço pro
     }
   }
 
-  if (recentUserCount < 4 && detectedPhase !== 'presenca' && detectedPhase !== 'initial') {
-    console.log(`🔄 Phase evaluator: recentPairs=${recentUserCount} < 4, forcing presenca (was ${detectedPhase})`);
+  // Fase 1 — relaxa o freio rígido de pares: se o conteúdo já está saturado
+  // (contexto + emoção nomeada + crença/origem), permite avanço mesmo com <4 pares.
+  // Sem isso, usuário denso em 2 mensagens ficava preso esperando contagem cega.
+  const densitySaturated = lastUserContext?.information_density === 'saturated';
+  if (recentUserCount < 4 && detectedPhase !== 'presenca' && detectedPhase !== 'initial' && !densitySaturated) {
+    console.log(`🔄 Phase evaluator: recentPairs=${recentUserCount} < 4 (density=${lastUserContext?.information_density ?? 'unknown'}), forcing presenca (was ${detectedPhase})`);
     return {
       detectedPhase: 'presenca',
       stagnationLevel: 0,
@@ -1305,6 +1316,9 @@ NÃO avance para interpretação ou sentido ainda.
 AÇÃO: Valide o que o usuário trouxe, pergunte sobre a situação concreta, mostre que está ouvindo.
 Reframes e perguntas-âncora só DEPOIS de mapear o contexto.`
     };
+  }
+  if (recentUserCount < 4 && densitySaturated && detectedPhase !== 'presenca' && detectedPhase !== 'initial') {
+    console.log(`🔄 Phase evaluator: recentPairs=${recentUserCount} < 4 MAS information_density=saturated → permitindo avanço para ${detectedPhase}`);
   }
 
   const questionCount = recentAssistant.reduce((sum, msg) => 
