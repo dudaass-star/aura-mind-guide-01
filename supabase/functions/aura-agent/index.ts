@@ -1029,9 +1029,8 @@ INSTRUÇÕES TÁTICAS — Exploração → Reframe:
 ✅ CERTO: devolva UMA observação concreta e nova (padrão recorrente, contradição, consequência) com suas próprias palavras — sem fórmula de abertura fixa.
 ❌ ERRADO: Continuar fazendo perguntas abertas sem sintetizar
 ✅ CERTO: Apresentar UMA observação concreta e depois UMA pergunta de reframe
-TÉCNICA: Nomeie o que está por baixo, não o que está na superfície.
 
-⚠️ CONFRONTO CIRÚRGICO OBRIGATÓRIO: Pelo menos 1 confronto cirúrgico nesta fase. Sem isso, sessão vira conversa.
+⚠️ CONFRONTO CIRÚRGICO: Use quando perceber padrão repetido (2+ aparições nesta sessão) ou contradição clara.
 - "Você descreveu 3 situações diferentes essa sessão, mas o padrão é o mesmo. Tá vendo qual é?"
 - "Tem uma incoerência entre o que você diz que quer e o que você escolhe. Quer olhar pra isso?"
 - "Você tá descrevendo isso como se fosse coisa que aconteceu com você. Mas você participou. Onde tá sua parte?"
@@ -1058,7 +1057,7 @@ const FREE_PHASE_INSTRUCTIONS: Record<string, string> = {
   presenca_to_sentido: `
 INSTRUÇÕES TÁTICAS — Presença → Sentido:
 ❌ ERRADO: "Me conta mais" / "Como assim?" / "O que você sentiu?"
-✅ CERTO: nomeie com suas próprias palavras o que está por baixo do que foi dito (sem fórmula fixa) e siga com UMA pergunta-âncora da Logoterapia.
+✅ CERTO: devolva com suas próprias palavras o que o usuário trouxe (sem fórmula fixa) e siga com UMA pergunta-âncora da Logoterapia.
 ❌ ERRADO: Repetir validação emocional sem avançar ("Eu entendo", "Faz sentido sentir assim" pela 5ª vez)
 ✅ CERTO: Validar brevemente + trazer UMA pergunta-âncora da Logoterapia:
   • "O que essa situação mostra sobre o que importa pra você?"
@@ -1137,22 +1136,34 @@ function evaluateTherapeuticPhase(
   lastUserContext?: UserContextState | null,
   totalMessageCount?: number,
   insightsCount?: number,
-  sessionDurationMin: number = 45
+  sessionDurationMin: number = 45,
+  lastUserContextUpdatedAt?: string | null
 ): PhaseEvaluation {
   // ======== USER CONTEXT OVERRIDES (from micro-agent, previous turn) ========
   if (lastUserContext) {
     // Priority 1: Emotional regression → force Presença
     if (lastUserContext.user_emotional_state === 'crisis' || lastUserContext.user_emotional_state === 'vulnerable') {
-      console.log(`🔄 Phase evaluator: user_emotional_state=${lastUserContext.user_emotional_state} → forcing presenca`);
-      return {
-        detectedPhase: 'presenca',
-        stagnationLevel: 0,
-        guidance: `\n\n🔄 RESET DE FASE (DETECÇÃO AUTOMÁTICA):
+      // Guarda de idade: só aplica reset se o label foi gerado nos últimos 10 min.
+      // Sem isso, label antigo (ex.: 'vulnerable' de uma sessão de ontem) força
+      // "PRIORIDADE ABSOLUTA: Acolhimento" no turno atual mesmo em conversa neutra.
+      const ageMs = lastUserContextUpdatedAt
+        ? Date.now() - new Date(lastUserContextUpdatedAt).getTime()
+        : Number.POSITIVE_INFINITY;
+      const isFresh = ageMs < 10 * 60 * 1000;
+      if (!isFresh) {
+        console.log(`🔄 Phase evaluator: user_emotional_state=${lastUserContext.user_emotional_state} ignorado (label antigo, idade=${Math.round(ageMs / 60000)}min)`);
+      } else {
+        console.log(`🔄 Phase evaluator: user_emotional_state=${lastUserContext.user_emotional_state} → forcing presenca`);
+        return {
+          detectedPhase: 'presenca',
+          stagnationLevel: 0,
+          guidance: `\n\n🔄 RESET DE FASE (DETECÇÃO AUTOMÁTICA):
 O sistema detectou que o usuário está em estado ${lastUserContext.user_emotional_state === 'crisis' ? 'de CRISE' : 'VULNERÁVEL'}.
 PRIORIDADE ABSOLUTA: Acolhimento e presença. NÃO avance fase. NÃO faça perguntas profundas agora.
 Apenas esteja presente, valide o que ele sente, e ofereça segurança emocional.
 ${lastUserContext.user_emotional_state === 'crisis' ? 'Se houver risco, siga o protocolo de segurança.' : ''}`
-      };
+        };
+      }
     }
 
     // Priority 2: Short answer streak (check BEFORE topic shift so it's not silenced)
@@ -1432,7 +1443,7 @@ O usuário já se sentiu ouvido. Agora é hora de trazer SENTIDO (Fase 2).
 
 AÇÃO OBRIGATÓRIA:
 - NÃO faça mais perguntas exploratórias ("como assim?", "me conta mais")
-- Traga UMA observação profunda com suas próprias palavras (sem fórmula fixa) — nomeie o que está por baixo.
+- Traga UMA observação concreta sobre o que o usuário descreveu (sem fórmula fixa).
 - Use UMA pergunta-âncora da Logoterapia:
   • "O que essa situação mostra sobre o que importa pra você?"
   • "Qual seria sua resposta mais autêntica a isso?"
@@ -2755,9 +2766,6 @@ Conversas profundas seguem 3 fases progressivas. NÃO pule fases. NÃO fique pre
 
 ### FASE 1 — PRESENÇA (1-2 trocas)
 Reaja de forma genuína, sem fórmulas. Mostre que leu e se importa.
-Nomeie o que está por baixo do que foi dito SOMENTE quando isso acrescentar algo novo. Se for só traduzir a fala do usuário em linguagem emocional, não faça.
-- Errado: "Que difícil estar sem trabalho..."
-- Certo: "Você não tá falando só de dinheiro. Tá falando de identidade. De não saber quem você é quando não está produzindo."
 
 ⚠️ Antídoto do eco interpretativo: em Fase 1, alterne presença com reação concreta. Nem toda dor precisa virar leitura psicológica na resposta seguinte.
 
@@ -3423,10 +3431,9 @@ ESTILO AURA DE EXPLORAÇÃO:
 
 📐 CAMADAS DE PROFUNDIDADE (use como bússola, não como checklist):
 - Camada 1 — FATO: O que aconteceu? (se o usuário ainda está aqui, vá pra camada 2)
-- Camada 2 — EMOÇÃO: O que sentiu? (nomeie a emoção se o usuário não nomear)
+- Camada 2 — EMOÇÃO: O que sentiu?
 - Camada 3 — CRENÇA: O que isso significa pra você? Que história você conta pra si sobre isso?
 - Camada 4 — ORIGEM: De onde vem essa crença? Quando foi a primeira vez que sentiu isso?
-Se o usuário está dando respostas curtas ou genéricas, você provavelmente ainda está na superfície. Vá mais fundo antes de avançar.
 
 🪞 META-COMUNICAÇÃO TERAPÊUTICA (use quando perceber padrões na própria conversa):
 - "Percebi que quando toquei em [X], você mudou de assunto. O que aconteceu ali?"
@@ -3471,7 +3478,7 @@ Se sentir que "já explorou o suficiente", vá MAIS FUNDO no mesmo tema ou abra 
    - "Teve alguma vez em que você esperava reagir assim mas não reagiu? O que foi diferente?"
    - "Em que situação você se sentiu o oposto disso?"
 
-6. **CONFRONTO CIRÚRGICO** (obrigatório pelo menos 1x na fase de Reframe): Devolva ao usuário a contradição ou padrão observado, com cuidado mas sem suavizar. Use só após 15+ min de sessão (vínculo já estabelecido).
+6. **CONFRONTO CIRÚRGICO** (use quando houver padrão repetido ou contradição clara): Devolva ao usuário a contradição ou padrão observado, com cuidado mas sem suavizar. Use só após 15+ min de sessão (vínculo já estabelecido).
    - "Você descreveu 3 situações diferentes essa sessão, mas o padrão é o mesmo. Tá vendo qual é?"
    - "Tem uma incoerência entre o que você diz que quer e o que você escolhe. Quer olhar pra isso?"
    - "Você tá descrevendo como se isso só acontecesse com você. Mas você participou. Onde tá sua parte?"
@@ -6117,7 +6124,23 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
         evalElapsedMin = Math.floor((Date.now() - new Date(currentSession.started_at).getTime()) / 60000);
       }
       const evalDurationMin = currentSession?.duration_minutes ?? 45;
-      const phaseEval = evaluateTherapeuticPhase(messageHistory, sessionActive, evalSessionPhase, evalElapsedMin, last_user_context, messageCount, userInsights.length, evalDurationMin);
+      // Guarda de idade: busca updated_at de aura_response_state só quando o label é de alto risco.
+      // Evita que label 'vulnerable'/'crisis' antigo force acolhimento em conversa neutra do dia seguinte.
+      let lastUserContextUpdatedAt: string | null = null;
+      if (last_user_context?.user_emotional_state === 'vulnerable' ||
+          last_user_context?.user_emotional_state === 'crisis') {
+        try {
+          const { data: ars } = await supabase
+            .from('aura_response_state')
+            .select('updated_at')
+            .eq('user_id', profile.id)
+            .maybeSingle();
+          lastUserContextUpdatedAt = ars?.updated_at ?? null;
+        } catch (err) {
+          console.warn('⚠️ [phase-evaluator-age-guard] fetch updated_at skipped (non-fatal):', err);
+        }
+      }
+      const phaseEval = evaluateTherapeuticPhase(messageHistory, sessionActive, evalSessionPhase, evalElapsedMin, last_user_context, messageCount, userInsights.length, evalDurationMin, lastUserContextUpdatedAt);
       if (phaseEval.guidance) {
         dynamicContext += phaseEval.guidance;
         console.log(`🔄 Phase evaluator: detected=${phaseEval.detectedPhase}, stagnation=${phaseEval.stagnationLevel}, context=${sessionActive ? 'session' : 'free'}`);
