@@ -5353,22 +5353,26 @@ ${(() => {
   if (pendingCommitmentsDetailed.length > 0) {
     ctx += `- Compromissos pendentes: ${pendingCommitmentsDetailed.map((c: any) => c.title).join(', ')}\n`;
     
-    // Detectar padrão recorrente de inação (inter-conversas)
-    const recurringStalling = pendingCommitmentsDetailed.filter((c: any) => {
-      const followUpCount = c.follow_up_count || 0;
-      const daysSince = Math.floor((Date.now() - new Date(c.created_at).getTime()) / (1000 * 60 * 60 * 24));
-      return followUpCount >= 2 || daysSince > 14;
-    });
-    
-    if (recurringStalling.length > 0) {
-      ctx += `\n⚠️ PADRÃO RECORRENTE DE INAÇÃO DETECTADO:\n`;
-      for (const c of recurringStalling) {
-        const followUps = c.follow_up_count || 0;
+    // Padrão recorrente de inação SÓ é injetado em sessão ativa.
+    // Fora de sessão (chat casual / "Oi"), confronto afetuoso vira ruído e força a Aura
+    // a puxar tema antigo sem o usuário abrir gancho. Tracking continua no banco.
+    if (sessionActive) {
+      const recurringStalling = pendingCommitmentsDetailed.filter((c: any) => {
+        const followUpCount = c.follow_up_count || 0;
         const daysSince = Math.floor((Date.now() - new Date(c.created_at).getTime()) / (1000 * 60 * 60 * 24));
-        ctx += `- "${c.title}" (há ${daysSince} dias, cobrado ${followUps}x sem movimento)\n`;
+        return followUpCount >= 2 || daysSince > 14;
+      });
+      
+      if (recurringStalling.length > 0) {
+        ctx += `\n⚠️ PADRÃO RECORRENTE DE INAÇÃO DETECTADO:\n`;
+        for (const c of recurringStalling) {
+          const followUps = c.follow_up_count || 0;
+          const daysSince = Math.floor((Date.now() - new Date(c.created_at).getTime()) / (1000 * 60 * 60 * 24));
+          ctx += `- "${c.title}" (há ${daysSince} dias, cobrado ${followUps}x sem movimento)\n`;
+        }
+        ctx += `→ Considere confronto afetuoso: "A gente já conversou sobre isso [X vezes]. O que você ganha ficando parada nessa situação?"\n`;
+        ctx += `→ Tom: alguém que se importa demais pra fingir que tá tudo bem. NÃO é julgamento.\n`;
       }
-      ctx += `→ Considere confronto afetuoso: "A gente já conversou sobre isso [X vezes]. O que você ganha ficando parada nessa situação?"\n`;
-      ctx += `→ Tom: alguém que se importa demais pra fingir que tá tudo bem. NÃO é julgamento.\n`;
     }
   }
   return ctx;
