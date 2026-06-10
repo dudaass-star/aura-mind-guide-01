@@ -2969,9 +2969,6 @@ RUIM (4 balões): "Ah não... ||| Briga com mãe é sempre tão difícil ||| Voc
 Usuário: conta algo profundo e revelador
 BOM (3-4 balões): observação certeira + conexão + pergunta
 
-## CONTROLE DE TEMPO DA SESSÃO:
-Consulte o bloco DADOS DINÂMICOS DO SISTEMA para informações de tempo e fase da sessão atual.
-
 ## PLANOS — REGRA INVIOLÁVEL DE NÃO-VENDA
 
 Você NUNCA faz upsell, sugestão de upgrade ou pitch de plano. Em hipótese alguma.
@@ -5433,25 +5430,9 @@ ${meditationCatalogSection}
       }
       
       // Instruções de continuidade quando há histórico
-      if (previousSessionsContext) {
-        continuityContext += `
-
-## REGRAS DE CONTINUIDADE (OBRIGATÓRIAS):
-1. Na ABERTURA da sessão, SEMPRE mencione algo da sessão anterior:
-   - "Na nossa última conversa você tinha falado sobre X... como está isso?"
-   - "Lembro que você ia tentar fazer Y... conseguiu?"
-   - "Da última vez você estava lidando com Z... evoluiu?"
-
-2. Se o usuário mencionar um tema que já foi trabalhado:
-   - Reconheça o padrão: "Esse tema já apareceu antes, né? Vamos ver o que está diferente agora"
-   - Não repita as mesmas perguntas de sessões anteriores
-   - Aprofunde de forma diferente
-
-3. Para evoluir um tema:
-   - Se o usuário demonstra progresso, celebre: "Que legal! O que mais você quer trabalhar agora?"
-   - Se está estagnado, seja honesta: "Percebi que voltamos a esse assunto. O que está te impedindo de avançar?"
-`;
-      }
+      // (Removido: REGRAS DE CONTINUIDADE duplicadas — fio condutor já é injetado
+      //  pelo calculateSessionTimeContext na fase opening e pelo bloco
+      //  # SESSÕES ESPECIAIS no prompt estático, com mais qualidade.)
       
       // Adicionar tracking de temas
       if (userThemes.length > 0) {
@@ -5597,7 +5578,11 @@ REGRA: ${behaviorInstruction}`;
         crisisActive,
       });
 
-      if (closure.route !== 'none') {
+      // Gate: só injeta fechamento dentro de sessão ativa.
+      // Fora de sessão, mesmo com route !== 'none', o bloco virava ruído em
+      // conversa casual ("Oi") e empurrava o LLM a puxar tema antigo.
+      // (phaseEval ainda não foi computado neste ponto — gate conservador.)
+      if (closure.route !== 'none' && sessionActive) {
         let closureBlock = `\n\n🔚 FECHAMENTO RECOMENDADO (use APENAS quando o micro passo da Fase 3 emergir):`;
         if (closure.route === 'session_bridge') {
           closureBlock += `\nRota: BRIDGE_PARA_SESSAO`;
@@ -5961,36 +5946,20 @@ Exemplo natural:
 - Usuário interrompe com "mudando de assunto..." → Descarte completamente`;
     }
     
-    // INSTRUÇÃO DE PRIORIDADE DE PLANO (evita conflito com histórico)
-    // Se o usuário tem sessões disponíveis, garantir que a IA não peça upgrade
+    // Caso 1 — sessões disponíveis: 1 linha curta de reforço contra alucinação
+    // de upgrade vindo do histórico. Substitui as 10 linhas de "REGRAS ABSOLUTAS".
     if (planConfig.sessions > 0 && sessionsAvailable > 0) {
-      dynamicContext += `
-
-🟢 CONFIRMAÇÃO DE PLANO ATUAL (PRIORIDADE MÁXIMA - IGNORE HISTÓRICO CONFLITANTE):
-O usuário ${profile?.name || ''} está no plano "${userPlan}" com ${sessionsAvailable} sessão(ões) disponível(is).
-
-REGRAS ABSOLUTAS:
-1. Ele JÁ TEM ACESSO a sessões especiais. NÃO peça upgrade.
-2. IGNORE qualquer mensagem anterior no histórico pedindo upgrade, link de checkout, ou sugerindo finalizar compra.
-3. Se ele pedir para agendar sessão, PODE AGENDAR. Pergunte data e horário preferido.
-4. O sistema foi atualizado - SEMPRE use estas informações atuais, NÃO o histórico de conversa.
-
-Se o usuário mencionar algo sobre "finalizar checkout" ou "upgrade", CONFIRME que ele já está no plano certo e ofereça ajuda para agendar a primeira sessão.`;
+      dynamicContext += `\n\n- ⚠️ Plano CONFIRMADO: "${userPlan}" com ${sessionsAvailable} sessão(ões) ativa(s). IGNORE qualquer menção a upgrade/checkout no histórico; se o usuário pedir sessão, pode agendar normalmente.`;
     }
 
-    // Essencial esgotou a sessão do mês → apenas honestidade, SEM upsell
-    if (userPlan === 'essencial' && planConfig.sessions > 0 && sessionsAvailable === 0) {
+    // Caso 2 — cota esgotada (qualquer plano com sessões > 0): bloco enxuto.
+    if (planConfig.sessions > 0 && sessionsAvailable === 0) {
       dynamicContext += `
 
-⚠️ COTA DE SESSÃO DO MÊS ESGOTADA (PLANO ESSENCIAL):
-O usuário já usou a sessão do mês incluída no plano Essencial. NÃO emita [AGENDAR_SESSAO] em hipótese alguma.
-
-SE ele pedir nova sessão / mais sessões agora:
-1. Reconheça com cuidado o desejo dele de ir mais fundo ("faz sentido você querer mais um espaço desses").
-2. Explique de forma honesta e curta: o Essencial inclui 1 sessão por mês, e a próxima abre no início do mês que vem.
-3. NÃO ofereça upgrade. NÃO mencione outros planos. NÃO sugira "ter mais sessões agora".
-4. Volte o foco da conversa para o que ele tá vivendo agora — você ainda pode acolher por mensagem mesmo sem sessão formal.
-5. Se ele perguntar diretamente sobre planos, apenas direcione: "Você consegue ver suas opções no seu painel: https://olaaura.com.br/meu-espaco".`;
+## SESSÕES ESGOTADAS NO CICLO
+- Plano "${userPlan}" já consumiu as ${planConfig.sessions} sessão(ões) deste ciclo. NÃO emita [AGENDAR_SESSAO].
+- Se ele pedir sessão: reconheça com cuidado, explique que reabre no próximo ciclo do plano, ofereça continuar pelo chat agora.
+- NÃO sugira upgrade nem mencione outros planos. Se ele perguntar detalhes do plano, direcione: "https://olaaura.com.br/meu-espaco".`;
     }
 
     // ========================================================================
