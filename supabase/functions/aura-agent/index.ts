@@ -790,6 +790,10 @@ interface ExtractedActions {
   topic_continuity?: 'same_topic' | 'shifted' | 'new_topic';
   engagement_level?: 'engaged' | 'short_answers' | 'disengaged';
   aura_phase?: 'presenca' | 'sentido' | 'movimento';
+  // Fase 1 — sinais novos para o Phase Evaluator enxergar conteúdo (não só clock/contagem).
+  information_density?: 'low' | 'medium' | 'saturated';
+  user_reflection_mode?: boolean;
+  user_engaged_with_commitment?: boolean;
 }
 
 interface UserContextState {
@@ -798,6 +802,9 @@ interface UserContextState {
   engagement_level?: string;
   short_answer_streak?: number;
   aura_phase?: string;
+  information_density?: string;
+  user_reflection_mode?: boolean;
+  user_engaged_with_commitment?: boolean;
 }
 
 async function extractActionsFromResponse(
