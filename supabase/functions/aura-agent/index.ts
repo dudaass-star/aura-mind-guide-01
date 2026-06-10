@@ -1675,6 +1675,9 @@ async function processExtractedActions(
         engagement_level: actions.engagement_level,
         short_answer_streak: shortAnswerStreak,
         aura_phase: actions.aura_phase,
+        information_density: actions.information_density,
+        user_reflection_mode: actions.user_reflection_mode,
+        user_engaged_with_commitment: actions.user_engaged_with_commitment,
       };
       // Use partial UPDATE to avoid overwriting concurrent fields (is_responding, pending_content, etc.)
       await supabase.from('aura_response_state')
