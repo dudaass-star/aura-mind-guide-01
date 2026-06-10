@@ -19,9 +19,10 @@ const AURA_VOICE_CONFIG = {
 // ─── Inworld TTS Config ────────────────────────────────────────────
 const INWORLD_CONFIG = {
   voiceId: "default-m-ple0rtxdeidhocwm57qw__aura",
-  modelId: "inworld-tts-1.5-max",
-  speakingRate: 1.20,
-  temperature: 1.0,
+  modelId: "inworld-tts-2",
+  speakingRate: 1.0,
+  // TTS-2 usa delivery_mode (STABLE | BALANCED | EXPRESSIVE) ao invés de temperature
+  delivery_mode: "EXPRESSIVE",
 };
 
 // ─── Interfaces ────────────────────────────────────────────────────
@@ -183,7 +184,7 @@ async function generateInworldTTS(text: string): Promise<{ audioBytes: Uint8Arra
         voiceId: INWORLD_CONFIG.voiceId,
         modelId: INWORLD_CONFIG.modelId,
         speakingRate: INWORLD_CONFIG.speakingRate,
-        temperature: INWORLD_CONFIG.temperature,
+        delivery_mode: INWORLD_CONFIG.delivery_mode,
       }),
     });
 
