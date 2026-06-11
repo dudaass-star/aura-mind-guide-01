@@ -1,0 +1,1 @@
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS twilio_redirect_notice_sent_at timestamptz;

@@ -1333,6 +1333,7 @@ export type Database = {
           trial_nudge_active: boolean | null
           trial_phase: string | null
           trial_started_at: string | null
+          twilio_redirect_notice_sent_at: string | null
           updated_at: string | null
           upgrade_refusal_count: number
           upgrade_refusal_type: string | null
@@ -1399,6 +1400,7 @@ export type Database = {
           trial_nudge_active?: boolean | null
           trial_phase?: string | null
           trial_started_at?: string | null
+          twilio_redirect_notice_sent_at?: string | null
           updated_at?: string | null
           upgrade_refusal_count?: number
           upgrade_refusal_type?: string | null
@@ -1465,6 +1467,7 @@ export type Database = {
           trial_nudge_active?: boolean | null
           trial_phase?: string | null
           trial_started_at?: string | null
+          twilio_redirect_notice_sent_at?: string | null
           updated_at?: string | null
           upgrade_refusal_count?: number
           upgrade_refusal_type?: string | null
