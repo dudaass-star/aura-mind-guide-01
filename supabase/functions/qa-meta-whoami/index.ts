@@ -23,10 +23,30 @@ Deno.serve(async (req) => {
   );
   const wabaJson = await wabaRes.json();
 
+  // 3. listar subscribed_apps do WABA
+  const subsListRes = await fetch(
+    `https://graph.facebook.com/v21.0/${wabaEnv}/subscribed_apps`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  const subsListJson = await subsListRes.json();
+
+  // 4. se action=subscribe na query, faz POST /subscribed_apps
+  const url = new URL(req.url);
+  let subscribeResult: any = null;
+  if (url.searchParams.get('action') === 'subscribe') {
+    const subRes = await fetch(
+      `https://graph.facebook.com/v21.0/${wabaEnv}/subscribed_apps`,
+      { method: 'POST', headers: { Authorization: `Bearer ${token}` } }
+    );
+    subscribeResult = await subRes.json();
+  }
+
   return new Response(JSON.stringify({
     env_phone_number_id: phoneId,
     env_waba_id: wabaEnv,
     phone_info: phoneJson,
     waba_info: wabaJson,
+    subscribed_apps: subsListJson,
+    subscribe_result: subscribeResult,
   }, null, 2), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 });
