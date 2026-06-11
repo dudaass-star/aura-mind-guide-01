@@ -348,7 +348,7 @@ export async function sendProactiveMessage(
     // Janela fechada → template aprovado
     const { data: templateConfig } = await supabase
       .from('whatsapp_templates')
-      .select('template_name, meta_template_name, meta_language_code, is_active, meta_variable_count')
+      .select('template_name, meta_template_name, meta_language_code, is_active, meta_variable_count, meta_variable_names')
       .eq('category', templateCategory)
       .single();
 
@@ -368,12 +368,15 @@ export async function sendProactiveMessage(
     const expectedVars = typeof templateConfig.meta_variable_count === 'number'
       ? templateConfig.meta_variable_count
       : 1;
+    const variableNames: string[] | undefined = Array.isArray(templateConfig.meta_variable_names)
+      ? templateConfig.meta_variable_names.slice(0, expectedVars)
+      : undefined;
 
     // Variáveis explícitas têm prioridade
     if (templateVariables && templateVariables.length > 0) {
       const trimmed = templateVariables.slice(0, expectedVars);
       console.log(`📨 [Meta] Sending template "${metaName}" with ${trimmed.length}/${expectedVars} structured variable(s)`);
-      const r = await sendTemplateMessage(phone, metaName, langCode, trimmed);
+      const r = await sendTemplateMessage(phone, metaName, langCode, trimmed, variableNames);
       return { success: r.success, parts: 1, type: 'template', error: r.error, messageId: r.messageId };
     }
 
@@ -390,7 +393,7 @@ export async function sendProactiveMessage(
 
     // Repete o nome até preencher o número esperado de variáveis (defensivo).
     const autoVars = Array(expectedVars).fill(firstName);
-    const r = await sendTemplateMessage(phone, metaName, langCode, autoVars);
+    const r = await sendTemplateMessage(phone, metaName, langCode, autoVars, variableNames);
     return { success: r.success, parts: 1, type: 'template', error: r.error, messageId: r.messageId };
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Unknown error';
