@@ -109,6 +109,7 @@ export async function sendTemplateMessage(
   templateName: string,
   languageCode: string,
   variables: string[],
+  variableNames?: string[],
 ): Promise<TwilioSendResult> {
   if (!phone || !phone.replace(/\D/g, '')) {
     return { success: false, error: `Invalid phone number: "${phone}"` };
@@ -121,10 +122,20 @@ export async function sendTemplateMessage(
 
     const components: Array<Record<string, unknown>> = [];
     if (variables.length > 0) {
+      const useNamed = Array.isArray(variableNames)
+        && variableNames.length === variables.length
+        && variableNames.every(n => typeof n === 'string' && n.length > 0);
       components.push({
         type: 'body',
-        parameters: variables.map(v => ({ type: 'text', text: v })),
+        parameters: variables.map((v, i) =>
+          useNamed
+            ? { type: 'text', parameter_name: variableNames![i], text: v }
+            : { type: 'text', text: v }
+        ),
       });
+      if (useNamed) {
+        console.log(`📨 [Meta] Using named parameters: ${JSON.stringify(variableNames)}`);
+      }
     }
 
     const body: Record<string, unknown> = {
