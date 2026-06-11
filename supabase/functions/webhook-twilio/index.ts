@@ -6,6 +6,7 @@
  */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sendFreeText as twilioSendFreeText } from "../_shared/whatsapp-official.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -146,6 +147,53 @@ Deno.serve(async (req) => {
       console.warn('⚠️ Could not update last_user_message_at:', updateError.message);
     } else {
       console.log('✅ Updated last_user_message_at for phone variations');
+    }
+
+    // ========================================================================
+    // REDIRECIONAMENTO MIGRAÇÃO TWILIO → META
+    // Se o perfil já foi flipado para `whatsapp_provider = 'meta'`, este
+    // inbound veio pro número antigo. Respondemos com aviso curto via Twilio
+    // (janela 24h aberta = texto livre, sem template) e NÃO chamamos o agente.
+    // Idempotência: 7 dias entre repetições para não virar spam.
+    // ========================================================================
+    try {
+      const { data: targetProfile } = await supabase
+        .from('profiles')
+        .select('id, whatsapp_provider, twilio_redirect_notice_sent_at')
+        .in('phone', phoneVariations)
+        .maybeSingle();
+
+      if (targetProfile?.whatsapp_provider === 'meta') {
+        const lastNotice = targetProfile.twilio_redirect_notice_sent_at
+          ? new Date(targetProfile.twilio_redirect_notice_sent_at).getTime()
+          : 0;
+        const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+        const shouldNotify = !lastNotice || Date.now() - lastNotice > sevenDaysMs;
+
+        if (shouldNotify) {
+          const noticeText = 'Oi! Mudei de número 💛 Me chama aqui agora: https://wa.me/15559586099 — esse número antigo vai sair do ar em breve.';
+          const sendResult = await twilioSendFreeText(cleanPhone, noticeText);
+          if (sendResult.success) {
+            await supabase
+              .from('profiles')
+              .update({ twilio_redirect_notice_sent_at: new Date().toISOString() })
+              .eq('id', targetProfile.id);
+            console.log('📤 Redirect notice sent via Twilio (migração Meta)');
+          } else {
+            console.warn('⚠️ Falha enviando redirect notice:', sendResult.error);
+          }
+        } else {
+          console.log('⏭️ Redirect notice já enviado nos últimos 7 dias, silenciando');
+        }
+
+        return new Response('', {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'text/plain' },
+        });
+      }
+    } catch (redirectErr) {
+      console.error('⚠️ Erro na checagem de redirecionamento Meta:', redirectErr);
+      // Não bloqueia o fluxo normal — segue pro worker
     }
 
     // ========================================================================

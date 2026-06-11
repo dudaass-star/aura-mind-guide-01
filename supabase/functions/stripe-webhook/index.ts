@@ -427,6 +427,7 @@ Deno.serve(async (req) => {
                 current_journey_id: 'j1-ansiedade',
                 current_episode: 0,
                 last_content_sent_at: null,
+                whatsapp_provider: 'meta',
                 ...(instanceId && { whatsapp_instance_id: instanceId }),
               });
               console.log('✅ Trial profile created');

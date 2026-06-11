@@ -273,6 +273,7 @@ async function handleActivation(
         current_episode: 0,
         plan_expires_at: newExpiry,
         asaas_customer_id: updated.asaas_customer_id || null,
+        whatsapp_provider: "meta",
       }).select("id").maybeSingle();
       if (insErr) {
         console.error("[webhook-asaas] Erro criando profile:", insErr);
