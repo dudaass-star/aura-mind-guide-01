@@ -239,7 +239,7 @@ export async function sendTemplateOnly(
 
     const { data: templateConfig } = await supabase
       .from('whatsapp_templates')
-      .select('template_name, meta_template_name, meta_language_code, is_active, meta_variable_count')
+      .select('template_name, meta_template_name, meta_language_code, is_active, meta_variable_count, meta_variable_names')
       .eq('category', templateCategory)
       .single();
 
@@ -257,6 +257,9 @@ export async function sendTemplateOnly(
     const expectedVars = typeof templateConfig.meta_variable_count === 'number'
       ? templateConfig.meta_variable_count
       : 1;
+    const variableNames: string[] | undefined = Array.isArray(templateConfig.meta_variable_names)
+      ? templateConfig.meta_variable_names.slice(0, expectedVars)
+      : undefined;
 
     // Resolve variables respeitando meta_variable_count
     let variables: string[] = [];
@@ -279,7 +282,7 @@ export async function sendTemplateOnly(
 
     console.log(`📨 [Meta][TemplateOnly] Sending "${metaName}" (${langCode}) to ${phone.substring(0, 4)}*** vars=${JSON.stringify(variables)} (expected=${expectedVars})`);
 
-    const result = await sendTemplateMessage(phone, metaName, langCode, variables);
+    const result = await sendTemplateMessage(phone, metaName, langCode, variables, variableNames);
     return { success: result.success, parts: 1, type: 'template', error: result.error, messageId: result.messageId };
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Unknown error';
