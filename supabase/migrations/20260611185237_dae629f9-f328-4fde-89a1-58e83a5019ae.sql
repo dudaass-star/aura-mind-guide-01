@@ -1,0 +1,6 @@
+UPDATE public.whatsapp_templates SET meta_template_name='welcome2', meta_language_code='pt_BR', meta_variable_count=0, meta_variable_names=NULL, is_active=true WHERE category='welcome';
+UPDATE public.whatsapp_templates SET meta_template_name='sessao_inicio2', meta_language_code='pt_BR', meta_variable_count=0, meta_variable_names=NULL, is_active=true WHERE category='session_start';
+UPDATE public.whatsapp_templates SET meta_template_name='jornada_semanal2', meta_language_code='pt_BR', meta_variable_count=0, meta_variable_names=NULL, is_active=true WHERE category='content';
+UPDATE public.whatsapp_templates SET meta_template_name='relatorio_semanal2', meta_language_code='pt_BR', meta_variable_count=0, meta_variable_names=NULL, is_active=true WHERE category='weekly_report';
+UPDATE public.whatsapp_templates SET meta_template_name='carta_mensal', meta_language_code='en', meta_variable_count=0, meta_variable_names=NULL, is_active=true WHERE category='monthly_letter';
+UPDATE public.whatsapp_templates SET meta_template_name='cheking_7dias2', meta_language_code='pt_BR', meta_variable_count=0, meta_variable_names=NULL, is_active=false WHERE category='checkin';
