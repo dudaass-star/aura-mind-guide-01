@@ -1,0 +1,1 @@
+UPDATE public.system_config SET value = '"meta"'::jsonb, updated_at = now() WHERE key = 'whatsapp_provider';
