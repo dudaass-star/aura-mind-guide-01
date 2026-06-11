@@ -6,7 +6,11 @@ const corsHeaders = {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   const token = Deno.env.get('META_WHATSAPP_ACCESS_TOKEN');
-  const waba = Deno.env.get('META_WHATSAPP_BUSINESS_ACCOUNT_ID');
+  let waba = Deno.env.get('META_WHATSAPP_BUSINESS_ACCOUNT_ID');
+  try {
+    const body = await req.json();
+    if (body?.waba) waba = String(body.waba);
+  } catch (_) { /* sem body */ }
   const r = await fetch(
     `https://graph.facebook.com/v21.0/${waba}/message_templates?fields=name,language,status,category,components&limit=200`,
     { headers: { Authorization: `Bearer ${token}` } }

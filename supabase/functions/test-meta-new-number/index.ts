@@ -36,10 +36,17 @@ Deno.serve(async (req) => {
     if (mode === 'template') {
       const templateName = body.template ?? 'cheking_7dias';
       const lang = body.language ?? 'pt_BR';
+      const paramName = body.parameter_name ?? 'name';
+      const textValue = body.name ?? 'Eduardo';
+      const useNamed = body.use_named !== false; // default true pros templates novos
       const components = body.components ?? [
         {
           type: 'body',
-          parameters: [{ type: 'text', text: body.name ?? 'Eduardo' }],
+          parameters: [
+            useNamed
+              ? { type: 'text', parameter_name: paramName, text: textValue }
+              : { type: 'text', text: textValue },
+          ],
         },
       ];
       payload = {

@@ -109,6 +109,7 @@ export async function sendTemplateMessage(
   templateName: string,
   languageCode: string,
   variables: string[],
+  variableNames?: string[],
 ): Promise<TwilioSendResult> {
   if (!phone || !phone.replace(/\D/g, '')) {
     return { success: false, error: `Invalid phone number: "${phone}"` };
@@ -121,10 +122,20 @@ export async function sendTemplateMessage(
 
     const components: Array<Record<string, unknown>> = [];
     if (variables.length > 0) {
+      const useNamed = Array.isArray(variableNames)
+        && variableNames.length === variables.length
+        && variableNames.every(n => typeof n === 'string' && n.length > 0);
       components.push({
         type: 'body',
-        parameters: variables.map(v => ({ type: 'text', text: v })),
+        parameters: variables.map((v, i) =>
+          useNamed
+            ? { type: 'text', parameter_name: variableNames![i], text: v }
+            : { type: 'text', text: v }
+        ),
       });
+      if (useNamed) {
+        console.log(`📨 [Meta] Using named parameters: ${JSON.stringify(variableNames)}`);
+      }
     }
 
     const body: Record<string, unknown> = {
@@ -228,7 +239,7 @@ export async function sendTemplateOnly(
 
     const { data: templateConfig } = await supabase
       .from('whatsapp_templates')
-      .select('template_name, meta_template_name, meta_language_code, is_active, meta_variable_count')
+      .select('template_name, meta_template_name, meta_language_code, is_active, meta_variable_count, meta_variable_names')
       .eq('category', templateCategory)
       .single();
 
@@ -246,6 +257,9 @@ export async function sendTemplateOnly(
     const expectedVars = typeof templateConfig.meta_variable_count === 'number'
       ? templateConfig.meta_variable_count
       : 1;
+    const variableNames: string[] | undefined = Array.isArray(templateConfig.meta_variable_names)
+      ? templateConfig.meta_variable_names.slice(0, expectedVars)
+      : undefined;
 
     // Resolve variables respeitando meta_variable_count
     let variables: string[] = [];
@@ -268,7 +282,7 @@ export async function sendTemplateOnly(
 
     console.log(`📨 [Meta][TemplateOnly] Sending "${metaName}" (${langCode}) to ${phone.substring(0, 4)}*** vars=${JSON.stringify(variables)} (expected=${expectedVars})`);
 
-    const result = await sendTemplateMessage(phone, metaName, langCode, variables);
+    const result = await sendTemplateMessage(phone, metaName, langCode, variables, variableNames);
     return { success: result.success, parts: 1, type: 'template', error: result.error, messageId: result.messageId };
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Unknown error';
@@ -334,7 +348,7 @@ export async function sendProactiveMessage(
     // Janela fechada → template aprovado
     const { data: templateConfig } = await supabase
       .from('whatsapp_templates')
-      .select('template_name, meta_template_name, meta_language_code, is_active, meta_variable_count')
+      .select('template_name, meta_template_name, meta_language_code, is_active, meta_variable_count, meta_variable_names')
       .eq('category', templateCategory)
       .single();
 
@@ -354,12 +368,15 @@ export async function sendProactiveMessage(
     const expectedVars = typeof templateConfig.meta_variable_count === 'number'
       ? templateConfig.meta_variable_count
       : 1;
+    const variableNames: string[] | undefined = Array.isArray(templateConfig.meta_variable_names)
+      ? templateConfig.meta_variable_names.slice(0, expectedVars)
+      : undefined;
 
     // Variáveis explícitas têm prioridade
     if (templateVariables && templateVariables.length > 0) {
       const trimmed = templateVariables.slice(0, expectedVars);
       console.log(`📨 [Meta] Sending template "${metaName}" with ${trimmed.length}/${expectedVars} structured variable(s)`);
-      const r = await sendTemplateMessage(phone, metaName, langCode, trimmed);
+      const r = await sendTemplateMessage(phone, metaName, langCode, trimmed, variableNames);
       return { success: r.success, parts: 1, type: 'template', error: r.error, messageId: r.messageId };
     }
 
@@ -376,7 +393,7 @@ export async function sendProactiveMessage(
 
     // Repete o nome até preencher o número esperado de variáveis (defensivo).
     const autoVars = Array(expectedVars).fill(firstName);
-    const r = await sendTemplateMessage(phone, metaName, langCode, autoVars);
+    const r = await sendTemplateMessage(phone, metaName, langCode, autoVars, variableNames);
     return { success: r.success, parts: 1, type: 'template', error: r.error, messageId: r.messageId };
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Unknown error';
