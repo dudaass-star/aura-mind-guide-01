@@ -1,101 +1,83 @@
-# Painel de análise de cobertura de sessões
+## Contexto
 
-## Objetivo
+O número Meta novo (WABA `META_WHATSAPP_BUSINESS_ACCOUNT_ID`) tem 5 templates aprovados, todos `Utilidade` com 1 variável posicional `{{}}`:
 
-Auditar, sob demanda, se cada sessão real cobriu o que o prompt promete: **4 camadas investigativas** (FATO/EMOÇÃO/CRENÇA/ORIGEM), **3 fases** (presença/sentido/movimento), qualidade do reframe e do fechamento. Análise post-hoc via LLM lendo a transcrição completa.
+| Template aprovado | Idioma | Categoria interna |
+|---|---|---|
+| `relatorio_semanal` | pt_BR | `weekly_report` |
+| `jornada_semanal`   | pt_BR | `content` |
+| `sessao_inicio2`    | pt_BR | `session_reminder` |
+| `welcome2`          | pt_BR | `welcome` |
+| `carta_mensal`      | **en** | `monthly_letter` |
 
-Escopo: sessões agendadas a partir de amanhã + sessões `completed` que rodarem daqui pra frente. Sem retroativo bulk.
+O sender (`meta-whatsapp-client.ts → sendTemplateMessage`) já lê `meta_template_name`, `meta_language_code` e `meta_variable_count` e monta o componente `body` com parâmetros posicionais — então **nenhuma mudança de código** é necessária. Só precisamos corrigir os mapeamentos no banco e validar.
 
-## 1. Nova rota admin: `/admin/sessoes`
+`cheking_7dias` (categoria `checkin`) ainda será submetido — fica fora desse passo, mas vou desativar a linha pra falhar fechado (evita erro 132000 no novo número até subir).
 
-Adicionar ao `App.tsx` ao lado de `/admin/engajamento`. Página `AdminSessions.tsx` com duas seções:
+## Mudanças
 
-- **Próximas sessões** (agendadas, scheduled_at >= amanhã 00h BRT): lista quem/quando/plano/topic. Sem análise (não rodaram). Só visibilidade.
-- **Sessões para auditar** (status=`completed`, ended_at nos últimos 30 dias): tabela com usuário, duração real, status da análise (`pendente` / `analisada`), botão **Analisar** ou **Ver análise**.
+### 1. Migration: atualizar `whatsapp_templates`
 
-Acesso restrito via `has_role(uid, 'admin')`. Reaproveita padrão já existente em `/admin/engajamento`.
+```sql
+update public.whatsapp_templates
+   set meta_template_name = 'relatorio_semanal',
+       meta_language_code = 'pt_BR',
+       meta_variable_count = 1
+ where category = 'weekly_report';
 
-## 2. Nova tabela: `session_coverage_analyses`
+update public.whatsapp_templates
+   set meta_template_name = 'jornada_semanal',
+       meta_language_code = 'pt_BR',
+       meta_variable_count = 1
+ where category = 'content';
 
-Cache da análise para não re-chamar LLM por sessão.
+update public.whatsapp_templates
+   set meta_template_name = 'sessao_inicio2',
+       meta_language_code = 'pt_BR',
+       meta_variable_count = 1
+ where category = 'session_reminder';
 
-Colunas:
-- `id uuid pk`
-- `session_id uuid unique fk sessions(id) on delete cascade`
-- `analyzed_at timestamptz default now()`
-- `model text` (ex. `google/gemini-3-flash-preview`)
-- `coverage jsonb` (estrutura abaixo)
-- `overall_score int` (1–5)
-- `diagnosis text` (3–5 linhas, PT-BR)
-- `red_flags text[]` (lista curta)
+update public.whatsapp_templates
+   set meta_template_name = 'welcome2',
+       meta_language_code = 'pt_BR',
+       meta_variable_count = 1
+ where category = 'welcome';
 
-RLS: SELECT/INSERT só para `has_role(uid, 'admin')`; service_role full. GRANTs explícitos.
+update public.whatsapp_templates
+   set meta_template_name = 'carta_mensal',
+       meta_language_code = 'en',
+       meta_variable_count = 1
+ where category = 'monthly_letter';
 
-Shape do `coverage`:
-
-```json
-{
-  "camadas": {
-    "fato":    { "coberta": true, "evidencia": "..." },
-    "emocao":  { "coberta": true, "evidencia": "..." },
-    "crenca":  { "coberta": false, "evidencia": null },
-    "origem":  { "coberta": false, "evidencia": null }
-  },
-  "fases": {
-    "presenca":  { "coberta": true, "comentario": "..." },
-    "sentido":   { "coberta": true, "comentario": "..." },
-    "movimento": { "coberta": false, "comentario": "..." }
-  },
-  "reframe":     { "emergiu": true, "como_hipotese_aberta": true, "qualidade_1_5": 4, "trecho": "..." },
-  "fechamento":  { "formato_cardapio": "tese|encruzilhada|leitura|experimento|pergunta|escolha-binaria|micro-passo|nenhum", "usuario_se_comprometeu": false, "trecho": "..." }
-}
+-- cheking_7dias ainda não aprovado no número novo → falha fechado
+update public.whatsapp_templates
+   set is_active = false
+ where category = 'checkin';
 ```
 
-## 3. Nova edge function: `analyze-session-coverage`
+### 2. Validação (sem código novo)
 
-`supabase/functions/analyze-session-coverage/index.ts`.
+Pra cada categoria atualizada, disparar `test-meta-new-number` em modo `template` (whitelist Eduardo) e conferir o `wamid` retornado:
 
-Entrada: `{ session_id }`. Validação: caller precisa ser admin (JWT claims + `has_role`).
+- `template: relatorio_semanal`, components `[{type:body, parameters:[{type:text, text:"Eduardo"}]}]`
+- mesmo padrão pra `jornada_semanal`, `sessao_inicio2`, `welcome2`
+- `carta_mensal` com `language: "en"`
 
-Fluxo:
-1. Carrega `sessions` row + todas as `messages` da sessão (ordem cronológica), e `last_user_context` final do `aura_response_state` (pra cross-check).
-2. Se já existe linha em `session_coverage_analyses` para o `session_id` e `force=false`, retorna a cache.
-3. Strip de tags internas no histórico (reusa `stripAllInternalTags` — copiar helper enxuto, sem importar de `aura-agent`).
-4. Monta prompt em PT-BR com transcrição completa + definições estritas das 4 camadas e das 3 fases (mesmo dicionário usado no extractor da Fase 1, evita drift).
-5. Chama Lovable AI Gateway com `google/gemini-3-flash-preview` via `generateText` + `Output.object` (schema Zod compacto correspondendo ao `coverage` acima + `overall_score` + `diagnosis` + `red_flags`).
-6. UPSERT em `session_coverage_analyses` pelo `session_id`.
-7. Retorna a análise.
+Logs ficam em `failed_message_log` se houver erro 132000/132001.
 
-Tamanho da sessão: cap de ~30k chars de transcrição (truncar mensagens muito longas no meio, manter início e fim). Em prática uma sessão de 45 min cabe.
+### 3. Memória
 
-Red flags candidatos a detectar (lista fechada no prompt pra evitar enum dinâmico): `dramatizacao`, `perguntas_socraticas_vazias`, `reframe_imposto_sem_hipotese`, `clock_muleta_acionado`, `fechamento_forcado_sem_material`, `concordancia_passiva_tratada_como_reflexao`, `interrupcao_fase_presenca`.
-
-## 4. UI de análise
-
-Componente `SessionCoverageCard.tsx` consumido pela página admin.
-
-- Botão **Analisar** dispara `supabase.functions.invoke('analyze-session-coverage', { body: { session_id } })`. Estado loading com spinner (10–25s típico).
-- Resultado renderiza:
-  - **Checklist camadas**: 4 itens com ✅/❌ + evidência colapsável.
-  - **Checklist fases**: 3 itens com ✅/❌ + comentário curto.
-  - **Reframe**: badge ("emergiu como hipótese aberta" / "imposto" / "não emergiu") + nota 1–5.
-  - **Fechamento**: formato do cardápio + se usuário se comprometeu.
-  - **Red flags**: chips vermelhos quando presentes.
-  - **Diagnóstico**: bloco de texto livre (3–5 linhas).
-  - **Nota geral**: 1–5 em destaque.
-- Botão **Re-analisar** (passa `force=true`, sobrescreve a linha).
-- Link "abrir conversa" leva pra `/admin/usuarios?user_id=...` (se já existir esse padrão; senão, só mostra o telefone).
+Atualizar `mem://technical/whatsapp/approved-template-sids` com a nova lista do número novo (Meta names, não SIDs Twilio) e marcar `cheking_7dias` como pendente de aprovação.
 
 ## Fora de escopo
 
-- Análise automática ao fim da sessão (fica para depois, evita custo recorrente até validar utilidade).
-- Backfill retroativo das sessões antigas (só roda sob demanda; quem quiser analisa).
-- Métricas agregadas / gráficos (primeira versão é por-sessão; agregação vem depois com 20+ análises).
-- Comparação entre sessões do mesmo usuário (futuro).
-- Nada mexe em `aura-agent`, `phase evaluator`, ou prompt da Aura — é puramente leitura.
+- Não mexer no sender Meta — já posicional.
+- Não desativar Twilio — segue como fallback (memória `mem://technical/whatsapp/meta-twilio-fallback-broad`).
+- Submeter `cheking_7dias` ao novo número — você faz no painel Meta; depois reativo a linha.
+- Não trocar `whatsapp_provider` ainda — esse plano só prepara os templates pro switch.
 
-## Risco e mitigação
+## Riscos
 
-**Drift de definição**: as 4 camadas no analisador precisam usar o mesmo vocabulário do prompt da Aura (FATO/EMOÇÃO/CRENÇA/ORIGEM) e da Fase 1 (information_density). Mitigação: copiar literalmente as definições estritas no prompt do analisador, comentário no código apontando pra fonte.
-
-**Falso-positivo de "coberta"**: Flash pode marcar `crenca.coberta=true` por menção superficial. Mitigação: schema exige `evidencia` literal (trecho curto da conversa); se evidência vazia, considerar `false` na UI.
+- **Erro 132000** (variable mismatch): mitigado por `meta_variable_count = 1` casando exatamente com `{{}}` único do corpo.
+- **`carta_mensal` em `en`**: confirmado pelo print que foi aprovado em English, então `meta_language_code = 'en'` é obrigatório — qualquer outro valor cai em 132001.
+- **`checkin` desativado**: `sendProactiveMessage` falha fechado fora da janela 24h pra categoria `checkin` até `cheking_7dias` ser aprovado. Reativação 7d fica pausada nesse intervalo.
