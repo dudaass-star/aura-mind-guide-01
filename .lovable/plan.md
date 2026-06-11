@@ -1,59 +1,58 @@
-## Objetivo
+## Contexto
 
-Migrar 100% da conversa da Aura do Twilio para o número Meta novo (`+1 555-958-6099`, WABA `4389879528007597`) usando o próprio Twilio como ponte de redirecionamento — sem campanha proativa em massa, sem risco de ban.
+A infraestrutura Meta Cloud API já está 100% pronta no código:
 
-## Lógica central
+- `_shared/meta-whatsapp-client.ts` espelha todas as funções de envio (texto, áudio, template, proativo)
+- `_shared/whatsapp-provider.ts` já roteia por `system_config.whatsapp_provider` e tem fallback Meta→Twilio em qualquer erro
+- Templates Meta já cadastrados em `whatsapp_templates.meta_template_name` para a maioria das categorias
 
-O `whatsapp-provider.ts` já respeita `profiles.whatsapp_provider` como override por usuário. A chave é: **a migração acontece no primeiro inbound do usuário no Twilio depois do flip**. Ninguém fica preso no número antigo.
+O que falta é só o **flip do switch global** + verificações de segurança.
 
-## Fase 1 — Novos cadastros nascem no Meta
+## Estado atual
 
-No fluxo de criação de perfil pós-checkout (Stripe webhook + Asaas onboarding), gravar `profiles.whatsapp_provider = 'meta'` no insert. Tudo que sai dali (welcome, sessões, jornadas) já vai pelo Meta direto. Twilio nunca toca neles.
+| Item | Hoje | Após plano |
+|---|---|---|
+| Inbound | webhook-meta (novo número) ✅ | webhook-meta (novo número) |
+| Outbound texto livre | Twilio `+16625255005` | Meta `+15559586099` |
+| Outbound áudio | Twilio | Meta |
+| Outbound proativo | Twilio template | Meta template, fallback Twilio em erro |
+| `system_config.whatsapp_provider` | `official` (=Twilio) | `meta` |
 
-## Fase 2 — Migração dos antigos via inbound (o coração do plano)
+## Plano
 
-Para todos os perfis existentes com `whatsapp_provider` NULL ou `'official'`, fazer um único update em batch: setar `whatsapp_provider = 'meta'`.
+### 1. Flip do provider global
 
-A partir desse momento:
+Migration `update`: `system_config.whatsapp_provider = 'meta'`. Isso ativa o branch `meta` em `getProvider()` no `whatsapp-provider.ts`, que já roteia tudo (texto, áudio, proativo, template forçado) para `meta-whatsapp-client.ts`.
 
-**Outbound (Aura → usuário)**: tudo que a Aura mandar já sai pelo Meta novo, porque o provider lê o override do profile.
+### 2. Garantir checkin Meta ativo
 
-**Inbound (usuário → Aura)**: o usuário ainda tem o número Twilio antigo salvo no contato. Quando ele escrever pro Twilio:
-- `webhook-twilio/index.ts` detecta que o `profile.whatsapp_provider = 'meta'` (já foi flipado).
-- Responde via Twilio com texto curto: *"Oi! Mudei de número 💛 Me chama aqui pra continuarmos: wa.me/15559586099"* (janela 24h aberta — é resposta direta à msg dele, sem custo de template).
-- Grava `profile.twilio_redirect_notice_sent_at = now()` e NÃO processa a mensagem pelo agente (não grava em `messages`, não dispara LLM, não acumula contexto).
-- Se ele insistir no Twilio dentro de 7 dias, ignora silenciosamente (não repete o aviso) pra não virar spam. Após 7 dias, pode reenviar 1x.
+A categoria `checkin` está com `meta_template_name = 'cheking_7dias2'` e `is_active = false`. Como `cheking_7dias` é o único check-in proativo aprovado segundo a memória, preciso confirmar com você antes de mexer:
 
-Resultado: a primeira vez que o usuário tentar falar com a Aura, recebe o redirect. Quando ele clicar no `wa.me`, abre conversa no Meta, manda msg, e o `webhook-meta` pega normalmente (mesmo `user_id` resolvido pelo telefone). Continuidade total.
+- Ativar `cheking_7dias2` (se já aprovado pela Meta no WABA novo)?
+- Ou trocar `meta_template_name` para o nome aprovado no WABA novo (`cheking_7dias`)?
 
-## Fase 3 — Outbound proativo cobre quem nunca escreve
+Categorias sem `meta_template_name` (`reconnect`, `checkout_recovery_*`) continuam caindo pro fallback Twilio automaticamente — não bloqueia o flip.
 
-Alguns usuários podem ficar semanas sem mandar msg. Para esses, o próprio fluxo proativo já vai bater no Meta (porque o provider foi flipado na Fase 2). Como o template `welcome2`, `sessao_inicio2`, `jornada_semanal2`, `relatorio_semanal2`, `carta_mensal` já estão aprovados sem variável, o próximo proativo natural (lembrete de sessão, jornada da semana, etc.) chega pelo Meta e o usuário já tem o número novo no contato.
+### 3. Validação imediata pós-flip
 
-Não precisamos disparar um "aviso de migração" proativo dedicado — o próprio fluxo orgânico apresenta o número novo.
+Você manda outra mensagem pro `+1 555-958-6099` e eu verifico em `process-webhook-message` logs:
 
-## Salvaguardas
+- `📨 [Meta] Sending free text` em vez de `[Twilio]`
+- `wamid:` retornado pelo Graph (em vez de `SID:`)
+- Mensagem chega no seu WhatsApp **vinda do mesmo número novo**
 
-- **Fallback Meta→Twilio largo** (já existe na memória `mem://technical/whatsapp/meta-twilio-fallback-broad`): se algum proativo Meta falhar (132xxx, 131xxx), cai pro Twilio antigo automaticamente. Garante que ninguém fica sem mensagem durante a transição.
-- **Recuperação de carrinho** (subaccount Twilio dedicada) NÃO muda — segue isolada e continua no Twilio.
-- **Reversão**: se algo der errado, basta um UPDATE setando `whatsapp_provider = NULL` que tudo volta pro Twilio.
+### 4. Plano de rollback
 
-## O que vou implementar (na ordem)
+Se algo quebrar (ex: token Meta sem permissão `messages` para o phone_number_id novo, template ainda não aprovado num caso específico): basta reverter `system_config.whatsapp_provider` para `official` via 1 update. O fallback Meta→Twilio já cobre erros transientes sem precisar de rollback global.
 
-1. **`webhook-twilio/index.ts`** — após resolver `user_id`, checar `whatsapp_provider`. Se `'meta'`, enviar o aviso de redirect via Twilio (texto livre, janela aberta), marcar `twilio_redirect_notice_sent_at`, retornar 200 sem chamar o agente. Idempotência: 7 dias entre avisos.
-2. **Migration** — adicionar coluna `profiles.twilio_redirect_notice_sent_at timestamptz`.
-3. **Fluxo de criação de perfil** (Stripe + Asaas onboarding) — gravar `whatsapp_provider = 'meta'` no insert dos novos.
-4. **Batch migration script** — UPDATE em `profiles` setando `whatsapp_provider = 'meta'` onde for NULL/`'official'`, com a opção de você rodar em lotes (ex.: 100 por vez) ou tudo de uma vez.
+## Detalhes técnicos (referência)
 
-## Perguntas antes de implementar
+- Phone number ID alvo: `1102172772986795` (env `META_WHATSAPP_PHONE_NUMBER_ID` já está)
+- WABA: `4389879528007597` (`META_WHATSAPP_BUSINESS_ACCOUNT_ID`)
+- App "Ola Aura 2" já inscrito no WABA (passo concluído na turn anterior)
+- Token: `META_WHATSAPP_ACCESS_TOKEN` (já válido — webhook-meta valida assinatura com sucesso)
+- Memória `mem://technical/whatsapp/integration-provider-status` e `mem://technical/whatsapp/official-number-config` precisarão ser atualizadas após cutover
 
-1. **Texto exato do aviso**: sugiro *"Oi! Mudei de número 💛 Me chama aqui agora: wa.me/15559586099 — esse número antigo vai sair do ar em breve."* Aprovado?
-2. **Batch da Fase 2**: flipa todo mundo de uma vez ou em lotes? Recomendo tudo de uma vez — o fallback Meta→Twilio cobre falhas individuais e a transição fica curta. Se preferir cauteloso, faço lotes de 100/dia.
-3. **Janela de cooldown do aviso**: 7 dias entre repetições do redirect tá bom, ou prefere uma única vez (nunca repete)?
+## Pergunta antes de implementar
 
-## Fora de escopo
-
-- Não mexer em `system_config.whatsapp_provider` global (segue `'official'` como rede de segurança — override por usuário decide tudo).
-- Não cancelar/desligar o número Twilio agora.
-- Não criar templates novos no Meta (5 já aprovados + 1 pending bastam).
-- Recuperação de carrinho WhatsApp (subaccount Twilio) intocada.
+Sobre o template `checkin` na seção 2 — qual o nome exato aprovado no WABA novo? Posso seguir com flip mesmo se `checkin` continuar inativo (só o check-in 7 dias proativo para de funcionar; tudo o mais opera normal).
