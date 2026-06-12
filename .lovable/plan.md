@@ -1,52 +1,56 @@
-## Objetivo
+## Problema
 
-Permitir que o `support-agent` proponha **múltiplas ações** numa minuta (ex: `cancel_subscription` + `refund_invoice` x N) e que o checkbox "Executar" do painel rode todas elas, em ordem, antes do envio do e-mail. Hoje só cabe 1 ação por minuta.
+No funil do Admin Engagement, o mesmo cliente que abre cartão (Stripe → `checkout_sessions`) e depois paga via PIX (Asaas → `asaas_payments`) é contado **duas vezes**: 1 em "criados" Stripe + 1 em "criados" Asaas, e o Stripe permanece como `created` (abandonado) mesmo após o PIX ser pago.
 
-## Mudanças
+Caso real de hoje (Jana — `janainakurth4022@gmail.com`):
+- 14:57 abriu cartão Stripe → `checkout_sessions.status='created'` (conta como "Desistiu")
+- 14:58 abriu PIX Asaas → pago às 15:00 (conta como "Finalizou")
+- Resultado exibido: 2 criados / 1 abandonado / 1 finalizado (errado). Correto: 1 criado / 0 abandonado / 1 finalizado.
 
-### 1. Backend — `supabase/functions/support-agent/index.ts`
-- Adicionar campo `suggested_actions` (array, 0–5 itens) no tool schema `submit_support_draft`, mantendo `suggested_action` (singular) por compatibilidade temporária.
-- Atualizar SYSTEM_PROMPT: quando o draft promete cancelamento + reembolso(s) das faturas pagas recentes, emitir a lista completa em `suggested_actions` (a 1ª como "principal", as demais como follow-up). Manter `suggested_action` = primeira ação da lista pra retrocompat.
-- Estender o hardening de injeção de IDs pra iterar sobre `suggested_actions` (preencher `subscription_id`, `invoice_id`, `asaas_*_id` por item, escolhendo invoices distintos quando houver múltiplos refund_invoice).
-- Gravar `suggested_actions` em `support_ticket_drafts` (coluna nova, JSONB).
+A raiz é o agregador em `supabase/functions/admin-engagement-metrics/index.ts`, que **soma** Stripe + Asaas sem cruzar identidades (linhas 1524–1529).
 
-### 2. Migration
-- `ALTER TABLE support_ticket_drafts ADD COLUMN suggested_actions JSONB`. Sem default; código lê `suggested_actions ?? [suggested_action]` durante a transição.
+## O que vai mudar
 
-### 3. Painel — `src/pages/AdminSupport.tsx`
-- Renderizar a lista de ações com um checkbox por item (default: todas marcadas se críticas). Mostrar `type`, `reason` e `params` por linha.
-- `handleApproveSend` passa a iterar sobre as ações marcadas: executa todas as **críticas** antes do e-mail (gate: se qualquer uma falhar, aborta envio e mostra qual). Não-críticas rodam best-effort depois.
-- Manter retrocompat: se a minuta só tem `suggested_action`, comportamento atual idêntico.
+Editar apenas `supabase/functions/admin-engagement-metrics/index.ts`. Sem mudanças de schema, UI ou outras edge functions.
 
-### 4. `support-execute-action` (sem mudança no contrato)
-Continua aceitando 1 ação por chamada — o painel chama N vezes em sequência. Mantém os fallbacks de auto-resolve já implementados.
+### 1. Construir índice de pagantes confirmados (período + all-time)
 
-### 5. `support-send-reply` (sem mudança)
-A defesa de 5min contra ação crítica falha continua válida — agora protege contra qualquer uma das múltiplas ações ter falhado.
+Antes de calcular os totais combinados, montar dois conjuntos auxiliares:
 
-## Fora do escopo
-- Não muda o contrato de `support-execute-action` (1 ação por call).
-- Não toca em recovery/dunning/e-mail transacional.
-- Não muda nada da Aura (WhatsApp).
+- `paidEmailsInPeriod` / `paidPhonesInPeriod` — todo email/telefone que tenha:
+  - `checkout_sessions.status='completed'` no período, **ou**
+  - `asaas_payments.status ∈ PAID_STATUSES` com `paid_at` no período.
+- `paidEmailsAllTime` / `paidPhonesAllTime` — equivalente sem filtro de período.
 
-## Detalhes técnicos
+Telefones são normalizados via `normalizeBrazilianPhone` (já usado no projeto) para casar variações `55…` / `…9…`.
 
-```text
-support_ticket_drafts
-├── suggested_action  JSONB   (legado, = suggested_actions[0])
-└── suggested_actions JSONB   (novo, array)
-```
+### 2. Filtrar "criados" Stripe antes de contar
 
-Fluxo do painel ao aprovar:
+Ao montar `uniquePhonesCreated` (linhas 826–833 e 840–847), descartar a sessão Stripe `created` quando o **mesmo email OU telefone normalizado** já aparece em `paidEmailsInPeriod`/`paidPhonesInPeriod` (ou versão all-time). Para isso, o `SELECT` em `checkout_sessions` passa a incluir `email` além de `phone`/`status`.
 
-```text
-1. Pega lista de ações marcadas (críticas primeiro)
-2. Para cada crítica:
-     invoke('support-execute-action', { action })
-     se !ok → abort, mostra qual falhou
-3. invoke('support-send-reply', ...)
-4. Para cada não-crítica marcada:
-     invoke('support-execute-action', { action })  best-effort
-```
+### 3. Filtrar "criados" Asaas com confirmação Stripe
 
-Validação após mudança: criar ticket de teste pedindo cancelamento + reembolso de 2 faturas pagas, checar que a minuta vem com 3 itens em `suggested_actions`, aprovar com todos marcados, conferir 3 linhas em `support_ticket_actions` com `success:true`.
+Simetricamente, ao montar `pixCreatedEmails` (linha 1297) e `pixEmailsCreated` (linha 1326), remover entradas cujo email/telefone tenha `completed` em `checkout_sessions` no mesmo recorte. Isso evita o caso inverso (abriu PIX, pagou no cartão).
+
+### 4. Totais combinados sem dupla contagem
+
+Substituir a soma ingênua (linhas 1524–1529) por uniões de conjuntos:
+
+- `checkoutCreatedTotalInPeriod = |criadosStripeDedup ∪ criadosAsaasDedup|` (chave: email normalizado ou telefone normalizado).
+- `checkoutCompletedTotalInPeriod = |pagosStripe ∪ pagosAsaas|` (mesma chave).
+- Mesma lógica para `…AllTime`.
+
+`checkoutDropoffInPeriod` continua sendo `criados − completados`, agora já consistente.
+
+### 5. Logs
+
+Adicionar um `console.log` mostrando quantos Stripe `created` foram suprimidos por terem pago em Asaas e vice-versa, para conferência futura.
+
+## Validação
+
+Após o deploy, rodar `admin-engagement-metrics` para hoje (BRT) e confirmar que o funil retorna `1 criado / 1 finalizado / 0 abandonado / 100%` no caso da Jana. Conferir também um dia anterior para garantir que números históricos não regredem.
+
+## Fora de escopo
+
+- Atualizar `checkout_sessions.status` para `completed` quando o pagamento sai por outro canal: é uma limpeza desejável, mas envolve mexer no `stripe-webhook` e/ou no webhook do Asaas. Pode virar um segundo ciclo se você quiser.
+- Mudanças na função `recover-abandoned-checkout` (ela já filtra clientes ativos por email/telefone, então não dispara recovery indevida nesse caso).
