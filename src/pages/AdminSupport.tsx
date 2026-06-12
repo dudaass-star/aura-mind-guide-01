@@ -54,6 +54,7 @@ interface Draft {
   id: string;
   draft_body: string;
   suggested_action: { type: string; reason: string; params?: Record<string, unknown> };
+  suggested_actions?: Array<{ type: string; reason: string; params?: Record<string, unknown> }> | null;
   context_snapshot: Record<string, unknown>;
   generated_at: string;
   ai_model: string;
@@ -84,6 +85,25 @@ const ACTION_LABELS: Record<string, string> = {
   refund_invoice: 'Reembolsar fatura',
   retry_payment: 'Tentar cobrar novamente',
   change_plan: 'Trocar plano',
+  refund_asaas_payment: 'Reembolsar PIX',
+  cancel_asaas_subscription: 'Cancelar PIX',
+};
+
+// Ações que DEVEM rodar antes do envio do email (se falharem, abortam o envio).
+const CRITICAL_ACTION_TYPES = new Set([
+  'refund_invoice',
+  'pause_subscription',
+  'change_plan',
+  'cancel_subscription',
+  'refund_asaas_payment',
+  'cancel_asaas_subscription',
+]);
+
+// Normaliza acesso à lista de ações: prefere suggested_actions, cai pra [suggested_action] legado.
+const getActionsList = (d: Draft | null): Array<{ type: string; reason: string; params?: Record<string, unknown> }> => {
+  if (!d) return [];
+  if (Array.isArray(d.suggested_actions) && d.suggested_actions.length > 0) return d.suggested_actions;
+  return d.suggested_action ? [d.suggested_action] : [];
 };
 
 export default function AdminSupport() {
@@ -100,7 +120,8 @@ export default function AdminSupport() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [editedBody, setEditedBody] = useState('');
-  const [actionEnabled, setActionEnabled] = useState(true);
+  // Mapa indexado: actionsEnabled[i] = true significa "executar a i-ésima ação ao aprovar"
+  const [actionsEnabled, setActionsEnabled] = useState<boolean[]>([]);
   const [sending, setSending] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [hint, setHint] = useState('');
@@ -191,7 +212,8 @@ export default function AdminSupport() {
       currentDraft = draftRes.data as unknown as Draft;
       setDraft(currentDraft);
       setEditedBody(currentDraft.draft_body);
-      setActionEnabled(currentDraft.suggested_action?.type !== 'none');
+      const list = getActionsList(currentDraft);
+      setActionsEnabled(list.map((a) => a.type !== 'none'));
     }
     setLoadingDetail(false);
 
@@ -230,7 +252,8 @@ export default function AdminSupport() {
         const d = freshDraft as unknown as Draft;
         setDraft(d);
         setEditedBody(d.draft_body);
-        setActionEnabled(d.suggested_action?.type !== 'none');
+        const list = getActionsList(d);
+        setActionsEnabled(list.map((a) => a.type !== 'none'));
       }
     } catch (e) {
       toast({
@@ -247,31 +270,25 @@ export default function AdminSupport() {
     if (!selectedTicket || !editedBody.trim()) return;
     setSending(true);
     try {
-      // Ações críticas: executam ANTES do email. Se falhar, email NÃO é enviado
-      // para não prometer ao cliente algo que não aconteceu.
-      const CRITICAL_ACTIONS = new Set([
-        'refund_invoice',
-        'pause_subscription',
-        'change_plan',
-        'cancel_subscription',
-        'refund_asaas_payment',
-        'cancel_asaas_subscription',
-      ]);
-      const actionType = draft?.suggested_action.type;
-      const willExecute = executeAction && draft && actionType && actionType !== 'none';
-      const isCritical = willExecute && CRITICAL_ACTIONS.has(actionType);
+      // Coleta as ações marcadas pra rodar nesse aprovar/enviar
+      const allActions = getActionsList(draft);
+      const selected = executeAction
+        ? allActions.filter((a, i) => actionsEnabled[i] && a.type !== 'none')
+        : [];
+      const critical = selected.filter((a) => CRITICAL_ACTION_TYPES.has(a.type));
+      const nonCritical = selected.filter((a) => !CRITICAL_ACTION_TYPES.has(a.type));
 
-      // 1. Executar ação crítica PRIMEIRO (gate do email)
-      if (isCritical) {
+      // 1. Críticas PRIMEIRO (em ordem). Qualquer falha aborta o envio.
+      for (const action of critical) {
         const { data: actData, error: actErr } = await supabase.functions.invoke('support-execute-action', {
-          body: { ticket_id: selectedTicket.id, action: draft!.suggested_action },
+          body: { ticket_id: selectedTicket.id, action },
         });
-        const actOk = !actErr && actData && (actData as any).ok === true;
+        const actOk = !actErr && actData && (actData as { ok?: boolean }).ok === true;
         if (!actOk) {
-          const reason = (actData as any)?.error || actErr?.message || 'erro desconhecido';
+          const reason = (actData as { error?: string })?.error || actErr?.message || 'erro desconhecido';
           toast({
-            title: `Ação "${actionType}" falhou — email NÃO enviado`,
-            description: `${reason}. Corrija manualmente no provedor ou desmarque "Executar" para apenas responder.`,
+            title: `Ação "${action.type}" falhou — email NÃO enviado`,
+            description: `${reason}. Corrija no provedor ou desmarque essa ação para apenas responder.`,
             variant: 'destructive',
           });
           setSending(false);
@@ -285,13 +302,13 @@ export default function AdminSupport() {
       });
       if (sendErr) throw sendErr;
 
-      // 3. Executar ação NÃO-crítica depois (best-effort, padrão antigo)
-      if (willExecute && !isCritical) {
+      // 3. Não-críticas depois (best-effort)
+      for (const action of nonCritical) {
         const { error: actErr } = await supabase.functions.invoke('support-execute-action', {
-          body: { ticket_id: selectedTicket.id, action: draft!.suggested_action },
+          body: { ticket_id: selectedTicket.id, action },
         });
         if (actErr) {
-          toast({ title: 'Email enviado, mas ação falhou', description: actErr.message, variant: 'destructive' });
+          toast({ title: `Email enviado, mas ação "${action.type}" falhou`, description: actErr.message, variant: 'destructive' });
         }
       }
 
@@ -638,24 +655,44 @@ export default function AdminSupport() {
                     className="min-h-[360px] text-sm leading-relaxed font-normal"
                   />
 
-                  <div className="rounded-md border p-3 space-y-2 bg-muted/30">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium">Ação sugerida</span>
-                  {draft.suggested_action.type !== 'none' && (
-                    <label className="flex items-center gap-1 text-xs cursor-pointer">
-                      <input type="checkbox" checked={actionEnabled} onChange={(e) => setActionEnabled(e.target.checked)} />
-                      Executar
-                    </label>
-                  )}
-                </div>
-                <Badge variant={draft.suggested_action.type === 'none' ? 'secondary' : 'default'}>
-                  {ACTION_LABELS[draft.suggested_action.type] || draft.suggested_action.type}
-                </Badge>
-                <p className="text-xs text-muted-foreground">{draft.suggested_action.reason}</p>
-                {draft.suggested_action.params && Object.keys(draft.suggested_action.params).length > 0 && (
-                  <pre className="text-[10px] bg-background p-1.5 rounded">{JSON.stringify(draft.suggested_action.params, null, 2)}</pre>
-                )}
-                  </div>
+                  {(() => {
+                    const list = getActionsList(draft);
+                    return (
+                      <div className="rounded-md border p-3 space-y-3 bg-muted/30">
+                        <div className="text-xs font-medium">
+                          {list.length > 1 ? `Ações sugeridas (${list.length})` : 'Ação sugerida'}
+                        </div>
+                        {list.map((action, idx) => (
+                          <div key={idx} className="space-y-1.5 pb-2 border-b last:border-b-0 last:pb-0">
+                            <div className="flex items-center justify-between gap-2">
+                              <Badge variant={action.type === 'none' ? 'secondary' : 'default'}>
+                                {ACTION_LABELS[action.type] || action.type}
+                              </Badge>
+                              {action.type !== 'none' && (
+                                <label className="flex items-center gap-1 text-xs cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={actionsEnabled[idx] ?? false}
+                                    onChange={(e) => {
+                                      const next = [...actionsEnabled];
+                                      while (next.length < list.length) next.push(false);
+                                      next[idx] = e.target.checked;
+                                      setActionsEnabled(next);
+                                    }}
+                                  />
+                                  Executar
+                                </label>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground">{action.reason}</p>
+                            {action.params && Object.keys(action.params).length > 0 && (
+                              <pre className="text-[10px] bg-background p-1.5 rounded">{JSON.stringify(action.params, null, 2)}</pre>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
                 </CardContent>
                 </ScrollArea>
 
@@ -674,14 +711,20 @@ export default function AdminSupport() {
                       <AlertDialogTitle>Confirmar envio</AlertDialogTitle>
                       <AlertDialogDescription>
                         Vai enviar a resposta para <strong>{selectedTicket.customer_email}</strong>
-                        {actionEnabled && draft.suggested_action.type !== 'none' && (
-                          <> e executar a ação <strong>{ACTION_LABELS[draft.suggested_action.type]}</strong></>
-                        )}.
+                        {(() => {
+                          const list = getActionsList(draft);
+                          const willRun = list.filter((a, i) => actionsEnabled[i] && a.type !== 'none');
+                          if (willRun.length === 0) return '.';
+                          if (willRun.length === 1) {
+                            return <> e executar <strong>{ACTION_LABELS[willRun[0].type] || willRun[0].type}</strong>.</>;
+                          }
+                          return <> e executar <strong>{willRun.length} ações</strong>: {willRun.map((a) => ACTION_LABELS[a.type] || a.type).join(', ')}.</>;
+                        })()}
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                      <AlertDialogAction onClick={() => handleApproveSend(actionEnabled)}>Confirmar</AlertDialogAction>
+                      <AlertDialogAction onClick={() => handleApproveSend(true)}>Confirmar</AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>

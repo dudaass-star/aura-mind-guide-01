@@ -2134,6 +2134,7 @@ export type Database = {
           is_current: boolean
           kb_top_score: number | null
           suggested_action: Json | null
+          suggested_actions: Json | null
           ticket_id: string
         }
         Insert: {
@@ -2151,6 +2152,7 @@ export type Database = {
           is_current?: boolean
           kb_top_score?: number | null
           suggested_action?: Json | null
+          suggested_actions?: Json | null
           ticket_id: string
         }
         Update: {
@@ -2168,6 +2170,7 @@ export type Database = {
           is_current?: boolean
           kb_top_score?: number | null
           suggested_action?: Json | null
+          suggested_actions?: Json | null
           ticket_id?: string
         }
         Relationships: [

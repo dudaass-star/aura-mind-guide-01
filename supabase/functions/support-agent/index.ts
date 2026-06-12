@@ -100,7 +100,10 @@ SEVERIDADES:
 - media: cobrança, troca de plano
 - alta: reembolso, jurídico, ameaça pública, dados pessoais (LGPD)
 
-AÇÕES SUGERIDAS (escolha APENAS UMA):
+AÇÕES SUGERIDAS (use 1 ou mais, em ordem):
+- O campo "suggested_actions" é uma LISTA. Use 1 ação na maioria dos casos. Use múltiplas APENAS quando o draft promete explicitamente várias coisas no mesmo email (ex: cancelar assinatura + reembolsar 2 faturas pagas) — uma ação por promessa concreta. Máximo 5.
+- A 1ª ação da lista é a "principal" e também aparece em "suggested_action" (singular) por compatibilidade. As demais são executadas em sequência no mesmo aprovar/enviar.
+- Tipos válidos:
 - none: só responder, sem ação
 - send_portal_link: enviar link de acesso ao /meu-espaco (login com Google ou código de 6 dígitos por email — sem token na URL)
 - cancel_subscription: cancelar assinatura agora
@@ -110,6 +113,8 @@ AÇÕES SUGERIDAS (escolha APENAS UMA):
 - change_plan: trocar plano (informe new_plan: essencial|direcao|transformacao e billing: monthly|yearly)
 - refund_asaas_payment: reembolsar cobrança PIX/Asaas (informe asaas_payment_id e amount_cents se parcial)
 - cancel_asaas_subscription: cancelar assinatura PIX/Asaas (informe asaas_subscription_id)
+- Exemplo combinado: cliente quer cancelar E reembolsar últimas 2 faturas → suggested_actions = [{ type: "cancel_subscription", params: { subscription_id: "..." } }, { type: "refund_invoice", params: { invoice_id: "in_AAA..." } }, { type: "refund_invoice", params: { invoice_id: "in_BBB..." } }].
+- Se prometer reembolso de N faturas no texto, DEVE haver N itens refund_invoice na lista, cada um com seu invoice_id distinto vindo de stripe.invoices.
 
 REGRA DE PROVEDOR:
 - Cliente pagou com cartão (tem stripe.subscriptions/invoices no contexto) → use ações Stripe (refund_invoice, cancel_subscription, etc).
@@ -461,6 +466,20 @@ Analise e responda com a estrutura solicitada.`;
                   },
                   required: ["type", "reason"],
                 },
+                suggested_actions: {
+                  type: "array",
+                  description: "Lista ordenada de ações a executar no mesmo aprovar/enviar. 1ª = principal. Máximo 5. Use múltiplas APENAS quando o draft promete várias coisas concretas (ex: cancelar + reembolsar várias faturas).",
+                  maxItems: 5,
+                  items: {
+                    type: "object",
+                    properties: {
+                      type: { type: "string", enum: ["none","send_portal_link","cancel_subscription","pause_subscription","refund_invoice","retry_payment","change_plan","refund_asaas_payment","cancel_asaas_subscription"] },
+                      reason: { type: "string" },
+                      params: { type: "object", additionalProperties: true },
+                    },
+                    required: ["type", "reason"],
+                  },
+                },
                 summary: { type: "string", description: "Resumo de 1 linha pro admin" },
               },
               required: ["category", "severity", "draft_response", "suggested_action", "summary"],
@@ -486,20 +505,33 @@ Analise e responda com a estrutura solicitada.`;
     // Quando o contexto já carrega esses IDs, injeta antes de gravar pra não depender
     // 100% do auto-resolve no momento da execução.
     try {
-      const sa = args.suggested_action;
-      if (sa && typeof sa === "object") {
+      const ctxStripeSubs = (context as { stripe?: { subscriptions?: Array<{ id: string; status: string }> } }).stripe?.subscriptions || [];
+      const ctxStripeInvs = (context as { stripe?: { invoices?: Array<{ id: string; status: string; amount_paid: number }> } }).stripe?.invoices || [];
+      const ctxAsaasSubs = (context as { asaas?: { subscriptions?: Array<{ id: string }> } }).asaas?.subscriptions || [];
+      const ctxAsaasPays = (context as { asaas?: { payments?: Array<{ asaas_payment_id: string; status: string }> } }).asaas?.payments || [];
+
+      const pickSub = () =>
+        ctxStripeSubs.find((s) => s.status === "active") ||
+        ctxStripeSubs.find((s) => s.status === "trialing") ||
+        ctxStripeSubs.find((s) => s.status === "past_due") ||
+        ctxStripeSubs[0];
+
+      // Normaliza: garante que suggested_actions seja a fonte de verdade (array).
+      // Se o LLM só preencheu suggested_action (singular), promove pra lista.
+      if (!Array.isArray(args.suggested_actions) || args.suggested_actions.length === 0) {
+        args.suggested_actions = args.suggested_action ? [args.suggested_action] : [];
+      }
+
+      // Rastreia invoices já consumidas pra não reembolsar a mesma 2x quando há vários refund_invoice.
+      const usedInvoiceIds = new Set<string>(
+        (args.suggested_actions as Array<{ type: string; params?: Record<string, unknown> }>)
+          .filter((a) => a?.type === "refund_invoice" && typeof a.params?.invoice_id === "string")
+          .map((a) => a.params!.invoice_id as string),
+      );
+
+      for (const sa of args.suggested_actions as Array<{ type: string; params?: Record<string, unknown> }>) {
+        if (!sa || typeof sa !== "object") continue;
         sa.params = sa.params || {};
-        const ctxStripeSubs = (context as { stripe?: { subscriptions?: Array<{ id: string; status: string }> } }).stripe?.subscriptions || [];
-        const ctxStripeInvs = (context as { stripe?: { invoices?: Array<{ id: string; status: string; amount_paid: number }> } }).stripe?.invoices || [];
-        const ctxAsaasSubs = (context as { asaas?: { subscriptions?: Array<{ id: string }> } }).asaas?.subscriptions || [];
-        const ctxAsaasPays = (context as { asaas?: { payments?: Array<{ asaas_payment_id: string; status: string }> } }).asaas?.payments || [];
-
-        const pickSub = () =>
-          ctxStripeSubs.find((s) => s.status === "active") ||
-          ctxStripeSubs.find((s) => s.status === "trialing") ||
-          ctxStripeSubs.find((s) => s.status === "past_due") ||
-          ctxStripeSubs[0];
-
         if (["cancel_subscription", "pause_subscription", "change_plan"].includes(sa.type) && !sa.params.subscription_id) {
           const sub = pickSub();
           if (sub?.id) {
@@ -508,9 +540,13 @@ Analise e responda com a estrutura solicitada.`;
           }
         }
         if (sa.type === "refund_invoice" && !sa.params.invoice_id) {
-          const inv = ctxStripeInvs.find((i) => i.status === "paid" && i.amount_paid > 0) || ctxStripeInvs[0];
+          // Prefere invoices pagas, distintas das já consumidas pela própria lista
+          const inv =
+            ctxStripeInvs.find((i) => i.status === "paid" && i.amount_paid > 0 && !usedInvoiceIds.has(i.id)) ||
+            ctxStripeInvs.find((i) => !usedInvoiceIds.has(i.id));
           if (inv?.id) {
             sa.params.invoice_id = inv.id;
+            usedInvoiceIds.add(inv.id);
             log("Injected invoice_id into draft action", { id: inv.id });
           }
         }
@@ -529,6 +565,11 @@ Analise e responda com a estrutura solicitada.`;
           }
         }
       }
+
+      // Mantém suggested_action (singular) sincronizado com a 1ª da lista pra retrocompat
+      if (args.suggested_actions.length > 0) {
+        args.suggested_action = args.suggested_actions[0];
+      }
     } catch (e) {
       log("Action param hardening failed (non-fatal)", { error: String(e) });
     }
@@ -538,7 +579,11 @@ Analise e responda com a estrutura solicitada.`;
 
     // Calcula elegibilidade pra auto-resposta
     const isSafeCategory = SAFE_AUTO_REPLY_CATEGORIES.has(args.category);
-    const isSafeAction = args.suggested_action?.type === "none" || args.suggested_action?.type === "send_portal_link";
+    // Auto-reply só permitido quando TODAS as ações da lista são seguras (none/send_portal_link)
+    const actionsList: Array<{ type: string }> = Array.isArray(args.suggested_actions) && args.suggested_actions.length > 0
+      ? args.suggested_actions
+      : (args.suggested_action ? [args.suggested_action] : []);
+    const isSafeAction = actionsList.every((a) => a?.type === "none" || a?.type === "send_portal_link");
     const hasGoodKbMatch = kbTopScore !== null && kbTopScore >= AUTO_REPLY_KB_THRESHOLD;
     const isLowSeverity = args.severity === "baixa";
     // Bloqueia auto-resposta se ticket já foi auto-respondido antes (regra: nunca 2x)
@@ -561,6 +606,7 @@ Analise e responda com a estrutura solicitada.`;
       ai_model: "google/gemini-2.5-pro",
       draft_body: args.draft_response,
       suggested_action: args.suggested_action,
+      suggested_actions: args.suggested_actions,
       context_snapshot: { context, summary: args.summary, kb_used: kbUsedIds },
       hint: hint || null,
       is_current: true,
