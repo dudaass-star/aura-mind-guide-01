@@ -202,88 +202,108 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 2) Cria a assinatura PIX. nextDueDate = hoje BRT pra primeiro QR ser imediato.
-    const nextDueDate = new Intl.DateTimeFormat("en-CA", {
+    // 2) Cria autorização PIX Automático Bacen (Jornada 3 — QR Code integrado:
+    //    primeiro pagamento + consentimento de recorrência no mesmo escaneamento).
+    const todayBRT = new Intl.DateTimeFormat("en-CA", {
       timeZone: "America/Sao_Paulo",
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
     }).format(new Date());
+    // QR Code do 1º pagamento expira em 30 min (default sandbox costuma ser maior; explicitamos).
+    const qrExpiration = new Date(Date.now() + 30 * 60 * 1000)
+      .toISOString()
+      .replace("T", " ")
+      .slice(0, 19);
+    // contractId tem limite de 35 chars no Bacen → usa hash curto.
+    const contractId = `aura${plan[0]}${billing[0]}${Date.now().toString(36)}`.slice(0, 35);
+    // description tem limite de 35 chars.
+    const description = `Aura ${PLAN_NAMES[plan]} ${PERIOD_LABELS[billing]}`.slice(0, 35);
 
-    const subscription = await asaasFetch("/subscriptions", {
-      method: "POST",
-      body: JSON.stringify({
-        customer: asaasCustomerId,
-        billingType: "PIX",
-        cycle,
+    const authReqBody: Record<string, unknown> = {
+      customerId: asaasCustomerId,
+      frequency,
+      contractId,
+      startDate: todayBRT,
+      value: amountDecimal,
+      description,
+      paymentCreationMode: "SUBSCRIPTION",
+      immediateQrCode: {
         value: amountDecimal,
-        nextDueDate,
-        description: `Aura ${PLAN_NAMES[plan]} - assinatura ${PERIOD_LABELS[billing]}`,
-        externalReference: `aura_sub_${plan}_${billing}_${Date.now()}`,
-      }),
+        expirationDate: qrExpiration,
+      },
+    };
+
+    const authorization = await asaasFetch("/pix/automatic/authorizations", {
+      method: "POST",
+      body: JSON.stringify(authReqBody),
     });
 
-    const subscriptionId = subscription?.id as string;
-    if (!subscriptionId) {
-      throw new Error("Asaas não retornou subscription.id");
+    const authorizationId = authorization?.id as string;
+    if (!authorizationId) {
+      throw new Error("Asaas não retornou authorization.id");
     }
 
-    // 3) Busca o primeiro payment gerado pela subscription.
-    // Pode demorar 1–2s entre criar a subscription e o payment aparecer no list.
-    let firstPayment: Record<string, unknown> | null = null;
-    for (let attempt = 0; attempt < 5; attempt++) {
-      const list = await asaasFetch(`/subscriptions/${subscriptionId}/payments?limit=1`);
-      if (list?.data?.[0]) {
-        firstPayment = list.data[0];
-        break;
+    // QR Code integrado vem dentro de immediateQrCode na resposta.
+    const iqr = (authorization?.immediateQrCode as Record<string, unknown>) || {};
+    let qrPayload = (iqr.payload as string) || (iqr.copyAndPaste as string) || null;
+    let qrImage = (iqr.encodedImage as string) || (iqr.qrCodeImage as string) || null;
+    const qrExpiresAt = (iqr.expirationDate as string) || qrExpiration;
+    const invoiceUrl = (authorization?.invoiceUrl as string) || (iqr.invoiceUrl as string) || null;
+
+    // Fallback: endpoint dedicado de QR caso a resposta principal não inclua.
+    if (!qrPayload || !qrImage) {
+      try {
+        const qrEndpoint = await asaasFetch(`/pix/automatic/authorizations/${authorizationId}/qrCode`);
+        qrPayload = qrPayload || (qrEndpoint?.payload as string) || null;
+        qrImage = qrImage || (qrEndpoint?.encodedImage as string) || null;
+      } catch (e) {
+        console.warn("[criar-pix-recorrente-asaas] QR endpoint fallback falhou:", (e as Error)?.message);
       }
-      await new Promise((r) => setTimeout(r, 600));
-    }
-    if (!firstPayment) {
-      throw new Error("Asaas não gerou primeiro payment da subscription");
     }
 
-    const paymentId = firstPayment.id as string;
-    const invoiceUrl = (firstPayment.invoiceUrl as string) || null;
+    if (!qrPayload || !qrImage) {
+      console.error("[criar-pix-recorrente-asaas] QR ausente na resposta:", JSON.stringify(authorization));
+      throw new Error("Asaas não retornou QR Code da autorização");
+    }
 
-    // 4) Busca QR PIX do primeiro payment.
-    const qr = await asaasFetch(`/payments/${paymentId}/pixQrCode`);
-
-    // 5) Persiste no banco. Usa asaas_subscription_id pra agrupar renovações.
-    const { error: insertErr } = await supabase.from("asaas_payments").insert({
-      asaas_payment_id: paymentId,
+    // 3) Persiste a autorização. Ativação real só vem no webhook
+    //    PIX_AUTOMATIC_RECURRING_AUTHORIZATION_ACTIVATED (depois do consent do pagador).
+    const { error: insertErr } = await supabase.from("asaas_pix_authorizations").insert({
+      asaas_authorization_id: authorizationId,
       asaas_customer_id: asaasCustomerId,
-      asaas_subscription_id: subscriptionId,
       user_id: existingProfileId,
+      contract_id: contractId,
+      plan,
+      billing_period: billing,
+      frequency,
+      value_cents: amountCents,
+      status: (authorization?.status as string) || "PENDING",
+      start_date: todayBRT,
+      finish_date: (authorization?.finishDate as string) || null,
+      qr_payload: qrPayload,
+      qr_encoded_image: qrImage,
+      qr_expires_at: qrExpiresAt,
       customer_name: name,
       customer_email: emailClean,
       customer_phone: phoneClean || null,
       customer_cpf: cpfClean,
-      plan,
-      billing_period: billing,
-      amount_cents: amountCents,
-      status: (firstPayment.status as string) || "PENDING",
-      payment_method: "PIX_SUBSCRIPTION",
-      pix_qr_code: qr.encodedImage || null,
-      pix_copy_paste: qr.payload || null,
-      pix_expires_at: qr.expirationDate || null,
-      invoice_url: invoiceUrl,
-      raw_payload: { subscription, firstPayment },
+      raw_payload: authorization,
     });
     if (insertErr) {
-      console.error("[criar-pix-recorrente-asaas] Erro salvando pagamento:", insertErr);
+      console.error("[criar-pix-recorrente-asaas] Erro salvando autorização:", insertErr);
     }
 
     return new Response(
       JSON.stringify({
-        subscriptionId,
-        paymentId,
+        authorizationId,
         amount: amountDecimal,
-        qrCodeImage: qr.encodedImage,
-        copyPaste: qr.payload,
-        expiresAt: qr.expirationDate,
+        qrCodeImage: qrImage,
+        copyPaste: qrPayload,
+        expiresAt: qrExpiresAt,
         invoiceUrl,
-        cycle,
+        frequency,
+        pixAutomatic: true,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
