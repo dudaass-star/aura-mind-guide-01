@@ -655,24 +655,44 @@ export default function AdminSupport() {
                     className="min-h-[360px] text-sm leading-relaxed font-normal"
                   />
 
-                  <div className="rounded-md border p-3 space-y-2 bg-muted/30">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium">Ação sugerida</span>
-                  {draft.suggested_action.type !== 'none' && (
-                    <label className="flex items-center gap-1 text-xs cursor-pointer">
-                      <input type="checkbox" checked={actionEnabled} onChange={(e) => setActionEnabled(e.target.checked)} />
-                      Executar
-                    </label>
-                  )}
-                </div>
-                <Badge variant={draft.suggested_action.type === 'none' ? 'secondary' : 'default'}>
-                  {ACTION_LABELS[draft.suggested_action.type] || draft.suggested_action.type}
-                </Badge>
-                <p className="text-xs text-muted-foreground">{draft.suggested_action.reason}</p>
-                {draft.suggested_action.params && Object.keys(draft.suggested_action.params).length > 0 && (
-                  <pre className="text-[10px] bg-background p-1.5 rounded">{JSON.stringify(draft.suggested_action.params, null, 2)}</pre>
-                )}
-                  </div>
+                  {(() => {
+                    const list = getActionsList(draft);
+                    return (
+                      <div className="rounded-md border p-3 space-y-3 bg-muted/30">
+                        <div className="text-xs font-medium">
+                          {list.length > 1 ? `Ações sugeridas (${list.length})` : 'Ação sugerida'}
+                        </div>
+                        {list.map((action, idx) => (
+                          <div key={idx} className="space-y-1.5 pb-2 border-b last:border-b-0 last:pb-0">
+                            <div className="flex items-center justify-between gap-2">
+                              <Badge variant={action.type === 'none' ? 'secondary' : 'default'}>
+                                {ACTION_LABELS[action.type] || action.type}
+                              </Badge>
+                              {action.type !== 'none' && (
+                                <label className="flex items-center gap-1 text-xs cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={actionsEnabled[idx] ?? false}
+                                    onChange={(e) => {
+                                      const next = [...actionsEnabled];
+                                      while (next.length < list.length) next.push(false);
+                                      next[idx] = e.target.checked;
+                                      setActionsEnabled(next);
+                                    }}
+                                  />
+                                  Executar
+                                </label>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground">{action.reason}</p>
+                            {action.params && Object.keys(action.params).length > 0 && (
+                              <pre className="text-[10px] bg-background p-1.5 rounded">{JSON.stringify(action.params, null, 2)}</pre>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
                 </CardContent>
                 </ScrollArea>
 
@@ -691,14 +711,20 @@ export default function AdminSupport() {
                       <AlertDialogTitle>Confirmar envio</AlertDialogTitle>
                       <AlertDialogDescription>
                         Vai enviar a resposta para <strong>{selectedTicket.customer_email}</strong>
-                        {actionEnabled && draft.suggested_action.type !== 'none' && (
-                          <> e executar a ação <strong>{ACTION_LABELS[draft.suggested_action.type]}</strong></>
-                        )}.
+                        {(() => {
+                          const list = getActionsList(draft);
+                          const willRun = list.filter((a, i) => actionsEnabled[i] && a.type !== 'none');
+                          if (willRun.length === 0) return '.';
+                          if (willRun.length === 1) {
+                            return <> e executar <strong>{ACTION_LABELS[willRun[0].type] || willRun[0].type}</strong>.</>;
+                          }
+                          return <> e executar <strong>{willRun.length} ações</strong>: {willRun.map((a) => ACTION_LABELS[a.type] || a.type).join(', ')}.</>;
+                        })()}
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                      <AlertDialogAction onClick={() => handleApproveSend(actionEnabled)}>Confirmar</AlertDialogAction>
+                      <AlertDialogAction onClick={() => handleApproveSend(true)}>Confirmar</AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>
