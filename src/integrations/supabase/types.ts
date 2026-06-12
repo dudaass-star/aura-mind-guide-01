@@ -106,6 +106,101 @@ export type Database = {
           },
         ]
       }
+      asaas_pix_authorizations: {
+        Row: {
+          activated_at: string | null
+          asaas_authorization_id: string
+          asaas_customer_id: string
+          asaas_subscription_id: string | null
+          billing_period: string
+          cancellation_reason: string | null
+          cancelled_at: string | null
+          contract_id: string
+          created_at: string
+          customer_cpf: string | null
+          customer_email: string | null
+          customer_name: string | null
+          customer_phone: string | null
+          finish_date: string | null
+          frequency: string
+          id: string
+          plan: string
+          qr_encoded_image: string | null
+          qr_expires_at: string | null
+          qr_payload: string | null
+          raw_payload: Json | null
+          start_date: string
+          status: string
+          updated_at: string
+          user_id: string | null
+          value_cents: number
+        }
+        Insert: {
+          activated_at?: string | null
+          asaas_authorization_id: string
+          asaas_customer_id: string
+          asaas_subscription_id?: string | null
+          billing_period: string
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          contract_id: string
+          created_at?: string
+          customer_cpf?: string | null
+          customer_email?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          finish_date?: string | null
+          frequency: string
+          id?: string
+          plan: string
+          qr_encoded_image?: string | null
+          qr_expires_at?: string | null
+          qr_payload?: string | null
+          raw_payload?: Json | null
+          start_date: string
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+          value_cents: number
+        }
+        Update: {
+          activated_at?: string | null
+          asaas_authorization_id?: string
+          asaas_customer_id?: string
+          asaas_subscription_id?: string | null
+          billing_period?: string
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          contract_id?: string
+          created_at?: string
+          customer_cpf?: string | null
+          customer_email?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          finish_date?: string | null
+          frequency?: string
+          id?: string
+          plan?: string
+          qr_encoded_image?: string | null
+          qr_expires_at?: string | null
+          qr_payload?: string | null
+          raw_payload?: Json | null
+          start_date?: string
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+          value_cents?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asaas_pix_authorizations_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       aura_response_state: {
         Row: {
           is_responding: boolean | null
