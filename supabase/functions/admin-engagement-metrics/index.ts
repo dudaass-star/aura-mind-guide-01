@@ -1500,6 +1500,56 @@ Deno.serve(async (req) => {
       ? Math.round(matureConverted.length / matureTrials.length * 1000) / 10
       : 0;
 
+    // ========== 🔄 DEDUP CROSS-CHANNEL CHECKOUT ==========
+    // Quando o mesmo cliente abre cartão (Stripe) e paga via PIX (Asaas),
+    // ele aparecia 2x no funil — 1 como "criou" em cada canal e 1 como
+    // "abandonou" no Stripe (que ficou em `created`). Aqui descartamos
+    // Stripe-`created` cujo identityKey já confirmou em Asaas, e Asaas-`created`
+    // cujo identityKey já completou no Stripe. Totais combinados = união.
+    const stripeCreatedDedupInPeriod = new Set(
+      [...stripeCreatedKeysInPeriod].filter(
+        (k) => !asaasConfirmedKeysInPeriod.has(k) || stripeCompletedKeysInPeriod.has(k)
+      )
+    );
+    const asaasCreatedDedupInPeriod = new Set(
+      [...asaasCreatedKeysInPeriod].filter(
+        (k) => !stripeCompletedKeysInPeriod.has(k) || asaasConfirmedKeysInPeriod.has(k)
+      )
+    );
+    const stripeCreatedDedupAllTime = new Set(
+      [...stripeCreatedKeysAllTime].filter(
+        (k) => !asaasConfirmedKeysAllTime.has(k) || stripeCompletedKeysAllTime.has(k)
+      )
+    );
+    const asaasCreatedDedupAllTime = new Set(
+      [...asaasCreatedKeysAllTime].filter(
+        (k) => !stripeCompletedKeysAllTime.has(k) || asaasConfirmedKeysAllTime.has(k)
+      )
+    );
+
+    // Sobrescreve as contagens por canal já descontando o cross-channel
+    checkoutCreatedInPeriod = stripeCreatedDedupInPeriod.size;
+    checkoutCompletedInPeriod = stripeCompletedKeysInPeriod.size;
+    checkoutCreatedAllTime = stripeCreatedDedupAllTime.size;
+    checkoutCompletedAllTime = stripeCompletedKeysAllTime.size;
+    asaasCheckoutCreatedInPeriod = asaasCreatedDedupInPeriod.size;
+    asaasCheckoutCreatedAllTime = asaasCreatedDedupAllTime.size;
+
+    // Totais combinados = união (dedup entre canais)
+    const createdTotalInPeriodSet = new Set([...stripeCreatedDedupInPeriod, ...asaasCreatedDedupInPeriod]);
+    const completedTotalInPeriodSet = new Set([...stripeCompletedKeysInPeriod, ...asaasConfirmedKeysInPeriod]);
+    const createdTotalAllTimeSet = new Set([...stripeCreatedDedupAllTime, ...asaasCreatedDedupAllTime]);
+    const completedTotalAllTimeSet = new Set([...stripeCompletedKeysAllTime, ...asaasConfirmedKeysAllTime]);
+
+    checkoutDropoffInPeriod = checkoutCreatedInPeriod - checkoutCompletedInPeriod;
+    checkoutCompletionRate = checkoutCreatedInPeriod > 0
+      ? Math.round(checkoutCompletedInPeriod / checkoutCreatedInPeriod * 1000) / 10
+      : 0;
+
+    const stripeSuppressedByAsaas = stripeCreatedKeysInPeriod.size - stripeCreatedDedupInPeriod.size;
+    const asaasSuppressedByStripe = asaasCreatedKeysInPeriod.size - asaasCreatedDedupInPeriod.size;
+    console.log(`🔄 [checkout-dedup] period: Stripe-created suprimidos por pagamento Asaas=${stripeSuppressedByAsaas}, Asaas-created suprimidos por completed Stripe=${asaasSuppressedByStripe}`);
+
     const responsePayload = JSON.stringify({
       // Engagement
       activeUsers: activeUsersInPeriod,
@@ -1556,12 +1606,12 @@ Deno.serve(async (req) => {
       // 💠 Asaas / PIX (somados separadamente para visibilidade)
       asaasCheckoutCreatedInPeriod,
       asaasCheckoutConfirmedInPeriod,
-      checkoutCreatedTotalInPeriod: (checkoutCreatedInPeriod || 0) + asaasCheckoutCreatedInPeriod,
-      checkoutCompletedTotalInPeriod: (checkoutCompletedInPeriod || 0) + asaasCheckoutConfirmedInPeriod,
+      checkoutCreatedTotalInPeriod: createdTotalInPeriodSet.size,
+      checkoutCompletedTotalInPeriod: completedTotalInPeriodSet.size,
       asaasCheckoutCreatedAllTime,
       asaasCheckoutConfirmedAllTime,
-      checkoutCreatedTotalAllTime: (checkoutCreatedAllTime || 0) + asaasCheckoutCreatedAllTime,
-      checkoutCompletedTotalAllTime: (checkoutCompletedAllTime || 0) + asaasCheckoutConfirmedAllTime,
+      checkoutCreatedTotalAllTime: createdTotalAllTimeSet.size,
+      checkoutCompletedTotalAllTime: completedTotalAllTimeSet.size,
       // Billing
       billingSuccessInPeriod,
       billingTotalInPeriod,
