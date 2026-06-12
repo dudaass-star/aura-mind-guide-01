@@ -816,39 +816,65 @@ Deno.serve(async (req) => {
 
     // ========== CHECKOUT FUNNEL METRICS (deduplicated by phone) ==========
 
-    // Fetch sessions in period and deduplicate by phone
+    // Chave de identidade unificada: email lowercase OU últimos 11 dígitos do telefone.
+    // Usada para deduplicar entre Stripe (checkout_sessions) e Asaas (asaas_payments).
+    const identityKey = (email?: string | null, phone?: string | null): string | null => {
+      const e = (email || '').trim().toLowerCase();
+      if (e) return `e:${e}`;
+      const digits = (phone || '').replace(/\D/g, '');
+      if (!digits) return null;
+      // Mantém últimos 11 dígitos (DDD + 9 + 8) — descarta prefixo 55
+      const tail = digits.length > 11 ? digits.slice(-11) : digits;
+      return `p:${tail}`;
+    };
+
+    // Fetch sessions in period (Stripe). Inclui email pra construir chave de identidade.
     const { data: periodSessions } = await supabase
       .from('checkout_sessions')
-      .select('phone, status')
+      .select('phone, email, status')
       .gte('created_at', periodStart)
       .lt('created_at', periodEnd);
 
-    const uniquePhonesCreated = new Set<string>();
-    const uniquePhonesCompleted = new Set<string>();
+    const stripeCreatedKeysInPeriod = new Set<string>();
+    const stripeCompletedKeysInPeriod = new Set<string>();
     for (const s of (periodSessions || [])) {
-      if (s.phone) uniquePhonesCreated.add(s.phone);
-      if (s.phone && s.status === 'completed') uniquePhonesCompleted.add(s.phone);
+      const k = identityKey(s.email as string | null, s.phone as string | null);
+      if (!k) continue;
+      stripeCreatedKeysInPeriod.add(k);
+      if (s.status === 'completed') stripeCompletedKeysInPeriod.add(k);
     }
-    const checkoutCreatedInPeriod = uniquePhonesCreated.size;
-    const checkoutCompletedInPeriod = uniquePhonesCompleted.size;
 
-    // All-time checkout funnel (deduplicated)
+    // All-time checkout funnel (Stripe)
     const { data: allTimeSessions } = await supabase
       .from('checkout_sessions')
-      .select('phone, status');
+      .select('phone, email, status');
 
-    const allPhonesCreated = new Set<string>();
-    const allPhonesCompleted = new Set<string>();
+    const stripeCreatedKeysAllTime = new Set<string>();
+    const stripeCompletedKeysAllTime = new Set<string>();
     for (const s of (allTimeSessions || [])) {
-      if (s.phone) allPhonesCreated.add(s.phone);
-      if (s.phone && s.status === 'completed') allPhonesCompleted.add(s.phone);
+      const k = identityKey(s.email as string | null, s.phone as string | null);
+      if (!k) continue;
+      stripeCreatedKeysAllTime.add(k);
+      if (s.status === 'completed') stripeCompletedKeysAllTime.add(k);
     }
-    const checkoutCreatedAllTime = allPhonesCreated.size;
-    const checkoutCompletedAllTime = allPhonesCompleted.size;
 
-    const checkoutDropoffInPeriod = (checkoutCreatedInPeriod || 0) - (checkoutCompletedInPeriod || 0);
-    const checkoutCompletionRate = (checkoutCreatedInPeriod || 0) > 0
-      ? Math.round((checkoutCompletedInPeriod || 0) / (checkoutCreatedInPeriod || 0) * 1000) / 10
+    // Sets de chaves Asaas (preenchidos depois, dentro do bloco try/catch do Asaas).
+    // Declarados aqui pra ficarem visíveis na hora de combinar.
+    const asaasCreatedKeysInPeriod = new Set<string>();
+    const asaasConfirmedKeysInPeriod = new Set<string>();
+    const asaasCreatedKeysAllTime = new Set<string>();
+    const asaasConfirmedKeysAllTime = new Set<string>();
+
+    // Os totais por canal e combinados são calculados depois (após popular Asaas),
+    // descartando "created" Stripe quando o mesmo identityKey aparece pago no Asaas
+    // e vice-versa. Inicializamos com a contagem bruta como fallback.
+    let checkoutCreatedInPeriod = stripeCreatedKeysInPeriod.size;
+    let checkoutCompletedInPeriod = stripeCompletedKeysInPeriod.size;
+    let checkoutCreatedAllTime = stripeCreatedKeysAllTime.size;
+    let checkoutCompletedAllTime = stripeCompletedKeysAllTime.size;
+    let checkoutDropoffInPeriod = checkoutCreatedInPeriod - checkoutCompletedInPeriod;
+    let checkoutCompletionRate = checkoutCreatedInPeriod > 0
+      ? Math.round(checkoutCompletedInPeriod / checkoutCreatedInPeriod * 1000) / 10
       : 0;
 
     // ========== 💰 MRR & REVENUE METRICS (STRIPE = SOURCE OF TRUTH) ==========
@@ -1289,7 +1315,7 @@ Deno.serve(async (req) => {
       // Criados: conta por created_at (intenção de pagar via PIX no período)
       const { data: asaasCreatedInPeriod } = await supabase
         .from('asaas_payments')
-        .select('id, customer_email')
+        .select('id, customer_email, customer_phone')
         .gte('created_at', periodStart)
         .lt('created_at', periodEnd)
         .not('customer_email', 'ilike', E2E_EMAIL_PATTERN);
@@ -1298,13 +1324,15 @@ Deno.serve(async (req) => {
       for (const p of asaasCreatedInPeriod || []) {
         const em = (p.customer_email as string | null) || `__nokey_${p.id}`;
         pixCreatedEmails.add(em);
+        const k = identityKey(p.customer_email as string | null, p.customer_phone as string | null);
+        if (k) asaasCreatedKeysInPeriod.add(k);
       }
       asaasCheckoutCreatedInPeriod = pixCreatedEmails.size;
 
       // Confirmados: conta por paid_at (dinheiro entrou no período, mesmo se PIX criado antes)
       const { data: asaasConfirmedInPeriod } = await supabase
         .from('asaas_payments')
-        .select('id, customer_email, paid_at, status')
+        .select('id, customer_email, customer_phone, paid_at, status')
         .in('status', PAID_STATUSES)
         .gte('paid_at', periodStart)
         .lt('paid_at', periodEnd)
@@ -1314,13 +1342,15 @@ Deno.serve(async (req) => {
       for (const p of asaasConfirmedInPeriod || []) {
         const em = (p.customer_email as string | null) || `__nokey_${p.id}`;
         pixConfirmedEmails.add(em);
+        const k = identityKey(p.customer_email as string | null, p.customer_phone as string | null);
+        if (k) asaasConfirmedKeysInPeriod.add(k);
       }
       asaasCheckoutConfirmedInPeriod = pixConfirmedEmails.size;
 
       // 2b) Funil all-time PIX (dedup por email pra alinhar com cartão)
       const { data: asaasAllTime } = await supabase
         .from('asaas_payments')
-        .select('status, customer_email')
+        .select('status, customer_email, customer_phone')
         .not('customer_email', 'ilike', E2E_EMAIL_PATTERN);
 
       const pixEmailsCreated = new Set<string>();
@@ -1330,6 +1360,11 @@ Deno.serve(async (req) => {
         if (!em) continue;
         pixEmailsCreated.add(em);
         if (PAID_STATUSES.includes(p.status as string)) pixEmailsConfirmed.add(em);
+        const k = identityKey(em, p.customer_phone as string | null);
+        if (k) {
+          asaasCreatedKeysAllTime.add(k);
+          if (PAID_STATUSES.includes(p.status as string)) asaasConfirmedKeysAllTime.add(k);
+        }
       }
       asaasCheckoutCreatedAllTime = pixEmailsCreated.size;
       asaasCheckoutConfirmedAllTime = pixEmailsConfirmed.size;
@@ -1465,6 +1500,56 @@ Deno.serve(async (req) => {
       ? Math.round(matureConverted.length / matureTrials.length * 1000) / 10
       : 0;
 
+    // ========== 🔄 DEDUP CROSS-CHANNEL CHECKOUT ==========
+    // Quando o mesmo cliente abre cartão (Stripe) e paga via PIX (Asaas),
+    // ele aparecia 2x no funil — 1 como "criou" em cada canal e 1 como
+    // "abandonou" no Stripe (que ficou em `created`). Aqui descartamos
+    // Stripe-`created` cujo identityKey já confirmou em Asaas, e Asaas-`created`
+    // cujo identityKey já completou no Stripe. Totais combinados = união.
+    const stripeCreatedDedupInPeriod = new Set(
+      [...stripeCreatedKeysInPeriod].filter(
+        (k) => !asaasConfirmedKeysInPeriod.has(k) || stripeCompletedKeysInPeriod.has(k)
+      )
+    );
+    const asaasCreatedDedupInPeriod = new Set(
+      [...asaasCreatedKeysInPeriod].filter(
+        (k) => !stripeCompletedKeysInPeriod.has(k) || asaasConfirmedKeysInPeriod.has(k)
+      )
+    );
+    const stripeCreatedDedupAllTime = new Set(
+      [...stripeCreatedKeysAllTime].filter(
+        (k) => !asaasConfirmedKeysAllTime.has(k) || stripeCompletedKeysAllTime.has(k)
+      )
+    );
+    const asaasCreatedDedupAllTime = new Set(
+      [...asaasCreatedKeysAllTime].filter(
+        (k) => !stripeCompletedKeysAllTime.has(k) || asaasConfirmedKeysAllTime.has(k)
+      )
+    );
+
+    // Sobrescreve as contagens por canal já descontando o cross-channel
+    checkoutCreatedInPeriod = stripeCreatedDedupInPeriod.size;
+    checkoutCompletedInPeriod = stripeCompletedKeysInPeriod.size;
+    checkoutCreatedAllTime = stripeCreatedDedupAllTime.size;
+    checkoutCompletedAllTime = stripeCompletedKeysAllTime.size;
+    asaasCheckoutCreatedInPeriod = asaasCreatedDedupInPeriod.size;
+    asaasCheckoutCreatedAllTime = asaasCreatedDedupAllTime.size;
+
+    // Totais combinados = união (dedup entre canais)
+    const createdTotalInPeriodSet = new Set([...stripeCreatedDedupInPeriod, ...asaasCreatedDedupInPeriod]);
+    const completedTotalInPeriodSet = new Set([...stripeCompletedKeysInPeriod, ...asaasConfirmedKeysInPeriod]);
+    const createdTotalAllTimeSet = new Set([...stripeCreatedDedupAllTime, ...asaasCreatedDedupAllTime]);
+    const completedTotalAllTimeSet = new Set([...stripeCompletedKeysAllTime, ...asaasConfirmedKeysAllTime]);
+
+    checkoutDropoffInPeriod = checkoutCreatedInPeriod - checkoutCompletedInPeriod;
+    checkoutCompletionRate = checkoutCreatedInPeriod > 0
+      ? Math.round(checkoutCompletedInPeriod / checkoutCreatedInPeriod * 1000) / 10
+      : 0;
+
+    const stripeSuppressedByAsaas = stripeCreatedKeysInPeriod.size - stripeCreatedDedupInPeriod.size;
+    const asaasSuppressedByStripe = asaasCreatedKeysInPeriod.size - asaasCreatedDedupInPeriod.size;
+    console.log(`🔄 [checkout-dedup] period: Stripe-created suprimidos por pagamento Asaas=${stripeSuppressedByAsaas}, Asaas-created suprimidos por completed Stripe=${asaasSuppressedByStripe}`);
+
     const responsePayload = JSON.stringify({
       // Engagement
       activeUsers: activeUsersInPeriod,
@@ -1521,12 +1606,12 @@ Deno.serve(async (req) => {
       // 💠 Asaas / PIX (somados separadamente para visibilidade)
       asaasCheckoutCreatedInPeriod,
       asaasCheckoutConfirmedInPeriod,
-      checkoutCreatedTotalInPeriod: (checkoutCreatedInPeriod || 0) + asaasCheckoutCreatedInPeriod,
-      checkoutCompletedTotalInPeriod: (checkoutCompletedInPeriod || 0) + asaasCheckoutConfirmedInPeriod,
+      checkoutCreatedTotalInPeriod: createdTotalInPeriodSet.size,
+      checkoutCompletedTotalInPeriod: completedTotalInPeriodSet.size,
       asaasCheckoutCreatedAllTime,
       asaasCheckoutConfirmedAllTime,
-      checkoutCreatedTotalAllTime: (checkoutCreatedAllTime || 0) + asaasCheckoutCreatedAllTime,
-      checkoutCompletedTotalAllTime: (checkoutCompletedAllTime || 0) + asaasCheckoutConfirmedAllTime,
+      checkoutCreatedTotalAllTime: createdTotalAllTimeSet.size,
+      checkoutCompletedTotalAllTime: completedTotalAllTimeSet.size,
       // Billing
       billingSuccessInPeriod,
       billingTotalInPeriod,
