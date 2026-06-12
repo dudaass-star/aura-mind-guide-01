@@ -85,6 +85,25 @@ const ACTION_LABELS: Record<string, string> = {
   refund_invoice: 'Reembolsar fatura',
   retry_payment: 'Tentar cobrar novamente',
   change_plan: 'Trocar plano',
+  refund_asaas_payment: 'Reembolsar PIX',
+  cancel_asaas_subscription: 'Cancelar PIX',
+};
+
+// Ações que DEVEM rodar antes do envio do email (se falharem, abortam o envio).
+const CRITICAL_ACTION_TYPES = new Set([
+  'refund_invoice',
+  'pause_subscription',
+  'change_plan',
+  'cancel_subscription',
+  'refund_asaas_payment',
+  'cancel_asaas_subscription',
+]);
+
+// Normaliza acesso à lista de ações: prefere suggested_actions, cai pra [suggested_action] legado.
+const getActionsList = (d: Draft | null): Array<{ type: string; reason: string; params?: Record<string, unknown> }> => {
+  if (!d) return [];
+  if (Array.isArray(d.suggested_actions) && d.suggested_actions.length > 0) return d.suggested_actions;
+  return d.suggested_action ? [d.suggested_action] : [];
 };
 
 export default function AdminSupport() {
