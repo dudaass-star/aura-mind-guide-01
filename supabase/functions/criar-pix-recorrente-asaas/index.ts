@@ -1,9 +1,8 @@
-// Edge function: cria assinatura PIX recorrente via Asaas.
-// Diferença vs criar-pix-asaas (one-time): aqui criamos uma /subscriptions com cycle
-// (MONTHLY/QUARTERLY/SEMIANNUALLY/YEARLY). Asaas gera o primeiro payment automaticamente;
-// a cada ciclo ele gera um novo PIX e dispara PAYMENT_RECEIVED no webhook quando o
-// cliente paga. Se a conta Asaas tiver Pix Automático habilitado, Asaas debita sozinho
-// — caso contrário, o cliente recebe um novo QR por email/WhatsApp a cada ciclo.
+// Edge function: cria autorização PIX AUTOMÁTICO Bacen via Asaas (Jornada 3).
+// Endpoint: POST /v3/pix/automatic/authorizations com paymentCreationMode=SUBSCRIPTION.
+// Cliente paga o 1º PIX e autoriza a recorrência no MESMO QR Code. A partir daí
+// o banco debita sozinho na data de vencimento — sem novo QR a cada ciclo.
+// Eventos PIX_AUTOMATIC_RECURRING_AUTHORIZATION_* e PAYMENT_RECEIVED chegam no webhook-asaas.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const corsHeaders = {
@@ -12,7 +11,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-// Tabela de preços (valor cheio em centavos) — agora cobre os 4 ciclos.
+// Tabela de preços (valor cheio em centavos) — cobre os 4 ciclos.
 const PRICES: Record<string, Record<string, number>> = {
   essencial:     { monthly: 2990, quarterly: 7990,  semestral: 12590, yearly: 21490 },
   direcao:       { monthly: 4990, quarterly: 13390, semestral: 20990, yearly: 35990 },
@@ -25,12 +24,12 @@ const PLAN_NAMES: Record<string, string> = {
   transformacao: "Transformação",
 };
 
-// Mapeamento billing → cycle aceito pelo Asaas.
-const CYCLE_MAP: Record<string, string> = {
+// Mapeamento billing → frequency aceito pelo PIX Automático Bacen.
+const FREQUENCY_MAP: Record<string, string> = {
   monthly: "MONTHLY",
   quarterly: "QUARTERLY",
   semestral: "SEMIANNUALLY",
-  yearly: "YEARLY",
+  yearly: "ANNUALLY",
 };
 
 const PERIOD_LABELS: Record<string, string> = {
