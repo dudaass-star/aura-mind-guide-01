@@ -58,8 +58,10 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const event = body?.event as string | undefined;
     const payment = body?.payment as Record<string, unknown> | undefined;
+    const authorizationEvt = body?.authorization as Record<string, unknown> | undefined;
+    const paymentInstruction = body?.paymentInstruction as Record<string, unknown> | undefined;
 
-    if (!event || !payment?.id) {
+    if (!event) {
       console.warn("[webhook-asaas] Payload inválido:", body);
       return new Response(JSON.stringify({ ok: true, ignored: true }), {
         status: 200,
@@ -67,9 +69,79 @@ Deno.serve(async (req) => {
       });
     }
 
-    console.log(`[webhook-asaas] Evento ${event} para payment ${payment.id}`);
+    console.log(`[webhook-asaas] Evento ${event} recebido`);
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // ============================================================
+    // PIX AUTOMÁTICO BACEN — eventos da autorização.
+    // PAYMENT_RECEIVED real chega via evento PAYMENT_* mais abaixo.
+    // ============================================================
+    if (event.startsWith("PIX_AUTOMATIC_RECURRING_AUTHORIZATION_") && authorizationEvt?.id) {
+      const authStatusMap: Record<string, { status: string; field?: string }> = {
+        PIX_AUTOMATIC_RECURRING_AUTHORIZATION_CREATED:   { status: "PENDING" },
+        PIX_AUTOMATIC_RECURRING_AUTHORIZATION_ACTIVATED: { status: "ACTIVE", field: "activated_at" },
+        PIX_AUTOMATIC_RECURRING_AUTHORIZATION_CANCELLED: { status: "CANCELLED", field: "cancelled_at" },
+        PIX_AUTOMATIC_RECURRING_AUTHORIZATION_REJECTED:  { status: "REJECTED", field: "cancelled_at" },
+        PIX_AUTOMATIC_RECURRING_AUTHORIZATION_EXPIRED:   { status: "EXPIRED",  field: "cancelled_at" },
+      };
+      const mapped = authStatusMap[event] || { status: (authorizationEvt.status as string) || "UNKNOWN" };
+      const updatePayload: Record<string, unknown> = {
+        status: mapped.status,
+        raw_payload: authorizationEvt,
+      };
+      if (mapped.field) updatePayload[mapped.field] = new Date().toISOString();
+      if (event === "PIX_AUTOMATIC_RECURRING_AUTHORIZATION_CANCELLED") {
+        updatePayload.cancellation_reason = (authorizationEvt as any).cancellationReason || "asaas_event";
+      }
+
+      const { error: authUpdErr } = await supabase
+        .from("asaas_pix_authorizations")
+        .update(updatePayload)
+        .eq("asaas_authorization_id", authorizationEvt.id);
+      if (authUpdErr) {
+        console.error("[webhook-asaas] Erro atualizando authorization:", authUpdErr);
+      } else {
+        console.log(`[webhook-asaas] Authorization ${authorizationEvt.id} → ${mapped.status}`);
+      }
+
+      // Cancelamento da autorização → marca profile como canceled (perde acesso ao fim do ciclo).
+      if (mapped.status === "CANCELLED" || mapped.status === "REJECTED" || mapped.status === "EXPIRED") {
+        const { data: authRow } = await supabase
+          .from("asaas_pix_authorizations")
+          .select("customer_email")
+          .eq("asaas_authorization_id", authorizationEvt.id)
+          .maybeSingle();
+        if (authRow?.customer_email) {
+          await supabase
+            .from("profiles")
+            .update({ status: "canceled" })
+            .eq("email", authRow.customer_email);
+        }
+      }
+
+      return new Response(JSON.stringify({ ok: true, event, status: mapped.status }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // PIX_AUTOMATIC_RECURRING_PAYMENT_INSTRUCTION_* → só logamos (PAYMENT_* trata o resto).
+    if (event.startsWith("PIX_AUTOMATIC_RECURRING_PAYMENT_INSTRUCTION_")) {
+      console.log(`[webhook-asaas] Instruction ${event}`, paymentInstruction?.id);
+      return new Response(JSON.stringify({ ok: true, event }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (!payment?.id) {
+      console.warn("[webhook-asaas] Evento sem payment.id:", event);
+      return new Response(JSON.stringify({ ok: true, ignored: true }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // Mapeia evento → status interno
     const statusMap: Record<string, string> = {
