@@ -221,9 +221,58 @@ Deno.serve(async (req) => {
       } else {
         console.warn(`[webhook-asaas] Subscription ${subscriptionId} sem parent payment`);
       }
-    } else if (updated) {
+    }
+
+    // PIX Automático Bacen: paymentos criados pelo modo SUBSCRIPTION trazem
+    // pixAutomaticAuthorizationId em vez de subscription. Linkamos via asaas_pix_authorizations.
+    const pixAutoAuthId =
+      ((payment as any)?.pixAutomaticAuthorizationId as string) ||
+      ((payment as any)?.authorization?.id as string) ||
+      undefined;
+    if (!updated && pixAutoAuthId) {
+      const { data: authRow } = await supabase
+        .from("asaas_pix_authorizations")
+        .select("*")
+        .eq("asaas_authorization_id", pixAutoAuthId)
+        .maybeSingle();
+      if (authRow) {
+        const { data: inserted, error: insErr } = await supabase
+          .from("asaas_payments")
+          .insert({
+            asaas_payment_id: payment.id,
+            asaas_customer_id: authRow.asaas_customer_id,
+            asaas_subscription_id: pixAutoAuthId, // reusa coluna pra agrupar ciclos
+            user_id: authRow.user_id,
+            customer_name: authRow.customer_name,
+            customer_email: authRow.customer_email,
+            customer_phone: authRow.customer_phone,
+            customer_cpf: authRow.customer_cpf,
+            plan: authRow.plan,
+            billing_period: authRow.billing_period,
+            amount_cents:
+              Math.round(Number((payment as any).value || 0) * 100) || authRow.value_cents,
+            status: newStatus,
+            payment_method: "PIX_AUTOMATIC",
+            invoice_url: (payment as any).invoiceUrl || null,
+            paid_at: isPaid ? new Date().toISOString() : null,
+            raw_payload: payment,
+          })
+          .select()
+          .maybeSingle();
+        if (insErr) {
+          console.error("[webhook-asaas] Erro criando payment PIX Automático:", insErr);
+        } else {
+          updated = inserted;
+          console.log(`[webhook-asaas] Payment ${payment.id} vinculado à auth ${pixAutoAuthId}`);
+        }
+      } else {
+        console.warn(`[webhook-asaas] Authorization ${pixAutoAuthId} não encontrada`);
+      }
+    }
+
+    if (updated) {
       console.log(`[webhook-asaas] Pagamento ${payment.id} atualizado para ${newStatus}`);
-    } else if (!subscriptionId) {
+    } else if (!subscriptionId && !pixAutoAuthId) {
       console.warn(`[webhook-asaas] Pagamento ${payment.id} não encontrado no banco`);
     }
 
