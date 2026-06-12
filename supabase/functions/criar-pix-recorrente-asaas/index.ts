@@ -115,7 +115,7 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    if (!PRICES[plan]?.[billing] || !CYCLE_MAP[billing]) {
+    if (!PRICES[plan]?.[billing] || !FREQUENCY_MAP[billing]) {
       return new Response(JSON.stringify({ error: "Plano/período inválido" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -130,7 +130,7 @@ Deno.serve(async (req) => {
 
     const amountCents = PRICES[plan][billing];
     const amountDecimal = amountCents / 100;
-    const cycle = CYCLE_MAP[billing];
+    const frequency = FREQUENCY_MAP[billing];
     const cpfClean = cleanDigits(cpf);
     const phoneClean = cleanDigits(phone || "");
     const emailClean = email.trim().toLowerCase();
