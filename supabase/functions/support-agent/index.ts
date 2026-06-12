@@ -481,6 +481,58 @@ Analise e responda com a estrutura solicitada.`;
     if (!toolCall) throw new Error("No tool call returned");
     const args = JSON.parse(toolCall.function.arguments);
 
+    // ============ HARDENING: preenche IDs faltantes no suggested_action ============
+    // O LLM às vezes acerta o `type` mas esquece de copiar o ID concreto do contexto.
+    // Quando o contexto já carrega esses IDs, injeta antes de gravar pra não depender
+    // 100% do auto-resolve no momento da execução.
+    try {
+      const sa = args.suggested_action;
+      if (sa && typeof sa === "object") {
+        sa.params = sa.params || {};
+        const ctxStripeSubs = (context as { stripe?: { subscriptions?: Array<{ id: string; status: string }> } }).stripe?.subscriptions || [];
+        const ctxStripeInvs = (context as { stripe?: { invoices?: Array<{ id: string; status: string; amount_paid: number }> } }).stripe?.invoices || [];
+        const ctxAsaasSubs = (context as { asaas?: { subscriptions?: Array<{ id: string }> } }).asaas?.subscriptions || [];
+        const ctxAsaasPays = (context as { asaas?: { payments?: Array<{ asaas_payment_id: string; status: string }> } }).asaas?.payments || [];
+
+        const pickSub = () =>
+          ctxStripeSubs.find((s) => s.status === "active") ||
+          ctxStripeSubs.find((s) => s.status === "trialing") ||
+          ctxStripeSubs.find((s) => s.status === "past_due") ||
+          ctxStripeSubs[0];
+
+        if (["cancel_subscription", "pause_subscription", "change_plan"].includes(sa.type) && !sa.params.subscription_id) {
+          const sub = pickSub();
+          if (sub?.id) {
+            sa.params.subscription_id = sub.id;
+            log("Injected subscription_id into draft action", { id: sub.id, type: sa.type });
+          }
+        }
+        if (sa.type === "refund_invoice" && !sa.params.invoice_id) {
+          const inv = ctxStripeInvs.find((i) => i.status === "paid" && i.amount_paid > 0) || ctxStripeInvs[0];
+          if (inv?.id) {
+            sa.params.invoice_id = inv.id;
+            log("Injected invoice_id into draft action", { id: inv.id });
+          }
+        }
+        if (sa.type === "cancel_asaas_subscription" && !sa.params.asaas_subscription_id) {
+          const s = ctxAsaasSubs[0];
+          if (s?.id) {
+            sa.params.asaas_subscription_id = s.id;
+            log("Injected asaas_subscription_id into draft action", { id: s.id });
+          }
+        }
+        if (sa.type === "refund_asaas_payment" && !sa.params.asaas_payment_id) {
+          const p = ctxAsaasPays.find((x) => ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"].includes(x.status));
+          if (p?.asaas_payment_id) {
+            sa.params.asaas_payment_id = p.asaas_payment_id;
+            log("Injected asaas_payment_id into draft action", { id: p.asaas_payment_id });
+          }
+        }
+      }
+    } catch (e) {
+      log("Action param hardening failed (non-fatal)", { error: String(e) });
+    }
+
     // Mark previous drafts as not current
     await supabase.from("support_ticket_drafts").update({ is_current: false }).eq("ticket_id", ticket_id);
 
