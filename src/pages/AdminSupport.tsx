@@ -54,6 +54,7 @@ interface Draft {
   id: string;
   draft_body: string;
   suggested_action: { type: string; reason: string; params?: Record<string, unknown> };
+  suggested_actions?: Array<{ type: string; reason: string; params?: Record<string, unknown> }> | null;
   context_snapshot: Record<string, unknown>;
   generated_at: string;
   ai_model: string;
@@ -100,7 +101,8 @@ export default function AdminSupport() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [editedBody, setEditedBody] = useState('');
-  const [actionEnabled, setActionEnabled] = useState(true);
+  // Mapa indexado: actionsEnabled[i] = true significa "executar a i-ésima ação ao aprovar"
+  const [actionsEnabled, setActionsEnabled] = useState<boolean[]>([]);
   const [sending, setSending] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [hint, setHint] = useState('');
