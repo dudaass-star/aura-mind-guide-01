@@ -816,39 +816,65 @@ Deno.serve(async (req) => {
 
     // ========== CHECKOUT FUNNEL METRICS (deduplicated by phone) ==========
 
-    // Fetch sessions in period and deduplicate by phone
+    // Chave de identidade unificada: email lowercase OU últimos 11 dígitos do telefone.
+    // Usada para deduplicar entre Stripe (checkout_sessions) e Asaas (asaas_payments).
+    const identityKey = (email?: string | null, phone?: string | null): string | null => {
+      const e = (email || '').trim().toLowerCase();
+      if (e) return `e:${e}`;
+      const digits = (phone || '').replace(/\D/g, '');
+      if (!digits) return null;
+      // Mantém últimos 11 dígitos (DDD + 9 + 8) — descarta prefixo 55
+      const tail = digits.length > 11 ? digits.slice(-11) : digits;
+      return `p:${tail}`;
+    };
+
+    // Fetch sessions in period (Stripe). Inclui email pra construir chave de identidade.
     const { data: periodSessions } = await supabase
       .from('checkout_sessions')
-      .select('phone, status')
+      .select('phone, email, status')
       .gte('created_at', periodStart)
       .lt('created_at', periodEnd);
 
-    const uniquePhonesCreated = new Set<string>();
-    const uniquePhonesCompleted = new Set<string>();
+    const stripeCreatedKeysInPeriod = new Set<string>();
+    const stripeCompletedKeysInPeriod = new Set<string>();
     for (const s of (periodSessions || [])) {
-      if (s.phone) uniquePhonesCreated.add(s.phone);
-      if (s.phone && s.status === 'completed') uniquePhonesCompleted.add(s.phone);
+      const k = identityKey(s.email as string | null, s.phone as string | null);
+      if (!k) continue;
+      stripeCreatedKeysInPeriod.add(k);
+      if (s.status === 'completed') stripeCompletedKeysInPeriod.add(k);
     }
-    const checkoutCreatedInPeriod = uniquePhonesCreated.size;
-    const checkoutCompletedInPeriod = uniquePhonesCompleted.size;
 
-    // All-time checkout funnel (deduplicated)
+    // All-time checkout funnel (Stripe)
     const { data: allTimeSessions } = await supabase
       .from('checkout_sessions')
-      .select('phone, status');
+      .select('phone, email, status');
 
-    const allPhonesCreated = new Set<string>();
-    const allPhonesCompleted = new Set<string>();
+    const stripeCreatedKeysAllTime = new Set<string>();
+    const stripeCompletedKeysAllTime = new Set<string>();
     for (const s of (allTimeSessions || [])) {
-      if (s.phone) allPhonesCreated.add(s.phone);
-      if (s.phone && s.status === 'completed') allPhonesCompleted.add(s.phone);
+      const k = identityKey(s.email as string | null, s.phone as string | null);
+      if (!k) continue;
+      stripeCreatedKeysAllTime.add(k);
+      if (s.status === 'completed') stripeCompletedKeysAllTime.add(k);
     }
-    const checkoutCreatedAllTime = allPhonesCreated.size;
-    const checkoutCompletedAllTime = allPhonesCompleted.size;
 
-    const checkoutDropoffInPeriod = (checkoutCreatedInPeriod || 0) - (checkoutCompletedInPeriod || 0);
-    const checkoutCompletionRate = (checkoutCreatedInPeriod || 0) > 0
-      ? Math.round((checkoutCompletedInPeriod || 0) / (checkoutCreatedInPeriod || 0) * 1000) / 10
+    // Sets de chaves Asaas (preenchidos depois, dentro do bloco try/catch do Asaas).
+    // Declarados aqui pra ficarem visíveis na hora de combinar.
+    const asaasCreatedKeysInPeriod = new Set<string>();
+    const asaasConfirmedKeysInPeriod = new Set<string>();
+    const asaasCreatedKeysAllTime = new Set<string>();
+    const asaasConfirmedKeysAllTime = new Set<string>();
+
+    // Os totais por canal e combinados são calculados depois (após popular Asaas),
+    // descartando "created" Stripe quando o mesmo identityKey aparece pago no Asaas
+    // e vice-versa. Inicializamos com a contagem bruta como fallback.
+    let checkoutCreatedInPeriod = stripeCreatedKeysInPeriod.size;
+    let checkoutCompletedInPeriod = stripeCompletedKeysInPeriod.size;
+    let checkoutCreatedAllTime = stripeCreatedKeysAllTime.size;
+    let checkoutCompletedAllTime = stripeCompletedKeysAllTime.size;
+    let checkoutDropoffInPeriod = checkoutCreatedInPeriod - checkoutCompletedInPeriod;
+    let checkoutCompletionRate = checkoutCreatedInPeriod > 0
+      ? Math.round(checkoutCompletedInPeriod / checkoutCreatedInPeriod * 1000) / 10
       : 0;
 
     // ========== 💰 MRR & REVENUE METRICS (STRIPE = SOURCE OF TRUTH) ==========
