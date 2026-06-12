@@ -122,6 +122,24 @@ Deno.serve(async (req) => {
     }
     logStep("Profile loaded", { email: profile.email, plan: profile.plan });
 
+    // PIX Automático Bacen: troca de plano exige NOVA autorização no app do banco
+    // do pagador. Não dá pra mudar o valor de uma autorização ativa via API — o
+    // cliente precisa cancelar a atual e refazer pelo checkout.
+    const { data: activeAuth } = await supabase
+      .from("asaas_pix_authorizations")
+      .select("asaas_authorization_id, status")
+      .eq("asaas_customer_id", profile.asaas_customer_id)
+      .in("status", ["ACTIVE", "PENDING"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (activeAuth) {
+      return jsonError(
+        "Sua assinatura é PIX Automático. Pra trocar de plano, cancele a atual no app do seu banco e faça um novo checkout.",
+        409,
+      );
+    }
+
     // Mesmo plano + mesmo ciclo → bloqueia
     if (profile.plan === plan && profile.billing_cycle === cycle) {
       return jsonError("Você já está nesse plano.", 409);
