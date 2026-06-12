@@ -270,31 +270,25 @@ export default function AdminSupport() {
     if (!selectedTicket || !editedBody.trim()) return;
     setSending(true);
     try {
-      // Ações críticas: executam ANTES do email. Se falhar, email NÃO é enviado
-      // para não prometer ao cliente algo que não aconteceu.
-      const CRITICAL_ACTIONS = new Set([
-        'refund_invoice',
-        'pause_subscription',
-        'change_plan',
-        'cancel_subscription',
-        'refund_asaas_payment',
-        'cancel_asaas_subscription',
-      ]);
-      const actionType = draft?.suggested_action.type;
-      const willExecute = executeAction && draft && actionType && actionType !== 'none';
-      const isCritical = willExecute && CRITICAL_ACTIONS.has(actionType);
+      // Coleta as ações marcadas pra rodar nesse aprovar/enviar
+      const allActions = getActionsList(draft);
+      const selected = executeAction
+        ? allActions.filter((a, i) => actionsEnabled[i] && a.type !== 'none')
+        : [];
+      const critical = selected.filter((a) => CRITICAL_ACTION_TYPES.has(a.type));
+      const nonCritical = selected.filter((a) => !CRITICAL_ACTION_TYPES.has(a.type));
 
-      // 1. Executar ação crítica PRIMEIRO (gate do email)
-      if (isCritical) {
+      // 1. Críticas PRIMEIRO (em ordem). Qualquer falha aborta o envio.
+      for (const action of critical) {
         const { data: actData, error: actErr } = await supabase.functions.invoke('support-execute-action', {
-          body: { ticket_id: selectedTicket.id, action: draft!.suggested_action },
+          body: { ticket_id: selectedTicket.id, action },
         });
-        const actOk = !actErr && actData && (actData as any).ok === true;
+        const actOk = !actErr && actData && (actData as { ok?: boolean }).ok === true;
         if (!actOk) {
-          const reason = (actData as any)?.error || actErr?.message || 'erro desconhecido';
+          const reason = (actData as { error?: string })?.error || actErr?.message || 'erro desconhecido';
           toast({
-            title: `Ação "${actionType}" falhou — email NÃO enviado`,
-            description: `${reason}. Corrija manualmente no provedor ou desmarque "Executar" para apenas responder.`,
+            title: `Ação "${action.type}" falhou — email NÃO enviado`,
+            description: `${reason}. Corrija no provedor ou desmarque essa ação para apenas responder.`,
             variant: 'destructive',
           });
           setSending(false);
@@ -308,13 +302,13 @@ export default function AdminSupport() {
       });
       if (sendErr) throw sendErr;
 
-      // 3. Executar ação NÃO-crítica depois (best-effort, padrão antigo)
-      if (willExecute && !isCritical) {
+      // 3. Não-críticas depois (best-effort)
+      for (const action of nonCritical) {
         const { error: actErr } = await supabase.functions.invoke('support-execute-action', {
-          body: { ticket_id: selectedTicket.id, action: draft!.suggested_action },
+          body: { ticket_id: selectedTicket.id, action },
         });
         if (actErr) {
-          toast({ title: 'Email enviado, mas ação falhou', description: actErr.message, variant: 'destructive' });
+          toast({ title: `Email enviado, mas ação "${action.type}" falhou`, description: actErr.message, variant: 'destructive' });
         }
       }
 
