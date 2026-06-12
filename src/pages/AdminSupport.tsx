@@ -193,7 +193,8 @@ export default function AdminSupport() {
       currentDraft = draftRes.data as unknown as Draft;
       setDraft(currentDraft);
       setEditedBody(currentDraft.draft_body);
-      setActionEnabled(currentDraft.suggested_action?.type !== 'none');
+      const list = getActionsList(currentDraft);
+      setActionsEnabled(list.map((a) => a.type !== 'none'));
     }
     setLoadingDetail(false);
 
@@ -232,7 +233,8 @@ export default function AdminSupport() {
         const d = freshDraft as unknown as Draft;
         setDraft(d);
         setEditedBody(d.draft_body);
-        setActionEnabled(d.suggested_action?.type !== 'none');
+        const list = getActionsList(d);
+        setActionsEnabled(list.map((a) => a.type !== 'none'));
       }
     } catch (e) {
       toast({
