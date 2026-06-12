@@ -100,7 +100,10 @@ SEVERIDADES:
 - media: cobrança, troca de plano
 - alta: reembolso, jurídico, ameaça pública, dados pessoais (LGPD)
 
-AÇÕES SUGERIDAS (escolha APENAS UMA):
+AÇÕES SUGERIDAS (use 1 ou mais, em ordem):
+- O campo "suggested_actions" é uma LISTA. Use 1 ação na maioria dos casos. Use múltiplas APENAS quando o draft promete explicitamente várias coisas no mesmo email (ex: cancelar assinatura + reembolsar 2 faturas pagas) — uma ação por promessa concreta. Máximo 5.
+- A 1ª ação da lista é a "principal" e também aparece em "suggested_action" (singular) por compatibilidade. As demais são executadas em sequência no mesmo aprovar/enviar.
+- Tipos válidos:
 - none: só responder, sem ação
 - send_portal_link: enviar link de acesso ao /meu-espaco (login com Google ou código de 6 dígitos por email — sem token na URL)
 - cancel_subscription: cancelar assinatura agora
@@ -110,6 +113,8 @@ AÇÕES SUGERIDAS (escolha APENAS UMA):
 - change_plan: trocar plano (informe new_plan: essencial|direcao|transformacao e billing: monthly|yearly)
 - refund_asaas_payment: reembolsar cobrança PIX/Asaas (informe asaas_payment_id e amount_cents se parcial)
 - cancel_asaas_subscription: cancelar assinatura PIX/Asaas (informe asaas_subscription_id)
+- Exemplo combinado: cliente quer cancelar E reembolsar últimas 2 faturas → suggested_actions = [{ type: "cancel_subscription", params: { subscription_id: "..." } }, { type: "refund_invoice", params: { invoice_id: "in_AAA..." } }, { type: "refund_invoice", params: { invoice_id: "in_BBB..." } }].
+- Se prometer reembolso de N faturas no texto, DEVE haver N itens refund_invoice na lista, cada um com seu invoice_id distinto vindo de stripe.invoices.
 
 REGRA DE PROVEDOR:
 - Cliente pagou com cartão (tem stripe.subscriptions/invoices no contexto) → use ações Stripe (refund_invoice, cancel_subscription, etc).
@@ -460,6 +465,20 @@ Analise e responda com a estrutura solicitada.`;
                     params: { type: "object", description: "Parâmetros: subscription_id, invoice_id, amount_cents, pause_days, new_plan, billing, asaas_payment_id, asaas_subscription_id", additionalProperties: true },
                   },
                   required: ["type", "reason"],
+                },
+                suggested_actions: {
+                  type: "array",
+                  description: "Lista ordenada de ações a executar no mesmo aprovar/enviar. 1ª = principal. Máximo 5. Use múltiplas APENAS quando o draft promete várias coisas concretas (ex: cancelar + reembolsar várias faturas).",
+                  maxItems: 5,
+                  items: {
+                    type: "object",
+                    properties: {
+                      type: { type: "string", enum: ["none","send_portal_link","cancel_subscription","pause_subscription","refund_invoice","retry_payment","change_plan","refund_asaas_payment","cancel_asaas_subscription"] },
+                      reason: { type: "string" },
+                      params: { type: "object", additionalProperties: true },
+                    },
+                    required: ["type", "reason"],
+                  },
                 },
                 summary: { type: "string", description: "Resumo de 1 linha pro admin" },
               },
