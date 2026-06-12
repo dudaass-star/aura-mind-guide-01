@@ -61,40 +61,145 @@ serve(async (req) => {
     const needsAsaasPayment = action.type === "refund_asaas_payment" && !params.asaas_payment_id;
     const needsAsaasSub = action.type === "cancel_asaas_subscription" && !params.asaas_subscription_id;
 
-    if ((needsStripeInvoice || needsStripeSub) && ticket.customer_email) {
+    if (needsStripeInvoice || needsStripeSub) {
       try {
-        const customers = await stripe.customers.list({ email: ticket.customer_email, limit: 1 });
-        const cust = customers.data[0];
-        if (cust) {
-          if (needsStripeInvoice) {
-            const invs = await stripe.invoices.list({ customer: cust.id, status: "paid", limit: 1 });
-            if (invs.data[0]) {
-              params.invoice_id = invs.data[0].id;
-              log("Auto-resolved invoice_id", { invoice_id: params.invoice_id });
-            }
+        // Coleta candidatos a Stripe customer em múltiplas fontes,
+        // sem repetir IDs já vistos. Ordem de preferência:
+        //   1. profiles.stripe_customer_id WHERE user_id = profile_user_id
+        //   2. profiles.stripe_customer_id WHERE email = customer_email
+        //   3. stripe.customers.list({ email: customer_email })
+        //   4. stripe.customers.search por metadata.email
+        const candidateCustomers: Array<{ id: string; source: string }> = [];
+        const seen = new Set<string>();
+        const pushCandidate = (id: string | null | undefined, source: string) => {
+          if (id && !seen.has(id)) { seen.add(id); candidateCustomers.push({ id, source }); }
+        };
+
+        // Também tenta puxar subscription_id direto do profile (fonte mais
+        // confiável que o Stripe quando ele está populado).
+        let profileSubId: string | null = null;
+        let profileInvoiceFallback: string | null = null;
+
+        if (ticket.profile_user_id) {
+          const { data: prof } = await supabase
+            .from("profiles")
+            .select("stripe_customer_id, stripe_subscription_id")
+            .eq("user_id", ticket.profile_user_id)
+            .maybeSingle();
+          const p = prof as { stripe_customer_id?: string; stripe_subscription_id?: string } | null;
+          pushCandidate(p?.stripe_customer_id, "profile_by_user_id");
+          if (p?.stripe_subscription_id) profileSubId = p.stripe_subscription_id;
+        }
+
+        if (ticket.customer_email) {
+          const { data: profByEmail } = await supabase
+            .from("profiles")
+            .select("stripe_customer_id, stripe_subscription_id")
+            .ilike("email", ticket.customer_email)
+            .limit(1)
+            .maybeSingle();
+          const p = profByEmail as { stripe_customer_id?: string; stripe_subscription_id?: string } | null;
+          pushCandidate(p?.stripe_customer_id, "profile_by_email");
+          if (!profileSubId && p?.stripe_subscription_id) profileSubId = p.stripe_subscription_id;
+
+          try {
+            const listed = await stripe.customers.list({ email: ticket.customer_email, limit: 3 });
+            for (const c of listed.data) pushCandidate(c.id, "stripe_list_by_email");
+          } catch (e) {
+            log("stripe.customers.list failed", { error: String(e) });
           }
-          if (needsStripeSub) {
-            // Prioriza ativa, senão pega a mais recente
-            let subs = await stripe.subscriptions.list({ customer: cust.id, status: "active", limit: 1 });
-            if (subs.data.length === 0) {
-              subs = await stripe.subscriptions.list({ customer: cust.id, status: "all", limit: 1 });
-            }
-            if (subs.data[0]) {
-              params.subscription_id = subs.data[0].id;
-              log("Auto-resolved subscription_id", { subscription_id: params.subscription_id });
-            }
+
+          try {
+            const searched = await stripe.customers.search({
+              query: `metadata['email']:'${ticket.customer_email.replace(/'/g, "")}'`,
+              limit: 5,
+            });
+            for (const c of searched.data) pushCandidate(c.id, "stripe_search_metadata_email");
+          } catch (e) {
+            log("stripe.customers.search failed", { error: String(e) });
           }
         }
+
+        log("Stripe auto-resolve candidates", {
+          candidates: candidateCustomers,
+          profile_sub_hint: profileSubId,
+        });
+
+        // Validação rápida do subscription_id vindo do profile: confirma que
+        // ainda existe no Stripe e não está cancelado/incompleto.
+        if (needsStripeSub && profileSubId) {
+          try {
+            const sub = await stripe.subscriptions.retrieve(profileSubId);
+            if (sub && !["canceled", "incomplete_expired"].includes(sub.status)) {
+              params.subscription_id = sub.id;
+              log("Auto-resolved subscription_id via profile", { subscription_id: sub.id, status: sub.status });
+            } else {
+              log("Profile subscription_id stale, falling back", { id: profileSubId, status: sub?.status });
+            }
+          } catch (e) {
+            log("Profile subscription_id retrieve failed", { id: profileSubId, error: String(e) });
+          }
+        }
+
+        for (const cust of candidateCustomers) {
+          if (needsStripeInvoice && !params.invoice_id) {
+            try {
+              const invs = await stripe.invoices.list({ customer: cust.id, status: "paid", limit: 1 });
+              if (invs.data[0]) {
+                params.invoice_id = invs.data[0].id;
+                log("Auto-resolved invoice_id", { invoice_id: params.invoice_id, source: cust.source });
+              }
+              if (!params.invoice_id) profileInvoiceFallback = profileInvoiceFallback; // noop
+            } catch (e) {
+              log("invoices.list failed", { customer: cust.id, error: String(e) });
+            }
+          }
+          if (needsStripeSub && !params.subscription_id) {
+            try {
+              // Prioriza active → trialing → past_due → mais recente (status all)
+              for (const status of ["active", "trialing", "past_due", "all"] as const) {
+                const subs = await stripe.subscriptions.list({
+                  customer: cust.id,
+                  status: status as Stripe.SubscriptionListParams["status"],
+                  limit: 1,
+                });
+                if (subs.data[0]) {
+                  params.subscription_id = subs.data[0].id;
+                  log("Auto-resolved subscription_id", {
+                    subscription_id: params.subscription_id,
+                    customer: cust.id,
+                    source: cust.source,
+                    matched_status: status,
+                  });
+                  break;
+                }
+              }
+            } catch (e) {
+              log("subscriptions.list failed", { customer: cust.id, error: String(e) });
+            }
+          }
+          if ((!needsStripeInvoice || params.invoice_id) && (!needsStripeSub || params.subscription_id)) break;
+        }
       } catch (e) {
-        log("Stripe auto-resolve failed", { error: String(e) });
+        log("Stripe auto-resolve outer failed", { error: String(e) });
       }
     }
 
-    if ((needsAsaasPayment || needsAsaasSub) && ticket.profile_user_id) {
+    if (needsAsaasPayment || needsAsaasSub) {
       try {
-        const { data: prof } = await supabase
-          .from("profiles").select("asaas_customer_id").eq("user_id", ticket.profile_user_id).maybeSingle();
-        const asaasCustomerId = (prof as { asaas_customer_id?: string } | null)?.asaas_customer_id;
+        // Resolve asaas_customer_id por profile_user_id OU email,
+        // pra cobrir tickets cujo profile foi limpo pelo cleanup de inativos.
+        let asaasCustomerId: string | undefined;
+        if (ticket.profile_user_id) {
+          const { data: prof } = await supabase
+            .from("profiles").select("asaas_customer_id").eq("user_id", ticket.profile_user_id).maybeSingle();
+          asaasCustomerId = (prof as { asaas_customer_id?: string } | null)?.asaas_customer_id;
+        }
+        if (!asaasCustomerId && ticket.customer_email) {
+          const { data: profByEmail } = await supabase
+            .from("profiles").select("asaas_customer_id").ilike("email", ticket.customer_email).limit(1).maybeSingle();
+          asaasCustomerId = (profByEmail as { asaas_customer_id?: string } | null)?.asaas_customer_id;
+        }
         const pq = supabase
           .from("asaas_payments")
           .select("asaas_payment_id, asaas_subscription_id, status")
