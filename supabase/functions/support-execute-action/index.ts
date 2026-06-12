@@ -158,11 +158,9 @@ serve(async (req) => {
             try {
               // Prioriza active → trialing → past_due → mais recente (status all)
               for (const status of ["active", "trialing", "past_due", "all"] as const) {
-                const subs = await stripe.subscriptions.list({
-                  customer: cust.id,
-                  status: status as Stripe.SubscriptionListParams["status"],
-                  limit: 1,
-                });
+                const listParams: Record<string, unknown> = { customer: cust.id, limit: 1 };
+                listParams.status = status;
+                const subs = await stripe.subscriptions.list(listParams as never);
                 if (subs.data[0]) {
                   params.subscription_id = subs.data[0].id;
                   log("Auto-resolved subscription_id", {
