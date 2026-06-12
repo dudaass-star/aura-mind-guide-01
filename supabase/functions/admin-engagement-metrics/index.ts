@@ -1315,7 +1315,7 @@ Deno.serve(async (req) => {
       // Criados: conta por created_at (intenção de pagar via PIX no período)
       const { data: asaasCreatedInPeriod } = await supabase
         .from('asaas_payments')
-        .select('id, customer_email')
+        .select('id, customer_email, customer_phone')
         .gte('created_at', periodStart)
         .lt('created_at', periodEnd)
         .not('customer_email', 'ilike', E2E_EMAIL_PATTERN);
@@ -1324,13 +1324,15 @@ Deno.serve(async (req) => {
       for (const p of asaasCreatedInPeriod || []) {
         const em = (p.customer_email as string | null) || `__nokey_${p.id}`;
         pixCreatedEmails.add(em);
+        const k = identityKey(p.customer_email as string | null, p.customer_phone as string | null);
+        if (k) asaasCreatedKeysInPeriod.add(k);
       }
       asaasCheckoutCreatedInPeriod = pixCreatedEmails.size;
 
       // Confirmados: conta por paid_at (dinheiro entrou no período, mesmo se PIX criado antes)
       const { data: asaasConfirmedInPeriod } = await supabase
         .from('asaas_payments')
-        .select('id, customer_email, paid_at, status')
+        .select('id, customer_email, customer_phone, paid_at, status')
         .in('status', PAID_STATUSES)
         .gte('paid_at', periodStart)
         .lt('paid_at', periodEnd)
@@ -1340,13 +1342,15 @@ Deno.serve(async (req) => {
       for (const p of asaasConfirmedInPeriod || []) {
         const em = (p.customer_email as string | null) || `__nokey_${p.id}`;
         pixConfirmedEmails.add(em);
+        const k = identityKey(p.customer_email as string | null, p.customer_phone as string | null);
+        if (k) asaasConfirmedKeysInPeriod.add(k);
       }
       asaasCheckoutConfirmedInPeriod = pixConfirmedEmails.size;
 
       // 2b) Funil all-time PIX (dedup por email pra alinhar com cartão)
       const { data: asaasAllTime } = await supabase
         .from('asaas_payments')
-        .select('status, customer_email')
+        .select('status, customer_email, customer_phone')
         .not('customer_email', 'ilike', E2E_EMAIL_PATTERN);
 
       const pixEmailsCreated = new Set<string>();
@@ -1356,6 +1360,11 @@ Deno.serve(async (req) => {
         if (!em) continue;
         pixEmailsCreated.add(em);
         if (PAID_STATUSES.includes(p.status as string)) pixEmailsConfirmed.add(em);
+        const k = identityKey(em, p.customer_phone as string | null);
+        if (k) {
+          asaasCreatedKeysAllTime.add(k);
+          if (PAID_STATUSES.includes(p.status as string)) asaasConfirmedKeysAllTime.add(k);
+        }
       }
       asaasCheckoutCreatedAllTime = pixEmailsCreated.size;
       asaasCheckoutConfirmedAllTime = pixEmailsConfirmed.size;
