@@ -1,47 +1,57 @@
+## Plano: corrigir PIX recorrente para PIX Automático Bacen
 
-# Checklist: PIX Automático Bacen na conta Asaas
+Você está certo: a conta Asaas está habilitada, mas o código atual ficou preso no modelo antigo (`/subscriptions` + `billingType: "PIX"`). Isso gera QR recorrente manual, não débito automático autorizado no banco.
 
-Antes de mexer em código, precisamos confirmar que a conta Asaas tem PIX Automático Bacen liberado de verdade. Hoje o código usa só `/subscriptions` + `billingType: "PIX"` (recorrência com QR novo a cada ciclo, cliente paga manual) — **nada de PIX Automático Bacen implementado**.
+### Objetivo
 
-## O que vou fazer
+Fazer novos checkouts PIX usarem PIX Automático Bacen de verdade: o cliente autoriza uma vez no app do banco, e as próximas cobranças acontecem automaticamente.
 
-Uma única edge function temporária `asaas-check-pix-automatico` (interna, admin-only) que bate na API do Asaas e retorna um relatório do que está/não está disponível. Sem alterar nenhum fluxo existente.
+### Etapas
 
-### Verificações da API
+1. **Ajustar o checkout PIX**
+   - Trocar o fluxo de `criar-pix-recorrente-asaas` para criar uma autorização PIX Automático.
+   - A UI deixa de tratar esse fluxo como “gerar QR recorrente” e passa a orientar: “autorize no app do banco”.
+   - Manter QR/copia-e-cola apenas como fallback se o Asaas retornar um pagamento imediato junto da autorização.
 
-1. **Endpoint disponível**: `GET /v3/pix/automatic/authorizations?limit=1` 
-   - 200/empty list → habilitado
-   - 401/403 → conta sem permissão
-   - 404 → endpoint não liberado pra esse ambiente
-2. **Ambiente**: confirma `ASAAS_ENV` (sandbox vs production) e mostra qual URL base foi consultada.
-3. **Conta**: `GET /v3/myAccount` pra trazer nome, status de aprovação e país/CNPJ.
-4. **Webhooks ativos**: `GET /v3/webhooks` pra listar quais eventos estão inscritos e checar se já tem `PIX_AUTOMATIC_*` (ou só os clássicos `PAYMENT_*`).
-5. **Subscriptions existentes**: count rápido em `asaas_payments` agrupando por `billing_type` pra mostrar quantas assinaturas vivas hoje são `/subscriptions` PIX clássico (essas teriam que ser migradas depois).
+2. **Persistir a autorização PIX Automático**
+   - Criar estrutura no banco para guardar a autorização: `authorizationId`, customer, plano, ciclo, valor, status, payload bruto e vínculo com profile.
+   - Preservar `asaas_payments` para cobranças/pagamentos efetivos.
+   - Incluir `GRANT` + RLS corretamente na migration.
 
-### Entrega
+3. **Atualizar o webhook Asaas**
+   - Tratar eventos `PIX_AUTOMATIC_*` além de `PAYMENT_*`.
+   - Quando autorização for aprovada/ativa, marcar a assinatura PIX Automático como ativa.
+   - Quando um pagamento automático for confirmado, reutilizar a lógica atual de ativação/renovação do profile.
+   - Quando autorização for cancelada/rejeitada/expirada, atualizar status e evitar acesso indevido.
 
-- Edge function retorna JSON estruturado:
-  ```
-  {
-    env: "production" | "sandbox",
-    pixAutomatico: { available: boolean, status: 200|401|403|404, sample?: {...} },
-    account: { name, status, country },
-    webhooks: [{ url, events: [...], hasPixAutomatico: boolean }],
-    legacySubscriptions: { active: number, byBilling: {...} }
-  }
-  ```
-- Eu rodo a function 1x e te entrego o relatório no chat. Sem UI, sem migração, sem mudança no checkout/webhook atuais.
+4. **Adaptar troca de plano PIX**
+   - Parar de criar nova `/subscriptions` clássica em `change-asaas-plan`.
+   - Para PIX Automático, cancelar/substituir a autorização anterior conforme o suporte da API e criar uma nova autorização para o próximo ciclo.
+   - Se houver cobrança vencida, manter o bloqueio atual.
 
-## Detalhes técnicos
+5. **Legado sem quebrar clientes atuais**
+   - Não apagar as 32 subscriptions clássicas existentes agora.
+   - O webhook continua aceitando `PAYMENT_*` das subscriptions antigas para não interromper renovações em andamento.
+   - Depois da migração dos novos checkouts, fazemos um plano separado para migrar os clientes antigos com comunicação apropriada, porque PIX Automático exige consentimento no banco.
 
-- Nova função em `supabase/functions/asaas-check-pix-automatico/index.ts`.
-- Usa `ASAAS_API_KEY` e `ASAAS_ENV` já existentes (não pede secret novo).
-- `verify_jwt = false` padrão Lovable; protegida por `INTERNAL_WEBHOOK_SECRET` no header pra ninguém de fora invocar.
-- Read-only: só `GET` na API do Asaas e `SELECT` no Supabase. Zero `POST`/`DELETE`/`UPDATE`.
-- Não toca em `criar-pix-recorrente-asaas`, `webhook-asaas`, `change-asaas-plan`, nem no `ChangePlanDialog`.
+6. **Validação pós-implementação**
+   - Rodar teste controlado da edge function em modo read/write mínimo com dados de teste ou payload real aprovado.
+   - Verificar logs do webhook para eventos `PIX_AUTOMATIC_*`.
+   - Confirmar no banco: autorização criada, status atualizado e profile ativado só após confirmação correta.
 
-## Próximo passo (depois deste checklist)
+### Detalhes técnicos
 
-Com o resultado em mãos, a gente decide:
-- Se PIX Automático estiver liberado → planejo a migração completa (`/subscriptions` → `/pix/automatic/authorizations`, novos eventos no webhook, UX de autorização no app do banco, plano de migração das subs antigas).
-- Se não estiver → você abre solicitação no Asaas e a gente espera, mantendo o modelo atual.
+- Alterar principalmente:
+  - `supabase/functions/criar-pix-recorrente-asaas/index.ts`
+  - `supabase/functions/webhook-asaas/index.ts`
+  - `supabase/functions/change-asaas-plan/index.ts`
+  - `src/pages/CheckoutV2.tsx`
+  - possivelmente `src/components/portal/ChangePlanDialog.tsx`
+- Criar migration para tabela/colunas de autorizações PIX Automático.
+- Manter compatibilidade com o modelo antigo por enquanto.
+- Não mexer em Stripe/cartão.
+- Não mexer em PIX one-time clássico, exceto se a UI estiver chamando a função recorrente onde deveria chamar o fluxo automático.
+
+### Resultado esperado
+
+Novos pagamentos PIX deixam de ser “recorrência manual com QR novo” e passam a ser PIX Automático Bacen real; o legado continua funcionando até uma migração separada dos clientes já ativos.
