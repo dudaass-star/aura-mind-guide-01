@@ -1,0 +1,1 @@
+ALTER TABLE public.support_ticket_drafts ADD COLUMN IF NOT EXISTS suggested_actions JSONB;
