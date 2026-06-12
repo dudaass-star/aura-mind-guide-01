@@ -58,8 +58,10 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const event = body?.event as string | undefined;
     const payment = body?.payment as Record<string, unknown> | undefined;
+    const authorizationEvt = body?.authorization as Record<string, unknown> | undefined;
+    const paymentInstruction = body?.paymentInstruction as Record<string, unknown> | undefined;
 
-    if (!event || !payment?.id) {
+    if (!event) {
       console.warn("[webhook-asaas] Payload inválido:", body);
       return new Response(JSON.stringify({ ok: true, ignored: true }), {
         status: 200,
@@ -67,9 +69,79 @@ Deno.serve(async (req) => {
       });
     }
 
-    console.log(`[webhook-asaas] Evento ${event} para payment ${payment.id}`);
+    console.log(`[webhook-asaas] Evento ${event} recebido`);
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // ============================================================
+    // PIX AUTOMÁTICO BACEN — eventos da autorização.
+    // PAYMENT_RECEIVED real chega via evento PAYMENT_* mais abaixo.
+    // ============================================================
+    if (event.startsWith("PIX_AUTOMATIC_RECURRING_AUTHORIZATION_") && authorizationEvt?.id) {
+      const authStatusMap: Record<string, { status: string; field?: string }> = {
+        PIX_AUTOMATIC_RECURRING_AUTHORIZATION_CREATED:   { status: "PENDING" },
+        PIX_AUTOMATIC_RECURRING_AUTHORIZATION_ACTIVATED: { status: "ACTIVE", field: "activated_at" },
+        PIX_AUTOMATIC_RECURRING_AUTHORIZATION_CANCELLED: { status: "CANCELLED", field: "cancelled_at" },
+        PIX_AUTOMATIC_RECURRING_AUTHORIZATION_REJECTED:  { status: "REJECTED", field: "cancelled_at" },
+        PIX_AUTOMATIC_RECURRING_AUTHORIZATION_EXPIRED:   { status: "EXPIRED",  field: "cancelled_at" },
+      };
+      const mapped = authStatusMap[event] || { status: (authorizationEvt.status as string) || "UNKNOWN" };
+      const updatePayload: Record<string, unknown> = {
+        status: mapped.status,
+        raw_payload: authorizationEvt,
+      };
+      if (mapped.field) updatePayload[mapped.field] = new Date().toISOString();
+      if (event === "PIX_AUTOMATIC_RECURRING_AUTHORIZATION_CANCELLED") {
+        updatePayload.cancellation_reason = (authorizationEvt as any).cancellationReason || "asaas_event";
+      }
+
+      const { error: authUpdErr } = await supabase
+        .from("asaas_pix_authorizations")
+        .update(updatePayload)
+        .eq("asaas_authorization_id", authorizationEvt.id);
+      if (authUpdErr) {
+        console.error("[webhook-asaas] Erro atualizando authorization:", authUpdErr);
+      } else {
+        console.log(`[webhook-asaas] Authorization ${authorizationEvt.id} → ${mapped.status}`);
+      }
+
+      // Cancelamento da autorização → marca profile como canceled (perde acesso ao fim do ciclo).
+      if (mapped.status === "CANCELLED" || mapped.status === "REJECTED" || mapped.status === "EXPIRED") {
+        const { data: authRow } = await supabase
+          .from("asaas_pix_authorizations")
+          .select("customer_email")
+          .eq("asaas_authorization_id", authorizationEvt.id)
+          .maybeSingle();
+        if (authRow?.customer_email) {
+          await supabase
+            .from("profiles")
+            .update({ status: "canceled" })
+            .eq("email", authRow.customer_email);
+        }
+      }
+
+      return new Response(JSON.stringify({ ok: true, event, status: mapped.status }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // PIX_AUTOMATIC_RECURRING_PAYMENT_INSTRUCTION_* → só logamos (PAYMENT_* trata o resto).
+    if (event.startsWith("PIX_AUTOMATIC_RECURRING_PAYMENT_INSTRUCTION_")) {
+      console.log(`[webhook-asaas] Instruction ${event}`, paymentInstruction?.id);
+      return new Response(JSON.stringify({ ok: true, event }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (!payment?.id) {
+      console.warn("[webhook-asaas] Evento sem payment.id:", event);
+      return new Response(JSON.stringify({ ok: true, ignored: true }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // Mapeia evento → status interno
     const statusMap: Record<string, string> = {
@@ -149,9 +221,58 @@ Deno.serve(async (req) => {
       } else {
         console.warn(`[webhook-asaas] Subscription ${subscriptionId} sem parent payment`);
       }
-    } else if (updated) {
+    }
+
+    // PIX Automático Bacen: paymentos criados pelo modo SUBSCRIPTION trazem
+    // pixAutomaticAuthorizationId em vez de subscription. Linkamos via asaas_pix_authorizations.
+    const pixAutoAuthId =
+      ((payment as any)?.pixAutomaticAuthorizationId as string) ||
+      ((payment as any)?.authorization?.id as string) ||
+      undefined;
+    if (!updated && pixAutoAuthId) {
+      const { data: authRow } = await supabase
+        .from("asaas_pix_authorizations")
+        .select("*")
+        .eq("asaas_authorization_id", pixAutoAuthId)
+        .maybeSingle();
+      if (authRow) {
+        const { data: inserted, error: insErr } = await supabase
+          .from("asaas_payments")
+          .insert({
+            asaas_payment_id: payment.id,
+            asaas_customer_id: authRow.asaas_customer_id,
+            asaas_subscription_id: pixAutoAuthId, // reusa coluna pra agrupar ciclos
+            user_id: authRow.user_id,
+            customer_name: authRow.customer_name,
+            customer_email: authRow.customer_email,
+            customer_phone: authRow.customer_phone,
+            customer_cpf: authRow.customer_cpf,
+            plan: authRow.plan,
+            billing_period: authRow.billing_period,
+            amount_cents:
+              Math.round(Number((payment as any).value || 0) * 100) || authRow.value_cents,
+            status: newStatus,
+            payment_method: "PIX_AUTOMATIC",
+            invoice_url: (payment as any).invoiceUrl || null,
+            paid_at: isPaid ? new Date().toISOString() : null,
+            raw_payload: payment,
+          })
+          .select()
+          .maybeSingle();
+        if (insErr) {
+          console.error("[webhook-asaas] Erro criando payment PIX Automático:", insErr);
+        } else {
+          updated = inserted;
+          console.log(`[webhook-asaas] Payment ${payment.id} vinculado à auth ${pixAutoAuthId}`);
+        }
+      } else {
+        console.warn(`[webhook-asaas] Authorization ${pixAutoAuthId} não encontrada`);
+      }
+    }
+
+    if (updated) {
       console.log(`[webhook-asaas] Pagamento ${payment.id} atualizado para ${newStatus}`);
-    } else if (!subscriptionId) {
+    } else if (!subscriptionId && !pixAutoAuthId) {
       console.warn(`[webhook-asaas] Pagamento ${payment.id} não encontrado no banco`);
     }
 
