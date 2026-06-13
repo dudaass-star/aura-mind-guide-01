@@ -264,15 +264,6 @@ export default function RecoveryInbox({ heightClass = 'h-[calc(100vh-180px)]' }:
     return { unread, replied, sentOnly, total: conversations.length };
   }, [conversations]);
 
-  // Se o filtro default "Não lidas" estiver vazio mas existirem respostas,
-  // cai pra "Responderam"; senão, "Todas".
-  useEffect(() => {
-    if (loadingList) return;
-    if (filter === 'unread' && counts.unread === 0) {
-      setFilter(counts.replied > 0 ? 'replied' : 'all');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadingList, counts.unread, counts.replied]);
 
   const selectedConv = useMemo(
     () => conversations.find(c => c.phone === selectedPhone) || null,
