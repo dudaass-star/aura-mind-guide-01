@@ -317,10 +317,10 @@ export default function RecoveryInbox({ heightClass = 'h-[calc(100vh-180px)]' }:
           </div>
           <div className="flex flex-wrap gap-1 mt-2">
             {([
+              { key: 'all',       label: 'Todas', n: counts.total },
               { key: 'unread',    label: 'Não lidas', n: counts.unread },
               { key: 'replied',   label: 'Responderam', n: counts.replied },
               { key: 'sent_only', label: 'Só envio', n: counts.sentOnly },
-              { key: 'all',       label: 'Todas', n: counts.total },
             ] as { key: FilterKey; label: string; n: number }[]).map(opt => (
               <button
                 key={opt.key}
