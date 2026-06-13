@@ -1313,15 +1313,43 @@ Deno.serve(async (req) => {
 
       // 2) Funil de checkout PIX no período
       // Criados: conta por created_at (intenção de pagar via PIX no período)
+      // IMPORTANTE: o funil de "checkout abandonado" mede SOMENTE novos clientes que
+      // iniciaram pagamento pelo site. Renovações automáticas geradas pela recorrência
+      // Asaas (2ª+ cobrança de uma mesma subscription) NÃO entram aqui — para isso
+      // existem outros indicadores (MRR, ativos, churn).
+      // Estratégia: identificar o ID do PRIMEIRO pagamento de cada subscription e
+      // descartar qualquer linha cujo id não seja esse "primeiro".
+      const { data: asaasSubFirstScan } = await supabase
+        .from('asaas_payments')
+        .select('id, asaas_subscription_id, created_at')
+        .not('asaas_subscription_id', 'is', null)
+        .not('customer_email', 'ilike', E2E_EMAIL_PATTERN)
+        .order('created_at', { ascending: true })
+        .limit(5000);
+
+      const firstPaymentIdBySub = new Map<string, string>();
+      for (const r of asaasSubFirstScan || []) {
+        const sub = r.asaas_subscription_id as string | null;
+        if (!sub) continue;
+        if (!firstPaymentIdBySub.has(sub)) firstPaymentIdBySub.set(sub, r.id as string);
+      }
+      const isRenewal = (row: { id: string; asaas_subscription_id: string | null }): boolean => {
+        const sub = row.asaas_subscription_id;
+        if (!sub) return false; // PIX one-shot sem subscription nunca é renovação
+        const firstId = firstPaymentIdBySub.get(sub);
+        return !!firstId && firstId !== row.id;
+      };
+
       const { data: asaasCreatedInPeriod } = await supabase
         .from('asaas_payments')
-        .select('id, customer_email, customer_phone')
+        .select('id, customer_email, customer_phone, asaas_subscription_id')
         .gte('created_at', periodStart)
         .lt('created_at', periodEnd)
         .not('customer_email', 'ilike', E2E_EMAIL_PATTERN);
 
       const pixCreatedEmails = new Set<string>();
       for (const p of asaasCreatedInPeriod || []) {
+        if (isRenewal({ id: p.id as string, asaas_subscription_id: p.asaas_subscription_id as string | null })) continue;
         const em = (p.customer_email as string | null) || `__nokey_${p.id}`;
         pixCreatedEmails.add(em);
         const k = identityKey(p.customer_email as string | null, p.customer_phone as string | null);
@@ -1332,7 +1360,7 @@ Deno.serve(async (req) => {
       // Confirmados: conta por paid_at (dinheiro entrou no período, mesmo se PIX criado antes)
       const { data: asaasConfirmedInPeriod } = await supabase
         .from('asaas_payments')
-        .select('id, customer_email, customer_phone, paid_at, status')
+        .select('id, customer_email, customer_phone, paid_at, status, asaas_subscription_id')
         .in('status', PAID_STATUSES)
         .gte('paid_at', periodStart)
         .lt('paid_at', periodEnd)
@@ -1340,6 +1368,7 @@ Deno.serve(async (req) => {
 
       const pixConfirmedEmails = new Set<string>();
       for (const p of asaasConfirmedInPeriod || []) {
+        if (isRenewal({ id: p.id as string, asaas_subscription_id: p.asaas_subscription_id as string | null })) continue;
         const em = (p.customer_email as string | null) || `__nokey_${p.id}`;
         pixConfirmedEmails.add(em);
         const k = identityKey(p.customer_email as string | null, p.customer_phone as string | null);
@@ -1350,12 +1379,13 @@ Deno.serve(async (req) => {
       // 2b) Funil all-time PIX (dedup por email pra alinhar com cartão)
       const { data: asaasAllTime } = await supabase
         .from('asaas_payments')
-        .select('status, customer_email, customer_phone')
+        .select('id, status, customer_email, customer_phone, asaas_subscription_id')
         .not('customer_email', 'ilike', E2E_EMAIL_PATTERN);
 
       const pixEmailsCreated = new Set<string>();
       const pixEmailsConfirmed = new Set<string>();
       for (const p of asaasAllTime || []) {
+        if (isRenewal({ id: p.id as string, asaas_subscription_id: p.asaas_subscription_id as string | null })) continue;
         const em = (p.customer_email as string | null) || '';
         if (!em) continue;
         pixEmailsCreated.add(em);
