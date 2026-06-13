@@ -73,8 +73,8 @@ export default function RecoveryInbox({ heightClass = 'h-[calc(100vh-180px)]' }:
   // Mapas auxiliares para enriquecer a lista
   const [stageByPhone, setStageByPhone] = useState<Record<string, number>>({});
   const [lastInboundByPhone, setLastInboundByPhone] = useState<Record<string, string>>({});
-  type FilterKey = 'unread' | 'replied' | 'sent_only' | 'all';
-  const [filter, setFilter] = useState<FilterKey>('unread');
+  type FilterKey = 'all' | 'unread' | 'replied' | 'sent_only';
+  const [filter, setFilter] = useState<FilterKey>('all');
 
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -264,15 +264,6 @@ export default function RecoveryInbox({ heightClass = 'h-[calc(100vh-180px)]' }:
     return { unread, replied, sentOnly, total: conversations.length };
   }, [conversations]);
 
-  // Se o filtro default "Não lidas" estiver vazio mas existirem respostas,
-  // cai pra "Responderam"; senão, "Todas".
-  useEffect(() => {
-    if (loadingList) return;
-    if (filter === 'unread' && counts.unread === 0) {
-      setFilter(counts.replied > 0 ? 'replied' : 'all');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadingList, counts.unread, counts.replied]);
 
   const selectedConv = useMemo(
     () => conversations.find(c => c.phone === selectedPhone) || null,
@@ -326,10 +317,10 @@ export default function RecoveryInbox({ heightClass = 'h-[calc(100vh-180px)]' }:
           </div>
           <div className="flex flex-wrap gap-1 mt-2">
             {([
+              { key: 'all',       label: 'Todas', n: counts.total },
               { key: 'unread',    label: 'Não lidas', n: counts.unread },
               { key: 'replied',   label: 'Responderam', n: counts.replied },
               { key: 'sent_only', label: 'Só envio', n: counts.sentOnly },
-              { key: 'all',       label: 'Todas', n: counts.total },
             ] as { key: FilterKey; label: string; n: number }[]).map(opt => (
               <button
                 key={opt.key}
