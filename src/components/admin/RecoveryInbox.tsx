@@ -73,8 +73,8 @@ export default function RecoveryInbox({ heightClass = 'h-[calc(100vh-180px)]' }:
   // Mapas auxiliares para enriquecer a lista
   const [stageByPhone, setStageByPhone] = useState<Record<string, number>>({});
   const [lastInboundByPhone, setLastInboundByPhone] = useState<Record<string, string>>({});
-  type FilterKey = 'unread' | 'replied' | 'sent_only' | 'all';
-  const [filter, setFilter] = useState<FilterKey>('unread');
+  type FilterKey = 'all' | 'unread' | 'replied' | 'sent_only';
+  const [filter, setFilter] = useState<FilterKey>('all');
 
   const endRef = useRef<HTMLDivElement>(null);
 
