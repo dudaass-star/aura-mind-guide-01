@@ -1,80 +1,50 @@
-## Contexto
+## Reenviar Purchase ao Meta CAPI das compras de ontem/hoje + verificar recepção
 
-Compras de ontem/hoje (fermaion 15/06, camilamuri 16/06) são Stripe cartão "Direção mensal" no `/v2`. O código de envio CAPI existe em `stripe-webhook` mas não há prova de que está saindo nem de que o Meta está aceitando — logs da edge function não retêm o suficiente. Para PIX Asaas, hoje não há envio CAPI nenhum.
+### Passos
 
-Regra fixada pelo usuário (vai pra `mem://`): **Purchase no Meta = só 1ª compra do cliente vindo do anúncio. Renovações e cobranças recorrentes nunca disparam Purchase.**
+1. **Criar edge function `backfill-meta-purchase`** (one-shot reaproveitável, protegida por header secret):
+   - Lista compras de janela configurável (default 48h):
+     - **Stripe**: lê `stripe_webhook_events` últimos N h + cruza com Stripe API (`stripe.checkout.sessions.retrieve`) pra ter `metadata.fbp/fbc/ga_client_id`, `customer_email`, `amount_total`, `id`.
+     - **Asaas**: `SELECT * FROM asaas_payments WHERE status IN ('CONFIRMED','RECEIVED') AND paid_at >= now() - interval 'X hours'`.
+   - Para cada uma, valida 1ª compra:
+     - Stripe: sem profile prévio na resolução por email/phone OU profile criado pelo próprio webhook (igual lógica atual).
+     - Asaas: nenhum outro `asaas_payment` `CONFIRMED/RECEIVED` mais antigo da mesma `asaas_subscription_id`.
+   - Pula renovação/upgrade/returning (mantém a regra).
+   - Dispara `meta-capi` com:
+     - `event_id` = `session.id` (Stripe) ou `asaas_payment_id` (Asaas) → **Meta deduplica** se já recebeu.
+     - `event_name = "Purchase"`, `source = "backfill-manual"`, `is_first_purchase = true`.
+     - `user_data`: email + phone + first_name + (fbp/fbc quando disponíveis).
+     - `custom_data`: value (BRL), content_name, content_category.
+   - 500ms entre chamadas. Retorna JSON com contadores `{total, sent, skipped_renewal, skipped_no_email, errors}`.
 
-## O que vou fazer
+2. **Disparar** via `curl_edge_functions POST /backfill-meta-purchase` com `{"hours": 48}`.
 
-### 1. Definir "primeira compra" de forma determinística
+3. **Verificar recepção** via `psql`:
+   ```sql
+   SELECT created_at, event_name, event_id, meta_status, meta_fbtrace_id,
+          meta_error, email_present, phone_present, fbp_present, request_value
+   FROM meta_capi_log
+   WHERE source = 'backfill-manual'
+   ORDER BY created_at DESC;
+   ```
+   Reporto a tabela inteira ao usuário, com diagnóstico por linha:
+   - `meta_status = 200` + `fbtrace_id` → ✅ Meta aceitou.
+   - `meta_status != 200` → mostro o `meta_error` literal.
 
-Critério único, aplicado nos dois gateways:
-- **Stripe**: é 1ª compra quando `checkout.session.completed` (qualquer modo) ou `invoice.paid` cujo `billing_reason` ∈ {`subscription_create`, `subscription_cycle` apenas se for a 1ª invoice da subscription}. Na prática, simplifico: dispara Purchase **apenas em `checkout.session.completed`**. Renovações chegam via `invoice.paid` e ficam sem Purchase.
-- **PIX Asaas**: é 1ª compra quando o `asaas_payments.id` é o 1º pagamento confirmado da `asaas_subscription_id` (mesma lógica que já usamos no indicador de checkout abandonado). Renovações automáticas Asaas ficam fora.
+### O que esperar no Meta Events Manager
 
-Não dispara Purchase em: `invoice.paid` recorrente, `customer.subscription.updated`, `PAYMENT_RECEIVED` de renovação Asaas, troca de plano, retomada, dunning recuperado.
+- Eventos chegam no **Events Manager** em até ~20 min em produção (não estou usando `test_event_code`).
+- Atribuição de anúncio (qual campanha) só vem forte se `fbp`/`fbc` estiverem presentes. Stripe das últimas 48h: provavelmente tem (`metadata.fbp/fbc` setado no `create-checkout`). Asaas PIX antigo: vazio (coluna criada hoje) — Purchase chega mesmo assim via hash de email+phone, mas atribuição fica fraca/genérica.
+- Se Meta já tiver recebido o evento (mesmo `event_id`), aceita silenciosamente e deduplica — sem efeito colateral.
 
-### 2. Limpar disparos atuais que violam a regra
+### Arquivos tocados
 
-`supabase/functions/stripe-webhook/index.ts`:
-- Manter os dois `Purchase` existentes (linhas 567 e 836) — ambos rodam dentro de `checkout.session.completed`, então já são 1ª compra. ✅
-- **Não** adicionar Purchase em `invoice.paid` (cancela a ideia anterior).
-- Garantir `event_id = session.id` único (já está) para dedup.
+- `supabase/functions/backfill-meta-purchase/index.ts` (novo, one-shot).
+- Sem migration (`meta_capi_log` já existe).
+- Sem alteração em código de produção.
 
-`supabase/functions/webhook-asaas/index.ts`:
-- Adicionar disparo CAPI `Purchase` em `PAYMENT_RECEIVED`/`PAYMENT_CONFIRMED` **somente se o pagamento for o 1º da `asaas_subscription_id`** (consulta `asaas_payments` ordenado por `created_at`, compara `id`). Renovações: nada.
-- `event_id = asaas_payment_id`.
-- `user_data`: `email`, `phone` (do customer/profile), e `fbp`/`fbc` se persistidos.
+### Não vou fazer
 
-### 3. Propagar `fbp`/`fbc` no PIX (hoje some)
-
-- `src/pages/CheckoutV2.tsx`: ler `_fbp`/`_fbc` dos cookies (já tem helper p/ Stripe) e passar em `invoke("criar-pix-recorrente-asaas")`.
-- `supabase/functions/criar-pix-recorrente-asaas/index.ts`: receber `fbp`/`fbc`/`ga_client_id`, persistir.
-- Migration nova: adicionar `fbp text`, `fbc text`, `ga_client_id text` em `asaas_pix_authorizations` e em `asaas_payments` (para resolver na hora do webhook).
-- `webhook-asaas`: ler esses campos do pagamento ou da authorization vinculada antes de enviar CAPI.
-
-### 4. Auditoria persistente (necessária pra diagnosticar agora)
-
-Migration nova `public.meta_capi_log`:
-- `id uuid pk default gen_random_uuid()`, `created_at timestamptz default now()`
-- `event_name text`, `event_id text`, `source text` (`stripe-webhook` / `webhook-asaas`)
-- `is_first_purchase bool`
-- `email_present bool`, `phone_present bool`, `fbp_present bool`, `fbc_present bool`
-- `request_value numeric`
-- `meta_status int`, `meta_fbtrace_id text`, `meta_error text`, `raw_response jsonb`
-- GRANT + RLS: `service_role` escreve/lê tudo; `authenticated` lê só se `has_role(auth.uid(),'admin')`.
-
-`supabase/functions/meta-capi/index.ts`: após receber resposta da Graph API, inserir 1 linha em `meta_capi_log` com `fbtrace_id` extraído. Fire-and-forget.
-
-### 5. Validação
-
-Após deploy:
-```sql
-SELECT created_at, event_name, source, is_first_purchase,
-       meta_status, meta_fbtrace_id, meta_error,
-       fbp_present, fbc_present, request_value
-FROM meta_capi_log
-WHERE created_at >= now() - interval '48 hours'
-ORDER BY created_at DESC;
-```
-Esperado: linhas só para `event_name='Purchase'` com `is_first_purchase=true`, `meta_status=200`. Renovações Stripe (`invoice.paid` recorrente) e renovações Asaas: **zero** linhas. Se Meta retornar erro, vejo o motivo direto.
-
-### 6. Memória
-
-Salvar regra em `mem://marketing/meta-purchase-first-only` e referenciar no índice: "Purchase Meta = só 1ª compra; renovações Stripe/Asaas nunca disparam Purchase."
-
-## Não vou fazer
-
-- Não vou reativar Pixel `Purchase` no browser (continua só CAPI server-side).
-- Não vou criar UI admin nova; consulta SQL na tabela basta.
-- Não vou tocar em StartTrial, Lead, InitiateCheckout — só Purchase.
-
-## Arquivos tocados
-
-- `supabase/functions/meta-capi/index.ts` (log)
-- `supabase/functions/stripe-webhook/index.ts` (nenhuma adição de Purchase em renovação — confirmar)
-- `supabase/functions/webhook-asaas/index.ts` (novo Purchase com guard de 1ª compra)
-- `supabase/functions/criar-pix-recorrente-asaas/index.ts` (recebe e persiste fbp/fbc)
-- `src/pages/CheckoutV2.tsx` (envia fbp/fbc também no PIX)
-- Migration nova: `meta_capi_log` + colunas em `asaas_pix_authorizations` e `asaas_payments`
-- `mem://marketing/meta-purchase-first-only` + `mem://index.md`
+- Não vou refazer Purchase de renovações/upgrades (regra: só 1ª compra).
+- Não vou usar `test_event_code` (evento precisa entrar como produção, não como teste).
+- Não vou criar UI admin — basta o curl + a query SQL.
