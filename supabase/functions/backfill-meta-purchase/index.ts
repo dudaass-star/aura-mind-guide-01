@@ -90,26 +90,18 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // 1ª compra? Resolve profile pelo email/phone, mesma lógica do stripe-webhook.
+      // 1ª compra? No backfill, qualquer session paga = compra a reenviar.
+      // Excluímos apenas returning (cliente cancelado e reativado — não é aquisição nova).
       const resolved = await resolveProfile(supabase, customerPhone || "", customerEmail);
       const existing = resolved.profile;
-      const isReturning = existing?.status === "canceled";
-      // No webhook real: existingProfile criado pelo próprio webhook (idempotência por session.id).
-      // Como o webhook do mesmo session.id já rodou (compra real), existingProfile vai existir agora.
-      // Backfill: tratamos como 1ª compra quando o profile foi criado neste mesmo ciclo
-      // (sem outro pagamento Stripe prévio). Heurística simples: se profile.created_at >= session.created.
-      let isFirst = false;
-      if (!existing) {
-        isFirst = true;
-      } else {
-        const profCreatedTs = existing.created_at ? Math.floor(new Date(existing.created_at).getTime() / 1000) : 0;
-        const sessCreatedTs = session.created || 0;
-        // tolerância 2 min: profile criado <=2min antes do checkout = mesmo ciclo
-        isFirst = profCreatedTs >= sessCreatedTs - 120;
-      }
-      if (!isFirst || isReturning) {
+      // Returning = profile cancelado ANTES desta sessão.
+      const isReturning =
+        existing?.status === "canceled" &&
+        existing.created_at &&
+        Math.floor(new Date(existing.created_at).getTime() / 1000) < (session.created || 0) - 120;
+      if (isReturning) {
         counters.skipped_renewal_or_upgrade++;
-        report.push({ sid, source: "stripe", email: customerEmail, skipped: isReturning ? "returning" : "existing_profile" });
+        report.push({ sid, source: "stripe", email: customerEmail, skipped: "returning" });
         continue;
       }
 
