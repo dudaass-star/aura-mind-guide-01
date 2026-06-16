@@ -26,6 +26,9 @@ export type Database = {
           customer_email: string
           customer_name: string
           customer_phone: string | null
+          fbc: string | null
+          fbp: string | null
+          ga_client_id: string | null
           id: string
           invoice_url: string | null
           paid_at: string | null
@@ -53,6 +56,9 @@ export type Database = {
           customer_email: string
           customer_name: string
           customer_phone?: string | null
+          fbc?: string | null
+          fbp?: string | null
+          ga_client_id?: string | null
           id?: string
           invoice_url?: string | null
           paid_at?: string | null
@@ -80,6 +86,9 @@ export type Database = {
           customer_email?: string
           customer_name?: string
           customer_phone?: string | null
+          fbc?: string | null
+          fbp?: string | null
+          ga_client_id?: string | null
           id?: string
           invoice_url?: string | null
           paid_at?: string | null
@@ -121,8 +130,11 @@ export type Database = {
           customer_email: string | null
           customer_name: string | null
           customer_phone: string | null
+          fbc: string | null
+          fbp: string | null
           finish_date: string | null
           frequency: string
+          ga_client_id: string | null
           id: string
           plan: string
           qr_encoded_image: string | null
@@ -149,8 +161,11 @@ export type Database = {
           customer_email?: string | null
           customer_name?: string | null
           customer_phone?: string | null
+          fbc?: string | null
+          fbp?: string | null
           finish_date?: string | null
           frequency: string
+          ga_client_id?: string | null
           id?: string
           plan: string
           qr_encoded_image?: string | null
@@ -177,8 +192,11 @@ export type Database = {
           customer_email?: string | null
           customer_name?: string | null
           customer_phone?: string | null
+          fbc?: string | null
+          fbp?: string | null
           finish_date?: string | null
           frequency?: string
+          ga_client_id?: string | null
           id?: string
           plan?: string
           qr_encoded_image?: string | null
@@ -1266,6 +1284,60 @@ export type Database = {
             referencedColumns: ["user_id"]
           },
         ]
+      }
+      meta_capi_log: {
+        Row: {
+          created_at: string
+          email_present: boolean | null
+          event_id: string | null
+          event_name: string
+          fbc_present: boolean | null
+          fbp_present: boolean | null
+          id: string
+          is_first_purchase: boolean | null
+          meta_error: string | null
+          meta_fbtrace_id: string | null
+          meta_status: number | null
+          phone_present: boolean | null
+          raw_response: Json | null
+          request_value: number | null
+          source: string | null
+        }
+        Insert: {
+          created_at?: string
+          email_present?: boolean | null
+          event_id?: string | null
+          event_name: string
+          fbc_present?: boolean | null
+          fbp_present?: boolean | null
+          id?: string
+          is_first_purchase?: boolean | null
+          meta_error?: string | null
+          meta_fbtrace_id?: string | null
+          meta_status?: number | null
+          phone_present?: boolean | null
+          raw_response?: Json | null
+          request_value?: number | null
+          source?: string | null
+        }
+        Update: {
+          created_at?: string
+          email_present?: boolean | null
+          event_id?: string | null
+          event_name?: string
+          fbc_present?: boolean | null
+          fbp_present?: boolean | null
+          id?: string
+          is_first_purchase?: boolean | null
+          meta_error?: string | null
+          meta_fbtrace_id?: string | null
+          meta_status?: number | null
+          phone_present?: boolean | null
+          raw_response?: Json | null
+          request_value?: number | null
+          source?: string | null
+        }
+        Relationships: []
       }
       monthly_letters: {
         Row: {
