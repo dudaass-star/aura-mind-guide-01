@@ -255,6 +255,9 @@ Deno.serve(async (req) => {
             payment_method: "PIX_AUTOMATIC",
             invoice_url: (payment as any).invoiceUrl || null,
             paid_at: isPaid ? new Date().toISOString() : null,
+            fbp: authRow.fbp || null,
+            fbc: authRow.fbc || null,
+            ga_client_id: authRow.ga_client_id || null,
             raw_payload: payment,
           })
           .select()
