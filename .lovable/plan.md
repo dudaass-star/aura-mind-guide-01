@@ -1,57 +1,80 @@
-## Plano: corrigir PIX recorrente para PIX Automático Bacen
+## Contexto
 
-Você está certo: a conta Asaas está habilitada, mas o código atual ficou preso no modelo antigo (`/subscriptions` + `billingType: "PIX"`). Isso gera QR recorrente manual, não débito automático autorizado no banco.
+Compras de ontem/hoje (fermaion 15/06, camilamuri 16/06) são Stripe cartão "Direção mensal" no `/v2`. O código de envio CAPI existe em `stripe-webhook` mas não há prova de que está saindo nem de que o Meta está aceitando — logs da edge function não retêm o suficiente. Para PIX Asaas, hoje não há envio CAPI nenhum.
 
-### Objetivo
+Regra fixada pelo usuário (vai pra `mem://`): **Purchase no Meta = só 1ª compra do cliente vindo do anúncio. Renovações e cobranças recorrentes nunca disparam Purchase.**
 
-Fazer novos checkouts PIX usarem PIX Automático Bacen de verdade: o cliente autoriza uma vez no app do banco, e as próximas cobranças acontecem automaticamente.
+## O que vou fazer
 
-### Etapas
+### 1. Definir "primeira compra" de forma determinística
 
-1. **Ajustar o checkout PIX**
-   - Trocar o fluxo de `criar-pix-recorrente-asaas` para criar uma autorização PIX Automático.
-   - A UI deixa de tratar esse fluxo como “gerar QR recorrente” e passa a orientar: “autorize no app do banco”.
-   - Manter QR/copia-e-cola apenas como fallback se o Asaas retornar um pagamento imediato junto da autorização.
+Critério único, aplicado nos dois gateways:
+- **Stripe**: é 1ª compra quando `checkout.session.completed` (qualquer modo) ou `invoice.paid` cujo `billing_reason` ∈ {`subscription_create`, `subscription_cycle` apenas se for a 1ª invoice da subscription}. Na prática, simplifico: dispara Purchase **apenas em `checkout.session.completed`**. Renovações chegam via `invoice.paid` e ficam sem Purchase.
+- **PIX Asaas**: é 1ª compra quando o `asaas_payments.id` é o 1º pagamento confirmado da `asaas_subscription_id` (mesma lógica que já usamos no indicador de checkout abandonado). Renovações automáticas Asaas ficam fora.
 
-2. **Persistir a autorização PIX Automático**
-   - Criar estrutura no banco para guardar a autorização: `authorizationId`, customer, plano, ciclo, valor, status, payload bruto e vínculo com profile.
-   - Preservar `asaas_payments` para cobranças/pagamentos efetivos.
-   - Incluir `GRANT` + RLS corretamente na migration.
+Não dispara Purchase em: `invoice.paid` recorrente, `customer.subscription.updated`, `PAYMENT_RECEIVED` de renovação Asaas, troca de plano, retomada, dunning recuperado.
 
-3. **Atualizar o webhook Asaas**
-   - Tratar eventos `PIX_AUTOMATIC_*` além de `PAYMENT_*`.
-   - Quando autorização for aprovada/ativa, marcar a assinatura PIX Automático como ativa.
-   - Quando um pagamento automático for confirmado, reutilizar a lógica atual de ativação/renovação do profile.
-   - Quando autorização for cancelada/rejeitada/expirada, atualizar status e evitar acesso indevido.
+### 2. Limpar disparos atuais que violam a regra
 
-4. **Adaptar troca de plano PIX**
-   - Parar de criar nova `/subscriptions` clássica em `change-asaas-plan`.
-   - Para PIX Automático, cancelar/substituir a autorização anterior conforme o suporte da API e criar uma nova autorização para o próximo ciclo.
-   - Se houver cobrança vencida, manter o bloqueio atual.
+`supabase/functions/stripe-webhook/index.ts`:
+- Manter os dois `Purchase` existentes (linhas 567 e 836) — ambos rodam dentro de `checkout.session.completed`, então já são 1ª compra. ✅
+- **Não** adicionar Purchase em `invoice.paid` (cancela a ideia anterior).
+- Garantir `event_id = session.id` único (já está) para dedup.
 
-5. **Legado sem quebrar clientes atuais**
-   - Não apagar as 32 subscriptions clássicas existentes agora.
-   - O webhook continua aceitando `PAYMENT_*` das subscriptions antigas para não interromper renovações em andamento.
-   - Depois da migração dos novos checkouts, fazemos um plano separado para migrar os clientes antigos com comunicação apropriada, porque PIX Automático exige consentimento no banco.
+`supabase/functions/webhook-asaas/index.ts`:
+- Adicionar disparo CAPI `Purchase` em `PAYMENT_RECEIVED`/`PAYMENT_CONFIRMED` **somente se o pagamento for o 1º da `asaas_subscription_id`** (consulta `asaas_payments` ordenado por `created_at`, compara `id`). Renovações: nada.
+- `event_id = asaas_payment_id`.
+- `user_data`: `email`, `phone` (do customer/profile), e `fbp`/`fbc` se persistidos.
 
-6. **Validação pós-implementação**
-   - Rodar teste controlado da edge function em modo read/write mínimo com dados de teste ou payload real aprovado.
-   - Verificar logs do webhook para eventos `PIX_AUTOMATIC_*`.
-   - Confirmar no banco: autorização criada, status atualizado e profile ativado só após confirmação correta.
+### 3. Propagar `fbp`/`fbc` no PIX (hoje some)
 
-### Detalhes técnicos
+- `src/pages/CheckoutV2.tsx`: ler `_fbp`/`_fbc` dos cookies (já tem helper p/ Stripe) e passar em `invoke("criar-pix-recorrente-asaas")`.
+- `supabase/functions/criar-pix-recorrente-asaas/index.ts`: receber `fbp`/`fbc`/`ga_client_id`, persistir.
+- Migration nova: adicionar `fbp text`, `fbc text`, `ga_client_id text` em `asaas_pix_authorizations` e em `asaas_payments` (para resolver na hora do webhook).
+- `webhook-asaas`: ler esses campos do pagamento ou da authorization vinculada antes de enviar CAPI.
 
-- Alterar principalmente:
-  - `supabase/functions/criar-pix-recorrente-asaas/index.ts`
-  - `supabase/functions/webhook-asaas/index.ts`
-  - `supabase/functions/change-asaas-plan/index.ts`
-  - `src/pages/CheckoutV2.tsx`
-  - possivelmente `src/components/portal/ChangePlanDialog.tsx`
-- Criar migration para tabela/colunas de autorizações PIX Automático.
-- Manter compatibilidade com o modelo antigo por enquanto.
-- Não mexer em Stripe/cartão.
-- Não mexer em PIX one-time clássico, exceto se a UI estiver chamando a função recorrente onde deveria chamar o fluxo automático.
+### 4. Auditoria persistente (necessária pra diagnosticar agora)
 
-### Resultado esperado
+Migration nova `public.meta_capi_log`:
+- `id uuid pk default gen_random_uuid()`, `created_at timestamptz default now()`
+- `event_name text`, `event_id text`, `source text` (`stripe-webhook` / `webhook-asaas`)
+- `is_first_purchase bool`
+- `email_present bool`, `phone_present bool`, `fbp_present bool`, `fbc_present bool`
+- `request_value numeric`
+- `meta_status int`, `meta_fbtrace_id text`, `meta_error text`, `raw_response jsonb`
+- GRANT + RLS: `service_role` escreve/lê tudo; `authenticated` lê só se `has_role(auth.uid(),'admin')`.
 
-Novos pagamentos PIX deixam de ser “recorrência manual com QR novo” e passam a ser PIX Automático Bacen real; o legado continua funcionando até uma migração separada dos clientes já ativos.
+`supabase/functions/meta-capi/index.ts`: após receber resposta da Graph API, inserir 1 linha em `meta_capi_log` com `fbtrace_id` extraído. Fire-and-forget.
+
+### 5. Validação
+
+Após deploy:
+```sql
+SELECT created_at, event_name, source, is_first_purchase,
+       meta_status, meta_fbtrace_id, meta_error,
+       fbp_present, fbc_present, request_value
+FROM meta_capi_log
+WHERE created_at >= now() - interval '48 hours'
+ORDER BY created_at DESC;
+```
+Esperado: linhas só para `event_name='Purchase'` com `is_first_purchase=true`, `meta_status=200`. Renovações Stripe (`invoice.paid` recorrente) e renovações Asaas: **zero** linhas. Se Meta retornar erro, vejo o motivo direto.
+
+### 6. Memória
+
+Salvar regra em `mem://marketing/meta-purchase-first-only` e referenciar no índice: "Purchase Meta = só 1ª compra; renovações Stripe/Asaas nunca disparam Purchase."
+
+## Não vou fazer
+
+- Não vou reativar Pixel `Purchase` no browser (continua só CAPI server-side).
+- Não vou criar UI admin nova; consulta SQL na tabela basta.
+- Não vou tocar em StartTrial, Lead, InitiateCheckout — só Purchase.
+
+## Arquivos tocados
+
+- `supabase/functions/meta-capi/index.ts` (log)
+- `supabase/functions/stripe-webhook/index.ts` (nenhuma adição de Purchase em renovação — confirmar)
+- `supabase/functions/webhook-asaas/index.ts` (novo Purchase com guard de 1ª compra)
+- `supabase/functions/criar-pix-recorrente-asaas/index.ts` (recebe e persiste fbp/fbc)
+- `src/pages/CheckoutV2.tsx` (envia fbp/fbc também no PIX)
+- Migration nova: `meta_capi_log` + colunas em `asaas_pix_authorizations` e `asaas_payments`
+- `mem://marketing/meta-purchase-first-only` + `mem://index.md`

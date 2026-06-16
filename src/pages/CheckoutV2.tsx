@@ -480,6 +480,17 @@ const CheckoutV2 = () => {
     setCpfError(undefined);
     setPixLoading(true);
     try {
+      const getCookie = (name: string) => {
+        const match = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
+        return match ? match[2] : undefined;
+      };
+      const fbp = getCookie("_fbp");
+      const fbc =
+        getCookie("_fbc") ||
+        (new URLSearchParams(window.location.search).get("fbclid")
+          ? `fb.1.${Date.now()}.${new URLSearchParams(window.location.search).get("fbclid")}`
+          : undefined);
+      const gaClientId = getGaClientId();
       const edgeName = pixMode === "subscription" ? "criar-pix-recorrente-asaas" : "criar-pix-asaas";
       const { data, error } = await supabase.functions.invoke(edgeName, {
         body: {
@@ -489,6 +500,9 @@ const CheckoutV2 = () => {
           email: email.trim(),
           phone: phone.replace(/\D/g, ""),
           cpf: cpf.replace(/\D/g, ""),
+          ...(fbp && { fbp }),
+          ...(fbc && { fbc }),
+          ...(gaClientId && { gaClientId }),
         },
       });
       if (error) throw new Error(error.message || "Erro ao gerar PIX");

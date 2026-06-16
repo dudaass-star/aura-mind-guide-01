@@ -142,6 +142,42 @@ Deno.serve(async (req) => {
 
     const result = await response.json();
 
+    // Audit log fire-and-forget — registra todo disparo p/ diagnóstico.
+    try {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL');
+      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+      if (supabaseUrl && supabaseKey) {
+        const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2");
+        const sb = createClient(supabaseUrl, supabaseKey);
+        const fbtrace =
+          (result?.fbtrace_id as string) ||
+          (result?.error?.fbtrace_id as string) ||
+          null;
+        const metaError = !response.ok
+          ? JSON.stringify(result?.error || result).slice(0, 1000)
+          : null;
+        sb.from('meta_capi_log').insert({
+          event_name,
+          event_id: event_id || null,
+          source: (body as any).source || null,
+          is_first_purchase: (body as any).is_first_purchase ?? null,
+          email_present: !!user_data.email,
+          phone_present: !!user_data.phone,
+          fbp_present: !!user_data.fbp,
+          fbc_present: !!user_data.fbc,
+          request_value: custom_data?.value ?? null,
+          meta_status: response.status,
+          meta_fbtrace_id: fbtrace,
+          meta_error: metaError,
+          raw_response: result ?? null,
+        }).then(({ error }) => {
+          if (error) console.warn('⚠️ meta_capi_log insert failed:', error.message);
+        });
+      }
+    } catch (logErr) {
+      console.warn('⚠️ meta_capi_log fire-and-forget failed:', logErr);
+    }
+
     if (!response.ok) {
       console.error('❌ CAPI error:', JSON.stringify(result));
       return new Response(JSON.stringify({ error: 'CAPI request failed', details: result }), {
