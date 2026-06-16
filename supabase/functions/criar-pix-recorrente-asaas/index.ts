@@ -107,7 +107,8 @@ Deno.serve(async (req) => {
         : "https://api-sandbox.asaas.com/v3";
 
     const body = await req.json();
-    const { plan, billing, name, email, phone, cpf } = body as Record<string, string>;
+    const { plan, billing, name, email, phone, cpf, fbp, fbc, gaClientId } =
+      body as Record<string, string>;
 
     if (!plan || !billing || !name || !email || !cpf) {
       return new Response(JSON.stringify({ error: "Campos obrigatórios faltando" }), {
@@ -288,6 +289,9 @@ Deno.serve(async (req) => {
       customer_email: emailClean,
       customer_phone: phoneClean || null,
       customer_cpf: cpfClean,
+      fbp: fbp || null,
+      fbc: fbc || null,
+      ga_client_id: gaClientId || null,
       raw_payload: authorization,
     });
     if (insertErr) {
