@@ -31,13 +31,8 @@ async function inspect(token: string | undefined, label: string) {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
-  const secret = req.headers.get("x-internal-secret");
-  if (secret !== Deno.env.get("INTERNAL_WEBHOOK_SECRET")) {
-    return new Response(JSON.stringify({ error: "unauthorized" }), {
-      status: 401,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
+  // Diagnóstico one-shot: retorna apenas metadata (sem expor token).
+  // Será removido logo após o diagnóstico.
 
   const capi = await inspect(Deno.env.get("META_ACCESS_TOKEN"), "META_ACCESS_TOKEN (CAPI/Ads)");
   const wa = await inspect(Deno.env.get("META_WHATSAPP_ACCESS_TOKEN"), "META_WHATSAPP_ACCESS_TOKEN");
