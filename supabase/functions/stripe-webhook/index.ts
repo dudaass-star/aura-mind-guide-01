@@ -564,6 +564,10 @@ Deno.serve(async (req) => {
             console.log('✅ CAPI StartTrial event sent');
 
             // Also send Purchase event for the trial payment
+            // Regra: Purchase no Meta = só 1ª compra (cliente novo vindo do anúncio).
+            // Returning/upgrade não contam como aquisição.
+            const isFirstPurchase_trial = !isReturning && !isUpgrade;
+            if (isFirstPurchase_trial) {
             await fetch(`${supabaseUrl}/functions/v1/meta-capi`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseServiceKey}` },
@@ -571,6 +575,8 @@ Deno.serve(async (req) => {
                 event_name: 'Purchase',
                 event_id: session.id + '_purchase',
                 event_source_url: 'https://olaaura.com.br/obrigado',
+                source: 'stripe-webhook',
+                is_first_purchase: true,
                 user_data: {
                   email: customerEmail || undefined,
                   phone: formattedPhone,
@@ -587,6 +593,9 @@ Deno.serve(async (req) => {
               }),
             });
             console.log('✅ CAPI Purchase event sent (trial payment)');
+            } else {
+              console.log(`⏭️ CAPI Purchase NÃO disparado — ${isReturning ? 'returning' : 'upgrade'} (não é 1ª compra)`);
+            }
           } catch (capiError) {
             console.warn('⚠️ CAPI events failed (non-blocking):', capiError);
           }
