@@ -830,7 +830,12 @@ Deno.serve(async (req) => {
       }
 
       // Send CAPI Purchase event (non-blocking)
+      // Regra: Purchase no Meta = só 1ª compra (cliente novo vindo do anúncio).
+      const isFirstPurchase_direct = !isReturning && !isUpgrade;
       try {
+        if (!isFirstPurchase_direct) {
+          console.log(`⏭️ CAPI Purchase NÃO disparado — ${isReturning ? 'returning' : 'upgrade'} (não é 1ª compra)`);
+        } else {
         const amountTotal = session.amount_total ? session.amount_total / 100 : 0;
         const eventId = session.id;
         const fbp = session.metadata?.fbp;
@@ -845,6 +850,8 @@ Deno.serve(async (req) => {
             event_name: 'Purchase',
             event_id: eventId,
             event_source_url: 'https://olaaura.com.br/obrigado',
+            source: 'stripe-webhook',
+            is_first_purchase: true,
             user_data: {
               email: customerEmail || undefined,
               phone: formattedPhone,
@@ -861,6 +868,7 @@ Deno.serve(async (req) => {
           }),
         });
         console.log(`✅ CAPI Purchase event sent (event_id: ${eventId}, fbp: ${!!fbp}, fbc: ${!!fbc})`);
+        }
       } catch (capiError) {
         console.warn('⚠️ CAPI Purchase event failed (non-blocking):', capiError);
       }
