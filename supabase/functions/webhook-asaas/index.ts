@@ -446,6 +446,55 @@ async function handleActivation(
     // Renovação → para por aqui (sem welcome novo).
     if (isRenewal) return;
 
+    // ============================================================
+    // Meta CAPI Purchase — APENAS na 1ª compra (novo cliente vindo do anúncio).
+    // Renovações Asaas (isRenewal=true) já retornaram acima. Upgrade/returning
+    // não são "1ª compra" no sentido de aquisição → não disparam Purchase.
+    // ============================================================
+    if (isNew) {
+      try {
+        const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+        const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+        const amountValue = Number((updated.amount_cents as number) || 0) / 100;
+        await fetch(`${supabaseUrl}/functions/v1/meta-capi`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${supabaseServiceKey}`,
+          },
+          body: JSON.stringify({
+            event_name: "Purchase",
+            event_id: paymentId,
+            event_source_url: "https://olaaura.com.br/obrigado",
+            source: "webhook-asaas",
+            is_first_purchase: true,
+            user_data: {
+              email: customerEmail,
+              phone: formattedPhone || cleanPhone || undefined,
+              first_name: (customerName || "").split(" ")[0] || undefined,
+              ...(updated.fbp && { fbp: updated.fbp }),
+              ...(updated.fbc && { fbc: updated.fbc }),
+            },
+            custom_data: {
+              value: amountValue,
+              currency: "BRL",
+              content_name: `Plano ${PLAN_NAMES[customerPlan] || customerPlan}`,
+              content_category: customerPlan,
+            },
+          }),
+        });
+        console.log(
+          `[webhook-asaas] ✅ CAPI Purchase disparado (event_id=${paymentId}, fbp=${!!updated.fbp}, fbc=${!!updated.fbc})`,
+        );
+      } catch (capiErr) {
+        console.warn("[webhook-asaas] ⚠️ CAPI Purchase falhou (non-blocking):", capiErr);
+      }
+    } else {
+      console.log(
+        `[webhook-asaas] ⏭️ CAPI Purchase NÃO disparado — ${isReturning ? "returning" : isUpgrade ? "upgrade" : "outro"} (não é 1ª compra)`,
+      );
+    }
+
     // 4) Portal token.
     let portalLink = "";
     try {
