@@ -21,7 +21,6 @@ async function inspect(token: string | undefined, label: string) {
   return {
     label,
     present: true,
-    token_preview: `${token.slice(0, 8)}...${token.slice(-6)}`,
     token_length: token.length,
     debug_token: dbgJson,
     me: meJson,
