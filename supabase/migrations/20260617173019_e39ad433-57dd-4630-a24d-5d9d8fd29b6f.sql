@@ -1,0 +1,1 @@
+UPDATE public.instagram_config SET meta_access_token = NULL, token_expires_at = NULL WHERE id = 1;
