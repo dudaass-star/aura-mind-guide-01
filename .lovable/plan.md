@@ -1,35 +1,42 @@
-# Diagnóstico do META_ACCESS_TOKEN
+## Estado atual (verificado em `meta_capi_log`)
 
-Hipótese: a migração do WhatsApp pra Meta Cloud API (criação de novo System User / novo app no Business Manager) pode ter invalidado o token de Ads usado pelo `meta-capi`. Vamos confirmar antes de pedir token novo.
+**Pós-troca do token (17/06 17:30 UTC):**
+- ✅ 2× `Purchase` enviados com `meta_status: 200` (backfill — camilamuri + fermaion, R$ 9,90 cada, com email/phone/fbp/fbc)
+- ❌ 2× `Purchase` 400 anteriores (eram do backfill rodado ANTES do `instagram_config.meta_access_token` ser zerado — token velho ainda em cache no DB)
+- ⚠️ Nenhum evento orgânico (`Lead`, `InitiateCheckout`, `Purchase` de webhook) desde a troca — não dá pra afirmar que o fluxo "ao vivo" está OK, só que o token funciona
 
-## Passos
+Os últimos `Lead`/`InitiateCheckout` no log são de 17/06 02:25–02:34 UTC, todos com erro 190/460 (token velho). Depois disso, ninguém abriu checkout — então o silêncio é normal, mas precisa de uma validação ativa antes de declarar "tudo certo".
 
-1. **Criar edge function `meta-capi-debug`** (one-shot, descartável):
-   - Protegida por header `x-internal-secret` (INTERNAL_WEBHOOK_SECRET).
-   - Chama `GET https://graph.facebook.com/v21.0/debug_token?input_token=${META_ACCESS_TOKEN}&access_token=${META_ACCESS_TOKEN}`.
-   - Retorna JSON cru da Meta: `app_id`, `type` (USER / SYSTEM_USER / PAGE), `application` (nome do app dono), `expires_at`, `data_access_expires_at`, `is_valid`, `scopes`, `error` se houver.
-   - Também roda um `GET /me?access_token=...` pra mostrar quem é o ator do token.
-   - Compara com `META_WHATSAPP_ACCESS_TOKEN` (mesma chamada) só pra ver se os dois tokens vieram do mesmo app/System User — se sim, é forte indício que foi sobrescrita.
+## Plano de verificação
 
-2. **Invocar a função** via `curl_edge_functions` e te trazer o output bruto.
+### 1. Smoke test do token via `meta-capi-debug`
+Disparar um `Purchase` de teste (com `event_id` único + flag de test event) pra confirmar que:
+- Token novo é lido (do DB ou env)
+- `ads_management` está ativo (sem erro 200/100 de permissão)
+- Pixel `939366085297921` aceita o evento
 
-3. **Interpretar e decidir**:
-   - Se `is_valid: false` + `error.code: 190` → token revogado/expirado. Próximo passo: gerar novo System User Token com `ads_management` + `business_management` e usar `update_secret`.
-   - Se `is_valid: true` mas `scopes` não contém `ads_management` → token foi sobrescrito com um de WhatsApp. Mesmo fix: gerar token correto.
-   - Se `application` igual ao do WhatsApp → confirmação da hipótese de sobrescrita durante a migração.
-   - Se `expires_at` no passado → era User Token de 60 dias, expirou. Recomendação: migrar pra System User Token (não expira).
+### 2. Confirmar leitura do token na função
+Conferir no log da chamada se a função pegou o token do env (já que zeramos `instagram_config.meta_access_token`). Garantir que `META_ACCESS_TOKEN` em Secrets bate com o token novo.
 
-4. **Documentar achado em memória** (`mem://marketing/meta-capi-token-incident`) pra não repetir.
+### 3. Checar Events Manager (manual, usuário)
+Pedir pro usuário abrir Events Manager → Pixel Ola Aura → **Visão Geral** e **Eventos de teste**, confirmando:
+- Os 2 `Purchase` do backfill apareceram (camilamuri + fermaion, R$ 9,90)
+- `fbtrace_id` `AehR-qvYHv1msazhWKnYChZ` e `ASjYC4iRzASGMHP84uJRASA` aparecem em "Atividade"
+- Qualidade da correspondência subiu (email + phone + fbp + fbc hasheados)
 
-5. **Limpar**: deletar a edge function `meta-capi-debug` depois do diagnóstico.
+### 4. Próximo Purchase orgânico
+Quando entrar a próxima compra de novo cliente (Stripe `checkout.session.completed` ou Asaas `PAYMENT_RECEIVED` com `isNew=true`), validar no `meta_capi_log`:
+```sql
+SELECT created_at, source, meta_status, meta_fbtrace_id, meta_error
+FROM meta_capi_log
+WHERE event_name='Purchase' AND source != 'backfill-manual'
+ORDER BY created_at DESC LIMIT 5;
+```
+Critério: `meta_status=200`, `meta_error IS NULL`, `is_first_purchase=true`.
 
-## Detalhes técnicos
+### 5. Limpeza (após validação)
+- Remover `supabase/functions/meta-capi-debug` e `supabase/functions/backfill-meta-purchase` (deixar repo limpo)
+- Ou manter como "kit de diagnóstico" se você preferir
 
-- Função: `supabase/functions/meta-capi-debug/index.ts`, sem CORS browser (uso interno), `verify_jwt = false` (default Lovable), valida `x-internal-secret`.
-- Nenhuma migration, nenhuma mudança em código de produção.
-- Output devolvido só pra mim/você no chat; não loga token em lugar nenhum (só metadata: app_id, scopes, expires_at).
-
-## Não inclui
-
-- Atualizar o token (só depois do diagnóstico, se você confirmar).
-- Rodar o backfill das compras (já temos `backfill-meta-purchase` pronta — roda após o fix do token).
+## Pergunta antes de implementar
+Quer que eu já rode o smoke test (passo 1) agora via `meta-capi-debug` enviando um `Purchase` de teste, ou prefere esperar a próxima compra orgânica entrar pra validar de verdade?
