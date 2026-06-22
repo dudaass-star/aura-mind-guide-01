@@ -134,12 +134,12 @@ async function attemptGoogleTTS(text: string, accessToken: string, projectId: st
   }
 }
 
-async function generateGoogleCloudTTS(text: string, serviceAccount: ServiceAccountCredentials): Promise<{ audioBytes: Uint8Array | null; blocked: boolean }> {
-  console.log('🎙️ Attempting Google Cloud TTS with voice:', AURA_VOICE_CONFIG.voiceName);
+async function generateGoogleCloudTTS(text: string, serviceAccount: ServiceAccountCredentials, gcpModelName: string): Promise<{ audioBytes: Uint8Array | null; blocked: boolean }> {
+  console.log('🎙️ Attempting Google Cloud TTS with voice:', AURA_VOICE_CONFIG.voiceName, 'model:', gcpModelName);
   const accessToken = await getAccessToken(serviceAccount);
 
   const sanitizedText = sanitizeTextForTTS(text);
-  let result = await attemptGoogleTTS(sanitizedText, accessToken, serviceAccount.project_id);
+  let result = await attemptGoogleTTS(sanitizedText, accessToken, serviceAccount.project_id, gcpModelName);
 
   if (result.success && result.audioBytes) {
     console.log('✅ Google Cloud TTS success on first attempt:', result.audioBytes.byteLength, 'bytes');
@@ -149,7 +149,7 @@ async function generateGoogleCloudTTS(text: string, serviceAccount: ServiceAccou
   if (result.blocked) {
     console.log('⚠️ First TTS attempt blocked, retrying with reformulated text...');
     const reformulatedText = reformulateForRetry(sanitizedText);
-    result = await attemptGoogleTTS(reformulatedText, accessToken, serviceAccount.project_id);
+    result = await attemptGoogleTTS(reformulatedText, accessToken, serviceAccount.project_id, gcpModelName);
     if (result.success && result.audioBytes) {
       console.log('✅ Google Cloud TTS success on retry:', result.audioBytes.byteLength, 'bytes');
       return { audioBytes: result.audioBytes, blocked: false };
