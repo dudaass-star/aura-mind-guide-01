@@ -1,42 +1,68 @@
-## Estado atual (verificado em `meta_capi_log`)
+# Áudio TTS: trocar pra Flash + novos limites + regra áudio↔áudio (piloto Débora)
 
-**Pós-troca do token (17/06 17:30 UTC):**
-- ✅ 2× `Purchase` enviados com `meta_status: 200` (backfill — camilamuri + fermaion, R$ 9,90 cada, com email/phone/fbp/fbc)
-- ❌ 2× `Purchase` 400 anteriores (eram do backfill rodado ANTES do `instagram_config.meta_access_token` ser zerado — token velho ainda em cache no DB)
-- ⚠️ Nenhum evento orgânico (`Lead`, `InitiateCheckout`, `Purchase` de webhook) desde a troca — não dá pra afirmar que o fluxo "ao vivo" está OK, só que o token funciona
+## Decisões fechadas
 
-Os últimos `Lead`/`InitiateCheckout` no log são de 17/06 02:25–02:34 UTC, todos com erro 190/460 (token velho). Depois disso, ninguém abriu checkout — então o silêncio é normal, mas precisa de uma validação ativa antes de declarar "tudo certo".
+1. **Trocar TTS de Pro → Flash** (`google/gemini-2.5-flash-tts`). Corta custo pela metade. Qualidade da voz cai um pouquinho mas continua natural — aceitável.
+2. **Novos limites por plano:**
+   - Essencial: **30 min** (mantém)
+   - Direção: **50 → 90 min** (+40 min)
+   - Transformação: **120 → 180 min** (+60 min)
+3. **Regra "áudio entra → áudio sai": ligar SÓ pra Débora primeiro** (piloto 2 semanas), medir consumo real, depois decidir se promove pra global. Minha sugestão.
 
-## Plano de verificação
+## Projeção de custo com Flash (R$ 5,80/USD)
 
-### 1. Smoke test do token via `meta-capi-debug`
-Disparar um `Purchase` de teste (com `event_id` único + flag de test event) pra confirmar que:
-- Token novo é lido (do DB ou env)
-- `ads_management` está ativo (sem erro 200/100 de permissão)
-- Pixel `939366085297921` aceita o evento
+| Plano | Min/mês | Custo TTS/mês |
+|---|---|---|
+| Essencial | 30 | **R$ 3,40** |
+| Direção | 90 | **R$ 10** |
+| Transformação | 180 | **R$ 20** |
 
-### 2. Confirmar leitura do token na função
-Conferir no log da chamada se a função pegou o token do env (já que zeramos `instagram_config.meta_access_token`). Garantir que `META_ACCESS_TOKEN` em Secrets bate com o token novo.
+Margem confortável em todos os tiers.
 
-### 3. Checar Events Manager (manual, usuário)
-Pedir pro usuário abrir Events Manager → Pixel Ola Aura → **Visão Geral** e **Eventos de teste**, confirmando:
-- Os 2 `Purchase` do backfill apareceram (camilamuri + fermaion, R$ 9,90)
-- `fbtrace_id` `AehR-qvYHv1msazhWKnYChZ` e `ASjYC4iRzASGMHP84uJRASA` aparecem em "Atividade"
-- Qualidade da correspondência subiu (email + phone + fbp + fbc hasheados)
+## Mudanças técnicas
 
-### 4. Próximo Purchase orgânico
-Quando entrar a próxima compra de novo cliente (Stripe `checkout.session.completed` ou Asaas `PAYMENT_RECEIVED` com `isNew=true`), validar no `meta_capi_log`:
-```sql
-SELECT created_at, source, meta_status, meta_fbtrace_id, meta_error
-FROM meta_capi_log
-WHERE event_name='Purchase' AND source != 'backfill-manual'
-ORDER BY created_at DESC LIMIT 5;
-```
-Critério: `meta_status=200`, `meta_error IS NULL`, `is_first_purchase=true`.
+### 1. Trocar modelo TTS pra Flash
+- `system_config.tts_model`: `google/erinome` → `google/erinome-flash` (ou criar nova entrada).
+- `aura-tts/index.ts` linha 106: `modelName: "gemini-2.5-pro-tts"` → `"gemini-2.5-flash-tts"`.
+- Log model name atualizado (linha 299): `'google/gemini-2.5-flash-tts'`.
+- **Validar voz**: Erinome existe no Flash? Se não, escolher voz equivalente (ex.: Aoede, Despina) e testar 2-3 áudios antes de promover.
 
-### 5. Limpeza (após validação)
-- Remover `supabase/functions/meta-capi-debug` e `supabase/functions/backfill-meta-purchase` (deixar repo limpo)
-- Ou manter como "kit de diagnóstico" se você preferir
+### 2. Atualizar limites por plano
+- `aura-agent/index.ts` linha 7570:
+  ```ts
+  const budgetSeconds = profile?.plan === 'transformacao' ? 10800   // 180 min
+                      : profile?.plan === 'direcao'      ? 5400    // 90 min
+                                                         : 1800;   // 30 min Essencial
+  ```
+- Atualizar mensagens de teto estourado pra refletir novos limites.
+- Atualizar memória `sistema-orcamento-mensal` com novos valores.
 
-## Pergunta antes de implementar
-Quer que eu já rode o smoke test (passo 1) agora via `meta-capi-debug` enviando um `Purchase` de teste, ou prefere esperar a próxima compra orgânica entrar pra validar de verdade?
+### 3. Flag "áudio↔áudio" individual (piloto Débora)
+- Migration: adicionar coluna `audio_mirror_enabled BOOLEAN DEFAULT FALSE` em `profiles`.
+- Ativar `true` pra Débora (`id = 53b5f75d-f0b2-41fd-a0da-74e1b3ab08f1`).
+- No `aura-agent`, antes de decidir áudio (lógica do `audioDecision`):
+  ```ts
+  if (profile.audio_mirror_enabled && lastUserMessageWasAudio) {
+    audioDecision.mandatory = true;
+    audioDecision.reason = 'audio_mirror_flag';
+  }
+  ```
+- Respeita o teto mensal normalmente — se estourar, volta a texto com aviso ("seu pacote de áudio acabou, volto em áudio dia DD/MM").
+
+### 4. Comunicação Débora
+- Mandar WhatsApp explicando: "ativei pra você responder em áudio sempre que você mandar áudio, dentro do seu pacote mensal de 30 min. Se quiser mais espaço, posso te explicar os planos Direção (90 min) ou Transformação (180 min)."
+
+## Métricas pra avaliar piloto (2 semanas)
+
+- Minutos consumidos/dia por Débora.
+- % de áudios da Aura que estouraram o teto e caíram pra texto.
+- Custo real TTS observado em `token_usage_logs`.
+- Sentimento da Débora (engagement, feedback espontâneo).
+
+Se métricas saudáveis → promover regra global numa segunda fase (adicionar `audio_mirror_enabled = true` no default ou hardcode na lógica).
+
+## O que NÃO entra agora
+
+- Add-on pago de áudio (avaliar depois do piloto, se demanda surgir de outros).
+- Plano "Áudio Ilimitado" novo (mesmo motivo).
+- Migração das meditações guiadas pra Flash (escopo separado, Inworld continua).
