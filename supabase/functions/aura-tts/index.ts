@@ -92,7 +92,7 @@ async function getAccessToken(serviceAccount: ServiceAccountCredentials): Promis
   return tokenData.access_token;
 }
 
-async function attemptGoogleTTS(text: string, accessToken: string, projectId: string): Promise<{ success: boolean; audioBytes?: Uint8Array; blocked?: boolean }> {
+async function attemptGoogleTTS(text: string, accessToken: string, projectId: string, gcpModelName: string): Promise<{ success: boolean; audioBytes?: Uint8Array; blocked?: boolean }> {
   try {
     const response = await fetch("https://texttospeech.googleapis.com/v1/text:synthesize", {
       method: "POST",
@@ -103,7 +103,7 @@ async function attemptGoogleTTS(text: string, accessToken: string, projectId: st
       },
       body: JSON.stringify({
         input: { prompt: AURA_VOICE_CONFIG.stylePrompt, text },
-        voice: { languageCode: "pt-BR", name: AURA_VOICE_CONFIG.voiceName, modelName: "gemini-2.5-pro-tts" },
+        voice: { languageCode: "pt-BR", name: AURA_VOICE_CONFIG.voiceName, modelName: gcpModelName },
         audioConfig: { audioEncoding: "MP3", speakingRate: AURA_VOICE_CONFIG.speakingRate },
       }),
     });
