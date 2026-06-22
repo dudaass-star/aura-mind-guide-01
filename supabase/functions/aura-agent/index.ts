@@ -4309,7 +4309,7 @@ serve(async (req) => {
       console.warn('Failed to read AI model config, using default:', e);
     }
 
-    const { message: rawMessage, user_id, phone, pending_content, pending_context, last_user_context, minimal_context, quoted_message, proactive_context, inbound_message_created_at } = await req.json();
+    const { message: rawMessage, user_id, phone, pending_content, pending_context, last_user_context, minimal_context, quoted_message, proactive_context, inbound_message_created_at, is_audio_message } = await req.json();
     const inboundMessageDate = inbound_message_created_at ? new Date(inbound_message_created_at) : null;
     const reminderReferenceDate = inboundMessageDate && !isNaN(inboundMessageDate.getTime()) ? inboundMessageDate : new Date();
 
