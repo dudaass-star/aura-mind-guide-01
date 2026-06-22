@@ -290,13 +290,19 @@ serve(async (req) => {
           status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
-      const result = await generateGoogleCloudTTS(truncatedText, serviceAccount);
+      // Sentinel '-flash' no system_config.tts_model seleciona o Gemini 2.5 Flash TTS
+      // (mais barato, qualidade ligeiramente menor). Default = Pro TTS.
+      const useFlash = ttsModel.includes('flash');
+      const gcpModelName = useFlash ? 'gemini-2.5-flash-tts' : 'gemini-2.5-pro-tts';
+      const result = await generateGoogleCloudTTS(truncatedText, serviceAccount, gcpModelName);
       audioBytes = result.audioBytes;
       blocked = result.blocked;
     }
 
     // Log TTS usage to token_usage_logs (fire-and-forget)
-    const logModel = ttsModel === 'inworld/aura' ? 'inworld/aura' : 'google/gemini-2.5-pro-tts';
+    const logModel = ttsModel === 'inworld/aura'
+      ? 'inworld/aura'
+      : (ttsModel.includes('flash') ? 'google/gemini-2.5-flash-tts' : 'google/gemini-2.5-pro-tts');
     const charCount = truncatedText.length;
     try {
       const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
