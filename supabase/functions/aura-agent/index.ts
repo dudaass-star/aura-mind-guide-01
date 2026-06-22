@@ -7566,8 +7566,8 @@ Só DEPOIS de saber a situação, explore as emoções com profundidade.`;
     const sessionCloseInfo = currentSession ? calculateSessionTimeContext(currentSession, lastMessageTimestamp, currentSession.resumption_count ?? 0) : null;
     const aiWantsAudio = assistantMessage.trimStart().startsWith('[MODO_AUDIO]');
     
-    // Audio budget
-    const budgetSeconds = profile?.plan === 'transformacao' ? 7200 : profile?.plan === 'direcao' ? 3000 : 1800;
+    // Audio budget (min/mês): Essencial 30 / Direção 90 / Transformação 180
+    const budgetSeconds = profile?.plan === 'transformacao' ? 10800 : profile?.plan === 'direcao' ? 5400 : 1800;
     const audioSecondsUsed = profile?.audio_seconds_used_this_month || 0;
     const currentAudioMonth = new Date().toISOString().slice(0, 7);
     const resetMonth = profile?.audio_reset_date?.slice(0, 7);
@@ -7584,6 +7584,22 @@ Só DEPOIS de saber a situação, explore as emoções com profundidade.`;
       wantsAudio,
       aiIncludedAudioTag: aiWantsAudio,
     });
+
+    // Flag individual (piloto): se ativada, áudio do usuário força áudio na resposta,
+    // respeitando o teto mensal do plano. Sobrescreve apenas quando não há decisão
+    // mandatória mais forte (crisis, session_opening/closing) já tomada.
+    if (
+      profile?.audio_mirror_enabled === true &&
+      is_audio_message === true &&
+      budgetAvailable &&
+      !wantsText &&
+      !audioDecision.mandatory
+    ) {
+      audioDecision.shouldUseAudio = true;
+      audioDecision.mandatory = true;
+      audioDecision.reason = 'audio_mirror_flag';
+      console.log('🪞 audio_mirror_enabled: forçando áudio porque usuário mandou áudio');
+    }
 
     const allowAudioThisTurn = audioDecision.shouldUseAudio;
     const forceAudioForSessionStart = audioDecision.reason === 'session_opening';
