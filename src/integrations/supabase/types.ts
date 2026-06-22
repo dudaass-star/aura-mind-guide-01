@@ -1447,6 +1447,7 @@ export type Database = {
       profiles: {
         Row: {
           asaas_customer_id: string | null
+          audio_mirror_enabled: boolean
           audio_reset_date: string | null
           audio_seconds_used_this_month: number | null
           awaiting_time_capsule: string | null
@@ -1514,6 +1515,7 @@ export type Database = {
         }
         Insert: {
           asaas_customer_id?: string | null
+          audio_mirror_enabled?: boolean
           audio_reset_date?: string | null
           audio_seconds_used_this_month?: number | null
           awaiting_time_capsule?: string | null
@@ -1581,6 +1583,7 @@ export type Database = {
         }
         Update: {
           asaas_customer_id?: string | null
+          audio_mirror_enabled?: boolean
           audio_reset_date?: string | null
           audio_seconds_used_this_month?: number | null
           awaiting_time_capsule?: string | null

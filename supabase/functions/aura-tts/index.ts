@@ -92,7 +92,7 @@ async function getAccessToken(serviceAccount: ServiceAccountCredentials): Promis
   return tokenData.access_token;
 }
 
-async function attemptGoogleTTS(text: string, accessToken: string, projectId: string): Promise<{ success: boolean; audioBytes?: Uint8Array; blocked?: boolean }> {
+async function attemptGoogleTTS(text: string, accessToken: string, projectId: string, gcpModelName: string): Promise<{ success: boolean; audioBytes?: Uint8Array; blocked?: boolean }> {
   try {
     const response = await fetch("https://texttospeech.googleapis.com/v1/text:synthesize", {
       method: "POST",
@@ -103,7 +103,7 @@ async function attemptGoogleTTS(text: string, accessToken: string, projectId: st
       },
       body: JSON.stringify({
         input: { prompt: AURA_VOICE_CONFIG.stylePrompt, text },
-        voice: { languageCode: "pt-BR", name: AURA_VOICE_CONFIG.voiceName, modelName: "gemini-2.5-pro-tts" },
+        voice: { languageCode: "pt-BR", name: AURA_VOICE_CONFIG.voiceName, modelName: gcpModelName },
         audioConfig: { audioEncoding: "MP3", speakingRate: AURA_VOICE_CONFIG.speakingRate },
       }),
     });
@@ -134,12 +134,12 @@ async function attemptGoogleTTS(text: string, accessToken: string, projectId: st
   }
 }
 
-async function generateGoogleCloudTTS(text: string, serviceAccount: ServiceAccountCredentials): Promise<{ audioBytes: Uint8Array | null; blocked: boolean }> {
-  console.log('🎙️ Attempting Google Cloud TTS with voice:', AURA_VOICE_CONFIG.voiceName);
+async function generateGoogleCloudTTS(text: string, serviceAccount: ServiceAccountCredentials, gcpModelName: string): Promise<{ audioBytes: Uint8Array | null; blocked: boolean }> {
+  console.log('🎙️ Attempting Google Cloud TTS with voice:', AURA_VOICE_CONFIG.voiceName, 'model:', gcpModelName);
   const accessToken = await getAccessToken(serviceAccount);
 
   const sanitizedText = sanitizeTextForTTS(text);
-  let result = await attemptGoogleTTS(sanitizedText, accessToken, serviceAccount.project_id);
+  let result = await attemptGoogleTTS(sanitizedText, accessToken, serviceAccount.project_id, gcpModelName);
 
   if (result.success && result.audioBytes) {
     console.log('✅ Google Cloud TTS success on first attempt:', result.audioBytes.byteLength, 'bytes');
@@ -149,7 +149,7 @@ async function generateGoogleCloudTTS(text: string, serviceAccount: ServiceAccou
   if (result.blocked) {
     console.log('⚠️ First TTS attempt blocked, retrying with reformulated text...');
     const reformulatedText = reformulateForRetry(sanitizedText);
-    result = await attemptGoogleTTS(reformulatedText, accessToken, serviceAccount.project_id);
+    result = await attemptGoogleTTS(reformulatedText, accessToken, serviceAccount.project_id, gcpModelName);
     if (result.success && result.audioBytes) {
       console.log('✅ Google Cloud TTS success on retry:', result.audioBytes.byteLength, 'bytes');
       return { audioBytes: result.audioBytes, blocked: false };
@@ -290,13 +290,19 @@ serve(async (req) => {
           status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
-      const result = await generateGoogleCloudTTS(truncatedText, serviceAccount);
+      // Sentinel '-flash' no system_config.tts_model seleciona o Gemini 2.5 Flash TTS
+      // (mais barato, qualidade ligeiramente menor). Default = Pro TTS.
+      const useFlash = ttsModel.includes('flash');
+      const gcpModelName = useFlash ? 'gemini-2.5-flash-tts' : 'gemini-2.5-pro-tts';
+      const result = await generateGoogleCloudTTS(truncatedText, serviceAccount, gcpModelName);
       audioBytes = result.audioBytes;
       blocked = result.blocked;
     }
 
     // Log TTS usage to token_usage_logs (fire-and-forget)
-    const logModel = ttsModel === 'inworld/aura' ? 'inworld/aura' : 'google/gemini-2.5-pro-tts';
+    const logModel = ttsModel === 'inworld/aura'
+      ? 'inworld/aura'
+      : (ttsModel.includes('flash') ? 'google/gemini-2.5-flash-tts' : 'google/gemini-2.5-pro-tts');
     const charCount = truncatedText.length;
     try {
       const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
