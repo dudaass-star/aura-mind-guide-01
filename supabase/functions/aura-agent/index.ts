@@ -1610,7 +1610,8 @@ async function processExtractedActions(
   profile: any,
   currentSession: any,
   dateTimeContext: { currentDate: string; currentTime: string; isoDate: string },
-  previousUserContext?: UserContextState | null
+  previousUserContext?: UserContextState | null,
+  userMessage?: string
 ): Promise<void> {
   if (!profile?.user_id) return;
   const userId = profile.user_id;
@@ -1689,13 +1690,31 @@ async function processExtractedActions(
     // Theme tracking — handled by postConversationAnalysis() (deduplicated)
     // Micro-agent themes are intentionally skipped to avoid race conditions
 
-    // Journey management
-    if (actions.journey_action === 'pause') {
-      await supabase.from('profiles').update({ current_journey_id: null, current_episode: 0 }).eq('user_id', userId);
-      console.log('✅ [MICRO-AGENT] Journeys paused');
-    } else if (actions.journey_action === 'switch' && actions.journey_id) {
-      await supabase.from('profiles').update({ current_journey_id: actions.journey_id, current_episode: 0 }).eq('user_id', userId);
-      console.log('✅ [MICRO-AGENT] Journey switched to:', actions.journey_id);
+    // Journey management — exige intenção EXPLÍCITA do usuário e respeita histórico.
+    // O extractor (Flash-lite) já errou no passado inferindo `switch`/`pause` a partir
+    // do contexto. Aqui validamos a mensagem real do usuário antes de mexer no profile.
+    if (actions.journey_action === 'pause' || actions.journey_action === 'switch') {
+      const intent = hasExplicitJourneyIntent(userMessage || '');
+      if (actions.journey_action === 'pause' && intent.pause) {
+        await supabase.from('profiles').update({ current_journey_id: null, current_episode: 0 }).eq('user_id', userId);
+        console.log('✅ [MICRO-AGENT] Journeys paused (intenção explícita confirmada)');
+      } else if (actions.journey_action === 'switch' && actions.journey_id && intent.switch) {
+        // Bloqueia switch para uma jornada já concluída
+        const { data: alreadyDone } = await supabase
+          .from('user_journey_history')
+          .select('journey_id')
+          .eq('user_id', userId)
+          .eq('journey_id', actions.journey_id)
+          .limit(1);
+        if (alreadyDone && alreadyDone.length > 0) {
+          console.warn(`🚫 [MICRO-AGENT] Switch ignorado: ${actions.journey_id} já está no histórico do usuário.`);
+        } else {
+          await supabase.from('profiles').update({ current_journey_id: actions.journey_id, current_episode: 0 }).eq('user_id', userId);
+          console.log('✅ [MICRO-AGENT] Journey switched to:', actions.journey_id);
+        }
+      } else {
+        console.warn(`🚫 [MICRO-AGENT] journey_action="${actions.journey_action}" descartado — mensagem do usuário não tem pedido explícito. msg="${(userMessage || '').substring(0, 120)}"`);
+      }
     }
 
     // Time capsule
@@ -7988,7 +8007,7 @@ Só DEPOIS de saber a situação, explore as emoções com profundidade.`;
             message, assistantMessage, GEMINI_API_KEY, supabase, profile.user_id, recentUserMsgs
           );
           if (Object.keys(actions).length > 0) {
-            await processExtractedActions(actions, supabase, profile, currentSession, dateTimeContext, last_user_context);
+            await processExtractedActions(actions, supabase, profile, currentSession, dateTimeContext, last_user_context, message);
           }
         } catch (err) {
           console.error('⚠️ Micro-agent async error:', err);
