@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { cleanPhoneNumber } from "../_shared/zapi-client.ts";
 import { sendProactive } from "../_shared/whatsapp-provider.ts";
 import { getInstanceConfigForUser, antiBurstDelayForInstance, groupByInstance } from "../_shared/instance-helper.ts";
+import { pickNextJourney } from "../_shared/journey-helper.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -73,26 +74,22 @@ serve(async (req) => {
     if (pendingUsers && pendingUsers.length > 0) {
       console.log(`⏰ Found ${pendingUsers.length} users pending journey choice (48h+ elapsed)`);
 
-      // Get all active journeys to pick a default
-      const { data: allJourneys } = await supabase
-        .from('content_journeys')
-        .select('id, title, next_journey_id')
-        .eq('is_active', true)
-        .order('id');
-
       for (const pu of pendingUsers) {
-        // Pick first available journey as fallback
-        const fallbackJourney = allJourneys?.[0];
-        if (fallbackJourney) {
+        // Escolhe a próxima jornada respeitando o histórico do usuário.
+        // Recicla a mais antiga se todas já foram feitas (evita "sem conteúdo").
+        const chosenId = await pickNextJourney(supabase, pu.user_id, { allowRecycle: true });
+        if (chosenId) {
           await supabase
             .from('profiles')
             .update({
-              current_journey_id: fallbackJourney.id,
+              current_journey_id: chosenId,
               current_episode: 0,
               last_content_sent_at: null, // allow immediate content
             })
             .eq('id', pu.id);
-          console.log(`🔄 Auto-assigned ${pu.name || 'user'} to journey: ${fallbackJourney.title}`);
+          console.log(`🔄 Auto-assigned ${pu.name || 'user'} to journey: ${chosenId}`);
+        } else {
+          console.warn(`⚠️ Sem jornada disponível para ${pu.name || pu.user_id} (histórico vazio mas helper retornou null).`);
         }
       }
     }
