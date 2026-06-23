@@ -855,6 +855,7 @@ REGRAS:
 - commitments: apenas compromissos CONCRETOS com ação clara (não intenções vagas)
 - themes: temas emocionais significativos discutidos (não triviais)
 - session_action: só se houve pedido explícito de agendamento/reagendamento/pausa
+- journey_action: SOMENTE quando a MENSAGEM ATUAL DO USUÁRIO contém pedido literal de trocar/pausar jornada (ex.: "quero trocar de jornada", "pausa as jornadas", "muda pra jornada de ansiedade", "para com as jornadas"). NUNCA infira por contexto, tópico do profile ou tom da conversa. Se o usuário só está conversando sobre o tema (ansiedade, autoestima, etc.), NÃO retorne journey_action. Em dúvida, omita o campo.
 - user_emotional_state: avalie o estado emocional do USUÁRIO (não da assistente). "crisis" = risco/desespero, "vulnerable" = fragilidade emocional, "resistant" = evitando aprofundamento, "stable" = normal
 - topic_continuity: compare o tema da mensagem ATUAL do USUÁRIO com a mensagem IMEDIATAMENTE anterior dele (não com o início da conversa). "shifted" = mudou de assunto parcialmente em relação à última mensagem, "new_topic" = tema completamente novo vs a última mensagem, "same_topic" = continuação do mesmo tema da última mensagem. IMPORTANTE: se o usuário mudou de tema no turno anterior e agora CONTINUA nesse novo tema, classifique como "same_topic" (ele está aprofundando o novo assunto).
 - engagement_level: "disengaged" = respostas evasivas/monossilábicas sem conteúdo, "short_answers" = respostas curtas mas com conteúdo, "engaged" = participando ativamente
