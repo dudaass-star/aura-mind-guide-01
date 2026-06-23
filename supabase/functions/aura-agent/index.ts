@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { cleanPhoneNumber } from "../_shared/zapi-client.ts";
 import { sendMessage } from "../_shared/whatsapp-provider.ts";
 import { getInstanceConfigForUser } from "../_shared/instance-helper.ts";
+import { pickNextJourney, hasExplicitJourneyIntent } from "../_shared/journey-helper.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -854,6 +855,7 @@ REGRAS:
 - commitments: apenas compromissos CONCRETOS com ação clara (não intenções vagas)
 - themes: temas emocionais significativos discutidos (não triviais)
 - session_action: só se houve pedido explícito de agendamento/reagendamento/pausa
+- journey_action: SOMENTE quando a MENSAGEM ATUAL DO USUÁRIO contém pedido literal de trocar/pausar jornada (ex.: "quero trocar de jornada", "pausa as jornadas", "muda pra jornada de ansiedade", "para com as jornadas"). NUNCA infira por contexto, tópico do profile ou tom da conversa. Se o usuário só está conversando sobre o tema (ansiedade, autoestima, etc.), NÃO retorne journey_action. Em dúvida, omita o campo.
 - user_emotional_state: avalie o estado emocional do USUÁRIO (não da assistente). "crisis" = risco/desespero, "vulnerable" = fragilidade emocional, "resistant" = evitando aprofundamento, "stable" = normal
 - topic_continuity: compare o tema da mensagem ATUAL do USUÁRIO com a mensagem IMEDIATAMENTE anterior dele (não com o início da conversa). "shifted" = mudou de assunto parcialmente em relação à última mensagem, "new_topic" = tema completamente novo vs a última mensagem, "same_topic" = continuação do mesmo tema da última mensagem. IMPORTANTE: se o usuário mudou de tema no turno anterior e agora CONTINUA nesse novo tema, classifique como "same_topic" (ele está aprofundando o novo assunto).
 - engagement_level: "disengaged" = respostas evasivas/monossilábicas sem conteúdo, "short_answers" = respostas curtas mas com conteúdo, "engaged" = participando ativamente
@@ -1609,7 +1611,8 @@ async function processExtractedActions(
   profile: any,
   currentSession: any,
   dateTimeContext: { currentDate: string; currentTime: string; isoDate: string },
-  previousUserContext?: UserContextState | null
+  previousUserContext?: UserContextState | null,
+  userMessage?: string
 ): Promise<void> {
   if (!profile?.user_id) return;
   const userId = profile.user_id;
@@ -1688,13 +1691,31 @@ async function processExtractedActions(
     // Theme tracking — handled by postConversationAnalysis() (deduplicated)
     // Micro-agent themes are intentionally skipped to avoid race conditions
 
-    // Journey management
-    if (actions.journey_action === 'pause') {
-      await supabase.from('profiles').update({ current_journey_id: null, current_episode: 0 }).eq('user_id', userId);
-      console.log('✅ [MICRO-AGENT] Journeys paused');
-    } else if (actions.journey_action === 'switch' && actions.journey_id) {
-      await supabase.from('profiles').update({ current_journey_id: actions.journey_id, current_episode: 0 }).eq('user_id', userId);
-      console.log('✅ [MICRO-AGENT] Journey switched to:', actions.journey_id);
+    // Journey management — exige intenção EXPLÍCITA do usuário e respeita histórico.
+    // O extractor (Flash-lite) já errou no passado inferindo `switch`/`pause` a partir
+    // do contexto. Aqui validamos a mensagem real do usuário antes de mexer no profile.
+    if (actions.journey_action === 'pause' || actions.journey_action === 'switch') {
+      const intent = hasExplicitJourneyIntent(userMessage || '');
+      if (actions.journey_action === 'pause' && intent.pause) {
+        await supabase.from('profiles').update({ current_journey_id: null, current_episode: 0 }).eq('user_id', userId);
+        console.log('✅ [MICRO-AGENT] Journeys paused (intenção explícita confirmada)');
+      } else if (actions.journey_action === 'switch' && actions.journey_id && intent.switch) {
+        // Bloqueia switch para uma jornada já concluída
+        const { data: alreadyDone } = await supabase
+          .from('user_journey_history')
+          .select('journey_id')
+          .eq('user_id', userId)
+          .eq('journey_id', actions.journey_id)
+          .limit(1);
+        if (alreadyDone && alreadyDone.length > 0) {
+          console.warn(`🚫 [MICRO-AGENT] Switch ignorado: ${actions.journey_id} já está no histórico do usuário.`);
+        } else {
+          await supabase.from('profiles').update({ current_journey_id: actions.journey_id, current_episode: 0 }).eq('user_id', userId);
+          console.log('✅ [MICRO-AGENT] Journey switched to:', actions.journey_id);
+        }
+      } else {
+        console.warn(`🚫 [MICRO-AGENT] journey_action="${actions.journey_action}" descartado — mensagem do usuário não tem pedido explícito. msg="${(userMessage || '').substring(0, 120)}"`);
+      }
     }
 
     // Time capsule
@@ -7183,16 +7204,25 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
         .single();
       
       if (journey) {
-        // Atualizar profile com nova jornada (episódio 0 = próximo conteúdo será ep 1)
-        await supabase
-          .from('profiles')
-          .update({
-            current_journey_id: journeyId,
-            current_episode: 0
-          })
-          .eq('user_id', profile.user_id);
-        
-        console.log('✅ Journey switched to:', journey.title);
+        // Bloqueia troca para uma jornada já concluída — evita reentregar conteúdo antigo.
+        const { data: alreadyDone } = await supabase
+          .from('user_journey_history')
+          .select('journey_id')
+          .eq('user_id', profile.user_id)
+          .eq('journey_id', journeyId)
+          .limit(1);
+        if (alreadyDone && alreadyDone.length > 0) {
+          console.warn(`🚫 [TROCAR_JORNADA] Ignorada — ${journeyId} já está no histórico do usuário ${profile.user_id}.`);
+        } else {
+          await supabase
+            .from('profiles')
+            .update({
+              current_journey_id: journeyId,
+              current_episode: 0
+            })
+            .eq('user_id', profile.user_id);
+          console.log('✅ Journey switched to:', journey.title);
+        }
       } else {
         console.log('⚠️ Journey not found:', journeyId);
       }
@@ -7432,10 +7462,16 @@ Apenas o tema, nada mais.`
                           }
                         }
                         journeyId = journeyId || 'j2-autoconfianca'; // Fallback
-                        
-                        profileUpdate.current_journey_id = journeyId;
+
+                        // Se por acaso o usuário já tem essa jornada no histórico
+                        // (re-onboarding após churn, por exemplo), escolhe outra disponível.
+                        const safeJourneyId = await pickNextJourney(supabase, profile.user_id, {
+                          preferredJourneyId: journeyId,
+                          allowRecycle: true,
+                        });
+                        profileUpdate.current_journey_id = safeJourneyId || journeyId;
                         profileUpdate.current_episode = 0;
-                        console.log('📚 Assigned journey:', journeyId);
+                        console.log('📚 Assigned journey:', profileUpdate.current_journey_id, '(preferred:', journeyId, ')');
                       }
                     }
                   } catch (topicError) {
@@ -7987,7 +8023,7 @@ Só DEPOIS de saber a situação, explore as emoções com profundidade.`;
             message, assistantMessage, GEMINI_API_KEY, supabase, profile.user_id, recentUserMsgs
           );
           if (Object.keys(actions).length > 0) {
-            await processExtractedActions(actions, supabase, profile, currentSession, dateTimeContext, last_user_context);
+            await processExtractedActions(actions, supabase, profile, currentSession, dateTimeContext, last_user_context, message);
           }
         } catch (err) {
           console.error('⚠️ Micro-agent async error:', err);
