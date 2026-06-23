@@ -7461,10 +7461,16 @@ Apenas o tema, nada mais.`
                           }
                         }
                         journeyId = journeyId || 'j2-autoconfianca'; // Fallback
-                        
-                        profileUpdate.current_journey_id = journeyId;
+
+                        // Se por acaso o usuário já tem essa jornada no histórico
+                        // (re-onboarding após churn, por exemplo), escolhe outra disponível.
+                        const safeJourneyId = await pickNextJourney(supabase, profile.user_id, {
+                          preferredJourneyId: journeyId,
+                          allowRecycle: true,
+                        });
+                        profileUpdate.current_journey_id = safeJourneyId || journeyId;
                         profileUpdate.current_episode = 0;
-                        console.log('📚 Assigned journey:', journeyId);
+                        console.log('📚 Assigned journey:', profileUpdate.current_journey_id, '(preferred:', journeyId, ')');
                       }
                     }
                   } catch (topicError) {
