@@ -7203,16 +7203,25 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
         .single();
       
       if (journey) {
-        // Atualizar profile com nova jornada (episódio 0 = próximo conteúdo será ep 1)
-        await supabase
-          .from('profiles')
-          .update({
-            current_journey_id: journeyId,
-            current_episode: 0
-          })
-          .eq('user_id', profile.user_id);
-        
-        console.log('✅ Journey switched to:', journey.title);
+        // Bloqueia troca para uma jornada já concluída — evita reentregar conteúdo antigo.
+        const { data: alreadyDone } = await supabase
+          .from('user_journey_history')
+          .select('journey_id')
+          .eq('user_id', profile.user_id)
+          .eq('journey_id', journeyId)
+          .limit(1);
+        if (alreadyDone && alreadyDone.length > 0) {
+          console.warn(`🚫 [TROCAR_JORNADA] Ignorada — ${journeyId} já está no histórico do usuário ${profile.user_id}.`);
+        } else {
+          await supabase
+            .from('profiles')
+            .update({
+              current_journey_id: journeyId,
+              current_episode: 0
+            })
+            .eq('user_id', profile.user_id);
+          console.log('✅ Journey switched to:', journey.title);
+        }
       } else {
         console.log('⚠️ Journey not found:', journeyId);
       }
