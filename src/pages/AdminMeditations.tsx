@@ -257,7 +257,10 @@ export default function AdminMeditations() {
       
       const { error: uploadError } = await supabase.storage
         .from('meditations')
-        .upload(storagePath, file, { upsert: true });
+        .upload(storagePath, file, {
+          upsert: true,
+          contentType: 'audio/mpeg', // arquivo sempre salvo como .mp3; força mime aceito pelo bucket
+        });
 
       if (uploadError) throw uploadError;
 
@@ -314,10 +317,25 @@ export default function AdminMeditations() {
 
       await fetchMeditations();
     } catch (error) {
-      console.error('Error uploading audio:', error);
+      const err = error as { message?: string; statusCode?: string | number; name?: string };
+      console.error('Error uploading audio:', {
+        message: err?.message,
+        statusCode: err?.statusCode,
+        name: err?.name,
+        raw: error,
+      });
+      const msg = (err?.message || '').toLowerCase();
+      let description = err?.message || "Não foi possível fazer o upload.";
+      if (msg.includes('mime') || msg.includes('invalid_mime')) {
+        description = "Formato de áudio não suportado pelo bucket. Use MP3 ou WAV.";
+      } else if (msg.includes('row-level security') || msg.includes('policy') || msg.includes('unauthorized')) {
+        description = "Sem permissão pra atualizar esse áudio. Confirme que está logada como admin e tente de novo.";
+      } else if (msg.includes('payload') || msg.includes('too large') || String(err?.statusCode) === '413') {
+        description = "Arquivo muito grande pro bucket (máx 50MB).";
+      }
       toast({
         title: "Erro no upload",
-        description: error instanceof Error ? error.message : "Não foi possível fazer o upload.",
+        description,
         variant: "destructive",
       });
     } finally {
