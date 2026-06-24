@@ -4970,7 +4970,12 @@ serve(async (req) => {
       const lowerMsg = message.toLowerCase().trim();
       const userWantsToStartMissedSession = confirmPhrasesMissed.some(p => lowerMsg.includes(p));
 
-      if (userWantsToStartMissedSession) {
+      // GUARDA DE COTA MENSAL: não reativar sessão perdida se já estourou o plano.
+      const quotaOk = !(planConfig.sessions > 0 && sessionsAvailable <= 0);
+      if (!quotaOk) {
+        console.warn(`🛑 BLOQUEADO reativação de sessão perdida ${recentMissedSession.id}: cota mensal esgotada (plano=${userPlan}, usadas=${profile.sessions_used_this_month})`);
+        recentMissedSession = null;
+      } else if (userWantsToStartMissedSession) {
         const now = new Date().toISOString();
 
         // Reativar sessão: mudar status para in_progress
