@@ -4922,6 +4922,11 @@ serve(async (req) => {
         console.warn(`🛑 BLOQUEADO início precoce de sessão ${pendingScheduledSession.id}: diff=${diffMin.toFixed(1)}min, notified=false`);
         shouldStartSession = false;
       }
+      // GUARDA DE COTA MENSAL: não iniciar sessão se usuário já estourou o limite do plano.
+      if (shouldStartSession && planConfig.sessions > 0 && sessionsAvailable <= 0) {
+        console.warn(`🛑 BLOQUEADO início de sessão ${pendingScheduledSession.id}: cota mensal esgotada (plano=${userPlan}, usadas=${profile.sessions_used_this_month})`);
+        shouldStartSession = false;
+      }
     }
 
     if (shouldStartSession && pendingScheduledSession && profile) {
