@@ -432,6 +432,24 @@ async function handleActivation(
         console.log(
           `[webhook-asaas] ✅ Profile ${profileUserId} (${isRenewal ? "renovação" : isReturning ? "returning" : isUpgrade ? "upgrade" : "update"}) estendido até ${newExpiry}`,
         );
+        // Em returning/upgrade: limpa sessões órfãs (scheduled sem started_at)
+        // do ciclo anterior para evitar reativação de fantasmas pelo agente.
+        if (isReturning || isUpgrade) {
+          try {
+            const { data: cleanedSessions } = await supabase
+              .from("sessions")
+              .update({ status: "cancelled", session_summary: "plan_change_cleanup" })
+              .eq("user_id", profileUserId)
+              .eq("status", "scheduled")
+              .is("started_at", null)
+              .select("id");
+            if (cleanedSessions && cleanedSessions.length > 0) {
+              console.log(`[webhook-asaas] 🧹 Cancelled ${cleanedSessions.length} orphan scheduled sessions (plan change cleanup)`);
+            }
+          } catch (cleanupErr) {
+            console.warn("[webhook-asaas] ⚠️ Orphan session cleanup failed (non-blocking):", cleanupErr);
+          }
+        }
       }
     }
 

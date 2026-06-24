@@ -733,6 +733,22 @@ Deno.serve(async (req) => {
             console.error('❌ Error updating profile:', updateError);
           } else {
             console.log('✅ Profile updated with plan:', customerPlan, planExpiresAt ? `expires: ${planExpiresAt}` : '');
+            // Limpa sessões órfãs do plano anterior (scheduled sem started_at)
+            // para evitar que o agente reative fantasmas após a troca de plano.
+            try {
+              const { data: cleanedSessions } = await supabase
+                .from('sessions')
+                .update({ status: 'cancelled', session_summary: 'plan_change_cleanup' })
+                .eq('user_id', existingProfile.user_id)
+                .eq('status', 'scheduled')
+                .is('started_at', null)
+                .select('id');
+              if (cleanedSessions && cleanedSessions.length > 0) {
+                console.log(`🧹 Cancelled ${cleanedSessions.length} orphan scheduled sessions (plan change cleanup)`);
+              }
+            } catch (cleanupErr) {
+              console.warn('⚠️ Orphan session cleanup failed (non-blocking):', cleanupErr);
+            }
             const { data: cancelled } = await supabase
               .from('scheduled_tasks')
               .update({ status: 'cancelled', executed_at: new Date().toISOString() })

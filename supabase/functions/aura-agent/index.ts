@@ -4621,12 +4621,16 @@ serve(async (req) => {
 
       // Se não encontrou sessão scheduled, buscar sessão perdida (cancelled/no_show)
       if (!pendingScheduledSession) {
+        // Piso temporal: só considera "sessão perdida" recente (últimos 7 dias).
+        // Evita reativar fantasmas de meses atrás quando o usuário volta após sumir.
+        const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
         const { data: missedSessions } = await supabase
           .from('sessions')
           .select('*')
           .eq('user_id', profile.user_id)
           .in('status', ['cancelled', 'no_show'])
           .is('started_at', null)
+          .gte('scheduled_at', sevenDaysAgo.toISOString())
           .or('session_summary.is.null,session_summary.neq.reactivation_declined')
           .order('scheduled_at', { ascending: false })
           .limit(1);
@@ -4918,6 +4922,11 @@ serve(async (req) => {
         console.warn(`🛑 BLOQUEADO início precoce de sessão ${pendingScheduledSession.id}: diff=${diffMin.toFixed(1)}min, notified=false`);
         shouldStartSession = false;
       }
+      // GUARDA DE COTA MENSAL: não iniciar sessão se usuário já estourou o limite do plano.
+      if (shouldStartSession && planConfig.sessions > 0 && sessionsAvailable <= 0) {
+        console.warn(`🛑 BLOQUEADO início de sessão ${pendingScheduledSession.id}: cota mensal esgotada (plano=${userPlan}, usadas=${profile.sessions_used_this_month})`);
+        shouldStartSession = false;
+      }
     }
 
     if (shouldStartSession && pendingScheduledSession && profile) {
@@ -4961,7 +4970,12 @@ serve(async (req) => {
       const lowerMsg = message.toLowerCase().trim();
       const userWantsToStartMissedSession = confirmPhrasesMissed.some(p => lowerMsg.includes(p));
 
-      if (userWantsToStartMissedSession) {
+      // GUARDA DE COTA MENSAL: não reativar sessão perdida se já estourou o plano.
+      const quotaOk = !(planConfig.sessions > 0 && sessionsAvailable <= 0);
+      if (!quotaOk) {
+        console.warn(`🛑 BLOQUEADO reativação de sessão perdida ${recentMissedSession.id}: cota mensal esgotada (plano=${userPlan}, usadas=${profile.sessions_used_this_month})`);
+        recentMissedSession = null;
+      } else if (userWantsToStartMissedSession) {
         const now = new Date().toISOString();
 
         // Reativar sessão: mudar status para in_progress
