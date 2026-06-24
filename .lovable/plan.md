@@ -1,68 +1,45 @@
-# Áudio TTS: trocar pra Flash + novos limites + regra áudio↔áudio (piloto Débora)
+# Fix: upload manual de áudio de meditação falha com "violates row-level security policy"
 
-## Decisões fechadas
+## Diagnóstico
 
-1. **Trocar TTS de Pro → Flash** (`google/gemini-2.5-flash-tts`). Corta custo pela metade. Qualidade da voz cai um pouquinho mas continua natural — aceitável.
-2. **Novos limites por plano:**
-   - Essencial: **30 min** (mantém)
-   - Direção: **50 → 90 min** (+40 min)
-   - Transformação: **120 → 180 min** (+60 min)
-3. **Regra "áudio entra → áudio sai": ligar SÓ pra Débora primeiro** (piloto 2 semanas), medir consumo real, depois decidir se promove pra global. Minha sugestão.
+- Bucket `meditations`: público, 50MB, aceita `audio/mpeg|mp3|wav`. Seu MP3 de 10MB passa.
+- Só existe 1 admin (`duda.ass@gmail.com`) e você está logado nele — então o `has_role(auth.uid(),'admin')` das policies de INSERT/UPDATE deveria passar.
+- O erro "new row violates row-level security policy" no Supabase Storage tem **3 causas plausíveis** nesse cenário:
+  1. `file.type` chega vazio/diferente do navegador → o bucket recusa por mime e o erro é embrulhado como RLS (comportamento conhecido).
+  2. A policy de UPDATE existente (`Admins can update meditations bucket`) tem `USING` mas não tem `WITH CHECK` explícito. No `upsert:true` sobre arquivo já existente, o PostgreSQL às vezes não reaproveita o USING como WITH CHECK e bloqueia.
+  3. Sessão JWT não chega no storage (raro, descartável por agora).
 
-## Projeção de custo com Flash (R$ 5,80/USD)
+Vou atacar (1) e (2) — barato, reversível, e já cobre a maioria dos casos. Não vou criar edge function nesse momento: seria 80+ linhas novas pra manter, 20MB de tráfego extra por upload (cliente → edge → storage) e esconderia a causa raiz. Fica como plano B se isso aqui falhar.
 
-| Plano | Min/mês | Custo TTS/mês |
-|---|---|---|
-| Essencial | 30 | **R$ 3,40** |
-| Direção | 90 | **R$ 10** |
-| Transformação | 180 | **R$ 20** |
+## O que vou fazer
 
-Margem confortável em todos os tiers.
+### 1. `src/pages/AdminMeditations.tsx` — `handleFileChange`
+- Forçar `contentType: 'audio/mpeg'` no `supabase.storage.from('meditations').upload(...)` (o arquivo sempre é salvo como `audio.mp3`, então isso é seguro independente do tipo do arquivo de origem).
+- Melhorar o `catch`: logar `error.message`, `error.statusCode` e `error.name` no console pra que, se ainda falhar, a próxima tentativa mostre a causa real (mime/rls/size) em vez do toast genérico.
+- Refinar o toast: se `error.message` mencionar "mime" → "Formato de áudio não suportado". Se mencionar "row-level security" ou "policy" → "Sem permissão pra atualizar esse áudio (verifique se está logado como admin)". Caso contrário, mensagem atual.
 
-## Mudanças técnicas
+### 2. Migração SQL — blindar policy de UPDATE no storage
+Recriar a policy `Admins can update meditations bucket` com `WITH CHECK` explícito:
+```sql
+DROP POLICY "Admins can update meditations bucket" ON storage.objects;
+CREATE POLICY "Admins can update meditations bucket"
+ON storage.objects FOR UPDATE TO authenticated
+USING (bucket_id = 'meditations' AND public.has_role(auth.uid(),'admin'))
+WITH CHECK (bucket_id = 'meditations' AND public.has_role(auth.uid(),'admin'));
+```
+Sem mudança nas policies de INSERT, DELETE ou nas do service_role.
 
-### 1. Trocar modelo TTS pra Flash
-- `system_config.tts_model`: `google/erinome` → `google/erinome-flash` (ou criar nova entrada).
-- `aura-tts/index.ts` linha 106: `modelName: "gemini-2.5-pro-tts"` → `"gemini-2.5-flash-tts"`.
-- Log model name atualizado (linha 299): `'google/gemini-2.5-flash-tts'`.
-- **Validar voz**: Erinome existe no Flash? Se não, escolher voz equivalente (ex.: Aoede, Despina) e testar 2-3 áudios antes de promover.
+## Validação
 
-### 2. Atualizar limites por plano
-- `aura-agent/index.ts` linha 7570:
-  ```ts
-  const budgetSeconds = profile?.plan === 'transformacao' ? 10800   // 180 min
-                      : profile?.plan === 'direcao'      ? 5400    // 90 min
-                                                         : 1800;   // 30 min Essencial
-  ```
-- Atualizar mensagens de teto estourado pra refletir novos limites.
-- Atualizar memória `sistema-orcamento-mensal` com novos valores.
+1. Logada como admin em `/admin/meditacoes`, substituir o áudio com o mesmo MP3 de 10MB → toast de sucesso, áudio toca no player do portal.
+2. Repetir o upload na mesma meditação (segundo upsert) → continua funcionando.
+3. Se quebrar de novo, o console agora mostra a mensagem real → partimos pra edge function (plano B abaixo) com causa já identificada.
 
-### 3. Flag "áudio↔áudio" individual (piloto Débora)
-- Migration: adicionar coluna `audio_mirror_enabled BOOLEAN DEFAULT FALSE` em `profiles`.
-- Ativar `true` pra Débora (`id = 53b5f75d-f0b2-41fd-a0da-74e1b3ab08f1`).
-- No `aura-agent`, antes de decidir áudio (lógica do `audioDecision`):
-  ```ts
-  if (profile.audio_mirror_enabled && lastUserMessageWasAudio) {
-    audioDecision.mandatory = true;
-    audioDecision.reason = 'audio_mirror_flag';
-  }
-  ```
-- Respeita o teto mensal normalmente — se estourar, volta a texto com aviso ("seu pacote de áudio acabou, volto em áudio dia DD/MM").
+## Plano B (NÃO executar agora — só se o plano A falhar)
 
-### 4. Comunicação Débora
-- Mandar WhatsApp explicando: "ativei pra você responder em áudio sempre que você mandar áudio, dentro do seu pacote mensal de 30 min. Se quiser mais espaço, posso te explicar os planos Direção (90 min) ou Transformação (180 min)."
+Criar `supabase/functions/admin-upload-meditation/index.ts` com `verify_jwt=true`, valida `has_role` via `getClaims()`, recebe multipart e faz upload via service role. Refatorar o client pra chamar `supabase.functions.invoke`. Resolve qualquer quirk de RLS de uma vez, mas adiciona complexidade que só compensa se o plano A não bastar.
 
-## Métricas pra avaliar piloto (2 semanas)
+## Riscos
 
-- Minutos consumidos/dia por Débora.
-- % de áudios da Aura que estouraram o teto e caíram pra texto.
-- Custo real TTS observado em `token_usage_logs`.
-- Sentimento da Débora (engagement, feedback espontâneo).
-
-Se métricas saudáveis → promover regra global numa segunda fase (adicionar `audio_mirror_enabled = true` no default ou hardcode na lógica).
-
-## O que NÃO entra agora
-
-- Add-on pago de áudio (avaliar depois do piloto, se demanda surgir de outros).
-- Plano "Áudio Ilimitado" novo (mesmo motivo).
-- Migração das meditações guiadas pra Flash (escopo separado, Inworld continua).
+- Mínimos. As mudanças são localizadas (1 arquivo TSX + 1 policy do storage) e reversíveis.
+- A policy de UPDATE só fica mais explícita, sem mudar o comportamento de segurança esperado.
