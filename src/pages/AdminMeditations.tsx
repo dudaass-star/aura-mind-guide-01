@@ -45,6 +45,7 @@ interface Meditation {
 
 interface MeditationAudio {
   meditation_id: string;
+  storage_path: string;
   public_url: string;
   duration_seconds: number | null;
   generated_at: string;
@@ -89,6 +90,24 @@ function splitScriptIntoChunks(script: string, maxChars = 1200): string[] {
   }
 
   return chunks;
+}
+
+async function getFunctionErrorMessage(error: unknown): Promise<string> {
+  const err = error as { message?: string; context?: Response };
+  const response = err?.context;
+  if (response) {
+    try {
+      const payload = await response.clone().json();
+      if (payload?.error) return String(payload.error);
+      if (payload?.message) return String(payload.message);
+    } catch {
+      try {
+        const text = await response.clone().text();
+        if (text) return text;
+      } catch {}
+    }
+  }
+  return err?.message || "Erro desconhecido";
 }
 
 // Aguarda um chunk completar via polling
@@ -225,12 +244,14 @@ export default function AdminMeditations() {
     
     if (!file || !target) return;
 
-    // Validar tipo de arquivo
-    const validTypes = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-m4a', 'audio/mp4'];
-    if (!validTypes.includes(file.type)) {
+    // Validar tipo de arquivo alinhado ao bucket de meditações
+    const fileName = file.name.toLowerCase();
+    const validTypes = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav', 'audio/wave'];
+    const hasValidExtension = fileName.endsWith('.mp3') || fileName.endsWith('.wav');
+    if (!validTypes.includes(file.type) && !hasValidExtension) {
       toast({
         title: "Tipo inválido",
-        description: "Apenas arquivos MP3, M4A ou WAV são aceitos.",
+        description: "Apenas arquivos MP3 ou WAV são aceitos.",
         variant: "destructive",
       });
       e.target.value = '';
@@ -252,63 +273,21 @@ export default function AdminMeditations() {
     setUploading(target.id);
 
     try {
-      // Upload para Storage
-      const storagePath = `${target.id}/audio.mp3`;
-      
-      const { error: uploadError } = await supabase.storage
-        .from('meditations')
-        .upload(storagePath, file, {
-          upsert: true,
-          contentType: 'audio/mpeg', // arquivo sempre salvo como .mp3; força mime aceito pelo bucket
-        });
+      const formData = new FormData();
+      formData.append('meditation_id', target.id);
+      formData.append('file', file);
 
-      if (uploadError) throw uploadError;
+      const { data, error: uploadError } = await supabase.functions.invoke('admin-upload-meditation', {
+        body: formData,
+      });
 
-      // Obter URL pública
-      const { data: urlData } = supabase.storage
-        .from('meditations')
-        .getPublicUrl(storagePath);
-
-      const publicUrl = `${urlData.publicUrl}?t=${Date.now()}`;
-
-      // Verificar se já existe registro em meditation_audios
-      const { data: existingAudio } = await supabase
-        .from('meditation_audios')
-        .select('id')
-        .eq('meditation_id', target.id)
-        .single();
-
-      if (existingAudio) {
-        // Atualizar registro existente
-        const { error: updateError } = await supabase
-          .from('meditation_audios')
-          .update({
-            public_url: publicUrl,
-            storage_path: storagePath,
-            generated_at: new Date().toISOString(),
-          })
-          .eq('meditation_id', target.id);
-
-        if (updateError) throw updateError;
-      } else {
-        // Criar novo registro
-        const { error: insertError } = await supabase
-          .from('meditation_audios')
-          .insert({
-            meditation_id: target.id,
-            public_url: publicUrl,
-            storage_path: storagePath,
-            generated_at: new Date().toISOString(),
-          });
-
-        if (insertError) throw insertError;
+      if (uploadError) {
+        throw new Error(await getFunctionErrorMessage(uploadError));
       }
 
-      // Limpar chunks antigos se existirem
-      await supabase
-        .from('meditation_audio_chunks')
-        .delete()
-        .eq('meditation_id', target.id);
+      if (!data?.success) {
+        throw new Error(data?.error || 'Não foi possível substituir o áudio.');
+      }
 
       toast({
         title: "Upload concluído!",
@@ -326,7 +305,7 @@ export default function AdminMeditations() {
       });
       const msg = (err?.message || '').toLowerCase();
       let description = err?.message || "Não foi possível fazer o upload.";
-      if (msg.includes('mime') || msg.includes('invalid_mime')) {
+      if (msg.includes('mime') || msg.includes('invalid_mime') || msg.includes('formato')) {
         description = "Formato de áudio não suportado pelo bucket. Use MP3 ou WAV.";
       } else if (msg.includes('row-level security') || msg.includes('policy') || msg.includes('unauthorized')) {
         description = "Sem permissão pra atualizar esse áudio. Confirme que está logada como admin e tente de novo.";
@@ -353,7 +332,7 @@ export default function AdminMeditations() {
     
     try {
       // Deletar do Storage
-      const storagePath = `${med.id}/audio.mp3`;
+      const storagePath = med.audio.storage_path || `${med.id}/audio.mp3`;
       await supabase.storage.from('meditations').remove([storagePath]);
 
       // Deletar registro em meditation_audios
@@ -813,7 +792,7 @@ export default function AdminMeditations() {
       <input
         ref={fileInputRef}
         type="file"
-        accept=".mp3,.m4a,.wav,audio/mpeg,audio/mp3,audio/wav,audio/x-m4a,audio/mp4"
+        accept=".mp3,.wav,audio/mpeg,audio/mp3,audio/wav,audio/x-wav,audio/wave"
         className="hidden"
         onChange={handleFileChange}
       />
