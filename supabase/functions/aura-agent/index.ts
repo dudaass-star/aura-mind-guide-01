@@ -4621,12 +4621,16 @@ serve(async (req) => {
 
       // Se não encontrou sessão scheduled, buscar sessão perdida (cancelled/no_show)
       if (!pendingScheduledSession) {
+        // Piso temporal: só considera "sessão perdida" recente (últimos 7 dias).
+        // Evita reativar fantasmas de meses atrás quando o usuário volta após sumir.
+        const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
         const { data: missedSessions } = await supabase
           .from('sessions')
           .select('*')
           .eq('user_id', profile.user_id)
           .in('status', ['cancelled', 'no_show'])
           .is('started_at', null)
+          .gte('scheduled_at', sevenDaysAgo.toISOString())
           .or('session_summary.is.null,session_summary.neq.reactivation_declined')
           .order('scheduled_at', { ascending: false })
           .limit(1);
