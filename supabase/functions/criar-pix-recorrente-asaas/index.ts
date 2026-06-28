@@ -233,6 +233,7 @@ Deno.serve(async (req) => {
       paymentCreationMode: "SUBSCRIPTION",
       immediateQrCode: {
         value: amountDecimal,
+        originalValue: amountDecimal,
         expirationDate: qrExpiration,
         expirationSeconds: qrTtlSeconds,
       },
