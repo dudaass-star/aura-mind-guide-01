@@ -1,45 +1,87 @@
-# Fix: upload manual de áudio de meditação falha com "violates row-level security policy"
+## Diagnóstico (já investigado no banco)
 
-## Diagnóstico
+Confirmei a suspeita: **leads estão tentando pagar PIX e não conseguem desde 13/jun**. De 13/jun até hoje (25/jun), **14 leads abriram cobrança PIX e ZERO pagaram**. Antes disso, ~50% pagavam no mesmo dia.
 
-- Bucket `meditations`: público, 50MB, aceita `audio/mpeg|mp3|wav`. Seu MP3 de 10MB passa.
-- Só existe 1 admin (`duda.ass@gmail.com`) e você está logado nele — então o `has_role(auth.uid(),'admin')` das policies de INSERT/UPDATE deveria passar.
-- O erro "new row violates row-level security policy" no Supabase Storage tem **3 causas plausíveis** nesse cenário:
-  1. `file.type` chega vazio/diferente do navegador → o bucket recusa por mime e o erro é embrulhado como RLS (comportamento conhecido).
-  2. A policy de UPDATE existente (`Admins can update meditations bucket`) tem `USING` mas não tem `WITH CHECK` explícito. No `upsert:true` sobre arquivo já existente, o PostgreSQL às vezes não reaproveita o USING como WITH CHECK e bloqueia.
-  3. Sessão JWT não chega no storage (raro, descartável por agora).
+### Causa raiz
 
-Vou atacar (1) e (2) — barato, reversível, e já cobre a maioria dos casos. Não vou criar edge function nesse momento: seria 80+ linhas novas pra manter, 20MB de tráfego extra por upload (cliente → edge → storage) e esconderia a causa raiz. Fica como plano B se isso aqui falhar.
+Toda cobrança PIX criada para novo cliente vem com `dueDate` ~38 dias no futuro:
 
-## O que vou fazer
-
-### 1. `src/pages/AdminMeditations.tsx` — `handleFileChange`
-- Forçar `contentType: 'audio/mpeg'` no `supabase.storage.from('meditations').upload(...)` (o arquivo sempre é salvo como `audio.mp3`, então isso é seguro independente do tipo do arquivo de origem).
-- Melhorar o `catch`: logar `error.message`, `error.statusCode` e `error.name` no console pra que, se ainda falhar, a próxima tentativa mostre a causa real (mime/rls/size) em vez do toast genérico.
-- Refinar o toast: se `error.message` mencionar "mime" → "Formato de áudio não suportado". Se mencionar "row-level security" ou "policy" → "Sem permissão pra atualizar esse áudio (verifique se está logado como admin)". Caso contrário, mensagem atual.
-
-### 2. Migração SQL — blindar policy de UPDATE no storage
-Recriar a policy `Admins can update meditations bucket` com `WITH CHECK` explícito:
-```sql
-DROP POLICY "Admins can update meditations bucket" ON storage.objects;
-CREATE POLICY "Admins can update meditations bucket"
-ON storage.objects FOR UPDATE TO authenticated
-USING (bucket_id = 'meditations' AND public.has_role(auth.uid(),'admin'))
-WITH CHECK (bucket_id = 'meditations' AND public.has_role(auth.uid(),'admin'));
+```text
+created_at  →  dueDate
+2026-06-25  →  2026-08-03
+2026-06-22  →  2026-07-31
+2026-06-20  →  2026-07-29
+2026-06-19  →  2026-07-28
+2026-06-18  →  2026-07-27
+...
 ```
-Sem mudança nas policies de INSERT, DELETE ou nas do service_role.
 
-## Validação
+Comparado com o padrão antigo que funcionava (até 12/jun), o Asaas criava **duas** cobranças por assinatura nova: uma com `dueDate = hoje` (paga na hora, virava `RECEIVED`) e outra com `dueDate = hoje+30` (próximo ciclo, `PENDING`). De 13/jun para cá, só a "do próximo ciclo" está sendo criada. O cliente abre o invoiceUrl, vê vencimento em 5–6 semanas e o QR PIX nem aparece pra pagar agora → desiste.
 
-1. Logada como admin em `/admin/meditacoes`, substituir o áudio com o mesmo MP3 de 10MB → toast de sucesso, áudio toca no player do portal.
-2. Repetir o upload na mesma meditação (segundo upsert) → continua funcionando.
-3. Se quebrar de novo, o console agora mostra a mensagem real → partimos pra edge function (plano B abaixo) com causa já identificada.
+### Drift de deploy (causa secundária a confirmar)
 
-## Plano B (NÃO executar agora — só se o plano A falhar)
+O `criar-pix-recorrente-asaas` no repo usa `POST /pix/automatic/authorizations` (PIX Automático Bacen) e gravaria em `asaas_pix_authorizations`. Essa tabela está **vazia** (0 linhas). Mas as cobranças que estão chegando têm `asaas_subscription_id` `sub_xxx` + `externalReference: aura_sub_<plan>_<billing>_<ts>` — claramente vêm de `POST /subscriptions`, padrão antigo. Ou seja: **a função deployada em produção não corresponde ao código no repo**, batendo com o problema conhecido de drift Lovable → GitHub Actions.
 
-Criar `supabase/functions/admin-upload-meditation/index.ts` com `verify_jwt=true`, valida `has_role` via `getClaims()`, recebe multipart e faz upload via service role. Refatorar o client pra chamar `supabase.functions.invoke`. Resolve qualquer quirk de RLS de uma vez, mas adiciona complexidade que só compensa se o plano A não bastar.
+### Impacto
 
-## Riscos
+- Zero pagamentos PIX em 13 dias. ~14 leads quentes perdidos.
+- Tudo de cartão (Stripe) seguiu rodando normalmente — bug é isolado no fluxo PIX mensal.
 
-- Mínimos. As mudanças são localizadas (1 arquivo TSX + 1 policy do storage) e reversíveis.
-- A policy de UPDATE só fica mais explícita, sem mudar o comportamento de segurança esperado.
+---
+
+## Plano de correção
+
+### 1. Inspecionar a função deployada em produção
+Bater código real do `criar-pix-recorrente-asaas` em execução (via `supabase functions inspect` / dashboard / `tool_search` p/ logs) contra o repo. Confirmar se está rodando a versão antiga de `/subscriptions`. Salvar o snapshot pra ter histórico.
+
+### 2. Decidir o caminho canônico (perguntar antes de aplicar)
+Duas opções, escolhe-se UMA:
+
+- **Opção A — manter `/subscriptions` (Asaas legado, mais simples):** consertar a função para que a primeira cobrança tenha `nextDueDate = hoje (BRT)` em vez de `hoje + 1 ciclo`. É o comportamento que funcionava antes de 13/jun.
+- **Opção B — migrar pra PIX Automático Bacen:** redeploy do que está no repo (`/pix/automatic/authorizations`). É a Jornada 3 (QR único pra 1º pagamento + autorização de débito recorrente). Mais robusta, mas exige que PIX Automático esteja habilitado na conta Asaas (a função `asaas-check-pix-automatico` já existe pra diagnosticar isso — rodar antes).
+
+### 3. Aplicar o fix da opção escolhida
+- **Se A:** `criar-pix-recorrente-asaas` passa a usar `/subscriptions` com `nextDueDate = todayBRT`, `billingType: PIX`, ciclo correto. Forçar deploy via GH Actions pra eliminar o drift.
+- **Se B:** confirmar via `asaas-check-pix-automatico` que `/pix/automatic/authorizations` retorna 2xx; redeploy da versão atual do repo.
+
+### 4. Validação pós-deploy
+- Criar cobrança PIX de teste (R$ 0,01 ou plano essencial) e confirmar: invoiceUrl exibe QR válido pra pagar **agora**, `dueDate = hoje`, `status` vira `RECEIVED` no webhook após pagamento.
+- Conferir métricas: nova linha `RECEIVED` aparece em `asaas_payments` dentro de minutos.
+
+### 5. Recuperar leads dos últimos 13 dias
+Os 14 PENDING entre 13/jun e 25/jun têm nome/email/phone gravados. Plano:
+- Listar via SQL e revisar manualmente (lista anexa abaixo).
+- Mandar via WhatsApp/email um link novo de checkout PIX (já corrigido). Reusar o template de abandoned-checkout em `recover-abandoned-checkout-whatsapp` ou enviar manualmente do admin.
+- Opcional: deletar/cancelar as subscriptions antigas no Asaas pra não confundir (`DELETE /subscriptions/{id}`).
+
+### 6. Guardrail futuro
+Adicionar alerta simples no admin: se `asaas_payments` ficar > 48h sem nenhum `RECEIVED` enquanto houver `PENDING` recentes, dispara email pro `ADMIN_ALERT_EMAIL`. Evita ficar 13 dias sem perceber de novo.
+
+---
+
+## Leads a recuperar (PENDING desde 13/jun)
+
+```text
+2026-06-25  charlesvitoria1975@gmail.com   direcao
+2026-06-22  vmelba25@gmail.com             direcao
+2026-06-21  ivanfreitas70@gmail.com        direcao
+2026-06-20  cris.guckert@gmail.com         direcao
+2026-06-20  malta.caiane@gmail.com         essencial
+2026-06-19  milda.feitosa35@gmail.com      essencial
+2026-06-19  jairoaugusto30@gmail.com       essencial
+2026-06-18  paulamdeassis@hotmail.com      essencial
+2026-06-18  studiokelyoliveira@gmail.com   transformacao
+2026-06-18  luiz.junior@fogas.com.br       direcao
+2026-06-16  s.acs.1000@gmail.com           essencial
+2026-06-15  raisilva92@gmail.com           transformacao
+2026-06-14  apsgheller@hotmail.com.br      essencial
+2026-06-13  d12uda.ass@gmail.com           direcao
+2026-06-13  du12da.ass@gmail.com           direcao
+```
+
+---
+
+## Perguntas pra destravar
+
+1. **Opção A ou B?** (corrigir `/subscriptions` com dueDate=hoje, ou migrar pra PIX Automático Bacen)
+2. Quer que eu já dispare a recuperação dos 14 leads junto, ou prefere validar só o fix técnico primeiro e cuidar dos leads em outra rodada?
