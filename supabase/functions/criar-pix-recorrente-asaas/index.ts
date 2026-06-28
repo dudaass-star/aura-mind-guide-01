@@ -249,12 +249,23 @@ Deno.serve(async (req) => {
       throw new Error("Asaas não retornou authorization.id");
     }
 
-    // QR Code integrado vem dentro de immediateQrCode na resposta.
-    const iqr = (authorization?.immediateQrCode as Record<string, unknown>) || {};
-    let qrPayload = (iqr.payload as string) || (iqr.copyAndPaste as string) || null;
-    let qrImage = (iqr.encodedImage as string) || (iqr.qrCodeImage as string) || null;
+    // QR Code integrado: o Asaas devolve `payload` e `encodedImage` no top-level
+    // da resposta (originType=IMMEDIATE_PAYMENT_AND_RECURRING_QR_CODE). O bloco
+    // `immediateQrCode` traz só metadata (expirationDate, conciliationIdentifier).
+    const auth = authorization as Record<string, unknown>;
+    const iqr = (auth?.immediateQrCode as Record<string, unknown>) || {};
+    let qrPayload =
+      (auth?.payload as string) ||
+      (iqr.payload as string) ||
+      (iqr.copyAndPaste as string) ||
+      null;
+    let qrImage =
+      (auth?.encodedImage as string) ||
+      (iqr.encodedImage as string) ||
+      (iqr.qrCodeImage as string) ||
+      null;
     const qrExpiresAt = (iqr.expirationDate as string) || qrExpiration;
-    const invoiceUrl = (authorization?.invoiceUrl as string) || (iqr.invoiceUrl as string) || null;
+    const invoiceUrl = (auth?.invoiceUrl as string) || (iqr.invoiceUrl as string) || null;
 
     // Fallback: endpoint dedicado de QR caso a resposta principal não inclua.
     if (!qrPayload || !qrImage) {
