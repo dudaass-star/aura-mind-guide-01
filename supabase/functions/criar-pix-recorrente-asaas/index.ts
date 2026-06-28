@@ -211,8 +211,10 @@ Deno.serve(async (req) => {
       month: "2-digit",
       day: "2-digit",
     }).format(new Date());
-    // QR Code do 1º pagamento expira em 30 min (default sandbox costuma ser maior; explicitamos).
-    const qrExpiration = new Date(Date.now() + 30 * 60 * 1000)
+    // QR Code do 1º pagamento: válido por 30 min (1800s). Bacen exige expirationSeconds
+    // no immediateQrCode. Mantemos expirationDate calculado pra log/UI.
+    const qrTtlSeconds = 30 * 60;
+    const qrExpiration = new Date(Date.now() + qrTtlSeconds * 1000)
       .toISOString()
       .replace("T", " ")
       .slice(0, 19);
@@ -232,6 +234,7 @@ Deno.serve(async (req) => {
       immediateQrCode: {
         value: amountDecimal,
         expirationDate: qrExpiration,
+        expirationSeconds: qrTtlSeconds,
       },
     };
 
