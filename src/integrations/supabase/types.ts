@@ -679,6 +679,8 @@ export type Database = {
       }
       dunning_attempts: {
         Row: {
+          attempt_number: number | null
+          channel: string | null
           created_at: string
           customer_id: string
           error_message: string | null
@@ -687,14 +689,20 @@ export type Database = {
           id: string
           invoice_id: string | null
           link_generated: boolean
+          message_sid: string | null
+          payment_id: string | null
           phone_raw: string | null
           phone_resolved: string | null
           profile_found: boolean
           profile_user_id: string | null
+          provider: string | null
           subscription_id: string | null
+          template_sid: string | null
           whatsapp_sent: boolean
         }
         Insert: {
+          attempt_number?: number | null
+          channel?: string | null
           created_at?: string
           customer_id: string
           error_message?: string | null
@@ -703,14 +711,20 @@ export type Database = {
           id?: string
           invoice_id?: string | null
           link_generated?: boolean
+          message_sid?: string | null
+          payment_id?: string | null
           phone_raw?: string | null
           phone_resolved?: string | null
           profile_found?: boolean
           profile_user_id?: string | null
+          provider?: string | null
           subscription_id?: string | null
+          template_sid?: string | null
           whatsapp_sent?: boolean
         }
         Update: {
+          attempt_number?: number | null
+          channel?: string | null
           created_at?: string
           customer_id?: string
           error_message?: string | null
@@ -719,11 +733,15 @@ export type Database = {
           id?: string
           invoice_id?: string | null
           link_generated?: boolean
+          message_sid?: string | null
+          payment_id?: string | null
           phone_raw?: string | null
           phone_resolved?: string | null
           profile_found?: boolean
           profile_user_id?: string | null
+          provider?: string | null
           subscription_id?: string | null
+          template_sid?: string | null
           whatsapp_sent?: boolean
         }
         Relationships: []

@@ -74,8 +74,22 @@ Deno.serve(async (req) => {
     }
 
     if (!customerId) {
+      // Fallback Asaas: usuário pagou via PIX (recorrente ou Automático Bacen).
+      // Devolve a invoice_url mais recente em OVERDUE/PENDING pra ele quitar.
+      const { data: asaasPay } = await supabase
+        .from("asaas_payments")
+        .select("invoice_url, status, created_at")
+        .eq("user_id", userId)
+        .in("status", ["OVERDUE", "PENDING"])
+        .not("invoice_url", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (asaasPay?.invoice_url) {
+        return json({ url: asaasPay.invoice_url, provider: "asaas" }, 200);
+      }
       return json(
-        { error: "Não encontramos sua assinatura no nosso sistema de pagamento. Fale com o suporte." },
+        { error: "Não encontramos uma cobrança em aberto. Fale com o suporte." },
         404,
       );
     }

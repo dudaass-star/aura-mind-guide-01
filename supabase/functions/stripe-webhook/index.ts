@@ -1351,7 +1351,30 @@ Me conta: como você está hoje?`;
               console.warn('⚠️ No email available for dunning, skipping email notification');
             }
 
-            // Step 5: WhatsApp dunning removed — dunning is email-only to protect Meta account quality
+            // Step 5: Dunning via WhatsApp (subaccount Twilio dedicada, template aprovado)
+            try {
+              const { sendDunningWhatsApp } = await import("../_shared/dunning-whatsapp.ts");
+              const waResult = await sendDunningWhatsApp({
+                supabase,
+                profile: {
+                  user_id: profile.user_id,
+                  phone: profile.phone,
+                  name: profile.name || (customer as Stripe.Customer).name || null,
+                },
+                eventId: event.id,
+                provider: "stripe",
+                invoiceId: invoice.id,
+                subscriptionId: subscriptionId || null,
+                customerId,
+              });
+              if (waResult.sent) {
+                console.log(`✅ [DUNNING-WA] Enviado attempt=${waResult.attemptNumber} sid=${waResult.messageSid}`);
+              } else {
+                console.log(`ℹ️ [DUNNING-WA] Não enviado: ${waResult.skipped || waResult.error}`);
+              }
+            } catch (waErr) {
+              console.error("❌ [DUNNING-WA] Erro inesperado:", waErr);
+            }
           } catch (portalErr) {
             const errMsg = portalErr instanceof Error ? portalErr.message : String(portalErr);
             console.error('❌ Error creating billing portal or sending dunning:', errMsg);

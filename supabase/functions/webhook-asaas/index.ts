@@ -285,11 +285,15 @@ Deno.serve(async (req) => {
     }
 
     // Eventos terminais de assinatura → marca status e expira acesso no fim do ciclo atual.
-    if ((event === "SUBSCRIPTION_DELETED" || event === "PAYMENT_OVERDUE") && subscriptionId) {
+    const overdueSubscriptionId =
+      subscriptionId ||
+      (pixAutoAuthId as string | undefined) ||
+      (updated?.asaas_subscription_id as string | undefined);
+    if ((event === "SUBSCRIPTION_DELETED" || event === "PAYMENT_OVERDUE") && overdueSubscriptionId) {
       const { data: subRow } = await supabase
         .from("asaas_payments")
-        .select("customer_email")
-        .eq("asaas_subscription_id", subscriptionId)
+        .select("customer_email, user_id, customer_name, customer_phone")
+        .eq("asaas_subscription_id", overdueSubscriptionId)
         .limit(1)
         .maybeSingle();
       if (subRow?.customer_email) {
@@ -298,6 +302,46 @@ Deno.serve(async (req) => {
           .update({ status: event === "SUBSCRIPTION_DELETED" ? "canceled" : "past_due" })
           .eq("email", subRow.customer_email);
         console.log(`[webhook-asaas] Profile ${subRow.customer_email} marcado como ${event}`);
+      }
+
+      // Dunning via WhatsApp (apenas PAYMENT_OVERDUE — cobre PIX recorrente e PIX Automático Bacen).
+      if (event === "PAYMENT_OVERDUE") {
+        try {
+          const { sendDunningWhatsApp } = await import("../_shared/dunning-whatsapp.ts");
+          // Resolve user_id e telefone via profile (asaas_payments pode não ter user_id ainda).
+          let userId = subRow?.user_id as string | undefined;
+          let phone = subRow?.customer_phone as string | undefined;
+          let name = subRow?.customer_name as string | undefined;
+          if (subRow?.customer_email) {
+            const { data: prof } = await supabase
+              .from("profiles")
+              .select("user_id, phone, name")
+              .eq("email", subRow.customer_email)
+              .maybeSingle();
+            if (prof) {
+              userId = prof.user_id;
+              phone = prof.phone || phone;
+              name = prof.name || name;
+            }
+          }
+          if (userId) {
+            const waResult = await sendDunningWhatsApp({
+              supabase,
+              profile: { user_id: userId, phone, name },
+              eventId: `asaas-${event}-${payment.id}`,
+              provider: "asaas",
+              paymentId: payment.id,
+              subscriptionId: overdueSubscriptionId,
+            });
+            console.log(
+              `[webhook-asaas] dunning WhatsApp sent=${waResult.sent} skip=${waResult.skipped || "-"} err=${waResult.error || "-"}`,
+            );
+          } else {
+            console.warn(`[webhook-asaas] OVERDUE sem user_id resolvido — WhatsApp não enviado`);
+          }
+        } catch (waErr) {
+          console.error("[webhook-asaas] erro disparando dunning WhatsApp:", waErr);
+        }
       }
     }
 
