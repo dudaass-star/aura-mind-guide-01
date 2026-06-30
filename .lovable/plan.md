@@ -1,53 +1,62 @@
-# Atualizar agente de recuperação de checkout
 
-Dois objetivos, mesma função (`recovery-agent` + tabela `recovery_knowledge_base`):
+# Navegação unificada do Admin
 
-1. **Corrigir info desatualizada** sobre PIX/trial (mesmo fix do support-agent).
-2. **Aumentar conversão** dando ao agente munição sobre features/benefícios (meditações, sessões, portal, memória, jornadas) pra usar quando o lead hesita.
+Hoje cada página `/admin/*` é independente e a única forma de pular entre elas é digitar a URL. Vou criar uma **sidebar fixa** que aparece em todas as rotas admin, com link pra cada seção, destaque na rota ativa e botão de colapsar (mini-rail com ícones) pra não roubar espaço em telas menores.
 
-## 1. Corrigir KB com info errada sobre trial via PIX
+## Como vai funcionar
 
-Hoje 3 entradas dizem ou insinuam que o trial de R$6,90 vale pra qualquer pagamento. Não vale — é só cartão Stripe. Vou reescrever:
+- Sidebar à esquerda em **todas as rotas `/admin/*`** (exceto `/admin/login`).
+- Estado **expandido (~240px)** com ícone + rótulo, ou **colapsado (~56px)** só com ícones e tooltip no hover.
+- Rota ativa destacada (cor + barra lateral).
+- Botão de toggle no header sempre visível, mesmo colapsada.
+- Persistência do estado (expandido/colapsado) em `localStorage`.
+- Grupos lógicos pra reduzir o ruído visual:
 
-- `preco / Quanto custa cada plano?` — deixar explícito: trial semanal (R$6,90 / R$11,90 / R$24,90) **só no cartão**; via PIX Automático começa direto no mensal cheio.
-- `preco / Por que tem um valor na 1ª semana e outro depois?` — mesmo esclarecimento.
-- `objecao_valor / Tá caro pra mim agora` — oferecer trial cartão OU PIX mensal sem trial como alternativas.
-- `pagamento / Tem PIX?` — confirmar que PIX Automático Bacen não tem trial; 1º QR já cobra valor cheio e autoriza débito recorrente.
-- `pagamento / Quais formas de pagamento aceitam?` — alinhar redação.
+```text
+GERAL
+  • Dashboard / Engajamento     /admin/engajamento
+  • Usuários                    /admin/usuarios
+  • Sessões                     /admin/sessoes
 
-## 2. Adicionar KB nova: features e benefícios pra converter
+MENSAGERIA
+  • Mensagens (inbox)           /admin/mensagens
+  • Inbox Recuperação           /admin/whatsapp-inbox
+  • Templates WhatsApp          /admin/templates
+  • E-mails                     /admin/emails
+  • Instagram                   /admin/instagram
 
-Categoria `beneficio` (nova), com `priority` alto pra entrar nos always-include junto com preço/garantia/etc. Conteúdo:
+SUPORTE
+  • Conversas                   /admin/suporte
+  • Base de conhecimento        /admin/suporte/conhecimento
+  • Gaps                        /admin/suporte/gaps
 
-- **Meditações guiadas no WhatsApp** — a Aura percebe o momento (ansiedade, sono, foco, estresse) e envia áudio guiado com a voz dela, direto no chat, sem outro app.
-- **Sessões 1:1 agendadas** — 45min, marca pelo WhatsApp, metodologia própria de autoconhecimento; quantidade por plano.
-- **Memória de longo prazo** — lembra do que importa pra você (rotina, vínculos, metas), não recomeça do zero toda vez.
-- **Portal /meu-espaco** — histórico de sessões, insights, jornadas e meditações em um lugar só, sem senha (link mágico).
-- **Jornadas guiadas** — trilhas curtas (ansiedade, sono, propósito, autoestima) que rodam no ritmo da pessoa.
-- **Check-in proativo** — a Aura puxa assunto em momentos chave, sem você precisar lembrar de abrir.
-- **Voz familiar / áudio** — você pode mandar áudio também; ela responde por áudio quando faz mais sentido que texto.
-- **24/7 sem fila** — disponível na hora que bater, fora de horário comercial.
+CONTEÚDO
+  • Meditações                  /admin/meditacoes
+  • Testes                      /admin/testes
+  • Preview Popup               /admin/popup-preview
 
-E ampliar os `ALWAYS_CATEGORIES` no código pra incluir `beneficio` (assim entra sempre no contexto do LLM, não só quando keyword bate).
+INFRA
+  • Instâncias                  /admin/instancias
+  • Configurações               /admin/configuracoes
+```
 
-## 3. Ajustar `SYSTEM_PROMPT` do `recovery-agent`
-
-Acréscimos cirúrgicos (sem reescrever do zero):
-
-- **Regra de pagamento** explícita: trial semanal só cartão Stripe; PIX Automático Bacen sempre cobra valor cheio na 1ª parcela. Se pedir trial via PIX, oferecer (a) trial cartão ou (b) PIX mensal sem trial.
-- **Postura de conversão**: lead já demonstrou interesse (chegou ao checkout). Quando a dúvida principal estiver respondida, mencionar UM benefício relevante da base (meditações, sessões, portal, memória) antes de mandar o link — não listar tudo, escolher o que cabe na conversa.
-- **Limites mantidos**: continua 1-3 frases, sem inventar fato fora da base, sem nomear escolas terapêuticas, sem prometer humano no WhatsApp.
-
-## 4. Memória
-
-Atualizar `mem/business/trial-only-on-card.md` mencionando que recovery-agent também já reflete a regra, e criar `mem/features/recovery/recovery-agent-conversion-kb.md` documentando que a KB do recovery inclui categoria `beneficio` (sempre injetada) pra reforçar valor antes do link.
+(Ordem/grupos ajustáveis — me fala se quiser mover algo.)
 
 ## Detalhes técnicos
 
-- **Migration** atualiza 5 linhas existentes em `recovery_knowledge_base` e insere ~8 novas com `category='beneficio'`, `is_active=true`, `priority` entre 60-90, `keywords` relevantes (meditacao, audio, sessao, portal, memoria, jornada, etc.).
-- **Migration** faz `UPDATE recovery_agent_config SET system_prompt = ... WHERE id = 1` com o prompt revisado.
-- **Code change** em `supabase/functions/recovery-agent/index.ts`: adicionar `"beneficio"` ao array `ALWAYS_CATEGORIES`. Nenhuma outra mudança de lógica.
-- **Deploy** da função `recovery-agent`.
-- Nada muda no fluxo de envio (Twilio subaccount), tags (`[ENVIAR_LINK]/[ESCALAR_HUMANO]/[STOP]`), guards (active user, quiet hours, stop words) ou limites (`max_auto_replies=3`).
+1. **`src/components/admin/AdminLayout.tsx`** (novo) — usa `SidebarProvider` + `Sidebar` do shadcn, com `collapsible="icon"`. Renderiza header fino com `SidebarTrigger` + título da página atual e `<Outlet/>` (ou `{children}`) pro conteúdo.
+2. **`src/components/admin/AdminSidebar.tsx`** (novo) — grupos acima, ícones do `lucide-react`, `NavLink` do react-router pra detectar rota ativa, oculta itens se `!isAdmin`. Usa `useAdminAuth` só pra esconder a sidebar enquanto carrega / redirecionar do login.
+3. **`src/App.tsx`** — envolver todas as rotas `/admin/*` (menos `/admin/login`) num route pai que renderiza `<AdminLayout/>`, mantendo cada página atual como filha. Sem refatorar o conteúdo das páginas — só remover headers/botões "voltar" duplicados onde a sidebar substitui (opcional, posso deixar pra depois).
+4. **`useAdminAuth`** — reaproveitado, sem mudanças. Cada página continua chamando `redirectIfNotAdmin()`; a sidebar só renderiza quando `isAdmin === true`.
+5. **Mobile** — sidebar vira drawer (comportamento padrão do shadcn `Sidebar`), aberto pelo `SidebarTrigger` no header.
 
-Nenhuma mudança no support-agent — esta atualização é só do recovery-agent (lead que respondeu ao template de carrinho abandonado).
+## Fora de escopo
+
+- Nada de mudar lógica de cada página, permissões ou rotas existentes.
+- Não removo as páginas antigas, só passam a viver dentro do layout.
+- Sem mudanças no portal `/meu-espaco` nem nas páginas públicas.
+
+## Perguntas rápidas (opcional, posso decidir sozinho)
+
+- Agrupamento acima te serve, ou prefere lista plana?
+- Quer que eu remova os botões "voltar" e headers redundantes das páginas agora, ou deixo pra um segundo passe?
