@@ -419,6 +419,75 @@ Deno.serve(async (req) => {
 // Detecta novo / returning / upgrade / renovação e dispara welcome
 // (profile + portal token + template WhatsApp + email + pending_insight).
 // ============================================================
+// Dispara Purchase via Meta CAPI com dedup por event_id (meta_capi_log).
+// Evita duplicar quando o mesmo payment passa por mais de um caminho de ativação
+// (webhook normal, recovered-*, reprocessamento manual).
+async function fireMetaCapiPurchase(
+  supabase: any,
+  args: {
+    eventId: string;
+    email: string;
+    phone?: string;
+    firstName?: string;
+    fbp?: string | null;
+    fbc?: string | null;
+    value: number;
+    plan: string;
+    isFirstPurchase: boolean;
+  },
+): Promise<void> {
+  try {
+    // Dedup: já existe sucesso (200) para este event_id?
+    const { data: prior } = await supabase
+      .from("meta_capi_log")
+      .select("id")
+      .eq("event_id", args.eventId)
+      .eq("event_name", "Purchase")
+      .eq("meta_status", 200)
+      .limit(1)
+      .maybeSingle();
+    if (prior) {
+      console.log(`[webhook-asaas] ⏭️ CAPI Purchase já registrado (event_id=${args.eventId}), pulando`);
+      return;
+    }
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    await fetch(`${supabaseUrl}/functions/v1/meta-capi`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${supabaseServiceKey}`,
+      },
+      body: JSON.stringify({
+        event_name: "Purchase",
+        event_id: args.eventId,
+        event_source_url: "https://olaaura.com.br/obrigado",
+        source: "webhook-asaas",
+        is_first_purchase: args.isFirstPurchase,
+        user_data: {
+          email: args.email,
+          phone: args.phone || undefined,
+          first_name: args.firstName || undefined,
+          ...(args.fbp && { fbp: args.fbp }),
+          ...(args.fbc && { fbc: args.fbc }),
+        },
+        custom_data: {
+          value: args.value,
+          currency: "BRL",
+          content_name: `Plano ${PLAN_NAMES[args.plan] || args.plan}`,
+          content_category: args.plan,
+        },
+      }),
+    });
+    console.log(
+      `[webhook-asaas] ✅ CAPI Purchase disparado (event_id=${args.eventId}, fbp=${!!args.fbp}, fbc=${!!args.fbc})`,
+    );
+  } catch (capiErr) {
+    console.warn("[webhook-asaas] ⚠️ CAPI Purchase falhou (non-blocking):", capiErr);
+  }
+}
+
 async function handleActivation(
   supabase: any,
   updated: any,
@@ -567,47 +636,30 @@ async function handleActivation(
     // Renovações Asaas (isRenewal=true) já retornaram acima. Upgrade/returning
     // não são "1ª compra" no sentido de aquisição → não disparam Purchase.
     // ============================================================
-    if (isNew) {
-      try {
-        const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-        const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-        const amountValue = Number((updated.amount_cents as number) || 0) / 100;
-        await fetch(`${supabaseUrl}/functions/v1/meta-capi`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${supabaseServiceKey}`,
-          },
-          body: JSON.stringify({
-            event_name: "Purchase",
-            event_id: paymentId,
-            event_source_url: "https://olaaura.com.br/obrigado",
-            source: "webhook-asaas",
-            is_first_purchase: true,
-            user_data: {
-              email: customerEmail,
-              phone: formattedPhone || cleanPhone || undefined,
-              first_name: (customerName || "").split(" ")[0] || undefined,
-              ...(updated.fbp && { fbp: updated.fbp }),
-              ...(updated.fbc && { fbc: updated.fbc }),
-            },
-            custom_data: {
-              value: amountValue,
-              currency: "BRL",
-              content_name: `Plano ${PLAN_NAMES[customerPlan] || customerPlan}`,
-              content_category: customerPlan,
-            },
-          }),
-        });
-        console.log(
-          `[webhook-asaas] ✅ CAPI Purchase disparado (event_id=${paymentId}, fbp=${!!updated.fbp}, fbc=${!!updated.fbc})`,
-        );
-      } catch (capiErr) {
-        console.warn("[webhook-asaas] ⚠️ CAPI Purchase falhou (non-blocking):", capiErr);
-      }
-    } else {
+    // CAPI Purchase: dispara em TODA ativação que não seja renovação (novo,
+    // returning, upgrade). Dedup por event_id em meta_capi_log evita duplicata
+    // quando o mesmo paymentId passa por caminhos alternativos (recovered-*,
+    // reprocessamento manual). Renovações puras já saíram via `return` acima.
+    const amountValue = Number((updated.amount_cents as number) || 0) / 100;
+    // event_id estável: payment normal usa paymentId; payments "recovered-*"
+    // (reprocessamento manual) caem para a authorization, preservando dedup.
+    const stableEventId = paymentId.startsWith("recovered-")
+      ? `asaas-pix-${paymentId.replace(/^recovered-/, "")}-purchase`
+      : paymentId;
+    await fireMetaCapiPurchase(supabase, {
+      eventId: stableEventId,
+      email: customerEmail,
+      phone: formattedPhone || cleanPhone || undefined,
+      firstName: (customerName || "").split(" ")[0] || undefined,
+      fbp: (updated.fbp as string | null) || null,
+      fbc: (updated.fbc as string | null) || null,
+      value: amountValue,
+      plan: customerPlan,
+      isFirstPurchase: isNew,
+    });
+    if (!isNew) {
       console.log(
-        `[webhook-asaas] ⏭️ CAPI Purchase NÃO disparado — ${isReturning ? "returning" : isUpgrade ? "upgrade" : "outro"} (não é 1ª compra)`,
+        `[webhook-asaas] ℹ️ CAPI Purchase enviado em ativação ${isReturning ? "returning" : isUpgrade ? "upgrade" : "outro"} (não-1ª compra)`,
       );
     }
 
