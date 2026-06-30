@@ -95,6 +95,13 @@ Deno.serve(async (req) => {
         updatePayload.cancellation_reason = (authorizationEvt as any).cancellationReason || "asaas_event";
       }
 
+      // Asaas devolve `subscriptionId` na ativação do PIX Automático Bacen.
+      // Persistimos pra que PAYMENT_* consigam linkar via payment.subscription.
+      const evtSubscriptionId = (authorizationEvt as any)?.subscriptionId as string | undefined;
+      if (evtSubscriptionId) {
+        updatePayload.asaas_subscription_id = evtSubscriptionId;
+      }
+
       const { error: authUpdErr } = await supabase
         .from("asaas_pix_authorizations")
         .update(updatePayload)
@@ -270,6 +277,53 @@ Deno.serve(async (req) => {
         }
       } else {
         console.warn(`[webhook-asaas] Authorization ${pixAutoAuthId} não encontrada`);
+      }
+    }
+
+    // Fallback PIX Automático Bacen — 1º payment do ciclo costuma chegar com
+    // `subscription: sub_xxx` SEM pixAutomaticAuthorizationId. Procuramos a auth
+    // já gravada pelo subscriptionId persistido no AUTHORIZATION_ACTIVATED.
+    if (!updated && subscriptionId) {
+      const { data: authBySub } = await supabase
+        .from("asaas_pix_authorizations")
+        .select("*")
+        .eq("asaas_subscription_id", subscriptionId)
+        .maybeSingle();
+      if (authBySub) {
+        const { data: inserted, error: insErr } = await supabase
+          .from("asaas_payments")
+          .insert({
+            asaas_payment_id: payment.id,
+            asaas_customer_id: authBySub.asaas_customer_id,
+            asaas_subscription_id: subscriptionId,
+            user_id: authBySub.user_id,
+            customer_name: authBySub.customer_name,
+            customer_email: authBySub.customer_email,
+            customer_phone: authBySub.customer_phone,
+            customer_cpf: authBySub.customer_cpf,
+            plan: authBySub.plan,
+            billing_period: authBySub.billing_period,
+            amount_cents:
+              Math.round(Number((payment as any).value || 0) * 100) || authBySub.value_cents,
+            status: newStatus,
+            payment_method: "PIX_AUTOMATIC",
+            invoice_url: (payment as any).invoiceUrl || null,
+            paid_at: isPaid ? new Date().toISOString() : null,
+            fbp: authBySub.fbp || null,
+            fbc: authBySub.fbc || null,
+            ga_client_id: authBySub.ga_client_id || null,
+            raw_payload: payment,
+          })
+          .select()
+          .maybeSingle();
+        if (insErr) {
+          console.error("[webhook-asaas] Erro criando payment via subscriptionId:", insErr);
+        } else {
+          updated = inserted;
+          console.log(
+            `[webhook-asaas] Payment ${payment.id} vinculado à auth ${authBySub.asaas_authorization_id} (via subscription ${subscriptionId})`,
+          );
+        }
       }
     }
 
