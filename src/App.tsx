@@ -31,6 +31,7 @@ import AdminSupportKnowledge from "./pages/AdminSupportKnowledge";
 import AdminSupportGaps from "./pages/AdminSupportGaps";
 import AdminWhatsappRecovery from "./pages/AdminWhatsappRecovery";
 import AdminSessions from "./pages/AdminSessions";
+import AdminLayout from "./components/admin/AdminLayout";
 import UserGuide from "./pages/UserGuide";
 import Episode from "./pages/Episode";
 import JourneyComplete from "./pages/JourneyComplete";
@@ -69,22 +70,24 @@ const App = () => (
             <Route path="/experimentar" element={<StartTrial />} />
             <Route path="/trial-iniciado" element={<TrialStarted />} />
             <Route path="/admin/login" element={<AdminLogin />} />
-            <Route path="/admin/meditacoes" element={<AdminMeditations />} />
-            <Route path="/admin/testes" element={<AdminTests />} />
-            <Route path="/admin/instancias" element={<AdminInstances />} />
-            <Route path="/admin/configuracoes" element={<AdminSettings />} />
-            <Route path="/admin/engajamento" element={<AdminEngagement />} />
-            <Route path="/admin/mensagens" element={<AdminMessages />} />
-            <Route path="/admin/templates" element={<AdminTemplates />} />
-            <Route path="/admin/emails" element={<AdminEmails />} />
-            <Route path="/admin/popup-preview" element={<AdminPopupPreview />} />
-            <Route path="/admin/usuarios" element={<AdminUsers />} />
-            <Route path="/admin/instagram" element={<AdminInstagram />} />
-            <Route path="/admin/suporte" element={<AdminSupport />} />
-            <Route path="/admin/suporte/conhecimento" element={<AdminSupportKnowledge />} />
-            <Route path="/admin/suporte/gaps" element={<AdminSupportGaps />} />
-            <Route path="/admin/whatsapp-inbox" element={<AdminWhatsappRecovery />} />
-            <Route path="/admin/sessoes" element={<AdminSessions />} />
+            <Route element={<AdminLayout />}>
+              <Route path="/admin/meditacoes" element={<AdminMeditations />} />
+              <Route path="/admin/testes" element={<AdminTests />} />
+              <Route path="/admin/instancias" element={<AdminInstances />} />
+              <Route path="/admin/configuracoes" element={<AdminSettings />} />
+              <Route path="/admin/engajamento" element={<AdminEngagement />} />
+              <Route path="/admin/mensagens" element={<AdminMessages />} />
+              <Route path="/admin/templates" element={<AdminTemplates />} />
+              <Route path="/admin/emails" element={<AdminEmails />} />
+              <Route path="/admin/popup-preview" element={<AdminPopupPreview />} />
+              <Route path="/admin/usuarios" element={<AdminUsers />} />
+              <Route path="/admin/instagram" element={<AdminInstagram />} />
+              <Route path="/admin/suporte" element={<AdminSupport />} />
+              <Route path="/admin/suporte/conhecimento" element={<AdminSupportKnowledge />} />
+              <Route path="/admin/suporte/gaps" element={<AdminSupportGaps />} />
+              <Route path="/admin/whatsapp-inbox" element={<AdminWhatsappRecovery />} />
+              <Route path="/admin/sessoes" element={<AdminSessions />} />
+            </Route>
             <Route path="/guia" element={<UserGuide />} />
             <Route path="/episodio/:id" element={<Episode />} />
             <Route path="/jornada-completa/:journeyId/:userId" element={<JourneyComplete />} />
