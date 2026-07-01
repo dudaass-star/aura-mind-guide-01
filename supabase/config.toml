@@ -151,3 +151,5 @@ project_id = "uhyogifgmutfmbyhzzyo"
     verify_jwt = false
   [functions.weekly-report]
     verify_jwt = false
+  [functions.debug-openai]
+    verify_jwt = false
