@@ -278,6 +278,11 @@ export default function AdminUsers() {
       return result[uid];
     };
 
+    // Garante entrada zerada para TODOS os usuários da página, mesmo sem sessões,
+    // para que getD0Status receba stats concretos (done=0 → 'sem_dados') em vez
+    // de cair no fallback que retornava 'concluido' incorretamente.
+    userIds.forEach(uid => ensure(uid));
+
     (data || []).forEach((s: any) => {
       const stats = ensure(s.user_id);
       const scheduledMs = s.scheduled_at ? new Date(s.scheduled_at).getTime() : 0;
