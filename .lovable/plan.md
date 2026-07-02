@@ -1,42 +1,117 @@
-## Objetivo
 
-Corrigir o gap de eventos Purchase via CAPI para vendas PIX Asaas e disparar retroativamente os 2 eventos perdidos hoje (Felipe e Maria).
+# Diagnóstico geral
 
-## Contexto
+Nas últimas 3 vezes que a Aura "esqueceu" algo do Eduardo (04/06, 18/06, 02/07), o padrão foi idêntico:
 
-O `webhook-asaas` só dispara Purchase via CAPI dentro do branch `isNew` (linhas 570-607). Quando o `PAYMENT_RECEIVED` não consegue correlacionar a autorização PIX (porque `asaas_subscription_id` ficou vazio), a ativação cai em paths alternativos (`recovered-…` ou SQL manual) que **pulam o bloco de CAPI**. Resultado: a venda existe no banco, mas o Meta nunca recebe o evento.
+- Um insight ou commitment **de fase de planejamento** ("planejando volta aos treinos", "conversar com esposa sobre X") ficou vivo depois que o usuário já executou/resolveu.
+- Ninguém marcou como resolvido, porque o único mecanismo automático hoje é `cancel_topics` — que só age quando o usuário **recusa** ("não quero", "para de insistir"). Não existe equivalente para "**já fiz / já resolvi / já aconteceu**".
+- `pattern-analysis` (nudge semanal por LLM) escolhe UM insight sem checar idade nem contradições recentes. Ele pega o "mais acionável" — que quase sempre é o mais antigo, porque nunca foi encerrado.
 
-Como o `ThankYou.tsx` desativou o Purchase no pixel do browser (linhas 13-15) deixando "server-side only", se o CAPI não dispara, **não há evento nenhum** — foi exatamente o que aconteceu hoje.
+O problema não é específico de treino. É **estrutural**: o sistema acumula "combustível para nudge" indefinidamente e nunca queima.
 
-## Etapas
+# Princípio da correção
 
-### 1. Backfill dos 2 eventos perdidos de hoje
+**Não adicionar regras novas por domínio.** Fazer duas coisas simples, universais, que reduzem o combustível velho:
 
-Disparar manualmente via `meta-capi` os eventos Purchase para:
-- Felipe (`5fbb7bbc…`) — R$ 49,90
-- Maria (`5e50c12e…`) — R$ 29,90
+1. Espelho universal do `cancel_topics` para conclusão.
+2. Filtro de decaimento por tempo no que alimenta o `pattern-analysis`.
 
-Usando dados do `asaas_pix_authorizations` (fbp, fbc, email, telefone hash, event_time original) com `event_id` determinístico para permitir deduplicação caso a Meta receba duplicata futura.
+Nada de novo campo, nada de nova tabela, nada de novo modelo. Só reaproveita o que já existe.
 
-### 2. Tornar o disparo de Purchase resiliente em `webhook-asaas/index.ts`
+# Plano
 
-Mover (ou duplicar) o bloco de CAPI Purchase para **fora do branch `isNew`**, de modo que qualquer caminho que ative o usuário a partir de um `PAYMENT_RECEIVED` (incluindo `recovered-…` e ativação tardia) dispare o evento. Proteção contra duplicata:
+## 1. `resolved_topics` no post-analysis extractor (espelho do `cancel_topics`)
 
-- Gerar `event_id` determinístico a partir de `payment.id` do Asaas
-- Checar `meta_capi_log` por `event_id` antes de enviar (skip se já enviado com `meta_status=200`)
+`supabase/functions/aura-agent/index.ts > postConversationAnalysis`.
 
-### 3. Validação
+Adicionar UMA regra ao prompt do extractor Flash-lite (paralela à regra 6 existente de `cancel_topics`):
 
-- Conferir 2 novas linhas em `meta_capi_log` com `meta_status=200` e `source=webhook-asaas-backfill`
-- Verificar no Meta Events Manager (Test Events ou Overview) que os 2 Purchase apareceram com os valores corretos
-- Próxima venda PIX real: confirmar que `webhook-asaas` grava `meta_capi_log` mesmo se a correlação inicial falhar
+> **7.** Se o usuário sinalizar que **já fez / já resolveu / já aconteceu / já não é mais um problema** algo que estava pendente (ex.: "já voltei a treinar", "já conversei com ela", "já resolvi aquilo", "isso já passou"), preencher `resolved_topics: string[]` com palavras-chave curtas (1-3 palavras, minúsculas).
 
-## Arquivos afetados
+Handler idêntico ao de `cancel_topics`, só muda o status final:
 
-- `supabase/functions/webhook-asaas/index.ts` — refator do bloco CAPI (item 2)
-- Backfill ad-hoc via `supabase--curl_edge_functions` chamando `meta-capi` diretamente (item 1, sem mudança de código)
+```ts
+// para cada topic em resolved_topics
+UPDATE commitments
+SET commitment_status='completed', completed=true
+WHERE user_id=$1
+  AND commitment_status='pending'
+  AND (title ILIKE '%'||topic||'%' OR description ILIKE '%'||topic||'%');
 
-## Riscos
+UPDATE user_insights
+SET importance = GREATEST(importance - 2, 3),
+    last_mentioned_at = now()
+WHERE user_id=$1
+  AND (key ILIKE '%'||topic||'%' OR value ILIKE '%'||topic||'%')
+  AND key ~* '^(retomar|planejar|iniciar|começar|conversar_sobre)';
+```
 
-- **Duplicação no Meta**: mitigado pelo `event_id` determinístico (Meta dedupa por 7 dias)
-- **Regressão no fluxo `isNew`**: a lógica atual continua, só adicionamos o fallback fora dela
+Rebaixar `importance` (em vez de deletar) preserva a memória histórica, mas tira o insight do topo do ranking que o `pattern-analysis` consome.
+
+**Por que é simples:** o modelo já sabe extrair `cancel_topics`; adicionar um campo paralelo é trivial. Handler é copy-paste do existente. Zero regra por tema.
+
+## 2. Decaimento por tempo no input do `pattern-analysis`
+
+`supabase/functions/pattern-analysis/index.ts`.
+
+Duas linhas de filtro adicional na query de insights (linha ~305) e uma proteção para commitments:
+
+```ts
+// insights: ignora "planejamento antigo"; identidade/trauma (importance >= 8) sempre passam
+.or('importance.gte.8,last_mentioned_at.gte.' + fortyFiveDaysAgo.toISOString())
+
+// commitments: só considera pending recentes como "combustível de nudge"
+// (já existentes na análise permanecem apenas se created_at >= 45d)
+```
+
+Corte de 45 dias. Insights de identidade/valores/trauma (importance ≥ 8) sempre entram — são estáveis por natureza. Insights de "planejando X" (importance 4-6) decaem naturalmente se ninguém os revalidou.
+
+**Por que é simples:** um filtro SQL. Zero mudança no prompt do LLM, zero nova instrução para o modelo seguir.
+
+## 3. Backfill único do Eduardo
+
+Encerra o passivo já acumulado e para os nudges de treino a partir de hoje:
+
+```sql
+UPDATE commitments
+SET commitment_status='completed', completed=true
+WHERE user_id='d2d4526a-0094-4e26-a435-429ed074b102'
+  AND commitment_status='pending'
+  AND (title ILIKE '%trein%' OR title ILIKE '%academ%');
+
+UPDATE user_insights
+SET importance = 4, last_mentioned_at = now()
+WHERE user_id='d2d4526a-0094-4e26-a435-429ed074b102'
+  AND key IN ('retomar_treinos','retomada_treinos','horario_treino');
+```
+
+Não deleta nada. Só rebaixa e fecha.
+
+# Arquivos afetados
+
+- `supabase/functions/aura-agent/index.ts` — +1 regra no prompt do extractor + handler ~15 linhas copiadas do `cancel_topics`.
+- `supabase/functions/pattern-analysis/index.ts` — +1 filtro `.or(...)` na query de insights, +1 filtro em commitments quando forem incluídos.
+- SQL ad-hoc do backfill via `supabase--insert` (Eduardo).
+
+Zero migração de schema. Zero novo campo. Zero nova tabela.
+
+# Por que isso pega os outros casos ("loop de assuntos já resolvidos")
+
+- Usuário diz "já conversei com meu chefe" → `resolved_topics: ["chefe"]` → fecha os 3 commitments "conversar com chefe" abertos há 2 meses.
+- Usuário diz "já saí daquele emprego" → fecha "avaliar mudança de emprego".
+- Insight "está pensando em terapia" de 3 meses atrás sem menção nova → decai pelo filtro de 45d, não vira nudge.
+- Commitment "meditar amanhã" de março → não entra mais no `pattern-analysis` pelo corte de tempo.
+
+Nenhum desses casos precisou de regra específica. É o mesmo mecanismo agindo.
+
+# Riscos e mitigações
+
+- **`resolved_topics` falso-positivo em frases hipotéticas** ("se eu voltasse a treinar"). Mitigação: regra do prompt exige verbo em passado/presente factivo. Mesmo se falhar, o pior é fechar um commitment que voltará se o assunto reaparecer — não é destrutivo (histórico permanece em `messages`).
+- **Corte de 45d esconde algo importante e velho.** Mitigação: `importance ≥ 8` sempre passa. Identidade, trauma, metas centrais (que são exatamente os insights que a Aura precisa lembrar sempre) ficam imunes ao filtro.
+- **Drift de deploy do `aura-agent`** (memória `aura-agent-deployment-and-fallback-safety`). Validar em 5 min pós-deploy com `failed_message_log` e forçar `deploy_edge_functions` se preciso.
+
+# Validação
+
+1. `pattern-analysis` em dry-run com `target_user_id` do Eduardo → saída não menciona treino/academia.
+2. Query de sanity: `SELECT count(*) FROM commitments WHERE commitment_status='pending' AND created_at < now() - interval '60 days'` — número deve cair drasticamente à medida que usuários conversarem nas próximas semanas (via `resolved_topics`).
+3. Teste manual: enviar "já resolvi aquilo do trabalho" para um usuário de teste com commitment pendente sobre "trabalho" → verificar que virou `completed`.
