@@ -300,11 +300,16 @@ serve(async (req) => {
             }
 
             // Collect user data in parallel
+            // Corte de 45d no input do pattern-analysis: insights de "planejamento"
+            // antigos (importance 4-7 sem menção recente) não devem virar nudge.
+            // Identidade/trauma/metas centrais (importance >= 8) sempre passam.
+            const fortyFiveDaysAgo = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString();
             const [insightsResult, checkinsResult, themesResult, messagesResult] = await Promise.all([
               supabase
                 .from('user_insights')
                 .select('category, key, value, importance')
                 .eq('user_id', user.user_id)
+                .or(`importance.gte.8,last_mentioned_at.gte.${fortyFiveDaysAgo}`)
                 .order('importance', { ascending: false })
                 .limit(20),
               supabase
