@@ -85,7 +85,7 @@ function getD0Status(p: Profile, s?: SessionStats): D0Status {
     return 'sem_dados';
   }
   // Sem dados de sessões carregados ainda — fallback conservador
-  return 'concluido';
+  return 'sem_dados';
 }
 
 const d0Labels: Record<D0Status, string> = {
@@ -277,6 +277,11 @@ export default function AdminUsers() {
       };
       return result[uid];
     };
+
+    // Garante entrada zerada para TODOS os usuários da página, mesmo sem sessões,
+    // para que getD0Status receba stats concretos (done=0 → 'sem_dados') em vez
+    // de cair no fallback que retornava 'concluido' incorretamente.
+    userIds.forEach(uid => ensure(uid));
 
     (data || []).forEach((s: any) => {
       const stats = ensure(s.user_id);
