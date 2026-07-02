@@ -1774,6 +1774,13 @@ interface ConversationAnalysis {
   }>;
   cancel_topics?: string[];
 }
+// resolved_topics: universal completion signal — mirror of cancel_topics para
+// quando o usuário sinaliza que já FEZ / já RESOLVEU algo. Fecha commitments
+// pendentes e rebaixa insights de fase de planejamento, evitando que o
+// pattern-analysis (nudge semanal) continue puxando temas já superados.
+interface ConversationAnalysisWithResolved extends ConversationAnalysis {
+  resolved_topics?: string[];
+}
 
 async function postConversationAnalysis(
   userMessage: string,
@@ -1803,6 +1810,7 @@ REGRAS CRÍTICAS:
 4. Não invente conexões entre temas. Se o usuário fala de ansiedade hoje, não ligue automaticamente a esposa, mãe, trabalho, etc.
 5. Insights devem ser fatos curtos e literais (nomes, profissão, evento, preferência declarada). Evite frases interpretativas.
 6. Se o usuário expressou RECUSA, DESINTERESSE ou pediu para PARAR de insistir em algum tópico (ex.: "não quero", "já disse que não", "para de insistir", "não tenho interesse", "deixa pra lá"), preencha "cancel_topics" com palavras-chave curtas do(s) tópico(s) recusado(s) (ex.: ["sessão", "agendar"]). Use 1-3 palavras por item, em minúsculas.
+7. Se o usuário sinalizou que JÁ FEZ, JÁ RESOLVEU, JÁ ACONTECEU ou que algo NÃO É MAIS UM PROBLEMA (ex.: "já voltei a treinar", "já conversei com ela", "já resolvi aquilo", "isso já passou", "já comecei"), preencha "resolved_topics" com palavras-chave curtas do(s) tópico(s) concluído(s). Use verbo em passado/presente factivo — NUNCA hipotético ("se eu voltasse", "talvez eu faça"). 1-3 palavras por item, em minúsculas.
 
 CONTEXTO RECENTE:
 ${recentContext}
@@ -1866,6 +1874,11 @@ Use a função extract_analysis para retornar os dados.`;
               cancel_topics: {
                 type: 'ARRAY',
                 description: 'Palavras-chave de tópicos que o usuário recusou explicitamente nesta troca (ex.: ["sessão","agendar"]). Use minúsculas, 1-3 palavras por item. Omita se não houver recusa clara.',
+                items: { type: 'STRING' }
+              },
+              resolved_topics: {
+                type: 'ARRAY',
+                description: 'Palavras-chave de tópicos que o usuário sinalizou como JÁ FEITOS/RESOLVIDOS nesta troca (ex.: ["treino","conversa esposa"]). Só use se o verbo for factivo (passado/presente), nunca hipotético. Minúsculas, 1-3 palavras por item. Omita se não houver.',
                 items: { type: 'STRING' }
               }
             }
@@ -2075,6 +2088,70 @@ Use a função extract_analysis para retornar os dados.`;
           console.warn('⚠️ [POST-ANALYSIS] cancel_topics update error:', cancelErr.message);
         } else if (cancelled && cancelled.length > 0) {
           console.log(`🚫 [POST-ANALYSIS] Cancelados ${cancelled.length} commitments por recusa (tópicos: ${topics.join(', ')})`);
+        }
+      }
+    }
+
+    // Auto-completa commitments e rebaixa insights de planejamento quando o
+    // usuário sinaliza conclusão. Espelho universal do cancel_topics.
+    const resolvedTopics = (analysis as ConversationAnalysisWithResolved).resolved_topics;
+    if (resolvedTopics && resolvedTopics.length > 0) {
+      const topics = resolvedTopics
+        .map(t => (t || '').trim().toLowerCase())
+        .filter(t => t.length >= 3 && t.length <= 40);
+
+      if (topics.length > 0) {
+        const orFilter = topics
+          .flatMap(t => [`title.ilike.%${t}%`, `description.ilike.%${t}%`])
+          .join(',');
+
+        const { data: resolved, error: resolvedErr } = await supabase
+          .from('commitments')
+          .update({ commitment_status: 'completed', completed: true })
+          .eq('user_id', userId)
+          .eq('commitment_status', 'pending')
+          .or(orFilter)
+          .select('id, title');
+
+        if (resolvedErr) {
+          console.warn('⚠️ [POST-ANALYSIS] resolved_topics update error:', resolvedErr.message);
+        } else if (resolved && resolved.length > 0) {
+          console.log(`✅ [POST-ANALYSIS] Concluídos ${resolved.length} commitments (tópicos: ${topics.join(', ')})`);
+        }
+
+        // Rebaixa insights de fase de planejamento sobre o mesmo tema (importance -2, min 3).
+        // Preserva a linha (histórico), mas tira do topo do ranking do pattern-analysis.
+        try {
+          const insightsOr = topics
+            .flatMap(t => [`key.ilike.%${t}%`, `value.ilike.%${t}%`])
+            .join(',');
+
+          const { data: planningInsights } = await supabase
+            .from('user_insights')
+            .select('id, key, importance')
+            .eq('user_id', userId)
+            .or(insightsOr);
+
+          const planningPrefix = /^(retomar|planejar|iniciar|comecar|começar|conversar|voltar|marcar|agendar)/i;
+          const toDowngrade = (planningInsights || []).filter(
+            (r: any) => planningPrefix.test(r.key || '') && (r.importance ?? 5) > 3,
+          );
+
+          for (const row of toDowngrade) {
+            await supabase
+              .from('user_insights')
+              .update({
+                importance: Math.max((row.importance ?? 5) - 2, 3),
+                last_mentioned_at: new Date().toISOString(),
+              })
+              .eq('id', row.id);
+          }
+
+          if (toDowngrade.length > 0) {
+            console.log(`📉 [POST-ANALYSIS] Rebaixados ${toDowngrade.length} insights de planejamento`);
+          }
+        } catch (e) {
+          console.warn('⚠️ [POST-ANALYSIS] downgrade insights skipped (non-fatal):', e);
         }
       }
     }
