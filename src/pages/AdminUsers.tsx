@@ -85,7 +85,7 @@ function getD0Status(p: Profile, s?: SessionStats): D0Status {
     return 'sem_dados';
   }
   // Sem dados de sessões carregados ainda — fallback conservador
-  return 'concluido';
+  return 'sem_dados';
 }
 
 const d0Labels: Record<D0Status, string> = {
