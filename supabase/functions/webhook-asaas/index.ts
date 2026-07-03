@@ -327,8 +327,88 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ============================================================
+    // Fallback PIX Automático Bacen — cobrança avulsa por customer.
+    // O Asaas provisiona a 1ª fatura do ciclo Bacen com QR próprio.
+    // Se o cliente paga via outra chave/QR do mesmo recebedor, o Asaas
+    // gera cobrança avulsa (subscription=null, pixAutomaticAuthorizationId=null,
+    // apenas customer preenchido). Esse pagamento É a ativação legítima
+    // da subscription Bacen — reconciliamos via customer + valor.
+    // ============================================================
+    const asaasCustomerId = (payment as any)?.customer as string | undefined;
+    if (!updated && asaasCustomerId && isPaid) {
+      const { data: authByCustomer } = await supabase
+        .from("asaas_pix_authorizations")
+        .select("*")
+        .eq("asaas_customer_id", asaasCustomerId)
+        .eq("status", "ACTIVE")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (authByCustomer) {
+        const paymentValue = Number((payment as any).value || 0);
+        const expectedValue = Number(authByCustomer.value_cents || 0) / 100;
+        // Tolerância R$ 0,50 para arredondamentos; rejeita valores
+        // nitidamente diferentes (evita ativar por PIX aleatório de
+        // outro contexto no mesmo customer).
+        const valueMatches = Math.abs(paymentValue - expectedValue) <= 0.5;
+
+        if (!valueMatches) {
+          console.warn(
+            `[webhook-asaas] Payment ${payment.id} (R$${paymentValue}) não bate com auth ${authByCustomer.asaas_authorization_id} (R$${expectedValue}). Ignorado.`,
+          );
+        } else {
+          const { data: inserted, error: insErr } = await supabase
+            .from("asaas_payments")
+            .insert({
+              asaas_payment_id: payment.id,
+              asaas_customer_id: asaasCustomerId,
+              asaas_subscription_id: authByCustomer.asaas_subscription_id,
+              user_id: authByCustomer.user_id,
+              customer_name: authByCustomer.customer_name,
+              customer_email: authByCustomer.customer_email,
+              customer_phone: authByCustomer.customer_phone,
+              customer_cpf: authByCustomer.customer_cpf,
+              plan: authByCustomer.plan,
+              billing_period: authByCustomer.billing_period,
+              amount_cents:
+                Math.round(paymentValue * 100) || authByCustomer.value_cents,
+              status: newStatus,
+              payment_method: "PIX_AUTOMATIC",
+              invoice_url: (payment as any).invoiceUrl || null,
+              paid_at: new Date().toISOString(),
+              fbp: authByCustomer.fbp || null,
+              fbc: authByCustomer.fbc || null,
+              ga_client_id: authByCustomer.ga_client_id || null,
+              raw_payload: payment,
+            })
+            .select()
+            .maybeSingle();
+
+          if (insErr) {
+            console.error(
+              "[webhook-asaas] Erro reconciliando pagamento Bacen avulso:",
+              insErr,
+            );
+          } else {
+            updated = inserted;
+            console.log(
+              `[webhook-asaas] ✅ Payment ${payment.id} reconciliado com auth ${authByCustomer.asaas_authorization_id} via customer ${asaasCustomerId}`,
+            );
+          }
+        }
+      }
+    }
+
     if (updated) {
       console.log(`[webhook-asaas] Pagamento ${payment.id} atualizado para ${newStatus}`);
+    } else if (isPaid) {
+      // Pagamento confirmado que não conseguimos vincular a nenhum cliente:
+      // ERROR (não warn) pra ficar visível nos logs / alertas.
+      console.error(
+        `[webhook-asaas] ⚠️ Pagamento ${payment.id} CONFIRMADO mas não vinculado a nenhum cliente (customer=${asaasCustomerId ?? "n/a"}, sub=${subscriptionId ?? "n/a"})`,
+      );
     } else if (!subscriptionId && !pixAutoAuthId) {
       console.warn(`[webhook-asaas] Pagamento ${payment.id} não encontrado no banco`);
     }
