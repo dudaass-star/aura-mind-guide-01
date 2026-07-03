@@ -1,117 +1,153 @@
+## Diagnóstico final
 
-# Diagnóstico geral
+Fluxo esperado do negócio (confirmado):
+1. Cliente autoriza PIX Automático Bacen → `AUTHORIZATION_ACTIVATED`
+2. Asaas provisiona 1ª cobrança (`pay_A`, PIX_AUTOMATIC, PENDING)
+3. Cliente paga o QR **na hora**
+4. Asaas confirma → sistema ativa
 
-Nas últimas 3 vezes que a Aura "esqueceu" algo do Eduardo (04/06, 18/06, 02/07), o padrão foi idêntico:
+O que quebrou com a Juscileia (e com quem quebrou "há poucos dias"):
+- Autorização Bacen ativou às 20:59 ✅
+- Cobrança provisionada `pay_4c4l80yg3m035ofi` PENDING ✅
+- Cliente pagou R$29,90 via PIX → Asaas creditou numa **cobrança nova** (`pay_agb0ew05o93qdflp`, RECEIVED, `customer=cus_000185008988`, `subscription=null`) em vez de fechar a fatura provisionada
+- Webhook não tem caminho pra esse `payment.id` → **abandono silencioso**
 
-- Um insight ou commitment **de fase de planejamento** ("planejando volta aos treinos", "conversar com esposa sobre X") ficou vivo depois que o usuário já executou/resolveu.
-- Ninguém marcou como resolvido, porque o único mecanismo automático hoje é `cancel_topics` — que só age quando o usuário **recusa** ("não quero", "para de insistir"). Não existe equivalente para "**já fiz / já resolvi / já aconteceu**".
-- `pattern-analysis` (nudge semanal por LLM) escolhe UM insight sem checar idade nem contradições recentes. Ele pega o "mais acionável" — que quase sempre é o mais antigo, porque nunca foi encerrado.
+Motivo Asaas-side (irrelevante pra gente resolver): a cobrança PIX_AUTOMATIC provisionada tem QR próprio do Bacen; se o cliente usa qualquer outra chave/QR do mesmo recebedor, o Asaas gera cobrança avulsa. Não vamos tentar "consertar" isso no Asaas — vamos aceitar como fato e reconciliar do nosso lado.
 
-O problema não é específico de treino. É **estrutural**: o sistema acumula "combustível para nudge" indefinidamente e nunca queima.
+Regra de negócio limpa que resolve tudo: **`PAYMENT_RECEIVED`/`PAYMENT_CONFIRMED` com `customer=X` + existe `asaas_pix_authorization` ACTIVE para o mesmo `customer=X` + valor bate com o plano contratado = ativa esse cliente**. É a definição do negócio, não uma gambiarra.
 
-# Princípio da correção
+## Ativação da Juscileia (operação one-shot)
 
-**Não adicionar regras novas por domínio.** Fazer duas coisas simples, universais, que reduzem o combustível velho:
-
-1. Espelho universal do `cancel_topics` para conclusão.
-2. Filtro de decaimento por tempo no que alimenta o `pattern-analysis`.
-
-Nada de novo campo, nada de nova tabela, nada de novo modelo. Só reaproveita o que já existe.
-
-# Plano
-
-## 1. `resolved_topics` no post-analysis extractor (espelho do `cancel_topics`)
-
-`supabase/functions/aura-agent/index.ts > postConversationAnalysis`.
-
-Adicionar UMA regra ao prompt do extractor Flash-lite (paralela à regra 6 existente de `cancel_topics`):
-
-> **7.** Se o usuário sinalizar que **já fez / já resolveu / já aconteceu / já não é mais um problema** algo que estava pendente (ex.: "já voltei a treinar", "já conversei com ela", "já resolvi aquilo", "isso já passou"), preencher `resolved_topics: string[]` com palavras-chave curtas (1-3 palavras, minúsculas).
-
-Handler idêntico ao de `cancel_topics`, só muda o status final:
-
-```ts
-// para cada topic em resolved_topics
-UPDATE commitments
-SET commitment_status='completed', completed=true
-WHERE user_id=$1
-  AND commitment_status='pending'
-  AND (title ILIKE '%'||topic||'%' OR description ILIKE '%'||topic||'%');
-
-UPDATE user_insights
-SET importance = GREATEST(importance - 2, 3),
-    last_mentioned_at = now()
-WHERE user_id=$1
-  AND (key ILIKE '%'||topic||'%' OR value ILIKE '%'||topic||'%')
-  AND key ~* '^(retomar|planejar|iniciar|começar|conversar_sobre)';
-```
-
-Rebaixar `importance` (em vez de deletar) preserva a memória histórica, mas tira o insight do topo do ranking que o `pattern-analysis` consome.
-
-**Por que é simples:** o modelo já sabe extrair `cancel_topics`; adicionar um campo paralelo é trivial. Handler é copy-paste do existente. Zero regra por tema.
-
-## 2. Decaimento por tempo no input do `pattern-analysis`
-
-`supabase/functions/pattern-analysis/index.ts`.
-
-Duas linhas de filtro adicional na query de insights (linha ~305) e uma proteção para commitments:
-
-```ts
-// insights: ignora "planejamento antigo"; identidade/trauma (importance >= 8) sempre passam
-.or('importance.gte.8,last_mentioned_at.gte.' + fortyFiveDaysAgo.toISOString())
-
-// commitments: só considera pending recentes como "combustível de nudge"
-// (já existentes na análise permanecem apenas se created_at >= 45d)
-```
-
-Corte de 45 dias. Insights de identidade/valores/trauma (importance ≥ 8) sempre entram — são estáveis por natureza. Insights de "planejando X" (importance 4-6) decaem naturalmente se ninguém os revalidou.
-
-**Por que é simples:** um filtro SQL. Zero mudança no prompt do LLM, zero nova instrução para o modelo seguir.
-
-## 3. Backfill único do Eduardo
-
-Encerra o passivo já acumulado e para os nudges de treino a partir de hoje:
-
+1. `insert` em `asaas_payments`:
 ```sql
-UPDATE commitments
-SET commitment_status='completed', completed=true
-WHERE user_id='d2d4526a-0094-4e26-a435-429ed074b102'
-  AND commitment_status='pending'
-  AND (title ILIKE '%trein%' OR title ILIKE '%academ%');
-
-UPDATE user_insights
-SET importance = 4, last_mentioned_at = now()
-WHERE user_id='d2d4526a-0094-4e26-a435-429ed074b102'
-  AND key IN ('retomar_treinos','retomada_treinos','horario_treino');
+INSERT INTO asaas_payments (
+  asaas_payment_id, asaas_customer_id, asaas_subscription_id,
+  customer_name, customer_email, customer_phone, customer_cpf,
+  plan, billing_period, amount_cents, status, payment_method,
+  invoice_url, paid_at, raw_payload, created_at
+)
+SELECT
+  'pay_agb0ew05o93qdflp',
+  a.asaas_customer_id,
+  a.asaas_subscription_id,
+  a.customer_name, a.customer_email, a.customer_phone, a.customer_cpf,
+  a.plan, a.billing_period, 2990, 'RECEIVED', 'PIX_AUTOMATIC',
+  'https://www.asaas.com/i/agb0ew05o93qdflp',
+  now(),
+  '{"id":"pay_agb0ew05o93qdflp","status":"RECEIVED","value":29.9,"customer":"cus_000185008988","reconciled_manually":true}'::jsonb,
+  now()
+FROM asaas_pix_authorizations a
+WHERE a.asaas_customer_id = 'cus_000185008988';
 ```
 
-Não deleta nada. Só rebaixa e fecha.
+2. `supabase--curl_edge_functions` para `POST /webhook-asaas` com body `{"event":"PAYMENT_RECEIVED","payment":{"id":"pay_agb0ew05o93qdflp","status":"RECEIVED","value":29.9,"customer":"cus_000185008988","billingType":"PIX"}}` e `x-asaas-access-token: $ASAAS_WEBHOOK_TOKEN`. Isso reaproveita `handleActivation` — cria profile, portal token, WhatsApp welcome, email transacional, `pending_insight`. Mesmo caminho de qualquer pagamento válido, sem código especial.
 
-# Arquivos afetados
+## Fix estrutural — `supabase/functions/webhook-asaas/index.ts`
 
-- `supabase/functions/aura-agent/index.ts` — +1 regra no prompt do extractor + handler ~15 linhas copiadas do `cancel_topics`.
-- `supabase/functions/pattern-analysis/index.ts` — +1 filtro `.or(...)` na query de insights, +1 filtro em commitments quando forem incluídos.
-- SQL ad-hoc do backfill via `supabase--insert` (Eduardo).
+Adicionar **1 bloco** entre linhas 328 e 332 (depois dos 4 fallbacks atuais, antes do warning final):
 
-Zero migração de schema. Zero novo campo. Zero nova tabela.
+```ts
+// Fallback autoridade Bacen: PIX Automático provisiona uma fatura, mas o
+// cliente pode pagar via chave/QR que gera cobrança avulsa (subscription
+// null, apenas customer preenchido). Se existe autorização ACTIVE do mesmo
+// customer, esse pagamento É a ativação legítima do ciclo Bacen.
+const asaasCustomerId = (payment as any)?.customer as string | undefined;
+if (!updated && asaasCustomerId && isPaid) {
+  const { data: authByCustomer } = await supabase
+    .from("asaas_pix_authorizations")
+    .select("*")
+    .eq("asaas_customer_id", asaasCustomerId)
+    .eq("status", "ACTIVE")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
-# Por que isso pega os outros casos ("loop de assuntos já resolvidos")
+  if (authByCustomer) {
+    const paymentValue = Number((payment as any).value || 0);
+    const expectedValue = Number(authByCustomer.value_cents || 0) / 100;
+    // Tolerância R$ 0,50 para arredondamentos; rejeita valores nitidamente diferentes
+    // (evita ativar por um PIX aleatório de outro serviço no mesmo cus_).
+    const valueMatches = Math.abs(paymentValue - expectedValue) <= 0.5;
 
-- Usuário diz "já conversei com meu chefe" → `resolved_topics: ["chefe"]` → fecha os 3 commitments "conversar com chefe" abertos há 2 meses.
-- Usuário diz "já saí daquele emprego" → fecha "avaliar mudança de emprego".
-- Insight "está pensando em terapia" de 3 meses atrás sem menção nova → decai pelo filtro de 45d, não vira nudge.
-- Commitment "meditar amanhã" de março → não entra mais no `pattern-analysis` pelo corte de tempo.
+    if (!valueMatches) {
+      console.warn(
+        `[webhook-asaas] Payment ${payment.id} (R$${paymentValue}) não bate com auth ${authByCustomer.asaas_authorization_id} (R$${expectedValue}). Ignorado.`,
+      );
+    } else {
+      const { data: inserted, error: insErr } = await supabase
+        .from("asaas_payments")
+        .insert({
+          asaas_payment_id: payment.id,
+          asaas_customer_id: asaasCustomerId,
+          asaas_subscription_id: authByCustomer.asaas_subscription_id,
+          user_id: authByCustomer.user_id,
+          customer_name: authByCustomer.customer_name,
+          customer_email: authByCustomer.customer_email,
+          customer_phone: authByCustomer.customer_phone,
+          customer_cpf: authByCustomer.customer_cpf,
+          plan: authByCustomer.plan,
+          billing_period: authByCustomer.billing_period,
+          amount_cents: Math.round(paymentValue * 100) || authByCustomer.value_cents,
+          status: newStatus,
+          payment_method: "PIX_AUTOMATIC",
+          invoice_url: (payment as any).invoiceUrl || null,
+          paid_at: new Date().toISOString(),
+          fbp: authByCustomer.fbp || null,
+          fbc: authByCustomer.fbc || null,
+          ga_client_id: authByCustomer.ga_client_id || null,
+          raw_payload: payment,
+        })
+        .select()
+        .maybeSingle();
 
-Nenhum desses casos precisou de regra específica. É o mesmo mecanismo agindo.
+      if (insErr) {
+        console.error("[webhook-asaas] Erro reconciliando pagamento Bacen avulso:", insErr);
+      } else {
+        updated = inserted;
+        console.log(
+          `[webhook-asaas] ✅ Payment ${payment.id} reconciliado com auth ${authByCustomer.asaas_authorization_id} via customer ${asaasCustomerId}`,
+        );
+      }
+    }
+  }
+}
+```
 
-# Riscos e mitigações
+Ajuste no warning atual (linhas 332-334): logar quando `!updated` sempre (não só quando faltam ids), com nível `error` — pra que qualquer novo caso fique gritante em `failed_message_log` ou nos logs Supabase.
 
-- **`resolved_topics` falso-positivo em frases hipotéticas** ("se eu voltasse a treinar"). Mitigação: regra do prompt exige verbo em passado/presente factivo. Mesmo se falhar, o pior é fechar um commitment que voltará se o assunto reaparecer — não é destrutivo (histórico permanece em `messages`).
-- **Corte de 45d esconde algo importante e velho.** Mitigação: `importance ≥ 8` sempre passa. Identidade, trauma, metas centrais (que são exatamente os insights que a Aura precisa lembrar sempre) ficam imunes ao filtro.
-- **Drift de deploy do `aura-agent`** (memória `aura-agent-deployment-and-fallback-safety`). Validar em 5 min pós-deploy com `failed_message_log` e forçar `deploy_edge_functions` se preciso.
+## Salvaguarda de idempotência
 
-# Validação
+O bloco já é idempotente via constraint UNIQUE em `asaas_payment_id` (assumindo que existe — vou verificar antes de codar). Se o mesmo `PAYMENT_RECEIVED` chegar 2x:
+- 1ª vez: match falha, cai no fallback, insere, ativa
+- 2ª vez: `updated` do UPDATE inicial (linha 174) já retorna a linha existente → fallback nem roda
 
-1. `pattern-analysis` em dry-run com `target_user_id` do Eduardo → saída não menciona treino/academia.
-2. Query de sanity: `SELECT count(*) FROM commitments WHERE commitment_status='pending' AND created_at < now() - interval '60 days'` — número deve cair drasticamente à medida que usuários conversarem nas próximas semanas (via `resolved_topics`).
-3. Teste manual: enviar "já resolvi aquilo do trabalho" para um usuário de teste com commitment pendente sobre "trabalho" → verificar que virou `completed`.
+Se não houver UNIQUE constraint, adiciono via migração no mesmo PR.
+
+## O que **NÃO** vou fazer
+
+- Não crio cron reconciler. Você foi claro: pagamento é na hora. Se o webhook não chegar, é caso de suporte, não de código automático rodando de tempos em tempos.
+- Não altero o fluxo canônico dos 4 fallbacks existentes.
+- Não toco em Stripe/cartão/D0.
+- Não migro o modelo de PIX (Bacen fica).
+
+## Ordem de execução
+
+1. Verificar UNIQUE em `asaas_payment_id` (query rápida).
+2. Ativar Juscileia (insert + curl no webhook) — 2 tool calls.
+3. Confirmar em `profiles` que a linha da Juscileia foi criada com `status=active`, WhatsApp welcome disparado.
+4. Editar `supabase/functions/webhook-asaas/index.ts` com o bloco novo.
+5. `deploy_edge_functions` para `webhook-asaas`.
+6. Registrar memória `mem/features/payments/pix-bacen-avulso-reconciliation.md` documentando a regra "PAYMENT_RECEIVED + auth ACTIVE do mesmo customer + valor bate = ativa".
+
+## Risco
+
+Baixo:
+- 5º fallback só roda quando os 4 anteriores falham (hoje = abandono).
+- Tolerância R$ 0,50 no valor evita ativar por PIX aleatório.
+- Só ativa se existe `asaas_pix_authorization` ACTIVE — cliente sem autorização Bacen prévia não é afetado.
+- Rollback = comentar o `if` novo.
+
+## Arquivos afetados
+
+- `supabase/functions/webhook-asaas/index.ts` (+ ~55 linhas)
+- `mem/features/payments/pix-bacen-avulso-reconciliation.md` (novo)
