@@ -61,8 +61,9 @@ Deno.serve(async (req) => {
     const startedAt = Date.now();
     const results: { window: string; ok: boolean; ms?: number; error?: string }[] = [];
 
-    // Sequencial pra não estourar limites do Stripe (a função já paraleliza internamente).
-    for (const w of WINDOWS) {
+    // Paralelo: cada janela ~30-60s. Sequencial estouraria o limite de execução da edge fn.
+    // A função alvo já paraleliza chamadas Stripe internamente e é idempotente por window_key.
+    await Promise.all(WINDOWS.map(async (w) => {
       const t0 = Date.now();
       const dateFrom = new Date(Date.now() - w.days * 24 * 60 * 60 * 1000)
         .toISOString()
@@ -73,7 +74,7 @@ Deno.serve(async (req) => {
           headers: {
             'Content-Type': 'application/json',
             'x-internal-secret': internalSecret,
-            // Apenas para satisfazer edge runtime (não usado no auth):
+            // Necessário para o Supabase edge runtime não recusar o request:
             'Authorization': `Bearer ${serviceRoleKey}`,
           },
           body: JSON.stringify({ dateFrom, dateTo: today, forceRefresh: true }),
@@ -83,9 +84,8 @@ Deno.serve(async (req) => {
           const txt = await resp.text().catch(() => '');
           results.push({ window: w.key, ok: false, ms, error: `HTTP ${resp.status}: ${txt.slice(0, 200)}` });
           console.error(`❌ snapshot ${w.key} failed: ${resp.status}`);
-          continue;
+          return;
         }
-        // Não precisamos ler o body — a função já upserta no snapshot.
         await resp.body?.cancel();
         results.push({ window: w.key, ok: true, ms });
         console.log(`✅ snapshot ${w.key} refreshed in ${ms}ms`);
@@ -94,7 +94,7 @@ Deno.serve(async (req) => {
         results.push({ window: w.key, ok: false, ms: Date.now() - t0, error: msg });
         console.error(`❌ snapshot ${w.key} error:`, msg);
       }
-    }
+    }));
 
     const totalMs = Date.now() - startedAt;
     console.log(`🏁 snapshot batch done in ${totalMs}ms`);
