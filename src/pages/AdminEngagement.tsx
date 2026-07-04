@@ -721,6 +721,20 @@ export default function AdminEngagement() {
               <RefreshCw className={`h-4 w-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
               {loading ? `Atualizando${elapsedSec > 2 ? ` ${elapsedSec}s` : '...'}` : 'Atualizar'}
             </Button>
+            {metrics?._snapshot_computed_at && (
+              <span
+                className="text-[11px] text-muted-foreground"
+                title={`Snapshot recalculado a cada 5 min • ${new Date(metrics._snapshot_computed_at as string).toLocaleString('pt-BR')}`}
+              >
+                atualizado há {(() => {
+                  const s = Math.floor((Date.now() - new Date(metrics._snapshot_computed_at as string).getTime()) / 1000);
+                  if (s < 60) return `${s}s`;
+                  const m = Math.floor(s / 60);
+                  if (m < 60) return `${m} min`;
+                  return `${Math.floor(m / 60)}h`;
+                })()}
+              </span>
+            )}
             <Button variant="outline" size="sm" onClick={handleSendEmailNotification} disabled={sendingEmail} className="h-8 border-primary/30 text-primary hover:bg-primary/10">
               <Mail className={`h-4 w-4 mr-1 ${sendingEmail ? 'animate-pulse' : ''}`} />
               {sendingEmail ? 'Enviando...' : 'Aviso por Email'}
