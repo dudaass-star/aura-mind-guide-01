@@ -33,21 +33,16 @@ Deno.serve(async (req) => {
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const admin = createClient(supabaseUrl, serviceRoleKey);
 
-    // Lê o segredo compartilhado com o cron a partir do vault.
-    const { data: secretRow, error: secretErr } = await admin
-      .schema('vault')
-      .from('decrypted_secrets')
-      .select('decrypted_secret')
-      .eq('name', 'admin_metrics_snapshot_secret')
-      .maybeSingle();
-    if (secretErr || !secretRow?.decrypted_secret) {
-      console.error('❌ snapshot secret missing in vault:', secretErr);
+    // Lê o segredo compartilhado com o cron via função SECURITY DEFINER.
+    const { data: secretValue, error: secretErr } = await admin.rpc('get_admin_metrics_snapshot_secret');
+    if (secretErr || !secretValue) {
+      console.error('❌ snapshot secret missing:', secretErr);
       return new Response(JSON.stringify({ error: 'snapshot secret missing' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-    const internalSecret = secretRow.decrypted_secret as string;
+    const internalSecret = secretValue as string;
 
     const provided = req.headers.get('x-internal-secret');
     if (provided !== internalSecret) {
