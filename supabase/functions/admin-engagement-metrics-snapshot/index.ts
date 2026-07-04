@@ -3,7 +3,12 @@
 // admin_metrics_snapshots. Aciona a função admin-engagement-metrics com
 // forceRefresh=true e header x-internal-secret para bypass do auth de admin.
 //
+// Auth: o cron chama esta função com o segredo `admin_metrics_snapshot_secret`
+// guardado no vault. Lemos o mesmo segredo aqui via service role.
+//
 // Idempotente: se rodar em paralelo, o UPSERT por window_key resolve.
+
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -25,17 +30,25 @@ Deno.serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const internalSecret = Deno.env.get('INTERNAL_WEBHOOK_SECRET');
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const admin = createClient(supabaseUrl, serviceRoleKey);
 
-    if (!internalSecret) {
-      return new Response(JSON.stringify({ error: 'INTERNAL_WEBHOOK_SECRET missing' }), {
+    // Lê o segredo compartilhado com o cron a partir do vault.
+    const { data: secretRow, error: secretErr } = await admin
+      .schema('vault')
+      .from('decrypted_secrets')
+      .select('decrypted_secret')
+      .eq('name', 'admin_metrics_snapshot_secret')
+      .maybeSingle();
+    if (secretErr || !secretRow?.decrypted_secret) {
+      console.error('❌ snapshot secret missing in vault:', secretErr);
+      return new Response(JSON.stringify({ error: 'snapshot secret missing' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+    const internalSecret = secretRow.decrypted_secret as string;
 
-    // Se o request veio de fora do cron, exige o secret também aqui (defesa em profundidade).
     const provided = req.headers.get('x-internal-secret');
     if (provided !== internalSecret) {
       return new Response(JSON.stringify({ error: 'unauthorized' }), {
