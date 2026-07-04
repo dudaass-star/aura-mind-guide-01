@@ -24,6 +24,8 @@ interface CostBreakdown {
 }
 
 interface Metrics {
+  _snapshot_computed_at?: string;
+  _snapshot_window?: string;
   activeUsers: number;
   activeUsersBase: number;
   userMessagesInPeriod: number;
