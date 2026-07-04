@@ -155,10 +155,19 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Auth: admin logado OU chamada interna (cron do snapshot) via INTERNAL_WEBHOOK_SECRET.
-    const internalSecret = Deno.env.get('INTERNAL_WEBHOOK_SECRET');
+    // Auth: admin logado OU chamada interna (função snapshot) via segredo do vault.
     const providedInternal = req.headers.get('x-internal-secret');
-    const isInternalCall = !!(internalSecret && providedInternal && providedInternal === internalSecret);
+    let isInternalCall = false;
+    if (providedInternal) {
+      const { data: secretRow } = await supabase
+        .schema('vault')
+        .from('decrypted_secrets')
+        .select('decrypted_secret')
+        .eq('name', 'admin_metrics_snapshot_secret')
+        .maybeSingle();
+      const internalSecret = (secretRow as { decrypted_secret?: string } | null)?.decrypted_secret;
+      isInternalCall = !!(internalSecret && providedInternal === internalSecret);
+    }
 
     if (!isInternalCall) {
       const authHeader = req.headers.get('Authorization');
