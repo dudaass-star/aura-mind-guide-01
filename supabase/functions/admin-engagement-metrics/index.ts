@@ -159,14 +159,8 @@ Deno.serve(async (req) => {
     const providedInternal = req.headers.get('x-internal-secret');
     let isInternalCall = false;
     if (providedInternal) {
-      const { data: secretRow } = await supabase
-        .schema('vault')
-        .from('decrypted_secrets')
-        .select('decrypted_secret')
-        .eq('name', 'admin_metrics_snapshot_secret')
-        .maybeSingle();
-      const internalSecret = (secretRow as { decrypted_secret?: string } | null)?.decrypted_secret;
-      isInternalCall = !!(internalSecret && providedInternal === internalSecret);
+      const { data: secretValue } = await supabase.rpc('get_admin_metrics_snapshot_secret');
+      isInternalCall = !!(secretValue && providedInternal === (secretValue as string));
     }
 
     if (!isInternalCall) {
