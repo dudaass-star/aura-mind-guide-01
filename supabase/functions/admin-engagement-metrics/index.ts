@@ -155,20 +155,26 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Validate admin auth
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader?.startsWith('Bearer ')) throw new Error('No authorization header');
+    // Auth: admin logado OU chamada interna (cron do snapshot) via INTERNAL_WEBHOOK_SECRET.
+    const internalSecret = Deno.env.get('INTERNAL_WEBHOOK_SECRET');
+    const providedInternal = req.headers.get('x-internal-secret');
+    const isInternalCall = !!(internalSecret && providedInternal && providedInternal === internalSecret);
 
-    const anonClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const token = authHeader.replace('Bearer ', '');
-    const { data: claimsData, error: claimsError } = await anonClient.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims) throw new Error('Not authenticated');
-    const userId = claimsData.claims.sub as string;
+    if (!isInternalCall) {
+      const authHeader = req.headers.get('Authorization');
+      if (!authHeader?.startsWith('Bearer ')) throw new Error('No authorization header');
 
-    const { data: isAdmin } = await supabase.rpc('has_role', { _user_id: userId, _role: 'admin' });
-    if (!isAdmin) throw new Error('Not admin');
+      const anonClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const token = authHeader.replace('Bearer ', '');
+      const { data: claimsData, error: claimsError } = await anonClient.auth.getClaims(token);
+      if (claimsError || !claimsData?.claims) throw new Error('Not authenticated');
+      const userId = claimsData.claims.sub as string;
+
+      const { data: isAdmin } = await supabase.rpc('has_role', { _user_id: userId, _role: 'admin' });
+      if (!isAdmin) throw new Error('Not admin');
+    }
 
     // Parse date filters
     let dateFrom: string | null = null;
