@@ -16,6 +16,32 @@ const corsHeaders = {
 const METRICS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos
 const metricsCache = new Map<string, { expiresAt: number; payload: string }>();
 
+// Janelas padrão pré-calculadas via snapshot (cron 5min → tabela admin_metrics_snapshots).
+// Filtros customizados fora dessa lista caem no caminho ao vivo (compute + cache em memória).
+const STANDARD_WINDOW_DAYS: Record<string, number> = {
+  today: 0,
+  '7d': 7,
+  '14d': 14,
+  '30d': 30,
+  '90d': 90,
+};
+
+/**
+ * Retorna a chave da janela padrão (today|7d|14d|30d|90d) se o intervalo
+ * dateFrom→dateTo casar com uma das janelas terminando HOJE (BRT). Caso
+ * contrário retorna null (filtro customizado).
+ */
+function matchStandardWindow(dateFrom: string, dateTo: string): string | null {
+  const today = new Date().toISOString().slice(0, 10);
+  if (dateTo !== today) return null;
+  for (const [key, days] of Object.entries(STANDARD_WINDOW_DAYS)) {
+    const expectedFrom = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+      .toISOString().slice(0, 10);
+    if (dateFrom === expectedFrom) return key;
+  }
+  return null;
+}
+
 function getCached(key: string): string | null {
   const hit = metricsCache.get(key);
   if (!hit) return null;
