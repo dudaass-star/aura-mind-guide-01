@@ -204,6 +204,35 @@ Deno.serve(async (req) => {
       console.log(`🔄 Force refresh requested for ${cacheKey}`);
       metricsCache.delete(cacheKey);
     }
+
+    // 📸 Snapshot check — janelas padrão são pré-calculadas por cron a cada 5 min.
+    // Se o filtro casar com hoje/7d/14d/30d/90d e forceRefresh não for pedido,
+    // devolvemos o snapshot direto (dashboard em <200ms). Consideramos stale
+    // após 15 min por segurança (caso o cron falhe).
+    const windowKey = matchStandardWindow(dateFrom || defaultFrom, dateTo || defaultTo);
+    if (windowKey && !forceRefresh) {
+      const { data: snap } = await supabase
+        .from('admin_metrics_snapshots')
+        .select('payload, computed_at')
+        .eq('window_key', windowKey)
+        .maybeSingle();
+      if (snap?.payload) {
+        const ageMs = Date.now() - new Date(snap.computed_at as string).getTime();
+        if (ageMs < 15 * 60 * 1000) {
+          console.log(`📸 Snapshot HIT window=${windowKey} age=${Math.round(ageMs / 1000)}s`);
+          const payload = { ...(snap.payload as Record<string, unknown>), _snapshot_computed_at: snap.computed_at, _snapshot_window: windowKey };
+          return new Response(JSON.stringify(payload), {
+            headers: {
+              ...corsHeaders,
+              'Content-Type': 'application/json',
+              'X-Cache': 'SNAPSHOT',
+              'X-Snapshot-Age-Ms': String(ageMs),
+            },
+          });
+        }
+        console.log(`📸 Snapshot STALE window=${windowKey} age=${Math.round(ageMs / 1000)}s → recompute`);
+      }
+    }
     const computeStartedAt = Date.now();
 
     // ========== ENGAGEMENT METRICS ==========
