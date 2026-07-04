@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_metrics_snapshots: {
+        Row: {
+          compute_ms: number | null
+          computed_at: string
+          date_from: string
+          date_to: string
+          payload: Json
+          window_key: string
+        }
+        Insert: {
+          compute_ms?: number | null
+          computed_at?: string
+          date_from: string
+          date_to: string
+          payload: Json
+          window_key: string
+        }
+        Update: {
+          compute_ms?: number | null
+          computed_at?: string
+          date_from?: string
+          date_to?: string
+          payload?: Json
+          window_key?: string
+        }
+        Relationships: []
+      }
       asaas_payments: {
         Row: {
           amount_cents: number
@@ -3170,6 +3197,7 @@ export type Database = {
         Args: { payload: Json; queue_name: string }
         Returns: number
       }
+      get_admin_metrics_snapshot_secret: { Args: never; Returns: string }
       get_customer_ticket_history: {
         Args: { _days?: number; _email: string; _limit?: number }
         Returns: {

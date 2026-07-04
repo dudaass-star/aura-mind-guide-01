@@ -16,6 +16,32 @@ const corsHeaders = {
 const METRICS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos
 const metricsCache = new Map<string, { expiresAt: number; payload: string }>();
 
+// Janelas padrão pré-calculadas via snapshot (cron 5min → tabela admin_metrics_snapshots).
+// Filtros customizados fora dessa lista caem no caminho ao vivo (compute + cache em memória).
+const STANDARD_WINDOW_DAYS: Record<string, number> = {
+  today: 0,
+  '7d': 7,
+  '14d': 14,
+  '30d': 30,
+  '90d': 90,
+};
+
+/**
+ * Retorna a chave da janela padrão (today|7d|14d|30d|90d) se o intervalo
+ * dateFrom→dateTo casar com uma das janelas terminando HOJE (BRT). Caso
+ * contrário retorna null (filtro customizado).
+ */
+function matchStandardWindow(dateFrom: string, dateTo: string): string | null {
+  const today = new Date().toISOString().slice(0, 10);
+  if (dateTo !== today) return null;
+  for (const [key, days] of Object.entries(STANDARD_WINDOW_DAYS)) {
+    const expectedFrom = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+      .toISOString().slice(0, 10);
+    if (dateFrom === expectedFrom) return key;
+  }
+  return null;
+}
+
 function getCached(key: string): string | null {
   const hit = metricsCache.get(key);
   if (!hit) return null;
@@ -129,20 +155,29 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Validate admin auth
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader?.startsWith('Bearer ')) throw new Error('No authorization header');
+    // Auth: admin logado OU chamada interna (função snapshot) via segredo do vault.
+    const providedInternal = req.headers.get('x-internal-secret');
+    let isInternalCall = false;
+    if (providedInternal) {
+      const { data: secretValue } = await supabase.rpc('get_admin_metrics_snapshot_secret');
+      isInternalCall = !!(secretValue && providedInternal === (secretValue as string));
+    }
 
-    const anonClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const token = authHeader.replace('Bearer ', '');
-    const { data: claimsData, error: claimsError } = await anonClient.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims) throw new Error('Not authenticated');
-    const userId = claimsData.claims.sub as string;
+    if (!isInternalCall) {
+      const authHeader = req.headers.get('Authorization');
+      if (!authHeader?.startsWith('Bearer ')) throw new Error('No authorization header');
 
-    const { data: isAdmin } = await supabase.rpc('has_role', { _user_id: userId, _role: 'admin' });
-    if (!isAdmin) throw new Error('Not admin');
+      const anonClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const token = authHeader.replace('Bearer ', '');
+      const { data: claimsData, error: claimsError } = await anonClient.auth.getClaims(token);
+      if (claimsError || !claimsData?.claims) throw new Error('Not authenticated');
+      const userId = claimsData.claims.sub as string;
+
+      const { data: isAdmin } = await supabase.rpc('has_role', { _user_id: userId, _role: 'admin' });
+      if (!isAdmin) throw new Error('Not admin');
+    }
 
     // Parse date filters
     let dateFrom: string | null = null;
@@ -177,6 +212,35 @@ Deno.serve(async (req) => {
     } else {
       console.log(`🔄 Force refresh requested for ${cacheKey}`);
       metricsCache.delete(cacheKey);
+    }
+
+    // 📸 Snapshot check — janelas padrão são pré-calculadas por cron a cada 5 min.
+    // Se o filtro casar com hoje/7d/14d/30d/90d e forceRefresh não for pedido,
+    // devolvemos o snapshot direto (dashboard em <200ms). Consideramos stale
+    // após 15 min por segurança (caso o cron falhe).
+    const windowKey = matchStandardWindow(dateFrom || defaultFrom, dateTo || defaultTo);
+    if (windowKey && !forceRefresh) {
+      const { data: snap } = await supabase
+        .from('admin_metrics_snapshots')
+        .select('payload, computed_at')
+        .eq('window_key', windowKey)
+        .maybeSingle();
+      if (snap?.payload) {
+        const ageMs = Date.now() - new Date(snap.computed_at as string).getTime();
+        if (ageMs < 15 * 60 * 1000) {
+          console.log(`📸 Snapshot HIT window=${windowKey} age=${Math.round(ageMs / 1000)}s`);
+          const payload = { ...(snap.payload as Record<string, unknown>), _snapshot_computed_at: snap.computed_at, _snapshot_window: windowKey };
+          return new Response(JSON.stringify(payload), {
+            headers: {
+              ...corsHeaders,
+              'Content-Type': 'application/json',
+              'X-Cache': 'SNAPSHOT',
+              'X-Snapshot-Age-Ms': String(ageMs),
+            },
+          });
+        }
+        console.log(`📸 Snapshot STALE window=${windowKey} age=${Math.round(ageMs / 1000)}s → recompute`);
+      }
     }
     const computeStartedAt = Date.now();
 
@@ -1727,6 +1791,26 @@ Deno.serve(async (req) => {
     setCached(cacheKey, responsePayload);
     const elapsedMs = Date.now() - computeStartedAt;
     console.log(`✅ Computed metrics in ${elapsedMs}ms (cached as ${cacheKey})`);
+
+    // 📸 Persiste no snapshot se casar com janela padrão (cron 5min também usa este caminho).
+    if (windowKey) {
+      try {
+        const payloadObj = JSON.parse(responsePayload);
+        await supabase
+          .from('admin_metrics_snapshots')
+          .upsert({
+            window_key: windowKey,
+            date_from: dateFrom || defaultFrom,
+            date_to: dateTo || defaultTo,
+            payload: payloadObj,
+            computed_at: new Date().toISOString(),
+            compute_ms: elapsedMs,
+          }, { onConflict: 'window_key' });
+        console.log(`📸 Snapshot upserted window=${windowKey} compute_ms=${elapsedMs}`);
+      } catch (e) {
+        console.warn('⚠️ Falha ao gravar snapshot (não crítico):', e);
+      }
+    }
 
     return new Response(responsePayload, {
       headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Cache': 'MISS', 'X-Compute-Ms': String(elapsedMs) },
