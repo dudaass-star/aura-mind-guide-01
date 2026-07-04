@@ -1783,6 +1783,26 @@ Deno.serve(async (req) => {
     const elapsedMs = Date.now() - computeStartedAt;
     console.log(`✅ Computed metrics in ${elapsedMs}ms (cached as ${cacheKey})`);
 
+    // 📸 Persiste no snapshot se casar com janela padrão (cron 5min também usa este caminho).
+    if (windowKey) {
+      try {
+        const payloadObj = JSON.parse(responsePayload);
+        await supabase
+          .from('admin_metrics_snapshots')
+          .upsert({
+            window_key: windowKey,
+            date_from: dateFrom || defaultFrom,
+            date_to: dateTo || defaultTo,
+            payload: payloadObj,
+            computed_at: new Date().toISOString(),
+            compute_ms: elapsedMs,
+          }, { onConflict: 'window_key' });
+        console.log(`📸 Snapshot upserted window=${windowKey} compute_ms=${elapsedMs}`);
+      } catch (e) {
+        console.warn('⚠️ Falha ao gravar snapshot (não crítico):', e);
+      }
+    }
+
     return new Response(responsePayload, {
       headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Cache': 'MISS', 'X-Compute-Ms': String(elapsedMs) },
     });
