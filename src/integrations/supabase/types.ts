@@ -3197,6 +3197,7 @@ export type Database = {
         Args: { payload: Json; queue_name: string }
         Returns: number
       }
+      get_admin_metrics_snapshot_secret: { Args: never; Returns: string }
       get_customer_ticket_history: {
         Args: { _days?: number; _email: string; _limit?: number }
         Returns: {
