@@ -20,6 +20,7 @@ import logoOlaAura from "@/assets/logo-ola-aura.png";
 import "@/styles/v2-theme.css";
 import { loadStripe, type Stripe as StripeJs } from "@stripe/stripe-js";
 import { EmbeddedCheckoutProvider, EmbeddedCheckout } from "@stripe/react-stripe-js";
+import { AsaasCardForm } from "@/components/checkout/AsaasCardForm";
 
 type PlanId = "essencial" | "direcao" | "transformacao";
 type BillingPeriod = "monthly" | "quarterly" | "semestral" | "yearly";
@@ -185,6 +186,10 @@ const CheckoutV2 = () => {
   // sem salto pro domínio checkout.stripe.com.
   const [embeddedClientSecret, setEmbeddedClientSecret] = useState<string | null>(null);
   const [stripePromise, setStripePromise] = useState<Promise<StripeJs | null> | null>(null);
+  // Gateway de cartão vindo do system_config. Default stripe até carregar.
+  const [cardGateway, setCardGateway] = useState<"stripe" | "asaas">("stripe");
+  // Quando gateway=asaas, submit do form abre o AsaasCardForm ao invés do embed Stripe.
+  const [asaasCardOpen, setAsaasCardOpen] = useState(false);
 
   // PIX (Asaas): só aparece pra trim/sem/anual. Modal abre com form de CPF
   // (resto dos dados reusa name/email/phone do form principal) e troca pra
@@ -218,6 +223,23 @@ const CheckoutV2 = () => {
     }
     trackBeginCheckout({ plan: selectedPlan, value: trialPriceMap[selectedPlan] });
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Busca gateway de cartão ativo (só afeta rota do cartão, não do PIX).
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from("system_config")
+        .select("value")
+        .eq("key", "card_gateway")
+        .maybeSingle();
+      if (data?.value) {
+        try {
+          const v = typeof data.value === "string" ? JSON.parse(data.value) : data.value;
+          if (v === "asaas" || v === "stripe") setCardGateway(v);
+        } catch { /* mantém default */ }
+      }
+    })();
   }, []);
 
   // Exit-intent (mesma regra do V1: desktop >= 768px)
@@ -316,6 +338,17 @@ const CheckoutV2 = () => {
     setIsLoading(true);
 
     try {
+      // Se o admin roteou cartão para o Asaas, mostra o AsaasCardForm em vez
+      // de disparar o create-checkout do Stripe. Toda a validação/erros dos
+      // 3 campos comuns já rodou acima.
+      if (cardGateway === "asaas") {
+        setAsaasCardOpen(true);
+        setHasRedirected(true);
+        window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
+        setIsLoading(false);
+        return;
+      }
+
       const getCookie = (name: string) => {
         const match = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
         return match ? match[2] : undefined;
@@ -440,6 +473,7 @@ const CheckoutV2 = () => {
   const handleResetCheckout = useCallback(() => {
     setEmbeddedClientSecret(null);
     setStripePromise(null);
+    setAsaasCardOpen(false);
     setHasRedirected(false);
   }, []);
 
@@ -686,6 +720,30 @@ const CheckoutV2 = () => {
                   </div>
                 </div>
               </div>
+            ) : asaasCardOpen ? (
+              <AsaasCardForm
+                plan={selectedPlan}
+                billing={billingPeriod}
+                name={name}
+                email={email}
+                phone={phone}
+                amountLabel={`R$ ${currentPrice}`}
+                periodLabel={periodLabel}
+                installmentMax={12}
+                fbp={(() => {
+                  const m = document.cookie.match(/(?:^|; )_fbp=([^;]+)/);
+                  return m ? decodeURIComponent(m[1]) : undefined;
+                })()}
+                fbc={(() => {
+                  const m = document.cookie.match(/(?:^|; )_fbc=([^;]+)/);
+                  return m ? decodeURIComponent(m[1]) : undefined;
+                })()}
+                gaClientId={getGaClientId() || undefined}
+                onBack={handleResetCheckout}
+                onSuccess={() => {
+                  window.location.href = "/obrigado";
+                }}
+              />
             ) : (
               <>
             {/* Cabeçalho enxuto */}

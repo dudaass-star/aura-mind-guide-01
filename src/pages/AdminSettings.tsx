@@ -5,7 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, Save, Brain, Mic, Mail, Eye } from 'lucide-react';
+import { ArrowLeft, Save, Brain, Mic, Mail, Eye, CreditCard } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const AI_MODELS = [
@@ -25,14 +25,22 @@ const TTS_MODELS = [
   { value: 'inworld/aura', label: 'Inworld Aura', description: 'Voz customizada criada no Inworld' },
 ];
 
+const CARD_GATEWAYS = [
+  { value: 'stripe', label: 'Stripe', description: 'Checkout hospedado, PCI SAQ A. Padrão atual.' },
+  { value: 'asaas', label: 'Asaas', description: 'Formulário nativo no /v2. PCI SAQ A-EP. Suporta parcelado.' },
+];
+
 export default function AdminSettings() {
   const { isLoading, isAdmin, redirectIfNotAdmin } = useAdminAuth();
   const [selectedModel, setSelectedModel] = useState('google/gemini-2.5-pro');
   const [currentModel, setCurrentModel] = useState('google/gemini-2.5-pro');
   const [selectedTTSModel, setSelectedTTSModel] = useState('google/erinome');
   const [currentTTSModel, setCurrentTTSModel] = useState('google/erinome');
+  const [selectedCardGateway, setSelectedCardGateway] = useState('stripe');
+  const [currentCardGateway, setCurrentCardGateway] = useState('stripe');
   const [saving, setSaving] = useState(false);
   const [savingTTS, setSavingTTS] = useState(false);
+  const [savingCardGateway, setSavingCardGateway] = useState(false);
   const [loadingConfig, setLoadingConfig] = useState(true);
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -51,7 +59,7 @@ export default function AdminSettings() {
       const { data, error } = await supabase
         .from('system_config')
         .select('key, value')
-        .in('key', ['ai_model', 'tts_model']);
+        .in('key', ['ai_model', 'tts_model', 'card_gateway']);
 
       if (error) throw error;
 
@@ -68,6 +76,9 @@ export default function AdminSettings() {
         } else if (row.key === 'tts_model') {
           setSelectedTTSModel(val);
           setCurrentTTSModel(val);
+        } else if (row.key === 'card_gateway') {
+          setSelectedCardGateway(val);
+          setCurrentCardGateway(val);
         }
       }
     } catch (e) {
@@ -113,6 +124,22 @@ export default function AdminSettings() {
     }
   };
 
+  const handleSaveCardGateway = async () => {
+    setSavingCardGateway(true);
+    try {
+      const { error } = await supabase
+        .from('system_config')
+        .upsert({ key: 'card_gateway', value: JSON.stringify(selectedCardGateway), updated_at: new Date().toISOString() }, { onConflict: 'key' });
+      if (error) throw error;
+      setCurrentCardGateway(selectedCardGateway);
+      toast({ title: 'Gateway de cartão salvo', description: `Novos checkouts vão usar ${CARD_GATEWAYS.find(g => g.value === selectedCardGateway)?.label}. Assinaturas ativas não são afetadas.` });
+    } catch (e: any) {
+      toast({ title: 'Erro ao salvar', description: e.message, variant: 'destructive' });
+    } finally {
+      setSavingCardGateway(false);
+    }
+  };
+
   if (isLoading || loadingConfig) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -125,6 +152,7 @@ export default function AdminSettings() {
 
   const hasChanges = selectedModel !== currentModel;
   const hasTTSChanges = selectedTTSModel !== currentTTSModel;
+  const hasCardGatewayChanges = selectedCardGateway !== currentCardGateway;
 
   return (
     <div className="min-h-screen bg-background">
@@ -246,6 +274,45 @@ export default function AdminSettings() {
                 <Button onClick={handleSaveTTS} disabled={savingTTS || !hasTTSChanges} variant="sage">
                   <Save className="h-4 w-4 mr-2" />
                   {savingTTS ? 'Salvando...' : 'Salvar'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <CreditCard className="h-5 w-5 text-primary" />
+                <CardTitle>Gateway de Cartão</CardTitle>
+              </div>
+              <CardDescription>
+                Define qual gateway processa novos pagamentos com cartão no /v2. Assinaturas ativas continuam no gateway em que foram criadas.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Select value={selectedCardGateway} onValueChange={setSelectedCardGateway}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione um gateway" />
+                </SelectTrigger>
+                <SelectContent>
+                  {CARD_GATEWAYS.map(gw => (
+                    <SelectItem key={gw.value} value={gw.value}>
+                      <div className="flex flex-col">
+                        <span className="font-medium">{gw.label}</span>
+                        <span className="text-xs text-muted-foreground">{gw.description}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <div className="flex items-center justify-between pt-2">
+                <p className="text-sm text-muted-foreground">
+                  Gateway ativo: <span className="font-medium text-foreground">{CARD_GATEWAYS.find(g => g.value === currentCardGateway)?.label || currentCardGateway}</span>
+                </p>
+                <Button onClick={handleSaveCardGateway} disabled={savingCardGateway || !hasCardGatewayChanges} variant="sage">
+                  <Save className="h-4 w-4 mr-2" />
+                  {savingCardGateway ? 'Salvando...' : 'Salvar'}
                 </Button>
               </div>
             </CardContent>
