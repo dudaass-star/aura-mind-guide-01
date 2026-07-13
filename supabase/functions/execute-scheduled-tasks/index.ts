@@ -281,6 +281,112 @@ Deno.serve(async (req) => {
             break;
           }
 
+          case 'card_retry_asaas': {
+            // Retentativa automática de cartão recorrente Asaas após OVERDUE.
+            // Reusa o `creditCardToken` salvo na subscription — não pede cartão de novo.
+            // Roda em D+2, D+4, D+7. Se qualquer uma passar, cancela as demais.
+            // Se a 3ª (última) falhar, cancela a subscription Asaas pra parar o loop.
+            const ASAAS_API_KEY = Deno.env.get('ASAAS_API_KEY') || '';
+            const ASAAS_BASE_URL = (Deno.env.get('ASAAS_ENV') === 'production' || !Deno.env.get('ASAAS_ENV'))
+              ? 'https://api.asaas.com/v3'
+              : 'https://api-sandbox.asaas.com/v3';
+            const paymentId = payload.paymentId as string;
+            const subscriptionId = payload.subscriptionId as string;
+            const customerId = payload.customerId as string | null;
+            const value = Number(payload.value) || 0;
+            const attempt = Number(payload.attempt) || 1;
+            const maxAttempts = Number(payload.maxAttempts) || 3;
+
+            if (!ASAAS_API_KEY || !paymentId || !subscriptionId) {
+              console.warn('⚠️ card_retry_asaas payload incompleto ou sem ASAAS_API_KEY');
+              break;
+            }
+
+            const asaasFetch = async (path: string, init?: RequestInit) => {
+              const r = await fetch(`${ASAAS_BASE_URL}${path}`, {
+                ...init,
+                headers: {
+                  access_token: ASAAS_API_KEY,
+                  'Content-Type': 'application/json',
+                  'User-Agent': 'Aura/1.0',
+                  ...(init?.headers || {}),
+                },
+              });
+              const j = await r.json().catch(() => ({}));
+              return { ok: r.ok, status: r.status, json: j };
+            };
+
+            // 1) Checar status do payment original — pode já ter sido pago por retry externo.
+            const orig = await asaasFetch(`/payments/${paymentId}`);
+            const origStatus = (orig.json as any)?.status as string | undefined;
+            if (origStatus === 'CONFIRMED' || origStatus === 'RECEIVED' || origStatus === 'RECEIVED_IN_CASH') {
+              console.log(`✅ Payment ${paymentId} já pago (${origStatus}), cancelando retries pendentes`);
+              await supabase
+                .from('scheduled_tasks')
+                .update({ status: 'canceled', executed_at: new Date().toISOString() })
+                .eq('task_type', 'card_retry_asaas')
+                .eq('status', 'pending')
+                .contains('payload', { paymentId });
+              break;
+            }
+
+            // 2) Buscar token do cartão salvo na sub.
+            const sub = await asaasFetch(`/subscriptions/${subscriptionId}`);
+            const cardToken = (sub.json as any)?.creditCard?.creditCardToken as string | undefined;
+            const subCustomer = (sub.json as any)?.customer as string | undefined;
+            if (!cardToken) {
+              console.warn(`⚠️ Sub ${subscriptionId} sem creditCardToken salvo, retry impossível`);
+              // Não faz sentido continuar tentando sem token
+              await supabase
+                .from('scheduled_tasks')
+                .update({ status: 'canceled', executed_at: new Date().toISOString() })
+                .eq('task_type', 'card_retry_asaas')
+                .eq('status', 'pending')
+                .contains('payload', { paymentId });
+              break;
+            }
+
+            // 3) Cria nova cobrança avulsa reusando o token.
+            const today = new Intl.DateTimeFormat('en-CA', {
+              timeZone: 'America/Sao_Paulo',
+              year: 'numeric', month: '2-digit', day: '2-digit',
+            }).format(new Date());
+            const chargeResp = await asaasFetch('/payments', {
+              method: 'POST',
+              body: JSON.stringify({
+                customer: customerId || subCustomer,
+                billingType: 'CREDIT_CARD',
+                creditCardToken: cardToken,
+                value,
+                dueDate: today,
+                description: `Retry ${attempt}/${maxAttempts} - cobrança ${paymentId}`,
+                externalReference: `retry_${paymentId}_${attempt}`,
+              }),
+            });
+            const newStatus = (chargeResp.json as any)?.status as string | undefined;
+            console.log(`💳 card_retry_asaas #${attempt} payment=${paymentId} status=${newStatus} ok=${chargeResp.ok}`);
+
+            if (chargeResp.ok && (newStatus === 'CONFIRMED' || newStatus === 'RECEIVED')) {
+              // Sucesso: cancela demais retries pendentes.
+              await supabase
+                .from('scheduled_tasks')
+                .update({ status: 'canceled', executed_at: new Date().toISOString() })
+                .eq('task_type', 'card_retry_asaas')
+                .eq('status', 'pending')
+                .contains('payload', { paymentId });
+              console.log(`✅ Retry #${attempt} recuperou payment ${paymentId}`);
+            } else if (attempt >= maxAttempts) {
+              // Última tentativa falhou: cancela subscription pra parar de acumular OVERDUE.
+              try {
+                await asaasFetch(`/subscriptions/${subscriptionId}`, { method: 'DELETE' });
+                console.log(`🛑 Sub ${subscriptionId} cancelada após ${maxAttempts} retries falhos`);
+              } catch (delErr) {
+                console.warn('⚠️ Falha cancelando sub após retries:', (delErr as Error).message);
+              }
+            }
+            break;
+          }
+
           default:
             console.warn(`⚠️ Unknown task type: ${task.task_type}`);
         }
