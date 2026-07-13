@@ -733,6 +733,7 @@ const CheckoutV2 = () => {
                 amountLabel={`R$ ${currentPrice}`}
                 periodLabel={periodLabel}
                 installmentMax={12}
+                trial={billingPeriod === "monthly"}
                 fbp={(() => {
                   const m = document.cookie.match(/(?:^|; )_fbp=([^;]+)/);
                   return m ? decodeURIComponent(m[1]) : undefined;
