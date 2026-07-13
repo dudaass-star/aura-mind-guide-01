@@ -55,6 +55,7 @@ export function AsaasCardForm({
   const [mode, setMode] = useState<"recurring" | "installment">("recurring");
   const [installments, setInstallments] = useState<number>(2);
   const [loading, setLoading] = useState(false);
+  const [pendingReview, setPendingReview] = useState(false);
 
   const canInstallment = billing !== "monthly";
 
@@ -102,9 +103,13 @@ export function AsaasCardForm({
       });
       if (error) throw new Error(error.message || "Erro ao processar cartão");
       if (data?.error) throw new Error(data.error);
-      if (data?.success || data?.pending) {
-        toast.success(data?.pending ? "Pagamento em análise — você recebe confirmação em instantes." : "Pagamento aprovado!");
+      if (data?.success) {
+        toast.success("Pagamento aprovado!");
         onSuccess();
+      } else if (data?.pending) {
+        // Não redireciona pra /obrigado — mostra tela intermediária para o usuário
+        // não achar que deu tudo certo antes do webhook Asaas confirmar.
+        setPendingReview(true);
       } else {
         throw new Error("Resposta inesperada do provedor");
       }
@@ -117,6 +122,40 @@ export function AsaasCardForm({
   };
 
   const inputCls = "mt-1.5 bg-white/5 border-white/15 text-white placeholder:text-white/55 focus-visible:ring-1 focus-visible:ring-[hsl(140_18%_55%)]";
+
+  if (pendingReview) {
+    return (
+      <div className="space-y-5">
+        <div className="text-center">
+          <h1 className="font-display text-2xl md:text-3xl font-semibold mb-2 tracking-tight">
+            Pagamento em análise
+          </h1>
+          <p className="text-white/70 text-sm">
+            Seu cartão passou pela análise antifraude do Asaas. Costuma levar poucos minutos.
+          </p>
+        </div>
+        <div className="bg-white/[0.03] border border-white/10 rounded-2xl p-5 space-y-4 text-sm text-white/80">
+          <p>
+            Assim que aprovar, você recebe uma mensagem no WhatsApp em{" "}
+            <span className="font-semibold text-white">{phone}</span> e um email em{" "}
+            <span className="font-semibold text-white">{email}</span>.
+          </p>
+          <p className="text-white/60">
+            Pode fechar essa tela — a gente te avisa. Se em 10 minutos nada chegar, entra em contato pelo email <strong className="text-white/80">suporte@olaaura.com.br</strong>.
+          </p>
+          <Button
+            type="button"
+            variant="sage"
+            size="xl"
+            onClick={() => (window.location.href = "/meu-espaco")}
+            className="w-full rounded-full"
+          >
+            Acompanhar no meu espaço
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">
