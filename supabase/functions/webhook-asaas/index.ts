@@ -32,8 +32,15 @@ const CYCLE_DAYS: Record<string, number> = {
   monthly: 31,
   quarterly: 93,
   semestral: 186,
+  semiannual: 186,
   yearly: 372,
 };
+
+// Normaliza o billing period pra chave que o portal/plan-pricing usa ("semiannual").
+// Legacy: rows antigas de asaas_payments podem trazer "semestral".
+function normalizeBillingCycle(bp: string): string {
+  return bp === "semestral" ? "semiannual" : bp;
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
