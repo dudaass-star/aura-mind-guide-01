@@ -267,10 +267,10 @@ Deno.serve(async (req) => {
               try {
                 await supabase.functions.invoke('send-transactional-email', {
                   body: {
-                    templateName: 'welcome',
+                    templateName: 'dunning-payment-failed',
                     recipientEmail: targetEmail,
                     idempotencyKey: `installment-renewal-${task.id}`,
-                    templateData: { name: firstName, portalUrl },
+                    templateData: { name: firstName, paymentLink: portalUrl },
                   },
                 });
                 console.log('✅ Installment renewal email enfileirado');
