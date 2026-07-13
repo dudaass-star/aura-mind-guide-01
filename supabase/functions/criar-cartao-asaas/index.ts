@@ -18,6 +18,14 @@ const PRICES: Record<string, Record<string, number>> = {
   transformacao: { monthly: 7990, quarterly: 21390, semestral: 33590, yearly: 57490 },
 };
 
+// Trial de 7 dias (mensal cartão) — 1ª cobrança reduzida, depois valor cheio recorrente.
+// Bate com o `trialPriceMap` do CheckoutV2.tsx.
+const TRIAL_PRICES_CENTS: Record<string, number> = {
+  essencial: 690,
+  direcao: 990,
+  transformacao: 1990,
+};
+
 const CYCLE_MAP: Record<string, string> = {
   monthly: "MONTHLY",
   quarterly: "QUARTERLY",
@@ -30,6 +38,22 @@ const PLAN_NAMES: Record<string, string> = {
   direcao: "Direção",
   transformacao: "Transformação",
 };
+
+// Traduz mensagens comuns do Asaas para PT-BR amigável.
+// Se não bater nenhum padrão, cai no texto original.
+function friendlyAsaasError(raw: string): string {
+  const s = (raw || "").toLowerCase();
+  if (s.includes("invalid card") || s.includes("cartão inválido")) return "Cartão inválido. Confira número, validade e CVV.";
+  if (s.includes("expired") || s.includes("expirado")) return "Cartão expirado.";
+  if (s.includes("insufficient") || s.includes("saldo") || s.includes("limite")) return "Cartão sem limite disponível.";
+  if (s.includes("declined") || s.includes("recusado") || s.includes("not authorized") || s.includes("não autorizado")) {
+    return "Pagamento recusado pelo banco emissor. Tente outro cartão.";
+  }
+  if (s.includes("cvv") || s.includes("cvc") || s.includes("verification")) return "CVV incorreto.";
+  if (s.includes("holder")) return "Dados do titular incorretos.";
+  if (s.includes("cpf")) return "CPF inválido para essa cobrança.";
+  return raw;
+}
 
 function cleanDigits(s: string): string {
   return (s || "").replace(/\D/g, "");
