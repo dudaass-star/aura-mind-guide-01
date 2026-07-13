@@ -222,7 +222,13 @@ const UserPortal = () => {
           userId={userId}
           currentPlan={(profile?.plan as "essencial" | "direcao" | "transformacao" | null) ?? null}
           currentBilling={(profile?.billing_cycle as any) ?? null}
-          paymentMethod={isAsaasPix ? "pix" : "card"}
+          paymentGateway={
+            isAsaasPix
+              ? "asaas-pix"
+              : (profile as any)?.card_gateway === "asaas"
+                ? "asaas-card"
+                : "stripe-card"
+          }
         />
       )}
     </>

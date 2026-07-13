@@ -31,8 +31,8 @@ interface Props {
   userId: string;
   currentPlan: PlanId | null;
   currentBilling?: BillingCycle | null;
-  /** Método de pagamento atual — roteia para a edge function correta. */
-  paymentMethod: "card" | "pix";
+  /** Gateway ativo — roteia para a edge function correta e ajusta copy. */
+  paymentGateway: "stripe-card" | "asaas-pix" | "asaas-card";
 }
 
 export function ChangePlanDialog({
@@ -41,7 +41,7 @@ export function ChangePlanDialog({
   userId,
   currentPlan,
   currentBilling,
-  paymentMethod,
+  paymentGateway,
 }: Props) {
   const [billing, setBilling] = useState<BillingCycle>(currentBilling ?? "monthly");
   const [selected, setSelected] = useState<PlanId | null>(null);
@@ -54,7 +54,22 @@ export function ChangePlanDialog({
   } | null>(null);
   const queryClient = useQueryClient();
 
-  const isPix = paymentMethod === "pix";
+  const isAsaas = paymentGateway === "asaas-pix" || paymentGateway === "asaas-card";
+  const isPix = paymentGateway === "asaas-pix";
+  const isAsaasCard = paymentGateway === "asaas-card";
+  // Mostra tela de sucesso com próxima cobrança em qualquer fluxo Asaas
+  // (PIX e cartão recorrente Asaas reusam a mesma edge com retorno idêntico).
+  const showsNextCharge = isAsaas;
+  const copyDescription = isPix
+    ? "A troca vale a partir da próxima cobrança PIX. Hoje não rola cobrança nenhuma."
+    : isAsaasCard
+      ? "A troca vale a partir da próxima cobrança no seu cartão. Hoje não rola cobrança nenhuma."
+      : "A diferença é cobrada (ou creditada) hoje no cartão já cadastrado.";
+  const copyConfirm = isPix
+    ? "Sua próxima cobrança PIX já vem com o novo valor. Nada é cobrado agora."
+    : isAsaasCard
+      ? "Sua próxima cobrança no cartão já vem com o novo valor. Nada é cobrado agora."
+      : "A diferença é cobrada agora no seu cartão. Se for downgrade, vira crédito no próximo ciclo.";
 
   const reset = () => {
     setSelected(null);
@@ -73,7 +88,7 @@ export function ChangePlanDialog({
     if (!selected) return;
     setLoading(true);
     try {
-      const functionName = isPix ? "change-asaas-plan" : "change-subscription-plan";
+      const functionName = isAsaas ? "change-asaas-plan" : "change-subscription-plan";
       const { data, error } = await supabasePortal.functions.invoke(functionName, {
         body: { userId, targetPlan: selected, billing },
       });
@@ -89,8 +104,8 @@ export function ChangePlanDialog({
 
       await queryClient.invalidateQueries({ queryKey: ["portal-profile", userId] });
 
-      if (isPix) {
-        // PIX: mostra tela de sucesso com próxima cobrança
+      if (showsNextCharge) {
+        // Asaas: mostra tela de sucesso com data + valor da próxima cobrança
         setSuccess({
           planName: (data as any)?.newPlanName ?? PLAN_LABELS[selected],
           nextChargeDate: (data as any)?.nextChargeDate,
@@ -123,9 +138,7 @@ export function ChangePlanDialog({
         <DialogHeader>
           <DialogTitle className="font-['Nunito']">Trocar de plano</DialogTitle>
           <DialogDescription className="font-['Nunito']">
-            {isPix
-              ? "A troca vale a partir da próxima cobrança PIX. Hoje não rola cobrança nenhuma."
-              : "A diferença é cobrada (ou creditada) hoje no cartão já cadastrado."}
+            {copyDescription}
           </DialogDescription>
         </DialogHeader>
 
@@ -138,7 +151,7 @@ export function ChangePlanDialog({
               </div>
               {success.nextChargeDate && success.nextChargeAmount != null && (
                 <p className="text-muted-foreground">
-                  Sua próxima cobrança PIX, no dia <strong>{success.nextChargeDate}</strong>,
+                  Sua próxima cobrança, no dia <strong>{success.nextChargeDate}</strong>,
                   já vem no valor novo: <strong>{fmtBRL(success.nextChargeAmount)}</strong>.
                 </p>
               )}
@@ -256,9 +269,7 @@ export function ChangePlanDialog({
                 </span>
               </div>
               <p className="text-xs text-muted-foreground pt-1">
-                {isPix
-                  ? "Sua próxima cobrança PIX já vem com o novo valor. Nada é cobrado agora."
-                  : "A diferença é cobrada agora no seu cartão. Se for downgrade, vira crédito no próximo ciclo."}
+                {copyConfirm}
               </p>
             </div>
 
