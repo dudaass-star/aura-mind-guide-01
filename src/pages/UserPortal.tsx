@@ -221,7 +221,12 @@ const UserPortal = () => {
           onOpenChange={setChangePlanOpen}
           userId={userId}
           currentPlan={(profile?.plan as "essencial" | "direcao" | "transformacao" | null) ?? null}
-          currentBilling={(profile?.billing_cycle as any) ?? null}
+          currentBilling={
+            // Legacy: rows antigas gravaram "semestral"; ChangePlanDialog espera "semiannual".
+            (profile?.billing_cycle === "semestral"
+              ? "semiannual"
+              : (profile?.billing_cycle as any)) ?? null
+          }
           paymentGateway={
             isAsaasPix
               ? "asaas-pix"

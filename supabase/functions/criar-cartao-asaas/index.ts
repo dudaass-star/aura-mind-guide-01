@@ -18,6 +18,14 @@ const PRICES: Record<string, Record<string, number>> = {
   transformacao: { monthly: 7990, quarterly: 21390, semestral: 33590, yearly: 57490 },
 };
 
+// Trial de 7 dias (mensal cartão) — 1ª cobrança reduzida, depois valor cheio recorrente.
+// Bate com o `trialPriceMap` do CheckoutV2.tsx.
+const TRIAL_PRICES_CENTS: Record<string, number> = {
+  essencial: 690,
+  direcao: 990,
+  transformacao: 1990,
+};
+
 const CYCLE_MAP: Record<string, string> = {
   monthly: "MONTHLY",
   quarterly: "QUARTERLY",
@@ -30,6 +38,22 @@ const PLAN_NAMES: Record<string, string> = {
   direcao: "Direção",
   transformacao: "Transformação",
 };
+
+// Traduz mensagens comuns do Asaas para PT-BR amigável.
+// Se não bater nenhum padrão, cai no texto original.
+function friendlyAsaasError(raw: string): string {
+  const s = (raw || "").toLowerCase();
+  if (s.includes("invalid card") || s.includes("cartão inválido")) return "Cartão inválido. Confira número, validade e CVV.";
+  if (s.includes("expired") || s.includes("expirado")) return "Cartão expirado.";
+  if (s.includes("insufficient") || s.includes("saldo") || s.includes("limite")) return "Cartão sem limite disponível.";
+  if (s.includes("declined") || s.includes("recusado") || s.includes("not authorized") || s.includes("não autorizado")) {
+    return "Pagamento recusado pelo banco emissor. Tente outro cartão.";
+  }
+  if (s.includes("cvv") || s.includes("cvc") || s.includes("verification")) return "CVV incorreto.";
+  if (s.includes("holder")) return "Dados do titular incorretos.";
+  if (s.includes("cpf")) return "CPF inválido para essa cobrança.";
+  return raw;
+}
 
 function cleanDigits(s: string): string {
   return (s || "").replace(/\D/g, "");
@@ -91,7 +115,7 @@ Deno.serve(async (req) => {
 
     const body = await req.json();
     const {
-      plan, billing, mode, installments,
+      plan, billing, mode, installments, trial,
       name, email, phone, cpf,
       card, holder,
       fbp, fbc, gaClientId,
@@ -174,7 +198,8 @@ Deno.serve(async (req) => {
       const json = await resp.json().catch(() => ({}));
       if (!resp.ok) {
         console.error(`[criar-cartao-asaas] Asaas ${path} falhou:`, resp.status, json);
-        throw new Error(json?.errors?.[0]?.description || `Erro Asaas (${resp.status})`);
+        const raw = json?.errors?.[0]?.description || `Erro Asaas (${resp.status})`;
+        throw new Error(friendlyAsaasError(raw));
       }
       return json;
     };
@@ -237,32 +262,21 @@ Deno.serve(async (req) => {
     let subscriptionId: string | null = null;
     let paymentId: string | null = null;
     let paymentMethodLabel = "";
+    // `paymentStatus` sempre reflete a 1ª cobrança (não o ciclo de vida da subscription).
+    // Essa é a fonte da verdade que o front usa pra decidir success/pending/erro.
+    let paymentStatus: string | undefined;
+    let invoiceUrl: string | null = null;
+    let rawForStorage: any = null;
 
-    if (paymentMode === "recurring") {
-      // POST /subscriptions com CREDIT_CARD → cria assinatura + 1ª cobrança
-      asaasResp = await asaasFetch("/subscriptions", {
-        method: "POST",
-        body: JSON.stringify({
-          customer: asaasCustomerId,
-          billingType: "CREDIT_CARD",
-          cycle: CYCLE_MAP[billing],
-          value: amountDecimal,
-          nextDueDate: todayBRT,
-          description,
-          creditCard,
-          creditCardHolderInfo,
-          remoteIp,
-        }),
-      });
-      subscriptionId = asaasResp?.id;
-      // Busca 1ª cobrança gerada
-      const payments = await asaasFetch(`/subscriptions/${subscriptionId}/payments?limit=1`);
-      paymentId = payments?.data?.[0]?.id || null;
-      paymentMethodLabel = "CREDIT_CARD_RECURRING";
-    } else {
-      // POST /payments com installmentCount → cobrança parcelada única
+    // Trial mensal cartão: 1ª cobrança em valor reduzido HOJE + subscription no valor cheio a partir de D+7.
+    // Ativa somente pra mensal (Trim/Sem/Anual sempre à vista recorrente sem trial).
+    const useTrial = paymentMode === "recurring" && trial === true && billing === "monthly";
+    const trialCents = useTrial ? (TRIAL_PRICES_CENTS[plan] ?? amountCents) : null;
+
+    if (paymentMode === "installment") {
+      // POST /payments com installmentCount → cobrança parcelada única (status = payment status)
       const nInstallments = Math.max(2, Math.min(12, Number(installments) || 2));
-      asaasResp = await asaasFetch("/payments", {
+      const paymentResp = await asaasFetch("/payments", {
         method: "POST",
         body: JSON.stringify({
           customer: asaasCustomerId,
@@ -276,13 +290,127 @@ Deno.serve(async (req) => {
           remoteIp,
         }),
       });
-      paymentId = asaasResp?.id;
+      asaasResp = paymentResp;
+      paymentId = paymentResp?.id;
+      paymentStatus = paymentResp?.status as string | undefined;
+      invoiceUrl = paymentResp?.invoiceUrl || null;
+      rawForStorage = paymentResp;
       paymentMethodLabel = "CREDIT_CARD_INSTALLMENT";
+    } else if (useTrial) {
+      // 1) Cobra o trial de 7d hoje
+      const trialDecimal = (trialCents ?? amountCents) / 100;
+      const trialPayment = await asaasFetch("/payments", {
+        method: "POST",
+        body: JSON.stringify({
+          customer: asaasCustomerId,
+          billingType: "CREDIT_CARD",
+          value: trialDecimal,
+          dueDate: todayBRT,
+          description: `${description} (7d)`.slice(0, 100),
+          creditCard,
+          creditCardHolderInfo,
+          remoteIp,
+          externalReference: `aura_trial_${plan}_${Date.now()}`,
+        }),
+      });
+      paymentId = trialPayment?.id;
+      paymentStatus = trialPayment?.status as string | undefined;
+      invoiceUrl = trialPayment?.invoiceUrl || null;
+      rawForStorage = trialPayment;
+      asaasResp = trialPayment;
+      paymentMethodLabel = "CREDIT_CARD_RECURRING";
+
+      // Só cria subscription se o trial não foi RECUSADO de cara.
+      // (AWAITING_RISK_ANALYSIS ainda entra — se depois for REPROVED, webhook cancela a sub.)
+      const declinedStatuses = new Set(["REFUSED", "CHARGEBACK", "DUNNING_REQUESTED", "DUNNING_RECEIVED"]);
+      const okToCreateSub =
+        !!paymentId &&
+        !!paymentStatus &&
+        !declinedStatuses.has(paymentStatus);
+
+      if (okToCreateSub) {
+        try {
+          const cardToken = trialPayment?.creditCard?.creditCardToken as string | undefined;
+          // nextDueDate = hoje + 7 dias (formatado BRT)
+          const in7 = new Date(Date.now() + 7 * 86400_000);
+          const nextDue = new Intl.DateTimeFormat("en-CA", {
+            timeZone: "America/Sao_Paulo",
+            year: "numeric", month: "2-digit", day: "2-digit",
+          }).format(in7);
+          const subPayload: Record<string, unknown> = {
+            customer: asaasCustomerId,
+            billingType: "CREDIT_CARD",
+            cycle: "MONTHLY",
+            value: amountDecimal,
+            nextDueDate: nextDue,
+            description,
+            remoteIp,
+          };
+          if (cardToken) {
+            subPayload.creditCardToken = cardToken;
+          } else {
+            // sem token (edge case) → repassa os dados do cartão pra Asaas tokenizar de novo
+            subPayload.creditCard = creditCard;
+            subPayload.creditCardHolderInfo = creditCardHolderInfo;
+          }
+          const subResp = await asaasFetch("/subscriptions", {
+            method: "POST",
+            body: JSON.stringify(subPayload),
+          });
+          subscriptionId = subResp?.id || null;
+        } catch (subErr) {
+          console.error("[criar-cartao-asaas] trial: sub creation failed (non-blocking):", subErr);
+          // Se falhou criar sub, ainda temos o trial cobrado — logar e seguir.
+          // Precisa ser visível: alerta em failed_message_log.
+          await supabase.from("failed_message_log").insert({
+            failure_reason: "asaas_trial_subscription_failed",
+            error_details: {
+              paymentId, plan, billing,
+              email: emailClean,
+              message: subErr instanceof Error ? subErr.message : String(subErr),
+            },
+          }).catch(() => {});
+        }
+      }
+    } else {
+      // Recorrente sem trial (Trim/Sem/Anual, ou monthly com trial=false):
+      // POST /subscriptions com cobrança HOJE → status vem da 1ª cobrança, não da sub.
+      const subResp = await asaasFetch("/subscriptions", {
+        method: "POST",
+        body: JSON.stringify({
+          customer: asaasCustomerId,
+          billingType: "CREDIT_CARD",
+          cycle: CYCLE_MAP[billing],
+          value: amountDecimal,
+          nextDueDate: todayBRT,
+          description,
+          creditCard,
+          creditCardHolderInfo,
+          remoteIp,
+        }),
+      });
+      subscriptionId = subResp?.id || null;
+      // Busca 1ª cobrança gerada + lê o status DELA (fonte da verdade, não a sub)
+      let firstPayment: any = null;
+      try {
+        const payments = await asaasFetch(`/subscriptions/${subscriptionId}/payments?limit=1`);
+        firstPayment = payments?.data?.[0] || null;
+      } catch (pErr) {
+        console.warn("[criar-cartao-asaas] falha buscando 1ª cobrança da sub:", pErr);
+      }
+      paymentId = firstPayment?.id || null;
+      paymentStatus = (firstPayment?.status as string | undefined) || (subResp?.status as string | undefined);
+      invoiceUrl = firstPayment?.invoiceUrl || null;
+      rawForStorage = { subscription: subResp, firstPayment };
+      asaasResp = firstPayment || subResp;
+      paymentMethodLabel = "CREDIT_CARD_RECURRING";
     }
 
-    // Persiste registro do payment (webhook completa a ativação)
+    // Persiste asaas_payments — se falhar, NÃO é non-blocking:
+    // sem esse registro, o webhook não linka o pagamento a nenhum cliente
+    // e a ativação nunca acontece. Registra em failed_message_log e devolve erro.
     if (paymentId) {
-      await supabase.from("asaas_payments").insert({
+      const { error: insErr } = await supabase.from("asaas_payments").insert({
         asaas_payment_id: paymentId,
         asaas_customer_id: asaasCustomerId,
         asaas_subscription_id: subscriptionId,
@@ -294,15 +422,32 @@ Deno.serve(async (req) => {
         plan,
         billing_period: billing,
         amount_cents: amountCents,
-        status: (asaasResp?.status as string) || "PENDING",
+        status: paymentStatus || "PENDING",
         payment_method: paymentMethodLabel,
-        invoice_url: asaasResp?.invoiceUrl || null,
+        invoice_url: invoiceUrl,
         fbp: fbp || null,
         fbc: fbc || null,
         ga_client_id: gaClientId || null,
-        raw_payload: asaasResp,
-      }).select().maybeSingle().catch((e) => {
-        console.warn("[criar-cartao-asaas] insert asaas_payments (non-blocking):", e?.message);
+        raw_payload: rawForStorage,
+      });
+      if (insErr) {
+        console.error("[criar-cartao-asaas] ❌ INSERT asaas_payments falhou:", insErr);
+        await supabase.from("failed_message_log").insert({
+          failure_reason: "asaas_payments_insert_failed",
+          error_details: {
+            paymentId, subscriptionId, plan, billing,
+            email: emailClean, error: insErr.message,
+          },
+        }).catch(() => {});
+        return new Response(JSON.stringify({
+          error: "Pagamento criado mas falha ao registrar. Fala com o suporte com esse código: " + paymentId,
+        }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+    } else {
+      // Sem paymentId significa que Asaas não retornou nada persistível — provavelmente erro upstream
+      console.error("[criar-cartao-asaas] ❌ Asaas não retornou paymentId");
+      return new Response(JSON.stringify({ error: "Não conseguimos processar o pagamento agora. Tenta de novo." }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -313,19 +458,33 @@ Deno.serve(async (req) => {
         .eq("id", existingProfileId);
     }
 
-    // Status final: CONFIRMED/RECEIVED = sucesso na hora; qualquer outra coisa (AWAITING_RISK_ANALYSIS,
-    // PENDING) — o webhook completa quando o Asaas resolver.
-    const status = asaasResp?.status as string | undefined;
-    const success = status === "CONFIRMED" || status === "RECEIVED" || status === "ACTIVE";
+    // Decisão de UX (front usa isso):
+    // - success=true → CONFIRMED/RECEIVED (cartão aprovou na hora) → /obrigado
+    // - pending=true → AWAITING_RISK_ANALYSIS → tela de análise
+    // - qualquer outro (REFUSED, DECLINED, etc) → erro
+    const isSuccess = paymentStatus === "CONFIRMED" || paymentStatus === "RECEIVED";
+    const isPending = paymentStatus === "AWAITING_RISK_ANALYSIS";
+
+    if (!isSuccess && !isPending) {
+      // Cartão negado — tentamos cancelar a sub criada (se houver) pra não deixar zumbi
+      if (subscriptionId) {
+        await asaasFetch(`/subscriptions/${subscriptionId}`, { method: "DELETE" }).catch(() => {});
+      }
+      return new Response(JSON.stringify({
+        error: "Pagamento recusado pelo banco emissor. Tente outro cartão.",
+        status: paymentStatus,
+      }), { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
 
     return new Response(JSON.stringify({
-      success,
-      pending: !success,
-      status,
+      success: isSuccess,
+      pending: isPending,
+      status: paymentStatus,
       paymentId,
       subscriptionId,
-      invoiceUrl: asaasResp?.invoiceUrl || null,
+      invoiceUrl,
       mode: paymentMode,
+      trial: useTrial,
     }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
   } catch (error) {

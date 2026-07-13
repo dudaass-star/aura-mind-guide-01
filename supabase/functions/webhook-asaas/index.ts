@@ -32,8 +32,15 @@ const CYCLE_DAYS: Record<string, number> = {
   monthly: 31,
   quarterly: 93,
   semestral: 186,
+  semiannual: 186,
   yearly: 372,
 };
+
+// Normaliza o billing period pra chave que o portal/plan-pricing usa ("semiannual").
+// Legacy: rows antigas de asaas_payments podem trazer "semestral".
+function normalizeBillingCycle(bp: string): string {
+  return bp === "semestral" ? "semiannual" : bp;
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -158,10 +165,16 @@ Deno.serve(async (req) => {
       PAYMENT_OVERDUE: "OVERDUE",
       PAYMENT_REFUNDED: "REFUNDED",
       PAYMENT_DELETED: "DELETED",
+      PAYMENT_AWAITING_RISK_ANALYSIS: "AWAITING_RISK_ANALYSIS",
+      PAYMENT_APPROVED_BY_RISK_ANALYSIS: "CONFIRMED",
+      PAYMENT_REPROVED_BY_RISK_ANALYSIS: "REFUSED",
     };
 
     const newStatus = statusMap[event] || (payment.status as string) || "UNKNOWN";
-    const isPaid = event === "PAYMENT_CONFIRMED" || event === "PAYMENT_RECEIVED";
+    const isPaid =
+      event === "PAYMENT_CONFIRMED" ||
+      event === "PAYMENT_RECEIVED" ||
+      event === "PAYMENT_APPROVED_BY_RISK_ANALYSIS";
 
     const updatePayload: Record<string, unknown> = {
       status: newStatus,
@@ -486,7 +499,11 @@ Deno.serve(async (req) => {
         // ────────────────────────────────────────────────────────────────
         try {
           const pm = (updated?.payment_method as string | undefined) || "";
-          const isRecurringCard = pm === "CREDIT_CARD" && !!overdueSubscriptionId;
+          // Cartão recorrente é gravado como "CREDIT_CARD_RECURRING" pelo criar-cartao-asaas.
+          // Aceita variantes legadas ("CREDIT_CARD") por defesa.
+          const isRecurringCard =
+            (pm === "CREDIT_CARD_RECURRING" || pm === "CREDIT_CARD") &&
+            !!overdueSubscriptionId;
           if (isRecurringCard) {
             const { data: existingRetry } = await supabase
               .from("scheduled_tasks")
