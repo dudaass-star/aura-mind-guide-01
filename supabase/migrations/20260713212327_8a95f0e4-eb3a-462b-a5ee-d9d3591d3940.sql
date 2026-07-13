@@ -1,0 +1,1 @@
+UPDATE public.system_config SET value = '"stripe"'::jsonb WHERE key = 'card_gateway';
