@@ -476,6 +476,60 @@ Deno.serve(async (req) => {
         } catch (waErr) {
           console.error("[webhook-asaas] erro disparando dunning WhatsApp:", waErr);
         }
+
+        // ────────────────────────────────────────────────────────────────
+        // Retry automático de cartão (paridade com Smart Retries do Stripe).
+        // Só roda pra CREDIT_CARD recorrente (sub) — installment não tem
+        // creditCardToken reusável e PIX não tem cartão salvo.
+        // Agenda 3 retries em D+2, D+4, D+7 usando `scheduled_tasks`.
+        // Idempotente: só agenda se ainda não houver retry pendente pra esse payment.
+        // ────────────────────────────────────────────────────────────────
+        try {
+          const pm = (updated?.payment_method as string | undefined) || "";
+          const isRecurringCard = pm === "CREDIT_CARD" && !!overdueSubscriptionId;
+          if (isRecurringCard) {
+            const { data: existingRetry } = await supabase
+              .from("scheduled_tasks")
+              .select("id")
+              .eq("task_type", "card_retry_asaas")
+              .eq("status", "pending")
+              .contains("payload", { paymentId: payment.id })
+              .limit(1)
+              .maybeSingle();
+            if (!existingRetry) {
+              const now = Date.now();
+              const retries = [
+                { attempt: 1, delayDays: 2 },
+                { attempt: 2, delayDays: 4 },
+                { attempt: 3, delayDays: 7 },
+              ];
+              const rows = retries.map((r) => ({
+                user_id: (updated?.user_id as string | null) || null,
+                task_type: "card_retry_asaas",
+                execute_at: new Date(now + r.delayDays * 86400_000).toISOString(),
+                status: "pending",
+                payload: {
+                  paymentId: payment.id,
+                  subscriptionId: overdueSubscriptionId,
+                  customerId: (updated?.asaas_customer_id as string | null) || null,
+                  value: Number((payment as any).value) || 0,
+                  attempt: r.attempt,
+                  maxAttempts: retries.length,
+                },
+              }));
+              const { error: insErr } = await supabase.from("scheduled_tasks").insert(rows);
+              if (insErr) {
+                console.error("[webhook-asaas] erro agendando card retries:", insErr);
+              } else {
+                console.log(`[webhook-asaas] 3 card retries agendados para payment ${payment.id}`);
+              }
+            } else {
+              console.log(`[webhook-asaas] card retries já agendados para ${payment.id}, skip`);
+            }
+          }
+        } catch (retryErr) {
+          console.error("[webhook-asaas] erro no scheduling de card retries:", retryErr);
+        }
       }
     }
 
