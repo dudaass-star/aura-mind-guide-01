@@ -1,83 +1,81 @@
-
 ## Objetivo
 
-Habilitar pagamento com **cartão via Asaas** em paridade com o Stripe: todos os 4 ciclos (Mensal, Trimestral, Semestral, Anual), com **seletor no admin** pra decidir qual gateway processa cartão. No checkout, quando o ciclo permitir, o usuário escolhe entre **à vista recorrente** ou **parcelado**.
+Fechar as 3 pendências que sobraram da implementação de cartão via Asaas:
 
-> Status atual: nada implementado ainda. Este plano precisa da sua aprovação pra sair do modo plano.
+1. Troca de plano no portal funciona pra quem assinou cartão Asaas recorrente (hoje cai no Stripe e quebra).
+2. Cartão parcelado (installment) tem renovação — hoje o Asaas cobra as N parcelas e para; usuário perde acesso silenciosamente.
+3. Roteamento do `ChangePlanDialog` deixa de usar o proxy frágil "tem PIX Asaas?" e passa a olhar o gateway real do cartão.
 
-## Como fica pro cliente final
+## Escopo — o que muda
 
-- **Checkout `/v2`**: visual igual. Ao escolher cartão:
-  - Gateway ativo = **Stripe** → fluxo atual (Stripe Checkout hospedado).
-  - Gateway ativo = **Asaas** → formulário nativo de cartão (Asaas não tem checkout hospedado equivalente). Em Trim/Sem/Anual aparece toggle **"À vista recorrente"** vs **"Parcelar em Nx"** (2x a 12x conforme ciclo).
-- Welcome, portal e cobrança seguem idênticos — só muda quem processa.
+### 1. `change-asaas-plan` aceita CREDIT_CARD recorrente
 
-## Como fica pro admin
+Hoje a função só troca subs PIX (com bloqueio explícito pra PIX Automático Bacen e ignorando `CREDIT_CARD_RECURRING`).
 
-Card novo em `/admin/settings`:
-- **Gateway de cartão** (Select): `Stripe` (default) / `Asaas`
-- Persistido em `system_config.card_gateway`, lido por `create-checkout` e pelo `CheckoutV2` antes de rotear.
-- Trocar o seletor **não mexe em assinaturas ativas** — só afeta novos checkouts. Assinaturas antigas continuam no gateway que as criou (usaremos `profiles.card_gateway` pra saber).
+Mudança:
+- Detectar `billingType` da sub antiga via `GET /subscriptions/{id}` (`CREDIT_CARD` vs `PIX`).
+- Se CREDIT_CARD:
+  - Buscar `creditCardToken` da sub antiga (Asaas devolve em `creditCard.creditCardToken`).
+  - Criar nova sub `POST /subscriptions` com `billingType: CREDIT_CARD` + `creditCardToken` (reusa cartão salvo — não pede dados de novo).
+  - Manter `nextDueDate` da sub antiga (sem cobrança hoje, igual PIX).
+  - Cancelar a antiga (best-effort, já implementado).
+- Se PIX: fluxo atual intocado.
+- Bloqueio de PIX Automático Bacen segue ativo só quando `billingType=PIX`.
+- Bloqueio de installment: se a "sub" na verdade é um pagamento parcelado (`asaas_subscription_id IS NULL` mas `payment_method='CREDIT_CARD_INSTALLMENT'`), devolver erro claro: "Sua assinatura é parcelada. Aguarde o fim do ciclo pra trocar de plano ou entre em contato."
 
-## Escopo técnico
+### 2. Renovação automática de cartão parcelado
 
-### 1. Migration
-```sql
-ALTER TABLE public.profiles
-  ADD COLUMN IF NOT EXISTS card_gateway text
-  CHECK (card_gateway IN ('stripe','asaas'));
+`POST /payments` com `installmentCount` cobra N parcelas e termina — sem recorrência. Sem intervenção, usuário fica `canceled` quando `plan_expires_at` chega.
 
-INSERT INTO public.system_config (key, value)
-VALUES ('card_gateway', '"stripe"')
-ON CONFLICT (key) DO NOTHING;
-```
+Solução: agendar lembrete de renovação D-3 antes do fim do ciclo via `scheduled_tasks`.
 
-### 2. Edge function nova `criar-cartao-asaas`
-- Recebe `{ userId, plan, billing, mode: 'recurring' | 'installment', installments?, cardData, holderInfo }`.
-- Cria/reaproveita `customer` Asaas (mesma lógica de `criar-pix-recorrente-asaas`).
-- **Recorrente**: `POST /subscriptions` com `billingType: CREDIT_CARD` + `creditCard` + `creditCardHolderInfo` (Asaas tokeniza e reutiliza nas próximas cobranças).
-- **Parcelado**: `POST /payments` com `billingType: CREDIT_CARD` + `installmentCount` + `installmentValue`. Não é recorrente — no fim do ciclo pago, agenda renovação via `scheduled_tasks` (D-3).
-- Grava `profiles.card_gateway = 'asaas'` na ativação.
+- No `webhook-asaas`, quando ativa um payment com `payment_method='CREDIT_CARD_INSTALLMENT'` **e** não é renewal:
+  - Inserir `scheduled_tasks` com `execute_at = plan_expires_at - 3 dias`, `action_type = 'installment_renewal_reminder'`, `payload = { userId, plan, billing, portalToken }`.
+- Nova edge function `installment-renewal-reminder`:
+  - Verifica se profile ainda está `active` (senão, ignora).
+  - Dispara WhatsApp via `sendProactive` com template curto de utility ("sua assinatura Aura renova em 3 dias — pague em `/pagamento?t=<token>`") + email fallback via `send-transactional-email`.
+- `execute-scheduled-tasks` já processa qualquer `scheduled_tasks`; adicionar branch pra chamar a nova função.
+- Novo template WhatsApp Meta: `installment_renewal_v1` com 2 variáveis (nome + link do portal). Registrar em `whatsapp_templates` com `meta_variable_count=2`. **Nota pro usuário:** template precisa ser aprovado na Meta antes de rodar em produção; até lá cai só no email.
 
-### 3. Ajustes em `webhook-asaas`
-- Já processa `PAYMENT_CONFIRMED` de qualquer `billingType`. Adicionar:
-  - Distinguir cartão recorrente (subscription) vs parcelado (installment) pra calcular `plan_expires_at` corretamente (parcelado = 1 pagamento cobre o ciclo).
-  - Não disparar dunning-whatsapp em parcelas futuras naturais.
+### 3. Roteamento do `ChangePlanDialog` por gateway real
 
-### 4. Frontend — `CheckoutV2.tsx` + novo `AsaasCardForm`
-- Hook `useCardGateway()` lê `system_config.card_gateway` (cacheado com React Query).
-- Se `stripe` → `create-checkout` (rota atual).
-- Se `asaas` → renderiza `AsaasCardForm` (número, validade, CVV, titular, CPF, endereço obrigatórios pelo Asaas) + toggle parcelamento nos ciclos elegíveis.
-- Submit chama `criar-cartao-asaas` via `supabase.functions.invoke`.
+Hoje: `paymentMethod={isAsaasPix ? "pix" : "card"}` — só distingue PIX Asaas de "todo o resto → Stripe". Usuário cartão Asaas cai em `change-subscription-plan` (Stripe) e falha.
 
-### 5. Frontend — `AdminSettings.tsx`
-- Card novo "Gateway de Cartão" com Select (Stripe/Asaas) + Save, mesmo padrão dos cards `ai_model` / `tts_model` existentes.
+Mudança em `src/pages/UserPortal.tsx`:
+- Adicionar `card_gateway` ao select do profile no portal (já existe no schema).
+- Estender prop pra 3 casos: `paymentGateway: "stripe-card" | "asaas-pix" | "asaas-card"`.
+- Lógica:
+  - `isAsaasPix=true` → `asaas-pix`
+  - senão se `profile.card_gateway='asaas'` → `asaas-card`
+  - senão → `stripe-card`
 
-### 6. Portal — troca de plano
-- `ChangePlanDialog` hoje roteia por `paymentMethod` (`card` → Stripe, `pix` → Asaas).
-- Adaptar: quando `paymentMethod = 'card'` E `profile.card_gateway = 'asaas'` → chamar `change-asaas-plan` (adaptado pra aceitar `billingType: CREDIT_CARD` além de PIX). Mais simples que criar função nova.
+Em `ChangePlanDialog`:
+- Trocar prop `paymentMethod` por `paymentGateway`.
+- Roteamento:
+  - `stripe-card` → `change-subscription-plan` (atual)
+  - `asaas-pix` / `asaas-card` → `change-asaas-plan` (mesma função, ela agora resolve o billingType internamente)
+- Copy do dialog: `asaas-card` mostra "cobrança nova só a partir da próxima fatura, mesmo cartão"; `asaas-pix` segue atual.
 
-### 7. Preços
-- Nada novo. Cartão Asaas usa `value` direto (não exige `price_id` como Stripe). Reaproveita `PLAN_PRICES` em `lib/plan-pricing.ts`.
+### 4. Ajuste bônus — `AsaasCardForm` status pendente
+
+Já retorna `pending: true` pra status ≠ CONFIRMED/RECEIVED (ex.: `AWAITING_RISK_ANALYSIS`). Adicionar copy melhor: em vez de redirecionar direto pra `/obrigado`, mostrar tela intermediária "Pagamento em análise — aviso em minutos" com link pro portal, pra evitar confusão do usuário achar que deu certo antes do webhook confirmar.
 
 ## Fora de escopo
 
-- **3DS challenge Asaas** (fluxo `PAYMENT_AWAITING_RISK_ANALYSIS`) — Asaas faz internamente por padrão; UX de challenge no navegador fica pra depois se necessário.
-- Migrar assinaturas Stripe existentes pra Asaas.
-- Boleto (segue vetado).
+- 3DS challenge com redirect (Asaas normalmente resolve internamente).
+- Migrar subs cartão Stripe existentes pra Asaas.
+- Trocar plano estando com cartão parcelado meio-caminho.
 
-## Risco importante — PCI
+## Ordem de execução
 
-Cartão passará pelo nosso backend antes de chegar ao Asaas → escopo PCI-DSS sobe de **SAQ A** (Stripe hospedado) pra **SAQ A-EP**. Alternativa: usar link de checkout hospedado do Asaas, mas UX fica pior que hoje.
+1. `change-asaas-plan` — suporte a CREDIT_CARD recorrente + bloqueio installment.
+2. `UserPortal.tsx` + `ChangePlanDialog.tsx` — nova prop `paymentGateway`.
+3. `webhook-asaas` — agendar reminder em ativação de installment.
+4. Nova edge function `installment-renewal-reminder` + branch em `execute-scheduled-tasks`.
+5. Seed do template `installment_renewal_v1` em `whatsapp_templates` (via insert tool — user precisa registrar+aprovar na Meta em paralelo).
+6. `AsaasCardForm` — tela intermediária de pendente.
 
-**Confirmar antes de codar**: seguimos com formulário nativo (SAQ A-EP) ou você prefere link hospedado do Asaas?
+## Risco
 
-## Ordem de implementação
-
-1. Migration (`profiles.card_gateway` + seed `system_config.card_gateway`).
-2. Card do seletor em `AdminSettings.tsx`.
-3. Edge function `criar-cartao-asaas` (recorrente primeiro).
-4. `AsaasCardForm` + integração no `CheckoutV2`.
-5. Ajustes em `webhook-asaas`.
-6. Modo parcelado + agendamento de renovação.
-7. Adaptar `change-asaas-plan` pra cartão.
+- Reuso de `creditCardToken` na nova sub: se Asaas invalidar o token após cancelamento da sub antiga, a primeira cobrança nova pode falhar. Mitigação: fazer `DELETE` da sub antiga **depois** da nova sub estar criada (fluxo atual já faz isso).
+- Template Meta pendente: enquanto não for aprovado, `installment-renewal-reminder` roda só o email — logar warning quando WhatsApp falhar por template inexistente.

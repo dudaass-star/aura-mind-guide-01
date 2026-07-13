@@ -241,6 +241,46 @@ Deno.serve(async (req) => {
             break;
           }
 
+          case 'installment_renewal_reminder': {
+            // Lembrete D-3 antes do fim do ciclo pago via cartão parcelado Asaas.
+            // Só dispara se o usuário AINDA está active (senão vira dunning normal).
+            const { data: fullProfile } = await supabase
+              .from('profiles')
+              .select('status, plan, plan_expires_at, email, name')
+              .eq('user_id', task.user_id)
+              .maybeSingle();
+            if (!fullProfile || fullProfile.status !== 'active') {
+              console.log('ℹ️ Installment reminder skipped (profile inativo ou removido)');
+              break;
+            }
+            const firstName = (fullProfile.name || payload.customer_name || 'oi').split(' ')[0];
+            const portalUrl = 'https://olaaura.com.br/meu-espaco';
+            const waText = `Oi, ${firstName}! Sua assinatura da Aura vence em 3 dias. Pra continuar sem interrupção, renove em ${portalUrl} 💜`;
+            try {
+              await sendProactive(profile.phone, waText, 'checkin', task.user_id);
+              console.log(`✅ Installment renewal reminder (WhatsApp) enviado para ${profile.phone.substring(0, 4)}***`);
+            } catch (waErr) {
+              console.warn('⚠️ WhatsApp reminder falhou (segue email):', (waErr as Error).message);
+            }
+            const targetEmail = fullProfile.email || payload.customer_email;
+            if (targetEmail) {
+              try {
+                await supabase.functions.invoke('send-transactional-email', {
+                  body: {
+                    templateName: 'welcome',
+                    recipientEmail: targetEmail,
+                    idempotencyKey: `installment-renewal-${task.id}`,
+                    templateData: { name: firstName, portalUrl },
+                  },
+                });
+                console.log('✅ Installment renewal email enfileirado');
+              } catch (emailErr) {
+                console.warn('⚠️ Installment renewal email falhou:', (emailErr as Error).message);
+              }
+            }
+            break;
+          }
+
           default:
             console.warn(`⚠️ Unknown task type: ${task.task_type}`);
         }

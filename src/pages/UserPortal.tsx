@@ -47,7 +47,7 @@ const UserPortal = () => {
       const { data, error } = await supabasePortal
         .from("profiles")
         .select(
-          "name, current_journey_id, current_episode, journeys_completed, plan, billing_cycle, asaas_customer_id, pending_insight, last_user_message_at, last_proactive_insight_at, sessions_used_this_month",
+          "name, current_journey_id, current_episode, journeys_completed, plan, billing_cycle, asaas_customer_id, card_gateway, pending_insight, last_user_message_at, last_proactive_insight_at, sessions_used_this_month",
         )
         .eq("user_id", userId!)
         .maybeSingle();
@@ -222,7 +222,13 @@ const UserPortal = () => {
           userId={userId}
           currentPlan={(profile?.plan as "essencial" | "direcao" | "transformacao" | null) ?? null}
           currentBilling={(profile?.billing_cycle as any) ?? null}
-          paymentMethod={isAsaasPix ? "pix" : "card"}
+          paymentGateway={
+            isAsaasPix
+              ? "asaas-pix"
+              : (profile as any)?.card_gateway === "asaas"
+                ? "asaas-card"
+                : "stripe-card"
+          }
         />
       )}
     </>

@@ -111,7 +111,7 @@ Deno.serve(async (req) => {
 
     const { data: profile, error: profileErr } = await supabase
       .from("profiles")
-      .select("user_id, email, plan, billing_cycle, asaas_customer_id")
+      .select("user_id, email, plan, billing_cycle, asaas_customer_id, card_gateway")
       .eq("user_id", userId)
       .maybeSingle();
 
@@ -122,33 +122,34 @@ Deno.serve(async (req) => {
     }
     logStep("Profile loaded", { email: profile.email, plan: profile.plan });
 
-    // PIX Automático Bacen: troca de plano exige NOVA autorização no app do banco
-    // do pagador. Não dá pra mudar o valor de uma autorização ativa via API — o
-    // cliente precisa cancelar a atual e refazer pelo checkout.
-    const { data: activeAuth } = await supabase
-      .from("asaas_pix_authorizations")
-      .select("asaas_authorization_id, status")
-      .eq("asaas_customer_id", profile.asaas_customer_id)
-      .in("status", ["ACTIVE", "PENDING"])
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (activeAuth) {
-      return jsonError(
-        "Sua assinatura é PIX Automático. Pra trocar de plano, cancele a atual no app do seu banco e faça um novo checkout.",
-        409,
-      );
-    }
-
     // Mesmo plano + mesmo ciclo → bloqueia
     if (profile.plan === plan && profile.billing_cycle === cycle) {
       return jsonError("Você já está nesse plano.", 409);
     }
 
-    // Acha a subscription ativa mais recente em asaas_payments
+    // Detecta cartão parcelado (installment): 1 pagamento com N parcelas, sem subscription.
+    // Não há como trocar de plano meio-ciclo — pede pra aguardar renovação.
+    const { data: installmentRow } = await supabase
+      .from("asaas_payments")
+      .select("id, payment_method, status")
+      .eq("asaas_customer_id", profile.asaas_customer_id)
+      .eq("payment_method", "CREDIT_CARD_INSTALLMENT")
+      .is("asaas_subscription_id", null)
+      .in("status", ["CONFIRMED", "RECEIVED", "PENDING", "ACTIVE"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (installmentRow) {
+      return jsonError(
+        "Sua assinatura está no cartão parcelado. Pra trocar de plano, aguarde o fim do ciclo atual ou fale com o suporte.",
+        409,
+      );
+    }
+
+    // Acha a subscription ativa mais recente em asaas_payments (PIX ou CREDIT_CARD recorrente)
     const { data: subRows } = await supabase
       .from("asaas_payments")
-      .select("asaas_subscription_id, status")
+      .select("asaas_subscription_id, status, payment_method")
       .eq("asaas_customer_id", profile.asaas_customer_id)
       .not("asaas_subscription_id", "is", null)
       .in("status", ["CONFIRMED", "RECEIVED", "PENDING", "ACTIVE", "RECEIVED_IN_CASH", "OVERDUE"])
@@ -157,7 +158,7 @@ Deno.serve(async (req) => {
 
     const oldSubscriptionId = subRows?.[0]?.asaas_subscription_id as string | undefined;
     if (!oldSubscriptionId) {
-      return jsonError("Não encontramos sua assinatura PIX. Tenta de novo daqui a pouco.", 404);
+      return jsonError("Não encontramos sua assinatura ativa. Tenta de novo daqui a pouco.", 404);
     }
     logStep("Old subscription found", { oldSubscriptionId });
 
@@ -184,21 +185,53 @@ Deno.serve(async (req) => {
     const overdueRow = subRows?.[0];
     if (overdueRow?.status === "OVERDUE") {
       return jsonError(
-        "Você tem uma cobrança PIX vencida. Paga ela primeiro e depois troca o plano.",
+        "Você tem uma cobrança vencida. Paga ela primeiro e depois troca o plano.",
         409,
       );
     }
 
-    // Busca nextDueDate da sub antiga
+    // Busca detalhes da sub antiga (nextDueDate + billingType + creditCardToken se cartão)
     let nextDueDate: string | null = null;
+    let oldBillingType: string = "PIX";
+    let oldCardToken: string | null = null;
     try {
       const oldSub = await asaasFetch(`/subscriptions/${oldSubscriptionId}`);
       nextDueDate = (oldSub?.nextDueDate as string) || null;
-      logStep("Old subscription nextDueDate", { nextDueDate });
+      oldBillingType = (oldSub?.billingType as string) || "PIX";
+      oldCardToken = (oldSub?.creditCard?.creditCardToken as string) || null;
+      logStep("Old subscription details", { nextDueDate, oldBillingType, hasCardToken: !!oldCardToken });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       logStep("WARN failed to fetch old subscription", { msg });
     }
+
+    // PIX Automático Bacen: só bloqueia quando a assinatura antiga é PIX.
+    // Cartão Asaas nunca gera authorization Bacen, então pode trocar normalmente.
+    if (oldBillingType === "PIX") {
+      const { data: activeAuth } = await supabase
+        .from("asaas_pix_authorizations")
+        .select("asaas_authorization_id, status")
+        .eq("asaas_customer_id", profile.asaas_customer_id)
+        .in("status", ["ACTIVE", "PENDING"])
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (activeAuth) {
+        return jsonError(
+          "Sua assinatura é PIX Automático. Pra trocar de plano, cancele a atual no app do seu banco e faça um novo checkout.",
+          409,
+        );
+      }
+    }
+
+    // Cartão recorrente sem token salvo → não conseguimos reusar sem pedir dados de novo.
+    if (oldBillingType === "CREDIT_CARD" && !oldCardToken) {
+      return jsonError(
+        "Não conseguimos reutilizar seu cartão salvo. Por favor, refaça o checkout para trocar de plano.",
+        409,
+      );
+    }
+
     if (!nextDueDate) {
       // Fallback: hoje + 30 dias BRT
       const fallback = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
@@ -211,20 +244,25 @@ Deno.serve(async (req) => {
       logStep("Using fallback nextDueDate", { nextDueDate });
     }
 
-    // Cria a nova subscription PIX com o mesmo nextDueDate (sem cobrança hoje)
+    // Cria a nova subscription (PIX ou CREDIT_CARD com token reusado) com o mesmo
+    // nextDueDate — sem cobrança hoje. Cartão reusa creditCardToken; PIX é direto.
     let newSub: { id?: string } | null = null;
     try {
+      const subPayload: Record<string, unknown> = {
+        customer: profile.asaas_customer_id,
+        billingType: oldBillingType,
+        cycle: CYCLE_MAP[cycle],
+        value: amountDecimal,
+        nextDueDate,
+        description: `Aura ${PLAN_NAMES[plan]} - assinatura ${PERIOD_LABELS[cycle]}`,
+        externalReference: `aura_sub_${plan}_${cycle}_${Date.now()}`,
+      };
+      if (oldBillingType === "CREDIT_CARD" && oldCardToken) {
+        subPayload.creditCardToken = oldCardToken;
+      }
       newSub = await asaasFetch("/subscriptions", {
         method: "POST",
-        body: JSON.stringify({
-          customer: profile.asaas_customer_id,
-          billingType: "PIX",
-          cycle: CYCLE_MAP[cycle],
-          value: amountDecimal,
-          nextDueDate,
-          description: `Aura ${PLAN_NAMES[plan]} - assinatura ${PERIOD_LABELS[cycle]}`,
-          externalReference: `aura_sub_${plan}_${cycle}_${Date.now()}`,
-        }),
+        body: JSON.stringify(subPayload),
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);

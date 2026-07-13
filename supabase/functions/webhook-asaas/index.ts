@@ -716,6 +716,39 @@ async function handleActivation(
     if (isRenewal) return;
 
     // ============================================================
+    // Cartão parcelado (installment) não renova sozinho — Asaas cobra as N
+    // parcelas e para. Agenda lembrete D-3 antes do fim do ciclo para reativação.
+    // ============================================================
+    if (paymentMethodLabel === "CREDIT_CARD_INSTALLMENT") {
+      try {
+        const remindAt = new Date(new Date(newExpiry).getTime() - 3 * 24 * 60 * 60 * 1000);
+        // Se já passou (ciclo curtíssimo ou clock skew), pula.
+        if (remindAt.getTime() > Date.now()) {
+          const { error: schedErr } = await supabase.from("scheduled_tasks").insert({
+            user_id: profileUserId,
+            task_type: "installment_renewal_reminder",
+            execute_at: remindAt.toISOString(),
+            status: "pending",
+            payload: {
+              plan: customerPlan,
+              billing: billingPeriod,
+              expires_at: newExpiry,
+              customer_name: customerName,
+              customer_email: customerEmail,
+            },
+          });
+          if (schedErr) {
+            console.warn("[webhook-asaas] ⚠️ agendar renewal reminder falhou:", schedErr.message);
+          } else {
+            console.log(`[webhook-asaas] ✅ Renewal reminder agendado para ${remindAt.toISOString()}`);
+          }
+        }
+      } catch (schedCatch) {
+        console.warn("[webhook-asaas] ⚠️ scheduled_tasks insert catch:", schedCatch);
+      }
+    }
+
+    // ============================================================
     // Meta CAPI Purchase — APENAS na 1ª compra (novo cliente vindo do anúncio).
     // Renovações Asaas (isRenewal=true) já retornaram acima. Upgrade/returning
     // não são "1ª compra" no sentido de aquisição → não disparam Purchase.
