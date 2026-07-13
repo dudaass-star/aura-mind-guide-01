@@ -171,7 +171,10 @@ Deno.serve(async (req) => {
     };
 
     const newStatus = statusMap[event] || (payment.status as string) || "UNKNOWN";
-    const isPaid = event === "PAYMENT_CONFIRMED" || event === "PAYMENT_RECEIVED";
+    const isPaid =
+      event === "PAYMENT_CONFIRMED" ||
+      event === "PAYMENT_RECEIVED" ||
+      event === "PAYMENT_APPROVED_BY_RISK_ANALYSIS";
 
     const updatePayload: Record<string, unknown> = {
       status: newStatus,
