@@ -115,7 +115,7 @@ Deno.serve(async (req) => {
 
     const body = await req.json();
     const {
-      plan, billing, mode, installments,
+      plan, billing, mode, installments, trial,
       name, email, phone, cpf,
       card, holder,
       fbp, fbc, gaClientId,
@@ -198,7 +198,8 @@ Deno.serve(async (req) => {
       const json = await resp.json().catch(() => ({}));
       if (!resp.ok) {
         console.error(`[criar-cartao-asaas] Asaas ${path} falhou:`, resp.status, json);
-        throw new Error(json?.errors?.[0]?.description || `Erro Asaas (${resp.status})`);
+        const raw = json?.errors?.[0]?.description || `Erro Asaas (${resp.status})`;
+        throw new Error(friendlyAsaasError(raw));
       }
       return json;
     };
