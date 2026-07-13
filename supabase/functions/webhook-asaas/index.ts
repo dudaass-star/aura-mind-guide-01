@@ -580,6 +580,8 @@ async function handleActivation(
     const customerPlan = (updated.plan as string) || "essencial";
     const billingPeriod = (updated.billing_period as string) || "monthly";
     const subscriptionId = (updated.asaas_subscription_id as string) || null;
+    const paymentMethodLabel = (updated.payment_method as string) || "";
+    const isCardPayment = paymentMethodLabel.startsWith("CREDIT_CARD");
     const paymentId = payment.id as string;
     const days = CYCLE_DAYS[billingPeriod] ?? 31;
 
@@ -646,6 +648,7 @@ async function handleActivation(
         asaas_customer_id: updated.asaas_customer_id || null,
         whatsapp_provider: "meta",
         billing_cycle: billingPeriod,
+        ...(isCardPayment ? { card_gateway: "asaas" } : {}),
       }).select("id").maybeSingle();
       if (insErr) {
         console.error("[webhook-asaas] Erro criando profile:", insErr);
@@ -663,6 +666,7 @@ async function handleActivation(
         billing_cycle: billingPeriod,
         updated_at: new Date().toISOString(),
       };
+      if (isCardPayment) updatePayload.card_gateway = "asaas";
       if (isReturning) {
         updatePayload.sessions_used_this_month = 0;
         updatePayload.sessions_reset_date = today;

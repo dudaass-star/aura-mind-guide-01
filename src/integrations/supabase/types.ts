@@ -1498,6 +1498,7 @@ export type Database = {
           awaiting_time_capsule: string | null
           billing_cycle: string | null
           canceled_at: string | null
+          card_gateway: string | null
           converted_at: string | null
           created_at: string | null
           current_episode: number | null
@@ -1566,6 +1567,7 @@ export type Database = {
           awaiting_time_capsule?: string | null
           billing_cycle?: string | null
           canceled_at?: string | null
+          card_gateway?: string | null
           converted_at?: string | null
           created_at?: string | null
           current_episode?: number | null
@@ -1634,6 +1636,7 @@ export type Database = {
           awaiting_time_capsule?: string | null
           billing_cycle?: string | null
           canceled_at?: string | null
+          card_gateway?: string | null
           converted_at?: string | null
           created_at?: string | null
           current_episode?: number | null
