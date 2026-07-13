@@ -233,11 +233,14 @@ const CheckoutV2 = () => {
         .select("value")
         .eq("key", "card_gateway")
         .maybeSingle();
-      if (data?.value) {
-        try {
-          const v = typeof data.value === "string" ? JSON.parse(data.value) : data.value;
-          if (v === "asaas" || v === "stripe") setCardGateway(v);
-        } catch { /* mantém default */ }
+      if (data?.value !== undefined && data?.value !== null) {
+        // JSONB pode voltar como string pura ("asaas") ou como JSON string ('"asaas"').
+        // Tenta parse; se falhar, usa o valor cru.
+        let v: unknown = data.value;
+        if (typeof v === "string") {
+          try { v = JSON.parse(v); } catch { /* mantém string crua */ }
+        }
+        if (v === "asaas" || v === "stripe") setCardGateway(v);
       }
     })();
   }, []);
