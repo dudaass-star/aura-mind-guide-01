@@ -18,6 +18,7 @@ interface Props {
   amountLabel: string;              // "R$ 214,90"
   periodLabel: string;              // "ano"
   installmentMax: number;           // ex: 12
+  trial?: boolean;                  // mensal: 1ª cobrança reduzida (R$ 6,90/9,90/19,90)
   fbp?: string;
   fbc?: string;
   gaClientId?: string;
@@ -42,6 +43,7 @@ function formatCep(v: string) {
 export function AsaasCardForm({
   plan, billing, name, email, phone,
   amountLabel, periodLabel, installmentMax,
+  trial,
   fbp, fbc, gaClientId,
   onBack, onSuccess,
 }: Props) {
@@ -80,6 +82,8 @@ export function AsaasCardForm({
           plan, billing,
           mode: canInstallment ? mode : "recurring",
           installments: mode === "installment" ? installments : undefined,
+          // Trial só faz sentido no monthly recorrente (bate com trialPriceMap do CheckoutV2)
+          trial: billing === "monthly" && mode === "recurring" ? (trial ?? true) : false,
           name, email, phone: phone.replace(/\D/g, ""), cpf: cpfClean,
           card: {
             holderName: holderName.trim(),
