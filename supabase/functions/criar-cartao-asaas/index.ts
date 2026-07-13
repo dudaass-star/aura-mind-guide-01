@@ -362,14 +362,16 @@ Deno.serve(async (req) => {
           console.error("[criar-cartao-asaas] trial: sub creation failed (non-blocking):", subErr);
           // Se falhou criar sub, ainda temos o trial cobrado — logar e seguir.
           // Precisa ser visível: alerta em failed_message_log.
-          await supabase.from("failed_message_log").insert({
-            failure_reason: "asaas_trial_subscription_failed",
-            error_details: {
-              paymentId, plan, billing,
-              email: emailClean,
-              message: subErr instanceof Error ? subErr.message : String(subErr),
-            },
-          }).catch(() => {});
+          try {
+            await supabase.from("failed_message_log").insert({
+              failure_reason: "asaas_trial_subscription_failed",
+              error_details: {
+                paymentId, plan, billing,
+                email: emailClean,
+                message: subErr instanceof Error ? subErr.message : String(subErr),
+              },
+            });
+          } catch (_logErr) { /* best-effort */ }
         }
       }
     } else {
@@ -432,13 +434,15 @@ Deno.serve(async (req) => {
       });
       if (insErr) {
         console.error("[criar-cartao-asaas] ❌ INSERT asaas_payments falhou:", insErr);
-        await supabase.from("failed_message_log").insert({
-          failure_reason: "asaas_payments_insert_failed",
-          error_details: {
-            paymentId, subscriptionId, plan, billing,
-            email: emailClean, error: insErr.message,
-          },
-        }).catch(() => {});
+        try {
+          await supabase.from("failed_message_log").insert({
+            failure_reason: "asaas_payments_insert_failed",
+            error_details: {
+              paymentId, subscriptionId, plan, billing,
+              email: emailClean, error: insErr.message,
+            },
+          });
+        } catch (_logErr) { /* best-effort */ }
         return new Response(JSON.stringify({
           error: "Pagamento criado mas falha ao registrar. Fala com o suporte com esse código: " + paymentId,
         }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
