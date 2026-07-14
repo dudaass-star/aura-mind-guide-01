@@ -1,44 +1,42 @@
-## Problema
+## Plano: Protótipos clicáveis do redesign do /meu-espaco
 
-O card "Último insight da Aura" no portal está lendo `profiles.pending_insight`. Esse campo **não é insight** — é um buffer técnico de entrega no WhatsApp que carrega prefixos como `[CONTENT]` (episódio de jornada), `[WEEKLY_REPORT]` (teaser), `[WELCOME]`, `[SESSION_PREARM]`, `[SESSION_START]`. Por isso aparece disparo de jornada no lugar de reflexão.
+Vou seguir o caminho B (protótipos renderizados em HTML/Tailwind reais), pra você poder abrir cada direção no navegador e sentir densidade, hierarquia e ritmo de verdade — não só o clima visual.
 
-A Aura **continua mandando insights de verdade** via WhatsApp (cron `pattern-analysis-weekly` → efeito Oráculo) — o problema é só que o portal está mostrando o campo errado. Não é para desligar nada da régua.
+### Passo 1 — Capturar o Portal atual (referência visual)
+- Rodar Playwright autenticado no seu usuário (Eduardo), mesma rota que já usei antes.
+- Screenshots das abas principais: **Hoje**, **Percurso**, **Sobre você**, **Sessões**.
+- Salvar em `/tmp/browser/portal-redesign/` como referência que vai junto na geração das direções (obrigatório — sem screenshot, a ferramenta recusa).
 
-## Solução
+### Passo 2 — Fixar a paleta e tipografia (travadas nas 3 direções)
+Herdadas da landing V2 (`src/styles/v2-theme.css`), sem drift:
+- **Cores**: creme `#F5F0E8` (bg), sage `#87A878` (primário), navy `#1B2A4E` (hero/hierarquia), lavender `#B8A5D9` (acento), tinta escura para texto.
+- **Fontes**: Fraunces (display/quotes), Nunito (corpo/UI).
+- **Layout base**: mesma estrutura de 5 abas atual, mesmo conteúdo — só muda composição, hierarquia e emoção.
 
-Trocar a fonte do card por ativos que já têm valor clínico curado:
+### Passo 3 — Gerar 3 direções distintas
+Cada uma com um ponto de vista próprio (mesma paleta/tipografia, composições diferentes):
 
-1. **Fonte primária**: `thematic_snapshots` mais recente do usuário (já é síntese temática com citação literal, tier de confiança e período).
-2. **Fallback**: `monthly_reports.analysis_text` mais recente (síntese mensal completa).
-3. **Se nenhum existir**: esconder o card (sem placeholder falso).
+**Direção 1 — "Editorial Íntimo"**
+Sensação de revista literária. Hero grande em navy com Fraunces XL, muito respiro, citações literais em blockquote destacado, capítulos do Percurso como capas de revista mensal. Densidade baixa, emoção alta.
 
-`pending_insight` sai completamente do portal — nem como preferência, nem como fallback.
+**Direção 2 — "Painel Vivo"**
+Sensação de dashboard pessoal quente. Grid bento com cards de tamanhos variados na "Hoje" (última sessão, próxima, insight, intimidade), sage e lavender usados como códigos de cor por tipo de conteúdo. Densidade média, navegação rápida.
 
-## Escopo técnico
+**Direção 3 — "Diário Contínuo"**
+Sensação de caderno costurado. Coluna única centrada, tudo lido de cima pra baixo como um diário, transições suaves entre seções, marcadores tipo margin notes em lavender. Densidade alta em texto, emoção contemplativa.
 
-### `src/pages/UserPortal.tsx`
-- Remover `pending_insight` do `select` de `profile` (linha 79).
+### Passo 4 — Você escolhe
+Apresento as 3 lado a lado via pergunta do tipo `prototype` (clicáveis, renderizadas). Você abre, navega, escolhe uma. Zero ambiguidade — uma pergunta só: "Qual direção implementar?"
 
-### `src/components/portal/HojeTab.tsx`
-- Nova query `["portal-latest-insight", userId]` que busca:
-  1. Último `thematic_snapshots` do user (`order by period_end desc limit 1`, filtrando `confidence_tier != 'insufficient'`).
-  2. Se vazio, último `monthly_reports.analysis_text` (`order by created_at desc limit 1`).
-- Montar objeto `{ kind: 'snapshot'|'monthly', title, body, meta }` — ex.:
-  - snapshot → title = tema (`emotional_theme`), meta = período BRT.
-  - monthly → title = "Resumo de {mês}", body = primeiros ~280 chars de `analysis_text`.
-- `InsightPreviewCard` recebe `title` opcional além de `text`; label do header vira "Insight da Aura" (sem "Último", que induz a "última mensagem").
-- Remover uso de `profile.pending_insight` como fonte.
+### Passo 5 — Implementação (só depois da sua escolha)
+- Copio os tokens/composição da direção escolhida verbatim pra dentro do Portal real.
+- Scope via `.theme-v2` wrapper em `/meu-espaco` pra não vazar pro resto do app.
+- Aplico aba por aba: Hoje → Percurso → Sobre você → Sessões → Assinatura.
+- Sanitizo o que já mapeamos (prefixo `[CONTENT]`, markdown cru, pluralização) no mesmo passe.
 
-### `src/components/portal/InsightsTab.tsx`
-- Remover bloco `hasPendingInsight` / render de `profile.pending_insight` (linhas ~246–267). A aba já tem os capítulos (`thematic_snapshots` renderizados), então não perde nada.
+### O que fica de fora deste plano
+- Nenhuma mudança de lógica de negócio, queries, edge functions ou dados.
+- Nenhuma mudança na landing V2 ou em outras rotas.
+- Sanitização de dados fica na implementação (passo 5), não nos protótipos.
 
-### Sem mudanças em
-- `pending_insight` no schema (continua sendo buffer legítimo do WhatsApp).
-- `weekly-report`, `stripe-webhook`, `start-trial`, `aura-agent`, `session-reminder` (mantêm uso normal do buffer).
-- Nenhum cron pausado.
-
-## Validação
-
-- Abrir `/meu-espaco` no perfil Eduardo via Playwright autenticado.
-- Confirmar que o card mostra um snapshot temático (com citação) ou o resumo mensal — nunca texto começando com `[CONTENT]`/`[WEEKLY_REPORT]`/link `olaaura.com.br/meu-espaco/...`.
-- Verificar que a aba "Percurso" também não mostra mais o buffer.
+Aprova pra eu começar pelo passo 1 (captura + geração das 3 direções)?
