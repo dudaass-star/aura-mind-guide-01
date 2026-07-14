@@ -6,7 +6,7 @@ import { supabasePortal } from "@/integrations/supabase/portal-client";
 // badge pode reaparecer em novo device, o que é aceitável.
 const STORAGE_KEY = (userId: string) => `aura_portal_tab_seen_${userId}`;
 
-export type TabKey = "hoje" | "insights" | "jornada";
+export type TabKey = "hoje" | "insights";
 
 export function getSeenAt(userId: string, tab: TabKey): string | null {
   try {
@@ -34,7 +34,7 @@ export function usePortalNovidades(userId: string | undefined) {
   return useQuery({
     queryKey: ["portal-novidades", userId],
     queryFn: async () => {
-      if (!userId) return { hoje: false, insights: false, jornada: false };
+      if (!userId) return { hoje: false, insights: false };
 
       // Busca timestamps máximos por aba em paralelo
       const [lastSession, lastInsight, lastLetter, lastSnapshot, lastMilestone] =
@@ -79,7 +79,6 @@ export function usePortalNovidades(userId: string | undefined) {
 
       const seenHoje = getSeenAt(userId, "hoje");
       const seenTimeline = getSeenAt(userId, "insights");
-      const seenJornada = getSeenAt(userId, "jornada");
 
       const isNewer = (candidate: string | null | undefined, baseline: string | null) => {
         if (!candidate) return false;
@@ -102,8 +101,6 @@ export function usePortalNovidades(userId: string | undefined) {
           isNewer(snapshotTs, seenTimeline) ||
           isNewer(milestoneTs, seenTimeline) ||
           isNewer(insightTs, seenTimeline),
-        // Jornada: snapshot novo
-        jornada: isNewer(snapshotTs, seenJornada),
       };
     },
     enabled: !!userId,
