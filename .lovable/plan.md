@@ -1,63 +1,55 @@
-## Plano — Memória Ativa (A + E)
+# Revisão do portal — o que está bom e o que ajustar
 
-Duas abas conectadas no `/meu-espaco`: **"O que a Aura sabe"** (ledger editável) e um indicador de **Nível de intimidade** integrado ao header do portal (sem virar gamificação).
+## O que está bom
 
----
+- Header, tabs e footer seguem o mesmo grid (`max-w-2xl`), tipografia (Fraunces/Nunito) e cor de acento das outras abas — a nova aba **Memória** e o **Intimacy** não destoam.
+- Ledger tem CRUD completo (corrigir / apagar / marcar / adicionar), com toasts e agrupamento por categoria.
+- IntimacyLevel é discreto (barra de 3 traços + frase + tooltip), coerente com o contrato clínico — não vira "gamificação de app".
 
-### Parte A — Ledger editável
+## O que precisa ajuste
 
-**Nova aba "O que a Aura sabe"** (ícone `BookOpen`, entre "Sua jornada" e "Sobre você").
+### 1. Barra de abas está apertada (8 abas)
 
-Lista `user_insights` do usuário logado, agrupada por `category` (pessoas / fatos / identidade / rotina / preferências / outros), ordenada por `importance` desc + `mentioned_count` desc.
+- "Sua jornada" + "O que a Aura sabe" são rótulos longos e empurram a barra pro scroll horizontal em mobile.
+- Ajuste: encurtar rótulos → **"Jornada"** e **"Memória"** (ícones já dão o contexto).
 
-Cada item mostra: `key` em negrito, `value` como texto, chip com nº de menções e data da última. Três ações inline:
-- **Corrigir** → abre input; ao salvar, faz `UPDATE user_insights` e cria uma linha em `user_memory_corrections` com `correction_text` no formato "Sobre '{key}': era '{valor antigo}', é '{valor novo}'" e `source='user_portal'`. Isso garante que a Aura respeite via prompt (correções já entram como prioridade máxima).
-- **Apagar** → `DELETE` no insight + `INSERT` em `user_memory_corrections` com `correction_text` "Ignorar: {key} — {value}".
-- **Marcar como importante** → `UPDATE importance = 10`.
+### 2. Confirmação de apagar usa `confirm()` nativo
 
-Também: botão "Adicionar algo que a Aura deveria saber" no topo → cria insight `category='user_added'`, `importance=9`.
+- Fora do padrão do resto do portal (que usa toasts e diálogos shadcn).
+- Trocar por `AlertDialog` do shadcn com título "Apagar da memória da Aura?" e ação destrutiva.
 
-Empty state: "A Aura ainda está te conhecendo. Conforme você conversa, o que ela aprende aparece aqui e você pode corrigir a qualquer momento."
+### 3. Ordenação da lista pode esconder o que o usuário adicionou
 
-**RLS já cobre**: policies existentes em `user_insights` permitem SELECT/UPDATE/DELETE/INSERT via `auth.uid() = user_id`. Para `user_memory_corrections`, precisa nova policy de INSERT para o próprio usuário (hoje só service_role escreve).
+- Query ordena por `importance desc, mentioned_count desc`. Itens adicionados pelo usuário entram com `importance = 9`, mas `mentioned_count = 1` — podem ficar depois de coisas antigas com muitas menções.
+- Ajuste: dentro de cada categoria, subir sempre no topo os `category = 'user_added'` e depois aplicar o sort atual.
 
-**Consumo pela Aura**: nada muda no `aura-agent` — ele já lê `user_insights` (com `mentioned_count`) e `user_memory_corrections` como override. Correções feitas no portal entram no mesmo canal.
+### 4. Categorias podem aparecer com rótulos genéricos
 
----
+- `CATEGORY_LABELS` cobre 7 chaves em PT. Se o extractor gravar categoria em inglês (`people`, `facts`) cai no fallback "Outros".
+- Adicionar mapeamento defensivo para `people/facts/identity/routine/preferences` → mesmos rótulos PT.
 
-### Parte E — Nível de intimidade (sóbrio, sem gamificação)
+### 5. Empty state do Ledger e usuário novo
 
-Componente pequeno no `PortalHeader` (abaixo da frase motivacional), com uma frase e uma barra fininha de 3 estágios. Nada de XP, badges, medalhas.
+- Hoje mostra "A Aura ainda está te conhecendo" para qualquer lista vazia. Faltou o mesmo cuidado que fizemos em Jornada (distinguir usuário recém-criado).
+- Ajuste leve: se `profile.created_at` < 7 dias, texto vira "Nos primeiros dias a Aura ainda está ouvindo. O caderno começa a preencher conforme vocês conversam."
 
-**Cálculo** (client-side, uma query):
-- `sessionsCount` = `sessions` do usuário com `status='completed'`
-- `themesCount` = `session_themes` distintos
-- `correctionsCount` = `user_memory_corrections` do usuário
+### 6. IntimacyLevel — validar acesso no portal
 
-**Estágios**:
-| Estágio | Regra | Frase |
-|---|---|---|
-| Início | sessions < 3 | "A Aura está começando a te conhecer." |
-| Familiaridade | sessions ≥ 3 e (themes ≥ 3 OU corrections ≥ 1) | "A Aura já entende como você funciona em algumas áreas." |
-| Profundidade | sessions ≥ 10 e themes ≥ 5 | "A Aura te conhece a fundo — em várias camadas da sua vida." |
+- Faz `count` em `sessions` + `select` em `session_themes` + `count` em `user_memory_corrections` usando `supabasePortal`. Preciso confirmar que as três tabelas têm política de SELECT para o token do portal — se `session_themes` não tiver, o cálculo silenciosamente retorna 0 e o usuário fica travado em "Início" para sempre.
+- Ação: query rápida no schema; se faltar policy, adicionar SELECT via `portal_token`.
 
-Tooltip discreto no ícone: "Baseado em sessões, temas conversados e correções que você fez."
+### 7. Microcopy do Intimacy
 
-Sem número, sem porcentagem, sem "próximo nível" — evita o efeito app de hábito que quebra o contrato clínico.
+- "A Aura te conhece a fundo — em várias camadas da sua vida." soa um pouco solene. Alternativa mais leve, mesma intenção: "A Aura já te conhece em várias camadas."
+- Só cosmético — confirmar se quer trocar. NAO TROCAR
 
----
+## Fora de escopo (não mexer agora)
 
-### Ordem de execução
+- Estrutura das outras abas, cores/tokens globais, layout do header.
 
-1. Migration: policy de INSERT no `user_memory_corrections` para `auth.uid() = user_id`.
-2. Criar `src/components/portal/MemoriaTab.tsx` (ledger).
-3. Registrar aba em `UserPortal.tsx` (`TabId` + `TABS` + render).
-4. Atualizar `PortalHeader` em `src/components/portal/shared.tsx` para receber `userId` e renderizar o indicador de intimidade (nova sub-função `IntimacyLevel` com useQuery próprio).
-5. Passar `userId` na chamada `<PortalHeader />` em cada tab que já usa (verificar se está em `UserPortal.tsx` ou nas tabs — ajustar conforme atual).
+## Arquivos afetados
 
----
-
-### Fora de escopo agora
-
-- Diário clínico em 1ª pessoa da Aura (opção secundária discutida) fica para depois — precisa auditoria de qualidade primeiro, mesmo padrão que aplicamos aos snapshots temáticos.
-- Nenhuma mudança em `aura-agent` ou pós-análise — o ledger reaproveita canais existentes.
+- `src/pages/UserPortal.tsx` (rótulos das tabs)
+- `src/components/portal/MemoriaTab.tsx` (AlertDialog, ordenação, empty state contextual, categorias EN)
+- `src/components/portal/IntimacyLevel.tsx` (microcopy, se aprovado)
+- Migração SQL só se a checagem de RLS em `session_themes` mostrar policy faltando.

@@ -4,6 +4,16 @@ import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { BookOpen, Pencil, Trash2, Star, Plus, Check, X } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { EmptyState, PortalLoadingInline, SectionHeader } from "./shared";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type Insight = {
   id: string;
@@ -23,6 +33,13 @@ const CATEGORY_LABELS: Record<string, string> = {
   preferencias: "Preferências",
   user_added: "Você contou pra Aura",
   outros: "Outros",
+  // Fallback defensivo caso o extractor grave categoria em inglês
+  people: "Pessoas na sua vida",
+  facts: "Fatos e eventos",
+  identity: "Quem você é",
+  routine: "Sua rotina",
+  preferences: "Preferências",
+  other: "Outros",
 };
 
 function labelFor(cat: string | null) {
@@ -37,6 +54,19 @@ export function MemoriaTab({ userId }: { userId: string }) {
   const [adding, setAdding] = useState(false);
   const [newKey, setNewKey] = useState("");
   const [newValue, setNewValue] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState<Insight | null>(null);
+
+  const { data: profile } = useQuery({
+    queryKey: ["portal-memoria-profile", userId],
+    queryFn: async () => {
+      const { data } = await supabasePortal
+        .from("profiles")
+        .select("created_at")
+        .eq("user_id", userId)
+        .maybeSingle();
+      return data;
+    },
+  });
 
   const { data: insights, isLoading } = useQuery({
     queryKey: ["portal-memoria", userId],
@@ -145,6 +175,19 @@ export function MemoriaTab({ userId }: { userId: string }) {
     if (!grouped.has(cat)) grouped.set(cat, []);
     grouped.get(cat)!.push(it);
   }
+  // Dentro de cada categoria, empurrar itens adicionados pelo usuário pro topo
+  for (const [, items] of grouped) {
+    items.sort((a, b) => {
+      const aUser = a.category === "user_added" ? 1 : 0;
+      const bUser = b.category === "user_added" ? 1 : 0;
+      if (aUser !== bUser) return bUser - aUser;
+      return (b.importance ?? 0) - (a.importance ?? 0);
+    });
+  }
+
+  const isNewUser =
+    profile?.created_at &&
+    Date.now() - new Date(profile.created_at).getTime() < 7 * 24 * 60 * 60 * 1000;
 
   return (
     <div className="space-y-5">
@@ -205,8 +248,12 @@ export function MemoriaTab({ userId }: { userId: string }) {
       {(insights?.length ?? 0) === 0 ? (
         <EmptyState
           icon={BookOpen}
-          title="A Aura ainda está te conhecendo"
-          description="Conforme vocês conversam, o que ela aprende aparece aqui — e você pode corrigir a qualquer momento."
+          title={isNewUser ? "Nos primeiros dias, a Aura ainda está ouvindo" : "A Aura ainda está te conhecendo"}
+          description={
+            isNewUser
+              ? "O caderno dela começa a preencher conforme vocês conversam. Você também pode adicionar algo aqui em cima."
+              : "Conforme vocês conversam, o que ela aprende aparece aqui — e você pode corrigir a qualquer momento."
+          }
         />
       ) : (
         <div className="space-y-6">
@@ -291,11 +338,7 @@ export function MemoriaTab({ userId }: { userId: string }) {
                               </button>
                             )}
                             <button
-                              onClick={() => {
-                                if (confirm(`Apagar "${item.key}" da memória da Aura?`)) {
-                                  deleteMut.mutate(item);
-                                }
-                              }}
+                              onClick={() => setConfirmDelete(item)}
                               disabled={deleteMut.isPending}
                               className="p-1.5 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                               title="Apagar"
@@ -313,6 +356,36 @@ export function MemoriaTab({ userId }: { userId: string }) {
           ))}
         </div>
       )}
+
+      <AlertDialog open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-['Fraunces']">
+              Apagar da memória da Aura?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="font-['Nunito']">
+              {confirmDelete ? (
+                <>
+                  A Aura vai deixar de considerar <strong>"{confirmDelete.key}"</strong> nas próximas
+                  conversas. Isso não apaga o histórico do chat.
+                </>
+              ) : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="font-['Nunito']">Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (confirmDelete) deleteMut.mutate(confirmDelete);
+                setConfirmDelete(null);
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 font-['Nunito']"
+            >
+              Apagar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
