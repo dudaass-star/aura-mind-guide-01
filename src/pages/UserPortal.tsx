@@ -4,12 +4,13 @@ import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { Helmet } from "react-helmet-async";
 import { useState } from "react";
 import logoOlaAura from "@/assets/logo-ola-aura.png";
-import { Target, Sparkles, Headphones, Lock, LogOut, Sun, Calendar, User, Route } from "lucide-react";
+import { Target, Sparkles, Headphones, Lock, LogOut, Sun, Calendar, User, Route, BookOpen } from "lucide-react";
 import { usePortalAuth } from "@/contexts/PortalAuthContext";
 
 import { PortalLoading } from "@/components/portal/shared";
 import { JornadasTab } from "@/components/portal/JornadasTab";
 import { JornadaTab } from "@/components/portal/JornadaTab";
+import { MemoriaTab } from "@/components/portal/MemoriaTab";
 import { MeditacoesTab } from "@/components/portal/MeditacoesTab";
 import { PhoneLinkPrompt } from "@/components/portal/PhoneLinkPrompt";
 import { HojeTab } from "@/components/portal/HojeTab";
@@ -21,13 +22,14 @@ import { CreditCard, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { ChangePlanDialog } from "@/components/portal/ChangePlanDialog";
 
-type TabId = "hoje" | "sessoes" | "insights" | "sobre" | "jornada" | "jornadas" | "meditacoes";
+type TabId = "hoje" | "sessoes" | "insights" | "sobre" | "jornada" | "memoria" | "jornadas" | "meditacoes";
 
 const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: "hoje", label: "Hoje", icon: Sun },
   { id: "sessoes", label: "Sessões", icon: Calendar },
   { id: "insights", label: "Insights", icon: Sparkles },
   { id: "jornada", label: "Sua jornada", icon: Route },
+  { id: "memoria", label: "O que a Aura sabe", icon: BookOpen },
   { id: "sobre", label: "Sobre você", icon: User },
   { id: "jornadas", label: "Jornadas", icon: Target },
   { id: "meditacoes", label: "Meditações", icon: Headphones },
@@ -172,6 +174,7 @@ const UserPortal = () => {
           {activeTab === "sessoes" && <SessoesTab userId={userId!} profile={profile} />}
           {activeTab === "insights" && <InsightsTab userId={userId!} profile={profile} />}
           {activeTab === "jornada" && <JornadaTab userId={userId!} />}
+          {activeTab === "memoria" && <MemoriaTab userId={userId!} />}
           {activeTab === "sobre" && <SobreVoceTab userId={userId!} />}
           {activeTab === "jornadas" && (
             <JornadasTab userId={userId!} profile={profile} portalToken={""} />
