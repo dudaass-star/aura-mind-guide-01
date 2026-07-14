@@ -2,7 +2,7 @@ import { useSearchParams, Navigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { Helmet } from "react-helmet-async";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import logoOlaAura from "@/assets/logo-ola-aura.png";
 import { Target, Sparkles, Headphones, Lock, LogOut, Sun, Calendar, User, Route, BookOpen } from "lucide-react";
 import { usePortalAuth } from "@/contexts/PortalAuthContext";
@@ -57,6 +57,13 @@ const UserPortal = () => {
 
   const userId = session?.user?.id;
   const { data: novidades, refetch: refetchNovidades } = usePortalNovidades(userId);
+
+  // Ao abrir o portal, marca a aba inicial como vista.
+  useEffect(() => {
+    const key = NOVIDADE_TABS[activeTab];
+    if (key && userId) markTabSeen(userId, key);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
 
   const handleTabClick = (id: TabId) => {
     setActiveTab(id);
