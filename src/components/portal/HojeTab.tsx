@@ -156,6 +156,7 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab }: HojeTabPr
             Vocês conversaram {relativeTime(profile.last_user_message_at)}.
           </p>
         )}
+        <IntimacyLevel userId={userId} />
       </div>
 
       {/* Empty state global p/ usuária ainda sem nada */}
