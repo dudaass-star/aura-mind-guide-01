@@ -243,7 +243,6 @@ export function InsightsTab({ userId, profile }: { userId: string; profile: any 
   const visible = showOlder ? chapters : chapters.slice(0, 12);
   const hasMore = chapters.length > 12;
 
-  const hasPendingInsight = !!profile?.pending_insight;
   const daysSinceSignup = profileMeta?.created_at
     ? Math.floor((Date.now() - new Date(profileMeta.created_at).getTime()) / 86_400_000)
     : null;
@@ -255,20 +254,6 @@ export function InsightsTab({ userId, profile }: { userId: string; profile: any 
       <p className="text-sm text-muted-foreground font-['Nunito'] -mt-2">
         Um capítulo por mês. Como as coisas foram mudando dentro de você.
       </p>
-
-      {hasPendingInsight && (
-        <div className="rounded-2xl border border-accent/30 bg-accent/5 p-4 flex gap-3 items-start animate-fade-in">
-          <Sparkles size={18} className="text-accent shrink-0 mt-0.5" />
-          <div className="min-w-0">
-            <p className="text-[11px] uppercase tracking-wider font-semibold text-accent font-['Nunito']">
-              Insight recente da Aura
-            </p>
-            <p className="text-sm text-foreground font-['Nunito'] leading-relaxed mt-1">
-              {truncate(profile.pending_insight, 220)}
-            </p>
-          </div>
-        </div>
-      )}
 
       {chapters.length === 0 && (
         <EmptyState

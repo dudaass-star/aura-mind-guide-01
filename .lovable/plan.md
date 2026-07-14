@@ -1,77 +1,44 @@
-## Unificar Memória em "Sobre você" + convite ativo à contribuição
+## Problema
 
-Você tem razão: o `Sobre você` (retrato curado pelo Gemini a partir de `user_portraits`) captura bem quem o usuário é. A `Memória` mostra a lista crua de `user_insights` — sempre vai parecer poluída por design, porque é dado técnico. Melhor eliminar a duplicidade.
+O card "Último insight da Aura" no portal está lendo `profiles.pending_insight`. Esse campo **não é insight** — é um buffer técnico de entrega no WhatsApp que carrega prefixos como `[CONTENT]` (episódio de jornada), `[WEEKLY_REPORT]` (teaser), `[WELCOME]`, `[SESSION_PREARM]`, `[SESSION_START]`. Por isso aparece disparo de jornada no lugar de reflexão.
 
-### O que muda
+A Aura **continua mandando insights de verdade** via WhatsApp (cron `pattern-analysis-weekly` → efeito Oráculo) — o problema é só que o portal está mostrando o campo errado. Não é para desligar nada da régua.
 
-**1. Remover a aba "Memória"**
+## Solução
 
-- `src/pages/UserPortal.tsx`: remover `memoria` do array `TABS` e do render. Portal cai para 5 abas (Hoje / Sessões / Percurso / Sobre você / Meditações).
-- Manter o componente `MemoriaTab.tsx` no repo por 1 release em caso de rollback, mas sem rota (ou deletar direto — decisão sua).
+Trocar a fonte do card por ativos que já têm valor clínico curado:
 
-**2. Migrar "o que o usuário quer complementar" para dentro de Sobre você**
+1. **Fonte primária**: `thematic_snapshots` mais recente do usuário (já é síntese temática com citação literal, tier de confiança e período).
+2. **Fallback**: `monthly_reports.analysis_text` mais recente (síntese mensal completa).
+3. **Se nenhum existir**: esconder o card (sem placeholder falso).
 
-Nova seção no fim do `SobreVoceTab`, **antes** do rodapé "corrigir no WhatsApp":
+`pending_insight` sai completamente do portal — nem como preferência, nem como fallback.
 
-> **"O que você quer que a Aura saiba"**
-> *Coisas suas que ainda não apareceram nas conversas ou que você quer reforçar.*
+## Escopo técnico
 
-- Lê de `user_insights` apenas onde `source = 'user_added'` (o que já era a parte editável da MemoriaTab).
-- Renderiza como cards simples com edit/delete inline (reaproveita a lógica que já existe em MemoriaTab).
-- Botão principal: **"+ Adicionar algo sobre você"**.
+### `src/pages/UserPortal.tsx`
+- Remover `pending_insight` do `select` de `profile` (linha 79).
 
-**3. Convite ativo com prompts sugeridos**
+### `src/components/portal/HojeTab.tsx`
+- Nova query `["portal-latest-insight", userId]` que busca:
+  1. Último `thematic_snapshots` do user (`order by period_end desc limit 1`, filtrando `confidence_tier != 'insufficient'`).
+  2. Se vazio, último `monthly_reports.analysis_text` (`order by created_at desc limit 1`).
+- Montar objeto `{ kind: 'snapshot'|'monthly', title, body, meta }` — ex.:
+  - snapshot → title = tema (`emotional_theme`), meta = período BRT.
+  - monthly → title = "Resumo de {mês}", body = primeiros ~280 chars de `analysis_text`.
+- `InsightPreviewCard` recebe `title` opcional além de `text`; label do header vira "Insight da Aura" (sem "Último", que induz a "última mensagem").
+- Remover uso de `profile.pending_insight` como fonte.
 
-Quando o usuário clica em "+ Adicionar", em vez de um campo em branco, mostra um seletor de **temas sugeridos** que abrem o formulário já contextualizado:
+### `src/components/portal/InsightsTab.tsx`
+- Remover bloco `hasPendingInsight` / render de `profile.pending_insight` (linhas ~246–267). A aba já tem os capítulos (`thematic_snapshots` renderizados), então não perde nada.
 
-- 🎯 **Um objetivo importante** — "Onde eu quero chegar em..."
-- 😰 **Um medo ou receio** — "Uma coisa que me trava é..."
-- ⚔️ **Um desafio atual** — "O que estou enfrentando agora é..."
-- 💭 **Um valor inegociável** — "Uma coisa que não abro mão é..."
-- 🌱 **Algo sobre quem eu quero ser** — "A pessoa que eu quero me tornar..."
-- ✍️ **Outro** — campo livre
+### Sem mudanças em
+- `pending_insight` no schema (continua sendo buffer legítimo do WhatsApp).
+- `weekly-report`, `stripe-webhook`, `start-trial`, `aura-agent`, `session-reminder` (mantêm uso normal do buffer).
+- Nenhum cron pausado.
 
-Ao escolher um tema, o formulário abre com:
-- Placeholder específico do tema (o exemplo acima)
-- Categoria já pré-selecionada no backend (medo→`sensivel`, objetivo→`objetivo`, desafio→`objetivo`, valor→`preferencia`, quem-quero-ser→`objetivo`, outro→`contexto`)
-- Campo único de texto livre (sem exigir `key`/`value` técnicos como hoje).
+## Validação
 
-Isso resolve dois problemas: (a) elimina o campo `key` técnico que ninguém sabia preencher; (b) dá ao usuário um convite real, não uma caixa em branco.
-
-**4. Empty state contextual**
-
-Se o usuário ainda não adicionou nada manualmente:
-
-> *"A Aura já sabe bastante sobre você pelas conversas. Se quiser reforçar algo — um medo, um objetivo, um valor — adiciona aqui e ela leva em conta."*
-> [+ Adicionar algo sobre você]
-
-**5. Badges e navegação**
-
-- `usePortalNovidades.ts` e `NOVIDADE_TABS`: remover a chave `memoria` se existir.
-- Se algum link interno aponta pra `?tab=memoria`, redireciona pra `?tab=sobre`.
-
-### O que não muda
-
-- `user_insights` continua igual no banco — é a fonte de todo o portrait.
-- Prompt/extractor da Aura não muda nesta rodada. Se depois quisermos apertar extração, isso vira plano separado.
-- `user_portraits` (o curado) continua sendo a fonte visível — o Gemini já filtra e narra bem.
-- WhatsApp "me corrige" no rodapé fica igual.
-
-### Arquivos a editar
-
-- `src/pages/UserPortal.tsx` — remove tab.
-- `src/components/portal/SobreVoceTab.tsx` — adiciona seção "O que você quer que a Aura saiba" + seletor de prompts + form contextualizado + lista editável de `user_added`.
-- `src/components/portal/hooks/usePortalNovidades.ts` — remove `memoria` se listado.
-- `src/components/portal/MemoriaTab.tsx` — deletar (ou deixar não-referenciado por 1 release, sua escolha).
-
-### Ordem
-
-1. Adicionar a seção "O que você quer que a Aura saiba" dentro de SobreVoceTab, funcional.
-2. Só depois remover a aba Memória e deletar o arquivo.
-
-Isso evita janela em que o usuário perde acesso ao que ele mesmo adicionou.
-
-### Fora do escopo (podemos fazer depois)
-
-- Endurecer o extractor de `user_insights` — só faz sentido se um dia quisermos re-expor os brutos, o que não é o caso.
-- Sugestões automáticas baseadas em lacunas ("você nunca falou sobre X, quer contar?").
+- Abrir `/meu-espaco` no perfil Eduardo via Playwright autenticado.
+- Confirmar que o card mostra um snapshot temático (com citação) ou o resumo mensal — nunca texto começando com `[CONTENT]`/`[WEEKLY_REPORT]`/link `olaaura.com.br/meu-espaco/...`.
+- Verificar que a aba "Percurso" também não mostra mais o buffer.
