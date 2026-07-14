@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 import {
   Heart,
@@ -14,9 +14,31 @@ import {
   ChevronUp,
   MessageCircle,
   Sparkles,
+  Plus,
+  Pencil,
+  Trash2,
+  Check,
+  X,
+  Target,
+  Frown,
+  Swords,
+  Gem,
+  Sprout,
+  PenLine,
 } from "lucide-react";
 import { SectionHeader, EmptyState, PortalLoadingInline } from "./shared";
 import { auraWhatsAppLink } from "./whatsapp";
+import { toast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 // ============================================================
 // Aba "Sobre você" — versão retrato narrativo
@@ -368,6 +390,8 @@ export function SobreVoceTab({ userId }: { userId: string }) {
       )}
 
       {/* Rodapé: corrigir no WhatsApp */}
+      <ContribuicaoUsuario userId={userId} />
+
       <a
         href={auraWhatsAppLink("Oi Aura, queria corrigir uma coisa no que você sabe sobre mim.")}
         target="_blank"
@@ -451,5 +475,342 @@ function ProseList({ items, muted }: { items: string[]; muted?: boolean }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+// ============================================================
+// ContribuicaoUsuario — "O que você quer que a Aura saiba"
+// Absorve o CRUD que antes vivia na aba Memória, mas com convite ativo
+// por prompts (medos, objetivos, desafios, valores) em vez de campo em branco.
+// Lê/grava em user_insights com source implícito via category="user_added".
+// ============================================================
+
+type UserAdded = {
+  id: string;
+  key: string;
+  value: string;
+  created_at: string | null;
+};
+
+type PromptOption = {
+  id: string;
+  icon: React.ElementType;
+  label: string;
+  placeholder: string;
+  keyLabel: string; // como fica salvo no campo "key" do insight
+};
+
+const PROMPTS: PromptOption[] = [
+  {
+    id: "objetivo",
+    icon: Target,
+    label: "Um objetivo importante",
+    placeholder: "Onde eu quero chegar em...",
+    keyLabel: "Objetivo",
+  },
+  {
+    id: "medo",
+    icon: Frown,
+    label: "Um medo ou receio",
+    placeholder: "Uma coisa que me trava é...",
+    keyLabel: "Medo",
+  },
+  {
+    id: "desafio",
+    icon: Swords,
+    label: "Um desafio atual",
+    placeholder: "O que estou enfrentando agora é...",
+    keyLabel: "Desafio",
+  },
+  {
+    id: "valor",
+    icon: Gem,
+    label: "Um valor inegociável",
+    placeholder: "Uma coisa que eu não abro mão é...",
+    keyLabel: "Valor",
+  },
+  {
+    id: "quem",
+    icon: Sprout,
+    label: "Quem eu quero me tornar",
+    placeholder: "A pessoa que eu quero me tornar é...",
+    keyLabel: "Aspiração",
+  },
+  {
+    id: "outro",
+    icon: PenLine,
+    label: "Outra coisa",
+    placeholder: "O que a Aura deveria saber sobre você?",
+    keyLabel: "Sobre mim",
+  },
+];
+
+function ContribuicaoUsuario({ userId }: { userId: string }) {
+  const qc = useQueryClient();
+  const [selectedPrompt, setSelectedPrompt] = useState<PromptOption | null>(null);
+  const [draft, setDraft] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState<UserAdded | null>(null);
+
+  const { data: items, isLoading } = useQuery({
+    queryKey: ["portal-user-added", userId],
+    queryFn: async () => {
+      const { data, error } = await supabasePortal
+        .from("user_insights")
+        .select("id, key, value, created_at")
+        .eq("user_id", userId)
+        .eq("category", "user_added")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as UserAdded[];
+    },
+  });
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["portal-user-added", userId] });
+    qc.invalidateQueries({ queryKey: ["portal-user-portrait", userId] });
+  };
+
+  const addMut = useMutation({
+    mutationFn: async () => {
+      if (!selectedPrompt) throw new Error("Escolha um tema.");
+      const val = draft.trim();
+      if (!val) throw new Error("Escreve alguma coisa antes de salvar.");
+      const { error } = await supabasePortal.from("user_insights").insert({
+        user_id: userId,
+        category: "user_added",
+        key: selectedPrompt.keyLabel,
+        value: val,
+        importance: 9,
+        mentioned_count: 1,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({ title: "Guardado", description: "A Aura já sabe disso." });
+      setSelectedPrompt(null);
+      setDraft("");
+      invalidate();
+    },
+    onError: (e: any) =>
+      toast({ title: "Não deu", description: e.message, variant: "destructive" }),
+  });
+
+  const editMut = useMutation({
+    mutationFn: async ({ item, newVal }: { item: UserAdded; newVal: string }) => {
+      const { error } = await supabasePortal
+        .from("user_insights")
+        .update({ value: newVal })
+        .eq("id", item.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({ title: "Atualizado" });
+      setEditingId(null);
+      invalidate();
+    },
+    onError: (e: any) =>
+      toast({ title: "Não deu", description: e.message, variant: "destructive" }),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: async (item: UserAdded) => {
+      const { error: corrErr } = await supabasePortal.from("user_memory_corrections").insert({
+        user_id: userId,
+        correction_text: `Ignorar: ${item.key} — ${item.value}.`,
+        source: "user_portal",
+        confidence: 1,
+      });
+      if (corrErr) throw corrErr;
+      const { error } = await supabasePortal.from("user_insights").delete().eq("id", item.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({ title: "Apagado" });
+      setConfirmDelete(null);
+      invalidate();
+    },
+    onError: (e: any) =>
+      toast({ title: "Não deu", description: e.message, variant: "destructive" }),
+  });
+
+  const list = items ?? [];
+
+  return (
+    <div className="pt-2 space-y-4">
+      <div className="flex items-center gap-2">
+        <Sparkles size={14} className="text-accent" />
+        <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold font-['Nunito']">
+          O que você quer que a Aura saiba
+        </p>
+      </div>
+      <p className="text-sm text-muted-foreground font-['Nunito'] -mt-2">
+        Reforce coisas suas que ainda não apareceram nas conversas — a Aura leva em conta.
+      </p>
+
+      {/* Itens já adicionados */}
+      {!isLoading && list.length > 0 && (
+        <div className="space-y-2">
+          {list.map((item) => {
+            const isEditing = editingId === item.id;
+            return (
+              <div
+                key={item.id}
+                className="rounded-xl border border-border/60 bg-card p-3"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[11px] uppercase tracking-wider text-accent font-semibold font-['Nunito']">
+                      {item.key}
+                    </p>
+                    {isEditing ? (
+                      <textarea
+                        autoFocus
+                        value={editDraft}
+                        onChange={(e) => setEditDraft(e.target.value)}
+                        rows={2}
+                        className="mt-1 w-full bg-background rounded-lg px-2 py-1.5 text-sm border border-accent font-['Nunito'] resize-none"
+                      />
+                    ) : (
+                      <p className="text-sm text-foreground font-['Nunito'] mt-0.5 break-words leading-relaxed">
+                        {item.value}
+                      </p>
+                    )}
+                  </div>
+                  {isEditing ? (
+                    <div className="flex gap-1 shrink-0">
+                      <button
+                        onClick={() =>
+                          editMut.mutate({ item, newVal: editDraft.trim() })
+                        }
+                        disabled={editMut.isPending || !editDraft.trim()}
+                        className="p-1.5 rounded-lg bg-accent text-accent-foreground disabled:opacity-60"
+                        title="Salvar"
+                      >
+                        <Check size={14} />
+                      </button>
+                      <button
+                        onClick={() => setEditingId(null)}
+                        className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted"
+                        title="Cancelar"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-1 shrink-0 opacity-60 hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={() => {
+                          setEditingId(item.id);
+                          setEditDraft(item.value);
+                        }}
+                        className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+                        title="Editar"
+                      >
+                        <Pencil size={14} />
+                      </button>
+                      <button
+                        onClick={() => setConfirmDelete(item)}
+                        disabled={deleteMut.isPending}
+                        className="p-1.5 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                        title="Apagar"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Formulário aberto */}
+      {selectedPrompt ? (
+        <div className="rounded-xl border border-accent/30 bg-accent/5 p-4 space-y-3 animate-fade-in">
+          <div className="flex items-center gap-2">
+            <selectedPrompt.icon size={16} className="text-accent" />
+            <p className="text-sm font-semibold text-foreground font-['Nunito']">
+              {selectedPrompt.label}
+            </p>
+          </div>
+          <textarea
+            autoFocus
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder={selectedPrompt.placeholder}
+            rows={3}
+            className="w-full bg-background rounded-lg px-3 py-2 text-sm border border-border font-['Nunito'] resize-none focus:outline-none focus:border-accent/60"
+          />
+          <div className="flex gap-2 justify-end">
+            <button
+              onClick={() => {
+                setSelectedPrompt(null);
+                setDraft("");
+              }}
+              className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground font-['Nunito']"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={() => addMut.mutate()}
+              disabled={addMut.isPending || !draft.trim()}
+              className="px-4 py-1.5 text-xs rounded-lg bg-accent text-accent-foreground font-semibold font-['Nunito'] disabled:opacity-60"
+            >
+              Salvar
+            </button>
+          </div>
+        </div>
+      ) : (
+        // Seletor de prompts
+        <div>
+          <p className="text-xs text-muted-foreground font-['Nunito'] mb-2 flex items-center gap-1.5">
+            <Plus size={12} />
+            Sobre o quê você quer contar?
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            {PROMPTS.map((p) => {
+              const Icon = p.icon;
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => {
+                    setSelectedPrompt(p);
+                    setDraft("");
+                  }}
+                  className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2.5 text-left hover:border-accent/40 hover:bg-accent/5 transition-colors"
+                >
+                  <Icon size={14} className="text-accent shrink-0" />
+                  <span className="text-xs text-foreground font-['Nunito'] leading-tight">
+                    {p.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <AlertDialog open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Apagar isto?</AlertDialogTitle>
+            <AlertDialogDescription>
+              A Aura vai deixar de considerar "{confirmDelete?.value}".
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => confirmDelete && deleteMut.mutate(confirmDelete)}
+            >
+              Apagar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
   );
 }
