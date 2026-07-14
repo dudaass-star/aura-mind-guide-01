@@ -21,19 +21,31 @@ import { FloatingWhatsAppCTA } from "@/components/portal/FloatingWhatsAppCTA";
 import { CreditCard, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { ChangePlanDialog } from "@/components/portal/ChangePlanDialog";
+import {
+  usePortalNovidades,
+  markTabSeen,
+  type TabKey,
+} from "@/components/portal/hooks/usePortalNovidades";
 
 type TabId = "hoje" | "sessoes" | "insights" | "sobre" | "jornada" | "memoria" | "jornadas" | "meditacoes";
 
 const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: "hoje", label: "Hoje", icon: Sun },
   { id: "sessoes", label: "Sessões", icon: Calendar },
-  { id: "insights", label: "Insights", icon: Sparkles },
+  { id: "insights", label: "Percurso", icon: Sparkles },
   { id: "jornada", label: "Jornada", icon: Route },
   { id: "memoria", label: "Memória", icon: BookOpen },
   { id: "sobre", label: "Sobre você", icon: User },
   { id: "jornadas", label: "Jornadas", icon: Target },
   { id: "meditacoes", label: "Meditações", icon: Headphones },
 ];
+
+// Abas que exibem badge de novidade (subset do TabId).
+const NOVIDADE_TABS: Record<string, TabKey> = {
+  hoje: "hoje",
+  insights: "insights",
+  jornada: "jornada",
+};
 
 const UserPortal = () => {
   const [searchParams] = useSearchParams();
@@ -44,6 +56,17 @@ const UserPortal = () => {
   const { session, loading: authLoading, signOut, linkStatus } = usePortalAuth();
 
   const userId = session?.user?.id;
+  const { data: novidades, refetch: refetchNovidades } = usePortalNovidades(userId);
+
+  const handleTabClick = (id: TabId) => {
+    setActiveTab(id);
+    const key = NOVIDADE_TABS[id];
+    if (key && userId) {
+      markTabSeen(userId, key);
+      // Re-avalia badges após marcar como visto.
+      setTimeout(() => refetchNovidades(), 100);
+    }
+  };
 
   const { data: profile, isLoading: profileLoading } = useQuery({
     queryKey: ["portal-profile", userId],
@@ -143,10 +166,13 @@ const UserPortal = () => {
             {TABS.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
+              const novidadeKey = NOVIDADE_TABS[tab.id];
+              const hasNovidade =
+                !isActive && novidadeKey && (novidades as any)?.[novidadeKey];
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
+                  onClick={() => handleTabClick(tab.id)}
                   className={`flex items-center gap-1 px-2.5 sm:px-3 py-3 text-xs sm:text-sm font-['Nunito'] font-medium whitespace-nowrap border-b-2 transition-all shrink-0 ${
                     isActive
                       ? "border-accent text-accent"
@@ -155,6 +181,12 @@ const UserPortal = () => {
                 >
                   <Icon size={15} />
                   <span>{tab.label}</span>
+                  {hasNovidade && (
+                    <span
+                      aria-label="Novidade"
+                      className="ml-0.5 inline-block h-1.5 w-1.5 rounded-full bg-accent animate-pulse-soft"
+                    />
+                  )}
                 </button>
               );
             })}
@@ -168,7 +200,7 @@ const UserPortal = () => {
               userId={userId!}
               firstName={firstName}
               profile={profile}
-              onNavigateTab={(t) => setActiveTab(t as TabId)}
+              onNavigateTab={(t) => handleTabClick(t as TabId)}
             />
           )}
           {activeTab === "sessoes" && <SessoesTab userId={userId!} profile={profile} />}

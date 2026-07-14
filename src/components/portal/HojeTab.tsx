@@ -14,6 +14,8 @@ import { Link } from "react-router-dom";
 import { PortalLoadingInline } from "./shared";
 import { IntimacyLevel } from "./IntimacyLevel";
 import { auraWhatsAppLink, presentClosure } from "./whatsapp";
+import { PerguntaDoDiaCard } from "./PerguntaDoDiaCard";
+import { AcoesRapidasBar } from "./AcoesRapidasBar";
 
 interface HojeTabProps {
   userId: string;
@@ -159,6 +161,9 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab }: HojeTabPr
         <IntimacyLevel userId={userId} />
       </div>
 
+      {/* Ações rápidas contextuais */}
+      <AcoesRapidasBar />
+
       {/* Empty state global p/ usuária ainda sem nada */}
       {!hasAnything && (
         <div className="rounded-2xl border border-accent/30 bg-gradient-to-br from-accent/5 to-transparent p-6 text-center space-y-3 animate-fade-up">
@@ -182,6 +187,9 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab }: HojeTabPr
           </a>
         </div>
       )}
+
+      {/* Pergunta do dia — ritual leve pra abrir o portal fora dos dias de carta */}
+      <PerguntaDoDiaCard lastUserMessageAt={profile?.last_user_message_at} />
 
       {/* Card: O que ficou da última sessão */}
       {lastSession && (lastSession.closure_text || lastSession.session_summary) && (
