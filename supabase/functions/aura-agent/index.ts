@@ -1825,6 +1825,7 @@ REGRAS CRÍTICAS:
 5. Insights devem ser fatos curtos e literais (nomes, profissão, evento, preferência declarada). Evite frases interpretativas.
 6. Se o usuário expressou RECUSA, DESINTERESSE ou pediu para PARAR de insistir em algum tópico (ex.: "não quero", "já disse que não", "para de insistir", "não tenho interesse", "deixa pra lá"), preencha "cancel_topics" com palavras-chave curtas do(s) tópico(s) recusado(s) (ex.: ["sessão", "agendar"]). Use 1-3 palavras por item, em minúsculas.
 7. Se o usuário sinalizou que JÁ FEZ, JÁ RESOLVEU, JÁ ACONTECEU ou que algo NÃO É MAIS UM PROBLEMA (ex.: "já voltei a treinar", "já conversei com ela", "já resolvi aquilo", "isso já passou", "já comecei"), preencha "resolved_topics" com palavras-chave curtas do(s) tópico(s) concluído(s). Use verbo em passado/presente factivo — NUNCA hipotético ("se eu voltasse", "talvez eu faça"). 1-3 palavras por item, em minúsculas.
+8. FICÇÃO vs PESSOA REAL: só salve como category='pessoa' quando o usuário fala de alguém da vida real dele em primeira mão (ex.: "minha amiga Angela", "meu pai", "a Carla do trabalho"). Personagens de filme, série, livro, jogo, quadrinho, novela ou qualquer referência cultural — mesmo quando o usuário se compara ou usa como metáfora — devem ir em category='referencia_cultural' (nunca em 'pessoa'). Na dúvida entre real e ficcional, NÃO EXTRAIA. Precisão importa mais que cobertura aqui.
 
 CONTEXTO RECENTE:
 ${recentContext}
@@ -1862,7 +1863,7 @@ Use a função extract_analysis para retornar os dados.`;
                 items: {
                   type: 'OBJECT',
                   properties: {
-                    category: { type: 'STRING', enum: ['pessoa', 'identidade', 'desafio', 'trauma', 'saude', 'objetivo', 'conquista', 'padrao', 'preferencia', 'rotina', 'contexto', 'tecnica'], description: 'Categoria do insight' },
+                    category: { type: 'STRING', enum: ['pessoa', 'identidade', 'desafio', 'trauma', 'saude', 'objetivo', 'conquista', 'padrao', 'preferencia', 'rotina', 'contexto', 'tecnica', 'referencia_cultural'], description: 'Categoria do insight. Use referencia_cultural para personagens fictícios (filme/série/livro/jogo) citados pelo usuário — NUNCA salve ficção como pessoa.' },
                     key: { type: 'STRING', description: 'Chave descritiva (ex: filha, profissao, principal)' },
                     value: { type: 'STRING', description: 'Valor extraído (ex: Bella, engenheiro, ansiedade)' }
                   },
