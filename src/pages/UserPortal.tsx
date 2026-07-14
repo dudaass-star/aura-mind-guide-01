@@ -4,11 +4,10 @@ import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { Helmet } from "react-helmet-async";
 import { useEffect, useState } from "react";
 import logoOlaAura from "@/assets/logo-ola-aura.png";
-import { Sparkles, Headphones, Lock, LogOut, Sun, Calendar, User, BookOpen } from "lucide-react";
+import { Sparkles, Headphones, Lock, LogOut, Sun, Calendar, User } from "lucide-react";
 import { usePortalAuth } from "@/contexts/PortalAuthContext";
 
 import { PortalLoading } from "@/components/portal/shared";
-import { MemoriaTab } from "@/components/portal/MemoriaTab";
 import { MeditacoesTab } from "@/components/portal/MeditacoesTab";
 import { PhoneLinkPrompt } from "@/components/portal/PhoneLinkPrompt";
 import { HojeTab } from "@/components/portal/HojeTab";
@@ -25,13 +24,12 @@ import {
   type TabKey,
 } from "@/components/portal/hooks/usePortalNovidades";
 
-type TabId = "hoje" | "sessoes" | "insights" | "memoria" | "sobre" | "meditacoes";
+type TabId = "hoje" | "sessoes" | "insights" | "sobre" | "meditacoes";
 
 const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: "hoje", label: "Hoje", icon: Sun },
   { id: "sessoes", label: "Sessões", icon: Calendar },
   { id: "insights", label: "Percurso", icon: Sparkles },
-  { id: "memoria", label: "Memória", icon: BookOpen },
   { id: "sobre", label: "Sobre você", icon: User },
   { id: "meditacoes", label: "Meditações", icon: Headphones },
 ];
@@ -44,7 +42,9 @@ const NOVIDADE_TABS: Record<string, TabKey> = {
 
 const UserPortal = () => {
   const [searchParams] = useSearchParams();
-  const initialTab = (searchParams.get("tab") as TabId) || "hoje";
+  const rawTab = searchParams.get("tab") as TabId | "memoria" | null;
+  // Legacy: aba "memoria" foi absorvida em "sobre".
+  const initialTab: TabId = (rawTab === "memoria" ? "sobre" : (rawTab as TabId)) || "hoje";
   const [activeTab, setActiveTab] = useState<TabId>(initialTab);
   const [portalLoading, setPortalLoading] = useState(false);
   const [changePlanOpen, setChangePlanOpen] = useState(false);
@@ -207,7 +207,6 @@ const UserPortal = () => {
           )}
           {activeTab === "sessoes" && <SessoesTab userId={userId!} profile={profile} />}
           {activeTab === "insights" && <InsightsTab userId={userId!} profile={profile} />}
-          {activeTab === "memoria" && <MemoriaTab userId={userId!} />}
           {activeTab === "sobre" && <SobreVoceTab userId={userId!} />}
           {activeTab === "meditacoes" && <MeditacoesTab userId={userId!} />}
         </div>
