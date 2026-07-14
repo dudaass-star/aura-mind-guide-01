@@ -1,40 +1,77 @@
-## Auditoria visual v2 — portal do Eduardo após as últimas mudanças
+## Unificar Memória em "Sobre você" + convite ativo à contribuição
 
-Objetivo: entrar logado como Eduardo (`duda.ass@gmail.com`), navegar as 6 abas e avaliar como ficou o portal depois de:
-- Consolidação 8 → 6 tabs
-- Reformulação de **Percurso** em capítulos mensais (síntese + citação + chips + acordeão)
-- Reformulação de **Memória** em caderno navegável (busca + acordeões por categoria + paginação)
-- `AcoesRapidasBar` com "Reagendar" 7/14/30 dias
-- Empty state real da Hoje / fallback de Sobre você
-- Correções P1 anteriores (sanitização `[CONTENT]`, typo "sessãoões", dedup Memória, IntimacyLevel)
+Você tem razão: o `Sobre você` (retrato curado pelo Gemini a partir de `user_portraits`) captura bem quem o usuário é. A `Memória` mostra a lista crua de `user_insights` — sempre vai parecer poluída por design, porque é dado técnico. Melhor eliminar a duplicidade.
 
-### Passos
+### O que muda
 
-1. **Recriar edge function temporária** `dev-portal-magic-link` (Service Role gera magic link para o email do Eduardo com `redirectTo=/meu-espaco`).
-2. **Deploy** da função e chamada única para gerar o link.
-3. **Playwright headless (desktop 1280×1800 e mobile 390×844)** consumindo o magic link e capturando screenshots de cada aba:
-   - Hoje
-   - Sessões
-   - Percurso (novo formato de capítulos)
-   - Memória (novo caderno com busca/acordeões)
-   - Sobre você
-   - Meditações
-   Em cada aba: screenshot no estado inicial + 1 interação chave (expandir um capítulo, abrir uma categoria da Memória, abrir popover de Reagendar).
-4. **Coleta de console + network errors** durante a navegação.
-5. **Análise** comparando com os bugs/UX findings da rodada anterior:
-   - Bugs P1 realmente sumiram? (`[CONTENT]`, typo, dedup, IntimacyLevel recalibrado)
-   - Percurso ficou navegável e narrativo (não mais parede de lista)?
-   - Memória ficou consultável (busca funciona, categorias colapsam, paginação aparece)?
-   - Novos problemas introduzidos pela refatoração?
-6. **Remover** a edge function temporária ao fim.
-7. **Relatório** por gravidade (🔴 bugs / 🟡 UX / 🟢 ok) com recomendação de próximos passos.
+**1. Remover a aba "Memória"**
 
-### Detalhes técnicos
+- `src/pages/UserPortal.tsx`: remover `memoria` do array `TABS` e do render. Portal cai para 5 abas (Hoje / Sessões / Percurso / Sobre você / Meditações).
+- Manter o componente `MemoriaTab.tsx` no repo por 1 release em caso de rollback, mas sem rota (ou deletar direto — decisão sua).
 
-- Função `dev-portal-magic-link` idêntica à usada na rodada anterior (`generateLink` type `magiclink` via admin API, retorna `action_link`).
-- Playwright script sob `/tmp/browser/portal-audit-v2/`, screenshots em subpasta, script único por viewport.
-- Nenhuma alteração de código de produto nesta etapa — só auditoria. Fixes vêm num plano seguinte, baseado nos achados.
+**2. Migrar "o que o usuário quer complementar" para dentro de Sobre você**
 
-### Entregável
+Nova seção no fim do `SobreVoceTab`, **antes** do rodapé "corrigir no WhatsApp":
 
-Relatório estruturado igual ao da rodada anterior (bugs, UX, o que está bom, próximos passos priorizados), com screenshots anexados como evidência.
+> **"O que você quer que a Aura saiba"**
+> *Coisas suas que ainda não apareceram nas conversas ou que você quer reforçar.*
+
+- Lê de `user_insights` apenas onde `source = 'user_added'` (o que já era a parte editável da MemoriaTab).
+- Renderiza como cards simples com edit/delete inline (reaproveita a lógica que já existe em MemoriaTab).
+- Botão principal: **"+ Adicionar algo sobre você"**.
+
+**3. Convite ativo com prompts sugeridos**
+
+Quando o usuário clica em "+ Adicionar", em vez de um campo em branco, mostra um seletor de **temas sugeridos** que abrem o formulário já contextualizado:
+
+- 🎯 **Um objetivo importante** — "Onde eu quero chegar em..."
+- 😰 **Um medo ou receio** — "Uma coisa que me trava é..."
+- ⚔️ **Um desafio atual** — "O que estou enfrentando agora é..."
+- 💭 **Um valor inegociável** — "Uma coisa que não abro mão é..."
+- 🌱 **Algo sobre quem eu quero ser** — "A pessoa que eu quero me tornar..."
+- ✍️ **Outro** — campo livre
+
+Ao escolher um tema, o formulário abre com:
+- Placeholder específico do tema (o exemplo acima)
+- Categoria já pré-selecionada no backend (medo→`sensivel`, objetivo→`objetivo`, desafio→`objetivo`, valor→`preferencia`, quem-quero-ser→`objetivo`, outro→`contexto`)
+- Campo único de texto livre (sem exigir `key`/`value` técnicos como hoje).
+
+Isso resolve dois problemas: (a) elimina o campo `key` técnico que ninguém sabia preencher; (b) dá ao usuário um convite real, não uma caixa em branco.
+
+**4. Empty state contextual**
+
+Se o usuário ainda não adicionou nada manualmente:
+
+> *"A Aura já sabe bastante sobre você pelas conversas. Se quiser reforçar algo — um medo, um objetivo, um valor — adiciona aqui e ela leva em conta."*
+> [+ Adicionar algo sobre você]
+
+**5. Badges e navegação**
+
+- `usePortalNovidades.ts` e `NOVIDADE_TABS`: remover a chave `memoria` se existir.
+- Se algum link interno aponta pra `?tab=memoria`, redireciona pra `?tab=sobre`.
+
+### O que não muda
+
+- `user_insights` continua igual no banco — é a fonte de todo o portrait.
+- Prompt/extractor da Aura não muda nesta rodada. Se depois quisermos apertar extração, isso vira plano separado.
+- `user_portraits` (o curado) continua sendo a fonte visível — o Gemini já filtra e narra bem.
+- WhatsApp "me corrige" no rodapé fica igual.
+
+### Arquivos a editar
+
+- `src/pages/UserPortal.tsx` — remove tab.
+- `src/components/portal/SobreVoceTab.tsx` — adiciona seção "O que você quer que a Aura saiba" + seletor de prompts + form contextualizado + lista editável de `user_added`.
+- `src/components/portal/hooks/usePortalNovidades.ts` — remove `memoria` se listado.
+- `src/components/portal/MemoriaTab.tsx` — deletar (ou deixar não-referenciado por 1 release, sua escolha).
+
+### Ordem
+
+1. Adicionar a seção "O que você quer que a Aura saiba" dentro de SobreVoceTab, funcional.
+2. Só depois remover a aba Memória e deletar o arquivo.
+
+Isso evita janela em que o usuário perde acesso ao que ele mesmo adicionou.
+
+### Fora do escopo (podemos fazer depois)
+
+- Endurecer o extractor de `user_insights` — só faz sentido se um dia quisermos re-expor os brutos, o que não é o caso.
+- Sugestões automáticas baseadas em lacunas ("você nunca falou sobre X, quer contar?").
