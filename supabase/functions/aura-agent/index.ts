@@ -2003,23 +2003,43 @@ Use a função extract_analysis para retornar os dados.`;
     const categoryImportance: Record<string, number> = {
       'pessoa': 10, 'identidade': 10, 'desafio': 8, 'trauma': 8, 'saude': 8,
       'objetivo': 6, 'conquista': 6, 'padrao': 5, 'preferencia': 4, 'rotina': 4,
-      'contexto': 5, 'tecnica': 7
+      'contexto': 5, 'tecnica': 7, 'referencia_cultural': 2
     };
 
     if (analysis.insights && analysis.insights.length > 0) {
       for (const insight of analysis.insights) {
         if (!insight.category || !insight.key || !insight.value) continue;
         const importance = categoryImportance[insight.category] || 5;
-        
-        await supabase.from('user_insights').upsert({
-          user_id: userId,
-          category: insight.category,
-          key: insight.key,
-          value: insight.value,
-          importance,
-          last_mentioned_at: new Date().toISOString()
-        }, { onConflict: 'user_id,category,key' });
-        
+
+        // Incrementa mentioned_count quando já existe (usado para hierarquizar
+        // no formatInsightsForContext). Upsert puro sobrescreve o contador.
+        const { data: existingInsight } = await supabase
+          .from('user_insights')
+          .select('id, mentioned_count')
+          .eq('user_id', userId)
+          .eq('category', insight.category)
+          .eq('key', insight.key)
+          .maybeSingle();
+
+        if (existingInsight?.id) {
+          await supabase.from('user_insights').update({
+            value: insight.value,
+            importance,
+            mentioned_count: (existingInsight.mentioned_count || 1) + 1,
+            last_mentioned_at: new Date().toISOString()
+          }).eq('id', existingInsight.id);
+        } else {
+          await supabase.from('user_insights').insert({
+            user_id: userId,
+            category: insight.category,
+            key: insight.key,
+            value: insight.value,
+            importance,
+            mentioned_count: 1,
+            last_mentioned_at: new Date().toISOString()
+          });
+        }
+
         console.log(`💾 [POST-ANALYSIS] Insight: ${insight.category}:${insight.key}=${insight.value}`);
       }
     }
