@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
-import { Sparkles } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -8,31 +7,21 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-type Stage = { key: "inicio" | "familiaridade" | "profundidade"; label: string; phrase: string; filled: number };
+type Stage = {
+  key: "inicio" | "familiaridade" | "profundidade";
+  label: string;
+  short: string;
+  percent: number;
+};
 
 function computeStage(sessions: number, themes: number, corrections: number): Stage {
   if (sessions >= 10 && themes >= 5) {
-    return {
-      key: "profundidade",
-      label: "profundamente",
-      phrase: "Aura te conhece: profundamente",
-      filled: 3,
-    };
+    return { key: "profundidade", label: "profundamente", short: "Íntimo", percent: 95 };
   }
   if (sessions >= 3 && (themes >= 3 || corrections >= 1)) {
-    return {
-      key: "familiaridade",
-      label: "bem",
-      phrase: "Aura te conhece: bem",
-      filled: 2,
-    };
+    return { key: "familiaridade", label: "bem", short: "Aprofundando", percent: 65 };
   }
-  return {
-    key: "inicio",
-    label: "superficialmente",
-    phrase: "Aura te conhece: superficialmente",
-    filled: 1,
-  };
+  return { key: "inicio", label: "superficialmente", short: "Superficial", percent: 25 };
 }
 
 export function IntimacyLevel({ userId }: { userId: string }) {
@@ -68,20 +57,24 @@ export function IntimacyLevel({ userId }: { userId: string }) {
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <div className="mt-3 rounded-xl border border-border/50 bg-card/50 px-3 py-2.5 cursor-help">
-            <div className="flex items-center gap-2 mb-1.5">
-              <Sparkles size={12} className="text-accent" />
-              <p className="text-xs text-muted-foreground font-['Nunito']">{stage.phrase}</p>
+          <div className="mt-4 rounded-2xl bg-white/60 p-5 cursor-help border border-white/80">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#1B2A4E] font-['Nunito']">
+                Nível de Intimidade
+              </h3>
+              <span className="text-xs font-bold text-[#87A878] font-['Nunito']">
+                {stage.short}
+              </span>
             </div>
-            <div className="flex gap-1">
-              {[1, 2, 3].map((i) => (
-                <div
-                  key={i}
-                  className={`h-1 flex-1 rounded-full transition-all ${
-                    i <= stage.filled ? "bg-accent" : "bg-muted"
-                  }`}
-                />
-              ))}
+            <div className="h-2 w-full bg-[#1B2A4E]/10 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-[#87A878] to-[#B8A5D9] transition-all duration-500"
+                style={{ width: `${stage.percent}%` }}
+              />
+            </div>
+            <div className="flex justify-between mt-2">
+              <span className="text-[10px] text-[#2A2A2A]/40 font-['Nunito']">Superficial</span>
+              <span className="text-[10px] text-[#2A2A2A]/40 font-['Nunito']">Íntimo</span>
             </div>
           </div>
         </TooltipTrigger>
