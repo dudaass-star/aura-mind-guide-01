@@ -157,6 +157,11 @@ interface Metrics {
   matureTrialsCount: number;
   matureConvertedCount: number;
   matureConversionRate: number;
+  // 🛡️ Higiene de interpretação
+  correctionsTotalInPeriod?: number;
+  correctionsUsersInPeriod?: number;
+  correctionsPerUserInPeriod?: number;
+  correctionsWeekly?: { week: string; total: number; users: number; per_user: number }[];
 }
 
 interface RecoverySession {
@@ -925,6 +930,49 @@ export default function AdminEngagement() {
                       <p className="text-[11px] text-muted-foreground">{metrics.recoveredPayments}/{metrics.totalPaymentFailedAllTime} cartões recuperados</p>
                     </CardContent>
                   </Card>
+
+                  {/* 🛡️ Higiene de interpretação — correções por usuário */}
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between p-3 pb-1">
+                      <CardTitle className="text-xs font-medium text-muted-foreground">🛡️ Correções / usuário</CardTitle>
+                      <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent className="p-3 pt-0">
+                      {(() => {
+                        const perUser = metrics.correctionsPerUserInPeriod ?? 0;
+                        const total = metrics.correctionsTotalInPeriod ?? 0;
+                        const users = metrics.correctionsUsersInPeriod ?? 0;
+                        const weekly = metrics.correctionsWeekly ?? [];
+                        // Verde <=4, amarelo 4-8, vermelho >8 (baseline observado: 3-13/user).
+                        const color = perUser <= 4 ? 'text-green-600' : perUser <= 8 ? 'text-yellow-600' : 'text-destructive';
+                        const values = weekly.map(w => w.per_user);
+                        const max = Math.max(1, ...values);
+                        const w = 100;
+                        const h = 24;
+                        const pts = values.length > 1
+                          ? values.map((v, i) => `${(i / (values.length - 1)) * w},${h - (v / max) * h}`).join(' ')
+                          : '';
+                        return (
+                          <>
+                            <div className={`text-xl font-bold ${color}`}>{perUser.toFixed(2)}</div>
+                            <p className="text-[11px] text-muted-foreground">{total} correções · {users} usuários (período)</p>
+                            {values.length > 1 && (
+                              <svg viewBox={`0 0 ${w} ${h}`} className="mt-1 w-full h-6" preserveAspectRatio="none">
+                                <polyline
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="1.5"
+                                  className={color}
+                                  points={pts}
+                                />
+                              </svg>
+                            )}
+                            <p className="text-[10px] text-muted-foreground">últimas {values.length}sem · pico {Math.max(...values, 0).toFixed(1)}</p>
+                          </>
+                        );
+                      })()}
+                    </CardContent>
+                  </Card>
                 </div>
 
                 {/* Churn breakdown card */}
@@ -1330,6 +1378,7 @@ export default function AdminEngagement() {
                     <p>• <strong>Recovery Rate:</strong> % de usuários com cartão recusado que voltaram para status active (all-time).</p>
                     <p>• <strong>Activation Rate:</strong> % de pagantes que enviaram a 1ª mensagem em ≤3 dias do cadastro. Meta: &gt;70%.</p>
                     <p>• <strong>Conversão Madura:</strong> só conta trials com ≥7 dias de vida. Meta: &gt;25%.</p>
+                    <p>• <strong>Correções / usuário:</strong> quantas vezes, em média, cada usuário corrigiu uma leitura da Aura no período. Baseline 3-13. Meta: ≤4 (verde). Sparkline = últimas 8 semanas.</p>
                     <p>• <strong>ARR / ARPU:</strong> ARR = MRR × 12 (projeção anualizada). ARPU = MRR ÷ assinaturas ativas (receita média por usuário/mês).</p>
                     <p>• <strong>MRR Growth (30d):</strong> soma do MRR das assinaturas <strong>novas</strong> criadas nos últimos 30d menos o MRR <strong>perdido</strong> por cancelamentos no mesmo período. % calculado sobre o MRR estimado no início do período.</p>
                     <p>• <strong>Margem de contribuição:</strong> MRR mensal menos custo de IA <strong>mensalizado</strong> (custo do período × 30 ÷ dias do período). Garante que ambos os lados estão na mesma escala temporal — a margem fica estável independente do filtro de data. Verde ≥70%, amarelo 40-70%, vermelho &lt;40%.</p>

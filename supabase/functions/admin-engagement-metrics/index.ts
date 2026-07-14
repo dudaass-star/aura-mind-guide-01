@@ -1644,6 +1644,67 @@ Deno.serve(async (req) => {
     const asaasSuppressedByStripe = asaasCreatedKeysInPeriod.size - asaasCreatedDedupInPeriod.size;
     console.log(`🔄 [checkout-dedup] period: Stripe-created suprimidos por pagamento Asaas=${stripeSuppressedByAsaas}, Asaas-created suprimidos por completed Stripe=${asaasSuppressedByStripe}`);
 
+    // 🛡️ Higiene de interpretação — KPI "Correções por usuário / semana"
+    // Fonte: user_memory_corrections (correções que o usuário fez sobre leituras
+    // erradas da Aura). Serve como métrica de qualidade de vínculo — quanto
+    // menor, menos momentos "ela não me entende".
+    // Calcula (a) janela do request e (b) breakdown das últimas 8 semanas.
+    let correctionsTotalInPeriod = 0;
+    let correctionsUsersInPeriod = 0;
+    let correctionsPerUserInPeriod = 0;
+    let correctionsWeekly: { week: string; total: number; users: number; per_user: number }[] = [];
+    try {
+      const { data: correctionsRows } = await supabase
+        .from('user_memory_corrections')
+        .select('user_id, created_at')
+        .gte('created_at', periodStart.toISOString())
+        .lte('created_at', periodEnd.toISOString());
+      if (correctionsRows) {
+        correctionsTotalInPeriod = correctionsRows.length;
+        correctionsUsersInPeriod = new Set(correctionsRows.map(r => r.user_id)).size;
+        correctionsPerUserInPeriod = correctionsUsersInPeriod > 0
+          ? Math.round((correctionsTotalInPeriod / correctionsUsersInPeriod) * 100) / 100
+          : 0;
+      }
+
+      // Breakdown 8 semanas — usa data fixa (não depende de dateFrom/To do request).
+      const eightWeeksAgo = new Date(Date.now() - 8 * 7 * 24 * 60 * 60 * 1000);
+      const { data: weeklyRows } = await supabase
+        .from('user_memory_corrections')
+        .select('user_id, created_at')
+        .gte('created_at', eightWeeksAgo.toISOString());
+      if (weeklyRows) {
+        // Agrupa por segunda-feira BRT (date_trunc('week') no Postgres = Mon).
+        const buckets = new Map<string, { total: number; users: Set<string> }>();
+        for (const r of weeklyRows) {
+          const d = new Date(r.created_at as string);
+          // Segunda-feira BRT: shift para UTC-3, então back-shift para segunda.
+          const brt = new Date(d.getTime() - 3 * 60 * 60 * 1000);
+          const dow = brt.getUTCDay(); // 0=Dom, 1=Seg...
+          const daysSinceMon = (dow + 6) % 7;
+          const weekStart = new Date(Date.UTC(brt.getUTCFullYear(), brt.getUTCMonth(), brt.getUTCDate() - daysSinceMon));
+          const key = weekStart.toISOString().slice(0, 10);
+          let bucket = buckets.get(key);
+          if (!bucket) {
+            bucket = { total: 0, users: new Set() };
+            buckets.set(key, bucket);
+          }
+          bucket.total += 1;
+          bucket.users.add(r.user_id as string);
+        }
+        correctionsWeekly = [...buckets.entries()]
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([week, b]) => ({
+            week,
+            total: b.total,
+            users: b.users.size,
+            per_user: b.users.size > 0 ? Math.round((b.total / b.users.size) * 100) / 100 : 0,
+          }));
+      }
+    } catch (e) {
+      console.warn('⚠️ Falha ao calcular métricas de correções (não crítico):', e);
+    }
+
     const responsePayload = JSON.stringify({
       // Engagement
       activeUsers: activeUsersInPeriod,
@@ -1785,6 +1846,11 @@ Deno.serve(async (req) => {
       matureTrialsCount: matureTrials.length,
       matureConvertedCount: matureConverted.length,
       matureConversionRate,
+      // 🛡️ Higiene de interpretação
+      correctionsTotalInPeriod,
+      correctionsUsersInPeriod,
+      correctionsPerUserInPeriod,
+      correctionsWeekly,
     });
 
     // Salva no cache para próximas requests dentro do TTL

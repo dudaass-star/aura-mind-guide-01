@@ -1307,16 +1307,30 @@ A força não tá em estar certa — tá em arriscar a leitura e dar espaço pro
   // (contexto + emoção nomeada + crença/origem), permite avanço mesmo com <4 pares.
   // Sem isso, usuário denso em 2 mensagens ficava preso esperando contagem cega.
   const densitySaturated = lastUserContext?.information_density === 'saturated';
-  if (recentUserCount < 4 && detectedPhase !== 'presenca' && detectedPhase !== 'initial' && !densitySaturated) {
-    console.log(`🔄 Phase evaluator: recentPairs=${recentUserCount} < 4 (density=${lastUserContext?.information_density ?? 'unknown'}), forcing presenca (was ${detectedPhase})`);
+  // Higiene de interpretação: freio também dispara quando o material do usuário
+  // ainda está raso (information_density === 'low'), mesmo depois de 4+ pares.
+  // Sem isso, Aura interpretava em cima de material insuficiente e o usuário
+  // corrigia — raiz da taxa alta de correções/user/semana observada.
+  // Escape hatches preservados: densitySaturated (avança), user_reflection_mode
+  // (usuário já está trazendo material denso sozinho), Direction Request Detector
+  // (bloco acima retorna antes).
+  const densityLow = lastUserContext?.information_density === 'low';
+  const userReflecting = lastUserContext?.user_reflection_mode === true;
+  const brakeByPairs = recentUserCount < 4 && !densitySaturated;
+  const brakeByDensity = densityLow && !userReflecting;
+  if ((brakeByPairs || brakeByDensity) && detectedPhase !== 'presenca' && detectedPhase !== 'initial') {
+    const reason = brakeByPairs
+      ? `primeiras trocas sobre este tema (${recentUserCount} pares)`
+      : `material ainda raso (falta contexto concreto, emoção nomeada ou crença/origem)`;
+    console.log(`🔄 Phase evaluator: FREIO DE PRESENÇA disparado — ${brakeByPairs ? 'pairs' : 'density=low'} (pairs=${recentUserCount}, density=${lastUserContext?.information_density ?? 'unknown'}, reflection=${userReflecting}), forcing presenca (was ${detectedPhase})`);
     return {
       detectedPhase: 'presenca',
       stagnationLevel: 0,
       guidance: `\n\n⚠️ FREIO DE PRESENÇA:
-Ainda estamos nas primeiras trocas sobre este tema (${recentUserCount} pares).
-NÃO avance para interpretação ou sentido ainda.
-AÇÃO: Valide o que o usuário trouxe, pergunte sobre a situação concreta, mostre que está ouvindo.
-Reframes e perguntas-âncora só DEPOIS de mapear o contexto.`
+${reason}.
+NÃO avance para interpretação ou sentido ainda. NÃO nomeie padrão, NÃO conecte com temas anteriores, NÃO ofereça leitura psicológica.
+AÇÃO: Valide o que o usuário trouxe COM CALOR e faça UMA pergunta concreta que puxe o que ainda falta — situação específica (o que aconteceu exatamente?), emoção nomeada (o que veio em você?) ou crença/origem (já sentiu isso antes?).
+Exploração ativa, não silêncio. Tamanho normal, tom acolhedor. Reframes e perguntas-âncora só DEPOIS de mapear o contexto.`
     };
   }
   if (recentUserCount < 4 && densitySaturated && detectedPhase !== 'presenca' && detectedPhase !== 'initial') {
