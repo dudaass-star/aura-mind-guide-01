@@ -5170,7 +5170,7 @@ serve(async (req) => {
         // 2. Insights críticos (pessoa, identidade) - reduzido em minimal
         supabase
           .from('user_insights')
-          .select('category, key, value, importance')
+          .select('category, key, value, importance, mentioned_count')
           .eq('user_id', userId)
           .in('category', ['pessoa', 'identidade'])
           .order('importance', { ascending: false })
@@ -5180,7 +5180,7 @@ serve(async (req) => {
           ? Promise.resolve({ data: [], error: null })
           : supabase
               .from('user_insights')
-              .select('category, key, value, importance')
+              .select('category, key, value, importance, mentioned_count')
               .eq('user_id', userId)
               .not('category', 'in', '("pessoa","identidade")')
               .order('importance', { ascending: false })
