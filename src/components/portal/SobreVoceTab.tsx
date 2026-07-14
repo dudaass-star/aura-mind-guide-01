@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 import {
   Heart,
@@ -14,9 +14,31 @@ import {
   ChevronUp,
   MessageCircle,
   Sparkles,
+  Plus,
+  Pencil,
+  Trash2,
+  Check,
+  X,
+  Target,
+  Frown,
+  Swords,
+  Gem,
+  Sprout,
+  PenLine,
 } from "lucide-react";
 import { SectionHeader, EmptyState, PortalLoadingInline } from "./shared";
 import { auraWhatsAppLink } from "./whatsapp";
+import { toast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 // ============================================================
 // Aba "Sobre você" — versão retrato narrativo
