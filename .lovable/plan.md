@@ -1,49 +1,107 @@
+## Linha do Tempo Emocional (P1) — Snapshots Temáticos com Evidência Literal
 
-# Higiene Factual da Aura (enxuto)
+Transformar o saldo emocional em história ancorada por temas, com citações **literais e datadas** do usuário. Zero paráfrase inventada. V1 fica fora do chat da Aura — só portal + carta mensal — pra auditar qualidade antes de expor ao turno rápido.
 
-Você tem razão. A #3 traz heurística de classificação ("factual vs interpretativo") que é frágil e vira dívida. Se o problema raiz é extração suja + contexto achatado, atacar esses dois já deve reduzir muito a necessidade da correção existir em primeiro lugar. Removida.
+---
 
-## Escopo
+### 1. Dados: tabela `thematic_snapshots`
 
-Duas mudanças cirúrgicas em `supabase/functions/aura-agent/index.ts`. Zero UI, zero schema, zero novo agente.
+Nova tabela em `public`, com RLS e GRANTs:
 
-### 1. Filtro anti-ficção no extractor (raiz)
+```
+id uuid pk
+user_id uuid
+theme text                    -- "mãe", "trabalho", "ansiedade", "corpo"
+period_start date
+period_end date               -- mês fechado
+snapshot_before text          -- "onde eu estava" (nullable)
+snapshot_change text          -- "o que mudou" (nullable)
+evidence_quote text           -- CITAÇÃO LITERAL do usuário (nullable)
+evidence_message_id uuid      -- FK -> messages(id), nullable
+evidence_date timestamptz
+message_count_in_period int
+confidence text CHECK IN ('high','low','insufficient_data')
+created_at, updated_at
+UNIQUE (user_id, theme, period_start)
+```
 
-No prompt do `postConversationAnalysis` (~linhas 1817-1836):
+- RLS: usuário lê os próprios via portal token; `service_role` full.
+- GRANTs explícitos (sem `anon`).
 
-- Só extrai como `category='pessoa'` quando o usuário fala do ente em **primeira mão** (ex.: "minha amiga", "meu pai", "a Angela do trabalho").
-- **Não extrai** personagens de filme/série/livro/jogo, mesmo quando o usuário se compara a eles. Se for referência cultural, extrai como `category='referencia_cultural'` (string livre, não muda schema).
-- Na dúvida, **não extrai** (bias para precisão).
+### 2. Produtor único: `generate-thematic-snapshots` + cron mensal
 
-Efeito: para de nascer "Agente J", "Boris", "Kurt" como pessoas do usuário.
+Edge function nova, roda dia 1 de cada mês (10h BRT), para o mês anterior. Por usuário ativo:
 
-### 2. Hierarquia no `formatInsightsForContext` (peso)
+1. Conta mensagens `role='user'` no período.
+2. **Guard-rails anti-alucinação:**
+   - `< 10 msgs` → grava 1 linha `confidence='insufficient_data'`, sem before/change/quote.
+   - `10–29 msgs` → `confidence='low'`. Só temas com ≥5 menções.
+   - `≥ 30 msgs` → `confidence='high'`. Temas com ≥5 menções.
+3. Agrupa temas por `session_themes` + top `mention_count` de `user_insights` no período.
+4. Chama Flash-lite com prompt estrito. Input: mensagens literais do usuário + snapshot do mês anterior (se houver). Output esperado (tool calling): `{ before, change, evidence_message_id, evidence_quote }`.
+5. **Validação obrigatória pós-LLM:**
+   - `evidence_message_id` precisa existir em `messages` do usuário no período.
+   - `evidence_quote` precisa ser **substring exata** de `messages.content`. Se não bater → descarta o snapshot (sem fallback fantasia).
 
-Hoje o formatter (~linhas 4050-4087) despeja tudo alfabético. Mudar para:
+### 3. Consumidor 1: aba "Sua Jornada" no portal
 
-1. **Pessoas reais primeiro**, ordenadas por `mention_count` desc.
-2. Depois fatos concretos (trabalho, saúde, agenda).
-3. Referências culturais **por último** e rotuladas `[ficção]`.
-4. Cortar em top N por categoria (ex.: 8 pessoas, 10 fatos) pra não afogar o prompt.
+Novo componente `src/components/portal/JornadaTab.tsx` em `/meu-espaco`. Timeline vertical agrupada por tema, ordem cronológica reversa:
 
-Efeito: a Aura vê "mãe (12 menções)" antes de "Agente J (1) [ficção]" e para de confundir quem é quem.
+```
+Mãe
+  ├─ Junho: [before] → [change]
+  │   "citação literal" — 12/06
+  └─ Maio: [before] → [change]
+      "citação literal" — 03/05
+```
 
-## Fora de escopo (agora)
+Estados vazios explícitos:
+- `insufficient_data` → card cinza: *"Neste mês vocês conversaram pouco — sem material suficiente pra uma leitura honesta."*
+- Sem histórico algum → *"Sua jornada começa a se desenhar depois do primeiro mês ativo."*
+- `confidence='low'` → badge "leitura preliminar" no card.
 
-- Bloco dedicado de correções factuais (removido a pedido — heurística frágil).
-- Bloco determinístico de agenda de sessões passadas.
-- Deduplicar entidades ("amiga" vs "Angela").
-- Sub-KPI factual vs interpretativo no admin.
+### 4. Consumidor 2: `generate-monthly-letter` ancorada
 
-Se em 4 semanas o KPI já existente (correções por usuário/semana) não cair de ~13 pra <6, revisitamos com dados novos.
+Em `gatherContext`, adicionar leitura de snapshots do mês (`confidence in ('high','low')`) e injetar no `userPrompt` como âncoras obrigatórias, com instrução: *"cite pelo menos uma `evidence_quote` literal entre aspas"*.
 
-## Validação
+Se todos os snapshots do mês forem `insufficient_data` (ou vazios) → gerar carta curta reconhecendo o silêncio, sem inventar arco.
 
-- `phase_thresholds_test.ts` + inspeção do prompt renderizado num user real com muitos insights.
-- Acompanhar KPI já existente no `AdminEngagement`.
+### 5. Fora de escopo desta v1 (decisão explícita)
 
-## Arquivos tocados
+- **Chat da Aura NÃO recebe snapshots nesta versão.** Aura hoje já tem 4 camadas de memória (corrections → evolution_summary → insights → themes). Adicionar uma 5ª camada sem auditar qualidade real dos snapshots gerados é o tipo de acúmulo que causa alucinação e contradição no turno rápido. Depois de 2-4 semanas com dados reais no portal, revisitamos com bloco dedicado `## Arco por tema`, filtro `high` apenas, cap de 3 temas, e regra "não puxar sem o usuário abrir o tema".
+- Aba admin de auditoria por usuário (opcional; se sentir falta pra QA, criamos depois).
+- Dedup de entidades entre snapshots e `user_insights`.
 
-- `supabase/functions/aura-agent/index.ts` (2 blocos: prompt do extractor + `formatInsightsForContext`).
+---
 
-Sem migração, sem UI, sem novo agente.
+### Guard-rails de alucinação (consolidado)
+
+| Situação | Comportamento |
+|---|---|
+| 0 msgs no mês | Nenhuma linha; carta reconhece ausência ou é pulada |
+| 1–9 msgs | `insufficient_data`; portal mostra card cinza; carta curta e honesta |
+| 10–29 msgs | `confidence='low'`; portal com badge preliminar; entra na carta como âncora |
+| ≥30 msgs, tema <5 menções | Tema descartado |
+| LLM inventa citação | Validação de substring exata rejeita o snapshot inteiro |
+| Sem `evidence_message_id` válido | Snapshot descartado |
+| Snapshot colide com `user_memory_corrections` | Correction vence; snapshot é descartado (aplicado quando o chat entrar na v2) |
+
+### Ordem de execução
+
+1. Migration: `thematic_snapshots` + GRANTs + RLS + índices (`user_id, period_start desc`, `user_id, theme`).
+2. Edge function `generate-thematic-snapshots` + cron mensal (`pg_cron` + `pg_net`, dia 1 às 10h BRT).
+3. Atualização de `generate-monthly-letter` (gatherContext + prompt).
+4. `JornadaTab.tsx` no portal + adicionar aba no `UserPortal.tsx`.
+5. Rodar produção uma vez em modo backfill do mês corrente pra popular a aba antes do próximo dia 1.
+
+### Arquivos tocados
+
+- **Novo:** migration da tabela + cron.
+- **Novo:** `supabase/functions/generate-thematic-snapshots/index.ts`.
+- **Novo:** `src/components/portal/JornadaTab.tsx`.
+- **Editado:** `supabase/functions/generate-monthly-letter/index.ts` (gatherContext + prompt).
+- **Editado:** `src/pages/UserPortal.tsx` (registrar nova aba).
+
+### Memória de projeto
+
+Salvar `mem://features/thematic-snapshots` documentando: tabela, guard-rails de volume, validação de substring, e decisão explícita de manter fora do chat na v1.
