@@ -2613,6 +2613,65 @@ export type Database = {
         }
         Relationships: []
       }
+      thematic_snapshots: {
+        Row: {
+          confidence: string
+          created_at: string
+          evidence_date: string | null
+          evidence_message_id: string | null
+          evidence_quote: string | null
+          id: string
+          message_count_in_period: number
+          period_end: string
+          period_start: string
+          snapshot_before: string | null
+          snapshot_change: string | null
+          theme: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          confidence: string
+          created_at?: string
+          evidence_date?: string | null
+          evidence_message_id?: string | null
+          evidence_quote?: string | null
+          id?: string
+          message_count_in_period?: number
+          period_end: string
+          period_start: string
+          snapshot_before?: string | null
+          snapshot_change?: string | null
+          theme: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          confidence?: string
+          created_at?: string
+          evidence_date?: string | null
+          evidence_message_id?: string | null
+          evidence_quote?: string | null
+          id?: string
+          message_count_in_period?: number
+          period_end?: string
+          period_start?: string
+          snapshot_before?: string | null
+          snapshot_change?: string | null
+          theme?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "thematic_snapshots_evidence_message_id_fkey"
+            columns: ["evidence_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       time_capsules: {
         Row: {
           audio_url: string
