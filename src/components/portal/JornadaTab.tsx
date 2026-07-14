@@ -29,6 +29,16 @@ function capitalize(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+const MONTHS_PT = [
+  "janeiro", "fevereiro", "março", "abril", "maio", "junho",
+  "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
+];
+
+function nextCronLabel(now: Date = new Date()) {
+  const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  return `1 de ${MONTHS_PT[next.getMonth()]}`;
+}
+
 export function JornadaTab({ userId }: { userId: string }) {
   const { data, isLoading } = useQuery({
     queryKey: ["portal-thematic-snapshots", userId],
@@ -45,12 +55,31 @@ export function JornadaTab({ userId }: { userId: string }) {
     enabled: !!userId,
   });
 
-  if (isLoading) return <PortalLoadingInline />;
+  const { data: profile, isLoading: profileLoading } = useQuery({
+    queryKey: ["portal-profile-created-at", userId],
+    queryFn: async () => {
+      const { data } = await supabasePortal
+        .from("profiles")
+        .select("created_at")
+        .eq("id", userId)
+        .maybeSingle();
+      return data as { created_at: string } | null;
+    },
+    enabled: !!userId,
+  });
+
+  if (isLoading || profileLoading) return <PortalLoadingInline />;
 
   const snapshots = (data || []).filter(s => s.theme !== "__month__");
   const insufficientMonths = (data || []).filter(s => s.theme === "__month__" && s.confidence === "insufficient_data");
 
   if (snapshots.length === 0) {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const createdAt = profile?.created_at ? new Date(profile.created_at) : null;
+    const isNewUser = createdAt ? createdAt >= startOfMonth : true;
+    const nextRun = nextCronLabel(now);
+
     return (
       <div className="space-y-6">
         <SectionHeader icon={Route} title="Sua jornada" />
@@ -58,11 +87,17 @@ export function JornadaTab({ userId }: { userId: string }) {
           <div className="rounded-xl border border-border/40 bg-muted/30 p-5 text-sm text-muted-foreground font-['Nunito'] leading-relaxed">
             No último mês vocês conversaram pouco — sem material suficiente pra uma leitura honesta da sua jornada. Quando o volume cresce, os recortes aparecem aqui.
           </div>
+        ) : isNewUser ? (
+          <EmptyState
+            icon={Route}
+            title="Sua primeira jornada chega em breve"
+            description={`Cada mês fechado vira um recorte por tema, com trechos literais do que você escreveu. A sua primeira aparece em ${nextRun}.`}
+          />
         ) : (
           <EmptyState
             icon={Route}
-            title="Sua jornada começa a se desenhar"
-            description="Depois do primeiro mês ativo, os recortes por tema aparecem aqui, com trechos literais do que você escreveu."
+            title="Ainda não temos material suficiente"
+            description={`Continue conversando — a próxima leitura da sua jornada é gerada em ${nextRun}.`}
           />
         )}
       </div>
