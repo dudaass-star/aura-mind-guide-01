@@ -3,6 +3,7 @@ import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { Sparkles, Trophy, Calendar, Mail, BookMarked, ChevronDown, ChevronUp } from "lucide-react";
 import { useMemo, useState } from "react";
 import { SectionHeader, EmptyState, PortalLoadingInline } from "./shared";
+import { sanitizePortalText } from "./sanitize";
 
 // "Percurso" como Capítulos mensais: um card por mês, síntese narrativa curta
 // no topo (frase-resumo + citação + chips de tema + contadores). O detalhe
@@ -202,21 +203,24 @@ export function InsightsTab({ userId, profile }: { userId: string; profile: any 
 
       // Headline: carta > melhor snapshot > marco
       if (c.letter?.preview_text) {
-        c.headline = truncate(c.letter.preview_text, 180);
+        c.headline = truncate(sanitizePortalText(c.letter.preview_text), 180);
       } else if (c.snapshots.length > 0) {
         const best = [...c.snapshots].sort(
           (a, b) => (CONF_ORDER[b.confidence ?? ""] ?? 0) - (CONF_ORDER[a.confidence ?? ""] ?? 0),
         )[0];
-        c.headline = truncate(best.snapshot_change || best.snapshot_before || "", 180);
-        c.quote = best.evidence_quote?.trim() || null;
+        c.headline = truncate(
+          sanitizePortalText(best.snapshot_change || best.snapshot_before || ""),
+          180,
+        );
+        c.quote = sanitizePortalText(best.evidence_quote) || null;
       } else if (c.milestones.length > 0) {
-        c.headline = truncate(c.milestones[0].milestone_text || "", 180);
+        c.headline = truncate(sanitizePortalText(c.milestones[0].milestone_text), 180);
       }
 
       // Citação (se não veio do snapshot acima)
       if (!c.quote) {
         const withQuote = c.snapshots.find((s) => s.evidence_quote?.trim());
-        if (withQuote) c.quote = withQuote.evidence_quote!.trim();
+        if (withQuote) c.quote = sanitizePortalText(withQuote.evidence_quote);
       }
 
       // Temas (até 3, dedup)
@@ -251,7 +255,7 @@ export function InsightsTab({ userId, profile }: { userId: string; profile: any 
   return (
     <div className="space-y-5">
       <SectionHeader icon={BookMarked} title="Percurso" />
-      <p className="text-sm text-muted-foreground font-['Nunito'] -mt-2">
+      <p className="text-sm text-[#2A2A2A]/60 font-['Nunito'] -mt-2">
         Um capítulo por mês. Como as coisas foram mudando dentro de você.
       </p>
 
@@ -309,40 +313,40 @@ function ChapterCard({
 
   return (
     <div
-      className="rounded-2xl border border-border bg-card overflow-hidden animate-fade-up"
+      className="rounded-2xl border border-[#87A878]/15 bg-white/60 overflow-hidden animate-fade-up shadow-sm"
       style={{ animationDelay: `${idx * 60}ms` }}
     >
       <button
         onClick={canExpand ? onToggle : undefined}
         className={`w-full text-left p-5 space-y-3 transition-colors ${
-          canExpand ? "hover:bg-muted/20" : "cursor-default"
+          canExpand ? "hover:bg-[#F5F0E8]/60" : "cursor-default"
         }`}
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[11px] uppercase tracking-widest font-semibold text-accent font-['Nunito']">
+            <p className="text-[10px] uppercase tracking-[0.2em] font-bold text-[#87A878] font-['Nunito']">
               Capítulo
             </p>
-            <p className="font-['Fraunces'] text-lg font-semibold text-foreground mt-0.5 capitalize">
+            <p className="font-['Fraunces'] text-xl font-semibold text-[#1B2A4E] mt-0.5 capitalize tracking-tight">
               {monthLabel}
             </p>
           </div>
           {canExpand && (
-            <span className="text-muted-foreground shrink-0 mt-1">
+            <span className="text-[#1B2A4E]/50 shrink-0 mt-1">
               {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
             </span>
           )}
         </div>
 
         {headline && (
-          <p className="text-[15px] text-foreground/90 font-['Nunito'] leading-relaxed">
+          <p className="text-[15px] text-[#2A2A2A] font-['Nunito'] leading-relaxed">
             {headline}
           </p>
         )}
 
         {quote && (
-          <blockquote className="border-l-2 border-accent/40 pl-3 text-sm text-foreground/80 italic font-['Nunito'] leading-relaxed">
-            "{quote}"
+          <blockquote className="border-l-[3px] border-[#B8A5D9] pl-4 py-1 text-[15px] text-[#1B2A4E]/85 italic font-['Fraunces'] leading-relaxed">
+            “{quote}”
           </blockquote>
         )}
 
@@ -351,7 +355,7 @@ function ChapterCard({
             {themes.map((t) => (
               <span
                 key={t}
-                className="inline-flex items-center px-2.5 py-1 rounded-full bg-accent/10 text-accent text-[11px] font-medium font-['Nunito']"
+                className="inline-flex items-center px-2.5 py-1 rounded-full bg-[#87A878]/12 text-[#1B2A4E] text-[11px] font-semibold font-['Nunito']"
               >
                 {t}
               </span>
@@ -360,7 +364,7 @@ function ChapterCard({
         )}
 
         {(sessionsCount > 0 || milestonesCount > 0) && (
-          <div className="flex gap-4 text-[11px] text-muted-foreground font-['Nunito'] pt-1">
+          <div className="flex gap-4 text-[11px] text-[#2A2A2A]/55 font-['Nunito'] pt-1">
             {sessionsCount > 0 && (
               <span className="flex items-center gap-1">
                 <Calendar size={11} /> {sessionsCount} {sessionsCount === 1 ? "sessão" : "sessões"}
@@ -376,17 +380,17 @@ function ChapterCard({
       </button>
 
       {expanded && (
-        <div className="border-t border-border/60 p-5 space-y-5 bg-muted/10 animate-fade-in">
+        <div className="border-t border-[#87A878]/15 p-5 space-y-5 bg-[#F5F0E8]/50 animate-fade-in">
           {letter?.letter_text && (
             <section className="space-y-2">
               <div className="flex items-center gap-2">
-                <Mail size={13} className="text-accent" />
-                <p className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground font-['Nunito']">
+                <Mail size={13} className="text-[#87A878]" />
+                <p className="text-[10px] uppercase tracking-[0.18em] font-bold text-[#1B2A4E] font-['Nunito']">
                   Carta do mês
                 </p>
               </div>
-              <p className="text-sm text-foreground font-['Nunito'] leading-relaxed whitespace-pre-line">
-                {letter.letter_text}
+              <p className="text-sm text-[#2A2A2A] font-['Nunito'] leading-relaxed whitespace-pre-line">
+                {sanitizePortalText(letter.letter_text)}
               </p>
             </section>
           )}
@@ -394,32 +398,32 @@ function ChapterCard({
           {snapshots.length > 0 && (
             <section className="space-y-3">
               <div className="flex items-center gap-2">
-                <Sparkles size={13} className="text-accent" />
-                <p className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground font-['Nunito']">
+                <Sparkles size={13} className="text-[#87A878]" />
+                <p className="text-[10px] uppercase tracking-[0.18em] font-bold text-[#1B2A4E] font-['Nunito']">
                   O que mudou
                 </p>
               </div>
               <div className="space-y-3">
                 {snapshots.map((s) => (
-                  <div key={s.id} className="rounded-xl border border-border/60 bg-card p-3 space-y-1.5">
+                  <div key={s.id} className="rounded-xl border border-[#87A878]/15 bg-white/70 p-3 space-y-1.5">
                     {s.theme && (
-                      <p className="text-xs font-semibold text-accent font-['Nunito']">{s.theme}</p>
+                      <p className="text-xs font-bold text-[#87A878] font-['Nunito'] uppercase tracking-wider">{s.theme}</p>
                     )}
                     {s.snapshot_before && (
-                      <p className="text-sm text-foreground/70 font-['Nunito'] leading-relaxed">
-                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground mr-1">Antes:</span>
-                        {s.snapshot_before}
+                      <p className="text-sm text-[#2A2A2A]/70 font-['Nunito'] leading-relaxed">
+                        <span className="text-[10px] uppercase tracking-wider text-[#2A2A2A]/50 mr-1 font-bold">Antes:</span>
+                        {sanitizePortalText(s.snapshot_before)}
                       </p>
                     )}
                     {s.snapshot_change && (
-                      <p className="text-sm text-foreground font-['Nunito'] leading-relaxed">
-                        <span className="text-[10px] uppercase tracking-wider text-accent mr-1">Mudou:</span>
-                        {s.snapshot_change}
+                      <p className="text-sm text-[#1B2A4E] font-['Nunito'] leading-relaxed">
+                        <span className="text-[10px] uppercase tracking-wider text-[#87A878] mr-1 font-bold">Mudou:</span>
+                        {sanitizePortalText(s.snapshot_change)}
                       </p>
                     )}
                     {s.evidence_quote && (
-                      <blockquote className="border-l-2 border-accent/30 pl-2 text-xs text-foreground/75 italic font-['Nunito']">
-                        "{s.evidence_quote}"
+                      <blockquote className="border-l-[3px] border-[#B8A5D9] pl-3 text-sm text-[#1B2A4E]/80 italic font-['Fraunces']">
+                        “{sanitizePortalText(s.evidence_quote)}”
                       </blockquote>
                     )}
                   </div>
@@ -431,16 +435,16 @@ function ChapterCard({
           {milestones.length > 0 && (
             <section className="space-y-2">
               <div className="flex items-center gap-2">
-                <Trophy size={13} className="text-accent" />
-                <p className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground font-['Nunito']">
+                <Trophy size={13} className="text-[#87A878]" />
+                <p className="text-[10px] uppercase tracking-[0.18em] font-bold text-[#1B2A4E] font-['Nunito']">
                   Marcos
                 </p>
               </div>
               <ul className="space-y-2">
                 {milestones.map((m) => (
-                  <li key={m.id} className="text-sm text-foreground font-['Nunito'] leading-relaxed flex gap-2">
-                    <span className="text-accent mt-1.5 select-none leading-none">•</span>
-                    <span>{m.milestone_text}</span>
+                  <li key={m.id} className="text-sm text-[#2A2A2A] font-['Nunito'] leading-relaxed flex gap-2">
+                    <span className="text-[#87A878] mt-1.5 select-none leading-none">•</span>
+                    <span>{sanitizePortalText(m.milestone_text)}</span>
                   </li>
                 ))}
               </ul>
@@ -450,15 +454,15 @@ function ChapterCard({
           {sessions.length > 0 && (
             <section className="space-y-2">
               <div className="flex items-center gap-2">
-                <Calendar size={13} className="text-accent" />
-                <p className="text-[11px] uppercase tracking-wider font-semibold text-muted-foreground font-['Nunito']">
+                <Calendar size={13} className="text-[#87A878]" />
+                <p className="text-[10px] uppercase tracking-[0.18em] font-bold text-[#1B2A4E] font-['Nunito']">
                   Sessões do mês
                 </p>
               </div>
               <ul className="space-y-1.5">
                 {sessions.map((s) => (
-                  <li key={s.id} className="text-xs text-muted-foreground font-['Nunito']">
-                    <span className="text-foreground/80">
+                  <li key={s.id} className="text-xs text-[#2A2A2A]/60 font-['Nunito']">
+                    <span className="text-[#1B2A4E]/85">
                       {s.theme_label || s.focus_topic || "Sessão"}
                     </span>
                     {s.ended_at && (
