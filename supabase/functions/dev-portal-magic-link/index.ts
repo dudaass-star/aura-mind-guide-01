@@ -15,7 +15,12 @@ Deno.serve(async (req) => {
       options: { redirectTo },
     });
     if (error) throw error;
-    return new Response(JSON.stringify({ action_link: data.properties?.action_link }), {
+    return new Response(JSON.stringify({
+      action_link: data.properties?.action_link,
+      hashed_token: data.properties?.hashed_token,
+      email_otp: data.properties?.email_otp,
+      user_id: data.user?.id,
+    }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
