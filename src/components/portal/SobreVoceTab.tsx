@@ -390,6 +390,8 @@ export function SobreVoceTab({ userId }: { userId: string }) {
       )}
 
       {/* Rodapé: corrigir no WhatsApp */}
+      <ContribuicaoUsuario userId={userId} />
+
       <a
         href={auraWhatsAppLink("Oi Aura, queria corrigir uma coisa no que você sabe sobre mim.")}
         target="_blank"
