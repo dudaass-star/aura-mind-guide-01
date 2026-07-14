@@ -14,23 +14,23 @@ function computeStage(sessions: number, themes: number, corrections: number): St
   if (sessions >= 10 && themes >= 5) {
     return {
       key: "profundidade",
-      label: "A Aura te conhece a fundo",
-      phrase: "A Aura te conhece a fundo — em várias camadas da sua vida.",
+      label: "profundamente",
+      phrase: "Aura te conhece: profundamente",
       filled: 3,
     };
   }
   if (sessions >= 3 && (themes >= 3 || corrections >= 1)) {
     return {
       key: "familiaridade",
-      label: "A Aura já te entende em algumas áreas",
-      phrase: "A Aura já entende como você funciona em algumas áreas.",
+      label: "bem",
+      phrase: "Aura te conhece: bem",
       filled: 2,
     };
   }
   return {
     key: "inicio",
-    label: "A Aura está começando a te conhecer",
-    phrase: "A Aura está começando a te conhecer.",
+    label: "superficialmente",
+    phrase: "Aura te conhece: superficialmente",
     filled: 1,
   };
 }
