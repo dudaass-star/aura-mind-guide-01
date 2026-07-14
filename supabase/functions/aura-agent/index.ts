@@ -1825,6 +1825,7 @@ REGRAS CRÍTICAS:
 5. Insights devem ser fatos curtos e literais (nomes, profissão, evento, preferência declarada). Evite frases interpretativas.
 6. Se o usuário expressou RECUSA, DESINTERESSE ou pediu para PARAR de insistir em algum tópico (ex.: "não quero", "já disse que não", "para de insistir", "não tenho interesse", "deixa pra lá"), preencha "cancel_topics" com palavras-chave curtas do(s) tópico(s) recusado(s) (ex.: ["sessão", "agendar"]). Use 1-3 palavras por item, em minúsculas.
 7. Se o usuário sinalizou que JÁ FEZ, JÁ RESOLVEU, JÁ ACONTECEU ou que algo NÃO É MAIS UM PROBLEMA (ex.: "já voltei a treinar", "já conversei com ela", "já resolvi aquilo", "isso já passou", "já comecei"), preencha "resolved_topics" com palavras-chave curtas do(s) tópico(s) concluído(s). Use verbo em passado/presente factivo — NUNCA hipotético ("se eu voltasse", "talvez eu faça"). 1-3 palavras por item, em minúsculas.
+8. FICÇÃO vs PESSOA REAL: só salve como category='pessoa' quando o usuário fala de alguém da vida real dele em primeira mão (ex.: "minha amiga Angela", "meu pai", "a Carla do trabalho"). Personagens de filme, série, livro, jogo, quadrinho, novela ou qualquer referência cultural — mesmo quando o usuário se compara ou usa como metáfora — devem ir em category='referencia_cultural' (nunca em 'pessoa'). Na dúvida entre real e ficcional, NÃO EXTRAIA. Precisão importa mais que cobertura aqui.
 
 CONTEXTO RECENTE:
 ${recentContext}
@@ -1862,7 +1863,7 @@ Use a função extract_analysis para retornar os dados.`;
                 items: {
                   type: 'OBJECT',
                   properties: {
-                    category: { type: 'STRING', enum: ['pessoa', 'identidade', 'desafio', 'trauma', 'saude', 'objetivo', 'conquista', 'padrao', 'preferencia', 'rotina', 'contexto', 'tecnica'], description: 'Categoria do insight' },
+                    category: { type: 'STRING', enum: ['pessoa', 'identidade', 'desafio', 'trauma', 'saude', 'objetivo', 'conquista', 'padrao', 'preferencia', 'rotina', 'contexto', 'tecnica', 'referencia_cultural'], description: 'Categoria do insight. Use referencia_cultural para personagens fictícios (filme/série/livro/jogo) citados pelo usuário — NUNCA salve ficção como pessoa.' },
                     key: { type: 'STRING', description: 'Chave descritiva (ex: filha, profissao, principal)' },
                     value: { type: 'STRING', description: 'Valor extraído (ex: Bella, engenheiro, ansiedade)' }
                   },
@@ -2002,23 +2003,43 @@ Use a função extract_analysis para retornar os dados.`;
     const categoryImportance: Record<string, number> = {
       'pessoa': 10, 'identidade': 10, 'desafio': 8, 'trauma': 8, 'saude': 8,
       'objetivo': 6, 'conquista': 6, 'padrao': 5, 'preferencia': 4, 'rotina': 4,
-      'contexto': 5, 'tecnica': 7
+      'contexto': 5, 'tecnica': 7, 'referencia_cultural': 2
     };
 
     if (analysis.insights && analysis.insights.length > 0) {
       for (const insight of analysis.insights) {
         if (!insight.category || !insight.key || !insight.value) continue;
         const importance = categoryImportance[insight.category] || 5;
-        
-        await supabase.from('user_insights').upsert({
-          user_id: userId,
-          category: insight.category,
-          key: insight.key,
-          value: insight.value,
-          importance,
-          last_mentioned_at: new Date().toISOString()
-        }, { onConflict: 'user_id,category,key' });
-        
+
+        // Incrementa mentioned_count quando já existe (usado para hierarquizar
+        // no formatInsightsForContext). Upsert puro sobrescreve o contador.
+        const { data: existingInsight } = await supabase
+          .from('user_insights')
+          .select('id, mentioned_count')
+          .eq('user_id', userId)
+          .eq('category', insight.category)
+          .eq('key', insight.key)
+          .maybeSingle();
+
+        if (existingInsight?.id) {
+          await supabase.from('user_insights').update({
+            value: insight.value,
+            importance,
+            mentioned_count: (existingInsight.mentioned_count || 1) + 1,
+            last_mentioned_at: new Date().toISOString()
+          }).eq('id', existingInsight.id);
+        } else {
+          await supabase.from('user_insights').insert({
+            user_id: userId,
+            category: insight.category,
+            key: insight.key,
+            value: insight.value,
+            importance,
+            mentioned_count: 1,
+            last_mentioned_at: new Date().toISOString()
+          });
+        }
+
         console.log(`💾 [POST-ANALYSIS] Insight: ${insight.category}:${insight.key}=${insight.value}`);
       }
     }
@@ -4047,17 +4068,14 @@ function splitIntoMessages(
 
 
 // Função para formatar insights para o contexto
+// Hierarquia (evita confundir pessoa real com personagem de ficção):
+//   1. Pessoas reais primeiro, ordenadas por mentioned_count desc
+//   2. Identidade / fatos concretos (trabalho, saúde, objetivos, contexto…)
+//   3. Referências culturais por último, rotuladas [ficção]
+// Cap por categoria para não afogar o prompt.
 function formatInsightsForContext(insights: any[]): string {
   if (!insights || insights.length === 0) {
     return "Nenhuma informação salva ainda. Este é um novo usuário ou primeira conversa.";
-  }
-
-  const grouped: Record<string, string[]> = {};
-  for (const insight of insights) {
-    if (!grouped[insight.category]) {
-      grouped[insight.category] = [];
-    }
-    grouped[insight.category].push(`${insight.key}: ${insight.value}`);
   }
 
   const categoryLabels: Record<string, string> = {
@@ -4071,16 +4089,62 @@ function formatInsightsForContext(insights: any[]): string {
     contexto: "📍 Contexto de vida",
     desafio: "⚡ Desafios atuais",
     saude: "🏥 Saúde",
-    rotina: "⏰ Rotina"
+    rotina: "⏰ Rotina",
+    tecnica: "🛠️ Técnicas",
+    referencia_cultural: "🎬 Referências culturais (ficção — NÃO são pessoas da vida do usuário)"
   };
 
+  // Ordem visual dos blocos: pessoas > identidade > fatos > ficção
+  const categoryOrder = [
+    'pessoa', 'identidade',
+    'desafio', 'trauma', 'saude', 'objetivo', 'conquista',
+    'contexto', 'rotina', 'preferencia', 'padrao', 'tecnica',
+    'referencia_cultural'
+  ];
+  const perCategoryCap: Record<string, number> = {
+    pessoa: 8, identidade: 8, referencia_cultural: 5
+  };
+  const defaultCap = 10;
+
+  const grouped: Record<string, any[]> = {};
+  for (const insight of insights) {
+    const cat = insight.category || 'contexto';
+    if (!grouped[cat]) grouped[cat] = [];
+    grouped[cat].push(insight);
+  }
+
+  // Ordena cada bucket por mentioned_count desc (fallback importance)
+  for (const cat of Object.keys(grouped)) {
+    grouped[cat].sort((a, b) => {
+      const mc = (b.mentioned_count || 1) - (a.mentioned_count || 1);
+      if (mc !== 0) return mc;
+      return (b.importance || 0) - (a.importance || 0);
+    });
+  }
+
   let formatted = "";
-  for (const [category, items] of Object.entries(grouped)) {
+  const seenCats = new Set<string>();
+
+  const renderCat = (category: string) => {
+    const items = grouped[category];
+    if (!items || items.length === 0) return;
+    seenCats.add(category);
     const label = categoryLabels[category] || category;
+    const cap = perCategoryCap[category] ?? defaultCap;
     formatted += `${label}:\n`;
-    for (const item of items) {
-      formatted += `  - ${item}\n`;
+    for (const it of items.slice(0, cap)) {
+      const count = it.mentioned_count && it.mentioned_count > 1
+        ? ` (${it.mentioned_count}x)`
+        : '';
+      const ficMark = category === 'referencia_cultural' ? ' [ficção]' : '';
+      formatted += `  - ${it.key}: ${it.value}${count}${ficMark}\n`;
     }
+  };
+
+  for (const cat of categoryOrder) renderCat(cat);
+  // Categorias não mapeadas (defensivo)
+  for (const cat of Object.keys(grouped)) {
+    if (!seenCats.has(cat)) renderCat(cat);
   }
 
   return formatted || "Nenhuma informação salva ainda.";
@@ -5149,7 +5213,7 @@ serve(async (req) => {
         // 2. Insights críticos (pessoa, identidade) - reduzido em minimal
         supabase
           .from('user_insights')
-          .select('category, key, value, importance')
+          .select('category, key, value, importance, mentioned_count')
           .eq('user_id', userId)
           .in('category', ['pessoa', 'identidade'])
           .order('importance', { ascending: false })
@@ -5159,7 +5223,7 @@ serve(async (req) => {
           ? Promise.resolve({ data: [], error: null })
           : supabase
               .from('user_insights')
-              .select('category, key, value, importance')
+              .select('category, key, value, importance, mentioned_count')
               .eq('user_id', userId)
               .not('category', 'in', '("pessoa","identidade")')
               .order('importance', { ascending: false })
