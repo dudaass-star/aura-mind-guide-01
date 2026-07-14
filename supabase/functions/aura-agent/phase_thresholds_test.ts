@@ -187,3 +187,40 @@ Deno.test("Nudge intermediário: só dispara com density=saturated (sem virar mu
     "Header 'NOTA DE TIMING' sumiu — nudge precisa ser descritivo, não AÇÃO OBRIGATÓRIA."
   );
 });
+
+// =============================================================================
+// Higiene de Interpretação (Fase 2) — FREIO DE PRESENÇA estendido por density
+// =============================================================================
+
+Deno.test("Higiene de interpretação: freio dispara também por density=low, não só por contagem de pares", () => {
+  assert(
+    /densityLow\s*=\s*lastUserContext\?\.information_density\s*===\s*['"]low['"]/.test(SOURCE),
+    "Variável densityLow sumiu — freio de presença voltaria a depender só de contagem de pares."
+  );
+  assert(
+    /brakeByDensity\s*=\s*densityLow\s*&&\s*!userReflecting/.test(SOURCE),
+    "brakeByDensity sumiu — Aura voltaria a interpretar em cima de material raso após 4+ pares."
+  );
+  assert(
+    /brakeByPairs\s*\|\|\s*brakeByDensity/.test(SOURCE),
+    "Condição combinada (brakeByPairs || brakeByDensity) sumiu do gatilho do freio."
+  );
+});
+
+Deno.test("Higiene de interpretação: user_reflection_mode desarma o freio por density", () => {
+  assert(
+    /userReflecting\s*=\s*lastUserContext\?\.user_reflection_mode\s*===\s*true/.test(SOURCE),
+    "Escape hatch por user_reflection_mode sumiu — usuário reflexivo ficaria travado em presença mesmo entregando material."
+  );
+});
+
+Deno.test("Higiene de interpretação: bloco do freio nomeia o motivo real (material raso) e exige exploração ativa", () => {
+  assert(
+    /material ainda raso/.test(SOURCE),
+    "Texto 'material ainda raso' sumiu — freio precisa explicar o motivo real para o modelo, não só citar contagem."
+  );
+  assert(
+    /Explora[çc][ãa]o ativa, n[ãa]o sil[êe]ncio/.test(SOURCE),
+    "Regra 'Exploração ativa, não silêncio' sumiu — risco de Aura ficar seca/curta no freio."
+  );
+});
