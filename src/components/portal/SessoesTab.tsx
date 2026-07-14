@@ -3,6 +3,7 @@ import { supabasePortal } from "@/integrations/supabase/portal-client";
 import { Calendar, Star, MessageCircle } from "lucide-react";
 import { SectionHeader, EmptyState, PortalLoadingInline } from "./shared";
 import { auraWhatsAppLink, presentClosure } from "./whatsapp";
+import { sanitizePortalText } from "./sanitize";
 
 const PLAN_SESSION_LIMITS: Record<string, number> = {
   essencial: 1,
@@ -78,11 +79,11 @@ export function SessoesTab({ userId, profile }: { userId: string; profile: any }
 
       {/* Próxima sessão */}
       {nextSession ? (
-        <div className="rounded-2xl border border-accent/20 bg-gradient-to-br from-accent/5 to-transparent p-5 space-y-2 animate-fade-up">
-          <p className="text-xs uppercase tracking-wider text-accent font-semibold font-['Nunito']">
+        <div className="rounded-3xl bg-[#1B2A4E] p-6 space-y-3 animate-fade-up shadow-lg">
+          <p className="text-[10px] uppercase tracking-[0.2em] text-[#B8A5D9] font-bold font-['Nunito']">
             Próxima sessão
           </p>
-          <p className="font-['Fraunces'] font-semibold text-foreground capitalize">
+          <p className="font-['Fraunces'] text-2xl font-semibold text-[#F5F0E8] capitalize tracking-tight leading-tight">
             {new Date(nextSession.scheduled_at).toLocaleString("pt-BR", {
               weekday: "long",
               day: "2-digit",
@@ -96,21 +97,21 @@ export function SessoesTab({ userId, profile }: { userId: string; profile: any }
             href={auraWhatsAppLink("Oi Aura, quero reagendar nossa sessão.")}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-sm text-accent font-semibold font-['Nunito']"
+            className="inline-flex items-center gap-1.5 text-sm text-[#B8A5D9] hover:text-[#F5F0E8] font-semibold font-['Nunito'] transition-colors"
           >
             <MessageCircle size={14} /> Reagendar pelo WhatsApp
           </a>
         </div>
       ) : (
-        <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-4 text-center animate-fade-in">
-          <p className="text-sm text-muted-foreground font-['Nunito']">
+        <div className="rounded-2xl border border-dashed border-[#87A878]/30 bg-white/40 p-5 text-center animate-fade-in">
+          <p className="text-sm text-[#2A2A2A]/70 font-['Nunito']">
             Nenhuma sessão agendada agora.
           </p>
           <a
             href={auraWhatsAppLink("Oi Aura, quero agendar uma sessão.")}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-sm text-accent font-semibold font-['Nunito'] mt-2"
+            className="inline-flex items-center gap-1.5 text-sm text-[#1B2A4E] font-bold font-['Nunito'] mt-2 hover:text-[#87A878] transition-colors"
           >
             <MessageCircle size={14} /> Agendar pelo WhatsApp
           </a>
@@ -119,7 +120,7 @@ export function SessoesTab({ userId, profile }: { userId: string; profile: any }
 
       {/* Contador do mês */}
       {planLimit ? (
-        <div className="text-xs text-muted-foreground font-['Nunito']">
+        <div className="text-xs text-[#2A2A2A]/60 font-['Nunito']">
           {used} de {planLimit} sessão{planLimit > 1 ? "ões" : ""} no plano deste mês
         </div>
       ) : null}
@@ -144,12 +145,12 @@ export function SessoesTab({ userId, profile }: { userId: string; profile: any }
             return (
               <details
                 key={s.id}
-                className="rounded-2xl border border-border bg-card p-5 shadow-sm animate-fade-up group"
+                className="rounded-2xl border border-[#87A878]/15 bg-white/60 p-5 shadow-sm animate-fade-up group open:bg-white/80"
                 style={{ animationDelay: `${idx * 60}ms` }}
               >
                 <summary className="cursor-pointer list-none flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-xs text-muted-foreground font-['Nunito']">
+                    <p className="text-[10px] uppercase tracking-[0.15em] text-[#87A878] font-bold font-['Nunito']">
                       {date
                         ? new Date(date).toLocaleDateString("pt-BR", {
                             day: "2-digit",
@@ -158,52 +159,52 @@ export function SessoesTab({ userId, profile }: { userId: string; profile: any }
                           })
                         : ""}
                     </p>
-                    <p className="font-['Fraunces'] font-semibold text-foreground mt-0.5 truncate">
+                    <p className="font-['Fraunces'] text-lg font-semibold text-[#1B2A4E] mt-0.5 truncate tracking-tight">
                       {s.theme_label || s.focus_topic || "Sessão"}
                     </p>
                     {closurePres && (
-                      <span className="inline-block mt-1.5 px-2 py-0.5 rounded-full bg-accent/10 text-accent text-[10px] uppercase tracking-wider font-semibold font-['Nunito']">
+                      <span className="inline-block mt-2 px-2.5 py-1 rounded-full bg-[#B8A5D9]/25 text-[#1B2A4E] text-[10px] uppercase tracking-wider font-bold font-['Nunito']">
                         {closurePres.title}
                       </span>
                     )}
                   </div>
                   {rating ? (
                     <div className="flex items-center gap-1 shrink-0">
-                      <Star size={14} className="text-accent fill-accent" />
-                      <span className="text-sm font-semibold text-foreground font-['Nunito']">
+                      <Star size={14} className="text-[#87A878] fill-[#87A878]" />
+                      <span className="text-sm font-bold text-[#1B2A4E] font-['Nunito']">
                         {rating}
                       </span>
                     </div>
                   ) : null}
                 </summary>
-                <div className="mt-4 space-y-3 pt-3 border-t border-border/40">
+                <div className="mt-4 space-y-3 pt-3 border-t border-[#87A878]/15">
                   {s.session_summary && (
                     <div>
-                      <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold font-['Nunito'] mb-1">
+                      <p className="text-[10px] uppercase tracking-[0.18em] text-[#87A878] font-bold font-['Nunito'] mb-1">
                         Resumo
                       </p>
-                      <p className="text-sm text-foreground/85 font-['Nunito'] leading-relaxed">
-                        {s.session_summary}
+                      <p className="text-sm text-[#2A2A2A] font-['Nunito'] leading-relaxed">
+                        {sanitizePortalText(s.session_summary)}
                       </p>
                     </div>
                   )}
                   {s.reframe_text && (
                     <div>
-                      <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold font-['Nunito'] mb-1">
+                      <p className="text-[10px] uppercase tracking-[0.18em] text-[#87A878] font-bold font-['Nunito'] mb-1">
                         Reframe
                       </p>
-                      <p className="text-sm text-foreground/85 font-['Nunito'] leading-relaxed">
-                        {s.reframe_text}
+                      <p className="text-sm text-[#2A2A2A] font-['Nunito'] leading-relaxed">
+                        {sanitizePortalText(s.reframe_text)}
                       </p>
                     </div>
                   )}
                   {s.closure_text && (
                     <div>
-                      <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold font-['Nunito'] mb-1">
+                      <p className="text-[10px] uppercase tracking-[0.18em] text-[#87A878] font-bold font-['Nunito'] mb-1">
                         Fechamento
                       </p>
-                      <p className="text-sm text-foreground font-['Fraunces'] italic leading-relaxed">
-                        "{s.closure_text}"
+                      <p className="text-[15px] text-[#1B2A4E] font-['Fraunces'] italic leading-relaxed border-l-[3px] border-[#B8A5D9] pl-3">
+                        “{sanitizePortalText(s.closure_text)}”
                       </p>
                     </div>
                   )}
