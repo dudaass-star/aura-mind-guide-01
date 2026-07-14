@@ -38,6 +38,7 @@ import JourneyComplete from "./pages/JourneyComplete";
 import Unsubscribe from "./pages/Unsubscribe";
 import UserPortal from "./pages/UserPortal";
 import PortalLogin from "./pages/PortalLogin";
+import UserPortalPreview from "./pages/UserPortalPreview";
 import { PortalAuthProvider } from "./contexts/PortalAuthContext";
 import Blog from "./pages/Blog";
 import BlogPost from "./pages/BlogPost";
@@ -94,6 +95,9 @@ const App = () => (
             <Route path="/unsubscribe" element={<Unsubscribe />} />
             <Route path="/meu-espaco" element={<UserPortal />} />
             <Route path="/meu-espaco/entrar" element={<PortalLogin />} />
+            {import.meta.env.DEV && (
+              <Route path="/meu-espaco/preview" element={<UserPortalPreview />} />
+            )}
             <Route path="/blog" element={<Blog />} />
             <Route path="/blog/:slug" element={<BlogPost />} />
             <Route path="/pagamento" element={<Pagamento />} />
