@@ -164,7 +164,7 @@ const UserPortal = () => {
 
         {/* Tabs — underline navy accent */}
         <div className="bg-[#F5F0E8] sticky top-0 z-10">
-          <div className="max-w-2xl mx-auto px-3 sm:px-5 border-b border-[#87A878]/20 flex gap-1 overflow-x-auto scrollbar-none">
+          <div className="max-w-2xl mx-auto px-3 sm:px-5 border-b border-[#87A878]/20 flex gap-1 sm:gap-1 w-full justify-between sm:justify-start sm:overflow-x-auto scrollbar-none">
             {TABS.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -175,22 +175,23 @@ const UserPortal = () => {
                 <button
                   key={tab.id}
                   onClick={() => handleTabClick(tab.id)}
-                  className={`relative flex items-center gap-1.5 px-3 sm:px-4 py-3 text-xs sm:text-sm font-['Nunito'] whitespace-nowrap transition-all shrink-0 ${
+                  aria-label={tab.label}
+                  className={`relative flex items-center justify-center sm:justify-start gap-1.5 px-2 sm:px-4 py-3 text-xs sm:text-sm font-['Nunito'] whitespace-nowrap transition-all flex-1 sm:flex-none sm:shrink-0 ${
                     isActive
                       ? "text-[#1B2A4E] font-bold"
                       : "text-[#2A2A2A]/50 font-semibold hover:text-[#1B2A4E]"
                   }`}
                 >
-                  <Icon size={14} />
-                  <span>{tab.label}</span>
+                  <Icon size={isActive ? 16 : 15} className="sm:!w-[14px] sm:!h-[14px] shrink-0" />
+                  <span className={`${isActive ? "inline" : "hidden"} sm:inline`}>{tab.label}</span>
                   {hasNovidade && (
                     <span
                       aria-label="Novidade"
-                      className="ml-0.5 inline-block h-1.5 w-1.5 rounded-full bg-[#B8A5D9] animate-pulse-soft"
+                      className="absolute top-1.5 right-1.5 sm:static sm:ml-0.5 inline-block h-1.5 w-1.5 rounded-full bg-[#B8A5D9] animate-pulse-soft"
                     />
                   )}
                   {isActive && (
-                    <span className="absolute -bottom-px left-1/2 -translate-x-1/2 h-[3px] w-6 bg-[#1B2A4E] rounded-full" />
+                    <span className="absolute -bottom-px left-1/2 -translate-x-1/2 h-[3px] w-8 sm:w-6 bg-[#1B2A4E] rounded-full" />
                   )}
                 </button>
               );
