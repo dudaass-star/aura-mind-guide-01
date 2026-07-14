@@ -930,6 +930,49 @@ export default function AdminEngagement() {
                       <p className="text-[11px] text-muted-foreground">{metrics.recoveredPayments}/{metrics.totalPaymentFailedAllTime} cartões recuperados</p>
                     </CardContent>
                   </Card>
+
+                  {/* 🛡️ Higiene de interpretação — correções por usuário */}
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between p-3 pb-1">
+                      <CardTitle className="text-xs font-medium text-muted-foreground">🛡️ Correções / usuário</CardTitle>
+                      <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent className="p-3 pt-0">
+                      {(() => {
+                        const perUser = metrics.correctionsPerUserInPeriod ?? 0;
+                        const total = metrics.correctionsTotalInPeriod ?? 0;
+                        const users = metrics.correctionsUsersInPeriod ?? 0;
+                        const weekly = metrics.correctionsWeekly ?? [];
+                        // Verde <=4, amarelo 4-8, vermelho >8 (baseline observado: 3-13/user).
+                        const color = perUser <= 4 ? 'text-green-600' : perUser <= 8 ? 'text-yellow-600' : 'text-destructive';
+                        const values = weekly.map(w => w.per_user);
+                        const max = Math.max(1, ...values);
+                        const w = 100;
+                        const h = 24;
+                        const pts = values.length > 1
+                          ? values.map((v, i) => `${(i / (values.length - 1)) * w},${h - (v / max) * h}`).join(' ')
+                          : '';
+                        return (
+                          <>
+                            <div className={`text-xl font-bold ${color}`}>{perUser.toFixed(2)}</div>
+                            <p className="text-[11px] text-muted-foreground">{total} correções · {users} usuários (período)</p>
+                            {values.length > 1 && (
+                              <svg viewBox={`0 0 ${w} ${h}`} className="mt-1 w-full h-6" preserveAspectRatio="none">
+                                <polyline
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="1.5"
+                                  className={color}
+                                  points={pts}
+                                />
+                              </svg>
+                            )}
+                            <p className="text-[10px] text-muted-foreground">últimas {values.length}sem · pico {Math.max(...values, 0).toFixed(1)}</p>
+                          </>
+                        );
+                      })()}
+                    </CardContent>
+                  </Card>
                 </div>
 
                 {/* Churn breakdown card */}
