@@ -132,14 +132,64 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab }: HojeTabPr
     },
   });
 
-  // Último insight: prefere profiles.pending_insight; fallback monthly_reports.analysis_text
-  const lastInsightText: string | null =
-    profile?.pending_insight && typeof profile.pending_insight === "string"
-      ? profile.pending_insight
-      : null;
+  // Insight curado: snapshot temático mais recente; fallback = resumo mensal.
+  // NUNCA usar profiles.pending_insight — é buffer técnico de entrega no WhatsApp.
+  const { data: curatedInsight } = useQuery({
+    queryKey: ["portal-hoje-curated-insight", userId],
+    queryFn: async () => {
+      // 1) Snapshot temático mais recente com confiança válida
+      const { data: snap } = await supabasePortal
+        .from("thematic_snapshots")
+        .select("theme, snapshot_change, snapshot_before, evidence_quote, period_end, confidence")
+        .eq("user_id", userId)
+        .neq("confidence", "insufficient")
+        .order("period_end", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (snap) {
+        const period = snap.period_end
+          ? new Date(snap.period_end).toLocaleDateString("pt-BR", {
+              month: "long",
+              year: "numeric",
+              timeZone: "America/Sao_Paulo",
+            })
+          : null;
+        return {
+          title: snap.theme || "Um movimento seu",
+          body: snap.snapshot_change || snap.snapshot_before || snap.evidence_quote || "",
+          meta: period,
+        };
+      }
+      // 2) Fallback: último resumo mensal
+      const { data: report } = await supabasePortal
+        .from("monthly_reports")
+        .select("analysis_text, created_at")
+        .eq("user_id", userId)
+        .not("analysis_text", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (report?.analysis_text) {
+        const when = report.created_at
+          ? new Date(report.created_at).toLocaleDateString("pt-BR", {
+              month: "long",
+              year: "numeric",
+              timeZone: "America/Sao_Paulo",
+            })
+          : null;
+        return {
+          title: when ? `Resumo de ${when}` : "Resumo recente",
+          body: report.analysis_text,
+          meta: null,
+        };
+      }
+      return null;
+    },
+    enabled: !!userId,
+  });
 
   const hasAnything =
-    !!lastSession || !!nextSession || !!suggestedMeditation || !!lastInsightText;
+    !!lastSession || !!nextSession || !!suggestedMeditation || !!curatedInsight;
 
   // Usuário que nunca conversou com a Aura: portal precisa focar num único CTA.
   const zeroConversa = !profile?.last_user_message_at;
@@ -228,9 +278,14 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab }: HojeTabPr
       {/* Card: Próxima sessão */}
       {nextSession && <NextSessionCard session={nextSession} />}
 
-      {/* Card: Último insight da Aura */}
-      {lastInsightText && (
-        <InsightPreviewCard text={lastInsightText} onSeeAll={() => onNavigateTab("insights")} />
+      {/* Card: Insight curado (snapshot temático ou resumo mensal) */}
+      {curatedInsight && (
+        <InsightPreviewCard
+          title={curatedInsight.title}
+          meta={curatedInsight.meta}
+          text={curatedInsight.body}
+          onSeeAll={() => onNavigateTab("insights")}
+        />
       )}
 
       {/* Card: Meditação sugerida (não mostrar pra zero-conversa) */}
