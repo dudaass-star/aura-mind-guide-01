@@ -36,13 +36,26 @@ interface UserContext {
   themes: string[];
   sessions_count: number;
   primary_topic: string | null;
+  snapshots: SnapshotForLetter[];
+  snapshots_confidence: 'high' | 'low' | 'insufficient_data' | 'none';
 }
 
-async function gatherContext(supabase: any, userId: string): Promise<{
+interface SnapshotForLetter {
+  theme: string;
+  before: string | null;
+  change: string | null;
+  quote: string | null;
+  quote_date: string | null;
+  confidence: 'high' | 'low';
+}
+
+async function gatherContext(supabase: any, userId: string, letterMonth: string): Promise<{
   milestones: string[];
   insights: string[];
   themes: string[];
   sessions_count: number;
+  snapshots: SnapshotForLetter[];
+  snapshots_confidence: 'high' | 'low' | 'insufficient_data' | 'none';
 }> {
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
@@ -76,11 +89,44 @@ async function gatherContext(supabase: any, userId: string): Promise<{
       .gte('ended_at', thirtyDaysAgo),
   ]);
 
+  // Snapshots temáticos do mês da carta (produzidos por generate-thematic-snapshots).
+  const monthDate = new Date(letterMonth + 'T00:00:00Z');
+  const prevMonthStart = new Date(Date.UTC(monthDate.getUTCFullYear(), monthDate.getUTCMonth() - 1, 1))
+    .toISOString().slice(0, 10);
+  const { data: snapsRaw } = await supabase
+    .from('thematic_snapshots')
+    .select('theme, snapshot_before, snapshot_change, evidence_quote, evidence_date, confidence, period_start')
+    .eq('user_id', userId)
+    .in('period_start', [letterMonth, prevMonthStart])
+    .order('period_start', { ascending: false });
+
+  const snaps: SnapshotForLetter[] = [];
+  let snapshots_confidence: 'high' | 'low' | 'insufficient_data' | 'none' = 'none';
+  for (const s of (snapsRaw || [])) {
+    if (s.confidence === 'insufficient_data') {
+      if (snapshots_confidence === 'none') snapshots_confidence = 'insufficient_data';
+      continue;
+    }
+    if (s.theme === '__month__') continue;
+    snaps.push({
+      theme: s.theme,
+      before: s.snapshot_before,
+      change: s.snapshot_change,
+      quote: s.evidence_quote,
+      quote_date: s.evidence_date,
+      confidence: s.confidence as 'high' | 'low',
+    });
+    if (s.confidence === 'high') snapshots_confidence = 'high';
+    else if (snapshots_confidence !== 'high') snapshots_confidence = 'low';
+  }
+
   return {
     milestones: (milestonesRes.data || []).map((m: any) => m.milestone_text).filter(Boolean),
     insights: (insightsRes.data || []).map((i: any) => i.value).filter(Boolean),
     themes: (themesRes.data || []).map((t: any) => t.theme_name).filter(Boolean),
     sessions_count: sessionsRes.count || 0,
+    snapshots: snaps.slice(0, 4),
+    snapshots_confidence,
   };
 }
 
@@ -93,6 +139,13 @@ async function generateLetter(ctx: UserContext): Promise<{ preview: string; lett
 
   const firstName = ctx.name ? ctx.name.split(' ')[0] : 'você';
 
+  const hasAnchors = ctx.snapshots.length > 0;
+  const anchorRule = hasAnchors
+    ? `\n\nÂNCORAS OBRIGATÓRIAS: use pelo menos UMA das citações literais listadas em "Snapshots temáticos" entre aspas, exatamente como foi escrita. Não parafraseie a citação.`
+    : (ctx.snapshots_confidence === 'insufficient_data'
+        ? `\n\nATENÇÃO: houve pouco material no mês. Escreva uma carta CURTA (150-220 palavras) reconhecendo o silêncio, sem inventar arco nem citar frases.`
+        : '');
+
   const systemPrompt = `Você é a AURA, mentora terapêutica brasileira. Está escrevendo uma CARTA MENSAL pessoal para ${firstName}.
 
 Tom: caloroso, direto, sem clichês de coach. Português brasileiro informal (tô, né). Sem emojis.
@@ -100,16 +153,21 @@ Estrutura da CARTA (300-450 palavras):
 1. Abertura curta reconhecendo o mês que passou (sem floreios)
 2. O que você observou: padrões, marcos, mudanças reais (cite específicos do contexto)
 3. Uma reflexão honesta — pode ser desconfortável, é uma carta de mentora, não um abraço
-4. Fechamento com uma pergunta provocativa para o próximo mês
+4. Fechamento com uma pergunta provocativa para o próximo mês${anchorRule}
 
 PREVIEW (1 frase, máx 200 chars): teaser provocativo que faz a pessoa querer ler a carta completa. NÃO resumir. Deve criar curiosidade.`;
+
+  const snapshotsBlock = ctx.snapshots.length > 0
+    ? '\n\nSnapshots temáticos (use como âncora, citações são LITERAIS do próprio usuário):\n' +
+      ctx.snapshots.map(s => `- Tema: ${s.theme}${s.before ? ` | Onde estava: ${s.before}` : ''}${s.change ? ` | O que mudou: ${s.change}` : ''}${s.quote ? ` | Citação (${(s.quote_date || '').slice(0,10)}): "${s.quote}"` : ''} [confiança: ${s.confidence}]`).join('\n')
+    : '';
 
   const userPrompt = `Contexto dos últimos 30 dias de ${firstName}:
 - Sessões concluídas: ${ctx.sessions_count}
 - Marcos registrados: ${ctx.milestones.length > 0 ? ctx.milestones.join(' | ') : 'nenhum'}
 - Temas recorrentes: ${ctx.themes.length > 0 ? ctx.themes.join(', ') : 'nenhum'}
 - Insights guardados: ${ctx.insights.length > 0 ? ctx.insights.slice(0, 6).join(' | ') : 'nenhum'}
-- Tópico principal: ${ctx.primary_topic || 'não definido'}
+- Tópico principal: ${ctx.primary_topic || 'não definido'}${snapshotsBlock}
 
 Gere a carta mensal e o preview.`;
 
@@ -218,7 +276,7 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      const ctx = await gatherContext(supabase, user.user_id);
+      const ctx = await gatherContext(supabase, user.user_id, letterMonth);
 
       // Skip se contexto vazio (usuário recém-chegado, nada a contar)
       if (ctx.sessions_count === 0 && ctx.milestones.length === 0 && ctx.insights.length === 0) {
@@ -235,6 +293,8 @@ Deno.serve(async (req) => {
         themes: ctx.themes,
         sessions_count: ctx.sessions_count,
         primary_topic: user.primary_topic,
+        snapshots: ctx.snapshots,
+        snapshots_confidence: ctx.snapshots_confidence,
       });
 
       if (!result) {
