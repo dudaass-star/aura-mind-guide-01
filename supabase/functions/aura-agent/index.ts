@@ -4068,17 +4068,14 @@ function splitIntoMessages(
 
 
 // Função para formatar insights para o contexto
+// Hierarquia (evita confundir pessoa real com personagem de ficção):
+//   1. Pessoas reais primeiro, ordenadas por mentioned_count desc
+//   2. Identidade / fatos concretos (trabalho, saúde, objetivos, contexto…)
+//   3. Referências culturais por último, rotuladas [ficção]
+// Cap por categoria para não afogar o prompt.
 function formatInsightsForContext(insights: any[]): string {
   if (!insights || insights.length === 0) {
     return "Nenhuma informação salva ainda. Este é um novo usuário ou primeira conversa.";
-  }
-
-  const grouped: Record<string, string[]> = {};
-  for (const insight of insights) {
-    if (!grouped[insight.category]) {
-      grouped[insight.category] = [];
-    }
-    grouped[insight.category].push(`${insight.key}: ${insight.value}`);
   }
 
   const categoryLabels: Record<string, string> = {
@@ -4092,16 +4089,62 @@ function formatInsightsForContext(insights: any[]): string {
     contexto: "📍 Contexto de vida",
     desafio: "⚡ Desafios atuais",
     saude: "🏥 Saúde",
-    rotina: "⏰ Rotina"
+    rotina: "⏰ Rotina",
+    tecnica: "🛠️ Técnicas",
+    referencia_cultural: "🎬 Referências culturais (ficção — NÃO são pessoas da vida do usuário)"
   };
 
+  // Ordem visual dos blocos: pessoas > identidade > fatos > ficção
+  const categoryOrder = [
+    'pessoa', 'identidade',
+    'desafio', 'trauma', 'saude', 'objetivo', 'conquista',
+    'contexto', 'rotina', 'preferencia', 'padrao', 'tecnica',
+    'referencia_cultural'
+  ];
+  const perCategoryCap: Record<string, number> = {
+    pessoa: 8, identidade: 8, referencia_cultural: 5
+  };
+  const defaultCap = 10;
+
+  const grouped: Record<string, any[]> = {};
+  for (const insight of insights) {
+    const cat = insight.category || 'contexto';
+    if (!grouped[cat]) grouped[cat] = [];
+    grouped[cat].push(insight);
+  }
+
+  // Ordena cada bucket por mentioned_count desc (fallback importance)
+  for (const cat of Object.keys(grouped)) {
+    grouped[cat].sort((a, b) => {
+      const mc = (b.mentioned_count || 1) - (a.mentioned_count || 1);
+      if (mc !== 0) return mc;
+      return (b.importance || 0) - (a.importance || 0);
+    });
+  }
+
   let formatted = "";
-  for (const [category, items] of Object.entries(grouped)) {
+  const seenCats = new Set<string>();
+
+  const renderCat = (category: string) => {
+    const items = grouped[category];
+    if (!items || items.length === 0) return;
+    seenCats.add(category);
     const label = categoryLabels[category] || category;
+    const cap = perCategoryCap[category] ?? defaultCap;
     formatted += `${label}:\n`;
-    for (const item of items) {
-      formatted += `  - ${item}\n`;
+    for (const it of items.slice(0, cap)) {
+      const count = it.mentioned_count && it.mentioned_count > 1
+        ? ` (${it.mentioned_count}x)`
+        : '';
+      const ficMark = category === 'referencia_cultural' ? ' [ficção]' : '';
+      formatted += `  - ${it.key}: ${it.value}${count}${ficMark}\n`;
     }
+  };
+
+  for (const cat of categoryOrder) renderCat(cat);
+  // Categorias não mapeadas (defensivo)
+  for (const cat of Object.keys(grouped)) {
+    if (!seenCats.has(cat)) renderCat(cat);
   }
 
   return formatted || "Nenhuma informação salva ainda.";
