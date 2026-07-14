@@ -151,7 +151,7 @@ const UserPortal = () => {
         <meta name="robots" content="noindex, nofollow" />
       </Helmet>
 
-      <div className="min-h-screen bg-background flex flex-col">
+      <div className="min-h-screen bg-[#F5F0E8] text-[#2A2A2A] flex flex-col">
         {/* Header — Deep Navy Anchor */}
         <div className="bg-[#F5F0E8]">
           <div className="max-w-2xl mx-auto px-5 pt-5 pb-3 flex items-center justify-between">
