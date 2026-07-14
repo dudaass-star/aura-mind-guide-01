@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
-import { BookOpen, Pencil, Trash2, Star, Plus, Check, X } from "lucide-react";
+import { BookOpen, Pencil, Trash2, Star, Plus, Check, X, Search, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { EmptyState, PortalLoadingInline, SectionHeader } from "./shared";
 import {
@@ -47,6 +47,29 @@ function labelFor(cat: string | null) {
   return CATEGORY_LABELS[cat] ?? cat;
 }
 
+const PAGE_SIZE = 10;
+// Ordem preferida das categorias na lista.
+const CATEGORY_ORDER = [
+  "user_added",
+  "pessoas",
+  "people",
+  "identidade",
+  "identity",
+  "fatos",
+  "facts",
+  "rotina",
+  "routine",
+  "preferencias",
+  "preferences",
+  "outros",
+  "other",
+];
+
+function categoryRank(cat: string) {
+  const i = CATEGORY_ORDER.indexOf(cat);
+  return i === -1 ? 99 : i;
+}
+
 export function MemoriaTab({ userId }: { userId: string }) {
   const qc = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -55,6 +78,14 @@ export function MemoriaTab({ userId }: { userId: string }) {
   const [newKey, setNewKey] = useState("");
   const [newValue, setNewValue] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<Insight | null>(null);
+  const [query, setQuery] = useState("");
+  const [openCats, setOpenCats] = useState<Record<string, boolean>>({});
+  const [pageByCat, setPageByCat] = useState<Record<string, number>>({});
+
+  const toggleCat = (cat: string) =>
+    setOpenCats((s) => ({ ...s, [cat]: !s[cat] }));
+  const showMore = (cat: string) =>
+    setPageByCat((s) => ({ ...s, [cat]: (s[cat] ?? 1) + 1 }));
 
   const { data: profile } = useQuery({
     queryKey: ["portal-memoria-profile", userId],
@@ -169,21 +200,32 @@ export function MemoriaTab({ userId }: { userId: string }) {
 
   if (isLoading) return <PortalLoadingInline />;
 
+  // Filtro por busca (case-insensitive, em key + value)
+  const q = query.trim().toLowerCase();
+  const filtered = (insights ?? []).filter((it) => {
+    if (!q) return true;
+    return (
+      (it.key ?? "").toLowerCase().includes(q) ||
+      (it.value ?? "").toLowerCase().includes(q)
+    );
+  });
+
   const grouped = new Map<string, Insight[]>();
-  for (const it of insights ?? []) {
+  for (const it of filtered) {
     const cat = it.category ?? "outros";
     if (!grouped.has(cat)) grouped.set(cat, []);
     grouped.get(cat)!.push(it);
   }
-  // Dentro de cada categoria, empurrar itens adicionados pelo usuário pro topo
   for (const [, items] of grouped) {
-    items.sort((a, b) => {
-      const aUser = a.category === "user_added" ? 1 : 0;
-      const bUser = b.category === "user_added" ? 1 : 0;
-      if (aUser !== bUser) return bUser - aUser;
-      return (b.importance ?? 0) - (a.importance ?? 0);
-    });
+    items.sort(
+      (a, b) =>
+        (b.importance ?? 0) - (a.importance ?? 0) ||
+        (b.mentioned_count ?? 0) - (a.mentioned_count ?? 0),
+    );
   }
+  const sortedCats = Array.from(grouped.entries()).sort(
+    ([a], [b]) => categoryRank(a) - categoryRank(b),
+  );
 
   const isNewUser =
     profile?.created_at &&
@@ -244,6 +286,22 @@ export function MemoriaTab({ userId }: { userId: string }) {
         </div>
       )}
 
+      {/* Busca */}
+      {(insights?.length ?? 0) > 0 && (
+        <div className="relative">
+          <Search
+            size={14}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
+          />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Buscar na memória…"
+            className="w-full bg-background rounded-xl pl-9 pr-3 py-2.5 text-sm border border-border font-['Nunito'] focus:outline-none focus:border-accent/60"
+          />
+        </div>
+      )}
+
       {/* Lista ou empty */}
       {(insights?.length ?? 0) === 0 ? (
         <EmptyState
@@ -255,15 +313,43 @@ export function MemoriaTab({ userId }: { userId: string }) {
               : "Conforme vocês conversam, o que ela aprende aparece aqui — e você pode corrigir a qualquer momento."
           }
         />
+      ) : sortedCats.length === 0 ? (
+        <p className="text-sm text-muted-foreground font-['Nunito'] text-center py-8">
+          Nada por aqui com "{query}".
+        </p>
       ) : (
-        <div className="space-y-6">
-          {Array.from(grouped.entries()).map(([cat, items]) => (
-            <div key={cat} className="space-y-2">
-              <h3 className="text-xs uppercase tracking-widest text-muted-foreground font-['Nunito'] font-semibold">
-                {labelFor(cat)}
-              </h3>
-              <div className="space-y-2">
-                {items.map((item) => {
+        <div className="space-y-3">
+          {sortedCats.map(([cat, items]) => {
+            // user_added e busca ativa: sempre aberto. Outros: colapsado por default.
+            const forcedOpen = cat === "user_added" || !!q;
+            const isOpen = forcedOpen || !!openCats[cat];
+            const page = pageByCat[cat] ?? 1;
+            const visible = items.slice(0, page * PAGE_SIZE);
+            const remaining = items.length - visible.length;
+
+            return (
+              <div key={cat} className="rounded-xl border border-border/60 bg-card/60 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => !forcedOpen && toggleCat(cat)}
+                  className={`w-full flex items-center justify-between px-4 py-3 ${
+                    forcedOpen ? "cursor-default" : "hover:bg-muted/30"
+                  }`}
+                >
+                  <span className="text-sm font-semibold text-foreground font-['Nunito']">
+                    {labelFor(cat)}
+                    <span className="ml-2 text-muted-foreground font-normal">({items.length})</span>
+                  </span>
+                  {!forcedOpen && (
+                    <span className="text-muted-foreground">
+                      {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                    </span>
+                  )}
+                </button>
+
+                {isOpen && (
+                  <div className="px-3 pb-3 space-y-2">
+                    {visible.map((item) => {
                   const isEditing = editingId === item.id;
                   const isImportant = (item.importance ?? 0) >= 10;
                   return (
@@ -351,9 +437,19 @@ export function MemoriaTab({ userId }: { userId: string }) {
                     </div>
                   );
                 })}
+                    {remaining > 0 && (
+                      <button
+                        onClick={() => showMore(cat)}
+                        className="w-full py-2 text-xs text-muted-foreground hover:text-accent font-['Nunito']"
+                      >
+                        Ver mais {Math.min(PAGE_SIZE, remaining)} de {remaining}
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
