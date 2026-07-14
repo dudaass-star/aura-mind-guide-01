@@ -1,55 +1,92 @@
-# Revisão do portal — o que está bom e o que ajustar
+# Portal como destino — plano enxuto
 
-## O que está bom
+Escopo pós-cortes: **Badges de novidade + Pergunta do dia + Ações rápidas + Timeline (substitui Insights)**. Sem share público, sem notificação mensal extra, sem streak de semanas.
 
-- Header, tabs e footer seguem o mesmo grid (`max-w-2xl`), tipografia (Fraunces/Nunito) e cor de acento das outras abas — a nova aba **Memória** e o **Intimacy** não destoam.
-- Ledger tem CRUD completo (corrigir / apagar / marcar / adicionar), com toasts e agrupamento por categoria.
-- IntimacyLevel é discreto (barra de 3 traços + frase + tooltip), coerente com o contrato clínico — não vira "gamificação de app".
+## 1. Badges de novidade nas abas
 
-## O que precisa ajuste
+Marca visual (ponto colorido) ao lado do nome da aba quando há conteúdo novo desde a última visita do usuário:
 
-### 1. Barra de abas está apertada (8 abas)
+- **Hoje**: nova sessão concluída ou insight recém-recebido.
+- **Timeline** (ex-Insights): nova carta mensal, novo snapshot temático, ou novo insight.
+- **Jornada**: novo snapshot mensal gerado.
+- **Memória**: nada — não faz sentido "novidade" aqui.
 
-- "Sua jornada" + "O que a Aura sabe" são rótulos longos e empurram a barra pro scroll horizontal em mobile.
-- Ajuste: encurtar rótulos → **"Jornada"** e **"Memória"** (ícones já dão o contexto).
+Como funciona:
 
-### 2. Confirmação de apagar usa `confirm()` nativo
+- Novo campo `profile.portal_tab_seen_at jsonb` guarda `{ hoje: iso, timeline: iso, jornada: iso }`.
+- Cada aba grava seu `seen_at` ao abrir.
+- Badge aparece se o `max(created_at)` do conteúdo da aba for maior que o `seen_at`.
+- Visual: bolinha 6px em `bg-accent`, sem número, sem texto — sóbrio.
 
-- Fora do padrão do resto do portal (que usa toasts e diálogos shadcn).
-- Trocar por `AlertDialog` do shadcn com título "Apagar da memória da Aura?" e ação destrutiva.
+## 2. Pergunta do dia na aba "Hoje"
 
-### 3. Ordenação da lista pode esconder o que o usuário adicionou
+Card acima dos cards existentes:
 
-- Query ordena por `importance desc, mentioned_count desc`. Itens adicionados pelo usuário entram com `importance = 9`, mas `mentioned_count = 1` — podem ficar depois de coisas antigas com muitas menções.
-- Ajuste: dentro de cada categoria, subir sempre no topo os `category = 'user_added'` e depois aplicar o sort atual.
+- Uma pergunta curta trocada a cada dia (rotação determinística por `dayKey`, mesma lógica da meditação sugerida).
+- Botão único: **"Responder com a Aura"** → abre WhatsApp com a pergunta pré-preenchida como se o usuário estivesse trazendo o tema.
+- Fonte: array curado no código (~30 perguntas), sem cron, sem tabela. Ex:
+  - "Uma coisa que ficou difícil/pesada essa semana?"
+  - "O que você tá evitando confrontar?"
+  - "Tem algo que você adiaria hoje se pudesse?"
+- Se o usuário já conversou nas últimas 12h, o card some (evita empurrar quando já tá em conversa).
 
-### 4. Categorias podem aparecer com rótulos genéricos
+Objetivo: ritual leve que dá razão pra abrir o portal fora dos dias de carta/snapshot.
 
-- `CATEGORY_LABELS` cobre 7 chaves em PT. Se o extractor gravar categoria em inglês (`people`, `facts`) cai no fallback "Outros".
-- Adicionar mapeamento defensivo para `people/facts/identity/routine/preferences` → mesmos rótulos PT.
+## 3. Ações rápidas contextuais na "Hoje"
 
-### 5. Empty state do Ledger e usuário novo
+Barra horizontal de 4 chips clicáveis abaixo da saudação:
 
-- Hoje mostra "A Aura ainda está te conhecendo" para qualquer lista vazia. Faltou o mesmo cuidado que fizemos em Jornada (distinguir usuário recém-criado).
-- Ajuste leve: se `profile.created_at` < 7 dias, texto vira "Nos primeiros dias a Aura ainda está ouvindo. O caderno começa a preencher conforme vocês conversam."
+- **Marcar sessão** → WhatsApp: "Oi Aura, quero marcar uma sessão."
+- **Reagendar** → WhatsApp: "Oi Aura, preciso reagendar."
+- **Pausar sessão 7 dias** → WhatsApp: "Oi Aura, quero pausar a sessão por uma semana."
+- **Me chama amanhã** → WhatsApp: "Oi Aura, me manda mensagem amanhã de manhã?"
 
-### 6. IntimacyLevel — validar acesso no portal
+Cada chip usa `auraWhatsAppLink()` existente. Visual: pill compacto, ícone + texto curto, não competindo com os cards principais.
 
-- Faz `count` em `sessions` + `select` em `session_themes` + `count` em `user_memory_corrections` usando `supabasePortal`. Preciso confirmar que as três tabelas têm política de SELECT para o token do portal — se `session_themes` não tiver, o cálculo silenciosamente retorna 0 e o usuário fica travado em "Início" para sempre.
-- Ação: query rápida no schema; se faltar policy, adicionar SELECT via `portal_token`.
+## 4. Timeline substitui a aba Insights
 
-### 7. Microcopy do Intimacy
+Aba renomeada para **"Percurso"** (mais evocativo que "Insights"). Continua com o mesmo id `insights` internamente pra não quebrar links existentes.
 
-- "A Aura te conhece a fundo — em várias camadas da sua vida." soa um pouco solene. Alternativa mais leve, mesma intenção: "A Aura já te conhece em várias camadas."
-- Só cosmético — confirmar se quer trocar. NAO TROCAR
+Conteúdo: **linha do tempo cronológica reversa** que funde 4 fontes numa lista única:
 
-## Fora de escopo (não mexer agora)
+- Sessões concluídas (com `closure_text` como preview)
+- Snapshots temáticos mensais (título + evidência)
+- Cartas mensais (título + trecho)
+- Insights avulsos (`user_insights` marcados como `important` ou `pending_insight` histórico)
 
-- Estrutura das outras abas, cores/tokens globais, layout do header.
+Cada item da timeline tem:
+
+- Data legível ("15 de março", "há 3 dias")
+- Ícone por tipo (Calendar / Route / Mail / Sparkles)
+- Título curto
+- 1-2 linhas de preview
+- Tap → expande in-place com o conteúdo completo
+
+Agrupamento por mês (header sticky "Março 2026").
+
+Empty state: se nenhuma fonte tem conteúdo, mostra mensagem convidando a primeira sessão (como o `hasAnything` da Hoje).
+
+## Ordem de execução
+
+1. **Badges de novidade** — 1 migração pequena (`profile.portal_tab_seen_at`) + hook em cada aba.
+2. **Pergunta do dia** — só frontend, array + rotação determinística.
+3. **Ações rápidas** — só frontend, chips com `auraWhatsAppLink`.
+4. **Timeline (Percurso)** — reescreve `InsightsTab.tsx` unificando as 4 fontes; renomeia label da aba mantendo id.
 
 ## Arquivos afetados
 
-- `src/pages/UserPortal.tsx` (rótulos das tabs)
-- `src/components/portal/MemoriaTab.tsx` (AlertDialog, ordenação, empty state contextual, categorias EN)
-- `src/components/portal/IntimacyLevel.tsx` (microcopy, se aprovado)
-- Migração SQL só se a checagem de RLS em `session_themes` mostrar policy faltando.
+- Migration: adicionar `portal_tab_seen_at jsonb` em `profiles`.
+- `src/pages/UserPortal.tsx`: label da aba `insights` vira "Percurso"; badges no map de tabs.
+- `src/components/portal/HojeTab.tsx`: adicionar `PerguntaDoDiaCard` e `AcoesRapidasBar`.
+- `src/components/portal/InsightsTab.tsx`: reescrita como Timeline.
+- Novo hook `usePortalNovidades(userId)` que retorna `{ hoje: bool, timeline: bool, jornada: bool }`.
+
+## Métrica pra medir
+
+Log `portal_view` numa tabela simples ou reusar `checkins`. Meta: usuário ativo abrindo portal ≥2× por mês (baseline atual ~1×).
+
+## Fora de escopo (confirmado)
+
+- Compartilhável privado (risco de sinal errado num produto clínico).
+- Notificação mensal extra (redundante com carta).
+- Streak de semanas (fraco e culpabilizante).
