@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { PortalLoadingInline } from "./shared";
+import { IntimacyLevel } from "./IntimacyLevel";
 import { auraWhatsAppLink, presentClosure } from "./whatsapp";
 
 interface HojeTabProps {
