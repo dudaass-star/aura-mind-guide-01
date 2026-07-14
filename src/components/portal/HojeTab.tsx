@@ -381,18 +381,34 @@ function NextSessionCard({ session }: { session: any }) {
 }
 
 function InsightPreviewCard({
+  title,
+  meta,
   text,
   onSeeAll,
 }: {
+  title?: string;
+  meta?: string | null;
   text: string;
   onSeeAll: () => void;
 }) {
   return (
     <div className="rounded-2xl border border-border bg-card p-5 space-y-3 shadow-sm animate-fade-up">
       <div className="flex items-start justify-between gap-3">
-        <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold font-['Nunito']">
-          Último insight da Aura
-        </p>
+        <div className="min-w-0">
+          <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold font-['Nunito']">
+            Insight da Aura
+          </p>
+          {title && (
+            <p className="font-['Fraunces'] font-semibold text-foreground mt-1 capitalize">
+              {title}
+            </p>
+          )}
+          {meta && (
+            <p className="text-xs text-muted-foreground font-['Nunito'] mt-0.5 capitalize">
+              {meta}
+            </p>
+          )}
+        </div>
         <div className="bg-primary/10 rounded-full p-2 shrink-0">
           <Sparkles size={18} className="text-primary" />
         </div>
