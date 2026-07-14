@@ -141,6 +141,9 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab }: HojeTabPr
   const hasAnything =
     !!lastSession || !!nextSession || !!suggestedMeditation || !!lastInsightText;
 
+  // Usuário que nunca conversou com a Aura: portal precisa focar num único CTA.
+  const zeroConversa = !profile?.last_user_message_at;
+
   if (loadingLast) return <PortalLoadingInline />;
 
   return (
@@ -161,11 +164,35 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab }: HojeTabPr
         <IntimacyLevel userId={userId} />
       </div>
 
-      {/* Ações rápidas contextuais */}
-      <AcoesRapidasBar />
+      {/* Zero-conversa: card único de primeiro contato, sem ruído. */}
+      {zeroConversa && (
+        <div className="rounded-2xl border border-accent/30 bg-gradient-to-br from-accent/5 to-transparent p-6 text-center space-y-3 animate-fade-up">
+          <div className="bg-accent/10 rounded-full p-3 w-14 h-14 mx-auto flex items-center justify-center">
+            <MessageCircle size={24} className="text-accent" />
+          </div>
+          <p className="font-['Fraunces'] font-semibold text-foreground">
+            Fala com a Aura pela primeira vez
+          </p>
+          <p className="text-sm text-muted-foreground font-['Nunito']">
+            Manda a primeira mensagem — depois esse espaço começa a ganhar vida.
+          </p>
+          <a
+            href={auraWhatsAppLink("Oi Aura, quero começar.")}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-full bg-accent text-accent-foreground px-5 py-2.5 text-sm font-semibold font-['Nunito'] hover:scale-105 transition-all"
+          >
+            <MessageCircle size={16} />
+            Abrir WhatsApp
+          </a>
+        </div>
+      )}
 
-      {/* Empty state global p/ usuária ainda sem nada */}
-      {!hasAnything && (
+      {/* Ações rápidas contextuais (esconde em zero-conversa) */}
+      {!zeroConversa && <AcoesRapidasBar hasNextSession={!!nextSession} />}
+
+      {/* Empty state global (já conversou mas nada foi materializado ainda) */}
+      {!zeroConversa && !hasAnything && (
         <div className="rounded-2xl border border-accent/30 bg-gradient-to-br from-accent/5 to-transparent p-6 text-center space-y-3 animate-fade-up">
           <div className="bg-accent/10 rounded-full p-3 w-14 h-14 mx-auto flex items-center justify-center">
             <Sparkles size={24} className="text-accent" />
@@ -188,8 +215,10 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab }: HojeTabPr
         </div>
       )}
 
-      {/* Pergunta do dia — ritual leve pra abrir o portal fora dos dias de carta */}
-      <PerguntaDoDiaCard lastUserMessageAt={profile?.last_user_message_at} />
+      {/* Pergunta do dia — só faz sentido pra quem já iniciou o vínculo */}
+      {!zeroConversa && (
+        <PerguntaDoDiaCard lastUserMessageAt={profile?.last_user_message_at} />
+      )}
 
       {/* Card: O que ficou da última sessão */}
       {lastSession && (lastSession.closure_text || lastSession.session_summary) && (
@@ -204,8 +233,8 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab }: HojeTabPr
         <InsightPreviewCard text={lastInsightText} onSeeAll={() => onNavigateTab("insights")} />
       )}
 
-      {/* Card: Meditação sugerida */}
-      {suggestedMeditation && (
+      {/* Card: Meditação sugerida (não mostrar pra zero-conversa) */}
+      {!zeroConversa && suggestedMeditation && (
         <SuggestedMeditationCard
           meditation={suggestedMeditation}
           onOpen={() => onNavigateTab("meditacoes")}

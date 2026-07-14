@@ -206,10 +206,8 @@ export function SobreVoceTab({ userId }: { userId: string }) {
         <SectionHeader icon={User} title="Sobre você" />
         <EmptyState
           icon={Heart}
-          title={portrait ? "A Aura ainda está te conhecendo" : "Organizando o que sei sobre você…"}
-          description={portrait
-            ? "Conforme vocês conversam, ela vai mapear identidade, valores e temas recorrentes seus aqui."
-            : "Isso leva alguns segundos. Volte daqui a pouco e o seu retrato vai estar aqui."}
+          title="A Aura ainda está te conhecendo"
+          description="Depois de algumas conversas ela mapeia aqui identidade, pessoas próximas, valores e temas recorrentes seus."
         />
       </div>
     );
