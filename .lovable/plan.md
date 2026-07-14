@@ -1,50 +1,37 @@
-# Redesign V2 — Restante do Portal (Deep Navy Anchor)
+## Objetivo
+Eliminar o scroll horizontal das abas no mobile fazendo com que as 5 abas caibam em 390px, mantendo o design Deep Navy Anchor atual.
 
-A aba **Hoje** e a navegação já foram reestilizadas. Este plano fecha as 4 abas restantes com os mesmos tokens visuais e limpa o lixo técnico que ainda vaza dos dados.
+## Comportamento
 
-## Tokens (locked)
-- Bg: `#F5F0E8` (creme) · Superfícies: `white/60`
-- Navy `#1B2A4E` (títulos, CTA principal, hero cards)
-- Sage `#87A878` (labels, chips, acentos secundários)
-- Lavender `#B8A5D9` (hero de insight, novidade dots)
-- Fraunces para display/quotes · Nunito para UI/body
+**Mobile (< 640px):**
+- Cada aba mostra **só o ícone** por padrão (largura fixa ~44px, `flex-1` distribuído).
+- A aba **ativa expande** e mostra ícone + label ao lado (pill navy sutil).
+- Underline navy embaixo continua marcando a ativa.
+- Badge de novidade (bolinha lavender) continua no canto superior do ícone.
+- Zero overflow horizontal — a barra ocupa 100% da largura disponível.
 
-## Escopo por aba
+**Desktop (≥ 640px):**
+- Mantém exatamente como está hoje: ícone + label sempre visíveis, underline navy, sem mudanças.
 
-### 1. Percurso (`InsightsTab.tsx`) — Capítulos mensais
-- Card de mês em bg `white/60` com borda sage/15, título em Fraunces navy, mês em label sage uppercase.
-- Citação literal em blockquote Fraunces italic navy, com barra lateral lavender.
-- Estado vazio: card creme com mensagem clara (evita fallback genérico).
-- Aplicar `sanitizePortalText` em toda síntese e citação.
+## Implementação
+Alterar apenas `src/pages/UserPortal.tsx`, dentro do bloco de tabs:
 
-### 2. Sobre você (`SobreVoceTab.tsx`) — Retrato + prompts
-- Bloco "Retrato" como hero navy (igual próxima sessão), com nome em Fraunces XL e descrição em Nunito.
-- Os 6 prompts temáticos (Medos, Objetivos, Desafios…) viram chips com bg `white/60`, ícone sage, label Fraunces.
-- CRUD dos insights do usuário: cards `white/60`, botão adicionar em navy pill.
-- Sanitizar `content` de cada insight na exibição.
-
-### 3. Meditações (`MeditacoesTab.tsx`)
-- Grid de cards `white/60` com borda sage/15, título Fraunces navy, duração em label sage.
-- Player mantém funcionalidade; só troca cores (barra em gradient sage→lavender, botão play navy).
-- Categoria destacada como chip sage claro.
-
-### 4. Sessões (`SessoesTab.tsx`)
-- Próxima sessão como hero navy (mesmo componente visual do Hoje).
-- Histórico: lista de cards `white/60` com data em label sage, tema em Fraunces navy, síntese em Nunito.
-- Sanitizar `session_summary` e `closure_text`.
-
-## Sanitização (transversal)
-Aplicar `sanitizePortalText` (já criado) em qualquer string vinda do banco em:
-- InsightsTab (síntese, citações)
-- SobreVoceTab (portrait_text, insight.content)
-- SessoesTab (session_summary, closure_text)
-- MonthlyLetters se exibidas em qualquer aba
+- Remover `overflow-x-auto` e `whitespace-nowrap` no mobile (manter em desktop via `sm:` se necessário).
+- Trocar o container das tabs para `flex justify-between sm:justify-start w-full`.
+- No `<button>` de cada tab:
+  - Mobile: `flex-1 justify-center` com só o ícone; o `<span>` do label recebe `hidden sm:inline`.
+  - Quando `isActive` no mobile: o `<span>` do label ganha `inline` (override) + padding lateral pra virar pill.
+- Ajustar tamanho do ícone pra 16px no mobile ativo, manter 14px inativo pra dar destaque.
+- Badge de novidade: reposicionar como `absolute top-1.5 right-1.5` no mobile pra não conflitar com o layout ícone-only.
+- Underline navy: manter, mas ajustar `w-6` pra `w-8` na aba ativa mobile (fica proporcional ao pill).
 
 ## Fora de escopo
-- Backend, edge functions, schema: nenhuma mudança.
-- Lógica de negócio (níveis de intimidade, queries): mantém.
-- Aba Hoje e navegação: já feitas — não tocar.
+- Não mudar cor, tipografia, ordem das abas, nem lógica de novidades.
+- Não mudar comportamento de nenhuma outra parte do portal.
 
-## Verificação
-- Playwright no perfil Eduardo capturando as 4 abas após o build.
-- Conferir: sem `[CONTENT]`, sem `**markdown**`, sem URLs cruas visíveis.
+## Validação
+Rodar Playwright em 390px, capturar screenshot do topo do `/meu-espaco`, confirmar:
+1. As 5 abas visíveis sem scroll horizontal.
+2. Aba ativa mostra ícone + label; inativas só ícone.
+3. Underline navy alinhado à ativa.
+4. Badge lavender aparece corretamente nas abas com novidade.
