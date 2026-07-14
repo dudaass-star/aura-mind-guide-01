@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { SectionHeader, EmptyState, PortalLoadingInline } from "./shared";
 import { auraWhatsAppLink } from "./whatsapp";
+import { sanitizePortalText } from "./sanitize";
 import { toast } from "@/hooks/use-toast";
 import {
   AlertDialog,
@@ -239,25 +240,25 @@ export function SobreVoceTab({ userId }: { userId: string }) {
 
   return (
     <div className="space-y-7">
-      {/* Header */}
-      <div className="animate-in fade-in slide-in-from-top-2 duration-500">
-        <h2 className="text-2xl font-semibold text-foreground font-['Nunito'] tracking-tight">
+      {/* Hero navy — retrato narrativo */}
+      <div className="relative overflow-hidden rounded-3xl bg-[#1B2A4E] p-6 animate-in fade-in slide-in-from-top-2 duration-500">
+        <Sparkles size={16} className="text-[#B8A5D9] absolute top-5 right-5 opacity-70" />
+        <p className="text-[10px] uppercase tracking-[0.2em] text-[#B8A5D9] font-bold font-['Nunito']">
+          Retrato
+        </p>
+        <h2 className="font-['Fraunces'] text-3xl font-semibold text-[#F5F0E8] mt-1 tracking-tight">
           {greeting}
         </h2>
-        <p className="text-sm text-muted-foreground font-['Nunito'] mt-1">
-          Aqui está o que eu fui aprendendo sobre você nas nossas conversas.
-        </p>
-      </div>
-
-      {/* Intro narrativa — card destaque */}
-      {portrait?.intro && (
-        <div className="relative overflow-hidden rounded-2xl border border-accent/20 bg-gradient-to-br from-accent/8 via-accent/3 to-transparent p-5 animate-in fade-in duration-700">
-          <Sparkles size={16} className="text-accent absolute top-4 right-4 opacity-60" />
-          <p className="text-[15px] text-foreground font-['Nunito'] leading-relaxed italic pr-6">
-            {portrait.intro}
+        {portrait?.intro ? (
+          <p className="text-[15px] text-[#F5F0E8]/85 font-['Nunito'] leading-relaxed mt-3 pr-6">
+            {sanitizePortalText(portrait.intro)}
           </p>
-        </div>
-      )}
+        ) : (
+          <p className="text-sm text-[#F5F0E8]/70 font-['Nunito'] mt-2">
+            O que fui aprendendo sobre você nas nossas conversas.
+          </p>
+        )}
+      </div>
 
       {/* Pessoas — chips */}
       {portrait?.pessoas && portrait.pessoas.length > 0 && (
@@ -266,19 +267,19 @@ export function SobreVoceTab({ userId }: { userId: string }) {
             {portrait.pessoas.map((p, i) => (
               <div
                 key={`${p.label}-${i}`}
-                className="rounded-xl border border-border bg-card px-3 py-2.5"
+                className="rounded-xl border border-[#87A878]/15 bg-white/60 px-3 py-2.5"
               >
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold font-['Nunito']">
+                <p className="text-[10px] uppercase tracking-[0.15em] text-[#87A878] font-bold font-['Nunito']">
                   {p.label}
                 </p>
                 {p.names.length > 0 && (
-                  <p className="text-sm text-foreground font-['Nunito'] leading-snug mt-0.5">
+                  <p className="text-sm text-[#1B2A4E] font-['Nunito'] font-semibold leading-snug mt-0.5">
                     {p.names.join(", ")}
                   </p>
                 )}
                 {p.nota && (
-                  <p className="text-xs text-muted-foreground font-['Nunito'] leading-snug mt-0.5 italic">
-                    {p.nota}
+                  <p className="text-xs text-[#2A2A2A]/60 font-['Nunito'] leading-snug mt-0.5 italic">
+                    {sanitizePortalText(p.nota)}
                   </p>
                 )}
               </div>
@@ -299,9 +300,9 @@ export function SobreVoceTab({ userId }: { userId: string }) {
         <SectionShell title="Padrões que a Aura percebeu" icon={Activity}>
           <div className="space-y-3">
             {portrait.padroes.map((v, i) => (
-              <blockquote key={i} className="border-l-2 border-accent/40 pl-3">
-                <p className="text-sm text-foreground/90 font-['Nunito'] italic leading-relaxed">
-                  {v}
+              <blockquote key={i} className="border-l-[3px] border-[#B8A5D9] pl-4 py-1">
+                <p className="text-[15px] text-[#1B2A4E]/85 font-['Fraunces'] italic leading-relaxed">
+                  {sanitizePortalText(v)}
                 </p>
               </blockquote>
             ))}
@@ -323,10 +324,10 @@ export function SobreVoceTab({ userId }: { userId: string }) {
             {portrait.conquistas.map((v, i) => (
               <span
                 key={i}
-                className="inline-flex items-start gap-1.5 px-3 py-2 rounded-2xl bg-accent/10 text-accent text-xs font-medium font-['Nunito'] leading-snug max-w-full whitespace-normal"
+                className="inline-flex items-start gap-1.5 px-3 py-2 rounded-2xl bg-[#B8A5D9]/20 text-[#1B2A4E] text-xs font-semibold font-['Nunito'] leading-snug max-w-full whitespace-normal"
               >
-                <Trophy size={12} className="mt-0.5 shrink-0" />
-                <span>{v.replace(/\.$/, "")}</span>
+                <Trophy size={12} className="mt-0.5 shrink-0 text-[#87A878]" />
+                <span>{sanitizePortalText(v).replace(/\.$/, "")}</span>
               </span>
             ))}
           </div>
@@ -336,7 +337,7 @@ export function SobreVoceTab({ userId }: { userId: string }) {
       {/* Sensíveis */}
       {portrait?.sensiveis && portrait.sensiveis.length > 0 && (
         <CollapsibleShell title="Pontos sensíveis" icon={ShieldAlert}>
-          <p className="text-xs text-muted-foreground italic font-['Nunito']">
+          <p className="text-xs text-[#2A2A2A]/60 italic font-['Nunito']">
             Tópicos delicados que você compartilhou com a Aura.
           </p>
           <ProseList items={portrait.sensiveis} muted />
@@ -349,8 +350,8 @@ export function SobreVoceTab({ userId }: { userId: string }) {
           {activeThemes.length > 0 && (
             <div className="space-y-2">
               <div className="flex items-center gap-2">
-                <Tag size={14} className="text-accent" />
-                <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold font-['Nunito']">
+                <Tag size={14} className="text-[#87A878]" />
+                <p className="text-[10px] uppercase tracking-[0.18em] text-[#1B2A4E] font-bold font-['Nunito']">
                   Temas em movimento
                 </p>
               </div>
@@ -358,11 +359,11 @@ export function SobreVoceTab({ userId }: { userId: string }) {
                 {activeThemes.map((t: any) => (
                   <span
                     key={t.id}
-                    className="inline-flex items-center px-3 py-2 rounded-full bg-accent/10 text-accent text-xs font-medium font-['Nunito'] whitespace-nowrap"
+                    className="inline-flex items-center px-3 py-2 rounded-full bg-[#87A878]/15 text-[#1B2A4E] text-xs font-semibold font-['Nunito'] whitespace-nowrap"
                   >
                     {t.theme_name}
                     {t.session_count > 1 && (
-                      <span className="ml-1 opacity-70">· {t.session_count}</span>
+                      <span className="ml-1 opacity-60">· {t.session_count}</span>
                     )}
                   </span>
                 ))}
@@ -371,14 +372,14 @@ export function SobreVoceTab({ userId }: { userId: string }) {
           )}
           {resolvedThemes.length > 0 && (
             <div className="space-y-2">
-              <p className="text-xs uppercase tracking-wider text-muted-foreground/70 font-semibold font-['Nunito']">
+              <p className="text-[10px] uppercase tracking-[0.18em] text-[#2A2A2A]/50 font-bold font-['Nunito']">
                 Já trabalhados
               </p>
               <div className="flex flex-wrap gap-2.5">
                 {resolvedThemes.map((t: any) => (
                   <span
                     key={t.id}
-                    className="inline-flex items-center px-3 py-2 rounded-full bg-muted text-muted-foreground text-xs font-medium font-['Nunito'] line-through opacity-70 whitespace-nowrap"
+                    className="inline-flex items-center px-3 py-2 rounded-full bg-[#F5F0E8] text-[#2A2A2A]/60 text-xs font-medium font-['Nunito'] line-through whitespace-nowrap border border-[#87A878]/10"
                   >
                     {t.theme_name}
                   </span>
@@ -396,7 +397,7 @@ export function SobreVoceTab({ userId }: { userId: string }) {
         href={auraWhatsAppLink("Oi Aura, queria corrigir uma coisa no que você sabe sobre mim.")}
         target="_blank"
         rel="noopener noreferrer"
-        className="flex items-center justify-center gap-2 mt-2 px-4 py-3 rounded-xl border border-border bg-card text-sm text-muted-foreground hover:text-accent hover:border-accent/40 transition-colors font-['Nunito']"
+        className="flex items-center justify-center gap-2 mt-2 px-4 py-3 rounded-xl border border-[#87A878]/20 bg-white/60 text-sm text-[#1B2A4E]/70 hover:text-[#1B2A4E] hover:border-[#87A878]/50 transition-colors font-['Nunito']"
       >
         <MessageCircle size={14} />
         Algo aqui não bate? Me corrige no WhatsApp →
@@ -419,8 +420,8 @@ function SectionShell({
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
-        <Icon size={14} className="text-accent" />
-        <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold font-['Nunito']">
+        <Icon size={14} className="text-[#87A878]" />
+        <p className="text-[10px] uppercase tracking-[0.18em] text-[#1B2A4E] font-bold font-['Nunito']">
           {title}
         </p>
       </div>
@@ -446,11 +447,11 @@ function CollapsibleShell({
         onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-2 w-full text-left"
       >
-        <Icon size={14} className="text-accent" />
-        <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold font-['Nunito']">
+        <Icon size={14} className="text-[#87A878]" />
+        <p className="text-[10px] uppercase tracking-[0.18em] text-[#1B2A4E] font-bold font-['Nunito']">
           {title}
         </p>
-        <span className="ml-auto text-muted-foreground">
+        <span className="ml-auto text-[#1B2A4E]/50">
           {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
         </span>
       </button>
@@ -464,13 +465,13 @@ function ProseList({ items, muted }: { items: string[]; muted?: boolean }) {
     <ul className="space-y-2.5">
       {items.map((v, i) => (
         <li key={i} className="flex gap-2.5">
-          <span className="text-accent mt-1.5 select-none leading-none">•</span>
+          <span className="text-[#87A878] mt-1.5 select-none leading-none">•</span>
           <span
             className={`text-[14px] font-['Nunito'] leading-relaxed ${
-              muted ? "text-foreground/85" : "text-foreground"
+              muted ? "text-[#2A2A2A]/75" : "text-[#2A2A2A]"
             }`}
           >
-            {v}
+            {sanitizePortalText(v)}
           </span>
         </li>
       ))}
@@ -640,12 +641,12 @@ function ContribuicaoUsuario({ userId }: { userId: string }) {
   return (
     <div className="pt-2 space-y-4">
       <div className="flex items-center gap-2">
-        <Sparkles size={14} className="text-accent" />
-        <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold font-['Nunito']">
+        <Sparkles size={14} className="text-[#87A878]" />
+        <p className="text-[10px] uppercase tracking-[0.18em] text-[#1B2A4E] font-bold font-['Nunito']">
           O que você quer que a Aura saiba
         </p>
       </div>
-      <p className="text-sm text-muted-foreground font-['Nunito'] -mt-2">
+      <p className="text-sm text-[#2A2A2A]/65 font-['Nunito'] -mt-2">
         Reforce coisas suas que ainda não apareceram nas conversas — a Aura leva em conta.
       </p>
 
@@ -657,11 +658,11 @@ function ContribuicaoUsuario({ userId }: { userId: string }) {
             return (
               <div
                 key={item.id}
-                className="rounded-xl border border-border/60 bg-card p-3"
+                className="rounded-xl border border-[#87A878]/15 bg-white/60 p-3"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
-                    <p className="text-[11px] uppercase tracking-wider text-accent font-semibold font-['Nunito']">
+                    <p className="text-[10px] uppercase tracking-[0.15em] text-[#87A878] font-bold font-['Nunito']">
                       {item.key}
                     </p>
                     {isEditing ? (
@@ -670,11 +671,11 @@ function ContribuicaoUsuario({ userId }: { userId: string }) {
                         value={editDraft}
                         onChange={(e) => setEditDraft(e.target.value)}
                         rows={2}
-                        className="mt-1 w-full bg-background rounded-lg px-2 py-1.5 text-sm border border-accent font-['Nunito'] resize-none"
+                        className="mt-1 w-full bg-[#F5F0E8] rounded-lg px-2 py-1.5 text-sm border border-[#87A878] font-['Nunito'] resize-none text-[#1B2A4E]"
                       />
                     ) : (
-                      <p className="text-sm text-foreground font-['Nunito'] mt-0.5 break-words leading-relaxed">
-                        {item.value}
+                      <p className="text-sm text-[#1B2A4E] font-['Nunito'] mt-0.5 break-words leading-relaxed">
+                        {sanitizePortalText(item.value)}
                       </p>
                     )}
                   </div>
@@ -685,14 +686,14 @@ function ContribuicaoUsuario({ userId }: { userId: string }) {
                           editMut.mutate({ item, newVal: editDraft.trim() })
                         }
                         disabled={editMut.isPending || !editDraft.trim()}
-                        className="p-1.5 rounded-lg bg-accent text-accent-foreground disabled:opacity-60"
+                        className="p-1.5 rounded-lg bg-[#1B2A4E] text-[#F5F0E8] disabled:opacity-60"
                         title="Salvar"
                       >
                         <Check size={14} />
                       </button>
                       <button
                         onClick={() => setEditingId(null)}
-                        className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted"
+                        className="p-1.5 rounded-lg text-[#2A2A2A]/60 hover:bg-[#F5F0E8]"
                         title="Cancelar"
                       >
                         <X size={14} />
@@ -705,7 +706,7 @@ function ContribuicaoUsuario({ userId }: { userId: string }) {
                           setEditingId(item.id);
                           setEditDraft(item.value);
                         }}
-                        className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+                        className="p-1.5 rounded-lg text-[#2A2A2A]/60 hover:bg-[#F5F0E8] hover:text-[#1B2A4E]"
                         title="Editar"
                       >
                         <Pencil size={14} />
@@ -713,7 +714,7 @@ function ContribuicaoUsuario({ userId }: { userId: string }) {
                       <button
                         onClick={() => setConfirmDelete(item)}
                         disabled={deleteMut.isPending}
-                        className="p-1.5 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                        className="p-1.5 rounded-lg text-[#2A2A2A]/60 hover:bg-destructive/10 hover:text-destructive"
                         title="Apagar"
                       >
                         <Trash2 size={14} />
@@ -729,10 +730,10 @@ function ContribuicaoUsuario({ userId }: { userId: string }) {
 
       {/* Formulário aberto */}
       {selectedPrompt ? (
-        <div className="rounded-xl border border-accent/30 bg-accent/5 p-4 space-y-3 animate-fade-in">
+        <div className="rounded-xl border border-[#87A878]/30 bg-[#87A878]/8 p-4 space-y-3 animate-fade-in">
           <div className="flex items-center gap-2">
-            <selectedPrompt.icon size={16} className="text-accent" />
-            <p className="text-sm font-semibold text-foreground font-['Nunito']">
+            <selectedPrompt.icon size={16} className="text-[#1B2A4E]" />
+            <p className="text-sm font-bold text-[#1B2A4E] font-['Nunito']">
               {selectedPrompt.label}
             </p>
           </div>
@@ -742,7 +743,7 @@ function ContribuicaoUsuario({ userId }: { userId: string }) {
             onChange={(e) => setDraft(e.target.value)}
             placeholder={selectedPrompt.placeholder}
             rows={3}
-            className="w-full bg-background rounded-lg px-3 py-2 text-sm border border-border font-['Nunito'] resize-none focus:outline-none focus:border-accent/60"
+            className="w-full bg-white rounded-lg px-3 py-2 text-sm border border-[#87A878]/25 font-['Nunito'] resize-none focus:outline-none focus:border-[#1B2A4E] text-[#1B2A4E]"
           />
           <div className="flex gap-2 justify-end">
             <button
@@ -750,14 +751,14 @@ function ContribuicaoUsuario({ userId }: { userId: string }) {
                 setSelectedPrompt(null);
                 setDraft("");
               }}
-              className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground font-['Nunito']"
+              className="px-3 py-1.5 text-xs text-[#2A2A2A]/60 hover:text-[#1B2A4E] font-['Nunito']"
             >
               Cancelar
             </button>
             <button
               onClick={() => addMut.mutate()}
               disabled={addMut.isPending || !draft.trim()}
-              className="px-4 py-1.5 text-xs rounded-lg bg-accent text-accent-foreground font-semibold font-['Nunito'] disabled:opacity-60"
+              className="px-4 py-2 text-xs rounded-full bg-[#1B2A4E] text-[#F5F0E8] font-bold font-['Nunito'] disabled:opacity-60 hover:bg-[#1B2A4E]/90"
             >
               Salvar
             </button>
@@ -766,7 +767,7 @@ function ContribuicaoUsuario({ userId }: { userId: string }) {
       ) : (
         // Seletor de prompts
         <div>
-          <p className="text-xs text-muted-foreground font-['Nunito'] mb-2 flex items-center gap-1.5">
+          <p className="text-xs text-[#2A2A2A]/60 font-['Nunito'] mb-2 flex items-center gap-1.5">
             <Plus size={12} />
             Sobre o quê você quer contar?
           </p>
@@ -780,10 +781,10 @@ function ContribuicaoUsuario({ userId }: { userId: string }) {
                     setSelectedPrompt(p);
                     setDraft("");
                   }}
-                  className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2.5 text-left hover:border-accent/40 hover:bg-accent/5 transition-colors"
+                  className="flex items-center gap-2 rounded-xl border border-[#87A878]/15 bg-white/60 px-3 py-3 text-left hover:border-[#1B2A4E]/30 hover:bg-white transition-colors"
                 >
-                  <Icon size={14} className="text-accent shrink-0" />
-                  <span className="text-xs text-foreground font-['Nunito'] leading-tight">
+                  <Icon size={14} className="text-[#87A878] shrink-0" />
+                  <span className="text-xs text-[#1B2A4E] font-['Nunito'] font-semibold leading-tight">
                     {p.label}
                   </span>
                 </button>

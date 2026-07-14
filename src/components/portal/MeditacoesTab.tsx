@@ -150,8 +150,8 @@ export function MeditacoesTab({ userId }: MeditacoesTabProps) {
       {suggested.length > 0 && (
         <div className="space-y-3 animate-fade-in">
           <div className="flex items-center gap-2">
-            <Sparkles size={14} className="text-accent" />
-            <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold font-['Nunito']">
+            <Sparkles size={14} className="text-[#87A878]" />
+            <p className="text-[10px] uppercase tracking-[0.18em] text-[#1B2A4E] font-bold font-['Nunito']">
               Sugeridas pra você
             </p>
           </div>
@@ -169,17 +169,17 @@ export function MeditacoesTab({ userId }: MeditacoesTabProps) {
 
       <div className="space-y-2 animate-fade-in">
         <div className="relative">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#1B2A4E]/50" />
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Buscar meditação..."
-            className="pl-9 h-10 font-['Nunito'] text-sm"
+            className="pl-9 h-10 font-['Nunito'] text-sm bg-white/60 border-[#87A878]/20 text-[#1B2A4E]"
           />
         </div>
         <div className="flex gap-2">
           <Select value={category} onValueChange={setCategory}>
-            <SelectTrigger className="h-9 text-xs font-['Nunito'] flex-1">
+            <SelectTrigger className="h-9 text-xs font-['Nunito'] flex-1 bg-white/60 border-[#87A878]/20 text-[#1B2A4E]">
               <SelectValue placeholder="Categoria" />
             </SelectTrigger>
             <SelectContent>
@@ -192,7 +192,7 @@ export function MeditacoesTab({ userId }: MeditacoesTabProps) {
             </SelectContent>
           </Select>
           <Select value={duration} onValueChange={setDuration}>
-            <SelectTrigger className="h-9 text-xs font-['Nunito'] flex-1">
+            <SelectTrigger className="h-9 text-xs font-['Nunito'] flex-1 bg-white/60 border-[#87A878]/20 text-[#1B2A4E]">
               <SelectValue placeholder="Duração" />
             </SelectTrigger>
             <SelectContent>
@@ -206,14 +206,14 @@ export function MeditacoesTab({ userId }: MeditacoesTabProps) {
       </div>
 
       {filtered.length === 0 && (
-        <p className="text-sm text-muted-foreground font-['Nunito'] text-center py-6">
+        <p className="text-sm text-[#2A2A2A]/60 font-['Nunito'] text-center py-6">
           Nenhuma meditação corresponde aos filtros.
         </p>
       )}
 
       {Object.entries(grouped).map(([cat, items]) => (
         <div key={cat} className="space-y-3">
-          <p className="text-sm font-semibold text-foreground font-['Nunito'] capitalize">
+          <p className="text-[10px] uppercase tracking-[0.18em] text-[#87A878] font-bold font-['Nunito']">
             {CATEGORY_LABELS[cat.toLowerCase()] || cat}
           </p>
           {(items as any[]).map((meditation: any, idx: number) => (
@@ -244,32 +244,34 @@ function MeditationCard({
 }) {
   return (
     <div
-      className="rounded-2xl border border-border bg-card p-4 space-y-3 shadow-sm hover:shadow-card transition-all animate-fade-up"
+      className="rounded-2xl border border-[#87A878]/15 bg-white/60 p-4 space-y-3 shadow-sm hover:shadow-md hover:border-[#87A878]/30 transition-all animate-fade-up"
       style={{ animationDelay: `${idx * 80}ms` }}
     >
       <div className="flex items-start gap-3">
-        <div className="bg-accent/10 rounded-full p-2 mt-0.5 shrink-0">
-          <Headphones size={16} className="text-accent" />
+        <div className="bg-[#B8A5D9]/25 rounded-full p-2.5 mt-0.5 shrink-0">
+          <Headphones size={16} className="text-[#1B2A4E]" />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <p className="font-['Fraunces'] font-semibold text-foreground">{meditation.title}</p>
+            <p className="font-['Fraunces'] text-lg font-semibold text-[#1B2A4E] leading-tight">
+              {meditation.title}
+            </p>
             {heard && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-['Nunito'] font-medium text-accent bg-accent/10 rounded-full px-2 py-0.5">
+              <span className="inline-flex items-center gap-1 text-[10px] font-['Nunito'] font-bold text-[#87A878] bg-[#87A878]/12 rounded-full px-2 py-0.5">
                 <CheckCircle2 size={10} /> já ouvi
               </span>
             )}
           </div>
           <div className="flex items-center gap-2 mt-0.5">
-            <Clock size={12} className="text-muted-foreground" />
-            <p className="text-xs text-muted-foreground font-['Nunito']">
+            <Clock size={12} className="text-[#87A878]" />
+            <p className="text-xs text-[#2A2A2A]/60 font-['Nunito'] font-semibold">
               {Math.round(meditation.duration_seconds / 60)} min
             </p>
           </div>
         </div>
       </div>
       {meditation.description && (
-        <p className="text-sm text-foreground/80 font-['Nunito']">{meditation.description}</p>
+        <p className="text-sm text-[#2A2A2A]/80 font-['Nunito'] leading-relaxed">{meditation.description}</p>
       )}
       {audioUrl && <AudioPlayer src={audioUrl} />}
     </div>
