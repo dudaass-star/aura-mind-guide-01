@@ -152,19 +152,19 @@ const UserPortal = () => {
       </Helmet>
 
       <div className="min-h-screen bg-background flex flex-col">
-        {/* Header */}
-        <div className="bg-card border-b border-border/40 shadow-sm">
-          <div className="max-w-2xl mx-auto px-5 py-3 flex items-center justify-between">
-            <img src={logoOlaAura} alt="Olá AURA" className="h-12 w-auto" />
-            <span className="text-xs uppercase tracking-widest text-accent font-semibold font-['Nunito']">
+        {/* Header — Deep Navy Anchor */}
+        <div className="bg-[#F5F0E8]">
+          <div className="max-w-2xl mx-auto px-5 pt-5 pb-3 flex items-center justify-between">
+            <img src={logoOlaAura} alt="Olá AURA" className="h-11 w-auto" />
+            <span className="text-[10px] uppercase tracking-[0.2em] text-[#87A878] font-bold font-['Nunito']">
               Meu Espaço
             </span>
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="border-b border-border/30 bg-card/50 sticky top-0 z-10">
-          <div className="max-w-2xl mx-auto px-2 sm:px-5 flex gap-0.5 overflow-x-auto scrollbar-none">
+        {/* Tabs — underline navy accent */}
+        <div className="bg-[#F5F0E8] sticky top-0 z-10">
+          <div className="max-w-2xl mx-auto px-3 sm:px-5 border-b border-[#87A878]/20 flex gap-1 overflow-x-auto scrollbar-none">
             {TABS.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -175,19 +175,22 @@ const UserPortal = () => {
                 <button
                   key={tab.id}
                   onClick={() => handleTabClick(tab.id)}
-                  className={`flex items-center gap-1 px-2.5 sm:px-3 py-3 text-xs sm:text-sm font-['Nunito'] font-medium whitespace-nowrap border-b-2 transition-all shrink-0 ${
+                  className={`relative flex items-center gap-1.5 px-3 sm:px-4 py-3 text-xs sm:text-sm font-['Nunito'] whitespace-nowrap transition-all shrink-0 ${
                     isActive
-                      ? "border-accent text-accent"
-                      : "border-transparent text-muted-foreground hover:text-foreground"
+                      ? "text-[#1B2A4E] font-bold"
+                      : "text-[#2A2A2A]/50 font-semibold hover:text-[#1B2A4E]"
                   }`}
                 >
-                  <Icon size={15} />
+                  <Icon size={14} />
                   <span>{tab.label}</span>
                   {hasNovidade && (
                     <span
                       aria-label="Novidade"
-                      className="ml-0.5 inline-block h-1.5 w-1.5 rounded-full bg-accent animate-pulse-soft"
+                      className="ml-0.5 inline-block h-1.5 w-1.5 rounded-full bg-[#B8A5D9] animate-pulse-soft"
                     />
+                  )}
+                  {isActive && (
+                    <span className="absolute -bottom-px left-1/2 -translate-x-1/2 h-[3px] w-6 bg-[#1B2A4E] rounded-full" />
                   )}
                 </button>
               );
