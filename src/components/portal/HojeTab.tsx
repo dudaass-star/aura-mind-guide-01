@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { PortalLoadingInline } from "./shared";
+import { IntimacyLevel } from "./IntimacyLevel";
 import { auraWhatsAppLink, presentClosure } from "./whatsapp";
 
 interface HojeTabProps {
@@ -155,6 +156,7 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab }: HojeTabPr
             Vocês conversaram {relativeTime(profile.last_user_message_at)}.
           </p>
         )}
+        <IntimacyLevel userId={userId} />
       </div>
 
       {/* Empty state global p/ usuária ainda sem nada */}

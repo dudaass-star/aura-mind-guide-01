@@ -1,0 +1,318 @@
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabasePortal } from "@/integrations/supabase/portal-client";
+import { BookOpen, Pencil, Trash2, Star, Plus, Check, X } from "lucide-react";
+import { toast } from "@/hooks/use-toast";
+import { EmptyState, PortalLoadingInline, SectionHeader } from "./shared";
+
+type Insight = {
+  id: string;
+  category: string | null;
+  key: string;
+  value: string;
+  importance: number | null;
+  mentioned_count: number | null;
+  last_mentioned_at: string | null;
+};
+
+const CATEGORY_LABELS: Record<string, string> = {
+  pessoas: "Pessoas na sua vida",
+  fatos: "Fatos e eventos",
+  identidade: "Quem você é",
+  rotina: "Sua rotina",
+  preferencias: "Preferências",
+  user_added: "Você contou pra Aura",
+  outros: "Outros",
+};
+
+function labelFor(cat: string | null) {
+  if (!cat) return CATEGORY_LABELS.outros;
+  return CATEGORY_LABELS[cat] ?? cat;
+}
+
+export function MemoriaTab({ userId }: { userId: string }) {
+  const qc = useQueryClient();
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draftValue, setDraftValue] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [newKey, setNewKey] = useState("");
+  const [newValue, setNewValue] = useState("");
+
+  const { data: insights, isLoading } = useQuery({
+    queryKey: ["portal-memoria", userId],
+    queryFn: async () => {
+      const { data, error } = await supabasePortal
+        .from("user_insights")
+        .select("id, category, key, value, importance, mentioned_count, last_mentioned_at")
+        .eq("user_id", userId)
+        .order("importance", { ascending: false })
+        .order("mentioned_count", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as Insight[];
+    },
+  });
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["portal-memoria", userId] });
+    qc.invalidateQueries({ queryKey: ["portal-intimacy", userId] });
+  };
+
+  const correctMut = useMutation({
+    mutationFn: async ({ item, newVal }: { item: Insight; newVal: string }) => {
+      const { error: upErr } = await supabasePortal
+        .from("user_insights")
+        .update({ value: newVal })
+        .eq("id", item.id);
+      if (upErr) throw upErr;
+      const { error: corrErr } = await supabasePortal.from("user_memory_corrections").insert({
+        user_id: userId,
+        correction_text: `Sobre "${item.key}": era "${item.value}", é "${newVal}".`,
+        source: "user_portal",
+        confidence: 1,
+      });
+      if (corrErr) throw corrErr;
+    },
+    onSuccess: () => {
+      toast({ title: "Corrigido", description: "A Aura vai respeitar essa correção." });
+      setEditingId(null);
+      invalidate();
+    },
+    onError: (e: any) => toast({ title: "Não deu", description: e.message, variant: "destructive" }),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: async (item: Insight) => {
+      const { error: corrErr } = await supabasePortal.from("user_memory_corrections").insert({
+        user_id: userId,
+        correction_text: `Ignorar: ${item.key} — ${item.value}.`,
+        source: "user_portal",
+        confidence: 1,
+      });
+      if (corrErr) throw corrErr;
+      const { error: delErr } = await supabasePortal.from("user_insights").delete().eq("id", item.id);
+      if (delErr) throw delErr;
+    },
+    onSuccess: () => {
+      toast({ title: "Apagado", description: "A Aura vai deixar isso de lado." });
+      invalidate();
+    },
+    onError: (e: any) => toast({ title: "Não deu", description: e.message, variant: "destructive" }),
+  });
+
+  const importantMut = useMutation({
+    mutationFn: async (item: Insight) => {
+      const { error } = await supabasePortal
+        .from("user_insights")
+        .update({ importance: 10 })
+        .eq("id", item.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({ title: "Marcado como importante" });
+      invalidate();
+    },
+    onError: (e: any) => toast({ title: "Não deu", description: e.message, variant: "destructive" }),
+  });
+
+  const addMut = useMutation({
+    mutationFn: async () => {
+      if (!newKey.trim() || !newValue.trim()) throw new Error("Preencha os dois campos.");
+      const { error } = await supabasePortal.from("user_insights").insert({
+        user_id: userId,
+        category: "user_added",
+        key: newKey.trim(),
+        value: newValue.trim(),
+        importance: 9,
+        mentioned_count: 1,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({ title: "Adicionado", description: "A Aura já sabe disso." });
+      setAdding(false);
+      setNewKey("");
+      setNewValue("");
+      invalidate();
+    },
+    onError: (e: any) => toast({ title: "Não deu", description: e.message, variant: "destructive" }),
+  });
+
+  if (isLoading) return <PortalLoadingInline />;
+
+  const grouped = new Map<string, Insight[]>();
+  for (const it of insights ?? []) {
+    const cat = it.category ?? "outros";
+    if (!grouped.has(cat)) grouped.set(cat, []);
+    grouped.get(cat)!.push(it);
+  }
+
+  return (
+    <div className="space-y-5">
+      <SectionHeader icon={BookOpen} title="O que a Aura sabe sobre você" />
+
+      <p className="text-sm text-muted-foreground font-['Nunito'] -mt-2">
+        Este é o caderno dela. Você pode corrigir, apagar ou marcar como importante — a Aura respeita
+        o que você define aqui.
+      </p>
+
+      {/* Adicionar */}
+      {!adding ? (
+        <button
+          onClick={() => setAdding(true)}
+          className="w-full flex items-center justify-center gap-2 rounded-xl border border-dashed border-accent/40 py-3 text-sm text-accent hover:bg-accent/5 transition-all font-['Nunito']"
+        >
+          <Plus size={16} />
+          Adicionar algo que a Aura deveria saber
+        </button>
+      ) : (
+        <div className="rounded-xl border border-accent/30 bg-accent/5 p-4 space-y-2 animate-fade-in">
+          <input
+            autoFocus
+            value={newKey}
+            onChange={(e) => setNewKey(e.target.value)}
+            placeholder="Sobre o quê? (ex: minha irmã Ana)"
+            className="w-full bg-background rounded-lg px-3 py-2 text-sm border border-border font-['Nunito']"
+          />
+          <input
+            value={newValue}
+            onChange={(e) => setNewValue(e.target.value)}
+            placeholder="O que a Aura deveria saber?"
+            className="w-full bg-background rounded-lg px-3 py-2 text-sm border border-border font-['Nunito']"
+          />
+          <div className="flex gap-2 justify-end">
+            <button
+              onClick={() => {
+                setAdding(false);
+                setNewKey("");
+                setNewValue("");
+              }}
+              className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground font-['Nunito']"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={() => addMut.mutate()}
+              disabled={addMut.isPending}
+              className="px-3 py-1.5 text-xs rounded-lg bg-accent text-accent-foreground font-semibold font-['Nunito'] disabled:opacity-60"
+            >
+              Salvar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Lista ou empty */}
+      {(insights?.length ?? 0) === 0 ? (
+        <EmptyState
+          icon={BookOpen}
+          title="A Aura ainda está te conhecendo"
+          description="Conforme vocês conversam, o que ela aprende aparece aqui — e você pode corrigir a qualquer momento."
+        />
+      ) : (
+        <div className="space-y-6">
+          {Array.from(grouped.entries()).map(([cat, items]) => (
+            <div key={cat} className="space-y-2">
+              <h3 className="text-xs uppercase tracking-widest text-muted-foreground font-['Nunito'] font-semibold">
+                {labelFor(cat)}
+              </h3>
+              <div className="space-y-2">
+                {items.map((item) => {
+                  const isEditing = editingId === item.id;
+                  const isImportant = (item.importance ?? 0) >= 10;
+                  return (
+                    <div
+                      key={item.id}
+                      className="rounded-xl border border-border/60 bg-card p-3 space-y-2"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-foreground font-['Nunito'] flex items-center gap-1.5">
+                            {item.key}
+                            {isImportant && <Star size={12} className="text-accent fill-accent" />}
+                          </p>
+                          {isEditing ? (
+                            <input
+                              autoFocus
+                              value={draftValue}
+                              onChange={(e) => setDraftValue(e.target.value)}
+                              className="mt-1 w-full bg-background rounded-lg px-2 py-1.5 text-sm border border-accent font-['Nunito']"
+                            />
+                          ) : (
+                            <p className="text-sm text-muted-foreground font-['Nunito'] mt-0.5 break-words">
+                              {item.value}
+                            </p>
+                          )}
+                          {(item.mentioned_count ?? 0) > 1 && !isEditing && (
+                            <p className="text-[11px] text-muted-foreground/70 font-['Nunito'] mt-1">
+                              Mencionado {item.mentioned_count}× em conversas
+                            </p>
+                          )}
+                        </div>
+                        {isEditing ? (
+                          <div className="flex gap-1 shrink-0">
+                            <button
+                              onClick={() =>
+                                correctMut.mutate({ item, newVal: draftValue.trim() })
+                              }
+                              disabled={correctMut.isPending || !draftValue.trim()}
+                              className="p-1.5 rounded-lg bg-accent text-accent-foreground disabled:opacity-60"
+                              title="Salvar"
+                            >
+                              <Check size={14} />
+                            </button>
+                            <button
+                              onClick={() => setEditingId(null)}
+                              className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted"
+                              title="Cancelar"
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex gap-1 shrink-0 opacity-60 hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => {
+                                setEditingId(item.id);
+                                setDraftValue(item.value);
+                              }}
+                              className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+                              title="Corrigir"
+                            >
+                              <Pencil size={14} />
+                            </button>
+                            {!isImportant && (
+                              <button
+                                onClick={() => importantMut.mutate(item)}
+                                disabled={importantMut.isPending}
+                                className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-accent"
+                                title="Marcar como importante"
+                              >
+                                <Star size={14} />
+                              </button>
+                            )}
+                            <button
+                              onClick={() => {
+                                if (confirm(`Apagar "${item.key}" da memória da Aura?`)) {
+                                  deleteMut.mutate(item);
+                                }
+                              }}
+                              disabled={deleteMut.isPending}
+                              className="p-1.5 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                              title="Apagar"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
