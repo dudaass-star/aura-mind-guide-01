@@ -3,19 +3,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { supabasePortal } from "@/integrations/supabase/portal-client";
 import {
   Calendar,
-  Clock,
-  Sparkles,
   Headphones,
   ArrowRight,
   MessageCircle,
-  Quote,
 } from "lucide-react";
-import { Link } from "react-router-dom";
 import { PortalLoadingInline } from "./shared";
 import { IntimacyLevel } from "./IntimacyLevel";
 import { auraWhatsAppLink, presentClosure } from "./whatsapp";
 import { PerguntaDoDiaCard } from "./PerguntaDoDiaCard";
-import { AcoesRapidasBar } from "./AcoesRapidasBar";
+import { sanitizePortalText } from "./sanitize";
 
 interface HojeTabProps {
   userId: string;
@@ -197,40 +193,40 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab }: HojeTabPr
   if (loadingLast) return <PortalLoadingInline />;
 
   return (
-    <div className="space-y-5">
-      {/* Saudação */}
-      <div className="animate-fade-in">
-        <div className="flex items-center gap-2">
-          <h2 className="font-['Fraunces'] text-2xl font-semibold text-foreground">
-            {greeting()}, {firstName}
-          </h2>
-          <Sparkles size={18} className="text-accent animate-pulse-soft" />
-        </div>
-        {profile?.last_user_message_at && (
-          <p className="text-sm text-muted-foreground font-['Nunito'] mt-1">
-            Vocês conversaram {relativeTime(profile.last_user_message_at)}.
-          </p>
-        )}
+    <div className="space-y-6">
+      {/* Saudação — Deep Navy Anchor */}
+      <header className="space-y-1 animate-fade-in">
+        <h1
+          className="text-3xl sm:text-4xl text-[#1B2A4E] font-['Fraunces']"
+          style={{ fontWeight: 600 }}
+        >
+          {greeting()}, {firstName}
+        </h1>
+        <p className="text-[#87A878] font-semibold uppercase tracking-[0.15em] text-[10px] sm:text-xs font-['Nunito']">
+          {profile?.last_user_message_at
+            ? `Vocês conversaram ${relativeTime(profile.last_user_message_at)}`
+            : "Seu refúgio de hoje"}
+        </p>
         <IntimacyLevel userId={userId} />
-      </div>
+      </header>
 
       {/* Zero-conversa: card único de primeiro contato, sem ruído. */}
       {zeroConversa && (
-        <div className="rounded-2xl border border-accent/30 bg-gradient-to-br from-accent/5 to-transparent p-6 text-center space-y-3 animate-fade-up">
-          <div className="bg-accent/10 rounded-full p-3 w-14 h-14 mx-auto flex items-center justify-center">
-            <MessageCircle size={24} className="text-accent" />
+        <div className="rounded-2xl bg-white/60 border border-[#87A878]/20 p-6 text-center space-y-3 animate-fade-up">
+          <div className="bg-[#87A878]/15 rounded-full p-3 w-14 h-14 mx-auto flex items-center justify-center">
+            <MessageCircle size={24} className="text-[#87A878]" />
           </div>
-          <p className="font-['Fraunces'] font-semibold text-foreground">
+          <p className="font-['Fraunces'] font-semibold text-[#1B2A4E]">
             Fala com a Aura pela primeira vez
           </p>
-          <p className="text-sm text-muted-foreground font-['Nunito']">
+          <p className="text-sm text-[#2A2A2A]/70 font-['Nunito']">
             Manda a primeira mensagem — depois esse espaço começa a ganhar vida.
           </p>
           <a
             href={auraWhatsAppLink("Oi Aura, quero começar.")}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-full bg-accent text-accent-foreground px-5 py-2.5 text-sm font-semibold font-['Nunito'] hover:scale-105 transition-all"
+            className="inline-flex items-center gap-2 rounded-full bg-[#1B2A4E] text-white px-5 py-2.5 text-sm font-bold font-['Nunito'] hover:bg-[#1B2A4E]/90 transition-all"
           >
             <MessageCircle size={16} />
             Abrir WhatsApp
@@ -238,26 +234,28 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab }: HojeTabPr
         </div>
       )}
 
-      {/* Ações rápidas contextuais (esconde em zero-conversa) */}
-      {!zeroConversa && <AcoesRapidasBar hasNextSession={!!nextSession} />}
+      {/* Sessões: Última + Próxima em grid 2 colunas (Última bege, Próxima navy) */}
+      {!zeroConversa && (
+        <SessionsRow
+          lastSession={lastSession}
+          nextSession={nextSession}
+        />
+      )}
 
       {/* Empty state global (já conversou mas nada foi materializado ainda) */}
       {!zeroConversa && !hasAnything && (
-        <div className="rounded-2xl border border-accent/30 bg-gradient-to-br from-accent/5 to-transparent p-6 text-center space-y-3 animate-fade-up">
-          <div className="bg-accent/10 rounded-full p-3 w-14 h-14 mx-auto flex items-center justify-center">
-            <Sparkles size={24} className="text-accent" />
-          </div>
-          <p className="font-['Fraunces'] font-semibold text-foreground">
+        <div className="rounded-2xl bg-white/60 border border-[#87A878]/20 p-6 text-center space-y-3 animate-fade-up">
+          <p className="font-['Fraunces'] font-semibold text-[#1B2A4E]">
             Sua jornada está começando
           </p>
-          <p className="text-sm text-muted-foreground font-['Nunito']">
+          <p className="text-sm text-[#2A2A2A]/70 font-['Nunito']">
             Quando vocês começarem a conversar, esse espaço ganha vida.
           </p>
           <a
             href={auraWhatsAppLink("Oi Aura, quero começar.")}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-full bg-accent text-accent-foreground px-5 py-2.5 text-sm font-semibold font-['Nunito'] hover:scale-105 transition-all"
+            className="inline-flex items-center gap-2 rounded-full bg-[#1B2A4E] text-white px-5 py-2.5 text-sm font-bold font-['Nunito'] hover:bg-[#1B2A4E]/90 transition-all"
           >
             <MessageCircle size={16} />
             Falar com a Aura
@@ -265,20 +263,7 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab }: HojeTabPr
         </div>
       )}
 
-      {/* Pergunta do dia — só faz sentido pra quem já iniciou o vínculo */}
-      {!zeroConversa && (
-        <PerguntaDoDiaCard lastUserMessageAt={profile?.last_user_message_at} />
-      )}
-
-      {/* Card: O que ficou da última sessão */}
-      {lastSession && (lastSession.closure_text || lastSession.session_summary) && (
-        <ClosureCard session={lastSession} />
-      )}
-
-      {/* Card: Próxima sessão */}
-      {nextSession && <NextSessionCard session={nextSession} />}
-
-      {/* Card: Insight curado (snapshot temático ou resumo mensal) */}
+      {/* Card: Insight curado (snapshot temático ou resumo mensal) — HERO em lavender */}
       {curatedInsight && (
         <InsightPreviewCard
           title={curatedInsight.title}
@@ -286,6 +271,16 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab }: HojeTabPr
           text={curatedInsight.body}
           onSeeAll={() => onNavigateTab("insights")}
         />
+      )}
+
+      {/* Card: O que ficou da última sessão (bloco de continuidade da conversa) */}
+      {lastSession && (lastSession.closure_text || lastSession.session_summary) && (
+        <ClosureCard session={lastSession} />
+      )}
+
+      {/* Pergunta do dia — sage bg + navy CTA */}
+      {!zeroConversa && (
+        <PerguntaDoDiaCard lastUserMessageAt={profile?.last_user_message_at} />
       )}
 
       {/* Card: Meditação sugerida (não mostrar pra zero-conversa) */}
@@ -300,12 +295,81 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab }: HojeTabPr
 }
 
 // ============ Cards ============
+
+function SessionsRow({
+  lastSession,
+  nextSession,
+}: {
+  lastSession: any;
+  nextSession: any;
+}) {
+  const lastLabel = lastSession?.ended_at ? relativeTime(lastSession.ended_at) : null;
+  const lastTheme =
+    lastSession?.theme_label || lastSession?.focus_topic || "Autoconhecimento";
+  const REAGENDAR = [7, 14, 30];
+
+  return (
+    <div className="grid grid-cols-2 gap-4 animate-fade-up">
+      {/* Última sessão — bege claro */}
+      <div className="bg-white/60 p-5 rounded-2xl border border-[#87A878]/15">
+        <p className="text-[10px] uppercase tracking-[0.15em] text-[#87A878] font-bold font-['Nunito'] mb-2">
+          Última sessão
+        </p>
+        {lastSession ? (
+          <p className="text-[#2A2A2A] text-sm leading-snug font-['Nunito']">
+            {lastLabel ? `${lastLabel} · ` : ""}
+            <span className="font-bold text-[#1B2A4E] capitalize">{lastTheme}</span>
+          </p>
+        ) : (
+          <p className="text-[#2A2A2A]/60 text-sm font-['Nunito']">
+            Ainda sem sessões concluídas
+          </p>
+        )}
+      </div>
+
+      {/* Próxima sessão — navy com chips 7/14/30d */}
+      <div className="bg-[#1B2A4E] p-5 rounded-2xl text-[#F5F0E8] shadow-lg shadow-[#1B2A4E]/20">
+        <p className="text-[10px] uppercase tracking-[0.15em] text-[#B8A5D9] font-bold font-['Nunito'] mb-2">
+          Próxima sessão
+        </p>
+        {nextSession ? (
+          <p className="text-sm mb-3 font-['Nunito'] capitalize">
+            {formatScheduledBRT(nextSession.scheduled_at).label}
+          </p>
+        ) : (
+          <p className="text-sm mb-3 font-['Nunito'] text-[#F5F0E8]/70">
+            Nenhuma agendada
+          </p>
+        )}
+        <p className="text-[10px] uppercase tracking-widest text-[#B8A5D9]/70 font-['Nunito'] mb-1.5">
+          Reagendar em
+        </p>
+        <div className="flex gap-1">
+          {REAGENDAR.map((d) => (
+            <a
+              key={d}
+              href={auraWhatsAppLink(
+                `Oi Aura, quero remarcar minha próxima sessão para daqui a ${d} dias.`,
+              )}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-2.5 py-1 bg-[#F5F0E8]/10 hover:bg-[#87A878] rounded text-[10px] font-bold border border-[#F5F0E8]/20 transition-colors font-['Nunito']"
+            >
+              {d}d
+            </a>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ClosureCard({ session }: { session: any }) {
   const { title, buttonLabel, prefilledMessage } = presentClosure(
     session.closure_type,
     session.closure_text,
   );
-  const body = session.closure_text || session.session_summary || "";
+  const body = sanitizePortalText(session.closure_text || session.session_summary || "");
   const ended = session.ended_at
     ? new Date(session.ended_at).toLocaleDateString("pt-BR", {
         day: "2-digit",
@@ -314,66 +378,29 @@ function ClosureCard({ session }: { session: any }) {
     : null;
 
   return (
-    <div className="rounded-2xl border border-accent/20 bg-gradient-to-br from-accent/5 to-transparent p-5 space-y-3 shadow-sm animate-fade-up">
+    <div className="rounded-2xl bg-white/60 border border-[#87A878]/15 p-6 space-y-3 animate-fade-up">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-xs uppercase tracking-wider text-accent font-semibold font-['Nunito']">
+          <p className="text-[10px] uppercase tracking-[0.15em] text-[#87A878] font-bold font-['Nunito']">
             {title}
           </p>
           {ended && (
-            <p className="text-xs text-muted-foreground font-['Nunito'] mt-0.5">
+            <p className="text-xs text-[#2A2A2A]/50 font-['Nunito'] mt-0.5">
               da sessão de {ended}
             </p>
           )}
         </div>
-        <div className="bg-accent/10 rounded-full p-2 shrink-0">
-          <Quote size={18} className="text-accent" />
-        </div>
       </div>
-      <p className="text-foreground font-['Fraunces'] text-base leading-relaxed">
-        {body}
+      <p className="text-[#1B2A4E] font-['Fraunces'] text-base leading-relaxed italic">
+        “{body}”
       </p>
       <a
         href={auraWhatsAppLink(prefilledMessage)}
         target="_blank"
         rel="noopener noreferrer"
-        className="inline-flex items-center gap-1.5 text-sm font-semibold text-accent hover:text-accent/80 font-['Nunito'] transition-colors"
+        className="inline-flex items-center gap-1.5 text-sm font-bold text-[#1B2A4E] hover:text-[#87A878] font-['Nunito'] transition-colors"
       >
         {buttonLabel}
-        <ArrowRight size={14} />
-      </a>
-    </div>
-  );
-}
-
-function NextSessionCard({ session }: { session: any }) {
-  const { label, countdown } = formatScheduledBRT(session.scheduled_at);
-  return (
-    <div className="rounded-2xl border border-border bg-card p-5 space-y-3 shadow-sm animate-fade-up">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold font-['Nunito']">
-            Próxima sessão
-          </p>
-          <p className="font-['Fraunces'] font-semibold text-foreground mt-1 capitalize">
-            {label}
-          </p>
-        </div>
-        <div className="bg-accent/10 rounded-full p-2 shrink-0">
-          <Calendar size={18} className="text-accent" />
-        </div>
-      </div>
-      <div className="flex items-center gap-2 text-xs text-muted-foreground font-['Nunito']">
-        <Clock size={12} />
-        <span>{countdown}</span>
-      </div>
-      <a
-        href={auraWhatsAppLink("Oi Aura, quero reagendar nossa sessão.")}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-center gap-1.5 text-sm font-semibold text-accent hover:text-accent/80 font-['Nunito'] transition-colors"
-      >
-        Reagendar pelo WhatsApp
         <ArrowRight size={14} />
       </a>
     </div>
@@ -391,38 +418,42 @@ function InsightPreviewCard({
   text: string;
   onSeeAll: () => void;
 }) {
+  const clean = sanitizePortalText(text);
   return (
-    <div className="rounded-2xl border border-border bg-card p-5 space-y-3 shadow-sm animate-fade-up">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold font-['Nunito']">
-            Insight da Aura
-          </p>
-          {title && (
-            <p className="font-['Fraunces'] font-semibold text-foreground mt-1 capitalize">
-              {title}
-            </p>
-          )}
-          {meta && (
-            <p className="text-xs text-muted-foreground font-['Nunito'] mt-0.5 capitalize">
-              {meta}
-            </p>
-          )}
-        </div>
-        <div className="bg-primary/10 rounded-full p-2 shrink-0">
-          <Sparkles size={18} className="text-primary" />
+    <div className="bg-[#B8A5D9]/15 border-2 border-[#B8A5D9] p-6 sm:p-7 rounded-3xl relative overflow-hidden animate-fade-up">
+      <div className="absolute -top-6 -right-6 w-32 h-32 bg-[#B8A5D9]/25 rounded-full blur-2xl pointer-events-none" />
+      <div className="relative">
+        <p className="text-[10px] uppercase tracking-[0.2em] text-[#1B2A4E]/60 font-bold font-['Nunito'] mb-3">
+          Insight da Aura
+        </p>
+        <blockquote
+          className="text-lg sm:text-xl text-[#1B2A4E] leading-relaxed font-['Fraunces'] italic mb-4"
+          style={{ fontWeight: 400 }}
+        >
+          {clean}
+        </blockquote>
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="min-w-0">
+            {title && (
+              <p className="text-sm font-['Fraunces'] font-semibold text-[#1B2A4E] capitalize">
+                {title}
+              </p>
+            )}
+            {meta && (
+              <p className="text-[11px] text-[#2A2A2A]/50 font-['Nunito'] capitalize">
+                {meta}
+              </p>
+            )}
+          </div>
+          <button
+            onClick={onSeeAll}
+            className="inline-flex items-center gap-1.5 text-xs font-bold text-[#1B2A4E] hover:text-[#87A878] font-['Nunito'] uppercase tracking-wider transition-colors"
+          >
+            Ver percurso
+            <ArrowRight size={14} />
+          </button>
         </div>
       </div>
-      <p className="text-foreground font-['Fraunces'] italic leading-relaxed line-clamp-4">
-        "{text}"
-      </p>
-      <button
-        onClick={onSeeAll}
-        className="inline-flex items-center gap-1.5 text-sm font-semibold text-accent hover:text-accent/80 font-['Nunito'] transition-colors"
-      >
-        Ver todos os insights
-        <ArrowRight size={14} />
-      </button>
     </div>
   );
 }
@@ -436,33 +467,33 @@ function SuggestedMeditationCard({
 }) {
   const mins = Math.round((meditation.duration_seconds || 0) / 60);
   return (
-    <div className="rounded-2xl border border-border bg-card p-5 space-y-3 shadow-sm animate-fade-up">
+    <div className="rounded-2xl bg-white/60 border border-[#87A878]/15 p-5 space-y-3 animate-fade-up">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold font-['Nunito']">
+          <p className="text-[10px] uppercase tracking-[0.15em] text-[#87A878] font-bold font-['Nunito']">
             Meditação sugerida
           </p>
-          <p className="font-['Fraunces'] font-semibold text-foreground mt-1 truncate">
+          <p className="font-['Fraunces'] font-semibold text-[#1B2A4E] mt-1 truncate">
             {meditation.title}
           </p>
           {mins > 0 && (
-            <p className="text-xs text-muted-foreground font-['Nunito'] mt-0.5">
+            <p className="text-xs text-[#2A2A2A]/50 font-['Nunito'] mt-0.5">
               {mins} min
             </p>
           )}
         </div>
-        <div className="bg-accent/10 rounded-full p-2 shrink-0">
-          <Headphones size={18} className="text-accent" />
+        <div className="bg-[#87A878]/15 rounded-full p-2 shrink-0">
+          <Headphones size={18} className="text-[#87A878]" />
         </div>
       </div>
       {meditation.description && (
-        <p className="text-sm text-foreground/80 font-['Nunito'] line-clamp-2">
+        <p className="text-sm text-[#2A2A2A]/80 font-['Nunito'] line-clamp-2">
           {meditation.description}
         </p>
       )}
       <button
         onClick={onOpen}
-        className="inline-flex items-center gap-1.5 text-sm font-semibold text-accent hover:text-accent/80 font-['Nunito'] transition-colors"
+        className="inline-flex items-center gap-1.5 text-sm font-bold text-[#1B2A4E] hover:text-[#87A878] font-['Nunito'] transition-colors"
       >
         Ouvir agora
         <ArrowRight size={14} />

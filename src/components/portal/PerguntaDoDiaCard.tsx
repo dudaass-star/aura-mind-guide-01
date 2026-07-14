@@ -1,4 +1,4 @@
-import { HelpCircle, ArrowRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { auraWhatsAppLink } from "./whatsapp";
 
 // Perguntas rotacionadas de forma determinística por dia.
@@ -56,23 +56,18 @@ export function PerguntaDoDiaCard({ lastUserMessageAt }: Props) {
   const link = auraWhatsAppLink(pergunta);
 
   return (
-    <div className="rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/5 to-transparent p-5 space-y-3 shadow-sm animate-fade-up">
-      <div className="flex items-start justify-between gap-3">
-        <p className="text-xs uppercase tracking-wider text-primary font-semibold font-['Nunito']">
-          Pergunta do dia
-        </p>
-        <div className="bg-primary/10 rounded-full p-2 shrink-0">
-          <HelpCircle size={18} className="text-primary" />
-        </div>
-      </div>
-      <p className="text-foreground font-['Fraunces'] text-lg leading-relaxed">
+    <div className="rounded-2xl bg-[#87A878]/12 border border-[#87A878]/30 p-6 space-y-4 animate-fade-up">
+      <p className="text-[10px] uppercase tracking-[0.2em] text-[#87A878] font-bold font-['Nunito']">
+        Pergunta do dia
+      </p>
+      <p className="text-[#1B2A4E] font-['Fraunces'] text-xl leading-snug" style={{ fontWeight: 500 }}>
         {pergunta}
       </p>
       <a
         href={link}
         target="_blank"
         rel="noopener noreferrer"
-        className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:text-primary/80 font-['Nunito'] transition-colors"
+        className="inline-flex items-center gap-1.5 rounded-full bg-[#1B2A4E] text-white px-4 py-2 text-xs font-bold font-['Nunito'] uppercase tracking-wider hover:bg-[#1B2A4E]/90 transition-colors"
       >
         Responder com a Aura
         <ArrowRight size={14} />
