@@ -1846,6 +1846,11 @@ Deno.serve(async (req) => {
       matureTrialsCount: matureTrials.length,
       matureConvertedCount: matureConverted.length,
       matureConversionRate,
+      // 🛡️ Higiene de interpretação
+      correctionsTotalInPeriod,
+      correctionsUsersInPeriod,
+      correctionsPerUserInPeriod,
+      correctionsWeekly,
     });
 
     // Salva no cache para próximas requests dentro do TTL
