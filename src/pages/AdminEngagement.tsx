@@ -157,6 +157,11 @@ interface Metrics {
   matureTrialsCount: number;
   matureConvertedCount: number;
   matureConversionRate: number;
+  // 🛡️ Higiene de interpretação
+  correctionsTotalInPeriod?: number;
+  correctionsUsersInPeriod?: number;
+  correctionsPerUserInPeriod?: number;
+  correctionsWeekly?: { week: string; total: number; users: number; per_user: number }[];
 }
 
 interface RecoverySession {
