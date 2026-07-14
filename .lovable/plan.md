@@ -1,71 +1,60 @@
-Auditei o fluxo Asaas ponta-a-ponta. Resposta direta: **não vai funcionar 100% como está — tem 2 bugs críticos que quebram o principal, e alguns menores.** Segue o plano de correção, priorizado.
+# Higiene de Interpretação — versão enxuta final
 
-## 🔴 Bugs críticos (bloqueiam o produto)
+## Contexto
 
-### 1. Retry automático de cartão NUNCA dispara
+- 12 semanas de dados mostram correções/user oscilando entre 3 e 13, sem tendência clara e sem instrumentação.
+- Fixes anteriores (Fase 1/2A) já cobriram "puxar passado sem pedir licença" em aberturas.
+- O prompt do `aura-agent` já tem 9 camadas de guidance condicional — adicionar uma 10ª aumenta risco de contradição e diluição. Melhor estender o que já existe.
 
-`webhook-asaas/index.ts:488` compara `payment_method === "CREDIT_CARD"`, mas o valor gravado é `"CREDIT_CARD_RECURRING"` (`criar-cartao-asaas` linhas 261/298). Resultado: os retries D+2/D+4/D+7 e o auto-cancel no 3º fail — que a gente acabou de implementar — **estão mortos**. Nenhum cliente OVERDUE de cartão Asaas é recuperado.
+## Escopo (só 2 mudanças, nenhum bloco novo no prompt)
 
-- Fix: `pm === "CREDIT_CARD_RECURRING"` (ou `startsWith`).
+### Parte 1 — KPI "Correções por usuário por semana" (fazer primeiro)
 
-### 2. Falso "Pagamento aprovado" no checkout recorrente
+Objetivo: baseline honesto antes de mexer em qualquer regra. Sem métrica, não dá pra saber se a mudança da Parte 2 funcionou.
 
-`criar-cartao-asaas/index.ts:318` lê `asaasResp.status` da **subscription** (ACTIVE/INACTIVE), não do **payment** (CONFIRMED/AWAITING_RISK_ANALYSIS/DECLINED). Uma sub recém-criada quase sempre nasce `ACTIVE` mesmo com a 1ª cobrança recusada ou em análise → o form mostra "Pagamento aprovado" e manda pro `/obrigado` mesmo com cartão negado.
+- **`supabase/functions/admin-engagement-metrics-snapshot/index.ts`**: adicionar cálculo no payload existente:
+  - `corrections_total_week` = `count(*) FROM user_memory_corrections WHERE created_at ≥ start_of_week`.
+  - `corrections_users_week` = usuários distintos com correção na janela.
+  - `corrections_per_user_week` = razão (0 se sem correções).
+- **`src/pages/AdminEngagement.tsx`**: card novo "Correções / usuário / semana" com número da semana atual + sparkline das últimas 8 semanas. Sparkline vem de query direta em `user_memory_corrections` agrupada por `date_trunc('week', created_at)` — não depende de histórico do snapshot.
+- Sem migration. Payload do snapshot é jsonb.
 
-- Fix: ler `payments.data[0].status` (já buscado na linha 259-260, só descartado hoje) e usar ele como fonte da verdade pra `success` e pra decidir se mostra tela de análise.
+### Parte 2 — Estender o FREIO DE PRESENÇA existente (uma condição a mais)
 
-### 3. Trial mensal cobra valor cheio (risco CDC)
+Objetivo: manter Aura em modo exploratório enquanto o material do usuário ainda estiver raso, sem criar camada nova de instruções conflitantes.
 
-Copy do checkout: "Começar trial por R$ 6,90". Backend Asaas (`criar-cartao-asaas:134`): cobra `PRICES[plan][monthly]` = R$ 29,90 imediatamente, sem `value` de trial nem `nextDueDate` deslocado. Diferente do Stripe que respeita o trial.
+- **`supabase/functions/aura-agent/index.ts`, linha ~1310** — o freio hoje dispara em `recentUserCount < 4 && !densitySaturated`. Passa a disparar também quando `information_density === 'low'`, independente da contagem de pares:
+  - Novo gatilho: `(recentUserCount < 4 && !densitySaturated) || (information_density === 'low' && !userReflectionMode && !directionRequestDetected)`.
+  - Ajustar o texto do bloco `⚠️ FREIO DE PRESENÇA` pra citar o motivo real: "material ainda raso (falta contexto concreto, emoção nomeada ou crença/origem)" em vez de "primeiras trocas".
+- **Escape hatches já existentes que continuam valendo:**
+  - `densitySaturated === true` → libera (comportamento atual).
+  - `user_reflection_mode === true` → não dispara o freio (usuário refletindo sozinho já está entregando material denso).
+  - Direction Request Detector (linha 1289) → tem precedência, retorna antes.
+- Nada de bloco novo. Nada de gate paralelo. É a mesma regra, gatilho um pouco mais amplo.
 
-- Fix: 1ª parcela com `value: trialPrice` + `nextDueDate = hoje+7` no Asaas subscription, **ou** esconder copy de trial quando `card_gateway==="asaas"`. Decisão de produto (ver perguntas abaixo).
+### Testes
 
-## 🟡 Bugs importantes
+- **`supabase/functions/aura-agent/phase_thresholds_test.ts`**: adicionar 2 asserts:
+  - Freio dispara quando `information_density === 'low'` mesmo com `recentPairs ≥ 4`.
+  - Freio NÃO dispara quando `user_reflection_mode === true`, mesmo em `low`.
 
-### 4. Eventos de risk analysis sem handler
+## Critério de sucesso
 
-`PAYMENT_AWAITING_RISK_ANALYSIS`, `PAYMENT_APPROVED_BY_RISK_ANALYSIS`, `PAYMENT_REPROVED_BY_RISK_ANALYSIS` não estão no `statusMap` (`webhook-asaas:154`). A tela promete "avisamos no WhatsApp quando aprovar" — mas nenhum código dispara essa notificação. Recusado por antifraude fica invisível.
+- **Semana 0-1 (só KPI, sem mudança de comportamento):** confirmar baseline. Esperado 6-13 correções/user/semana.
+- **Semana 2+ (com freio estendido):** meta = derrubar pra ≤5, estável. Se cair sem derrubar também rating/insights (checar em `AdminEngagement`), sucesso.
+- KPI passa a servir como detector automático de regressão nas próximas mudanças de prompt.
 
-- Fix: mapear os 3 eventos → aprovado chama `handleActivation`; recusado dispara WhatsApp/email de recusa (pode reusar `dunning-payment-failed` com copy adaptada, ou criar template dedicado).
+## Fora de escopo (deliberado)
 
-### 5. Silêncio em falha de insert de `asaas_payments`
+- Bloco novo "gate density-aware" no prompt. Foi descartado por sobreposição com o Freio de Presença.
+- Regra específica pra `medium` (hipótese aberta obrigatória). Só volta se KPI não cair o suficiente.
+- Dataset offline de reincidência via Flash-lite. Custo alto, benefício especulativo sem baseline.
+- Mudança em "conexão longitudinal". Coberto por Fase 1/2A.
 
-`criar-cartao-asaas:304` só faz `console.warn` se o INSERT falhar. Sem esse registro, o webhook não encontra o `asaas_payment_id` e cai em "pagamento não vinculado" — cliente paga e nunca é ativado.
+## Arquivos tocados
 
-- Fix: falha explícita + alerta em `failed_message_log` (ou tabela equivalente).
-
-### 6. Inconsistência `semestral` vs `semiannual`
-
-Checkout usa `"semestral"`, ChangePlanDialog usa `"semiannual"`. Highlight de "plano atual" no portal quebra pra clientes semestrais.
-
-- Fix: padronizar em `"semiannual"` em todo o fluxo Asaas (ou normalizar na leitura).
-
-## 🟢 Menores (não bloqueiam)
-
-- **#7** Erros do Asaas expostos crus em PT/EN misturado no toast. Traduzir os mais comuns (invalid CVV, declined, expired, etc).
-- **#8** `card_retry_asaas` sem chave de idempotência no lado Asaas. Baixo risco (dedup local por `paymentId` já protege), mas dá pra adicionar `externalReference` com hash.
-- **#9** `installmentMax=12` fixo, sem validar valor mínimo por parcela.
-
-## ❓ Preciso da tua decisão em 2 pontos antes de codar
-
-**A. Trial no Asaas (bug #3):**
-
-- (i) Implementar trial real no Asaas (1ª cobrança R$ 6,90 hoje, R$ 29,90 recorrente a partir de D+7). Mais fiel ao Stripe. SIM
-- (ii) Remover o trial da UX quando `card_gateway=asaas` — mostra só "R$ 29,90/mês, cancele quando quiser". Mais simples e sem risco jurídico. SIM
-
-**B. UX pós-checkout recorrente (bug #2):**
-
-- (i) Sempre mostrar "Pagamento em processamento, avisamos no WhatsApp" pra cartão recorrente Asaas e só liberar `/obrigado` quando webhook confirmar. Mais seguro, evita falso positivo.
-- (ii) Ler o status real da 1ª cobrança e só mostrar sucesso se `CONFIRMED/RECEIVED`; `AWAITING_RISK_ANALYSIS` → tela de análise; qualquer outro → toast de erro. Comportamento mais próximo do Stripe.
-
-## Escopo da implementação (após tuas respostas)
-
-1. Patch em `webhook-asaas/index.ts`: fix #1 (payment_method match), fix #4 (3 novos eventos risk analysis), fix #6 (semiannual).
-2. Patch em `criar-cartao-asaas/index.ts`: fix #2 (usar status da 1ª cobrança), fix #3 (conforme decisão A), fix #5 (falha explícita no insert), fix #6.
-3. Patch em `AsaasCardForm.tsx` / `CheckoutV2.tsx`: fix #2 UX (conforme decisão B), fix #7 (tradução de erros comuns), fix #3 UX (conforme decisão A).
-4. Patch em `change-asaas-plan/index.ts` + `ChangePlanDialog.tsx`: fix #6 (semiannual).
-5. Sem migration necessária — tudo é código de edge function e frontend.
-
-## O que já está OK (não mexo)
-
-Preços/ciclos batendo entre 3 lugares, feature flag `card_gateway` com fallback correto, tokenização buscada ao vivo (nunca dessincroniza), idempotência de retry (uma vez que ele passe a disparar), dedup de Meta CAPI, autenticação de webhook, bloqueio de troca em installment/overdue.
+- `supabase/functions/admin-engagement-metrics-snapshot/index.ts`
+- `src/pages/AdminEngagement.tsx`
+- `supabase/functions/aura-agent/index.ts` (linhas ~1309-1321)
+- `supabase/functions/aura-agent/phase_thresholds_test.ts`
+- `mem/technical/ai/therapeutic-phase-evaluator-constraints.md` (atualizar com novo gatilho)
