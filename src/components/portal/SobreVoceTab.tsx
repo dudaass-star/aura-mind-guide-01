@@ -232,6 +232,7 @@ export function SobreVoceTab({ userId }: { userId: string }) {
           title="A Aura ainda está te conhecendo"
           description="Depois de algumas conversas ela mapeia aqui identidade, pessoas próximas, valores e temas recorrentes seus."
         />
+        <ContribuicaoUsuario userId={userId} emptyContext />
       </div>
     );
   }
@@ -259,6 +260,9 @@ export function SobreVoceTab({ userId }: { userId: string }) {
           </p>
         )}
       </div>
+
+      {/* Convite pra contribuir — logo abaixo do hero, com destaque próprio. */}
+      <ContribuicaoUsuario userId={userId} />
 
       {/* Pessoas — chips */}
       {portrait?.pessoas && portrait.pessoas.length > 0 && (
@@ -391,8 +395,6 @@ export function SobreVoceTab({ userId }: { userId: string }) {
       )}
 
       {/* Rodapé: corrigir no WhatsApp */}
-      <ContribuicaoUsuario userId={userId} />
-
       <a
         href={auraWhatsAppLink("Oi Aura, queria corrigir uma coisa no que você sabe sobre mim.")}
         target="_blank"
@@ -546,7 +548,13 @@ const PROMPTS: PromptOption[] = [
   },
 ];
 
-function ContribuicaoUsuario({ userId }: { userId: string }) {
+function ContribuicaoUsuario({
+  userId,
+  emptyContext = false,
+}: {
+  userId: string;
+  emptyContext?: boolean;
+}) {
   const qc = useQueryClient();
   const [selectedPrompt, setSelectedPrompt] = useState<PromptOption | null>(null);
   const [draft, setDraft] = useState("");
@@ -639,16 +647,30 @@ function ContribuicaoUsuario({ userId }: { userId: string }) {
   const list = items ?? [];
 
   return (
-    <div className="pt-2 space-y-4">
-      <div className="flex items-center gap-2">
-        <Sparkles size={14} className="text-[#87A878]" />
-        <p className="text-[10px] uppercase tracking-[0.18em] text-[#1B2A4E] font-bold font-['Nunito']">
-          O que você quer que a Aura saiba
-        </p>
+    <div className="rounded-3xl border-2 border-dashed border-[#87A878]/40 bg-[#87A878]/6 p-5 sm:p-6 space-y-4 animate-fade-up">
+      <div className="flex items-start gap-3">
+        <div className="shrink-0 rounded-2xl bg-[#B8A5D9]/25 p-2.5">
+          <PenLine size={18} className="text-[#1B2A4E]" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] uppercase tracking-[0.2em] text-[#87A878] font-bold font-['Nunito']">
+            Você conta pra Aura
+          </p>
+          <h3 className="font-['Fraunces'] text-[22px] leading-tight text-[#1B2A4E] font-semibold mt-0.5">
+            O que você quer que eu saiba
+          </h3>
+          <p className="text-sm text-[#2A2A2A]/70 font-['Nunito'] leading-relaxed mt-1.5">
+            {emptyContext
+              ? "Enquanto eu te conheço nas conversas, você já pode me contar o essencial aqui — medos, objetivos, valores."
+              : "Adicione o que for importante — medos, objetivos, valores. Eu levo pra nossas conversas."}
+          </p>
+          {list.length > 0 && (
+            <p className="text-[11px] text-[#87A878] font-bold font-['Nunito'] uppercase tracking-wider mt-2">
+              {list.length} {list.length === 1 ? "coisa adicionada" : "coisas adicionadas"}
+            </p>
+          )}
+        </div>
       </div>
-      <p className="text-sm text-[#2A2A2A]/65 font-['Nunito'] -mt-2">
-        Reforce coisas suas que ainda não apareceram nas conversas — a Aura leva em conta.
-      </p>
 
       {/* Itens já adicionados */}
       {!isLoading && list.length > 0 && (
