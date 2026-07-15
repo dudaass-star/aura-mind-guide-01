@@ -133,6 +133,10 @@ const UserPortal = () => {
       return;
     }
     setPortalLoading(true);
+    toast({
+      title: "Abrindo página de pagamento…",
+      description: "Só um instante.",
+    });
     try {
       const gateway =
         (profile as any)?.card_gateway === "asaas" ? "asaas-card" : "stripe-card";
