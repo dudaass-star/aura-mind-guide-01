@@ -123,14 +123,26 @@ const UserPortal = () => {
 
   const handleOpenBillingPortal = async () => {
     if (portalLoading) return;
+    // PIX Asaas recorrente: cartão não se aplica. Explica e oferece suporte.
+    if (isAsaasPix) {
+      toast({
+        title: "Você paga via PIX",
+        description:
+          "PIX recorrente não usa cartão. Se quiser trocar de forma de pagamento, fale com o suporte.",
+      });
+      return;
+    }
     setPortalLoading(true);
     try {
+      const gateway =
+        (profile as any)?.card_gateway === "asaas" ? "asaas-card" : "stripe-card";
       const { data, error } = await supabasePortal.functions.invoke("customer-portal", {
-        body: { userId },
+        body: { userId, gateway },
       });
       if (error) throw error;
       if (!data?.url) throw new Error("Link não recebido");
-      window.open(data.url, "_blank", "noopener,noreferrer");
+      // window.location.href evita popup blocker em mobile após await.
+      window.location.href = data.url;
     } catch (err: any) {
       const msg = err?.context?.error || err?.message || "Não foi possível abrir agora. Tente novamente em instantes.";
       toast({

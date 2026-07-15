@@ -15,6 +15,7 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const token: string | undefined = body?.token;
     let userId: string | undefined = body?.userId;
+    const gatewayHint: string | undefined = body?.gateway;
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -45,12 +46,49 @@ Deno.serve(async (req) => {
     // 2. Pega email/phone do profile pra achar customer no Stripe
     const { data: profile } = await supabase
       .from("profiles")
-      .select("email, phone, name")
+      .select("email, phone, name, card_gateway, asaas_customer_id")
       .eq("user_id", userId)
       .maybeSingle();
 
     if (!profile) {
       return json({ error: "Perfil não encontrado" }, 404);
+    }
+
+    // Roteamento por gateway. Hint do cliente + confirmação via profile.
+    const isAsaasCard =
+      gatewayHint === "asaas-card" || profile.card_gateway === "asaas";
+
+    if (isAsaasCard) {
+      // Asaas cartão: usa invoice_url mais recente (Asaas permite trocar cartão lá).
+      const { data: asaasPay } = await supabase
+        .from("asaas_payments")
+        .select("invoice_url, status, created_at")
+        .eq("user_id", userId)
+        .not("invoice_url", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (asaasPay?.invoice_url) {
+        return json({ url: asaasPay.invoice_url, provider: "asaas" }, 200);
+      }
+      // Fallback via customer_id caso user_id não bata em rows antigas.
+      if (profile.asaas_customer_id) {
+        const { data: byCustomer } = await supabase
+          .from("asaas_payments")
+          .select("invoice_url, created_at")
+          .eq("asaas_customer_id", profile.asaas_customer_id)
+          .not("invoice_url", "is", null)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (byCustomer?.invoice_url) {
+          return json({ url: byCustomer.invoice_url, provider: "asaas" }, 200);
+        }
+      }
+      return json(
+        { error: "Não encontramos sua cobrança pra atualizar o cartão. Fale com o suporte." },
+        404,
+      );
     }
 
     const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!, {
