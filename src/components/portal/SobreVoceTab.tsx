@@ -232,6 +232,7 @@ export function SobreVoceTab({ userId }: { userId: string }) {
           title="A Aura ainda está te conhecendo"
           description="Depois de algumas conversas ela mapeia aqui identidade, pessoas próximas, valores e temas recorrentes seus."
         />
+        <ContribuicaoUsuario userId={userId} emptyContext />
       </div>
     );
   }
@@ -259,6 +260,9 @@ export function SobreVoceTab({ userId }: { userId: string }) {
           </p>
         )}
       </div>
+
+      {/* Convite pra contribuir — logo abaixo do hero, com destaque próprio. */}
+      <ContribuicaoUsuario userId={userId} />
 
       {/* Pessoas — chips */}
       {portrait?.pessoas && portrait.pessoas.length > 0 && (
@@ -391,8 +395,6 @@ export function SobreVoceTab({ userId }: { userId: string }) {
       )}
 
       {/* Rodapé: corrigir no WhatsApp */}
-      <ContribuicaoUsuario userId={userId} />
-
       <a
         href={auraWhatsAppLink("Oi Aura, queria corrigir uma coisa no que você sabe sobre mim.")}
         target="_blank"
