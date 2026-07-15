@@ -242,7 +242,7 @@ const UserPortal = () => {
             className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-accent transition-colors font-['Nunito'] mb-3 disabled:opacity-60"
           >
             {portalLoading ? <Loader2 size={14} className="animate-spin" /> : <CreditCard size={14} />}
-            <span>Atualizar forma de pagamento</span>
+            <span>{portalLoading ? "Abrindo…" : "Atualizar forma de pagamento"}</span>
           </button>
           <button
             onClick={() => setChangePlanOpen(true)}
