@@ -6,6 +6,7 @@ import {
   Headphones,
   ArrowRight,
   MessageCircle,
+  PenLine,
 } from "lucide-react";
 import { PortalLoadingInline } from "./shared";
 import { IntimacyLevel } from "./IntimacyLevel";
@@ -190,6 +191,28 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab }: HojeTabPr
   // Usuário que nunca conversou com a Aura: portal precisa focar num único CTA.
   const zeroConversa = !profile?.last_user_message_at;
 
+  // Convite pra contribuir na aba Sobre: conta >7d, sem itens user_added ainda.
+  const { data: userAddedCount } = useQuery({
+    queryKey: ["portal-hoje-user-added-count", userId],
+    queryFn: async () => {
+      const { count } = await supabasePortal
+        .from("user_insights")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .eq("category", "user_added");
+      return count ?? 0;
+    },
+    enabled: !!userId && !zeroConversa,
+  });
+  const contaCriadaEmMs = profile?.created_at
+    ? new Date(profile.created_at).getTime()
+    : null;
+  const contaMaduraSemUserAdded =
+    !zeroConversa &&
+    userAddedCount === 0 &&
+    !!contaCriadaEmMs &&
+    Date.now() - contaCriadaEmMs > 7 * 86_400_000;
+
   if (loadingLast) return <PortalLoadingInline />;
 
   return (
@@ -289,6 +312,27 @@ export function HojeTab({ userId, firstName, profile, onNavigateTab }: HojeTabPr
           meditation={suggestedMeditation}
           onOpen={() => onNavigateTab("meditacoes")}
         />
+      )}
+
+      {/* Convite discreto pra contribuir com o que a Aura sabe */}
+      {contaMaduraSemUserAdded && (
+        <button
+          onClick={() => onNavigateTab("sobre")}
+          className="w-full text-left rounded-2xl border-2 border-dashed border-[#87A878]/40 bg-[#87A878]/8 p-4 flex items-center gap-3 hover:bg-[#87A878]/12 hover:border-[#87A878]/60 transition-colors animate-fade-up"
+        >
+          <div className="shrink-0 rounded-xl bg-[#B8A5D9]/25 p-2">
+            <PenLine size={16} className="text-[#1B2A4E]" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-[#1B2A4E] font-['Nunito'] leading-tight">
+              Quer me contar algo direto?
+            </p>
+            <p className="text-xs text-[#2A2A2A]/65 font-['Nunito'] mt-0.5">
+              Medos, objetivos, valores — eu levo pras conversas.
+            </p>
+          </div>
+          <ArrowRight size={16} className="text-[#1B2A4E]/60 shrink-0" />
+        </button>
       )}
     </div>
   );
