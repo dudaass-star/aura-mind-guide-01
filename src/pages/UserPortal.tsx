@@ -38,6 +38,7 @@ const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
 const NOVIDADE_TABS: Record<string, TabKey> = {
   hoje: "hoje",
   insights: "insights",
+  sobre: "sobre",
 };
 
 const UserPortal = () => {
