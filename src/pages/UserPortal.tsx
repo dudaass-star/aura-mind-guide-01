@@ -77,7 +77,7 @@ const UserPortal = () => {
       const { data, error } = await supabasePortal
         .from("profiles")
         .select(
-          "name, current_journey_id, current_episode, journeys_completed, plan, billing_cycle, asaas_customer_id, card_gateway, last_user_message_at, last_proactive_insight_at, sessions_used_this_month",
+          "name, current_journey_id, current_episode, journeys_completed, plan, billing_cycle, asaas_customer_id, card_gateway, last_user_message_at, last_proactive_insight_at, sessions_used_this_month, created_at",
         )
         .eq("user_id", userId!)
         .maybeSingle();
