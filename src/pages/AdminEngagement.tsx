@@ -162,6 +162,14 @@ interface Metrics {
   correctionsUsersInPeriod?: number;
   correctionsPerUserInPeriod?: number;
   correctionsWeekly?: { week: string; total: number; users: number; per_user: number }[];
+  // 🧭 Fechamento de sessão
+  closureTotal?: number;
+  closureDialogada?: number;
+  closureUnilateral?: number;
+  closureNoShow?: number;
+  closureDialogadaPct?: number;
+  closureUnilateralPct?: number;
+  closureNoShowPct?: number;
 }
 
 interface RecoverySession {
