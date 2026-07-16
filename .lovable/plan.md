@@ -1,37 +1,78 @@
-## Diagnóstico
 
-Sim, correto — "O que você quer que a Aura saiba" foi pensado pra ser um diferencial: o usuário sente que **controla** o que a Aura sabe dele, não só recebe passivamente o retrato. Hoje isso não acontece porque:
+## Contexto
 
-1. **Fica escondido no rodapé** (linha 394 do `SobreVoceTab.tsx`), depois de 6-7 seções + tags de temas. Em perfis com retrato completo, o usuário rola muito e provavelmente não chega lá.
-2. **Sem destaque visual** — usa o mesmo `SectionShell` das outras seções, então some no meio.
-3. **Sem gancho na Hoje** — nada convida o usuário a contribuir.
-4. **Empty state fraco** — quando o retrato está vazio, o CTA de contribuir não aparece com força; o usuário vê só "A Aura ainda está te conhecendo" e sai.
+Leandro Leite Lopes (user `2d110f3c…`, phone 554499542844) migrou do cartão Stripe pra PIX Automático Asaas em **06/07/2026** e pagou a mensalidade Direção via PIX (R$49,90, coberto até 06/08). Mas a assinatura Stripe cartão **não foi cancelada** — está tentando cobrar o cartão desde 15/07 e falhando por falta de saldo. Além disso, a ativação Asaas não populou os campos `asaas_customer_id` / `card_gateway` no `profile`, então o portal dele mostra `past_due` e o botão de atualizar pagamento apontou pro fluxo errado (Stripe cartão em vez de mostrar que já tá quitado via PIX).
 
-## Proposta (lean, só UX)
+Cliente já entrou em contato pelo suporte pedindo pra desativar as tentativas de cobrança no cartão.
 
-**1. Promover pra logo abaixo do Hero navy**
-Mover o `ContribuicaoUsuario` de `linha 394` (rodapé) pra **logo abaixo do bloco Hero** (linha 261). Ordem nova: Hero → Contribuição → Pessoas → O que te move → …
+Plano em duas frentes: (1) resolver o caso do Leandro hoje, (2) corrigir os dois bugs sistêmicos por trás disso.
 
-**2. Dar identidade visual própria (não é "mais uma seção")**
-Envolver o bloco num card com fundo levemente diferenciado (creme com borda pontilhada `border-dashed` sage) e um header maior:
-- Ícone `PenLine` (já importado) em destaque.
-- Título em Fraunces `"O que você quer que eu saiba"` (1ª pessoa, voz da Aura).
-- Subtítulo curto: `"Adicione o que for importante — medos, objetivos, valores. Eu levo pra nossas conversas."`
-- Chips dos 6 prompts sempre visíveis (medos, objetivos, desafios, valores, sonhos, marcos), não escondidos.
-- Contador discreto: `"3 coisas adicionadas"` quando houver itens.
+---
 
-**3. Empty state forte quando o retrato ainda não existe**
-Hoje o empty state (linha 226) só mostra "A Aura ainda está te conhecendo" e o usuário sai. Substituir por: **mesma mensagem + o card de contribuição já aberto embaixo**, com copy adaptada: `"Enquanto eu te conheço nas conversas, você já pode me contar o essencial aqui."` Isso vira o principal caminho de ativação pra novos usuários.
+## Parte 1 — Ação imediata no caso do Leandro
 
-**4. Gancho na aba Hoje (opcional, pequeno)**
-Quando `user_added` está vazio E o usuário tem >7 dias de conta, mostrar um card discreto na Hoje: `"A Aura conhece você pelas conversas. Quer contar algo direto? →"` linkando pra `?tab=sobre`. Marca badge de novidade uma vez. **Recomendação: fazer** — é o que faz o usuário descobrir a feature sem precisar navegar até o fim da aba.
+1. **Verificar via Stripe** se `invoice.paid` de R$49,90 do dia 15/07 (invoice `in_1Tq0WpQU15XnZ7VvREymp3aa`) realmente capturou dinheiro. Se sim, avaliar refund; se foi trial/zero, seguir sem refund. (Cliente afirma que não passou.)
+2. **Cancelar Stripe subscription `sub_1TnTBLQU15XnZ7VvB3FvnAQG`** imediatamente (`cancel_at_period_end=false`) via `stripe_api_write` — para os retries.
+3. **Corrigir o `profile` do Leandro** via migration:
+   - `asaas_customer_id = 'cus_000185547270'`
+   - `card_gateway = 'asaas'`
+   - `status = 'active'`
+   - `payment_failed_at = null`
+   - `plan_expires_at` já está correto (06/08).
+4. **Preparar texto de resposta ao email de suporte** confirmando: Stripe cancelada, cobranças no cartão paradas, PIX ativo e vigente até 06/08. (Envio é você pelo painel.)
 
-**5. Badge "Novo" na aba Sobre**
-Adicionar a chave `sobre` em `NOVIDADE_TABS` (em `UserPortal.tsx`) e disparar `bumpNovidade('sobre')` uma vez pra usuários existentes, pra chamar atenção pra área remodelada. **Trade-off**: badge some depois do primeiro clique. Recomendação: **fazer**, é barato.
+---
 
-## Arquivos afetados
-- `src/components/portal/SobreVoceTab.tsx` — reordenar (mover `ContribuicaoUsuario` pra cima), redesenhar o header do bloco com card diferenciado, incluir bloco também no empty state.
-- `src/components/portal/HojeTab.tsx` — card de convite condicional (item 4).
-- `src/pages/UserPortal.tsx` + `src/components/portal/hooks/usePortalNovidades.ts` — badge "novo" em `sobre` (item 5).
+## Parte 2 — Bug sistêmico A: cancelar Stripe quando cliente ativa PIX Asaas
 
-Nenhuma mudança em edge/backend/schema.
+**Sintoma:** cliente com Stripe cartão ativa cria assinatura PIX Asaas → fica com 2 assinaturas cobrando em paralelo.
+
+**Correção em `supabase/functions/webhook-asaas/index.ts`**, dentro de `handleActivation()`, depois do `resolveProfile`:
+
+- Se o profile tem Stripe subscription `active`/`past_due`/`trialing` (lookup por email no Stripe, já que não guardamos `stripe_subscription_id` no profile), chamar `stripe.subscriptions.cancel(subId)` com `invoice_now=false, prorate=false`.
+- Logar como `[migration-cleanup]`.
+- Nunca abortar a ativação Asaas se o cancel Stripe falhar — só `console.error`.
+
+---
+
+## Parte 3 — Bug sistêmico B: activation Asaas não popula profile
+
+**Sintoma:** Leandro pagou PIX, `asaas_payments` gravou tudo, `plan_expires_at` foi estendido, mas `asaas_customer_id` e `card_gateway` continuam nulos. Portal continua tratando ele como Stripe cartão.
+
+**Investigação:** ler `supabase/functions/webhook-asaas/index.ts` e `_shared/profile-resolver.ts`. Hipótese: o branch *returning* (Leandro veio de trial Stripe) não escreve `asaas_customer_id` / `card_gateway`, só estende o `plan_expires_at`.
+
+**Correção:** todos os branches de `handleActivation` que reconhecem pagamento Asaas devem gravar `asaas_customer_id` e `card_gateway='asaas'` no profile, além de limpar `payment_failed_at` e forçar `status='active'`.
+
+---
+
+## Parte 4 — Auditoria retroativa
+
+Rodar SQL para achar outros afetados:
+```sql
+SELECT p.user_id, p.name, p.email, p.status, p.card_gateway, p.asaas_customer_id,
+       ap.asaas_subscription_id, ap.paid_at
+FROM profiles p
+JOIN asaas_payments ap ON ap.user_id = p.user_id AND ap.status IN ('RECEIVED','CONFIRMED')
+WHERE p.asaas_customer_id IS NULL OR p.card_gateway IS NULL;
+```
+
+Cada retorno é candidato ao mesmo problema:
+- Fix do profile via migration em lote.
+- Cruzar com Stripe (subs `active` no mesmo email) → cancelar Stripe onde estiver duplicado.
+
+---
+
+## Ordem sugerida
+
+1. Parte 1 (Leandro) — verificar invoice, cancelar Stripe, corrigir profile, texto de resposta.
+2. Parte 4 (auditoria) — dimensionar o problema.
+3. Parte 3 (fix populate profile) — para o sangramento novo.
+4. Parte 2 (fix cancel Stripe no webhook Asaas) — bloqueia dupla-cobrança futura.
+
+Se preferir enxuto: Parte 1 + Parte 4 agora, 2+3 depois.
+
+## Não vou fazer sem sua confirmação
+
+- Cancelar Stripe do Leandro.
+- Migration alterando o profile dele.
+- Qualquer refund (só se a verificação da invoice mostrar captura real e você aprovar).
