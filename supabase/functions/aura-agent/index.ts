@@ -1075,6 +1075,38 @@ INSTRUÇÕES TÁTICAS — Preso na Abertura:
 ✅ CERTO: "De tudo que você trouxe, o que mais pesa? Vamos focar nisso."
 ❌ ERRADO: Tentar abordar 3 assuntos ao mesmo tempo
 ✅ CERTO: Escolher O tema que tem mais carga emocional e aprofundar com investigação socrática.`
+,
+
+  soft_closing_costurando: `
+INSTRUÇÕES TÁTICAS — Costurando (Soft Closing):
+A sessão entrou na janela de fechamento. Ainda dá tempo, mas o modo agora é COSTURAR — não abrir.
+❌ ERRADO: Abrir tema novo, perguntas exploratórias amplas ("e sobre X, como é pra você?").
+❌ ERRADO: Repetir socrática vazia sem entregar leitura.
+✅ CERTO: Aprofundar UM ângulo do que já está na mesa e começar a puxar o fio para o CARDÁPIO DE FECHAMENTO (tese / encruzilhada / leitura / experimento / pergunta-pra-carregar / escolha binária / micro-passo). Escolha UM formato pela árvore de decisão.
+✅ CERTO: Entregar como HIPÓTESE ABERTA: "O que tô vendo daqui é [X]. Faz sentido pra você ou tô errando o ângulo?"
+
+⚠️ SALVAGUARDA — assunto vivo:
+Se o usuário abriu um tema novo com carga emocional na ÚLTIMA mensagem, NÃO force fechamento. Acolhe, valida brevemente e proponha retomar na próxima sessão. Fechar em cima de assunto vivo parece robô.`,
+
+  overtime_aterrissando: `
+INSTRUÇÕES TÁTICAS — Aterrissando (Overtime):
+O tempo alvo da sessão já passou. O fechamento precisa emergir NESTA ou na PRÓXIMA resposta.
+❌ ERRADO: Abrir tema novo, perguntas exploratórias amplas, socrática vazia.
+❌ ERRADO: "Vamos parar por aqui" seco, sem síntese e sem entrega — parece robô e destrói a percepção de valor da sessão.
+✅ CERTO: Entregar UM formato do CARDÁPIO DE FECHAMENTO amarrado ao que foi construído hoje, como hipótese aberta.
+✅ CERTO: Priorize as rotas de continuidade quando o bloco "FECHAMENTO RECOMENDADO" indicar — 'session_bridge' (já há sessão marcada) ou 'suggest_session' (propor próxima). Transforme o fim em PRÓXIMO CAPÍTULO, não em vácuo.
+✅ CERTO: Amarração natural — "a gente foi longe hoje com [tema]. Fica com [insight/tese] pra decantar. [Retomamos na sessão de X / topa marcarmos pra Y?]"
+
+⚠️ SALVAGUARDA — assunto vivo:
+Se o usuário abriu tema novo com carga emocional na ÚLTIMA mensagem, NÃO corte. Acolhe integralmente, valida, e proponha retomar esse fio próprio na próxima sessão.`,
+
+  declined_closure_acolher: `
+INSTRUÇÕES TÁTICAS — Usuário pediu para continuar:
+Você propôs encerrar / marcar próxima, e o usuário voltou com material novo em vez de aceitar o fim. Isso é pedido implícito de continuar.
+❌ ERRADO: Repetir a proposta de fechar imediatamente — vira robô ("já falei que fechamos, mas...").
+❌ ERRADO: Ignorar o que ele trouxe agora.
+✅ CERTO: Acolhe integralmente o novo material. Trate como conteúdo legítimo, aprofunde UM ângulo. Só volte a costurar fechamento depois que esse fio tiver sido tocado de verdade.
+✅ CERTO: Tom de "tô com você, vamos até onde precisar" — sem pressa, sem trava.`
 };
 
 const FREE_PHASE_INSTRUCTIONS: Record<string, string> = {
@@ -1150,6 +1182,69 @@ function commitmentQuestionDetected(
     .join(' ||| ');
   if (!recentAssistant) return false;
   return COMMITMENT_QUESTION_MARKERS.some(marker => recentAssistant.includes(marker));
+}
+
+// ============================================================
+// Detector: a Aura JÁ propôs encerrar/marcar próxima na última fala?
+// Usado para identificar quando o usuário "recusa fechamento" e traz
+// material novo — nesse caso suprimimos a instrução de aterrissagem
+// por alguns turnos para acolher o pedido implícito de continuar.
+// ============================================================
+const CLOSURE_PROPOSAL_MARKERS = [
+  'proxima sessao',
+  'retomar na proxima',
+  'retomamos na',
+  'na proxima a gente',
+  'na proxima semana a gente',
+  'que tal marcarmos',
+  'topa marcarmos',
+  'topa agendar',
+  'vamos marcar',
+  'fica pra proxima',
+  'deixar decantar',
+  'decantar em voce',
+  'pra decantar',
+  'a gente pausa aqui',
+  'pausar aqui',
+  'vamos pausar',
+  'vamos fechar por aqui',
+  'fechar por aqui',
+  'parar por aqui',
+];
+
+function closureProposedInLastAssistant(
+  messageHistory: Array<{ role: string; content: string }>
+): boolean {
+  // Última mensagem assistente antes da última mensagem do usuário
+  const lastAssistant = [...messageHistory].reverse().find(m => m.role === 'assistant');
+  if (!lastAssistant) return false;
+  const normalized = normalizeForMatch(lastAssistant.content);
+  return CLOSURE_PROPOSAL_MARKERS.some(marker => normalized.includes(marker));
+}
+
+// Aceite curto de fim ("ok", "beleza", "vlw", "até", "combinado") — não é recusa
+const CLOSURE_ACCEPT_MARKERS = [
+  'ok', 'beleza', 'blz', 'combinado', 'fechou', 'valeu', 'vlw',
+  'obrigado', 'obrigada', 'ate a proxima', 'ate mais', 'tchau',
+  'boa noite', 'bom dia', 'ate amanha', 'perfeito', 'pode ser',
+  'topo', 'aceito', 'bora', 'entao ta', 'ta bom', 'ta certo'
+];
+
+function userDeclinedClosure(
+  messageHistory: Array<{ role: string; content: string }>
+): boolean {
+  if (!closureProposedInLastAssistant(messageHistory)) return false;
+  const lastUser = [...messageHistory].reverse().find(m => m.role === 'user');
+  if (!lastUser) return false;
+  const content = normalizeForMatch(lastUser.content).trim();
+  if (!content) return false;
+  // Mensagem muito curta (<= 40 chars) e contém apenas marcador de aceite → aceitou fim
+  if (content.length <= 40) {
+    const isAccept = CLOSURE_ACCEPT_MARKERS.some(m => content === m || content.startsWith(m + ' ') || content.endsWith(' ' + m) || content.includes(' ' + m + ' '));
+    if (isAccept) return false;
+  }
+  // Trouxe material substantivo depois da proposta → recusou o fim implicitamente
+  return content.length >= 15;
 }
 
 function evaluateTherapeuticPhase(
@@ -1394,18 +1489,15 @@ ${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}`
       detectedPhase === 'sentido' &&
       sessionElapsedMin >= Math.floor(sessionDurationMin * 0.6)
     ) {
-      // Fase 1 — só desarma a rede de segurança se o USUÁRIO respondeu à pergunta
-      // de compromisso de forma concreta. Antes, bastava a Aura ter perguntado
-      // (falso-positivo): isso desligava a rede sem fechamento real.
+      // Fase 2 — desarma APENAS se o USUÁRIO respondeu à pergunta de compromisso
+      // de forma concreta (user_engaged_with_commitment === true). Removido o
+      // fallback "auraAskedCommitment" que era chicken-and-egg e mantinha a rede
+      // desarmada mesmo sem fechamento real (raiz do arraste pra 78min).
       const userClosedLoop = lastUserContext?.user_engaged_with_commitment === true;
-      const auraAskedCommitment = commitmentQuestionDetected(messageHistory);
       if (userClosedLoop) {
         console.log(`✅ user_engaged_with_commitment=true — closure efetivo, skipping safety net`);
-      } else if (auraAskedCommitment && lastUserContext?.user_engaged_with_commitment === undefined) {
-        // Sinal indisponível (extractor ainda não rodou): fallback ao comportamento antigo.
-        console.log(`✅ Commitment question detected, signal indisponível — fallback antigo, skipping safety net`);
       } else {
-        console.log(`🛡️ Closure safety net fired (elapsed=${sessionElapsedMin}min, duration=${sessionDurationMin}min, auraAsked=${auraAskedCommitment}, userEngaged=${lastUserContext?.user_engaged_with_commitment})`);
+        console.log(`🛡️ Closure safety net fired (elapsed=${sessionElapsedMin}min, duration=${sessionDurationMin}min, userEngaged=${lastUserContext?.user_engaged_with_commitment})`);
         return {
           detectedPhase: 'sentido',
           stagnationLevel: 1,
@@ -1416,6 +1508,45 @@ AÇÃO OBRIGATÓRIA AGORA: amarre o insight num passo concreto antes do fim.
 ${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}`
         };
       }
+    }
+
+    // ======== COBERTURA DE FASES TARDIAS (soft_closing / final_closing / overtime) ========
+    // Estas fases hoje ficavam ÓRFÃS de guidance no evaluator — a Aura passava
+    // dos 45min sem receber nenhuma orientação nova. Distribuição bimodal
+    // (~45min ou ~78min) tinha aqui a raiz.
+    if (['soft_closing', 'final_closing', 'overtime'].includes(sessionPhase)) {
+      const declined = userDeclinedClosure(messageHistory);
+      if (declined) {
+        console.log(`🤝 user_declined_closure detected in phase=${sessionPhase} — supressing landing, acolher pedido de continuar`);
+        return {
+          detectedPhase,
+          stagnationLevel: 0,
+          guidance: `\n\n🤝 USUÁRIO PEDIU PARA CONTINUAR:
+Você propôs encerrar/marcar próxima, e o usuário trouxe material novo em vez de aceitar. Trate como pedido implícito de continuar.
+${SESSION_PHASE_INSTRUCTIONS.declined_closure_acolher}`
+        };
+      }
+
+      if (sessionPhase === 'soft_closing') {
+        console.log(`🧵 Guidance soft_closing injetada (elapsed=${sessionElapsedMin}min)`);
+        return {
+          detectedPhase,
+          stagnationLevel: 1,
+          guidance: `\n\n🧵 JANELA DE COSTURA:
+Estamos entrando no fechamento. Modo: costurar o que já está na mesa, não abrir tema novo.
+${SESSION_PHASE_INSTRUCTIONS.soft_closing_costurando}`
+        };
+      }
+
+      // final_closing + overtime → aterrissagem
+      console.log(`🛬 Guidance ${sessionPhase} injetada (elapsed=${sessionElapsedMin}min)`);
+      return {
+        detectedPhase,
+        stagnationLevel: 2,
+        guidance: `\n\n🛬 ATERRISSAGEM AGORA:
+O tempo alvo da sessão passou. Precisa entregar fechamento com valor NESTA ou na PRÓXIMA resposta — nunca corte seco.
+${SESSION_PHASE_INSTRUCTIONS.overtime_aterrissando}`
+      };
     }
 
     // ======== NUDGE INTERMEDIÁRIO (Vale da Morte 10-25 min) ========
