@@ -5252,7 +5252,7 @@ serve(async (req) => {
           ? Promise.resolve({ data: [], error: null })
           : supabase
               .from('sessions')
-              .select('session_summary, key_insights, focus_topic, ended_at, commitments', { count: 'exact' })
+              .select('session_summary, key_insights, focus_topic, ended_at, commitments, closure_mode, last_user_emotional_state', { count: 'exact' })
               .eq('user_id', userId)
               .eq('status', 'completed')
               .not('session_summary', 'is', null)
