@@ -7479,6 +7479,7 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
         .update({
           status: 'completed',
           ended_at: endTime,
+          closure_mode: 'dialogada',
         })
         .eq('id', sessionIdToExtract);
       console.log(`🏁 Session ${sessionIdToExtract} marcada como completed — extração será feita pelo session-extractor`);
