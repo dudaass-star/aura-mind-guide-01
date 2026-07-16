@@ -791,6 +791,30 @@ async function handleActivation(
     if (isRenewal) return;
 
     // ============================================================
+    // Migration cleanup: se cliente tinha Stripe ativa (migrou de cartão pra
+    // PIX Asaas), cancela a Stripe sub pra parar cobranças duplicadas / retries.
+    // Non-blocking: erro nunca aborta a ativação Asaas.
+    // ============================================================
+    try {
+      const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
+      if (stripeKey && customerEmail) {
+        const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
+        const customers = await stripe.customers.list({ email: customerEmail, limit: 5 });
+        for (const cust of customers.data) {
+          for (const status of ["active", "past_due", "trialing"] as const) {
+            const subs = await stripe.subscriptions.list({ customer: cust.id, status, limit: 10 });
+            for (const sub of subs.data) {
+              await stripe.subscriptions.cancel(sub.id, { invoice_now: false, prorate: false });
+              console.log(`[migration-cleanup] Stripe sub ${sub.id} (${status}) cancelada para ${customerEmail}`);
+            }
+          }
+        }
+      }
+    } catch (stripeErr) {
+      console.error("[migration-cleanup] Falha cancelando Stripe (non-blocking):", stripeErr);
+    }
+
+    // ============================================================
     // Cartão parcelado (installment) não renova sozinho — Asaas cobra as N
     // parcelas e para. Agenda lembrete D-3 antes do fim do ciclo para reativação.
     // ============================================================
