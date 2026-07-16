@@ -96,6 +96,21 @@ REGRAS:
 - theme_label = 2-5 palavras nomeando o tema central (ex.: "limites com a mãe", "medo de errar no trabalho"). Sem ponto final.
 
 ──────────────────────────────────────────
+CAMPOS DE INSTRUMENTAÇÃO (M2 — gate conversacional):
+──────────────────────────────────────────
+- last_user_emotional_state: como o USUÁRIO estava emocionalmente na ÚLTIMA fala dele antes do encerramento.
+  Valores permitidos: 'sereno' | 'aliviado' | 'esperancoso' | 'reflexivo' | 'ambivalente' | 'vulneravel' | 'em_choro' | 'raivoso' | 'ansioso' | 'evasivo' | 'silencio' | null.
+  Use 'silencio' se a última fala foi um "ok"/emoji vazio ou nenhuma resposta ao fechamento da AURA. null se ambíguo.
+- had_dated_bridge: true se a AURA deixou uma ponte com REFERÊNCIA TEMPORAL concreta (ex.: "amanhã cedo", "sexta que vem", "no próximo domingo"). false se a ponte foi vaga ("qualquer hora", "quando quiser") ou inexistente.
+- commitment_confirmed: true se houve pelo menos UM compromisso proposto pela AURA com aceite EXPLÍCITO do usuário ("topo", "combinado", "vou fazer", "💜"). false se compromissos foram apenas sugeridos sem aceite, ou inexistentes.
+- closure_state (derivado — como a última interação ficou, para gate de outbounds):
+   • 'fechada_tranquila' → aterrissagem com estado sereno/aliviado/esperancoso
+   • 'fechada_com_direcao' → aterrissagem + commitment_confirmed=true OU had_dated_bridge=true
+   • 'aberta_com_pergunta' → AURA deixou pergunta sem resposta do usuário
+   • 'aberta_vulneravel' → usuário terminou em estado vulneravel/em_choro/raivoso/ansioso
+   • 'aberta_em_silencio' → última fala do usuário foi vazia/emoji ou silêncio pós-fechamento
+
+──────────────────────────────────────────
 REGRAS GERAIS:
 ──────────────────────────────────────────
 - summary: 2-3 frases sobre o tema central e a virada que aconteceu na sessão
@@ -158,6 +173,24 @@ const EXTRACTION_TOOL = {
           type: ["string", "null"],
           description: "Frase/pergunta/proposta literal da AURA que fecha o ciclo (até 240 caracteres). null se não houve fechamento claro.",
         },
+        last_user_emotional_state: {
+          type: ["string", "null"],
+          enum: ['sereno','aliviado','esperancoso','reflexivo','ambivalente','vulneravel','em_choro','raivoso','ansioso','evasivo','silencio', null],
+          description: "Estado emocional do USUÁRIO na última fala antes do encerramento.",
+        },
+        had_dated_bridge: {
+          type: "boolean",
+          description: "true se a AURA deixou ponte com referência temporal concreta (data/dia/prazo).",
+        },
+        commitment_confirmed: {
+          type: "boolean",
+          description: "true se ao menos um compromisso proposto pela AURA teve aceite explícito do usuário.",
+        },
+        closure_state: {
+          type: ["string", "null"],
+          enum: ['fechada_tranquila','fechada_com_direcao','aberta_com_pergunta','aberta_vulneravel','aberta_em_silencio', null],
+          description: "Estado consolidado da última interação, usado como gate para outbounds automáticos.",
+        },
       },
       required: [
         "summary",
@@ -167,6 +200,10 @@ const EXTRACTION_TOOL = {
         "reframe_text",
         "closure_type",
         "closure_text",
+        "last_user_emotional_state",
+        "had_dated_bridge",
+        "commitment_confirmed",
+        "closure_state",
       ],
       additionalProperties: false,
     },
@@ -181,6 +218,10 @@ interface ExtractionResult {
   reframe_text: string | null;
   closure_type: string | null;
   closure_text: string | null;
+  last_user_emotional_state: string | null;
+  had_dated_bridge: boolean;
+  commitment_confirmed: boolean;
+  closure_state: string | null;
 }
 
 /**
@@ -248,6 +289,12 @@ async function callExtractor(
       typeof parsed.theme_label === "string" && parsed.theme_label.trim()
         ? parsed.theme_label.trim().slice(0, 80)
         : null;
+    const ALLOWED_EMO = new Set(['sereno','aliviado','esperancoso','reflexivo','ambivalente','vulneravel','em_choro','raivoso','ansioso','evasivo','silencio']);
+    const rawEmo = typeof parsed.last_user_emotional_state === 'string' ? parsed.last_user_emotional_state.trim().toLowerCase() : null;
+    const last_user_emotional_state = rawEmo && ALLOWED_EMO.has(rawEmo) ? rawEmo : null;
+    const ALLOWED_CLOSURE_STATE = new Set(['fechada_tranquila','fechada_com_direcao','aberta_com_pergunta','aberta_vulneravel','aberta_em_silencio']);
+    const rawState = typeof parsed.closure_state === 'string' ? parsed.closure_state.trim().toLowerCase() : null;
+    const closure_state = rawState && ALLOWED_CLOSURE_STATE.has(rawState) ? rawState : null;
     return {
       summary: typeof parsed.summary === "string" ? parsed.summary : "",
       key_insights: Array.isArray(parsed.key_insights) ? parsed.key_insights : [],
@@ -258,6 +305,10 @@ async function callExtractor(
       reframe_text,
       closure_type,
       closure_text,
+      last_user_emotional_state,
+      had_dated_bridge: parsed.had_dated_bridge === true,
+      commitment_confirmed: parsed.commitment_confirmed === true,
+      closure_state,
     };
   } catch (err) {
     console.error("❌ session-extractor: falha ao decodificar tool arguments:", err);
@@ -364,6 +415,9 @@ Deno.serve(async (req) => {
         reframe_text: result.reframe_text,
         closure_type: result.closure_type,
         closure_text: result.closure_text,
+        last_user_emotional_state: result.last_user_emotional_state,
+        had_dated_bridge: result.had_dated_bridge,
+        commitment_confirmed: result.commitment_confirmed,
       })
       .eq("id", sessionId);
 
@@ -373,6 +427,23 @@ Deno.serve(async (req) => {
         JSON.stringify({ ok: false, error: "persist_failed", details: updateErr.message }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
+    }
+
+    // 5) Propaga closure_state pro profile — gate consolidado para outbounds automáticos
+    //    (scheduled-checkin, scheduled-followup, periodic-content, reactivation-blast etc.).
+    //    Não bloqueia o retorno — falha aqui não invalida a extração.
+    if (result.closure_state) {
+      try {
+        await supabase
+          .from('profiles')
+          .update({
+            last_interaction_closure_state: result.closure_state,
+            last_interaction_closure_at: new Date().toISOString(),
+          })
+          .eq('user_id', session.user_id);
+      } catch (propErr) {
+        console.error(`⚠️ session-extractor: falha ao propagar closure_state pro profile ${session.user_id}:`, propErr);
+      }
     }
 
     console.log(

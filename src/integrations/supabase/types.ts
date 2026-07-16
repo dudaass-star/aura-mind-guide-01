@@ -1514,6 +1514,8 @@ export type Database = {
           journeys_completed: number | null
           last_checkin_sent_at: string | null
           last_content_sent_at: string | null
+          last_interaction_closure_at: string | null
+          last_interaction_closure_state: string | null
           last_message_date: string | null
           last_proactive_insight_at: string | null
           last_reactivation_sent: string | null
@@ -1583,6 +1585,8 @@ export type Database = {
           journeys_completed?: number | null
           last_checkin_sent_at?: string | null
           last_content_sent_at?: string | null
+          last_interaction_closure_at?: string | null
+          last_interaction_closure_state?: string | null
           last_message_date?: string | null
           last_proactive_insight_at?: string | null
           last_reactivation_sent?: string | null
@@ -1652,6 +1656,8 @@ export type Database = {
           journeys_completed?: number | null
           last_checkin_sent_at?: string | null
           last_content_sent_at?: string | null
+          last_interaction_closure_at?: string | null
+          last_interaction_closure_state?: string | null
           last_message_date?: string | null
           last_proactive_insight_at?: string | null
           last_reactivation_sent?: string | null
@@ -2031,8 +2037,10 @@ export type Database = {
       sessions: {
         Row: {
           audio_sent_count: number | null
+          closure_mode: string | null
           closure_text: string | null
           closure_type: string | null
+          commitment_confirmed: boolean | null
           commitments: Json | null
           confirmation_requested: boolean | null
           created_at: string
@@ -2040,8 +2048,10 @@ export type Database = {
           duration_minutes: number
           ended_at: string | null
           focus_topic: string | null
+          had_dated_bridge: boolean | null
           id: string
           key_insights: Json | null
+          last_user_emotional_state: string | null
           post_session_sent: boolean | null
           rating_requested: boolean | null
           reframe_text: string | null
@@ -2063,8 +2073,10 @@ export type Database = {
         }
         Insert: {
           audio_sent_count?: number | null
+          closure_mode?: string | null
           closure_text?: string | null
           closure_type?: string | null
+          commitment_confirmed?: boolean | null
           commitments?: Json | null
           confirmation_requested?: boolean | null
           created_at?: string
@@ -2072,8 +2084,10 @@ export type Database = {
           duration_minutes?: number
           ended_at?: string | null
           focus_topic?: string | null
+          had_dated_bridge?: boolean | null
           id?: string
           key_insights?: Json | null
+          last_user_emotional_state?: string | null
           post_session_sent?: boolean | null
           rating_requested?: boolean | null
           reframe_text?: string | null
@@ -2095,8 +2109,10 @@ export type Database = {
         }
         Update: {
           audio_sent_count?: number | null
+          closure_mode?: string | null
           closure_text?: string | null
           closure_type?: string | null
+          commitment_confirmed?: boolean | null
           commitments?: Json | null
           confirmation_requested?: boolean | null
           created_at?: string
@@ -2104,8 +2120,10 @@ export type Database = {
           duration_minutes?: number
           ended_at?: string | null
           focus_topic?: string | null
+          had_dated_bridge?: boolean | null
           id?: string
           key_insights?: Json | null
+          last_user_emotional_state?: string | null
           post_session_sent?: boolean | null
           rating_requested?: boolean | null
           reframe_text?: string | null

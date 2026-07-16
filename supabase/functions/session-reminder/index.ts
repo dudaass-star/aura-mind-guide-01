@@ -589,7 +589,8 @@ Você está pronta(o) pra começar? Me responde um "vamos" ou "bora" quando quis
           .update({ 
             status: 'cancelled',
             ended_at: now.toISOString(),
-            session_summary: 'Usuário não respondeu à notificação de início da sessão.'
+            session_summary: 'Usuário não respondeu à notificação de início da sessão.',
+            closure_mode: 'no_show'
           })
           .eq('id', session.id);
         
@@ -752,7 +753,8 @@ Se quiser remarcar uma nova sessão, é só me dizer!`;
           .update({ 
             status: statusToSet,
             ended_at: now.toISOString(),
-            session_summary: summaryToSet
+            session_summary: summaryToSet,
+            closure_mode: statusToSet === 'no_show' ? 'no_show' : 'unilateral'
           })
           .eq('id', session.id);
         

@@ -1,78 +1,99 @@
 
-## Contexto
+# Avaliação das sugestões (M1–M4 + instrumentação)
 
-Leandro Leite Lopes (user `2d110f3c…`, phone 554499542844) migrou do cartão Stripe pra PIX Automático Asaas em **06/07/2026** e pagou a mensalidade Direção via PIX (R$49,90, coberto até 06/08). Mas a assinatura Stripe cartão **não foi cancelada** — está tentando cobrar o cartão desde 15/07 e falhando por falta de saldo. Além disso, a ativação Asaas não populou os campos `asaas_customer_id` / `card_gateway` no `profile`, então o portal dele mostra `past_due` e o botão de atualizar pagamento apontou pro fluxo errado (Stripe cartão em vez de mostrar que já tá quitado via PIX).
-
-Cliente já entrou em contato pelo suporte pedindo pra desativar as tentativas de cobrança no cartão.
-
-Plano em duas frentes: (1) resolver o caso do Leandro hoje, (2) corrigir os dois bugs sistêmicos por trás disso.
+Fiz o cruzamento com o que já roda hoje. Resumo honesto: **o princípio está certo, mas 60% das "novidades" já existem** — em partes escondidas do código. O risco real não é *implementar mais*, é *duplicar comportamento* em cima do que já está instrumentado e criar duas fontes de verdade (o próprio defeito que M3 quer curar).
 
 ---
 
-## Parte 1 — Ação imediata no caso do Leandro
+## Instrumentação prévia → **já existe, não precisa refazer**
+`session-extractor` já grava por sessão: `session_summary`, `key_insights`, `commitments`, `theme_label`, `reframe_text`, **`closure_type`** (7 formatos do Cardápio) e **`closure_text`**. O que **falta** de fato é:
+- `closure_mode`: `dialogada | unilateral | pausa | no_show` (o "como terminou", não o "que formato foi").
+- `last_user_emotional_state` no momento do fechamento (o extractor não persiste isso hoje).
+- `had_dated_bridge` (bool) e `commitment_confirmed` (bool).
 
-1. **Verificar via Stripe** se `invoice.paid` de R$49,90 do dia 15/07 (invoice `in_1Tq0WpQU15XnZ7VvREymp3aa`) realmente capturou dinheiro. Se sim, avaliar refund; se foi trial/zero, seguir sem refund. (Cliente afirma que não passou.)
-2. **Cancelar Stripe subscription `sub_1TnTBLQU15XnZ7VvB3FvnAQG`** imediatamente (`cancel_at_period_end=false`) via `stripe_api_write` — para os retries.
-3. **Corrigir o `profile` do Leandro** via migration:
-   - `asaas_customer_id = 'cus_000185547270'`
-   - `card_gateway = 'asaas'`
-   - `status = 'active'`
-   - `payment_failed_at = null`
-   - `plan_expires_at` já está correto (06/08).
-4. **Preparar texto de resposta ao email de suporte** confirmando: Stripe cancelada, cobranças no cartão paradas, PIX ativo e vigente até 06/08. (Envio é você pelo painel.)
+**Custo:** 4 colunas + ajuste no prompt do extractor. Baixo. Vale.
 
 ---
 
-## Parte 2 — Bug sistêmico A: cancelar Stripe quando cliente ativa PIX Asaas
+## M1 — Contrato de encerramento (4 saídas)
 
-**Sintoma:** cliente com Stripe cartão ativa cria assinatura PIX Asaas → fica com 2 assinaturas cobrando em paralelo.
+**Já existe parcialmente** (`session-reminder` linhas 677-745):
+- `≤1 msg do user` → `no_show` ✅
+- `2–4 msgs` → `no_show` com aviso ✅
+- `≥5 msgs` → `completed` + extractor + rating ✅
+- pausa via tag `[PAUSAR_SESSOES]` ✅
 
-**Correção em `supabase/functions/webhook-asaas/index.ts`**, dentro de `handleActivation()`, depois do `resolveProfile`:
+**O que a sugestão adiciona de real:**
+1. **"Aterrissagem unilateral"** — se o usuário silencia N min *na fase final* (`aterrissagem`), a AURA envia fechamento antes de expirar. Hoje: nada acontece até o grace de 60min estourar e virar `completed` genérico. **Isso sim é novo e tem valor.**
+2. **No-show nunca vira completed** — já é a regra hoje. Ok.
+3. **"81 sessões fantasma"** — precisa auditar o que são antes de mexer. Podem ser sessões antigas de antes das regras atuais (falso positivo).
 
-- Se o profile tem Stripe subscription `active`/`past_due`/`trialing` (lookup por email no Stripe, já que não guardamos `stripe_subscription_id` no profile), chamar `stripe.subscriptions.cancel(subId)` com `invoice_now=false, prorate=false`.
-- Logar como `[migration-cleanup]`.
-- Nunca abortar a ativação Asaas se o cancel Stripe falhar — só `console.error`.
+**Risco crítico:** aterrissagem unilateral automática é a AURA falando sozinha depois de silêncio. Se disparar cedo demais, atropela usuário que só foi ao banheiro. Se disparar tarde, não resolve nada. Precisa gate: só na fase `aterrissagem` (o phase-evaluator já sabe) + silêncio ≥ X min + dentro do contrato de 45min. E precisa contar como sessão real (rating condicional funciona).
 
----
-
-## Parte 3 — Bug sistêmico B: activation Asaas não popula profile
-
-**Sintoma:** Leandro pagou PIX, `asaas_payments` gravou tudo, `plan_expires_at` foi estendido, mas `asaas_customer_id` e `card_gateway` continuam nulos. Portal continua tratando ele como Stripe cartão.
-
-**Investigação:** ler `supabase/functions/webhook-asaas/index.ts` e `_shared/profile-resolver.ts`. Hipótese: o branch *returning* (Leandro veio de trial Stripe) não escreve `asaas_customer_id` / `card_gateway`, só estende o `plan_expires_at`.
-
-**Correção:** todos os branches de `handleActivation` que reconhecem pagamento Asaas devem gravar `asaas_customer_id` e `card_gateway='asaas'` no profile, além de limpar `payment_failed_at` e forçar `status='active'`.
+**Decisão sugerida:** aprovar **só o item 1** (aterrissagem unilateral) + as 4 colunas de instrumentação. Rejeitar reescrita do fluxo — o resto já roda.
 
 ---
 
-## Parte 4 — Auditoria retroativa
+## M2 — Gate de estado conversacional para todo outbound
 
-Rodar SQL para achar outros afetados:
-```sql
-SELECT p.user_id, p.name, p.email, p.status, p.card_gateway, p.asaas_customer_id,
-       ap.asaas_subscription_id, ap.paid_at
-FROM profiles p
-JOIN asaas_payments ap ON ap.user_id = p.user_id AND ap.status IN ('RECEIVED','CONFIRMED')
-WHERE p.asaas_customer_id IS NULL OR p.card_gateway IS NULL;
-```
+**Já existe fragmentado:**
+- `aura_response_state.pending_content/is_responding` — gate de interrupção.
+- Silent hours 22h-08h — gate temporal.
+- `session-reminder` checa `post_session_sent`, `rating_requested`, atividade recente antes de mandar rating.
+- `sendProactive` já bloqueia se há sessão ativa ou interação recente.
+- `Presence Brake` + phase-evaluator lêem `user_emotional_state`, `density`, `recentPairs`.
 
-Cada retorno é candidato ao mesmo problema:
-- Fix do profile via migration em lote.
-- Cruzar com Stripe (subs `active` no mesmo email) → cancelar Stripe onde estiver duplicado.
+**O que falta:** um **campo único derivado** (`last_interaction_closure_state`) que sirva de gate consolidado para os cron jobs periféricos (`scheduled-checkin`, `scheduled-followup`, `periodic-content`, `deliver-trial-insight`, `reactivation-blast`, `reengagement-blast`, `winback-canceled-users`). Hoje cada um faz seu próprio check parcial → daí o "jornada alegre pós-luto".
+
+**Risco:** derivar esse estado em tempo real a cada outbound = custo. Melhor: o `session-extractor` e o `postConversationAnalysis` já rodam — que eles gravem `last_interaction_closure_state` no `profiles` e os crons leiam. Zero IA nova.
+
+**Decisão sugerida:** **APROVAR na versão barata** — 1 coluna em `profiles` + leitura pelos ~7 crons. Alto ROI, baixo risco. Este é o mais valioso dos quatro.
 
 ---
 
-## Ordem sugerida
+## M3 — Compromisso unificado
 
-1. Parte 1 (Leandro) — verificar invoice, cancelar Stripe, corrigir profile, texto de resposta.
-2. Parte 4 (auditoria) — dimensionar o problema.
-3. Parte 3 (fix populate profile) — para o sangramento novo.
-4. Parte 2 (fix cancel Stripe no webhook Asaas) — bloqueia dupla-cobrança futura.
+**Este é o mais delicado.** Há **duas fontes hoje**:
+- `sessions.commitments` (jsonb, escrito pelo `session-extractor`) — usado no *pós-sessão* (mensagem de resumo) e no prompt (`session.commitments` linha 4177).
+- `commitments` (tabela) — escrita pelo `aura-agent` durante a conversa e pelo `postConversationAnalysis`; lida como "pendentes" no prompt (linha 5260).
 
-Se preferir enxuto: Parte 1 + Parte 4 agora, 2+3 depois.
+Elas **não são a mesma coisa por design**: uma é snapshot da sessão, outra é backlog vivo entre sessões. Colapsar tudo em uma só quebra o `formatPendingCommitmentsForFollowup` e a cobrança de abertura. **A sugestão está errada nesse ponto.**
 
-## Não vou fazer sem sua confirmação
+**O que faz sentido salvar da M3:**
+- **Régua mais estrita**: "compromisso só existe se for fala do usuário em 1ª pessoa com ação futura". Isso é ajuste de prompt no `session-extractor` e no `postConversationAnalysis`. Barato, direto.
+- **Sync one-way**: quando `session-extractor` cria `sessions.commitments`, espelhar como rows em `commitments` (source of truth = tabela). Elimina divergência sem colapsar semântica.
+- **Métrica de precisão** por amostragem — vale como painel admin, não como código de produção.
 
-- Cancelar Stripe do Leandro.
-- Migration alterando o profile dele.
-- Qualquer refund (só se a verificação da invoice mostrar captura real e você aprovar).
+**Decisão sugerida:** aprovar **régua estrita + sync one-way**; rejeitar "fonte única".
+
+---
+
+## M4 — Cancelamento de balões em fila
+
+**Verificação:** interrupção existe hoje na **geração** (`pending_content` acumula e re-processa — linhas 1161/1468 do `process-webhook-message`), mas **não na entrega** (loop de balões do `aura-agent` não checa `messages` novas do user antes de enviar cada balão).
+
+**A sugestão está correta e é barata:** antes de cada balão do loop de envio, `SELECT 1 FROM messages WHERE user_id=X AND role='user' AND created_at > loop_start_ts LIMIT 1`. Se existir, aborta o restante e escreve o que sobrou em `pending_content` (mesmo caminho já testado).
+
+**Risco:** query extra por balão. Mitigação: só a partir do 2º balão + com `LIMIT 1`. Custo desprezível.
+
+**Decisão sugerida:** APROVAR.
+
+---
+
+## Ordem de execução recomendada
+
+| # | Ação | Complexidade | Risco | Valor |
+|---|------|--------------|-------|-------|
+| 1 | Instrumentação: 4 colunas + prompt do extractor | Baixa | Nenhum | Alto (baseline) |
+| 2 | M2: `last_interaction_closure_state` + leitura nos 7 crons | Média | Baixo | **Muito alto** |
+| 3 | M4: interrupção na entrega de balões | Baixa | Baixo | Médio |
+| 4 | M3: régua estrita + sync one-way `sessions→commitments` | Média | Médio | Médio |
+| 5 | M1: aterrissagem unilateral (só na fase `aterrissagem`) | Média | **Alto** | Alto se acertar |
+
+**Não implementar:** "fonte única de commitments" (quebra semântica), "auditoria das 81 fantasmas" antes de saber se são legado, reescrita do contrato de encerramento (já existe).
+
+---
+
+## Pergunta antes de qualquer código
+
+Aprovando essa priorização, o caminho concreto seria começar por **#1 + #2** juntos numa migração + edit em `session-extractor` + edits em `scheduled-checkin/followup/periodic-content/reactivation-blast`. Confirma essa ordem, ou prefere olhar antes as 81 sessões fantasma (auditoria SQL de 5 min) pra decidir se M1 sobe de prioridade?
