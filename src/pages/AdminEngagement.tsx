@@ -162,6 +162,14 @@ interface Metrics {
   correctionsUsersInPeriod?: number;
   correctionsPerUserInPeriod?: number;
   correctionsWeekly?: { week: string; total: number; users: number; per_user: number }[];
+  // 🧭 Fechamento de sessão
+  closureTotal?: number;
+  closureDialogada?: number;
+  closureUnilateral?: number;
+  closureNoShow?: number;
+  closureDialogadaPct?: number;
+  closureUnilateralPct?: number;
+  closureNoShowPct?: number;
 }
 
 interface RecoverySession {
@@ -968,6 +976,33 @@ export default function AdminEngagement() {
                               </svg>
                             )}
                             <p className="text-[10px] text-muted-foreground">últimas {values.length}sem · pico {Math.max(...values, 0).toFixed(1)}</p>
+                          </>
+                        );
+                      })()}
+                    </CardContent>
+                  </Card>
+
+                  {/* 🧭 Fechamento de sessão — dialogada vs unilateral vs no-show */}
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between p-3 pb-1">
+                      <CardTitle className="text-xs font-medium text-muted-foreground">🧭 Fechamento sessões</CardTitle>
+                      <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent className="p-3 pt-0">
+                      {(() => {
+                        const total = metrics.closureTotal ?? 0;
+                        const dPct = metrics.closureDialogadaPct ?? 0;
+                        const uPct = metrics.closureUnilateralPct ?? 0;
+                        const nPct = metrics.closureNoShowPct ?? 0;
+                        // Verde >=75% dialogada, amarelo 55-75, vermelho <55.
+                        const color = dPct >= 75 ? 'text-green-600' : dPct >= 55 ? 'text-yellow-600' : 'text-destructive';
+                        return (
+                          <>
+                            <div className={`text-xl font-bold ${color}`}>{dPct.toFixed(1)}%</div>
+                            <p className="text-[11px] text-muted-foreground">dialogadas · {total} sessões (período)</p>
+                            <p className="text-[10px] text-muted-foreground mt-1">
+                              unilateral {uPct.toFixed(1)}% · no-show {nPct.toFixed(1)}%
+                            </p>
                           </>
                         );
                       })()}

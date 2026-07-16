@@ -4155,7 +4155,25 @@ function formatPreviousSessionsContext(sessions: any[]): string {
   if (!sessions || sessions.length === 0) return '';
 
   let context = '\n📚 HISTÓRICO DE SESSÕES ANTERIORES:\n';
-  
+
+  // 🧭 Sinal de continuidade — se a última sessão terminou de forma
+  // atípica (Aura fechou sozinha, no-show) ou usuário estava vulnerável,
+  // puxa o fio na abertura, sem forçar.
+  const last = sessions[0];
+  const closure = last?.closure_mode as string | undefined;
+  const emo = last?.last_user_emotional_state as string | undefined;
+  const needsThread =
+    (closure && closure !== 'dialogada') ||
+    emo === 'aberta_vulneravel';
+  if (needsThread) {
+    const reason = closure === 'no_show'
+      ? 'a última sessão marcada não aconteceu (o usuário não apareceu)'
+      : closure === 'unilateral'
+        ? 'a última sessão fechou sem despedida — o usuário silenciou no meio'
+        : 'a última sessão terminou com o usuário num lugar emocionalmente aberto';
+    context += `\n⚠️ CONTINUIDADE (usar na abertura, sem forçar): ${reason}. Se fizer sentido no fluxo, puxe o fio com cuidado — pergunta curta, sem cobrança, tipo "da última vez a gente parou num lugar difícil, como você tá voltando?".\n`;
+  }
+
   sessions.forEach((session, index) => {
     const date = new Date(session.ended_at).toLocaleDateString('pt-BR');
     const num = sessions.length - index;
@@ -5234,7 +5252,7 @@ serve(async (req) => {
           ? Promise.resolve({ data: [], error: null })
           : supabase
               .from('sessions')
-              .select('session_summary, key_insights, focus_topic, ended_at, commitments', { count: 'exact' })
+              .select('session_summary, key_insights, focus_topic, ended_at, commitments, closure_mode, last_user_emotional_state', { count: 'exact' })
               .eq('user_id', userId)
               .eq('status', 'completed')
               .not('session_summary', 'is', null)

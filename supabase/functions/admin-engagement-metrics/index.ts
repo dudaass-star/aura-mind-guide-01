@@ -1705,6 +1705,42 @@ Deno.serve(async (req) => {
       console.warn('⚠️ Falha ao calcular métricas de correções (não crítico):', e);
     }
 
+    // 🧭 Fechamento de sessão — % dialogada vs unilateral vs no-show.
+    // Fonte: sessions.closure_mode gravado pelo aura-agent (dialogada) e
+    // pelo session-reminder (unilateral/no_show). Serve como termômetro
+    // contínuo da qualidade de aterrissagem das sessões.
+    let closureDialogada = 0;
+    let closureUnilateral = 0;
+    let closureNoShow = 0;
+    let closureTotal = 0;
+    let closureDialogadaPct = 0;
+    let closureUnilateralPct = 0;
+    let closureNoShowPct = 0;
+    try {
+      const { data: closureRows } = await supabase
+        .from('sessions')
+        .select('closure_mode')
+        .gte('ended_at', periodStart.toISOString())
+        .lte('ended_at', periodEnd.toISOString())
+        .not('closure_mode', 'is', null);
+      if (closureRows) {
+        for (const r of closureRows) {
+          const m = (r as any).closure_mode as string;
+          if (m === 'dialogada') closureDialogada++;
+          else if (m === 'unilateral') closureUnilateral++;
+          else if (m === 'no_show') closureNoShow++;
+        }
+        closureTotal = closureDialogada + closureUnilateral + closureNoShow;
+        if (closureTotal > 0) {
+          closureDialogadaPct = Math.round((closureDialogada / closureTotal) * 1000) / 10;
+          closureUnilateralPct = Math.round((closureUnilateral / closureTotal) * 1000) / 10;
+          closureNoShowPct = Math.round((closureNoShow / closureTotal) * 1000) / 10;
+        }
+      }
+    } catch (e) {
+      console.warn('⚠️ Falha ao calcular closure metrics (não crítico):', e);
+    }
+
     const responsePayload = JSON.stringify({
       // Engagement
       activeUsers: activeUsersInPeriod,
@@ -1851,6 +1887,14 @@ Deno.serve(async (req) => {
       correctionsUsersInPeriod,
       correctionsPerUserInPeriod,
       correctionsWeekly,
+      // 🧭 Fechamento de sessão
+      closureTotal,
+      closureDialogada,
+      closureUnilateral,
+      closureNoShow,
+      closureDialogadaPct,
+      closureUnilateralPct,
+      closureNoShowPct,
     });
 
     // Salva no cache para próximas requests dentro do TTL
