@@ -7,6 +7,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { resolveProfile } from "../_shared/profile-resolver.ts";
 import { normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
 import { sendProactive } from "../_shared/whatsapp-provider.ts";
+import Stripe from "https://esm.sh/stripe@18.5.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -719,7 +720,8 @@ async function handleActivation(
         asaas_customer_id: updated.asaas_customer_id || null,
         whatsapp_provider: "meta",
         billing_cycle: billingPeriod,
-        ...(isCardPayment ? { card_gateway: "asaas" } : {}),
+        card_gateway: "asaas",
+        payment_failed_at: null,
       }).select("id").maybeSingle();
       if (insErr) {
         console.error("[webhook-asaas] Erro criando profile:", insErr);
@@ -735,9 +737,11 @@ async function handleActivation(
         status: "active",
         plan_expires_at: newExpiry,
         billing_cycle: billingPeriod,
+        card_gateway: "asaas",
+        payment_failed_at: null,
+        ...(updated.asaas_customer_id ? { asaas_customer_id: updated.asaas_customer_id } : {}),
         updated_at: new Date().toISOString(),
       };
-      if (isCardPayment) updatePayload.card_gateway = "asaas";
       if (isReturning) {
         updatePayload.sessions_used_this_month = 0;
         updatePayload.sessions_reset_date = today;
@@ -785,6 +789,30 @@ async function handleActivation(
 
     // Renovação → para por aqui (sem welcome novo).
     if (isRenewal) return;
+
+    // ============================================================
+    // Migration cleanup: se cliente tinha Stripe ativa (migrou de cartão pra
+    // PIX Asaas), cancela a Stripe sub pra parar cobranças duplicadas / retries.
+    // Non-blocking: erro nunca aborta a ativação Asaas.
+    // ============================================================
+    try {
+      const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
+      if (stripeKey && customerEmail) {
+        const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
+        const customers = await stripe.customers.list({ email: customerEmail, limit: 5 });
+        for (const cust of customers.data) {
+          for (const status of ["active", "past_due", "trialing"] as const) {
+            const subs = await stripe.subscriptions.list({ customer: cust.id, status, limit: 10 });
+            for (const sub of subs.data) {
+              await stripe.subscriptions.cancel(sub.id, { invoice_now: false, prorate: false });
+              console.log(`[migration-cleanup] Stripe sub ${sub.id} (${status}) cancelada para ${customerEmail}`);
+            }
+          }
+        }
+      }
+    } catch (stripeErr) {
+      console.error("[migration-cleanup] Falha cancelando Stripe (non-blocking):", stripeErr);
+    }
 
     // ============================================================
     // Cartão parcelado (installment) não renova sozinho — Asaas cobra as N
