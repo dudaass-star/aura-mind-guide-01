@@ -1184,6 +1184,69 @@ function commitmentQuestionDetected(
   return COMMITMENT_QUESTION_MARKERS.some(marker => recentAssistant.includes(marker));
 }
 
+// ============================================================
+// Detector: a Aura JÁ propôs encerrar/marcar próxima na última fala?
+// Usado para identificar quando o usuário "recusa fechamento" e traz
+// material novo — nesse caso suprimimos a instrução de aterrissagem
+// por alguns turnos para acolher o pedido implícito de continuar.
+// ============================================================
+const CLOSURE_PROPOSAL_MARKERS = [
+  'proxima sessao',
+  'retomar na proxima',
+  'retomamos na',
+  'na proxima a gente',
+  'na proxima semana a gente',
+  'que tal marcarmos',
+  'topa marcarmos',
+  'topa agendar',
+  'vamos marcar',
+  'fica pra proxima',
+  'deixar decantar',
+  'decantar em voce',
+  'pra decantar',
+  'a gente pausa aqui',
+  'pausar aqui',
+  'vamos pausar',
+  'vamos fechar por aqui',
+  'fechar por aqui',
+  'parar por aqui',
+];
+
+function closureProposedInLastAssistant(
+  messageHistory: Array<{ role: string; content: string }>
+): boolean {
+  // Última mensagem assistente antes da última mensagem do usuário
+  const lastAssistant = [...messageHistory].reverse().find(m => m.role === 'assistant');
+  if (!lastAssistant) return false;
+  const normalized = normalizeForMatch(lastAssistant.content);
+  return CLOSURE_PROPOSAL_MARKERS.some(marker => normalized.includes(marker));
+}
+
+// Aceite curto de fim ("ok", "beleza", "vlw", "até", "combinado") — não é recusa
+const CLOSURE_ACCEPT_MARKERS = [
+  'ok', 'beleza', 'blz', 'combinado', 'fechou', 'valeu', 'vlw',
+  'obrigado', 'obrigada', 'ate a proxima', 'ate mais', 'tchau',
+  'boa noite', 'bom dia', 'ate amanha', 'perfeito', 'pode ser',
+  'topo', 'aceito', 'bora', 'entao ta', 'ta bom', 'ta certo'
+];
+
+function userDeclinedClosure(
+  messageHistory: Array<{ role: string; content: string }>
+): boolean {
+  if (!closureProposedInLastAssistant(messageHistory)) return false;
+  const lastUser = [...messageHistory].reverse().find(m => m.role === 'user');
+  if (!lastUser) return false;
+  const content = normalizeForMatch(lastUser.content).trim();
+  if (!content) return false;
+  // Mensagem muito curta (<= 40 chars) e contém apenas marcador de aceite → aceitou fim
+  if (content.length <= 40) {
+    const isAccept = CLOSURE_ACCEPT_MARKERS.some(m => content === m || content.startsWith(m + ' ') || content.endsWith(' ' + m) || content.includes(' ' + m + ' '));
+    if (isAccept) return false;
+  }
+  // Trouxe material substantivo depois da proposta → recusou o fim implicitamente
+  return content.length >= 15;
+}
+
 function evaluateTherapeuticPhase(
   messageHistory: Array<{ role: string; content: string }>,
   sessionActive: boolean,
