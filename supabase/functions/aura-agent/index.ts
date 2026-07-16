@@ -1489,18 +1489,15 @@ ${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}`
       detectedPhase === 'sentido' &&
       sessionElapsedMin >= Math.floor(sessionDurationMin * 0.6)
     ) {
-      // Fase 1 — só desarma a rede de segurança se o USUÁRIO respondeu à pergunta
-      // de compromisso de forma concreta. Antes, bastava a Aura ter perguntado
-      // (falso-positivo): isso desligava a rede sem fechamento real.
+      // Fase 2 — desarma APENAS se o USUÁRIO respondeu à pergunta de compromisso
+      // de forma concreta (user_engaged_with_commitment === true). Removido o
+      // fallback "auraAskedCommitment" que era chicken-and-egg e mantinha a rede
+      // desarmada mesmo sem fechamento real (raiz do arraste pra 78min).
       const userClosedLoop = lastUserContext?.user_engaged_with_commitment === true;
-      const auraAskedCommitment = commitmentQuestionDetected(messageHistory);
       if (userClosedLoop) {
         console.log(`✅ user_engaged_with_commitment=true — closure efetivo, skipping safety net`);
-      } else if (auraAskedCommitment && lastUserContext?.user_engaged_with_commitment === undefined) {
-        // Sinal indisponível (extractor ainda não rodou): fallback ao comportamento antigo.
-        console.log(`✅ Commitment question detected, signal indisponível — fallback antigo, skipping safety net`);
       } else {
-        console.log(`🛡️ Closure safety net fired (elapsed=${sessionElapsedMin}min, duration=${sessionDurationMin}min, auraAsked=${auraAskedCommitment}, userEngaged=${lastUserContext?.user_engaged_with_commitment})`);
+        console.log(`🛡️ Closure safety net fired (elapsed=${sessionElapsedMin}min, duration=${sessionDurationMin}min, userEngaged=${lastUserContext?.user_engaged_with_commitment})`);
         return {
           detectedPhase: 'sentido',
           stagnationLevel: 1,
@@ -1511,6 +1508,45 @@ AÇÃO OBRIGATÓRIA AGORA: amarre o insight num passo concreto antes do fim.
 ${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}`
         };
       }
+    }
+
+    // ======== COBERTURA DE FASES TARDIAS (soft_closing / final_closing / overtime) ========
+    // Estas fases hoje ficavam ÓRFÃS de guidance no evaluator — a Aura passava
+    // dos 45min sem receber nenhuma orientação nova. Distribuição bimodal
+    // (~45min ou ~78min) tinha aqui a raiz.
+    if (['soft_closing', 'final_closing', 'overtime'].includes(sessionPhase)) {
+      const declined = userDeclinedClosure(messageHistory);
+      if (declined) {
+        console.log(`🤝 user_declined_closure detected in phase=${sessionPhase} — supressing landing, acolher pedido de continuar`);
+        return {
+          detectedPhase,
+          stagnationLevel: 0,
+          guidance: `\n\n🤝 USUÁRIO PEDIU PARA CONTINUAR:
+Você propôs encerrar/marcar próxima, e o usuário trouxe material novo em vez de aceitar. Trate como pedido implícito de continuar.
+${SESSION_PHASE_INSTRUCTIONS.declined_closure_acolher}`
+        };
+      }
+
+      if (sessionPhase === 'soft_closing') {
+        console.log(`🧵 Guidance soft_closing injetada (elapsed=${sessionElapsedMin}min)`);
+        return {
+          detectedPhase,
+          stagnationLevel: 1,
+          guidance: `\n\n🧵 JANELA DE COSTURA:
+Estamos entrando no fechamento. Modo: costurar o que já está na mesa, não abrir tema novo.
+${SESSION_PHASE_INSTRUCTIONS.soft_closing_costurando}`
+        };
+      }
+
+      // final_closing + overtime → aterrissagem
+      console.log(`🛬 Guidance ${sessionPhase} injetada (elapsed=${sessionElapsedMin}min)`);
+      return {
+        detectedPhase,
+        stagnationLevel: 2,
+        guidance: `\n\n🛬 ATERRISSAGEM AGORA:
+O tempo alvo da sessão passou. Precisa entregar fechamento com valor NESTA ou na PRÓXIMA resposta — nunca corte seco.
+${SESSION_PHASE_INSTRUCTIONS.overtime_aterrissando}`
+      };
     }
 
     // ======== NUDGE INTERMEDIÁRIO (Vale da Morte 10-25 min) ========
