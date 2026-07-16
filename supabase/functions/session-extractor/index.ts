@@ -429,6 +429,45 @@ Deno.serve(async (req) => {
       );
     }
 
+    // 4.1) Sync one-way: espelhar commitments da sessão no backlog vivo (tabela commitments).
+    //      Source of truth semântica: sessions.commitments = snapshot; commitments = backlog vivo.
+    //      Só espelha se houve aceite explícito (commitment_confirmed=true) — evita poluir backlog
+    //      com sugestões não aceitas. Dedup por (user_id, session_id, title normalizado) porque
+    //      o extractor é idempotente e pode re-rodar.
+    if (result.commitments.length > 0 && result.commitment_confirmed) {
+      try {
+        const { data: existing } = await supabase
+          .from('commitments')
+          .select('title')
+          .eq('user_id', session.user_id)
+          .eq('session_id', sessionId);
+        const existingNorm = new Set(
+          (existing ?? []).map((r: any) => String(r.title || '').trim().toLowerCase()),
+        );
+        const rows = result.commitments
+          .filter((c) => c.title && !existingNorm.has(c.title.trim().toLowerCase()))
+          .map((c) => ({
+            user_id: session.user_id,
+            session_id: sessionId,
+            title: c.title,
+            commitment_status: 'pending',
+            completed: false,
+            reminder_sent: false,
+            follow_up_count: 0,
+          }));
+        if (rows.length > 0) {
+          const { error: insErr } = await supabase.from('commitments').insert(rows);
+          if (insErr) {
+            console.error(`⚠️ session-extractor: sync commitments falhou (${sessionId}):`, insErr);
+          } else {
+            console.log(`🔗 session-extractor: ${rows.length} commitment(s) espelhados de ${sessionId} → tabela commitments`);
+          }
+        }
+      } catch (syncErr) {
+        console.error(`⚠️ session-extractor: exceção no sync de commitments (${sessionId}):`, syncErr);
+      }
+    }
+
     // 5) Propaga closure_state pro profile — gate consolidado para outbounds automáticos
     //    (scheduled-checkin, scheduled-followup, periodic-content, reactivation-blast etc.).
     //    Não bloqueia o retorno — falha aqui não invalida a extração.
