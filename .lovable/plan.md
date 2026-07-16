@@ -1,56 +1,84 @@
 
-# Diagnóstico: sumiço antes do fechamento é canal ou é qualidade?
+# Aterrissagem de sessão sem corte artificial
 
-## Hipótese
+## Problema que estamos tratando
 
-No WhatsApp, parte do abandono é estrutural (a pessoa é interrompida por vida real e não volta na mesma janela). Outra parte é qualidade da Aura (perdeu o fio, ficou repetitiva, interpretou errado, não aterrissou). Sem separar as duas, qualquer conclusão vira achismo.
+Auditoria das últimas 30 sessões mostrou distribuição bimodal do fim: ou fecha em ~45min (ideal), ou arrasta pra ~78min (ruim). Em 25% dos casos vira `no_show` — cron externo mata sem despedida, taxa de retorno em 72h cai pra 12,5%. Em 100% das sessões silenciosas a Aura foi a última a falar, tipicamente com pergunta aberta densa. Cliente sai com sensação de "fiquei pendurado" ou "ela não sabe fechar".
 
-## O que investigar (só leitura, sem mudar nada)
+Causa raiz encontrada no código do `aura-agent/index.ts`:
 
-Vou rodar 5 recortes no banco sobre as sessões dos últimos 30 dias, cruzando `sessions`, `messages` e os novos campos de fechamento (`closure_mode`, `last_interaction_closure_state`).
+1. A "Rede de Segurança de Fechamento" (linha 1389) tem 4 pré-condições AND — incluindo `auraAskedCommitment`, que é chicken-and-egg. Praticamente nunca dispara.
+2. As fases tardias (`soft_closing`, `final_closing`, `overtime`) não têm bloco de guidance no evaluator — a Aura passa dos 45min sem receber nenhuma orientação nova de fechamento.
+3. Rotas de continuidade (`session_bridge`, `suggest_session`) existem mas não são referenciadas nos momentos em que fariam diferença.
 
-### 1. Onde a pessoa some (mapa de calor por fase)
-Contar sessões que terminaram sem fechamento agrupadas pela **fase ativa no momento da última mensagem** (abertura / exploração / reframe / fechamento).
-- Se concentra em **abertura/exploração** → provável qualidade (não engajou).
-- Se concentra em **reframe/fechamento** → provável canal (a pessoa recebeu o valor e saiu).
+Não é problema do modelo Flash e nem de timer — é buraco de cobertura no evaluator que já roda.
 
-### 2. Tempo até o sumiço
-Distribuição do gap entre última mensagem da Aura e o silêncio, comparado com duração total da sessão.
-- Sumiço nos primeiros 5 min = fricção inicial.
-- Sumiço perto dos 45 min = fadiga / sessão longa demais.
-- Sumiço espalhado = ruído de canal.
+## O que muda para o cliente
 
-### 3. Quem é o último a falar
-Ratio de sessões silenciosas onde a **última mensagem foi da Aura** vs. **do usuário**.
-- Aura última → alta chance de a pessoa não ter achado o que responder (pergunta ruim, bloco denso, interpretação errada).
-- Usuário última → pessoa foi interrompida (sinal de canal).
+- Sessão sempre termina com aterrissagem (um dos 7 formatos do Cardápio).
+- Nunca é cortado no meio de assunto novo com carga emocional.
+- Se pedir para continuar após proposta de fechar, é acolhido por até ~15min extras.
+- Fim vira convite pra próxima sessão ou check-in — não vácuo.
 
-### 4. Padrões da Aura nas 3 últimas mensagens antes do sumiço
-Amostra qualitativa de 20 sessões silenciosas: ler as últimas trocas e classificar em:
-- Interpretação prematura / leitura psicológica assertiva
-- Bloco muito longo (>4 balões, muito denso)
-- Pergunta genérica ("como você se sente com isso?")
-- Repetição do que o usuário disse
-- Aterrissagem tentada mas ignorada
-- Nada aparente (canal)
+## O que NÃO muda
 
-Esse é o passo que separa "qualidade" de "canal" de verdade.
+- Nenhum timer paralelo ao Phase Evaluator.
+- Nenhum hard-cut de tempo dentro do agente.
+- Nenhum "vamos parar por aqui" seco.
+- Duração alvo continua 45min; cron externo continua sendo o único que fecha no banco.
+- Metodologia (logoterapia, 3 fases, Cardápio) intocada.
 
-### 5. Retorno pós-sumiço
-Dos usuários que sumiram em uma sessão, quantos voltam a conversar com a Aura em até 72h?
-- Alto retorno → canal (a vida atravessou, mas a relação está viva).
-- Baixo retorno → qualidade (a pessoa saiu e não teve motivo pra voltar).
+## Escopo técnico
 
-## Entregável
+Todas as mudanças em uma única função: `evaluateTherapeuticPhase` em `supabase/functions/aura-agent/index.ts`. Nada em paralelo, uma única fonte de decisão.
 
-Um único relatório em chat com:
-- Números dos 5 recortes.
-- Veredito por eixo: **canal / qualidade / misto**.
-- Se houver eixo de qualidade dominante, lista curta de 2–3 correções específicas (não plano genérico) — ex.: "encurtar reframe quando a fase muda antes de 3 pares", "banir pergunta X que aparece em 40% dos sumiços".
+### 1. Afrouxar a Rede de Segurança existente
 
-## Fora do escopo
+Remover a exigência de `auraAskedCommitment` da condição de disparo (é chicken-and-egg). Manter: `sentido sustentado + elapsed ≥ 60%`. Manter `user_engaged_with_commitment` como razão de desarme (já funciona).
 
-- Nenhuma alteração de código, prompt ou schema nesta rodada.
-- Não vou reabrir M1–M4; isso aqui é diagnóstico do que sobrou depois deles.
+### 2. Adicionar guidance para fases órfãs
 
-Aprova rodar o diagnóstico?
+Preencher blocos de instrução tática para `soft_closing` (~38min+) e `overtime` (~45min+) — hoje ambos ficam sem nenhuma injeção. Texto de cada bloco inclui:
+
+- Estado "costurando" (`soft_closing`): "sem novas perguntas exploratórias; aprofunde o que já está na mesa e comece a puxar o fio para o Cardápio."
+- Estado "aterrissando" (`overtime`): "o formato do Cardápio precisa emergir nesta ou na próxima resposta; priorize `session_bridge` / `suggest_session` para transformar o fim em próximo capítulo."
+
+### 3. Salvaguarda contra corte de assunto vivo
+
+Regra escrita explicitamente nos dois blocos acima:
+
+> "Se o usuário abriu tema novo com carga emocional na última mensagem, NÃO force fechamento. Acolhe, valida, e proponha retomar na próxima sessão. Fechar em cima de assunto vivo parece robô."
+
+### 4. Acolher pedido de continuar
+
+Nova flag determinística no evaluator: `user_declined_closure = true` quando a última mensagem do usuário vier após uma resposta da Aura marcada com fechamento (menção a "próxima sessão"/"retomar" ou tag `session_bridge`/`suggest_session`).
+
+Enquanto essa flag estiver ativa por até 3-4 pares de mensagens (ou +15min sobre o alvo, o que vier primeiro), o evaluator **suprime** as instruções de aterrissagem e injeta:
+
+> "Usuário pediu para continuar após proposta de fechar. Acolhe integralmente o que ele trouxe; NÃO repita proposta de fechar imediatamente. Só volte a costurar quando o novo tema tiver sido tocado."
+
+Passando desse limite, evaluator volta a injetar aterrissagem, agora com texto de validação: *"a gente estendeu bem hoje, e o que você trouxe merece espaço próprio — que tal marcarmos [dia]?"*.
+
+Teto absoluto continua sendo o cron externo.
+
+## Instrumentação (já existe, só validar)
+
+- `closure_mode` no `sessions` (deployado hoje). Após 24-48h deve começar a aparecer preenchido com `ritual` / `unilateral` / `no_show`.
+- Se continuar 100% NULL depois desse prazo, abrir sub-tarefa de investigação — fora do escopo deste plano.
+
+## Métricas de sucesso (30 dias após deploy)
+
+- % de sessões com `closure_type` preenchido dentro de ≤50min sobe de ~45% para ≥65%.
+- % de `no_show` cai de ~25% para ≤10%.
+- Taxa de retorno em 72h nas sessões que passam do alvo sobe de 12,5% para ≥30%.
+- Duração média cai de ~62min para ≤52min.
+
+## Arquivos afetados
+
+- `supabase/functions/aura-agent/index.ts` — única mudança, dentro de `evaluateTherapeuticPhase` e nos textos de `SESSION_PHASE_INSTRUCTIONS`.
+
+## Riscos e mitigação
+
+- **Risco**: Aura ficar rígida demais e cortar cedo. **Mitigação**: salvaguarda de assunto vivo + flag `user_declined_closure` são explícitas no prompt.
+- **Risco**: Flash ignorar as novas instruções como ignora as atuais. **Mitigação**: instruções ficam mais fortes e cobrem fases hoje órfãs (mudança de cobertura, não só de tom). Se ainda assim ignorar, próximo passo seria interceptação determinística no backend — mas só depois de validar que a mudança de cobertura já resolve boa parte.
+- **Risco**: Regressão no comportamento atual das sessões que já fecham bem (~45%). **Mitigação**: mudanças concentradas nas fases tardias; `exploration`/`reframe` intocados.
