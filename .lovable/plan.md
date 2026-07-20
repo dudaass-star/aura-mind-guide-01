@@ -1,62 +1,49 @@
-## Contexto e diagnóstico
+# Simplificar bloqueio do Semanal + cobrir Asaas cartão + explicar o gap
 
-O plano **Semanal** (R$ 6,90 / 9,90 / 19,90) foi desenhado como **isca de aquisição** — porta de entrada barata para converter em recorrente. Hoje o `create-checkout` só bloqueia quem tem assinatura **ativa/trialing** (anti-dup). Quem já foi cliente e cancelou consegue voltar pelo Semanal quantas vezes quiser — como o caso `jefmarper@gmail.com` (Direção mensal em maio → cancelou → voltou no Semanal em julho).
+## Por que passou batido antes
 
-Isso quebra a proposta: o Semanal deixa de ser aquisição e vira um "downgrade disfarçado" para churners recorrentes, corroendo LTV.
+1. **Fail-open silencioso**: o `.select("stripe_customer_id, …")` referencia coluna inexistente em `profiles` (só `asaas_customer_id` existe). PostgREST devolve 400, cai no `catch` genérico da linha 382 e loga *"non-blocking"* — o checkout segue normal. Nenhum 409 sai.
+2. **Não testei após implementar**: sem `curl` no endpoint nem inspeção de log. Confiei no código.
+3. **A anti-dup antiga (linhas 184-240) só usa API Stripe** — por isso nunca quebrou. O bug apareceu quando misturei query Supabase mal formada.
 
-**Concordo com a regra**: Semanal é 1× por cliente. Retornante deve ir direto para Mensal/Trim/Sem/Anual.
+## Escopo revisado (com Asaas cartão)
 
-## Escopo
+Semanal pode entrar por Stripe **ou** Asaas cartão (o gateway ativo é chaveado via `system_config` no admin). Precisamos bloquear retornante **independente** do gateway usado antes.
 
-Backend-only + copy no checkout. Sem mudar a landing.
+Fontes de verdade:
+- **Stripe**: `stripe.subscriptions.list({ customer, status: "all" })` — cobre canceled/past_due/incomplete.
+- **Asaas**: `public.asaas_payments` filtrando por `customer_email` OU `customer_phone` com `status IN ('CONFIRMED','RECEIVED','RECEIVED_IN_CASH')` — cobre PIX e cartão.
+- **Não olhar `profiles`**: o schema não tem `stripe_customer_id` e `plan` é ambíguo (fica preenchido mesmo em cancelados). Ir direto na origem elimina o bug atual.
 
-### 1. Bloqueio server-side em `create-checkout` (fonte da verdade)
+## Mudança única em `supabase/functions/create-checkout/index.ts`
 
-Quando `trial === true` (fluxo Semanal), rodar uma checagem de "cliente retornante" **antes** de criar a Session. Retornante = qualquer um dos abaixo:
+**Remover** o bloco atual do trial (linhas 311-386) — a query Supabase quebrada e a segunda varredura Stripe.
 
-- **Profile existente** em `profiles` para o mesmo email OU telefone normalizado com `stripe_customer_id` preenchido, OU `asaas_customer_id` preenchido, OU `plan` já setado alguma vez (indica compra anterior).
-- **Stripe**: `stripe.customers.list({email})` retornando algum customer com **qualquer** subscription histórica (`status: 'all'` — inclui `canceled`, `incomplete_expired`, `past_due`, `unpaid`, além de `active`/`trialing`).
-- **Asaas**: existe `asaas_payments` com `status IN ('CONFIRMED','RECEIVED','RECEIVED_IN_CASH')` para o `asaas_customer_id` ligado a esse email/telefone.
+**Adicionar** no fluxo `if (trial)` uma checagem enxuta e explícita:
 
-Se qualquer condição bater, retornar **HTTP 409** com:
-```json
-{
-  "error": "O Plano Semanal é só pra primeira experiência. Como você já assinou antes, escolha um dos planos recorrentes (mensal, trimestral, semestral ou anual).",
-  "code": "WEEKLY_NOT_AVAILABLE_FOR_RETURNING",
-  "suggestedBilling": "monthly"
-}
-```
+1. **Reusar `customersToCheck`** (já construído na anti-dup por email + variações de telefone, linhas 188-203). Para cada `cid`, chamar `stripe.subscriptions.list({ customer: cid, status: "all", limit: 3 })`. Qualquer resultado → retornante.
+2. **Consultar Asaas** direto: `supabase.from("asaas_payments").select("id").or("customer_email.eq.<email>,customer_phone.eq.<phoneClean>").in("status", ["CONFIRMED","RECEIVED","RECEIVED_IN_CASH"]).limit(1)`. Qualquer linha → retornante.
+3. Se qualquer uma disparar, retornar **409** com `code: "WEEKLY_NOT_AVAILABLE_FOR_RETURNING"` e a mensagem/`suggestedBilling: "monthly"` que já existe hoje. Log `hasStripeHistory` / `hasAsaasHistory` pra observabilidade.
 
-O anti-dup atual (assinatura ativa) permanece — ele cobre "quem tá pagando agora"; a nova regra cobre "quem já pagou antes".
+Sem try/catch mascarando: se a query Asaas falhar por erro de infra, logar e **prosseguir** (fail-open explícito e comentado, não acidental). Se a query voltar `error != null` mas com resposta válida (schema quebrado, coluna errada), a função vai lançar — melhor barulho do que bug silencioso.
 
-### 2. UX no `CheckoutV2.tsx`
+Diff: ~40 linhas a menos, uma responsabilidade por bloco, sem acoplamento com `profiles`.
 
-Tratar o `code: "WEEKLY_NOT_AVAILABLE_FOR_RETURNING"`:
-- Mostrar toast com a mensagem retornada.
-- Trocar automaticamente o `billingPeriod` para `monthly` (recorrente cartão sem trial, ou o próximo caminho disponível).
-- Rolar até o toggle de período pra deixar claro qual a alternativa.
+## Não afetar quem já pagou (jefmarper e afins)
 
-### 3. Memória do projeto
+Fix é **só na porta de entrada** (`create-checkout`). Quem já concluiu o Semanal continua com a subscription rodando normal — em ~7 dias a Stripe cobra o preço mensal recorrente conforme o mandato CIT→MIT. Nada é revertido, nenhuma linha do banco é tocada, nenhuma cobrança cancelada. A regra só impede a **próxima** tentativa de assinar Semanal de novo.
 
-Salvar `mem://business/weekly-plan-first-purchase-only.md` como **constraint**: "Semanal é 1× por CPF/email/telefone. Retornantes vão direto pro recorrente."
+## Validação (obrigatória desta vez)
 
-## Fora do escopo
+Após o deploy do `create-checkout`:
 
-- Bloqueio no Asaas PIX Semanal — hoje não existe PIX Semanal (Asaas PIX só recorrente nos 4 ciclos), então nada a fazer lá.
-- Migração de dados históricos ou refund de quem já comprou o Semanal 2×.
-- Blindagem contra fraude com email/telefone novo — quem quiser burlar cria conta nova; o objetivo aqui é higienizar o fluxo legítimo, não caçar abuso.
-- Mudança na landing page ou remoção do Semanal da vitrine (Semanal continua exposto como oferta pública — só quem já foi cliente é redirecionado).
+1. `supabase--curl_edge_functions` POST em `/create-checkout` com `{ trial: true, plan: "essencial", email: "jefmarper@gmail.com", phone: "5511976982383", name: "Jef", paymentMethod: "card" }` → esperar **409** + `code: "WEEKLY_NOT_AVAILABLE_FOR_RETURNING"`.
+2. Mesmo POST com email/telefone novos → esperar **200** com `clientSecret`.
+3. `edge_function_logs` do `create-checkout`: confirmar `⛔ Weekly blocked for returning customer` no caso 1 e ausência do warning `non-blocking` em qualquer chamada.
 
-## Detalhes técnicos
+## Fora de escopo
 
-- Arquivo: `supabase/functions/create-checkout/index.ts` — inserir bloco de checagem logo depois do lookup de `profile`/`customer` e **antes** da montagem de `sessionConfig`, no ramo `if (trial)`.
-- Query Supabase: `select stripe_customer_id, asaas_customer_id, plan, billing_cycle from profiles where email = ? or phone_normalized = ? limit 1`.
-- Stripe: `stripe.subscriptions.list({customer: cid, status: 'all', limit: 5})` — se `.data.length > 0`, é retornante.
-- Log: `logStep("⛔ Weekly blocked for returning customer", { email, hasProfile, hasStripeHistory, hasAsaasHistory })` para auditoria.
-- Frontend: `CheckoutV2.tsx` já trata `error?.context?.error` — adicionar branch por `code === "WEEKLY_NOT_AVAILABLE_FOR_RETURNING"` no `catch`/response handler do submit.
-
-## Validação
-
-1. Testar com `jefmarper@gmail.com` (retornante conhecido) → deve receber 409.
-2. Testar com email totalmente novo → checkout Semanal segue normal.
-3. Verificar em `edge_function_logs` se o log de bloqueio aparece.
+- **Frontend (`CheckoutV2.tsx`)**: handler do 409 já está correto (linhas 445-458). Não muda.
+- **Memória `weekly-plan-first-purchase-only`**: regra mantida — só a execução fica mais enxuta e cobre Asaas.
+- **Assinatura ativa do jefmarper**: intocada.
+- **Migration**: nenhuma. Não há mudança de schema.

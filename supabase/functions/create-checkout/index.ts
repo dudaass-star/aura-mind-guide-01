@@ -308,81 +308,77 @@ serve(async (req) => {
     if (trial) {
       // === PLANO SEMANAL (legado "trial"): mode=payment + setup_future_usage off_session ===
       // === REGRA: Semanal é 1x por cliente (aquisição). Retornantes vão pro recorrente. ===
+      // Consulta direta às fontes de verdade (Stripe + Asaas), sem passar por profiles
+      // (schema não tem stripe_customer_id; `plan` fica preenchido mesmo em cancelados).
+      let hasStripeHistory = false;
+      let hasAsaasHistory = false;
+
+      // 1) Stripe: reusa varredura por email + variações de telefone (mesma da anti-dup)
+      const stripeCustomersToScan = new Map<string, true>();
+      const byEmail = await stripe.customers.list({ email, limit: 10 });
+      for (const c of byEmail.data) stripeCustomersToScan.set(c.id, true);
+      for (const phoneVar of phoneVariations) {
+        const byPhone = await stripe.customers.search({
+          query: `metadata['phone']:'${phoneVar}'`,
+          limit: 10,
+        });
+        for (const c of byPhone.data) stripeCustomersToScan.set(c.id, true);
+      }
+      for (const cid of stripeCustomersToScan.keys()) {
+        const anySubs = await stripe.subscriptions.list({
+          customer: cid,
+          status: "all",
+          limit: 3,
+        });
+        if (anySubs.data.length > 0) {
+          hasStripeHistory = true;
+          break;
+        }
+      }
+
+      // 2) Asaas: qualquer pagamento confirmado por email OU telefone (cobre PIX e cartão)
       try {
         const supabaseCheck = createClient(
           Deno.env.get("SUPABASE_URL") ?? "",
           Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
           { auth: { persistSession: false } },
         );
+        const { data: asaasPays, error: asaasErr } = await supabaseCheck
+          .from("asaas_payments")
+          .select("id")
+          .or(`customer_email.eq.${email},customer_phone.eq.${phoneClean}`)
+          .in("status", ["CONFIRMED", "RECEIVED", "RECEIVED_IN_CASH"])
+          .limit(1);
+        if (asaasErr) {
+          // Fail-open explícito: logamos e seguimos. Não queremos derrubar checkout
+          // por falha transitória do banco, mas o warning fica visível pra ops.
+          console.warn("⚠️ Asaas history check failed (non-blocking):", asaasErr.message);
+        } else {
+          hasAsaasHistory = !!(asaasPays && asaasPays.length > 0);
+        }
+      } catch (asaasCatch) {
+        const msg = asaasCatch instanceof Error ? asaasCatch.message : String(asaasCatch);
+        console.warn("⚠️ Asaas history check threw (non-blocking):", msg);
+      }
 
-        let hasProfile = false;
-        let hasAsaasHistory = false;
-        const { data: prof } = await supabaseCheck
-          .from("profiles")
-          .select("user_id, stripe_customer_id, asaas_customer_id, plan")
-          .or(`email.eq.${email},phone.eq.${phoneClean}`)
-          .limit(1)
-          .maybeSingle();
-        if (prof) {
-          hasProfile = !!(prof.stripe_customer_id || prof.asaas_customer_id || prof.plan);
-          if (prof.asaas_customer_id) {
-            const { data: asaasPays } = await supabaseCheck
-              .from("asaas_payments")
-              .select("id")
-              .eq("asaas_customer_id", prof.asaas_customer_id)
-              .in("status", ["CONFIRMED", "RECEIVED", "RECEIVED_IN_CASH"])
-              .limit(1);
-            hasAsaasHistory = !!(asaasPays && asaasPays.length > 0);
-          }
-        }
-
-        let hasStripeHistory = false;
-        const customersToScan = new Map<string, true>();
-        const byEmail = await stripe.customers.list({ email, limit: 10 });
-        for (const c of byEmail.data) customersToScan.set(c.id, true);
-        for (const phoneVar of phoneVariations) {
-          const byPhone = await stripe.customers.search({
-            query: `metadata['phone']:'${phoneVar}'`,
-            limit: 10,
-          });
-          for (const c of byPhone.data) customersToScan.set(c.id, true);
-        }
-        for (const cid of customersToScan.keys()) {
-          const anySubs = await stripe.subscriptions.list({
-            customer: cid,
-            status: "all",
-            limit: 3,
-          });
-          if (anySubs.data.length > 0) {
-            hasStripeHistory = true;
-            break;
-          }
-        }
-
-        if (hasProfile || hasStripeHistory || hasAsaasHistory) {
-          logStep("⛔ Weekly blocked for returning customer", {
-            email,
-            hasProfile,
-            hasStripeHistory,
-            hasAsaasHistory,
-          });
-          return new Response(
-            JSON.stringify({
-              error:
-                "O Plano Semanal é só pra primeira experiência. Como você já assinou antes, escolha um dos planos recorrentes (mensal, trimestral, semestral ou anual).",
-              code: "WEEKLY_NOT_AVAILABLE_FOR_RETURNING",
-              suggestedBilling: "monthly",
-            }),
-            {
-              headers: { ...corsHeaders, "Content-Type": "application/json" },
-              status: 409,
-            },
-          );
-        }
-      } catch (weeklyErr) {
-        const msg = weeklyErr instanceof Error ? weeklyErr.message : String(weeklyErr);
-        if (msg.includes("WEEKLY_NOT_AVAILABLE_FOR_RETURNING")) throw weeklyErr;
-        console.warn("⚠️ Weekly returning-check failed (non-blocking):", msg);
+      if (hasStripeHistory || hasAsaasHistory) {
+        logStep("⛔ Weekly blocked for returning customer", {
+          email,
+          hasStripeHistory,
+          hasAsaasHistory,
+        });
+        return new Response(
+          JSON.stringify({
+            error:
+              "O Plano Semanal é só pra primeira experiência. Como você já assinou antes, escolha um dos planos recorrentes (mensal, trimestral, semestral ou anual).",
+            code: "WEEKLY_NOT_AVAILABLE_FOR_RETURNING",
+            suggestedBilling: "monthly",
+          }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 409,
+          },
+        );
       }
 
       // Estratégia CIT→MIT: a 1ª cobrança (R$ 6,90/9,90/19,90) já estabelece um mandato
