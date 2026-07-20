@@ -466,9 +466,8 @@ const CheckoutV2 = () => {
           try { errBody = await ctx.json(); } catch { /* ignore */ }
         }
         if (errBody?.code === "WEEKLY_NOT_AVAILABLE_FOR_RETURNING") {
-          toast.info(errBody.error, { duration: 7000 });
-          setBillingPeriod("monthly");
-          requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+          toast.info("Mudamos pro plano Mensal — confira acima.", { duration: 4000 });
+          triggerWeeklyBlockedFallback(errBody.error);
           return;
         }
         throw new Error(errBody?.error || error.message || "Erro ao processar pagamento");
