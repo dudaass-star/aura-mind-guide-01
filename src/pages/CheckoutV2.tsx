@@ -761,6 +761,13 @@ const CheckoutV2 = () => {
                 onSuccess={() => {
                   window.location.href = "/obrigado";
                 }}
+                onWeeklyBlocked={() => {
+                  // Retornante tentando Semanal via Asaas cartão: fecha o form,
+                  // volta ao topo pro usuário escolher um plano recorrente (Trim/Sem/Anual).
+                  handleResetCheckout();
+                  setBillingPeriod("monthly");
+                  requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+                }}
               />
             ) : (
               <>
