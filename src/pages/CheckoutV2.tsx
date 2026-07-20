@@ -828,13 +828,14 @@ const CheckoutV2 = () => {
                     <button
                       type="button"
                       onClick={() => {
-                        setWeeklyBlockedNotice(null);
-                        const el = document.getElementById("checkout-form");
-                        el?.scrollIntoView({ behavior: "smooth", block: "end" });
+                        const btn = document.querySelector<HTMLButtonElement>(
+                          "#checkout-form button[type='submit']",
+                        );
+                        btn?.scrollIntoView({ behavior: "smooth", block: "center" });
                       }}
                       className="mt-2 text-xs font-medium text-[hsl(35_70%_75%)] underline underline-offset-2 hover:text-white"
                     >
-                      Continuar com o Mensal
+                      Ir para o pagamento →
                     </button>
                   </div>
                 </div>
