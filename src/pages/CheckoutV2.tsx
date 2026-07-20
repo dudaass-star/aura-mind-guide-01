@@ -777,11 +777,12 @@ const CheckoutV2 = () => {
                   window.location.href = "/obrigado";
                 }}
                 onWeeklyBlocked={() => {
-                  // Retornante tentando Semanal via Asaas cartão: fecha o form,
-                  // volta ao topo pro usuário escolher um plano recorrente (Trim/Sem/Anual).
+                  // Retornante tentando Semanal via Asaas cartão: fecha o form embutido
+                  // e mostra o banner explicativo no lugar — sem parecer erro genérico.
                   handleResetCheckout();
-                  setBillingPeriod("monthly");
-                  requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+                  triggerWeeklyBlockedFallback(
+                    "O Plano Semanal é só pra primeira experiência. Como você já assinou antes, escolha um dos planos recorrentes (mensal, trimestral, semestral ou anual).",
+                  );
                 }}
               />
             ) : (
