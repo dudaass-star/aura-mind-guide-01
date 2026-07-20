@@ -448,19 +448,13 @@ const CheckoutV2 = () => {
         },
       });
 
-      // 409 c/ body JSON (ex.: WEEKLY_NOT_AVAILABLE_FOR_RETURNING) chega em error.context (Response)
       if (error) {
-        let errBody: any = (data as any) ?? null;
-        const ctx = (error as any)?.context;
-        if (!errBody && ctx && typeof ctx.json === "function") {
-          try { errBody = await ctx.json(); } catch { /* ignore */ }
-        }
-        if (errBody?.code === "WEEKLY_NOT_AVAILABLE_FOR_RETURNING") {
-          toast.info("Mudamos pro plano Mensal — confira acima.", { duration: 4000 });
-          triggerWeeklyBlockedFallback(errBody.error, "stripe");
-          return;
-        }
-        throw new Error(errBody?.error || error.message || "Erro ao processar pagamento");
+        throw new Error((data as any)?.error || error.message || "Erro ao processar pagamento");
+      }
+      // Backend rebaixou Semanal → Mensal recorrente pra cliente retornante.
+      // O Embedded Checkout já vem com o preço/custom_text corretos; só instrumentamos.
+      if ((data as any)?.returning_customer) {
+        trackReturningCustomerMonthly("stripe");
       }
 
       if (data?.clientSecret && data?.publishableKey) {
