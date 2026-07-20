@@ -1,46 +1,39 @@
-## Contexto verificado
+## Verificação
 
-Fluxo atual quando o retornante tenta Semanal (Stripe cartão **ou** Asaas cartão):
+Simulei o 409 `WEEKLY_NOT_AVAILABLE_FOR_RETURNING` no `/v2/checkout` via Playwright (viewport mobile 420px). Comportamento observado:
 
-1. Backend responde `409 WEEKLY_NOT_AVAILABLE_FOR_RETURNING` com a mensagem: *"O Plano Semanal é só pra primeira experiência. Como você já assinou antes, escolha um dos planos recorrentes..."* e `suggestedBilling: "monthly"`.
-2. Frontend (`CheckoutV2.tsx` + `AsaasCardForm.tsx`) já:
-   - Dispara `toast.info(...)` por 7s.
-   - `setBillingPeriod("monthly")`.
-   - Rola pro topo.
+- **Banner inline** aparece no topo, cor "info" (âmbar/dourado), com título "Mudamos pro plano Mensal automaticamente" + a mensagem do backend + link "Continuar com o Mensal".
+- **Toggle de período** já está em "Mensal" quando o banner aparece.
+- **Toast de reforço** ("Mudamos pro plano Mensal — confira acima.") aparece no rodapé por 4s.
+- **Subtítulo** volta pro "7 dias por R$ X,XX • cancele quando quiser" (coerente com o Mensal, que tem trial).
+- Trocar de plano manualmente **fecha o banner** — testado no código.
 
-**Gaps encontrados:**
-- É um `toast.info` de 7s que some — se o usuário estiver olhando o botão "Pagar" no meio da tela, pode não ver e achar que "deu erro e não vai" na segunda tentativa.
-- Nada visualmente destaca que o plano mudou (o seletor de billing só troca de estado sem callout).
-- No fluxo Asaas, `handleResetCheckout()` fecha o form embutido: o usuário volta pro formulário mas sem contexto explícito do porquê.
-- Não há aviso preventivo — o usuário só descobre depois de clicar "Pagar".
+Ficou visível e não parece erro. Está pronto.
 
-## O que fazer
+## Ajustes finos sugeridos (todos pequenos)
 
-**1. Banner inline persistente (substitui o toast como fonte primária)**
-- Novo estado `weeklyBlockedNotice` em `CheckoutV2.tsx`.
-- Quando o 409 chega (Stripe cartão ou Asaas cartão), setar o aviso com o texto do backend.
-- Renderizar um card destacado (tom "info", não "erro") no topo do formulário: ícone de info + título "Mudamos pra Mensal automaticamente" + corpo com a mensagem do backend + CTA "Continuar com Mensal" que rola até o botão Pagar.
-- Some ao trocar plano/billing manualmente ou ao submeter com sucesso.
-- Manter o `toast.info` como reforço (curto), mas o banner é o que garante que não parece erro.
+**1. Copy do CTA do banner mais acionável**
+- Hoje: "Continuar com o Mensal" (rola até o fim do form).
+- Trocar pra: "Ir para o pagamento" — mais direto, evita ambiguidade (usuário pode achar que "continuar com o Mensal" é confirmar mudança).
 
-**2. Destacar visualmente a troca**
-- Ao setar `billingPeriod = "monthly"`, aplicar um highlight temporário (ring/animação de 2s) no card do plano Mensal.
-- Atualizar o subtítulo do checkout dinamicamente ("7 dias por R$ X" → "Mensal • R$ Y/mês") pra reforçar que a UI já se ajustou.
+**2. Persistência do highlight no Mensal**
+- Hoje o pulse dura 2.4s. Se o usuário demora pra rolar até o toggle, perde o sinal visual.
+- Trocar por um **ring estático** enquanto `weeklyBlockedNotice` estiver ativo (some junto com o banner). Sem `animate-pulse`, só ring âmbar.
 
-**3. Copy defensiva antes de submeter (opcional, leve)**
-- Se o usuário estiver com Semanal selecionado e já tiver preenchido email + telefone válidos, exibir um hint discreto abaixo do seletor: "Já assinou antes? O Semanal é só pra 1ª experiência."
-- Sem chamada de rede — só mensagem informativa. Evita frustração antes do clique.
+**3. Auto-scroll direto pro botão Pagar em vez do topo**
+- Hoje o `triggerWeeklyBlockedFallback` rola pro topo (pra ver o banner). Mas o banner é grande e empurra o botão Pagar pra fora da tela.
+- Alternativa: rolar pro topo por 800ms (garantindo que o banner seja visto), então rolar suavemente até o botão Pagar. Assim o usuário vê o aviso **e** encontra o próximo passo sem procurar.
+- Ou mais simples: manter no topo, mas garantir que o banner seja compacto o suficiente pra o toggle + botão Pagar ficarem visíveis no scroll seguinte.
 
-**4. Preservar o fluxo do Asaas embutido**
-- No `onWeeklyBlocked` do `AsaasCardForm`, além do reset + scroll: setar o mesmo `weeklyBlockedNotice` para que, ao voltar ao formulário, o banner explique o motivo do form ter sido fechado.
+**4. Log de instrumentação (nice-to-have)**
+- Adicionar `console.info` + evento GA4 `weekly_redirect_to_monthly` no `triggerWeeklyBlockedFallback` pra medir quantos retornantes caem nesse fluxo. Ajuda a validar depois se a mensagem converte ou se estamos perdendo gente aqui.
 
 ## Arquivos afetados
 
-- `src/pages/CheckoutV2.tsx` — novo estado `weeklyBlockedNotice`, banner, highlight, subtítulo dinâmico, hint opcional, wiring do `onWeeklyBlocked`.
-- Sem mudanças de backend, sem mudanças de contrato de API.
+- `src/pages/CheckoutV2.tsx` — copy do CTA, ring estático em vez de pulse temporário, ajuste do scroll, evento GA4.
+- `src/lib/ga4.ts` — nova função `trackWeeklyRedirectToMonthly` (se seguirmos com o item 4).
 
 ## Fora de escopo
 
-- Pré-checagem via endpoint dedicado (evitar round-trip extra e complexidade).
-- Auto-submit após a troca — o usuário precisa revisar e confirmar o novo valor (Mensal cobra mais que Semanal na 1ª cobrança).
-- Fluxo PIX (não oferece Semanal).
+- Pré-checagem antes do submit (evitar round-trip). Já discutido e descartado antes.
+- Mudança de copy do backend — a mensagem atual do 409 é boa.
