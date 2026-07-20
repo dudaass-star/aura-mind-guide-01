@@ -121,3 +121,8 @@ export const trackScrollDepth = (percent: 25 | 50 | 75 | 100): void =>
 export const trackExitIntent = (
   action: "open" | "convert" | "dismiss"
 ): void => trackEvent("exit_intent", { action });
+
+export const trackWeeklyRedirectToMonthly = (
+  gateway: "stripe" | "asaas",
+): void =>
+  trackEvent("weekly_redirect_to_monthly", { gateway });
