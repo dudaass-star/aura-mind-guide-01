@@ -793,19 +793,11 @@ const CheckoutV2 = () => {
                     <button
                       key={p}
                       type="button"
-                      onClick={() => {
-                        setBillingPeriod(p);
-                        // Troca manual dispensa o banner de fallback do Semanal.
-                        if (weeklyBlockedNotice) setWeeklyBlockedNotice(null);
-                      }}
+                      onClick={() => setBillingPeriod(p)}
                       className={`relative flex flex-col items-center justify-center px-2 py-2 rounded-xl text-xs font-medium transition-all ${
                         active
                           ? "bg-[hsl(140_22%_45%)] text-white shadow-md"
                           : "text-white/70 hover:text-white"
-                      } ${
-                        p === "monthly" && weeklyBlockedNotice
-                          ? "ring-2 ring-[hsl(35_70%_60%)] ring-offset-2 ring-offset-[hsl(220_35%_12%)]"
-                          : ""
                       }`}
                     >
                       <span>{periodShortMap[p]}</span>
