@@ -191,6 +191,22 @@ const CheckoutV2 = () => {
   // Quando gateway=asaas, submit do form abre o AsaasCardForm ao invés do embed Stripe.
   const [asaasCardOpen, setAsaasCardOpen] = useState(false);
 
+  // Fallback visível quando o backend recusa o Semanal pra retornante (409
+  // WEEKLY_NOT_AVAILABLE_FOR_RETURNING). Mostramos um banner inline persistente
+  // em vez de depender só do toast — evita que o usuário ache que "deu erro"
+  // e desista. `highlightMonthly` dá um pulse curto no toggle pra reforçar
+  // que a UI já se ajustou pro Mensal automaticamente.
+  const [weeklyBlockedNotice, setWeeklyBlockedNotice] = useState<string | null>(null);
+  const [highlightMonthly, setHighlightMonthly] = useState(false);
+
+  const triggerWeeklyBlockedFallback = useCallback((message: string) => {
+    setWeeklyBlockedNotice(message);
+    setBillingPeriod("monthly");
+    setHighlightMonthly(true);
+    window.setTimeout(() => setHighlightMonthly(false), 2400);
+    requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+  }, []);
+
   // PIX (Asaas): só aparece pra trim/sem/anual. Modal abre com form de CPF
   // (resto dos dados reusa name/email/phone do form principal) e troca pra
   // tela de QR depois que a edge function retorna.
