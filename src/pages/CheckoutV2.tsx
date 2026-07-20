@@ -486,7 +486,7 @@ const CheckoutV2 = () => {
         }
         if (errBody?.code === "WEEKLY_NOT_AVAILABLE_FOR_RETURNING") {
           toast.info("Mudamos pro plano Mensal — confira acima.", { duration: 4000 });
-          triggerWeeklyBlockedFallback(errBody.error);
+          triggerWeeklyBlockedFallback(errBody.error, "stripe");
           return;
         }
         throw new Error(errBody?.error || error.message || "Erro ao processar pagamento");
@@ -801,6 +801,7 @@ const CheckoutV2 = () => {
                   handleResetCheckout();
                   triggerWeeklyBlockedFallback(
                     "O Plano Semanal é só pra primeira experiência. Como você já assinou antes, escolha um dos planos recorrentes (mensal, trimestral, semestral ou anual).",
+                    "asaas",
                   );
                 }}
               />
