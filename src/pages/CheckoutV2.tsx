@@ -878,8 +878,8 @@ const CheckoutV2 = () => {
                           ? "bg-[hsl(140_22%_45%)] text-white shadow-md"
                           : "text-white/70 hover:text-white"
                       } ${
-                        p === "monthly" && highlightMonthly
-                          ? "ring-2 ring-[hsl(35_70%_60%)] ring-offset-2 ring-offset-[hsl(220_35%_12%)] animate-pulse"
+                        p === "monthly" && weeklyBlockedNotice
+                          ? "ring-2 ring-[hsl(35_70%_60%)] ring-offset-2 ring-offset-[hsl(220_35%_12%)]"
                           : ""
                       }`}
                     >
