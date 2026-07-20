@@ -757,56 +757,15 @@ const CheckoutV2 = () => {
                 })()}
                 gaClientId={getGaClientId() || undefined}
                 onBack={handleResetCheckout}
-                onSuccess={() => {
+                onSuccess={(info) => {
+                  if (info?.returningCustomerMonthly) {
+                    trackReturningCustomerMonthly("asaas");
+                  }
                   window.location.href = "/obrigado";
-                }}
-                onWeeklyBlocked={() => {
-                  // Retornante tentando Semanal via Asaas cartão: fecha o form embutido
-                  // e mostra o banner explicativo no lugar — sem parecer erro genérico.
-                  handleResetCheckout();
-                  triggerWeeklyBlockedFallback(
-                    "O Plano Semanal é só pra primeira experiência. Como você já assinou antes, escolha um dos planos recorrentes (mensal, trimestral, semestral ou anual).",
-                    "asaas",
-                  );
                 }}
               />
             ) : (
               <>
-            {/* Banner de fallback Semanal → Mensal: aparece quando o backend
-                bloqueia o Semanal pra retornante. Persistente (não some sozinho),
-                cor "info" pra não parecer erro. */}
-            {weeklyBlockedNotice && (
-              <div
-                role="status"
-                aria-live="polite"
-                className="mb-5 rounded-2xl border border-[hsl(35_70%_60%)]/40 bg-[hsl(35_70%_60%)]/10 p-4 text-sm text-white/90"
-              >
-                <div className="flex items-start gap-3">
-                  <Check className="h-5 w-5 shrink-0 text-[hsl(35_70%_70%)] mt-0.5" />
-                  <div className="flex-1">
-                    <p className="font-semibold text-white mb-1">
-                      Mudamos pro plano Mensal automaticamente
-                    </p>
-                    <p className="text-white/75 leading-relaxed">
-                      {weeklyBlockedNotice}
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const btn = document.querySelector<HTMLButtonElement>(
-                          "#checkout-form button[type='submit']",
-                        );
-                        btn?.scrollIntoView({ behavior: "smooth", block: "center" });
-                      }}
-                      className="mt-2 text-xs font-medium text-[hsl(35_70%_75%)] underline underline-offset-2 hover:text-white"
-                    >
-                      Ir para o pagamento →
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
             {/* Cabeçalho enxuto */}
             <div className="text-center mb-6">
               <h1 className="font-display text-2xl md:text-3xl font-semibold mb-2 tracking-tight">
