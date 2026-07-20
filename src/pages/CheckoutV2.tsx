@@ -461,7 +461,14 @@ const CheckoutV2 = () => {
         // Persistimos os dados pra resgate caso o usuário recarregue durante o pagamento.
         localStorage.setItem(
           "aura_checkout",
-          JSON.stringify({ name, phone, plan: selectedPlan, billing: billingPeriod, price: currentPrice }),
+          JSON.stringify({
+            name,
+            phone,
+            plan: selectedPlan,
+            billing: billingPeriod,
+            price: currentPrice,
+            returningCustomerMonthly: !!(data as any)?.returning_customer,
+          }),
         );
         setHasRedirected(true);
         setStripePromise(loadStripe(data.publishableKey as string));
