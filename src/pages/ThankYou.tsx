@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 
 const ThankYou = () => {
   const location = useLocation();
-  const [userData, setUserData] = useState({ name: "", plan: "anual" });
+  const [userData, setUserData] = useState({ name: "", plan: "anual", returning: false });
 
   useEffect(() => {
     // Disable Meta Pixel automatic event detection on this page
@@ -16,16 +16,24 @@ const ThankYou = () => {
     }
 
     // Try to get data from location state first, then localStorage
-    let checkoutData = { name: "", plan: "anual" };
-    
+    let checkoutData = { name: "", plan: "anual", returning: false };
+
     if (location.state?.name) {
-      checkoutData = { name: location.state.name, plan: location.state.plan || "anual" };
+      checkoutData = {
+        name: location.state.name,
+        plan: location.state.plan || "anual",
+        returning: !!location.state.returningCustomerMonthly,
+      };
     } else {
       const stored = localStorage.getItem('aura_checkout');
       if (stored) {
         try {
           const parsed = JSON.parse(stored);
-          checkoutData = { name: parsed.name || "", plan: parsed.plan || "anual" };
+          checkoutData = {
+            name: parsed.name || "",
+            plan: parsed.plan || "anual",
+            returning: !!parsed.returningCustomerMonthly,
+          };
           localStorage.removeItem('aura_checkout');
         } catch (e) {
           console.error('Error parsing checkout data:', e);
@@ -33,7 +41,7 @@ const ThankYou = () => {
       }
     }
 
-    setUserData({ name: checkoutData.name, plan: checkoutData.plan });
+    setUserData(checkoutData);
     // Purchase event is sent server-side only (CAPI via stripe-webhook)
     // to avoid double-counting by Meta
   }, [location.state]);
@@ -69,13 +77,23 @@ const ThankYou = () => {
           {/* Content */}
           <div className="animate-fade-up delay-100">
             <h1 className="font-display text-4xl md:text-5xl font-semibold text-foreground mb-4">
-              Parabéns, {firstName}!
+              {userData.returning ? <>Bem-vindo de volta, {firstName} 👋</> : <>Parabéns, {firstName}!</>}
             </h1>
-            <p className="text-lg text-muted-foreground mb-8 leading-relaxed">
-              Sua assinatura do plano <span className="text-primary font-medium">{userData.plan}</span> foi confirmada.
-              <br />
-              Agora é só começar sua conversa com a AURA.
-            </p>
+            {userData.returning ? (
+              <p className="text-lg text-muted-foreground mb-8 leading-relaxed">
+                Como você já usou o período semanal na sua primeira assinatura, ativamos direto o
+                {" "}
+                <span className="text-primary font-medium">plano {userData.plan} mensal recorrente</span>.
+                <br />
+                Cancele quando quiser pelo seu painel.
+              </p>
+            ) : (
+              <p className="text-lg text-muted-foreground mb-8 leading-relaxed">
+                Sua assinatura do plano <span className="text-primary font-medium">{userData.plan}</span> foi confirmada.
+                <br />
+                Agora é só começar sua conversa com a AURA.
+              </p>
+            )}
           </div>
 
           {/* Aviso WhatsApp */}

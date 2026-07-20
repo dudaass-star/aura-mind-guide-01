@@ -765,6 +765,20 @@ const CheckoutV2 = () => {
                 gaClientId={getGaClientId() || undefined}
                 onBack={handleResetCheckout}
                 onSuccess={(info) => {
+                  // Persiste flag pro /obrigado adaptar headline (retornante).
+                  try {
+                    localStorage.setItem(
+                      "aura_checkout",
+                      JSON.stringify({
+                        name,
+                        phone,
+                        plan: selectedPlan,
+                        billing: billingPeriod,
+                        price: currentPrice,
+                        returningCustomerMonthly: !!info?.returningCustomerMonthly,
+                      }),
+                    );
+                  } catch { /* best-effort */ }
                   if (info?.returningCustomerMonthly) {
                     trackReturningCustomerMonthly("asaas");
                   }
