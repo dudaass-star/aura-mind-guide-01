@@ -15,7 +15,13 @@ import { Link, useLocation } from "react-router-dom";
 import { ArrowLeft, CreditCard, Check, Shield, Lock, Gift, QrCode, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { trackBeginCheckout, trackAddPaymentInfo, trackExitIntent, getGaClientId } from "@/lib/ga4";
+import {
+  trackBeginCheckout,
+  trackAddPaymentInfo,
+  trackExitIntent,
+  getGaClientId,
+  trackWeeklyRedirectToMonthly,
+} from "@/lib/ga4";
 import logoOlaAura from "@/assets/logo-ola-aura.png";
 import "@/styles/v2-theme.css";
 import { loadStripe, type Stripe as StripeJs } from "@stripe/stripe-js";
@@ -197,15 +203,28 @@ const CheckoutV2 = () => {
   // e desista. `highlightMonthly` dá um pulse curto no toggle pra reforçar
   // que a UI já se ajustou pro Mensal automaticamente.
   const [weeklyBlockedNotice, setWeeklyBlockedNotice] = useState<string | null>(null);
-  const [highlightMonthly, setHighlightMonthly] = useState(false);
 
-  const triggerWeeklyBlockedFallback = useCallback((message: string) => {
-    setWeeklyBlockedNotice(message);
-    setBillingPeriod("monthly");
-    setHighlightMonthly(true);
-    window.setTimeout(() => setHighlightMonthly(false), 2400);
-    requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
-  }, []);
+  const triggerWeeklyBlockedFallback = useCallback(
+    (message: string, gateway: "stripe" | "asaas") => {
+      setWeeklyBlockedNotice(message);
+      setBillingPeriod("monthly");
+      // Rola pro topo primeiro (garante que o banner é visto) e, depois de 900ms,
+      // desce suavemente até o botão Pagar pra o próximo passo ficar óbvio.
+      requestAnimationFrame(() =>
+        window.scrollTo({ top: 0, behavior: "smooth" }),
+      );
+      window.setTimeout(() => {
+        const btn = document.querySelector<HTMLButtonElement>(
+          "#checkout-form button[type='submit']",
+        );
+        btn?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 900);
+      // Instrumentação: quantos retornantes caem nesse fluxo por gateway.
+      console.info("[checkout] weekly→monthly fallback", { gateway });
+      trackWeeklyRedirectToMonthly(gateway);
+    },
+    [],
+  );
 
   // PIX (Asaas): só aparece pra trim/sem/anual. Modal abre com form de CPF
   // (resto dos dados reusa name/email/phone do form principal) e troca pra
