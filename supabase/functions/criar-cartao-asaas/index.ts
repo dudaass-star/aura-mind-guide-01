@@ -5,6 +5,8 @@
 // Padrão de ativação: cobrança 1x aprovada aqui mesmo dispara webhook PAYMENT_CONFIRMED,
 // que roda o mesmo handleActivation do PIX (welcome, portal token, CAPI, etc).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import Stripe from "https://esm.sh/stripe@18.5.0";
+import { getPhoneVariations } from "../_shared/zapi-client.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -272,6 +274,72 @@ Deno.serve(async (req) => {
     // Ativa somente pra mensal (Trim/Sem/Anual sempre à vista recorrente sem trial).
     const useTrial = paymentMode === "recurring" && trial === true && billing === "monthly";
     const trialCents = useTrial ? (TRIAL_PRICES_CENTS[plan] ?? amountCents) : null;
+
+    // === REGRA: Semanal (trial 7d) é 1x por cliente. Bloqueia retornantes
+    // ANTES de qualquer cobrança. Espelha checagem do create-checkout (Stripe). ===
+    if (useTrial) {
+      let hasAsaasHistory = false;
+      let hasStripeHistory = false;
+
+      // 1) Asaas: qualquer pagamento confirmado por email OU telefone
+      try {
+        const { data: asaasPays, error: asaasErr } = await supabase
+          .from("asaas_payments")
+          .select("id")
+          .or(`customer_email.eq.${emailClean},customer_phone.eq.${phoneClean}`)
+          .in("status", ["CONFIRMED", "RECEIVED", "RECEIVED_IN_CASH"])
+          .limit(1);
+        if (asaasErr) {
+          console.warn("[criar-cartao-asaas] Asaas history check failed (non-blocking):", asaasErr.message);
+        } else {
+          hasAsaasHistory = !!(asaasPays && asaasPays.length > 0);
+        }
+      } catch (e) {
+        console.warn("[criar-cartao-asaas] Asaas history check threw (non-blocking):", e instanceof Error ? e.message : String(e));
+      }
+
+      // 2) Stripe: varredura por email + variações de telefone (cobre quem assinou no outro gateway antes)
+      if (!hasAsaasHistory) {
+        try {
+          const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
+          if (stripeKey) {
+            const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
+            const customerIds = new Map<string, true>();
+            const byEmail = await stripe.customers.list({ email: emailClean, limit: 10 });
+            for (const c of byEmail.data) customerIds.set(c.id, true);
+            if (phoneClean) {
+              const variations = getPhoneVariations(phoneClean);
+              for (const v of variations) {
+                const byPhone = await stripe.customers.search({
+                  query: `metadata['phone']:'${v}'`,
+                  limit: 10,
+                });
+                for (const c of byPhone.data) customerIds.set(c.id, true);
+              }
+            }
+            for (const cid of customerIds.keys()) {
+              const anySubs = await stripe.subscriptions.list({ customer: cid, status: "all", limit: 3 });
+              if (anySubs.data.length > 0) { hasStripeHistory = true; break; }
+            }
+          }
+        } catch (e) {
+          console.warn("[criar-cartao-asaas] Stripe history check failed (non-blocking):", e instanceof Error ? e.message : String(e));
+        }
+      }
+
+      if (hasAsaasHistory || hasStripeHistory) {
+        console.log("[criar-cartao-asaas] ⛔ Weekly blocked for returning customer", { emailClean, hasAsaasHistory, hasStripeHistory });
+        return new Response(
+          JSON.stringify({
+            error:
+              "O Plano Semanal é só pra primeira experiência. Como você já assinou antes, escolha um dos planos recorrentes (mensal, trimestral, semestral ou anual).",
+            code: "WEEKLY_NOT_AVAILABLE_FOR_RETURNING",
+            suggestedBilling: "monthly",
+          }),
+          { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    }
 
     if (paymentMode === "installment") {
       // POST /payments com installmentCount → cobrança parcelada única (status = payment status)
