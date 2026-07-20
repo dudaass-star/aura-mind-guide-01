@@ -122,7 +122,7 @@ export const trackExitIntent = (
   action: "open" | "convert" | "dismiss"
 ): void => trackEvent("exit_intent", { action });
 
-export const trackWeeklyRedirectToMonthly = (
+export const trackReturningCustomerMonthly = (
   gateway: "stripe" | "asaas",
 ): void =>
-  trackEvent("weekly_redirect_to_monthly", { gateway });
+  trackEvent("returning_customer_monthly", { gateway });
