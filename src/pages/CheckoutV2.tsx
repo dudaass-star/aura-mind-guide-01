@@ -442,18 +442,21 @@ const CheckoutV2 = () => {
         },
       });
 
-      // Erros com body JSON (ex.: 409 WEEKLY_NOT_AVAILABLE_FOR_RETURNING) vêm em error.context
-      const errCtx = (error as any)?.context;
-      const errBody = (data as any) ?? errCtx;
-      if (errBody?.code === "WEEKLY_NOT_AVAILABLE_FOR_RETURNING") {
-        toast.info(errBody.error, { duration: 7000 });
-        setBillingPeriod("monthly");
-        requestAnimationFrame(() => {
-          window.scrollTo({ top: 0, behavior: "smooth" });
-        });
-        return;
+      // 409 c/ body JSON (ex.: WEEKLY_NOT_AVAILABLE_FOR_RETURNING) chega em error.context (Response)
+      if (error) {
+        let errBody: any = (data as any) ?? null;
+        const ctx = (error as any)?.context;
+        if (!errBody && ctx && typeof ctx.json === "function") {
+          try { errBody = await ctx.json(); } catch { /* ignore */ }
+        }
+        if (errBody?.code === "WEEKLY_NOT_AVAILABLE_FOR_RETURNING") {
+          toast.info(errBody.error, { duration: 7000 });
+          setBillingPeriod("monthly");
+          requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+          return;
+        }
+        throw new Error(errBody?.error || error.message || "Erro ao processar pagamento");
       }
-      if (error) throw new Error(error.message || "Erro ao processar pagamento");
 
       if (data?.clientSecret && data?.publishableKey) {
         // Persistimos os dados pra resgate caso o usuário recarregue durante o pagamento.
