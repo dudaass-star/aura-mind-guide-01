@@ -1,36 +1,46 @@
-# Validação — "Semanal só na 1ª compra"
+## Contexto verificado
 
-## Status atual
+Fluxo atual quando o retornante tenta Semanal (Stripe cartão **ou** Asaas cartão):
 
-**Funcionando (validado no código):**
-- `create-checkout` (Stripe): bloqueia retornantes com checagem dupla Stripe (`subscriptions.list status:"all"` por email + variações de telefone) + Asaas (`asaas_payments` com status `CONFIRMED/RECEIVED/RECEIVED_IN_CASH`). Fail-open apenas em erro transitório de banco, com warning.
-- `CheckoutV2.tsx`: intercepta 409 `WEEKLY_NOT_AVAILABLE_FOR_RETURNING`, mostra toast, troca para `monthly` e rola ao topo.
-- `phoneClean` validado (10-15 dígitos) antes de entrar no `.or()`, então sem risco de match vazio.
+1. Backend responde `409 WEEKLY_NOT_AVAILABLE_FOR_RETURNING` com a mensagem: *"O Plano Semanal é só pra primeira experiência. Como você já assinou antes, escolha um dos planos recorrentes..."* e `suggestedBilling: "monthly"`.
+2. Frontend (`CheckoutV2.tsx` + `AsaasCardForm.tsx`) já:
+   - Dispara `toast.info(...)` por 7s.
+   - `setBillingPeriod("monthly")`.
+   - Rola pro topo.
 
-## Gap encontrado
+**Gaps encontrados:**
+- É um `toast.info` de 7s que some — se o usuário estiver olhando o botão "Pagar" no meio da tela, pode não ver e achar que "deu erro e não vai" na segunda tentativa.
+- Nada visualmente destaca que o plano mudou (o seletor de billing só troca de estado sem callout).
+- No fluxo Asaas, `handleResetCheckout()` fecha o form embutido: o usuário volta pro formulário mas sem contexto explícito do porquê.
+- Não há aviso preventivo — o usuário só descobre depois de clicar "Pagar".
 
-`supabase/functions/criar-cartao-asaas/index.ts` também tem fluxo de **weekly trial** (`useTrial = paymentMode === "recurring" && trial === true && billing === "monthly"`, linha 273) e **não** tem a checagem de retornante. Quando o painel admin troca o gateway de cartão de Stripe → Asaas, o `CheckoutV2` chama essa função e retornantes conseguem comprar o Semanal por lá. A regra de negócio (memória `weekly-plan-first-purchase-only`) fica furada nesse caminho.
+## O que fazer
 
-PIX Asaas (`criar-pix-recorrente-asaas`) não tem trial — sem gap.
+**1. Banner inline persistente (substitui o toast como fonte primária)**
+- Novo estado `weeklyBlockedNotice` em `CheckoutV2.tsx`.
+- Quando o 409 chega (Stripe cartão ou Asaas cartão), setar o aviso com o texto do backend.
+- Renderizar um card destacado (tom "info", não "erro") no topo do formulário: ícone de info + título "Mudamos pra Mensal automaticamente" + corpo com a mensagem do backend + CTA "Continuar com Mensal" que rola até o botão Pagar.
+- Some ao trocar plano/billing manualmente ou ao submeter com sucesso.
+- Manter o `toast.info` como reforço (curto), mas o banner é o que garante que não parece erro.
 
-## Correção
+**2. Destacar visualmente a troca**
+- Ao setar `billingPeriod = "monthly"`, aplicar um highlight temporário (ring/animação de 2s) no card do plano Mensal.
+- Atualizar o subtítulo do checkout dinamicamente ("7 dias por R$ X" → "Mensal • R$ Y/mês") pra reforçar que a UI já se ajustou.
 
-### 1. `supabase/functions/criar-cartao-asaas/index.ts`
-Antes do bloco `if (useTrial)` (~linha 271), aplicar a mesma checagem do `create-checkout`:
+**3. Copy defensiva antes de submeter (opcional, leve)**
+- Se o usuário estiver com Semanal selecionado e já tiver preenchido email + telefone válidos, exibir um hint discreto abaixo do seletor: "Já assinou antes? O Semanal é só pra 1ª experiência."
+- Sem chamada de rede — só mensagem informativa. Evita frustração antes do clique.
 
-- Consultar `asaas_payments` por `customer_email = emailClean OR customer_phone = phoneClean` com status confirmados (`CONFIRMED/RECEIVED/RECEIVED_IN_CASH`), limit 1.
-- Consultar Stripe também (mesma lógica de email + `phoneVariations`, `subscriptions.list status:"all"`) para pegar quem já assinou pelo outro gateway antes.
-- Se qualquer um retornar histórico: responder **409** com o mesmo shape `{ error, code: "WEEKLY_NOT_AVAILABLE_FOR_RETURNING", suggestedBilling: "monthly" }`.
-- Fail-open explícito com `console.warn` em erro transitório, igual `create-checkout`.
+**4. Preservar o fluxo do Asaas embutido**
+- No `onWeeklyBlocked` do `AsaasCardForm`, além do reset + scroll: setar o mesmo `weeklyBlockedNotice` para que, ao voltar ao formulário, o banner explique o motivo do form ter sido fechado.
 
-### 2. `src/pages/CheckoutV2.tsx`
-O handler de 409 atual só cobre a chamada Stripe (`supabase.functions.invoke("create-checkout")`). Localizar a invocação equivalente para `criar-cartao-asaas` (fluxo cartão Asaas) e replicar o mesmo bloco: detectar `code === "WEEKLY_NOT_AVAILABLE_FOR_RETURNING"`, `toast.info`, `setBillingPeriod("monthly")`, scroll to top, `return`.
+## Arquivos afetados
 
-### 3. Validação pós-deploy
-- `supabase--curl_edge_functions` em `criar-cartao-asaas` com email de retornante conhecido (ex: `jefmarper@gmail.com`) + `trial: true, billing: "monthly"` → esperar 409.
-- Novo email + trial → esperar 200 (ou o erro de cartão esperado, mas nunca 409).
+- `src/pages/CheckoutV2.tsx` — novo estado `weeklyBlockedNotice`, banner, highlight, subtítulo dinâmico, hint opcional, wiring do `onWeeklyBlocked`.
+- Sem mudanças de backend, sem mudanças de contrato de API.
 
 ## Fora de escopo
-- Sem mudança em `create-checkout` (já validado ok).
-- Sem mudança em PIX (Asaas PIX não tem weekly).
-- Sem mudança na memória — a constraint já cobre "todos os gateways".
+
+- Pré-checagem via endpoint dedicado (evitar round-trip extra e complexidade).
+- Auto-submit após a troca — o usuário precisa revisar e confirmar o novo valor (Mensal cobra mais que Semanal na 1ª cobrança).
+- Fluxo PIX (não oferece Semanal).
