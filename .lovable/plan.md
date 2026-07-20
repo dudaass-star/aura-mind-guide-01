@@ -1,49 +1,36 @@
-# Simplificar bloqueio do Semanal + cobrir Asaas cartão + explicar o gap
+# Validação — "Semanal só na 1ª compra"
 
-## Por que passou batido antes
+## Status atual
 
-1. **Fail-open silencioso**: o `.select("stripe_customer_id, …")` referencia coluna inexistente em `profiles` (só `asaas_customer_id` existe). PostgREST devolve 400, cai no `catch` genérico da linha 382 e loga *"non-blocking"* — o checkout segue normal. Nenhum 409 sai.
-2. **Não testei após implementar**: sem `curl` no endpoint nem inspeção de log. Confiei no código.
-3. **A anti-dup antiga (linhas 184-240) só usa API Stripe** — por isso nunca quebrou. O bug apareceu quando misturei query Supabase mal formada.
+**Funcionando (validado no código):**
+- `create-checkout` (Stripe): bloqueia retornantes com checagem dupla Stripe (`subscriptions.list status:"all"` por email + variações de telefone) + Asaas (`asaas_payments` com status `CONFIRMED/RECEIVED/RECEIVED_IN_CASH`). Fail-open apenas em erro transitório de banco, com warning.
+- `CheckoutV2.tsx`: intercepta 409 `WEEKLY_NOT_AVAILABLE_FOR_RETURNING`, mostra toast, troca para `monthly` e rola ao topo.
+- `phoneClean` validado (10-15 dígitos) antes de entrar no `.or()`, então sem risco de match vazio.
 
-## Escopo revisado (com Asaas cartão)
+## Gap encontrado
 
-Semanal pode entrar por Stripe **ou** Asaas cartão (o gateway ativo é chaveado via `system_config` no admin). Precisamos bloquear retornante **independente** do gateway usado antes.
+`supabase/functions/criar-cartao-asaas/index.ts` também tem fluxo de **weekly trial** (`useTrial = paymentMode === "recurring" && trial === true && billing === "monthly"`, linha 273) e **não** tem a checagem de retornante. Quando o painel admin troca o gateway de cartão de Stripe → Asaas, o `CheckoutV2` chama essa função e retornantes conseguem comprar o Semanal por lá. A regra de negócio (memória `weekly-plan-first-purchase-only`) fica furada nesse caminho.
 
-Fontes de verdade:
-- **Stripe**: `stripe.subscriptions.list({ customer, status: "all" })` — cobre canceled/past_due/incomplete.
-- **Asaas**: `public.asaas_payments` filtrando por `customer_email` OU `customer_phone` com `status IN ('CONFIRMED','RECEIVED','RECEIVED_IN_CASH')` — cobre PIX e cartão.
-- **Não olhar `profiles`**: o schema não tem `stripe_customer_id` e `plan` é ambíguo (fica preenchido mesmo em cancelados). Ir direto na origem elimina o bug atual.
+PIX Asaas (`criar-pix-recorrente-asaas`) não tem trial — sem gap.
 
-## Mudança única em `supabase/functions/create-checkout/index.ts`
+## Correção
 
-**Remover** o bloco atual do trial (linhas 311-386) — a query Supabase quebrada e a segunda varredura Stripe.
+### 1. `supabase/functions/criar-cartao-asaas/index.ts`
+Antes do bloco `if (useTrial)` (~linha 271), aplicar a mesma checagem do `create-checkout`:
 
-**Adicionar** no fluxo `if (trial)` uma checagem enxuta e explícita:
+- Consultar `asaas_payments` por `customer_email = emailClean OR customer_phone = phoneClean` com status confirmados (`CONFIRMED/RECEIVED/RECEIVED_IN_CASH`), limit 1.
+- Consultar Stripe também (mesma lógica de email + `phoneVariations`, `subscriptions.list status:"all"`) para pegar quem já assinou pelo outro gateway antes.
+- Se qualquer um retornar histórico: responder **409** com o mesmo shape `{ error, code: "WEEKLY_NOT_AVAILABLE_FOR_RETURNING", suggestedBilling: "monthly" }`.
+- Fail-open explícito com `console.warn` em erro transitório, igual `create-checkout`.
 
-1. **Reusar `customersToCheck`** (já construído na anti-dup por email + variações de telefone, linhas 188-203). Para cada `cid`, chamar `stripe.subscriptions.list({ customer: cid, status: "all", limit: 3 })`. Qualquer resultado → retornante.
-2. **Consultar Asaas** direto: `supabase.from("asaas_payments").select("id").or("customer_email.eq.<email>,customer_phone.eq.<phoneClean>").in("status", ["CONFIRMED","RECEIVED","RECEIVED_IN_CASH"]).limit(1)`. Qualquer linha → retornante.
-3. Se qualquer uma disparar, retornar **409** com `code: "WEEKLY_NOT_AVAILABLE_FOR_RETURNING"` e a mensagem/`suggestedBilling: "monthly"` que já existe hoje. Log `hasStripeHistory` / `hasAsaasHistory` pra observabilidade.
+### 2. `src/pages/CheckoutV2.tsx`
+O handler de 409 atual só cobre a chamada Stripe (`supabase.functions.invoke("create-checkout")`). Localizar a invocação equivalente para `criar-cartao-asaas` (fluxo cartão Asaas) e replicar o mesmo bloco: detectar `code === "WEEKLY_NOT_AVAILABLE_FOR_RETURNING"`, `toast.info`, `setBillingPeriod("monthly")`, scroll to top, `return`.
 
-Sem try/catch mascarando: se a query Asaas falhar por erro de infra, logar e **prosseguir** (fail-open explícito e comentado, não acidental). Se a query voltar `error != null` mas com resposta válida (schema quebrado, coluna errada), a função vai lançar — melhor barulho do que bug silencioso.
-
-Diff: ~40 linhas a menos, uma responsabilidade por bloco, sem acoplamento com `profiles`.
-
-## Não afetar quem já pagou (jefmarper e afins)
-
-Fix é **só na porta de entrada** (`create-checkout`). Quem já concluiu o Semanal continua com a subscription rodando normal — em ~7 dias a Stripe cobra o preço mensal recorrente conforme o mandato CIT→MIT. Nada é revertido, nenhuma linha do banco é tocada, nenhuma cobrança cancelada. A regra só impede a **próxima** tentativa de assinar Semanal de novo.
-
-## Validação (obrigatória desta vez)
-
-Após o deploy do `create-checkout`:
-
-1. `supabase--curl_edge_functions` POST em `/create-checkout` com `{ trial: true, plan: "essencial", email: "jefmarper@gmail.com", phone: "5511976982383", name: "Jef", paymentMethod: "card" }` → esperar **409** + `code: "WEEKLY_NOT_AVAILABLE_FOR_RETURNING"`.
-2. Mesmo POST com email/telefone novos → esperar **200** com `clientSecret`.
-3. `edge_function_logs` do `create-checkout`: confirmar `⛔ Weekly blocked for returning customer` no caso 1 e ausência do warning `non-blocking` em qualquer chamada.
+### 3. Validação pós-deploy
+- `supabase--curl_edge_functions` em `criar-cartao-asaas` com email de retornante conhecido (ex: `jefmarper@gmail.com`) + `trial: true, billing: "monthly"` → esperar 409.
+- Novo email + trial → esperar 200 (ou o erro de cartão esperado, mas nunca 409).
 
 ## Fora de escopo
-
-- **Frontend (`CheckoutV2.tsx`)**: handler do 409 já está correto (linhas 445-458). Não muda.
-- **Memória `weekly-plan-first-purchase-only`**: regra mantida — só a execução fica mais enxuta e cobre Asaas.
-- **Assinatura ativa do jefmarper**: intocada.
-- **Migration**: nenhuma. Não há mudança de schema.
+- Sem mudança em `create-checkout` (já validado ok).
+- Sem mudança em PIX (Asaas PIX não tem weekly).
+- Sem mudança na memória — a constraint já cobre "todos os gateways".
