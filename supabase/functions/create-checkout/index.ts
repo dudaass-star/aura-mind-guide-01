@@ -81,6 +81,11 @@ serve(async (req) => {
       paymentMethod === "card" &&
       !trial &&
       (billingOverride === "quarterly" || billingOverride === "semestral" || billingOverride === "yearly");
+    // Trial "efetivo": pode ser rebaixado pra false se o cliente for retornante
+    // (Semanal só na 1ª compra) — nesse caso promovemos silenciosamente pra
+    // Mensal recorrente sem trial usando STRIPE_PRICE_*_MONTHLY.
+    let effectiveTrial = !!trial;
+    let returningCustomerMonthly = false;
     
     logStep("Request received", { plan, billing: billingOverride, name, email, phone, trial: !!trial, paymentMethod, isBoleto: isBoletoPayment, isRecurringCardV2, embedded: !!embedded, hasFbp: !!fbp, hasFbc: !!fbc, hasGaClientId: !!gaClientId });
 
@@ -305,7 +310,7 @@ serve(async (req) => {
 
     
 
-    if (trial) {
+    if (effectiveTrial) {
       // === PLANO SEMANAL (legado "trial"): mode=payment + setup_future_usage off_session ===
       // === REGRA: Semanal é 1x por cliente (aquisição). Retornantes vão pro recorrente. ===
       // Consulta direta às fontes de verdade (Stripe + Asaas), sem passar por profiles
@@ -362,24 +367,27 @@ serve(async (req) => {
       }
 
       if (hasStripeHistory || hasAsaasHistory) {
-        logStep("⛔ Weekly blocked for returning customer", {
+        // Retornante detectado → promoção silenciosa pro Mensal recorrente sem trial.
+        // Usa STRIPE_PRICE_*_MONTHLY (recorrente cheio) e cai no else-branch de subscription.
+        // O front NÃO recebe 409; o cliente vê o preço real no Embedded Checkout.
+        const monthlyPriceId = PRICES[plan].monthly;
+        if (!monthlyPriceId) {
+          throw new Error("STRIPE_PRICE_*_MONTHLY não configurado — não foi possível promover retornante pra Mensal recorrente.");
+        }
+        logStep("↩️ Returning customer: promovendo Semanal → Mensal recorrente", {
           email,
           hasStripeHistory,
           hasAsaasHistory,
+          fromPlan: plan,
+          toPriceId: monthlyPriceId,
         });
-        return new Response(
-          JSON.stringify({
-            error:
-              "O Plano Semanal é só pra primeira experiência. Como você já assinou antes, escolha um dos planos recorrentes (mensal, trimestral, semestral ou anual).",
-            code: "WEEKLY_NOT_AVAILABLE_FOR_RETURNING",
-            suggestedBilling: "monthly",
-          }),
-          {
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-            status: 409,
-          },
-        );
+        effectiveTrial = false;
+        returningCustomerMonthly = true;
+        priceId = monthlyPriceId;
       }
+    }
+
+    if (effectiveTrial) {
 
       // Estratégia CIT→MIT: a 1ª cobrança (R$ 6,90/9,90/19,90) já estabelece um mandato
       // off_session reusável. Quando o webhook criar a Subscription com o MESMO PaymentMethod
@@ -488,6 +496,15 @@ serve(async (req) => {
       sessionConfig.payment_method_collection = 'always';
       sessionConfig.line_items = [{ price: priceId, quantity: 1 }];
       sessionConfig.payment_method_types = ["card"];
+      // Retornante rebaixado do Semanal → deixa claro no botão de pagar
+      // que o valor cobrado é o mensal cheio recorrente, sem período de teste.
+      if (returningCustomerMonthly) {
+        sessionConfig.custom_text = {
+          submit: {
+            message: `Você já foi cliente da AURA. Esta é a assinatura mensal recorrente de R$ ${displayPrice}/mês. Cancele quando quiser.`,
+          },
+        };
+      }
       sessionConfig.metadata = {
         phone: phoneClean,
         name: name,
@@ -495,6 +512,11 @@ serve(async (req) => {
         plan: plan,
         billing: billingPeriod,
         ...(isRecurringCardV2 && { payment_method: "card_recurring_v2", v2_no_trial: "true" }),
+        ...(returningCustomerMonthly && {
+          payment_method: "card_recurring_monthly",
+          returning_customer: "true",
+          original_flow: "weekly_blocked",
+        }),
         ...(fbp && { fbp }),
         ...(fbc && { fbc }),
         ...(gaClientId && { ga_client_id: gaClientId }),
@@ -507,12 +529,17 @@ serve(async (req) => {
           plan: plan,
           billing: billingPeriod,
           ...(isRecurringCardV2 && { payment_method: "card_recurring_v2", v2_no_trial: "true" }),
+          ...(returningCustomerMonthly && {
+            payment_method: "card_recurring_monthly",
+            returning_customer: "true",
+            original_flow: "weekly_blocked",
+          }),
           ...(gaClientId && { ga_client_id: gaClientId }),
         },
       };
     }
 
-    logStep("Creating checkout session", { plan, billing: billingPeriod, priceId: trial ? getTrialPrices()[plan] : priceId, mode: sessionConfig.mode, trial: !!trial, citMitReinforced: !!trial });
+    logStep("Creating checkout session", { plan, billing: billingPeriod, priceId: effectiveTrial ? getTrialPrices()[plan] : priceId, mode: sessionConfig.mode, trial: effectiveTrial, citMitReinforced: effectiveTrial, returningCustomerMonthly });
     const session = await stripe.checkout.sessions.create(sessionConfig);
     logStep("Checkout session created", { sessionId: session.id });
 
@@ -544,8 +571,9 @@ serve(async (req) => {
           clientSecret: (session as any).client_secret,
           publishableKey: Deno.env.get("STRIPE_PUBLISHABLE_KEY") || null,
           sessionId: session.id,
+          returning_customer: returningCustomerMonthly,
         }
-      : { url: session.url };
+      : { url: session.url, returning_customer: returningCustomerMonthly };
 
     return new Response(JSON.stringify(responseBody), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

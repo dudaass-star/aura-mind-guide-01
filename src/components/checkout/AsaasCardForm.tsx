@@ -23,9 +23,7 @@ interface Props {
   fbc?: string;
   gaClientId?: string;
   onBack: () => void;
-  onSuccess: () => void;
-  /** Chamado quando o backend recusa o Semanal pra cliente retornante (409 code=WEEKLY_NOT_AVAILABLE_FOR_RETURNING). */
-  onWeeklyBlocked?: () => void;
+  onSuccess: (info?: { returningCustomerMonthly?: boolean }) => void;
 }
 
 function formatCardNumber(v: string) {
@@ -47,7 +45,7 @@ export function AsaasCardForm({
   amountLabel, periodLabel, installmentMax,
   trial,
   fbp, fbc, gaClientId,
-  onBack, onSuccess, onWeeklyBlocked,
+  onBack, onSuccess,
 }: Props) {
   const [cpf, setCpf] = useState("");
   const [cardNumber, setCardNumber] = useState("");
@@ -107,24 +105,11 @@ export function AsaasCardForm({
           ...(gaClientId && { gaClientId }),
         },
       });
-      // 409 c/ body JSON (WEEKLY_NOT_AVAILABLE_FOR_RETURNING) chega em error.context (Response)
-      let errBody: any = (data as any) ?? null;
-      if (error) {
-        const ctx = (error as any)?.context;
-        if (!errBody && ctx && typeof ctx.json === "function") {
-          try { errBody = await ctx.json(); } catch { /* ignore */ }
-        }
-      }
-      if (errBody?.code === "WEEKLY_NOT_AVAILABLE_FOR_RETURNING") {
-        toast.info(errBody.error, { duration: 7000 });
-        onWeeklyBlocked?.();
-        return;
-      }
       if (error) throw new Error(error.message || "Erro ao processar cartão");
       if (data?.error) throw new Error(data.error);
       if (data?.success) {
         toast.success("Pagamento aprovado!");
-        onSuccess();
+        onSuccess({ returningCustomerMonthly: !!data?.returning_customer });
       } else if (data?.pending) {
         // Não redireciona pra /obrigado — mostra tela intermediária para o usuário
         // não achar que deu tudo certo antes do webhook Asaas confirmar.

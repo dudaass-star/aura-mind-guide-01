@@ -20,7 +20,7 @@ import {
   trackAddPaymentInfo,
   trackExitIntent,
   getGaClientId,
-  trackWeeklyRedirectToMonthly,
+  trackReturningCustomerMonthly,
 } from "@/lib/ga4";
 import logoOlaAura from "@/assets/logo-ola-aura.png";
 import "@/styles/v2-theme.css";
@@ -196,35 +196,6 @@ const CheckoutV2 = () => {
   const [cardGateway, setCardGateway] = useState<"stripe" | "asaas">("stripe");
   // Quando gateway=asaas, submit do form abre o AsaasCardForm ao invés do embed Stripe.
   const [asaasCardOpen, setAsaasCardOpen] = useState(false);
-
-  // Fallback visível quando o backend recusa o Semanal pra retornante (409
-  // WEEKLY_NOT_AVAILABLE_FOR_RETURNING). Mostramos um banner inline persistente
-  // em vez de depender só do toast — evita que o usuário ache que "deu erro"
-  // e desista. `highlightMonthly` dá um pulse curto no toggle pra reforçar
-  // que a UI já se ajustou pro Mensal automaticamente.
-  const [weeklyBlockedNotice, setWeeklyBlockedNotice] = useState<string | null>(null);
-
-  const triggerWeeklyBlockedFallback = useCallback(
-    (message: string, gateway: "stripe" | "asaas") => {
-      setWeeklyBlockedNotice(message);
-      setBillingPeriod("monthly");
-      // Rola pro topo primeiro (garante que o banner é visto) e, depois de 900ms,
-      // desce suavemente até o botão Pagar pra o próximo passo ficar óbvio.
-      requestAnimationFrame(() =>
-        window.scrollTo({ top: 0, behavior: "smooth" }),
-      );
-      window.setTimeout(() => {
-        const btn = document.querySelector<HTMLButtonElement>(
-          "#checkout-form button[type='submit']",
-        );
-        btn?.scrollIntoView({ behavior: "smooth", block: "center" });
-      }, 900);
-      // Instrumentação: quantos retornantes caem nesse fluxo por gateway.
-      console.info("[checkout] weekly→monthly fallback", { gateway });
-      trackWeeklyRedirectToMonthly(gateway);
-    },
-    [],
-  );
 
   // PIX (Asaas): só aparece pra trim/sem/anual. Modal abre com form de CPF
   // (resto dos dados reusa name/email/phone do form principal) e troca pra
@@ -477,19 +448,13 @@ const CheckoutV2 = () => {
         },
       });
 
-      // 409 c/ body JSON (ex.: WEEKLY_NOT_AVAILABLE_FOR_RETURNING) chega em error.context (Response)
       if (error) {
-        let errBody: any = (data as any) ?? null;
-        const ctx = (error as any)?.context;
-        if (!errBody && ctx && typeof ctx.json === "function") {
-          try { errBody = await ctx.json(); } catch { /* ignore */ }
-        }
-        if (errBody?.code === "WEEKLY_NOT_AVAILABLE_FOR_RETURNING") {
-          toast.info("Mudamos pro plano Mensal — confira acima.", { duration: 4000 });
-          triggerWeeklyBlockedFallback(errBody.error, "stripe");
-          return;
-        }
-        throw new Error(errBody?.error || error.message || "Erro ao processar pagamento");
+        throw new Error((data as any)?.error || error.message || "Erro ao processar pagamento");
+      }
+      // Backend rebaixou Semanal → Mensal recorrente pra cliente retornante.
+      // O Embedded Checkout já vem com o preço/custom_text corretos; só instrumentamos.
+      if ((data as any)?.returning_customer) {
+        trackReturningCustomerMonthly("stripe");
       }
 
       if (data?.clientSecret && data?.publishableKey) {
@@ -792,56 +757,15 @@ const CheckoutV2 = () => {
                 })()}
                 gaClientId={getGaClientId() || undefined}
                 onBack={handleResetCheckout}
-                onSuccess={() => {
+                onSuccess={(info) => {
+                  if (info?.returningCustomerMonthly) {
+                    trackReturningCustomerMonthly("asaas");
+                  }
                   window.location.href = "/obrigado";
-                }}
-                onWeeklyBlocked={() => {
-                  // Retornante tentando Semanal via Asaas cartão: fecha o form embutido
-                  // e mostra o banner explicativo no lugar — sem parecer erro genérico.
-                  handleResetCheckout();
-                  triggerWeeklyBlockedFallback(
-                    "O Plano Semanal é só pra primeira experiência. Como você já assinou antes, escolha um dos planos recorrentes (mensal, trimestral, semestral ou anual).",
-                    "asaas",
-                  );
                 }}
               />
             ) : (
               <>
-            {/* Banner de fallback Semanal → Mensal: aparece quando o backend
-                bloqueia o Semanal pra retornante. Persistente (não some sozinho),
-                cor "info" pra não parecer erro. */}
-            {weeklyBlockedNotice && (
-              <div
-                role="status"
-                aria-live="polite"
-                className="mb-5 rounded-2xl border border-[hsl(35_70%_60%)]/40 bg-[hsl(35_70%_60%)]/10 p-4 text-sm text-white/90"
-              >
-                <div className="flex items-start gap-3">
-                  <Check className="h-5 w-5 shrink-0 text-[hsl(35_70%_70%)] mt-0.5" />
-                  <div className="flex-1">
-                    <p className="font-semibold text-white mb-1">
-                      Mudamos pro plano Mensal automaticamente
-                    </p>
-                    <p className="text-white/75 leading-relaxed">
-                      {weeklyBlockedNotice}
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const btn = document.querySelector<HTMLButtonElement>(
-                          "#checkout-form button[type='submit']",
-                        );
-                        btn?.scrollIntoView({ behavior: "smooth", block: "center" });
-                      }}
-                      className="mt-2 text-xs font-medium text-[hsl(35_70%_75%)] underline underline-offset-2 hover:text-white"
-                    >
-                      Ir para o pagamento →
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
             {/* Cabeçalho enxuto */}
             <div className="text-center mb-6">
               <h1 className="font-display text-2xl md:text-3xl font-semibold mb-2 tracking-tight">
@@ -869,19 +793,11 @@ const CheckoutV2 = () => {
                     <button
                       key={p}
                       type="button"
-                      onClick={() => {
-                        setBillingPeriod(p);
-                        // Troca manual dispensa o banner de fallback do Semanal.
-                        if (weeklyBlockedNotice) setWeeklyBlockedNotice(null);
-                      }}
+                      onClick={() => setBillingPeriod(p)}
                       className={`relative flex flex-col items-center justify-center px-2 py-2 rounded-xl text-xs font-medium transition-all ${
                         active
                           ? "bg-[hsl(140_22%_45%)] text-white shadow-md"
                           : "text-white/70 hover:text-white"
-                      } ${
-                        p === "monthly" && weeklyBlockedNotice
-                          ? "ring-2 ring-[hsl(35_70%_60%)] ring-offset-2 ring-offset-[hsl(220_35%_12%)]"
-                          : ""
                       }`}
                     >
                       <span>{periodShortMap[p]}</span>

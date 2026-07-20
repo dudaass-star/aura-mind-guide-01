@@ -272,7 +272,10 @@ Deno.serve(async (req) => {
 
     // Trial mensal cartão: 1ª cobrança em valor reduzido HOJE + subscription no valor cheio a partir de D+7.
     // Ativa somente pra mensal (Trim/Sem/Anual sempre à vista recorrente sem trial).
-    const useTrial = paymentMode === "recurring" && trial === true && billing === "monthly";
+    // `let` porque o trial pode ser rebaixado silenciosamente pra false quando
+    // detectamos cliente retornante (Semanal só na 1ª compra).
+    let useTrial = paymentMode === "recurring" && trial === true && billing === "monthly";
+    let returningCustomerMonthly = false;
     const trialCents = useTrial ? (TRIAL_PRICES_CENTS[plan] ?? amountCents) : null;
 
     // === REGRA: Semanal (trial 7d) é 1x por cliente. Bloqueia retornantes
@@ -328,16 +331,14 @@ Deno.serve(async (req) => {
       }
 
       if (hasAsaasHistory || hasStripeHistory) {
-        console.log("[criar-cartao-asaas] ⛔ Weekly blocked for returning customer", { emailClean, hasAsaasHistory, hasStripeHistory });
-        return new Response(
-          JSON.stringify({
-            error:
-              "O Plano Semanal é só pra primeira experiência. Como você já assinou antes, escolha um dos planos recorrentes (mensal, trimestral, semestral ou anual).",
-            code: "WEEKLY_NOT_AVAILABLE_FOR_RETURNING",
-            suggestedBilling: "monthly",
-          }),
-          { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
+        // Retornante detectado → promoção silenciosa pro Mensal recorrente sem trial.
+        // Cai no else-branch abaixo (POST /subscriptions cycle=MONTHLY no valor cheio),
+        // sem 409, sem tela de erro. Cliente vê o valor real no form.
+        console.log("[criar-cartao-asaas] ↩️ Returning customer: promovendo Semanal → Mensal recorrente", {
+          emailClean, hasAsaasHistory, hasStripeHistory, plan,
+        });
+        useTrial = false;
+        returningCustomerMonthly = true;
       }
     }
 
@@ -557,6 +558,7 @@ Deno.serve(async (req) => {
       invoiceUrl,
       mode: paymentMode,
       trial: useTrial,
+      returning_customer: returningCustomerMonthly,
     }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
   } catch (error) {
