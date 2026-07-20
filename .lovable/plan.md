@@ -1,84 +1,62 @@
+## Contexto e diagnóstico
 
-# Aterrissagem de sessão sem corte artificial
+O plano **Semanal** (R$ 6,90 / 9,90 / 19,90) foi desenhado como **isca de aquisição** — porta de entrada barata para converter em recorrente. Hoje o `create-checkout` só bloqueia quem tem assinatura **ativa/trialing** (anti-dup). Quem já foi cliente e cancelou consegue voltar pelo Semanal quantas vezes quiser — como o caso `jefmarper@gmail.com` (Direção mensal em maio → cancelou → voltou no Semanal em julho).
 
-## Problema que estamos tratando
+Isso quebra a proposta: o Semanal deixa de ser aquisição e vira um "downgrade disfarçado" para churners recorrentes, corroendo LTV.
 
-Auditoria das últimas 30 sessões mostrou distribuição bimodal do fim: ou fecha em ~45min (ideal), ou arrasta pra ~78min (ruim). Em 25% dos casos vira `no_show` — cron externo mata sem despedida, taxa de retorno em 72h cai pra 12,5%. Em 100% das sessões silenciosas a Aura foi a última a falar, tipicamente com pergunta aberta densa. Cliente sai com sensação de "fiquei pendurado" ou "ela não sabe fechar".
+**Concordo com a regra**: Semanal é 1× por cliente. Retornante deve ir direto para Mensal/Trim/Sem/Anual.
 
-Causa raiz encontrada no código do `aura-agent/index.ts`:
+## Escopo
 
-1. A "Rede de Segurança de Fechamento" (linha 1389) tem 4 pré-condições AND — incluindo `auraAskedCommitment`, que é chicken-and-egg. Praticamente nunca dispara.
-2. As fases tardias (`soft_closing`, `final_closing`, `overtime`) não têm bloco de guidance no evaluator — a Aura passa dos 45min sem receber nenhuma orientação nova de fechamento.
-3. Rotas de continuidade (`session_bridge`, `suggest_session`) existem mas não são referenciadas nos momentos em que fariam diferença.
+Backend-only + copy no checkout. Sem mudar a landing.
 
-Não é problema do modelo Flash e nem de timer — é buraco de cobertura no evaluator que já roda.
+### 1. Bloqueio server-side em `create-checkout` (fonte da verdade)
 
-## O que muda para o cliente
+Quando `trial === true` (fluxo Semanal), rodar uma checagem de "cliente retornante" **antes** de criar a Session. Retornante = qualquer um dos abaixo:
 
-- Sessão sempre termina com aterrissagem (um dos 7 formatos do Cardápio).
-- Nunca é cortado no meio de assunto novo com carga emocional.
-- Se pedir para continuar após proposta de fechar, é acolhido por até ~15min extras.
-- Fim vira convite pra próxima sessão ou check-in — não vácuo.
+- **Profile existente** em `profiles` para o mesmo email OU telefone normalizado com `stripe_customer_id` preenchido, OU `asaas_customer_id` preenchido, OU `plan` já setado alguma vez (indica compra anterior).
+- **Stripe**: `stripe.customers.list({email})` retornando algum customer com **qualquer** subscription histórica (`status: 'all'` — inclui `canceled`, `incomplete_expired`, `past_due`, `unpaid`, além de `active`/`trialing`).
+- **Asaas**: existe `asaas_payments` com `status IN ('CONFIRMED','RECEIVED','RECEIVED_IN_CASH')` para o `asaas_customer_id` ligado a esse email/telefone.
 
-## O que NÃO muda
+Se qualquer condição bater, retornar **HTTP 409** com:
+```json
+{
+  "error": "O Plano Semanal é só pra primeira experiência. Como você já assinou antes, escolha um dos planos recorrentes (mensal, trimestral, semestral ou anual).",
+  "code": "WEEKLY_NOT_AVAILABLE_FOR_RETURNING",
+  "suggestedBilling": "monthly"
+}
+```
 
-- Nenhum timer paralelo ao Phase Evaluator.
-- Nenhum hard-cut de tempo dentro do agente.
-- Nenhum "vamos parar por aqui" seco.
-- Duração alvo continua 45min; cron externo continua sendo o único que fecha no banco.
-- Metodologia (logoterapia, 3 fases, Cardápio) intocada.
+O anti-dup atual (assinatura ativa) permanece — ele cobre "quem tá pagando agora"; a nova regra cobre "quem já pagou antes".
 
-## Escopo técnico
+### 2. UX no `CheckoutV2.tsx`
 
-Todas as mudanças em uma única função: `evaluateTherapeuticPhase` em `supabase/functions/aura-agent/index.ts`. Nada em paralelo, uma única fonte de decisão.
+Tratar o `code: "WEEKLY_NOT_AVAILABLE_FOR_RETURNING"`:
+- Mostrar toast com a mensagem retornada.
+- Trocar automaticamente o `billingPeriod` para `monthly` (recorrente cartão sem trial, ou o próximo caminho disponível).
+- Rolar até o toggle de período pra deixar claro qual a alternativa.
 
-### 1. Afrouxar a Rede de Segurança existente
+### 3. Memória do projeto
 
-Remover a exigência de `auraAskedCommitment` da condição de disparo (é chicken-and-egg). Manter: `sentido sustentado + elapsed ≥ 60%`. Manter `user_engaged_with_commitment` como razão de desarme (já funciona).
+Salvar `mem://business/weekly-plan-first-purchase-only.md` como **constraint**: "Semanal é 1× por CPF/email/telefone. Retornantes vão direto pro recorrente."
 
-### 2. Adicionar guidance para fases órfãs
+## Fora do escopo
 
-Preencher blocos de instrução tática para `soft_closing` (~38min+) e `overtime` (~45min+) — hoje ambos ficam sem nenhuma injeção. Texto de cada bloco inclui:
+- Bloqueio no Asaas PIX Semanal — hoje não existe PIX Semanal (Asaas PIX só recorrente nos 4 ciclos), então nada a fazer lá.
+- Migração de dados históricos ou refund de quem já comprou o Semanal 2×.
+- Blindagem contra fraude com email/telefone novo — quem quiser burlar cria conta nova; o objetivo aqui é higienizar o fluxo legítimo, não caçar abuso.
+- Mudança na landing page ou remoção do Semanal da vitrine (Semanal continua exposto como oferta pública — só quem já foi cliente é redirecionado).
 
-- Estado "costurando" (`soft_closing`): "sem novas perguntas exploratórias; aprofunde o que já está na mesa e comece a puxar o fio para o Cardápio."
-- Estado "aterrissando" (`overtime`): "o formato do Cardápio precisa emergir nesta ou na próxima resposta; priorize `session_bridge` / `suggest_session` para transformar o fim em próximo capítulo."
+## Detalhes técnicos
 
-### 3. Salvaguarda contra corte de assunto vivo
+- Arquivo: `supabase/functions/create-checkout/index.ts` — inserir bloco de checagem logo depois do lookup de `profile`/`customer` e **antes** da montagem de `sessionConfig`, no ramo `if (trial)`.
+- Query Supabase: `select stripe_customer_id, asaas_customer_id, plan, billing_cycle from profiles where email = ? or phone_normalized = ? limit 1`.
+- Stripe: `stripe.subscriptions.list({customer: cid, status: 'all', limit: 5})` — se `.data.length > 0`, é retornante.
+- Log: `logStep("⛔ Weekly blocked for returning customer", { email, hasProfile, hasStripeHistory, hasAsaasHistory })` para auditoria.
+- Frontend: `CheckoutV2.tsx` já trata `error?.context?.error` — adicionar branch por `code === "WEEKLY_NOT_AVAILABLE_FOR_RETURNING"` no `catch`/response handler do submit.
 
-Regra escrita explicitamente nos dois blocos acima:
+## Validação
 
-> "Se o usuário abriu tema novo com carga emocional na última mensagem, NÃO force fechamento. Acolhe, valida, e proponha retomar na próxima sessão. Fechar em cima de assunto vivo parece robô."
-
-### 4. Acolher pedido de continuar
-
-Nova flag determinística no evaluator: `user_declined_closure = true` quando a última mensagem do usuário vier após uma resposta da Aura marcada com fechamento (menção a "próxima sessão"/"retomar" ou tag `session_bridge`/`suggest_session`).
-
-Enquanto essa flag estiver ativa por até 3-4 pares de mensagens (ou +15min sobre o alvo, o que vier primeiro), o evaluator **suprime** as instruções de aterrissagem e injeta:
-
-> "Usuário pediu para continuar após proposta de fechar. Acolhe integralmente o que ele trouxe; NÃO repita proposta de fechar imediatamente. Só volte a costurar quando o novo tema tiver sido tocado."
-
-Passando desse limite, evaluator volta a injetar aterrissagem, agora com texto de validação: *"a gente estendeu bem hoje, e o que você trouxe merece espaço próprio — que tal marcarmos [dia]?"*.
-
-Teto absoluto continua sendo o cron externo.
-
-## Instrumentação (já existe, só validar)
-
-- `closure_mode` no `sessions` (deployado hoje). Após 24-48h deve começar a aparecer preenchido com `ritual` / `unilateral` / `no_show`.
-- Se continuar 100% NULL depois desse prazo, abrir sub-tarefa de investigação — fora do escopo deste plano.
-
-## Métricas de sucesso (30 dias após deploy)
-
-- % de sessões com `closure_type` preenchido dentro de ≤50min sobe de ~45% para ≥65%.
-- % de `no_show` cai de ~25% para ≤10%.
-- Taxa de retorno em 72h nas sessões que passam do alvo sobe de 12,5% para ≥30%.
-- Duração média cai de ~62min para ≤52min.
-
-## Arquivos afetados
-
-- `supabase/functions/aura-agent/index.ts` — única mudança, dentro de `evaluateTherapeuticPhase` e nos textos de `SESSION_PHASE_INSTRUCTIONS`.
-
-## Riscos e mitigação
-
-- **Risco**: Aura ficar rígida demais e cortar cedo. **Mitigação**: salvaguarda de assunto vivo + flag `user_declined_closure` são explícitas no prompt.
-- **Risco**: Flash ignorar as novas instruções como ignora as atuais. **Mitigação**: instruções ficam mais fortes e cobrem fases hoje órfãs (mudança de cobertura, não só de tom). Se ainda assim ignorar, próximo passo seria interceptação determinística no backend — mas só depois de validar que a mudança de cobertura já resolve boa parte.
-- **Risco**: Regressão no comportamento atual das sessões que já fecham bem (~45%). **Mitigação**: mudanças concentradas nas fases tardias; `exploration`/`reframe` intocados.
+1. Testar com `jefmarper@gmail.com` (retornante conhecido) → deve receber 409.
+2. Testar com email totalmente novo → checkout Semanal segue normal.
+3. Verificar em `edge_function_logs` se o log de bloqueio aparece.
