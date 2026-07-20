@@ -1,55 +1,38 @@
-## Verificação da implementação "Fallback silencioso Semanal → Mensal"
+## Objetivo
+Validar em produção que a inversão Semanal→Mensal para clientes retornantes está funcionando corretamente nos dois gateways, sem quebrar o fluxo de clientes novos.
 
-### O que já está correto ✅
+## O que vou executar automaticamente (via curl)
 
-**Stripe (`create-checkout`)**
+**1. Stripe — retornante**
+- POST `create-checkout` com email de retornante conhecido (`jefmarper@gmail.com`), `plan=direcao`, `billing=monthly`, `trial=true`.
+- Validar na resposta:
+  - `returning_customer: true`
+  - `url` aponta pra Checkout Session válida
+  - Session no Stripe: `mode=subscription`, price = `STRIPE_PRICE_DIRECAO_MONTHLY`, sem trial, `metadata.returning_customer=true`, `custom_text.submit.message` presente.
 
-- `effectiveTrial` e `returningCustomerMonthly` como `let`, com rebaixamento silencioso quando `hasStripeHistory || hasAsaasHistory`.
-- Se retornante: `priceId = PRICES[plan].monthly` (STRIPE_PRICE_*_MONTHLY, recorrente cheio), cai no `else` de `subscription` mode, com `custom_text.submit.message` explicando "Você já foi cliente da AURA. Esta é a assinatura mensal recorrente de R$ 29,90/mês…".
-- `displayPrice` puxa do `planPrices[plan]["monthly"]` — bate certinho (R$ 29,90 / 49,90 / 79,90).
-- Metadata da session + subscription marcam `returning_customer=true`, `original_flow=weekly_blocked` (auditável no Stripe Dashboard).
-- Log renomeado pra `effectiveTrial` e resposta inclui `returning_customer` pro front instrumentar.
+**2. Stripe — cliente novo (controle)**
+- Mesmo POST com email inédito. Confirmar `returning_customer: false` e price = trial (R$ 9,90 pra Direção).
 
-**Asaas (`criar-cartao-asaas`)**
+**3. Asaas — retornante**
+- POST `criar-cartao-asaas` com email retornante + cartão de teste Asaas sandbox.
+- Se `ASAAS_ENV=production`, pulo esse passo e só inspeciono o código path (não vou processar cartão real).
+- Se sandbox disponível, validar `returning_customer: true` na resposta e no dashboard: subscription com `cycle=MONTHLY`, `value=29.90`.
 
-- `useTrial` virou `let`; retornante → `useTrial=false` + `returningCustomerMonthly=true`.
-- Cai no branch `else` (linha 446-478) que faz `POST /subscriptions` com `cycle=CYCLE_MAP.monthly = "MONTHLY"` e `value=amountDecimal` (R$ 29,90 cheio, sem R$ 6,90).
-- Resposta inclui `returning_customer` pro front.
+**4. Asaas — cliente novo (controle)**
+- Igual, com email inédito. Confirmar trial R$ 9,90.
 
-**Frontend (`CheckoutV2.tsx` + `AsaasCardForm.tsx`)**
+**5. Hardening check**
+- Simular chamada com secret ausente não é viável em prod; em vez disso valido nos logs do último deploy que o boot check rodou sem warning.
 
-- Removidos: `weeklyBlockedNotice`, `triggerWeeklyBlockedFallback`, banner âmbar, ring no toggle Mensal, handler `onWeeklyBlocked`, tratamento de 409.
-- `AsaasCardForm` agora chama `onSuccess({ returningCustomerMonthly })`.
-- `trackReturningCustomerMonthly("stripe" | "asaas")` disparado nos dois caminhos.
+## O que fica pra teste manual do usuário
+- **Fluxo visual completo** (Embedded Checkout renderizando o `custom_text.submit.message`; página `/obrigado` mostrando "Bem-vindo de volta 👋"): precisa navegador real com email retornante — te passo o link após o step 1.
+- **Cobrança efetiva Asaas** (se estivermos em produção): só um cartão real confirma R$ 29,90 na 1ª fatura.
 
-### Ajustes recomendados (pequenos, opcionais)
+## Entregável
+Relatório curto com:
+- Status de cada um dos 4 casos (✅/❌ + evidência do payload)
+- Screenshots/JSON do Stripe Dashboard quando aplicável
+- Lista de qualquer divergência encontrada + correção proposta
 
-**1. `/obrigado` — reconhecer o retornante**
-Hoje mostra a mesma mensagem pra todo mundo. Vale ler `?session_id` (Stripe) e, se `metadata.returning_customer === "true"`, trocar o headline por algo tipo "Bem-vindo de volta 👋 — sua Mensal está ativa." Reforça que a promoção foi intencional e evita ticket "cadê meu Semanal de R$ 6,90?".
-
-**2. WhatsApp de boas-vindas**
-Mesmo racional: hoje dispara o template padrão de welcome. Pra retornantes seria bom uma variação "Que bom te ver de volta — a partir de hoje é Mensal recorrente." Se aceitar, precisa criar um `ContentSid` novo no Twilio; se não, no mínimo suprimir o pedaço "Você tem 7 dias por R$ 6,90" caso exista no template atual.
-
-**3. Métrica no Admin**
-`AdminEngagement.tsx` já tem KPIs. Adicionar "Retornantes rebaixados p/ Mensal (30d)" consultando `stripe_subscriptions.metadata->>'returning_customer' = 'true'` + Asaas equivalente ajuda a medir volume real do caso.
-
-**4. Falta: hardening do `PRICES[plan].monthly` no Stripe**
-O `throw` que adicionei protege runtime, mas vale checar no boot da função (uma vez, no topo) que os 3 secrets `STRIPE_PRICE_{ESSENCIAL,DIRECAO,TRANSFORMACAO}_MONTHLY` estão setados — falha rápida em vez de derrubar o checkout do cliente.
-
-**5. Teste manual sugerido antes de considerar fechado**
-
-- Simular retornante Stripe: usar email com histórico + escolher Semanal → conferir no Embedded Checkout se aparece R$ 29,90/mês e a mensagem custom_text.
-- Simular retornante Asaas: mesmo email → conferir no Asaas Dashboard se a subscription saiu `cycle=MONTHLY value=29.90` e a 1ª cobrança foi R$ 29,90 (não R$ 6,90).
-- Cliente novo: garantir que o fluxo Semanal (R$ 6,90) continua funcionando.
-
-### Nada urgente ou quebrado
-
-A implementação principal está sólida e coerente. Os 5 pontos acima são melhorias de UX/observabilidade — não bloqueiam o release.
-
-### Como quer proceder?
-
-- **A** — Implemento tudo (1–4) + valido com curl no `create-checkout` simulando retornante.
-- **B** — Só os pontos 1 e 4 (mensagem no /obrigado + hardening dos secrets).
-- **C** — Nenhum ajuste agora, só rodo o teste manual (5) e valido logs.  
-  
-APROVAR O B
+## Riscos
+- Nenhum: chamadas Stripe criam sessions descartáveis (não cobram sem `payment_method`); Asaas em sandbox idem. Nada é enviado ao cliente `jefmarper@gmail.com` — os tokens de auth não disparam WhatsApp/email de boas-vindas até o pagamento confirmar.
