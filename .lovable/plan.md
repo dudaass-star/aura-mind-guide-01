@@ -1,67 +1,55 @@
-## Confirmação sobre o catálogo (pergunta que você fez)
+## Verificação da implementação "Fallback silencioso Semanal → Mensal"
 
-Sim, **os planos sem Semanal já existem em Stripe e Asaas** — não precisamos criar produto novo. O que muda é só a rota que o backend escolhe pro retornante.
+### O que já está correto ✅
 
-- **Stripe cartão sem trial**: `STRIPE_PRICE_ESSENCIAL_MONTHLY` (R$ 29,90/mês), `STRIPE_PRICE_DIRECAO_MONTHLY` (R$ 49,90/mês), `STRIPE_PRICE_TRANSFORMACAO_MONTHLY` (R$ 79,90/mês) — todos já em secrets, todos recorrentes mensais sem período de teste.
-- **Trim/Sem/Anual cartão** (`RECURRING_PRICES` hardcoded) e **Trim/Sem/Anual PIX Asaas** — hoje **já não passam pelo Semanal**. Retornante que escolhe esses períodos já cai limpo. Nada a mudar aqui.
-- **Asaas cartão mensal**: `criar-cartao-asaas` já sabe criar `subscription` mensal recorrente — basta o front mandar `trial: false` (ou o backend forçar isso pro retornante).
+**Stripe (`create-checkout`)**
 
-Onde o "Semanal contamina" hoje é **só no toggle Mensal**. É esse único caso que precisa ser tratado.
+- `effectiveTrial` e `returningCustomerMonthly` como `let`, com rebaixamento silencioso quando `hasStripeHistory || hasAsaasHistory`.
+- Se retornante: `priceId = PRICES[plan].monthly` (STRIPE_PRICE_*_MONTHLY, recorrente cheio), cai no `else` de `subscription` mode, com `custom_text.submit.message` explicando "Você já foi cliente da AURA. Esta é a assinatura mensal recorrente de R$ 29,90/mês…".
+- `displayPrice` puxa do `planPrices[plan]["monthly"]` — bate certinho (R$ 29,90 / 49,90 / 79,90).
+- Metadata da session + subscription marcam `returning_customer=true`, `original_flow=weekly_blocked` (auditável no Stripe Dashboard).
+- Log renomeado pra `effectiveTrial` e resposta inclui `returning_customer` pro front instrumentar.
 
-## Escopo (enxuto)
+**Asaas (`criar-cartao-asaas`)**
 
-### 1. Backend — Stripe (`supabase/functions/create-checkout/index.ts`)
+- `useTrial` virou `let`; retornante → `useTrial=false` + `returningCustomerMonthly=true`.
+- Cai no branch `else` (linha 446-478) que faz `POST /subscriptions` com `cycle=CYCLE_MAP.monthly = "MONTHLY"` e `value=amountDecimal` (R$ 29,90 cheio, sem R$ 6,90).
+- Resposta inclui `returning_customer` pro front.
 
-No bloco `if (trial)` (linha 308), após detectar `hasStripeHistory || hasAsaasHistory`:
+**Frontend (`CheckoutV2.tsx` + `AsaasCardForm.tsx`)**
 
-- **Trocar o `return 409`** por um **fallback silencioso**: promover o request pra Mensal recorrente sem trial (`PRICES[plan].monthly`), `mode = "subscription"`, mantendo o mesmo `customer`, sem trial. Metadados: `returning_customer: "true"`, `original_flow: "weekly_blocked"`.
-- Manter `custom_text.submit.message` explícito no Embedded Checkout: *"Você já foi cliente. Esta é a assinatura mensal recorrente de R$ XX,XX. Cancele quando quiser."* — garante que o cliente veja o valor real antes de confirmar.
+- Removidos: `weeklyBlockedNotice`, `triggerWeeklyBlockedFallback`, banner âmbar, ring no toggle Mensal, handler `onWeeklyBlocked`, tratamento de 409.
+- `AsaasCardForm` agora chama `onSuccess({ returningCustomerMonthly })`.
+- `trackReturningCustomerMonthly("stripe" | "asaas")` disparado nos dois caminhos.
 
-### 2. Backend — Asaas (`supabase/functions/criar-cartao-asaas/index.ts`)
+### Ajustes recomendados (pequenos, opcionais)
 
-Mesma inversão: se retornante detectado no path `trial=true`, criar `subscription` Asaas com `cycle=MONTHLY` no valor cheio (R$ 29,90 / 49,90 / 79,90) em vez de retornar 409.
+**1. `/obrigado` — reconhecer o retornante**
+Hoje mostra a mesma mensagem pra todo mundo. Vale ler `?session_id` (Stripe) e, se `metadata.returning_customer === "true"`, trocar o headline por algo tipo "Bem-vindo de volta 👋 — sua Mensal está ativa." Reforça que a promoção foi intencional e evita ticket "cadê meu Semanal de R$ 6,90?".
 
-### 3. Frontend — remover o banner e o callback de bloqueio
+**2. WhatsApp de boas-vindas**
+Mesmo racional: hoje dispara o template padrão de welcome. Pra retornantes seria bom uma variação "Que bom te ver de volta — a partir de hoje é Mensal recorrente." Se aceitar, precisa criar um `ContentSid` novo no Twilio; se não, no mínimo suprimir o pedaço "Você tem 7 dias por R$ 6,90" caso exista no template atual.
 
-- `src/pages/CheckoutV2.tsx`:
-  - Remover: `weeklyBlockedNotice`, banner âmbar, `triggerWeeklyBlockedFallback`, ring/pulse no toggle Mensal, tratamento de 409 nos dois handlers.
-  - Manter tratamento genérico de erro.
-- `src/components/checkout/AsaasCardForm.tsx`:
-  - Remover prop `onWeeklyBlocked` (sem 409 pra tratar).
-- `src/lib/ga4.ts`:
-  - Renomear `trackWeeklyRedirectToMonthly` → `trackReturningCustomerMonthly`, disparado quando o backend retornar `returning_customer: true` no JSON.
+**3. Métrica no Admin**
+`AdminEngagement.tsx` já tem KPIs. Adicionar "Retornantes rebaixados p/ Mensal (30d)" consultando `stripe_subscriptions.metadata->>'returning_customer' = 'true'` + Asaas equivalente ajuda a medir volume real do caso.
 
-## Fluxo final
+**4. Falta: hardening do `PRICES[plan].monthly` no Stripe**
+O `throw` que adicionei protege runtime, mas vale checar no boot da função (uma vez, no topo) que os 3 secrets `STRIPE_PRICE_{ESSENCIAL,DIRECAO,TRANSFORMACAO}_MONTHLY` estão setados — falha rápida em vez de derrubar o checkout do cliente.
 
-```text
-Retornante clica "Começar trial por R$ 6,90"  (toggle Mensal)
-        │
-        ▼
-Backend detecta histórico (Stripe OU Asaas)
-        │
-        ▼
-Monta Mensal recorrente cheio (STRIPE_PRICE_*_MONTHLY ou Asaas cycle=MONTHLY)
-        │
-        ▼
-Embedded Checkout / form Asaas abre com:
-  • Preço: R$ 29,90/mês (ou 49,90 / 79,90)
-  • Texto: "Você já foi cliente. Assinatura mensal recorrente. Cancele quando quiser."
-        │
-        ▼
-Cliente confirma ou fecha (se fechar, volta pro /v2/checkout e pode escolher Trim/Sem/Anual)
-```
+**5. Teste manual sugerido antes de considerar fechado**
 
-Trim/Sem/Anual seguem inalterados — retornante que escolher esses períodos vai direto pro recorrente sem passar nem perto do Semanal (já é assim hoje).
+- Simular retornante Stripe: usar email com histórico + escolher Semanal → conferir no Embedded Checkout se aparece R$ 29,90/mês e a mensagem custom_text.
+- Simular retornante Asaas: mesmo email → conferir no Asaas Dashboard se a subscription saiu `cycle=MONTHLY value=29.90` e a 1ª cobrança foi R$ 29,90 (não R$ 6,90).
+- Cliente novo: garantir que o fluxo Semanal (R$ 6,90) continua funcionando.
 
-## Riscos
+### Nada urgente ou quebrado
 
-1. **Choque de preço R$ 6,90 → R$ 29,90.** Mitigado por `custom_text.submit.message` + o valor grande do Embedded Checkout; sem tela extra "escolha outro plano".
-2. **Retornante quer Trim/Anual em vez de Mensal.** Se fechar o Embedded, cai de volta no `/v2/checkout` com o toggle disponível.
+A implementação principal está sólida e coerente. Os 5 pontos acima são melhorias de UX/observabilidade — não bloqueiam o release.
 
-## Ordem de execução
+### Como quer proceder?
 
-1. `create-checkout`: substituir 409 por fallback Mensal recorrente.
-2. `criar-cartao-asaas`: mesma substituição.
-3. Front: remover banner, callback, ring, toast.
-4. GA4: renomear evento.
-5. Deploy edge functions + smoke com `jefmarper@gmail.com` (retornante) — deve abrir Embedded no valor cheio, sem 409.
+- **A** — Implemento tudo (1–4) + valido com curl no `create-checkout` simulando retornante.
+- **B** — Só os pontos 1 e 4 (mensagem no /obrigado + hardening dos secrets).
+- **C** — Nenhum ajuste agora, só rodo o teste manual (5) e valido logs.  
+  
+APROVAR O B
