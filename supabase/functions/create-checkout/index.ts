@@ -8,6 +8,24 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Hardening: valida no boot que os secrets do fallback Semanal→Mensal existem.
+// Se faltar, loga um aviso alto — o throw só dispara quando alguém tenta usar
+// (evita derrubar o boot inteiro por causa do fluxo retornante).
+(() => {
+  const required = [
+    "STRIPE_PRICE_ESSENCIAL_MONTHLY",
+    "STRIPE_PRICE_DIRECAO_MONTHLY",
+    "STRIPE_PRICE_TRANSFORMACAO_MONTHLY",
+  ];
+  const missing = required.filter((k) => !Deno.env.get(k));
+  if (missing.length > 0) {
+    console.error(
+      `[CREATE-CHECKOUT][BOOT] Secrets ausentes p/ fallback retornante: ${missing.join(", ")}. ` +
+      `Retornantes que escolherem Semanal vão falhar até setar.`,
+    );
+  }
+})();
+
 // Trial price IDs per plan (one-time, paid trial)
 const getTrialPrices = (): Record<string, string> => ({
   essencial: Deno.env.get("STRIPE_PRICE_ESSENCIAL_TRIAL") || "",
