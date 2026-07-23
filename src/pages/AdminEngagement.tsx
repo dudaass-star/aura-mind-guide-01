@@ -1589,6 +1589,64 @@ export default function AdminEngagement() {
                 {/* 1. Cards de métricas */}
                 <MetricCards cards={trialCards} />
 
+                {/* 1b. Escada de retenção (cancel flow) */}
+                <div className="space-y-2">
+                  <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
+                    <Heart className="h-4 w-4" />
+                    Retenção — Fluxo de Cancelamento ({periodLabel})
+                  </h2>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <Card>
+                      <CardHeader className="flex flex-row items-center justify-between p-3 pb-1">
+                        <CardTitle className="text-xs font-medium text-muted-foreground">Cancelamentos Retidos</CardTitle>
+                        <CheckCircle2 className="h-3.5 w-3.5 text-muted-foreground" />
+                      </CardHeader>
+                      <CardContent className="p-3 pt-0">
+                        <div className="text-xl font-bold text-foreground">{retentionStats.accepted}</div>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">aceitaram oferta em vez de cancelar</p>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardHeader className="flex flex-row items-center justify-between p-3 pb-1">
+                        <CardTitle className="text-xs font-medium text-muted-foreground">Save Rate</CardTitle>
+                        <TrendingUp className="h-3.5 w-3.5 text-muted-foreground" />
+                      </CardHeader>
+                      <CardContent className="p-3 pt-0">
+                        <div className="text-xl font-bold text-foreground">
+                          {retentionStats.accepted + retentionStats.canceled > 0
+                            ? Math.round((retentionStats.accepted / (retentionStats.accepted + retentionStats.canceled)) * 100)
+                            : 0}%
+                        </div>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">{retentionStats.accepted} salvos / {retentionStats.accepted + retentionStats.canceled} chegaram ao fim</p>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardHeader className="flex flex-row items-center justify-between p-3 pb-1">
+                        <CardTitle className="text-xs font-medium text-muted-foreground">Por Tier</CardTitle>
+                        <BarChart3 className="h-3.5 w-3.5 text-muted-foreground" />
+                      </CardHeader>
+                      <CardContent className="p-3 pt-0">
+                        <div className="text-[11px] text-muted-foreground space-y-0.5">
+                          <div>Pausa: <span className="font-semibold text-foreground">{retentionStats.byTier.pause || 0}</span></div>
+                          <div>30% off: <span className="font-semibold text-foreground">{retentionStats.byTier.discount_30 || 0}</span></div>
+                          <div>Lite: <span className="font-semibold text-foreground">{retentionStats.byTier.lite || 0}</span></div>
+                          <div>Base: <span className="font-semibold text-foreground">{retentionStats.byTier.base || 0}</span></div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardHeader className="flex flex-row items-center justify-between p-3 pb-1">
+                        <CardTitle className="text-xs font-medium text-muted-foreground">Cancelaram no Fluxo</CardTitle>
+                        <XCircle className="h-3.5 w-3.5 text-muted-foreground" />
+                      </CardHeader>
+                      <CardContent className="p-3 pt-0">
+                        <div className="text-xl font-bold text-foreground">{retentionStats.canceled}</div>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">recusaram a escada</p>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </div>
+
                 {/* 2. Cobranças no Período */}
                 {metrics && (
                   <div className="space-y-2">
