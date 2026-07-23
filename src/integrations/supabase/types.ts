@@ -390,31 +390,40 @@ export type Database = {
         Row: {
           action_taken: string
           created_at: string
+          gateway: string | null
           id: string
           pause_until: string | null
           phone: string
           reason: string
           reason_detail: string | null
+          save_offer_accepted: boolean | null
+          save_tier: string | null
           user_id: string | null
         }
         Insert: {
           action_taken: string
           created_at?: string
+          gateway?: string | null
           id?: string
           pause_until?: string | null
           phone: string
           reason: string
           reason_detail?: string | null
+          save_offer_accepted?: boolean | null
+          save_tier?: string | null
           user_id?: string | null
         }
         Update: {
           action_taken?: string
           created_at?: string
+          gateway?: string | null
           id?: string
           pause_until?: string | null
           phone?: string
           reason?: string
           reason_detail?: string | null
+          save_offer_accepted?: boolean | null
+          save_tier?: string | null
           user_id?: string | null
         }
         Relationships: []
@@ -710,6 +719,7 @@ export type Database = {
           channel: string | null
           created_at: string
           customer_id: string
+          days_past_due: number | null
           error_message: string | null
           error_stage: string | null
           event_id: string
@@ -717,6 +727,9 @@ export type Database = {
           invoice_id: string | null
           link_generated: boolean
           message_sid: string | null
+          offer_accepted: boolean | null
+          offer_tier: string | null
+          offer_token_code: string | null
           payment_id: string | null
           phone_raw: string | null
           phone_resolved: string | null
@@ -732,6 +745,7 @@ export type Database = {
           channel?: string | null
           created_at?: string
           customer_id: string
+          days_past_due?: number | null
           error_message?: string | null
           error_stage?: string | null
           event_id: string
@@ -739,6 +753,9 @@ export type Database = {
           invoice_id?: string | null
           link_generated?: boolean
           message_sid?: string | null
+          offer_accepted?: boolean | null
+          offer_tier?: string | null
+          offer_token_code?: string | null
           payment_id?: string | null
           phone_raw?: string | null
           phone_resolved?: string | null
@@ -754,6 +771,7 @@ export type Database = {
           channel?: string | null
           created_at?: string
           customer_id?: string
+          days_past_due?: number | null
           error_message?: string | null
           error_stage?: string | null
           event_id?: string
@@ -761,6 +779,9 @@ export type Database = {
           invoice_id?: string | null
           link_generated?: boolean
           message_sid?: string | null
+          offer_accepted?: boolean | null
+          offer_tier?: string | null
+          offer_token_code?: string | null
           payment_id?: string | null
           phone_raw?: string | null
           phone_resolved?: string | null
@@ -1533,6 +1554,7 @@ export type Database = {
           phone: string | null
           plan: string | null
           plan_expires_at: string | null
+          plan_tier: string | null
           preferred_session_time: string | null
           preferred_support_style: string | null
           primary_topic: string | null
@@ -1604,6 +1626,7 @@ export type Database = {
           phone?: string | null
           plan?: string | null
           plan_expires_at?: string | null
+          plan_tier?: string | null
           preferred_session_time?: string | null
           preferred_support_style?: string | null
           primary_topic?: string | null
@@ -1675,6 +1698,7 @@ export type Database = {
           phone?: string | null
           plan?: string | null
           plan_expires_at?: string | null
+          plan_tier?: string | null
           preferred_session_time?: string | null
           preferred_support_style?: string | null
           primary_topic?: string | null
@@ -1889,6 +1913,87 @@ export type Database = {
           metadata?: Json | null
           phone?: string
           sent_by_admin?: boolean
+        }
+        Relationships: []
+      }
+      retention_events: {
+        Row: {
+          action: string
+          amount_cents: number | null
+          channel: string | null
+          created_at: string
+          gateway: string | null
+          id: string
+          metadata: Json
+          origin: string
+          phone: string | null
+          tier: string
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          amount_cents?: number | null
+          channel?: string | null
+          created_at?: string
+          gateway?: string | null
+          id?: string
+          metadata?: Json
+          origin: string
+          phone?: string | null
+          tier: string
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          amount_cents?: number | null
+          channel?: string | null
+          created_at?: string
+          gateway?: string | null
+          id?: string
+          metadata?: Json
+          origin?: string
+          phone?: string | null
+          tier?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      retention_tokens: {
+        Row: {
+          channel: string
+          code: string
+          consumed_at: string | null
+          created_at: string
+          expires_at: string
+          gateway: string
+          id: string
+          payload: Json
+          tier: string
+          user_id: string
+        }
+        Insert: {
+          channel: string
+          code: string
+          consumed_at?: string | null
+          created_at?: string
+          expires_at?: string
+          gateway: string
+          id?: string
+          payload?: Json
+          tier: string
+          user_id: string
+        }
+        Update: {
+          channel?: string
+          code?: string
+          consumed_at?: string | null
+          created_at?: string
+          expires_at?: string
+          gateway?: string
+          id?: string
+          payload?: Json
+          tier?: string
+          user_id?: string
         }
         Relationships: []
       }
