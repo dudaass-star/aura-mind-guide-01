@@ -250,6 +250,12 @@ export default function AdminEngagement() {
   const [dunningOpen, setDunningOpen] = useState(false);
   const [showAllRecovery, setShowAllRecovery] = useState(false);
   const [showAllDunning, setShowAllDunning] = useState(false);
+  const [retentionStats, setRetentionStats] = useState<{
+    offered: number;
+    accepted: number;
+    byTier: Record<string, number>;
+    canceled: number;
+  }>({ offered: 0, accepted: 0, byTier: {}, canceled: 0 });
   const { toast } = useToast();
   const navigate = useNavigate();
   const requestIdRef = useRef(0);
