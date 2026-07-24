@@ -88,6 +88,7 @@ const CancelSubscription = () => {
   const [valueRecap, setValueRecap] = useState<ValueRecap | null>(null);
   const [discountAvailable, setDiscountAvailable] = useState<boolean>(true);
   const [gatewayUnsupported, setGatewayUnsupported] = useState<boolean>(false);
+  const [needsNewCard, setNeedsNewCard] = useState<boolean>(false);
 
   const formatPhone = (value: string) => {
     const digits = value.replace(/\D/g, "");
@@ -176,6 +177,13 @@ const CancelSubscription = () => {
         return;
       }
 
+      if (data.needs_new_card) {
+        setNeedsNewCard(true);
+        setMessage(data.message || "Precisamos atualizar sua forma de pagamento antes de continuar.");
+        setStatus("error");
+        return;
+      }
+
       if (data.success) {
         setStatus("success");
         setMessage(data.message);
@@ -201,6 +209,7 @@ const CancelSubscription = () => {
     setValueRecap(null);
     setDiscountAvailable(true);
     setGatewayUnsupported(false);
+    setNeedsNewCard(false);
   };
 
   const offerList: Tier[] = selectedReason
@@ -553,6 +562,13 @@ const CancelSubscription = () => {
                       <Button className="w-full">
                         <MessageCircle className="w-4 h-4 mr-2" />
                         Falar com o suporte
+                      </Button>
+                    </a>
+                  )}
+                  {needsNewCard && (
+                    <a href="/checkout" className="block">
+                      <Button className="w-full">
+                        Atualizar forma de pagamento
                       </Button>
                     </a>
                   )}
