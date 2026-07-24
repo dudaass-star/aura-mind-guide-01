@@ -254,8 +254,9 @@ export default function AdminEngagement() {
     offered: number;
     accepted: number;
     byTier: Record<string, number>;
+    byGateway: Record<string, number>;
     canceled: number;
-  }>({ offered: 0, accepted: 0, byTier: {}, canceled: 0 });
+  }>({ offered: 0, accepted: 0, byTier: {}, byGateway: {}, canceled: 0 });
   const { toast } = useToast();
   const navigate = useNavigate();
   const requestIdRef = useRef(0);
@@ -555,16 +556,24 @@ export default function AdminEngagement() {
       const toISO = new Date(dateTo.setHours(23, 59, 59, 999)).toISOString();
       const { data, error } = await supabase
         .from('retention_events')
-        .select('tier, action, created_at')
+        .select('tier, action, gateway, created_at')
         .gte('created_at', fromISO)
         .lte('created_at', toISO);
       if (error || !data) return;
-      const stats = { offered: 0, accepted: 0, byTier: {} as Record<string, number>, canceled: 0 };
-      for (const ev of data as Array<{ tier: string; action: string }>) {
+      const stats = {
+        offered: 0,
+        accepted: 0,
+        byTier: {} as Record<string, number>,
+        byGateway: {} as Record<string, number>,
+        canceled: 0,
+      };
+      for (const ev of data as Array<{ tier: string; action: string; gateway: string | null }>) {
         if (ev.action === 'offered') stats.offered += 1;
         if (ev.action === 'accepted') {
           stats.accepted += 1;
           stats.byTier[ev.tier] = (stats.byTier[ev.tier] || 0) + 1;
+          const gw = ev.gateway || 'unknown';
+          stats.byGateway[gw] = (stats.byGateway[gw] || 0) + 1;
         }
         if (ev.action === 'applied' && ev.tier === 'cancel') stats.canceled += 1;
       }
