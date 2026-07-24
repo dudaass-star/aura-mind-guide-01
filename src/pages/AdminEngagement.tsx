@@ -1645,6 +1645,19 @@ export default function AdminEngagement() {
                     </Card>
                     <Card>
                       <CardHeader className="flex flex-row items-center justify-between p-3 pb-1">
+                        <CardTitle className="text-xs font-medium text-muted-foreground">Por Gateway</CardTitle>
+                        <BarChart3 className="h-3.5 w-3.5 text-muted-foreground" />
+                      </CardHeader>
+                      <CardContent className="p-3 pt-0">
+                        <div className="text-[11px] text-muted-foreground space-y-0.5">
+                          <div>Stripe: <span className="font-semibold text-foreground">{retentionStats.byGateway.stripe || 0}</span></div>
+                          <div>Asaas cartão: <span className="font-semibold text-foreground">{retentionStats.byGateway.asaas_card || 0}</span></div>
+                          <div>Asaas PIX: <span className="font-semibold text-foreground">{retentionStats.byGateway.asaas_pix || 0}</span></div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardHeader className="flex flex-row items-center justify-between p-3 pb-1">
                         <CardTitle className="text-xs font-medium text-muted-foreground">Cancelaram no Fluxo</CardTitle>
                         <XCircle className="h-3.5 w-3.5 text-muted-foreground" />
                       </CardHeader>
