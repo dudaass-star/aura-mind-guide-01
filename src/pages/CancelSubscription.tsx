@@ -88,6 +88,7 @@ const CancelSubscription = () => {
   const [valueRecap, setValueRecap] = useState<ValueRecap | null>(null);
   const [discountAvailable, setDiscountAvailable] = useState<boolean>(true);
   const [gatewayUnsupported, setGatewayUnsupported] = useState<boolean>(false);
+  const [needsNewCard, setNeedsNewCard] = useState<boolean>(false);
 
   const formatPhone = (value: string) => {
     const digits = value.replace(/\D/g, "");
@@ -172,6 +173,13 @@ const CancelSubscription = () => {
       if (data.gateway_unsupported) {
         setGatewayUnsupported(true);
         setMessage(data.message);
+        setStatus("error");
+        return;
+      }
+
+      if (data.needs_new_card) {
+        setNeedsNewCard(true);
+        setMessage(data.message || "Precisamos atualizar sua forma de pagamento antes de continuar.");
         setStatus("error");
         return;
       }

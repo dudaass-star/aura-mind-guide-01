@@ -127,7 +127,7 @@ serve(async (req) => {
     }
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Descobre o perfil (user_id, gateway, nome) pela variação de telefone
+    // Descobre o perfil (user_id, gateway, nome) tentando cada variação de telefone
     let profile: {
       user_id: string | null;
       name: string | null;
@@ -137,12 +137,13 @@ serve(async (req) => {
       billing_cycle?: string | null;
     } | null = null;
     {
+      const variants = getPhoneVariations(phoneClean);
       const { data } = await supabase
         .from("profiles")
         .select("user_id, name, card_gateway, asaas_customer_id, plan, billing_cycle")
-        .eq("phone", phoneClean)
-        .maybeSingle();
-      if (data) profile = data as any;
+        .in("phone", variants)
+        .limit(1);
+      if (data && data.length > 0) profile = data[0] as any;
     }
 
     // ─── Roteamento Asaas cartão ─────────────────────────────────────────
@@ -263,7 +264,9 @@ serve(async (req) => {
       }
 
       if (cancelingSub) {
-        const rawCancelEnd = cancelingSub.items.data[0]?.current_period_end;
+        const rawCancelEnd =
+          (cancelingSub as any).current_period_end ??
+          cancelingSub.items.data[0]?.current_period_end;
         const endDate = typeof rawCancelEnd === 'string' ? new Date(rawCancelEnd) : new Date((rawCancelEnd ?? 0) * 1000);
         return new Response(
           JSON.stringify({
@@ -297,7 +300,9 @@ serve(async (req) => {
     }
 
     const subscription = subscriptions.data[0];
-    const rawEnd = subscription.items.data[0]?.current_period_end;
+    const rawEnd =
+      (subscription as any).current_period_end ??
+      subscription.items.data[0]?.current_period_end;
     logStep("Raw current_period_end value", { rawEnd, type: typeof rawEnd });
     const currentPeriodEnd = typeof rawEnd === 'string' ? new Date(rawEnd) : new Date((rawEnd ?? 0) * 1000);
 
