@@ -146,26 +146,37 @@ serve(async (req) => {
       if (data && data.length > 0) profile = data[0] as any;
     }
 
-    // ─── Roteamento Asaas cartão ─────────────────────────────────────────
-    // Se o usuário tem gateway Asaas cartão OU PIX recorrente, roda todo o
-    // fluxo pelo Asaas. Cartão tem paridade total. PIX faz check/pause/
-    // downgrade/cancel (sem desconto 30% — precisa de token de cartão).
-    if (profile?.card_gateway === "asaas_card" && profile.user_id && profile.asaas_customer_id) {
-      const resp = await handleAsaasCard({
-        supabase,
-        profile: profile as any,
-        phoneClean,
-        action,
-        reason,
-        reason_detail,
-        pause_days,
-      });
-      if (resp) return resp;
-      // Se handleAsaasCard não conseguiu resolver, cai para o fluxo Stripe.
-    }
+    // ─── Roteamento Asaas (cartão OU PIX recorrente) ──────────────────────
+    // Em produção o card_gateway é gravado como 'asaas' (valor único). A
+    // distinção cartão vs PIX vem do payment_method da última cobrança em
+    // asaas_payments. Aceita também os nomes antigos 'asaas_card'/'asaas_pix'
+    // para retrocompatibilidade.
+    const isAsaasUser =
+      profile?.asaas_customer_id &&
+      profile?.user_id &&
+      (profile.card_gateway === "asaas" ||
+        profile.card_gateway === "asaas_card" ||
+        profile.card_gateway === "asaas_pix");
 
-    if (profile?.card_gateway === "asaas_pix" && profile.user_id && profile.asaas_customer_id) {
-      const resp = await handleAsaasPix({
+    if (isAsaasUser) {
+      let asaasMethod: "PIX" | "CARD" | null = null;
+      if (profile.card_gateway === "asaas_pix") asaasMethod = "PIX";
+      else if (profile.card_gateway === "asaas_card") asaasMethod = "CARD";
+      else {
+        // card_gateway = 'asaas' → inspeciona a última cobrança
+        const { data: lastPay } = await supabase
+          .from("asaas_payments")
+          .select("payment_method")
+          .eq("asaas_customer_id", profile.asaas_customer_id)
+          .not("payment_method", "is", null)
+          .order("created_at", { ascending: false })
+          .limit(1);
+        const pm = String(lastPay?.[0]?.payment_method || "").toUpperCase();
+        asaasMethod = pm === "PIX" ? "PIX" : "CARD";
+      }
+
+      const handler = asaasMethod === "PIX" ? handleAsaasPix : handleAsaasCard;
+      const resp = await handler({
         supabase,
         profile: profile as any,
         phoneClean,
@@ -175,6 +186,7 @@ serve(async (req) => {
         pause_days,
       });
       if (resp) return resp;
+      // Se o handler devolveu null (sem sub encontrada), cai para o Stripe.
     }
 
     // Search for customer by phone in metadata using all variations
