@@ -659,7 +659,7 @@ async function handleAsaasCard(params: HandleAsaasParams): Promise<Response | nu
   const logA = (step: string, details?: any) =>
     console.log(`[CANCEL-SUBSCRIPTION][ASAAS] ${step}${details ? ` - ${JSON.stringify(details)}` : ""}`);
 
-  let asaasFetch: ReturnType<typeof getAsaasClient>;
+  let asaasFetch: (path: string, init?: RequestInit) => Promise<any>;
   try {
     asaasFetch = getAsaasClient();
   } catch (e) {
