@@ -34,6 +34,7 @@ interface SubscriptionInfo {
   amount?: string;
   resumesAt?: string;
   resumesAtFormatted?: string;
+  gateway?: string;
 }
 
 interface CancellationReason {
@@ -121,6 +122,10 @@ const CancelSubscription = () => {
 
       if (data.success && data.status === "active") {
         setSubscription(data.subscription);
+        // Preserva o gateway retornado pelo backend pra decisões de UI (nota PIX etc).
+        if (data.gateway) {
+          setSubscription({ ...data.subscription, gateway: data.gateway });
+        }
         setReasons(data.reasons || []);
         setValueRecap(data.value_recap || null);
         setDiscountAvailable(data.discount_available !== false);
@@ -419,6 +424,12 @@ const CancelSubscription = () => {
                       <span className="font-medium">{subscription.endDateFormatted}</span>
                     </div>
                   </div>
+
+                  {subscription.gateway === "asaas_pix" && (
+                    <p className="text-xs text-muted-foreground text-center">
+                      Você paga via PIX recorrente — o QR chega automático no próximo vencimento.
+                    </p>
+                  )}
 
                   <div className="flex gap-3">
                     <Button variant="outline" onClick={resetForm} className="flex-1">

@@ -388,10 +388,12 @@ Deno.serve(async (req) => {
           }
 
           case 'asaas_resume_subscription':
-          case 'asaas_restore_full_price': {
+          case 'asaas_restore_full_price':
+          case 'asaas_pix_resume_subscription': {
             // Retomada de pausa OU restauração do valor cheio após 30% off (3 ciclos).
             //   - asaas_resume_subscription: cria nova sub com o mesmo `value` original.
             //   - asaas_restore_full_price: cria nova sub com o `full_value` e cancela a descontada.
+            //   - asaas_pix_resume_subscription: retomada de pausa em sub PIX (sem card token).
             const ASAAS_API_KEY = Deno.env.get('ASAAS_API_KEY') || '';
             const ASAAS_BASE_URL = (Deno.env.get('ASAAS_ENV') === 'production' || !Deno.env.get('ASAAS_ENV'))
               ? 'https://api.asaas.com/v3'
@@ -401,13 +403,14 @@ Deno.serve(async (req) => {
               break;
             }
             const customerId = payload.customer_id as string;
-            const cardToken = payload.card_token as string;
+            const isPix = task.task_type === 'asaas_pix_resume_subscription' || payload.billing_type === 'PIX';
+            const cardToken = payload.card_token as string | undefined;
             const cycle = (payload.cycle as string) || 'MONTHLY';
             const description = (payload.description as string) || 'Aura - assinatura';
             const targetValue = task.task_type === 'asaas_restore_full_price'
               ? Number(payload.full_value)
               : Number(payload.value);
-            if (!customerId || !cardToken || !targetValue) {
+            if (!customerId || !targetValue || (!isPix && !cardToken)) {
               console.warn(`⚠️ ${task.task_type} payload incompleto`, payload);
               break;
             }
@@ -428,18 +431,19 @@ Deno.serve(async (req) => {
               timeZone: 'America/Sao_Paulo',
               year: 'numeric', month: '2-digit', day: '2-digit',
             }).format(new Date());
+            const subBody: Record<string, unknown> = {
+              customer: customerId,
+              billingType: isPix ? 'PIX' : 'CREDIT_CARD',
+              cycle,
+              value: targetValue,
+              nextDueDate: today,
+              description,
+              externalReference: `aura_${task.task_type}_${task.user_id}_${Date.now()}`,
+            };
+            if (!isPix) subBody.creditCardToken = cardToken;
             const created = await asaasFetch('/subscriptions', {
               method: 'POST',
-              body: JSON.stringify({
-                customer: customerId,
-                billingType: 'CREDIT_CARD',
-                creditCardToken: cardToken,
-                cycle,
-                value: targetValue,
-                nextDueDate: today,
-                description,
-                externalReference: `aura_${task.task_type}_${task.user_id}_${Date.now()}`,
-              }),
+              body: JSON.stringify(subBody),
             });
             if (!created.ok) {
               console.warn(`⚠️ ${task.task_type} falhou ao criar sub:`, created.json);
@@ -452,7 +456,7 @@ Deno.serve(async (req) => {
                 console.warn('⚠️ Falha cancelando sub descontada:', (e as Error).message);
               }
             }
-            if (task.task_type === 'asaas_resume_subscription') {
+            if (task.task_type === 'asaas_resume_subscription' || task.task_type === 'asaas_pix_resume_subscription') {
               await supabase.from('profiles').update({ status: 'active' }).eq('user_id', task.user_id);
             }
             console.log(`✅ ${task.task_type} OK sub=${(created.json as any)?.id}`);

@@ -1,111 +1,110 @@
-# Onda 2A — Escada de Retenção no Asaas cartão
+# Onda 2B — Asaas PIX + Dunning WhatsApp na escada de retenção
 
 ## Objetivo
-Dar paridade total ao fluxo Asaas cartão dentro do `cancel-subscription`, cobrindo as 4 ações que a Onda 1 já entrega no Stripe (`pause`, `apply_discount_3m`, `downgrade_to_lite`, `downgrade_to_base`) + `cancel` e `check`. PIX Asaas fica fora (não tem instrumentos nativos equivalentes; segue redirecionando pra suporte).
+Fechar as duas lacunas restantes da escada:
+1. **Asaas PIX recorrente** — hoje cai em `gateway_unsupported`. Dar paridade parcial (pause, downgrade e cancel) no que é possível sem `creditCardToken`.
+2. **Dunning WhatsApp** — reforço da recuperação via canal onde a conversão acontece, complementando o email já ativo.
 
-## Escopo (o que ENTRA)
+## Parte 1 — Asaas PIX na escada
 
-### 1. Resolver o gateway do usuário antes de decidir o fluxo
-- Hoje `cancel-subscription` busca customer no Stripe primeiro; se não achar, devolve `gateway_unsupported`.
-- Ajuste: se o perfil tiver `card_gateway = 'asaas_card'` (ou não achar no Stripe mas achar subscription Asaas cartão via `asaas_payments`), roteia pro branch Asaas em vez de bloquear.
-- Se for `asaas_pix` → mantém `gateway_unsupported: true` com mensagem existente (PIX segue fora da escada por ora).
+### O que é possível vs. o que não é
+PIX recorrente Asaas não tem token de instrumento salvo — cada cobrança gera um QR novo que o cliente autoriza no app do banco. Isso limita workarounds:
 
-### 2. Novo branch Asaas cartão (reusa padrão de `change-asaas-plan`)
+| Ação | PIX Asaas | Como |
+|---|---|---|
+| `check` | Sim | Igual cartão Asaas: lê `nextDueDate`/`value`/`cycle` da sub |
+| `pause` (30/60/90d) | Sim | `DELETE` sub + `scheduled_task` recria sub com mesmo `value/cycle` e `nextDueDate = fim_da_pausa` |
+| `apply_discount_3m` | Não | Sem token não dá pra garantir cobrança automática nas próximas 3 — cliente teria que reautorizar cada QR |
+| `downgrade_to_lite/base` | Sim | `DELETE` sub antiga + `POST /subscriptions` PIX com `value=19.90` ou `9.90`, mesmo `nextDueDate` |
+| `cancel` | Sim | `DELETE` sub + `profiles.status='canceling'` |
 
-Helpers internos ao próprio `cancel-subscription/index.ts` (sem novo arquivo compartilhado — mantém o edge function coeso):
-- `asaasFetch(path, init)`: mesmo padrão do `change-asaas-plan` (base URL sandbox/production, header `access_token`).
-- `findActiveAsaasSubscription(customerId)`: pega em `asaas_payments` a subscription mais recente com `payment_method='CREDIT_CARD'` e `asaas_subscription_id` não-nulo em status ativo/pending; ignora `CREDIT_CARD_INSTALLMENT` e PIX.
-- `fetchAsaasSubscriptionDetails(subId)`: retorna `{ nextDueDate, value, cycle, creditCardToken }`.
+`apply_discount_3m` fica desabilitado no PIX (o `check` já retorna `discount_available: false` com motivo explícito).
 
-Ações:
+### Roteamento
+Extender `cancel-subscription/index.ts`:
+- Detecta `profile.card_gateway === 'asaas_pix'` (ou fallback: acha sub Asaas PIX ativa via `asaas_payments.payment_method = 'PIX'`).
+- Roteia pra novo branch `handleAsaasPix` (helpers reusam `getAsaasClient`, `brtDatePlusDays`, `PLAN_LABELS`).
+- Se ação = `apply_discount_3m` → retorna `{ success: false, message: "Desconto disponível apenas para cartão. Ver opções abaixo.", discount_available: false }` sem quebrar UX.
 
-**a) `check`**
-Devolve o mesmo shape que hoje (`subscription.id/plan/endDate/amount_cents/price_id`, `value_recap`, `discount_available`, `reasons`), preenchido com dados do Asaas:
-- `plan` = label do `profiles.plan` (Essencial/Direção/Transformação).
-- `endDate` = `nextDueDate`.
-- `amount_cents` = `value * 100`.
-- `price_id` = `asaas_subscription_id` (identificador equivalente).
-- `gateway: "asaas_card"` (para o frontend saber que os planos Lite/Base vão via workaround).
+### Novo handler em `execute-scheduled-tasks`
+- `asaas_pix_resume_subscription` (paralelo do `asaas_resume_subscription`): recria sub PIX com `billingType='PIX'`, sem `creditCardToken`.
+- Idempotente via `scheduled_tasks.status`.
 
-**b) `pause` (30/60/90 dias)**
-Asaas não tem pause nativo em `/subscriptions`. Workaround:
-1. Salva snapshot da sub antiga (`value`, `cycle`, `nextDueDate`, `creditCardToken`) em `scheduled_tasks` com `execute_at = agora + pause_days` e `payload = { intent: 'asaas_resume_subscription', ... }`.
-2. Cancela a subscription atual (`DELETE /subscriptions/{id}`) — para de cobrar imediatamente.
-3. `profiles.status = 'paused'`.
-4. `execute-scheduled-tasks` ganha handler `asaas_resume_subscription`: recria `/subscriptions` com o mesmo `creditCardToken` + `nextDueDate = hoje` no fim da pausa e volta `status = 'active'`.
+### Frontend `CancelSubscription.tsx`
+- `check` PIX retorna `gateway: 'asaas_pix'` + `discount_available: false`. UI já esconde card de desconto quando `discountAvailable=false` → nada muda visualmente exceto ausência da oferta 30%.
+- Ajuste: quando `gateway === 'asaas_pix'`, adicionar linha discreta "O PIX recorrente reinicia no próximo vencimento — o QR chega automático" abaixo da nota de `nextDueDate`.
 
-Se `creditCardToken` estiver ausente → retorna `success: false, needs_new_card: true` com mensagem "sua forma de pagamento precisa ser refeita antes de pausar" (mesmo padrão do 409 em `change-asaas-plan`).
+### KPI Admin
+`AdminEngagement.tsx` já tem breakdown `byGateway`. Confirmar que `asaas_pix` aparece separado de `asaas_card` (já está — mesma query, agrupamento por `gateway`).
 
-**c) `apply_discount_3m` (30% off por 3 meses)**
-Asaas não tem cupom com duração limitada. Workaround (mesmo caminho do plano original):
-1. Cria nova `/subscriptions` com `value = value_atual * 0.70`, mesmo `cycle`, mesmo `nextDueDate`, mesmo `creditCardToken`, `externalReference = aura_retention_discount_${userId}_${ts}`.
-2. Cancela a sub antiga (`DELETE`).
-3. Cria 1 `scheduled_tasks` com `execute_at` = data da 4ª cobrança (`nextDueDate + 3 × ciclo`), `payload = { intent: 'asaas_restore_full_price', user_id, subscription_id, full_value, cycle, card_token }`.
-4. `execute-scheduled-tasks` handler `asaas_restore_full_price`: cria nova sub com valor cheio + cancela a de desconto.
-5. Registra em `cancellation_feedback` (`save_tier='discount_30'`) e `retention_events` — reusa a mesma trava `hasRecentDiscount` (12 meses).
+## Parte 2 — Dunning WhatsApp
 
-**d) `downgrade_to_lite` / `downgrade_to_base` (R$19,90 / R$9,90)**
-Reusa exatamente o padrão de `change-asaas-plan`:
-1. Cria nova `/subscriptions` com `value=19.90` ou `9.90`, `cycle=MONTHLY`, mesmo `nextDueDate`, mesmo `creditCardToken`, `description = "Aura Lite/Base"`.
-2. Cancela a sub antiga.
-3. `profiles.plan_tier = 'lite'|'base'`, `status='active'`, `billing_cycle='monthly'`.
-4. Grava `cancellation_feedback` + `retention_events` (`gateway='asaas_card'`).
+### Estado atual (verificado)
+- `_shared/dunning-whatsapp.ts` já existe e implementa envio via subaccount Twilio (não o número da Aura).
+- Template aprovado: `HXaf4af1e1f5d4cf40b6fff6b5b68df29a` ({{1}}=nome, {{2}}=link portal).
+- Limite: 2 envios por subscription, casado com Smart Retries Stripe / retries Asaas.
+- Idempotência por `dunning_attempts (event_id, channel='whatsapp', profile_user_id)`.
+- Falta confirmar: **quais webhooks realmente chamam `sendDunningWhatsApp` hoje?** Investigação na primeira etapa.
 
-**e) `cancel`**
-`DELETE /subscriptions/{id}` + `profiles.status='canceling'` + `cancellation_feedback`. Mantém acesso até `nextDueDate` (paridade com `cancel_at_period_end` do Stripe — mas como Asaas cancela na hora, guarda `access_until = nextDueDate` em `profiles` pra frontend/portal respeitar).
+### Escopo
+1. **Auditar** os webhooks de falha de cobrança (`stripe-webhook`, `webhook-asaas`) e verificar se `sendDunningWhatsApp` é invocado nos eventos:
+   - Stripe: `invoice.payment_failed`, `customer.subscription.updated` (past_due).
+   - Asaas: `PAYMENT_OVERDUE` (cartão e PIX).
+2. **Adicionar** as chamadas onde faltar. Passar `provider`, `eventId` (idempotência), `subscriptionId/paymentId`, `profile`.
+3. **Cadenciar** com o email: WhatsApp dispara junto do 2º email (não do 1º) — evita saturar o cliente. Regra: `attempt_number >= 2` no `dunning_attempts` de email OU tentativa 2 do Smart Retries.
+4. **Silent hours 22h-08h BRT**: dunning é utility/transacional, então **ignora quiet hours** (conforme comentário no arquivo). Confirmar decisão com o usuário — ver perguntas.
 
-### 3. Extensão de `execute-scheduled-tasks`
-Adicionar 2 handlers novos, cada um idempotente (checa se a task já rodou via `status`):
-- `asaas_resume_subscription`
-- `asaas_restore_full_price`
-
-Ambos com try/catch — se Asaas falhar (ex: cartão expirou), grava `error_message` na task e envia email/WhatsApp pro admin (padrão `ADMIN_ALERT_EMAIL`).
-
-### 4. Frontend `CancelSubscription.tsx`
-- Já lida com `gateway_unsupported` hoje. Ajuste: quando `gateway: "asaas_card"` volta em `check`, mostra o mesmo fluxo do Stripe (sem banner de "fale com suporte").
-- Adiciona texto discreto na tela de desconto/downgrade Asaas: "A cobrança nova entra a partir do próximo vencimento (DD/MM)." (usa `nextDueDate` do check).
-
-### 5. KPIs `AdminEngagement.tsx`
-- Já lêem `retention_events` sem filtrar gateway. Adicionar breakdown `Stripe vs Asaas cartão` no card "Save por tier" (2 barras por tier).
+### Arquivos tocados (Parte 2)
+- `supabase/functions/stripe-webhook/index.ts` — adicionar `sendDunningWhatsApp` no handler de `invoice.payment_failed` (se ausente).
+- `supabase/functions/webhook-asaas/index.ts` — mesma coisa para `PAYMENT_OVERDUE`.
+- Não altera `_shared/dunning-whatsapp.ts` (já pronto).
 
 ## O que NÃO entra
-- PIX Asaas (nem recorrente, nem Bacen) — segue com `gateway_unsupported` na escada. Motivo: sem `creditCardToken` equivalente pra reusar; qualquer downgrade/desconto exige o cliente reautorizar no banco.
-- Dunning WhatsApp/Email da escada (Onda 2B).
-- Novos preços/produtos — Lite e Base já foram criados no Stripe; no Asaas usamos `value` direto no `/subscriptions` (não há catálogo de products).
+- Dunning por Instagram/SMS (só WhatsApp).
+- Retentativa Bacen PIX Automático — não temos escopo Bacen ativo, só Asaas.
+- Novos templates Twilio — usa o `HXaf4af1e1f5d4cf40b6fff6b5b68df29a` já aprovado.
 
 ## Detalhes técnicos
 
-Arquivos tocados:
-- `supabase/functions/cancel-subscription/index.ts` (branch Asaas cartão + helpers inline).
-- `supabase/functions/execute-scheduled-tasks/index.ts` (2 handlers novos).
-- `src/pages/CancelSubscription.tsx` (remove banner Asaas quando gateway é `asaas_card`, adiciona nota de próximo vencimento).
-- `src/pages/AdminEngagement.tsx` (breakdown por gateway no card de save por tier).
-
-Sem migration nova — `scheduled_tasks`, `retention_events`, `cancellation_feedback.save_tier/gateway`, `profiles.plan_tier/access_until` já existem da Onda 1 / infra atual.
-
-Estrutura do payload em `scheduled_tasks`:
+Arquivos:
 ```text
-asaas_resume_subscription
-  payload: { user_id, customer_id, value, cycle, card_token, description }
+supabase/functions/cancel-subscription/index.ts
+  + handleAsaasPix() em paralelo a handleAsaasCard
+  + roteamento por card_gateway === 'asaas_pix'
 
-asaas_restore_full_price
-  payload: { user_id, customer_id, discount_subscription_id, full_value, cycle, card_token }
+supabase/functions/execute-scheduled-tasks/index.ts
+  + case 'asaas_pix_resume_subscription'
+
+supabase/functions/stripe-webhook/index.ts
+  + call sendDunningWhatsApp em invoice.payment_failed (attempt >= 2)
+
+supabase/functions/webhook-asaas/index.ts
+  + call sendDunningWhatsApp em PAYMENT_OVERDUE
+
+src/pages/CancelSubscription.tsx
+  + nota curta quando gateway === 'asaas_pix'
 ```
 
-Trava anti-abuso: `hasRecentDiscount` (12 meses via `cancellation_feedback.save_tier='discount_30'`) já é gateway-agnóstica, funciona automaticamente pro Asaas.
+Sem migration nova. Tabelas usadas (`scheduled_tasks`, `dunning_attempts`, `retention_events`, `cancellation_feedback`) já existem.
 
-## Riscos e mitigações
-- **Cartão sem `creditCardToken` salvo**: retorna erro claro pedindo pra refazer checkout (mesmo padrão de `change-asaas-plan`). Evita orfanato de subs.
-- **Scheduled task falhar** (cartão expirado no restore): handler grava erro + alerta admin; usuário fica temporariamente no desconto/pausa até intervenção manual — mais seguro do que cobrança falhando silenciosa.
-- **Sub antiga não cancelar** após criar a nova: best-effort com log; reconciliação já roda em `reconcile-subscriptions` e detecta duplicatas.
-- **Race durante pausa** (webhook Asaas processando enquanto cancelamos): idempotência via `event_id` já existente em `webhook-asaas`.
+## Riscos
+- **Sub PIX antiga não cancelar após criar a nova**: best-effort + log; `reconcile-subscriptions` detecta duplicata.
+- **Cliente não pagar o próximo QR pós-pausa/downgrade**: cai no fluxo de dunning normal (email + WhatsApp).
+- **Dunning WhatsApp saturar cliente**: mitigado por (a) limite 2 envios/sub, (b) cadência atrás do 2º email, (c) dedup por event_id.
 
 ## Validação pós-deploy
-- Teste manual com 1 usuário Asaas cartão de teste: `check → apply_discount_3m` (confirma nova sub com value 0.7×, task agendada), rollback manual da task, `check → downgrade_to_lite` (confirma value 19.90), `check → pause 30d` (confirma sub cancelada + task de resume).
-- Query em `retention_events WHERE gateway='asaas_card'` mostra os eventos.
+- 1 usuário Asaas PIX de teste: `check → downgrade_to_lite` (confirma nova sub PIX 19.90), `check → pause 30d` (confirma sub cancelada + task de resume), `check → cancel`.
+- Query `retention_events WHERE gateway='asaas_pix'` mostra eventos.
+- Simular `invoice.payment_failed` no Stripe CLI → confirmar linha em `dunning_attempts` com `channel='whatsapp'` e `message_sid`.
 
 ## Ordem de execução
-1. Cancel-subscription: helpers + branch Asaas (todas as 5 ações).
-2. Execute-scheduled-tasks: 2 handlers novos.
-3. Frontend: ajustes em `CancelSubscription.tsx` + `AdminEngagement.tsx`.
-4. Typecheck + preview manual do fluxo.
+1. Auditar webhooks Stripe/Asaas para localizar pontos de invocação do dunning WhatsApp.
+2. `cancel-subscription`: `handleAsaasPix` + roteamento.
+3. `execute-scheduled-tasks`: handler PIX resume.
+4. Webhooks: chamadas de `sendDunningWhatsApp` onde faltar.
+5. Frontend: nota curta pro gateway PIX.
+6. Typecheck + validação manual.
+
+## Perguntas antes de implementar
+1. **Dunning WhatsApp respeita quiet hours 22h-08h BRT?** O código atual diz "não respeita — é utility/transacional". Confirma manter assim, ou quer aplicar a janela de silêncio?
+2. **Cadência WhatsApp**: disparar junto do 2º email (mais espaçado, menos atrito) ou junto do 1º (mais agressivo, converte mais rápido)?

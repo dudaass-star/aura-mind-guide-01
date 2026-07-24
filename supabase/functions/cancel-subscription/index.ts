@@ -147,9 +147,9 @@ serve(async (req) => {
     }
 
     // ─── Roteamento Asaas cartão ─────────────────────────────────────────
-    // Se o usuário tem gateway Asaas cartão, roda todo o fluxo pelo Asaas
-    // (paridade com o Stripe pra check/pause/discount/downgrade/cancel).
-    // PIX Asaas segue pelo caminho antigo → gateway_unsupported.
+    // Se o usuário tem gateway Asaas cartão OU PIX recorrente, roda todo o
+    // fluxo pelo Asaas. Cartão tem paridade total. PIX faz check/pause/
+    // downgrade/cancel (sem desconto 30% — precisa de token de cartão).
     if (profile?.card_gateway === "asaas_card" && profile.user_id && profile.asaas_customer_id) {
       const resp = await handleAsaasCard({
         supabase,
@@ -162,6 +162,19 @@ serve(async (req) => {
       });
       if (resp) return resp;
       // Se handleAsaasCard não conseguiu resolver, cai para o fluxo Stripe.
+    }
+
+    if (profile?.card_gateway === "asaas_pix" && profile.user_id && profile.asaas_customer_id) {
+      const resp = await handleAsaasPix({
+        supabase,
+        profile: profile as any,
+        phoneClean,
+        action,
+        reason,
+        reason_detail,
+        pause_days,
+      });
+      if (resp) return resp;
     }
 
     // Search for customer by phone in metadata using all variations
@@ -1054,5 +1067,307 @@ async function handleAsaasCard(params: HandleAsaasParams): Promise<Response | nu
   }
 
   // Ação desconhecida — cai pra fluxo Stripe (que vai devolver erro)
+  return null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Handler Asaas PIX recorrente — paridade parcial com cartão. Sem
+// creditCardToken, não dá pra oferecer desconto 30% (cliente teria que
+// reautorizar cada QR). Cobre check / pause / downgrade / cancel.
+// ─────────────────────────────────────────────────────────────────────────
+async function handleAsaasPix(params: HandleAsaasParams): Promise<Response | null> {
+  const { supabase, profile, phoneClean, action, reason, reason_detail, pause_days } = params;
+  const logP = (step: string, details?: any) =>
+    console.log(`[CANCEL-SUBSCRIPTION][ASAAS-PIX] ${step}${details ? ` - ${JSON.stringify(details)}` : ""}`);
+
+  let asaasFetch: (path: string, init?: RequestInit) => Promise<any>;
+  try {
+    asaasFetch = getAsaasClient();
+  } catch (e) {
+    logP("Sem ASAAS_API_KEY, delegando", { err: (e as Error).message });
+    return null;
+  }
+
+  // Acha sub PIX ativa mais recente (payment_method='PIX' pelo criar-pix-recorrente).
+  const { data: subRows } = await supabase
+    .from("asaas_payments")
+    .select("asaas_subscription_id, status, payment_method")
+    .eq("asaas_customer_id", profile.asaas_customer_id)
+    .eq("payment_method", "PIX")
+    .not("asaas_subscription_id", "is", null)
+    .in("status", ["CONFIRMED", "RECEIVED", "PENDING", "ACTIVE", "OVERDUE"])
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  const subscriptionId = subRows?.[0]?.asaas_subscription_id as string | undefined;
+  if (!subscriptionId) {
+    logP("Nenhuma subscription PIX Asaas encontrada");
+    return jsonResponse({
+      success: false,
+      message: "Nenhuma assinatura PIX ativa encontrada.",
+    });
+  }
+
+  let subDetails: any = {};
+  try {
+    subDetails = await asaasFetch(`/subscriptions/${subscriptionId}`);
+  } catch (e) {
+    logP("Erro buscando sub", { err: (e as Error).message });
+    return jsonResponse({ success: false, message: "Não consegui acessar sua assinatura agora." });
+  }
+
+  const nextDueDate: string | null = subDetails?.nextDueDate || null;
+  const value: number = Number(subDetails?.value) || 0;
+  const cycle: string = String(subDetails?.cycle || "MONTHLY");
+  const nextDueDateFmt = nextDueDate
+    ? (() => {
+        const [y, m, d] = nextDueDate.split("-");
+        return `${d}/${m}/${y}`;
+      })()
+    : "";
+
+  const logRetention = async (
+    tier: RetentionTier | "cancel",
+    actionName: "offered" | "accepted" | "declined" | "applied",
+    extra: Record<string, unknown> = {},
+  ) => {
+    try {
+      await supabase.from("retention_events").insert({
+        user_id: profile.user_id,
+        phone: phoneClean,
+        origin: "cancel_flow",
+        tier,
+        action: actionName,
+        gateway: "asaas_pix",
+        channel: "web",
+        metadata: extra,
+      });
+    } catch (e) {
+      logP("WARN retention_events insert", { e: (e as Error).message });
+    }
+  };
+
+  const buildValueRecap = async () => {
+    const [{ count: sessionsCount }, { data: snapshots }] = await Promise.all([
+      supabase
+        .from("sessions")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", profile.user_id)
+        .eq("status", "completed"),
+      supabase
+        .from("thematic_snapshots")
+        .select("theme, before_summary, after_summary, confidence, created_at")
+        .eq("user_id", profile.user_id)
+        .order("created_at", { ascending: false })
+        .limit(3),
+    ]);
+    return {
+      name: profile.name,
+      sessions_count: sessionsCount ?? 0,
+      snapshots: (snapshots ?? []).filter(
+        (s: any) => s.confidence === "high" || s.confidence === "medium",
+      ),
+    };
+  };
+
+  const CANCELLATION_REASONS_LOCAL = [
+    { id: "expensive", label: "Está caro pra mim" },
+    { id: "not_using", label: "Não estou usando" },
+    { id: "not_satisfied", label: "Não gostei do serviço" },
+    { id: "come_back_later", label: "Vou voltar depois" },
+    { id: "other", label: "Outro motivo" },
+  ];
+
+  const planLabel = PLAN_LABELS[profile.plan || ""] || "Assinatura AURA";
+
+  const scheduleTask = async (taskType: string, executeAt: Date, payload: Record<string, any>) => {
+    await supabase.from("scheduled_tasks").insert({
+      user_id: profile.user_id,
+      task_type: taskType,
+      execute_at: executeAt.toISOString(),
+      status: "pending",
+      payload,
+    });
+  };
+
+  // ─── check ────────────────────────────────────────────────────────────
+  if (action === "check" || !action) {
+    const valueRecap = await buildValueRecap();
+    return jsonResponse({
+      success: true,
+      status: "active",
+      gateway: "asaas_pix",
+      subscription: {
+        id: subscriptionId,
+        plan: planLabel,
+        endDate: nextDueDate ? new Date(nextDueDate).toISOString() : null,
+        endDateFormatted: nextDueDateFmt,
+        amount: value
+          ? value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+          : null,
+        amount_cents: Math.round(value * 100),
+        price_id: subscriptionId,
+        nextDueDateFormatted: nextDueDateFmt,
+      },
+      value_recap: valueRecap,
+      // PIX recorrente Asaas não suporta desconto temporário sem token de cartão.
+      discount_available: false,
+      reasons: CANCELLATION_REASONS_LOCAL,
+    });
+  }
+
+  // ─── apply_discount_3m — não suportado no PIX ─────────────────────────
+  if (action === "apply_discount_3m") {
+    return jsonResponse({
+      success: false,
+      discount_available: false,
+      message:
+        "O desconto está disponível apenas para pagamento com cartão. Veja as outras opções abaixo.",
+    });
+  }
+
+  // ─── pause (30/60/90 dias) ────────────────────────────────────────────
+  if (action === "pause") {
+    const days = [30, 60, 90].includes(Number(pause_days)) ? Number(pause_days) : 30;
+    logP("Pausando via workaround", { subscriptionId, days });
+
+    try {
+      await asaasFetch(`/subscriptions/${subscriptionId}`, { method: "DELETE" });
+    } catch (e) {
+      logP("Erro cancelando sub para pausa", { err: (e as Error).message });
+      return jsonResponse({ success: false, message: "Não consegui pausar agora. Tenta de novo." });
+    }
+
+    const resumeAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+    await scheduleTask("asaas_pix_resume_subscription", resumeAt, {
+      user_id: profile.user_id,
+      customer_id: profile.asaas_customer_id,
+      value,
+      cycle,
+      billing_type: "PIX",
+      description: `Aura ${planLabel} - assinatura PIX`,
+    });
+
+    await supabase.from("cancellation_feedback").insert({
+      phone: phoneClean,
+      user_id: profile.user_id,
+      reason: reason || "pause_requested",
+      reason_detail: reason_detail || null,
+      action_taken: "paused",
+      pause_until: resumeAt.toISOString(),
+      save_offer_accepted: true,
+      save_tier: "pause",
+      gateway: "asaas_pix",
+    });
+    await supabase.from("profiles").update({ status: "paused" }).eq("user_id", profile.user_id);
+    await logRetention("pause", "accepted", { days });
+    await logRetention("pause", "applied", { days });
+
+    return jsonResponse({
+      success: true,
+      status: "paused",
+      message: `Sua assinatura foi pausada por ${days} dias. O próximo QR PIX chega automático em ${resumeAt.toLocaleDateString("pt-BR")}.`,
+      subscription: {
+        id: subscriptionId,
+        resumesAt: resumeAt.toISOString(),
+        resumesAtFormatted: resumeAt.toLocaleDateString("pt-BR"),
+      },
+    });
+  }
+
+  // ─── downgrade_to_lite / downgrade_to_base ────────────────────────────
+  if (action === "downgrade_to_lite" || action === "downgrade_to_base") {
+    const tier: "lite" | "base" = action === "downgrade_to_lite" ? "lite" : "base";
+    const newValue = ASAAS_RETENTION_VALUES[tier];
+    logP(`Downgrade PIX para ${tier}`, { subscriptionId, newValue });
+
+    let newSub: any;
+    try {
+      newSub = await asaasFetch("/subscriptions", {
+        method: "POST",
+        body: JSON.stringify({
+          customer: profile.asaas_customer_id,
+          billingType: "PIX",
+          cycle: "MONTHLY",
+          value: newValue,
+          nextDueDate,
+          description: `Aura ${tier === "lite" ? "Lite" : "Base"} - assinatura mensal PIX`,
+          externalReference: `aura_retention_${tier}_pix_${profile.user_id}_${Date.now()}`,
+        }),
+      });
+    } catch (e) {
+      logP("Erro criando sub downgrade", { err: (e as Error).message });
+      return jsonResponse({ success: false, message: "Não consegui trocar de plano agora." });
+    }
+
+    try {
+      await asaasFetch(`/subscriptions/${subscriptionId}`, { method: "DELETE" });
+    } catch (e) {
+      logP("WARN sub antiga órfã", { subscriptionId, err: (e as Error).message });
+    }
+
+    await supabase
+      .from("profiles")
+      .update({ plan_tier: tier, status: "active", billing_cycle: "monthly" })
+      .eq("user_id", profile.user_id);
+
+    await supabase.from("cancellation_feedback").insert({
+      phone: phoneClean,
+      user_id: profile.user_id,
+      reason: reason || "expensive",
+      reason_detail: reason_detail || null,
+      action_taken: `downgrade_${tier}`,
+      save_offer_accepted: true,
+      save_tier: tier,
+      gateway: "asaas_pix",
+    });
+    await logRetention(tier, "accepted", { new_sub: newSub?.id });
+    await logRetention(tier, "applied", { new_sub: newSub?.id });
+
+    const price = tier === "lite" ? "R$ 19,90" : "R$ 9,90";
+    return jsonResponse({
+      success: true,
+      status: "downgraded",
+      tier,
+      message: `Assinatura ajustada para o plano ${tier === "lite" ? "Lite" : "Base"} (${price}/mês). O próximo QR PIX chega no dia ${nextDueDateFmt}.`,
+    });
+  }
+
+  // ─── cancel ───────────────────────────────────────────────────────────
+  if (action === "cancel") {
+    logP("Cancelando sub PIX Asaas", { subscriptionId });
+    try {
+      await asaasFetch(`/subscriptions/${subscriptionId}`, { method: "DELETE" });
+    } catch (e) {
+      logP("Erro cancelando", { err: (e as Error).message });
+      return jsonResponse({ success: false, message: "Não consegui cancelar agora. Tenta de novo." });
+    }
+
+    if (reason) {
+      await supabase.from("cancellation_feedback").insert({
+        phone: phoneClean,
+        user_id: profile.user_id,
+        reason,
+        reason_detail: reason_detail || null,
+        action_taken: "canceled",
+        save_offer_accepted: false,
+        gateway: "asaas_pix",
+      });
+    }
+    await supabase.from("profiles").update({ status: "canceling" }).eq("user_id", profile.user_id);
+    await logRetention("cancel", "applied", { reason });
+
+    return jsonResponse({
+      success: true,
+      status: "canceled",
+      message: `Sua assinatura foi cancelada. Você terá acesso até ${nextDueDateFmt}.`,
+      subscription: {
+        id: subscriptionId,
+        endDate: nextDueDate,
+        endDateFormatted: nextDueDateFmt,
+      },
+    });
+  }
+
   return null;
 }
