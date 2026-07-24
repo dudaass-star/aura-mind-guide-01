@@ -147,9 +147,9 @@ serve(async (req) => {
     }
 
     // ─── Roteamento Asaas cartão ─────────────────────────────────────────
-    // Se o usuário tem gateway Asaas cartão, roda todo o fluxo pelo Asaas
-    // (paridade com o Stripe pra check/pause/discount/downgrade/cancel).
-    // PIX Asaas segue pelo caminho antigo → gateway_unsupported.
+    // Se o usuário tem gateway Asaas cartão OU PIX recorrente, roda todo o
+    // fluxo pelo Asaas. Cartão tem paridade total. PIX faz check/pause/
+    // downgrade/cancel (sem desconto 30% — precisa de token de cartão).
     if (profile?.card_gateway === "asaas_card" && profile.user_id && profile.asaas_customer_id) {
       const resp = await handleAsaasCard({
         supabase,
@@ -162,6 +162,19 @@ serve(async (req) => {
       });
       if (resp) return resp;
       // Se handleAsaasCard não conseguiu resolver, cai para o fluxo Stripe.
+    }
+
+    if (profile?.card_gateway === "asaas_pix" && profile.user_id && profile.asaas_customer_id) {
+      const resp = await handleAsaasPix({
+        supabase,
+        profile: profile as any,
+        phoneClean,
+        action,
+        reason,
+        reason_detail,
+        pause_days,
+      });
+      if (resp) return resp;
     }
 
     // Search for customer by phone in metadata using all variations
