@@ -209,6 +209,7 @@ const CancelSubscription = () => {
     setValueRecap(null);
     setDiscountAvailable(true);
     setGatewayUnsupported(false);
+    setNeedsNewCard(false);
   };
 
   const offerList: Tier[] = selectedReason
@@ -561,6 +562,13 @@ const CancelSubscription = () => {
                       <Button className="w-full">
                         <MessageCircle className="w-4 h-4 mr-2" />
                         Falar com o suporte
+                      </Button>
+                    </a>
+                  )}
+                  {needsNewCard && (
+                    <a href="/checkout" className="block">
+                      <Button className="w-full">
+                        Atualizar forma de pagamento
                       </Button>
                     </a>
                   )}
