@@ -29,11 +29,65 @@ const RETENTION_PRICES = {
 
 type RetentionTier = "pause" | "discount_30" | "lite" | "base";
 
+// Preços dos planos de retenção no Asaas cartão (usa `value` direto em /subscriptions).
+const ASAAS_RETENTION_VALUES = {
+  lite: 19.90,
+  base: 9.90,
+} as const;
+
+// Ciclo em dias por ciclo Asaas — usado pra calcular data de restauração do valor cheio.
+const ASAAS_CYCLE_DAYS: Record<string, number> = {
+  MONTHLY: 30,
+  QUARTERLY: 90,
+  SEMIANNUALLY: 180,
+  YEARLY: 365,
+};
+
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
     status,
   });
+}
+
+// ─── Asaas helpers ─────────────────────────────────────────────────────────
+function getAsaasClient() {
+  const ASAAS_API_KEY = Deno.env.get("ASAAS_API_KEY");
+  const ASAAS_ENV = (Deno.env.get("ASAAS_ENV") || "sandbox").toLowerCase();
+  const ASAAS_BASE_URL =
+    ASAAS_ENV === "production"
+      ? "https://api.asaas.com/v3"
+      : "https://api-sandbox.asaas.com/v3";
+  if (!ASAAS_API_KEY) throw new Error("ASAAS_API_KEY não configurada");
+  return async (path: string, init?: RequestInit) => {
+    const resp = await fetch(`${ASAAS_BASE_URL}${path}`, {
+      ...init,
+      headers: {
+        access_token: ASAAS_API_KEY,
+        "Content-Type": "application/json",
+        "User-Agent": "Aura/1.0",
+        ...(init?.headers || {}),
+      },
+    });
+    const json = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      throw new Error(
+        (json as any)?.errors?.[0]?.description || `Asaas ${path} falhou (${resp.status})`,
+      );
+    }
+    return json;
+  };
+}
+
+// Retorna nextDueDate no formato Asaas (YYYY-MM-DD BRT) para daqui a `days` dias.
+function brtDatePlusDays(days: number): string {
+  const d = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
 }
 
 serve(async (req) => {
@@ -78,14 +132,35 @@ serve(async (req) => {
       user_id: string | null;
       name: string | null;
       card_gateway: string | null;
+      asaas_customer_id?: string | null;
+      plan?: string | null;
+      billing_cycle?: string | null;
     } | null = null;
     {
       const { data } = await supabase
         .from("profiles")
-        .select("user_id, name, card_gateway")
+        .select("user_id, name, card_gateway, asaas_customer_id, plan, billing_cycle")
         .eq("phone", phoneClean)
         .maybeSingle();
       if (data) profile = data as any;
+    }
+
+    // ─── Roteamento Asaas cartão ─────────────────────────────────────────
+    // Se o usuário tem gateway Asaas cartão, roda todo o fluxo pelo Asaas
+    // (paridade com o Stripe pra check/pause/discount/downgrade/cancel).
+    // PIX Asaas segue pelo caminho antigo → gateway_unsupported.
+    if (profile?.card_gateway === "asaas_card" && profile.user_id && profile.asaas_customer_id) {
+      const resp = await handleAsaasCard({
+        supabase,
+        profile: profile as any,
+        phoneClean,
+        action,
+        reason,
+        reason_detail,
+        pause_days,
+      });
+      if (resp) return resp;
+      // Se handleAsaasCard não conseguiu resolver, cai para o fluxo Stripe.
     }
 
     // Search for customer by phone in metadata using all variations
@@ -550,3 +625,429 @@ serve(async (req) => {
     );
   }
 });
+
+// ─────────────────────────────────────────────────────────────────────────
+// Handler Asaas cartão — paridade com Stripe pra check / pause / discount /
+// downgrade / cancel. Volta null se não conseguir resolver (cai pro Stripe).
+// ─────────────────────────────────────────────────────────────────────────
+interface HandleAsaasParams {
+  supabase: any;
+  profile: {
+    user_id: string;
+    name: string | null;
+    asaas_customer_id: string;
+    plan: string | null;
+    billing_cycle: string | null;
+  };
+  phoneClean: string;
+  action?: string;
+  reason?: string;
+  reason_detail?: string;
+  pause_days?: number;
+}
+
+const PLAN_LABELS: Record<string, string> = {
+  essencial: "Essencial",
+  direcao: "Direção",
+  transformacao: "Transformação",
+  lite: "Lite",
+  base: "Base",
+};
+
+async function handleAsaasCard(params: HandleAsaasParams): Promise<Response | null> {
+  const { supabase, profile, phoneClean, action, reason, reason_detail, pause_days } = params;
+  const logA = (step: string, details?: any) =>
+    console.log(`[CANCEL-SUBSCRIPTION][ASAAS] ${step}${details ? ` - ${JSON.stringify(details)}` : ""}`);
+
+  let asaasFetch: (path: string, init?: RequestInit) => Promise<any>;
+  try {
+    asaasFetch = getAsaasClient();
+  } catch (e) {
+    logA("Sem ASAAS_API_KEY, delegando ao Stripe", { err: (e as Error).message });
+    return null;
+  }
+
+  // Acha a subscription cartão ativa mais recente
+  const { data: subRows } = await supabase
+    .from("asaas_payments")
+    .select("asaas_subscription_id, status, payment_method")
+    .eq("asaas_customer_id", profile.asaas_customer_id)
+    .eq("payment_method", "CREDIT_CARD")
+    .not("asaas_subscription_id", "is", null)
+    .in("status", ["CONFIRMED", "RECEIVED", "PENDING", "ACTIVE", "OVERDUE"])
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  const subscriptionId = subRows?.[0]?.asaas_subscription_id as string | undefined;
+  if (!subscriptionId) {
+    logA("Nenhuma subscription cartão Asaas encontrada");
+    return jsonResponse({
+      success: false,
+      message: "Nenhuma assinatura cartão ativa encontrada.",
+    });
+  }
+
+  // Detalhes da sub
+  let subDetails: any = {};
+  try {
+    subDetails = await asaasFetch(`/subscriptions/${subscriptionId}`);
+  } catch (e) {
+    logA("Erro buscando sub", { err: (e as Error).message });
+    return jsonResponse({ success: false, message: "Não consegui acessar sua assinatura agora." });
+  }
+
+  const nextDueDate: string | null = subDetails?.nextDueDate || null;
+  const value: number = Number(subDetails?.value) || 0;
+  const cycle: string = String(subDetails?.cycle || "MONTHLY");
+  const cardToken: string | null = subDetails?.creditCard?.creditCardToken || null;
+
+  const nextDueDateFmt = nextDueDate
+    ? (() => {
+        const [y, m, d] = nextDueDate.split("-");
+        return `${d}/${m}/${y}`;
+      })()
+    : "";
+
+  const logRetention = async (
+    tier: RetentionTier | "cancel",
+    actionName: "offered" | "accepted" | "declined" | "applied",
+    extra: Record<string, unknown> = {},
+  ) => {
+    try {
+      await supabase.from("retention_events").insert({
+        user_id: profile.user_id,
+        phone: phoneClean,
+        origin: "cancel_flow",
+        tier,
+        action: actionName,
+        gateway: "asaas_card",
+        channel: "web",
+        metadata: extra,
+      });
+    } catch (e) {
+      logA("WARN retention_events insert", { e: (e as Error).message });
+    }
+  };
+
+  const hasRecentDiscount = async (): Promise<boolean> => {
+    const twelveMonthsAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
+    const { data } = await supabase
+      .from("cancellation_feedback")
+      .select("id")
+      .eq("user_id", profile.user_id)
+      .eq("save_tier", "discount_30")
+      .eq("save_offer_accepted", true)
+      .gte("created_at", twelveMonthsAgo)
+      .limit(1);
+    return !!data && data.length > 0;
+  };
+
+  const buildValueRecap = async () => {
+    const [{ count: sessionsCount }, { data: snapshots }] = await Promise.all([
+      supabase
+        .from("sessions")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", profile.user_id)
+        .eq("status", "completed"),
+      supabase
+        .from("thematic_snapshots")
+        .select("theme, before_summary, after_summary, confidence, created_at")
+        .eq("user_id", profile.user_id)
+        .order("created_at", { ascending: false })
+        .limit(3),
+    ]);
+    return {
+      name: profile.name,
+      sessions_count: sessionsCount ?? 0,
+      snapshots: (snapshots ?? []).filter(
+        (s: any) => s.confidence === "high" || s.confidence === "medium",
+      ),
+    };
+  };
+
+  const CANCELLATION_REASONS_LOCAL = [
+    { id: "expensive", label: "Está caro pra mim" },
+    { id: "not_using", label: "Não estou usando" },
+    { id: "not_satisfied", label: "Não gostei do serviço" },
+    { id: "come_back_later", label: "Vou voltar depois" },
+    { id: "other", label: "Outro motivo" },
+  ];
+
+  const planLabel = PLAN_LABELS[profile.plan || ""] || "Assinatura AURA";
+
+  // ─── check ────────────────────────────────────────────────────────────
+  if (action === "check" || !action) {
+    const valueRecap = await buildValueRecap();
+    const discountUsedRecently = await hasRecentDiscount();
+    return jsonResponse({
+      success: true,
+      status: "active",
+      gateway: "asaas_card",
+      subscription: {
+        id: subscriptionId,
+        plan: planLabel,
+        endDate: nextDueDate ? new Date(nextDueDate).toISOString() : null,
+        endDateFormatted: nextDueDateFmt,
+        amount: value
+          ? value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+          : null,
+        amount_cents: Math.round(value * 100),
+        price_id: subscriptionId,
+        nextDueDateFormatted: nextDueDateFmt,
+      },
+      value_recap: valueRecap,
+      discount_available: !discountUsedRecently,
+      reasons: CANCELLATION_REASONS_LOCAL,
+    });
+  }
+
+  // Todas as ações abaixo (exceto cancel) exigem cardToken pra reusar
+  const needsCardToken =
+    action === "pause" ||
+    action === "apply_discount_3m" ||
+    action === "downgrade_to_lite" ||
+    action === "downgrade_to_base";
+
+  if (needsCardToken && !cardToken) {
+    return jsonResponse({
+      success: false,
+      needs_new_card: true,
+      message:
+        "Não conseguimos reutilizar seu cartão salvo. Refaça o checkout para atualizar sua forma de pagamento.",
+    });
+  }
+
+  const scheduleTask = async (taskType: string, executeAt: Date, payload: Record<string, any>) => {
+    await supabase.from("scheduled_tasks").insert({
+      user_id: profile.user_id,
+      task_type: taskType,
+      execute_at: executeAt.toISOString(),
+      status: "pending",
+      payload,
+    });
+  };
+
+  // ─── pause (30/60/90 dias) ────────────────────────────────────────────
+  if (action === "pause") {
+    const days = [30, 60, 90].includes(Number(pause_days)) ? Number(pause_days) : 30;
+    logA("Pausando via workaround", { subscriptionId, days });
+
+    // Cancela a sub atual → para de cobrar
+    try {
+      await asaasFetch(`/subscriptions/${subscriptionId}`, { method: "DELETE" });
+    } catch (e) {
+      logA("Erro cancelando sub para pausa", { err: (e as Error).message });
+      return jsonResponse({ success: false, message: "Não consegui pausar agora. Tenta de novo." });
+    }
+
+    // Agenda retomada
+    const resumeAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+    await scheduleTask("asaas_resume_subscription", resumeAt, {
+      user_id: profile.user_id,
+      customer_id: profile.asaas_customer_id,
+      value,
+      cycle,
+      card_token: cardToken,
+      description: `Aura ${planLabel} - assinatura`,
+    });
+
+    await supabase.from("cancellation_feedback").insert({
+      phone: phoneClean,
+      user_id: profile.user_id,
+      reason: reason || "pause_requested",
+      reason_detail: reason_detail || null,
+      action_taken: "paused",
+      pause_until: resumeAt.toISOString(),
+      save_offer_accepted: true,
+      save_tier: "pause",
+      gateway: "asaas_card",
+    });
+    await supabase.from("profiles").update({ status: "paused" }).eq("user_id", profile.user_id);
+    await logRetention("pause", "accepted", { days });
+    await logRetention("pause", "applied", { days });
+
+    return jsonResponse({
+      success: true,
+      status: "paused",
+      message: `Sua assinatura foi pausada por ${days} dias. Ela volta automaticamente em ${resumeAt.toLocaleDateString("pt-BR")}.`,
+      subscription: {
+        id: subscriptionId,
+        resumesAt: resumeAt.toISOString(),
+        resumesAtFormatted: resumeAt.toLocaleDateString("pt-BR"),
+      },
+    });
+  }
+
+  // ─── apply_discount_3m ────────────────────────────────────────────────
+  if (action === "apply_discount_3m") {
+    if (await hasRecentDiscount()) {
+      return jsonResponse({
+        success: false,
+        message: "Você já usou o desconto de retenção nos últimos 12 meses.",
+        discount_available: false,
+      });
+    }
+
+    const discountedValue = Math.round(value * 0.70 * 100) / 100;
+    logA("Aplicando 30% off via nova sub", { subscriptionId, discountedValue });
+
+    // Cria sub com desconto
+    let newSub: any;
+    try {
+      newSub = await asaasFetch("/subscriptions", {
+        method: "POST",
+        body: JSON.stringify({
+          customer: profile.asaas_customer_id,
+          billingType: "CREDIT_CARD",
+          creditCardToken: cardToken,
+          cycle,
+          value: discountedValue,
+          nextDueDate,
+          description: `Aura ${planLabel} - desconto retenção 3m`,
+          externalReference: `aura_retention_discount_${profile.user_id}_${Date.now()}`,
+        }),
+      });
+    } catch (e) {
+      logA("Erro criando sub descontada", { err: (e as Error).message });
+      return jsonResponse({ success: false, message: "Não consegui aplicar o desconto agora." });
+    }
+
+    // Cancela sub antiga (best-effort)
+    try {
+      await asaasFetch(`/subscriptions/${subscriptionId}`, { method: "DELETE" });
+    } catch (e) {
+      logA("WARN sub antiga órfã", { subscriptionId, err: (e as Error).message });
+    }
+
+    // Agenda restauração do valor cheio na 4ª cobrança
+    const cycleDays = ASAAS_CYCLE_DAYS[cycle] || 30;
+    const restoreAt = new Date(Date.now() + 3 * cycleDays * 24 * 60 * 60 * 1000);
+    await scheduleTask("asaas_restore_full_price", restoreAt, {
+      user_id: profile.user_id,
+      customer_id: profile.asaas_customer_id,
+      discount_subscription_id: newSub?.id,
+      full_value: value,
+      cycle,
+      card_token: cardToken,
+      description: `Aura ${planLabel} - assinatura`,
+    });
+
+    await supabase.from("cancellation_feedback").insert({
+      phone: phoneClean,
+      user_id: profile.user_id,
+      reason: reason || "expensive",
+      reason_detail: reason_detail || null,
+      action_taken: "discount_30",
+      save_offer_accepted: true,
+      save_tier: "discount_30",
+      gateway: "asaas_card",
+    });
+    await logRetention("discount_30", "accepted", { new_sub: newSub?.id });
+    await logRetention("discount_30", "applied", { new_sub: newSub?.id });
+
+    return jsonResponse({
+      success: true,
+      status: "discount_applied",
+      message: `Pronto! Você tem 30% de desconto nas próximas 3 cobranças (a partir de ${nextDueDateFmt}). Depois o valor volta ao normal.`,
+      tier: "discount_30",
+    });
+  }
+
+  // ─── downgrade_to_lite / downgrade_to_base ────────────────────────────
+  if (action === "downgrade_to_lite" || action === "downgrade_to_base") {
+    const tier: "lite" | "base" = action === "downgrade_to_lite" ? "lite" : "base";
+    const newValue = ASAAS_RETENTION_VALUES[tier];
+    logA(`Downgrade para ${tier}`, { subscriptionId, newValue });
+
+    let newSub: any;
+    try {
+      newSub = await asaasFetch("/subscriptions", {
+        method: "POST",
+        body: JSON.stringify({
+          customer: profile.asaas_customer_id,
+          billingType: "CREDIT_CARD",
+          creditCardToken: cardToken,
+          cycle: "MONTHLY",
+          value: newValue,
+          nextDueDate,
+          description: `Aura ${tier === "lite" ? "Lite" : "Base"} - assinatura mensal`,
+          externalReference: `aura_retention_${tier}_${profile.user_id}_${Date.now()}`,
+        }),
+      });
+    } catch (e) {
+      logA("Erro criando sub downgrade", { err: (e as Error).message });
+      return jsonResponse({ success: false, message: "Não consegui trocar de plano agora." });
+    }
+
+    try {
+      await asaasFetch(`/subscriptions/${subscriptionId}`, { method: "DELETE" });
+    } catch (e) {
+      logA("WARN sub antiga órfã", { subscriptionId, err: (e as Error).message });
+    }
+
+    await supabase
+      .from("profiles")
+      .update({ plan_tier: tier, status: "active", billing_cycle: "monthly" })
+      .eq("user_id", profile.user_id);
+
+    await supabase.from("cancellation_feedback").insert({
+      phone: phoneClean,
+      user_id: profile.user_id,
+      reason: reason || "expensive",
+      reason_detail: reason_detail || null,
+      action_taken: `downgrade_${tier}`,
+      save_offer_accepted: true,
+      save_tier: tier,
+      gateway: "asaas_card",
+    });
+    await logRetention(tier, "accepted", { new_sub: newSub?.id });
+    await logRetention(tier, "applied", { new_sub: newSub?.id });
+
+    const price = tier === "lite" ? "R$ 19,90" : "R$ 9,90";
+    return jsonResponse({
+      success: true,
+      status: "downgraded",
+      tier,
+      message: `Assinatura ajustada para o plano ${tier === "lite" ? "Lite" : "Base"} (${price}/mês). A cobrança nova entra em ${nextDueDateFmt}.`,
+    });
+  }
+
+  // ─── cancel ───────────────────────────────────────────────────────────
+  if (action === "cancel") {
+    logA("Cancelando sub Asaas", { subscriptionId });
+    try {
+      await asaasFetch(`/subscriptions/${subscriptionId}`, { method: "DELETE" });
+    } catch (e) {
+      logA("Erro cancelando", { err: (e as Error).message });
+      return jsonResponse({ success: false, message: "Não consegui cancelar agora. Tenta de novo." });
+    }
+
+    if (reason) {
+      await supabase.from("cancellation_feedback").insert({
+        phone: phoneClean,
+        user_id: profile.user_id,
+        reason,
+        reason_detail: reason_detail || null,
+        action_taken: "canceled",
+        save_offer_accepted: false,
+        gateway: "asaas_card",
+      });
+    }
+    await supabase.from("profiles").update({ status: "canceling" }).eq("user_id", profile.user_id);
+    await logRetention("cancel", "applied", { reason });
+
+    return jsonResponse({
+      success: true,
+      status: "canceled",
+      message: `Sua assinatura foi cancelada. Você terá acesso até ${nextDueDateFmt}.`,
+      subscription: {
+        id: subscriptionId,
+        endDate: nextDueDate,
+        endDateFormatted: nextDueDateFmt,
+      },
+    });
+  }
+
+  // Ação desconhecida — cai pra fluxo Stripe (que vai devolver erro)
+  return null;
+}
