@@ -387,6 +387,78 @@ Deno.serve(async (req) => {
             break;
           }
 
+          case 'asaas_resume_subscription':
+          case 'asaas_restore_full_price': {
+            // Retomada de pausa OU restauração do valor cheio após 30% off (3 ciclos).
+            //   - asaas_resume_subscription: cria nova sub com o mesmo `value` original.
+            //   - asaas_restore_full_price: cria nova sub com o `full_value` e cancela a descontada.
+            const ASAAS_API_KEY = Deno.env.get('ASAAS_API_KEY') || '';
+            const ASAAS_BASE_URL = (Deno.env.get('ASAAS_ENV') === 'production' || !Deno.env.get('ASAAS_ENV'))
+              ? 'https://api.asaas.com/v3'
+              : 'https://api-sandbox.asaas.com/v3';
+            if (!ASAAS_API_KEY) {
+              console.warn(`⚠️ ${task.task_type} sem ASAAS_API_KEY`);
+              break;
+            }
+            const customerId = payload.customer_id as string;
+            const cardToken = payload.card_token as string;
+            const cycle = (payload.cycle as string) || 'MONTHLY';
+            const description = (payload.description as string) || 'Aura - assinatura';
+            const targetValue = task.task_type === 'asaas_restore_full_price'
+              ? Number(payload.full_value)
+              : Number(payload.value);
+            if (!customerId || !cardToken || !targetValue) {
+              console.warn(`⚠️ ${task.task_type} payload incompleto`, payload);
+              break;
+            }
+            const asaasFetch = async (path: string, init?: RequestInit) => {
+              const r = await fetch(`${ASAAS_BASE_URL}${path}`, {
+                ...init,
+                headers: {
+                  access_token: ASAAS_API_KEY,
+                  'Content-Type': 'application/json',
+                  'User-Agent': 'Aura/1.0',
+                  ...(init?.headers || {}),
+                },
+              });
+              const j = await r.json().catch(() => ({}));
+              return { ok: r.ok, status: r.status, json: j };
+            };
+            const today = new Intl.DateTimeFormat('en-CA', {
+              timeZone: 'America/Sao_Paulo',
+              year: 'numeric', month: '2-digit', day: '2-digit',
+            }).format(new Date());
+            const created = await asaasFetch('/subscriptions', {
+              method: 'POST',
+              body: JSON.stringify({
+                customer: customerId,
+                billingType: 'CREDIT_CARD',
+                creditCardToken: cardToken,
+                cycle,
+                value: targetValue,
+                nextDueDate: today,
+                description,
+                externalReference: `aura_${task.task_type}_${task.user_id}_${Date.now()}`,
+              }),
+            });
+            if (!created.ok) {
+              console.warn(`⚠️ ${task.task_type} falhou ao criar sub:`, created.json);
+              break;
+            }
+            if (task.task_type === 'asaas_restore_full_price' && payload.discount_subscription_id) {
+              try {
+                await asaasFetch(`/subscriptions/${payload.discount_subscription_id}`, { method: 'DELETE' });
+              } catch (e) {
+                console.warn('⚠️ Falha cancelando sub descontada:', (e as Error).message);
+              }
+            }
+            if (task.task_type === 'asaas_resume_subscription') {
+              await supabase.from('profiles').update({ status: 'active' }).eq('user_id', task.user_id);
+            }
+            console.log(`✅ ${task.task_type} OK sub=${(created.json as any)?.id}`);
+            break;
+          }
+
           default:
             console.warn(`⚠️ Unknown task type: ${task.task_type}`);
         }
