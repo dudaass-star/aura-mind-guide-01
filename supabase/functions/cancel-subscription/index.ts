@@ -29,11 +29,65 @@ const RETENTION_PRICES = {
 
 type RetentionTier = "pause" | "discount_30" | "lite" | "base";
 
+// Preços dos planos de retenção no Asaas cartão (usa `value` direto em /subscriptions).
+const ASAAS_RETENTION_VALUES = {
+  lite: 19.90,
+  base: 9.90,
+} as const;
+
+// Ciclo em dias por ciclo Asaas — usado pra calcular data de restauração do valor cheio.
+const ASAAS_CYCLE_DAYS: Record<string, number> = {
+  MONTHLY: 30,
+  QUARTERLY: 90,
+  SEMIANNUALLY: 180,
+  YEARLY: 365,
+};
+
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
     status,
   });
+}
+
+// ─── Asaas helpers ─────────────────────────────────────────────────────────
+function getAsaasClient() {
+  const ASAAS_API_KEY = Deno.env.get("ASAAS_API_KEY");
+  const ASAAS_ENV = (Deno.env.get("ASAAS_ENV") || "sandbox").toLowerCase();
+  const ASAAS_BASE_URL =
+    ASAAS_ENV === "production"
+      ? "https://api.asaas.com/v3"
+      : "https://api-sandbox.asaas.com/v3";
+  if (!ASAAS_API_KEY) throw new Error("ASAAS_API_KEY não configurada");
+  return async (path: string, init?: RequestInit) => {
+    const resp = await fetch(`${ASAAS_BASE_URL}${path}`, {
+      ...init,
+      headers: {
+        access_token: ASAAS_API_KEY,
+        "Content-Type": "application/json",
+        "User-Agent": "Aura/1.0",
+        ...(init?.headers || {}),
+      },
+    });
+    const json = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      throw new Error(
+        (json as any)?.errors?.[0]?.description || `Asaas ${path} falhou (${resp.status})`,
+      );
+    }
+    return json;
+  };
+}
+
+// Retorna nextDueDate no formato Asaas (YYYY-MM-DD BRT) para daqui a `days` dias.
+function brtDatePlusDays(days: number): string {
+  const d = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
 }
 
 serve(async (req) => {
@@ -78,14 +132,35 @@ serve(async (req) => {
       user_id: string | null;
       name: string | null;
       card_gateway: string | null;
+      asaas_customer_id?: string | null;
+      plan?: string | null;
+      billing_cycle?: string | null;
     } | null = null;
     {
       const { data } = await supabase
         .from("profiles")
-        .select("user_id, name, card_gateway")
+        .select("user_id, name, card_gateway, asaas_customer_id, plan, billing_cycle")
         .eq("phone", phoneClean)
         .maybeSingle();
       if (data) profile = data as any;
+    }
+
+    // ─── Roteamento Asaas cartão ─────────────────────────────────────────
+    // Se o usuário tem gateway Asaas cartão, roda todo o fluxo pelo Asaas
+    // (paridade com o Stripe pra check/pause/discount/downgrade/cancel).
+    // PIX Asaas segue pelo caminho antigo → gateway_unsupported.
+    if (profile?.card_gateway === "asaas_card" && profile.user_id && profile.asaas_customer_id) {
+      const resp = await handleAsaasCard({
+        supabase,
+        profile: profile as any,
+        phoneClean,
+        action,
+        reason,
+        reason_detail,
+        pause_days,
+      });
+      if (resp) return resp;
+      // Se handleAsaasCard não conseguiu resolver, cai para o fluxo Stripe.
     }
 
     // Search for customer by phone in metadata using all variations
