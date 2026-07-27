@@ -4813,10 +4813,19 @@ serve(async (req) => {
 
       if (usedNow === BASE_TIER_WARN_AT) {
         console.log(`⚠️ [BASE-TIER] Aviso de cota ${usedNow}/${BASE_TIER_MONTHLY_MESSAGES}`);
-        dynamicContextPrefix +=
-          `\n\n[AVISO_COTA_DETERMINISTICO]\n` +
-          `Ao final da sua resposta, acrescente EXATAMENTE esta linha em uma bolha separada, sem reformular:\n` +
-          `"Aviso rápido: você está em ${usedNow} de ${BASE_TIER_MONTHLY_MESSAGES} mensagens do seu plano neste mês."\n`;
+        if (phone) {
+          try {
+            let warnInstance = undefined;
+            try { warnInstance = await getInstanceConfigForUser(supabase, profile.user_id); } catch (_) {}
+            await sendMessage(
+              cleanPhoneNumber(phone),
+              `Aviso rápido: você está em ${usedNow} de ${BASE_TIER_MONTHLY_MESSAGES} mensagens do seu plano neste mês. Dá pra ver e ajustar em https://olaaura.com.br/meu-espaco`,
+              warnInstance,
+            );
+          } catch (e) {
+            console.error('❌ [BASE-TIER] Falha ao enviar aviso de cota:', e);
+          }
+        }
       }
     }
 
