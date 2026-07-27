@@ -52,6 +52,40 @@ Deno.serve(async (req) => {
     const profileName = body.ProfileName || null;
     const buttonText = body.ButtonText || "";
 
+    // ─── Status callback de entrega (StatusCallback dos templates de dunning) ───
+    // A Twilio aceita o POST e devolve `queued`; só depois manda o status final.
+    // Sem isso, `dunning_attempts` gravava "enviado" pra mensagem que nunca chegou.
+    const messageStatus = (body.MessageStatus || body.SmsStatus || "").toLowerCase();
+    if (messageStatus && !messageBody && !buttonText && messageSid) {
+      const supabaseCb = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      );
+      const failed = messageStatus === "failed" || messageStatus === "undelivered";
+      if (failed) {
+        const errorCode = body.ErrorCode || "unknown";
+        console.warn(
+          `⚠️ [recovery-webhook] entrega falhou sid=${messageSid} status=${messageStatus} code=${errorCode}`,
+        );
+        // whatsapp_sent=false + error_stage preenchido ⇒ o degrau não conta na
+        // cota da escada (ver dunning-whatsapp.ts) e pode ser reofertado depois.
+        await supabaseCb
+          .from("dunning_attempts")
+          .update({
+            whatsapp_sent: false,
+            error_stage: "twilio_delivery_failed",
+            error_message: `${messageStatus} (ErrorCode ${errorCode})`,
+          })
+          .eq("message_sid", messageSid);
+      } else if (messageStatus === "delivered" || messageStatus === "read") {
+        await supabaseCb
+          .from("dunning_attempts")
+          .update({ whatsapp_sent: true, error_stage: null, error_message: null })
+          .eq("message_sid", messageSid);
+      }
+      return new Response("", { status: 200, headers: { ...corsHeaders, "Content-Type": "text/plain" } });
+    }
+
     if (!from) {
       return new Response("", { status: 200, headers: { ...corsHeaders, "Content-Type": "text/plain" } });
     }
