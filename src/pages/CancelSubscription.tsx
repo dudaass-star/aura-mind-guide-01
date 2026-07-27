@@ -181,7 +181,7 @@ const CancelSubscription = () => {
     try {
       const { data, error } = await supabase.functions.invoke("cancel-subscription", {
         body: {
-          phone: digits,
+          ...(digits.length >= 10 ? { phone: digits } : { token: portalToken }),
           action,
           reason: selectedReason || null,
           reason_detail: reasonDetail || null,
