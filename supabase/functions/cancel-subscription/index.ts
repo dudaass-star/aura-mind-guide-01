@@ -310,6 +310,8 @@ serve(async (req) => {
     logStep("Customer search result", { found: !!customer });
 
     if (!customer) {
+      // Oferta prometida por link: nunca cair em erro genérico.
+      if (offeredTier) return jsonResponse(reactivationPayload());
       // Cliente não é Stripe: retorna sinal para o frontend redirecionar ao suporte
       // para todas as ações da escada. Mantém compatibilidade quando action=check.
       if (action && action !== "check") {
