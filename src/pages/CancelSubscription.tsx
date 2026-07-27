@@ -427,6 +427,7 @@ const CancelSubscription = () => {
                 {status === "success" && "Prontinho"}
                 {status === "already_canceling" && "Cancelamento já solicitado"}
                 {status === "already_paused" && "Assinatura pausada"}
+                {status === "reactivation" && "Sua oferta continua de pé"}
                 {status === "error" && "Ops!"}
               </CardDescription>
             </CardHeader>
@@ -643,6 +644,52 @@ const CancelSubscription = () => {
               )}
 
               {/* Error */}
+              {status === "error" && (
+                <>
+                </>
+              )}
+              {status === "reactivation" && highlightedTier && (
+                <div className="space-y-6">
+                  <p className="text-sm text-muted-foreground text-center">
+                    Sua assinatura não está mais ativa — mas a oferta que te mandamos no
+                    WhatsApp vale pra voltar agora, com todo o seu histórico intacto.
+                  </p>
+                  <div className="rounded-lg border border-primary/30 bg-primary/10 p-4 space-y-3">
+                    <div className="flex items-start gap-3">
+                      <Sparkles className="w-5 h-5 text-primary mt-0.5" />
+                      <div>
+                        <p className="font-medium text-foreground">
+                          {OFFER_LABELS[highlightedTier].title}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {OFFER_LABELS[highlightedTier].description}
+                        </p>
+                      </div>
+                    </div>
+                    <Button className="w-full" onClick={runReactivation} disabled={reactivating}>
+                      {reactivating ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Abrindo...
+                        </>
+                      ) : (
+                        "Reativar com essa oferta"
+                      )}
+                    </Button>
+                  </div>
+                  <a
+                    href="https://wa.me/16625255005?text=Oi%2C%20preciso%20de%20ajuda%20com%20minha%20assinatura"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block"
+                  >
+                    <Button variant="outline" className="w-full">
+                      <MessageCircle className="w-4 h-4 mr-2" />
+                      Prefiro falar com o suporte
+                    </Button>
+                  </a>
+                </div>
+              )}
               {status === "error" && (
                 <div className="space-y-6">
                   <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 text-center">
