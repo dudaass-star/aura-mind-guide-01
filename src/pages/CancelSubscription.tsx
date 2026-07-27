@@ -65,6 +65,7 @@ type Status =
   | "success"
   | "already_canceling"
   | "already_paused"
+  | "reactivation"
   | "error";
 
 type Tier = "pause" | "discount_30" | "lite" | "base";
@@ -98,6 +99,7 @@ const CancelSubscription = () => {
   const [discountAvailable, setDiscountAvailable] = useState<boolean>(true);
   const [gatewayUnsupported, setGatewayUnsupported] = useState<boolean>(false);
   const [needsNewCard, setNeedsNewCard] = useState<boolean>(false);
+  const [reactivating, setReactivating] = useState<boolean>(false);
   const autoCheckedRef = useRef(false);
 
   const formatPhone = (value: string) => {
@@ -125,8 +127,8 @@ const CancelSubscription = () => {
     try {
       const { data, error } = await supabase.functions.invoke("cancel-subscription", {
         body: opts?.token
-          ? { token: opts.token, action: "check" }
-          : { phone: digits, action: "check" },
+          ? { token: opts.token, action: "check", offer: highlightedTier }
+          : { phone: digits, action: "check", offer: highlightedTier },
       });
 
       if (error) throw error;
@@ -155,6 +157,11 @@ const CancelSubscription = () => {
         setSubscription(data.subscription);
         setStatus("already_paused");
         setMessage(data.message);
+      } else if (data.status === "no_gateway_subscription") {
+        // Assinatura não está mais ativa no gateway, mas a oferta prometida
+        // no WhatsApp continua valendo: vira fluxo de reativação.
+        setStatus("reactivation");
+        setMessage(data.message || "");
       } else {
         setStatus("error");
         setMessage(data.message || "Nenhuma assinatura encontrada");
