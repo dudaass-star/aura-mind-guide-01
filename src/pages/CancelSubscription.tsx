@@ -691,7 +691,7 @@ const CancelSubscription = () => {
                   <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 text-center">
                     <p className="text-destructive">{message}</p>
                   </div>
-                  {gatewayUnsupported && (
+                  {(gatewayUnsupported || !!portalToken) && (
                     <a
                       href="https://wa.me/16625255005?text=Oi%2C%20preciso%20de%20ajuda%20com%20minha%20assinatura"
                       target="_blank"
