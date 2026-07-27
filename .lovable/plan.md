@@ -1,37 +1,40 @@
-## Estado atual
+## Objetivo
 
-SIDs recebidos:
-- `dunning_offer_30` → `HX50cb75b6bb3cd9ae56ef2d9c6adc4781`
-- `dunning_offer_lite` → `HX18e81fa401b8487c360f085e9b83630f`
-- `dunning_offer_base` → **pendente** (você optou por esperar)
+Fechar o degrau 3 da escada de dunning (SID recebido) e cobrir o buraco do **cartão Asaas**, que hoje só recebe a primeira oferta.
 
-Contrato de variáveis dos dois já criados: `{{1}}` = primeiro nome no corpo; `{{2}}` = query string do botão (URL `https://olaaura.com.br/cancelar?{{2}}`).
+## Estado atual (verificado no código)
 
-## O que será implementado (quando o 3º SID chegar)
+- `_shared/dunning-whatsapp.ts`: degrau 3 (`base`) está com `sid: null` → cai no template genérico.
+- `webhook-asaas`: chama `sendDunningWhatsApp` em todo `PAYMENT_OVERDUE`, sem filtrar meio de pagamento. Cartão Asaas **recebe** o degrau 1.
+- Logo em seguida, para `CREDIT_CARD_RECURRING`, agenda retries próprios em D+2/D+4/D+7 (`card_retry_asaas`).
+- `execute-scheduled-tasks`, case `card_retry_asaas`: quando o retry falha, apenas loga; na última tentativa cancela a assinatura. **Não dispara dunning**. Logo, degraus Lite e Base dependem de um novo `PAYMENT_OVERDUE` do Asaas, que não é garantido nesses recharges.
+- Stripe: cada Smart Retry reemite `invoice.payment_failed` → escada avança sozinha.
+- Não existe intervalo mínimo próprio entre degraus; o ritmo é ditado pelo provedor, com o único ajuste sendo adiar para 08h BRT quando cai fora da janela 08h–21h.
 
-**1. Registro dos templates**
-Inserir os 3 templates em `whatsapp_templates` com nome, ContentSid, categoria `marketing` e contagem de variáveis = 2.
+## O que será feito
 
-**2. Seleção de tier por tentativa em `_shared/dunning-whatsapp.ts`**
-- Tentativa 1 → `dunning_offer_30` (query `t=<token>&offer=discount_30`)
-- Tentativa 2 → `dunning_offer_lite` (`offer=lite`)
-- Tentativa 3 → `dunning_offer_base` (`offer=base`)
-- Elevar `DUNNING_MAX_ATTEMPTS` de 2 para 3, já que agora cada envio carrega uma oferta diferente (hoje o limite é 2 e os dois envios usam o mesmo template genérico de falha).
-- Passar `{{2}}` como query string completa; manter o token vindo de `ensurePortalToken`.
-- Registrar em `dunning_attempts` o `template_sid` do tier disparado (coluna já existe).
+**1. Ligar o degrau 3**
+- Atualizar `whatsapp_templates`: `dunning_offer_base` → `HX65a53c5b0bb1dd7868146ee118c125fb`, `is_active = true`.
+- Preencher o `sid` do tier `base` em `DUNNING_OFFER_LADDER`.
 
-**3. Janela de envio (categoria Marketing)**
-Como os 3 templates são Marketing e não Utility, restringir disparo à faixa 08h–21h BRT. Fora da janela, agendar/adiar em vez de enviar. O template atual de dunning puro (`HXaf4af1e1f5d4cf40b6fff6b5b68df29a`) continua sem essa restrição.
+**2. Cobrir o cartão Asaas na escada**
+- No case `card_retry_asaas` de `execute-scheduled-tasks`, quando o recharge falhar, chamar `sendDunningWhatsApp` com `eventId = asaas-cardretry-<paymentId>-<attempt>` (dedup natural por tentativa), `provider: "asaas"`, `paymentId` e `subscriptionId` já disponíveis no payload.
+- O `attemptNumber` continua sendo calculado pelo próprio helper (contagem de envios com `message_sid` no mesmo `subscription_id`), então retry 1 → Lite, retry 2 → Base, retry 3 → limite atingido.
+- Resolver `user_id`/`phone`/`name` pelo mesmo caminho já usado no webhook (via `asaas_payments` → `profiles`).
 
-**4. Landing `/cancelar` com `?offer=`**
-`CancelSubscription.tsx` passa a ler o parâmetro `offer` e destacar o card correspondente (`discount_30`, `lite`, `base`), com o restante da escada visível abaixo. Sem `offer`, comportamento atual inalterado.
+**3. Ritmo entre degraus**
+Com isso, o cartão Asaas fica com espaçamento explícito D0 → D+2 → D+4 (D+7 já bate o teto de 3 envios). Nenhum intervalo artificial é adicionado ao Stripe/PIX.
 
-## Detalhes técnicos
+**4. Deploy e memória**
+- Deploy: `execute-scheduled-tasks`, `webhook-asaas`, `stripe-webhook`.
+- Atualizar `mem/features/recovery/dunning-whatsapp.md` com o SID real e o novo gatilho de cartão Asaas.
 
-- Gatilhos que chamam `sendDunningWhatsApp` (`stripe-webhook` em `invoice.payment_failed` e `webhook-asaas` em `PAYMENT_OVERDUE`) não mudam — a escolha do tier fica dentro do helper, baseada no `attemptNumber` já calculado ali.
-- Idempotência por `(profile_user_id, event_id, channel='whatsapp')` permanece.
-- Deploy das edge functions afetadas ao final.
+## Verificação
 
-## Antes de implementar
+- Consulta em `whatsapp_templates` confirmando os 3 SIDs ativos.
+- Conferência de que a 3ª tentativa resolve para `HX65a53c5b0bb1dd7868146ee118c125fb`.
+- Checagem de `dunning_attempts` filtrando `provider = 'asaas'` para ver se aparecem múltiplos `attempt_number` por assinatura de cartão.
 
-Preciso do ContentSid do `dunning_offer_base`. Assim que mandar, executo os 4 itens numa passada só.
+## Ponto a decidir
+
+Se quiser um intervalo mínimo global entre degraus (ex.: 48h) também para Stripe/PIX, me diz que incluo — hoje, se o provedor reprocessar duas falhas no mesmo dia, dois degraus podem sair com poucas horas de diferença.
