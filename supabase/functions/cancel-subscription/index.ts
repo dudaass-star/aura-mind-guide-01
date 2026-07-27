@@ -105,17 +105,12 @@ serve(async (req) => {
     }
     logStep("Stripe key verified");
 
-    const { phone, action, reason, reason_detail, pause_days } = await req.json();
-    logStep("Request received", { phone, action, reason });
+    const { phone, token, action, reason, reason_detail, pause_days } = await req.json();
+    logStep("Request received", { phone: !!phone, token: !!token, action, reason });
 
-    if (!phone) {
-      throw new Error("Phone number is required");
+    if (!phone && !token) {
+      throw new Error("Phone number or token is required");
     }
-
-    // Clean phone number - remove all non-digits
-    let phoneClean = phone.replace(/\D/g, "");
-    
-    logStep("Phone cleaned", { phoneClean });
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2023-10-16" });
 
@@ -126,6 +121,30 @@ serve(async (req) => {
       throw new Error("SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is not set");
     }
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Identidade: telefone digitado OU token do portal (link de oferta do WhatsApp).
+    let phoneClean = (phone || "").replace(/\D/g, "");
+    if (!phoneClean && token) {
+      const { data: pt } = await supabase
+        .from("user_portal_tokens")
+        .select("user_id")
+        .eq("token", token)
+        .maybeSingle();
+      if (!pt?.user_id) {
+        return jsonResponse({ success: false, message: "Link expirado. Informe seu telefone." }, 200);
+      }
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("phone")
+        .eq("user_id", pt.user_id)
+        .maybeSingle();
+      phoneClean = String(prof?.phone || "").replace(/\D/g, "");
+      if (!phoneClean) {
+        return jsonResponse({ success: false, message: "Não encontramos seu cadastro. Informe seu telefone." }, 200);
+      }
+    }
+
+    logStep("Phone resolved", { phoneClean, viaToken: !phone && !!token });
 
     // Descobre o perfil (user_id, gateway, nome) tentando cada variação de telefone
     let profile: {
