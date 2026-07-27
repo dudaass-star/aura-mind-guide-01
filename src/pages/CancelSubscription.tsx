@@ -111,9 +111,9 @@ const CancelSubscription = () => {
     setPhone(formatPhone(e.target.value));
   };
 
-  const checkSubscription = async () => {
+  const checkSubscription = async (opts?: { token?: string; skipToOffers?: boolean }) => {
     const digits = phone.replace(/\D/g, "");
-    if (digits.length < 10) {
+    if (!opts?.token && digits.length < 10) {
       toast.error("Por favor, insira um número de telefone válido");
       return;
     }
@@ -123,7 +123,9 @@ const CancelSubscription = () => {
 
     try {
       const { data, error } = await supabase.functions.invoke("cancel-subscription", {
-        body: { phone: digits, action: "check" },
+        body: opts?.token
+          ? { token: opts.token, action: "check" }
+          : { phone: digits, action: "check" },
       });
 
       if (error) throw error;
@@ -137,7 +139,13 @@ const CancelSubscription = () => {
         setReasons(data.reasons || []);
         setValueRecap(data.value_recap || null);
         setDiscountAvailable(data.discount_available !== false);
-        setStatus("recap");
+        if (opts?.skipToOffers) {
+          // Veio do link de oferta no WhatsApp: mostra a oferta prometida direto.
+          setSelectedReason("expensive");
+          setStatus("offer_ladder");
+        } else {
+          setStatus("recap");
+        }
       } else if (data.success && data.status === "canceling") {
         setSubscription(data.subscription);
         setStatus("already_canceling");
