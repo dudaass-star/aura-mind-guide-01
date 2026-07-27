@@ -4694,9 +4694,24 @@ serve(async (req) => {
 
     const rawPlan = profile?.plan || 'essencial';
     const userPlan = normalizePlan(rawPlan);
-    const planConfig = PLAN_CONFIGS[userPlan] || PLAN_CONFIGS.essencial;
-    
-    console.log('📊 Plan mapping:', { rawPlan, normalizedPlan: userPlan });
+    let planConfig = PLAN_CONFIGS[userPlan] || PLAN_CONFIGS.essencial;
+
+    // ------------------------------------------------------------------
+    // Sub-tiers de retenção (profiles.plan_tier): lite R$19,90 / base R$9,90.
+    // Entitlements reduzidos — ver mem://features/retention/tier-entitlements
+    //   lite: 1 sessão/mês (igual Essencial) + áudio 15 min/mês
+    //   base: sem sessões, sem áudio, 30 mensagens/mês
+    // ------------------------------------------------------------------
+    const planTier = (profile?.plan_tier || '').toString().toLowerCase();
+    const isLiteTier = planTier === 'lite';
+    const isBaseTier = planTier === 'base';
+    if (isLiteTier) {
+      planConfig = { ...planConfig, sessions: 1 };
+    } else if (isBaseTier) {
+      planConfig = { ...planConfig, sessions: 0 };
+    }
+
+    console.log('📊 Plan mapping:', { rawPlan, normalizedPlan: userPlan, planTier: planTier || null });
 
     // Atualizar contador de mensagens diárias
     const todayStr = new Date().toISOString().split('T')[0];
@@ -4723,6 +4738,86 @@ serve(async (req) => {
         .from('profiles')
         .update(updateFields)
         .eq('id', profile.id);
+    }
+
+    // ========================================================================
+    // COTA MENSAL DE MENSAGENS — apenas plan_tier = 'base' (30 msgs/mês)
+    // Aviso em 24/30 e parede em 30, ambos determinísticos (a Aura nunca
+    // faz upsell na conversa — ver mem://persona/no-upsell-policy).
+    // ========================================================================
+    const BASE_TIER_MONTHLY_MESSAGES = 30;
+    const BASE_TIER_WARN_AT = 24;
+    if (isBaseTier && profile && message) {
+      const monthKey = new Date().toISOString().slice(0, 7);
+      const sameMonth = profile.messages_reset_month === monthKey;
+      const usedNow = (sameMonth ? (profile.messages_used_this_month || 0) : 0) + 1;
+
+      await supabase
+        .from('profiles')
+        .update({ messages_used_this_month: usedNow, messages_reset_month: monthKey })
+        .eq('id', profile.id);
+      profile.messages_used_this_month = usedNow;
+      profile.messages_reset_month = monthKey;
+
+      const alreadyNotified = profile.tier_limit_notified_month === monthKey;
+
+      if (usedNow > BASE_TIER_MONTHLY_MESSAGES && phone) {
+        // Parede: não chama o LLM. Uma mensagem por mês.
+        if (!alreadyNotified) {
+          try {
+            let instanceConfig = undefined;
+            try { instanceConfig = await getInstanceConfigForUser(supabase, profile.user_id); } catch (_) {}
+            const wallText =
+              `Você chegou ao limite de ${BASE_TIER_MONTHLY_MESSAGES} mensagens do seu plano neste mês.\n\n` +
+              `Seu histórico continua salvo e a gente se fala de novo no dia 1º.\n\n` +
+              `Se quiser voltar ao ritmo normal agora, é por aqui: https://olaaura.com.br/meu-espaco`;
+            await sendMessage(cleanPhoneNumber(phone), wallText, instanceConfig);
+            await supabase
+              .from('profiles')
+              .update({ tier_limit_notified_month: monthKey })
+              .eq('id', profile.id);
+            await supabase.from('messages').insert({
+              user_id: profile.user_id,
+              role: 'assistant',
+              content: wallText,
+            });
+            // E-mail de aviso (canal seguro, sem risco de ban no WhatsApp)
+            if (profile.email) {
+              supabase.functions.invoke('send-transactional-email', {
+                body: {
+                  templateName: 'plan-limit-reached',
+                  recipientEmail: profile.email,
+                  idempotencyKey: `plan-limit-${profile.user_id}-${monthKey}`,
+                  templateData: {
+                    name: profile.name || null,
+                    limit: BASE_TIER_MONTHLY_MESSAGES,
+                    portalUrl: 'https://olaaura.com.br/meu-espaco',
+                  },
+                },
+              }).catch((e: any) => console.error('plan-limit email failed:', e?.message));
+            }
+          } catch (e) {
+            console.error('❌ [BASE-TIER] Falha ao enviar parede de cota:', e);
+          }
+        }
+        await supabase
+          .from('aura_response_state')
+          .update({ is_responding: false, pending_content: null, pending_context: null })
+          .eq('user_id', profile.user_id);
+        console.log(`🚧 [BASE-TIER] Cota esgotada (${usedNow}/${BASE_TIER_MONTHLY_MESSAGES}) — LLM não chamado`);
+        return new Response(
+          JSON.stringify({ quotaExceeded: true, used: usedNow, limit: BASE_TIER_MONTHLY_MESSAGES }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      if (usedNow === BASE_TIER_WARN_AT) {
+        console.log(`⚠️ [BASE-TIER] Aviso de cota ${usedNow}/${BASE_TIER_MONTHLY_MESSAGES}`);
+        dynamicContextPrefix +=
+          `\n\n[AVISO_COTA_DETERMINISTICO]\n` +
+          `Ao final da sua resposta, acrescente EXATAMENTE esta linha em uma bolha separada, sem reformular:\n` +
+          `"Aviso rápido: você está em ${usedNow} de ${BASE_TIER_MONTHLY_MESSAGES} mensagens do seu plano neste mês."\n`;
+      }
     }
 
     // ========================================================================
