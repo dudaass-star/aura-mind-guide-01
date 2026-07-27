@@ -1543,7 +1543,9 @@ export type Database = {
           last_user_message_at: string | null
           last_winback_reactive_sent_at: string | null
           main_challenges: string[] | null
+          messages_reset_month: string | null
           messages_today: number | null
+          messages_used_this_month: number
           name: string | null
           needs_schedule_setup: boolean | null
           onboarding_completed: boolean | null
@@ -1565,6 +1567,7 @@ export type Database = {
           sessions_used_this_month: number | null
           status: string | null
           therapy_experience: string | null
+          tier_limit_notified_month: string | null
           trial_aha_at_count: number | null
           trial_conversations_count: number
           trial_insight_sent_at: string | null
@@ -1615,7 +1618,9 @@ export type Database = {
           last_user_message_at?: string | null
           last_winback_reactive_sent_at?: string | null
           main_challenges?: string[] | null
+          messages_reset_month?: string | null
           messages_today?: number | null
+          messages_used_this_month?: number
           name?: string | null
           needs_schedule_setup?: boolean | null
           onboarding_completed?: boolean | null
@@ -1637,6 +1642,7 @@ export type Database = {
           sessions_used_this_month?: number | null
           status?: string | null
           therapy_experience?: string | null
+          tier_limit_notified_month?: string | null
           trial_aha_at_count?: number | null
           trial_conversations_count?: number
           trial_insight_sent_at?: string | null
@@ -1687,7 +1693,9 @@ export type Database = {
           last_user_message_at?: string | null
           last_winback_reactive_sent_at?: string | null
           main_challenges?: string[] | null
+          messages_reset_month?: string | null
           messages_today?: number | null
+          messages_used_this_month?: number
           name?: string | null
           needs_schedule_setup?: boolean | null
           onboarding_completed?: boolean | null
@@ -1709,6 +1717,7 @@ export type Database = {
           sessions_used_this_month?: number | null
           status?: string | null
           therapy_experience?: string | null
+          tier_limit_notified_month?: string | null
           trial_aha_at_count?: number | null
           trial_conversations_count?: number
           trial_insight_sent_at?: string | null
