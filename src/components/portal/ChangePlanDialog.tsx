@@ -31,6 +31,8 @@ interface Props {
   userId: string;
   currentPlan: PlanId | null;
   currentBilling?: BillingCycle | null;
+  /** Tier de retenção ativo (lite/base). Se houver, nenhum plano cheio é "atual". */
+  currentTier?: string | null;
   /** Gateway ativo — roteia para a edge function correta e ajusta copy. */
   paymentGateway: "stripe-card" | "asaas-pix" | "asaas-card";
 }
@@ -41,6 +43,7 @@ export function ChangePlanDialog({
   userId,
   currentPlan,
   currentBilling,
+  currentTier,
   paymentGateway,
 }: Props) {
   const [billing, setBilling] = useState<BillingCycle>(currentBilling ?? "monthly");
@@ -189,7 +192,10 @@ export function ChangePlanDialog({
 
             <div className="space-y-2.5">
               {PLAN_IDS.map((p) => {
-                const isCurrent = p === currentPlan && billing === (currentBilling ?? "monthly");
+                // Em tier de retenção (lite/base) o usuário está num preço reduzido:
+                // o Essencial mensal cheio precisa continuar selecionável.
+                const isCurrent =
+                  !currentTier && p === currentPlan && billing === (currentBilling ?? "monthly");
                 const isSelected = p === selected;
                 const price = priceFor(p, billing);
                 return (

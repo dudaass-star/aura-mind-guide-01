@@ -287,7 +287,9 @@ serve(async (req) => {
     // Reflete imediatamente no profile (webhook também atualiza, mas evita lag na UI)
     const { error: updateErr } = await supabase
       .from("profiles")
-      .update({ plan, billing_cycle: cycle })
+      // plan_tier: null — sair de um tier de retenção (lite/base) para um plano
+      // cheio precisa devolver os entitlements normais (áudio, sessões, msgs).
+      .update({ plan, billing_cycle: cycle, plan_tier: null })
       .eq("user_id", userId);
     if (updateErr) {
       logStep("WARN profile update failed", { msg: updateErr.message });

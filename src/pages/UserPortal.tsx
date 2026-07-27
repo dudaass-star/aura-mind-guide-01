@@ -278,6 +278,7 @@ const UserPortal = () => {
           onOpenChange={setChangePlanOpen}
           userId={userId}
           currentPlan={(profile?.plan as "essencial" | "direcao" | "transformacao" | null) ?? null}
+          currentTier={(profile as any)?.plan_tier ?? null}
           currentBilling={
             // Legacy: rows antigas gravaram "semestral"; ChangePlanDialog espera "semiannual".
             (profile?.billing_cycle === "semestral"

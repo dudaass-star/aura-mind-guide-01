@@ -38,6 +38,13 @@ const RECURRING_PRICES: Record<string, { plan: string; billing_cycle: string }> 
   "price_1TwRA2QU15XnZ7Vvt0zU4HNa": { plan: "essencial", billing_cycle: "monthly" }, // Base R$9,90
 };
 
+// Preço → tier de retenção (profiles.plan_tier). Qualquer outro preço = null,
+// ou seja: voltar a um plano cheio limpa o tier e devolve os entitlements.
+const RETENTION_TIER_BY_PRICE: Record<string, string> = {
+  "price_1TwR9yQU15XnZ7Vv59okBz23": "lite",
+  "price_1TwRA2QU15XnZ7Vvt0zU4HNa": "base",
+};
+
 function detectPlanCycleFromPrice(priceId: string | null | undefined): { plan: string; billing_cycle: string } | null {
   if (!priceId) return null;
   // Mensal: lookup via env
@@ -442,6 +449,7 @@ Deno.serve(async (req) => {
                 email: customerEmail,
                 plan: customerPlan,
                 status: 'trial',
+                plan_tier: null,
                 sessions_used_this_month: 0,
                 sessions_reset_date: today,
                 updated_at: new Date().toISOString(),
@@ -723,6 +731,7 @@ Deno.serve(async (req) => {
               email: customerEmail,
               plan: customerPlan,
               status: isTrial ? 'trial' : 'active',
+              plan_tier: null,
               sessions_used_this_month: 0,
               sessions_reset_date: today,
               updated_at: new Date().toISOString(),
@@ -1423,24 +1432,27 @@ Me conta: como você está hoje?`;
         const item = subscription.items?.data?.[0];
         const priceId = item?.price?.id ?? null;
         const detected = detectPlanCycleFromPrice(priceId);
+        const detectedTier = priceId ? (RETENTION_TIER_BY_PRICE[priceId] ?? null) : null;
         if (detected && ['active', 'trialing', 'past_due'].includes(subscription.status)) {
           const customerId = subscription.customer as string;
           const customer = await stripe.customers.retrieve(customerId);
           if (!customer.deleted) {
             const { profile } = await resolveProfileFromCustomer(supabase, customer as Stripe.Customer);
-            if (profile && (profile.plan !== detected.plan || profile.billing_cycle !== detected.billing_cycle)) {
+            const tierChanged = profile && ((profile.plan_tier ?? null) !== detectedTier);
+            if (profile && (profile.plan !== detected.plan || profile.billing_cycle !== detected.billing_cycle || tierChanged)) {
               const { error: planSyncErr } = await supabase
                 .from('profiles')
                 .update({
                   plan: detected.plan,
                   billing_cycle: detected.billing_cycle,
+                  plan_tier: detectedTier,
                   updated_at: new Date().toISOString(),
                 })
                 .eq('id', profile.id);
               if (planSyncErr) {
                 console.error('❌ Plan/cycle sync failed:', planSyncErr.message);
               } else {
-                console.log(`🔁 Plan/cycle synced: ${profile.phone} → ${detected.plan}/${detected.billing_cycle}`);
+                console.log(`🔁 Plan/cycle synced: ${profile.phone} → ${detected.plan}/${detected.billing_cycle} tier=${detectedTier ?? 'none'}`);
               }
             }
           }

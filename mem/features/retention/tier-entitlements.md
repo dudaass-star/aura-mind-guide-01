@@ -23,3 +23,10 @@ Ambos são **permanentes** (não expiram em 3 meses).
 
 ## UI
 `PlanTierBanner` em `src/pages/UserPortal.tsx`: barra de progresso 0-30 (base), resumo de limites (lite) e botão "Voltar ao Essencial" abrindo o `ChangePlanDialog`.
+
+## Saída do tier (limpeza obrigatória)
+`plan_tier` é limpo (`null`) em: `change-subscription-plan`, `change-asaas-plan`, `checkout.session.completed` (stripe-webhook) e no sync de `customer.subscription.updated` — onde o tier passa a ser derivado do priceId (`RETENTION_TIER_BY_PRICE`), e a condição de sync inclui mudança de tier (senão base→essencial mensal, mesmo plan/cycle, nunca sincronizaria).
+
+`ChangePlanDialog` recebe `currentTier`: com tier ativo nenhum card fica "plano atual", senão o usuário Base não conseguiria clicar no Essencial mensal.
+
+**Limitação conhecida:** PIX recorrente Asaas em tier de retenção não tem upgrade self-service (409 direcionando ao suporte).

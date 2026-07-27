@@ -290,7 +290,8 @@ Deno.serve(async (req) => {
     // Atualiza profile com novo plano + ciclo
     const { error: updateErr } = await supabase
       .from("profiles")
-      .update({ plan, billing_cycle: cycle })
+      // plan_tier: null — voltar a um plano cheio limpa o tier de retenção.
+      .update({ plan, billing_cycle: cycle, plan_tier: null })
       .eq("user_id", userId);
     if (updateErr) {
       logStep("WARN profile update failed", { msg: updateErr.message });
