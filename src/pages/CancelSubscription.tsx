@@ -63,6 +63,7 @@ type Status =
   | "offer_ladder"
   | "processing"
   | "success"
+  | "already_active"
   | "already_canceling"
   | "already_paused"
   | "reactivation"
@@ -133,7 +134,11 @@ const CancelSubscription = () => {
 
       if (error) throw error;
 
-      if (data.success && data.status === "active") {
+      if (data.success && data.status === "already_active") {
+        setSubscription(data.subscription || null);
+        setStatus("already_active");
+        setMessage(data.message);
+      } else if (data.success && data.status === "active") {
         setSubscription(data.subscription);
         // Preserva o gateway retornado pelo backend pra decisões de UI (nota PIX etc).
         if (data.gateway) {
@@ -425,6 +430,7 @@ const CancelSubscription = () => {
                 {status === "offer_ladder" && "Escolha o que faz mais sentido pra você"}
                 {status === "processing" && "Processando..."}
                 {status === "success" && "Prontinho"}
+                {status === "already_active" && "Assinatura ativa"}
                 {status === "already_canceling" && "Cancelamento já solicitado"}
                 {status === "already_paused" && "Assinatura pausada"}
                 {status === "reactivation" && "Sua oferta continua de pé"}
@@ -606,6 +612,43 @@ const CancelSubscription = () => {
                   <Button onClick={resetForm} variant="outline" className="w-full">
                     Voltar ao início
                   </Button>
+                </div>
+              )}
+
+              {/* Already active */}
+              {status === "already_active" && (
+                <div className="space-y-6">
+                  <div className="rounded-lg border border-primary/20 bg-primary/10 p-4 flex gap-3">
+                    <CheckCircle className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+                    <div className="text-sm space-y-2">
+                      <p className="font-medium text-foreground">Está tudo certo com sua assinatura.</p>
+                      <p className="text-muted-foreground">
+                        {message || "Sua assinatura já está ativa. Essa oferta era para reativação e não precisa ser aplicada agora."}
+                      </p>
+                    </div>
+                  </div>
+                  {subscription?.plan && (
+                    <div className="bg-muted/50 rounded-lg p-4 text-sm flex justify-between">
+                      <span className="text-muted-foreground">Plano atual</span>
+                      <span className="font-medium capitalize">{subscription.plan}</span>
+                    </div>
+                  )}
+                  <div className="space-y-3">
+                    <Link to={portalToken ? `/meu-espaco?t=${portalToken}` : "/meu-espaco"} className="block">
+                      <Button className="w-full">Ir para meu espaço</Button>
+                    </Link>
+                    <a
+                      href="https://wa.me/16625255005?text=Oi%2C%20preciso%20de%20ajuda%20com%20minha%20assinatura"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block"
+                    >
+                      <Button variant="outline" className="w-full">
+                        <MessageCircle className="w-4 h-4 mr-2" />
+                        Falar com o suporte
+                      </Button>
+                    </a>
+                  </div>
                 </div>
               )}
 
