@@ -253,6 +253,7 @@ const CancelSubscription = () => {
   };
 
   const baseOfferList: Tier[] = selectedReason
+
     ? OFFERS_BY_REASON[selectedReason] || OFFERS_BY_REASON.other
     : [];
   // A oferta que veio no link entra sempre em primeiro lugar.
