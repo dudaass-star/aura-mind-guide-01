@@ -166,6 +166,15 @@ const CancelSubscription = () => {
     }
   };
 
+  // Link de oferta do WhatsApp (/cancelar?t=<token>&offer=<tier>): identifica
+  // o usuário pelo token e leva direto pra oferta prometida na mensagem.
+  useEffect(() => {
+    if (autoCheckedRef.current || !portalToken) return;
+    autoCheckedRef.current = true;
+    void checkSubscription({ token: portalToken, skipToOffers: !!highlightedTier });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [portalToken, highlightedTier]);
+
   const runAction = async (
     action:
       | "pause"
