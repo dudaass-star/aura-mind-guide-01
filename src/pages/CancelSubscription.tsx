@@ -221,6 +221,7 @@ const CancelSubscription = () => {
   };
 
   const resetForm = () => {
+    autoCheckedRef.current = true; // não reabre o fluxo por token depois de reset
     setStatus("idle");
     setSubscription(null);
     setMessage("");
