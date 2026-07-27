@@ -566,19 +566,67 @@ serve(async (req) => {
       }
 
       logStep(`Downgrading to ${tier}`, { subscriptionId: subscription.id });
-      await stripe.subscriptions.update(subscription.id, {
-        items: [{ id: itemId, price: newPriceId }],
-        proration_behavior: "none",
-        cancel_at_period_end: false,
-        // Se estava pausada, remove pausa
-        pause_collection: "",
-      } as any);
+      // 1) Fecha o ciclo antigo: invoices em aberto do valor cheio precisam sair
+      //    do caminho, senão o Smart Retry segue cobrando o preço antigo e o
+      //    Stripe cancela a assinatura mesmo com a oferta aceita.
+      try {
+        const openInvoices = await stripe.invoices.list({
+          subscription: subscription.id,
+          status: "open",
+          limit: 10,
+        });
+        for (const inv of openInvoices.data) {
+          if (!inv.id) continue;
+          try {
+            await stripe.invoices.voidInvoice(inv.id);
+            logStep("Voided open invoice", { invoiceId: inv.id });
+          } catch (e) {
+            logStep("WARN void invoice failed", { invoiceId: inv.id, err: (e as Error).message });
+          }
+        }
+      } catch (e) {
+        logStep("WARN listing open invoices failed", { err: (e as Error).message });
+      }
+
+      // 2) Troca o preço e reinicia o ciclo agora → Stripe emite e cobra a
+      //    fatura do novo valor imediatamente.
+      let updated: Stripe.Subscription;
+      try {
+        updated = await stripe.subscriptions.update(subscription.id, {
+          items: [{ id: itemId, price: newPriceId }],
+          proration_behavior: "none",
+          billing_cycle_anchor: "now",
+          cancel_at_period_end: false,
+          // Se estava pausada, remove pausa
+          pause_collection: "",
+        } as any);
+      } catch (e) {
+        logStep("ERRO downgrade Stripe", { err: (e as Error).message });
+        return jsonResponse({
+          success: false,
+          message: "Não consegui trocar seu plano agora. Tenta de novo em alguns minutos ou fala com o suporte.",
+        });
+      }
+
+      // 3) Só confirma se o Stripe reconheceu a assinatura como saudável.
+      const healthy = ["active", "trialing"].includes(updated.status);
+      if (!healthy) {
+        logStep("Downgrade sem confirmação de pagamento", { status: updated.status });
+        await logRetention(tier, "accepted", { stripe_status: updated.status });
+        return jsonResponse({
+          success: false,
+          status: "payment_required",
+          tier,
+          message:
+            "Ajustei o valor do seu plano, mas o cartão ainda não passou. Atualize a forma de pagamento no seu espaço pra confirmar.",
+        });
+      }
 
       // Atualiza plan_tier no perfil (não mexe em profiles.plan pra não quebrar outras integrações)
       if (profile?.user_id) {
         await supabase
           .from("profiles")
-          .update({ plan_tier: tier, status: "active" })
+          .update({ plan_tier: tier, status: "active", payment_failed_at: null })
           .eq("user_id", profile.user_id);
       }
 
