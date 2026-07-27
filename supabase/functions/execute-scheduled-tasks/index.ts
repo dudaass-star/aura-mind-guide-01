@@ -2,6 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { cleanPhoneNumber } from "../_shared/zapi-client.ts";
 import { sendMessage, sendAudio, sendProactive } from "../_shared/whatsapp-provider.ts";
 import { getInstanceConfigForUser } from "../_shared/instance-helper.ts";
+import { sendDunningWhatsApp } from "../_shared/dunning-whatsapp.ts";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Reescreve um texto de lembrete que foi gravado N dias atrás para a data de
@@ -460,6 +461,25 @@ Deno.serve(async (req) => {
               await supabase.from('profiles').update({ status: 'active' }).eq('user_id', task.user_id);
             }
             console.log(`✅ ${task.task_type} OK sub=${(created.json as any)?.id}`);
+            break;
+          }
+
+          case 'dunning_offer_whatsapp': {
+            // Envio de oferta de retenção adiado por estar fora da janela
+            // de marketing (08h–21h BRT) no momento do gatilho original.
+            const res = await sendDunningWhatsApp({
+              supabase,
+              profile: { user_id: task.user_id, phone: profile.phone, name: profile.name },
+              eventId: payload.event_id,
+              provider: payload.provider === 'asaas' ? 'asaas' : 'stripe',
+              invoiceId: payload.invoice_id ?? null,
+              subscriptionId: payload.subscription_id ?? null,
+              paymentId: payload.payment_id ?? null,
+              customerId: payload.customer_id ?? null,
+              forceAttemptNumber: payload.attempt_number ?? 1,
+              skipWindowCheck: true,
+            });
+            console.log(`✅ dunning_offer_whatsapp tier=${res.tier} sent=${res.sent} skipped=${res.skipped ?? '-'}`);
             break;
           }
 

@@ -22,7 +22,7 @@ import {
   Archive,
   MessageCircle,
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -79,6 +79,13 @@ const OFFERS_BY_REASON: Record<string, Tier[]> = {
 };
 
 const CancelSubscription = () => {
+  const [searchParams] = useSearchParams();
+  // Ofertas de dunning chegam por WhatsApp como /cancelar?t=<token>&offer=<tier>.
+  const offerParamRaw = searchParams.get("offer");
+  const highlightedTier: Tier | null =
+    offerParamRaw === "discount_30" || offerParamRaw === "lite" || offerParamRaw === "base"
+      ? offerParamRaw
+      : null;
   const [phone, setPhone] = useState("");
   const [status, setStatus] = useState<Status>("idle");
   const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
@@ -217,16 +224,21 @@ const CancelSubscription = () => {
     setNeedsNewCard(false);
   };
 
-  const offerList: Tier[] = selectedReason
+  const baseOfferList: Tier[] = selectedReason
     ? OFFERS_BY_REASON[selectedReason] || OFFERS_BY_REASON.other
     : [];
+  // A oferta que veio no link entra sempre em primeiro lugar.
+  const offerList: Tier[] = highlightedTier
+    ? [highlightedTier, ...baseOfferList.filter((t) => t !== highlightedTier)]
+    : baseOfferList;
 
   const renderOfferCard = (tier: Tier) => {
     if (tier === "discount_30" && !discountAvailable) return null;
+    const highlight = tier === highlightedTier ? " ring-2 ring-primary ring-offset-2 ring-offset-background" : "";
 
     if (tier === "pause") {
       return (
-        <div key="pause" className="rounded-lg border border-primary/20 bg-primary/5 p-4 space-y-3">
+        <div key="pause" className={`rounded-lg border border-primary/20 bg-primary/5 p-4 space-y-3${highlight}`}>
           <div className="flex items-start gap-3">
             <Pause className="w-5 h-5 text-primary mt-0.5" />
             <div>
@@ -254,7 +266,7 @@ const CancelSubscription = () => {
 
     if (tier === "discount_30") {
       return (
-        <div key="discount" className="rounded-lg border border-primary/30 bg-primary/10 p-4 space-y-3">
+        <div key="discount" className={`rounded-lg border border-primary/30 bg-primary/10 p-4 space-y-3${highlight}`}>
           <div className="flex items-start gap-3">
             <Sparkles className="w-5 h-5 text-primary mt-0.5" />
             <div>
@@ -273,7 +285,7 @@ const CancelSubscription = () => {
 
     if (tier === "lite") {
       return (
-        <div key="lite" className="rounded-lg border border-border bg-muted/30 p-4 space-y-3">
+        <div key="lite" className={`rounded-lg border border-border bg-muted/30 p-4 space-y-3${highlight}`}>
           <div className="flex items-start gap-3">
             <TrendingDown className="w-5 h-5 text-foreground/70 mt-0.5" />
             <div>
@@ -292,7 +304,7 @@ const CancelSubscription = () => {
 
     if (tier === "base") {
       return (
-        <div key="base" className="rounded-lg border border-border bg-muted/30 p-4 space-y-3">
+        <div key="base" className={`rounded-lg border border-border bg-muted/30 p-4 space-y-3${highlight}`}>
           <div className="flex items-start gap-3">
             <Archive className="w-5 h-5 text-foreground/70 mt-0.5" />
             <div>
@@ -489,7 +501,9 @@ const CancelSubscription = () => {
               {status === "offer_ladder" && (
                 <div className="space-y-4">
                   <p className="text-sm text-muted-foreground text-center">
-                    Algumas opções antes de cancelar:
+                    {highlightedTier
+                      ? "Sua condição especial está reservada aqui:"
+                      : "Algumas opções antes de cancelar:"}
                   </p>
                   {offerList.map(renderOfferCard)}
                   <div className="pt-2 border-t border-border/50 space-y-2">
