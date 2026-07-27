@@ -105,7 +105,7 @@ serve(async (req) => {
     }
     logStep("Stripe key verified");
 
-    const { phone, token, action, reason, reason_detail, pause_days } = await req.json();
+    const { phone, token, action, reason, reason_detail, pause_days, offer } = await req.json();
     logStep("Request received", { phone: !!phone, token: !!token, action, reason });
 
     if (!phone && !token) {
@@ -150,6 +150,7 @@ serve(async (req) => {
     let profile: {
       user_id: string | null;
       name: string | null;
+      email?: string | null;
       card_gateway: string | null;
       asaas_customer_id?: string | null;
       plan?: string | null;
@@ -159,10 +160,92 @@ serve(async (req) => {
       const variants = getPhoneVariations(phoneClean);
       const { data } = await supabase
         .from("profiles")
-        .select("user_id, name, card_gateway, asaas_customer_id, plan, billing_cycle")
+        .select("user_id, name, email, card_gateway, asaas_customer_id, plan, billing_cycle")
         .in("phone", variants)
         .limit(1);
       if (data && data.length > 0) profile = data[0] as any;
+    }
+
+    // Oferta prometida no WhatsApp (link /cancelar?t=<token>&offer=<tier>).
+    const offeredTier: "discount_30" | "lite" | "base" | null =
+      offer === "discount_30" || offer === "lite" || offer === "base" ? offer : null;
+
+    // Sem assinatura no gateway (cancelada/expirada) + oferta prometida:
+    // em vez de "Nenhuma assinatura ativa encontrada", devolve o estado de
+    // reativação pro frontend honrar a oferta que o cliente recebeu.
+    const reactivationPayload = () => ({
+      success: false,
+      status: "no_gateway_subscription",
+      offer: offeredTier,
+      profile: { name: profile?.name ?? null, plan: profile?.plan ?? null },
+      message: "Sua assinatura não está mais ativa — mas a oferta continua de pé.",
+    });
+
+    // Ação: gerar checkout de reativação no preço da oferta.
+    if (action === "reactivate") {
+      if (!offeredTier) {
+        return jsonResponse({ success: false, message: "Oferta inválida." });
+      }
+      const origin = req.headers.get("origin") || "https://olaaura.com.br";
+      const planKey = String(profile?.plan || "essencial").toLowerCase();
+      let priceId: string | null = null;
+      let discounts: any[] | undefined;
+
+      if (offeredTier === "lite" || offeredTier === "base") {
+        priceId = RETENTION_PRICES[offeredTier];
+      } else {
+        const envKey = `STRIPE_PRICE_${planKey.toUpperCase()}_MONTHLY`;
+        priceId = Deno.env.get(envKey) || Deno.env.get("STRIPE_PRICE_ESSENCIAL_MONTHLY") || null;
+        if (priceId) {
+          const coupon = await stripe.coupons.create({
+            percent_off: 30,
+            duration: "repeating",
+            duration_in_months: 3,
+            name: "Reativação 30% off - 3 meses",
+            metadata: { phone: phoneClean, origin: "dunning_reactivation" },
+          });
+          discounts = [{ coupon: coupon.id }];
+        }
+      }
+
+      if (!priceId) {
+        return jsonResponse({
+          success: false,
+          message: "Não consegui montar sua reativação agora. Fale com o suporte no WhatsApp.",
+        });
+      }
+
+      const session = await stripe.checkout.sessions.create({
+        mode: "subscription",
+        line_items: [{ price: priceId, quantity: 1 }],
+        customer_email: profile?.email || undefined,
+        discounts,
+        success_url: `${origin}/obrigado?reactivation=1`,
+        cancel_url: `${origin}/cancelar${token ? `?t=${token}&offer=${offeredTier}` : ""}`,
+        subscription_data: {
+          metadata: {
+            phone: phoneClean,
+            retention_tier: offeredTier,
+            origin: "dunning_reactivation",
+          },
+        },
+        metadata: { phone: phoneClean, retention_tier: offeredTier },
+      });
+
+      try {
+        await supabase.from("retention_events").insert({
+          user_id: profile?.user_id ?? null,
+          phone: phoneClean,
+          origin: "dunning_reactivation",
+          tier: offeredTier,
+          action: "accepted",
+          gateway: "stripe",
+          channel: "web",
+          metadata: { checkout_session: session.id },
+        });
+      } catch (_) { /* auditoria best-effort */ }
+
+      return jsonResponse({ success: true, status: "reactivation_checkout", url: session.url });
     }
 
     // ─── Roteamento Asaas (cartão OU PIX recorrente) ──────────────────────
