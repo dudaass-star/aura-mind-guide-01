@@ -82,6 +82,7 @@ const CancelSubscription = () => {
   const [searchParams] = useSearchParams();
   // Ofertas de dunning chegam por WhatsApp como /cancelar?t=<token>&offer=<tier>.
   const offerParamRaw = searchParams.get("offer");
+  const portalToken = searchParams.get("t");
   const highlightedTier: Tier | null =
     offerParamRaw === "discount_30" || offerParamRaw === "lite" || offerParamRaw === "base"
       ? offerParamRaw
