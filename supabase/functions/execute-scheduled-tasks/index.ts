@@ -385,6 +385,28 @@ Deno.serve(async (req) => {
                 console.warn('⚠️ Falha cancelando sub após retries:', (delErr as Error).message);
               }
             }
+
+            // Retry falhou → avança a escada de ofertas no WhatsApp (Lite / Base).
+            // O helper calcula o attemptNumber contando envios já feitos nesta subscription.
+            if (!(chargeResp.ok && (newStatus === 'CONFIRMED' || newStatus === 'RECEIVED'))) {
+              try {
+                const { sendDunningWhatsApp } = await import('../_shared/dunning-whatsapp.ts');
+                const waRes = await sendDunningWhatsApp({
+                  supabase,
+                  profile: { user_id: task.user_id, phone: profile.phone, name: profile.name },
+                  eventId: `asaas-cardretry-${paymentId}-${attempt}`,
+                  provider: 'asaas',
+                  paymentId,
+                  subscriptionId,
+                  customerId: customerId || subCustomer || null,
+                });
+                console.log(
+                  `📨 dunning pós-retry #${attempt} tier=${waRes.tier} sent=${waRes.sent} skip=${waRes.skipped ?? '-'}`,
+                );
+              } catch (waErr) {
+                console.warn('⚠️ Falha disparando dunning pós-retry:', (waErr as Error).message);
+              }
+            }
             break;
           }
 
