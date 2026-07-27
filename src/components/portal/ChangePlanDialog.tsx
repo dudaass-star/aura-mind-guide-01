@@ -192,7 +192,10 @@ export function ChangePlanDialog({
 
             <div className="space-y-2.5">
               {PLAN_IDS.map((p) => {
-                const isCurrent = p === currentPlan && billing === (currentBilling ?? "monthly");
+                // Em tier de retenção (lite/base) o usuário está num preço reduzido:
+                // o Essencial mensal cheio precisa continuar selecionável.
+                const isCurrent =
+                  !currentTier && p === currentPlan && billing === (currentBilling ?? "monthly");
                 const isSelected = p === selected;
                 const price = priceFor(p, billing);
                 return (
