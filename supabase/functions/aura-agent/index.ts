@@ -8026,11 +8026,17 @@ Só DEPOIS de saber a situação, explore as emoções com profundidade.`;
     const aiWantsAudio = assistantMessage.trimStart().startsWith('[MODO_AUDIO]');
     
     // Audio budget (min/mês): Essencial 30 / Direção 90 / Transformação 180
-    const budgetSeconds = profile?.plan === 'transformacao' ? 10800 : profile?.plan === 'direcao' ? 5400 : 1800;
+    // Tiers de retenção sobrepõem o teto do plano: lite = 15 min, base = sem áudio.
+    const budgetSeconds = isBaseTier
+      ? 0
+      : isLiteTier
+        ? 900
+        : profile?.plan === 'transformacao' ? 10800 : profile?.plan === 'direcao' ? 5400 : 1800;
     const audioSecondsUsed = profile?.audio_seconds_used_this_month || 0;
     const currentAudioMonth = new Date().toISOString().slice(0, 7);
     const resetMonth = profile?.audio_reset_date?.slice(0, 7);
-    const budgetAvailable = (currentAudioMonth !== resetMonth) || (audioSecondsUsed < budgetSeconds);
+    const budgetAvailable = budgetSeconds > 0
+      && ((currentAudioMonth !== resetMonth) || (audioSecondsUsed < budgetSeconds));
 
     const audioDecision = determineAudioMode({
       userMessage: message,
