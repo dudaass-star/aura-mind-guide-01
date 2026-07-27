@@ -15,7 +15,7 @@ Disparo automático de WhatsApp para usuários com falha de pagamento, em parale
 - Templates de oferta são Marketing → só disparam entre **08h e 21h BRT**; fora da janela o envio é adiado via `scheduled_tasks` (`task_type = 'dunning_offer_whatsapp'`, executado por `execute-scheduled-tasks`).
 - `/cancelar` lê `?offer=<tier>` e coloca/destaca o card correspondente no topo da escada de retenção.
 - Secrets reutilizados: `TWILIO_RECOVERY_ACCOUNT_SID/AUTH_TOKEN/FROM`.
-- Limite: **3 envios por subscription/payment** (`DUNNING_MAX_ATTEMPTS`, um por degrau). Conta apenas `message_sid not null` em `dunning_attempts`.
+- Limite: **3 envios por subscription/payment** (`DUNNING_MAX_ATTEMPTS`, um por degrau). Conta apenas `message_sid not null` **e `template_sid` dentro de `DUNNING_OFFER_LADDER`** — envios antigos do template genérico não queimam a cota da escada.
 - Idempotência por `(profile_user_id, event_id, channel='whatsapp')`.
 - NÃO respeita quiet hours (utility transacional).
 
@@ -30,3 +30,8 @@ Link de retomada `/pagamento?t=<token>` resolve em `customer-portal/index.ts`:
 3. Senão, mensagem "fale com o suporte".
 
 Auditoria em `public.dunning_attempts` (colunas adicionadas: `channel`, `provider`, `template_sid`, `message_sid`, `attempt_number`, `payment_id`). Índices `(profile_user_id, channel)` e `(event_id)`.
+
+Aterrissagem da oferta:
+- `/cancelar?t=<token>&offer=<tier>` — o front resolve o `t` chamando `cancel-subscription` com `{ token, action: "check" }` (a edge aceita `token` como identidade alternativa ao telefone, via `user_portal_tokens`) e pula direto para o passo `offer_ladder` com o tier destacado. Sem telefone, sem escolher motivo.
+- Downgrade Stripe (`downgrade_to_lite/base`): faz `voidInvoice` nas invoices `open` do ciclo antigo, troca o price com `billing_cycle_anchor: "now"` (cobra o novo valor na hora) e só marca `profiles.status = 'active'` se a subscription voltar a `active`/`trialing`; senão devolve `status: "payment_required"`.
+- Price IDs de retenção no Stripe: Lite `price_1TwR9yQU15XnZ7Vv59okBz23` (R$19,90), Base `price_1TwRA2QU15XnZ7Vvt0zU4HNa` (R$9,90). Mapeados no `stripe-webhook` como `essencial/monthly` (entitlements inalterados; o tier vive em `profiles.plan_tier`).

@@ -38,6 +38,11 @@ export const DUNNING_OFFER_LADDER: OfferTemplate[] = [
   { tier: "base", sid: "HX65a53c5b0bb1dd7868146ee118c125fb" },
 ];
 
+/** SIDs válidos da escada — a cota conta só estes, nunca o template genérico. */
+const LADDER_SIDS = DUNNING_OFFER_LADDER
+  .map((t) => t.sid)
+  .filter((s): s is string => !!s);
+
 const MARKETING_WINDOW_START_BRT = 8;
 const MARKETING_WINDOW_END_BRT = 21;
 
@@ -182,13 +187,16 @@ export async function sendDunningWhatsApp(
   let attemptNumber = forceAttemptNumber ?? 1;
   if (scopeFilter && forceAttemptNumber === undefined) {
     try {
+      // Conta apenas envios da escada de ofertas. Envios antigos do template
+      // genérico não podem queimar a cota dos degraus novos.
       const { count } = await supabase
         .from("dunning_attempts")
         .select("id", { count: "exact", head: true })
         .eq("channel", "whatsapp")
         .eq("profile_user_id", profile.user_id)
         .eq(scopeFilter.col, scopeFilter.val)
-        .not("message_sid", "is", null);
+        .not("message_sid", "is", null)
+        .in("template_sid", LADDER_SIDS);
 
       const prevCount = count || 0;
       if (prevCount >= DUNNING_MAX_ATTEMPTS) {

@@ -105,17 +105,12 @@ serve(async (req) => {
     }
     logStep("Stripe key verified");
 
-    const { phone, action, reason, reason_detail, pause_days } = await req.json();
-    logStep("Request received", { phone, action, reason });
+    const { phone, token, action, reason, reason_detail, pause_days } = await req.json();
+    logStep("Request received", { phone: !!phone, token: !!token, action, reason });
 
-    if (!phone) {
-      throw new Error("Phone number is required");
+    if (!phone && !token) {
+      throw new Error("Phone number or token is required");
     }
-
-    // Clean phone number - remove all non-digits
-    let phoneClean = phone.replace(/\D/g, "");
-    
-    logStep("Phone cleaned", { phoneClean });
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2023-10-16" });
 
@@ -126,6 +121,30 @@ serve(async (req) => {
       throw new Error("SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is not set");
     }
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Identidade: telefone digitado OU token do portal (link de oferta do WhatsApp).
+    let phoneClean = (phone || "").replace(/\D/g, "");
+    if (!phoneClean && token) {
+      const { data: pt } = await supabase
+        .from("user_portal_tokens")
+        .select("user_id")
+        .eq("token", token)
+        .maybeSingle();
+      if (!pt?.user_id) {
+        return jsonResponse({ success: false, message: "Link expirado. Informe seu telefone." }, 200);
+      }
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("phone")
+        .eq("user_id", pt.user_id)
+        .maybeSingle();
+      phoneClean = String(prof?.phone || "").replace(/\D/g, "");
+      if (!phoneClean) {
+        return jsonResponse({ success: false, message: "Não encontramos seu cadastro. Informe seu telefone." }, 200);
+      }
+    }
+
+    logStep("Phone resolved", { phoneClean, viaToken: !phone && !!token });
 
     // Descobre o perfil (user_id, gateway, nome) tentando cada variação de telefone
     let profile: {
@@ -547,19 +566,67 @@ serve(async (req) => {
       }
 
       logStep(`Downgrading to ${tier}`, { subscriptionId: subscription.id });
-      await stripe.subscriptions.update(subscription.id, {
-        items: [{ id: itemId, price: newPriceId }],
-        proration_behavior: "none",
-        cancel_at_period_end: false,
-        // Se estava pausada, remove pausa
-        pause_collection: "",
-      } as any);
+      // 1) Fecha o ciclo antigo: invoices em aberto do valor cheio precisam sair
+      //    do caminho, senão o Smart Retry segue cobrando o preço antigo e o
+      //    Stripe cancela a assinatura mesmo com a oferta aceita.
+      try {
+        const openInvoices = await stripe.invoices.list({
+          subscription: subscription.id,
+          status: "open",
+          limit: 10,
+        });
+        for (const inv of openInvoices.data) {
+          if (!inv.id) continue;
+          try {
+            await stripe.invoices.voidInvoice(inv.id);
+            logStep("Voided open invoice", { invoiceId: inv.id });
+          } catch (e) {
+            logStep("WARN void invoice failed", { invoiceId: inv.id, err: (e as Error).message });
+          }
+        }
+      } catch (e) {
+        logStep("WARN listing open invoices failed", { err: (e as Error).message });
+      }
+
+      // 2) Troca o preço e reinicia o ciclo agora → Stripe emite e cobra a
+      //    fatura do novo valor imediatamente.
+      let updated: Stripe.Subscription;
+      try {
+        updated = await stripe.subscriptions.update(subscription.id, {
+          items: [{ id: itemId, price: newPriceId }],
+          proration_behavior: "none",
+          billing_cycle_anchor: "now",
+          cancel_at_period_end: false,
+          // Se estava pausada, remove pausa
+          pause_collection: "",
+        } as any);
+      } catch (e) {
+        logStep("ERRO downgrade Stripe", { err: (e as Error).message });
+        return jsonResponse({
+          success: false,
+          message: "Não consegui trocar seu plano agora. Tenta de novo em alguns minutos ou fala com o suporte.",
+        });
+      }
+
+      // 3) Só confirma se o Stripe reconheceu a assinatura como saudável.
+      const healthy = ["active", "trialing"].includes(updated.status);
+      if (!healthy) {
+        logStep("Downgrade sem confirmação de pagamento", { status: updated.status });
+        await logRetention(tier, "accepted", { stripe_status: updated.status });
+        return jsonResponse({
+          success: false,
+          status: "payment_required",
+          tier,
+          message:
+            "Ajustei o valor do seu plano, mas o cartão ainda não passou. Atualize a forma de pagamento no seu espaço pra confirmar.",
+        });
+      }
 
       // Atualiza plan_tier no perfil (não mexe em profiles.plan pra não quebrar outras integrações)
       if (profile?.user_id) {
         await supabase
           .from("profiles")
-          .update({ plan_tier: tier, status: "active" })
+          .update({ plan_tier: tier, status: "active", payment_failed_at: null })
           .eq("user_id", profile.user_id);
       }
 

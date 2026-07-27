@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -82,6 +82,7 @@ const CancelSubscription = () => {
   const [searchParams] = useSearchParams();
   // Ofertas de dunning chegam por WhatsApp como /cancelar?t=<token>&offer=<tier>.
   const offerParamRaw = searchParams.get("offer");
+  const portalToken = searchParams.get("t");
   const highlightedTier: Tier | null =
     offerParamRaw === "discount_30" || offerParamRaw === "lite" || offerParamRaw === "base"
       ? offerParamRaw
@@ -97,6 +98,7 @@ const CancelSubscription = () => {
   const [discountAvailable, setDiscountAvailable] = useState<boolean>(true);
   const [gatewayUnsupported, setGatewayUnsupported] = useState<boolean>(false);
   const [needsNewCard, setNeedsNewCard] = useState<boolean>(false);
+  const autoCheckedRef = useRef(false);
 
   const formatPhone = (value: string) => {
     const digits = value.replace(/\D/g, "");
@@ -110,9 +112,9 @@ const CancelSubscription = () => {
     setPhone(formatPhone(e.target.value));
   };
 
-  const checkSubscription = async () => {
+  const checkSubscription = async (opts?: { token?: string; skipToOffers?: boolean }) => {
     const digits = phone.replace(/\D/g, "");
-    if (digits.length < 10) {
+    if (!opts?.token && digits.length < 10) {
       toast.error("Por favor, insira um número de telefone válido");
       return;
     }
@@ -122,7 +124,9 @@ const CancelSubscription = () => {
 
     try {
       const { data, error } = await supabase.functions.invoke("cancel-subscription", {
-        body: { phone: digits, action: "check" },
+        body: opts?.token
+          ? { token: opts.token, action: "check" }
+          : { phone: digits, action: "check" },
       });
 
       if (error) throw error;
@@ -136,7 +140,13 @@ const CancelSubscription = () => {
         setReasons(data.reasons || []);
         setValueRecap(data.value_recap || null);
         setDiscountAvailable(data.discount_available !== false);
-        setStatus("recap");
+        if (opts?.skipToOffers) {
+          // Veio do link de oferta no WhatsApp: mostra a oferta prometida direto.
+          setSelectedReason("expensive");
+          setStatus("offer_ladder");
+        } else {
+          setStatus("recap");
+        }
       } else if (data.success && data.status === "canceling") {
         setSubscription(data.subscription);
         setStatus("already_canceling");
@@ -156,6 +166,15 @@ const CancelSubscription = () => {
     }
   };
 
+  // Link de oferta do WhatsApp (/cancelar?t=<token>&offer=<tier>): identifica
+  // o usuário pelo token e leva direto pra oferta prometida na mensagem.
+  useEffect(() => {
+    if (autoCheckedRef.current || !portalToken) return;
+    autoCheckedRef.current = true;
+    void checkSubscription({ token: portalToken, skipToOffers: !!highlightedTier });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [portalToken, highlightedTier]);
+
   const runAction = async (
     action:
       | "pause"
@@ -172,7 +191,7 @@ const CancelSubscription = () => {
     try {
       const { data, error } = await supabase.functions.invoke("cancel-subscription", {
         body: {
-          phone: digits,
+          ...(digits.length >= 10 ? { phone: digits } : { token: portalToken }),
           action,
           reason: selectedReason || null,
           reason_detail: reasonDetail || null,
@@ -212,6 +231,7 @@ const CancelSubscription = () => {
   };
 
   const resetForm = () => {
+    autoCheckedRef.current = true; // não reabre o fluxo por token depois de reset
     setStatus("idle");
     setSubscription(null);
     setMessage("");
@@ -377,7 +397,7 @@ const CancelSubscription = () => {
                       className="text-center text-lg"
                     />
                   </div>
-                  <Button onClick={checkSubscription} className="w-full" size="lg">
+                  <Button onClick={() => checkSubscription()} className="w-full" size="lg">
                     Verificar Assinatura
                   </Button>
                 </div>
