@@ -6,7 +6,7 @@
  * - Escada de ofertas por tentativa (attemptNumber):
  *     1 → dunning_offer_30   (30% off por 3 meses)
  *     2 → dunning_offer_lite (R$ 19,90/mês)
- *     3 → dunning_offer_base (R$ 9,90/mês)  [SID pendente → cai no genérico]
+ *     3 → dunning_offer_base (R$ 9,90/mês)
  *   Cada template de oferta: {{1}} = primeiro nome,
  *   {{2}} = query string do botão (`t=<token>&offer=<tier>`),
  *   URL do botão = https://olaaura.com.br/cancelar?{{2}}
@@ -35,7 +35,7 @@ interface OfferTemplate {
 export const DUNNING_OFFER_LADDER: OfferTemplate[] = [
   { tier: "discount_30", sid: "HX50cb75b6bb3cd9ae56ef2d9c6adc4781" },
   { tier: "lite", sid: "HX18e81fa401b8487c360f085e9b83630f" },
-  { tier: "base", sid: null }, // dunning_offer_base — aguardando ContentSid
+  { tier: "base", sid: "HX65a53c5b0bb1dd7868146ee118c125fb" },
 ];
 
 const MARKETING_WINDOW_START_BRT = 8;
