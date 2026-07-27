@@ -196,6 +196,9 @@ export async function sendDunningWhatsApp(
         .eq("profile_user_id", profile.user_id)
         .eq(scopeFilter.col, scopeFilter.val)
         .not("message_sid", "is", null)
+        // Degrau que a Twilio marcou como failed/undelivered (ex.: template ainda
+        // pendente de aprovação no Meta) não queima a cota — pode ser reofertado.
+        .eq("whatsapp_sent", true)
         .in("template_sid", LADDER_SIDS);
 
       const prevCount = count || 0;
@@ -270,7 +273,8 @@ export async function sendDunningWhatsApp(
   };
 
   try {
-    const result = await sendRecoveryTemplate(profile.phone, contentSid, variables);
+    const statusCallback = `${Deno.env.get("SUPABASE_URL")}/functions/v1/webhook-twilio-recovery`;
+    const result = await sendRecoveryTemplate(profile.phone, contentSid, variables, statusCallback);
     if (result.success) {
       await supabase.from("dunning_attempts").insert({
         ...baseRecord,
