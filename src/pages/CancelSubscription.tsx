@@ -65,6 +65,7 @@ type Status =
   | "success"
   | "already_canceling"
   | "already_paused"
+  | "reactivation"
   | "error";
 
 type Tier = "pause" | "discount_30" | "lite" | "base";
@@ -98,6 +99,7 @@ const CancelSubscription = () => {
   const [discountAvailable, setDiscountAvailable] = useState<boolean>(true);
   const [gatewayUnsupported, setGatewayUnsupported] = useState<boolean>(false);
   const [needsNewCard, setNeedsNewCard] = useState<boolean>(false);
+  const [reactivating, setReactivating] = useState<boolean>(false);
   const autoCheckedRef = useRef(false);
 
   const formatPhone = (value: string) => {
@@ -125,8 +127,8 @@ const CancelSubscription = () => {
     try {
       const { data, error } = await supabase.functions.invoke("cancel-subscription", {
         body: opts?.token
-          ? { token: opts.token, action: "check" }
-          : { phone: digits, action: "check" },
+          ? { token: opts.token, action: "check", offer: highlightedTier }
+          : { phone: digits, action: "check", offer: highlightedTier },
       });
 
       if (error) throw error;
@@ -155,6 +157,11 @@ const CancelSubscription = () => {
         setSubscription(data.subscription);
         setStatus("already_paused");
         setMessage(data.message);
+      } else if (data.status === "no_gateway_subscription") {
+        // Assinatura não está mais ativa no gateway, mas a oferta prometida
+        // no WhatsApp continua valendo: vira fluxo de reativação.
+        setStatus("reactivation");
+        setMessage(data.message || "");
       } else {
         setStatus("error");
         setMessage(data.message || "Nenhuma assinatura encontrada");
@@ -231,6 +238,7 @@ const CancelSubscription = () => {
   };
 
   const resetForm = () => {
+    setReactivating(false);
     autoCheckedRef.current = true; // não reabre o fluxo por token depois de reset
     setStatus("idle");
     setSubscription(null);
@@ -242,6 +250,49 @@ const CancelSubscription = () => {
     setDiscountAvailable(true);
     setGatewayUnsupported(false);
     setNeedsNewCard(false);
+  };
+
+  // Reativação: cria o checkout no preço da oferta prometida no WhatsApp.
+  const runReactivation = async () => {
+    if (!highlightedTier) return;
+    setReactivating(true);
+    try {
+      const digits = phone.replace(/\D/g, "");
+      const { data, error } = await supabase.functions.invoke("cancel-subscription", {
+        body: {
+          ...(digits.length >= 10 ? { phone: digits } : { token: portalToken }),
+          action: "reactivate",
+          offer: highlightedTier,
+        },
+      });
+      if (error) throw error;
+      if (data?.success && data.url) {
+        window.location.href = data.url;
+        return;
+      }
+      toast.error(data?.message || "Não consegui abrir sua reativação agora.");
+    } catch (err) {
+      console.error("Error reactivating:", err);
+      toast.error("Algo deu errado. Tente novamente em instantes.");
+    } finally {
+      setReactivating(false);
+    }
+  };
+
+  const OFFER_LABELS: Record<Tier, { title: string; description: string }> = {
+    pause: { title: "Pausar por um tempo", description: "Sem cobrança durante a pausa." },
+    discount_30: {
+      title: "30% de desconto por 3 meses",
+      description: "Volta pro seu plano com um respiro no valor. Depois o preço normaliza.",
+    },
+    lite: {
+      title: "Plano Lite — R$ 19,90/mês",
+      description: "1 sessão por mês e seu histórico inteiro preservado.",
+    },
+    base: {
+      title: "Plano Base — R$ 9,90/mês",
+      description: "30 mensagens por mês com a Aura, sem perder sua memória e seu percurso.",
+    },
   };
 
   const baseOfferList: Tier[] = selectedReason
@@ -376,6 +427,7 @@ const CancelSubscription = () => {
                 {status === "success" && "Prontinho"}
                 {status === "already_canceling" && "Cancelamento já solicitado"}
                 {status === "already_paused" && "Assinatura pausada"}
+                {status === "reactivation" && "Sua oferta continua de pé"}
                 {status === "error" && "Ops!"}
               </CardDescription>
             </CardHeader>
@@ -592,12 +644,54 @@ const CancelSubscription = () => {
               )}
 
               {/* Error */}
+              {status === "reactivation" && highlightedTier && (
+                <div className="space-y-6">
+                  <p className="text-sm text-muted-foreground text-center">
+                    Sua assinatura não está mais ativa — mas a oferta que te mandamos no
+                    WhatsApp vale pra voltar agora, com todo o seu histórico intacto.
+                  </p>
+                  <div className="rounded-lg border border-primary/30 bg-primary/10 p-4 space-y-3">
+                    <div className="flex items-start gap-3">
+                      <Sparkles className="w-5 h-5 text-primary mt-0.5" />
+                      <div>
+                        <p className="font-medium text-foreground">
+                          {OFFER_LABELS[highlightedTier].title}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {OFFER_LABELS[highlightedTier].description}
+                        </p>
+                      </div>
+                    </div>
+                    <Button className="w-full" onClick={runReactivation} disabled={reactivating}>
+                      {reactivating ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Abrindo...
+                        </>
+                      ) : (
+                        "Reativar com essa oferta"
+                      )}
+                    </Button>
+                  </div>
+                  <a
+                    href="https://wa.me/16625255005?text=Oi%2C%20preciso%20de%20ajuda%20com%20minha%20assinatura"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block"
+                  >
+                    <Button variant="outline" className="w-full">
+                      <MessageCircle className="w-4 h-4 mr-2" />
+                      Prefiro falar com o suporte
+                    </Button>
+                  </a>
+                </div>
+              )}
               {status === "error" && (
                 <div className="space-y-6">
                   <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 text-center">
                     <p className="text-destructive">{message}</p>
                   </div>
-                  {gatewayUnsupported && (
+                  {(gatewayUnsupported || !!portalToken) && (
                     <a
                       href="https://wa.me/16625255005?text=Oi%2C%20preciso%20de%20ajuda%20com%20minha%20assinatura"
                       target="_blank"

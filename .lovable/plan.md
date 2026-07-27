@@ -1,44 +1,38 @@
-## O que verifiquei (dados reais, não suposição)
+## Diagnóstico confirmado
 
-- **Preços Stripe existem e estão ativos em produção**: `price_1TwR9yQU15XnZ7Vv59okBz23` (R$ 19,90/mês) e `price_1TwRA2QU15XnZ7Vvt0zU4HNa` (R$ 9,90/mês), ambos `active: true`, `livemode: true`, recorrentes mensais.
-- **Asaas (cartão e PIX)** não usa "plano" cadastrado: `cancel-subscription` cria uma `/subscriptions` nova com `value` 19.90 / 9.90 e deleta a antiga. Cartão reusa `creditCardToken`; PIX gera novo QR no `nextDueDate`. Ambos os caminhos existem e estão implementados.
-- **Roteamento por gateway** em `cancel-subscription` está correto (Asaas por `asaas_customer_id` + último `payment_method`, senão Stripe).
-- **Colunas de auditoria existem**: `profiles.plan_tier`, `cancellation_feedback.save_tier/gateway`, tabela `retention_events`.
-- **Nada disso rodou de verdade ainda**: `cancellation_feedback` com `save_tier in (lite, base, discount_30)` = **0 linhas**; `retention_events` = 3 linhas (testes). Em `dunning_attempts`, os 43 envios com `message_sid` usaram **só o template genérico** `HXaf4af1e1f5d4cf40b6fff6b5b68df29a` — nenhum SID de oferta saiu ainda.
+**1. Lite e Base não chegaram** — não é bug de backend. Os 3 disparos saíram com `sent=true`, mas na Twilio:
 
-## Os 4 furos reais encontrados
+| Oferta | Status | Erro |
+|---|---|---|
+| 30% off | delivered | — |
+| Lite R$19,90 | failed | `63013` |
+| Base R$9,90 | undelivered | `63016` |
 
-**1. O link da oferta não leva à oferta (crítico de conversão)**
-`/cancelar?t=<token>&offer=lite` — a página `CancelSubscription.tsx` lê o `offer`, mas **ignora o `t=`**. O usuário que clica no botão do WhatsApp cai numa tela pedindo o telefone, depois vê o recap, depois escolhe um motivo, e só então vê o card destacado. São 3 passos antes da oferta prometida na mensagem.
+Exatamente o esperado para templates ainda pendentes de aprovação no Meta. Assim que aprovarem, os envios funcionam sem mudança de código.
 
-**2. Downgrade no Stripe deixa a fatura vencida em aberto (crítico de receita)**
-Em `downgrade_to_lite/base` o código faz `subscriptions.update` com `proration_behavior: "none"` e marca `profiles.status = 'active'`, mas **não paga nem cancela a invoice `open` do ciclo que falhou**. A assinatura continua `past_due`, os Smart Retries seguem tentando o valor cheio antigo e, no fim da escada, o Stripe cancela a assinatura — mesmo o cliente tendo aceitado a oferta. O perfil fica "active" no banco, dessincronizado do Stripe.
+**2. O link com erro não tem relação com o plano Direção.** O `cancel-subscription` resolve o token, acha o perfil, e depois procura assinatura **no gateway**: Stripe `active` → Stripe `past_due` → Asaas. Seu e-mail não tem nenhuma delas (o `active`/`direcao` existe só no banco), então retorna `{"success": false, "message": "Nenhuma assinatura ativa encontrada"}` e a tela cai no estado de erro. Confirmei chamando a edge direto com seu token.
 
-**3. Tentativas antigas queimam a cota da escada nova**
-`sendDunningWhatsApp` conta todos os envios com `message_sid` por subscription e corta em `DUNNING_MAX_ATTEMPTS = 3`. Como já existem 43 envios do template genérico, os inadimplentes atuais entram direto em `limit_reached` e **nunca receberão nenhum degrau de oferta**.
-
-**4. `plan_tier` é escrito e nunca lido**
-Nenhum lugar do código lê `profiles.plan_tier`. O downgrade grava o tier, mas nenhum limite (áudio, sessões) muda e o portal não mostra o plano Lite/Base. Além disso, os price IDs de retenção não estão em `RECURRING_PRICES` no `stripe-webhook`, então `customer.subscription.updated` loga `Unknown priceId` e deixa `profiles.plan` com o plano antigo.
+Para um inadimplente real o fluxo funciona (ele tem subscription em `past_due`/`OVERDUE`). Mas há dois buracos reais que valem fechar.
 
 ## O que fazer
 
-**A. Link direto para a oferta (frontend + edge)**
-- `CancelSubscription.tsx`: ler `t=<token>`; havendo token, chamar `cancel-subscription` com `{ token, action: "check" }` e pular direto para `offer_ladder` com o tier do `offer` no topo, sem pedir telefone nem motivo.
-- `cancel-subscription`: aceitar `token` como fonte de identidade (resolver `user_portal_tokens` → `profiles.phone`) em todas as ações, mantendo o fluxo por telefone intacto.
+### 1. Blindar a aterrissagem da oferta
+`supabase/functions/cancel-subscription/index.ts` + `src/pages/CancelSubscription.tsx`:
+- Quando a entrada é por **token de dunning com `offer=`** e não há assinatura no gateway, parar de devolver erro genérico. Devolver `status: "no_gateway_subscription"` e, no front, mostrar a oferta prometida como **reativação**: card do tier oferecido com CTA para o checkout no preço da oferta (Lite R$19,90 / Base R$9,90 / mensal com 30% off), preservando o token.
+- Cobrir também `canceling`/`paused`/Asaas `OVERDUE` nesse caminho por token, para ninguém receber a mensagem e bater em parede.
+- Erro cru só quando o token for inválido/expirado, aí com CTA pro WhatsApp de suporte.
 
-**B. Fechar o ciclo financeiro no Stripe**
-No `downgrade_to_lite/base`, após trocar o price: buscar as invoices `open` da subscription e cobrar imediatamente o novo valor (`invoices.voidInvoice` da antiga + `subscriptions.update` com `billing_cycle_anchor: "now"` e `proration_behavior: "none"`), confirmando que a subscription volta a `active`. Só marcar `profiles.status = 'active'` se o Stripe confirmar; caso contrário, devolver mensagem de falha honesta em vez de "ajustado".
+### 2. Registrar falha de entrega (hoje é cega)
+`supabase/functions/_shared/dunning-whatsapp.ts` + `webhook-twilio-recovery`:
+- A Twilio aceita o POST (`queued`) e só depois marca `failed`/`undelivered` — por isso o log gravou "enviado" para mensagens que nunca chegaram. Passar a gravar o `error_code` no `dunning_attempts` via callback de status e marcar `whatsapp_sent = false` quando o status final for `failed`/`undelivered`.
+- Tratar `63013 / 63016 / 63005` como **degrau não entregue**: não queimar a cota do ciclo, para o usuário não perder o degrau por causa de template pendente.
 
-**C. Cota separada para a escada de ofertas**
-Contar tentativas apenas sobre envios cujo `template_sid` está em `DUNNING_OFFER_LADDER`, ignorando o histórico do template genérico. Assim os inadimplentes atuais começam do degrau 1.
+Sem fallback para template genérico — se o degrau não entregar, ele simplesmente não conta e é reofertado depois.
 
-**D. Coerência de plano pós-downgrade**
-- Adicionar os dois price IDs de retenção ao mapa do `stripe-webhook` como `{ plan: 'essencial', billing_cycle: 'monthly' }` (mantém entitlements atuais, elimina o `Unknown priceId`).
-- Exibir o tier no portal (`SobreVoceTab` / `ChangePlanDialog`) para o downgrade ser perceptível.
+### 3. Reteste
+Reenfileirar os 3 disparos para o seu número, conferir status real de entrega na Twilio via `test-recovery-template` e abrir cada link para validar o destino.
 
-**E. Teste end-to-end antes de ligar**
-Rodar um caso por gateway (Stripe past_due, Asaas cartão, Asaas PIX) e conferir: `retention_events` com `accepted`+`applied`, `cancellation_feedback.save_tier`, status real no gateway e `profiles.status`.
-
-## Ponto a decidir
-
-O Lite (R$ 19,90) e o Base (R$ 9,90) devem **reduzir limites** (áudio/sessões) ou manter o plano atual por preço menor? Hoje o código mantém tudo. Se quiser reduzir, é preciso ler `plan_tier` na lógica de orçamento — me diz e incluo.
+## Detalhes técnicos
+- Arquivos: `supabase/functions/cancel-subscription/index.ts`, `supabase/functions/_shared/dunning-whatsapp.ts`, `supabase/functions/webhook-twilio-recovery/index.ts`, `src/pages/CancelSubscription.tsx`.
+- Sem migração: `dunning_attempts` já tem `error_stage`/`error_message`/`message_sid` para casar o callback.
+- Nada muda nos ContentSids — eles passam a funcionar sozinhos quando o Meta aprovar.
