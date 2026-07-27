@@ -416,6 +416,8 @@ serve(async (req) => {
         );
       }
 
+      if (offeredTier) return jsonResponse(reactivationPayload());
+
       return new Response(
         JSON.stringify({ 
           success: false, 
