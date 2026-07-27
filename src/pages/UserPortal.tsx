@@ -299,6 +299,7 @@ const UserPortal = () => {
 
 function PortalError({ message }: { message: string }) {
   return (
+  return (
     <div className="min-h-screen bg-background flex flex-col">
       <div className="py-4 px-6 flex justify-center border-b border-border/50">
         <img src={logoOlaAura} alt="Olá AURA" className="h-14 w-auto" />
