@@ -32,6 +32,10 @@ const RECURRING_PRICES: Record<string, { plan: string; billing_cycle: string }> 
   "price_1TZyoIQU15XnZ7VvCMjzuaZr": { plan: "transformacao", billing_cycle: "quarterly" },
   "price_1TZyoJQU15XnZ7Vv3FqH75Nb": { plan: "transformacao", billing_cycle: "semiannual" },
   "price_1TZyoKQU15XnZ7VvJzJNnub7": { plan: "transformacao", billing_cycle: "yearly" },
+  // Planos de retenção (downgrade assistido em /cancelar). Mantêm os
+  // entitlements do Essencial mensal; o tier fica em profiles.plan_tier.
+  "price_1TwR9yQU15XnZ7Vv59okBz23": { plan: "essencial", billing_cycle: "monthly" }, // Lite R$19,90
+  "price_1TwRA2QU15XnZ7Vvt0zU4HNa": { plan: "essencial", billing_cycle: "monthly" }, // Base R$9,90
 };
 
 function detectPlanCycleFromPrice(priceId: string | null | undefined): { plan: string; billing_cycle: string } | null {
