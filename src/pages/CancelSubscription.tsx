@@ -386,7 +386,7 @@ const CancelSubscription = () => {
                       className="text-center text-lg"
                     />
                   </div>
-                  <Button onClick={checkSubscription} className="w-full" size="lg">
+                  <Button onClick={() => checkSubscription()} className="w-full" size="lg">
                     Verificar Assinatura
                   </Button>
                 </div>
