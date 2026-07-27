@@ -1,0 +1,1 @@
+ALTER TABLE public.dunning_attempts ALTER COLUMN customer_id DROP NOT NULL;

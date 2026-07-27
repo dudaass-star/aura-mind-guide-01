@@ -718,7 +718,7 @@ export type Database = {
           attempt_number: number | null
           channel: string | null
           created_at: string
-          customer_id: string
+          customer_id: string | null
           days_past_due: number | null
           error_message: string | null
           error_stage: string | null
@@ -744,7 +744,7 @@ export type Database = {
           attempt_number?: number | null
           channel?: string | null
           created_at?: string
-          customer_id: string
+          customer_id?: string | null
           days_past_due?: number | null
           error_message?: string | null
           error_stage?: string | null
@@ -770,7 +770,7 @@ export type Database = {
           attempt_number?: number | null
           channel?: string | null
           created_at?: string
-          customer_id?: string
+          customer_id?: string | null
           days_past_due?: number | null
           error_message?: string | null
           error_stage?: string | null
