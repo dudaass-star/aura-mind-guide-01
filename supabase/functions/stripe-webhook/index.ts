@@ -38,6 +38,13 @@ const RECURRING_PRICES: Record<string, { plan: string; billing_cycle: string }> 
   "price_1TwRA2QU15XnZ7Vvt0zU4HNa": { plan: "essencial", billing_cycle: "monthly" }, // Base R$9,90
 };
 
+// Preço → tier de retenção (profiles.plan_tier). Qualquer outro preço = null,
+// ou seja: voltar a um plano cheio limpa o tier e devolve os entitlements.
+const RETENTION_TIER_BY_PRICE: Record<string, string> = {
+  "price_1TwR9yQU15XnZ7Vv59okBz23": "lite",
+  "price_1TwRA2QU15XnZ7Vvt0zU4HNa": "base",
+};
+
 function detectPlanCycleFromPrice(priceId: string | null | undefined): { plan: string; billing_cycle: string } | null {
   if (!priceId) return null;
   // Mensal: lookup via env
