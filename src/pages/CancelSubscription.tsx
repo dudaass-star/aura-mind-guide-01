@@ -501,7 +501,9 @@ const CancelSubscription = () => {
               {status === "offer_ladder" && (
                 <div className="space-y-4">
                   <p className="text-sm text-muted-foreground text-center">
-                    Algumas opções antes de cancelar:
+                    {highlightedTier
+                      ? "Sua condição especial está reservada aqui:"
+                      : "Algumas opções antes de cancelar:"}
                   </p>
                   {offerList.map(renderOfferCard)}
                   <div className="pt-2 border-t border-border/50 space-y-2">
