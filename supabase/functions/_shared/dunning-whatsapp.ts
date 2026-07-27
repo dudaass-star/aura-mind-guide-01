@@ -38,6 +38,11 @@ export const DUNNING_OFFER_LADDER: OfferTemplate[] = [
   { tier: "base", sid: "HX65a53c5b0bb1dd7868146ee118c125fb" },
 ];
 
+/** SIDs válidos da escada — a cota conta só estes, nunca o template genérico. */
+const LADDER_SIDS = DUNNING_OFFER_LADDER
+  .map((t) => t.sid)
+  .filter((s): s is string => !!s);
+
 const MARKETING_WINDOW_START_BRT = 8;
 const MARKETING_WINDOW_END_BRT = 21;
 
