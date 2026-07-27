@@ -297,8 +297,64 @@ const UserPortal = () => {
   );
 };
 
-function PortalError({ message }: { message: string }) {
+const BASE_TIER_MESSAGE_LIMIT = 30;
+
+function PlanTierBanner({
+  profile,
+  onChangePlan,
+}: {
+  profile: any;
+  onChangePlan: () => void;
+}) {
+  const tier = (profile?.plan_tier || "").toString().toLowerCase();
+  if (tier !== "lite" && tier !== "base") return null;
+
+  const monthKey = new Date().toISOString().slice(0, 7);
+  const used =
+    profile?.messages_reset_month === monthKey
+      ? profile?.messages_used_this_month ?? 0
+      : 0;
+  const pct = Math.min(100, Math.round((used / BASE_TIER_MESSAGE_LIMIT) * 100));
+
   return (
+    <div className="mb-5 rounded-2xl border border-[#B8A5D9]/40 bg-white/70 p-4 animate-fade-in">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[10px] uppercase tracking-[0.18em] text-[#87A878] font-bold font-['Nunito']">
+          Plano {tier === "lite" ? "Lite" : "Base"}
+        </p>
+        <button
+          onClick={onChangePlan}
+          className="text-xs font-bold font-['Nunito'] text-[#1B2A4E] underline underline-offset-2 hover:text-[#87A878] transition-colors"
+        >
+          Voltar ao Essencial
+        </button>
+      </div>
+
+      {tier === "base" ? (
+        <div className="mt-3">
+          <p className="text-sm text-[#2A2A2A] font-['Nunito']">
+            {used} de {BASE_TIER_MESSAGE_LIMIT} mensagens usadas neste mês
+          </p>
+          <div className="mt-2 h-2 w-full rounded-full bg-[#1B2A4E]/10 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-[#1B2A4E] transition-all"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          <p className="mt-2 text-xs text-[#2A2A2A]/60 font-['Nunito']">
+            Sem áudios e sem sessões agendadas neste plano. A cota reinicia no dia 1º.
+          </p>
+        </div>
+      ) : (
+        <p className="mt-2 text-xs text-[#2A2A2A]/70 font-['Nunito']">
+          1 sessão por mês e até 15 minutos de áudio. Conversas por texto seguem sem limite.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function PortalError({ message }: { message: string }) {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <div className="py-4 px-6 flex justify-center border-b border-border/50">
