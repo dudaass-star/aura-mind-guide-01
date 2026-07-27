@@ -8066,6 +8066,14 @@ Só DEPOIS de saber a situação, explore as emoções com profundidade.`;
       console.log('🪞 audio_mirror_enabled: forçando áudio porque usuário mandou áudio');
     }
 
+    // Tier base (R$ 9,90) não tem áudio em nenhuma hipótese — sobrepõe até decisões mandatórias.
+    if (isBaseTier && audioDecision.shouldUseAudio) {
+      audioDecision.shouldUseAudio = false;
+      audioDecision.mandatory = false;
+      audioDecision.reason = 'tier_base_no_audio';
+      console.log('🔇 [BASE-TIER] Áudio bloqueado pelo tier de retenção');
+    }
+
     const allowAudioThisTurn = audioDecision.shouldUseAudio;
     const forceAudioForSessionStart = audioDecision.reason === 'session_opening';
     const forceAudioForSessionClose = audioDecision.reason === 'session_closing';
