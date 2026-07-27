@@ -2,6 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { cleanPhoneNumber } from "../_shared/zapi-client.ts";
 import { sendMessage, sendAudio, sendProactive } from "../_shared/whatsapp-provider.ts";
 import { getInstanceConfigForUser } from "../_shared/instance-helper.ts";
+import { sendDunningWhatsApp } from "../_shared/dunning-whatsapp.ts";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Reescreve um texto de lembrete que foi gravado N dias atrás para a data de
