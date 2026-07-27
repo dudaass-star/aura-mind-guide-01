@@ -252,8 +252,50 @@ const CancelSubscription = () => {
     setNeedsNewCard(false);
   };
 
-  const baseOfferList: Tier[] = selectedReason
+  // Reativação: cria o checkout no preço da oferta prometida no WhatsApp.
+  const runReactivation = async () => {
+    if (!highlightedTier) return;
+    setReactivating(true);
+    try {
+      const digits = phone.replace(/\D/g, "");
+      const { data, error } = await supabase.functions.invoke("cancel-subscription", {
+        body: {
+          ...(digits.length >= 10 ? { phone: digits } : { token: portalToken }),
+          action: "reactivate",
+          offer: highlightedTier,
+        },
+      });
+      if (error) throw error;
+      if (data?.success && data.url) {
+        window.location.href = data.url;
+        return;
+      }
+      toast.error(data?.message || "Não consegui abrir sua reativação agora.");
+    } catch (err) {
+      console.error("Error reactivating:", err);
+      toast.error("Algo deu errado. Tente novamente em instantes.");
+    } finally {
+      setReactivating(false);
+    }
+  };
 
+  const OFFER_LABELS: Record<Tier, { title: string; description: string }> = {
+    pause: { title: "Pausar por um tempo", description: "Sem cobrança durante a pausa." },
+    discount_30: {
+      title: "30% de desconto por 3 meses",
+      description: "Volta pro seu plano com um respiro no valor. Depois o preço normaliza.",
+    },
+    lite: {
+      title: "Plano Lite — R$ 19,90/mês",
+      description: "1 sessão por mês e seu histórico inteiro preservado.",
+    },
+    base: {
+      title: "Plano Base — R$ 9,90/mês",
+      description: "30 mensagens por mês com a Aura, sem perder sua memória e seu percurso.",
+    },
+  };
+
+  const baseOfferList: Tier[] = selectedReason
     ? OFFERS_BY_REASON[selectedReason] || OFFERS_BY_REASON.other
     : [];
   // A oferta que veio no link entra sempre em primeiro lugar.
