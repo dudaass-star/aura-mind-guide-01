@@ -98,6 +98,7 @@ const CancelSubscription = () => {
   const [discountAvailable, setDiscountAvailable] = useState<boolean>(true);
   const [gatewayUnsupported, setGatewayUnsupported] = useState<boolean>(false);
   const [needsNewCard, setNeedsNewCard] = useState<boolean>(false);
+  const autoCheckedRef = useRef(false);
 
   const formatPhone = (value: string) => {
     const digits = value.replace(/\D/g, "");
