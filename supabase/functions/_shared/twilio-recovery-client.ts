@@ -65,6 +65,7 @@ async function postOnce(
   to: string,
   contentSid: string,
   contentVariables: Record<string, string>,
+  statusCallback?: string,
 ): Promise<TwilioRecoverySendResult> {
   const { sid, token, from } = getCreds();
   const url = `https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`;
@@ -77,6 +78,9 @@ async function postOnce(
     ContentSid: contentSid,
     ContentVariables: JSON.stringify(contentVariables),
   });
+  // StatusCallback: sem ele o status final (failed/undelivered) nunca chega e
+  // o log fica cego — a Twilio só devolve `queued` na resposta do POST.
+  if (statusCallback) body.set("StatusCallback", statusCallback);
 
   try {
     const resp = await fetch(url, {
@@ -150,8 +154,9 @@ export async function sendRecoveryTemplate(
   phone: string,
   contentSid: string,
   contentVariables: Record<string, string>,
+  statusCallback?: string,
 ): Promise<TwilioRecoverySendResult> {
-  const first = await postOnce(phone, contentSid, contentVariables);
+  const first = await postOnce(phone, contentSid, contentVariables, statusCallback);
   if (first.success) return first;
 
   if (isTransient(first.error, first.status)) {
@@ -159,7 +164,7 @@ export async function sendRecoveryTemplate(
       `⚠️ [TwilioRecovery] Erro transitório (${first.status}): ${first.error}. Retry em 2s...`,
     );
     await new Promise(r => setTimeout(r, 2000));
-    const retry = await postOnce(phone, contentSid, contentVariables);
+    const retry = await postOnce(phone, contentSid, contentVariables, statusCallback);
     if (retry.success) {
       console.log(`✅ [TwilioRecovery] Retry OK → ${retry.messageSid}`);
     } else {
