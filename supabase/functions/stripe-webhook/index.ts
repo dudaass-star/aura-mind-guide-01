@@ -1430,24 +1430,27 @@ Me conta: como você está hoje?`;
         const item = subscription.items?.data?.[0];
         const priceId = item?.price?.id ?? null;
         const detected = detectPlanCycleFromPrice(priceId);
+        const detectedTier = priceId ? (RETENTION_TIER_BY_PRICE[priceId] ?? null) : null;
         if (detected && ['active', 'trialing', 'past_due'].includes(subscription.status)) {
           const customerId = subscription.customer as string;
           const customer = await stripe.customers.retrieve(customerId);
           if (!customer.deleted) {
             const { profile } = await resolveProfileFromCustomer(supabase, customer as Stripe.Customer);
-            if (profile && (profile.plan !== detected.plan || profile.billing_cycle !== detected.billing_cycle)) {
+            const tierChanged = profile && ((profile.plan_tier ?? null) !== detectedTier);
+            if (profile && (profile.plan !== detected.plan || profile.billing_cycle !== detected.billing_cycle || tierChanged)) {
               const { error: planSyncErr } = await supabase
                 .from('profiles')
                 .update({
                   plan: detected.plan,
                   billing_cycle: detected.billing_cycle,
+                  plan_tier: detectedTier,
                   updated_at: new Date().toISOString(),
                 })
                 .eq('id', profile.id);
               if (planSyncErr) {
                 console.error('❌ Plan/cycle sync failed:', planSyncErr.message);
               } else {
-                console.log(`🔁 Plan/cycle synced: ${profile.phone} → ${detected.plan}/${detected.billing_cycle}`);
+                console.log(`🔁 Plan/cycle synced: ${profile.phone} → ${detected.plan}/${detected.billing_cycle} tier=${detectedTier ?? 'none'}`);
               }
             }
           }
