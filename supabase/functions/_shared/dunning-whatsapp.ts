@@ -187,13 +187,16 @@ export async function sendDunningWhatsApp(
   let attemptNumber = forceAttemptNumber ?? 1;
   if (scopeFilter && forceAttemptNumber === undefined) {
     try {
+      // Conta apenas envios da escada de ofertas. Envios antigos do template
+      // genérico não podem queimar a cota dos degraus novos.
       const { count } = await supabase
         .from("dunning_attempts")
         .select("id", { count: "exact", head: true })
         .eq("channel", "whatsapp")
         .eq("profile_user_id", profile.user_id)
         .eq(scopeFilter.col, scopeFilter.val)
-        .not("message_sid", "is", null);
+        .not("message_sid", "is", null)
+        .in("template_sid", LADDER_SIDS);
 
       const prevCount = count || 0;
       if (prevCount >= DUNNING_MAX_ATTEMPTS) {
