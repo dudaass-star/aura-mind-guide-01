@@ -1,38 +1,44 @@
-## Diagnóstico confirmado
+## Diagnóstico
 
-**1. Lite e Base não chegaram** — não é bug de backend. Os 3 disparos saíram com `sent=true`, mas na Twilio:
+O erro que você está vendo é real, mas não deveria aparecer assim para você.
 
-| Oferta | Status | Erro |
-|---|---|---|
-| 30% off | delivered | — |
-| Lite R$19,90 | failed | `63013` |
-| Base R$9,90 | undelivered | `63016` |
+- Seu perfil está ativo no banco: `active / direcao`.
+- A tela de cancelamento/dunning consulta o gateway de pagamento para achar uma assinatura ativa ou inadimplente.
+- No seu caso de teste, ela não encontra assinatura ativa no gateway e cai em erro genérico ou em estado de reativação.
+- Portanto, não é “correto” mostrar erro só porque você está em dia. O correto seria mostrar uma mensagem contextual: você já está ativo, então a oferta de dunning não precisa ser aplicada.
 
-Exatamente o esperado para templates ainda pendentes de aprovação no Meta. Assim que aprovarem, os envios funcionam sem mudança de código.
+## Plano de correção
 
-**2. O link com erro não tem relação com o plano Direção.** O `cancel-subscription` resolve o token, acha o perfil, e depois procura assinatura **no gateway**: Stripe `active` → Stripe `past_due` → Asaas. Seu e-mail não tem nenhuma delas (o `active`/`direcao` existe só no banco), então retorna `{"success": false, "message": "Nenhuma assinatura ativa encontrada"}` e a tela cai no estado de erro. Confirmei chamando a edge direto com seu token.
+### 1. Backend: criar status explícito para usuário já ativo
+No `cancel-subscription`, quando a função encontrar o perfil e ele estiver saudável no banco (`status = active`, sem `payment_failed_at` recente crítico), mas não encontrar assinatura no gateway:
 
-Para um inadimplente real o fluxo funciona (ele tem subscription em `past_due`/`OVERDUE`). Mas há dois buracos reais que valem fechar.
+- Se o link veio de dunning/oferta, retornar algo como:
+  - `success: true`
+  - `status: "already_active"`
+  - `message: "Sua assinatura já está ativa. Essa oferta era para reativação e não precisa ser aplicada agora."`
+  - dados mínimos do perfil/plano
+- Não retornar `no_gateway_subscription` nesse caso.
+- Manter `no_gateway_subscription` para usuários realmente inativos/cancelados/inadimplentes sem assinatura encontrada, pois aí a reativação por checkout faz sentido.
 
-## O que fazer
+### 2. Frontend: mostrar tela amigável para `already_active`
+No `CancelSubscription.tsx`:
 
-### 1. Blindar a aterrissagem da oferta
-`supabase/functions/cancel-subscription/index.ts` + `src/pages/CancelSubscription.tsx`:
-- Quando a entrada é por **token de dunning com `offer=`** e não há assinatura no gateway, parar de devolver erro genérico. Devolver `status: "no_gateway_subscription"` e, no front, mostrar a oferta prometida como **reativação**: card do tier oferecido com CTA para o checkout no preço da oferta (Lite R$19,90 / Base R$9,90 / mensal com 30% off), preservando o token.
-- Cobrir também `canceling`/`paused`/Asaas `OVERDUE` nesse caminho por token, para ninguém receber a mensagem e bater em parede.
-- Erro cru só quando o token for inválido/expirado, aí com CTA pro WhatsApp de suporte.
+- Adicionar tratamento para `status === "already_active"`.
+- Mostrar um card positivo, não vermelho, dizendo que a assinatura já está ativa.
+- Oferecer CTA para voltar ao portal/meu espaço ou falar com suporte.
+- Não mostrar CTA de reativação nem “Tentar novamente”.
 
-### 2. Registrar falha de entrega (hoje é cega)
-`supabase/functions/_shared/dunning-whatsapp.ts` + `webhook-twilio-recovery`:
-- A Twilio aceita o POST (`queued`) e só depois marca `failed`/`undelivered` — por isso o log gravou "enviado" para mensagens que nunca chegaram. Passar a gravar o `error_code` no `dunning_attempts` via callback de status e marcar `whatsapp_sent = false` quando o status final for `failed`/`undelivered`.
-- Tratar `63013 / 63016 / 63005` como **degrau não entregue**: não queimar a cota do ciclo, para o usuário não perder o degrau por causa de template pendente.
+### 3. Preservar fluxo real de dunning
+Para clientes reais em dunning:
 
-Sem fallback para template genérico — se o degrau não entregar, ele simplesmente não conta e é reofertado depois.
+- `past_due` continua abrindo recuperação.
+- `canceling`/`paused` continuam com suas mensagens específicas.
+- `no_gateway_subscription` continua existindo para casos de reativação real quando o perfil não está ativo.
+- As ofertas Lite/Base/30% continuam funcionando quando fizerem sentido.
 
-### 3. Reteste
-Reenfileirar os 3 disparos para o seu número, conferir status real de entrega na Twilio via `test-recovery-template` e abrir cada link para validar o destino.
+### 4. Reteste
+Depois da alteração:
 
-## Detalhes técnicos
-- Arquivos: `supabase/functions/cancel-subscription/index.ts`, `supabase/functions/_shared/dunning-whatsapp.ts`, `supabase/functions/webhook-twilio-recovery/index.ts`, `src/pages/CancelSubscription.tsx`.
-- Sem migração: `dunning_attempts` já tem `error_stage`/`error_message`/`message_sid` para casar o callback.
-- Nada muda nos ContentSids — eles passam a funcionar sozinhos quando o Meta aprovar.
+- Testar seu número com o link de oferta.
+- Confirmar que aparece “assinatura já ativa” em vez de erro.
+- Testar um payload simulado sem gateway e com perfil não ativo para garantir que a reativação ainda aparece.

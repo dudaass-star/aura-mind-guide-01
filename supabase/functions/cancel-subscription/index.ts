@@ -155,12 +155,14 @@ serve(async (req) => {
       asaas_customer_id?: string | null;
       plan?: string | null;
       billing_cycle?: string | null;
+      status?: string | null;
+      payment_failed_at?: string | null;
     } | null = null;
     {
       const variants = getPhoneVariations(phoneClean);
       const { data } = await supabase
         .from("profiles")
-        .select("user_id, name, email, card_gateway, asaas_customer_id, plan, billing_cycle")
+        .select("user_id, name, email, card_gateway, asaas_customer_id, plan, billing_cycle, status, payment_failed_at")
         .in("phone", variants)
         .limit(1);
       if (data && data.length > 0) profile = data[0] as any;
@@ -179,6 +181,29 @@ serve(async (req) => {
       offer: offeredTier,
       profile: { name: profile?.name ?? null, plan: profile?.plan ?? null },
       message: "Sua assinatura não está mais ativa — mas a oferta continua de pé.",
+    });
+
+    const hasRecentPaymentFailure = (paymentFailedAt?: string | null): boolean => {
+      if (!paymentFailedAt) return false;
+      const failedAtMs = new Date(paymentFailedAt).getTime();
+      if (Number.isNaN(failedAtMs)) return false;
+      const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+      return Date.now() - failedAtMs <= thirtyDaysMs;
+    };
+
+    const isActiveProfileWithoutFreshFailure = () =>
+      profile?.status === "active" && !hasRecentPaymentFailure(profile.payment_failed_at);
+
+    const alreadyActivePayload = () => ({
+      success: true,
+      status: "already_active",
+      offer: offeredTier,
+      profile: { name: profile?.name ?? null, plan: profile?.plan ?? null },
+      subscription: {
+        plan: profile?.plan || "Assinatura AURA",
+        gateway: profile?.card_gateway ?? null,
+      },
+      message: "Sua assinatura já está ativa. Essa oferta era para reativação e não precisa ser aplicada agora.",
     });
 
     // Ação: gerar checkout de reativação no preço da oferta.
@@ -311,7 +336,10 @@ serve(async (req) => {
 
     if (!customer) {
       // Oferta prometida por link: nunca cair em erro genérico.
-      if (offeredTier) return jsonResponse(reactivationPayload());
+      if (offeredTier) {
+        if (isActiveProfileWithoutFreshFailure()) return jsonResponse(alreadyActivePayload());
+        return jsonResponse(reactivationPayload());
+      }
       // Cliente não é Stripe: retorna sinal para o frontend redirecionar ao suporte
       // para todas as ações da escada. Mantém compatibilidade quando action=check.
       if (action && action !== "check") {
@@ -416,7 +444,10 @@ serve(async (req) => {
         );
       }
 
-      if (offeredTier) return jsonResponse(reactivationPayload());
+      if (offeredTier) {
+        if (isActiveProfileWithoutFreshFailure()) return jsonResponse(alreadyActivePayload());
+        return jsonResponse(reactivationPayload());
+      }
 
       return new Response(
         JSON.stringify({ 
@@ -503,6 +534,10 @@ serve(async (req) => {
 
     // If action is "check", just return subscription info
     if (action === "check") {
+      if (offeredTier && activeSubscriptions.data.length > 0) {
+        return jsonResponse(alreadyActivePayload());
+      }
+
       logStep("Returning subscription info for check");
       const valueRecap = await buildValueRecap();
       const discountUsedRecently = await hasRecentDiscount();
