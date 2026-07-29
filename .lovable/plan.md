@@ -1,44 +1,38 @@
-## Diagnóstico
+## Situação verificada (dados reais)
 
-O erro que você está vendo é real, mas não deveria aparecer assim para você.
+Cliente: **Jenoelma Barboza — elmaricardorosa@gmail.com** (o e-mail do ticket, `elmaricardo.rosa@gmail.com`, tem um ponto a mais; o cadastro real é sem o ponto).
 
-- Seu perfil está ativo no banco: `active / direcao`.
-- A tela de cancelamento/dunning consulta o gateway de pagamento para achar uma assinatura ativa ou inadimplente.
-- No seu caso de teste, ela não encontra assinatura ativa no gateway e cai em erro genérico ou em estado de reativação.
-- Portanto, não é “correto” mostrar erro só porque você está em dia. O correto seria mostrar uma mensagem contextual: você já está ativo, então a oferta de dunning não precisa ser aplicada.
+Ela fez **3 checkouts no mesmo dia 03/04/2026**, dos quais **2 foram concluídos** — e isso gerou **dois clientes distintos na Stripe, cada um com sua própria assinatura**:
 
-## Plano de correção
+| Customer | Assinatura | Status | Observação |
+|---|---|---|---|
+| `cus_UGh5Hrbj1eeR38` | `sub_1TI9lw...` | **cancelada** (16/04/2026, "cancellation_requested") | é esta que ela cancelou |
+| `cus_UGflbMcLkR7wM8` | `sub_1TI8R1...` | **ATIVA**, R$ 29,90/mês | nunca foi cancelada — continua cobrando |
 
-### 1. Backend: criar status explícito para usuário já ativo
-No `cancel-subscription`, quando a função encontrar o perfil e ele estiver saudável no banco (`status = active`, sem `payment_failed_at` recente crítico), mas não encontrar assinatura no gateway:
+Cobranças confirmadas na assinatura ativa (Visa •9486), todas sem reembolso: **10/07/2026 R$ 29,90**, **06/06/2026 R$ 29,90** e as anteriores do mesmo ciclo mensal desde abril.
 
-- Se o link veio de dunning/oferta, retornar algo como:
-  - `success: true`
-  - `status: "already_active"`
-  - `message: "Sua assinatura já está ativa. Essa oferta era para reativação e não precisa ser aplicada agora."`
-  - dados mínimos do perfil/plano
-- Não retornar `no_gateway_subscription` nesse caso.
-- Manter `no_gateway_subscription` para usuários realmente inativos/cancelados/inadimplentes sem assinatura encontrada, pois aí a reativação por checkout faz sentido.
+Não existe perfil dela em `profiles` (o cadastro foi removido/limpo), então nem o portal nem o fluxo de cancelamento enxergavam a segunda assinatura. Existe ticket aberto: "Cobrança", categoria `reembolso`, 28/07/2026, `pending_review`.
 
-### 2. Frontend: mostrar tela amigável para `already_active`
-No `CancelSubscription.tsx`:
+**Conclusão: a reclamação procede.** Ela cancelou uma assinatura e a segunda, duplicada, seguiu cobrando.
 
-- Adicionar tratamento para `status === "already_active"`.
-- Mostrar um card positivo, não vermelho, dizendo que a assinatura já está ativa.
-- Oferecer CTA para voltar ao portal/meu espaço ou falar com suporte.
-- Não mostrar CTA de reativação nem “Tentar novamente”.
+## Resolução do caso
 
-### 3. Preservar fluxo real de dunning
-Para clientes reais em dunning:
+1. Cancelar imediatamente `sub_1TI8R1QU15XnZ7VvdI1j3ZID` (sem prorata, sem fatura final).
+2. Levantar a lista exata de charges pagos dessa assinatura e reembolsar integralmente todos os ciclos posteriores ao cancelamento da primeira (16/04/2026) — pelos dados já lidos, no mínimo os de maio, junho e 10/07.
+3. Responder o ticket `6454c0d4` explicando o ocorrido (cobrança duplicada por dois checkouts no mesmo dia), confirmando cancelamento + reembolsos e o prazo de estorno no cartão, e fechar o ticket.
 
-- `past_due` continua abrindo recuperação.
-- `canceling`/`paused` continuam com suas mensagens específicas.
-- `no_gateway_subscription` continua existindo para casos de reativação real quando o perfil não está ativo.
-- As ofertas Lite/Base/30% continuam funcionando quando fizerem sentido.
+## Prevenção (raiz do problema)
 
-### 4. Reteste
-Depois da alteração:
+O `create-checkout` permite criar um segundo customer/subscription para o mesmo e-mail/telefone quando o usuário refaz o checkout minutos depois. Proposta:
 
-- Testar seu número com o link de oferta.
-- Confirmar que aparece “assinatura já ativa” em vez de erro.
-- Testar um payload simulado sem gateway e com perfil não ativo para garantir que a reativação ainda aparece.
+- Em `supabase/functions/create-checkout/index.ts`: antes de criar a sessão, buscar customer por e-mail **e** por telefone e, se já existir subscription `active`/`trialing`, não abrir novo checkout — redirecionar para o portal/mensagem "você já tem assinatura ativa".
+- No `stripe-webhook`, ao ativar um checkout: se o mesmo e-mail/telefone já tiver outra subscription ativa em customer diferente, cancelar automaticamente a mais recente duplicada e registrar log.
+- Rodar uma varredura única (reaproveitando o padrão de `audit-stripe-duplicates`) para achar outros clientes com duas subscriptions ativas no mesmo e-mail/telefone e tratar antes que virem ticket.
+
+## Detalhes técnicos
+
+- Cancelamento e refunds via Stripe API (`DeleteSubscriptionsSubscription`, `PostRefunds`), com `human_confirmation` quando exigido.
+- Reembolso registrado como `duplicate` no motivo do refund, para separar de churn real nas métricas.
+- Nenhuma migração de banco necessária.
+
+Confirme se quer que eu **cancele + reembolse todos os ciclos desde 16/04** (recomendado) ou apenas os últimos N meses.
