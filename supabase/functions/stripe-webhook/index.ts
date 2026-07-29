@@ -318,8 +318,10 @@ Deno.serve(async (req) => {
           }
           try {
             await supabase.from('failed_message_log').insert({
-              reason: 'duplicate_stripe_subscription',
-              details: { email: dupEmail, phone: dupPhoneRaw, kept: keep.id, canceled: drop.map((s) => s.id) },
+              function_name: 'stripe-webhook',
+              phone: dupPhoneRaw || null,
+              content: `duplicate_stripe_subscription | email=${dupEmail || '-'} | kept=${keep.id} | canceled=${drop.map((s) => s.id).join(',')}`,
+              error: 'duplicate_stripe_subscription',
             });
           } catch (_) { /* auditoria best-effort */ }
         }
