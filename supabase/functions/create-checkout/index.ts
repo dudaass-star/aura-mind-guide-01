@@ -200,34 +200,33 @@ serve(async (req) => {
       }
     }
 
-    if (existingCustomer) {
-      customerId = existingCustomer.id;
-      logStep("Found existing customer", { customerId });
+    // === ANTI-DUPLICAÇÃO (roda SEMPRE, mesmo sem existingCustomer) ===
+    // Caso real (Jenoelma, 03/04/2026): dois checkouts no mesmo dia criaram dois
+    // customers com duas subscriptions ativas. A checagem só rodava quando o
+    // customer era encontrado pelo `customers.search` — API com indexação
+    // eventual, que pode não retornar um customer criado minutos antes.
+    // `customers.list({ email })` é consistente e fecha essa brecha.
+    try {
+      const customersToCheck = new Map<string, true>();
+      if (existingCustomer) customersToCheck.set(existingCustomer.id, true);
 
-      // === ANTI-DUPLICAÇÃO: bloquear se já existe assinatura ativa ===
-      // Verifica TODOS os customers que batem por phone OU email (não só o primeiro)
-      // para evitar caso de customers duplicados com sub ativa em qualquer um deles.
-      try {
-        const customersToCheck = new Map<string, true>();
-        customersToCheck.set(customerId, true);
+      // Buscar TODOS por email (pode haver mais de um customer com mesmo email)
+      if (email) {
+        const allByEmail = await stripe.customers.list({ email, limit: 10 });
+        for (const c of allByEmail.data) customersToCheck.set(c.id, true);
+      }
+      // Buscar TODOS por variações de telefone
+      for (const phoneVar of phoneVariations) {
+        const allByPhone = await stripe.customers.search({
+          query: `metadata['phone']:'${phoneVar}'`,
+          limit: 10,
+        });
+        for (const c of allByPhone.data) customersToCheck.set(c.id, true);
+      }
 
-        // Buscar TODOS por email (pode haver mais de um customer com mesmo email)
-        if (email) {
-          const allByEmail = await stripe.customers.list({ email, limit: 10 });
-          for (const c of allByEmail.data) customersToCheck.set(c.id, true);
-        }
-        // Buscar TODOS por variações de telefone
-        for (const phoneVar of phoneVariations) {
-          const allByPhone = await stripe.customers.search({
-            query: `metadata['phone']:'${phoneVar}'`,
-            limit: 10,
-          });
-          for (const c of allByPhone.data) customersToCheck.set(c.id, true);
-        }
+      logStep("Anti-dup: checking active subscriptions", { customerCount: customersToCheck.size });
 
-        logStep("Anti-dup: checking active subscriptions", { customerCount: customersToCheck.size });
-
-        for (const cid of customersToCheck.keys()) {
+      for (const cid of customersToCheck.keys()) {
           const subs = await stripe.subscriptions.list({
             customer: cid,
             status: 'active',
@@ -253,15 +252,18 @@ serve(async (req) => {
               status: 409,
             });
           }
-        }
-        logStep("✅ Anti-dup: no active subscription, OK to proceed");
-      } catch (dupErr) {
-        // Não-bloqueante: se a checagem falhar, prosseguir (não queremos quebrar o checkout por isso)
-        const msg = dupErr instanceof Error ? dupErr.message : String(dupErr);
-        if (msg.includes("ACTIVE_SUBSCRIPTION_EXISTS")) throw dupErr;
-        console.warn("⚠️ Anti-dup check failed (non-blocking):", msg);
       }
+      logStep("✅ Anti-dup: no active subscription, OK to proceed");
+    } catch (dupErr) {
+      // Não-bloqueante: se a checagem falhar, prosseguir (não queremos quebrar o checkout por isso)
+      const msg = dupErr instanceof Error ? dupErr.message : String(dupErr);
+      if (msg.includes("ACTIVE_SUBSCRIPTION_EXISTS")) throw dupErr;
+      console.warn("⚠️ Anti-dup check failed (non-blocking):", msg);
+    }
 
+    if (existingCustomer) {
+      customerId = existingCustomer.id;
+      logStep("Found existing customer", { customerId });
       await stripe.customers.update(customerId, {
         email: email,
         name: name,
