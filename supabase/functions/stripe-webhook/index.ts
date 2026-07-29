@@ -267,6 +267,66 @@ Deno.serve(async (req) => {
         console.warn('⚠️ Failed to update checkout_session status (non-blocking):', csErr);
       }
 
+      // ========== REDE DE SEGURANÇA ANTI-DUPLICAÇÃO ==========
+      // Se o mesmo cliente (email ou telefone) terminar com mais de uma assinatura
+      // ativa/trialing — inclusive em customers diferentes — cancelamos as antigas
+      // e mantemos só a mais recente. Caso real: dois checkouts no mesmo dia
+      // geraram duas cobranças mensais paralelas por meses.
+      try {
+        const dupEmail = session.metadata?.email || session.customer_details?.email || undefined;
+        const dupPhoneRaw = (session.metadata?.phone || '').replace(/\D/g, '');
+        const dupCustomers = new Map<string, true>();
+        if (session.customer) dupCustomers.set(session.customer as string, true);
+        if (dupEmail) {
+          const byEmail = await stripe.customers.list({ email: dupEmail, limit: 10 });
+          for (const c of byEmail.data) dupCustomers.set(c.id, true);
+        }
+        if (dupPhoneRaw) {
+          for (const variation of new Set([dupPhoneRaw, dupPhoneRaw.replace(/^55/, ''), `55${dupPhoneRaw}`])) {
+            const byPhone = await stripe.customers.search({
+              query: `metadata['phone']:'${variation}'`,
+              limit: 10,
+            });
+            for (const c of byPhone.data) dupCustomers.set(c.id, true);
+          }
+        }
+
+        const liveSubs: Stripe.Subscription[] = [];
+        for (const cid of dupCustomers.keys()) {
+          for (const st of ['active', 'trialing'] as const) {
+            const list = await stripe.subscriptions.list({ customer: cid, status: st, limit: 10 });
+            liveSubs.push(...list.data);
+          }
+        }
+
+        if (liveSubs.length > 1) {
+          liveSubs.sort((a, b) => b.created - a.created);
+          const keep = liveSubs[0];
+          const drop = liveSubs.slice(1);
+          console.error('🚨 Duplicate active subscriptions detected', {
+            email: dupEmail,
+            keep: keep.id,
+            cancel: drop.map((s) => s.id),
+          });
+          for (const s of drop) {
+            try {
+              await stripe.subscriptions.cancel(s.id, { invoice_now: false, prorate: false });
+              console.log('🧹 Duplicate subscription canceled:', s.id);
+            } catch (cancelErr) {
+              console.error('❌ Failed to cancel duplicate subscription', s.id, cancelErr);
+            }
+          }
+          try {
+            await supabase.from('failed_message_log').insert({
+              reason: 'duplicate_stripe_subscription',
+              details: { email: dupEmail, phone: dupPhoneRaw, kept: keep.id, canceled: drop.map((s) => s.id) },
+            });
+          } catch (_) { /* auditoria best-effort */ }
+        }
+      } catch (dupErr) {
+        console.warn('⚠️ Duplicate-subscription safety net failed (non-blocking):', dupErr);
+      }
+
       // ========== TRIAL VALIDATION LEGADO (R$ X charge — fluxo antigo, mantido para compat) ==========
       if (session.metadata?.trial_validation === 'true' && session.mode === 'payment') {
         console.log('🔐 Trial validation flow detected');
