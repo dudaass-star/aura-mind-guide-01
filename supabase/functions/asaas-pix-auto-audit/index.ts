@@ -247,6 +247,10 @@ Deno.serve(async (req) => {
           (p.raw_payload as any)?.dueDate ||
           (p.raw_payload as any)?.payment?.dueDate ||
           String(p.created_at || "").slice(0, 10);
+        const alertedAt = auth.autodebit_alert_sent_at
+          ? new Date(auth.autodebit_alert_sent_at).getTime()
+          : 0;
+        const isNew = !alertedAt || Date.now() - alertedAt >= ALERT_COOLDOWN_MS;
         report.autodebit_failures.push({
           customer: auth.customer_email,
           plan: auth.plan,
@@ -254,10 +258,17 @@ Deno.serve(async (req) => {
           vencimento: String(dueDate).slice(0, 10),
           status: p.status,
           motivo: "cobrança venceu sem débito automático",
+          novo: isNew,
         });
+        if (isNew) report.autodebit_new_alerts++;
       }
 
-      if (duePayments.length > 0) {
+      // Só reescreve o marcador quando o caso volta a ser "novo" — assim o
+      // silêncio de 7 dias funciona de fato e o alerta para de repetir todo dia.
+      const cooledDown =
+        !auth.autodebit_alert_sent_at ||
+        Date.now() - new Date(auth.autodebit_alert_sent_at).getTime() >= ALERT_COOLDOWN_MS;
+      if (duePayments.length > 0 && cooledDown) {
         await supabase
           .from("asaas_pix_authorizations")
           .update({ autodebit_alert_sent_at: new Date().toISOString() })
@@ -269,13 +280,30 @@ Deno.serve(async (req) => {
     // Vai pela infra de e-mail do projeto (send-transactional-email); a Resend
     // direta recusa o remetente porque o domínio raiz não é verificado lá.
     const alertEmail = Deno.env.get("ADMIN_ALERT_EMAIL");
-    const needsAlert = report.autodebit_failures.length > 0 || report.lost_authorizations > 0;
+    // Só e-mail quando há novidade: caso novo de débito, perda detectada ou
+    // status corrigido pela reconciliação. Caso antigo em aberto entra só como
+    // contexto na lista, sem gerar alerta diário.
+    const needsAlert =
+      report.autodebit_new_alerts > 0 ||
+      report.lost_authorizations > 0 ||
+      report.qr_expired_swept > 0;
 
     if (needsAlert && alertEmail) {
-      const lines = report.autodebit_failures.map(
-        (f) =>
-          `${f.customer || "?"} · ${PLAN_LABELS[String(f.plan)] || f.plan || "?"} · venc. ${f.vencimento || "-"} · ${f.status || "-"} · ${f.motivo}`,
-      );
+      const fmt = (f: Record<string, unknown>) =>
+        `${f.novo ? "NOVO" : "em aberto"} · ${f.customer || "?"} · ${PLAN_LABELS[String(f.plan)] || f.plan || "?"} · venc. ${f.vencimento || "-"} · ${f.status || "-"} · ${f.motivo}`;
+      const lines = [
+        ...report.autodebit_failures.filter((f) => f.novo).map(fmt),
+        ...report.autodebit_failures.filter((f) => !f.novo).map(fmt),
+      ];
+      if (report.qr_expired_swept > 0) {
+        lines.push(`${report.qr_expired_swept} QR Code(s) venceram sem autorização (varredura)`);
+      }
+      if (report.status_changed.length > 0) {
+        lines.push(
+          `Reconciliação corrigiu ${report.status_changed.length} status: ` +
+            report.status_changed.map((s) => `${s.de}→${s.para}`).join(", "),
+        );
+      }
       try {
         const { error } = await supabase.functions.invoke("send-transactional-email", {
           body: {
@@ -285,7 +313,7 @@ Deno.serve(async (req) => {
             templateData: {
               date: report.date,
               lostAuthorizations: report.lost_authorizations,
-              recoveryEmailsSent: report.recovery_emails_sent,
+              recoveryEmailsSent: report.recovery_emails_sent + report.recovery_second_touch_sent,
               lines,
             },
           },
