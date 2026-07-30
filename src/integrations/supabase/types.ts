@@ -148,6 +148,7 @@ export type Database = {
           asaas_authorization_id: string
           asaas_customer_id: string
           asaas_subscription_id: string | null
+          autodebit_alert_sent_at: string | null
           billing_period: string
           cancellation_reason: string | null
           cancelled_at: string | null
@@ -168,6 +169,7 @@ export type Database = {
           qr_expires_at: string | null
           qr_payload: string | null
           raw_payload: Json | null
+          recovery_email_sent_at: string | null
           start_date: string
           status: string
           updated_at: string
@@ -179,6 +181,7 @@ export type Database = {
           asaas_authorization_id: string
           asaas_customer_id: string
           asaas_subscription_id?: string | null
+          autodebit_alert_sent_at?: string | null
           billing_period: string
           cancellation_reason?: string | null
           cancelled_at?: string | null
@@ -199,6 +202,7 @@ export type Database = {
           qr_expires_at?: string | null
           qr_payload?: string | null
           raw_payload?: Json | null
+          recovery_email_sent_at?: string | null
           start_date: string
           status?: string
           updated_at?: string
@@ -210,6 +214,7 @@ export type Database = {
           asaas_authorization_id?: string
           asaas_customer_id?: string
           asaas_subscription_id?: string | null
+          autodebit_alert_sent_at?: string | null
           billing_period?: string
           cancellation_reason?: string | null
           cancelled_at?: string | null
@@ -230,6 +235,7 @@ export type Database = {
           qr_expires_at?: string | null
           qr_payload?: string | null
           raw_payload?: Json | null
+          recovery_email_sent_at?: string | null
           start_date?: string
           status?: string
           updated_at?: string
