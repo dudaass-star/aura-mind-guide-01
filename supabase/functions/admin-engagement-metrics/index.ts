@@ -1930,6 +1930,8 @@ Deno.serve(async (req) => {
       checkoutCompletedTotalInPeriod: completedTotalInPeriodSet.size,
       asaasCheckoutCreatedAllTime,
       asaasCheckoutConfirmedAllTime,
+      // 🔁 PIX Automático (Bacen)
+      pixAuto,
       checkoutCreatedTotalAllTime: createdTotalAllTimeSet.size,
       checkoutCompletedTotalAllTime: completedTotalAllTimeSet.size,
       // Billing
