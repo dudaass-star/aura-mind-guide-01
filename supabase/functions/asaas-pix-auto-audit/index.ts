@@ -164,9 +164,16 @@ Deno.serve(async (req) => {
           }),
         });
         report.admin_alert_sent = resp.ok;
+        if (!resp.ok) {
+          console.warn("[pix-auto-audit] Resend recusou o alerta:", resp.status, await resp.text());
+        }
       } catch (e) {
         console.warn("[pix-auto-audit] alerta admin falhou:", (e as Error).message);
       }
+    } else if (needsAlert) {
+      console.warn(
+        `[pix-auto-audit] alerta não enviado — RESEND_API_KEY=${resendApiKey ? "ok" : "ausente"}, ADMIN_ALERT_EMAIL=${alertEmail ? "ok" : "ausente"}`,
+      );
     }
 
     console.log("[pix-auto-audit] relatório:", JSON.stringify(report));
