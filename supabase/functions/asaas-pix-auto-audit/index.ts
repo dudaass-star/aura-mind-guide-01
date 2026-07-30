@@ -82,6 +82,7 @@ Deno.serve(async (req) => {
     reconciled: 0,
     status_changed: [] as Array<Record<string, unknown>>,
     qr_expired_swept: 0,
+    twin_invoices_cancelled: 0,
     lost_authorizations: 0,
     recovery_emails_sent: 0,
     recovery_second_touch_sent: 0,
