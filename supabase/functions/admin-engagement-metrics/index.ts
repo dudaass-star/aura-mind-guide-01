@@ -1439,8 +1439,9 @@ Deno.serve(async (req) => {
       // a 1ª linha gravada em asaas_payments daquela subscription.
       const { data: authsBeforePeriod } = await supabase
         .from('asaas_pix_authorizations')
-        .select('asaas_subscription_id, asaas_customer_id, created_at')
+        .select('asaas_subscription_id, asaas_customer_id, created_at, status')
         .lt('created_at', periodStart)
+        .eq('status', 'ACTIVE')
         .limit(5000);
       const recurringSubsBefore = new Set<string>();
       const recurringCustomersBefore = new Set<string>();
