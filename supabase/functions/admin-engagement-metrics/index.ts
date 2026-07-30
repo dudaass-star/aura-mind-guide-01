@@ -1434,15 +1434,36 @@ Deno.serve(async (req) => {
         if (k) paidBeforeKeys.add(k);
       }
 
-      // Renovação no recorte do período: regra base + payload cru + histórico pago.
+      // Autorizações PIX Automático Bacen criadas ANTES do período: qualquer
+      // cobrança do ciclo delas dentro do período é renovação, mesmo que seja
+      // a 1ª linha gravada em asaas_payments daquela subscription.
+      const { data: authsBeforePeriod } = await supabase
+        .from('asaas_pix_authorizations')
+        .select('asaas_subscription_id, asaas_customer_id, created_at')
+        .lt('created_at', periodStart)
+        .limit(5000);
+      const recurringSubsBefore = new Set<string>();
+      const recurringCustomersBefore = new Set<string>();
+      for (const a of authsBeforePeriod || []) {
+        const sub = a.asaas_subscription_id as string | null;
+        const cus = a.asaas_customer_id as string | null;
+        if (sub) recurringSubsBefore.add(sub);
+        if (cus) recurringCustomersBefore.add(cus);
+      }
+
+      // Renovação no recorte do período: regra base + payload cru + histórico pago
+      // + autorização recorrente anterior ao período.
       const isRenewalInPeriod = (row: {
         id: string;
         asaas_subscription_id: string | null;
         customer_email?: string | null;
         customer_phone?: string | null;
+        asaas_customer_id?: string | null;
       }): boolean => {
         const effectiveSub = row.asaas_subscription_id || rawSubById.get(row.id) || null;
         if (isRenewal({ id: row.id, asaas_subscription_id: effectiveSub })) return true;
+        if (effectiveSub && recurringSubsBefore.has(effectiveSub)) return true;
+        if (row.asaas_customer_id && recurringCustomersBefore.has(row.asaas_customer_id)) return true;
         // Linha órfã com subscription no payload cru: não é primeiro pagamento
         // rastreável — trata como renovação se a identidade já pagou antes.
         const k = identityKey(row.customer_email ?? null, row.customer_phone ?? null);
@@ -1452,7 +1473,7 @@ Deno.serve(async (req) => {
 
       const { data: asaasCreatedInPeriod } = await supabase
         .from('asaas_payments')
-        .select('id, customer_email, customer_phone, asaas_subscription_id')
+        .select('id, customer_email, customer_phone, asaas_subscription_id, asaas_customer_id')
         .gte('created_at', periodStart)
         .lt('created_at', periodEnd)
         .not('customer_email', 'ilike', E2E_EMAIL_PATTERN);
@@ -1464,6 +1485,7 @@ Deno.serve(async (req) => {
           asaas_subscription_id: p.asaas_subscription_id as string | null,
           customer_email: p.customer_email as string | null,
           customer_phone: p.customer_phone as string | null,
+          asaas_customer_id: p.asaas_customer_id as string | null,
         })) continue;
         const em = (p.customer_email as string | null) || `__nokey_${p.id}`;
         pixCreatedEmails.add(em);
@@ -1475,7 +1497,7 @@ Deno.serve(async (req) => {
       // Confirmados: conta por paid_at (dinheiro entrou no período, mesmo se PIX criado antes)
       const { data: asaasConfirmedInPeriod } = await supabase
         .from('asaas_payments')
-        .select('id, customer_email, customer_phone, paid_at, status, asaas_subscription_id')
+        .select('id, customer_email, customer_phone, paid_at, status, asaas_subscription_id, asaas_customer_id')
         .in('status', PAID_STATUSES)
         .gte('paid_at', periodStart)
         .lt('paid_at', periodEnd)
@@ -1488,6 +1510,7 @@ Deno.serve(async (req) => {
           asaas_subscription_id: p.asaas_subscription_id as string | null,
           customer_email: p.customer_email as string | null,
           customer_phone: p.customer_phone as string | null,
+          asaas_customer_id: p.asaas_customer_id as string | null,
         })) continue;
         const em = (p.customer_email as string | null) || `__nokey_${p.id}`;
         pixConfirmedEmails.add(em);
