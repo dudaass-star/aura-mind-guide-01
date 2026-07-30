@@ -270,9 +270,26 @@ Deno.serve(async (req) => {
       // de débito automático (era isso que gerava alarme falso).
       const { data: paidRows } = await supabase
         .from("asaas_payments")
-        .select("asaas_payment_id, amount_cents, payment_method, raw_payload")
+        .select("asaas_payment_id, amount_cents, payment_method, raw_payload, paid_at, created_at")
         .eq("asaas_customer_id", auth.asaas_customer_id || "__none__")
         .in("status", ["RECEIVED", "CONFIRMED"]);
+
+      // Cobrança paga reconciliada (QR imediato/avulsa) não traz dueDate: usamos a
+      // data de pagamento. E o pagamento pode cair 1 dia depois do vencimento da
+      // gêmea (fuso/virada de dia), então a comparação é com tolerância de 1 dia.
+      const paidDayOf = (t: Record<string, unknown>) =>
+        String(
+          (t.raw_payload as any)?.dueDate ||
+            (t.raw_payload as any)?.paymentDate ||
+            (t as any).paid_at ||
+            (t as any).created_at ||
+            "",
+        ).slice(0, 10);
+      const withinOneDay = (a: string, b: string) => {
+        if (!a || !b) return false;
+        const diff = Math.abs(new Date(`${a}T00:00:00Z`).getTime() - new Date(`${b}T00:00:00Z`).getTime());
+        return diff <= 24 * 60 * 60 * 1000;
+      };
 
       const duePayments: typeof dueCandidates = [];
       for (const p of dueCandidates) {
@@ -281,7 +298,7 @@ Deno.serve(async (req) => {
             t.payment_method === "PIX_AUTOMATIC" &&
             t.amount_cents === p.amount_cents &&
             t.asaas_payment_id !== p.asaas_payment_id &&
-            dueOf(t) === dueOf(p),
+            withinOneDay(paidDayOf(t), dueOf(p)),
         );
         if (!twin) {
           duePayments.push(p);
