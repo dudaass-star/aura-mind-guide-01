@@ -220,6 +220,11 @@ const CheckoutV2 = () => {
   // O consentimento é a etapa que mais perdemos: o cliente paga/escaneia mas não
   // marca a autorização de cobrança automática no app do banco.
   const [authState, setAuthState] = useState<"pending" | "active" | "expired" | null>(null);
+  // Autorização retomada de uma visita anterior (cliente fechou o modal do QR e
+  // autorizou no banco depois). Guardamos o id no navegador por 24h.
+  const [resumedAuthId, setResumedAuthId] = useState<string | null>(null);
+  const [resumedState, setResumedState] = useState<"pending" | "active" | "expired" | null>(null);
+  const [resumedPlan, setResumedPlan] = useState<string | null>(null);
 
   // ViewContent + GA4 begin_checkout no mount
   useEffect(() => {
@@ -601,34 +606,110 @@ const CheckoutV2 = () => {
     }
   };
 
-  // Polling do consentimento enquanto o modal do QR está aberto (PIX Automático).
-  // Para assim que virar active/expired — sem loop infinito.
+  // ---- Retomada da autorização PIX Automático ----
+  // O consentimento acontece no app do banco, fora da nossa tela. Se o cliente
+  // fecha o modal e autoriza depois, sem isso ele nunca vê a confirmação.
+  const PIX_AUTH_LS_KEY = "aura_pix_auth_v1";
+  const PIX_AUTH_TTL_MS = 24 * 60 * 60 * 1000;
+
+  // Guarda o id da autorização recém-criada.
   useEffect(() => {
     const authId = pixData?.authorizationId;
-    if (!pixOpen || pixStage !== "qr" || !authId || authState !== "pending") return;
+    if (!authId) return;
+    try {
+      localStorage.setItem(
+        PIX_AUTH_LS_KEY,
+        JSON.stringify({ id: authId, plan: selectedPlan, ts: Date.now() }),
+      );
+    } catch {
+      // navegador sem storage: retomada simplesmente não acontece
+    }
+  }, [pixData?.authorizationId, selectedPlan]);
+
+  // Na montagem: se houver autorização recente, consulta o estado uma vez.
+  useEffect(() => {
     let cancelled = false;
+    (async () => {
+      let saved: { id?: string; plan?: string; ts?: number } | null = null;
+      try {
+        saved = JSON.parse(localStorage.getItem(PIX_AUTH_LS_KEY) || "null");
+      } catch {
+        saved = null;
+      }
+      if (!saved?.id || !saved.ts || Date.now() - saved.ts > PIX_AUTH_TTL_MS) {
+        if (saved?.id) {
+          try { localStorage.removeItem(PIX_AUTH_LS_KEY); } catch { /* noop */ }
+        }
+        return;
+      }
+      try {
+        const { data } = await supabase.functions.invoke("asaas-pix-auto-status", {
+          body: { authorizationId: saved.id },
+        });
+        if (cancelled || !data?.state) return;
+        setResumedPlan(data.plan || saved.plan || null);
+        setResumedState(data.state);
+        if (data.state === "pending") {
+          setResumedAuthId(saved.id);
+        } else {
+          try { localStorage.removeItem(PIX_AUTH_LS_KEY); } catch { /* noop */ }
+        }
+      } catch {
+        // silencioso
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Polling do consentimento: vale tanto para o QR na tela quanto para a
+  // autorização retomada. 4s nos 2 primeiros minutos, 10s depois, teto de 20 min.
+  useEffect(() => {
+    const liveAuthId =
+      pixOpen && pixStage === "qr" && authState === "pending" ? pixData?.authorizationId : null;
+    const authId = liveAuthId || resumedAuthId;
+    if (!authId) return;
+
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const startedAt = Date.now();
+
+    const finish = (state: "active" | "expired") => {
+      if (liveAuthId) setAuthState(state);
+      setResumedState(state);
+      setResumedAuthId(null);
+      try { localStorage.removeItem(PIX_AUTH_LS_KEY); } catch { /* noop */ }
+      if (state === "active") {
+        toast.success("Cobrança automática autorizada! Sua assinatura está ativa.");
+      }
+    };
+
     const tick = async () => {
+      const elapsed = Date.now() - startedAt;
+      if (cancelled || elapsed > 20 * 60 * 1000) return;
       try {
         const { data } = await supabase.functions.invoke("asaas-pix-auto-status", {
           body: { authorizationId: authId },
         });
-        if (cancelled || !data?.state) return;
-        if (data.state === "active") {
-          setAuthState("active");
-          toast.success("Cobrança automática autorizada! Sua assinatura está ativa.");
-        } else if (data.state === "expired") {
-          setAuthState("expired");
+        if (cancelled) return;
+        if (data?.state === "active" || data?.state === "expired") {
+          finish(data.state);
+          return;
         }
       } catch {
         // silencioso: polling não deve gerar ruído pro cliente
       }
+      if (!cancelled) timer = setTimeout(tick, elapsed < 2 * 60 * 1000 ? 4000 : 10000);
     };
-    const id = setInterval(tick, 6000);
+
+    timer = setTimeout(tick, 4000);
     return () => {
       cancelled = true;
-      clearInterval(id);
+      clearTimeout(timer);
     };
-  }, [pixOpen, pixStage, pixData?.authorizationId, authState]);
+  }, [pixOpen, pixStage, pixData?.authorizationId, authState, resumedAuthId]);
 
   const inputCls =
     "mt-1.5 bg-white/5 border-white/15 text-white placeholder:text-white/55 focus-visible:ring-1 focus-visible:ring-[hsl(140_18%_55%)]";
@@ -681,6 +762,49 @@ const CheckoutV2 = () => {
 
         <div className="relative container mx-auto px-4 py-8 md:py-12 pb-12">
           <div className="max-w-xl mx-auto">
+            {/* Retomada do PIX Automático: fecha o loop pra quem autorizou (ou não)
+                depois de sair da tela do QR. */}
+            {!pixOpen && resumedState && (
+              <div
+                className={`mb-6 rounded-xl border p-4 text-sm ${
+                  resumedState === "active"
+                    ? "border-[hsl(140_22%_45%)]/50 bg-[hsl(140_22%_45%)]/15 text-white"
+                    : resumedState === "expired"
+                      ? "border-amber-400/40 bg-amber-400/10 text-white"
+                      : "border-white/15 bg-white/5 text-white/85"
+                }`}
+              >
+                {resumedState === "active" && (
+                  <>
+                    <p className="font-semibold">Cobrança automática autorizada</p>
+                    <p className="mt-1 text-white/80">
+                      Sua assinatura está ativa. Pode continuar a conversa com a AURA no WhatsApp.
+                    </p>
+                  </>
+                )}
+                {resumedState === "pending" && (
+                  <>
+                    <p className="font-semibold">Falta autorizar a cobrança automática</p>
+                    <p className="mt-1 text-white/80">
+                      Você gerou um PIX
+                      {resumedPlan ? ` do plano ${plans[resumedPlan as PlanId]?.name || resumedPlan}` : ""} e ele
+                      ainda está aguardando a confirmação da recorrência no app do seu banco. Assim que
+                      autorizar, avisamos aqui.
+                    </p>
+                  </>
+                )}
+                {resumedState === "expired" && (
+                  <>
+                    <p className="font-semibold">O PIX anterior expirou</p>
+                    <p className="mt-1 text-white/80">
+                      A autorização não foi concluída no app do banco. Escolha o plano abaixo e gere um
+                      novo PIX — leva menos de um minuto.
+                    </p>
+                  </>
+                )}
+              </div>
+            )}
+
             {/* Stepper — orienta o usuário sobre o tamanho real do fluxo (só 2 passos).
                 Reduz a ansiedade de "será que tem mais etapa depois?". */}
             <div className="flex items-center justify-center gap-3 mb-6 text-xs">

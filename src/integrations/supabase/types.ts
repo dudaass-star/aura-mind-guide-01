@@ -164,11 +164,13 @@ export type Database = {
           frequency: string
           ga_client_id: string | null
           id: string
+          last_synced_at: string | null
           plan: string
           qr_encoded_image: string | null
           qr_expires_at: string | null
           qr_payload: string | null
           raw_payload: Json | null
+          recovery_email_2_sent_at: string | null
           recovery_email_sent_at: string | null
           start_date: string
           status: string
@@ -197,11 +199,13 @@ export type Database = {
           frequency: string
           ga_client_id?: string | null
           id?: string
+          last_synced_at?: string | null
           plan: string
           qr_encoded_image?: string | null
           qr_expires_at?: string | null
           qr_payload?: string | null
           raw_payload?: Json | null
+          recovery_email_2_sent_at?: string | null
           recovery_email_sent_at?: string | null
           start_date: string
           status?: string
@@ -230,11 +234,13 @@ export type Database = {
           frequency?: string
           ga_client_id?: string | null
           id?: string
+          last_synced_at?: string | null
           plan?: string
           qr_encoded_image?: string | null
           qr_expires_at?: string | null
           qr_payload?: string | null
           raw_payload?: Json | null
+          recovery_email_2_sent_at?: string | null
           recovery_email_sent_at?: string | null
           start_date?: string
           status?: string

@@ -1566,6 +1566,55 @@ Deno.serve(async (req) => {
 
     const mrrPixBRL = Math.round(asaasMrrCents / 100 * 100) / 100;
 
+    // ---------- PIX Automático (Bacen): saúde da autorização recorrente ----------
+    // A etapa que mais perdemos é o consentimento no app do banco. Aqui medimos
+    // criadas × ativadas × perdidas no período + débitos que não dispararam.
+    const pixAuto = {
+      createdInPeriod: 0,
+      activatedInPeriod: 0,
+      lostInPeriod: 0,
+      pendingNow: 0,
+      activeTotal: 0,
+      authorizationRate: 0,
+      autodebitFailures: [] as Array<Record<string, unknown>>,
+    };
+    try {
+      const { data: authRows } = await supabase
+        .from('asaas_pix_authorizations')
+        .select('id, status, plan, customer_email, created_at, activated_at, asaas_subscription_id, autodebit_alert_sent_at');
+
+      const inPeriod = (ts: string | null) =>
+        !!ts && ts >= periodStart && ts < periodEnd;
+
+      for (const a of authRows || []) {
+        const status = String(a.status || '').toUpperCase();
+        if (inPeriod(a.created_at as string | null)) pixAuto.createdInPeriod++;
+        if (inPeriod(a.activated_at as string | null)) pixAuto.activatedInPeriod++;
+        if (['REFUSED', 'EXPIRED', 'REJECTED'].includes(status) && !a.activated_at && inPeriod(a.created_at as string | null)) {
+          pixAuto.lostInPeriod++;
+        }
+        if (status === 'ACTIVE') pixAuto.activeTotal++;
+        if (!['ACTIVE', 'REFUSED', 'EXPIRED', 'REJECTED', 'CANCELLED'].includes(status)) {
+          pixAuto.pendingNow++;
+        }
+        // Débito que não disparou: autorização ativa com alerta recente da auditoria.
+        if (status === 'ACTIVE' && a.autodebit_alert_sent_at) {
+          pixAuto.autodebitFailures.push({
+            email: a.customer_email,
+            plan: a.plan,
+            alertedAt: a.autodebit_alert_sent_at,
+            hasSubscription: !!a.asaas_subscription_id,
+          });
+        }
+      }
+      pixAuto.authorizationRate = pixAuto.createdInPeriod > 0
+        ? Math.round(pixAuto.activatedInPeriod / pixAuto.createdInPeriod * 1000) / 10
+        : 0;
+      console.log(`🔁 PIX Automático: criadas=${pixAuto.createdInPeriod}, ativadas=${pixAuto.activatedInPeriod}, perdidas=${pixAuto.lostInPeriod}, taxa=${pixAuto.authorizationRate}%`);
+    } catch (e) {
+      console.warn('⚠️ Falha ao computar métricas de PIX Automático:', e);
+    }
+
     const mrrTotalCents = mrrCommittedCents + weeklyRevenueCents;
     const mrrCommittedBRL = Math.round(mrrCommittedCents / 100 * 100) / 100;
     const mrrWeeklyEquivBRL = Math.round(weeklyRevenueCents / 100 * 100) / 100;
@@ -1881,6 +1930,8 @@ Deno.serve(async (req) => {
       checkoutCompletedTotalInPeriod: completedTotalInPeriodSet.size,
       asaasCheckoutCreatedAllTime,
       asaasCheckoutConfirmedAllTime,
+      // 🔁 PIX Automático (Bacen)
+      pixAuto,
       checkoutCreatedTotalAllTime: createdTotalAllTimeSet.size,
       checkoutCompletedTotalAllTime: completedTotalAllTimeSet.size,
       // Billing
