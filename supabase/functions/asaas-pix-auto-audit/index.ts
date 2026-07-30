@@ -134,46 +134,37 @@ Deno.serve(async (req) => {
     }
 
     // ---------- Alerta admin ----------
-    const resendApiKey = Deno.env.get("RESEND_API_KEY");
+    // Vai pela infra de e-mail do projeto (send-transactional-email); a Resend
+    // direta recusa o remetente porque o domínio raiz não é verificado lá.
     const alertEmail = Deno.env.get("ADMIN_ALERT_EMAIL");
     const needsAlert = report.autodebit_failures.length > 0 || report.lost_authorizations > 0;
 
-    if (needsAlert && resendApiKey && alertEmail) {
-      const rows = report.autodebit_failures
-        .map(
-          (f) =>
-            `<tr><td style="padding:6px;border-bottom:1px solid #eee">${f.customer || "?"}</td><td style="padding:6px;border-bottom:1px solid #eee">${PLAN_LABELS[String(f.plan)] || f.plan || "?"}</td><td style="padding:6px;border-bottom:1px solid #eee">${f.vencimento || "-"}</td><td style="padding:6px;border-bottom:1px solid #eee">${f.motivo}</td></tr>`,
-        )
-        .join("");
+    if (needsAlert && alertEmail) {
+      const lines = report.autodebit_failures.map(
+        (f) =>
+          `${f.customer || "?"} · ${PLAN_LABELS[String(f.plan)] || f.plan || "?"} · venc. ${f.vencimento || "-"} · ${f.status || "-"} · ${f.motivo}`,
+      );
       try {
-        const resp = await fetch("https://api.resend.com/emails", {
-          method: "POST",
-          headers: { Authorization: `Bearer ${resendApiKey}`, "Content-Type": "application/json" },
-          body: JSON.stringify({
-            from: "Aura Monitor <alertas@olaaura.com.br>",
-            to: [alertEmail],
-            subject: `PIX Automático — ${report.autodebit_failures.length} débito(s) não disparado(s), ${report.lost_authorizations} autorização(ões) perdida(s)`,
-            html: `
-              <div style="font-family:sans-serif;max-width:680px;margin:0 auto;padding:20px">
-                <h2 style="color:#b45309">Auditoria PIX Automático — ${report.date}</h2>
-                <p><strong>${report.lost_authorizations}</strong> autorização(ões) expiraram sem consentimento nas últimas 48h
-                (${report.recovery_emails_sent} e-mail(s) de recuperação enviado(s)).</p>
-                <p><strong>${report.autodebit_failures.length}</strong> cobrança(s) de autorização ativa venceram sem débito automático:</p>
-                ${rows ? `<table style="width:100%;border-collapse:collapse;font-size:13px"><tr><th align="left" style="padding:6px">Cliente</th><th align="left" style="padding:6px">Plano</th><th align="left" style="padding:6px">Vencimento</th><th align="left" style="padding:6px">Motivo</th></tr>${rows}</table>` : "<p>Nenhuma.</p>"}
-              </div>`,
-          }),
+        const { error } = await supabase.functions.invoke("send-transactional-email", {
+          body: {
+            templateName: "admin-pix-auto-alert",
+            recipientEmail: alertEmail,
+            idempotencyKey: `pix-auto-audit-${report.date}`,
+            templateData: {
+              date: report.date,
+              lostAuthorizations: report.lost_authorizations,
+              recoveryEmailsSent: report.recovery_emails_sent,
+              lines,
+            },
+          },
         });
-        report.admin_alert_sent = resp.ok;
-        if (!resp.ok) {
-          console.warn("[pix-auto-audit] Resend recusou o alerta:", resp.status, await resp.text());
-        }
+        report.admin_alert_sent = !error;
+        if (error) console.warn("[pix-auto-audit] alerta admin falhou:", error.message);
       } catch (e) {
         console.warn("[pix-auto-audit] alerta admin falhou:", (e as Error).message);
       }
     } else if (needsAlert) {
-      console.warn(
-        `[pix-auto-audit] alerta não enviado — RESEND_API_KEY=${resendApiKey ? "ok" : "ausente"}, ADMIN_ALERT_EMAIL=${alertEmail ? "ok" : "ausente"}`,
-      );
+      console.warn("[pix-auto-audit] alerta não enviado — ADMIN_ALERT_EMAIL ausente");
     }
 
     console.log("[pix-auto-audit] relatório:", JSON.stringify(report));
