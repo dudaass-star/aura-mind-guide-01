@@ -214,7 +214,12 @@ const CheckoutV2 = () => {
     expiresAt: string | null;
     invoiceUrl: string | null;
     amount: number;
+    authorizationId?: string | null;
   } | null>(null);
+  // Estado do consentimento de PIX Automático (Bacen): pending → active | expired.
+  // O consentimento é a etapa que mais perdemos: o cliente paga/escaneia mas não
+  // marca a autorização de cobrança automática no app do banco.
+  const [authState, setAuthState] = useState<"pending" | "active" | "expired" | null>(null);
 
   // ViewContent + GA4 begin_checkout no mount
   useEffect(() => {
@@ -572,7 +577,9 @@ const CheckoutV2 = () => {
         expiresAt: data.expiresAt || null,
         invoiceUrl: data.invoiceUrl || null,
         amount: data.amount || 0,
+        authorizationId: data.authorizationId || null,
       });
+      setAuthState(pixMode === "subscription" && data.authorizationId ? "pending" : null);
       setPixStage("qr");
       trackAddPaymentInfo({ plan: selectedPlan, billing: billingPeriod, value: data.amount || 0 });
     } catch (err) {
