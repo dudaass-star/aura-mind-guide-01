@@ -762,6 +762,49 @@ const CheckoutV2 = () => {
 
         <div className="relative container mx-auto px-4 py-8 md:py-12 pb-12">
           <div className="max-w-xl mx-auto">
+            {/* Retomada do PIX Automático: fecha o loop pra quem autorizou (ou não)
+                depois de sair da tela do QR. */}
+            {!pixOpen && resumedState && (
+              <div
+                className={`mb-6 rounded-xl border p-4 text-sm ${
+                  resumedState === "active"
+                    ? "border-[hsl(140_22%_45%)]/50 bg-[hsl(140_22%_45%)]/15 text-white"
+                    : resumedState === "expired"
+                      ? "border-amber-400/40 bg-amber-400/10 text-white"
+                      : "border-white/15 bg-white/5 text-white/85"
+                }`}
+              >
+                {resumedState === "active" && (
+                  <>
+                    <p className="font-semibold">Cobrança automática autorizada</p>
+                    <p className="mt-1 text-white/80">
+                      Sua assinatura está ativa. Pode continuar a conversa com a AURA no WhatsApp.
+                    </p>
+                  </>
+                )}
+                {resumedState === "pending" && (
+                  <>
+                    <p className="font-semibold">Falta autorizar a cobrança automática</p>
+                    <p className="mt-1 text-white/80">
+                      Você gerou um PIX
+                      {resumedPlan ? ` do plano ${PLAN_LABELS[resumedPlan] || resumedPlan}` : ""} e ele
+                      ainda está aguardando a confirmação da recorrência no app do seu banco. Assim que
+                      autorizar, avisamos aqui.
+                    </p>
+                  </>
+                )}
+                {resumedState === "expired" && (
+                  <>
+                    <p className="font-semibold">O PIX anterior expirou</p>
+                    <p className="mt-1 text-white/80">
+                      A autorização não foi concluída no app do banco. Escolha o plano abaixo e gere um
+                      novo PIX — leva menos de um minuto.
+                    </p>
+                  </>
+                )}
+              </div>
+            )}
+
             {/* Stepper — orienta o usuário sobre o tamanho real do fluxo (só 2 passos).
                 Reduz a ansiedade de "será que tem mais etapa depois?". */}
             <div className="flex items-center justify-center gap-3 mb-6 text-xs">
