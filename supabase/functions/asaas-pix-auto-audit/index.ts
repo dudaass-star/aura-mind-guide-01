@@ -24,6 +24,22 @@ function brtDateString(d = new Date()): string {
   return new Date(d.getTime() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
+// Estados finais: nada mais muda depois deles.
+const FINAL_STATUSES = ["REFUSED", "EXPIRED", "REJECTED", "CANCELLED"];
+
+// Silêncio entre alertas de débito não disparado, por autorização.
+const ALERT_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
+// Segundo toque de recuperação: 72h depois do primeiro.
+const SECOND_TOUCH_MS = 72 * 60 * 60 * 1000;
+// Janela de recuperação: 7 dias.
+const RECOVERY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
+function recoveryLink(plan?: string | null, campaign = "pix_auto"): string {
+  const base = `https://olaaura.com.br/v2${plan ? `?plan=${plan}` : ""}`;
+  const sep = plan ? "&" : "?";
+  return `${base}${sep}utm_source=email&utm_medium=recovery&utm_campaign=${campaign}`;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -33,51 +49,167 @@ Deno.serve(async (req) => {
     { auth: { persistSession: false } },
   );
 
+  const ASAAS_API_KEY = Deno.env.get("ASAAS_API_KEY");
+  const ASAAS_ENV = (Deno.env.get("ASAAS_ENV") || "sandbox").toLowerCase();
+  const ASAAS_BASE_URL =
+    ASAAS_ENV === "production" ? "https://api.asaas.com/v3" : "https://api-sandbox.asaas.com/v3";
+
+  // GET read-only na Asaas. Nunca lança: falha de rede não pode derrubar a auditoria.
+  const asaasGet = async (path: string): Promise<Record<string, unknown> | null> => {
+    if (!ASAAS_API_KEY) return null;
+    try {
+      const resp = await fetch(`${ASAAS_BASE_URL}${path}`, {
+        method: "GET",
+        headers: {
+          access_token: ASAAS_API_KEY,
+          "Content-Type": "application/json",
+          "User-Agent": "Aura/1.0",
+        },
+      });
+      if (!resp.ok) {
+        console.warn(`[pix-auto-audit] Asaas GET ${path} → ${resp.status}`);
+        return null;
+      }
+      return await resp.json().catch(() => null);
+    } catch (e) {
+      console.warn(`[pix-auto-audit] Asaas GET ${path} falhou:`, (e as Error).message);
+      return null;
+    }
+  };
+
   const report = {
     date: brtDateString(),
+    reconciled: 0,
+    status_changed: [] as Array<Record<string, unknown>>,
+    qr_expired_swept: 0,
     lost_authorizations: 0,
     recovery_emails_sent: 0,
+    recovery_second_touch_sent: 0,
     autodebit_failures: [] as Array<Record<string, unknown>>,
+    autodebit_new_alerts: 0,
     admin_alert_sent: false,
   };
 
   try {
-    // ---------- 1) Autorizações perdidas nas últimas 48h ----------
-    const since = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+    // ---------- 0) Reconciliação com a Asaas ----------
+    // Webhook perdido deixa nosso status desatualizado pra sempre. Aqui a fonte
+    // da verdade é a Asaas: sincroniza status, datas e assinatura vinculada.
+    const { data: openAuths } = await supabase
+      .from("asaas_pix_authorizations")
+      .select("id, asaas_authorization_id, asaas_subscription_id, status, qr_expires_at, activated_at")
+      .not("status", "in", `(${FINAL_STATUSES.join(",")})`);
+
+    const nowIso = new Date().toISOString();
+    for (const auth of openAuths || []) {
+      const remote = await asaasGet(`/pix/automatic/authorizations/${auth.asaas_authorization_id}`);
+      const patch: Record<string, unknown> = { last_synced_at: nowIso };
+
+      if (remote) {
+        report.reconciled++;
+        const remoteStatus = String((remote as any).status || "").toUpperCase();
+        if (remoteStatus && remoteStatus !== String(auth.status || "").toUpperCase()) {
+          patch.status = remoteStatus;
+          if (remoteStatus === "ACTIVE" && !auth.activated_at) {
+            patch.activated_at = (remote as any).activatedDate || nowIso;
+          }
+          if (FINAL_STATUSES.includes(remoteStatus)) {
+            patch.cancelled_at = (remote as any).canceledDate || nowIso;
+          }
+          report.status_changed.push({
+            authorization: auth.asaas_authorization_id,
+            de: auth.status,
+            para: remoteStatus,
+          });
+        }
+        const remoteSub =
+          (remote as any).subscription?.id ||
+          (remote as any).subscription ||
+          (remote as any).subscriptionId ||
+          null;
+        if (remoteSub && typeof remoteSub === "string" && !auth.asaas_subscription_id) {
+          patch.asaas_subscription_id = remoteSub;
+        }
+      }
+
+      // ---------- 1) Varredura de QR vencido ----------
+      // Sem confirmação de ativação e com QR no passado: é perda, mesmo sem webhook.
+      const finalNow = String(patch.status || auth.status || "").toUpperCase();
+      const stillPending = !FINAL_STATUSES.includes(finalNow) && finalNow !== "ACTIVE";
+      const qrDead = auth.qr_expires_at ? new Date(auth.qr_expires_at).getTime() < Date.now() : false;
+      if (stillPending && qrDead && !auth.activated_at) {
+        patch.status = "EXPIRED";
+        patch.cancelled_at = nowIso;
+        report.qr_expired_swept++;
+      }
+
+      await supabase.from("asaas_pix_authorizations").update(patch).eq("id", auth.id);
+    }
+
+    // ---------- 2) Autorizações perdidas (janela de 7 dias) ----------
+    const since = new Date(Date.now() - RECOVERY_WINDOW_MS).toISOString();
     const { data: lost } = await supabase
       .from("asaas_pix_authorizations")
-      .select("id, asaas_authorization_id, status, plan, customer_name, customer_email, created_at, recovery_email_sent_at")
+      .select("id, asaas_authorization_id, status, plan, customer_name, customer_email, created_at, recovery_email_sent_at, recovery_email_2_sent_at")
       .in("status", ["REFUSED", "EXPIRED", "REJECTED"])
       .is("activated_at", null)
-      .is("recovery_email_sent_at", null)
       .gte("created_at", since);
 
-    report.lost_authorizations = lost?.length || 0;
+    report.lost_authorizations = (lost || []).filter((a) => !a.recovery_email_sent_at).length;
 
     for (const auth of lost || []) {
       if (!auth.customer_email) continue;
       const firstName = (auth.customer_name || "").split(" ")[0] || null;
-      const link = `https://olaaura.com.br/v2${auth.plan ? `?plan=${auth.plan}` : ""}${auth.plan ? "&" : "?"}utm_source=email&utm_medium=recovery&utm_campaign=pix_auto`;
-      try {
-        await supabase.functions.invoke("send-transactional-email", {
-          body: {
-            templateName: "pix-auto-not-authorized",
-            recipientEmail: auth.customer_email,
-            idempotencyKey: `pix-auto-not-authorized-${auth.asaas_authorization_id}`,
-            templateData: { name: firstName, plan: auth.plan, checkoutLink: link },
-          },
-        });
-        await supabase
-          .from("asaas_pix_authorizations")
-          .update({ recovery_email_sent_at: new Date().toISOString() })
-          .eq("id", auth.id);
-        report.recovery_emails_sent++;
-      } catch (e) {
-        console.warn(`[pix-auto-audit] recovery email falhou (${auth.asaas_authorization_id}):`, (e as Error).message);
+
+      // 1º toque: assim que a autorização é detectada como perdida.
+      if (!auth.recovery_email_sent_at) {
+        try {
+          await supabase.functions.invoke("send-transactional-email", {
+            body: {
+              templateName: "pix-auto-not-authorized",
+              recipientEmail: auth.customer_email,
+              idempotencyKey: `pix-auto-not-authorized-${auth.asaas_authorization_id}`,
+              templateData: { name: firstName, plan: auth.plan, checkoutLink: recoveryLink(auth.plan) },
+            },
+          });
+          await supabase
+            .from("asaas_pix_authorizations")
+            .update({ recovery_email_sent_at: new Date().toISOString() })
+            .eq("id", auth.id);
+          report.recovery_emails_sent++;
+        } catch (e) {
+          console.warn(`[pix-auto-audit] recovery email falhou (${auth.asaas_authorization_id}):`, (e as Error).message);
+        }
+        continue;
+      }
+
+      // 2º e último toque: 72h depois, se a pessoa não voltou.
+      const firstSent = new Date(auth.recovery_email_sent_at).getTime();
+      if (!auth.recovery_email_2_sent_at && Date.now() - firstSent >= SECOND_TOUCH_MS) {
+        try {
+          await supabase.functions.invoke("send-transactional-email", {
+            body: {
+              templateName: "pix-auto-not-authorized",
+              recipientEmail: auth.customer_email,
+              idempotencyKey: `pix-auto-not-authorized-2-${auth.asaas_authorization_id}`,
+              templateData: {
+                name: firstName,
+                plan: auth.plan,
+                checkoutLink: recoveryLink(auth.plan, "pix_auto_2"),
+              },
+            },
+          });
+          await supabase
+            .from("asaas_pix_authorizations")
+            .update({ recovery_email_2_sent_at: new Date().toISOString() })
+            .eq("id", auth.id);
+          report.recovery_second_touch_sent++;
+        } catch (e) {
+          console.warn(`[pix-auto-audit] 2º toque falhou (${auth.asaas_authorization_id}):`, (e as Error).message);
+        }
       }
     }
 
-    // ---------- 2) Débito automático que não disparou ----------
+    // ---------- 3) Débito automático que não disparou ----------
     // Cobranças de autorizações ACTIVE que venceram ontem ou antes e seguem
     // pendentes/vencidas. Se o débito automático funcionasse, estariam pagas.
     const yesterday = brtDateString(new Date(Date.now() - 24 * 60 * 60 * 1000));
