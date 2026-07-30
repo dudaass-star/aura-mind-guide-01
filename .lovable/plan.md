@@ -12,6 +12,12 @@ A implementação está no ar e funciona tecnicamente, mas **quase ninguém cons
 
 Além disso, **nenhuma cobrança em `asaas_payments` tem `pixAutomaticAuthorizationId`**, nem para os 3 casos ACTIVE. As cobranças de ciclo desses clientes estão como PIX comum `PENDING` (QR manual). Não há um único débito automático confirmado até hoje.
 
+### Por que você não acha essas recusas no painel da Asaas
+
+O que foi recusado **não é cobrança, é autorização** (o consentimento de recorrência do PIX Automático). Por isso não aparece em "Cobranças": não existe cobrança criada quando o consentimento é negado — a Asaas devolve a autorização com `status: REFUSED` e nenhum pagamento é gerado. Nos payloads que temos, essas autorizações têm `payload: null`, `encodedImage: null` e `subscriptionId: null`, ou seja: nem QR chegou a valer, nem assinatura foi criada.
+
+Esses registros vivem no recurso `/pix/automatic/authorizations` da API, que o painel da Asaas não expõe de forma navegável. Nosso banco (`asaas_pix_authorizations`) é hoje a única visão completa — e é exatamente esse ponto cego que o item 1 abaixo resolve.
+
 Dois problemas somados:
 
 1. **Taxa de recusa altíssima na autorização** (12/17). Nos payloads da Asaas, as autorizações voltam com `retryPolicy: "NOT_ALLOWED"` e `minLimitValue: null` — não enviamos esses campos na criação.
@@ -22,6 +28,7 @@ Dois problemas somados:
 ### 1. Instrumentar e enxergar (primeiro passo, sem risco)
 - Tratar `PIX_AUTOMATIC_RECURRING_AUTHORIZATION_REFUSED` explicitamente no `webhook-asaas`, com log de erro e registro do motivo.
 - Painel/consulta no Admin: autorizações criadas × ativadas × recusadas por dia, e cobranças de ciclo com/sem vínculo de autorização.
+- Conferência direta contra a Asaas: uma leitura read-only de `/pix/automatic/authorizations` para confirmar, na fonte, que os 12 REFUSED constam lá com o mesmo status e capturar o motivo da recusa que a Asaas informa (campo de rejeição por PSP do pagador).
 
 ### 2. Recuperar quem é recusado (maior impacto em receita)
 - Quando a autorização vira REFUSED, o checkout para de esperar e mostra na hora a alternativa (PIX avulso do mesmo valor ou cartão).
