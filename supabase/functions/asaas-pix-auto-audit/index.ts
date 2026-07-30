@@ -262,7 +262,10 @@ Deno.serve(async (req) => {
             String((p as any).created_at || "").slice(0, 10),
         ).slice(0, 10);
 
-      const dueCandidates = (openPayments || []).filter((p) => dueOf(p) <= yesterday);
+      // Para a varredura de gêmea, olhamos até HOJE (a duplicada nasce no mesmo dia
+      // do pagamento). O alerta de débito não disparado continua exigindo vencido.
+      const today = brtDateString();
+      const dueCandidates = (openPayments || []).filter((p) => dueOf(p) <= today);
 
       // Backstop da deduplicação em tempo real (webhook perdido): cobrança aberta
       // que tem gêmea PIX_AUTOMATIC já paga — mesmo customer, valor e vencimento —
@@ -319,7 +322,7 @@ Deno.serve(async (req) => {
         }
       }
 
-      for (const p of duePayments) {
+      for (const p of duePayments.filter((p) => dueOf(p) <= yesterday)) {
         const dueDate =
           dueOf(p);
         const alertedAt = auth.autodebit_alert_sent_at
@@ -340,10 +343,11 @@ Deno.serve(async (req) => {
 
       // Só reescreve o marcador quando o caso volta a ser "novo" — assim o
       // silêncio de 7 dias funciona de fato e o alerta para de repetir todo dia.
+      const overdueUnpaid = duePayments.filter((p) => dueOf(p) <= yesterday);
       const cooledDown =
         !auth.autodebit_alert_sent_at ||
         Date.now() - new Date(auth.autodebit_alert_sent_at).getTime() >= ALERT_COOLDOWN_MS;
-      if (duePayments.length > 0 && cooledDown) {
+      if (overdueUnpaid.length > 0 && cooledDown) {
         await supabase
           .from("asaas_pix_authorizations")
           .update({ autodebit_alert_sent_at: new Date().toISOString() })
