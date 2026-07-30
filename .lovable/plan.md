@@ -43,7 +43,8 @@ Aqui está o ganho maior: 12 pessoas chegaram ao QR e não concluíram.
 
 ## Detalhes técnicos
 
-- `supabase/functions/webhook-asaas/index.ts`: `authStatusMap` sem a chave `..._REFUSED`; bloco de status terminal cobre só CANCELLED/REJECTED/EXPIRED.
-- `supabase/functions/criar-pix-recorrente-asaas/index.ts`: `authReqBody` não envia `retryPolicy` nem `minLimitValue`.
-- `src/pages/CheckoutV2.tsx`: `pixMode="subscription"` no mensal (~linhas 1019/1032); a tela de QR não reage a autorização recusada.
+- `supabase/functions/webhook-asaas/index.ts`: `authStatusMap` sem a chave `..._REFUSED`; bloco de status terminal cobre só CANCELLED/REJECTED/EXPIRED (REFUSED entra pelo fallback e não dispara nada).
+- `supabase/functions/criar-pix-recorrente-asaas/index.ts`: `qrTtlSeconds = 30 * 60` (bate exatamente com o delta das 12 recusas); `authReqBody` não envia `retryPolicy` nem `minLimitValue`.
+- `src/pages/CheckoutV2.tsx`: `pixMode="subscription"` no mensal (~linhas 1019/1032); a tela de QR não faz polling de status nem reage a expiração.
+- Leitura read-only de `/pix/automatic/authorizations` na Asaas para confirmar status e motivo na fonte.
 - Nova rotina de verificação como edge function agendada (cron), lendo `asaas_pix_authorizations` + `asaas_payments`.
