@@ -85,6 +85,16 @@ interface Metrics {
   checkoutCompletedTotalInPeriod?: number;
   checkoutCreatedTotalAllTime?: number;
   checkoutCompletedTotalAllTime?: number;
+  // PIX Automático (Bacen)
+  pixAuto?: {
+    createdInPeriod: number;
+    activatedInPeriod: number;
+    lostInPeriod: number;
+    pendingNow: number;
+    activeTotal: number;
+    authorizationRate: number;
+    autodebitFailures: { email?: string | null; plan?: string | null; alertedAt?: string | null; hasSubscription?: boolean }[];
+  };
   // Weekly Plans (Stripe)
   totalWeeklyPlans: number;
   weeklyPlansInPeriod: number;
