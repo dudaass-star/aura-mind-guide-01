@@ -236,7 +236,7 @@ Deno.serve(async (req) => {
     const yesterday = brtDateString(new Date(Date.now() - 24 * 60 * 60 * 1000));
     const { data: activeAuths } = await supabase
       .from("asaas_pix_authorizations")
-      .select("id, asaas_authorization_id, asaas_subscription_id, customer_name, customer_email, plan, autodebit_alert_sent_at")
+      .select("id, asaas_authorization_id, asaas_subscription_id, asaas_customer_id, customer_name, customer_email, plan, autodebit_alert_sent_at")
       .eq("status", "ACTIVE");
 
     for (const auth of activeAuths || []) {
@@ -251,23 +251,60 @@ Deno.serve(async (req) => {
       // asaas_payments não tem coluna due_date: o vencimento vive no raw_payload.
       const { data: openPayments } = await supabase
         .from("asaas_payments")
-        .select("asaas_payment_id, status, amount_cents, raw_payload, created_at")
+        .select("asaas_payment_id, status, amount_cents, raw_payload, created_at, asaas_customer_id")
         .eq("asaas_subscription_id", auth.asaas_subscription_id)
         .in("status", ["PENDING", "OVERDUE"]);
 
-      const duePayments = (openPayments || []).filter((p) => {
-        const dueDate =
+      const dueOf = (p: Record<string, unknown>) =>
+        String(
           (p.raw_payload as any)?.dueDate ||
-          (p.raw_payload as any)?.payment?.dueDate ||
-          String(p.created_at || "").slice(0, 10);
-        return String(dueDate).slice(0, 10) <= yesterday;
-      });
+            (p.raw_payload as any)?.payment?.dueDate ||
+            String((p as any).created_at || "").slice(0, 10),
+        ).slice(0, 10);
+
+      const dueCandidates = (openPayments || []).filter((p) => dueOf(p) <= yesterday);
+
+      // Backstop da deduplicação em tempo real (webhook perdido): cobrança aberta
+      // que tem gêmea PIX_AUTOMATIC já paga — mesmo customer, valor e vencimento —
+      // é a fatura do ciclo 1 duplicada. Cancela na Asaas e não conta como falha
+      // de débito automático (era isso que gerava alarme falso).
+      const { data: paidRows } = await supabase
+        .from("asaas_payments")
+        .select("asaas_payment_id, amount_cents, payment_method, raw_payload")
+        .eq("asaas_customer_id", auth.asaas_customer_id || "__none__")
+        .in("status", ["RECEIVED", "CONFIRMED"]);
+
+      const duePayments: typeof dueCandidates = [];
+      for (const p of dueCandidates) {
+        const twin = (paidRows || []).find(
+          (t) =>
+            t.payment_method === "PIX_AUTOMATIC" &&
+            t.amount_cents === p.amount_cents &&
+            t.asaas_payment_id !== p.asaas_payment_id &&
+            dueOf(t) === dueOf(p),
+        );
+        if (!twin) {
+          duePayments.push(p);
+          continue;
+        }
+        const ok = await asaasDelete(`/payments/${p.asaas_payment_id}`);
+        if (ok) {
+          await supabase
+            .from("asaas_payments")
+            .update({ status: "CANCELLED" })
+            .eq("asaas_payment_id", p.asaas_payment_id);
+          report.twin_invoices_cancelled++;
+          console.log(
+            `[pix-auto-audit] 🧹 gêmea ${p.asaas_payment_id} cancelada (venc. ${dueOf(p)}, paga ${twin.asaas_payment_id})`,
+          );
+        } else {
+          duePayments.push(p);
+        }
+      }
 
       for (const p of duePayments) {
         const dueDate =
-          (p.raw_payload as any)?.dueDate ||
-          (p.raw_payload as any)?.payment?.dueDate ||
-          String(p.created_at || "").slice(0, 10);
+          dueOf(p);
         const alertedAt = auth.autodebit_alert_sent_at
           ? new Date(auth.autodebit_alert_sent_at).getTime()
           : 0;
