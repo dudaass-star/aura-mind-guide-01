@@ -606,34 +606,110 @@ const CheckoutV2 = () => {
     }
   };
 
-  // Polling do consentimento enquanto o modal do QR está aberto (PIX Automático).
-  // Para assim que virar active/expired — sem loop infinito.
+  // ---- Retomada da autorização PIX Automático ----
+  // O consentimento acontece no app do banco, fora da nossa tela. Se o cliente
+  // fecha o modal e autoriza depois, sem isso ele nunca vê a confirmação.
+  const PIX_AUTH_LS_KEY = "aura_pix_auth_v1";
+  const PIX_AUTH_TTL_MS = 24 * 60 * 60 * 1000;
+
+  // Guarda o id da autorização recém-criada.
   useEffect(() => {
     const authId = pixData?.authorizationId;
-    if (!pixOpen || pixStage !== "qr" || !authId || authState !== "pending") return;
+    if (!authId) return;
+    try {
+      localStorage.setItem(
+        PIX_AUTH_LS_KEY,
+        JSON.stringify({ id: authId, plan: selectedPlan, ts: Date.now() }),
+      );
+    } catch {
+      // navegador sem storage: retomada simplesmente não acontece
+    }
+  }, [pixData?.authorizationId, selectedPlan]);
+
+  // Na montagem: se houver autorização recente, consulta o estado uma vez.
+  useEffect(() => {
     let cancelled = false;
+    (async () => {
+      let saved: { id?: string; plan?: string; ts?: number } | null = null;
+      try {
+        saved = JSON.parse(localStorage.getItem(PIX_AUTH_LS_KEY) || "null");
+      } catch {
+        saved = null;
+      }
+      if (!saved?.id || !saved.ts || Date.now() - saved.ts > PIX_AUTH_TTL_MS) {
+        if (saved?.id) {
+          try { localStorage.removeItem(PIX_AUTH_LS_KEY); } catch { /* noop */ }
+        }
+        return;
+      }
+      try {
+        const { data } = await supabase.functions.invoke("asaas-pix-auto-status", {
+          body: { authorizationId: saved.id },
+        });
+        if (cancelled || !data?.state) return;
+        setResumedPlan(data.plan || saved.plan || null);
+        setResumedState(data.state);
+        if (data.state === "pending") {
+          setResumedAuthId(saved.id);
+        } else {
+          try { localStorage.removeItem(PIX_AUTH_LS_KEY); } catch { /* noop */ }
+        }
+      } catch {
+        // silencioso
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Polling do consentimento: vale tanto para o QR na tela quanto para a
+  // autorização retomada. 4s nos 2 primeiros minutos, 10s depois, teto de 20 min.
+  useEffect(() => {
+    const liveAuthId =
+      pixOpen && pixStage === "qr" && authState === "pending" ? pixData?.authorizationId : null;
+    const authId = liveAuthId || resumedAuthId;
+    if (!authId) return;
+
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const startedAt = Date.now();
+
+    const finish = (state: "active" | "expired") => {
+      if (liveAuthId) setAuthState(state);
+      setResumedState(state);
+      setResumedAuthId(null);
+      try { localStorage.removeItem(PIX_AUTH_LS_KEY); } catch { /* noop */ }
+      if (state === "active") {
+        toast.success("Cobrança automática autorizada! Sua assinatura está ativa.");
+      }
+    };
+
     const tick = async () => {
+      const elapsed = Date.now() - startedAt;
+      if (cancelled || elapsed > 20 * 60 * 1000) return;
       try {
         const { data } = await supabase.functions.invoke("asaas-pix-auto-status", {
           body: { authorizationId: authId },
         });
-        if (cancelled || !data?.state) return;
-        if (data.state === "active") {
-          setAuthState("active");
-          toast.success("Cobrança automática autorizada! Sua assinatura está ativa.");
-        } else if (data.state === "expired") {
-          setAuthState("expired");
+        if (cancelled) return;
+        if (data?.state === "active" || data?.state === "expired") {
+          finish(data.state);
+          return;
         }
       } catch {
         // silencioso: polling não deve gerar ruído pro cliente
       }
+      if (!cancelled) timer = setTimeout(tick, elapsed < 2 * 60 * 1000 ? 4000 : 10000);
     };
-    const id = setInterval(tick, 6000);
+
+    timer = setTimeout(tick, 4000);
     return () => {
       cancelled = true;
-      clearInterval(id);
+      clearTimeout(timer);
     };
-  }, [pixOpen, pixStage, pixData?.authorizationId, authState]);
+  }, [pixOpen, pixStage, pixData?.authorizationId, authState, resumedAuthId]);
 
   const inputCls =
     "mt-1.5 bg-white/5 border-white/15 text-white placeholder:text-white/55 focus-visible:ring-1 focus-visible:ring-[hsl(140_18%_55%)]";
