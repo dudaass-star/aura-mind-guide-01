@@ -356,6 +356,11 @@ Deno.serve(async (req) => {
       if (report.qr_expired_swept > 0) {
         lines.push(`${report.qr_expired_swept} QR Code(s) venceram sem autorização (varredura)`);
       }
+      if (report.twin_invoices_cancelled > 0) {
+        lines.push(
+          `${report.twin_invoices_cancelled} fatura(s) duplicada(s) de ciclo 1 canceladas (gêmea já paga por débito automático)`,
+        );
+      }
       if (report.status_changed.length > 0) {
         lines.push(
           `Reconciliação corrigiu ${report.status_changed.length} status: ` +
