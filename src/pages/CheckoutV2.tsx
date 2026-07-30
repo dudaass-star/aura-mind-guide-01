@@ -787,7 +787,7 @@ const CheckoutV2 = () => {
                     <p className="font-semibold">Falta autorizar a cobrança automática</p>
                     <p className="mt-1 text-white/80">
                       Você gerou um PIX
-                      {resumedPlan ? ` do plano ${PLAN_LABELS[resumedPlan] || resumedPlan}` : ""} e ele
+                      {resumedPlan ? ` do plano ${plans[resumedPlan as PlanId]?.name || resumedPlan}` : ""} e ele
                       ainda está aguardando a confirmação da recorrência no app do seu banco. Assim que
                       autorizar, avisamos aqui.
                     </p>
