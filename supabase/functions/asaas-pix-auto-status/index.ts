@@ -33,7 +33,7 @@ Deno.serve(async (req) => {
 
     const { data, error } = await supabase
       .from("asaas_pix_authorizations")
-      .select("status, qr_expires_at, activated_at")
+      .select("status, qr_expires_at, activated_at, plan, billing_period")
       .eq("asaas_authorization_id", authorizationId)
       .maybeSingle();
 
@@ -55,7 +55,14 @@ Deno.serve(async (req) => {
           : "pending";
 
     return new Response(
-      JSON.stringify({ state, status: raw, expiresAt: data.qr_expires_at, activatedAt: data.activated_at }),
+      JSON.stringify({
+        state,
+        status: raw,
+        expiresAt: data.qr_expires_at,
+        activatedAt: data.activated_at,
+        plan: data.plan,
+        billingPeriod: data.billing_period,
+      }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (e) {
