@@ -529,6 +529,7 @@ const CheckoutV2 = () => {
     setPixMode(mode);
     setPixStage("form");
     setPixData(null);
+    setAuthState(null);
     setCpfError(undefined);
     setPixOpen(true);
   };
@@ -599,6 +600,35 @@ const CheckoutV2 = () => {
       toast.error("Não foi possível copiar. Selecione manualmente.");
     }
   };
+
+  // Polling do consentimento enquanto o modal do QR está aberto (PIX Automático).
+  // Para assim que virar active/expired — sem loop infinito.
+  useEffect(() => {
+    const authId = pixData?.authorizationId;
+    if (!pixOpen || pixStage !== "qr" || !authId || authState !== "pending") return;
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const { data } = await supabase.functions.invoke("asaas-pix-auto-status", {
+          body: { authorizationId: authId },
+        });
+        if (cancelled || !data?.state) return;
+        if (data.state === "active") {
+          setAuthState("active");
+          toast.success("Cobrança automática autorizada! Sua assinatura está ativa.");
+        } else if (data.state === "expired") {
+          setAuthState("expired");
+        }
+      } catch {
+        // silencioso: polling não deve gerar ruído pro cliente
+      }
+    };
+    const id = setInterval(tick, 6000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [pixOpen, pixStage, pixData?.authorizationId, authState]);
 
   const inputCls =
     "mt-1.5 bg-white/5 border-white/15 text-white placeholder:text-white/55 focus-visible:ring-1 focus-visible:ring-[hsl(140_18%_55%)]";
