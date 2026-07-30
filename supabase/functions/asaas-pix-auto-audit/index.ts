@@ -95,25 +95,37 @@ Deno.serve(async (req) => {
         });
         continue;
       }
-      const { data: duePayments } = await supabase
+      // asaas_payments não tem coluna due_date: o vencimento vive no raw_payload.
+      const { data: openPayments } = await supabase
         .from("asaas_payments")
-        .select("asaas_payment_id, status, due_date, value_cents")
+        .select("asaas_payment_id, status, amount_cents, raw_payload, created_at")
         .eq("asaas_subscription_id", auth.asaas_subscription_id)
-        .in("status", ["PENDING", "OVERDUE"])
-        .lte("due_date", yesterday);
+        .in("status", ["PENDING", "OVERDUE"]);
 
-      for (const p of duePayments || []) {
+      const duePayments = (openPayments || []).filter((p) => {
+        const dueDate =
+          (p.raw_payload as any)?.dueDate ||
+          (p.raw_payload as any)?.payment?.dueDate ||
+          String(p.created_at || "").slice(0, 10);
+        return String(dueDate).slice(0, 10) <= yesterday;
+      });
+
+      for (const p of duePayments) {
+        const dueDate =
+          (p.raw_payload as any)?.dueDate ||
+          (p.raw_payload as any)?.payment?.dueDate ||
+          String(p.created_at || "").slice(0, 10);
         report.autodebit_failures.push({
           customer: auth.customer_email,
           plan: auth.plan,
           payment: p.asaas_payment_id,
-          vencimento: p.due_date,
+          vencimento: String(dueDate).slice(0, 10),
           status: p.status,
           motivo: "cobrança venceu sem débito automático",
         });
       }
 
-      if ((duePayments?.length || 0) > 0) {
+      if (duePayments.length > 0) {
         await supabase
           .from("asaas_pix_authorizations")
           .update({ autodebit_alert_sent_at: new Date().toISOString() })
