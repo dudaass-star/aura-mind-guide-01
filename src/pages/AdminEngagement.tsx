@@ -1759,6 +1759,64 @@ export default function AdminEngagement() {
                 </Card>
 
                 {/* 4. Funil de Conversão */}
+                {/* 3b. PIX Automático (Bacen) — saúde do consentimento recorrente */}
+                {metrics?.pixAuto && (metrics.pixAuto.createdInPeriod > 0 || metrics.pixAuto.activeTotal > 0) && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base font-semibold flex items-center gap-2">
+                        <ShoppingCart className="h-4 w-4" />
+                        PIX Automático (período)
+                      </CardTitle>
+                      <p className="text-xs text-muted-foreground">
+                        {periodLabel} — a etapa crítica é a autorização da cobrança automática no app do banco.
+                      </p>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <FunnelStep
+                        label="Autorizações criadas (QR gerado)"
+                        value={metrics.pixAuto.createdInPeriod}
+                        total={metrics.pixAuto.createdInPeriod}
+                        color="bg-blue-500"
+                      />
+                      <FunnelStep
+                        label="Autorizadas no banco (recorrência ativa)"
+                        value={metrics.pixAuto.activatedInPeriod}
+                        total={metrics.pixAuto.createdInPeriod}
+                        color="bg-green-500"
+                      />
+                      <div className="flex justify-between text-sm pt-2 border-t border-border">
+                        <span className="text-muted-foreground">Perdidas sem autorização</span>
+                        <span className="font-semibold text-destructive">{metrics.pixAuto.lostInPeriod}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Taxa de autorização</span>
+                        <span className="font-semibold text-foreground">{metrics.pixAuto.authorizationRate}%</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Ativas hoje / aguardando</span>
+                        <span className="font-semibold text-foreground">
+                          {metrics.pixAuto.activeTotal} / {metrics.pixAuto.pendingNow}
+                        </span>
+                      </div>
+                      {metrics.pixAuto.autodebitFailures.length > 0 && (
+                        <div className="pt-3 border-t border-border space-y-2">
+                          <p className="text-xs font-semibold text-destructive">
+                            Débito automático não disparou ({metrics.pixAuto.autodebitFailures.length})
+                          </p>
+                          {metrics.pixAuto.autodebitFailures.slice(0, 8).map((f, i) => (
+                            <div key={i} className="flex justify-between text-xs">
+                              <span className="text-muted-foreground truncate mr-2">{f.email || '—'}</span>
+                              <span className="text-foreground whitespace-nowrap">
+                                {f.plan || '—'}{f.hasSubscription ? '' : ' · sem assinatura'}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-base font-semibold flex items-center gap-2">
