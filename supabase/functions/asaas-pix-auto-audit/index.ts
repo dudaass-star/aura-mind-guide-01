@@ -77,6 +77,26 @@ Deno.serve(async (req) => {
     }
   };
 
+  // DELETE na Asaas. Usado só pra cancelar fatura gêmea comprovadamente duplicada.
+  const asaasDelete = async (path: string): Promise<boolean> => {
+    if (!ASAAS_API_KEY) return false;
+    try {
+      const resp = await fetch(`${ASAAS_BASE_URL}${path}`, {
+        method: "DELETE",
+        headers: {
+          access_token: ASAAS_API_KEY,
+          "Content-Type": "application/json",
+          "User-Agent": "Aura/1.0",
+        },
+      });
+      if (!resp.ok) console.warn(`[pix-auto-audit] Asaas DELETE ${path} → ${resp.status}`);
+      return resp.ok;
+    } catch (e) {
+      console.warn(`[pix-auto-audit] Asaas DELETE ${path} falhou:`, (e as Error).message);
+      return false;
+    }
+  };
+
   const report = {
     date: brtDateString(),
     reconciled: 0,
