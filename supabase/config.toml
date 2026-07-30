@@ -11,6 +11,10 @@ project_id = "uhyogifgmutfmbyhzzyo"
     verify_jwt = false
   [functions.admin-update-profile]
     verify_jwt = false
+  [functions.asaas-pix-auto-audit]
+    verify_jwt = false
+  [functions.asaas-pix-auto-status]
+    verify_jwt = false
   [functions.audit-decline-codes]
     verify_jwt = false
   [functions.audit-orphan-subscribers]

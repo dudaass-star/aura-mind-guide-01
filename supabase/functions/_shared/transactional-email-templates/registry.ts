@@ -16,6 +16,8 @@ import { template as checkoutRecovery2 } from './checkout-recovery-2.tsx'
 import { template as checkoutRecovery3 } from './checkout-recovery-3.tsx'
 import { template as welcome } from './welcome.tsx'
 import { template as planLimitReached } from './plan-limit-reached.tsx'
+import { template as pixAutoNotAuthorized } from './pix-auto-not-authorized.tsx'
+import { template as adminPixAutoAlert } from './admin-pix-auto-alert.tsx'
 
 export const TEMPLATES: Record<string, TemplateEntry> = {
   'dunning-payment-failed': dunningPaymentFailed,
@@ -25,4 +27,6 @@ export const TEMPLATES: Record<string, TemplateEntry> = {
   'checkout-recovery-3': checkoutRecovery3,
   'welcome': welcome,
   'plan-limit-reached': planLimitReached,
+  'pix-auto-not-authorized': pixAutoNotAuthorized,
+  'admin-pix-auto-alert': adminPixAutoAlert,
 }

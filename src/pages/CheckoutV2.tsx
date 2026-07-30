@@ -214,7 +214,12 @@ const CheckoutV2 = () => {
     expiresAt: string | null;
     invoiceUrl: string | null;
     amount: number;
+    authorizationId?: string | null;
   } | null>(null);
+  // Estado do consentimento de PIX Automático (Bacen): pending → active | expired.
+  // O consentimento é a etapa que mais perdemos: o cliente paga/escaneia mas não
+  // marca a autorização de cobrança automática no app do banco.
+  const [authState, setAuthState] = useState<"pending" | "active" | "expired" | null>(null);
 
   // ViewContent + GA4 begin_checkout no mount
   useEffect(() => {
@@ -524,6 +529,7 @@ const CheckoutV2 = () => {
     setPixMode(mode);
     setPixStage("form");
     setPixData(null);
+    setAuthState(null);
     setCpfError(undefined);
     setPixOpen(true);
   };
@@ -572,7 +578,9 @@ const CheckoutV2 = () => {
         expiresAt: data.expiresAt || null,
         invoiceUrl: data.invoiceUrl || null,
         amount: data.amount || 0,
+        authorizationId: data.authorizationId || null,
       });
+      setAuthState(pixMode === "subscription" && data.authorizationId ? "pending" : null);
       setPixStage("qr");
       trackAddPaymentInfo({ plan: selectedPlan, billing: billingPeriod, value: data.amount || 0 });
     } catch (err) {
@@ -592,6 +600,35 @@ const CheckoutV2 = () => {
       toast.error("Não foi possível copiar. Selecione manualmente.");
     }
   };
+
+  // Polling do consentimento enquanto o modal do QR está aberto (PIX Automático).
+  // Para assim que virar active/expired — sem loop infinito.
+  useEffect(() => {
+    const authId = pixData?.authorizationId;
+    if (!pixOpen || pixStage !== "qr" || !authId || authState !== "pending") return;
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const { data } = await supabase.functions.invoke("asaas-pix-auto-status", {
+          body: { authorizationId: authId },
+        });
+        if (cancelled || !data?.state) return;
+        if (data.state === "active") {
+          setAuthState("active");
+          toast.success("Cobrança automática autorizada! Sua assinatura está ativa.");
+        } else if (data.state === "expired") {
+          setAuthState("expired");
+        }
+      } catch {
+        // silencioso: polling não deve gerar ruído pro cliente
+      }
+    };
+    const id = setInterval(tick, 6000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [pixOpen, pixStage, pixData?.authorizationId, authState]);
 
   const inputCls =
     "mt-1.5 bg-white/5 border-white/15 text-white placeholder:text-white/55 focus-visible:ring-1 focus-visible:ring-[hsl(140_18%_55%)]";
@@ -1247,17 +1284,69 @@ const CheckoutV2 = () => {
                   <div className="bg-white/5 border border-white/10 rounded-xl p-3 text-xs text-white/70 space-y-1.5">
                     <p>1. Abra o app do seu banco e escolha pagar com PIX.</p>
                     <p>2. Escaneie o QR Code ou cole o código copia-e-cola.</p>
-                    <p>3. Confirme o pagamento — você recebe a confirmação no WhatsApp em segundos.</p>
+                    {pixMode === "subscription" ? (
+                      <>
+                        <p className="text-white">
+                          3. <strong>Marque a autorização de cobrança automática</strong> na tela de
+                          confirmação do banco.
+                        </p>
+                        <p>4. Confirme o pagamento — a liberação chega no WhatsApp em segundos.</p>
+                      </>
+                    ) : (
+                      <p>3. Confirme o pagamento — você recebe a confirmação no WhatsApp em segundos.</p>
+                    )}
                   </div>
 
                   {pixMode === "subscription" && (
                     <div className="bg-[hsl(35_70%_60%)]/15 border border-[hsl(35_70%_60%)]/40 rounded-xl p-3 text-xs space-y-2">
                       <p className="font-semibold text-[hsl(35_70%_75%)]">
-                        ⚠️ Ação obrigatória no app do banco
+                        ⚠️ O passo que a maioria esquece
                       </p>
                       <p className="text-white/80">
-                        Ao confirmar o pagamento, <strong>marque "Autorizar Pix Automático"</strong>. Sem isso, a assinatura não será ativada.
+                        O app do banco vai pedir <strong>duas confirmações</strong>: o pagamento e a{" "}
+                        <strong>autorização da cobrança automática</strong> (pode aparecer como
+                        "Pix Automático" ou "autorizar cobranças recorrentes"). Sem marcar a segunda,
+                        a assinatura não é ativada.
                       </p>
+                      <p className="text-white/60">
+                        Você cancela essa autorização quando quiser, no próprio app do banco.
+                      </p>
+                    </div>
+                  )}
+
+                  {authState === "pending" && (
+                    <div className="flex items-center justify-center gap-2 text-xs text-white/70">
+                      <span className="w-2 h-2 rounded-full bg-[hsl(35_70%_60%)] animate-pulse" />
+                      Aguardando a autorização no app do banco...
+                    </div>
+                  )}
+
+                  {authState === "active" && (
+                    <div className="bg-[hsl(140_30%_45%)]/20 border border-[hsl(140_30%_60%)]/40 rounded-xl p-3 text-xs text-white">
+                      ✅ Cobrança automática autorizada. Sua assinatura está ativa — o acesso chega no
+                      WhatsApp.
+                    </div>
+                  )}
+
+                  {authState === "expired" && (
+                    <div className="bg-destructive/20 border border-destructive/40 rounded-xl p-3 text-xs text-white space-y-2">
+                      <p>
+                        O código expirou antes da autorização ser concluída. Gere um novo PIX e
+                        lembre-se de marcar a autorização de cobrança automática.
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="bg-transparent border-white/25 text-white hover:bg-white/10 hover:text-white"
+                        onClick={() => {
+                          setPixData(null);
+                          setAuthState(null);
+                          setPixStage("form");
+                        }}
+                      >
+                        Gerar novo PIX
+                      </Button>
                     </div>
                   )}
 

@@ -92,6 +92,10 @@ Deno.serve(async (req) => {
         PIX_AUTOMATIC_RECURRING_AUTHORIZATION_CANCELLED: { status: "CANCELLED", field: "cancelled_at" },
         PIX_AUTOMATIC_RECURRING_AUTHORIZATION_REJECTED:  { status: "REJECTED", field: "cancelled_at" },
         PIX_AUTOMATIC_RECURRING_AUTHORIZATION_EXPIRED:   { status: "EXPIRED",  field: "cancelled_at" },
+        // REFUSED = consentimento não concluído (na prática, QR expirado antes do
+        // cliente autorizar no app do banco). Não é cobrança recusada: nenhuma
+        // cobrança chega a existir. Tratado explícito pra virar sinal, não ruído.
+        PIX_AUTOMATIC_RECURRING_AUTHORIZATION_REFUSED:   { status: "REFUSED",  field: "cancelled_at" },
       };
       const mapped = authStatusMap[event] || { status: (authorizationEvt.status as string) || "UNKNOWN" };
       const updatePayload: Record<string, unknown> = {
@@ -101,6 +105,10 @@ Deno.serve(async (req) => {
       if (mapped.field) updatePayload[mapped.field] = new Date().toISOString();
       if (event === "PIX_AUTOMATIC_RECURRING_AUTHORIZATION_CANCELLED") {
         updatePayload.cancellation_reason = (authorizationEvt as any).cancellationReason || "asaas_event";
+      }
+      if (mapped.status === "REFUSED") {
+        updatePayload.cancellation_reason =
+          (authorizationEvt as any).cancellationReason || "consentimento_nao_concluido";
       }
 
       // Asaas devolve `subscriptionId` na ativação do PIX Automático Bacen.
@@ -133,6 +141,14 @@ Deno.serve(async (req) => {
             .update({ status: "canceled" })
             .eq("email", authRow.customer_email);
         }
+      }
+
+      // REFUSED nunca ativou nada: não mexe em profile. Só grita no log pra
+      // aparecer na auditoria diária e alimentar a recuperação.
+      if (mapped.status === "REFUSED") {
+        console.error(
+          `[webhook-asaas] PIX Automático NÃO autorizado — auth ${authorizationEvt.id} (consentimento não concluído no app do banco)`,
+        );
       }
 
       return new Response(JSON.stringify({ ok: true, event, status: mapped.status }), {

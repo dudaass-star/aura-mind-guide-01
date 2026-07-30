@@ -211,19 +211,26 @@ Deno.serve(async (req) => {
       month: "2-digit",
       day: "2-digit",
     }).format(new Date());
-    // QR Code do 1º pagamento: válido por 30 min (1800s). Bacen exige expirationSeconds
-    // no immediateQrCode. Mantemos expirationDate calculado pra log/UI.
-    const qrTtlSeconds = 30 * 60;
-    const qrExpiration = new Date(Date.now() + qrTtlSeconds * 1000)
-      .toISOString()
-      .replace("T", " ")
-      .slice(0, 19);
+    // QR Code do 1º pagamento. TTL curto (30 min) era a causa da perda: 12 de 17
+    // autorizações foram marcadas REFUSED exatamente ~30 min após a criação, ou
+    // seja, expiravam antes do cliente concluir o consentimento no app do banco.
+    // Passa a 24h, com fallback pra 30 min se a Asaas rejeitar o valor.
+    const QR_TTL_LONG = 24 * 60 * 60;
+    const QR_TTL_FALLBACK = 30 * 60;
+    const buildQrExpiration = (ttl: number) =>
+      new Date(Date.now() + ttl * 1000).toISOString().replace("T", " ").slice(0, 19);
+    let qrTtlSeconds = QR_TTL_LONG;
+    let qrExpiration = buildQrExpiration(qrTtlSeconds);
     // contractId tem limite de 35 chars no Bacen → usa hash curto.
     const contractId = `aura${plan[0]}${billing[0]}${Date.now().toString(36)}`.slice(0, 35);
     // description tem limite de 35 chars.
     const description = `Aura ${PLAN_NAMES[plan]} ${PERIOD_LABELS[billing]}`.slice(0, 35);
 
-    const authReqBody: Record<string, unknown> = {
+    // retryPolicy ALLOW_THREE_IN_SEVEN_DAYS = política Bacen 3R_7D: até 3 novas
+    // tentativas de débito em 7 dias após o vencimento. Sem isso (default
+    // NOT_ALLOWED) uma falha de débito mata o ciclo de vez.
+    // minLimitValue NÃO pode ser enviado em autorização de valor fixo.
+    const buildAuthReqBody = (ttl: number): Record<string, unknown> => ({
       customerId: asaasCustomerId,
       frequency,
       contractId,
@@ -231,18 +238,34 @@ Deno.serve(async (req) => {
       value: amountDecimal,
       description,
       paymentCreationMode: "SUBSCRIPTION",
+      retryPolicy: "ALLOW_THREE_IN_SEVEN_DAYS",
       immediateQrCode: {
         value: amountDecimal,
         originalValue: amountDecimal,
-        expirationDate: qrExpiration,
-        expirationSeconds: qrTtlSeconds,
+        expirationDate: buildQrExpiration(ttl),
+        expirationSeconds: ttl,
       },
-    };
-
-    const authorization = await asaasFetch("/pix/automatic/authorizations", {
-      method: "POST",
-      body: JSON.stringify(authReqBody),
     });
+
+    let authorization: Record<string, unknown>;
+    try {
+      authorization = await asaasFetch("/pix/automatic/authorizations", {
+        method: "POST",
+        body: JSON.stringify(buildAuthReqBody(qrTtlSeconds)),
+      });
+    } catch (e) {
+      // TTL longo rejeitado pela Asaas → recria com o TTL antigo de 30 min.
+      console.warn(
+        `[criar-pix-recorrente-asaas] TTL ${qrTtlSeconds}s rejeitado, refazendo com ${QR_TTL_FALLBACK}s:`,
+        (e as Error)?.message,
+      );
+      qrTtlSeconds = QR_TTL_FALLBACK;
+      qrExpiration = buildQrExpiration(qrTtlSeconds);
+      authorization = await asaasFetch("/pix/automatic/authorizations", {
+        method: "POST",
+        body: JSON.stringify(buildAuthReqBody(qrTtlSeconds)),
+      });
+    }
 
     const authorizationId = authorization?.id as string;
     if (!authorizationId) {
