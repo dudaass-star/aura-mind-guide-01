@@ -484,19 +484,28 @@ Deno.serve(async (req) => {
       if (customerId && amountCents > 0) {
         const { data: twins } = await supabase
           .from("asaas_payments")
-          .select("asaas_payment_id, status, payment_method, raw_payload")
+          .select("asaas_payment_id, status, payment_method, raw_payload, paid_at, created_at")
           .eq("asaas_customer_id", customerId)
           .eq("amount_cents", amountCents)
           .in("status", ["RECEIVED", "CONFIRMED"])
           .neq("asaas_payment_id", payment.id);
 
         const paidTwin = (twins || []).find((t) => {
-          const twinDue = String(
+          if (t.payment_method !== "PIX_AUTOMATIC") return false;
+          // A cobrança do QR imediato é reconciliada sem dueDate: cai pra data de
+          // pagamento, com tolerância de 1 dia (virada de dia / fuso).
+          const twinDay = String(
             (t.raw_payload as any)?.dueDate ||
-              (t.raw_payload as any)?.payment?.dueDate ||
+              (t.raw_payload as any)?.paymentDate ||
+              t.paid_at ||
+              t.created_at ||
               "",
           ).slice(0, 10);
-          return twinDue === dueDay && t.payment_method === "PIX_AUTOMATIC";
+          if (!twinDay) return false;
+          const diff = Math.abs(
+            new Date(`${twinDay}T00:00:00Z`).getTime() - new Date(`${dueDay}T00:00:00Z`).getTime(),
+          );
+          return diff <= 24 * 60 * 60 * 1000;
         });
 
         if (paidTwin) {
