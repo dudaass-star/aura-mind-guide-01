@@ -220,6 +220,11 @@ const CheckoutV2 = () => {
   // O consentimento é a etapa que mais perdemos: o cliente paga/escaneia mas não
   // marca a autorização de cobrança automática no app do banco.
   const [authState, setAuthState] = useState<"pending" | "active" | "expired" | null>(null);
+  // Autorização retomada de uma visita anterior (cliente fechou o modal do QR e
+  // autorizou no banco depois). Guardamos o id no navegador por 24h.
+  const [resumedAuthId, setResumedAuthId] = useState<string | null>(null);
+  const [resumedState, setResumedState] = useState<"pending" | "active" | "expired" | null>(null);
+  const [resumedPlan, setResumedPlan] = useState<string | null>(null);
 
   // ViewContent + GA4 begin_checkout no mount
   useEffect(() => {
