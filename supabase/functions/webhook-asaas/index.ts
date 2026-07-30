@@ -458,6 +458,96 @@ Deno.serve(async (req) => {
       console.warn(`[webhook-asaas] Pagamento ${payment.id} não encontrado no banco`);
     }
 
+    // ============================================================
+    // PIX Automático Bacen — fatura gêmea do ciclo 1.
+    // A autorização é criada com `paymentCreationMode: SUBSCRIPTION` e
+    // `startDate` = hoje, então o Asaas emite (a) o QR imediato, que é o
+    // primeiro pagamento e ativa o consentimento, e (b) a fatura do ciclo 1
+    // da assinatura, com o MESMO vencimento e valor. A segunda é duplicada:
+    // fica PENDING, vira OVERDUE e o Asaas cobra por e-mail quem já pagou.
+    // Cancelamos em tempo real, com condição estrita: só quando existe uma
+    // cobrança PIX_AUTOMATIC já paga, do mesmo customer, mesmo valor e mesmo
+    // vencimento. Sem gêmea paga, nada é cancelado.
+    // ============================================================
+    const dueDateRaw = (payment as any)?.dueDate as string | undefined;
+    const isOpenStatus = newStatus === "PENDING" || newStatus === "OVERDUE";
+    if (isOpenStatus && !isPaid && dueDateRaw && (subscriptionId || pixAutoAuthId)) {
+      const dueDay = String(dueDateRaw).slice(0, 10);
+      const customerId =
+        ((payment as any)?.customer as string | undefined) ||
+        (updated?.asaas_customer_id as string | undefined);
+      const amountCents =
+        Math.round(Number((payment as any).value || 0) * 100) ||
+        (updated?.amount_cents as number | undefined) ||
+        0;
+
+      if (customerId && amountCents > 0) {
+        const { data: twins } = await supabase
+          .from("asaas_payments")
+          .select("asaas_payment_id, status, payment_method, raw_payload")
+          .eq("asaas_customer_id", customerId)
+          .eq("amount_cents", amountCents)
+          .in("status", ["RECEIVED", "CONFIRMED"])
+          .neq("asaas_payment_id", payment.id);
+
+        const paidTwin = (twins || []).find((t) => {
+          const twinDue = String(
+            (t.raw_payload as any)?.dueDate ||
+              (t.raw_payload as any)?.payment?.dueDate ||
+              "",
+          ).slice(0, 10);
+          return twinDue === dueDay && t.payment_method === "PIX_AUTOMATIC";
+        });
+
+        if (paidTwin) {
+          const ASAAS_API_KEY = Deno.env.get("ASAAS_API_KEY");
+          const ASAAS_ENV = (Deno.env.get("ASAAS_ENV") || "sandbox").toLowerCase();
+          const ASAAS_BASE_URL =
+            ASAAS_ENV === "production"
+              ? "https://api.asaas.com/v3"
+              : "https://api-sandbox.asaas.com/v3";
+          let cancelledRemote = false;
+          if (ASAAS_API_KEY) {
+            try {
+              const delResp = await fetch(`${ASAAS_BASE_URL}/payments/${payment.id}`, {
+                method: "DELETE",
+                headers: {
+                  access_token: ASAAS_API_KEY,
+                  "Content-Type": "application/json",
+                  "User-Agent": "Aura/1.0",
+                },
+              });
+              cancelledRemote = delResp.ok;
+              if (!delResp.ok) {
+                console.warn(
+                  `[webhook-asaas] DELETE /payments/${payment.id} → ${delResp.status}`,
+                );
+              }
+            } catch (e) {
+              console.warn(
+                `[webhook-asaas] Falha cancelando gêmea ${payment.id}:`,
+                (e as Error).message,
+              );
+            }
+          }
+
+          if (cancelledRemote) {
+            await supabase
+              .from("asaas_payments")
+              .update({ status: "CANCELLED" })
+              .eq("asaas_payment_id", payment.id);
+            console.log(
+              `[webhook-asaas] 🧹 Fatura gêmea ${payment.id} cancelada (venc. ${dueDay}, gêmea paga ${paidTwin.asaas_payment_id})`,
+            );
+            return new Response(
+              JSON.stringify({ ok: true, event, duplicate_cancelled: payment.id }),
+              { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+            );
+          }
+        }
+      }
+    }
+
     // Concede / estende acesso no profile quando o pagamento é confirmado.
     if (isPaid && updated?.customer_email) {
       await handleActivation(supabase, updated, payment);
