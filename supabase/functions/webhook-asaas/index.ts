@@ -262,7 +262,10 @@ Deno.serve(async (req) => {
           .insert({
             asaas_payment_id: payment.id,
             asaas_customer_id: authRow.asaas_customer_id,
-            asaas_subscription_id: pixAutoAuthId, // reusa coluna pra agrupar ciclos
+            // Cascata: sub da autorização → sub do payload → id da autorização
+            // (a coluna é reusada pra agrupar ciclos quando não há subscription).
+            asaas_subscription_id:
+              authRow.asaas_subscription_id || subscriptionId || pixAutoAuthId,
             user_id: authRow.user_id,
             customer_name: authRow.customer_name,
             customer_email: authRow.customer_email,
@@ -378,7 +381,12 @@ Deno.serve(async (req) => {
             .insert({
               asaas_payment_id: payment.id,
               asaas_customer_id: asaasCustomerId,
-              asaas_subscription_id: authByCustomer.asaas_subscription_id,
+              // Cascata: sub da autorização → sub do payload → id da autorização.
+              // Sem isso a linha nasce órfã e o funil trata renovação como venda nova.
+              asaas_subscription_id:
+                authByCustomer.asaas_subscription_id ||
+                subscriptionId ||
+                authByCustomer.asaas_authorization_id,
               user_id: authByCustomer.user_id,
               customer_name: authByCustomer.customer_name,
               customer_email: authByCustomer.customer_email,
@@ -410,6 +418,13 @@ Deno.serve(async (req) => {
             console.log(
               `[webhook-asaas] ✅ Payment ${payment.id} reconciliado com auth ${authByCustomer.asaas_authorization_id} via customer ${asaasCustomerId}`,
             );
+            // Fecha o vínculo na autorização pra que os próximos ciclos já nasçam ligados.
+            if (!authByCustomer.asaas_subscription_id && subscriptionId) {
+              await supabase
+                .from("asaas_pix_authorizations")
+                .update({ asaas_subscription_id: subscriptionId })
+                .eq("asaas_authorization_id", authByCustomer.asaas_authorization_id);
+            }
           }
         }
       }

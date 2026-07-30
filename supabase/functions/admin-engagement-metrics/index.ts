@@ -1404,16 +1404,90 @@ Deno.serve(async (req) => {
         return !!firstId && firstId !== row.id;
       };
 
+      // Linhas órfãs: PIX Automático Bacen pode gravar o pagamento sem
+      // asaas_subscription_id mesmo quando o payload cru traz `subscription`.
+      // Sem esse resgate, a renovação vira "venda nova" no funil.
+      const { data: orphanRows } = await supabase
+        .from('asaas_payments')
+        .select('id, raw_payload')
+        .is('asaas_subscription_id', null)
+        .or(`created_at.gte.${periodStart},paid_at.gte.${periodStart}`)
+        .limit(2000);
+      const rawSubById = new Map<string, string>();
+      for (const r of orphanRows || []) {
+        const sub = (r.raw_payload as Record<string, unknown> | null)?.subscription as string | undefined;
+        if (sub) rawSubById.set(r.id as string, sub);
+      }
+
+      // Identidades que já pagaram ANTES do período — qualquer pagamento delas
+      // dentro do período é renovação, não conversão de checkout novo.
+      const { data: paidBeforePeriod } = await supabase
+        .from('asaas_payments')
+        .select('customer_email, customer_phone')
+        .in('status', PAID_STATUSES)
+        .lt('paid_at', periodStart)
+        .not('customer_email', 'ilike', E2E_EMAIL_PATTERN)
+        .limit(10000);
+      const paidBeforeKeys = new Set<string>();
+      for (const r of paidBeforePeriod || []) {
+        const k = identityKey(r.customer_email as string | null, r.customer_phone as string | null);
+        if (k) paidBeforeKeys.add(k);
+      }
+
+      // Autorizações PIX Automático Bacen criadas ANTES do período: qualquer
+      // cobrança do ciclo delas dentro do período é renovação, mesmo que seja
+      // a 1ª linha gravada em asaas_payments daquela subscription.
+      const { data: authsBeforePeriod } = await supabase
+        .from('asaas_pix_authorizations')
+        .select('asaas_subscription_id, asaas_customer_id, created_at, status')
+        .lt('created_at', periodStart)
+        .eq('status', 'ACTIVE')
+        .limit(5000);
+      const recurringSubsBefore = new Set<string>();
+      const recurringCustomersBefore = new Set<string>();
+      for (const a of authsBeforePeriod || []) {
+        const sub = a.asaas_subscription_id as string | null;
+        const cus = a.asaas_customer_id as string | null;
+        if (sub) recurringSubsBefore.add(sub);
+        if (cus) recurringCustomersBefore.add(cus);
+      }
+
+      // Renovação no recorte do período: regra base + payload cru + histórico pago
+      // + autorização recorrente anterior ao período.
+      const isRenewalInPeriod = (row: {
+        id: string;
+        asaas_subscription_id: string | null;
+        customer_email?: string | null;
+        customer_phone?: string | null;
+        asaas_customer_id?: string | null;
+      }): boolean => {
+        const effectiveSub = row.asaas_subscription_id || rawSubById.get(row.id) || null;
+        if (isRenewal({ id: row.id, asaas_subscription_id: effectiveSub })) return true;
+        if (effectiveSub && recurringSubsBefore.has(effectiveSub)) return true;
+        if (row.asaas_customer_id && recurringCustomersBefore.has(row.asaas_customer_id)) return true;
+        // Linha órfã com subscription no payload cru: não é primeiro pagamento
+        // rastreável — trata como renovação se a identidade já pagou antes.
+        const k = identityKey(row.customer_email ?? null, row.customer_phone ?? null);
+        if (k && paidBeforeKeys.has(k)) return true;
+        return false;
+      };
+
       const { data: asaasCreatedInPeriod } = await supabase
         .from('asaas_payments')
-        .select('id, customer_email, customer_phone, asaas_subscription_id')
+        .select('id, customer_email, customer_phone, asaas_subscription_id, asaas_customer_id')
         .gte('created_at', periodStart)
         .lt('created_at', periodEnd)
         .not('customer_email', 'ilike', E2E_EMAIL_PATTERN);
 
       const pixCreatedEmails = new Set<string>();
       for (const p of asaasCreatedInPeriod || []) {
-        if (isRenewal({ id: p.id as string, asaas_subscription_id: p.asaas_subscription_id as string | null })) continue;
+        if (isRenewalInPeriod({
+          id: p.id as string,
+          asaas_subscription_id: p.asaas_subscription_id as string | null,
+          customer_email: p.customer_email as string | null,
+          customer_phone: p.customer_phone as string | null,
+          asaas_customer_id: p.asaas_customer_id as string | null,
+        })) continue;
         const em = (p.customer_email as string | null) || `__nokey_${p.id}`;
         pixCreatedEmails.add(em);
         const k = identityKey(p.customer_email as string | null, p.customer_phone as string | null);
@@ -1424,7 +1498,7 @@ Deno.serve(async (req) => {
       // Confirmados: conta por paid_at (dinheiro entrou no período, mesmo se PIX criado antes)
       const { data: asaasConfirmedInPeriod } = await supabase
         .from('asaas_payments')
-        .select('id, customer_email, customer_phone, paid_at, status, asaas_subscription_id')
+        .select('id, customer_email, customer_phone, paid_at, status, asaas_subscription_id, asaas_customer_id')
         .in('status', PAID_STATUSES)
         .gte('paid_at', periodStart)
         .lt('paid_at', periodEnd)
@@ -1432,7 +1506,13 @@ Deno.serve(async (req) => {
 
       const pixConfirmedEmails = new Set<string>();
       for (const p of asaasConfirmedInPeriod || []) {
-        if (isRenewal({ id: p.id as string, asaas_subscription_id: p.asaas_subscription_id as string | null })) continue;
+        if (isRenewalInPeriod({
+          id: p.id as string,
+          asaas_subscription_id: p.asaas_subscription_id as string | null,
+          customer_email: p.customer_email as string | null,
+          customer_phone: p.customer_phone as string | null,
+          asaas_customer_id: p.asaas_customer_id as string | null,
+        })) continue;
         const em = (p.customer_email as string | null) || `__nokey_${p.id}`;
         pixConfirmedEmails.add(em);
         const k = identityKey(p.customer_email as string | null, p.customer_phone as string | null);
