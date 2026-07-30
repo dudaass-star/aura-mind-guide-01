@@ -1,27 +1,22 @@
-# PIX Automático Bacen: por que ainda não está funcionando
+# PIX Automático Bacen: diagnóstico corrigido e o que fazer
 
-## O que os dados mostram (verificado agora)
+## Sua hipótese está quase certa — e os dados apontam algo mais simples
 
-Desde 28/06 foram criadas **17 autorizações** de PIX Automático:
+Você não acha essas recusas na Asaas porque **não são cobranças, são autorizações** (o consentimento de recorrência). Quando o consentimento não se completa, nenhuma cobrança é criada — logo, nada aparece em "Cobranças". Esses registros vivem em `/pix/automatic/authorizations`, que o painel não expõe de forma navegável. Nosso `asaas_pix_authorizations` é hoje a única visão completa.
 
-- **3 ACTIVE** (Leandro, Francisco, Felipe)
-- **12 REFUSED** — o banco do pagador recusou o consentimento de recorrência
-- **2 CANCELLED**
+E o padrão temporal mata a dúvida: **todas as 12 REFUSED foram marcadas exatamente ~30 minutos após a criação** (30:10, 30:19, 30:20, 30:28, 30:38, 30:49, 30:59, 31:01…). Trinta minutos é exatamente o TTL do nosso QR (`expirationSeconds = 1800`). Ou seja: não é o banco negando o débito automático — é o **QR expirando sem que o cliente conclua**. O cliente abriu o app, viu a tela de autorização de recorrência (a "caixinha") e não finalizou: desistiu, travou na dúvida, ou nem abriu.
 
-A implementação está no ar e funciona tecnicamente, mas **quase ninguém consegue autorizar**. A Nina, por exemplo, tentou 6 vezes entre 29 e 30/06: todas REFUSED/CANCELLED — e terminou pagando PIX na mão.
+As 3 que deram certo foram concluídas em 2, 6 e 117 minutos. Autorizações que o cliente completa, completam rápido.
 
-Além disso, **nenhuma cobrança em `asaas_payments` tem `pixAutomaticAuthorizationId`**, nem para os 3 casos ACTIVE. As cobranças de ciclo desses clientes estão como PIX comum `PENDING` (QR manual). Não há um único débito automático confirmado até hoje.
+A Nina é o caso extremo: 6 tentativas em dois dias, todas expiradas, e no fim pagou um PIX manual.
 
-### Por que você não acha essas recusas no painel da Asaas
+Então o problema real é **conversão da tela de autorização no app do banco**, não capacidade técnica.
 
-O que foi recusado **não é cobrança, é autorização** (o consentimento de recorrência do PIX Automático). Por isso não aparece em "Cobranças": não existe cobrança criada quando o consentimento é negado — a Asaas devolve a autorização com `status: REFUSED` e nenhum pagamento é gerado. Nos payloads que temos, essas autorizações têm `payload: null`, `encodedImage: null` e `subscriptionId: null`, ou seja: nem QR chegou a valer, nem assinatura foi criada.
+## O segundo problema, que continua de pé
 
-Esses registros vivem no recurso `/pix/automatic/authorizations` da API, que o painel da Asaas não expõe de forma navegável. Nosso banco (`asaas_pix_authorizations`) é hoje a única visão completa — e é exatamente esse ponto cego que o item 1 abaixo resolve.
+Para as 3 autorizações ACTIVE, as cobranças do ciclo seguinte estão como PIX comum `PENDING`, **sem `pixAutomaticAuthorizationId`**, e há duas já `OVERDUE` (Leandro 06/07, Felipe 30/06, Francisco 02/07). Nenhum débito automático confirmado até hoje: os únicos recebidos foram os pagamentos iniciais.
 
-Dois problemas somados:
-
-1. **Taxa de recusa altíssima na autorização** (12/17). Nos payloads da Asaas, as autorizações voltam com `retryPolicy: "NOT_ALLOWED"` e `minLimitValue: null` — não enviamos esses campos na criação.
-2. **A recusa é silenciosa.** O webhook não trata `..._AUTHORIZATION_REFUSED` (cai num fallback genérico) e, para REFUSED, não faz nada: não avisa ninguém, não oferece cartão/PIX avulso, não gera alerta. O cliente simplesmente sai do checkout olhando um QR parado.
+Duas cobranças vencem agora e servem de teste: **Felipe 30/07** (`pay_tf8bevjfskg3r6rq`) e **Francisco 02/08** (`pay_qm7po4aowq9lh8o0`).
 
 ## O que fazer
 
