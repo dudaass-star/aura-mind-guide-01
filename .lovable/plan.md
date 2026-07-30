@@ -18,30 +18,28 @@ Para as 3 autorizações ACTIVE, as cobranças do ciclo seguinte estão como PIX
 
 Duas cobranças vencem agora e servem de teste: **Felipe 30/07** (`pay_tf8bevjfskg3r6rq`) e **Francisco 02/08** (`pay_qm7po4aowq9lh8o0`).
 
-## O que fazer
+## O que fazer (mantendo PIX Automático como caminho recorrente — sem avulso)
 
-### 1. Instrumentar e enxergar (primeiro passo, sem risco)
-- Tratar `PIX_AUTOMATIC_RECURRING_AUTHORIZATION_REFUSED` explicitamente no `webhook-asaas`, com log de erro e registro do motivo.
-- Painel/consulta no Admin: autorizações criadas × ativadas × recusadas por dia, e cobranças de ciclo com/sem vínculo de autorização.
-- Conferência direta contra a Asaas: uma leitura read-only de `/pix/automatic/authorizations` para confirmar, na fonte, que os 12 REFUSED constam lá com o mesmo status e capturar o motivo da recusa que a Asaas informa (campo de rejeição por PSP do pagador).
+### 1. Converter a tela de autorização no app do banco
+Aqui está o ganho maior: 12 pessoas chegaram ao QR e não concluíram.
+- Reescrever a instrução na tela de QR: dizer explicitamente que, além de pagar, o app do banco vai pedir **autorização da cobrança automática mensal** e que é preciso confirmar essa etapa — com o valor, a frequência e o "pode cancelar quando quiser" visíveis.
+- Estados de acompanhamento na própria tela: "aguardando autorização" → "autorizado" → "expirou". Hoje a tela fica parada e o cliente não sabe se deu certo.
+- Aumentar o TTL do QR (de 30 min para o máximo que a Asaas aceitar) e oferecer botão "gerar novo QR" quando expirar, em vez de deixar o cliente sem saída.
 
-### 2. Recuperar quem é recusado (maior impacto em receita)
-- Quando a autorização vira REFUSED, o checkout para de esperar e mostra na hora a alternativa (PIX avulso do mesmo valor ou cartão).
-- Recuperação por e-mail/WhatsApp para quem foi recusado e não voltou (12 pessoas nos últimos 30 dias).
+### 2. Não perder quem expirou
+- Tratar `..._AUTHORIZATION_REFUSED`/expirado explicitamente no `webhook-asaas`, com log de erro e registro do motivo.
+- Recuperação por e-mail/WhatsApp para quem expirou e não voltou (12 pessoas em 30 dias), com link para retomar o **mesmo PIX recorrente** e uma explicação curta da etapa de autorização. Nenhuma oferta de PIX avulso.
 
-### 3. Ajustar a criação da autorização
-- Enviar `retryPolicy` permitindo retentativa e `minLimitValue`, para que um débito que falhe possa ser tentado novamente em vez de morrer na primeira falha.
-- Confirmar com o suporte da Asaas: (a) por que as autorizações voltam REFUSED com tanta frequência nessa conta; (b) por que as cobranças de ciclo das autorizações ACTIVE saem sem `pixAutomaticAuthorizationId` — sem esse vínculo o débito automático nunca dispara e o cliente sempre recebe QR manual.
+### 3. Fazer o débito automático realmente disparar
+- Enviar `retryPolicy` com retentativa e `minLimitValue` na criação da autorização, para que uma falha de débito seja tentada de novo.
+- Investigar por que as cobranças de ciclo das 3 autorizações ACTIVE nascem sem `pixAutomaticAuthorizationId` (e por isso viram QR manual e vencem). Confirmar com o suporte da Asaas se o vínculo deve ser criado pela assinatura gerada pela autorização (`paymentCreationMode: SUBSCRIPTION`) e o que está impedindo.
 
 ### 4. Verificação do dia seguinte
-- Rotina diária que compara vencimentos do dia anterior com pagamentos recebidos por débito automático e alerta quando o débito não disparou. É isso que responde de forma definitiva se o PIX Automático funciona nesta conta.
+- Rotina diária comparando vencimentos do dia anterior com recebimentos por débito automático, alertando quando o débito não disparou. Começando por Felipe (30/07) e Francisco (02/08) — são o teste real.
 
-## Decisão que precisa ser sua
+## Ordem sugerida
 
-Com ~70% de recusa, o PIX Automático como **caminho padrão do mensal** custa vendas. Duas opções:
-
-- **A) Manter como padrão** e implementar itens 1–4 (recupera o refugo, mas o funil segue sangrando até a Asaas responder).
-- **B) Rebaixar temporariamente**: mensal volta a oferecer PIX avulso/cartão como padrão, com PIX Automático como opção secundária, até o item 4 comprovar que o débito dispara.
+3 e 4 primeiro (sem débito automático funcionando, converter mais autorizações só empurra o problema para o ciclo 2), depois 1 e 2 para elevar a taxa de autorização.
 
 ## Detalhes técnicos
 
