@@ -155,8 +155,24 @@ Deno.serve(async (req) => {
     // inbound veio pro número antigo. Respondemos com aviso curto via Twilio
     // (janela 24h aberta = texto livre, sem template) e NÃO chamamos o agente.
     // Idempotência: 7 dias entre repetições para não virar spam.
+    //
+    // GATE OBRIGATÓRIO: só roda se `system_config.twilio_redirect_notice_enabled = 'true'`.
+    // Motivo: enquanto o envio proativo pelo Meta falha e cai no fallback Twilio,
+    // o cliente RECEBE do número antigo — mandar "mudei de número" nesse cenário
+    // joga cliente novo pra um número que não é o que falou com ele.
     // ========================================================================
     try {
+      const { data: noticeFlag } = await supabase
+        .from('system_config')
+        .select('value')
+        .eq('key', 'twilio_redirect_notice_enabled')
+        .maybeSingle();
+
+      if (noticeFlag?.value !== 'true') {
+        console.log('⏭️ Redirect notice desabilitado (twilio_redirect_notice_enabled != true)');
+        throw { __skipRedirect: true };
+      }
+
       const { data: targetProfile } = await supabase
         .from('profiles')
         .select('id, whatsapp_provider, twilio_redirect_notice_sent_at')
@@ -192,7 +208,9 @@ Deno.serve(async (req) => {
         });
       }
     } catch (redirectErr) {
-      console.error('⚠️ Erro na checagem de redirecionamento Meta:', redirectErr);
+      if (!(redirectErr as { __skipRedirect?: boolean })?.__skipRedirect) {
+        console.error('⚠️ Erro na checagem de redirecionamento Meta:', redirectErr);
+      }
       // Não bloqueia o fluxo normal — segue pro worker
     }
 
