@@ -129,8 +129,73 @@ Deno.serve(async (req) => {
         console.log(`[webhook-asaas] Authorization ${authorizationEvt.id} → ${mapped.status}`);
       }
 
-      // Cancelamento da autorização → marca profile como canceled (perde acesso ao fim do ciclo).
+      // Cancelamento/recusa da autorização.
+      // CANCELLED = o pagador derrubou o consentimento no app do banco. Se o ciclo
+      // atual está pago, ele NÃO perde acesso agora: mantemos `active` até
+      // plan_expires_at e só registramos a perda do consentimento, pra a auditoria
+      // disparar a reautorização na virada. Sem isso, cancelar consentimento virava
+      // churn silencioso com acesso cortado em cima de ciclo pago.
       if (mapped.status === "CANCELLED" || mapped.status === "REJECTED" || mapped.status === "EXPIRED") {
+        const { data: authRow } = await supabase
+          .from("asaas_pix_authorizations")
+          .select("customer_email, customer_name, plan, billing_period, replaced_by_authorization_id")
+          .eq("asaas_authorization_id", authorizationEvt.id)
+          .maybeSingle();
+        if (authRow?.customer_email) {
+          const { data: prof } = await supabase
+            .from("profiles")
+            .select("id, status, plan_expires_at")
+            .eq("email", authRow.customer_email)
+            .maybeSingle();
+          const expiresAt = prof?.plan_expires_at ? new Date(prof.plan_expires_at) : null;
+          const cicloPagoVigente =
+            mapped.status === "CANCELLED" && !!expiresAt && expiresAt.getTime() > Date.now();
+
+          if (prof?.id) {
+            await supabase
+              .from("profiles")
+              .update(
+                cicloPagoVigente
+                  ? { pix_consent_lost_at: new Date().toISOString() }
+                  : { status: "canceled", pix_consent_lost_at: new Date().toISOString() },
+              )
+              .eq("id", prof.id);
+          }
+
+          // Alerta admin: só quando o consentimento cai por ação do pagador e a
+          // autorização não foi substituída por uma reautorização nossa.
+          if (mapped.status === "CANCELLED" && !authRow.replaced_by_authorization_id) {
+            const alertEmail = Deno.env.get("ADMIN_ALERT_EMAIL");
+            if (alertEmail) {
+              supabase.functions
+                .invoke("send-transactional-email", {
+                  body: {
+                    templateName: "admin-pix-auto-alert",
+                    recipientEmail: alertEmail,
+                    idempotencyKey: `pix-consent-lost-${authorizationEvt.id}`,
+                    templateData: {
+                      date: new Date().toISOString().slice(0, 10),
+                      lostAuthorizations: 1,
+                      recoveryEmailsSent: 0,
+                      lines: [
+                        `Consentimento PIX cancelado no app do banco · ${authRow.customer_name || "?"} · ${authRow.customer_email} · plano ${authRow.plan || "?"} (${authRow.billing_period || "?"}) · motivo: ${(authorizationEvt as any).cancellationReason || "não informado"} · acesso até ${prof?.plan_expires_at ? String(prof.plan_expires_at).slice(0, 10) : "desconhecido"}`,
+                      ],
+                    },
+                  },
+                })
+                .catch((e) =>
+                  console.warn("[webhook-asaas] alerta de consentimento perdido falhou:", e?.message || e),
+                );
+            }
+            console.error(
+              `[webhook-asaas] ⚠️ Consentimento PIX perdido — ${authRow.customer_email} (auth ${authorizationEvt.id}), acesso mantido até ${prof?.plan_expires_at || "?"}`,
+            );
+          }
+        }
+      }
+
+      // Reautorização concluída: limpa a marca de consentimento perdido.
+      if (mapped.status === "ACTIVE") {
         const { data: authRow } = await supabase
           .from("asaas_pix_authorizations")
           .select("customer_email")
@@ -139,8 +204,9 @@ Deno.serve(async (req) => {
         if (authRow?.customer_email) {
           await supabase
             .from("profiles")
-            .update({ status: "canceled" })
-            .eq("email", authRow.customer_email);
+            .update({ pix_consent_lost_at: null })
+            .eq("email", authRow.customer_email)
+            .not("pix_consent_lost_at", "is", null);
         }
       }
 
