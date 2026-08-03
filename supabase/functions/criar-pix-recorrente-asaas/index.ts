@@ -107,8 +107,76 @@ Deno.serve(async (req) => {
         : "https://api-sandbox.asaas.com/v3";
 
     const body = await req.json();
-    const { plan, billing, name, email, phone, cpf, fbp, fbc, gaClientId } =
+    let { plan, billing, name, email, phone, cpf, fbp, fbc, gaClientId } =
       body as Record<string, string>;
+    const mode = (body as Record<string, string>).mode || "checkout";
+    const reauthToken = (body as Record<string, string>).token;
+
+    const supabaseEarly = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // ---- Modo reautorização ----------------------------------------------
+    // A API da Asaas exige `immediateQrCode` em toda autorização (não existe QR
+    // só de consentimento). Então reautorizar = nova autorização Jornada 3, cujo
+    // pagamento imediato É a cobrança do próximo ciclo. Por isso o link só é
+    // enviado na virada do ciclo — nunca em cima de um ciclo já pago.
+    let reauthUserId: string | null = null;
+    let previousAuthId: string | null = null;
+    if (mode === "reauthorize") {
+      if (!reauthToken) {
+        return new Response(JSON.stringify({ error: "Token ausente" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const { data: tokenRow } = await supabaseEarly
+        .from("user_portal_tokens")
+        .select("user_id")
+        .eq("token", reauthToken)
+        .maybeSingle();
+      if (!tokenRow?.user_id) {
+        return new Response(JSON.stringify({ error: "Link inválido ou expirado" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      reauthUserId = tokenRow.user_id as string;
+
+      const { data: profile } = await supabaseEarly
+        .from("profiles")
+        .select("id, name, email, phone, plan, billing_cycle, asaas_customer_id")
+        .eq("id", reauthUserId)
+        .maybeSingle();
+      if (!profile) {
+        return new Response(JSON.stringify({ error: "Perfil não encontrado" }), {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Última autorização PIX do cliente: fonte do CPF e do ciclo contratado.
+      const { data: lastAuth } = await supabaseEarly
+        .from("asaas_pix_authorizations")
+        .select("asaas_authorization_id, plan, billing_period, customer_cpf, customer_phone, asaas_customer_id")
+        .or(`user_id.eq.${reauthUserId},customer_email.eq.${(profile.email || "").toLowerCase()}`)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      plan = plan || (lastAuth?.plan as string) || (profile.plan as string);
+      billing = billing || (lastAuth?.billing_period as string) || (profile.billing_cycle as string) || "monthly";
+      name = profile.name || (name as string) || "Cliente Aura";
+      email = profile.email || (email as string);
+      phone = profile.phone || (lastAuth?.customer_phone as string) || "";
+      cpf = (lastAuth?.customer_cpf as string) || (cpf as string) || "";
+      previousAuthId = (lastAuth?.asaas_authorization_id as string) || null;
+
+      if (!cpf) {
+        return new Response(
+          JSON.stringify({ error: "CPF não encontrado — precisamos refazer o checkout" }),
+          { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    }
 
     if (!plan || !billing || !name || !email || !cpf) {
       return new Response(JSON.stringify({ error: "Campos obrigatórios faltando" }), {
@@ -136,12 +204,20 @@ Deno.serve(async (req) => {
     const phoneClean = cleanDigits(phone || "");
     const emailClean = email.trim().toLowerCase();
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const supabase = supabaseEarly;
 
     // Reaproveita customer Asaas se já houver profile vinculado.
     let asaasCustomerId: string | null = null;
     let existingProfileId: string | null = null;
-    if (phoneClean) {
+    if (reauthUserId) {
+      existingProfileId = reauthUserId;
+      const { data: p } = await supabase
+        .from("profiles")
+        .select("asaas_customer_id")
+        .eq("id", reauthUserId)
+        .maybeSingle();
+      asaasCustomerId = (p?.asaas_customer_id as string) || null;
+    } else if (phoneClean) {
       const { data: profileByPhone } = await supabase
         .from("profiles")
         .select("id, asaas_customer_id")
@@ -336,6 +412,18 @@ Deno.serve(async (req) => {
       console.error("[criar-pix-recorrente-asaas] Erro salvando autorização:", insertErr);
     }
 
+    // Reautorização: marca a autorização antiga como substituída pra a auditoria
+    // parar de tratá-la como caso aberto e não reenviar link.
+    if (mode === "reauthorize" && previousAuthId) {
+      await supabase
+        .from("asaas_pix_authorizations")
+        .update({ replaced_by_authorization_id: authorizationId })
+        .eq("asaas_authorization_id", previousAuthId);
+      console.log(
+        `[criar-pix-recorrente-asaas] reautorização: ${previousAuthId} → ${authorizationId}`,
+      );
+    }
+
     return new Response(
       JSON.stringify({
         authorizationId,
@@ -346,6 +434,9 @@ Deno.serve(async (req) => {
         invoiceUrl,
         frequency,
         pixAutomatic: true,
+        plan,
+        billing,
+        reauthorize: mode === "reauthorize",
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

@@ -41,6 +41,15 @@ function recoveryLink(plan?: string | null, campaign = "pix_auto"): string {
   return `${base}${sep}utm_source=email&utm_medium=recovery&utm_campaign=${campaign}`;
 }
 
+// Link da página de reautorização (token do portal, sem senha).
+function reauthLink(token: string): string {
+  return `https://olaaura.com.br/reautorizar-pix?token=${token}&utm_source=email&utm_medium=reauth&utm_campaign=pix_consent`;
+}
+
+// Janela do 2º toque: o QR de reautorização cobra na hora, então só entra a
+// partir de D-2 do vencimento — nunca em cima de ciclo já pago.
+const REAUTH_LINK_WINDOW_MS = 2 * 24 * 60 * 60 * 1000;
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -109,6 +118,8 @@ Deno.serve(async (req) => {
     lost_authorizations: 0,
     recovery_emails_sent: 0,
     recovery_second_touch_sent: 0,
+    consent_lost_notified: 0,
+    reauth_links_sent: 0,
     autodebit_failures: [] as Array<Record<string, unknown>>,
     autodebit_new_alerts: 0,
     admin_alert_sent: false,
@@ -247,6 +258,110 @@ Deno.serve(async (req) => {
           report.recovery_second_touch_sent++;
         } catch (e) {
           console.warn(`[pix-auto-audit] 2º toque falhou (${auth.asaas_authorization_id}):`, (e as Error).message);
+        }
+      }
+    }
+
+    // ---------- 3) Débito automático que não disparou ----------
+    // ---------- 2b) Consentimento perdido → reautorização ----------
+    // Autorização CANCELLED pelo pagador com ciclo pago vigente: acesso segue até
+    // plan_expires_at, mas nada vai debitar. Dois toques:
+    //   (a) aviso informativo, sem QR, assim que detectamos;
+    //   (b) link com QR de reautorização a partir de D-2 do vencimento — o QR
+    //       cobra na hora, então ele É a cobrança do próximo ciclo.
+    const { data: consentLost } = await supabase
+      .from("asaas_pix_authorizations")
+      .select(
+        "id, asaas_authorization_id, status, plan, billing_period, customer_name, customer_email, user_id, reauth_notified_at, reauth_link_sent_at, replaced_by_authorization_id",
+      )
+      .eq("status", "CANCELLED")
+      .is("replaced_by_authorization_id", null);
+
+    for (const auth of consentLost || []) {
+      if (!auth.customer_email) continue;
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("id, status, plan_expires_at, pix_consent_lost_at")
+        .eq("email", auth.customer_email)
+        .maybeSingle();
+      const expiresAt = prof?.plan_expires_at ? new Date(prof.plan_expires_at).getTime() : 0;
+      // Fora de ciclo pago vigente não há o que reautorizar aqui.
+      if (!prof?.id || !expiresAt || expiresAt <= Date.now()) continue;
+
+      const firstName = (auth.customer_name || "").split(" ")[0] || null;
+
+      // (a) aviso informativo
+      if (!auth.reauth_notified_at) {
+        try {
+          await supabase.functions.invoke("send-transactional-email", {
+            body: {
+              templateName: "pix-consent-lost",
+              recipientEmail: auth.customer_email,
+              idempotencyKey: `pix-consent-lost-${auth.asaas_authorization_id}`,
+              templateData: {
+                name: firstName,
+                plan: auth.plan,
+                accessUntil: new Date(expiresAt).toISOString().slice(0, 10),
+              },
+            },
+          });
+          await supabase
+            .from("asaas_pix_authorizations")
+            .update({ reauth_notified_at: new Date().toISOString() })
+            .eq("id", auth.id);
+          report.consent_lost_notified++;
+        } catch (e) {
+          console.warn(
+            `[pix-auto-audit] aviso de consentimento perdido falhou (${auth.asaas_authorization_id}):`,
+            (e as Error).message,
+          );
+        }
+      }
+
+      // (b) link com QR — só a partir de D-2 do vencimento
+      if (!auth.reauth_link_sent_at && expiresAt - Date.now() <= REAUTH_LINK_WINDOW_MS) {
+        try {
+          // Garante token de portal (mesmo mecanismo passwordless do /meu-espaco).
+          let token: string | null = null;
+          const { data: existing } = await supabase
+            .from("user_portal_tokens")
+            .select("token")
+            .eq("user_id", prof.id)
+            .maybeSingle();
+          token = (existing?.token as string) || null;
+          if (!token) {
+            const { data: created } = await supabase
+              .from("user_portal_tokens")
+              .insert({ user_id: prof.id })
+              .select("token")
+              .single();
+            token = (created?.token as string) || null;
+          }
+          if (!token) throw new Error("token de portal indisponível");
+
+          await supabase.functions.invoke("send-transactional-email", {
+            body: {
+              templateName: "pix-reauthorize",
+              recipientEmail: auth.customer_email,
+              idempotencyKey: `pix-reauthorize-${auth.asaas_authorization_id}`,
+              templateData: {
+                name: firstName,
+                plan: auth.plan,
+                renewalDate: new Date(expiresAt).toISOString().slice(0, 10),
+                reauthLink: reauthLink(token),
+              },
+            },
+          });
+          await supabase
+            .from("asaas_pix_authorizations")
+            .update({ reauth_link_sent_at: new Date().toISOString() })
+            .eq("id", auth.id);
+          report.reauth_links_sent++;
+        } catch (e) {
+          console.warn(
+            `[pix-auto-audit] link de reautorização falhou (${auth.asaas_authorization_id}):`,
+            (e as Error).message,
+          );
         }
       }
     }
@@ -396,6 +511,8 @@ Deno.serve(async (req) => {
       report.autodebit_new_alerts > 0 ||
       report.lost_authorizations > 0 ||
       report.qr_expired_swept > 0 ||
+      report.consent_lost_notified > 0 ||
+      report.reauth_links_sent > 0 ||
       report.orphan_payments_recovered.length > 0;
 
     if (needsAlert && alertEmail) {
@@ -407,6 +524,16 @@ Deno.serve(async (req) => {
       ];
       if (report.qr_expired_swept > 0) {
         lines.push(`${report.qr_expired_swept} QR Code(s) venceram sem autorização (varredura)`);
+      }
+      if (report.consent_lost_notified > 0) {
+        lines.push(
+          `${report.consent_lost_notified} cliente(s) avisado(s) de consentimento PIX cancelado no app do banco`,
+        );
+      }
+      if (report.reauth_links_sent > 0) {
+        lines.push(
+          `${report.reauth_links_sent} link(s) de reautorização enviado(s) (D-2 do vencimento)`,
+        );
       }
       if (report.twin_invoices_cancelled > 0) {
         lines.push(
