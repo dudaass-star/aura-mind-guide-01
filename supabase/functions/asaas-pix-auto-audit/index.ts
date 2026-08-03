@@ -350,7 +350,9 @@ Deno.serve(async (req) => {
         }
       }
 
-      for (const p of duePayments.filter((p) => dueOf(p) <= yesterday)) {
+      // Autorização não-ACTIVE não tem débito automático a disparar: gêmea já foi
+      // varrida acima e o resto é cobrança normal, não falha.
+      for (const p of (isActive ? duePayments : []).filter((p) => dueOf(p) <= yesterday)) {
         const dueDate =
           dueOf(p);
         const alertedAt = auth.autodebit_alert_sent_at
@@ -371,7 +373,7 @@ Deno.serve(async (req) => {
 
       // Só reescreve o marcador quando o caso volta a ser "novo" — assim o
       // silêncio de 7 dias funciona de fato e o alerta para de repetir todo dia.
-      const overdueUnpaid = duePayments.filter((p) => dueOf(p) <= yesterday);
+      const overdueUnpaid = isActive ? duePayments.filter((p) => dueOf(p) <= yesterday) : [];
       const cooledDown =
         !auth.autodebit_alert_sent_at ||
         Date.now() - new Date(auth.autodebit_alert_sent_at).getTime() >= ALERT_COOLDOWN_MS;
