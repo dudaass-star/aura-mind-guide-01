@@ -8,6 +8,7 @@
 //      automático não disparou (o cliente teria que pagar QR na mão).
 // Somente leitura no Asaas/DB + envio de e-mails. Nada bloqueante.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { reconcileOrphanPayments } from "../_shared/asaas-reconcile.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -103,6 +104,8 @@ Deno.serve(async (req) => {
     status_changed: [] as Array<Record<string, unknown>>,
     qr_expired_swept: 0,
     twin_invoices_cancelled: 0,
+    orphan_payments_checked: 0,
+    orphan_payments_recovered: [] as string[],
     lost_authorizations: 0,
     recovery_emails_sent: 0,
     recovery_second_touch_sent: 0,
@@ -164,6 +167,24 @@ Deno.serve(async (req) => {
       }
 
       await supabase.from("asaas_pix_authorizations").update(patch).eq("id", auth.id);
+    }
+
+    // ---------- 1.5) Pagamentos pagos na Asaas que não existem na nossa base ----------
+    // Rede de segurança para webhook perdido: qualquer cobrança RECEIVED/CONFIRMED
+    // dos últimos 5 dias que não tenha linha em asaas_payments é reenviada ao
+    // webhook-asaas, que insere e roda a ativação (idempotente).
+    try {
+      const sinceDay = brtDateString(new Date(Date.now() - 5 * 24 * 60 * 60 * 1000));
+      const orphans = await reconcileOrphanPayments(supabase, { "paymentDate[ge]": sinceDay });
+      report.orphan_payments_checked = orphans.checked;
+      report.orphan_payments_recovered = orphans.recovered;
+      if (orphans.recovered.length > 0) {
+        console.error(
+          `[pix-auto-audit] ⚠️ Pagamentos pagos sem registro reconciliados: ${orphans.recovered.join(", ")}`,
+        );
+      }
+    } catch (e) {
+      console.warn("[pix-auto-audit] reconciliação de órfãos falhou:", (e as Error).message);
     }
 
     // ---------- 2) Autorizações perdidas (janela de 7 dias) ----------
@@ -234,18 +255,25 @@ Deno.serve(async (req) => {
     // Cobranças de autorizações ACTIVE que venceram ontem ou antes e seguem
     // pendentes/vencidas. Se o débito automático funcionasse, estariam pagas.
     const yesterday = brtDateString(new Date(Date.now() - 24 * 60 * 60 * 1000));
+    // A varredura de fatura gêmea precisa alcançar autorizações já canceladas
+    // (o cliente pagou o ciclo 1 e depois cancelou o consentimento): as gêmeas
+    // PENDING seguem cobráveis por e-mail pela Asaas. Já o alerta de débito não
+    // disparado continua restrito a autorizações ACTIVE.
     const { data: activeAuths } = await supabase
       .from("asaas_pix_authorizations")
-      .select("id, asaas_authorization_id, asaas_subscription_id, asaas_customer_id, customer_name, customer_email, plan, autodebit_alert_sent_at")
-      .eq("status", "ACTIVE");
+      .select("id, status, asaas_authorization_id, asaas_subscription_id, asaas_customer_id, customer_name, customer_email, plan, autodebit_alert_sent_at")
+      .not("asaas_subscription_id", "is", null);
 
     for (const auth of activeAuths || []) {
+      const isActive = String(auth.status || "").toUpperCase() === "ACTIVE";
       if (!auth.asaas_subscription_id) {
-        report.autodebit_failures.push({
-          customer: auth.customer_email,
-          plan: auth.plan,
-          motivo: "autorização ACTIVE sem assinatura vinculada (débito automático impossível)",
-        });
+        if (isActive) {
+          report.autodebit_failures.push({
+            customer: auth.customer_email,
+            plan: auth.plan,
+            motivo: "autorização ACTIVE sem assinatura vinculada (débito automático impossível)",
+          });
+        }
         continue;
       }
       // asaas_payments não tem coluna due_date: o vencimento vive no raw_payload.
@@ -322,7 +350,9 @@ Deno.serve(async (req) => {
         }
       }
 
-      for (const p of duePayments.filter((p) => dueOf(p) <= yesterday)) {
+      // Autorização não-ACTIVE não tem débito automático a disparar: gêmea já foi
+      // varrida acima e o resto é cobrança normal, não falha.
+      for (const p of (isActive ? duePayments : []).filter((p) => dueOf(p) <= yesterday)) {
         const dueDate =
           dueOf(p);
         const alertedAt = auth.autodebit_alert_sent_at
@@ -343,7 +373,7 @@ Deno.serve(async (req) => {
 
       // Só reescreve o marcador quando o caso volta a ser "novo" — assim o
       // silêncio de 7 dias funciona de fato e o alerta para de repetir todo dia.
-      const overdueUnpaid = duePayments.filter((p) => dueOf(p) <= yesterday);
+      const overdueUnpaid = isActive ? duePayments.filter((p) => dueOf(p) <= yesterday) : [];
       const cooledDown =
         !auth.autodebit_alert_sent_at ||
         Date.now() - new Date(auth.autodebit_alert_sent_at).getTime() >= ALERT_COOLDOWN_MS;
@@ -365,7 +395,8 @@ Deno.serve(async (req) => {
     const needsAlert =
       report.autodebit_new_alerts > 0 ||
       report.lost_authorizations > 0 ||
-      report.qr_expired_swept > 0;
+      report.qr_expired_swept > 0 ||
+      report.orphan_payments_recovered.length > 0;
 
     if (needsAlert && alertEmail) {
       const fmt = (f: Record<string, unknown>) =>
@@ -380,6 +411,12 @@ Deno.serve(async (req) => {
       if (report.twin_invoices_cancelled > 0) {
         lines.push(
           `${report.twin_invoices_cancelled} fatura(s) duplicada(s) de ciclo 1 canceladas (gêmea já paga por débito automático)`,
+        );
+      }
+      if (report.orphan_payments_recovered.length > 0) {
+        lines.push(
+          `${report.orphan_payments_recovered.length} pagamento(s) pago(s) sem registro reconciliado(s) e ativado(s): ` +
+            report.orphan_payments_recovered.join(", "),
         );
       }
       if (report.status_changed.length > 0) {
