@@ -45,6 +45,34 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Guarda "já pagou": nunca recuperar quem tem pagamento pago, mesmo sem
+    // profile ativo (ex.: PIX Automático que ainda não foi reconciliado).
+    const { data: paidPix } = await supabase
+      .from('asaas_payments')
+      .select('customer_phone, customer_email')
+      .in('status', ['RECEIVED', 'CONFIRMED']);
+    if (paidPix) {
+      for (const p of paidPix) {
+        if (p.customer_phone) {
+          for (const v of getPhoneVariations(p.customer_phone)) activePhoneSet.add(v);
+        }
+        if (p.customer_email) activeEmailSet.add(p.customer_email.toLowerCase());
+      }
+    }
+
+    const { data: completedCheckouts } = await supabase
+      .from('checkout_sessions')
+      .select('phone, email')
+      .eq('status', 'completed');
+    if (completedCheckouts) {
+      for (const c of completedCheckouts) {
+        if (c.phone) {
+          for (const v of getPhoneVariations(c.phone)) activePhoneSet.add(v);
+        }
+        if (c.email) activeEmailSet.add(c.email.toLowerCase());
+      }
+    }
+
     const totals = { sent: 0, failed: 0, skipped: 0, by_stage: {} as Record<number, number> };
 
     for (const cfg of STAGES) {
