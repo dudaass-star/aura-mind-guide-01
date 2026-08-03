@@ -370,11 +370,16 @@ Deno.serve(async (req) => {
     // ============================================================
     const asaasCustomerId = (payment as any)?.customer as string | undefined;
     if (!updated && asaasCustomerId && isPaid) {
+      // A autorização pode estar em QUALQUER status: no QR integrado (Jornada 3)
+      // o PAYMENT_RECEIVED chega ANTES do AUTHORIZATION_ACTIVATED, então exigir
+      // status ACTIVE descartava pagamentos legítimos. Janela de 30 dias +
+      // tolerância de valor continuam sendo as travas.
+      const authWindowStart = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
       const { data: authByCustomer } = await supabase
         .from("asaas_pix_authorizations")
         .select("*")
         .eq("asaas_customer_id", asaasCustomerId)
-        .eq("status", "ACTIVE")
+        .gte("created_at", authWindowStart)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
