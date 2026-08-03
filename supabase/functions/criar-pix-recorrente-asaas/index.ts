@@ -204,12 +204,20 @@ Deno.serve(async (req) => {
     const phoneClean = cleanDigits(phone || "");
     const emailClean = email.trim().toLowerCase();
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const supabase = supabaseEarly;
 
     // Reaproveita customer Asaas se já houver profile vinculado.
     let asaasCustomerId: string | null = null;
     let existingProfileId: string | null = null;
-    if (phoneClean) {
+    if (reauthUserId) {
+      existingProfileId = reauthUserId;
+      const { data: p } = await supabase
+        .from("profiles")
+        .select("asaas_customer_id")
+        .eq("id", reauthUserId)
+        .maybeSingle();
+      asaasCustomerId = (p?.asaas_customer_id as string) || null;
+    } else if (phoneClean) {
       const { data: profileByPhone } = await supabase
         .from("profiles")
         .select("id, asaas_customer_id")
