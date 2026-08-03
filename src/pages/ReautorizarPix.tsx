@@ -74,9 +74,9 @@ export default function ReautorizarPix() {
         const { data } = await supabase.functions.invoke("asaas-pix-auto-status", {
           body: { authorizationId: qr.authorizationId },
         });
-        const st = data as { status?: string; paid?: boolean } | null;
+        const st = data as { state?: string; status?: string } | null;
         if (st?.status) setStatus(st.status);
-        if (st?.paid || st?.status === "ACTIVE") {
+        if (st?.state === "active") {
           setConfirmed(true);
           clearInterval(interval);
         }
