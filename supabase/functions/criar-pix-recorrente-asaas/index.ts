@@ -412,6 +412,18 @@ Deno.serve(async (req) => {
       console.error("[criar-pix-recorrente-asaas] Erro salvando autorização:", insertErr);
     }
 
+    // Reautorização: marca a autorização antiga como substituída pra a auditoria
+    // parar de tratá-la como caso aberto e não reenviar link.
+    if (mode === "reauthorize" && previousAuthId) {
+      await supabase
+        .from("asaas_pix_authorizations")
+        .update({ replaced_by_authorization_id: authorizationId })
+        .eq("asaas_authorization_id", previousAuthId);
+      console.log(
+        `[criar-pix-recorrente-asaas] reautorização: ${previousAuthId} → ${authorizationId}`,
+      );
+    }
+
     return new Response(
       JSON.stringify({
         authorizationId,
@@ -422,6 +434,9 @@ Deno.serve(async (req) => {
         invoiceUrl,
         frequency,
         pixAutomatic: true,
+        plan,
+        billing,
+        reauthorize: mode === "reauthorize",
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
