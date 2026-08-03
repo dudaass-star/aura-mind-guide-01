@@ -511,6 +511,8 @@ Deno.serve(async (req) => {
       report.autodebit_new_alerts > 0 ||
       report.lost_authorizations > 0 ||
       report.qr_expired_swept > 0 ||
+      report.consent_lost_notified > 0 ||
+      report.reauth_links_sent > 0 ||
       report.orphan_payments_recovered.length > 0;
 
     if (needsAlert && alertEmail) {
@@ -522,6 +524,16 @@ Deno.serve(async (req) => {
       ];
       if (report.qr_expired_swept > 0) {
         lines.push(`${report.qr_expired_swept} QR Code(s) venceram sem autorização (varredura)`);
+      }
+      if (report.consent_lost_notified > 0) {
+        lines.push(
+          `${report.consent_lost_notified} cliente(s) avisado(s) de consentimento PIX cancelado no app do banco`,
+        );
+      }
+      if (report.reauth_links_sent > 0) {
+        lines.push(
+          `${report.reauth_links_sent} link(s) de reautorização enviado(s) (D-2 do vencimento)`,
+        );
       }
       if (report.twin_invoices_cancelled > 0) {
         lines.push(
