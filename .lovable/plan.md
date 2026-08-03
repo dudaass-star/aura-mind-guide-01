@@ -22,7 +22,13 @@ No caso do Eduardo: perfil `active` com acesso até 03/09, mas sem consentimento
 
 1. **Alerta ao admin no cancelamento de consentimento**: no evento `PIX_AUTOMATIC_RECURRING_AUTHORIZATION_CANCELLED`, enviar alerta com nome, e-mail, plano, motivo do cancelamento e data em que o acesso termina.
 2. **Não marcar `canceled` cegamente quando o ciclo está pago**: se existe ciclo pago em aberto, manter o perfil `active` até `plan_expires_at` e registrar que o consentimento caiu, em vez de derrubar o status na hora.
-3. **Outreach de reautorização**: 5 dias antes de `plan_expires_at`, se o consentimento não estiver `ACTIVE`, disparar e-mail (e WhatsApp, se a janela estiver aberta) com link pra reautorizar o PIX Automático ou trocar pra cartão. Sem isso, todo cancelamento de consentimento vira churn silencioso.
+3. **Outreach de reautorização, com QR só de consentimento**: 5 dias antes de `plan_expires_at`, se o consentimento não estiver `ACTIVE`, disparar e-mail (e WhatsApp, se a janela estiver aberta) com um link nosso — nada de link do banco.
+
+   Não existe "link do banco": o Bacen não expõe URL de consentimento. Quem existe é o **QR Code de autorização**, que o cliente lê no app do banco dele e aprova ali. Hoje todo QR que geramos vem com `immediateQrCode`, ou seja, cobra na hora — usar isso na reautorização faria o Eduardo pagar de novo em cima de um ciclo já pago.
+
+   Então a reautorização precisa de uma variação nova: autorização **sem `immediateQrCode`**, com `startDate` na data de renovação (03/09 no caso dele). O QR só cria o consentimento; a primeira cobrança sai no vencimento normal.
+
+   O fluxo pro cliente: e-mail/WhatsApp → página `/reautorizar-pix?token=…` no nosso domínio → QR + copia-e-cola + polling do status (igual ao checkout) → "autorizado" na tela quando o `AUTHORIZATION_ACTIVATED` chegar. Alternativa na mesma página: trocar pra cartão.
 4. **Métrica no admin**: contador de consentimentos PIX perdidos e quantos foram reautorizados, junto às métricas de saúde do PIX que já existem.
 
 ## Ação imediata pro Eduardo
@@ -35,4 +41,6 @@ No caso do Eduardo: perfil `active` com acesso até 03/09, mas sem consentimento
 - `supabase/functions/webhook-asaas/index.ts`, bloco de eventos de autorização (linhas ~107-145): separar `CANCELLED` de `REJECTED`/`EXPIRED`, consultar ciclo pago em `asaas_payments` antes de mexer no `status` do perfil, e emitir o alerta.
 - Nova coluna `profiles.pix_consent_lost_at` (migração) para alimentar outreach e métrica.
 - Outreach: passo novo em `asaas-pix-auto-audit` (diário), comparando `plan_expires_at` com o status da autorização.
+- `criar-pix-recorrente-asaas`: novo modo `consentOnly` — omite `immediateQrCode` e usa `startDate` = data de renovação, mantendo `paymentCreationMode: SUBSCRIPTION` e `retryPolicy: ALLOW_THREE_IN_SEVEN_DAYS`. Confirmar na sandbox que a Asaas aceita autorização sem QR imediato antes de liberar em produção.
+- Página nova `src/pages/ReautorizarPix.tsx` reaproveitando o componente de QR + polling do `CheckoutV2.tsx` e o `asaas-pix-auto-status` já existente; acesso por token, sem senha, no padrão do portal.
 - Métrica: `admin-engagement-metrics` + card em `AdminEngagement.tsx`.
