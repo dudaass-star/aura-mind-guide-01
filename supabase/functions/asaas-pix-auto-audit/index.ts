@@ -255,18 +255,25 @@ Deno.serve(async (req) => {
     // Cobranças de autorizações ACTIVE que venceram ontem ou antes e seguem
     // pendentes/vencidas. Se o débito automático funcionasse, estariam pagas.
     const yesterday = brtDateString(new Date(Date.now() - 24 * 60 * 60 * 1000));
+    // A varredura de fatura gêmea precisa alcançar autorizações já canceladas
+    // (o cliente pagou o ciclo 1 e depois cancelou o consentimento): as gêmeas
+    // PENDING seguem cobráveis por e-mail pela Asaas. Já o alerta de débito não
+    // disparado continua restrito a autorizações ACTIVE.
     const { data: activeAuths } = await supabase
       .from("asaas_pix_authorizations")
-      .select("id, asaas_authorization_id, asaas_subscription_id, asaas_customer_id, customer_name, customer_email, plan, autodebit_alert_sent_at")
-      .eq("status", "ACTIVE");
+      .select("id, status, asaas_authorization_id, asaas_subscription_id, asaas_customer_id, customer_name, customer_email, plan, autodebit_alert_sent_at")
+      .not("asaas_subscription_id", "is", null);
 
     for (const auth of activeAuths || []) {
+      const isActive = String(auth.status || "").toUpperCase() === "ACTIVE";
       if (!auth.asaas_subscription_id) {
-        report.autodebit_failures.push({
-          customer: auth.customer_email,
-          plan: auth.plan,
-          motivo: "autorização ACTIVE sem assinatura vinculada (débito automático impossível)",
-        });
+        if (isActive) {
+          report.autodebit_failures.push({
+            customer: auth.customer_email,
+            plan: auth.plan,
+            motivo: "autorização ACTIVE sem assinatura vinculada (débito automático impossível)",
+          });
+        }
         continue;
       }
       // asaas_payments não tem coluna due_date: o vencimento vive no raw_payload.
