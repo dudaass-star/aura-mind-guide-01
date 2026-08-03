@@ -7,6 +7,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { resolveProfile } from "../_shared/profile-resolver.ts";
 import { normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
 import { sendProactive } from "../_shared/whatsapp-provider.ts";
+import { reconcileOrphanPayments } from "../_shared/asaas-reconcile.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 
 const corsHeaders = {
@@ -149,6 +150,39 @@ Deno.serve(async (req) => {
         console.error(
           `[webhook-asaas] PIX Automático NÃO autorizado — auth ${authorizationEvt.id} (consentimento não concluído no app do banco)`,
         );
+      }
+
+      // Ativação da autorização → fecha a corrida de ordem de eventos do QR
+      // integrado (Jornada 3): o pagamento imediato chega ANTES da ativação e
+      // sem `subscription`. Aqui buscamos na Asaas os pagamentos pagos recentes
+      // desse customer e reenviamos ao webhook os que faltam na base.
+      if (mapped.status === "ACTIVE") {
+        try {
+          const { data: authRow } = await supabase
+            .from("asaas_pix_authorizations")
+            .select("asaas_customer_id")
+            .eq("asaas_authorization_id", authorizationEvt.id)
+            .maybeSingle();
+          if (authRow?.asaas_customer_id) {
+            const since = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000)
+              .toISOString()
+              .slice(0, 10);
+            const res = await reconcileOrphanPayments(supabase, {
+              customer: authRow.asaas_customer_id,
+              "paymentDate[ge]": since,
+            });
+            if (res.recovered.length) {
+              console.log(
+                `[webhook-asaas] ✅ Reconciliados na ativação: ${res.recovered.join(", ")}`,
+              );
+            }
+          }
+        } catch (e) {
+          console.warn(
+            "[webhook-asaas] Reconciliação na ativação falhou:",
+            (e as Error).message,
+          );
+        }
       }
 
       return new Response(JSON.stringify({ ok: true, event, status: mapped.status }), {
