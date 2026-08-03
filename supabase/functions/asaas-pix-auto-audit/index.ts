@@ -263,6 +263,110 @@ Deno.serve(async (req) => {
     }
 
     // ---------- 3) Débito automático que não disparou ----------
+    // ---------- 2b) Consentimento perdido → reautorização ----------
+    // Autorização CANCELLED pelo pagador com ciclo pago vigente: acesso segue até
+    // plan_expires_at, mas nada vai debitar. Dois toques:
+    //   (a) aviso informativo, sem QR, assim que detectamos;
+    //   (b) link com QR de reautorização a partir de D-2 do vencimento — o QR
+    //       cobra na hora, então ele É a cobrança do próximo ciclo.
+    const { data: consentLost } = await supabase
+      .from("asaas_pix_authorizations")
+      .select(
+        "id, asaas_authorization_id, status, plan, billing_period, customer_name, customer_email, user_id, reauth_notified_at, reauth_link_sent_at, replaced_by_authorization_id",
+      )
+      .eq("status", "CANCELLED")
+      .is("replaced_by_authorization_id", null);
+
+    for (const auth of consentLost || []) {
+      if (!auth.customer_email) continue;
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("id, status, plan_expires_at, pix_consent_lost_at")
+        .eq("email", auth.customer_email)
+        .maybeSingle();
+      const expiresAt = prof?.plan_expires_at ? new Date(prof.plan_expires_at).getTime() : 0;
+      // Fora de ciclo pago vigente não há o que reautorizar aqui.
+      if (!prof?.id || !expiresAt || expiresAt <= Date.now()) continue;
+
+      const firstName = (auth.customer_name || "").split(" ")[0] || null;
+
+      // (a) aviso informativo
+      if (!auth.reauth_notified_at) {
+        try {
+          await supabase.functions.invoke("send-transactional-email", {
+            body: {
+              templateName: "pix-consent-lost",
+              recipientEmail: auth.customer_email,
+              idempotencyKey: `pix-consent-lost-${auth.asaas_authorization_id}`,
+              templateData: {
+                name: firstName,
+                plan: auth.plan,
+                accessUntil: new Date(expiresAt).toISOString().slice(0, 10),
+              },
+            },
+          });
+          await supabase
+            .from("asaas_pix_authorizations")
+            .update({ reauth_notified_at: new Date().toISOString() })
+            .eq("id", auth.id);
+          report.consent_lost_notified++;
+        } catch (e) {
+          console.warn(
+            `[pix-auto-audit] aviso de consentimento perdido falhou (${auth.asaas_authorization_id}):`,
+            (e as Error).message,
+          );
+        }
+      }
+
+      // (b) link com QR — só a partir de D-2 do vencimento
+      if (!auth.reauth_link_sent_at && expiresAt - Date.now() <= REAUTH_LINK_WINDOW_MS) {
+        try {
+          // Garante token de portal (mesmo mecanismo passwordless do /meu-espaco).
+          let token: string | null = null;
+          const { data: existing } = await supabase
+            .from("user_portal_tokens")
+            .select("token")
+            .eq("user_id", prof.id)
+            .maybeSingle();
+          token = (existing?.token as string) || null;
+          if (!token) {
+            const { data: created } = await supabase
+              .from("user_portal_tokens")
+              .insert({ user_id: prof.id })
+              .select("token")
+              .single();
+            token = (created?.token as string) || null;
+          }
+          if (!token) throw new Error("token de portal indisponível");
+
+          await supabase.functions.invoke("send-transactional-email", {
+            body: {
+              templateName: "pix-reauthorize",
+              recipientEmail: auth.customer_email,
+              idempotencyKey: `pix-reauthorize-${auth.asaas_authorization_id}`,
+              templateData: {
+                name: firstName,
+                plan: auth.plan,
+                renewalDate: new Date(expiresAt).toISOString().slice(0, 10),
+                reauthLink: reauthLink(token),
+              },
+            },
+          });
+          await supabase
+            .from("asaas_pix_authorizations")
+            .update({ reauth_link_sent_at: new Date().toISOString() })
+            .eq("id", auth.id);
+          report.reauth_links_sent++;
+        } catch (e) {
+          console.warn(
+            `[pix-auto-audit] link de reautorização falhou (${auth.asaas_authorization_id}):`,
+            (e as Error).message,
+          );
+        }
+      }
+    }
+
+    // ---------- 3) Débito automático que não disparou ----------
     // Cobranças de autorizações ACTIVE que venceram ontem ou antes e seguem
     // pendentes/vencidas. Se o débito automático funcionasse, estariam pagas.
     const yesterday = brtDateString(new Date(Date.now() - 24 * 60 * 60 * 1000));
