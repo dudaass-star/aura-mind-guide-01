@@ -170,8 +170,11 @@ export type Database = {
           qr_expires_at: string | null
           qr_payload: string | null
           raw_payload: Json | null
+          reauth_link_sent_at: string | null
+          reauth_notified_at: string | null
           recovery_email_2_sent_at: string | null
           recovery_email_sent_at: string | null
+          replaced_by_authorization_id: string | null
           start_date: string
           status: string
           updated_at: string
@@ -205,8 +208,11 @@ export type Database = {
           qr_expires_at?: string | null
           qr_payload?: string | null
           raw_payload?: Json | null
+          reauth_link_sent_at?: string | null
+          reauth_notified_at?: string | null
           recovery_email_2_sent_at?: string | null
           recovery_email_sent_at?: string | null
+          replaced_by_authorization_id?: string | null
           start_date: string
           status?: string
           updated_at?: string
@@ -240,8 +246,11 @@ export type Database = {
           qr_expires_at?: string | null
           qr_payload?: string | null
           raw_payload?: Json | null
+          reauth_link_sent_at?: string | null
+          reauth_notified_at?: string | null
           recovery_email_2_sent_at?: string | null
           recovery_email_sent_at?: string | null
+          replaced_by_authorization_id?: string | null
           start_date?: string
           status?: string
           updated_at?: string
@@ -1566,6 +1575,7 @@ export type Database = {
           pending_first_session_invite: boolean
           pending_insight: string | null
           phone: string | null
+          pix_consent_lost_at: string | null
           plan: string | null
           plan_expires_at: string | null
           plan_tier: string | null
@@ -1641,6 +1651,7 @@ export type Database = {
           pending_first_session_invite?: boolean
           pending_insight?: string | null
           phone?: string | null
+          pix_consent_lost_at?: string | null
           plan?: string | null
           plan_expires_at?: string | null
           plan_tier?: string | null
@@ -1716,6 +1727,7 @@ export type Database = {
           pending_first_session_invite?: boolean
           pending_insight?: string | null
           phone?: string | null
+          pix_consent_lost_at?: string | null
           plan?: string | null
           plan_expires_at?: string | null
           plan_tier?: string | null
