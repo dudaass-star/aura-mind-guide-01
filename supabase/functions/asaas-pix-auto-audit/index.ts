@@ -41,6 +41,15 @@ function recoveryLink(plan?: string | null, campaign = "pix_auto"): string {
   return `${base}${sep}utm_source=email&utm_medium=recovery&utm_campaign=${campaign}`;
 }
 
+// Link da página de reautorização (token do portal, sem senha).
+function reauthLink(token: string): string {
+  return `https://olaaura.com.br/reautorizar-pix?token=${token}&utm_source=email&utm_medium=reauth&utm_campaign=pix_consent`;
+}
+
+// Janela do 2º toque: o QR de reautorização cobra na hora, então só entra a
+// partir de D-2 do vencimento — nunca em cima de ciclo já pago.
+const REAUTH_LINK_WINDOW_MS = 2 * 24 * 60 * 60 * 1000;
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -109,6 +118,8 @@ Deno.serve(async (req) => {
     lost_authorizations: 0,
     recovery_emails_sent: 0,
     recovery_second_touch_sent: 0,
+    consent_lost_notified: 0,
+    reauth_links_sent: 0,
     autodebit_failures: [] as Array<Record<string, unknown>>,
     autodebit_new_alerts: 0,
     admin_alert_sent: false,
