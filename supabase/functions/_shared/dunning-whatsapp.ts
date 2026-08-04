@@ -279,6 +279,7 @@ export async function sendDunningWhatsApp(
           payment_id: paymentId,
           customer_id: customerId,
           attempt_number: attemptNumber,
+          payment_method: paymentMethod,
         },
       });
     } catch (err) {

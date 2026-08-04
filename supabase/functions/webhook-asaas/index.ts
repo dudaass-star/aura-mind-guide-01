@@ -715,6 +715,7 @@ Deno.serve(async (req) => {
               provider: "asaas",
               paymentId: payment.id,
               subscriptionId: overdueSubscriptionId,
+              paymentMethod: (updated?.payment_method as string | null) || null,
             });
             console.log(
               `[webhook-asaas] dunning WhatsApp sent=${waResult.sent} skip=${waResult.skipped || "-"} err=${waResult.error || "-"}`,
