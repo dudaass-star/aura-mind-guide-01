@@ -814,7 +814,11 @@ const CheckoutV2 = () => {
         </header>
 
         <div className="relative container mx-auto px-4 py-8 md:py-12 pb-12">
-          <div className="max-w-xl mx-auto">
+          <div
+            className={
+              embeddedClientSecret || asaasCardOpen ? "max-w-xl mx-auto" : "max-w-5xl mx-auto"
+            }
+          >
             {/* Retomada do PIX Automático: fecha o loop pra quem autorizou (ou não)
                 depois de sair da tela do QR. */}
             {!pixOpen && resumedState && (
