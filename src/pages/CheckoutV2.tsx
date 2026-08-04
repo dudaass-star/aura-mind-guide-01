@@ -27,6 +27,10 @@ import "@/styles/v2-theme.css";
 import { loadStripe, type Stripe as StripeJs } from "@stripe/stripe-js";
 import { EmbeddedCheckoutProvider, EmbeddedCheckout } from "@stripe/react-stripe-js";
 import { AsaasCardForm } from "@/components/checkout/AsaasCardForm";
+import { CycleTabs, type CycleTabItem } from "@/components/checkout/CycleTabs";
+import { OrderSummary } from "@/components/checkout/OrderSummary";
+import { TrustRow } from "@/components/checkout/TrustRow";
+import { StickyMobileCta } from "@/components/checkout/StickyMobileCta";
 
 type PlanId = "essencial" | "direcao" | "transformacao";
 type BillingPeriod = "monthly" | "quarterly" | "semestral" | "yearly";
@@ -114,6 +118,21 @@ const periodShortMap: Record<BillingPeriod, string> = {
   semestral: "Sem",
   yearly: "Anual",
 };
+const periodFullMap: Record<BillingPeriod, string> = {
+  monthly: "Plano mensal",
+  quarterly: "Plano trimestral",
+  semestral: "Plano semestral",
+  yearly: "Plano anual",
+};
+// Meses cobrados em cada ciclo — base do cálculo de economia em reais.
+const periodMonthsMap: Record<BillingPeriod, number> = {
+  monthly: 1,
+  quarterly: 3,
+  semestral: 6,
+  yearly: 12,
+};
+/** "118,80" → 118.8 */
+const parseBRL = (v: string) => Number(v.replace(/\./g, "").replace(",", ".")) || 0;
 
 function getPeriodPrice(plan: PlanConfig, b: BillingPeriod): string {
   switch (b) {
@@ -308,6 +327,46 @@ const CheckoutV2 = () => {
   const currentDiscount = getPeriodDiscount(currentPlan, billingPeriod);
   const currentMonthlyEquivalent = getPeriodMonthlyEquivalent(currentPlan, billingPeriod);
   const pixEnabled = isPixPeriod(billingPeriod);
+
+  // Abas de ciclo com preço/mês, total do ciclo e economia em reais (do plano selecionado).
+  const cycleItems: CycleTabItem[] = useMemo(
+    () =>
+      (["monthly", "quarterly", "semestral", "yearly"] as BillingPeriod[]).map((p) => {
+        const total = getPeriodPrice(currentPlan, p);
+        const monthlyEquiv = getPeriodMonthlyEquivalent(currentPlan, p) || currentPlan.monthlyPrice;
+        const months = periodMonthsMap[p];
+        const savings =
+          p === "monthly" ? 0 : parseBRL(currentPlan.monthlyPrice) * months - parseBRL(total);
+        return {
+          id: p,
+          label: periodShortMap[p],
+          monthlyEquivalent: monthlyEquiv,
+          total,
+          periodLabel: periodLabelMap[p],
+          discount: p === "monthly" ? 0 : getPeriodDiscount(currentPlan, p),
+          savings: savings > 0 ? savings : 0,
+        };
+      }),
+    [currentPlan],
+  );
+
+  // Cobrado hoje: trial no mensal (cartão) ou o ciclo inteiro nos planos longos.
+  const todayAmount = pixEnabled ? currentPrice : currentPlan.trialPrice;
+  const nextChargeLabel = pixEnabled
+    ? `Renova automaticamente em R$ ${currentPrice}/${periodLabel}. Cancele quando quiser.`
+    : `Depois R$ ${currentPrice}/mês, a partir do 8º dia. Cancele antes e não paga nada.`;
+  const summaryBenefits = useMemo(
+    () => [
+      ...currentPlan.highlights,
+      currentPlan.sessions > 0
+        ? `Custo por sessão: R$ ${(
+            parseBRL(getPeriodMonthlyEquivalent(currentPlan, billingPeriod) || currentPlan.monthlyPrice) /
+            currentPlan.sessions
+          ).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+        : "Memória de longo prazo das suas conversas",
+    ],
+    [currentPlan, billingPeriod],
+  );
 
   const formatPhone = (value: string) => {
     const numbers = value.replace(/\D/g, "");
@@ -760,8 +819,12 @@ const CheckoutV2 = () => {
           </div>
         </header>
 
-        <div className="relative container mx-auto px-4 py-8 md:py-12 pb-12">
-          <div className="max-w-xl mx-auto">
+        <div className="relative container mx-auto px-4 py-8 md:py-12 pb-28 lg:pb-12">
+          <div
+            className={
+              embeddedClientSecret || asaasCardOpen ? "max-w-xl mx-auto" : "max-w-5xl mx-auto"
+            }
+          >
             {/* Retomada do PIX Automático: fecha o loop pra quem autorizou (ou não)
                 depois de sair da tela do QR. */}
             {!pixOpen && resumedState && (
@@ -948,8 +1011,10 @@ const CheckoutV2 = () => {
               />
             ) : (
               <>
+            <div className="grid lg:grid-cols-[minmax(0,1fr)_320px] gap-8 lg:gap-10 items-start">
+              <div className="min-w-0 max-w-xl w-full mx-auto lg:mx-0">
             {/* Cabeçalho enxuto */}
-            <div className="text-center mb-6">
+            <div className="text-center lg:text-left mb-6">
               <h1 className="font-display text-2xl md:text-3xl font-semibold mb-2 tracking-tight">
                 Comece em 2 minutos
               </h1>
@@ -965,39 +1030,12 @@ const CheckoutV2 = () => {
               onSubmit={handleSubmit}
               className="space-y-5"
             >
-              {/* Toggle de período: 4 opções. Mensal = cartão com trial.
-                  Trim/Sem/Anual = PIX à vista (com card só no anual). */}
-              <div className="grid grid-cols-4 gap-1 p-1 bg-white/5 rounded-2xl border border-white/10">
-                {(["monthly", "quarterly", "semestral", "yearly"] as BillingPeriod[]).map((p) => {
-                  const active = billingPeriod === p;
-                  const discount = p === "monthly" ? 0 : getPeriodDiscount(currentPlan, p);
-                  return (
-                    <button
-                      key={p}
-                      type="button"
-                      onClick={() => setBillingPeriod(p)}
-                      className={`relative flex flex-col items-center justify-center px-2 py-2 rounded-xl text-xs font-medium transition-all ${
-                        active
-                          ? "bg-[hsl(140_22%_45%)] text-white shadow-md"
-                          : "text-white/70 hover:text-white"
-                      }`}
-                    >
-                      <span>{periodShortMap[p]}</span>
-                      {discount > 0 && (
-                        <span
-                          className={`mt-0.5 text-[9px] font-bold px-1 py-0.5 rounded ${
-                            active
-                              ? "bg-white/20 text-white"
-                              : "bg-[hsl(35_70%_60%)] text-[hsl(220_35%_12%)]"
-                          }`}
-                        >
-                          -{discount}%
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
+              {/* Abas de ciclo com preço/mês visível (ver CycleTabs). */}
+              <CycleTabs
+                items={cycleItems}
+                value={billingPeriod}
+                onChange={(id) => setBillingPeriod(id as BillingPeriod)}
+              />
 
               {/* Planos slim */}
               <RadioGroup
@@ -1011,14 +1049,28 @@ const CheckoutV2 = () => {
                   const monthlyEquiv = getPeriodMonthlyEquivalent(plan, billingPeriod);
                   const active = selectedPlan === id;
                   const isPopular = id === "direcao";
+                  const monthlyForSession = parseBRL(
+                    getPeriodMonthlyEquivalent(plan, billingPeriod) || plan.monthlyPrice,
+                  );
+                  const perSession =
+                    plan.sessions > 0
+                      ? (monthlyForSession / plan.sessions).toLocaleString("pt-BR", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })
+                      : null;
 
                   return (
                     <label
                       key={id}
-                      className={`relative flex items-center justify-between gap-3 p-4 rounded-xl border cursor-pointer transition-all ${
+                      className={`relative flex items-center justify-between gap-3 rounded-xl border cursor-pointer transition-all ${
+                        isPopular ? "p-5 mt-3" : "p-4"
+                      } ${
                         active
-                          ? "border-[hsl(140_22%_55%)] bg-[hsl(140_22%_45%/0.14)] shadow-[0_0_0_1px_hsl(140_22%_55%/0.4)]"
-                          : "border-white/10 bg-white/[0.03] hover:border-white/25"
+                          ? "border-[hsl(140_22%_55%)] bg-[hsl(140_22%_45%/0.16)] shadow-[0_0_0_1px_hsl(140_22%_55%/0.5),0_12px_30px_-18px_hsl(140_22%_45%/0.9)]"
+                          : isPopular
+                            ? "border-[hsl(140_22%_45%)]/40 bg-white/[0.05] hover:border-[hsl(140_22%_55%)]/70"
+                            : "border-white/10 bg-white/[0.03] hover:border-white/25"
                       }`}
                     >
                       {isPopular && (
@@ -1039,6 +1091,12 @@ const CheckoutV2 = () => {
                               ? `${plan.sessions} sessões/mês + chat ilimitado`
                               : "Chat ilimitado 24/7"}
                           </p>
+                          {perSession && (
+                            <p className="text-[11px] text-[hsl(140_30%_72%)] mt-0.5">
+                              R$ {perSession} por sessão
+                              {isPopular ? " · melhor custo por sessão" : ""}
+                            </p>
+                          )}
                         </div>
                       </div>
                       <div className="text-right shrink-0">
@@ -1067,6 +1125,9 @@ const CheckoutV2 = () => {
                 })}
               </RadioGroup>
 
+              {/* Confiança acima da dobra, colada na escolha do plano. */}
+              <TrustRow />
+
               {/* Formulário enxuto */}
               <div className="space-y-3 pt-2">
                 <div>
@@ -1088,7 +1149,7 @@ const CheckoutV2 = () => {
                     <p id="phone-error" className="text-[11px] text-red-300 mt-1">{errors.phone}</p>
                   ) : (
                     <p id="phone-hint" className="text-[11px] text-white/60 mt-1">
-                      A AURA conversa com você por aqui
+                      É por aqui que a AURA fala com você. Não enviamos spam.
                     </p>
                   )}
                 </div>
@@ -1135,6 +1196,11 @@ const CheckoutV2 = () => {
                   {errors.email && (
                     <p id="email-error" className="text-[11px] text-red-300 mt-1">{errors.email}</p>
                   )}
+                  {!errors.email && (
+                    <p className="text-[11px] text-white/60 mt-1">
+                      Só para recibo e recuperação de acesso.
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -1162,7 +1228,12 @@ const CheckoutV2 = () => {
                   Trim/Sem/Anual: PIX à vista principal + cartão recorrente secundário (sem trial). */}
               {billingPeriod === "monthly" ? (
                 <>
+                  <p className="text-center text-[11px] text-white/55">
+                    Cartão começa com 7 dias por R$ {currentPlan.trialPrice}. No PIX Automático a
+                    assinatura já começa cheia, sem trial — mesmo valor mensal.
+                  </p>
                   <Button
+                    id="checkout-primary-cta"
                     type="submit"
                     variant="sage"
                     size="xl"
@@ -1171,7 +1242,9 @@ const CheckoutV2 = () => {
                     aria-disabled={!isFormValid || isLoading}
                   >
                     <CreditCard className="w-5 h-5 mr-2" />
-                    {isLoading ? "Processando..." : `Começar trial por R$ ${currentPlan.trialPrice}`}
+                    {isLoading
+                      ? "Abrindo pagamento seguro..."
+                      : `Começar por R$ ${currentPlan.trialPrice} (7 dias)`}
                   </Button>
                   <Button
                     type="button"
@@ -1181,12 +1254,13 @@ const CheckoutV2 = () => {
                     className="w-full rounded-full bg-transparent border-white/25 text-white hover:bg-white/10 hover:text-white whitespace-normal leading-tight px-3 sm:px-8 text-sm sm:text-base h-auto min-h-11 py-2"
                   >
                     <QrCode className="w-4 h-4 mr-2" />
-                    PIX Automático — R$ {currentPrice}/mês
+                    PIX Automático · sem trial — R$ {currentPrice}/mês
                   </Button>
                 </>
               ) : (
                 <>
                   <Button
+                    id="checkout-primary-cta"
                     type="button"
                     variant="sage"
                     size="xl"
@@ -1205,7 +1279,9 @@ const CheckoutV2 = () => {
                     className="w-full rounded-full bg-transparent border-white/25 text-white hover:bg-white/10 hover:text-white whitespace-normal leading-tight px-3 sm:px-8 text-sm sm:text-base h-auto min-h-11 py-2"
                   >
                     <CreditCard className="w-4 h-4 mr-2" />
-                    {isLoading ? "Processando..." : `Cartão — R$ ${currentPrice}/${periodLabel}`}
+                    {isLoading
+                      ? "Abrindo pagamento seguro..."
+                      : `Cartão — R$ ${currentPrice}/${periodLabel}`}
                   </Button>
                 </>
               )}
@@ -1216,32 +1292,44 @@ const CheckoutV2 = () => {
                   : "Autorize 1x no app do banco • renovação automática • cancele quando quiser"}
               </p>
 
-              {/* Faixa única de confiança */}
-              <div className="flex flex-wrap justify-center gap-x-5 gap-y-2 text-xs text-white/55 pt-1">
-                <div className="flex items-center gap-1.5">
-                  <Shield className="w-3.5 h-3.5 text-[hsl(140_30%_72%)]" />
-                  Garantia 7 dias
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <Lock className="w-3.5 h-3.5 text-[hsl(140_30%_72%)]" />
-                  Pagamento Stripe
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <Check className="w-3.5 h-3.5 text-[hsl(140_30%_72%)]" />
-                  Cancele quando quiser
-                </div>
-              </div>
+              <TrustRow className="pt-1" />
 
-              {/* Mini-depoimento */}
-              <p className="text-center text-xs text-white/55 italic max-w-md mx-auto pt-2">
+              {/* Mini-depoimento (o painel lateral cobre o desktop) */}
+              <p className="lg:hidden text-center text-xs text-white/55 italic max-w-md mx-auto pt-2">
                 "Em 3 dias senti que alguém finalmente me ouvia." — Ana C.
               </p>
             </form>
+              </div>
+
+              <div className="hidden lg:block">
+                <OrderSummary
+                  planName={currentPlan.name}
+                  cycleLabel={`${periodFullMap[billingPeriod]} · R$ ${currentPrice}/${periodLabel}`}
+                  todayAmount={todayAmount}
+                  nextChargeLabel={nextChargeLabel}
+                  benefits={summaryBenefits}
+                />
+              </div>
+            </div>
 
               </>
             )}
           </div>
         </div>
+
+        {/* CTA fixo no mobile quando o botão principal sai da tela */}
+        {!embeddedClientSecret && !asaasCardOpen && (
+          <StickyMobileCta
+            anchorId="checkout-primary-cta"
+            todayLabel={`R$ ${todayAmount}`}
+            ctaLabel={pixEnabled ? "Pagar com PIX" : `Começar por R$ ${todayAmount}`}
+            onClick={() => {
+              document
+                .getElementById("checkout-primary-cta")
+                ?.scrollIntoView({ behavior: "smooth", block: "center" });
+            }}
+          />
+        )}
 
         {/* Exit-intent popup */}
         {showExitPopup && (
