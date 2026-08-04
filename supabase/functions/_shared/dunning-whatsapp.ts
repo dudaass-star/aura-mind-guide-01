@@ -29,7 +29,7 @@ export const DUNNING_CONTENT_SID = "HXaf4af1e1f5d4cf40b6fff6b5b68df29a";
 /** Quantos avisos (template utility) vêm antes da escada de ofertas. */
 export const DUNNING_NOTICE_STEPS = 2;
 
-/** Teto por ciclo: 2 avisos + 2 degraus de oferta. */
+/** Teto por ciclo no cartão: 2 avisos + 2 degraus de oferta. */
 export const DUNNING_MAX_ATTEMPTS = 4;
 
 export type DunningOfferTier = "discount_30" | "lite" | "base";
@@ -46,6 +46,15 @@ interface OfferTemplate {
  */
 export const DUNNING_OFFER_LADDER: OfferTemplate[] = [
   { tier: "discount_30", sid: "HX50cb75b6bb3cd9ae56ef2d9c6adc4781" },
+  { tier: "lite", sid: "HX18e81fa401b8487c360f085e9b83630f" },
+];
+
+/**
+ * Escada do PIX: o desconto de 30% depende de token de cartão salvo
+ * (`apply_discount_3m` recusa no PIX Asaas), então oferecê-lo por WhatsApp
+ * era beco sem saída. PIX vai direto pro Lite; o Base segue só em /cancelar.
+ */
+export const DUNNING_OFFER_LADDER_PIX: OfferTemplate[] = [
   { tier: "lite", sid: "HX18e81fa401b8487c360f085e9b83630f" },
 ];
 
@@ -93,6 +102,8 @@ export interface DunningWhatsAppParams {
   skipWindowCheck?: boolean;
   /** Força um tier específico (usado pelo executor da tarefa adiada). */
   forceAttemptNumber?: number;
+  /** Método de pagamento do ciclo (ex.: "PIX", "CREDIT_CARD") — define a escada. */
+  paymentMethod?: string | null;
 }
 
 export interface DunningWhatsAppResult {
@@ -140,8 +151,13 @@ export async function sendDunningWhatsApp(
   const {
     supabase, profile, eventId, provider,
     invoiceId = null, subscriptionId = null, paymentId = null, customerId = null,
-    skipWindowCheck = false, forceAttemptNumber,
+    skipWindowCheck = false, forceAttemptNumber, paymentMethod = null,
   } = params;
+
+  // Escada por método: PIX não tem degrau de 30% (não é aplicável sem cartão).
+  const isPix = String(paymentMethod || "").toUpperCase().includes("PIX");
+  const ladder = isPix ? DUNNING_OFFER_LADDER_PIX : DUNNING_OFFER_LADDER;
+  const maxAttempts = DUNNING_NOTICE_STEPS + ladder.length;
 
   const baseRecord: Record<string, any> = {
     event_id: eventId,
@@ -211,13 +227,13 @@ export async function sendDunningWhatsApp(
         .eq("whatsapp_sent", true);
 
       const prevCount = count || 0;
-      if (prevCount >= DUNNING_MAX_ATTEMPTS) {
+      if (prevCount >= maxAttempts) {
         await supabase.from("dunning_attempts").insert({
           ...baseRecord,
           template_sid: DUNNING_CONTENT_SID,
           attempt_number: prevCount + 1,
           error_stage: "limit_reached",
-          error_message: `Já enviados ${prevCount} WhatsApps neste ciclo (limite ${DUNNING_MAX_ATTEMPTS})`,
+          error_message: `Já enviados ${prevCount} WhatsApps neste ciclo (limite ${maxAttempts})`,
         });
         return { sent: false, skipped: "limit_reached", attemptNumber: prevCount };
       }
@@ -229,7 +245,7 @@ export async function sendDunningWhatsApp(
 
   // Tentativas 1..DUNNING_NOTICE_STEPS = aviso genérico; depois, escada de ofertas.
   const ladderIndex = attemptNumber - DUNNING_NOTICE_STEPS - 1;
-  const ladderEntry = ladderIndex >= 0 ? (DUNNING_OFFER_LADDER[ladderIndex] || null) : null;
+  const ladderEntry = ladderIndex >= 0 ? (ladder[ladderIndex] || null) : null;
   const useOffer = !!ladderEntry?.sid;
   const contentSid = ladderEntry?.sid || DUNNING_CONTENT_SID;
   const tier: DunningOfferTier | "generic" = useOffer ? ladderEntry!.tier : "generic";
