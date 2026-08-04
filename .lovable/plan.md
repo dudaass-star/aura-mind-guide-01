@@ -15,8 +15,9 @@ Não é bug de ativação: o cartão dela não tem saldo. O problema nosso é qu
 **1. O link de dunning leva direto à fatura do Stripe.**
 Em `customer-portal`, quando existe fatura `open` no Stripe, o link retornado é o `hosted_invoice_url` dessa fatura. Essa página do Stripe aceita cartão novo e paga a fatura pendente na hora. Só quando não existe fatura aberta é que o link é o Billing Portal (troca de meio de pagamento). Isso vale para `/pagamento?t=` (WhatsApp e e-mail).
 
-**2. A oferta de retenção só é oferecida quando o motivo é preço.**
-No dunning por `insufficient_funds` / `card_declined`, o primeiro contato passa a ser o template de retomada de pagamento (link da fatura), e a escada de ofertas começa a partir do segundo contato. Isso é decidido pelo `decline_code` que o Stripe já envia no evento.
+**2. O primeiro contato de WhatsApp passa a ser retomada de pagamento, não desconto.**
+Hoje não é essa a ordem. No mesmo evento `invoice.payment_failed`, o código dispara o e-mail com link de pagamento **e**, em seguida, o WhatsApp já no degrau 1 da escada — que é o template de **30% off** (`DUNNING_OFFER_LADDER[0] = discount_30`). Foi exatamente o que a Nathy recebeu às 08:00 BRT. O template genérico de retomada de pagamento (`DUNNING_CONTENT_SID`, que aponta para `/pagamento?t=`) existe mas só é usado como fallback.
+Mudança: na primeira falha, o WhatsApp usa o template de retomada de pagamento; a escada de ofertas (30% → Lite → Base) passa a começar na segunda falha. O teto de 3 envios da escada continua o mesmo.
 
 **3. Aceitar desconto passa a quitar o ciclo em aberto.**
 Em `cancel-subscription`, ao aplicar `apply_discount_3m` numa assinatura `past_due`: a fatura `open` do ciclo é anulada (`voidInvoice`) e a assinatura é reancorada com `billing_cycle_anchor: "now"` — mesmo mecanismo já usado nos downgrades Lite/Base. A resposta devolve o estado real: assinatura `active` → confirmação de reativação; assinatura ainda `past_due` → a resposta traz o `hosted_invoice_url` da nova fatura e a tela mostra o botão de pagar. Sem mensagem de "pronto" quando há valor em aberto.
