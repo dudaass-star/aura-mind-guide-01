@@ -819,7 +819,7 @@ const CheckoutV2 = () => {
           </div>
         </header>
 
-        <div className="relative container mx-auto px-4 py-8 md:py-12 pb-12">
+        <div className="relative container mx-auto px-4 py-8 md:py-12 pb-28 lg:pb-12">
           <div
             className={
               embeddedClientSecret || asaasCardOpen ? "max-w-xl mx-auto" : "max-w-5xl mx-auto"
