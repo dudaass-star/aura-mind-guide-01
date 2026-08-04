@@ -1248,32 +1248,44 @@ const CheckoutV2 = () => {
                   : "Autorize 1x no app do banco • renovação automática • cancele quando quiser"}
               </p>
 
-              {/* Faixa única de confiança */}
-              <div className="flex flex-wrap justify-center gap-x-5 gap-y-2 text-xs text-white/55 pt-1">
-                <div className="flex items-center gap-1.5">
-                  <Shield className="w-3.5 h-3.5 text-[hsl(140_30%_72%)]" />
-                  Garantia 7 dias
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <Lock className="w-3.5 h-3.5 text-[hsl(140_30%_72%)]" />
-                  Pagamento Stripe
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <Check className="w-3.5 h-3.5 text-[hsl(140_30%_72%)]" />
-                  Cancele quando quiser
-                </div>
-              </div>
+              <TrustRow className="pt-1" />
 
-              {/* Mini-depoimento */}
-              <p className="text-center text-xs text-white/55 italic max-w-md mx-auto pt-2">
+              {/* Mini-depoimento (o painel lateral cobre o desktop) */}
+              <p className="lg:hidden text-center text-xs text-white/55 italic max-w-md mx-auto pt-2">
                 "Em 3 dias senti que alguém finalmente me ouvia." — Ana C.
               </p>
             </form>
+              </div>
+
+              <div className="hidden lg:block">
+                <OrderSummary
+                  planName={currentPlan.name}
+                  cycleLabel={`${CYCLE_TEXT[billingPeriod]} · R$ ${currentPrice}/${periodLabel}`}
+                  todayAmount={todayAmount}
+                  nextChargeLabel={nextChargeLabel}
+                  benefits={summaryBenefits}
+                />
+              </div>
+            </div>
 
               </>
             )}
           </div>
         </div>
+
+        {/* CTA fixo no mobile quando o botão principal sai da tela */}
+        {!embeddedClientSecret && !asaasCardOpen && (
+          <StickyMobileCta
+            anchorId="checkout-primary-cta"
+            todayLabel={`R$ ${todayAmount}`}
+            ctaLabel={pixEnabled ? "Pagar com PIX" : `Começar por R$ ${todayAmount}`}
+            onClick={() => {
+              document
+                .getElementById("checkout-primary-cta")
+                ?.scrollIntoView({ behavior: "smooth", block: "center" });
+            }}
+          />
+        )}
 
         {/* Exit-intent popup */}
         {showExitPopup && (
