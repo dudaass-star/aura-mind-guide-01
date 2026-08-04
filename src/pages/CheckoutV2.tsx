@@ -1228,7 +1228,12 @@ const CheckoutV2 = () => {
                   Trim/Sem/Anual: PIX à vista principal + cartão recorrente secundário (sem trial). */}
               {billingPeriod === "monthly" ? (
                 <>
+                  <p className="text-center text-[11px] text-white/55">
+                    Cartão começa com 7 dias por R$ {currentPlan.trialPrice}. No PIX Automático a
+                    assinatura já começa cheia, sem trial — mesmo valor mensal.
+                  </p>
                   <Button
+                    id="checkout-primary-cta"
                     type="submit"
                     variant="sage"
                     size="xl"
@@ -1237,7 +1242,9 @@ const CheckoutV2 = () => {
                     aria-disabled={!isFormValid || isLoading}
                   >
                     <CreditCard className="w-5 h-5 mr-2" />
-                    {isLoading ? "Processando..." : `Começar trial por R$ ${currentPlan.trialPrice}`}
+                    {isLoading
+                      ? "Abrindo pagamento seguro..."
+                      : `Começar por R$ ${currentPlan.trialPrice} (7 dias)`}
                   </Button>
                   <Button
                     type="button"
@@ -1247,12 +1254,13 @@ const CheckoutV2 = () => {
                     className="w-full rounded-full bg-transparent border-white/25 text-white hover:bg-white/10 hover:text-white whitespace-normal leading-tight px-3 sm:px-8 text-sm sm:text-base h-auto min-h-11 py-2"
                   >
                     <QrCode className="w-4 h-4 mr-2" />
-                    PIX Automático — R$ {currentPrice}/mês
+                    PIX Automático · sem trial — R$ {currentPrice}/mês
                   </Button>
                 </>
               ) : (
                 <>
                   <Button
+                    id="checkout-primary-cta"
                     type="button"
                     variant="sage"
                     size="xl"
@@ -1271,7 +1279,9 @@ const CheckoutV2 = () => {
                     className="w-full rounded-full bg-transparent border-white/25 text-white hover:bg-white/10 hover:text-white whitespace-normal leading-tight px-3 sm:px-8 text-sm sm:text-base h-auto min-h-11 py-2"
                   >
                     <CreditCard className="w-4 h-4 mr-2" />
-                    {isLoading ? "Processando..." : `Cartão — R$ ${currentPrice}/${periodLabel}`}
+                    {isLoading
+                      ? "Abrindo pagamento seguro..."
+                      : `Cartão — R$ ${currentPrice}/${periodLabel}`}
                   </Button>
                 </>
               )}
