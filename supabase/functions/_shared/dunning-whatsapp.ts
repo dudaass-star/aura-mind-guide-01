@@ -183,18 +183,22 @@ export async function sendDunningWhatsApp(
     }
   } catch (_) { /* segue mesmo sem checar */ }
 
-  // Limite de 2 envios bem-sucedidos por subscription/payment.
-  const scopeFilter = subscriptionId
-    ? { col: "subscription_id", val: subscriptionId }
+  // Escopo do ciclo: fatura (Stripe) → cobrança (Asaas) → assinatura (fallback).
+  // Contar por subscription_id é errado como regra principal: o id é o mesmo
+  // ciclo após ciclo e a escada nunca reiniciaria numa nova cobrança.
+  const scopeFilter = invoiceId
+    ? { col: "invoice_id", val: invoiceId }
     : paymentId
     ? { col: "payment_id", val: paymentId }
+    : subscriptionId
+    ? { col: "subscription_id", val: subscriptionId }
     : null;
 
   let attemptNumber = forceAttemptNumber ?? 1;
   if (scopeFilter && forceAttemptNumber === undefined) {
     try {
-      // Conta apenas envios da escada de ofertas. Envios antigos do template
-      // genérico não podem queimar a cota dos degraus novos.
+      // Conta TODOS os envios entregues do ciclo (avisos + ofertas), porque os
+      // dois primeiros degraus são justamente os avisos genéricos.
       const { count } = await supabase
         .from("dunning_attempts")
         .select("id", { count: "exact", head: true })
@@ -204,8 +208,7 @@ export async function sendDunningWhatsApp(
         .not("message_sid", "is", null)
         // Degrau que a Twilio marcou como failed/undelivered (ex.: template ainda
         // pendente de aprovação no Meta) não queima a cota — pode ser reofertado.
-        .eq("whatsapp_sent", true)
-        .in("template_sid", LADDER_SIDS);
+        .eq("whatsapp_sent", true);
 
       const prevCount = count || 0;
       if (prevCount >= DUNNING_MAX_ATTEMPTS) {
@@ -224,8 +227,9 @@ export async function sendDunningWhatsApp(
     }
   }
 
-  // Escolhe o tier da escada; sem SID aprovado, cai no template genérico.
-  const ladderEntry = DUNNING_OFFER_LADDER[attemptNumber - 1] || null;
+  // Tentativas 1..DUNNING_NOTICE_STEPS = aviso genérico; depois, escada de ofertas.
+  const ladderIndex = attemptNumber - DUNNING_NOTICE_STEPS - 1;
+  const ladderEntry = ladderIndex >= 0 ? (DUNNING_OFFER_LADDER[ladderIndex] || null) : null;
   const useOffer = !!ladderEntry?.sid;
   const contentSid = ladderEntry?.sid || DUNNING_CONTENT_SID;
   const tier: DunningOfferTier | "generic" = useOffer ? ladderEntry!.tier : "generic";
