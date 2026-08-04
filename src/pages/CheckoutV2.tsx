@@ -1125,6 +1125,9 @@ const CheckoutV2 = () => {
                 })}
               </RadioGroup>
 
+              {/* Confiança acima da dobra, colada na escolha do plano. */}
+              <TrustRow />
+
               {/* Formulário enxuto */}
               <div className="space-y-3 pt-2">
                 <div>
@@ -1146,7 +1149,7 @@ const CheckoutV2 = () => {
                     <p id="phone-error" className="text-[11px] text-red-300 mt-1">{errors.phone}</p>
                   ) : (
                     <p id="phone-hint" className="text-[11px] text-white/60 mt-1">
-                      A AURA conversa com você por aqui
+                      É por aqui que a AURA fala com você. Não enviamos spam.
                     </p>
                   )}
                 </div>
@@ -1192,6 +1195,11 @@ const CheckoutV2 = () => {
                   />
                   {errors.email && (
                     <p id="email-error" className="text-[11px] text-red-300 mt-1">{errors.email}</p>
+                  )}
+                  {!errors.email && (
+                    <p className="text-[11px] text-white/60 mt-1">
+                      Só para recibo e recuperação de acesso.
+                    </p>
                   )}
                 </div>
               </div>
