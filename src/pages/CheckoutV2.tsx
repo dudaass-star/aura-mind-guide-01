@@ -1005,8 +1005,10 @@ const CheckoutV2 = () => {
               />
             ) : (
               <>
+            <div className="grid lg:grid-cols-[minmax(0,1fr)_320px] gap-8 lg:gap-10 items-start">
+              <div className="min-w-0 max-w-xl w-full mx-auto lg:mx-0">
             {/* Cabeçalho enxuto */}
-            <div className="text-center mb-6">
+            <div className="text-center lg:text-left mb-6">
               <h1 className="font-display text-2xl md:text-3xl font-semibold mb-2 tracking-tight">
                 Comece em 2 minutos
               </h1>
@@ -1022,39 +1024,12 @@ const CheckoutV2 = () => {
               onSubmit={handleSubmit}
               className="space-y-5"
             >
-              {/* Toggle de período: 4 opções. Mensal = cartão com trial.
-                  Trim/Sem/Anual = PIX à vista (com card só no anual). */}
-              <div className="grid grid-cols-4 gap-1 p-1 bg-white/5 rounded-2xl border border-white/10">
-                {(["monthly", "quarterly", "semestral", "yearly"] as BillingPeriod[]).map((p) => {
-                  const active = billingPeriod === p;
-                  const discount = p === "monthly" ? 0 : getPeriodDiscount(currentPlan, p);
-                  return (
-                    <button
-                      key={p}
-                      type="button"
-                      onClick={() => setBillingPeriod(p)}
-                      className={`relative flex flex-col items-center justify-center px-2 py-2 rounded-xl text-xs font-medium transition-all ${
-                        active
-                          ? "bg-[hsl(140_22%_45%)] text-white shadow-md"
-                          : "text-white/70 hover:text-white"
-                      }`}
-                    >
-                      <span>{periodShortMap[p]}</span>
-                      {discount > 0 && (
-                        <span
-                          className={`mt-0.5 text-[9px] font-bold px-1 py-0.5 rounded ${
-                            active
-                              ? "bg-white/20 text-white"
-                              : "bg-[hsl(35_70%_60%)] text-[hsl(220_35%_12%)]"
-                          }`}
-                        >
-                          -{discount}%
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
+              {/* Abas de ciclo com preço/mês visível (ver CycleTabs). */}
+              <CycleTabs
+                items={cycleItems}
+                value={billingPeriod}
+                onChange={(id) => setBillingPeriod(id as BillingPeriod)}
+              />
 
               {/* Planos slim */}
               <RadioGroup
