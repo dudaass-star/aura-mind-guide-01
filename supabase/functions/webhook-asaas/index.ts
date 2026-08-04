@@ -735,7 +735,8 @@ Deno.serve(async (req) => {
         // ────────────────────────────────────────────────────────────────
         try {
           const pmPix = (updated?.payment_method as string | undefined) || "";
-          const isPix = pmPix.toUpperCase().includes("PIX");
+          // Exige subscription: cobrança PIX avulsa sem recorrência não entra na escada.
+          const isPix = pmPix.toUpperCase().includes("PIX") && !!overdueSubscriptionId;
           if (isPix) {
             const { data: existingPixTask } = await supabase
               .from("scheduled_tasks")
