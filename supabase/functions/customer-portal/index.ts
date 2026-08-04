@@ -59,7 +59,21 @@ Deno.serve(async (req) => {
       gatewayHint === "asaas-card" || profile.card_gateway === "asaas";
 
     if (isAsaasCard) {
-      // Asaas cartão: usa invoice_url mais recente (Asaas permite trocar cartão lá).
+      // Asaas cartão: prioriza cobrança EM ABERTO (OVERDUE/PENDING) — abrir uma
+      // fatura já paga confunde quem clicou em "atualizar pagamento".
+      const { data: openPay } = await supabase
+        .from("asaas_payments")
+        .select("invoice_url, status, created_at")
+        .eq("user_id", userId)
+        .in("status", ["OVERDUE", "PENDING"])
+        .not("invoice_url", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (openPay?.invoice_url) {
+        return json({ url: openPay.invoice_url, provider: "asaas" }, 200);
+      }
+      // Sem cobrança em aberto: cai na mais recente (Asaas permite trocar cartão lá).
       const { data: asaasPay } = await supabase
         .from("asaas_payments")
         .select("invoice_url, status, created_at")
