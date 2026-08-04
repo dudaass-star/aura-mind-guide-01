@@ -322,6 +322,46 @@ const CheckoutV2 = () => {
   const currentMonthlyEquivalent = getPeriodMonthlyEquivalent(currentPlan, billingPeriod);
   const pixEnabled = isPixPeriod(billingPeriod);
 
+  // Abas de ciclo com preço/mês, total do ciclo e economia em reais (do plano selecionado).
+  const cycleItems: CycleTabItem[] = useMemo(
+    () =>
+      (["monthly", "quarterly", "semestral", "yearly"] as BillingPeriod[]).map((p) => {
+        const total = getPeriodPrice(currentPlan, p);
+        const monthlyEquiv = getPeriodMonthlyEquivalent(currentPlan, p) || currentPlan.monthlyPrice;
+        const months = periodMonthsMap[p];
+        const savings =
+          p === "monthly" ? 0 : parseBRL(currentPlan.monthlyPrice) * months - parseBRL(total);
+        return {
+          id: p,
+          label: periodShortMap[p],
+          monthlyEquivalent: monthlyEquiv,
+          total,
+          periodLabel: periodLabelMap[p],
+          discount: p === "monthly" ? 0 : getPeriodDiscount(currentPlan, p),
+          savings: savings > 0 ? savings : 0,
+        };
+      }),
+    [currentPlan],
+  );
+
+  // Cobrado hoje: trial no mensal (cartão) ou o ciclo inteiro nos planos longos.
+  const todayAmount = pixEnabled ? currentPrice : currentPlan.trialPrice;
+  const nextChargeLabel = pixEnabled
+    ? `Renova automaticamente em R$ ${currentPrice}/${periodLabel}. Cancele quando quiser.`
+    : `Depois R$ ${currentPrice}/mês, a partir do 8º dia. Cancele antes e não paga nada.`;
+  const summaryBenefits = useMemo(
+    () => [
+      ...currentPlan.highlights,
+      currentPlan.sessions > 0
+        ? `Custo por sessão: R$ ${(
+            parseBRL(getPeriodMonthlyEquivalent(currentPlan, billingPeriod) || currentPlan.monthlyPrice) /
+            currentPlan.sessions
+          ).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+        : "Memória de longo prazo das suas conversas",
+    ],
+    [currentPlan, billingPeriod],
+  );
+
   const formatPhone = (value: string) => {
     const numbers = value.replace(/\D/g, "");
     if (numbers.length <= 2) return numbers;
