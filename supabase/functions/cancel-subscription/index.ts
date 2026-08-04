@@ -863,6 +863,8 @@ interface HandleAsaasParams {
   reason?: string;
   reason_detail?: string;
   pause_days?: number;
+  /** Oferta prometida no link do WhatsApp (/cancelar?t=...&offer=...). */
+  offeredTier?: "discount_30" | "lite" | "base" | null;
 }
 
 const PLAN_LABELS: Record<string, string> = {
