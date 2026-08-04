@@ -27,6 +27,10 @@ import "@/styles/v2-theme.css";
 import { loadStripe, type Stripe as StripeJs } from "@stripe/stripe-js";
 import { EmbeddedCheckoutProvider, EmbeddedCheckout } from "@stripe/react-stripe-js";
 import { AsaasCardForm } from "@/components/checkout/AsaasCardForm";
+import { CycleTabs, type CycleTabItem } from "@/components/checkout/CycleTabs";
+import { OrderSummary } from "@/components/checkout/OrderSummary";
+import { TrustRow } from "@/components/checkout/TrustRow";
+import { StickyMobileCta } from "@/components/checkout/StickyMobileCta";
 
 type PlanId = "essencial" | "direcao" | "transformacao";
 type BillingPeriod = "monthly" | "quarterly" | "semestral" | "yearly";
@@ -114,6 +118,15 @@ const periodShortMap: Record<BillingPeriod, string> = {
   semestral: "Sem",
   yearly: "Anual",
 };
+// Meses cobrados em cada ciclo — base do cálculo de economia em reais.
+const periodMonthsMap: Record<BillingPeriod, number> = {
+  monthly: 1,
+  quarterly: 3,
+  semestral: 6,
+  yearly: 12,
+};
+/** "118,80" → 118.8 */
+const parseBRL = (v: string) => Number(v.replace(/\./g, "").replace(",", ".")) || 0;
 
 function getPeriodPrice(plan: PlanConfig, b: BillingPeriod): string {
   switch (b) {
