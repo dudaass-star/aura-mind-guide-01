@@ -10,9 +10,9 @@ const corsHeaders = {
 
 // Tabela de preços PIX (valor cheio em centavos)
 const PIX_PRICES: Record<string, Record<string, number>> = {
-  essencial: { quarterly: 7990, semestral: 12590, yearly: 21490 },
-  direcao: { quarterly: 13390, semestral: 20990, yearly: 35990 },
-  transformacao: { quarterly: 21390, semestral: 33590, yearly: 57490 },
+  essencial: { quarterly: 5970, semestral: 8940, yearly: 11880 },
+  direcao: { quarterly: 10170, semestral: 14940, yearly: 20280 },
+  transformacao: { quarterly: 16170, semestral: 23940, yearly: 32280 },
 };
 
 const PLAN_NAMES: Record<string, string> = {

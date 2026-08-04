@@ -287,9 +287,9 @@ serve(async (req) => {
 
     // Plan display prices for custom_text — agora cobre os 4 períodos.
     const planPrices: Record<string, Record<string, string>> = {
-      essencial:     { monthly: "29,90", quarterly: "79,90",  semestral: "125,90", yearly: "214,90" },
-      direcao:       { monthly: "49,90", quarterly: "133,90", semestral: "209,90", yearly: "359,90" },
-      transformacao: { monthly: "79,90", quarterly: "213,90", semestral: "335,90", yearly: "574,90" },
+      essencial:     { monthly: "29,90", quarterly: "59,70",  semestral: "89,40",  yearly: "118,80" },
+      direcao:       { monthly: "49,90", quarterly: "101,70", semestral: "149,40", yearly: "202,80" },
+      transformacao: { monthly: "79,90", quarterly: "161,70", semestral: "239,40", yearly: "322,80" },
     };
     const displayPrice = planPrices[plan]?.[billingPeriod] || "";
     const periodLabelMap: Record<string, string> = {

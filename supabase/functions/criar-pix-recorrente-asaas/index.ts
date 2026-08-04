@@ -13,9 +13,9 @@ const corsHeaders = {
 
 // Tabela de preços (valor cheio em centavos) — cobre os 4 ciclos.
 const PRICES: Record<string, Record<string, number>> = {
-  essencial:     { monthly: 2990, quarterly: 7990,  semestral: 12590, yearly: 21490 },
-  direcao:       { monthly: 4990, quarterly: 13390, semestral: 20990, yearly: 35990 },
-  transformacao: { monthly: 7990, quarterly: 21390, semestral: 33590, yearly: 57490 },
+  essencial:     { monthly: 2990, quarterly: 5970,  semestral: 8940,  yearly: 11880 },
+  direcao:       { monthly: 4990, quarterly: 10170, semestral: 14940, yearly: 20280 },
+  transformacao: { monthly: 7990, quarterly: 16170, semestral: 23940, yearly: 32280 },
 };
 
 const PLAN_NAMES: Record<string, string> = {
