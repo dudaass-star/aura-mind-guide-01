@@ -727,6 +727,53 @@ Deno.serve(async (req) => {
         }
 
         // ────────────────────────────────────────────────────────────────
+        // Cadência de dunning do PIX (recorrente e PIX Automático Bacen).
+        // O Asaas emite PAYMENT_OVERDUE só uma vez por cobrança e o PIX não
+        // tem retry de cartão, então sem estas tarefas a escada pararia no
+        // aviso 1 e nunca chegaria às ofertas (30% → Lite).
+        // Agenda D+2, D+4 e D+7. Idempotente por payment_id.
+        // ────────────────────────────────────────────────────────────────
+        try {
+          const pmPix = (updated?.payment_method as string | undefined) || "";
+          const isPix = pmPix.toUpperCase().includes("PIX");
+          if (isPix) {
+            const { data: existingPixTask } = await supabase
+              .from("scheduled_tasks")
+              .select("id")
+              .eq("task_type", "dunning_pix_followup")
+              .eq("status", "pending")
+              .contains("payload", { payment_id: payment.id })
+              .limit(1)
+              .maybeSingle();
+            if (!existingPixTask) {
+              const nowMs = Date.now();
+              const rows = [2, 4, 7].map((delayDays, idx) => ({
+                user_id: (updated?.user_id as string | null) || null,
+                task_type: "dunning_pix_followup",
+                execute_at: new Date(nowMs + delayDays * 86400_000).toISOString(),
+                status: "pending",
+                payload: {
+                  payment_id: payment.id,
+                  subscription_id: overdueSubscriptionId,
+                  customer_id: (updated?.asaas_customer_id as string | null) || null,
+                  attempt: idx + 1,
+                },
+              }));
+              const { error: pixInsErr } = await supabase.from("scheduled_tasks").insert(rows);
+              if (pixInsErr) {
+                console.error("[webhook-asaas] erro agendando dunning PIX:", pixInsErr);
+              } else {
+                console.log(`[webhook-asaas] cadência dunning PIX agendada para ${payment.id}`);
+              }
+            } else {
+              console.log(`[webhook-asaas] cadência dunning PIX já agendada para ${payment.id}, skip`);
+            }
+          }
+        } catch (pixErr) {
+          console.error("[webhook-asaas] erro no scheduling de dunning PIX:", pixErr);
+        }
+
+        // ────────────────────────────────────────────────────────────────
         // Retry automático de cartão (paridade com Smart Retries do Stripe).
         // Só roda pra CREDIT_CARD recorrente (sub) — installment não tem
         // creditCardToken reusável e PIX não tem cartão salvo.
