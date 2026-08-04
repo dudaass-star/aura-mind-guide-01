@@ -1049,14 +1049,28 @@ const CheckoutV2 = () => {
                   const monthlyEquiv = getPeriodMonthlyEquivalent(plan, billingPeriod);
                   const active = selectedPlan === id;
                   const isPopular = id === "direcao";
+                  const monthlyForSession = parseBRL(
+                    getPeriodMonthlyEquivalent(plan, billingPeriod) || plan.monthlyPrice,
+                  );
+                  const perSession =
+                    plan.sessions > 0
+                      ? (monthlyForSession / plan.sessions).toLocaleString("pt-BR", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })
+                      : null;
 
                   return (
                     <label
                       key={id}
-                      className={`relative flex items-center justify-between gap-3 p-4 rounded-xl border cursor-pointer transition-all ${
+                      className={`relative flex items-center justify-between gap-3 rounded-xl border cursor-pointer transition-all ${
+                        isPopular ? "p-5 mt-3" : "p-4"
+                      } ${
                         active
-                          ? "border-[hsl(140_22%_55%)] bg-[hsl(140_22%_45%/0.14)] shadow-[0_0_0_1px_hsl(140_22%_55%/0.4)]"
-                          : "border-white/10 bg-white/[0.03] hover:border-white/25"
+                          ? "border-[hsl(140_22%_55%)] bg-[hsl(140_22%_45%/0.16)] shadow-[0_0_0_1px_hsl(140_22%_55%/0.5),0_12px_30px_-18px_hsl(140_22%_45%/0.9)]"
+                          : isPopular
+                            ? "border-[hsl(140_22%_45%)]/40 bg-white/[0.05] hover:border-[hsl(140_22%_55%)]/70"
+                            : "border-white/10 bg-white/[0.03] hover:border-white/25"
                       }`}
                     >
                       {isPopular && (
@@ -1077,6 +1091,12 @@ const CheckoutV2 = () => {
                               ? `${plan.sessions} sessões/mês + chat ilimitado`
                               : "Chat ilimitado 24/7"}
                           </p>
+                          {perSession && (
+                            <p className="text-[11px] text-[hsl(140_30%_72%)] mt-0.5">
+                              R$ {perSession} por sessão
+                              {isPopular ? " · melhor custo por sessão" : ""}
+                            </p>
+                          )}
                         </div>
                       </div>
                       <div className="text-right shrink-0">
