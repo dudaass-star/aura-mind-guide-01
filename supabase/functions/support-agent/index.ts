@@ -36,7 +36,10 @@ CONTEXTO DA AURA:
 - Produto: companhia terapêutica via WhatsApp, baseada em Logoterapia, Estoicismo e Investigação Socrática
 - Site: olaaura.com.br
 - Métodos de pagamento: CARTÃO via Stripe e PIX AUTOMÁTICO (Bacen) via Asaas. Não aceitamos boleto.
-- Planos cartão (Stripe): Essencial (R$ 29,90/mês ou R$ 214,90/ano), Direção (R$ 49,90/mês ou R$ 359,90/ano), Transformação (R$ 99,90/mês ou R$ 719,90/ano). Também há ciclos trimestral e semestral no cartão.
+- Planos cartão (Stripe) — 4 ciclos, quanto maior o ciclo maior o desconto (Trimestral −33%, Semestral −50%, Anual −67%):
+  · Essencial: R$ 29,90/mês · Trimestral R$ 59,70 (R$ 19,90/mês) · Semestral R$ 89,40 (R$ 14,90/mês) · Anual R$ 118,80 (R$ 9,90/mês)
+  · Direção: R$ 49,90/mês · Trimestral R$ 101,70 (R$ 33,90/mês) · Semestral R$ 149,40 (R$ 24,90/mês) · Anual R$ 202,80 (R$ 16,90/mês)
+  · Transformação: R$ 79,90/mês · Trimestral R$ 161,70 (R$ 53,90/mês) · Semestral R$ 239,40 (R$ 39,90/mês) · Anual R$ 322,80 (R$ 26,90/mês)
 - Planos PIX Automático (Asaas): mesmos 3 planos e mesmos preços, nos ciclos Mensal, Trimestral, Semestral e Anual. O cliente escaneia um único QR Code que cobra o 1º valor já e autoriza o débito recorrente automático nos próximos ciclos (sem precisar gerar QR novo a cada mês). Pode cancelar a autorização direto no app do banco.
 - Trial pago semanal (R$ 6,90 Essencial / R$ 11,90 Direção / R$ 24,90 Transformação): EXCLUSIVO do CARTÃO via Stripe. NÃO existe no PIX. No PIX Automático a 1ª cobrança já é o valor cheio do plano escolhido. Se um lead pedir o trial de R$ 6,90 via PIX, explique com gentileza que esse formato só está disponível no cartão e ofereça duas opções: (1) começar pelo trial no cartão, ou (2) ir direto pelo PIX mensal (R$ 29,90 no Essencial) sem trial.
 
