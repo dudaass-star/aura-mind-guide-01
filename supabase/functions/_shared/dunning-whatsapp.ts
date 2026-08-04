@@ -3,15 +3,19 @@
  *
  * - Usa a SUBACCOUNT de recuperação (mesma do carrinho abandonado),
  *   não o número da Aura.
- * - Escada de ofertas por tentativa (attemptNumber):
- *     1 → dunning_offer_30   (30% off por 3 meses)
- *     2 → dunning_offer_lite (R$ 19,90/mês)
- *     3 → dunning_offer_base (R$ 9,90/mês)
+ * - Cadência por CICLO de cobrança (attemptNumber):
+ *     1 → aviso genérico de falha de pagamento (utility)
+ *     2 → aviso genérico de falha de pagamento (utility)
+ *     3 → dunning_offer_30   (30% off por 3 meses)
+ *     4 → dunning_offer_lite (R$ 19,90/mês)
+ *   O degrau "base" (R$ 9,90) saiu do WhatsApp e vive só em /cancelar.
  *   Cada template de oferta: {{1}} = primeiro nome,
  *   {{2}} = query string do botão (`t=<token>&offer=<tier>`),
  *   URL do botão = https://olaaura.com.br/cancelar?{{2}}
- * - Template genérico (fallback): HXaf4af1e1f5d4cf40b6fff6b5b68df29a
+ * - Template genérico (avisos 1 e 2 / fallback): HXaf4af1e1f5d4cf40b6fff6b5b68df29a
  *   {{1}} = primeiro nome, {{2}} = URL completa /pagamento?t=<token>
+ * - Escopo da contagem é o CICLO (invoice_id → payment_id → subscription_id),
+ *   nunca a assinatura inteira: cada nova fatura/cobrança recomeça no aviso.
  * - Idempotência: dedup por (profile_user_id, event_id, channel='whatsapp').
  * - Templates de oferta são categoria MARKETING no Meta → só disparam entre
  *   08h e 21h BRT; fora da janela o envio é adiado via scheduled_tasks.
@@ -21,7 +25,12 @@ import { sendRecoveryTemplate } from "./twilio-recovery-client.ts";
 
 /** Template genérico de falha de pagamento (utility, sem restrição de horário). */
 export const DUNNING_CONTENT_SID = "HXaf4af1e1f5d4cf40b6fff6b5b68df29a";
-export const DUNNING_MAX_ATTEMPTS = 3;
+
+/** Quantos avisos (template utility) vêm antes da escada de ofertas. */
+export const DUNNING_NOTICE_STEPS = 2;
+
+/** Teto por ciclo: 2 avisos + 2 degraus de oferta. */
+export const DUNNING_MAX_ATTEMPTS = 4;
 
 export type DunningOfferTier = "discount_30" | "lite" | "base";
 
@@ -31,17 +40,14 @@ interface OfferTemplate {
   sid: string | null;
 }
 
-/** Escada por tentativa: índice 0 = 1ª tentativa. */
+/**
+ * Escada de ofertas: índice 0 = primeira tentativa DEPOIS dos avisos
+ * (ou seja, attemptNumber === DUNNING_NOTICE_STEPS + 1).
+ */
 export const DUNNING_OFFER_LADDER: OfferTemplate[] = [
   { tier: "discount_30", sid: "HX50cb75b6bb3cd9ae56ef2d9c6adc4781" },
   { tier: "lite", sid: "HX18e81fa401b8487c360f085e9b83630f" },
-  { tier: "base", sid: "HX65a53c5b0bb1dd7868146ee118c125fb" },
 ];
-
-/** SIDs válidos da escada — a cota conta só estes, nunca o template genérico. */
-const LADDER_SIDS = DUNNING_OFFER_LADDER
-  .map((t) => t.sid)
-  .filter((s): s is string => !!s);
 
 const MARKETING_WINDOW_START_BRT = 8;
 const MARKETING_WINDOW_END_BRT = 21;
