@@ -399,6 +399,7 @@ Deno.serve(async (req) => {
                   paymentId,
                   subscriptionId,
                   customerId: customerId || subCustomer || null,
+                  paymentMethod: 'CREDIT_CARD',
                 });
                 console.log(
                   `📨 dunning pós-retry #${attempt} tier=${waRes.tier} sent=${waRes.sent} skip=${waRes.skipped ?? '-'}`,
@@ -500,6 +501,7 @@ Deno.serve(async (req) => {
               customerId: payload.customer_id ?? null,
               forceAttemptNumber: payload.attempt_number ?? 1,
               skipWindowCheck: true,
+              paymentMethod: payload.payment_method ?? null,
             });
             console.log(`✅ dunning_offer_whatsapp tier=${res.tier} sent=${res.sent} skipped=${res.skipped ?? '-'}`);
             break;
@@ -550,6 +552,7 @@ Deno.serve(async (req) => {
               paymentId: pixPaymentId,
               subscriptionId: payload.subscription_id ?? null,
               customerId: payload.customer_id ?? null,
+              paymentMethod: payload.payment_method ?? 'PIX',
             });
             console.log(
               `📨 dunning_pix_followup #${payload.attempt ?? 1} tier=${pixRes.tier} sent=${pixRes.sent} skipped=${pixRes.skipped ?? '-'}`,
