@@ -57,19 +57,19 @@ const getPrices = (): Record<string, { monthly: string; yearly: string; boletoYe
 // Stripe: interval=month, interval_count=3/6 para trim/sem; interval=year, interval_count=1 para anual.
 const RECURRING_PRICES: Record<string, { quarterly: string; semestral: string; yearly: string }> = {
   essencial: {
-    quarterly: "price_1TZyoCQU15XnZ7VvyI45t8um",
-    semestral: "price_1TZyoDQU15XnZ7VvOegMIXQi",
-    yearly:    "price_1TZyoEQU15XnZ7Vvx02qKKPF",
+    quarterly: "price_1U0pUoQU15XnZ7Vvqc4DcNi2",
+    semestral: "price_1U0pVHQU15XnZ7VvvCChiLHP",
+    yearly:    "price_1U0pW5QU15XnZ7VvBVHvYUnU",
   },
   direcao: {
-    quarterly: "price_1TZyoFQU15XnZ7VvAfRFoTOh",
-    semestral: "price_1TZyoGQU15XnZ7VvZiGk2ifY",
-    yearly:    "price_1TZyoHQU15XnZ7VvwUFUX9Bm",
+    quarterly: "price_1U0pWPQU15XnZ7VviqtmRsYR",
+    semestral: "price_1U0pWhQU15XnZ7VvEveOB9DP",
+    yearly:    "price_1U0pYFQU15XnZ7Vvu6ylUTEM",
   },
   transformacao: {
-    quarterly: "price_1TZyoIQU15XnZ7VvCMjzuaZr",
-    semestral: "price_1TZyoJQU15XnZ7Vv3FqH75Nb",
-    yearly:    "price_1TZyoKQU15XnZ7VvJzJNnub7",
+    quarterly: "price_1U0pa7QU15XnZ7VvEqEFDPWg",
+    semestral: "price_1U0paYQU15XnZ7VvmTzRNyGG",
+    yearly:    "price_1U0pavQU15XnZ7VvQErVkBV7",
   },
 };
 
