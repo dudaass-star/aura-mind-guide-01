@@ -109,6 +109,24 @@ Deno.serve(async (req) => {
       apiVersion: "2023-10-16",
     });
 
+    // Cobrança Asaas em aberto vence o Stripe: quem já teve assinatura no
+    // cartão e hoje paga PIX ainda tem customer no Stripe, e cairia num
+    // Billing Portal sem nada pra pagar.
+    {
+      const { data: openAsaas } = await supabase
+        .from("asaas_payments")
+        .select("invoice_url, status, created_at")
+        .eq("user_id", userId)
+        .in("status", ["OVERDUE", "PENDING"])
+        .not("invoice_url", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (openAsaas?.invoice_url) {
+        return json({ url: openAsaas.invoice_url, provider: "asaas" }, 200);
+      }
+    }
+
     // 3. Resolve customer no Stripe via email (com fallback pra phone no metadata)
     let customerId: string | null = null;
     if (profile.email) {
