@@ -7,22 +7,24 @@ type: feature
 Disparo automático de WhatsApp para usuários com falha de pagamento, em paralelo ao email de dunning. Usa a SUBACCOUNT Twilio dedicada de recuperação (mesma do carrinho abandonado, fora do número da Aura).
 
 - Helper: `supabase/functions/_shared/dunning-whatsapp.ts` (`sendDunningWhatsApp`).
-- Template genérico (fallback/utility): `HXaf4af1e1f5d4cf40b6fff6b5b68df29a` — `{{1}}` primeiro nome, `{{2}}` URL completa `https://olaaura.com.br/pagamento?t=<token>`.
-- **Escada de ofertas por tentativa** (`DUNNING_OFFER_LADDER`), categoria Marketing, `{{1}}` nome + `{{2}}` query string do botão (`t=<token>&offer=<tier>`, URL `https://olaaura.com.br/cancelar?{{2}}`):
-  1. `dunning_offer_30` → `HX50cb75b6bb3cd9ae56ef2d9c6adc4781`
-  2. `dunning_offer_lite` → `HX18e81fa401b8487c360f085e9b83630f`
-  3. `dunning_offer_base` → `HX65a53c5b0bb1dd7868146ee118c125fb`
+- **Cadência por ciclo de cobrança** (2 avisos antes da escada, `DUNNING_NOTICE_STEPS = 2`):
+  1. Aviso — template genérico utility `HXaf4af1e1f5d4cf40b6fff6b5b68df29a` (`{{1}}` primeiro nome, `{{2}}` URL completa `https://olaaura.com.br/pagamento?t=<token>`), sem restrição de horário.
+  2. Aviso — mesmo template.
+  3. Oferta `discount_30` → `HX50cb75b6bb3cd9ae56ef2d9c6adc4781`
+  4. Oferta `lite` → `HX18e81fa401b8487c360f085e9b83630f`
+  Templates de oferta: categoria Marketing, `{{1}}` nome + `{{2}}` query string do botão (`t=<token>&offer=<tier>`, URL `https://olaaura.com.br/cancelar?{{2}}`).
+- O degrau `base` (R$ 9,90) **não** existe mais no WhatsApp — vive só dentro de `/cancelar`. O template `HX65a53c5b0bb1dd7868146ee118c125fb` ficou ocioso.
 - Templates de oferta são Marketing → só disparam entre **08h e 21h BRT**; fora da janela o envio é adiado via `scheduled_tasks` (`task_type = 'dunning_offer_whatsapp'`, executado por `execute-scheduled-tasks`).
 - `/cancelar` lê `?offer=<tier>` e coloca/destaca o card correspondente no topo da escada de retenção.
 - Secrets reutilizados: `TWILIO_RECOVERY_ACCOUNT_SID/AUTH_TOKEN/FROM`.
-- Limite: **3 envios por subscription/payment** (`DUNNING_MAX_ATTEMPTS`, um por degrau). Conta apenas `message_sid not null` **e `template_sid` dentro de `DUNNING_OFFER_LADDER`** — envios antigos do template genérico não queimam a cota da escada.
+- Limite: **4 envios por ciclo** (`DUNNING_MAX_ATTEMPTS` = 2 avisos + 2 ofertas). Escopo da contagem é o **ciclo**, na ordem `invoice_id` (Stripe) → `payment_id` (Asaas) → `subscription_id` (fallback) — contar por assinatura fazia a escada nunca reiniciar em novo ciclo. Conta todos os envios do ciclo com `message_sid not null` e `whatsapp_sent = true` (avisos + ofertas); envio que a Twilio marcou como failed/undelivered não queima cota.
 - Idempotência por `(profile_user_id, event_id, channel='whatsapp')`.
 - NÃO respeita quiet hours (utility transacional).
 
 Gatilhos:
 - **Stripe `invoice.payment_failed`** (`stripe-webhook/index.ts`): roda após o email de dunning, casado com Smart Retries (4 tentativas, 3 semanas) — Stripe re-emite o evento a cada retry, e o limite de 2 envios WhatsApp se aplica naturalmente.
 - **Asaas `PAYMENT_OVERDUE`** (`webhook-asaas/index.ts`): cobre PIX recorrente (`/subscriptions`) E PIX Automático Bacen (`pixAutomaticAuthorizationId` reusado como `subscription_id`). `eventId = asaas-PAYMENT_OVERDUE-<paymentId>` garante dedup.
-- **Retry de cartão Asaas falho** (`execute-scheduled-tasks`, case `card_retry_asaas`): cada recharge que não confirma dispara o próximo degrau (`eventId = asaas-cardretry-<paymentId>-<attempt>`). Sem isso o cartão Asaas ficava travado no degrau 1, porque os retries D+2/D+4/D+7 são internos e não reemitem `PAYMENT_OVERDUE`. Ritmo efetivo: D0 (30% off) → D+2 (Lite) → D+4 (Base) → D+7 bate o teto de 3 envios.
+- **Retry de cartão Asaas falho** (`execute-scheduled-tasks`, case `card_retry_asaas`): cada recharge que não confirma dispara o próximo degrau (`eventId = asaas-cardretry-<paymentId>-<attempt>`). Sem isso o cartão Asaas ficava travado no degrau 1, porque os retries D+2/D+4/D+7 são internos e não reemitem `PAYMENT_OVERDUE`. Ritmo efetivo: D0 (aviso) → D+2 (aviso) → D+4 (30% off) → D+7 (Lite).
 
 Link de retomada `/pagamento?t=<token>` resolve em `customer-portal/index.ts`:
 1. Stripe customer → Billing Portal session.
