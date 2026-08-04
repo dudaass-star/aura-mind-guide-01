@@ -118,6 +118,12 @@ const periodShortMap: Record<BillingPeriod, string> = {
   semestral: "Sem",
   yearly: "Anual",
 };
+const periodFullMap: Record<BillingPeriod, string> = {
+  monthly: "Plano mensal",
+  quarterly: "Plano trimestral",
+  semestral: "Plano semestral",
+  yearly: "Plano anual",
+};
 // Meses cobrados em cada ciclo — base do cálculo de economia em reais.
 const periodMonthsMap: Record<BillingPeriod, number> = {
   monthly: 1,
