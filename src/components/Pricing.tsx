@@ -8,9 +8,9 @@ const plans = [{
   id: "essencial",
   name: "Essencial",
   monthlyPrice: "29,90",
-  yearlyPrice: "214,90",
-  yearlyMonthlyEquivalent: "17,91",
-  yearlyDiscount: 40,
+  yearlyPrice: "118,80",
+  yearlyMonthlyEquivalent: "9,90",
+  yearlyDiscount: 67,
   dailyPrice: {
     monthly: "~R$ 1,00/dia",
     yearly: "~R$0,59/dia"
@@ -47,9 +47,9 @@ const plans = [{
   id: "direcao",
   name: "Direção",
   monthlyPrice: "49,90",
-  yearlyPrice: "359,90",
-  yearlyMonthlyEquivalent: "29,99",
-  yearlyDiscount: 40,
+  yearlyPrice: "202,80",
+  yearlyMonthlyEquivalent: "16,90",
+  yearlyDiscount: 66,
   dailyPrice: {
     monthly: "~R$ 1,70/dia",
     yearly: "~R$0,99/dia"
@@ -86,9 +86,9 @@ const plans = [{
   id: "transformacao",
   name: "Transformação",
   monthlyPrice: "79,90",
-  yearlyPrice: "574,90",
-  yearlyMonthlyEquivalent: "47,91",
-  yearlyDiscount: 40,
+  yearlyPrice: "322,80",
+  yearlyMonthlyEquivalent: "26,90",
+  yearlyDiscount: 66,
   dailyPrice: {
     monthly: "~R$2,70/dia",
     yearly: "~R$1,57/dia"

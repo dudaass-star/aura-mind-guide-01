@@ -29,21 +29,21 @@ export const CYCLE_LABELS: Record<BillingCycle, string> = {
 export const PLAN_MONTHLY_EQUIVALENT: Record<PlanId, Record<BillingCycle, number>> = {
   essencial: {
     monthly: 29.9,
-    quarterly: 27.9,
-    semiannual: 26.9,
-    yearly: 24.9,
+    quarterly: 19.9,
+    semiannual: 14.9,
+    yearly: 9.9,
   },
   direcao: {
     monthly: 49.9,
-    quarterly: 46.9,
-    semiannual: 43.9,
-    yearly: 39.9,
+    quarterly: 33.9,
+    semiannual: 24.9,
+    yearly: 16.9,
   },
   transformacao: {
     monthly: 79.9,
-    quarterly: 74.9,
-    semiannual: 69.9,
-    yearly: 64.9,
+    quarterly: 53.9,
+    semiannual: 39.9,
+    yearly: 26.9,
   },
 };
 

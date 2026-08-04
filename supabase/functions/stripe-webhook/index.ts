@@ -22,16 +22,25 @@ const PLAN_NAMES: Record<string, string> = {
 const RECURRING_PRICES: Record<string, { plan: string; billing_cycle: string }> = {
   // Essencial
   "price_1TZyoCQU15XnZ7VvyI45t8um": { plan: "essencial", billing_cycle: "quarterly" },
+  "price_1U0pUoQU15XnZ7Vvqc4DcNi2": { plan: "essencial", billing_cycle: "quarterly" },
   "price_1TZyoDQU15XnZ7VvOegMIXQi": { plan: "essencial", billing_cycle: "semiannual" },
+  "price_1U0pVHQU15XnZ7VvvCChiLHP": { plan: "essencial", billing_cycle: "semiannual" },
   "price_1TZyoEQU15XnZ7Vvx02qKKPF": { plan: "essencial", billing_cycle: "yearly" },
+  "price_1U0pW5QU15XnZ7VvBVHvYUnU": { plan: "essencial", billing_cycle: "yearly" },
   // Direção
   "price_1TZyoFQU15XnZ7VvAfRFoTOh": { plan: "direcao", billing_cycle: "quarterly" },
+  "price_1U0pWPQU15XnZ7VviqtmRsYR": { plan: "direcao", billing_cycle: "quarterly" },
   "price_1TZyoGQU15XnZ7VvZiGk2ifY": { plan: "direcao", billing_cycle: "semiannual" },
+  "price_1U0pWhQU15XnZ7VvEveOB9DP": { plan: "direcao", billing_cycle: "semiannual" },
   "price_1TZyoHQU15XnZ7VvwUFUX9Bm": { plan: "direcao", billing_cycle: "yearly" },
+  "price_1U0pYFQU15XnZ7Vvu6ylUTEM": { plan: "direcao", billing_cycle: "yearly" },
   // Transformação
   "price_1TZyoIQU15XnZ7VvCMjzuaZr": { plan: "transformacao", billing_cycle: "quarterly" },
+  "price_1U0pa7QU15XnZ7VvEqEFDPWg": { plan: "transformacao", billing_cycle: "quarterly" },
   "price_1TZyoJQU15XnZ7Vv3FqH75Nb": { plan: "transformacao", billing_cycle: "semiannual" },
+  "price_1U0paYQU15XnZ7VvmTzRNyGG": { plan: "transformacao", billing_cycle: "semiannual" },
   "price_1TZyoKQU15XnZ7VvJzJNnub7": { plan: "transformacao", billing_cycle: "yearly" },
+  "price_1U0pavQU15XnZ7VvQErVkBV7": { plan: "transformacao", billing_cycle: "yearly" },
   // Planos de retenção (downgrade assistido em /cancelar). Mantêm os
   // entitlements do Essencial mensal; o tier fica em profiles.plan_tier.
   "price_1TwR9yQU15XnZ7Vv59okBz23": { plan: "essencial", billing_cycle: "monthly" }, // Lite R$19,90
