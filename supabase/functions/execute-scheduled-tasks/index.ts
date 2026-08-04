@@ -505,6 +505,58 @@ Deno.serve(async (req) => {
             break;
           }
 
+          case 'dunning_pix_followup': {
+            // Cadência de dunning do PIX (recorrente e PIX Automático).
+            // O Asaas emite PAYMENT_OVERDUE uma única vez por cobrança e não há
+            // retry de cartão no PIX, então a escada (aviso 2 → 30% → Lite)
+            // avança por estas tarefas agendadas em D+2, D+4 e D+7.
+            const ASAAS_API_KEY = Deno.env.get('ASAAS_API_KEY') || '';
+            const ASAAS_BASE_URL = (Deno.env.get('ASAAS_ENV') === 'production' || !Deno.env.get('ASAAS_ENV'))
+              ? 'https://api.asaas.com/v3'
+              : 'https://api-sandbox.asaas.com/v3';
+            const pixPaymentId = payload.payment_id as string;
+            if (!ASAAS_API_KEY || !pixPaymentId) {
+              console.warn('⚠️ dunning_pix_followup payload incompleto ou sem ASAAS_API_KEY');
+              break;
+            }
+
+            // 1) Já pago? cancela o resto da cadência e não envia nada.
+            const pixResp = await fetch(`${ASAAS_BASE_URL}/payments/${pixPaymentId}`, {
+              headers: {
+                access_token: ASAAS_API_KEY,
+                'Content-Type': 'application/json',
+                'User-Agent': 'Aura/1.0',
+              },
+            });
+            const pixJson: any = await pixResp.json().catch(() => ({}));
+            const pixStatus = pixJson?.status as string | undefined;
+            if (pixStatus === 'CONFIRMED' || pixStatus === 'RECEIVED' || pixStatus === 'RECEIVED_IN_CASH') {
+              console.log(`✅ PIX ${pixPaymentId} já pago (${pixStatus}), cancelando cadência pendente`);
+              await supabase
+                .from('scheduled_tasks')
+                .update({ status: 'canceled', executed_at: new Date().toISOString() })
+                .eq('task_type', 'dunning_pix_followup')
+                .eq('status', 'pending')
+                .contains('payload', { payment_id: pixPaymentId });
+              break;
+            }
+
+            // 2) Segue em aberto → avança a escada (o helper conta por payment_id).
+            const pixRes = await sendDunningWhatsApp({
+              supabase,
+              profile: { user_id: task.user_id, phone: profile.phone, name: profile.name },
+              eventId: `asaas-pixdunning-${pixPaymentId}-${payload.attempt ?? 1}`,
+              provider: 'asaas',
+              paymentId: pixPaymentId,
+              subscriptionId: payload.subscription_id ?? null,
+              customerId: payload.customer_id ?? null,
+            });
+            console.log(
+              `📨 dunning_pix_followup #${payload.attempt ?? 1} tier=${pixRes.tier} sent=${pixRes.sent} skipped=${pixRes.skipped ?? '-'}`,
+            );
+            break;
+          }
+
           default:
             console.warn(`⚠️ Unknown task type: ${task.task_type}`);
         }
