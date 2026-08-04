@@ -61,7 +61,7 @@ const Pagamento = () => {
               Abrindo seu pagamento seguro
             </h1>
             <p className="text-sm text-muted-foreground font-['Nunito']">
-              Te levando pro ambiente seguro do Stripe pra atualizar sua forma de pagamento…
+              Te levando pro ambiente seguro de pagamento pra você atualizar ou quitar sua cobrança…
             </p>
           </div>
         ) : (

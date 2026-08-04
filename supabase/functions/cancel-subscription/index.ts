@@ -311,6 +311,7 @@ serve(async (req) => {
         reason,
         reason_detail,
         pause_days,
+        offeredTier,
       });
       if (resp) return resp;
       // Se o handler devolveu null (sem sub encontrada), cai para o Stripe.
@@ -863,6 +864,8 @@ interface HandleAsaasParams {
   reason?: string;
   reason_detail?: string;
   pause_days?: number;
+  /** Oferta prometida no link do WhatsApp (/cancelar?t=...&offer=...). */
+  offeredTier?: "discount_30" | "lite" | "base" | null;
 }
 
 const PLAN_LABELS: Record<string, string> = {
@@ -1277,7 +1280,7 @@ async function handleAsaasCard(params: HandleAsaasParams): Promise<Response | nu
 // reautorizar cada QR). Cobre check / pause / downgrade / cancel.
 // ─────────────────────────────────────────────────────────────────────────
 async function handleAsaasPix(params: HandleAsaasParams): Promise<Response | null> {
-  const { supabase, profile, phoneClean, action, reason, reason_detail, pause_days } = params;
+  const { supabase, profile, phoneClean, action, reason, reason_detail, pause_days, offeredTier } = params;
   const logP = (step: string, details?: any) =>
     console.log(`[CANCEL-SUBSCRIPTION][ASAAS-PIX] ${step}${details ? ` - ${JSON.stringify(details)}` : ""}`);
 
@@ -1303,11 +1306,26 @@ async function handleAsaasPix(params: HandleAsaasParams): Promise<Response | nul
   const subscriptionId = subRows?.[0]?.asaas_subscription_id as string | undefined;
   if (!subscriptionId) {
     logP("Nenhuma subscription PIX Asaas encontrada");
+    // PIX Automático (Bacen) e PIX avulso não têm subscription no Asaas. Se o
+    // cliente chegou por link de oferta, não pode virar erro: devolve o estado
+    // de reativação pro front honrar a oferta (checkout no preço do tier).
+    if (offeredTier) {
+      return jsonResponse({
+        success: false,
+        status: "no_gateway_subscription",
+        offer: offeredTier,
+        profile: { name: profile.name ?? null, plan: profile.plan ?? null },
+        message: "Sua assinatura PIX não está mais ativa — mas a oferta continua de pé.",
+      });
+    }
     return jsonResponse({
       success: false,
       message: "Nenhuma assinatura PIX ativa encontrada.",
     });
   }
+
+  // Oferta de 30% não existe no PIX (sem cartão salvo). Se o link prometeu 30%,
+  // o front recebe discount_available=false e mostra Lite/Base na escada.
 
   let subDetails: any = {};
   try {

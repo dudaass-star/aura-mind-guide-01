@@ -715,6 +715,7 @@ Deno.serve(async (req) => {
               provider: "asaas",
               paymentId: payment.id,
               subscriptionId: overdueSubscriptionId,
+              paymentMethod: (updated?.payment_method as string | null) || null,
             });
             console.log(
               `[webhook-asaas] dunning WhatsApp sent=${waResult.sent} skip=${waResult.skipped || "-"} err=${waResult.error || "-"}`,
@@ -758,6 +759,7 @@ Deno.serve(async (req) => {
                   subscription_id: overdueSubscriptionId,
                   customer_id: (updated?.asaas_customer_id as string | null) || null,
                   attempt: idx + 1,
+                  payment_method: pmPix || "PIX",
                 },
               }));
               const { error: pixInsErr } = await supabase.from("scheduled_tasks").insert(rows);
