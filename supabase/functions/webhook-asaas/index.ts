@@ -732,7 +732,9 @@ Deno.serve(async (req) => {
         // O Asaas emite PAYMENT_OVERDUE só uma vez por cobrança e o PIX não
         // tem retry de cartão, então sem estas tarefas a escada pararia no
         // aviso 1 e nunca chegaria às ofertas (30% → Lite).
-        // Agenda D+2, D+4 e D+7. Idempotente por payment_id.
+        // Escada do PIX tem 3 degraus (2 avisos + Lite) e o envio do
+        // PAYMENT_OVERDUE já gasta o degrau 1 → só faltam 2 follow-ups.
+        // Agenda D+2 e D+4. Idempotente por payment_id.
         // ────────────────────────────────────────────────────────────────
         try {
           const pmPix = (updated?.payment_method as string | undefined) || "";
@@ -749,7 +751,7 @@ Deno.serve(async (req) => {
               .maybeSingle();
             if (!existingPixTask) {
               const nowMs = Date.now();
-              const rows = [2, 4, 7].map((delayDays, idx) => ({
+              const rows = [2, 4].map((delayDays, idx) => ({
                 user_id: (updated?.user_id as string | null) || null,
                 task_type: "dunning_pix_followup",
                 execute_at: new Date(nowMs + delayDays * 86400_000).toISOString(),
