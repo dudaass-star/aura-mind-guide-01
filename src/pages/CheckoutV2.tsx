@@ -1266,7 +1266,7 @@ const CheckoutV2 = () => {
               <div className="hidden lg:block">
                 <OrderSummary
                   planName={currentPlan.name}
-                  cycleLabel={`${CYCLE_TEXT[billingPeriod]} · R$ ${currentPrice}/${periodLabel}`}
+                  cycleLabel={`${periodFullMap[billingPeriod]} · R$ ${currentPrice}/${periodLabel}`}
                   todayAmount={todayAmount}
                   nextChargeLabel={nextChargeLabel}
                   benefits={summaryBenefits}
