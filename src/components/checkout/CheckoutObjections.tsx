@@ -9,7 +9,7 @@ const ITEMS = [
   },
   {
     q: "Como eu cancelo?",
-    a: "Em um clique no seu espaço, sem falar com ninguém e sem justificativa. Cancelando dentro dos 7 dias, você não paga a mensalidade.",
+    a: "Em um clique no seu espaço, sem falar com ninguém e sem justificativa. E se cancelar dentro dos 7 dias de garantia, devolvemos o valor.",
   },
   {
     q: "Meus dados ficam seguros?",
