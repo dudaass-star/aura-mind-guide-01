@@ -25,8 +25,9 @@ const HeroV2 = () => (
           </h1>
 
           <p className="mt-6 text-base md:text-lg text-white/70 max-w-md leading-relaxed">
-            Converse, desabafe, organize seus pensamentos e encontre clareza.
-            A qualquer hora, todos os dias.
+            A AURA lembra da sua história, entende seu momento e te acompanha no
+            WhatsApp — com sessões guiadas de 45 minutos e conversa aberta a
+            qualquer hora do dia.
           </p>
 
           <div className="mt-8 flex flex-col items-start gap-2">
@@ -36,7 +37,10 @@ const HeroV2 = () => (
               </Button>
             </Link>
             <p className="text-xs text-white/55">
-              7 dias por R$ 6,90 · Cancele quando quiser.
+              7 dias por R$ 6,90 · cancela em 1 clique · reembolso em 7 dias
+            </p>
+            <p className="mt-3 text-xs text-primary font-semibold">
+              +5.000 pessoas já começaram
             </p>
           </div>
 
