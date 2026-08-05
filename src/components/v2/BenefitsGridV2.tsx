@@ -4,10 +4,10 @@ import {
 } from "lucide-react";
 
 const benefits = [
-  { icon: Clock, title: "Disponível 24/7", desc: "Dia, noite, fim de semana. A AURA sempre aqui." },
-  { icon: Brain, title: "Memória de longo prazo", desc: "Lembra do que você contou semanas atrás." },
-  { icon: CalendarCheck, title: "Sessões de 45min", desc: "Metodologia estruturada, não papo aleatório." },
-  { icon: FileText, title: "Resumo escrito", desc: "Depois de cada sessão, você recebe os insights." },
+  { icon: Clock, title: "Nunca mais sozinho às 3h", desc: "Madrugada, domingo, feriado: a AURA responde quando o peso aparece." },
+  { icon: Brain, title: "Ela lembra da sua história", desc: "Você não precisa recomeçar do zero. Ela retoma de onde vocês pararam." },
+  { icon: CalendarCheck, title: "45 minutos só pra você", desc: "Sessões guiadas com método — não é papo aleatório de chatbot." },
+  { icon: FileText, title: "Você sai com clareza no papel", desc: "Depois de cada sessão, recebe um resumo com o que ficou claro." },
   { icon: Heart, title: "Nunca te abandona", desc: "Se você sumir, a AURA vai atrás de você." },
   { icon: Pause, title: "Pausa quando precisar", desc: "Pause sua assinatura por até 30 dias." },
   { icon: Cloud, title: "Cápsula do Tempo", desc: "Grave uma mensagem para seu eu do futuro." },
