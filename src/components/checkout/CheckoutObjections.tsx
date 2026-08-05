@@ -4,26 +4,38 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 
 const ITEMS = [
   {
-    q: "Vou falar com um robô?",
-    a: "Você conversa por WhatsApp com a AURA, que lembra do seu contexto, do que você já contou e acompanha sua evolução. Não é um chat genérico que começa do zero toda vez.",
+    q: "Como é ter a AURA no seu WhatsApp?",
+    a: "Você manda mensagem quando a coisa aperta — 6h da manhã, meia-noite, no meio do dia — e tem resposta na hora. Sem agenda, sem sala de espera, sem esperar até terça. E ela lembra do que você contou ontem, das pessoas da sua vida, do que você está tentando mudar. Por isso não parece um chat genérico: você nunca precisa começar do zero.",
   },
   {
-    q: "Como eu cancelo?",
-    a: "Em um clique no seu espaço, sem falar com ninguém e sem justificativa. E se cancelar dentro dos 7 dias de garantia, devolvemos o valor.",
+    q: "Como é a primeira conversa?",
+    a: "Ela começa pelo que está pesando agora. Você responde por texto ou áudio, do jeito que for mais fácil. Nos primeiros minutos já dá pra sentir a diferença: em vez de conselho pronto, você sai com uma leitura do que está acontecendo e um próximo passo concreto pra hoje.",
   },
   {
-    q: "Meus dados ficam seguros?",
-    a: "As conversas são privadas e criptografadas, o pagamento é processado por Stripe e Asaas (nunca guardamos seu cartão) e usamos seu email só para recibo e recuperação de acesso.",
+    q: "E se eu não gostar?",
+    a: "Você não está assinando um compromisso, está começando uma conversa. Cancela em um clique no seu espaço, sem falar com ninguém e sem justificar nada. Dentro dos 7 dias de garantia, devolvemos o valor.",
+  },
+  {
+    q: "Posso falar o que eu não falo pra ninguém?",
+    a: "É exatamente pra isso. Sem julgamento, sem alguém da sua vida sabendo. As conversas são privadas e criptografadas, o pagamento é processado por Stripe e Asaas (nunca guardamos seu cartão) e seu email é usado só para recibo e recuperação de acesso.",
   },
 ];
 
 export function CheckoutObjections({ className = "" }: { className?: string }) {
   return (
     <div className={className}>
-      <p className="mb-2 text-center text-[11px] uppercase tracking-wide text-[hsl(var(--ck-text-muted))] lg:text-left">
-        Dúvidas rápidas
+      <p className="text-center text-[11px] uppercase tracking-wide text-[hsl(var(--ck-text-muted))] lg:text-left">
+        Antes de começar
       </p>
-      <Accordion type="single" collapsible className="rounded-2xl border border-[hsl(var(--ck-line))] bg-[hsl(var(--ck-text)/0.04)] px-4">
+      <p className="mb-3 mt-1 text-center text-[13px] leading-relaxed text-[hsl(var(--ck-text-soft))] lg:text-left">
+        Em poucos minutos você já está conversando. Veja como funciona na prática.
+      </p>
+      <Accordion
+        type="single"
+        collapsible
+        defaultValue={ITEMS[0].q}
+        className="rounded-2xl border border-[hsl(var(--ck-line))] bg-[hsl(var(--ck-text)/0.04)] px-4"
+      >
         {ITEMS.map((it) => (
           <AccordionItem key={it.q} value={it.q} className="border-[hsl(var(--ck-line))] last:border-b-0">
             <AccordionTrigger className="py-3 text-left text-sm text-[hsl(var(--ck-text-soft))] hover:no-underline">
