@@ -18,7 +18,9 @@ const FinalCTAV2 = () => (
             <br className="hidden md:block" /> tudo <span className="italic text-gradient-sage">sozinho.</span>
           </h2>
           <p className="mt-4 text-base text-white/70">
-            A AURA está aqui, sempre que você precisar.
+            Uma sessão de terapia custa cerca de R$ 200. Um mês inteiro com a
+            AURA — conversas ilimitadas, sessões guiadas e memória da sua
+            história — sai a partir de R$ 9,90.
           </p>
         </div>
 
@@ -28,7 +30,10 @@ const FinalCTAV2 = () => (
               Quero começar agora
             </Button>
           </Link>
-          <p className="text-xs text-white/65">7 dias por R$ 6,90 · Cancele quando quiser.</p>
+          <p className="text-xs text-white/65 text-center md:text-right">
+            7 dias por R$ 6,90 · cancela em 1 clique
+            <br className="hidden md:block" /> reembolso em 7 dias
+          </p>
         </div>
       </div>
     </div>
