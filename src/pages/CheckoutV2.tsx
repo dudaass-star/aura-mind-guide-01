@@ -783,7 +783,7 @@ const CheckoutV2 = () => {
   }, [pixOpen, pixStage, pixData?.authorizationId, authState, resumedAuthId]);
 
   const inputCls =
-    "mt-1.5 bg-white/5 border-white/15 text-white placeholder:text-white/55 focus-visible:ring-1 focus-visible:ring-[hsl(140_18%_55%)]";
+    "ck-field mt-1.5 h-12 text-base sm:text-sm sm:h-11 focus-visible:ring-0 focus-visible:ring-offset-0";
 
   return (
     <>
@@ -800,7 +800,7 @@ const CheckoutV2 = () => {
         <meta property="og:type" content="website" />
       </Helmet>
 
-      <div className="v2-theme min-h-screen bg-[hsl(220_35%_8%)] text-white">
+      <div className="v2-theme checkout-dark min-h-screen bg-[hsl(var(--ck-bg))] text-white">
         {/* Glow decorativo no topo */}
         <div
           className="pointer-events-none absolute inset-x-0 top-0 h-[420px] opacity-60"
