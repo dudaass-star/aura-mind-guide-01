@@ -32,7 +32,7 @@ export function CycleTabs({ items, value, onChange }: CycleTabsProps) {
 
   return (
     <div className="space-y-2">
-      <div className="grid grid-cols-4 gap-1 p-1 bg-white/5 rounded-2xl border border-white/10">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 p-1.5 bg-[hsl(var(--ck-text)/0.05)] rounded-2xl border border-[hsl(var(--ck-line))]">
         {items.map((item) => {
           const active = item.id === value;
           return (
@@ -41,25 +41,27 @@ export function CycleTabs({ items, value, onChange }: CycleTabsProps) {
               type="button"
               onClick={() => onChange(item.id)}
               aria-pressed={active}
-              className={`relative flex flex-col items-center justify-center gap-0.5 px-1.5 py-2 rounded-xl transition-all ${
+              className={`relative flex min-h-[3.25rem] flex-col items-center justify-center gap-1 px-2 py-2.5 rounded-xl transition-all ${
                 active
-                  ? "bg-[hsl(140_22%_45%)] text-white shadow-md"
-                  : "text-white/70 hover:text-white hover:bg-white/5"
+                  ? "bg-[hsl(var(--ck-accent))] text-[hsl(var(--ck-text))] shadow-md"
+                  : "text-[hsl(var(--ck-text-soft))] hover:bg-[hsl(var(--ck-text)/0.07)]"
               }`}
             >
-              <span className="text-xs font-medium leading-none">{item.label}</span>
+              <span className="text-[13px] font-medium leading-none">{item.label}</span>
               <span
-                className={`text-[11px] font-semibold leading-none ${
-                  active ? "text-white" : "text-[hsl(140_30%_72%)]"
+                className={`ck-num text-xs font-semibold leading-none ${
+                  active ? "text-[hsl(var(--ck-text))]" : "text-[hsl(var(--ck-accent-soft))]"
                 }`}
               >
                 R$ {item.monthlyEquivalent}
-                <span className={active ? "text-white/75" : "text-white/50"}>/mês</span>
+                <span className={active ? "opacity-75" : "text-[hsl(var(--ck-text-muted))]"}>/mês</span>
               </span>
               {item.discount > 0 && (
                 <span
-                  className={`mt-0.5 text-[9px] font-bold px-1 py-0.5 rounded leading-none ${
-                    active ? "bg-white/20 text-white" : "bg-[hsl(35_70%_60%)] text-[hsl(220_35%_12%)]"
+                  className={`ck-num text-[10px] font-bold px-1.5 py-0.5 rounded leading-none ${
+                    active
+                      ? "bg-[hsl(var(--ck-text)/0.2)] text-[hsl(var(--ck-text))]"
+                      : "bg-[hsl(var(--ck-save)/0.18)] text-[hsl(var(--ck-save))]"
                   }`}
                 >
                   -{item.discount}%
@@ -71,19 +73,19 @@ export function CycleTabs({ items, value, onChange }: CycleTabsProps) {
       </div>
 
       {selected && (
-        <p className="text-center text-[11px] text-white/60">
+        <p className="ck-num text-center text-[11px] text-[hsl(var(--ck-text-muted))]">
           {selected.savings > 0 ? (
             <>
-              <span className="text-white/85">R$ {selected.total}</span> à vista por{" "}
+              <span className="text-[hsl(var(--ck-text-soft))]">R$ {selected.total}</span> à vista por{" "}
               {selected.periodLabel} ·{" "}
-              <span className="inline-flex items-center gap-1 text-[hsl(140_30%_72%)] font-semibold">
+              <span className="inline-flex items-center gap-1 text-[hsl(var(--ck-save))] font-semibold">
                 <Check className="w-3 h-3" />
                 economize R$ {fmt(selected.savings)}
               </span>
             </>
           ) : (
             <>
-              <span className="text-white/85">R$ {selected.total}</span> por mês · sem
+              <span className="text-[hsl(var(--ck-text-soft))]">R$ {selected.total}</span> por mês · sem
               compromisso de tempo
             </>
           )}
