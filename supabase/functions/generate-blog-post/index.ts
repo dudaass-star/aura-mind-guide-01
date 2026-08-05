@@ -72,6 +72,11 @@ function wordCount(md: string): number {
   return md.replace(/[#*`>\-_]/g, " ").split(/\s+/).filter(Boolean).length;
 }
 
+// Comparação de keyword ignorando acento/caixa: "insonia" casa com "insônia".
+function foldAccents(s: string): string {
+  return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
 function validate(post: GeneratedPost, keyword: string): string | null {
   if (!post.title || post.title.length < 20 || post.title.length > 70)
     return `title fora do range (${post.title?.length})`;
@@ -81,9 +86,8 @@ function validate(post: GeneratedPost, keyword: string): string | null {
     return `meta_description fora do range (${post.meta_description?.length})`;
   if (!post.content_md || wordCount(post.content_md) < 1200)
     return `content_md muito curto (${wordCount(post.content_md)} palavras)`;
-  const lowerContent = post.content_md.toLowerCase();
-  const lowerKw = keyword.toLowerCase();
-  if (!lowerContent.includes(lowerKw)) return `keyword "${keyword}" ausente no conteúdo`;
+  if (!foldAccents(post.content_md).includes(foldAccents(keyword)))
+    return `keyword "${keyword}" ausente no conteúdo`;
   const h2Count = (post.content_md.match(/^##\s/gm) || []).length;
   if (h2Count < 3) return `poucos H2 (${h2Count})`;
   if (!post.faq || post.faq.length < 3) return `FAQ insuficiente`;
