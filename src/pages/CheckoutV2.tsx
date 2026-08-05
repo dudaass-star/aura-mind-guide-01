@@ -24,6 +24,7 @@ import {
 } from "@/lib/ga4";
 import logoOlaAura from "@/assets/logo-ola-aura.png";
 import "@/styles/v2-theme.css";
+import "@/styles/checkout-theme.css";
 import { loadStripe, type Stripe as StripeJs } from "@stripe/stripe-js";
 import { EmbeddedCheckoutProvider, EmbeddedCheckout } from "@stripe/react-stripe-js";
 import { AsaasCardForm } from "@/components/checkout/AsaasCardForm";
@@ -31,6 +32,8 @@ import { CycleTabs, type CycleTabItem } from "@/components/checkout/CycleTabs";
 import { OrderSummary } from "@/components/checkout/OrderSummary";
 import { TrustRow } from "@/components/checkout/TrustRow";
 import { StickyMobileCta } from "@/components/checkout/StickyMobileCta";
+import { PaymentMethodToggle, type PayMethod } from "@/components/checkout/PaymentMethodToggle";
+import { CheckoutObjections } from "@/components/checkout/CheckoutObjections";
 
 type PlanId = "essencial" | "direcao" | "transformacao";
 type BillingPeriod = "monthly" | "quarterly" | "semestral" | "yearly";
@@ -196,6 +199,10 @@ const CheckoutV2 = () => {
 
   const [selectedPlan, setSelectedPlan] = useState<PlanId>(initialPlan);
   const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>(initialBilling);
+  // Meio de pagamento escolhido explicitamente (um CTA só, sem preços concorrentes).
+  const [payMethod, setPayMethod] = useState<PayMethod>(
+    isPixPeriod(initialBilling) ? "pix" : "card",
+  );
   const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -327,6 +334,11 @@ const CheckoutV2 = () => {
   const currentDiscount = getPeriodDiscount(currentPlan, billingPeriod);
   const currentMonthlyEquivalent = getPeriodMonthlyEquivalent(currentPlan, billingPeriod);
   const pixEnabled = isPixPeriod(billingPeriod);
+
+  // Ciclos longos não têm trial no cartão: o padrão passa a ser PIX à vista.
+  useEffect(() => {
+    setPayMethod(isPixPeriod(billingPeriod) ? "pix" : "card");
+  }, [billingPeriod]);
 
   // Abas de ciclo com preço/mês, total do ciclo e economia em reais (do plano selecionado).
   const cycleItems: CycleTabItem[] = useMemo(
