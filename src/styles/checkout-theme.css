@@ -1,0 +1,68 @@
+/* Tokens escopados ao checkout V2 (fundo navy escuro).
+ * Centraliza os valores que antes estavam crus (bg-[hsl(...)], text-white) para
+ * manter contraste e paleta consistentes em todos os componentes de checkout. */
+.checkout-dark {
+  --ck-bg: 220 35% 8%;
+  --ck-surface: 220 30% 13%;
+  --ck-text: 40 20% 98%;
+  --ck-text-soft: 40 12% 82%;
+  --ck-text-muted: 220 10% 62%;
+  --ck-line: 220 15% 30%;
+
+  /* Sage do CTA — mais claro/saturado que o sage da marca para vencer o navy */
+  --ck-cta: 145 42% 46%;
+  --ck-cta-hover: 145 46% 52%;
+  --ck-cta-fg: 150 45% 8%;
+
+  /* Sage de estado/seleção (mais sóbrio) */
+  --ck-accent: 140 24% 48%;
+  --ck-accent-soft: 140 32% 74%;
+
+  /* Âmbar exclusivo de economia */
+  --ck-save: 38 82% 62%;
+  --ck-save-fg: 30 40% 12%;
+}
+
+/* Números sempre alinhados: evita "dança" de largura ao trocar ciclo/plano */
+.checkout-dark .ck-num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+.checkout-dark .ck-cta {
+  background-color: hsl(var(--ck-cta));
+  color: hsl(var(--ck-cta-fg));
+  box-shadow:
+    0 1px 0 0 hsl(0 0% 100% / 0.18) inset,
+    0 14px 34px -14px hsl(var(--ck-cta) / 0.75);
+}
+.checkout-dark .ck-cta:hover {
+  background-color: hsl(var(--ck-cta-hover));
+  box-shadow:
+    0 1px 0 0 hsl(0 0% 100% / 0.22) inset,
+    0 18px 40px -14px hsl(var(--ck-cta) / 0.9);
+  transform: translateY(-1px);
+}
+.checkout-dark .ck-cta:active {
+  transform: translateY(1px);
+  box-shadow: 0 6px 16px -10px hsl(var(--ck-cta) / 0.8);
+}
+
+/* Campos de formulário com contraste real de borda e placeholder */
+.checkout-dark .ck-field {
+  background-color: hsl(var(--ck-text) / 0.06);
+  border-color: hsl(var(--ck-line));
+  color: hsl(var(--ck-text));
+}
+.checkout-dark .ck-field::placeholder {
+  color: hsl(var(--ck-text-muted));
+}
+.checkout-dark .ck-field:hover {
+  border-color: hsl(var(--ck-line) / 1);
+  background-color: hsl(var(--ck-text) / 0.09);
+}
+.checkout-dark .ck-field:focus-visible {
+  border-color: hsl(var(--ck-cta));
+  box-shadow: 0 0 0 3px hsl(var(--ck-cta) / 0.25);
+  outline: none;
+}

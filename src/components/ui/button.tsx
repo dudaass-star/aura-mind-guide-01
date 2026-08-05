@@ -16,6 +16,8 @@ const buttonVariants = cva(
         ghost: "hover:bg-accent hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
         sage: "bg-primary text-primary-foreground font-semibold shadow-soft hover:shadow-glow hover:scale-[1.02] active:scale-[0.98]",
+        /* CTA do checkout: cores via tokens do escopo .checkout-dark (ck-cta) */
+        "sage-solid": "ck-cta font-semibold",
         lavender: "bg-accent text-foreground font-semibold hover:bg-accent/80 hover:scale-[1.02] active:scale-[0.98]",
         glass: "bg-secondary/60 backdrop-blur-sm text-foreground border border-border hover:bg-secondary/80 hover:border-primary/30",
         whatsapp: "bg-[#25D366] text-white font-semibold shadow-soft hover:bg-[#128C7E] hover:scale-[1.02] active:scale-[0.98]",
@@ -25,6 +27,7 @@ const buttonVariants = cva(
         sm: "h-9 rounded-md px-3",
         lg: "h-12 rounded-lg px-8 text-base",
         xl: "h-14 rounded-xl px-10 text-lg",
+        cta: "min-h-[3.5rem] rounded-full px-6 text-base sm:text-lg font-semibold",
         icon: "h-10 w-10",
       },
     },
