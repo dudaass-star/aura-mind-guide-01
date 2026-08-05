@@ -103,6 +103,150 @@ async function pickNextSlot(supabase: any): Promise<Slot | null> {
   return data as Slot | null;
 }
 
+// ----------------------------------------------------------------------------
+// Auto-recuperação: slots que travaram em "generating" (crash/timeout no meio)
+// voltam pra fila. Depois de 3 tentativas viram "failed" pra não travar o trem.
+// ----------------------------------------------------------------------------
+async function recoverStuckSlots(supabase: any): Promise<void> {
+  const cutoff = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+  const { data } = await supabase
+    .from("editorial_calendar")
+    .select("id, attempts")
+    .eq("status", "generating")
+    .lt("updated_at", cutoff);
+  for (const s of data || []) {
+    await supabase
+      .from("editorial_calendar")
+      .update({
+        status: (s.attempts ?? 0) >= 3 ? "failed" : "queued",
+        error_message: "recuperado de generating travado",
+      })
+      .eq("id", s.id);
+  }
+  if ((data || []).length) console.log(`[recover] ${data.length} slot(s) destravado(s)`);
+}
+
+// ----------------------------------------------------------------------------
+// Auto-planejamento: quando a fila esvazia, a própria função gera os próximos
+// slots (keywords + briefings) via IA, evitando repetir keywords já usadas.
+// É isso que torna o blog perpétuo — sem depender de alguém popular a agenda.
+// ----------------------------------------------------------------------------
+type PlannedSlot = { cluster_slug: string; keyword: string; proposed_title: string; briefing: string };
+
+function nextTueFriSlots(count: number): string[] {
+  const out: string[] = [];
+  const d = new Date();
+  d.setUTCHours(12, 0, 0, 0);
+  while (out.length < count) {
+    d.setUTCDate(d.getUTCDate() + 1);
+    const dow = d.getUTCDay();
+    if (dow === 2 || dow === 5) out.push(new Date(d).toISOString());
+  }
+  return out;
+}
+
+async function planNextSlots(supabase: any, howMany = 8): Promise<number> {
+  const { data: clusters } = await supabase
+    .from("blog_clusters")
+    .select("id, slug, name, cta_copy")
+    .order("display_order");
+  if (!clusters?.length) throw new Error("sem clusters para planejar");
+
+  const { data: usedRows } = await supabase
+    .from("editorial_calendar")
+    .select("keyword")
+    .order("created_at", { ascending: false })
+    .limit(200);
+  const used = (usedRows || []).map((r: any) => r.keyword);
+
+  const res = await fetch(LOVABLE_AI_URL, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-flash",
+      messages: [
+        {
+          role: "system",
+          content:
+            "Você é estrategista de SEO PT-BR para a Aura (acompanhamento emocional por WhatsApp). Propõe keywords de cauda longa com intenção informacional real, que gente em sofrimento digita no Google.",
+        },
+        {
+          role: "user",
+          content: `Planeje ${howMany} próximos posts do blog.
+
+CLUSTERS DISPONÍVEIS (use o slug exato em cluster_slug):
+${clusters.map((c: any) => `- ${c.slug}: ${c.name}`).join("\n")}
+
+KEYWORDS JÁ USADAS (não repita nem variações quase idênticas):
+${used.join(", ") || "(nenhuma)"}
+
+Regras: distribua entre os clusters, keyword em minúsculas sem acento desnecessário, proposed_title com a keyword, briefing de 2-3 frases dizendo o ângulo e o que o leitor leva pra casa. Responda só JSON.`,
+        },
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "editorial_plan",
+          strict: true,
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            required: ["slots"],
+            properties: {
+              slots: {
+                type: "array",
+                items: {
+                  type: "object",
+                  additionalProperties: false,
+                  required: ["cluster_slug", "keyword", "proposed_title", "briefing"],
+                  properties: {
+                    cluster_slug: { type: "string" },
+                    keyword: { type: "string" },
+                    proposed_title: { type: "string" },
+                    briefing: { type: "string" },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    }),
+  });
+  if (!res.ok) throw new Error(`planner ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  const parsed = JSON.parse((await res.json())?.choices?.[0]?.message?.content || "{}");
+  const slots: PlannedSlot[] = parsed?.slots || [];
+  if (!slots.length) throw new Error("planner sem slots");
+
+  const dates = nextTueFriSlots(slots.length);
+  // O primeiro slot fica disponível agora, pra não esperar o próximo ter/sex.
+  dates[0] = new Date(Date.now() - 60_000).toISOString();
+
+  const rows = slots
+    .map((s, i) => {
+      const cluster = clusters.find((c: any) => c.slug === s.cluster_slug) || clusters[i % clusters.length];
+      const kw = (s.keyword || "").trim().toLowerCase();
+      if (!kw || used.some((u: string) => u.toLowerCase() === kw)) return null;
+      return {
+        cluster_id: cluster.id,
+        scheduled_for: dates[i],
+        keyword: kw,
+        proposed_title: s.proposed_title,
+        briefing: s.briefing,
+        is_pillar: false,
+        requires_manual_review: false,
+        status: "queued",
+      };
+    })
+    .filter(Boolean);
+  if (!rows.length) return 0;
+
+  const { error } = await supabase.from("editorial_calendar").insert(rows);
+  if (error) throw error;
+  console.log(`[planner] ${rows.length} slot(s) criado(s)`);
+  return rows.length;
+}
+
 async function generatePost(
   slot: Slot,
   cluster: Cluster,
@@ -300,7 +444,14 @@ Deno.serve(async (req) => {
   const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
   try {
-    const slot = await pickNextSlot(supabase);
+    await recoverStuckSlots(supabase);
+
+    let slot = await pickNextSlot(supabase);
+    if (!slot) {
+      // Fila vazia: planeja os próximos posts automaticamente e segue no mesmo run.
+      const created = await planNextSlots(supabase);
+      if (created > 0) slot = await pickNextSlot(supabase);
+    }
     if (!slot) {
       return new Response(JSON.stringify({ ok: true, message: "sem slots pendentes" }), {
         status: 200,
@@ -338,6 +489,17 @@ Deno.serve(async (req) => {
       console.warn(`tentativa ${attempt + 1} falhou validação: ${validationError}`);
     }
     if (!post) throw new Error("geração retornou nulo");
+
+    // Reparo mecânico do que dá pra consertar sem IA (títulos/metas fora de range).
+    // Evita post virar draft silencioso por 3 caracteres de excesso.
+    if (validationError) {
+      if (post.meta_title && post.meta_title.length > 65) post.meta_title = post.meta_title.slice(0, 62).trim() + "…";
+      if (post.title && post.title.length > 70) post.title = post.title.slice(0, 67).trim() + "…";
+      if (post.meta_description && post.meta_description.length > 170)
+        post.meta_description = post.meta_description.slice(0, 167).trim() + "…";
+      validationError = validate(post, slot.keyword);
+      if (validationError) console.warn(`draft por: ${validationError}`);
+    }
 
     // Normaliza slug
     const safeSlug = slugify(post.slug || post.title);
