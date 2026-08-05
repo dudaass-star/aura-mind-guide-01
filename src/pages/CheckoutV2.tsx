@@ -1207,93 +1207,73 @@ const CheckoutV2 = () => {
                 </div>
               </div>
 
-              {/* Resumo único acima do CTA */}
-              <div className="text-center text-sm text-white/65 pt-1">
-                {pixEnabled ? (
-                  <>
-                    À vista no PIX:{" "}
-                    <span className="text-white font-semibold">R$ {currentPrice}</span>
-                    {currentMonthlyEquivalent && (
-                      <span className="text-white/60"> (≈ R$ {currentMonthlyEquivalent}/mês)</span>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    Hoje{" "}
-                    <span className="text-white font-semibold">R$ {currentPlan.trialPrice}</span>
-                    {" "}• depois{" "}
-                    <span className="text-white/85">R$ {currentPrice}/{periodLabel}</span>
-                  </>
-                )}
+              {/* Escolha explícita do meio de pagamento: um CTA só, um preço só.
+                  Antes eram dois botões com valores diferentes no rótulo e o PIX
+                  parecia custar 5x mais que o cartão. */}
+              <div className="space-y-3 pt-1">
+                <PaymentMethodToggle
+                  value={payMethod}
+                  onChange={setPayMethod}
+                  cardHint={
+                    pixEnabled
+                      ? `R$ ${currentPrice}/${periodLabel}`
+                      : `7 dias por R$ ${currentPlan.trialPrice}`
+                  }
+                  pixHint={
+                    pixEnabled
+                      ? `R$ ${currentPrice} à vista`
+                      : `R$ ${currentPrice}/mês, sem trial`
+                  }
+                />
+
+                <div className="ck-num text-center text-sm text-[hsl(var(--ck-text-muted))]">
+                  Cobrado hoje{" "}
+                  <span className="font-semibold text-[hsl(var(--ck-text))]">
+                    R$ {payMethod === "card" && !pixEnabled ? currentPlan.trialPrice : currentPrice}
+                  </span>
+                  {" · "}
+                  {payMethod === "card" && !pixEnabled
+                    ? `depois R$ ${currentPrice}/mês`
+                    : pixEnabled
+                      ? `renova em R$ ${currentPrice}/${periodLabel}`
+                      : `renova em R$ ${currentPrice}/mês`}
+                </div>
+
+                <Button
+                  id="checkout-primary-cta"
+                  type={payMethod === "card" ? "submit" : "button"}
+                  variant="sage-solid"
+                  size="cta"
+                  onClick={payMethod === "pix" ? () => handleOpenPix("subscription") : undefined}
+                  className={`w-full whitespace-normal leading-tight ${!isFormValid ? "opacity-70" : ""}`}
+                  disabled={payMethod === "card" && isLoading}
+                  aria-disabled={!isFormValid || (payMethod === "card" && isLoading)}
+                >
+                  {payMethod === "card" ? (
+                    <CreditCard className="w-5 h-5" />
+                  ) : (
+                    <QrCode className="w-5 h-5" />
+                  )}
+                  <span className="ck-num">
+                    {payMethod === "card"
+                      ? isLoading
+                        ? "Abrindo pagamento seguro..."
+                        : pixEnabled
+                          ? `Assinar por R$ ${currentPrice}`
+                          : `Começar por R$ ${currentPlan.trialPrice}`
+                      : `Pagar com PIX — R$ ${currentPrice}`}
+                  </span>
+                  <ArrowRight className="w-5 h-5" />
+                </Button>
+
+                <p className="text-center text-[11px] text-[hsl(var(--ck-text-muted))]">
+                  {payMethod === "card"
+                    ? pixEnabled
+                      ? "Cobrança única do ciclo • renovação automática • cancele quando quiser"
+                      : "7 dias completos • Sem cobrança se cancelar antes do 8º dia"
+                    : "Autorize 1x no app do banco • renovação automática • cancele quando quiser"}
+                </p>
               </div>
-
-              {/* Mensal: cartão trial principal + PIX recorrente secundário.
-                  Trim/Sem/Anual: PIX à vista principal + cartão recorrente secundário (sem trial). */}
-              {billingPeriod === "monthly" ? (
-                <>
-                  <p className="text-center text-[11px] text-white/55">
-                    Cartão começa com 7 dias por R$ {currentPlan.trialPrice}. No PIX Automático a
-                    assinatura já começa cheia, sem trial — mesmo valor mensal.
-                  </p>
-                  <Button
-                    id="checkout-primary-cta"
-                    type="submit"
-                    variant="sage"
-                    size="xl"
-                    className={`w-full rounded-full transition-opacity whitespace-normal leading-tight px-4 sm:px-10 text-base sm:text-lg ${!isFormValid ? "opacity-70" : ""}`}
-                    disabled={isLoading}
-                    aria-disabled={!isFormValid || isLoading}
-                  >
-                    <CreditCard className="w-5 h-5 mr-2" />
-                    {isLoading
-                      ? "Abrindo pagamento seguro..."
-                      : `Começar por R$ ${currentPlan.trialPrice} (7 dias)`}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="lg"
-                    onClick={() => handleOpenPix("subscription")}
-                    className="w-full rounded-full bg-transparent border-white/25 text-white hover:bg-white/10 hover:text-white whitespace-normal leading-tight px-3 sm:px-8 text-sm sm:text-base h-auto min-h-11 py-2"
-                  >
-                    <QrCode className="w-4 h-4 mr-2" />
-                    PIX Automático · sem trial — R$ {currentPrice}/mês
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <Button
-                    id="checkout-primary-cta"
-                    type="button"
-                    variant="sage"
-                    size="xl"
-                    onClick={() => handleOpenPix("subscription")}
-                    className={`w-full rounded-full transition-opacity whitespace-normal leading-tight px-4 sm:px-10 text-base sm:text-lg h-auto min-h-14 py-3 ${!isFormValid ? "opacity-70" : ""}`}
-                    aria-disabled={!isFormValid}
-                  >
-                    <QrCode className="w-5 h-5 mr-2" />
-                    PIX Automático — R$ {currentPrice}/{periodLabel}
-                  </Button>
-                  <Button
-                    type="submit"
-                    variant="outline"
-                    size="lg"
-                    disabled={isLoading}
-                    className="w-full rounded-full bg-transparent border-white/25 text-white hover:bg-white/10 hover:text-white whitespace-normal leading-tight px-3 sm:px-8 text-sm sm:text-base h-auto min-h-11 py-2"
-                  >
-                    <CreditCard className="w-4 h-4 mr-2" />
-                    {isLoading
-                      ? "Abrindo pagamento seguro..."
-                      : `Cartão — R$ ${currentPrice}/${periodLabel}`}
-                  </Button>
-                </>
-              )}
-
-              <p className="text-center text-[11px] text-white/50 -mt-2">
-                {billingPeriod === "monthly"
-                  ? "7 dias completos • Sem cobrança se cancelar antes do 8º dia"
-                  : "Autorize 1x no app do banco • renovação automática • cancele quando quiser"}
-              </p>
 
               <TrustRow className="pt-1" />
 
@@ -1302,6 +1282,9 @@ const CheckoutV2 = () => {
                 "Em 3 dias senti que alguém finalmente me ouvia." — Ana C.
               </p>
             </form>
+
+              {/* Objeções no ponto de decisão (também preenche o vazio do desktop) */}
+              <CheckoutObjections className="mt-8" />
               </div>
 
               <div className="hidden lg:block">
