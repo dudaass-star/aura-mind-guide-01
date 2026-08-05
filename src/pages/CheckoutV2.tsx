@@ -880,37 +880,28 @@ const CheckoutV2 = () => {
               </div>
             )}
 
-            {/* Stepper — orienta o usuário sobre o tamanho real do fluxo (só 2 passos).
-                Reduz a ansiedade de "será que tem mais etapa depois?". */}
-            <div className="flex items-center justify-center gap-3 mb-6 text-xs">
-              <div className="flex items-center gap-2">
-                <span
-                  className={`flex items-center justify-center w-5 h-5 rounded-full border text-[10px] font-semibold transition-colors ${
-                    embeddedClientSecret
-                      ? "bg-[hsl(140_22%_45%)] border-[hsl(140_22%_45%)] text-white"
-                      : "bg-[hsl(140_22%_45%)] border-[hsl(140_22%_45%)] text-white"
-                  }`}
-                >
-                  {embeddedClientSecret ? <Check className="w-3 h-3" /> : "1"}
+            {/* Progresso — barra fina em vez de stepper discreto: comunica de longe
+                que o fluxo tem só 2 passos e que já está na metade. */}
+            <div className="mb-6 max-w-sm mx-auto">
+              <div className="flex items-baseline justify-between text-[11px] mb-1.5">
+                <span className="font-medium text-[hsl(var(--ck-text))]">
+                  {embeddedClientSecret || asaasCardOpen ? "Passo 2 de 2 · Pagamento" : "Passo 1 de 2 · Seus dados"}
                 </span>
-                <span className={embeddedClientSecret ? "text-white/55" : "text-white font-medium"}>
-                  Seus dados
+                <span className="text-[hsl(var(--ck-text-muted))]">
+                  {embeddedClientSecret || asaasCardOpen ? "quase lá" : "leva 2 minutos"}
                 </span>
               </div>
-              <span className="w-6 h-px bg-white/20" />
-              <div className="flex items-center gap-2">
-                <span
-                  className={`flex items-center justify-center w-5 h-5 rounded-full border text-[10px] font-semibold transition-colors ${
-                    embeddedClientSecret
-                      ? "bg-[hsl(140_22%_45%)] border-[hsl(140_22%_45%)] text-white"
-                      : "bg-transparent border-white/30 text-white/50"
-                  }`}
-                >
-                  2
-                </span>
-                <span className={embeddedClientSecret ? "text-white font-medium" : "text-white/50"}>
-                  Pagamento
-                </span>
+              <div
+                className="h-1.5 w-full rounded-full bg-[hsl(var(--ck-text)/0.1)] overflow-hidden"
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={2}
+                aria-valuenow={embeddedClientSecret || asaasCardOpen ? 2 : 1}
+              >
+                <div
+                  className="h-full rounded-full bg-[hsl(var(--ck-cta))] transition-all duration-500"
+                  style={{ width: embeddedClientSecret || asaasCardOpen ? "100%" : "50%" }}
+                />
               </div>
             </div>
 
