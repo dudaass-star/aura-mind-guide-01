@@ -86,8 +86,16 @@ function validate(post: GeneratedPost, keyword: string): string | null {
     return `meta_description fora do range (${post.meta_description?.length})`;
   if (!post.content_md || wordCount(post.content_md) < 1200)
     return `content_md muito curto (${wordCount(post.content_md)} palavras)`;
-  if (!foldAccents(post.content_md).includes(foldAccents(keyword)))
-    return `keyword "${keyword}" ausente no conteúdo`;
+  // Keyword exata para termos curtos; para cauda longa (5+ palavras) basta que
+  // todos os termos relevantes apareçam — senão o texto fica robótico ou vira draft.
+  const content = foldAccents(post.content_md);
+  const kw = foldAccents(keyword);
+  const kwWords = kw.split(/\s+/).filter((w) => w.length > 3);
+  const kwOk =
+    kwWords.length >= 5
+      ? kwWords.every((w) => content.includes(w))
+      : content.includes(kw);
+  if (!kwOk) return `keyword "${keyword}" ausente no conteúdo`;
   const h2Count = (post.content_md.match(/^##\s/gm) || []).length;
   if (h2Count < 3) return `poucos H2 (${h2Count})`;
   if (!post.faq || post.faq.length < 3) return `FAQ insuficiente`;
