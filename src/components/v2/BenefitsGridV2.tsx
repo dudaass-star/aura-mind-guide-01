@@ -4,10 +4,10 @@ import {
 } from "lucide-react";
 
 const benefits = [
-  { icon: Clock, title: "Disponível 24/7", desc: "Dia, noite, fim de semana. A AURA sempre aqui." },
-  { icon: Brain, title: "Memória de longo prazo", desc: "Lembra do que você contou semanas atrás." },
-  { icon: CalendarCheck, title: "Sessões de 45min", desc: "Metodologia estruturada, não papo aleatório." },
-  { icon: FileText, title: "Resumo escrito", desc: "Depois de cada sessão, você recebe os insights." },
+  { icon: Clock, title: "Nunca mais sozinho às 3h", desc: "Madrugada, domingo, feriado: a AURA responde quando o peso aparece." },
+  { icon: Brain, title: "Ela lembra da sua história", desc: "Você não precisa recomeçar do zero. Ela retoma de onde vocês pararam." },
+  { icon: CalendarCheck, title: "45 minutos só pra você", desc: "Sessões guiadas com método — não é papo aleatório de chatbot." },
+  { icon: FileText, title: "Você sai com clareza no papel", desc: "Depois de cada sessão, recebe um resumo com o que ficou claro." },
   { icon: Heart, title: "Nunca te abandona", desc: "Se você sumir, a AURA vai atrás de você." },
   { icon: Pause, title: "Pausa quando precisar", desc: "Pause sua assinatura por até 30 dias." },
   { icon: Cloud, title: "Cápsula do Tempo", desc: "Grave uma mensagem para seu eu do futuro." },
@@ -24,7 +24,7 @@ const BenefitsGridV2 = () => (
       <div className="text-center max-w-2xl mx-auto mb-14">
         <p className="text-xs uppercase tracking-[0.25em] text-white/65 mb-4">tudo isso</p>
         <h2 className="font-display text-3xl md:text-5xl font-medium leading-[1.15] tracking-tight text-white">
-          Por menos de <span className="italic">R$ 1,00</span> por dia.
+          A partir de <span className="italic">R$ 0,33</span> por dia.
         </h2>
         <p className="mt-5 text-base text-white/70">
           Saúde mental acessível não é saúde mental inferior. É saúde mental para todos.

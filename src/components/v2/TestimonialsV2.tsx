@@ -30,10 +30,18 @@ const TestimonialsV2 = () => (
           <p className="mt-5 text-base text-muted-foreground max-w-sm">
             Pessoas reais compartilhando como a AURA fez diferença nas suas vidas.
           </p>
+          <figure className="mt-8 rounded-2xl bg-[hsl(var(--sage-soft))] p-6">
+            <blockquote className="font-display text-xl md:text-2xl leading-snug text-foreground">
+              “{items[0].quote}”
+            </blockquote>
+            <figcaption className="mt-4 text-sm text-foreground/70">
+              {items[0].name}, {items[0].role}
+            </figcaption>
+          </figure>
         </div>
 
-        <div className="grid sm:grid-cols-3 gap-4">
-          {items.map((it) => (
+        <div className="grid sm:grid-cols-2 gap-4">
+          {items.slice(1).map((it) => (
             <figure key={it.name} className="rounded-2xl bg-card border border-border/40 p-6 flex flex-col">
               <span className="font-display text-3xl text-primary leading-none mb-3">“</span>
               <blockquote className="text-sm text-foreground/85 leading-relaxed flex-grow">

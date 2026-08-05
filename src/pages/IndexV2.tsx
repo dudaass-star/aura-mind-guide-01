@@ -65,8 +65,8 @@ const IndexV2 = () => {
         <HeaderV2 />
         <main>
           <HeroV2 />
-          <HowItWorksV2 />
           <DemoV2 />
+          <HowItWorksV2 />
           <BenefitsGridV2 />
           <TestimonialsV2 />
           <PricingV2 />

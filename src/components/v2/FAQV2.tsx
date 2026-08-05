@@ -8,6 +8,14 @@ import { trackFaqOpen } from "@/lib/ga4";
 
 const faqs = [
   {
+    q: "O que muda em ter a AURA no seu WhatsApp?",
+    a: "Ela lembra da sua história, entende seu momento e vai te conhecendo mais a cada conversa. Diferente de uma conversa isolada, a AURA constrói uma relação contínua: o que você contou ontem sustenta o apoio de amanhã. Está disponível das 6h à meia-noite, todos os dias, por texto ou áudio — e quando você precisa ir mais fundo, tem sessão guiada de 45 minutos com resumo escrito no final.",
+  },
+  {
+    q: "Como é a primeira conversa?",
+    a: "Simples: você manda uma mensagem contando o que está sentindo, do jeito que sair. A AURA não aplica formulário nem entrega respostas prontas — ela pergunta, escuta e ajuda você a organizar o que está embaralhado. Nos primeiros dias ela vai mapeando sua vida concreta, e daí em diante cada conversa fica mais precisa, porque ela já sabe quem é quem na sua história.",
+  },
+  {
     q: "Por que é tão mais barato que terapia?",
     a: "A Aura consegue oferecer acompanhamento emocional de qualidade a um custo muito menor porque está disponível 24/7 e escala com tecnologia. Não é terapia — é suporte emocional contínuo, com metodologia, memória do seu histórico e direção prática. É um complemento ou ponto de partida acessível para quem não pode pagar R$ 200 por sessão.",
   },
@@ -49,7 +57,7 @@ const FAQV2 = () => (
   <section id="faq" className="relative py-28 md:py-36 bg-background">
     <div className="container mx-auto px-6">
       <div className="max-w-2xl mx-auto">
-        <p className="text-sm uppercase tracking-[0.25em] text-primary/80 mb-4 text-center">dúvidas</p>
+        <p className="text-sm uppercase tracking-[0.25em] text-primary/80 mb-4 text-center">antes de começar</p>
         <h2 className="font-display text-3xl md:text-5xl font-medium leading-[1.15] tracking-tight text-foreground text-center mb-16">
           O que costumam perguntar.
         </h2>
@@ -57,6 +65,7 @@ const FAQV2 = () => (
         <Accordion
           type="single"
           collapsible
+          defaultValue="item-0"
           className="space-y-3"
           onValueChange={(v) => {
             if (!v) return;
