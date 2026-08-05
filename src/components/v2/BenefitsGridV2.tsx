@@ -24,7 +24,7 @@ const BenefitsGridV2 = () => (
       <div className="text-center max-w-2xl mx-auto mb-14">
         <p className="text-xs uppercase tracking-[0.25em] text-white/65 mb-4">tudo isso</p>
         <h2 className="font-display text-3xl md:text-5xl font-medium leading-[1.15] tracking-tight text-white">
-          Por menos de <span className="italic">R$ 1,00</span> por dia.
+          A partir de <span className="italic">R$ 0,33</span> por dia.
         </h2>
         <p className="mt-5 text-base text-white/70">
           Saúde mental acessível não é saúde mental inferior. É saúde mental para todos.
