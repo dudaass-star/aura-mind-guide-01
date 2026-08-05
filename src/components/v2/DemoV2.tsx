@@ -36,6 +36,8 @@ const messages: Message[] = [
   { sender: "aura", content: "Ele te levou pra um lugar onde o tempo sumiu" },
   { sender: "aura", content: "Isso não é \"só existir\"" },
   { sender: "aura", content: "Isso é uma pista enorme." },
+  { sender: "aura", content: "E lembra que em março você me disse que \"nada mais te empolgava\"?" },
+  { sender: "aura", content: "Eu guardei isso. Hoje você me trouxe uma tarde inteira que passou voando." },
   { sender: "aura", content: "", time: "21:34", isAudioOnly: true },
 ];
 
