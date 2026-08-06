@@ -27,6 +27,7 @@ import "@/styles/v2-theme.css";
 import "@/styles/checkout-theme.css";
 import { loadStripe, type Stripe as StripeJs } from "@stripe/stripe-js";
 import { EmbeddedCheckoutProvider, EmbeddedCheckout } from "@stripe/react-stripe-js";
+import { logFunnel } from "@/lib/checkout-funnel";
 import { AsaasCardForm } from "@/components/checkout/AsaasCardForm";
 import { CycleTabs, type CycleTabItem } from "@/components/checkout/CycleTabs";
 import { OrderSummary } from "@/components/checkout/OrderSummary";
