@@ -11,18 +11,20 @@
 - `criar-cartao-asaas` usa `billingType: "CREDIT_CARD"` com `creditCard` + `creditCardHolderInfo` — formulário nativo, cartão digitado na nossa página.
 - Formulário nativo não suporta carteira nenhuma (nem Apple nem Google Pay). O Asaas só ofereceria carteiras no checkout hospedado dele, que não usamos. Aqui não há o que ativar.
 
-## Causas prováveis do Google Pay não aparecer (verificar nesta ordem)
+## Confirmado no painel Stripe (print enviado)
 
-1. **Toggle no Payment Method Configuration da conta Stripe** — Google Pay pode estar desligado com o Apple Pay ligado. Suspeito nº 1, resolve-se no painel, sem código.
-2. **Registro de domínio** — Embedded Checkout exige `olaaura.com.br` e subdomínios registrados por ambiente (live e sandbox). Apple Pay funcionando sugere domínio principal ok, mas vale checar os de preview.
-3. **Ambiente de teste** — Google Pay só renderiza em Chrome/Edge com cartão salvo na Google Wallet, fora de aba anônima e com "permitir que sites verifiquem métodos de pagamento salvos" ativo. Em iPhone/Safari nunca aparece.
+`pmc_1Sk3NyQU15XnZ7VvnqNtcyFF`: Cartões, **Apple Pay** e **Google Pay** habilitados; Link e Boleto desabilitados. Ou seja, conta e código estão certos — não falta ativar nada.
 
-## O que eu faria
+## Sobre "verificar em teste"
 
-1. Ler a configuração de métodos de pagamento da conta Stripe e reportar se Google Pay está ativo e se os domínios do checkout estão registrados em live e sandbox.
-2. Se estiver desligado, te passar o passo exato no painel (é ação de conta, não de código) e validar a renderização com teste real no Chrome.
-3. Adicionar evento de funil em `checkout-funnel.ts` registrando o método efetivamente usado (carteira vs cartão digitado) — hoje não medimos isso.
-4. Registrar em memória que Apple/Google Pay no Stripe vivem dentro de `card` e que o fluxo Asaas nunca terá carteira, pra não voltar essa dúvida.
+Não é possível provar isso num teste automatizado aqui: o Chromium headless do sandbox não tem carteira Google com cartão salvo, então o Stripe.js legitimamente não renderiza o botão. Um teste automatizado que não mostra Google Pay não é evidência de bug.
+
+O que dá pra fazer de útil, nesta ordem:
+
+1. **Checar registro de domínio (o único ponto que ainda pode quebrar)** — Embedded Checkout só mostra carteira em domínio registrado, por ambiente. Conferir que `olaaura.com.br`, `www.olaaura.com.br` e o domínio de preview estão registrados em live e sandbox. Se faltar algum, esse é o motivo real.
+2. **Teste manual em 5 minutos** — abrir `/v2/checkout` no Chrome de um Android (ou Chrome desktop logado no Google com cartão salvo), fora de aba anônima, com "permitir que sites verifiquem métodos de pagamento salvos" ligado. Google Pay deve aparecer acima do formulário de cartão. Te passo o roteiro exato.
+3. **Instrumentar em vez de adivinhar** — adicionar em `src/lib/checkout-funnel.ts` um evento com o método efetivamente usado no pagamento (`google_pay` / `apple_pay` / `card`), lido do PaymentIntent no `stripe-webhook`. Assim a próxima dúvida sobre carteira se responde com dado real, não com print.
+4. Registrar em memória que Apple/Google Pay no Stripe vivem dentro de `card` e que o fluxo Asaas nunca terá carteira.
 
 ## Fora de escopo
 
