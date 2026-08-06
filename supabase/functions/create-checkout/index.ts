@@ -85,6 +85,7 @@ serve(async (req) => {
 
   try {
     logStep("Function started");
+    const reqStart = Date.now();
 
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
@@ -602,8 +603,10 @@ serve(async (req) => {
           publishableKey: Deno.env.get("STRIPE_PUBLISHABLE_KEY") || null,
           sessionId: session.id,
           returning_customer: returningCustomerMonthly,
+          serverMs: Date.now() - reqStart,
         }
-      : { url: session.url, returning_customer: returningCustomerMonthly };
+      : { url: session.url, returning_customer: returningCustomerMonthly, serverMs: Date.now() - reqStart };
+    logStep("Done", { serverMs: Date.now() - reqStart });
 
     return new Response(JSON.stringify(responseBody), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
