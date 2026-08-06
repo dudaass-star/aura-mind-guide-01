@@ -444,6 +444,8 @@ export default function AdminEngagement() {
       const attemptMap = new Map<string, string>();
       if (attempts) {
         for (const a of attempts) {
+          // Ignora tentativas de WhatsApp (wa_*): esta coluna é do fluxo de e-mail.
+          if (a.status?.startsWith('wa_')) continue;
           if (!attemptMap.has(a.checkout_session_id)) {
             attemptMap.set(a.checkout_session_id, a.status);
           }
