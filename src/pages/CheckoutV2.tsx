@@ -1079,11 +1079,17 @@ const CheckoutV2 = () => {
                 <div className="relative rounded-2xl bg-white p-2 md:p-4 shadow-2xl min-h-[480px]">
                   {/* Skeleton enquanto o iframe da Stripe carrega (~2-3s).
                       O EmbeddedCheckout pinta por cima quando estiver pronto. */}
-                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 pointer-events-none">
-                    <div className="w-8 h-8 rounded-full border-2 border-[hsl(140_22%_45%)]/30 border-t-[hsl(140_22%_45%)] animate-spin" />
-                    <p className="text-xs text-gray-500">Carregando pagamento seguro…</p>
-                  </div>
-                  <div className="relative z-10">
+                  {!embeddedMounted && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 pointer-events-none">
+                      <div className="w-8 h-8 rounded-full border-2 border-[hsl(140_22%_45%)]/30 border-t-[hsl(140_22%_45%)] animate-spin" />
+                      <p className="text-xs text-gray-500">
+                        {embeddedFallbackLoading
+                          ? "Abrindo pagamento seguro…"
+                          : "Carregando pagamento seguro…"}
+                      </p>
+                    </div>
+                  )}
+                  <div className="relative z-10" ref={embeddedHostRef}>
                     <EmbeddedCheckoutProvider stripe={stripePromise} options={embeddedOptions}>
                       <EmbeddedCheckout />
                     </EmbeddedCheckoutProvider>
