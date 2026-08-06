@@ -90,7 +90,7 @@ serve(async (req) => {
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
 
-    const { plan: requestedPlan, billing = "monthly", name, email, phone, trial, paymentMethod, fbp, fbc, gaClientId, embedded, fallback, warmup } = await req.json();
+    const { plan: requestedPlan, billing = "monthly", name, email, phone, trial, paymentMethod, fbp, fbc, gaClientId, embedded, fallback, warmup, prewarm } = await req.json();
 
     // === WARMUP ===
     // O front chama isso no primeiro foco de campo pra matar o cold start da função
@@ -574,6 +574,18 @@ serve(async (req) => {
           Deno.env.get("SUPABASE_URL") ?? "",
           Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
         );
+        // Sessão pré-criada enquanto o usuário digitava: se ele corrigiu um dado
+        // e geramos outra, limpamos a anterior ainda "created" da última hora
+        // pra não duplicar linha de funil nem e-mail de recuperação.
+        if (prewarm) {
+          void supabase
+            .from("checkout_sessions")
+            .delete()
+            .eq("phone", phoneClean)
+            .eq("status", "created")
+            .gte("created_at", new Date(Date.now() - 60 * 60 * 1000).toISOString())
+            .then(() => undefined, () => undefined);
+        }
         void supabase
           .from("checkout_sessions")
           .insert({
