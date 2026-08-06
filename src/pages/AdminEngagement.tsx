@@ -194,12 +194,35 @@ interface RecoverySession {
   recovery_sent_at: string | null;
   recovery_last_error: string | null;
   recovery_attempts_count: number;
+  recovery_stage1_sent_at: string | null;
+  recovery_stage2_sent_at: string | null;
+  recovery_stage3_sent_at: string | null;
   converted: boolean;
   attempt_status: string | null;
   whatsapp_recovery_15min_sent_at: string | null;
   whatsapp_recovery_24h_sent_at: string | null;
   whatsapp_recovery_last_error: string | null;
 }
+
+// Traduz "skipped: <motivo>" da recuperação (e-mail e WhatsApp) para linguagem de negócio.
+// Pular NÃO é erro: é a trava de segurança do fluxo.
+const SKIP_LABELS: Record<string, string> = {
+  phone_lifetime_cap: 'Pulado: já recebeu 2 msgs',
+  active_customer_email: 'Pulado: cliente ativo',
+  active_customer_phone: 'Pulado: cliente ativo',
+  already_paid_email: 'Pulado: já pagou',
+  already_paid_phone: 'Pulado: já pagou',
+  backlog_pre_cutoff: 'Pulado: fora do cutoff',
+  no_email: 'Pulado: sem e-mail',
+  no_phone: 'Pulado: sem telefone',
+  quiet_hours: 'Pulado: silêncio noturno',
+  duplicate_phone: 'Pulado: telefone duplicado',
+};
+
+const skipLabel = (raw: string | null | undefined): string => {
+  const reason = (raw || '').replace(/^skipped:\s*/, '').trim();
+  return SKIP_LABELS[reason] || (reason ? `Pulado: ${reason}` : 'Pulado');
+};
 
 interface DunningAttempt {
   id: string;
@@ -254,7 +277,7 @@ export default function AdminEngagement() {
   const [dateTo, setDateTo] = useState<Date>(new Date());
   const [recoverySessions, setRecoverySessions] = useState<RecoverySession[]>([]);
   const [recoveryStats, setRecoveryStats] = useState<{ raw: number; accepted: number }>({ raw: 0, accepted: 0 });
-  const [whatsappStats, setWhatsappStats] = useState<{ stage1: number; stage2: number; errors: number; unique: number; converted: number }>({ stage1: 0, stage2: 0, errors: 0, unique: 0, converted: 0 });
+  const [whatsappStats, setWhatsappStats] = useState<{ stage1: number; stage2: number; errors: number; skipped: number; unique: number; converted: number }>({ stage1: 0, stage2: 0, errors: 0, skipped: 0, unique: 0, converted: 0 });
   const [dunningAttempts, setDunningAttempts] = useState<DunningAttempt[]>([]);
   const [recoveryOpen, setRecoveryOpen] = useState(false);
   const [dunningOpen, setDunningOpen] = useState(false);
@@ -271,7 +294,7 @@ export default function AdminEngagement() {
   const navigate = useNavigate();
   const requestIdRef = useRef(0);
   const [elapsedSec, setElapsedSec] = useState(0);
-  const hasRecoveryActivity = recoverySessions.length > 0 || recoveryStats.raw > 0 || recoveryStats.accepted > 0 || whatsappStats.stage1 > 0 || whatsappStats.stage2 > 0 || whatsappStats.errors > 0;
+  const hasRecoveryActivity = recoverySessions.length > 0 || recoveryStats.raw > 0 || recoveryStats.accepted > 0 || whatsappStats.stage1 > 0 || whatsappStats.stage2 > 0 || whatsappStats.errors > 0 || whatsappStats.skipped > 0;
 
   // Cronômetro do botão "Atualizar" para feedback visual durante esperas longas.
   useEffect(() => {
@@ -377,19 +400,26 @@ export default function AdminEngagement() {
       setRecoveryStats({ raw: rawCount || 0, accepted: acceptedCount || 0 });
 
       // Contagens de recuperação via WhatsApp (campos próprios em checkout_sessions)
+      // "Pulado" (skipped: ...) NÃO é erro: é a trava de segurança do fluxo.
+      // Erro = falha técnica de entrega de verdade.
       const [
         { count: waStage1Count },
         { count: waStage2Count },
         { count: waErrorsCount },
+        { count: waSkippedCount },
       ] = await Promise.all([
         supabase.from('checkout_sessions').select('id', { count: 'exact', head: true }).not('whatsapp_recovery_15min_sent_at', 'is', null),
         supabase.from('checkout_sessions').select('id', { count: 'exact', head: true }).not('whatsapp_recovery_24h_sent_at', 'is', null),
-        supabase.from('checkout_sessions').select('id', { count: 'exact', head: true }).not('whatsapp_recovery_last_error', 'is', null),
+        supabase.from('checkout_sessions').select('id', { count: 'exact', head: true })
+          .not('whatsapp_recovery_last_error', 'is', null)
+          .not('whatsapp_recovery_last_error', 'like', 'skipped:%'),
+        supabase.from('checkout_sessions').select('id', { count: 'exact', head: true })
+          .like('whatsapp_recovery_last_error', 'skipped:%'),
       ]);
 
       const { data: abandoned, error } = await supabase
         .from('checkout_sessions')
-        .select('id, name, phone, email, plan, created_at, status, recovery_sent, recovery_sent_at, recovery_last_error, recovery_attempts_count, whatsapp_recovery_15min_sent_at, whatsapp_recovery_24h_sent_at, whatsapp_recovery_last_error')
+        .select('id, name, phone, email, plan, created_at, status, recovery_sent, recovery_sent_at, recovery_last_error, recovery_attempts_count, recovery_stage1_sent_at, recovery_stage2_sent_at, recovery_stage3_sent_at, whatsapp_recovery_15min_sent_at, whatsapp_recovery_24h_sent_at, whatsapp_recovery_last_error')
         .or('recovery_sent.eq.true,whatsapp_recovery_15min_sent_at.not.is.null,whatsapp_recovery_24h_sent_at.not.is.null,whatsapp_recovery_last_error.not.is.null')
         .order('created_at', { ascending: false })
         .limit(50);
@@ -437,6 +467,8 @@ export default function AdminEngagement() {
       const attemptMap = new Map<string, string>();
       if (attempts) {
         for (const a of attempts) {
+          // Ignora tentativas de WhatsApp (wa_*): esta coluna é do fluxo de e-mail.
+          if (a.status?.startsWith('wa_')) continue;
           if (!attemptMap.has(a.checkout_session_id)) {
             attemptMap.set(a.checkout_session_id, a.status);
           }
@@ -528,6 +560,7 @@ export default function AdminEngagement() {
         stage1: waStage1Count || 0,
         stage2: waStage2Count || 0,
         errors: waErrorsCount || 0,
+        skipped: waSkippedCount || 0,
         unique: waList.length,
         converted: waConverted,
       });
@@ -1574,18 +1607,18 @@ export default function AdminEngagement() {
                   Recuperação por WhatsApp
                 </CardTitle>
                 <p className="text-xs text-muted-foreground">
-                  Checkout abandonado — disparos automáticos de 15min e 24h
+                  Checkout abandonado — 2 estágios automáticos (15min e 24h)
                 </p>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
                   <div>
                     <div className="text-xl font-bold text-foreground">{whatsappStats.stage1}</div>
-                    <p className="text-[11px] text-muted-foreground">enviados 15min</p>
+                    <p className="text-[11px] text-muted-foreground">processados 15min</p>
                   </div>
                   <div>
                     <div className="text-xl font-bold text-foreground">{whatsappStats.stage2}</div>
-                    <p className="text-[11px] text-muted-foreground">enviados 24h</p>
+                    <p className="text-[11px] text-muted-foreground">processados 24h</p>
                   </div>
                   <div>
                     <div className="text-xl font-bold text-foreground">{whatsappStats.unique}</div>
@@ -1596,8 +1629,12 @@ export default function AdminEngagement() {
                     <p className="text-[11px] text-muted-foreground">converteram</p>
                   </div>
                   <div>
+                    <div className="text-xl font-bold text-foreground">{whatsappStats.skipped}</div>
+                    <p className="text-[11px] text-muted-foreground">pulados (trava)</p>
+                  </div>
+                  <div>
                     <div className={`text-xl font-bold ${whatsappStats.errors > 0 ? 'text-destructive' : 'text-foreground'}`}>{whatsappStats.errors}</div>
-                    <p className="text-[11px] text-muted-foreground">erros</p>
+                    <p className="text-[11px] text-muted-foreground">erros de entrega</p>
                   </div>
                 </div>
               </CardContent>
@@ -1879,7 +1916,10 @@ export default function AdminEngagement() {
                           </p>
                           <p className="text-xs text-muted-foreground mt-1">
                             <MessageCircle className="inline h-3 w-3 mr-1 text-emerald-600" />
-                            <strong>WhatsApp:</strong> {whatsappStats.stage1} em 15min · {whatsappStats.stage2} em 24h · {whatsappStats.unique} únicos · {whatsappStats.converted} converteram · {whatsappStats.errors} erros
+                            <strong>WhatsApp:</strong> {whatsappStats.stage1} em 15min · {whatsappStats.stage2} em 24h · {whatsappStats.unique} únicos · {whatsappStats.converted} converteram · {whatsappStats.skipped} pulados · {whatsappStats.errors} erros de entrega
+                          </p>
+                          <p className="text-[11px] text-muted-foreground/80 mt-1">
+                            Cadências: e-mail = 3 estágios (1h / 25h / 97h) · WhatsApp = 2 estágios (15min / 24h). "Pulado" é a trava de segurança (telefone já contatado, cliente ativo, já pagou), não falha de envio.
                           </p>
                         </CardHeader>
                       </CollapsibleTrigger>
@@ -1903,13 +1943,28 @@ export default function AdminEngagement() {
                                 const planNames: Record<string, string> = { essencial: 'Essencial', direcao: 'Direção', transformacao: 'Transformação' };
                                 const maskedEmail = s.email ? `${s.email.substring(0, 3)}***@${s.email.split('@')[1] || ''}` : '—';
                                 const attemptStatus = s.attempt_status;
-                                const sendBadge = attemptStatus === 'api_accepted'
+                                // Estágio real do fluxo de 3 e-mails: stage_1_sent / stage_2_sent / stage_3_sent.
+                                const stageMatch = attemptStatus?.match(/^stage_(\d)_(sent|failed|skipped)$/);
+                                const emailStage = s.recovery_stage3_sent_at ? 3 : s.recovery_stage2_sent_at ? 2 : s.recovery_stage1_sent_at ? 1 : null;
+                                const sendBadge = stageMatch && stageMatch[2] === 'sent'
+                                  ? <Badge className="bg-emerald-600 text-white text-[10px]"><CheckCircle2 className="h-3 w-3 mr-1" />{emailStage ?? stageMatch[1]}/3 enviados</Badge>
+                                  : stageMatch && stageMatch[2] === 'failed'
+                                  ? <Badge variant="destructive" className="text-[10px]" title={s.recovery_last_error || undefined}><AlertCircle className="h-3 w-3 mr-1" />Falhou no {stageMatch[1]}º</Badge>
+                                  : stageMatch && stageMatch[2] === 'skipped'
+                                  ? <Badge variant="outline" className="text-[10px]" title={s.recovery_last_error || undefined}>{skipLabel(s.recovery_last_error)}</Badge>
+                                  : attemptStatus === 'api_accepted'
                                   ? <Badge className="bg-emerald-600 text-white text-[10px]"><CheckCircle2 className="h-3 w-3 mr-1" />Enviado</Badge>
                                   : attemptStatus === 'failed' || attemptStatus === 'error'
                                   ? <Badge variant="destructive" className="text-[10px]"><AlertCircle className="h-3 w-3 mr-1" />{s.recovery_last_error?.substring(0, 30) || 'Falhou'}</Badge>
                                   : attemptStatus === 'skipped' || attemptStatus === 'skipped_active_customer'
                                   ? <Badge variant="outline" className="text-[10px]">{attemptStatus === 'skipped_active_customer' ? 'Cliente ativo' : 'Sem email'}</Badge>
                                   : <Badge variant="secondary" className="text-[10px]">Legado</Badge>;
+                                // "skipped: motivo" não é erro — o estágio mais recente preenchido foi pulado.
+                                const waSkipped = (s.whatsapp_recovery_last_error || '').startsWith('skipped:');
+                                const waError = s.whatsapp_recovery_last_error && !waSkipped;
+                                const show24h = !!s.whatsapp_recovery_24h_sent_at && !(waSkipped && !!s.whatsapp_recovery_24h_sent_at);
+                                const show15min = !!s.whatsapp_recovery_15min_sent_at
+                                  && !(waSkipped && !s.whatsapp_recovery_24h_sent_at);
                                 return (
                                   <TableRow key={s.id}>
                                     <TableCell className="font-medium">{s.name || '—'}</TableCell>
@@ -1932,18 +1987,23 @@ export default function AdminEngagement() {
                                     <TableCell>{sendBadge}</TableCell>
                                     <TableCell>
                                       <div className="flex flex-col gap-1">
-                                        {s.whatsapp_recovery_15min_sent_at && (
+                                        {show15min && (
                                           <Badge className="bg-emerald-600 text-white text-[10px] w-fit">15min ✓</Badge>
                                         )}
-                                        {s.whatsapp_recovery_24h_sent_at && (
+                                        {show24h && (
                                           <Badge className="bg-emerald-600 text-white text-[10px] w-fit">24h ✓</Badge>
                                         )}
-                                        {s.whatsapp_recovery_last_error && (
+                                        {waSkipped && (
+                                          <Badge variant="secondary" className="text-[10px] w-fit" title={s.whatsapp_recovery_last_error || undefined}>
+                                            {skipLabel(s.whatsapp_recovery_last_error)}
+                                          </Badge>
+                                        )}
+                                        {waError && (
                                           <Badge variant="destructive" className="text-[10px] w-fit" title={s.whatsapp_recovery_last_error}>
                                             <AlertCircle className="h-3 w-3 mr-1" />Erro
                                           </Badge>
                                         )}
-                                        {!s.whatsapp_recovery_15min_sent_at && !s.whatsapp_recovery_24h_sent_at && !s.whatsapp_recovery_last_error && (
+                                        {!show15min && !show24h && !s.whatsapp_recovery_last_error && (
                                           <span className="text-xs text-muted-foreground">—</span>
                                         )}
                                       </div>
