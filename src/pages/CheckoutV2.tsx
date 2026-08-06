@@ -631,38 +631,59 @@ const CheckoutV2 = () => {
       const gaClientId = getGaClientId();
 
       const isMonthlyTrial = billingPeriod === "monthly";
-      const { data, error } = await supabase.functions.invoke("create-checkout", {
-        body: {
-          plan: selectedPlan,
-          billing: billingPeriod,
-          trial: isMonthlyTrial,
-          paymentMethod: "card",
-          embedded: true,
-          name: name.trim(),
-          email: email.trim(),
-          phone: phone,
-          ...(fbp && { fbp }),
-          ...(fbc && { fbc }),
-          ...(gaClientId && { gaClientId }),
-        },
-      });
 
-      if (error) {
-        logFunnel("create_checkout_error", {
-          plan: selectedPlan,
-          billing: billingPeriod,
-          paymentMethod: "card",
-          detail: (data as any)?.error || error.message,
+      // Sessão pré-criada enquanto o usuário digitava? Então o campo de cartão
+      // aparece imediatamente, sem round-trip nenhum após o clique.
+      const pre = prewarmRef.current?.key === prewarmKey ? prewarmRef.current : null;
+      let clientSecret: string | null = pre?.clientSecret ?? null;
+      let publishableKey: string | null = null;
+      let outSessionId: string | null = pre?.sessionId ?? null;
+      let isReturning = pre?.returning ?? false;
+      let serverMs: number | null = null;
+
+      if (pre) {
+        logFunnel("prewarm_hit", { plan: selectedPlan, billing: billingPeriod, paymentMethod: "card" });
+      } else {
+        const t0 = Date.now();
+        const { data, error } = await supabase.functions.invoke("create-checkout", {
+          body: {
+            plan: selectedPlan,
+            billing: billingPeriod,
+            trial: isMonthlyTrial,
+            paymentMethod: "card",
+            embedded: true,
+            name: name.trim(),
+            email: email.trim(),
+            phone: phone,
+            ...(fbp && { fbp }),
+            ...(fbc && { fbc }),
+            ...(gaClientId && { gaClientId }),
+          },
         });
-        throw new Error((data as any)?.error || error.message || "Erro ao processar pagamento");
+
+        if (error) {
+          logFunnel("create_checkout_error", {
+            plan: selectedPlan,
+            billing: billingPeriod,
+            paymentMethod: "card",
+            detail: (data as any)?.error || error.message,
+          });
+          throw new Error((data as any)?.error || error.message || "Erro ao processar pagamento");
+        }
+        clientSecret = (data as any)?.clientSecret ?? null;
+        publishableKey = (data as any)?.publishableKey ?? null;
+        outSessionId = (data as any)?.sessionId ?? null;
+        isReturning = !!(data as any)?.returning_customer;
+        serverMs = (data as any)?.serverMs ?? Date.now() - t0;
       }
+
       // Backend rebaixou Semanal → Mensal recorrente pra cliente retornante.
       // O Embedded Checkout já vem com o preço/custom_text corretos; só instrumentamos.
-      if ((data as any)?.returning_customer) {
+      if (isReturning) {
         trackReturningCustomerMonthly("stripe");
       }
 
-      if (data?.clientSecret && data?.publishableKey) {
+      if (clientSecret && (publishableKey || stripePromise)) {
         // Persistimos os dados pra resgate caso o usuário recarregue durante o pagamento.
         localStorage.setItem(
           "aura_checkout",
@@ -672,17 +693,17 @@ const CheckoutV2 = () => {
             plan: selectedPlan,
             billing: billingPeriod,
             price: currentPrice,
-            returningCustomerMonthly: !!(data as any)?.returning_customer,
+            returningCustomerMonthly: isReturning,
           }),
         );
         setHasRedirected(true);
-        setStripePromise(loadStripe(data.publishableKey as string));
-        setEmbeddedClientSecret(data.clientSecret as string);
+        if (publishableKey) setStripePromise((prev) => prev ?? loadStripe(publishableKey as string));
+        setEmbeddedClientSecret(clientSecret);
         logFunnel("embedded_requested", {
           plan: selectedPlan,
           billing: billingPeriod,
           paymentMethod: "card",
-          meta: { sessionId: (data as any)?.sessionId || null },
+          meta: { sessionId: outSessionId, serverMs, prewarmed: !!pre },
         });
         // Vai pro topo da página: a PaymentView substitui o form e o widget
         // Stripe fica logo abaixo do header — visível na dobra mobile.
