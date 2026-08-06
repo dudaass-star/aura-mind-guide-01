@@ -413,6 +413,12 @@ const CheckoutV2 = () => {
 
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors);
+      logFunnel("form_invalid", {
+        plan: selectedPlan,
+        billing: billingPeriod,
+        paymentMethod: "card",
+        detail: Object.keys(nextErrors).join(","),
+      });
       const order = ["phone", "name", "email"] as const;
       const firstInvalid = order.find((field) => nextErrors[field]);
       if (firstInvalid) {
@@ -427,6 +433,12 @@ const CheckoutV2 = () => {
     setErrors({});
 
     setIsLoading(true);
+    logFunnel("form_submit", {
+      plan: selectedPlan,
+      billing: billingPeriod,
+      paymentMethod: "card",
+      meta: { gateway: cardGateway },
+    });
 
     try {
       // Se o admin roteou cartão para o Asaas, mostra o AsaasCardForm em vez
@@ -434,6 +446,7 @@ const CheckoutV2 = () => {
       // 3 campos comuns já rodou acima.
       if (cardGateway === "asaas") {
         setAsaasCardOpen(true);
+        logFunnel("asaas_card_open", { plan: selectedPlan, billing: billingPeriod, paymentMethod: "card" });
         setHasRedirected(true);
         window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
         setIsLoading(false);
@@ -531,6 +544,12 @@ const CheckoutV2 = () => {
       });
 
       if (error) {
+        logFunnel("create_checkout_error", {
+          plan: selectedPlan,
+          billing: billingPeriod,
+          paymentMethod: "card",
+          detail: (data as any)?.error || error.message,
+        });
         throw new Error((data as any)?.error || error.message || "Erro ao processar pagamento");
       }
       // Backend rebaixou Semanal → Mensal recorrente pra cliente retornante.
@@ -555,10 +574,22 @@ const CheckoutV2 = () => {
         setHasRedirected(true);
         setStripePromise(loadStripe(data.publishableKey as string));
         setEmbeddedClientSecret(data.clientSecret as string);
+        logFunnel("embedded_requested", {
+          plan: selectedPlan,
+          billing: billingPeriod,
+          paymentMethod: "card",
+          meta: { sessionId: (data as any)?.sessionId || null },
+        });
         // Vai pro topo da página: a PaymentView substitui o form e o widget
         // Stripe fica logo abaixo do header — visível na dobra mobile.
         window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
       } else {
+        logFunnel("create_checkout_error", {
+          plan: selectedPlan,
+          billing: billingPeriod,
+          paymentMethod: "card",
+          detail: "clientSecret ausente",
+        });
         throw new Error("clientSecret não recebido");
       }
     } catch (err) {
