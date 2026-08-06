@@ -1,0 +1,2 @@
+delete from public.checkout_sessions where phone in ('5511999998888','11999998888') and status = 'created';
+delete from public.checkout_funnel_events where meta->>'path' = '/v2/checkout' and created_at > now() - interval '30 minutes' and step in ('warmup','prewarm_session','prewarm_hit');
