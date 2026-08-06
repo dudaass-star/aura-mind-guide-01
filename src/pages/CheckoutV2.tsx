@@ -10,7 +10,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { ArrowLeft, ArrowRight, CreditCard, Check, Shield, Lock, Gift, QrCode, Copy } from "lucide-react";
 import { toast } from "sonner";
@@ -27,6 +27,7 @@ import "@/styles/v2-theme.css";
 import "@/styles/checkout-theme.css";
 import { loadStripe, type Stripe as StripeJs } from "@stripe/stripe-js";
 import { EmbeddedCheckoutProvider, EmbeddedCheckout } from "@stripe/react-stripe-js";
+import { logFunnel } from "@/lib/checkout-funnel";
 import { AsaasCardForm } from "@/components/checkout/AsaasCardForm";
 import { CycleTabs, type CycleTabItem } from "@/components/checkout/CycleTabs";
 import { OrderSummary } from "@/components/checkout/OrderSummary";
@@ -412,6 +413,12 @@ const CheckoutV2 = () => {
 
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors);
+      logFunnel("form_invalid", {
+        plan: selectedPlan,
+        billing: billingPeriod,
+        paymentMethod: "card",
+        detail: Object.keys(nextErrors).join(","),
+      });
       const order = ["phone", "name", "email"] as const;
       const firstInvalid = order.find((field) => nextErrors[field]);
       if (firstInvalid) {
@@ -426,6 +433,12 @@ const CheckoutV2 = () => {
     setErrors({});
 
     setIsLoading(true);
+    logFunnel("form_submit", {
+      plan: selectedPlan,
+      billing: billingPeriod,
+      paymentMethod: "card",
+      meta: { gateway: cardGateway },
+    });
 
     try {
       // Se o admin roteou cartão para o Asaas, mostra o AsaasCardForm em vez
@@ -433,6 +446,7 @@ const CheckoutV2 = () => {
       // 3 campos comuns já rodou acima.
       if (cardGateway === "asaas") {
         setAsaasCardOpen(true);
+        logFunnel("asaas_card_open", { plan: selectedPlan, billing: billingPeriod, paymentMethod: "card" });
         setHasRedirected(true);
         window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
         setIsLoading(false);
@@ -530,6 +544,12 @@ const CheckoutV2 = () => {
       });
 
       if (error) {
+        logFunnel("create_checkout_error", {
+          plan: selectedPlan,
+          billing: billingPeriod,
+          paymentMethod: "card",
+          detail: (data as any)?.error || error.message,
+        });
         throw new Error((data as any)?.error || error.message || "Erro ao processar pagamento");
       }
       // Backend rebaixou Semanal → Mensal recorrente pra cliente retornante.
@@ -554,10 +574,22 @@ const CheckoutV2 = () => {
         setHasRedirected(true);
         setStripePromise(loadStripe(data.publishableKey as string));
         setEmbeddedClientSecret(data.clientSecret as string);
+        logFunnel("embedded_requested", {
+          plan: selectedPlan,
+          billing: billingPeriod,
+          paymentMethod: "card",
+          meta: { sessionId: (data as any)?.sessionId || null },
+        });
         // Vai pro topo da página: a PaymentView substitui o form e o widget
         // Stripe fica logo abaixo do header — visível na dobra mobile.
         window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
       } else {
+        logFunnel("create_checkout_error", {
+          plan: selectedPlan,
+          billing: billingPeriod,
+          paymentMethod: "card",
+          detail: "clientSecret ausente",
+        });
         throw new Error("clientSecret não recebido");
       }
     } catch (err) {
@@ -573,6 +605,100 @@ const CheckoutV2 = () => {
     () => (embeddedClientSecret ? { clientSecret: embeddedClientSecret } : null),
     [embeddedClientSecret],
   );
+
+  // ---- Saúde do widget embedado (Stripe) ----
+  // Registro de entrada no checkout (base do funil).
+  useEffect(() => {
+    logFunnel("page_view", { plan: initialPlan, billing: initialBilling });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Se o iframe não montar em 12s (rede ruim, bloqueio de terceiros, mobile lento),
+  // caímos automaticamente no Checkout hospedado da Stripe em vez de deixar o
+  // usuário olhando um skeleton infinito.
+  const embeddedHostRef = useRef<HTMLDivElement | null>(null);
+  const [embeddedMounted, setEmbeddedMounted] = useState(false);
+  const [embeddedFallbackLoading, setEmbeddedFallbackLoading] = useState(false);
+
+  const goToHostedCheckout = useCallback(
+    async (reason: string) => {
+      setEmbeddedFallbackLoading(true);
+      try {
+        const { data, error } = await supabase.functions.invoke("create-checkout", {
+          body: {
+            plan: selectedPlan,
+            billing: billingPeriod,
+            trial: billingPeriod === "monthly",
+            paymentMethod: "card",
+            embedded: false,
+            fallback: true,
+            name: name.trim(),
+            email: email.trim(),
+            phone,
+          },
+        });
+        if (error || !data?.url) {
+          throw new Error((data as any)?.error || error?.message || "Fallback indisponível");
+        }
+        logFunnel("embedded_fallback_redirect", {
+          plan: selectedPlan,
+          billing: billingPeriod,
+          paymentMethod: "card",
+          detail: reason,
+        });
+        window.location.href = data.url as string;
+      } catch (err) {
+        logFunnel("embedded_fallback_error", {
+          plan: selectedPlan,
+          billing: billingPeriod,
+          paymentMethod: "card",
+          detail: err instanceof Error ? err.message : String(err),
+        });
+        toast.error("Não conseguimos abrir o pagamento. Tente novamente ou pague via PIX.");
+      } finally {
+        setEmbeddedFallbackLoading(false);
+      }
+    },
+    [selectedPlan, billingPeriod, name, email, phone],
+  );
+
+  useEffect(() => {
+    if (!embeddedClientSecret) {
+      setEmbeddedMounted(false);
+      return;
+    }
+    let done = false;
+    const started = Date.now();
+    const poll = window.setInterval(() => {
+      const iframe = embeddedHostRef.current?.querySelector("iframe");
+      if (iframe) {
+        done = true;
+        window.clearInterval(poll);
+        setEmbeddedMounted(true);
+        logFunnel("embedded_mounted", {
+          plan: selectedPlan,
+          billing: billingPeriod,
+          paymentMethod: "card",
+          meta: { ms: Date.now() - started },
+        });
+        return;
+      }
+      if (Date.now() - started > 12000) {
+        window.clearInterval(poll);
+        if (!done) {
+          logFunnel("embedded_timeout", {
+            plan: selectedPlan,
+            billing: billingPeriod,
+            paymentMethod: "card",
+            meta: { ms: Date.now() - started },
+          });
+          void goToHostedCheckout("embedded_timeout");
+        }
+      }
+    }, 500);
+    return () => window.clearInterval(poll);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [embeddedClientSecret]);
 
   const handleResetCheckout = useCallback(() => {
     setEmbeddedClientSecret(null);
@@ -608,6 +734,11 @@ const CheckoutV2 = () => {
     setAuthState(null);
     setCpfError(undefined);
     setPixOpen(true);
+    logFunnel("pix_modal_open", {
+      plan: selectedPlan,
+      billing: billingPeriod,
+      paymentMethod: mode === "subscription" ? "pix_auto" : "pix",
+    });
   };
 
   // Gera a cobrança PIX no Asaas e troca o modal pra tela de QR.
@@ -618,6 +749,11 @@ const CheckoutV2 = () => {
     }
     setCpfError(undefined);
     setPixLoading(true);
+    logFunnel("pix_qr_requested", {
+      plan: selectedPlan,
+      billing: billingPeriod,
+      paymentMethod: pixMode === "subscription" ? "pix_auto" : "pix",
+    });
     try {
       const getCookie = (name: string) => {
         const match = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
@@ -659,8 +795,20 @@ const CheckoutV2 = () => {
       setAuthState(pixMode === "subscription" && data.authorizationId ? "pending" : null);
       setPixStage("qr");
       trackAddPaymentInfo({ plan: selectedPlan, billing: billingPeriod, value: data.amount || 0 });
+      logFunnel("pix_qr_generated", {
+        plan: selectedPlan,
+        billing: billingPeriod,
+        paymentMethod: pixMode === "subscription" ? "pix_auto" : "pix",
+        meta: { amount: data.amount || 0, authorizationId: data.authorizationId || null },
+      });
     } catch (err) {
       console.error("PIX V2 error:", err);
+      logFunnel("pix_qr_error", {
+        plan: selectedPlan,
+        billing: billingPeriod,
+        paymentMethod: pixMode === "subscription" ? "pix_auto" : "pix",
+        detail: err instanceof Error ? err.message : String(err),
+      });
       toast.error(err instanceof Error ? err.message : "Erro ao gerar PIX. Tente novamente.");
     } finally {
       setPixLoading(false);
@@ -672,6 +820,11 @@ const CheckoutV2 = () => {
     try {
       await navigator.clipboard.writeText(pixData.copyPaste);
       toast.success("Código PIX copiado!");
+      logFunnel("pix_copy", {
+        plan: selectedPlan,
+        billing: billingPeriod,
+        paymentMethod: pixMode === "subscription" ? "pix_auto" : "pix",
+      });
     } catch {
       toast.error("Não foi possível copiar. Selecione manualmente.");
     }
@@ -749,6 +902,12 @@ const CheckoutV2 = () => {
 
     const finish = (state: "active" | "expired") => {
       if (liveAuthId) setAuthState(state);
+      logFunnel(state === "active" ? "pix_authorized" : "pix_qr_error", {
+        plan: selectedPlan,
+        billing: billingPeriod,
+        paymentMethod: "pix_auto",
+        detail: state === "active" ? "authorization_active" : "authorization_expired",
+      });
       setResumedState(state);
       setResumedAuthId(null);
       try { localStorage.removeItem(PIX_AUTH_LS_KEY); } catch { /* noop */ }
@@ -959,11 +1118,17 @@ const CheckoutV2 = () => {
                 <div className="relative rounded-2xl bg-white p-2 md:p-4 shadow-2xl min-h-[480px]">
                   {/* Skeleton enquanto o iframe da Stripe carrega (~2-3s).
                       O EmbeddedCheckout pinta por cima quando estiver pronto. */}
-                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 pointer-events-none">
-                    <div className="w-8 h-8 rounded-full border-2 border-[hsl(140_22%_45%)]/30 border-t-[hsl(140_22%_45%)] animate-spin" />
-                    <p className="text-xs text-gray-500">Carregando pagamento seguro…</p>
-                  </div>
-                  <div className="relative z-10">
+                  {!embeddedMounted && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 pointer-events-none">
+                      <div className="w-8 h-8 rounded-full border-2 border-[hsl(140_22%_45%)]/30 border-t-[hsl(140_22%_45%)] animate-spin" />
+                      <p className="text-xs text-gray-500">
+                        {embeddedFallbackLoading
+                          ? "Abrindo pagamento seguro…"
+                          : "Carregando pagamento seguro…"}
+                      </p>
+                    </div>
+                  )}
+                  <div className="relative z-10" ref={embeddedHostRef}>
                     <EmbeddedCheckoutProvider stripe={stripePromise} options={embeddedOptions}>
                       <EmbeddedCheckout />
                     </EmbeddedCheckoutProvider>

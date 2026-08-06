@@ -252,6 +252,22 @@ Deno.serve(async (req) => {
       console.error("[criar-pix-asaas] Erro salvando pagamento:", insertErr);
     }
 
+    // Visibilidade de funil: registra o início PIX avulso igual ao cartão.
+    // recovery_sent=true mantém o carrinho abandonado (cartão) fora daqui.
+    const { error: funnelErr } = await supabase.from("checkout_sessions").insert({
+      phone: phoneClean || "sem-telefone",
+      email: emailClean,
+      name,
+      plan,
+      billing,
+      payment_method: "pix",
+      status: "created",
+      recovery_sent: true,
+    });
+    if (funnelErr) {
+      console.warn("[criar-pix-asaas] funil PIX não logado:", funnelErr.message);
+    }
+
     return new Response(
       JSON.stringify({
         paymentId: payment.id,

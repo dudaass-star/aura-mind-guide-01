@@ -484,6 +484,42 @@ export type Database = {
           },
         ]
       }
+      checkout_funnel_events: {
+        Row: {
+          anon_session_id: string | null
+          billing: string | null
+          created_at: string
+          detail: string | null
+          id: string
+          meta: Json | null
+          payment_method: string | null
+          plan: string | null
+          step: string
+        }
+        Insert: {
+          anon_session_id?: string | null
+          billing?: string | null
+          created_at?: string
+          detail?: string | null
+          id?: string
+          meta?: Json | null
+          payment_method?: string | null
+          plan?: string | null
+          step: string
+        }
+        Update: {
+          anon_session_id?: string | null
+          billing?: string | null
+          created_at?: string
+          detail?: string | null
+          id?: string
+          meta?: Json | null
+          payment_method?: string | null
+          plan?: string | null
+          step?: string
+        }
+        Relationships: []
+      }
       checkout_recovery_attempts: {
         Row: {
           checkout_session_id: string
