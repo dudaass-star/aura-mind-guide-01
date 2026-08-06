@@ -1,38 +1,41 @@
-# Google Pay no checkout: o que existe hoje e o que fazer
+# Carteira primeiro, cartão recolhido no checkout
 
-## Situação confirmada no código
+## O que já é verdade hoje
 
-**Stripe (cartão, `/v2/checkout`)**
-- A sessão é criada em `create-checkout` com `ui_mode = "embedded"` e `payment_method_types = ["card"]` nos três caminhos (Semanal, assinatura, boleto legado).
-- Isso está correto: no Stripe, Google Pay e Apple Pay não são tipos separados — entram junto com `card` e são renderizados pelo Stripe.js conforme o dispositivo. Não existe `payment_method_types: ["google_pay"]`.
-- Ou seja: não falta código pro Google Pay. Se só o Apple Pay aparece, a causa está em configuração de conta ou no ambiente de teste.
+Apple Pay e Google Pay **já aparecem antes** do formulário de cartão: ficam no slot de express checkout, acima do divisor "OU" que o teste encontrou no iframe do Stripe. O que não dá pra mudar é o bloco de baixo — no Stripe Checkout (`ui_mode: "embedded"`, confirmado em `create-checkout`) o formulário de cartão sempre vem aberto quando cartão é o único método não-carteira. Não existe parâmetro de API pra recolher esse bloco, e carteira não é uma opção "marcável": é um botão de atalho, não um rádio.
 
-**Asaas (cartão)**
-- `criar-cartao-asaas` usa `billingType: "CREDIT_CARD"` com `creditCard` + `creditCardHolderInfo` — formulário nativo, cartão digitado na nossa página.
-- Formulário nativo não suporta carteira nenhuma (nem Apple nem Google Pay). O Asaas só ofereceria carteiras no checkout hospedado dele, que não usamos. Aqui não há o que ativar.
+A intuição do abandono faz sentido — campo de cartão aberto de cara pesa. Mas dentro do Checkout embedado atual isso é impossível. Pra ter o cartão atrás de um clique é preciso trocar o componente de pagamento do cartão.
 
-## Confirmado no painel Stripe (print enviado)
+## Minha recomendação: duas etapas
 
-`pmc_1Sk3NyQU15XnZ7VvnqNtcyFF`: Cartões, **Apple Pay** e **Google Pay** habilitados; Link e Boleto desabilitados. Ou seja, conta e código estão certos — não falta ativar nada.
+### Etapa 1 — medir antes de reescrever (risco baixo)
 
-## Resultado do teste que rodei agora
+O caminho de cartão hoje monta em ~170ms e converte. Antes de mexer nele, saber quanto a carteira realmente pesa:
 
-Abri `/v2/checkout?plan=direcao`, preenchi o formulário e cliquei em "Começar por R$ 9,90". No checkout embedado do Stripe encontrei:
+- Gravar no funil o método efetivamente usado em cada compra (`google_pay`, `apple_pay`, `card`), lido do PaymentIntent no `stripe-webhook`.
+- Mostrar no admin a fatia carteira x cartão e a conclusão de cada um.
 
-- Dois iframes `elements-inner-express-checkout` montados (é exatamente o slot de carteira do Stripe);
-- O divisor **"OU"** acima do formulário de cartão, que só é renderizado quando o Stripe planeja exibir carteira;
-- Nenhum botão dentro desses iframes (texto vazio).
+Se carteira já for fatia relevante, a Etapa 2 se paga. Se for quase zero, o abandono está em outro ponto e reescrever o cartão seria risco sem retorno.
 
-Leitura: **a integração está certa e o Stripe está tentando renderizar a carteira.** Os botões ficam vazios porque o navegador do teste automatizado (Chromium headless, sem login Google, sem cartão salvo na Google Wallet) não expõe carteira nenhuma — o Stripe.js esconde o botão nesse caso por desenho. Um teste headless nunca vai mostrar Google Pay, então isso não é evidência de defeito.
+### Etapa 2 — carteira em destaque, cartão em acordeão (a mudança pedida)
 
-## O que falta pra fechar a verificação
+Trocar, **só no caminho cartão/Stripe**, o Embedded Checkout por Elements:
 
-1. **Teste manual de 3 minutos (única prova real)** — abrir `/v2/checkout` no Chrome de um Android com cartão na Google Wallet (ou Chrome desktop logado no Google com cartão salvo), fora de aba anônima, com "permitir que sites verifiquem métodos de pagamento salvos" ativo. O botão preto do Google Pay deve aparecer no espaço acima do "OU". Monto o roteiro passo a passo.
-2. **Checar registro de domínio** — Embedded Checkout só exibe carteira em domínio registrado, por ambiente. Confirmar `olaaura.com.br`, `www.olaaura.com.br` e o domínio de preview registrados em live e sandbox. Se faltar algum, é aí que a carteira morre em produção mesmo com o toggle ligado.
-3. **Instrumentar pra não depender de print** — registrar no funil o método efetivamente usado (`google_pay` / `apple_pay` / `card`), lido do PaymentIntent no `stripe-webhook` e gravado via `src/lib/checkout-funnel.ts`. Assim passamos a ver quanto do faturamento entra por carteira.
-4. Registrar em memória que Apple/Google Pay no Stripe vivem dentro de `card` e que o fluxo Asaas nunca terá carteira.
+- `ExpressCheckoutElement` no topo: Google Pay / Apple Pay grandes, primeira coisa da tela.
+- `PaymentElement` abaixo com `layout: { type: "accordion", defaultCollapsed: true }`: vira uma linha "Cartão de crédito" fechada, que abre só no clique.
+- Backend: `create-checkout` passa a criar a assinatura com `payment_behavior: "default_incomplete"` e devolver o `client_secret` do PaymentIntent/SetupIntent em vez do da Checkout Session.
+- Confirmação no cliente e redirect pra `/obrigado` com os mesmos parâmetros de hoje.
+- PIX/Asaas intocado; o toggle Cartão x PIX Automático continua igual.
 
-## Fora de escopo
+Riscos a tratar: 3DS (`request_three_d_secure: "any"` precisa continuar valendo), trial do Plano Semanal, anti-duplicação de assinatura, e os eventos de funil e de recuperação de checkout abandonado que hoje dependem da Checkout Session.
 
-- Nenhuma mudança em `payment_method_types` (mexer ali é justamente o que quebraria as carteiras).
-- Não trocar o formulário nativo do Asaas por checkout hospedado só pra ter carteira.
+## Detalhes técnicos
+
+- `payment_method_types: ["card"]` já cobre Apple/Google Pay — carteira não é tipo separado no Stripe.
+- Carteira só renderiza em domínio registrado (`olaaura.com.br`, `www`, preview) e em navegador com cartão salvo; nunca aparece no Chromium headless dos testes.
+- Etapa 1: `supabase/functions/stripe-webhook/index.ts`, `src/lib/checkout-funnel.ts`, `src/pages/AdminEngagement.tsx`.
+- Etapa 2: `supabase/functions/create-checkout/index.ts`, `src/pages/CheckoutV2.tsx` e um novo `src/components/checkout/StripeCardElements.tsx`.
+
+## Decisão
+
+Fazer só a Etapa 1 agora (medir), ou ir direto pra Etapa 2 assumindo o risco de reescrever o caminho de cartão que hoje está rápido e funcionando?
