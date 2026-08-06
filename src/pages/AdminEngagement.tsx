@@ -204,6 +204,26 @@ interface RecoverySession {
   whatsapp_recovery_last_error: string | null;
 }
 
+// Traduz "skipped: <motivo>" da recuperação (e-mail e WhatsApp) para linguagem de negócio.
+// Pular NÃO é erro: é a trava de segurança do fluxo.
+const SKIP_LABELS: Record<string, string> = {
+  phone_lifetime_cap: 'Pulado: já recebeu 2 msgs',
+  active_customer_email: 'Pulado: cliente ativo',
+  active_customer_phone: 'Pulado: cliente ativo',
+  already_paid_email: 'Pulado: já pagou',
+  already_paid_phone: 'Pulado: já pagou',
+  backlog_pre_cutoff: 'Pulado: fora do cutoff',
+  no_email: 'Pulado: sem e-mail',
+  no_phone: 'Pulado: sem telefone',
+  quiet_hours: 'Pulado: silêncio noturno',
+  duplicate_phone: 'Pulado: telefone duplicado',
+};
+
+const skipLabel = (raw: string | null | undefined): string => {
+  const reason = (raw || '').replace(/^skipped:\s*/, '').trim();
+  return SKIP_LABELS[reason] || (reason ? `Pulado: ${reason}` : 'Pulado');
+};
+
 interface DunningAttempt {
   id: string;
   event_id: string;
