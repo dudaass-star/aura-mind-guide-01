@@ -574,34 +574,34 @@ serve(async (req) => {
           Deno.env.get("SUPABASE_URL") ?? "",
           Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
         );
-        // Sessão pré-criada enquanto o usuário digitava: se ele corrigiu um dado
-        // e geramos outra, limpamos a anterior ainda "created" da última hora
-        // pra não duplicar linha de funil nem e-mail de recuperação.
-        if (prewarm) {
-          void supabase
-            .from("checkout_sessions")
-            .delete()
-            .eq("phone", phoneClean)
-            .eq("status", "created")
-            .gte("created_at", new Date(Date.now() - 60 * 60 * 1000).toISOString())
-            .then(() => undefined, () => undefined);
-        }
-        void supabase
-          .from("checkout_sessions")
-          .insert({
-            phone: phoneClean,
-            email: email || null,
-            name: name,
-            plan: plan,
-            billing: billingPeriod,
-            payment_method: isBoletoPayment ? "boleto" : "card",
-            stripe_session_id: session.id,
-            status: "created",
-          })
-          .then(
-            () => logStep("Checkout session logged to DB"),
-            (e) => console.warn("⚠️ Failed to log checkout session (non-blocking):", e?.message || e),
-          );
+        void (async () => {
+          try {
+            // Sessão pré-criada enquanto o usuário digitava: se ele corrigiu um
+            // dado e geramos outra, limpamos a anterior ainda "created" da última
+            // hora pra não duplicar linha de funil nem e-mail de recuperação.
+            if (prewarm) {
+              await supabase
+                .from("checkout_sessions")
+                .delete()
+                .eq("phone", phoneClean)
+                .eq("status", "created")
+                .gte("created_at", new Date(Date.now() - 60 * 60 * 1000).toISOString());
+            }
+            await supabase.from("checkout_sessions").insert({
+              phone: phoneClean,
+              email: email || null,
+              name: name,
+              plan: plan,
+              billing: billingPeriod,
+              payment_method: isBoletoPayment ? "boleto" : "card",
+              stripe_session_id: session.id,
+              status: "created",
+            });
+            logStep("Checkout session logged to DB");
+          } catch (e) {
+            console.warn("⚠️ Failed to log checkout session (non-blocking):", (e as Error)?.message || e);
+          }
+        })();
       } catch (dbErr) {
         console.warn("⚠️ Failed to log checkout session (non-blocking):", dbErr);
       }
