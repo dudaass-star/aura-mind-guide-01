@@ -89,7 +89,21 @@ serve(async (req) => {
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
 
-    const { plan: requestedPlan, billing = "monthly", name, email, phone, trial, paymentMethod, fbp, fbc, gaClientId, embedded, fallback } = await req.json();
+    const { plan: requestedPlan, billing = "monthly", name, email, phone, trial, paymentMethod, fbp, fbc, gaClientId, embedded, fallback, warmup } = await req.json();
+
+    // === WARMUP ===
+    // O front chama isso no primeiro foco de campo pra matar o cold start da função
+    // e já carregar o js.stripe.com com a chave pública antes do clique no CTA.
+    // Não toca na API da Stripe: resposta em milissegundos.
+    if (warmup) {
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          publishableKey: Deno.env.get("STRIPE_PUBLISHABLE_KEY") || "",
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 },
+      );
+    }
     
     const plan = requestedPlan;
     const billingOverride = billing;
