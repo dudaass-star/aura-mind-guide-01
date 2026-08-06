@@ -398,6 +398,110 @@ const CheckoutV2 = () => {
   const isFormValid =
     name.trim().length > 0 && emailRegex.test(email.trim()) && phoneDigits.length >= 11;
 
+  // ============================================================
+  // VELOCIDADE DO CARTÃO
+  // O gargalo antigo: só depois do clique é que (1) a edge function acordava,
+  // (2) o js.stripe.com começava a baixar e (3) o iframe montava — tudo em fila.
+  // Agora: aquecemos a função + carregamos o js.stripe.com no primeiro toque no
+  // formulário e pré-criamos a sessão de pagamento enquanto o usuário digita.
+  // ============================================================
+  const warmedUpRef = useRef(false);
+  const prewarmRef = useRef<{
+    key: string;
+    clientSecret: string;
+    sessionId: string | null;
+    returning: boolean;
+  } | null>(null);
+  const prewarmInFlightRef = useRef<string | null>(null);
+
+  /** Chave que identifica a sessão pré-criada. Se qualquer dado muda, descartamos. */
+  const prewarmKey = useMemo(
+    () =>
+      [selectedPlan, billingPeriod, name.trim().toLowerCase(), email.trim().toLowerCase(), phoneDigits].join(
+        "|",
+      ),
+    [selectedPlan, billingPeriod, name, email, phoneDigits],
+  );
+
+  /** Aquece a edge function e começa a baixar o js.stripe.com com a chave pública. */
+  const warmUp = useCallback(async () => {
+    if (warmedUpRef.current) return;
+    warmedUpRef.current = true;
+    const t0 = Date.now();
+    try {
+      const { data } = await supabase.functions.invoke("create-checkout", {
+        body: { warmup: true },
+      });
+      const pk = (data as any)?.publishableKey as string | undefined;
+      if (pk) {
+        setStripePromise((prev) => prev ?? loadStripe(pk));
+        logFunnel("warmup", {
+          plan: selectedPlan,
+          billing: billingPeriod,
+          paymentMethod: "card",
+          meta: { ms: Date.now() - t0 },
+        });
+      }
+    } catch {
+      /* aquecimento é best-effort: o fluxo normal continua funcionando */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPlan, billingPeriod]);
+
+  // Pré-cria a sessão de pagamento quando os 3 campos já estão válidos.
+  // A sessão só vira cobrança quando o cliente confirma o pagamento, então
+  // pré-criar é seguro — e economiza todo o tempo de espera após o clique.
+  useEffect(() => {
+    if (cardGateway !== "stripe" || payMethod !== "card") return;
+    if (!isFormValid || hasRedirected || embeddedClientSecret) return;
+    if (prewarmRef.current?.key === prewarmKey) return;
+    if (prewarmInFlightRef.current === prewarmKey) return;
+
+    const timer = window.setTimeout(async () => {
+      prewarmInFlightRef.current = prewarmKey;
+      const t0 = Date.now();
+      try {
+        const { data, error } = await supabase.functions.invoke("create-checkout", {
+          body: {
+            plan: selectedPlan,
+            billing: billingPeriod,
+            trial: billingPeriod === "monthly",
+            paymentMethod: "card",
+            embedded: true,
+            prewarm: true,
+            name: name.trim(),
+            email: email.trim(),
+            phone,
+          },
+        });
+        if (!error && (data as any)?.clientSecret) {
+          prewarmRef.current = {
+            key: prewarmKey,
+            clientSecret: (data as any).clientSecret,
+            sessionId: (data as any).sessionId || null,
+            returning: !!(data as any).returning_customer,
+          };
+          if ((data as any).publishableKey) {
+            setStripePromise((prev) => prev ?? loadStripe((data as any).publishableKey));
+          }
+          logFunnel("prewarm_session", {
+            plan: selectedPlan,
+            billing: billingPeriod,
+            paymentMethod: "card",
+            meta: { ms: Date.now() - t0, serverMs: (data as any)?.serverMs ?? null },
+          });
+        }
+      } catch {
+        /* silencioso: o clique refaz a chamada normalmente */
+      } finally {
+        prewarmInFlightRef.current = null;
+      }
+    }, 700);
+
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prewarmKey, isFormValid, cardGateway, payMethod, hasRedirected, embeddedClientSecret]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
