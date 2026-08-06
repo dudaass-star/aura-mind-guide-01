@@ -606,6 +606,94 @@ const CheckoutV2 = () => {
     [embeddedClientSecret],
   );
 
+  // ---- Saúde do widget embedado (Stripe) ----
+  // Se o iframe não montar em 12s (rede ruim, bloqueio de terceiros, mobile lento),
+  // caímos automaticamente no Checkout hospedado da Stripe em vez de deixar o
+  // usuário olhando um skeleton infinito.
+  const embeddedHostRef = useRef<HTMLDivElement | null>(null);
+  const [embeddedMounted, setEmbeddedMounted] = useState(false);
+  const [embeddedFallbackLoading, setEmbeddedFallbackLoading] = useState(false);
+
+  const goToHostedCheckout = useCallback(
+    async (reason: string) => {
+      setEmbeddedFallbackLoading(true);
+      try {
+        const { data, error } = await supabase.functions.invoke("create-checkout", {
+          body: {
+            plan: selectedPlan,
+            billing: billingPeriod,
+            trial: billingPeriod === "monthly",
+            paymentMethod: "card",
+            embedded: false,
+            fallback: true,
+            name: name.trim(),
+            email: email.trim(),
+            phone,
+          },
+        });
+        if (error || !data?.url) {
+          throw new Error((data as any)?.error || error?.message || "Fallback indisponível");
+        }
+        logFunnel("embedded_fallback_redirect", {
+          plan: selectedPlan,
+          billing: billingPeriod,
+          paymentMethod: "card",
+          detail: reason,
+        });
+        window.location.href = data.url as string;
+      } catch (err) {
+        logFunnel("embedded_fallback_error", {
+          plan: selectedPlan,
+          billing: billingPeriod,
+          paymentMethod: "card",
+          detail: err instanceof Error ? err.message : String(err),
+        });
+        toast.error("Não conseguimos abrir o pagamento. Tente novamente ou pague via PIX.");
+      } finally {
+        setEmbeddedFallbackLoading(false);
+      }
+    },
+    [selectedPlan, billingPeriod, name, email, phone],
+  );
+
+  useEffect(() => {
+    if (!embeddedClientSecret) {
+      setEmbeddedMounted(false);
+      return;
+    }
+    let done = false;
+    const started = Date.now();
+    const poll = window.setInterval(() => {
+      const iframe = embeddedHostRef.current?.querySelector("iframe");
+      if (iframe) {
+        done = true;
+        window.clearInterval(poll);
+        setEmbeddedMounted(true);
+        logFunnel("embedded_mounted", {
+          plan: selectedPlan,
+          billing: billingPeriod,
+          paymentMethod: "card",
+          meta: { ms: Date.now() - started },
+        });
+        return;
+      }
+      if (Date.now() - started > 12000) {
+        window.clearInterval(poll);
+        if (!done) {
+          logFunnel("embedded_timeout", {
+            plan: selectedPlan,
+            billing: billingPeriod,
+            paymentMethod: "card",
+            meta: { ms: Date.now() - started },
+          });
+          void goToHostedCheckout("embedded_timeout");
+        }
+      }
+    }, 500);
+    return () => window.clearInterval(poll);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [embeddedClientSecret]);
+
   const handleResetCheckout = useCallback(() => {
     setEmbeddedClientSecret(null);
     setStripePromise(null);
