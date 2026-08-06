@@ -398,6 +398,110 @@ const CheckoutV2 = () => {
   const isFormValid =
     name.trim().length > 0 && emailRegex.test(email.trim()) && phoneDigits.length >= 11;
 
+  // ============================================================
+  // VELOCIDADE DO CARTÃO
+  // O gargalo antigo: só depois do clique é que (1) a edge function acordava,
+  // (2) o js.stripe.com começava a baixar e (3) o iframe montava — tudo em fila.
+  // Agora: aquecemos a função + carregamos o js.stripe.com no primeiro toque no
+  // formulário e pré-criamos a sessão de pagamento enquanto o usuário digita.
+  // ============================================================
+  const warmedUpRef = useRef(false);
+  const prewarmRef = useRef<{
+    key: string;
+    clientSecret: string;
+    sessionId: string | null;
+    returning: boolean;
+  } | null>(null);
+  const prewarmInFlightRef = useRef<string | null>(null);
+
+  /** Chave que identifica a sessão pré-criada. Se qualquer dado muda, descartamos. */
+  const prewarmKey = useMemo(
+    () =>
+      [selectedPlan, billingPeriod, name.trim().toLowerCase(), email.trim().toLowerCase(), phoneDigits].join(
+        "|",
+      ),
+    [selectedPlan, billingPeriod, name, email, phoneDigits],
+  );
+
+  /** Aquece a edge function e começa a baixar o js.stripe.com com a chave pública. */
+  const warmUp = useCallback(async () => {
+    if (warmedUpRef.current) return;
+    warmedUpRef.current = true;
+    const t0 = Date.now();
+    try {
+      const { data } = await supabase.functions.invoke("create-checkout", {
+        body: { warmup: true },
+      });
+      const pk = (data as any)?.publishableKey as string | undefined;
+      if (pk) {
+        setStripePromise((prev) => prev ?? loadStripe(pk));
+        logFunnel("warmup", {
+          plan: selectedPlan,
+          billing: billingPeriod,
+          paymentMethod: "card",
+          meta: { ms: Date.now() - t0 },
+        });
+      }
+    } catch {
+      /* aquecimento é best-effort: o fluxo normal continua funcionando */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPlan, billingPeriod]);
+
+  // Pré-cria a sessão de pagamento quando os 3 campos já estão válidos.
+  // A sessão só vira cobrança quando o cliente confirma o pagamento, então
+  // pré-criar é seguro — e economiza todo o tempo de espera após o clique.
+  useEffect(() => {
+    if (cardGateway !== "stripe" || payMethod !== "card") return;
+    if (!isFormValid || hasRedirected || embeddedClientSecret) return;
+    if (prewarmRef.current?.key === prewarmKey) return;
+    if (prewarmInFlightRef.current === prewarmKey) return;
+
+    const timer = window.setTimeout(async () => {
+      prewarmInFlightRef.current = prewarmKey;
+      const t0 = Date.now();
+      try {
+        const { data, error } = await supabase.functions.invoke("create-checkout", {
+          body: {
+            plan: selectedPlan,
+            billing: billingPeriod,
+            trial: billingPeriod === "monthly",
+            paymentMethod: "card",
+            embedded: true,
+            prewarm: true,
+            name: name.trim(),
+            email: email.trim(),
+            phone,
+          },
+        });
+        if (!error && (data as any)?.clientSecret) {
+          prewarmRef.current = {
+            key: prewarmKey,
+            clientSecret: (data as any).clientSecret,
+            sessionId: (data as any).sessionId || null,
+            returning: !!(data as any).returning_customer,
+          };
+          if ((data as any).publishableKey) {
+            setStripePromise((prev) => prev ?? loadStripe((data as any).publishableKey));
+          }
+          logFunnel("prewarm_session", {
+            plan: selectedPlan,
+            billing: billingPeriod,
+            paymentMethod: "card",
+            meta: { ms: Date.now() - t0, serverMs: (data as any)?.serverMs ?? null },
+          });
+        }
+      } catch {
+        /* silencioso: o clique refaz a chamada normalmente */
+      } finally {
+        prewarmInFlightRef.current = null;
+      }
+    }, 700);
+
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prewarmKey, isFormValid, cardGateway, payMethod, hasRedirected, embeddedClientSecret]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -527,38 +631,59 @@ const CheckoutV2 = () => {
       const gaClientId = getGaClientId();
 
       const isMonthlyTrial = billingPeriod === "monthly";
-      const { data, error } = await supabase.functions.invoke("create-checkout", {
-        body: {
-          plan: selectedPlan,
-          billing: billingPeriod,
-          trial: isMonthlyTrial,
-          paymentMethod: "card",
-          embedded: true,
-          name: name.trim(),
-          email: email.trim(),
-          phone: phone,
-          ...(fbp && { fbp }),
-          ...(fbc && { fbc }),
-          ...(gaClientId && { gaClientId }),
-        },
-      });
 
-      if (error) {
-        logFunnel("create_checkout_error", {
-          plan: selectedPlan,
-          billing: billingPeriod,
-          paymentMethod: "card",
-          detail: (data as any)?.error || error.message,
+      // Sessão pré-criada enquanto o usuário digitava? Então o campo de cartão
+      // aparece imediatamente, sem round-trip nenhum após o clique.
+      const pre = prewarmRef.current?.key === prewarmKey ? prewarmRef.current : null;
+      let clientSecret: string | null = pre?.clientSecret ?? null;
+      let publishableKey: string | null = null;
+      let outSessionId: string | null = pre?.sessionId ?? null;
+      let isReturning = pre?.returning ?? false;
+      let serverMs: number | null = null;
+
+      if (pre) {
+        logFunnel("prewarm_hit", { plan: selectedPlan, billing: billingPeriod, paymentMethod: "card" });
+      } else {
+        const t0 = Date.now();
+        const { data, error } = await supabase.functions.invoke("create-checkout", {
+          body: {
+            plan: selectedPlan,
+            billing: billingPeriod,
+            trial: isMonthlyTrial,
+            paymentMethod: "card",
+            embedded: true,
+            name: name.trim(),
+            email: email.trim(),
+            phone: phone,
+            ...(fbp && { fbp }),
+            ...(fbc && { fbc }),
+            ...(gaClientId && { gaClientId }),
+          },
         });
-        throw new Error((data as any)?.error || error.message || "Erro ao processar pagamento");
+
+        if (error) {
+          logFunnel("create_checkout_error", {
+            plan: selectedPlan,
+            billing: billingPeriod,
+            paymentMethod: "card",
+            detail: (data as any)?.error || error.message,
+          });
+          throw new Error((data as any)?.error || error.message || "Erro ao processar pagamento");
+        }
+        clientSecret = (data as any)?.clientSecret ?? null;
+        publishableKey = (data as any)?.publishableKey ?? null;
+        outSessionId = (data as any)?.sessionId ?? null;
+        isReturning = !!(data as any)?.returning_customer;
+        serverMs = (data as any)?.serverMs ?? Date.now() - t0;
       }
+
       // Backend rebaixou Semanal → Mensal recorrente pra cliente retornante.
       // O Embedded Checkout já vem com o preço/custom_text corretos; só instrumentamos.
-      if ((data as any)?.returning_customer) {
+      if (isReturning) {
         trackReturningCustomerMonthly("stripe");
       }
 
-      if (data?.clientSecret && data?.publishableKey) {
+      if (clientSecret && (publishableKey || stripePromise)) {
         // Persistimos os dados pra resgate caso o usuário recarregue durante o pagamento.
         localStorage.setItem(
           "aura_checkout",
@@ -568,17 +693,17 @@ const CheckoutV2 = () => {
             plan: selectedPlan,
             billing: billingPeriod,
             price: currentPrice,
-            returningCustomerMonthly: !!(data as any)?.returning_customer,
+            returningCustomerMonthly: isReturning,
           }),
         );
         setHasRedirected(true);
-        setStripePromise(loadStripe(data.publishableKey as string));
-        setEmbeddedClientSecret(data.clientSecret as string);
+        if (publishableKey) setStripePromise((prev) => prev ?? loadStripe(publishableKey as string));
+        setEmbeddedClientSecret(clientSecret);
         logFunnel("embedded_requested", {
           plan: selectedPlan,
           billing: billingPeriod,
           paymentMethod: "card",
-          meta: { sessionId: (data as any)?.sessionId || null },
+          meta: { sessionId: outSessionId, serverMs, prewarmed: !!pre },
         });
         // Vai pro topo da página: a PaymentView substitui o form e o widget
         // Stripe fica logo abaixo do header — visível na dobra mobile.
@@ -610,10 +735,25 @@ const CheckoutV2 = () => {
   // Registro de entrada no checkout (base do funil).
   useEffect(() => {
     logFunnel("page_view", { plan: initialPlan, billing: initialBilling });
+    // Baixa o js.stripe.com desde já (o loadStripe reaproveita esta tag) e
+    // aquece a edge function — quando o usuário clicar, não sobra latência.
+    try {
+      if (!document.querySelector('script[src^="https://js.stripe.com/v3"]')) {
+        const preload = document.createElement("link");
+        preload.rel = "preload";
+        preload.as = "script";
+        preload.href = "https://js.stripe.com/v3";
+        document.head.appendChild(preload);
+      }
+    } catch {
+      /* noop */
+    }
+    const t = window.setTimeout(() => void warmUp(), 300);
+    return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Se o iframe não montar em 12s (rede ruim, bloqueio de terceiros, mobile lento),
+  // Se o iframe não montar em 6s (rede ruim, bloqueio de terceiros, mobile lento),
   // caímos automaticamente no Checkout hospedado da Stripe em vez de deixar o
   // usuário olhando um skeleton infinito.
   const embeddedHostRef = useRef<HTMLDivElement | null>(null);
@@ -683,7 +823,7 @@ const CheckoutV2 = () => {
         });
         return;
       }
-      if (Date.now() - started > 12000) {
+      if (Date.now() - started > 6000) {
         window.clearInterval(poll);
         if (!done) {
           logFunnel("embedded_timeout", {
@@ -695,7 +835,7 @@ const CheckoutV2 = () => {
           void goToHostedCheckout("embedded_timeout");
         }
       }
-    }, 500);
+    }, 200);
     return () => window.clearInterval(poll);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [embeddedClientSecret]);
@@ -1119,12 +1259,15 @@ const CheckoutV2 = () => {
                   {/* Skeleton enquanto o iframe da Stripe carrega (~2-3s).
                       O EmbeddedCheckout pinta por cima quando estiver pronto. */}
                   {!embeddedMounted && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 pointer-events-none">
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center pointer-events-none">
                       <div className="w-8 h-8 rounded-full border-2 border-[hsl(140_22%_45%)]/30 border-t-[hsl(140_22%_45%)] animate-spin" />
-                      <p className="text-xs text-gray-500">
+                      <p className="text-sm font-medium text-gray-700">
                         {embeddedFallbackLoading
-                          ? "Abrindo pagamento seguro…"
-                          : "Carregando pagamento seguro…"}
+                          ? "Abrindo o pagamento seguro…"
+                          : "Preparando o pagamento seguro…"}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {currentPlan.name} · R$ {todayAmount} hoje · leva 1 ou 2 segundos
                       </p>
                     </div>
                   )}
@@ -1305,6 +1448,7 @@ const CheckoutV2 = () => {
                     type="tel"
                     value={phone}
                     onChange={handlePhoneChange}
+                    onFocus={() => void warmUp()}
                     placeholder="(11) 99999-9999"
                     className={`${inputCls} ${errors.phone ? "border-red-400/70 focus-visible:ring-red-400/60" : ""}`}
                     maxLength={15}
@@ -1327,6 +1471,7 @@ const CheckoutV2 = () => {
                     id="name"
                     type="text"
                     value={name}
+                    onFocus={() => void warmUp()}
                     onChange={(e) => {
                       setName(e.target.value);
                       if (errors.name) setErrors((prev) => ({ ...prev, name: undefined }));
@@ -1348,6 +1493,7 @@ const CheckoutV2 = () => {
                     id="email"
                     type="email"
                     value={email}
+                    onFocus={() => void warmUp()}
                     onChange={(e) => {
                       setEmail(e.target.value);
                       if (errors.email) setErrors((prev) => ({ ...prev, email: undefined }));

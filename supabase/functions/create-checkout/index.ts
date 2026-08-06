@@ -85,11 +85,26 @@ serve(async (req) => {
 
   try {
     logStep("Function started");
+    const reqStart = Date.now();
 
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
 
-    const { plan: requestedPlan, billing = "monthly", name, email, phone, trial, paymentMethod, fbp, fbc, gaClientId, embedded, fallback } = await req.json();
+    const { plan: requestedPlan, billing = "monthly", name, email, phone, trial, paymentMethod, fbp, fbc, gaClientId, embedded, fallback, warmup, prewarm } = await req.json();
+
+    // === WARMUP ===
+    // O front chama isso no primeiro foco de campo pra matar o cold start da função
+    // e já carregar o js.stripe.com com a chave pública antes do clique no CTA.
+    // Não toca na API da Stripe: resposta em milissegundos.
+    if (warmup) {
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          publishableKey: Deno.env.get("STRIPE_PUBLISHABLE_KEY") || "",
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 },
+      );
+    }
     
     const plan = requestedPlan;
     const billingOverride = billing;
@@ -174,31 +189,50 @@ serve(async (req) => {
     let customerId: string;
     
     const phoneVariations = getPhoneVariations(phoneClean);
-    logStep("Searching with phone variations", { phoneVariations });
-    
-    let existingCustomer = null;
-    for (const phoneVar of phoneVariations) {
-      const customers = await stripe.customers.search({
-        query: `metadata['phone']:'${phoneVar}'`,
-        limit: 1,
-      });
-      if (customers.data.length > 0) {
-        existingCustomer = customers.data[0];
-        break;
-      }
-    }
+    const lookupStarted = Date.now();
 
-    // Fallback: search by email if not found by phone
-    if (!existingCustomer && email) {
-      const customersByEmail = await stripe.customers.search({
-        query: `email:'${email}'`,
-        limit: 1,
-      });
-      if (customersByEmail.data.length > 0) {
-        existingCustomer = customersByEmail.data[0];
-        logStep("Found customer by email fallback", { customerId: existingCustomer.id });
+    // === LOOKUP PARALELO (performance) ===
+    // Antes: 1 search por variação de telefone em série + search por email +
+    // list por email + search por telefone de novo (até 6 chamadas encadeadas).
+    // Agora: todas as buscas disparam juntas e o resultado alimenta tanto o
+    // "existingCustomer" quanto a anti-duplicação e o histórico do Semanal.
+    const [phoneSearchResults, emailListResult] = await Promise.all([
+      Promise.all(
+        phoneVariations.map((phoneVar) =>
+          stripe.customers
+            .search({ query: `metadata['phone']:'${phoneVar}'`, limit: 10 })
+            .catch(() => ({ data: [] as Stripe.Customer[] })),
+        ),
+      ),
+      email
+        ? stripe.customers.list({ email, limit: 10 }).catch(() => ({ data: [] as Stripe.Customer[] }))
+        : Promise.resolve({ data: [] as Stripe.Customer[] }),
+    ]);
+
+    let existingCustomer: Stripe.Customer | null = null;
+    const customersToCheck = new Map<string, true>();
+    for (const res of phoneSearchResults) {
+      for (const c of res.data) {
+        if (!existingCustomer) existingCustomer = c;
+        customersToCheck.set(c.id, true);
       }
     }
+    for (const c of emailListResult.data) {
+      if (!existingCustomer) {
+        existingCustomer = c;
+        logStep("Found customer by email fallback", { customerId: c.id });
+      }
+      customersToCheck.set(c.id, true);
+    }
+    logStep("Customer lookup done", {
+      ms: Date.now() - lookupStarted,
+      candidates: customersToCheck.size,
+      existing: existingCustomer?.id || null,
+    });
+
+    // Histórico Stripe (qualquer subscription, inclusive cancelada) — calculado
+    // uma única vez aqui e reusado pelo bloqueio do Plano Semanal mais abaixo.
+    let hasAnyStripeSubscription = false;
 
     // === ANTI-DUPLICAÇÃO (roda SEMPRE, mesmo sem existingCustomer) ===
     // Caso real (Jenoelma, 03/04/2026): dois checkouts no mesmo dia criaram dois
@@ -207,53 +241,38 @@ serve(async (req) => {
     // eventual, que pode não retornar um customer criado minutos antes.
     // `customers.list({ email })` é consistente e fecha essa brecha.
     try {
-      const customersToCheck = new Map<string, true>();
-      if (existingCustomer) customersToCheck.set(existingCustomer.id, true);
+      logStep("Anti-dup: checking subscriptions", { customerCount: customersToCheck.size });
 
-      // Buscar TODOS por email (pode haver mais de um customer com mesmo email)
-      if (email) {
-        const allByEmail = await stripe.customers.list({ email, limit: 10 });
-        for (const c of allByEmail.data) customersToCheck.set(c.id, true);
-      }
-      // Buscar TODOS por variações de telefone
-      for (const phoneVar of phoneVariations) {
-        const allByPhone = await stripe.customers.search({
-          query: `metadata['phone']:'${phoneVar}'`,
-          limit: 10,
-        });
-        for (const c of allByPhone.data) customersToCheck.set(c.id, true);
-      }
+      // Uma chamada por customer (status: all) em paralelo — cobre active,
+      // trialing e histórico do Semanal de uma vez.
+      const subsResults = await Promise.all(
+        [...customersToCheck.keys()].map(async (cid) => ({
+          cid,
+          subs: await stripe.subscriptions
+            .list({ customer: cid, status: "all", limit: 10 })
+            .catch(() => ({ data: [] as Stripe.Subscription[] })),
+        })),
+      );
 
-      logStep("Anti-dup: checking active subscriptions", { customerCount: customersToCheck.size });
-
-      for (const cid of customersToCheck.keys()) {
-          const subs = await stripe.subscriptions.list({
-            customer: cid,
-            status: 'active',
-            limit: 5,
+      for (const { cid, subs } of subsResults) {
+        if (subs.data.length > 0) hasAnyStripeSubscription = true;
+        const activeSub = subs.data.find((s) => s.status === "active" || s.status === "trialing");
+        if (activeSub) {
+          logStep("⛔ Anti-dup: active subscription found", {
+            customerId: cid,
+            subscriptionId: activeSub.id,
+            status: activeSub.status,
           });
-          const trialing = await stripe.subscriptions.list({
-            customer: cid,
-            status: 'trialing',
-            limit: 5,
+          return new Response(JSON.stringify({
+            error: "Você já possui uma assinatura ativa da AURA. Acesse seu WhatsApp ou entre em contato com o suporte.",
+            code: "ACTIVE_SUBSCRIPTION_EXISTS",
+          }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 409,
           });
-          if (subs.data.length > 0 || trialing.data.length > 0) {
-            const activeSub = subs.data[0] || trialing.data[0];
-            logStep("⛔ Anti-dup: active subscription found", {
-              customerId: cid,
-              subscriptionId: activeSub.id,
-              status: activeSub.status,
-            });
-            return new Response(JSON.stringify({
-              error: "Você já possui uma assinatura ativa da AURA. Acesse seu WhatsApp ou entre em contato com o suporte.",
-              code: "ACTIVE_SUBSCRIPTION_EXISTS",
-            }), {
-              headers: { ...corsHeaders, "Content-Type": "application/json" },
-              status: 409,
-            });
-          }
+        }
       }
-      logStep("✅ Anti-dup: no active subscription, OK to proceed");
+      logStep("✅ Anti-dup: no active subscription, OK to proceed", { ms: Date.now() - lookupStarted });
     } catch (dupErr) {
       // Não-bloqueante: se a checagem falhar, prosseguir (não queremos quebrar o checkout por isso)
       const msg = dupErr instanceof Error ? dupErr.message : String(dupErr);
@@ -264,13 +283,15 @@ serve(async (req) => {
     if (existingCustomer) {
       customerId = existingCustomer.id;
       logStep("Found existing customer", { customerId });
-      await stripe.customers.update(customerId, {
-        email: email,
-        name: name,
-        metadata: {
-          phone: phoneClean,
-        },
-      });
+      // Fire-and-forget: a sessão só precisa do customerId. Esperar o update
+      // aqui adicionava ~300ms no caminho crítico do formulário de cartão.
+      void stripe.customers
+        .update(customerId, {
+          email: email,
+          name: name,
+          metadata: { phone: phoneClean },
+        })
+        .catch((e) => console.warn("⚠️ customers.update falhou (non-blocking):", e?.message || e));
     } else {
       const newCustomer = await stripe.customers.create({
         name: name,
@@ -335,31 +356,10 @@ serve(async (req) => {
       // === REGRA: Semanal é 1x por cliente (aquisição). Retornantes vão pro recorrente. ===
       // Consulta direta às fontes de verdade (Stripe + Asaas), sem passar por profiles
       // (schema não tem stripe_customer_id; `plan` fica preenchido mesmo em cancelados).
-      let hasStripeHistory = false;
+      // 1) Stripe: reusa o resultado da varredura da anti-duplicação (status: all),
+      // que já cobriu email + todas as variações de telefone. Zero chamada extra.
+      const hasStripeHistory = hasAnyStripeSubscription;
       let hasAsaasHistory = false;
-
-      // 1) Stripe: reusa varredura por email + variações de telefone (mesma da anti-dup)
-      const stripeCustomersToScan = new Map<string, true>();
-      const byEmail = await stripe.customers.list({ email, limit: 10 });
-      for (const c of byEmail.data) stripeCustomersToScan.set(c.id, true);
-      for (const phoneVar of phoneVariations) {
-        const byPhone = await stripe.customers.search({
-          query: `metadata['phone']:'${phoneVar}'`,
-          limit: 10,
-        });
-        for (const c of byPhone.data) stripeCustomersToScan.set(c.id, true);
-      }
-      for (const cid of stripeCustomersToScan.keys()) {
-        const anySubs = await stripe.subscriptions.list({
-          customer: cid,
-          status: "all",
-          limit: 3,
-        });
-        if (anySubs.data.length > 0) {
-          hasStripeHistory = true;
-          break;
-        }
-      }
 
       // 2) Asaas: qualquer pagamento confirmado por email OU telefone (cobre PIX e cartão)
       try {
@@ -422,16 +422,15 @@ serve(async (req) => {
       sessionConfig.mode = "payment";
       sessionConfig.payment_method_types = ["card"];
 
-      // Buscar o trial Price do Stripe para extrair unit_amount/currency e reusar product_id.
-      // Em seguida, montamos um price_data inline com product_data.description customizada
-      // para que o Stripe Checkout exiba "Após 7 dias: R$ XX/mês" sob o nome do produto.
-      const trialPriceObj = await stripe.prices.retrieve(trialPriceId, { expand: ["product"] });
-      const trialUnitAmount = trialPriceObj.unit_amount ?? 0;
-      const trialCurrency = trialPriceObj.currency || "brl";
-      const trialProductObj = typeof trialPriceObj.product === "string"
-        ? null
-        : (trialPriceObj.product as Stripe.Product);
-      const productName = trialProductObj?.name || `AURA — 7 dias ${planDisplayName}`;
+      // Valores do Plano Semanal são fixos e conhecidos — não vale gastar um
+      // round-trip `prices.retrieve` no caminho crítico do checkout.
+      const TRIAL_AMOUNTS: Record<string, number> = { essencial: 690, direcao: 990, transformacao: 1990 };
+      const trialUnitAmount = TRIAL_AMOUNTS[plan] ?? 0;
+      if (!trialUnitAmount) {
+        throw new Error("Valor do Plano Semanal não configurado para este plano.");
+      }
+      const trialCurrency = "brl";
+      const productName = `AURA — 7 dias ${planDisplayName}`;
 
       // Usamos product_data inline (name + description) para que a descrição
       // customizada apareça no painel esquerdo (verde) do Stripe Checkout,
@@ -566,27 +565,44 @@ serve(async (req) => {
     // Log checkout session for funnel tracking.
     // `fallback: true` = 2ª chamada do mesmo usuário (widget embedado não montou e
     // caímos no Checkout hospedado). Não duplicamos a linha do funil nesse caso.
-    try {
-      if (fallback) throw new Error("__skip_funnel_log__");
-      const supabase = createClient(
-        Deno.env.get("SUPABASE_URL") ?? "",
-        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-      );
-      await supabase.from("checkout_sessions").insert({
-        phone: phoneClean,
-        email: email || null,
-        name: name,
-        plan: plan,
-        billing: billingPeriod,
-        payment_method: isBoletoPayment ? "boleto" : "card",
-        stripe_session_id: session.id,
-        status: "created",
-      });
-      logStep("Checkout session logged to DB");
-    } catch (dbErr) {
-      if ((dbErr as Error)?.message === "__skip_funnel_log__") {
-        logStep("Fallback session — funnel log skipped");
-      } else {
+    // Gravação fire-and-forget: não faz o cliente esperar pelo log do funil.
+    if (fallback) {
+      logStep("Fallback session — funnel log skipped");
+    } else {
+      try {
+        const supabase = createClient(
+          Deno.env.get("SUPABASE_URL") ?? "",
+          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+        );
+        void (async () => {
+          try {
+            // Sessão pré-criada enquanto o usuário digitava: se ele corrigiu um
+            // dado e geramos outra, limpamos a anterior ainda "created" da última
+            // hora pra não duplicar linha de funil nem e-mail de recuperação.
+            if (prewarm) {
+              await supabase
+                .from("checkout_sessions")
+                .delete()
+                .eq("phone", phoneClean)
+                .eq("status", "created")
+                .gte("created_at", new Date(Date.now() - 60 * 60 * 1000).toISOString());
+            }
+            await supabase.from("checkout_sessions").insert({
+              phone: phoneClean,
+              email: email || null,
+              name: name,
+              plan: plan,
+              billing: billingPeriod,
+              payment_method: isBoletoPayment ? "boleto" : "card",
+              stripe_session_id: session.id,
+              status: "created",
+            });
+            logStep("Checkout session logged to DB");
+          } catch (e) {
+            console.warn("⚠️ Failed to log checkout session (non-blocking):", (e as Error)?.message || e);
+          }
+        })();
+      } catch (dbErr) {
         console.warn("⚠️ Failed to log checkout session (non-blocking):", dbErr);
       }
     }
@@ -599,8 +615,10 @@ serve(async (req) => {
           publishableKey: Deno.env.get("STRIPE_PUBLISHABLE_KEY") || null,
           sessionId: session.id,
           returning_customer: returningCustomerMonthly,
+          serverMs: Date.now() - reqStart,
         }
-      : { url: session.url, returning_customer: returningCustomerMonthly };
+      : { url: session.url, returning_customer: returningCustomerMonthly, serverMs: Date.now() - reqStart };
+    logStep("Done", { serverMs: Date.now() - reqStart });
 
     return new Response(JSON.stringify(responseBody), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
