@@ -607,6 +607,12 @@ const CheckoutV2 = () => {
   );
 
   // ---- Saúde do widget embedado (Stripe) ----
+  // Registro de entrada no checkout (base do funil).
+  useEffect(() => {
+    logFunnel("page_view", { plan: initialPlan, billing: initialBilling });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Se o iframe não montar em 12s (rede ruim, bloqueio de terceiros, mobile lento),
   // caímos automaticamente no Checkout hospedado da Stripe em vez de deixar o
   // usuário olhando um skeleton infinito.
