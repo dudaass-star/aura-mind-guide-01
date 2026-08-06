@@ -305,7 +305,29 @@ Deno.serve(async (req) => {
     // assim o funil de PIX fica comparável ao do cartão no admin.
     if (isPaid) {
       try {
-        const payerEmail = ((payment as any)?.customerEmail || "").toString().trim().toLowerCase();
+        const { data: payerRow } = await supabase
+          .from("asaas_payments")
+          .select("customer_email")
+          .eq("asaas_payment_id", payment.id)
+          .maybeSingle();
+        const { data: authRow } = payerRow?.customer_email
+          ? { data: null as { customer_email?: string } | null }
+          : await supabase
+              .from("asaas_pix_authorizations")
+              .select("customer_email")
+              .eq("asaas_customer_id", (payment as any)?.customer || "")
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+        const payerEmail = (
+          payerRow?.customer_email ||
+          authRow?.customer_email ||
+          (payment as any)?.customerEmail ||
+          ""
+        )
+          .toString()
+          .trim()
+          .toLowerCase();
         if (payerEmail) {
           await supabase
             .from("checkout_sessions")
