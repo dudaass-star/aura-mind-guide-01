@@ -564,27 +564,32 @@ serve(async (req) => {
     // Log checkout session for funnel tracking.
     // `fallback: true` = 2ª chamada do mesmo usuário (widget embedado não montou e
     // caímos no Checkout hospedado). Não duplicamos a linha do funil nesse caso.
-    try {
-      if (fallback) throw new Error("__skip_funnel_log__");
-      const supabase = createClient(
-        Deno.env.get("SUPABASE_URL") ?? "",
-        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-      );
-      await supabase.from("checkout_sessions").insert({
-        phone: phoneClean,
-        email: email || null,
-        name: name,
-        plan: plan,
-        billing: billingPeriod,
-        payment_method: isBoletoPayment ? "boleto" : "card",
-        stripe_session_id: session.id,
-        status: "created",
-      });
-      logStep("Checkout session logged to DB");
-    } catch (dbErr) {
-      if ((dbErr as Error)?.message === "__skip_funnel_log__") {
-        logStep("Fallback session — funnel log skipped");
-      } else {
+    // Gravação fire-and-forget: não faz o cliente esperar pelo log do funil.
+    if (fallback) {
+      logStep("Fallback session — funnel log skipped");
+    } else {
+      try {
+        const supabase = createClient(
+          Deno.env.get("SUPABASE_URL") ?? "",
+          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+        );
+        void supabase
+          .from("checkout_sessions")
+          .insert({
+            phone: phoneClean,
+            email: email || null,
+            name: name,
+            plan: plan,
+            billing: billingPeriod,
+            payment_method: isBoletoPayment ? "boleto" : "card",
+            stripe_session_id: session.id,
+            status: "created",
+          })
+          .then(
+            () => logStep("Checkout session logged to DB"),
+            (e) => console.warn("⚠️ Failed to log checkout session (non-blocking):", e?.message || e),
+          );
+      } catch (dbErr) {
         console.warn("⚠️ Failed to log checkout session (non-blocking):", dbErr);
       }
     }
