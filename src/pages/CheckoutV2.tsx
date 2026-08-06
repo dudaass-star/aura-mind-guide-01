@@ -735,6 +735,21 @@ const CheckoutV2 = () => {
   // Registro de entrada no checkout (base do funil).
   useEffect(() => {
     logFunnel("page_view", { plan: initialPlan, billing: initialBilling });
+    // Baixa o js.stripe.com desde já (o loadStripe reaproveita esta tag) e
+    // aquece a edge function — quando o usuário clicar, não sobra latência.
+    try {
+      if (!document.querySelector('script[src^="https://js.stripe.com/v3"]')) {
+        const preload = document.createElement("link");
+        preload.rel = "preload";
+        preload.as = "script";
+        preload.href = "https://js.stripe.com/v3";
+        document.head.appendChild(preload);
+      }
+    } catch {
+      /* noop */
+    }
+    const t = window.setTimeout(() => void warmUp(), 300);
+    return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
