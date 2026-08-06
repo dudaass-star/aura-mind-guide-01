@@ -412,6 +412,26 @@ Deno.serve(async (req) => {
       console.error("[criar-pix-recorrente-asaas] Erro salvando autorização:", insertErr);
     }
 
+    // Visibilidade de funil: PIX passa a aparecer em checkout_sessions junto com o
+    // cartão (antes só cartão era logado, o que cegava a comparação de conversão).
+    // recovery_sent=true evita que o fluxo de carrinho abandonado (desenhado pra
+    // cartão) dispare mensagens pra quem só gerou QR.
+    if (mode !== "reauthorize") {
+      const { error: funnelErr } = await supabase.from("checkout_sessions").insert({
+        phone: phoneClean || "sem-telefone",
+        email: emailClean,
+        name,
+        plan,
+        billing,
+        payment_method: "pix_auto",
+        status: "created",
+        recovery_sent: true,
+      });
+      if (funnelErr) {
+        console.warn("[criar-pix-recorrente-asaas] funil PIX não logado:", funnelErr.message);
+      }
+    }
+
     // Reautorização: marca a autorização antiga como substituída pra a auditoria
     // parar de tratá-la como caso aberto e não reenviar link.
     if (mode === "reauthorize" && previousAuthId) {
