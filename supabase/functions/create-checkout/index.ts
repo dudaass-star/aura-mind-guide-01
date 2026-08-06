@@ -355,31 +355,10 @@ serve(async (req) => {
       // === REGRA: Semanal é 1x por cliente (aquisição). Retornantes vão pro recorrente. ===
       // Consulta direta às fontes de verdade (Stripe + Asaas), sem passar por profiles
       // (schema não tem stripe_customer_id; `plan` fica preenchido mesmo em cancelados).
-      let hasStripeHistory = false;
+      // 1) Stripe: reusa o resultado da varredura da anti-duplicação (status: all),
+      // que já cobriu email + todas as variações de telefone. Zero chamada extra.
+      const hasStripeHistory = hasAnyStripeSubscription;
       let hasAsaasHistory = false;
-
-      // 1) Stripe: reusa varredura por email + variações de telefone (mesma da anti-dup)
-      const stripeCustomersToScan = new Map<string, true>();
-      const byEmail = await stripe.customers.list({ email, limit: 10 });
-      for (const c of byEmail.data) stripeCustomersToScan.set(c.id, true);
-      for (const phoneVar of phoneVariations) {
-        const byPhone = await stripe.customers.search({
-          query: `metadata['phone']:'${phoneVar}'`,
-          limit: 10,
-        });
-        for (const c of byPhone.data) stripeCustomersToScan.set(c.id, true);
-      }
-      for (const cid of stripeCustomersToScan.keys()) {
-        const anySubs = await stripe.subscriptions.list({
-          customer: cid,
-          status: "all",
-          limit: 3,
-        });
-        if (anySubs.data.length > 0) {
-          hasStripeHistory = true;
-          break;
-        }
-      }
 
       // 2) Asaas: qualquer pagamento confirmado por email OU telefone (cobre PIX e cartão)
       try {
