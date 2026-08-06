@@ -896,6 +896,12 @@ const CheckoutV2 = () => {
 
     const finish = (state: "active" | "expired") => {
       if (liveAuthId) setAuthState(state);
+      logFunnel(state === "active" ? "pix_authorized" : "pix_qr_error", {
+        plan: selectedPlan,
+        billing: billingPeriod,
+        paymentMethod: "pix_auto",
+        detail: state === "active" ? "authorization_active" : "authorization_expired",
+      });
       setResumedState(state);
       setResumedAuthId(null);
       try { localStorage.removeItem(PIX_AUTH_LS_KEY); } catch { /* noop */ }
