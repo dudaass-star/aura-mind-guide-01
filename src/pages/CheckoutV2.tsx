@@ -738,7 +738,7 @@ const CheckoutV2 = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Se o iframe não montar em 12s (rede ruim, bloqueio de terceiros, mobile lento),
+  // Se o iframe não montar em 6s (rede ruim, bloqueio de terceiros, mobile lento),
   // caímos automaticamente no Checkout hospedado da Stripe em vez de deixar o
   // usuário olhando um skeleton infinito.
   const embeddedHostRef = useRef<HTMLDivElement | null>(null);
@@ -808,7 +808,7 @@ const CheckoutV2 = () => {
         });
         return;
       }
-      if (Date.now() - started > 12000) {
+      if (Date.now() - started > 6000) {
         window.clearInterval(poll);
         if (!done) {
           logFunnel("embedded_timeout", {
@@ -820,7 +820,7 @@ const CheckoutV2 = () => {
           void goToHostedCheckout("embedded_timeout");
         }
       }
-    }, 500);
+    }, 200);
     return () => window.clearInterval(poll);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [embeddedClientSecret]);
