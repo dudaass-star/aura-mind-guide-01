@@ -301,6 +301,24 @@ Deno.serve(async (req) => {
       updatePayload.paid_at = new Date().toISOString();
     }
 
+    // Fecha a linha de funil PIX (checkout_sessions) quando o pagamento entra —
+    // assim o funil de PIX fica comparável ao do cartão no admin.
+    if (isPaid) {
+      try {
+        const payerEmail = ((payment as any)?.customerEmail || "").toString().trim().toLowerCase();
+        if (payerEmail) {
+          await supabase
+            .from("checkout_sessions")
+            .update({ status: "completed", completed_at: new Date().toISOString() })
+            .in("payment_method", ["pix", "pix_auto"])
+            .eq("status", "created")
+            .eq("email", payerEmail);
+        }
+      } catch (e) {
+        console.warn("[webhook-asaas] funil PIX não fechado:", (e as Error)?.message);
+      }
+    }
+
     let { data: updated, error: updateErr } = await supabase
       .from("asaas_payments")
       .update(updatePayload)
