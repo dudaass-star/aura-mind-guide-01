@@ -271,7 +271,7 @@ export default function AdminEngagement() {
   const navigate = useNavigate();
   const requestIdRef = useRef(0);
   const [elapsedSec, setElapsedSec] = useState(0);
-  const hasRecoveryActivity = recoverySessions.length > 0 || recoveryStats.raw > 0 || recoveryStats.accepted > 0 || whatsappStats.stage1 > 0 || whatsappStats.stage2 > 0 || whatsappStats.errors > 0;
+  const hasRecoveryActivity = recoverySessions.length > 0 || recoveryStats.raw > 0 || recoveryStats.accepted > 0 || whatsappStats.stage1 > 0 || whatsappStats.stage2 > 0 || whatsappStats.errors > 0 || whatsappStats.skipped > 0;
 
   // Cronômetro do botão "Atualizar" para feedback visual durante esperas longas.
   useEffect(() => {
@@ -1582,18 +1582,18 @@ export default function AdminEngagement() {
                   Recuperação por WhatsApp
                 </CardTitle>
                 <p className="text-xs text-muted-foreground">
-                  Checkout abandonado — disparos automáticos de 15min e 24h
+                  Checkout abandonado — 2 estágios automáticos (15min e 24h)
                 </p>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
                   <div>
                     <div className="text-xl font-bold text-foreground">{whatsappStats.stage1}</div>
-                    <p className="text-[11px] text-muted-foreground">enviados 15min</p>
+                    <p className="text-[11px] text-muted-foreground">processados 15min</p>
                   </div>
                   <div>
                     <div className="text-xl font-bold text-foreground">{whatsappStats.stage2}</div>
-                    <p className="text-[11px] text-muted-foreground">enviados 24h</p>
+                    <p className="text-[11px] text-muted-foreground">processados 24h</p>
                   </div>
                   <div>
                     <div className="text-xl font-bold text-foreground">{whatsappStats.unique}</div>
@@ -1604,8 +1604,12 @@ export default function AdminEngagement() {
                     <p className="text-[11px] text-muted-foreground">converteram</p>
                   </div>
                   <div>
+                    <div className="text-xl font-bold text-foreground">{whatsappStats.skipped}</div>
+                    <p className="text-[11px] text-muted-foreground">pulados (trava)</p>
+                  </div>
+                  <div>
                     <div className={`text-xl font-bold ${whatsappStats.errors > 0 ? 'text-destructive' : 'text-foreground'}`}>{whatsappStats.errors}</div>
-                    <p className="text-[11px] text-muted-foreground">erros</p>
+                    <p className="text-[11px] text-muted-foreground">erros de entrega</p>
                   </div>
                 </div>
               </CardContent>
