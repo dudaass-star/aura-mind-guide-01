@@ -254,7 +254,7 @@ export default function AdminEngagement() {
   const [dateTo, setDateTo] = useState<Date>(new Date());
   const [recoverySessions, setRecoverySessions] = useState<RecoverySession[]>([]);
   const [recoveryStats, setRecoveryStats] = useState<{ raw: number; accepted: number }>({ raw: 0, accepted: 0 });
-  const [whatsappStats, setWhatsappStats] = useState<{ stage1: number; stage2: number; errors: number; unique: number; converted: number }>({ stage1: 0, stage2: 0, errors: 0, unique: 0, converted: 0 });
+  const [whatsappStats, setWhatsappStats] = useState<{ stage1: number; stage2: number; errors: number; skipped: number; unique: number; converted: number }>({ stage1: 0, stage2: 0, errors: 0, skipped: 0, unique: 0, converted: 0 });
   const [dunningAttempts, setDunningAttempts] = useState<DunningAttempt[]>([]);
   const [recoveryOpen, setRecoveryOpen] = useState(false);
   const [dunningOpen, setDunningOpen] = useState(false);
@@ -377,14 +377,21 @@ export default function AdminEngagement() {
       setRecoveryStats({ raw: rawCount || 0, accepted: acceptedCount || 0 });
 
       // Contagens de recuperação via WhatsApp (campos próprios em checkout_sessions)
+      // "Pulado" (skipped: ...) NÃO é erro: é a trava de segurança do fluxo.
+      // Erro = falha técnica de entrega de verdade.
       const [
         { count: waStage1Count },
         { count: waStage2Count },
         { count: waErrorsCount },
+        { count: waSkippedCount },
       ] = await Promise.all([
         supabase.from('checkout_sessions').select('id', { count: 'exact', head: true }).not('whatsapp_recovery_15min_sent_at', 'is', null),
         supabase.from('checkout_sessions').select('id', { count: 'exact', head: true }).not('whatsapp_recovery_24h_sent_at', 'is', null),
-        supabase.from('checkout_sessions').select('id', { count: 'exact', head: true }).not('whatsapp_recovery_last_error', 'is', null),
+        supabase.from('checkout_sessions').select('id', { count: 'exact', head: true })
+          .not('whatsapp_recovery_last_error', 'is', null)
+          .not('whatsapp_recovery_last_error', 'like', 'skipped:%'),
+        supabase.from('checkout_sessions').select('id', { count: 'exact', head: true })
+          .like('whatsapp_recovery_last_error', 'skipped:%'),
       ]);
 
       const { data: abandoned, error } = await supabase
@@ -528,6 +535,7 @@ export default function AdminEngagement() {
         stage1: waStage1Count || 0,
         stage2: waStage2Count || 0,
         errors: waErrorsCount || 0,
+        skipped: waSkippedCount || 0,
         unique: waList.length,
         converted: waConverted,
       });
