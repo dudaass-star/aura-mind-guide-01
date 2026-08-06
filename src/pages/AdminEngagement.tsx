@@ -194,6 +194,9 @@ interface RecoverySession {
   recovery_sent_at: string | null;
   recovery_last_error: string | null;
   recovery_attempts_count: number;
+  recovery_stage1_sent_at: string | null;
+  recovery_stage2_sent_at: string | null;
+  recovery_stage3_sent_at: string | null;
   converted: boolean;
   attempt_status: string | null;
   whatsapp_recovery_15min_sent_at: string | null;
@@ -396,7 +399,7 @@ export default function AdminEngagement() {
 
       const { data: abandoned, error } = await supabase
         .from('checkout_sessions')
-        .select('id, name, phone, email, plan, created_at, status, recovery_sent, recovery_sent_at, recovery_last_error, recovery_attempts_count, whatsapp_recovery_15min_sent_at, whatsapp_recovery_24h_sent_at, whatsapp_recovery_last_error')
+        .select('id, name, phone, email, plan, created_at, status, recovery_sent, recovery_sent_at, recovery_last_error, recovery_attempts_count, recovery_stage1_sent_at, recovery_stage2_sent_at, recovery_stage3_sent_at, whatsapp_recovery_15min_sent_at, whatsapp_recovery_24h_sent_at, whatsapp_recovery_last_error')
         .or('recovery_sent.eq.true,whatsapp_recovery_15min_sent_at.not.is.null,whatsapp_recovery_24h_sent_at.not.is.null,whatsapp_recovery_last_error.not.is.null')
         .order('created_at', { ascending: false })
         .limit(50);
