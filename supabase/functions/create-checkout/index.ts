@@ -188,31 +188,50 @@ serve(async (req) => {
     let customerId: string;
     
     const phoneVariations = getPhoneVariations(phoneClean);
-    logStep("Searching with phone variations", { phoneVariations });
-    
-    let existingCustomer = null;
-    for (const phoneVar of phoneVariations) {
-      const customers = await stripe.customers.search({
-        query: `metadata['phone']:'${phoneVar}'`,
-        limit: 1,
-      });
-      if (customers.data.length > 0) {
-        existingCustomer = customers.data[0];
-        break;
-      }
-    }
+    const lookupStarted = Date.now();
 
-    // Fallback: search by email if not found by phone
-    if (!existingCustomer && email) {
-      const customersByEmail = await stripe.customers.search({
-        query: `email:'${email}'`,
-        limit: 1,
-      });
-      if (customersByEmail.data.length > 0) {
-        existingCustomer = customersByEmail.data[0];
-        logStep("Found customer by email fallback", { customerId: existingCustomer.id });
+    // === LOOKUP PARALELO (performance) ===
+    // Antes: 1 search por variação de telefone em série + search por email +
+    // list por email + search por telefone de novo (até 6 chamadas encadeadas).
+    // Agora: todas as buscas disparam juntas e o resultado alimenta tanto o
+    // "existingCustomer" quanto a anti-duplicação e o histórico do Semanal.
+    const [phoneSearchResults, emailListResult] = await Promise.all([
+      Promise.all(
+        phoneVariations.map((phoneVar) =>
+          stripe.customers
+            .search({ query: `metadata['phone']:'${phoneVar}'`, limit: 10 })
+            .catch(() => ({ data: [] as Stripe.Customer[] })),
+        ),
+      ),
+      email
+        ? stripe.customers.list({ email, limit: 10 }).catch(() => ({ data: [] as Stripe.Customer[] }))
+        : Promise.resolve({ data: [] as Stripe.Customer[] }),
+    ]);
+
+    let existingCustomer: Stripe.Customer | null = null;
+    const customersToCheck = new Map<string, true>();
+    for (const res of phoneSearchResults) {
+      for (const c of res.data) {
+        if (!existingCustomer) existingCustomer = c;
+        customersToCheck.set(c.id, true);
       }
     }
+    for (const c of emailListResult.data) {
+      if (!existingCustomer) {
+        existingCustomer = c;
+        logStep("Found customer by email fallback", { customerId: c.id });
+      }
+      customersToCheck.set(c.id, true);
+    }
+    logStep("Customer lookup done", {
+      ms: Date.now() - lookupStarted,
+      candidates: customersToCheck.size,
+      existing: existingCustomer?.id || null,
+    });
+
+    // Histórico Stripe (qualquer subscription, inclusive cancelada) — calculado
+    // uma única vez aqui e reusado pelo bloqueio do Plano Semanal mais abaixo.
+    let hasAnyStripeSubscription = false;
 
     // === ANTI-DUPLICAÇÃO (roda SEMPRE, mesmo sem existingCustomer) ===
     // Caso real (Jenoelma, 03/04/2026): dois checkouts no mesmo dia criaram dois
@@ -221,53 +240,38 @@ serve(async (req) => {
     // eventual, que pode não retornar um customer criado minutos antes.
     // `customers.list({ email })` é consistente e fecha essa brecha.
     try {
-      const customersToCheck = new Map<string, true>();
-      if (existingCustomer) customersToCheck.set(existingCustomer.id, true);
+      logStep("Anti-dup: checking subscriptions", { customerCount: customersToCheck.size });
 
-      // Buscar TODOS por email (pode haver mais de um customer com mesmo email)
-      if (email) {
-        const allByEmail = await stripe.customers.list({ email, limit: 10 });
-        for (const c of allByEmail.data) customersToCheck.set(c.id, true);
-      }
-      // Buscar TODOS por variações de telefone
-      for (const phoneVar of phoneVariations) {
-        const allByPhone = await stripe.customers.search({
-          query: `metadata['phone']:'${phoneVar}'`,
-          limit: 10,
-        });
-        for (const c of allByPhone.data) customersToCheck.set(c.id, true);
-      }
+      // Uma chamada por customer (status: all) em paralelo — cobre active,
+      // trialing e histórico do Semanal de uma vez.
+      const subsResults = await Promise.all(
+        [...customersToCheck.keys()].map(async (cid) => ({
+          cid,
+          subs: await stripe.subscriptions
+            .list({ customer: cid, status: "all", limit: 10 })
+            .catch(() => ({ data: [] as Stripe.Subscription[] })),
+        })),
+      );
 
-      logStep("Anti-dup: checking active subscriptions", { customerCount: customersToCheck.size });
-
-      for (const cid of customersToCheck.keys()) {
-          const subs = await stripe.subscriptions.list({
-            customer: cid,
-            status: 'active',
-            limit: 5,
+      for (const { cid, subs } of subsResults) {
+        if (subs.data.length > 0) hasAnyStripeSubscription = true;
+        const activeSub = subs.data.find((s) => s.status === "active" || s.status === "trialing");
+        if (activeSub) {
+          logStep("⛔ Anti-dup: active subscription found", {
+            customerId: cid,
+            subscriptionId: activeSub.id,
+            status: activeSub.status,
           });
-          const trialing = await stripe.subscriptions.list({
-            customer: cid,
-            status: 'trialing',
-            limit: 5,
+          return new Response(JSON.stringify({
+            error: "Você já possui uma assinatura ativa da AURA. Acesse seu WhatsApp ou entre em contato com o suporte.",
+            code: "ACTIVE_SUBSCRIPTION_EXISTS",
+          }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 409,
           });
-          if (subs.data.length > 0 || trialing.data.length > 0) {
-            const activeSub = subs.data[0] || trialing.data[0];
-            logStep("⛔ Anti-dup: active subscription found", {
-              customerId: cid,
-              subscriptionId: activeSub.id,
-              status: activeSub.status,
-            });
-            return new Response(JSON.stringify({
-              error: "Você já possui uma assinatura ativa da AURA. Acesse seu WhatsApp ou entre em contato com o suporte.",
-              code: "ACTIVE_SUBSCRIPTION_EXISTS",
-            }), {
-              headers: { ...corsHeaders, "Content-Type": "application/json" },
-              status: 409,
-            });
-          }
+        }
       }
-      logStep("✅ Anti-dup: no active subscription, OK to proceed");
+      logStep("✅ Anti-dup: no active subscription, OK to proceed", { ms: Date.now() - lookupStarted });
     } catch (dupErr) {
       // Não-bloqueante: se a checagem falhar, prosseguir (não queremos quebrar o checkout por isso)
       const msg = dupErr instanceof Error ? dupErr.message : String(dupErr);
