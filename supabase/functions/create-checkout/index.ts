@@ -89,7 +89,7 @@ serve(async (req) => {
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
 
-    const { plan: requestedPlan, billing = "monthly", name, email, phone, trial, paymentMethod, fbp, fbc, gaClientId, embedded } = await req.json();
+    const { plan: requestedPlan, billing = "monthly", name, email, phone, trial, paymentMethod, fbp, fbc, gaClientId, embedded, fallback } = await req.json();
     
     const plan = requestedPlan;
     const billingOverride = billing;
@@ -563,8 +563,11 @@ serve(async (req) => {
     const session = await stripe.checkout.sessions.create(sessionConfig);
     logStep("Checkout session created", { sessionId: session.id });
 
-    // Log checkout session for funnel tracking
+    // Log checkout session for funnel tracking.
+    // `fallback: true` = 2ª chamada do mesmo usuário (widget embedado não montou e
+    // caímos no Checkout hospedado). Não duplicamos a linha do funil nesse caso.
     try {
+      if (fallback) throw new Error("__skip_funnel_log__");
       const supabase = createClient(
         Deno.env.get("SUPABASE_URL") ?? "",
         Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
@@ -581,7 +584,11 @@ serve(async (req) => {
       });
       logStep("Checkout session logged to DB");
     } catch (dbErr) {
-      console.warn("⚠️ Failed to log checkout session (non-blocking):", dbErr);
+      if ((dbErr as Error)?.message === "__skip_funnel_log__") {
+        logStep("Fallback session — funnel log skipped");
+      } else {
+        console.warn("⚠️ Failed to log checkout session (non-blocking):", dbErr);
+      }
     }
 
     // Para modo embedded devolvemos client_secret + chave publicável (pra montar <EmbeddedCheckoutProvider>).
