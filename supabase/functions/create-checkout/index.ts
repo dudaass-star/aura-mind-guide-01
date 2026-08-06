@@ -421,16 +421,15 @@ serve(async (req) => {
       sessionConfig.mode = "payment";
       sessionConfig.payment_method_types = ["card"];
 
-      // Buscar o trial Price do Stripe para extrair unit_amount/currency e reusar product_id.
-      // Em seguida, montamos um price_data inline com product_data.description customizada
-      // para que o Stripe Checkout exiba "Após 7 dias: R$ XX/mês" sob o nome do produto.
-      const trialPriceObj = await stripe.prices.retrieve(trialPriceId, { expand: ["product"] });
-      const trialUnitAmount = trialPriceObj.unit_amount ?? 0;
-      const trialCurrency = trialPriceObj.currency || "brl";
-      const trialProductObj = typeof trialPriceObj.product === "string"
-        ? null
-        : (trialPriceObj.product as Stripe.Product);
-      const productName = trialProductObj?.name || `AURA — 7 dias ${planDisplayName}`;
+      // Valores do Plano Semanal são fixos e conhecidos — não vale gastar um
+      // round-trip `prices.retrieve` no caminho crítico do checkout.
+      const TRIAL_AMOUNTS: Record<string, number> = { essencial: 690, direcao: 990, transformacao: 1990 };
+      const trialUnitAmount = TRIAL_AMOUNTS[plan] ?? 0;
+      if (!trialUnitAmount) {
+        throw new Error("Valor do Plano Semanal não configurado para este plano.");
+      }
+      const trialCurrency = "brl";
+      const productName = `AURA — 7 dias ${planDisplayName}`;
 
       // Usamos product_data inline (name + description) para que a descrição
       // customizada apareça no painel esquerdo (verde) do Stripe Checkout,
