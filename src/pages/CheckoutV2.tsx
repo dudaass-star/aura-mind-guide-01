@@ -1433,6 +1433,7 @@ const CheckoutV2 = () => {
                     type="tel"
                     value={phone}
                     onChange={handlePhoneChange}
+                    onFocus={() => void warmUp()}
                     placeholder="(11) 99999-9999"
                     className={`${inputCls} ${errors.phone ? "border-red-400/70 focus-visible:ring-red-400/60" : ""}`}
                     maxLength={15}
@@ -1455,6 +1456,7 @@ const CheckoutV2 = () => {
                     id="name"
                     type="text"
                     value={name}
+                    onFocus={() => void warmUp()}
                     onChange={(e) => {
                       setName(e.target.value);
                       if (errors.name) setErrors((prev) => ({ ...prev, name: undefined }));
@@ -1476,6 +1478,7 @@ const CheckoutV2 = () => {
                     id="email"
                     type="email"
                     value={email}
+                    onFocus={() => void warmUp()}
                     onChange={(e) => {
                       setEmail(e.target.value);
                       if (errors.email) setErrors((prev) => ({ ...prev, email: undefined }));
