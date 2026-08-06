@@ -282,13 +282,15 @@ serve(async (req) => {
     if (existingCustomer) {
       customerId = existingCustomer.id;
       logStep("Found existing customer", { customerId });
-      await stripe.customers.update(customerId, {
-        email: email,
-        name: name,
-        metadata: {
-          phone: phoneClean,
-        },
-      });
+      // Fire-and-forget: a sessão só precisa do customerId. Esperar o update
+      // aqui adicionava ~300ms no caminho crítico do formulário de cartão.
+      void stripe.customers
+        .update(customerId, {
+          email: email,
+          name: name,
+          metadata: { phone: phoneClean },
+        })
+        .catch((e) => console.warn("⚠️ customers.update falhou (non-blocking):", e?.message || e));
     } else {
       const newCustomer = await stripe.customers.create({
         name: name,
