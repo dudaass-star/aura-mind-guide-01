@@ -728,6 +728,11 @@ const CheckoutV2 = () => {
     setAuthState(null);
     setCpfError(undefined);
     setPixOpen(true);
+    logFunnel("pix_modal_open", {
+      plan: selectedPlan,
+      billing: billingPeriod,
+      paymentMethod: mode === "subscription" ? "pix_auto" : "pix",
+    });
   };
 
   // Gera a cobrança PIX no Asaas e troca o modal pra tela de QR.
@@ -738,6 +743,11 @@ const CheckoutV2 = () => {
     }
     setCpfError(undefined);
     setPixLoading(true);
+    logFunnel("pix_qr_requested", {
+      plan: selectedPlan,
+      billing: billingPeriod,
+      paymentMethod: pixMode === "subscription" ? "pix_auto" : "pix",
+    });
     try {
       const getCookie = (name: string) => {
         const match = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
@@ -779,8 +789,20 @@ const CheckoutV2 = () => {
       setAuthState(pixMode === "subscription" && data.authorizationId ? "pending" : null);
       setPixStage("qr");
       trackAddPaymentInfo({ plan: selectedPlan, billing: billingPeriod, value: data.amount || 0 });
+      logFunnel("pix_qr_generated", {
+        plan: selectedPlan,
+        billing: billingPeriod,
+        paymentMethod: pixMode === "subscription" ? "pix_auto" : "pix",
+        meta: { amount: data.amount || 0, authorizationId: data.authorizationId || null },
+      });
     } catch (err) {
       console.error("PIX V2 error:", err);
+      logFunnel("pix_qr_error", {
+        plan: selectedPlan,
+        billing: billingPeriod,
+        paymentMethod: pixMode === "subscription" ? "pix_auto" : "pix",
+        detail: err instanceof Error ? err.message : String(err),
+      });
       toast.error(err instanceof Error ? err.message : "Erro ao gerar PIX. Tente novamente.");
     } finally {
       setPixLoading(false);
@@ -792,6 +814,11 @@ const CheckoutV2 = () => {
     try {
       await navigator.clipboard.writeText(pixData.copyPaste);
       toast.success("Código PIX copiado!");
+      logFunnel("pix_copy", {
+        plan: selectedPlan,
+        billing: billingPeriod,
+        paymentMethod: pixMode === "subscription" ? "pix_auto" : "pix",
+      });
     } catch {
       toast.error("Não foi possível copiar. Selecione manualmente.");
     }
