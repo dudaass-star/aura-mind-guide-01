@@ -26,8 +26,31 @@
 
 import { sendRecoveryTemplate } from "./twilio-recovery-client.ts";
 
-/** Template genérico de falha de pagamento (utility, sem restrição de horário). */
+/**
+ * Template genérico de falha de pagamento.
+ * ATENÇÃO: este SID (`aura_recuperacao_semanal1`) devolve ErrorCode 63027
+ * ("Template does not exist for a language and locale") no sender atual —
+ * comprovado em teste controlado 07/08. O substituto
+ * `dunning_notice_v2` (HX68e8ebce4c2ca1750a12ee20e4d2892a) está em aprovação
+ * no Meta; quando aprovar, basta gravar em system_config:
+ *   key = 'dunning_notice_content_sid', value = "HX68e8..."
+ * que o helper passa a usá-lo sem deploy.
+ */
 export const DUNNING_CONTENT_SID = "HXaf4af1e1f5d4cf40b6fff6b5b68df29a";
+
+/** SID do aviso a usar: system_config sobrepõe a constante. */
+async function resolveNoticeSid(supabase: any): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from("system_config")
+      .select("value")
+      .eq("key", "dunning_notice_content_sid")
+      .maybeSingle();
+    const v = typeof data?.value === "string" ? data.value : null;
+    if (v && v.startsWith("HX")) return v;
+  } catch (_) { /* usa constante */ }
+  return DUNNING_CONTENT_SID;
+}
 
 /** Quantos avisos (template utility) vêm antes da escada de ofertas. */
 export const DUNNING_NOTICE_STEPS = 2;
@@ -277,7 +300,8 @@ export async function sendDunningWhatsApp(
   const ladderIndex = attemptNumber - DUNNING_NOTICE_STEPS - 1;
   const ladderEntry = ladderIndex >= 0 ? (ladder[ladderIndex] || null) : null;
   const useOffer = !!ladderEntry?.sid;
-  const contentSid = ladderEntry?.sid || DUNNING_CONTENT_SID;
+  const noticeSid = await resolveNoticeSid(supabase);
+  const contentSid = ladderEntry?.sid || noticeSid;
   const tier: DunningOfferTier | "generic" = useOffer ? ladderEntry!.tier : "generic";
 
   const token = await ensurePortalToken(supabase, profile.user_id);
