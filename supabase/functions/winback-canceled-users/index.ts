@@ -87,9 +87,11 @@ Deno.serve(async (req) => {
 
   // Modo seco: lista elegíveis e o degrau de cada um, sem enviar nada.
   let dryRun = false;
+  let onlyUserId: string | null = null;
   try {
     const body = await req.json();
     dryRun = body?.dry_run === true;
+    onlyUserId = typeof body?.only_user_id === 'string' ? body.only_user_id : null;
   } catch { /* sem body */ }
 
   // Quiet hours: só roda entre 08h e 22h BRT
@@ -123,6 +125,7 @@ Deno.serve(async (req) => {
   const oneDayMs = 24 * 60 * 60 * 1000;
 
   for (const c of (candidates || []) as Candidate[]) {
+    if (onlyUserId && c.user_id !== onlyUserId) continue;
     const stage = pickStage(c);
     if (!stage) continue;
 
@@ -138,7 +141,9 @@ Deno.serve(async (req) => {
     }
 
     try {
-      const link = (await createShortLink('https://olaaura.com.br/checkout', c.phone!)) || 'https://olaaura.com.br/checkout';
+      // /checkout é caminho morto: o checkout canônico é o V2.
+      const checkoutUrl = 'https://olaaura.com.br/v2/checkout';
+      const link = (await createShortLink(checkoutUrl, c.phone!)) || checkoutUrl;
       const msg = buildMessage(stage, c.name || '', link, !!c.payment_failed_at);
 
       const r = await sendProactive(c.phone!, msg, 'reconnect', c.user_id);
