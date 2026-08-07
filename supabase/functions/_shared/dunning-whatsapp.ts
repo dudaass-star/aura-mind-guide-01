@@ -126,6 +126,33 @@ function firstName(name?: string | null): string {
   return first || "tudo bem";
 }
 
+/**
+ * Cria um short_link para a URL do gateway e devolve APENAS o código.
+ * Usado no modo degradado: o código entra em `{{2}}` e vira
+ * `https://olaaura.com.br/pagamento?t=<codigo>`, resolvido por customer-portal.
+ */
+async function createDunningLinkToken(url: string, phone: string): Promise<string | null> {
+  try {
+    const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/create-short-link`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+      },
+      body: JSON.stringify({ url, phone, ttl_hours: 168 }),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data?.code) {
+      console.error("[dunning-whatsapp] create-short-link falhou:", res.status, data);
+      return null;
+    }
+    return data.code as string;
+  } catch (err) {
+    console.error("[dunning-whatsapp] erro criando short_link:", err);
+    return null;
+  }
+}
+
 async function ensurePortalToken(supabase: any, userId: string): Promise<string | null> {
   try {
     await supabase
