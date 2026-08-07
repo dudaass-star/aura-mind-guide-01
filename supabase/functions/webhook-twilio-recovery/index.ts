@@ -101,10 +101,19 @@ Deno.serve(async (req) => {
             .eq("message_sid", messageSid);
 
           if (att?.profile_user_id) {
-            // 1) Reagenda o MESMO degrau pra amanhã 09h BRT (12h UTC).
+            // ErrorCode 63027 = template inexistente para o sender/locale.
+            // Reenviar o MESMO degrau amanhã só repete a falha; escalamos na hora
+            // para o primeiro degrau de oferta (templates comprovadamente
+            // entregáveis), pra não deixar o ciclo silencioso.
+            const templateMissing = String(errorCode) === "63027";
             const retryAt = new Date();
-            retryAt.setUTCDate(retryAt.getUTCDate() + 1);
-            retryAt.setUTCHours(12, 0, 0, 0);
+            if (!templateMissing) {
+              retryAt.setUTCDate(retryAt.getUTCDate() + 1);
+              retryAt.setUTCHours(12, 0, 0, 0);
+            }
+            const nextAttempt = templateMissing
+              ? Math.max(att.attempt_number || 1, 3) // 3 = primeiro degrau após os 2 avisos
+              : (att.attempt_number || 1);
             await supabaseCb.from("scheduled_tasks").insert({
               user_id: att.profile_user_id,
               task_type: "dunning_offer_whatsapp",
@@ -117,7 +126,7 @@ Deno.serve(async (req) => {
                 subscription_id: att.subscription_id,
                 payment_id: att.payment_id,
                 customer_id: att.customer_id,
-                attempt_number: att.attempt_number || 1,
+                attempt_number: nextAttempt,
                 retry_of_sid: messageSid,
               },
             });
