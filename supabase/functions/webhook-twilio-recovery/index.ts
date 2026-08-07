@@ -80,11 +80,23 @@ Deno.serve(async (req) => {
 
         // Fallback: entrega falhou ⇒ e-mail hoje + nova tentativa de WhatsApp amanhã 09h BRT.
         try {
-          const { data: att } = await supabaseCb
-            .from("dunning_attempts")
-            .select("profile_user_id, provider, invoice_id, subscription_id, payment_id, customer_id, attempt_number")
-            .eq("message_sid", messageSid)
-            .maybeSingle();
+          // A Twilio pode entregar o status final ANTES do insert do attempt
+          // (o POST retorna `queued` e o helper grava a linha depois).
+          // Sem esta releitura, `att` vinha nulo e nenhum retry era criado —
+          // motivo pelo qual não existia nenhuma tarefa `retry-*` no banco.
+          let att: any = null;
+          for (let i = 0; i < 4 && !att; i++) {
+            if (i > 0) await new Promise((r) => setTimeout(r, 1500));
+            const { data } = await supabaseCb
+              .from("dunning_attempts")
+              .select("profile_user_id, provider, invoice_id, subscription_id, payment_id, customer_id, attempt_number")
+              .eq("message_sid", messageSid)
+              .maybeSingle();
+            att = data;
+          }
+          if (!att) {
+            console.warn(`⚠️ [recovery-webhook] attempt não encontrado para sid=${messageSid} — sem retry`);
+          }
 
           if (att?.profile_user_id) {
             // 1) Reagenda o MESMO degrau pra amanhã 09h BRT (12h UTC).
