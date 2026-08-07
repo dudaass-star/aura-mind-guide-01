@@ -442,7 +442,22 @@ export async function sendDunningWhatsAppDegraded(
     console.warn("[dunning-whatsapp/degraded] erro contando tentativas:", err);
   }
 
-  const variables = { "1": firstName(name), "2": link };
+  // O botão do template já é `/pagamento?t={{2}}`, então {{2}} tem que ser um
+  // token curto — não a URL do gateway (isso gerava 63027 na Twilio).
+  // Sem profile não existe portal token: criamos um short_link e usamos o CÓDIGO
+  // como token; `customer-portal` resolve códigos de short_link.
+  const linkToken = await createDunningLinkToken(link, phone);
+  if (!linkToken) {
+    await supabase.from("dunning_attempts").insert({
+      ...baseRecord,
+      attempt_number: attemptNumber,
+      error_stage: "token_missing",
+      error_message: "Modo degradado: falha ao criar short_link para o token do botão",
+    });
+    return { sent: false, skipped: "token_missing", link, tier: "generic" };
+  }
+
+  const variables = { "1": firstName(name), "2": linkToken };
   try {
     const statusCallback = `${Deno.env.get("SUPABASE_URL")}/functions/v1/webhook-twilio-recovery`;
     const result = await sendRecoveryTemplate(phone, DUNNING_CONTENT_SID, variables, statusCallback);
