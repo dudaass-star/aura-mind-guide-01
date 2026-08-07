@@ -27,16 +27,17 @@
 import { sendRecoveryTemplate } from "./twilio-recovery-client.ts";
 
 /**
- * Template genérico de falha de pagamento.
- * ATENÇÃO: este SID (`aura_recuperacao_semanal1`) devolve ErrorCode 63027
- * ("Template does not exist for a language and locale") no sender atual —
- * comprovado em teste controlado 07/08. O substituto
- * `dunning_notice_v2` (HX68e8ebce4c2ca1750a12ee20e4d2892a) está em aprovação
- * no Meta; quando aprovar, basta gravar em system_config:
- *   key = 'dunning_notice_content_sid', value = "HX68e8..."
- * que o helper passa a usá-lo sem deploy.
+ * Template genérico de falha de pagamento (avisos 1 e 2).
+ * ATIVO: `dunning_notice_v2` (HX68e8ebce4c2ca1750a12ee20e4d2892a) — UTILITY,
+ * aprovado no WhatsApp para a subconta de recuperação, botão
+ * `https://olaaura.com.br/pagamento?t={{2}}` ({{1}} = primeiro nome,
+ * {{2}} = SOMENTE o token do portal).
+ * O antigo `aura_recuperacao_semanal1` (HXaf4af1e1f5d4cf40b6fff6b5b68df29a)
+ * era MARKETING e devolvia ErrorCode 63027 no sender atual — nenhum aviso
+ * 1/2 era entregue (comprovado 06/08 e 07/08 em dunning_attempts).
+ * `system_config.dunning_notice_content_sid` sobrepõe esta constante sem deploy.
  */
-export const DUNNING_CONTENT_SID = "HXaf4af1e1f5d4cf40b6fff6b5b68df29a";
+export const DUNNING_CONTENT_SID = "HX68e8ebce4c2ca1750a12ee20e4d2892a";
 
 /** SID do aviso a usar: system_config sobrepõe a constante. */
 async function resolveNoticeSid(supabase: any): Promise<string> {
