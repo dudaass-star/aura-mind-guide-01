@@ -2,8 +2,12 @@
  * Diagnóstico da subconta de recuperação (Twilio):
  * - lê templates no Content API (variáveis, tipos, aprovações Meta)
  * - lê mensagens específicas (error_code / error_message final)
- * Uso: POST { content_sids: ["HX..."], message_sids: ["MM..."] }
+ * - envia um template de teste com variáveis controladas (test_send)
+ * Uso: POST { content_sids: ["HX..."], message_sids: ["MM..."],
+ *             test_send: { to: "55...", content_sid: "HX...", variables: {"1":"...","2":"..."} } }
  */
+import { sendRecoveryTemplate } from "../_shared/twilio-recovery-client.ts";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -53,6 +57,18 @@ Deno.serve(async (req) => {
         http: m.status,
       });
     }
+  }
+
+  if (body.test_send?.to && body.test_send?.content_sid) {
+    const t = body.test_send;
+    const statusCallback = `${Deno.env.get("SUPABASE_URL")}/functions/v1/webhook-twilio-recovery`;
+    const res = await sendRecoveryTemplate(
+      t.to,
+      t.content_sid,
+      t.variables || {},
+      t.status_callback === false ? undefined : statusCallback,
+    );
+    out.test_send = res;
   }
 
   return new Response(JSON.stringify(out, null, 2), {
