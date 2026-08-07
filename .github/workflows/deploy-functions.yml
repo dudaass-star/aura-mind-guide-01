@@ -40,3 +40,9 @@ jobs:
         run: supabase functions deploy schedule-tag-extractor --project-ref ${{ secrets.SUPABASE_PROJECT_ID }}
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: Deploy winback-canceled-users
+        if: always()
+        run: supabase functions deploy winback-canceled-users --project-ref ${{ secrets.SUPABASE_PROJECT_ID }}
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}

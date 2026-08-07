@@ -77,6 +77,65 @@ Deno.serve(async (req) => {
             error_message: `${messageStatus} (ErrorCode ${errorCode})`,
           })
           .eq("message_sid", messageSid);
+
+        // Fallback: entrega falhou ⇒ e-mail hoje + nova tentativa de WhatsApp amanhã 09h BRT.
+        try {
+          const { data: att } = await supabaseCb
+            .from("dunning_attempts")
+            .select("profile_user_id, provider, invoice_id, subscription_id, payment_id, customer_id, attempt_number")
+            .eq("message_sid", messageSid)
+            .maybeSingle();
+
+          if (att?.profile_user_id) {
+            // 1) Reagenda o MESMO degrau pra amanhã 09h BRT (12h UTC).
+            const retryAt = new Date();
+            retryAt.setUTCDate(retryAt.getUTCDate() + 1);
+            retryAt.setUTCHours(12, 0, 0, 0);
+            await supabaseCb.from("scheduled_tasks").insert({
+              user_id: att.profile_user_id,
+              task_type: "dunning_offer_whatsapp",
+              execute_at: retryAt.toISOString(),
+              status: "pending",
+              payload: {
+                event_id: `retry-${messageSid}`,
+                provider: att.provider || "stripe",
+                invoice_id: att.invoice_id,
+                subscription_id: att.subscription_id,
+                payment_id: att.payment_id,
+                customer_id: att.customer_id,
+                attempt_number: att.attempt_number || 1,
+                retry_of_sid: messageSid,
+              },
+            });
+
+            // 2) E-mail imediato como canal secundário.
+            const { data: prof } = await supabaseCb
+              .from("profiles")
+              .select("email, name")
+              .eq("user_id", att.profile_user_id)
+              .maybeSingle();
+            const { data: tokenRow } = await supabaseCb
+              .from("user_portal_tokens")
+              .select("token")
+              .eq("user_id", att.profile_user_id)
+              .maybeSingle();
+            if (prof?.email && tokenRow?.token) {
+              await supabaseCb.functions.invoke("send-transactional-email", {
+                body: {
+                  templateName: "dunning-payment-failed",
+                  recipientEmail: prof.email,
+                  idempotencyKey: `dunning-wa-fallback-${messageSid}`,
+                  templateData: {
+                    name: prof.name || "Cliente",
+                    paymentLink: `https://olaaura.com.br/pagamento?t=${tokenRow.token}`,
+                  },
+                },
+              });
+            }
+          }
+        } catch (fbErr) {
+          console.error("❌ [recovery-webhook] fallback pós-falha de entrega:", fbErr);
+        }
       } else if (messageStatus === "delivered" || messageStatus === "read") {
         await supabaseCb
           .from("dunning_attempts")

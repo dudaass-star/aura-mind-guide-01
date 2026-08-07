@@ -307,6 +307,7 @@ export async function sendDunningWhatsApp(
         ...baseRecord,
         template_sid: contentSid,
         attempt_number: attemptNumber,
+        offer_tier: tier,
         link_generated: true,
         whatsapp_sent: true,
         message_sid: result.messageSid || null,
@@ -318,6 +319,7 @@ export async function sendDunningWhatsApp(
       ...baseRecord,
       template_sid: contentSid,
       attempt_number: attemptNumber,
+      offer_tier: tier,
       link_generated: true,
       error_stage: "twilio_send_failed",
       error_message: result.error || `HTTP ${result.status}`,
@@ -329,10 +331,137 @@ export async function sendDunningWhatsApp(
       ...baseRecord,
       template_sid: contentSid,
       attempt_number: attemptNumber,
+      offer_tier: tier,
       link_generated: true,
       error_stage: "twilio_exception",
       error_message: msg,
     });
     return { sent: false, error: msg, link, tier };
+  }
+}
+
+// ============================================================================
+// MODO DEGRADADO (sem profile no banco)
+// ============================================================================
+
+export interface DegradedDunningParams {
+  supabase: any;
+  /** Telefone vindo do gateway (metadata Stripe / customer Asaas). */
+  phone: string;
+  name?: string | null;
+  /** Link de retomada de pagamento já pronto (portal/fatura), de preferência curto. */
+  link: string;
+  eventId: string;
+  provider: "stripe" | "asaas";
+  invoiceId?: string | null;
+  subscriptionId?: string | null;
+  paymentId?: string | null;
+  customerId?: string | null;
+}
+
+/**
+ * Dispara o aviso genérico de falha de pagamento quando NÃO existe profile
+ * (usuário pagou mas nunca foi provisionado, ou telefone divergente).
+ * Sem profile não há portal token, então usamos o link do gateway direto e
+ * só o template utility (avisos), nunca a escada de ofertas.
+ * Teto: DUNNING_NOTICE_STEPS envios por ciclo, contados por telefone.
+ */
+export async function sendDunningWhatsAppDegraded(
+  params: DegradedDunningParams,
+): Promise<DunningWhatsAppResult> {
+  const {
+    supabase, phone, name = null, link, eventId, provider,
+    invoiceId = null, subscriptionId = null, paymentId = null, customerId = null,
+  } = params;
+
+  const baseRecord: Record<string, any> = {
+    event_id: eventId,
+    profile_user_id: null,
+    customer_id: customerId,
+    invoice_id: invoiceId,
+    subscription_id: subscriptionId,
+    payment_id: paymentId,
+    provider,
+    channel: "whatsapp",
+    phone_raw: phone,
+    phone_resolved: phone,
+    profile_found: false,
+    template_sid: DUNNING_CONTENT_SID,
+    offer_tier: "generic",
+  };
+
+  if (!phone) return { sent: false, skipped: "no_phone" };
+
+  // Idempotência por evento + telefone.
+  try {
+    const { data: dup } = await supabase
+      .from("dunning_attempts")
+      .select("id, message_sid")
+      .eq("event_id", eventId)
+      .eq("channel", "whatsapp")
+      .eq("phone_resolved", phone)
+      .maybeSingle();
+    if (dup) return { sent: false, skipped: "duplicate_event", messageSid: dup.message_sid };
+  } catch (_) { /* segue */ }
+
+  // Teto por ciclo (fatura → cobrança → assinatura → telefone).
+  const scope = invoiceId
+    ? { col: "invoice_id", val: invoiceId }
+    : paymentId
+    ? { col: "payment_id", val: paymentId }
+    : subscriptionId
+    ? { col: "subscription_id", val: subscriptionId }
+    : { col: "phone_resolved", val: phone };
+
+  let attemptNumber = 1;
+  try {
+    const { count } = await supabase
+      .from("dunning_attempts")
+      .select("id", { count: "exact", head: true })
+      .eq("channel", "whatsapp")
+      .eq("phone_resolved", phone)
+      .eq(scope.col, scope.val)
+      .eq("whatsapp_sent", true);
+    const prev = count || 0;
+    if (prev >= DUNNING_NOTICE_STEPS) {
+      await supabase.from("dunning_attempts").insert({
+        ...baseRecord,
+        attempt_number: prev + 1,
+        error_stage: "limit_reached",
+        error_message: `Modo degradado: já enviados ${prev} avisos (limite ${DUNNING_NOTICE_STEPS})`,
+      });
+      return { sent: false, skipped: "limit_reached", attemptNumber: prev };
+    }
+    attemptNumber = prev + 1;
+  } catch (err) {
+    console.warn("[dunning-whatsapp/degraded] erro contando tentativas:", err);
+  }
+
+  const variables = { "1": firstName(name), "2": link };
+  try {
+    const statusCallback = `${Deno.env.get("SUPABASE_URL")}/functions/v1/webhook-twilio-recovery`;
+    const result = await sendRecoveryTemplate(phone, DUNNING_CONTENT_SID, variables, statusCallback);
+    await supabase.from("dunning_attempts").insert({
+      ...baseRecord,
+      attempt_number: attemptNumber,
+      link_generated: true,
+      whatsapp_sent: !!result.success,
+      message_sid: result.messageSid || null,
+      error_stage: result.success ? null : "twilio_send_failed",
+      error_message: result.success ? null : (result.error || `HTTP ${result.status}`),
+    });
+    return result.success
+      ? { sent: true, attemptNumber, messageSid: result.messageSid, link, tier: "generic" }
+      : { sent: false, error: result.error || `HTTP ${result.status}`, link, tier: "generic" };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    await supabase.from("dunning_attempts").insert({
+      ...baseRecord,
+      attempt_number: attemptNumber,
+      link_generated: true,
+      error_stage: "twilio_exception",
+      error_message: msg,
+    });
+    return { sent: false, error: msg, link, tier: "generic" };
   }
 }

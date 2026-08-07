@@ -7,7 +7,9 @@
 // - Idempotência via profiles.winback_d{3,14,30}_sent_at
 // - Usa sendProactive com categoria 'reconnect' (template aprovado aura_reconnect_v2)
 
-import { createClient } from 'npm:@supabase/supabase-js@2.45.0';
+// ATENÇÃO: usar esm.sh para o client. O specifier `npm:@supabase/supabase-js@2.45.0`
+// quebrava o boot da função (BOOT_ERROR) e por isso nenhum winback saiu até 07/08/2026.
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.4';
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { sendProactive } from '../_shared/whatsapp-provider.ts';
 
@@ -83,9 +85,18 @@ Deno.serve(async (req) => {
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+  // Modo seco: lista elegíveis e o degrau de cada um, sem enviar nada.
+  let dryRun = false;
+  let onlyUserId: string | null = null;
+  try {
+    const body = await req.json();
+    dryRun = body?.dry_run === true;
+    onlyUserId = typeof body?.only_user_id === 'string' ? body.only_user_id : null;
+  } catch { /* sem body */ }
+
   // Quiet hours: só roda entre 08h e 22h BRT
   const brtHour = getBrtHour();
-  if (brtHour < 8 || brtHour >= 22) {
+  if (!dryRun && (brtHour < 8 || brtHour >= 22)) {
     console.log(`⏸️ Winback skipped — outside business hours (BRT ${brtHour}h)`);
     return new Response(JSON.stringify({ skipped: 'quiet_hours', brt_hour: brtHour }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -110,10 +121,11 @@ Deno.serve(async (req) => {
     });
   }
 
-  const results: Array<{ user_id: string; stage: Stage; success: boolean; reason?: string }> = [];
+  const results: Array<{ user_id: string; name?: string | null; stage: Stage; success: boolean; reason?: string }> = [];
   const oneDayMs = 24 * 60 * 60 * 1000;
 
   for (const c of (candidates || []) as Candidate[]) {
+    if (onlyUserId && c.user_id !== onlyUserId) continue;
     const stage = pickStage(c);
     if (!stage) continue;
 
@@ -123,8 +135,15 @@ Deno.serve(async (req) => {
       continue;
     }
 
+    if (dryRun) {
+      results.push({ user_id: c.user_id, name: c.name, stage, success: false, reason: 'dry_run' });
+      continue;
+    }
+
     try {
-      const link = (await createShortLink('https://olaaura.com.br/checkout', c.phone!)) || 'https://olaaura.com.br/checkout';
+      // /checkout é caminho morto: o checkout canônico é o V2.
+      const checkoutUrl = 'https://olaaura.com.br/v2/checkout';
+      const link = (await createShortLink(checkoutUrl, c.phone!)) || checkoutUrl;
       const msg = buildMessage(stage, c.name || '', link, !!c.payment_failed_at);
 
       const r = await sendProactive(c.phone!, msg, 'reconnect', c.user_id);
