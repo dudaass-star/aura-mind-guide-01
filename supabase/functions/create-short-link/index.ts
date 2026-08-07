@@ -14,6 +14,12 @@ const ALLOWED_DOMAINS = [
   'stripe.com',
   'checkout.stripe.com',
   'billing.stripe.com',
+  // Faturas hospedadas (dunning: hosted_invoice_url) e faturas Asaas
+  'invoice.stripe.com',
+  'pay.stripe.com',
+  'asaas.com',
+  'www.asaas.com',
+  'sandbox.asaas.com',
   // Supabase storage for meditation files
   'uhyogifgmutfmbyhzzyo.supabase.co',
 ];
@@ -66,7 +72,10 @@ serve(async (req) => {
     
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     
-    const { url, phone } = await req.json();
+    const { url, phone, ttl_hours } = await req.json();
+    // TTL configurável (default 24h, teto 30 dias). Links de dunning precisam
+    // sobreviver mais que 24h porque o cliente costuma voltar dias depois.
+    const ttlHours = Math.min(Math.max(Number(ttl_hours) || 24, 1), 720);
     
     if (!url) {
       return new Response(JSON.stringify({ error: 'URL is required' }), {
@@ -124,7 +133,7 @@ serve(async (req) => {
         code,
         url,
         phone: phone || null,
-        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 24 hours
+        expires_at: new Date(Date.now() + ttlHours * 60 * 60 * 1000).toISOString(),
       });
     
     if (insertError) {

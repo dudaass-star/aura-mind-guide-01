@@ -1307,6 +1307,42 @@ Me conta: como você está hoje?`;
         console.warn('⚠️ [DUNNING] No subscription resolved — skipping dunning but recording audit trail');
         dunningRecord.error_stage = 'no_subscription_on_invoice';
         dunningRecord.error_message = `invoice.subscription was ${String(invoice.subscription)}, fallback also failed. billing_reason: ${invoice.billing_reason}`;
+        // Recuperar pagamento NÃO depende de conhecer a assinatura: se há
+        // telefone/e-mail no cliente e link de fatura, ainda avisamos o cliente.
+        try {
+          const cust = await stripe.customers.retrieve(customerId);
+          if (!(cust as any).deleted) {
+            const c = cust as Stripe.Customer;
+            const phone = c.metadata?.phone || c.phone || null;
+            const recoveryLink = invoice.hosted_invoice_url
+              || (await stripe.billingPortal.sessions.create({ customer: customerId, return_url: 'https://olaaura.com.br' })).url;
+            dunningRecord.phone_raw = phone;
+            if (phone && recoveryLink) {
+              const { sendDunningWhatsAppDegraded } = await import('../_shared/dunning-whatsapp.ts');
+              const degraded = await sendDunningWhatsAppDegraded({
+                supabase, phone, name: c.name || null, link: recoveryLink,
+                eventId: event.id, provider: 'stripe', invoiceId: invoice.id, customerId,
+              });
+              dunningRecord.whatsapp_sent = degraded.sent;
+              dunningRecord.link_generated = true;
+              console.log(`[DUNNING-NOSUB] degradado sent=${degraded.sent} skip=${degraded.skipped || '-'} err=${degraded.error || '-'}`);
+            }
+            if (c.email && recoveryLink) {
+              try {
+                await supabase.functions.invoke('send-transactional-email', {
+                  body: {
+                    templateName: 'dunning-payment-failed',
+                    recipientEmail: c.email,
+                    idempotencyKey: `dunning-nosub-${event.id}`,
+                    templateData: { name: c.name || 'Cliente', paymentLink: recoveryLink },
+                  },
+                });
+              } catch (mailErr) { console.warn('[DUNNING-NOSUB] falha no e-mail:', mailErr); }
+            }
+          }
+        } catch (nosubErr) {
+          console.error('[DUNNING-NOSUB] erro no fallback sem assinatura:', nosubErr);
+        }
         try { await supabase.from('dunning_attempts').insert(dunningRecord); } catch (_) {}
         return new Response(JSON.stringify({ received: true }), {
           status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },

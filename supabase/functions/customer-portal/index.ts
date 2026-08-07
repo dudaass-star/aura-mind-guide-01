@@ -39,6 +39,23 @@ Deno.serve(async (req) => {
         .maybeSingle();
       userId = pt?.user_id;
     }
+
+    // Fallback do dunning em modo degradado (sem profile): o token do botão é o
+    // código de um short_link com a URL de pagamento do gateway. Sem isso, o
+    // template de aviso não teria como levar a lugar nenhum.
+    if (!userId && token && /^[A-Za-z0-9]{4,12}$/.test(token)) {
+      const { data: sl } = await supabase
+        .from("short_links")
+        .select("url, expires_at")
+        .eq("code", token)
+        .maybeSingle();
+      if (sl?.url) {
+        const expired = sl.expires_at && new Date(sl.expires_at).getTime() < Date.now();
+        if (!expired) return json({ url: sl.url, provider: "short_link" }, 200);
+        return json({ error: "Esse link expirou. Responda no WhatsApp que a gente gera outro." }, 410);
+      }
+    }
+
     if (!userId) {
       return json({ error: "Sessão necessária" }, 401);
     }

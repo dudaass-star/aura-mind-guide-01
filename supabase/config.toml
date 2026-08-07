@@ -159,3 +159,5 @@ project_id = "uhyogifgmutfmbyhzzyo"
     verify_jwt = false
   [functions.debug-openai]
     verify_jwt = false
+  [functions.debug-recovery-template]
+    verify_jwt = false

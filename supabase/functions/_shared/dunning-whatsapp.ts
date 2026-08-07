@@ -13,7 +13,10 @@
  *   {{2}} = query string do botão (`t=<token>&offer=<tier>`),
  *   URL do botão = https://olaaura.com.br/cancelar?{{2}}
  * - Template genérico (avisos 1 e 2 / fallback): HXaf4af1e1f5d4cf40b6fff6b5b68df29a
- *   {{1}} = primeiro nome, {{2}} = URL completa /pagamento?t=<token>
+ *   {{1}} = primeiro nome, {{2}} = SOMENTE o token (a URL do botão já é
+ *   `https://olaaura.com.br/pagamento?t={{2}}`). Passar a URL completa aqui
+ *   gerava `/pagamento?t=https://...` — URL inválida e a Twilio devolvia
+ *   ErrorCode 63027 (nenhum aviso 1/2 era entregue).
  * - Escopo da contagem é o CICLO (invoice_id → payment_id → subscription_id),
  *   nunca a assinatura inteira: cada nova fatura/cobrança recomeça no aviso.
  * - Idempotência: dedup por (profile_user_id, event_id, channel='whatsapp').
@@ -121,6 +124,33 @@ function firstName(name?: string | null): string {
   if (!name) return "tudo bem";
   const first = name.trim().split(/\s+/)[0];
   return first || "tudo bem";
+}
+
+/**
+ * Cria um short_link para a URL do gateway e devolve APENAS o código.
+ * Usado no modo degradado: o código entra em `{{2}}` e vira
+ * `https://olaaura.com.br/pagamento?t=<codigo>`, resolvido por customer-portal.
+ */
+async function createDunningLinkToken(url: string, phone: string): Promise<string | null> {
+  try {
+    const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/create-short-link`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+      },
+      body: JSON.stringify({ url, phone, ttl_hours: 168 }),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data?.code) {
+      console.error("[dunning-whatsapp] create-short-link falhou:", res.status, data);
+      return null;
+    }
+    return data.code as string;
+  } catch (err) {
+    console.error("[dunning-whatsapp] erro criando short_link:", err);
+    return null;
+  }
 }
 
 async function ensurePortalToken(supabase: any, userId: string): Promise<string | null> {
@@ -296,7 +326,9 @@ export async function sendDunningWhatsApp(
     : `https://olaaura.com.br/pagamento?t=${token}`;
   const variables = {
     "1": firstName(profile.name),
-    "2": useOffer ? `t=${token}&offer=${tier}` : link,
+    // Oferta: {{2}} é a query string (botão = /cancelar?{{2}}).
+    // Genérico: {{2}} é só o token (botão = /pagamento?t={{2}}).
+    "2": useOffer ? `t=${token}&offer=${tier}` : token,
   };
 
   try {
@@ -437,7 +469,22 @@ export async function sendDunningWhatsAppDegraded(
     console.warn("[dunning-whatsapp/degraded] erro contando tentativas:", err);
   }
 
-  const variables = { "1": firstName(name), "2": link };
+  // O botão do template já é `/pagamento?t={{2}}`, então {{2}} tem que ser um
+  // token curto — não a URL do gateway (isso gerava 63027 na Twilio).
+  // Sem profile não existe portal token: criamos um short_link e usamos o CÓDIGO
+  // como token; `customer-portal` resolve códigos de short_link.
+  const linkToken = await createDunningLinkToken(link, phone);
+  if (!linkToken) {
+    await supabase.from("dunning_attempts").insert({
+      ...baseRecord,
+      attempt_number: attemptNumber,
+      error_stage: "token_missing",
+      error_message: "Modo degradado: falha ao criar short_link para o token do botão",
+    });
+    return { sent: false, skipped: "token_missing", link, tier: "generic" };
+  }
+
+  const variables = { "1": firstName(name), "2": linkToken };
   try {
     const statusCallback = `${Deno.env.get("SUPABASE_URL")}/functions/v1/webhook-twilio-recovery`;
     const result = await sendRecoveryTemplate(phone, DUNNING_CONTENT_SID, variables, statusCallback);
