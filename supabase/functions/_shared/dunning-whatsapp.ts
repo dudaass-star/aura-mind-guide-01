@@ -463,11 +463,12 @@ export async function sendDunningWhatsAppDegraded(
     phone_raw: phone,
     phone_resolved: phone,
     profile_found: false,
-    template_sid: DUNNING_CONTENT_SID,
     offer_tier: "generic",
   };
 
   if (!phone) return { sent: false, skipped: "no_phone" };
+  const noticeSid = await resolveNoticeSid(supabase);
+  baseRecord.template_sid = noticeSid;
 
   // Idempotência por evento + telefone.
   try {
@@ -532,7 +533,7 @@ export async function sendDunningWhatsAppDegraded(
   const variables = { "1": firstName(name), "2": linkToken };
   try {
     const statusCallback = `${Deno.env.get("SUPABASE_URL")}/functions/v1/webhook-twilio-recovery`;
-    const result = await sendRecoveryTemplate(phone, DUNNING_CONTENT_SID, variables, statusCallback);
+    const result = await sendRecoveryTemplate(phone, noticeSid, variables, statusCallback);
     await supabase.from("dunning_attempts").insert({
       ...baseRecord,
       attempt_number: attemptNumber,
