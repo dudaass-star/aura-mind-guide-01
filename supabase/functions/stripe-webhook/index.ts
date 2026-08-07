@@ -1260,7 +1260,17 @@ Me conta: como você está hoje?`;
     if (event.type === 'invoice.payment_failed') {
       const invoice = event.data.object as Stripe.Invoice;
       const customerId = invoice.customer as string;
-      let subscriptionId = invoice.subscription as string | null;
+      // A API nova do Stripe não manda mais `invoice.subscription`: o id vive em
+      // `invoice.parent.subscription_details.subscription`. Sem esse fallback,
+      // toda renovação falhada era descartada como "no_subscription_on_invoice".
+      let subscriptionId =
+        (invoice.subscription as string | null) ??
+        ((invoice as any).parent?.subscription_details?.subscription as string | null) ??
+        ((invoice as any).subscription_details?.subscription as string | null) ??
+        null;
+      if (typeof subscriptionId === 'object' && subscriptionId) {
+        subscriptionId = (subscriptionId as any).id ?? null;
+      }
       console.log('🚨 [DUNNING-ENTRY] invoice.payment_failed BLOCK REACHED. invoice:', invoice.id, 'customer:', customerId, 'subscription:', subscriptionId, 'amount:', invoice.amount_due, 'billing_reason:', invoice.billing_reason);
 
       // Fallback: resolve subscription when invoice.subscription is null but billing_reason indicates subscription
@@ -1327,6 +1337,69 @@ Me conta: como você está hoje?`;
             dunningRecord.error_stage = 'profile_not_found';
             dunningRecord.error_message = `No profile found. Phone raw: ${rawPhone}, email: ${(customer as Stripe.Customer).email}, variations tried: ${variationsTried.join(',')}`;
             console.error(`❌ [DUNNING] Profile not found for customer ${customerId}. Raw phone: ${rawPhone}, variations: ${variationsTried.join(',')}`);
+
+            // MODO DEGRADADO: sem profile, ainda tentamos recuperar o cliente
+            // usando telefone/e-mail do gateway + link de pagamento do Stripe.
+            try {
+              let recoveryLink = invoice.hosted_invoice_url || null;
+              if (!recoveryLink) {
+                const portal = await stripe.billingPortal.sessions.create({
+                  customer: customerId,
+                  return_url: 'https://olaaura.com.br',
+                });
+                recoveryLink = portal.url;
+              }
+              try {
+                const shortRes = await fetch(`${supabaseUrl}/functions/v1/create-short-link`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseServiceKey}` },
+                  body: JSON.stringify({ url: recoveryLink, phone: phone || rawPhone || null }),
+                });
+                if (shortRes.ok) {
+                  const sd = await shortRes.json();
+                  if (sd?.shortUrl) recoveryLink = sd.shortUrl;
+                } else { await shortRes.text(); }
+              } catch (_) { /* usa URL longa */ }
+
+              const degradedPhone = phone || rawPhone || null;
+              if (degradedPhone && recoveryLink) {
+                const { sendDunningWhatsAppDegraded } = await import('../_shared/dunning-whatsapp.ts');
+                const degraded = await sendDunningWhatsAppDegraded({
+                  supabase,
+                  phone: degradedPhone,
+                  name: (customer as Stripe.Customer).name || null,
+                  link: recoveryLink,
+                  eventId: event.id,
+                  provider: 'stripe',
+                  invoiceId: invoice.id,
+                  subscriptionId: subscriptionId || null,
+                  customerId,
+                });
+                console.log(`[DUNNING-DEGRADED] whatsapp sent=${degraded.sent} skipped=${degraded.skipped || '-'} err=${degraded.error || '-'}`);
+                dunningRecord.whatsapp_sent = degraded.sent;
+                dunningRecord.link_generated = true;
+              }
+
+              // E-mail secundário (só se houver e-mail no gateway).
+              const degradedEmail = (customer as Stripe.Customer).email;
+              if (degradedEmail && recoveryLink) {
+                try {
+                  await supabase.functions.invoke('send-transactional-email', {
+                    body: {
+                      templateName: 'dunning-payment-failed',
+                      recipientEmail: degradedEmail,
+                      idempotencyKey: `dunning-degraded-${event.id}`,
+                      templateData: { name: (customer as Stripe.Customer).name || 'Cliente', paymentLink: recoveryLink },
+                    },
+                  });
+                } catch (mailErr) {
+                  console.warn('[DUNNING-DEGRADED] falha no e-mail:', mailErr);
+                }
+              }
+            } catch (degradedErr) {
+              console.error('[DUNNING-DEGRADED] erro no modo degradado:', degradedErr);
+            }
+
             await supabase.from('dunning_attempts').insert(dunningRecord);
             return new Response(JSON.stringify({ received: true }), {
               status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
