@@ -13,7 +13,10 @@
  *   {{2}} = query string do botão (`t=<token>&offer=<tier>`),
  *   URL do botão = https://olaaura.com.br/cancelar?{{2}}
  * - Template genérico (avisos 1 e 2 / fallback): HXaf4af1e1f5d4cf40b6fff6b5b68df29a
- *   {{1}} = primeiro nome, {{2}} = URL completa /pagamento?t=<token>
+ *   {{1}} = primeiro nome, {{2}} = SOMENTE o token (a URL do botão já é
+ *   `https://olaaura.com.br/pagamento?t={{2}}`). Passar a URL completa aqui
+ *   gerava `/pagamento?t=https://...` — URL inválida e a Twilio devolvia
+ *   ErrorCode 63027 (nenhum aviso 1/2 era entregue).
  * - Escopo da contagem é o CICLO (invoice_id → payment_id → subscription_id),
  *   nunca a assinatura inteira: cada nova fatura/cobrança recomeça no aviso.
  * - Idempotência: dedup por (profile_user_id, event_id, channel='whatsapp').
@@ -296,7 +299,9 @@ export async function sendDunningWhatsApp(
     : `https://olaaura.com.br/pagamento?t=${token}`;
   const variables = {
     "1": firstName(profile.name),
-    "2": useOffer ? `t=${token}&offer=${tier}` : link,
+    // Oferta: {{2}} é a query string (botão = /cancelar?{{2}}).
+    // Genérico: {{2}} é só o token (botão = /pagamento?t={{2}}).
+    "2": useOffer ? `t=${token}&offer=${tier}` : token,
   };
 
   try {
