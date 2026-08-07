@@ -36,9 +36,15 @@ A Twilio aceita o envio e depois o callback marca `failed` (ErrorCode 63027). Ho
 
 Correção: quando o callback marcar falha de entrega, disparar o e-mail equivalente daquele degrau e reagendar uma tentativa de WhatsApp no dia seguinte, dentro da janela permitida.
 
-## Falha 4 — `no_subscription_on_invoice` (7 casos)
+## Falha 4 — renovação de cliente ativo descartada (19 casos)
 
-Fatura de renovação sem assinatura resolvida encerra o fluxo antes de qualquer aviso. Separar por motivo da fatura: renovação segue para os avisos (WhatsApp + e-mail); tentativa de compra que nunca virou assinatura continua na recuperação de checkout.
+Aqui não tem nada a ver com carrinho abandonado — me expressei mal antes. Fui conferir uma a uma: são **19 faturas de renovação de assinantes ativos** em 30 dias que o webhook descartou com o motivo `no_subscription_on_invoice`.
+
+Exemplo real conferido no Stripe agora: fatura `in_1TwiP0…`, cliente do **Transformação R$ 79,90**, motivo da cobrança `subscription_cycle` (renovação de mês), assinatura `sub_1TY3ym…` viva, **9 tentativas de cobrança falhadas**, fatura ainda aberta e não paga. Nenhum aviso saiu — nem WhatsApp, nem e-mail — porque o código não conseguiu ler a assinatura dentro da fatura e abortou.
+
+A causa é técnica: o Stripe mudou o formato e agora a assinatura vem em `parent.subscription_details.subscription`, não mais no campo `subscription` que o código lê. Toda renovação que falha cai nesse buraco.
+
+A correção é só ler o campo novo antes de desistir. O fluxo de carrinho abandonado continua separado e intocado — ele trata quem nunca virou assinante; este trata quem já é cliente e falhou na renovação. Não há mistura entre os dois.
 
 ## Falha 5 — `offer_tier` nunca é gravado (auditoria cega)
 
