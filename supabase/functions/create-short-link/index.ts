@@ -14,6 +14,12 @@ const ALLOWED_DOMAINS = [
   'stripe.com',
   'checkout.stripe.com',
   'billing.stripe.com',
+  // Faturas hospedadas (dunning: hosted_invoice_url) e faturas Asaas
+  'invoice.stripe.com',
+  'pay.stripe.com',
+  'asaas.com',
+  'www.asaas.com',
+  'sandbox.asaas.com',
   // Supabase storage for meditation files
   'uhyogifgmutfmbyhzzyo.supabase.co',
 ];
