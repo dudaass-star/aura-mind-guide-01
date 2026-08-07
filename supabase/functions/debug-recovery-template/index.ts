@@ -47,6 +47,7 @@ Deno.serve(async (req) => {
     out.messages = [];
     for (const ms of body.message_sids) {
       const m = await get(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages/${ms}.json`);
+      const alerts = await get(`https://monitor.twilio.com/v1/Alerts?ResourceSid=${ms}&PageSize=5`);
       out.messages.push({
         sid: ms,
         status: m.json?.status,
@@ -55,6 +56,11 @@ Deno.serve(async (req) => {
         to: m.json?.to,
         from: m.json?.from,
         http: m.status,
+        alerts: (alerts.json?.alerts || []).map((a: any) => ({
+          error_code: a.error_code,
+          alert_text: a.alert_text,
+          more_info: a.more_info,
+        })),
       });
     }
   }
