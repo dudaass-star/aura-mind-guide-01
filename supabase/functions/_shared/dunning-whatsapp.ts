@@ -12,11 +12,11 @@
  *   Cada template de oferta: {{1}} = primeiro nome,
  *   {{2}} = query string do botão (`t=<token>&offer=<tier>`),
  *   URL do botão = https://olaaura.com.br/cancelar?{{2}}
- * - Template genérico (avisos 1 e 2 / fallback): HXaf4af1e1f5d4cf40b6fff6b5b68df29a
- *   {{1}} = primeiro nome, {{2}} = SOMENTE o token (a URL do botão já é
- *   `https://olaaura.com.br/pagamento?t={{2}}`). Passar a URL completa aqui
- *   gerava `/pagamento?t=https://...` — URL inválida e a Twilio devolvia
- *   ErrorCode 63027 (nenhum aviso 1/2 era entregue).
+ * - Template genérico (avisos 1 e 2 / fallback): `dunning_notice_v2`
+ *   HX68e8ebce4c2ca1750a12ee20e4d2892a (UTILITY, aprovado no sender de
+ *   recuperação). {{1}} = primeiro nome, {{2}} = SOMENTE o token (a URL do
+ *   botão já é `https://olaaura.com.br/pagamento?t={{2}}`). O SID anterior
+ *   (HXaf4af...) era MARKETING e devolvia ErrorCode 63027 no sender atual.
  * - Escopo da contagem é o CICLO (invoice_id → payment_id → subscription_id),
  *   nunca a assinatura inteira: cada nova fatura/cobrança recomeça no aviso.
  * - Idempotência: dedup por (profile_user_id, event_id, channel='whatsapp').
