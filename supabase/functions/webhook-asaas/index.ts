@@ -761,7 +761,30 @@ Deno.serve(async (req) => {
               `[webhook-asaas] dunning WhatsApp sent=${waResult.sent} skip=${waResult.skipped || "-"} err=${waResult.error || "-"}`,
             );
           } else {
-            console.warn(`[webhook-asaas] OVERDUE sem user_id resolvido — WhatsApp não enviado`);
+            // MODO DEGRADADO: sem profile no banco, ainda avisamos usando o
+            // telefone do cliente no Asaas + link da fatura.
+            const degradedPhone = phone || null;
+            const degradedLink = (updated?.invoice_url as string | null)
+              || (payment as any)?.invoiceUrl
+              || "https://olaaura.com.br/v2/checkout";
+            if (degradedPhone) {
+              const { sendDunningWhatsAppDegraded } = await import("../_shared/dunning-whatsapp.ts");
+              const degraded = await sendDunningWhatsAppDegraded({
+                supabase,
+                phone: degradedPhone,
+                name: name || null,
+                link: degradedLink,
+                eventId: `asaas-${event}-${payment.id}`,
+                provider: "asaas",
+                paymentId: payment.id,
+                subscriptionId: overdueSubscriptionId,
+              });
+              console.log(
+                `[webhook-asaas] dunning degradado sent=${degraded.sent} skip=${degraded.skipped || "-"} err=${degraded.error || "-"}`,
+              );
+            } else {
+              console.warn(`[webhook-asaas] OVERDUE sem user_id e sem telefone — WhatsApp não enviado`);
+            }
           }
         } catch (waErr) {
           console.error("[webhook-asaas] erro disparando dunning WhatsApp:", waErr);
