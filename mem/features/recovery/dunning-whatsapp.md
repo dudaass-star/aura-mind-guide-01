@@ -8,7 +8,7 @@ Disparo automático de WhatsApp para usuários com falha de pagamento, em parale
 
 - Helper: `supabase/functions/_shared/dunning-whatsapp.ts` (`sendDunningWhatsApp`).
 - **Cadência por ciclo de cobrança** (2 avisos antes da escada, `DUNNING_NOTICE_STEPS = 2`):
-  1. Aviso — template genérico utility `HXaf4af1e1f5d4cf40b6fff6b5b68df29a` (`{{1}}` primeiro nome, `{{2}}` URL completa `https://olaaura.com.br/pagamento?t=<token>`), sem restrição de horário.
+  1. Aviso — template genérico utility **`dunning_notice_v2` = `HX68e8ebce4c2ca1750a12ee20e4d2892a`** (`{{1}}` primeiro nome, `{{2}}` **somente o token** do portal; o botão já é `https://olaaura.com.br/pagamento?t={{2}}`), sem restrição de horário. `system_config.dunning_notice_content_sid` sobrepõe sem deploy. O antigo `HXaf4af1e1f5d4cf40b6fff6b5b68df29a` era MARKETING e devolvia ErrorCode 63027 no sender atual — nenhum aviso 1/2 chegava (06–07/08/2026).
   2. Aviso — mesmo template.
   3. Oferta `discount_30` → `HX50cb75b6bb3cd9ae56ef2d9c6adc4781`
   4. Oferta `lite` → `HX18e81fa401b8487c360f085e9b83630f`
@@ -16,8 +16,9 @@ Disparo automático de WhatsApp para usuários com falha de pagamento, em parale
 - O degrau `base` (R$ 9,90) **não** existe mais no WhatsApp — vive só dentro de `/cancelar`. O template `HX65a53c5b0bb1dd7868146ee118c125fb` ficou ocioso.
 - **Escada por método de pagamento**: PIX usa `DUNNING_OFFER_LADDER_PIX` e **pula o degrau de 30%** (`apply_discount_3m` é recusado no PIX Asaas por falta de cartão salvo → seria beco sem saída). PIX: 2 avisos → Lite (teto 3 envios). Cartão: 2 avisos → 30% → Lite (teto 4). O método chega via `paymentMethod` (webhook-asaas passa `payment_method`; `card_retry_asaas` passa CREDIT_CARD; `dunning_pix_followup` passa PIX; tarefas adiadas guardam `payment_method` no payload).
 - **Link de oferta para PIX Automático/avulso** (sem `asaas_subscription_id`): `handleAsaasPix` recebe `offeredTier` e devolve `status: "no_gateway_subscription"` + `offer` em vez de "Nenhuma assinatura PIX ativa encontrada", pro front mostrar a escada/reativação.
-- Template de aviso `HXaf4af1e1f5d4cf40b6fff6b5b68df29a` cadastrado em `whatsapp_templates` (`dunning_notice`, utility, 2 vars) só para visibilidade no admin — o envio usa o SID direto.
-- **Atenção a drift de deploy**: entre 27/07 e 04/08/2026 a versão publicada ainda começava no 30% (attempt 1 com `HX50cb75...` em `dunning_attempts`). Depois de mexer no helper, sempre republicar `stripe-webhook`, `webhook-asaas`, `execute-scheduled-tasks`, `reprocess-dunning`, `webhook-twilio-recovery` e conferir em `dunning_attempts` que a tentativa 1 grava `HXaf4af1...`.
+- **Atenção a drift de deploy**: entre 27/07 e 04/08/2026 a versão publicada ainda começava no 30% (attempt 1 com `HX50cb75...` em `dunning_attempts`). Depois de mexer no helper, sempre republicar `stripe-webhook`, `webhook-asaas`, `execute-scheduled-tasks`, `reprocess-dunning`, `webhook-twilio-recovery` e conferir em `dunning_attempts` que a tentativa 1 grava `HX68e8eb...`.
+- **63027 (template inexistente no sender)**: `webhook-twilio-recovery` marca `whatsapp_sent=false` + `error_stage='twilio_delivery_failed'` (não queima cota), manda e-mail na hora e escala direto pro primeiro degrau de oferta.
+- `reprocess-dunning` é WhatsApp-first: quando existe profile, dispara `sendDunningWhatsApp` (degrau do ciclo, grava `offer_tier`) **e** o e-mail; sem profile, cai em `sendDunningWhatsAppDegraded` com telefone/link do gateway.
 - Templates de oferta são Marketing → só disparam entre **08h e 21h BRT**; fora da janela o envio é adiado via `scheduled_tasks` (`task_type = 'dunning_offer_whatsapp'`, executado por `execute-scheduled-tasks`).
 - `/cancelar` lê `?offer=<tier>` e coloca/destaca o card correspondente no topo da escada de retenção.
 - Secrets reutilizados: `TWILIO_RECOVERY_ACCOUNT_SID/AUTH_TOKEN/FROM`.

@@ -1,7 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import Stripe from "https://esm.sh/stripe@14.21.0";
 import { resolveProfile } from "../_shared/profile-resolver.ts";
-import { sendDunningWhatsAppDegraded } from "../_shared/dunning-whatsapp.ts";
+import { sendDunningWhatsApp, sendDunningWhatsAppDegraded } from "../_shared/dunning-whatsapp.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -165,7 +165,25 @@ Deno.serve(async (req) => {
         }
       } catch (_) { /* use full URL */ }
 
-      // 7. Send dunning email instead of WhatsApp
+      // 7a. WhatsApp é o canal principal de recuperação: dispara o degrau da
+      // cadência do ciclo (aviso 1/2 → 30% off → Lite). O helper grava o
+      // próprio registro em dunning_attempts e respeita o teto por ciclo.
+      try {
+        const wa = await sendDunningWhatsApp({
+          supabase,
+          profile: { user_id: profile.user_id, phone: profile.phone, name: profile.name },
+          eventId: `${dunningRecord.event_id}-wa`,
+          provider: 'stripe',
+          invoiceId: invoice?.id || null,
+          subscriptionId: dunningRecord.subscription_id,
+          customerId,
+        });
+        report.whatsapp = wa;
+      } catch (waErr) {
+        report.whatsapp = { sent: false, error: waErr instanceof Error ? waErr.message : String(waErr) };
+      }
+
+      // 7b. E-mail como canal secundário (sempre acompanha o WhatsApp).
       const userName = profile.name || cust.name || 'Cliente';
       const recipientEmail = profile.email || cust.email;
 
