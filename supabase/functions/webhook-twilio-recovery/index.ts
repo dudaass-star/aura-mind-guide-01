@@ -67,17 +67,6 @@ Deno.serve(async (req) => {
         console.warn(
           `⚠️ [recovery-webhook] entrega falhou sid=${messageSid} status=${messageStatus} code=${errorCode}`,
         );
-        // whatsapp_sent=false + error_stage preenchido ⇒ o degrau não conta na
-        // cota da escada (ver dunning-whatsapp.ts) e pode ser reofertado depois.
-        await supabaseCb
-          .from("dunning_attempts")
-          .update({
-            whatsapp_sent: false,
-            error_stage: "twilio_delivery_failed",
-            error_message: `${messageStatus} (ErrorCode ${errorCode})`,
-          })
-          .eq("message_sid", messageSid);
-
         // Fallback: entrega falhou ⇒ e-mail hoje + nova tentativa de WhatsApp amanhã 09h BRT.
         try {
           // A Twilio pode entregar o status final ANTES do insert do attempt
@@ -97,6 +86,19 @@ Deno.serve(async (req) => {
           if (!att) {
             console.warn(`⚠️ [recovery-webhook] attempt não encontrado para sid=${messageSid} — sem retry`);
           }
+
+          // whatsapp_sent=false + error_stage preenchido ⇒ o degrau não conta na
+          // cota da escada (ver dunning-whatsapp.ts) e pode ser reofertado depois.
+          // Só depois da releitura, senão o UPDATE roda antes da linha existir e
+          // o envio falho continuaria marcado como entregue.
+          await supabaseCb
+            .from("dunning_attempts")
+            .update({
+              whatsapp_sent: false,
+              error_stage: "twilio_delivery_failed",
+              error_message: `${messageStatus} (ErrorCode ${errorCode})`,
+            })
+            .eq("message_sid", messageSid);
 
           if (att?.profile_user_id) {
             // 1) Reagenda o MESMO degrau pra amanhã 09h BRT (12h UTC).
