@@ -333,30 +333,51 @@ export async function sendDunningWhatsApp(
 
   try {
     const statusCallback = `${Deno.env.get("SUPABASE_URL")}/functions/v1/webhook-twilio-recovery`;
-    const result = await sendRecoveryTemplate(profile.phone, contentSid, variables, statusCallback);
+    let result = await sendRecoveryTemplate(profile.phone, contentSid, variables, statusCallback);
+    let usedSid = contentSid;
+    let usedTier: DunningOfferTier | "generic" = tier;
+    let usedLink = link;
+
+    // Fallback do aviso genérico: se o template utility falhar no POST
+    // (ex.: 63027 — template inexistente para o sender/locale), o ciclo ficava
+    // 100% silencioso. Nesse caso escalamos direto pro primeiro degrau de
+    // oferta, que é o único template comprovadamente entregável hoje.
+    if (!result.success && !useOffer && ladder[0]?.sid && insideMarketingWindow()) {
+      console.warn(`[dunning-whatsapp] aviso genérico falhou (${result.error}); escalando para ${ladder[0].tier}`);
+      usedTier = ladder[0].tier;
+      usedSid = ladder[0].sid!;
+      usedLink = `https://olaaura.com.br/cancelar?t=${token}&offer=${usedTier}`;
+      result = await sendRecoveryTemplate(
+        profile.phone,
+        usedSid,
+        { "1": firstName(profile.name), "2": `t=${token}&offer=${usedTier}` },
+        statusCallback,
+      );
+    }
+
     if (result.success) {
       await supabase.from("dunning_attempts").insert({
         ...baseRecord,
-        template_sid: contentSid,
+        template_sid: usedSid,
         attempt_number: attemptNumber,
-        offer_tier: tier,
+        offer_tier: usedTier,
         link_generated: true,
         whatsapp_sent: true,
         message_sid: result.messageSid || null,
       });
-      return { sent: true, attemptNumber, messageSid: result.messageSid, link, tier };
+      return { sent: true, attemptNumber, messageSid: result.messageSid, link: usedLink, tier: usedTier };
     }
 
     await supabase.from("dunning_attempts").insert({
       ...baseRecord,
-      template_sid: contentSid,
+      template_sid: usedSid,
       attempt_number: attemptNumber,
-      offer_tier: tier,
+      offer_tier: usedTier,
       link_generated: true,
       error_stage: "twilio_send_failed",
       error_message: result.error || `HTTP ${result.status}`,
     });
-    return { sent: false, error: result.error || `HTTP ${result.status}`, link, tier };
+    return { sent: false, error: result.error || `HTTP ${result.status}`, link: usedLink, tier: usedTier };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     await supabase.from("dunning_attempts").insert({
