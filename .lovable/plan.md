@@ -1,63 +1,69 @@
-# Dunning: diagnóstico do WhatsApp e do e-mail
+# Recuperação de pagamento: 4 furos que estão deixando clientes sair sem receber nada
 
-Justo o toque — o diagnóstico anterior ficou pendendo pro e-mail. Refiz olhando canal por canal. O WhatsApp é onde estão as perdas maiores.
+Auditoria dos últimos 30 dias, canal por canal. A escada de ofertas em si está certa. O problema é que muita gente nunca chega a receber o primeiro aviso.
 
-## Placar dos últimos 30 dias
+## O que já funciona
 
-| Canal | Registros | Entregues |
+- Cadência no WhatsApp desde 05/08: aviso 1 → aviso 2 → 30% off → Lite, com os templates certos (conferido nos envios de 05, 06 e 07/08).
+- Cadência no e-mail rodando em paralelo.
+- Registros antigos com oferta na primeira tentativa e teto de 2 mensagens são de antes da correção — não voltam a acontecer.
+
+## O que não funciona
+
+| Furo | Casos em 30 dias | Consequência |
 |---|---|---|
-| WhatsApp (dunning) | 96 | 35 |
-| E-mail (`dunning-payment-failed`) | 82 | 57 |
-| Win-back pós-cancelamento (WhatsApp) | 0 | 0 |
+| 1. Win-back pós-cancelamento nunca disparou | 30 cancelados, 0 mensagens | Ninguém é convidado a voltar |
+| 2. Renovação de assinante ativo descartada | 19 faturas | Cliente ativo perde acesso sem nenhum aviso |
+| 3. Cliente sem perfil no banco = silêncio total | 44 casos | Nem WhatsApp nem e-mail saem |
+| 4. Falha de entrega no WhatsApp sem plano B | 3 casos | Degrau pulado, nada cobre |
 
-Cadência no WhatsApp já está correta desde ~05/08: aviso 1 → aviso 2 → 30% off → Lite, com os ContentSids certos (verifiquei os registros de 05, 06 e 07/08). Os registros antigos com oferta na tentativa 1 e `limite 2` são de antes da correção de 2 avisos — não voltam a acontecer.
+---
 
-## Falha 1 — Win-back pós-cancelamento nunca disparou (WhatsApp)
+## Furo 1 — O win-back nunca rodou
 
-Existe a função `winback-canceled-users` (D+3 / D+14 / D+30, template `aura_reconnect_v2`). No banco: **32 perfis cancelados, 30 com data de cancelamento, e zero win-back enviado — nenhum, nunca.** As três colunas de controle estão todas vazias.
+Existe a rotina `winback-canceled-users` (D+3, D+14, D+30, template aprovado `aura_reconnect_v2`). No banco: 32 perfis cancelados, 30 com data de cancelamento e **zero** win-back registrado — as três colunas de controle estão todas vazias, nunca preenchidas.
 
-Ou seja: quem cancela ou cai por falta de pagamento sai do radar do WhatsApp por completo. O degrau Base (R$ 9,90) só existe na página `/cancelar`, e ninguém é levado até lá.
+Quem cancela ou cai por falta de pagamento sai do radar por completo. O degrau Base de R$ 9,90 só existe dentro da página `/cancelar`, e ninguém é levado até lá.
 
-Correção: descobrir por que o cron não roda (agendamento ausente ou gate interno bloqueando), rodar em modo seco pra ver quantos elegíveis existem hoje, e ligar de fato. Sem isso, os outros ajustes rendem pouco.
+O que fazer: descobrir por que a rotina não roda (agendamento ausente ou trava interna), rodar em modo seco para ver quantos elegíveis existem hoje, e então ligar de verdade.
 
-## Falha 2 — Sem perfil = nenhum canal fala (44 casos em 14 dias)
+## Furo 2 — Renovação de assinante ativo sendo descartada
 
-Quando o telefone do gateway não casa com nenhum perfil, o webhook aborta antes de tudo. Não sai WhatsApp **e** não sai e-mail — apesar de o telefone e o e-mail estarem ali, na mão, vindos do gateway.
+19 faturas de renovação de clientes ativos foram descartadas pelo webhook sem gerar nenhum aviso.
 
-Caso real confirmado no Stripe: cliente do Direção (R$ 49,90) acumulou 8 falhas e teve a assinatura cancelada por falta de pagamento **sem receber uma única mensagem em nenhum canal**. Ao menos 12 clientes distintos assim em 3 semanas.
+Caso conferido agora no Stripe: fatura `in_1TwiP0…`, cliente do **Transformação R$ 79,90**, motivo da cobrança `subscription_cycle` (renovação normal do mês), assinatura viva, **9 tentativas de cobrança falhadas**, fatura aberta e não paga. Nenhuma mensagem saiu em nenhum canal.
 
-Correção nos dois canais:
-- **WhatsApp**: usar o telefone que veio do gateway e enviar o aviso utility pelo número de recuperação, com link curto do portal de cobrança no lugar do link de portal do usuário (que depende de perfil).
-- **E-mail**: enviar o `dunning-payment-failed` com o e-mail do gateway.
+Causa: o Stripe mudou o formato do dado. A assinatura agora vem em `parent.subscription_details.subscription` e o código ainda lê o campo antigo `subscription`; não achando, ele encerra o processamento.
 
-## Falha 3 — Falha de entrega no WhatsApp não tem plano B (3 casos)
+Isso não tem relação com carrinho abandonado — o fluxo de carrinho continua separado e intocado. Aqui são clientes que já pagam e falharam na renovação.
 
-A Twilio aceita o envio e depois o callback marca `failed` (ErrorCode 63027). Hoje isso só vira linha de log: o degrau não é reenviado no mesmo ciclo e nenhum outro canal cobre a lacuna.
+## Furo 3 — Cliente sem perfil no banco não recebe nada
 
-Correção: quando o callback marcar falha de entrega, disparar o e-mail equivalente daquele degrau e reagendar uma tentativa de WhatsApp no dia seguinte, dentro da janela permitida.
+Quando o telefone vindo do gateway não casa com nenhum perfil, o webhook aborta antes de tudo: não sai WhatsApp e não sai e-mail — mesmo com telefone e e-mail na mão, vindos do próprio gateway.
 
-## Falha 4 — renovação de cliente ativo descartada (19 casos)
+44 ocorrências em 14 dias, pelo menos 12 clientes distintos. Um deles, do Direção R$ 49,90, acumulou 8 falhas e teve a assinatura cancelada sem uma única mensagem.
 
-Aqui não tem nada a ver com carrinho abandonado — me expressei mal antes. Fui conferir uma a uma: são **19 faturas de renovação de assinantes ativos** em 30 dias que o webhook descartou com o motivo `no_subscription_on_invoice`.
+O que fazer: quando não houver perfil, seguir em modo degradado nos dois canais — WhatsApp para o telefone do gateway (com link curto do portal de cobrança, que não depende de token de usuário) e e-mail para o endereço do gateway.
 
-Exemplo real conferido no Stripe agora: fatura `in_1TwiP0…`, cliente do **Transformação R$ 79,90**, motivo da cobrança `subscription_cycle` (renovação de mês), assinatura `sub_1TY3ym…` viva, **9 tentativas de cobrança falhadas**, fatura ainda aberta e não paga. Nenhum aviso saiu — nem WhatsApp, nem e-mail — porque o código não conseguiu ler a assinatura dentro da fatura e abortou.
+## Furo 4 — Falha de entrega no WhatsApp fica sem cobertura
 
-A causa é técnica: o Stripe mudou o formato e agora a assinatura vem em `parent.subscription_details.subscription`, não mais no campo `subscription` que o código lê. Toda renovação que falha cai nesse buraco.
+A Twilio aceita o envio e depois avisa que não entregou (erro 63027). Hoje isso só vira linha de log: o degrau não é reenviado e nenhum outro canal cobre a lacuna.
 
-A correção é só ler o campo novo antes de desistir. O fluxo de carrinho abandonado continua separado e intocado — ele trata quem nunca virou assinante; este trata quem já é cliente e falhou na renovação. Não há mistura entre os dois.
+O que fazer: ao receber a confirmação de não entrega, disparar o e-mail equivalente daquele degrau e reagendar uma tentativa de WhatsApp para o dia seguinte, dentro da janela permitida.
 
-## Falha 5 — `offer_tier` nunca é gravado (auditoria cega)
+## Auditoria — hoje é cega
 
-280 tentativas, zero com o degrau registrado. Sem isso não há como responder "quantos receberam a oferta de 30%?" nem medir aceite por degrau no WhatsApp. Gravar `offer_tier` e `days_past_due` em todos os registros.
+280 tentativas registradas, nenhuma com o degrau da escada gravado. Não há como responder "quantos receberam a oferta de 30%?" nem medir aceite por degrau. Passar a gravar o degrau e os dias de atraso em todo registro, e mostrar no painel a distribuição por degrau mais as linhas de "sem perfil", "não entregue" e "win-back enviados".
 
 ## Escopo técnico
 
-- `supabase/functions/winback-canceled-users/index.ts` + agendamento: investigar a não execução, rodar em dry-run e ativar o cron diário 10h BRT.
-- `supabase/functions/_shared/dunning-whatsapp.ts`: aceitar telefone e nome vindos do gateway quando não houver perfil (link = portal de cobrança, sem token de usuário); persistir `offer_tier` e `days_past_due`.
-- `supabase/functions/stripe-webhook/index.ts` e `webhook-asaas/index.ts`: nos ramos `profile_not_found` e `no_subscription_on_invoice` (renovação), seguir para WhatsApp + e-mail em modo degradado, com `error_stage` próprio para auditoria.
-- `supabase/functions/webhook-twilio-recovery/index.ts`: ao marcar falha de entrega, acionar e-mail equivalente e reagendar o degrau.
-- `src/pages/AdminEngagement.tsx`: distribuição por degrau (aviso 1, aviso 2, 30%, Lite), linhas separadas para "sem perfil", "falha de entrega" e "win-back enviados".
+- `winback-canceled-users` + agendamento: investigar a não execução, rodar dry-run, ativar cron diário 10h BRT.
+- `stripe-webhook/index.ts`: ler `parent.subscription_details.subscription` como fallback antes de descartar a fatura.
+- `stripe-webhook/index.ts` e `webhook-asaas/index.ts`: no ramo sem perfil, seguir para WhatsApp + e-mail em modo degradado com `error_stage` próprio.
+- `_shared/dunning-whatsapp.ts`: aceitar telefone/nome do gateway sem perfil; persistir `offer_tier` e `days_past_due`.
+- `webhook-twilio-recovery/index.ts`: ao marcar não entrega, acionar e-mail do degrau e reagendar o WhatsApp.
+- `src/pages/AdminEngagement.tsx`: distribuição por degrau e as três linhas novas de diagnóstico.
 
 ## Fora de escopo
 
-Valores das ofertas, templates aprovados, janela 08h–21h BRT e a cadência PIX (D0/D+2/D+4) ficam como estão.
+Valores das ofertas, templates aprovados, janela 08h–21h BRT, cadência PIX (D0/D+2/D+4) e o fluxo de carrinho abandonado ficam exatamente como estão.
