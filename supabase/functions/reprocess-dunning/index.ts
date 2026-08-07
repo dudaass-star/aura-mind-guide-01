@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import Stripe from "https://esm.sh/stripe@14.21.0";
 import { resolveProfile } from "../_shared/profile-resolver.ts";
+import { sendDunningWhatsAppDegraded } from "../_shared/dunning-whatsapp.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -81,6 +82,40 @@ Deno.serve(async (req) => {
         dunningRecord.error_stage = 'profile_not_found';
         dunningRecord.error_message = report.reason;
         await supabase.from('dunning_attempts').insert(dunningRecord);
+
+        // Modo degradado: sem profile ainda dá pra recuperar o pagamento —
+        // usamos o telefone do gateway + link da fatura/portal (aviso genérico).
+        if (rawPhone) {
+          let degradedLink = invoice?.hosted_invoice_url || null;
+          if (!degradedLink) {
+            try {
+              const portal = await stripe.billingPortal.sessions.create({
+                customer: customerId,
+                return_url: 'https://olaaura.com.br',
+              });
+              degradedLink = portal.url;
+            } catch (_) { /* sem link → não envia */ }
+          }
+          if (degradedLink) {
+            const degraded = await sendDunningWhatsAppDegraded({
+              supabase,
+              phone: rawPhone,
+              name: cust.name,
+              link: degradedLink,
+              eventId: `${dunningRecord.event_id}-degraded`,
+              provider: 'stripe',
+              invoiceId: invoice?.id || null,
+              subscriptionId: dunningRecord.subscription_id,
+              customerId,
+            });
+            report.degraded_whatsapp = degraded;
+          } else {
+            report.degraded_whatsapp = { sent: false, skipped: 'no_link' };
+          }
+        } else {
+          report.degraded_whatsapp = { sent: false, skipped: 'no_phone' };
+        }
+
         results.push(report);
         continue;
       }
