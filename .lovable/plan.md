@@ -1,74 +1,75 @@
-# PIX recorrente: sair do Asaas bloqueado usando Pix Automático do Stripe
+# PIX Automático recorrente na Woovi (substituindo o Asaas bloqueado)
 
-## O que a pesquisa mostrou
+## Respondendo direto: onde clicar nessa tela
 
-Fui atrás do Pix Automático (Bacen) em cada provedor. Resultado:
+Na tela **API/Plugins** que você abriu:
 
-- **Mercado Pago: não tem API de Pix Automático.** O índice oficial de documentação (`developers/pt/docs/llms.txt`) lista apenas Pix à vista (Checkout API, Bricks, Orders, reembolso). As páginas de assinatura (`/subscriptions`, `/preapproval`) só aceitam cartão. Existe comunicação de marketing no blog do Mercado Pago sobre Pix Automático, mas nenhuma rota pública documentada — as URLs candidatas de doc retornam 404. Ou seja: integrar Pix Automático via Mercado Pago hoje seria apostar em algo sem documentação.
-- **Stripe TEM Pix Automático nativo, com mandato Bacen.** Documentado em `docs.stripe.com/payments/pix/pix-automatico`: o cliente autoriza o mandato no app do banco, o Stripe dispara a pré-notificação de 3 dias, espera e debita sozinho. Funciona com **Stripe Billing/Subscriptions**, tem retentativas automáticas (1x por dia por 3 dias) e suporta Connect.
-- Nossa conta Stripe é **brasileira** (`country: BR`, `default_currency: brl`, `charges_enabled: true`), que é o requisito de localização do Pix. Hoje as capabilities ativas são `card_payments` e `boleto_payments` — **`pix_payments` ainda não está ativa**, então o Pix precisa ser habilitado no painel do Stripe antes de qualquer código rodar.
-- Alternativas com Pix Automático documentado, caso o Stripe negue: Iugu, Woovi, Efí, BTG.
+1. Aba **API/Plugins** → card **API REST** → **Adicionar**. Isso cria um App e gera o **AppID** (é o token que vai no header `Authorization`). Guarde o valor — só aparece na criação (depois em "Visualização de credenciais").
+2. No mesmo lugar → card **Webhook** → **Adicionar**. URL a cadastrar (vou te passar depois de criar a função):
+   `https://<projeto>.supabase.co/functions/v1/webhook-woovi`
+   Eventos a marcar: cobrança paga/expirada + **todos os de Pix Automático** (autorização e cobrança recorrente).
+3. Antes disso, confirme na conta: **Pix Automático habilitado** (Configurações da Empresa / Ajuda-Sobre). Se o recurso não estiver liberado pra sua conta, a criação de assinatura `PIX_RECURRING` volta erro — nesse caso é só pedir a liberação no suporte deles.
 
-**Conclusão:** o caminho de menor risco não é Mercado Pago — é levar o PIX recorrente para dentro do Stripe, que já é nosso gateway de cartão, já tem os preços, os webhooks, o dunning e o portal funcionando.
+Só preciso de você: o **AppID** (guardo como secret `WOOVI_APP_ID`). O resto é código.
+
+## O que a documentação confirma (checado agora)
+
+A Woovi tem Pix Automático Bacen de verdade, e o modelo é quase idêntico ao que já construímos no Asaas:
+
+- `POST /api/v1/subscriptions` com `type: "PIX_RECURRING"`, `frequency` (`WEEKLY`, `MONTHLY`, `QUARTERLY`, `SEMIANNUALLY`, `ANNUALLY` — cobre nossos 4 ciclos), `dayGenerateCharge` (dia do mês ou data ISO), `dayDue`, `comment` (contrato, < 30 chars).
+- `pixRecurringOptions`: `journey: "PAYMENT_ON_APPROVAL"` (paga e autoriza no mesmo QR — o que a gente quer), `retryPolicy: "THREE_RETRIES_7_DAYS"` (mesma política 3R/7D do Asaas), `minimumValue` para valor variável.
+- Estados separados: assinatura (`ACTIVE/EXPIRED/INACTIVE`), mandato `pixRecurring` (`CREATED → APPROVED`, `REJECTED` = cliente removeu no app do banco, `CANCELED` = nós cancelamos), parcela (`SCHEDULED → ACTIVE → COMPLETED/EXPIRED`).
+- **Valor variável resolve a semana de R$ 6,90**: manda `value = 690` + `minimumValue = 690`; a primeira parcela (paga na aprovação) sai 6,90, e depois `PUT /api/v1/subscriptions/{id}/value` sobe pro mensal cheio. Se precisar de controle fino, `POST /api/v1/installments/{id}/cobr` cria a cobrança da parcela com o valor que eu mandar.
+- Webhooks de Pix Automático incluem `PIX_AUTOMATIC_COBR_TRY_REJECTED` (falha imediata) e `PIX_AUTOMATIC_COBR_REJECTED` (falhou até expirar) — é exatamente o gancho que o dunning precisa.
 
 ## Objetivo
 
-1. Parar de vender PIX quebrado enquanto o Asaas está bloqueado.
-2. Reconstruir o PIX recorrente no Stripe, mantendo a regra comercial atual: **1ª semana R$ 6,90 e depois o valor mensal cobrado automaticamente**.
-3. Manter o Asaas apenas para os assinantes PIX que já existem, sem novas vendas por lá.
+1. PIX recorrente voltando a vender **hoje**, sem depender da conta bloqueada do Asaas.
+2. Manter a regra comercial: **1ª semana R$ 6,90 (ou 11,90 / 24,90) e depois o mensal cheio no débito automático**; Tri/Sem/Anual à vista + recorrência, sem trial.
+3. Asaas em modo somente-legado: os assinantes PIX atuais continuam lá, nenhuma venda nova.
 
-## Fase 0 — Fechar a torneira (hoje, independente do resto)
+## Fase 0 — Fechar a torneira do Asaas
 
-- Criar `asaas-health-check`: chama um endpoint operacional do Asaas, classifica `ok | blocked | invalid` e grava em `system_config` (`asaas_operational_status`).
-- Cron de 15 min atualizando esse status.
-- `CheckoutV2.tsx` lê o status: com `blocked`, o botão PIX sai da UI (ou vira "PIX temporariamente indisponível") em vez de gerar um QR que nunca nasce.
-- Alerta no admin quando o status muda.
+- `asaas-health-check`: bate num endpoint operacional, classifica `ok | blocked | invalid` e grava em `system_config.asaas_operational_status`. Cron de 15 min.
+- Novo `system_config.pix_gateway` (`woovi` | `asaas`) — chave única pra virar o trilho de PIX sem deploy, no padrão do `card_gateway` que já existe no AdminSettings.
+- `CheckoutV2.tsx` respeita as duas chaves: PIX aponta pra Woovi; se a Woovi cair, PIX some da UI em vez de gerar QR que não nasce.
 
-Isso é o item que para o vazamento de conversão agora.
+## Fase 1 — Criar a assinatura Woovi
 
-## Fase 1 — Habilitar Pix no Stripe (ação sua, no painel)
+Nova função `criar-pix-recorrente-woovi`, espelhando `criar-pix-recorrente-asaas`:
 
-Pré-requisito bloqueante para as fases seguintes: ativar **Pix** e **Pix Automático** em Configurações → Métodos de pagamento do Stripe. Vou confirmar por API quando a capability `pix_payments` aparecer como `active`.
+- Mensal: `value = trial (690/1190/2490)`, `minimumValue = trial`, `frequency: MONTHLY`, `journey: PAYMENT_ON_APPROVAL`, `dayGenerateCharge = hoje`, `retryPolicy: THREE_RETRIES_7_DAYS`. QR imediato cobra o trial e autoriza o mandato.
+- Tri/Sem/Anual: valor cheio, `frequency` correspondente, sem trial.
+- Retornante (`isReturningCustomer`) não pega trial — mesma regra que já vale hoje.
+- Grava `woovi_subscription_id`, `correlationID` e `mandate_status` no registro de pagamento, e devolve `brCode` + QR pro modal do checkout.
+- CPF e **endereço completo** são obrigatórios na Woovi — o checkout já coleta CPF; endereço entra via CEP (só CEP + número, o resto autocompleta) ou usamos o endereço da empresa quando a Woovi aceitar.
 
-## Fase 2 — Assinatura PIX no Stripe com a 1ª semana a R$ 6,90
+## Fase 2 — Webhook e ciclo de vida
 
-Reaproveita exatamente a mecânica que já usamos no cartão:
+Nova função `webhook-woovi` (verify_jwt = false, validação de assinatura do webhook):
 
-- `create-checkout` passa a aceitar `paymentMethod: 'pix'` e cria uma Subscription com `payment_method_types: ['pix']`.
-- Mandato configurado via `payment_method_options[pix][mandate_options]`:
-  - `amount` = teto do ciclo (valor mensal do plano com folga para reajuste), `amount_type: maximum`;
-  - `payment_schedule: monthly`;
-  - `reference` = nome do plano que aparece no app do banco;
-  - `amount_includes_iof` definido de forma explícita (quem paga o IOF).
-- Semana promocional: mesma estrutura do cartão — primeiro ciclo de 7 dias a R$ 6,90 e, no fim dele, o Stripe cobra o valor mensal cheio pelo mandato já autorizado.
-- Ciclos longos (Tri/Sem/Anual) entram com o `payment_schedule` correspondente, sem trial.
+- Cobrança do trial paga → ativa o plano com 7 dias de `plan_expires_at`, marca `is_trial` (mesma tolerância de R$ 0,50 que o `webhook-asaas` usa).
+- Mandato `APPROVED` → agenda a subida do valor: `PUT /subscriptions/{id}/value` para o mensal cheio, com a próxima parcela em D+7.
+- Parcela `COMPLETED` → estende o ciclo normalmente.
+- `PIX_AUTOMATIC_COBR_TRY_REJECTED` → não é churn ainda: entra na janela de retentativa, dunning silenciado.
+- `PIX_AUTOMATIC_COBR_REJECTED` → aciona o dunning PIX que já existe (2 avisos → escada de ofertas).
+- `pixRecurring: REJECTED` (cliente cancelou no banco) → churn silencioso → fluxo `/reautorizar-pix` apontando pra Woovi.
+- Dedupe por `correlationID` + parcela, pra não repetir o problema da "fatura gêmea" do Asaas.
 
-## Fase 3 — Webhook e estado da assinatura
+## Fase 3 — Dunning, portal e admin
 
-- `stripe-webhook` passa a tratar os estados específicos de Pix: pagamento em `processing` (janela de 3 dias da pré-notificação), `succeeded`, `failed` e mandato cancelado pelo cliente no banco.
-- `processing` **não** pode ser tratado como inadimplência: acesso mantido, dunning silenciado durante a janela.
-- Mandato revogado no app do banco → entra no fluxo de reautorização que já existe (`/reautorizar-pix`), apontando agora para o Stripe.
-- `profiles` ganha a marcação de qual trilho o assinante usa (`stripe_card`, `stripe_pix`, `asaas_pix_legacy`), para o dunning e o portal decidirem o link certo.
-
-## Fase 4 — Dunning e portal
-
-- A cadência de 2 avisos + escada de ofertas passa a reconhecer `stripe_pix`, usando o link do Stripe (invoice hospedada / portal) em vez do QR do Asaas.
-- `customer-portal` roteia `stripe_pix` para o portal do Stripe, onde o cliente vê e cancela o mandato.
-- Asaas legado continua com a cadência atual até a base migrar.
-
-## Fase 5 — Migração da base PIX do Asaas
-
-- Campanha por WhatsApp para os assinantes PIX ativos do Asaas: link único que cria o mandato no Stripe.
-- Só depois que o cliente autoriza no Stripe é que a assinatura Asaas é encerrada — nunca antes, para não abrir buraco de cobrança.
-- Painel admin com o placar da migração (autorizados / pendentes / falhos).
+- `profiles.payment_rail` reconhece `woovi_pix` (junto de `stripe_card`, `asaas_pix_legacy`), e o dunning/portal escolhem o link certo.
+- `customer-portal`: assinante Woovi vê status do mandato e instrução de cancelamento pelo app do banco; cancelamento nosso via `DELETE`/cancel da assinatura.
+- Auditoria diária `woovi-pix-auto-audit`, no molde da do Asaas: reconcilia parcelas pagas sem webhook, mandatos `CREATED` parados e órfãos.
+- Painel admin ganha o placar de saúde do PIX Woovi (mandatos aprovados / pendentes / rejeitados).
 
 ## Detalhes técnicos
 
-- Arquivos afetados: `supabase/functions/create-checkout/index.ts`, `supabase/functions/stripe-webhook/index.ts`, `supabase/functions/customer-portal/index.ts`, `supabase/functions/_shared/dunning-whatsapp.ts`, `src/pages/CheckoutV2.tsx`, novo `supabase/functions/asaas-health-check/index.ts`.
-- Nada de camada de abstração multi-gateway agora: Stripe cobre cartão e PIX, e o Asaas fica em modo somente-leitura/legado. Menos código, menos superfície de erro.
-- Mercado Pago fica fora do escopo até existir documentação pública de Pix Automático.
-- O Asaas continua valendo uma cobrança administrativa em paralelo (a conta segue com saldo de R$ 289,29 preso e as chaves Pix removidas), mas isso não bloqueia mais a operação.
+- Secret: `WOOVI_APP_ID` (header `Authorization: <AppID>`), base `https://api.woovi.com`.
+- Arquivos: novos `supabase/functions/criar-pix-recorrente-woovi/`, `webhook-woovi/`, `woovi-pix-auto-audit/`, `asaas-health-check/`, `_shared/woovi.ts`; alterados `src/pages/CheckoutV2.tsx`, `_shared/dunning-whatsapp.ts`, `customer-portal`, `AdminSettings.tsx`.
+- Sem camada multi-gateway genérica: uma chave `pix_gateway` decide o trilho, o Asaas fica em leitura.
+- Teste real de ponta a ponta com um pagamento de R$ 6,90 no meu cartão de teste não existe pra PIX — a validação vai ser uma venda real de 6,90 sua, acompanhando o mandato até o débito de D+7.
 
-## Ordem de execução
+## Ordem
 
-Fase 0 → você habilita o Pix no Stripe (Fase 1) → Fases 2 e 3 → Fase 4 → Fase 5.
+Você cria API REST + Webhook na Woovi e me passa o AppID → Fase 0 → Fase 1 → Fase 2 → Fase 3.
