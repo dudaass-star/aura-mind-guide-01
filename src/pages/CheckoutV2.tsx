@@ -365,7 +365,6 @@ const CheckoutV2 = () => {
 
   // Mensal tem 1ª semana promocional nos DOIS meios (cartão Stripe e PIX
   // Automático Bacen): o valor de hoje é o trial e o débito cheio vem no 8º dia.
-  const trialAvailable = billingPeriod === "monthly";
   const todayAmount = pixEnabled ? currentPrice : currentPlan.trialPrice;
   const nextChargeLabel = pixEnabled
     ? `Renova automaticamente em R$ ${currentPrice}/${periodLabel}. Cancele quando quiser.`
