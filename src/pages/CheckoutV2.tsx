@@ -363,11 +363,15 @@ const CheckoutV2 = () => {
     [currentPlan],
   );
 
-  // Cobrado hoje: trial no mensal (cartão) ou o ciclo inteiro nos planos longos.
+  // Mensal tem 1ª semana promocional nos DOIS meios (cartão Stripe e PIX
+  // Automático Bacen): o valor de hoje é o trial e o débito cheio vem no 8º dia.
+  const trialAvailable = billingPeriod === "monthly";
   const todayAmount = pixEnabled ? currentPrice : currentPlan.trialPrice;
   const nextChargeLabel = pixEnabled
     ? `Renova automaticamente em R$ ${currentPrice}/${periodLabel}. Cancele quando quiser.`
-    : `Depois R$ ${currentPrice}/mês, a partir do 8º dia. Cancele antes e não paga nada.`;
+    : payMethod === "pix"
+      ? `Depois R$ ${currentPrice}/mês no débito automático, a partir do 8º dia. Cancele quando quiser.`
+      : `Depois R$ ${currentPrice}/mês, a partir do 8º dia. Cancele antes e não paga nada.`;
   const summaryBenefits = useMemo(
     () => [
       ...currentPlan.highlights,
@@ -915,6 +919,9 @@ const CheckoutV2 = () => {
           email: email.trim(),
           phone: phone.replace(/\D/g, ""),
           cpf: cpf.replace(/\D/g, ""),
+          // Trial semanal também no PIX Automático (só mensal; o backend nega
+          // pra retornante e cai no valor cheio sozinho).
+          ...(pixMode === "subscription" && billingPeriod === "monthly" ? { trial: true } : {}),
           ...(fbp && { fbp }),
           ...(fbc && { fbc }),
           ...(gaClientId && { gaClientId }),
