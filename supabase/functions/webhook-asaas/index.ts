@@ -38,6 +38,17 @@ const CYCLE_DAYS: Record<string, number> = {
   yearly: 372,
 };
 
+// Dias liberados quando o pagamento é a 1ª semana promocional do PIX Automático.
+const TRIAL_DAYS = 7;
+
+// Um pagamento é "da 1ª semana" quando a autorização foi criada com trial e o
+// valor pago bate com o valor do trial (tolerância R$ 0,50 por arredondamento).
+function isTrialPayment(authRow: any, paidValue: number): boolean {
+  const trialCents = Number(authRow?.trial_value_cents || 0);
+  if (!authRow?.is_trial || !trialCents) return false;
+  return Math.abs(paidValue - trialCents / 100) <= 0.5;
+}
+
 // Normaliza o billing period pra chave que o portal/plan-pricing usa ("semiannual").
 // Legacy: rows antigas de asaas_payments podem trazer "semestral".
 function normalizeBillingCycle(bp: string): string {
