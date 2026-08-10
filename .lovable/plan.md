@@ -1,82 +1,54 @@
-# Conta Asaas: o que a API mostra e como resolver
+# Mercado Pago como alternativa ao PIX do Asaas
 
-## Diagnóstico (verificado agora via API de produção)
+## Onde estamos (verificado agora)
 
-A chave `ASAAS_API_KEY` **é válida** — não é problema de credencial:
+- A chave `ASAAS_API_KEY` **autentica** (`GET /finance/balance` → 200, saldo R$ 289,29), mas todo endpoint operacional responde **401 com corpo vazio** (`/payments`, `/customers`, `/subscriptions`, `/pix/addressKeys`, `/pix/automatic/authorizations`, `/myAccount`, `/webhooks`). Chave inválida devolveria `invalid_access_token` — não é o caso. Isso é conta restrita, não credencial errada.
+- Último pagamento Asaas registrado: **05/08/2026 23:14**. Nada depois. O trilho PIX está fora do ar há 5 dias.
 
-```text
-GET /v3/finance/balance      → 200  { "balance": 289.29 }
-GET /v3/customers            → 401  (corpo vazio)
-GET /v3/payments             → 401  (corpo vazio)
-GET /v3/subscriptions        → 401  (corpo vazio)
-GET /v3/pix/addressKeys      → 401  (corpo vazio)
-GET /v3/pix/automatic/authorizations → 401 (corpo vazio)
-GET /v3/myAccount            → 401  (corpo vazio)
-GET /v3/webhooks             → 401  (corpo vazio)
-```
+Conclusão: hoje temos **um único trilho de PIX e ele é um ponto único de falha**. Independente de o Asaas voltar, ter um segundo provedor é a decisão certa.
 
-Diferença que importa: com uma chave inventada, o Asaas responde
-`401 {"code":"invalid_access_token"}`. Com a nossa chave, o 401 vem **sem corpo
-nenhum** — é resposta de *permissão negada*, não de chave inválida. E o saldo
-(R$ 289,29) responde normalmente, provando que a chave autentica.
+## Avaliação honesta do Mercado Pago
 
-Ou seja: a conta continua existindo e com saldo, mas **perdeu autorização para
-operar cobranças** (criar/consultar pagamentos, clientes, assinaturas, chaves
-Pix). Isso casa exatamente com o que você viu no painel: chave Pix apagada e
-botão de nova cobrança cinza.
+**A favor**
+- Marca de confiança altíssima no PIX brasileiro — bom para conversão.
+- PIX avulso (QR dinâmico) é maduro, estável e barato; risco operacional baixo.
+- Conta e reputação independentes do Asaas: um bloqueio não derruba o outro.
 
-Data do corte confirmada no nosso banco: o último pagamento Asaas registrado é
-**05/08/2026 23:14** — nada depois. Ou seja, o checkout PIX está fora do ar há
-5 dias, e a causa é do lado do Asaas, não do nosso código.
+**Contra / a confirmar antes de decidir**
+- O ponto crítico é **PIX Automático (Bacen)** — o débito recorrente sem novo QR. Não consigo confirmar por documentação pública que o Mercado Pago já exponha isso em API para a nossa conta; a rota de recorrência deles (`/preapproval`) nasceu para cartão e saldo em conta. Sem PIX Automático, o Mercado Pago vira **PIX manual recorrente** (cobrança + aviso todo ciclo), que é exatamente o modelo que abandonamos por churn.
+- Trocar de provedor **não migra as autorizações Bacen existentes**. Quem já autorizou no Asaas teria que reautorizar no novo provedor — atrito real com a base ativa.
+- Duplicar provedor duplica o que já dói: webhook, dedupe de fatura, dunning PIX (D+2/D+4), reconciliação de órfãos e auditoria diária.
 
-Causa mais provável: bloqueio/restrição de conta por compliance (revisão
-cadastral, documentação pendente, análise de risco ou suspeita de fraude).
-Nesse estado o Asaas mantém saldo e login, remove a chave Pix e bloqueia
-emissão de cobranças. Não é algo que se resolva por código ou por gerar nova
-chave de API — a liberação é administrativa, do lado deles.
+Portanto **não recomendo "colocar no lugar de"**. Recomendo **colocar ao lado**: Mercado Pago entra como trilho de contingência e, se confirmar PIX Automático, é promovido a padrão.
 
-## O que fazer (nesta ordem)
+## Plano
 
-### 1. Você, no painel/atendimento do Asaas
-- Entrar em **Minha conta → Status/Pendências** e ver se há documento ou
-  informação cadastral pendente. Se houver, enviar — costuma ser o desbloqueio.
-- No chatbot, escapar do menu genérico pedindo explicitamente:
-  *"conta bloqueada para emissão de cobranças, chave Pix removida, API
-  retornando 401 sem corpo — preciso falar com atendimento humano do time de
-  compliance"*. Palavras "bloqueio", "compliance" e "atendimento humano"
-  costumam escalar.
-- Canais alternativos ao chatbot: e-mail **atendimento@asaas.com** e o telefone
-  do rodapé do painel. Cite CNPJ, e-mail da conta e a data do corte (05/08).
+### Etapa 0 — Confirmar a capacidade antes de escrever código (bloqueante)
+Criar conta/aplicação Mercado Pago e responder, com evidência de API, uma pergunta só: **existe débito recorrente PIX Automático Bacen disponível para a nossa conta?**
+- Se **sim** → seguimos para paridade total (etapas 1 a 4).
+- Se **não** → o Mercado Pago entra apenas como PIX à vista (mensal e ciclos longos), e a recorrência automática continua dependendo do Asaas voltar.
 
-Se quiser, eu preparo o texto pronto pra colar no atendimento com esses dados.
+Sem essa resposta, qualquer implementação corre risco de virar retrabalho. Preciso que você crie a conta e me passe as credenciais de teste para eu validar.
 
-### 2. Enquanto a conta está bloqueada — não deixar o checkout falhar em silêncio
-Hoje o cliente que escolhe PIX no checkout recebe erro genérico, porque toda
-chamada morre em 401. Duas mudanças pequenas:
+### Etapa 1 — Camada de provedor PIX
+Criar `supabase/functions/_shared/pix-provider.ts` com uma interface única (`criarCobranca`, `criarAutorizacaoRecorrente`, `consultar`) e duas implementações: `asaas` e `mercadopago`. Escolha por `system_config.pix_provider` (`asaas` | `mercadopago` | `auto`), com `auto` caindo no Mercado Pago quando o Asaas estiver bloqueado.
 
-- **Checagem de saúde do gateway**: uma função interna leve testa
-  `/finance/balance` (que funciona) e um endpoint de cobrança. Se o de cobrança
-  vier 401 sem corpo, marca `system_config.asaas_blocked = true`.
-- **Checkout degrada com clareza**: com a flag ligada, `CheckoutV2.tsx` esconde
-  o PIX e mostra apenas cartão, com um aviso curto ("PIX temporariamente
-  indisponível"). Melhor perder o meio de pagamento do que perder a venda com
-  erro sem explicação.
-- **Alerta**: quando a flag virar, e-mail pro ADMIN_ALERT_EMAIL — pra você
-  saber no mesmo dia, não 5 dias depois.
+### Etapa 2 — Mercado Pago: cobrança e webhook
+- `criar-pix-mercadopago`: cria pagamento PIX, devolve QR + copia-e-cola, persiste em uma tabela espelho de `asaas_payments` (mesmo formato de campos, para o painel e o dunning não precisarem de caso especial).
+- `webhook-mercadopago`: valida assinatura, trata `payment.updated`, ativa/renova o plano reaproveitando a mesma lógica de ativação já usada no `webhook-asaas` (fonte única de verdade), com dedupe por `external_reference`.
+- Trial semanal de R$ 6,90: no PIX à vista sai naturalmente (cobra 6,90 hoje); só faz sentido manter o débito automático em D+7 se a Etapa 0 confirmar PIX Automático.
 
-### 3. Quando a conta for liberada
-- Recadastrar a chave Pix no painel (ela foi removida).
-- Reconferir os webhooks (`/v3/webhooks`) — bloqueios costumam desativá-los.
-- Rodar `asaas-pix-auto-audit` para reconciliar pagamentos e autorizações do
-  período de apagão e reativar quem pagou sem o webhook chegar.
-- Desligar a flag `asaas_blocked` e refazer o teste ponta a ponta do trial PIX
-  de R$ 6,90 (backend já está implantado, só faltou validar em produção).
+### Etapa 3 — Checkout e detecção de indisponibilidade
+- `CheckoutV2.tsx` passa a ler o provedor ativo e chamar a função correta; o cliente não vê diferença.
+- Health-check diário (`balance` 200 + `payments` 401 = bloqueado) grava `system_config.asaas_blocked` e, no modo `auto`, redireciona o PIX para o Mercado Pago sem intervenção. Alerta por e-mail para o ADMIN_ALERT_EMAIL na virada — o problema atual passou 5 dias invisível.
+
+### Etapa 4 — Dunning e reconciliação
+Estender `_shared/dunning-whatsapp.ts` e a auditoria diária para reconhecer pagamentos Mercado Pago, mantendo a cadência atual (2 avisos → escada de ofertas) e a varredura de órfãos por API.
+
+### Em paralelo, sem depender disso
+Continuar a pressão pelo desbloqueio do Asaas (pendência cadastral no painel e atendimento humano de compliance). Se ele voltar, o Mercado Pago fica como contingência ativa em vez de virar trabalho jogado fora.
 
 ## Detalhes técnicos
-- Sem endpoint público de "status de conta" acessível: `/v3/myAccount` também
-  está no bloqueio, então o teste de saúde precisa inferir pelo par
-  `balance 200` + `payments 401`.
-- Arquivos: nova função `supabase/functions/asaas-health-check/index.ts`
-  (cron diário + invocável), leitura da flag em `src/pages/CheckoutV2.tsx`,
-  gravação em `system_config`.
-- Nada do bloqueio afeta cartão (Stripe) — só o trilho Asaas.
+- Novos secrets: `MERCADOPAGO_ACCESS_TOKEN`, `MERCADOPAGO_WEBHOOK_SECRET`, `MERCADOPAGO_ENV`.
+- Arquivos: `_shared/pix-provider.ts` (novo), `criar-pix-mercadopago/` (novo), `webhook-mercadopago/` (novo), `asaas-health-check/` (novo), e ajustes em `criar-pix-recorrente-asaas`, `webhook-asaas`, `asaas-pix-auto-audit`, `_shared/dunning-whatsapp.ts`, `src/pages/CheckoutV2.tsx`.
+- Nada disso toca o trilho de cartão (Stripe).
