@@ -1540,21 +1540,19 @@ const CheckoutV2 = () => {
                   pixHint={
                     pixEnabled
                       ? `R$ ${currentPrice} à vista`
-                      : `R$ ${currentPrice}/mês, sem trial`
+                      : `7 dias por R$ ${currentPlan.trialPrice}`
                   }
                 />
 
                 <div className="ck-num text-center text-sm text-[hsl(var(--ck-text-muted))]">
                   Cobrado hoje{" "}
                   <span className="font-semibold text-[hsl(var(--ck-text))]">
-                    R$ {payMethod === "card" && !pixEnabled ? currentPlan.trialPrice : currentPrice}
+                    R$ {!pixEnabled ? currentPlan.trialPrice : currentPrice}
                   </span>
                   {" · "}
-                  {payMethod === "card" && !pixEnabled
+                  {!pixEnabled
                     ? `depois R$ ${currentPrice}/mês`
-                    : pixEnabled
-                      ? `renova em R$ ${currentPrice}/${periodLabel}`
-                      : `renova em R$ ${currentPrice}/mês`}
+                    : `renova em R$ ${currentPrice}/${periodLabel}`}
                 </div>
 
                 <Button
@@ -1579,7 +1577,9 @@ const CheckoutV2 = () => {
                         : pixEnabled
                           ? `Assinar por R$ ${currentPrice}`
                           : `Começar por R$ ${currentPlan.trialPrice}`
-                      : `Pagar com PIX — R$ ${currentPrice}`}
+                      : pixEnabled
+                        ? `Pagar com PIX — R$ ${currentPrice}`
+                        : `Pagar com PIX — R$ ${currentPlan.trialPrice}`}
                   </span>
                   <ArrowRight className="w-5 h-5" />
                 </Button>
@@ -1589,7 +1589,9 @@ const CheckoutV2 = () => {
                     ? pixEnabled
                       ? "Cobrança única do ciclo • renovação automática • cancele quando quiser"
                       : "7 dias completos • Sem cobrança se cancelar antes do 8º dia"
-                    : "Autorize 1x no app do banco • renovação automática • cancele quando quiser"}
+                    : pixEnabled
+                      ? "Autorize 1x no app do banco • renovação automática • cancele quando quiser"
+                      : `1ª semana por R$ ${currentPlan.trialPrice} • autorize 1x no app do banco • depois R$ ${currentPrice}/mês`}
                 </p>
               </div>
 
