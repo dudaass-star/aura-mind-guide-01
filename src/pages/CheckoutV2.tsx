@@ -242,6 +242,9 @@ const CheckoutV2 = () => {
     invoiceUrl: string | null;
     amount: number;
     authorizationId?: string | null;
+    trial?: boolean;
+    recurringAmount?: number | null;
+    firstRecurringChargeDate?: string | null;
   } | null>(null);
   // Estado do consentimento de PIX Automático (Bacen): pending → active | expired.
   // O consentimento é a etapa que mais perdemos: o cliente paga/escaneia mas não
@@ -937,6 +940,9 @@ const CheckoutV2 = () => {
         invoiceUrl: data.invoiceUrl || null,
         amount: data.amount || 0,
         authorizationId: data.authorizationId || null,
+        trial: !!data.trial,
+        recurringAmount: data.recurringAmount ?? null,
+        firstRecurringChargeDate: data.firstRecurringChargeDate ?? null,
       });
       setAuthState(pixMode === "subscription" && data.authorizationId ? "pending" : null);
       setPixStage("qr");
@@ -1764,6 +1770,13 @@ const CheckoutV2 = () => {
                       R$ {pixData.amount.toFixed(2).replace(".", ",")}
                     </span>
                     {" "}· {currentPlan.name} {periodShortMap[billingPeriod]}
+                    {pixData.trial && pixData.recurringAmount ? (
+                      <span className="block text-xs mt-1 text-white/60">
+                        1ª semana. Depois R${" "}
+                        {pixData.recurringAmount.toFixed(2).replace(".", ",")}/mês no débito
+                        automático — cancele quando quiser no app do banco.
+                      </span>
+                    ) : null}
                   </DialogDescription>
                 </DialogHeader>
 
