@@ -18,6 +18,15 @@ const PRICES: Record<string, Record<string, number>> = {
   transformacao: { monthly: 7990, quarterly: 16170, semestral: 23940, yearly: 32280 },
 };
 
+// Trial semanal (1ª semana promocional) — paridade com o cartão Stripe.
+// Só existe no ciclo MENSAL e só na 1ª compra do cliente.
+const TRIAL_PRICES: Record<string, number> = {
+  essencial: 690,
+  direcao: 990,
+  transformacao: 1990,
+};
+const TRIAL_DAYS = 7;
+
 const PLAN_NAMES: Record<string, string> = {
   essencial: "Essencial",
   direcao: "Direção",
@@ -80,6 +89,60 @@ function isValidCPF(cpf: string): boolean {
   let d2 = 11 - (sum % 11);
   if (d2 >= 10) d2 = 0;
   return d2 === parseInt(c[10]);
+}
+
+// Retornante = cliente que já pagou alguma vez (perfil, Asaas ou Stripe).
+// Mesma regra do cartão: o semanal é isca de aquisição, 1× por cliente.
+async function isReturningCustomer(
+  supabase: any,
+  email: string,
+  phoneDigits: string,
+): Promise<boolean> {
+  try {
+    const orParts = [`email.eq.${email}`];
+    if (phoneDigits) {
+      orParts.push(`phone.eq.${phoneDigits}`, `phone.eq.55${phoneDigits}`);
+    }
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, plan, stripe_customer_id, asaas_customer_id")
+      .or(orParts.join(","))
+      .limit(5);
+    if ((profiles || []).some((p: any) => p.plan || p.stripe_customer_id || p.asaas_customer_id)) {
+      return true;
+    }
+
+    const { data: paid } = await supabase
+      .from("asaas_payments")
+      .select("id")
+      .eq("customer_email", email)
+      .in("status", ["CONFIRMED", "RECEIVED", "RECEIVED_IN_CASH"])
+      .limit(1);
+    if (paid && paid.length > 0) return true;
+
+    const STRIPE_SECRET_KEY = Deno.env.get("STRIPE_SECRET_KEY");
+    if (STRIPE_SECRET_KEY) {
+      const resp = await fetch(
+        `https://api.stripe.com/v1/customers?email=${encodeURIComponent(email)}&limit=1`,
+        { headers: { Authorization: `Bearer ${STRIPE_SECRET_KEY}` } },
+      );
+      const json = await resp.json().catch(() => ({}));
+      const customerId = json?.data?.[0]?.id;
+      if (customerId) {
+        const subs = await fetch(
+          `https://api.stripe.com/v1/subscriptions?customer=${customerId}&status=all&limit=1`,
+          { headers: { Authorization: `Bearer ${STRIPE_SECRET_KEY}` } },
+        );
+        const subsJson = await subs.json().catch(() => ({}));
+        if ((subsJson?.data || []).length > 0) return true;
+      }
+    }
+  } catch (e) {
+    // Falha na checagem NÃO pode bloquear checkout: cai no caminho conservador
+    // (sem trial) só se der erro depois; aqui assumimos novo cliente.
+    console.warn("[criar-pix-recorrente-asaas] checagem de retornante falhou:", (e as Error)?.message);
+  }
+  return false;
 }
 
 Deno.serve(async (req) => {
@@ -206,6 +269,20 @@ Deno.serve(async (req) => {
 
     const supabase = supabaseEarly;
 
+    // ---- Trial semanal (paridade com o cartão) ----------------------------
+    // Só no mensal, só em checkout novo e só pra quem nunca pagou. O valor do
+    // trial vai no `immediateQrCode`; o valor recorrente autorizado segue cheio.
+    const trialRequested = (body as Record<string, unknown>).trial === true;
+    let trialApplied =
+      trialRequested && billing === "monthly" && mode !== "reauthorize" && !!TRIAL_PRICES[plan];
+    if (trialApplied && (await isReturningCustomer(supabase, emailClean, phoneClean))) {
+      trialApplied = false;
+      console.log(
+        `[criar-pix-recorrente-asaas] trial semanal negado (retornante): ${emailClean}`,
+      );
+    }
+    const trialCents = trialApplied ? TRIAL_PRICES[plan] : null;
+
     // Reaproveita customer Asaas se já houver profile vinculado.
     let asaasCustomerId: string | null = null;
     let existingProfileId: string | null = null;
@@ -281,12 +358,19 @@ Deno.serve(async (req) => {
 
     // 2) Cria autorização PIX Automático Bacen (Jornada 3 — QR Code integrado:
     //    primeiro pagamento + consentimento de recorrência no mesmo escaneamento).
-    const todayBRT = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "America/Sao_Paulo",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(new Date());
+    const brtDate = (d: Date) =>
+      new Intl.DateTimeFormat("en-CA", {
+        timeZone: "America/Sao_Paulo",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(d);
+    const todayBRT = brtDate(new Date());
+    // Com trial, o 1º débito recorrente é em D+7 (o QR de hoje cobra só o trial).
+    // Sem trial, mantém hoje. Bacen exige >= 2 dias entre autorização e 1º débito.
+    const startDateBRT = trialApplied
+      ? brtDate(new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000))
+      : todayBRT;
     // QR Code do 1º pagamento. TTL curto (30 min) era a causa da perda: 12 de 17
     // autorizações foram marcadas REFUSED exatamente ~30 min após a criação, ou
     // seja, expiravam antes do cliente concluir o consentimento no app do banco.
@@ -306,41 +390,63 @@ Deno.serve(async (req) => {
     // tentativas de débito em 7 dias após o vencimento. Sem isso (default
     // NOT_ALLOWED) uma falha de débito mata o ciclo de vez.
     // minLimitValue NÃO pode ser enviado em autorização de valor fixo.
-    const buildAuthReqBody = (ttl: number): Record<string, unknown> => ({
-      customerId: asaasCustomerId,
-      frequency,
-      contractId,
-      startDate: todayBRT,
-      value: amountDecimal,
-      description,
-      paymentCreationMode: "SUBSCRIPTION",
-      retryPolicy: "ALLOW_THREE_IN_SEVEN_DAYS",
-      immediateQrCode: {
+    // Com trial: valor imediato (R$ 6,90) != valor recorrente (R$ 29,90) — o QR
+    // integrado do Bacen aceita os dois valores no mesmo consentimento.
+    const buildAuthReqBody = (ttl: number, withTrial: boolean): Record<string, unknown> => {
+      const immediateValue = withTrial && trialCents ? trialCents / 100 : amountDecimal;
+      return {
+        customerId: asaasCustomerId,
+        frequency,
+        contractId,
+        startDate: withTrial ? startDateBRT : todayBRT,
         value: amountDecimal,
-        originalValue: amountDecimal,
-        expirationDate: buildQrExpiration(ttl),
-        expirationSeconds: ttl,
-      },
-    });
+        description,
+        paymentCreationMode: "SUBSCRIPTION",
+        retryPolicy: "ALLOW_THREE_IN_SEVEN_DAYS",
+        immediateQrCode: {
+          value: immediateValue,
+          originalValue: immediateValue,
+          expirationDate: buildQrExpiration(ttl),
+          expirationSeconds: ttl,
+        },
+      };
+    };
 
     let authorization: Record<string, unknown>;
+    let trialInAuthorization = trialApplied;
     try {
       authorization = await asaasFetch("/pix/automatic/authorizations", {
         method: "POST",
-        body: JSON.stringify(buildAuthReqBody(qrTtlSeconds)),
+        body: JSON.stringify(buildAuthReqBody(qrTtlSeconds, trialInAuthorization)),
       });
     } catch (e) {
-      // TTL longo rejeitado pela Asaas → recria com o TTL antigo de 30 min.
       console.warn(
-        `[criar-pix-recorrente-asaas] TTL ${qrTtlSeconds}s rejeitado, refazendo com ${QR_TTL_FALLBACK}s:`,
+        `[criar-pix-recorrente-asaas] autorização rejeitada (trial=${trialInAuthorization}, ttl=${qrTtlSeconds}s):`,
         (e as Error)?.message,
       );
-      qrTtlSeconds = QR_TTL_FALLBACK;
-      qrExpiration = buildQrExpiration(qrTtlSeconds);
-      authorization = await asaasFetch("/pix/automatic/authorizations", {
-        method: "POST",
-        body: JSON.stringify(buildAuthReqBody(qrTtlSeconds)),
-      });
+      // Degradação em cascata: (1) TTL curto; (2) sem trial (valores iguais e
+      // startDate hoje). Checkout nunca quebra por causa do trial.
+      try {
+        qrTtlSeconds = QR_TTL_FALLBACK;
+        qrExpiration = buildQrExpiration(qrTtlSeconds);
+        authorization = await asaasFetch("/pix/automatic/authorizations", {
+          method: "POST",
+          body: JSON.stringify(buildAuthReqBody(qrTtlSeconds, trialInAuthorization)),
+        });
+      } catch (e2) {
+        if (!trialInAuthorization) throw e2;
+        console.error(
+          "[criar-pix-recorrente-asaas] Asaas recusou o trial no QR integrado — refazendo com valor cheio:",
+          (e2 as Error)?.message,
+        );
+        trialInAuthorization = false;
+        qrTtlSeconds = QR_TTL_LONG;
+        qrExpiration = buildQrExpiration(qrTtlSeconds);
+        authorization = await asaasFetch("/pix/automatic/authorizations", {
+          method: "POST",
+          body: JSON.stringify(buildAuthReqBody(qrTtlSeconds, false)),
+        });
+      }
     }
 
     const authorizationId = authorization?.id as string;
@@ -394,7 +500,9 @@ Deno.serve(async (req) => {
       frequency,
       value_cents: amountCents,
       status: (authorization?.status as string) || "PENDING",
-      start_date: todayBRT,
+      start_date: trialInAuthorization ? startDateBRT : todayBRT,
+      is_trial: trialInAuthorization,
+      trial_value_cents: trialInAuthorization ? trialCents : null,
       finish_date: (authorization?.finishDate as string) || null,
       qr_payload: qrPayload,
       qr_encoded_image: qrImage,
@@ -447,7 +555,10 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({
         authorizationId,
-        amount: amountDecimal,
+        amount: trialInAuthorization && trialCents ? trialCents / 100 : amountDecimal,
+        recurringAmount: amountDecimal,
+        trial: trialInAuthorization,
+        firstRecurringChargeDate: trialInAuthorization ? startDateBRT : todayBRT,
         qrCodeImage: qrImage,
         copyPaste: qrPayload,
         expiresAt: qrExpiresAt,

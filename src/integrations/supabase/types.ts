@@ -58,6 +58,7 @@ export type Database = {
           ga_client_id: string | null
           id: string
           invoice_url: string | null
+          is_trial: boolean
           paid_at: string | null
           payment_method: string
           pix_copy_paste: string | null
@@ -88,6 +89,7 @@ export type Database = {
           ga_client_id?: string | null
           id?: string
           invoice_url?: string | null
+          is_trial?: boolean
           paid_at?: string | null
           payment_method?: string
           pix_copy_paste?: string | null
@@ -118,6 +120,7 @@ export type Database = {
           ga_client_id?: string | null
           id?: string
           invoice_url?: string | null
+          is_trial?: boolean
           paid_at?: string | null
           payment_method?: string
           pix_copy_paste?: string | null
@@ -164,6 +167,7 @@ export type Database = {
           frequency: string
           ga_client_id: string | null
           id: string
+          is_trial: boolean
           last_synced_at: string | null
           plan: string
           qr_encoded_image: string | null
@@ -177,6 +181,7 @@ export type Database = {
           replaced_by_authorization_id: string | null
           start_date: string
           status: string
+          trial_value_cents: number | null
           updated_at: string
           user_id: string | null
           value_cents: number
@@ -202,6 +207,7 @@ export type Database = {
           frequency: string
           ga_client_id?: string | null
           id?: string
+          is_trial?: boolean
           last_synced_at?: string | null
           plan: string
           qr_encoded_image?: string | null
@@ -215,6 +221,7 @@ export type Database = {
           replaced_by_authorization_id?: string | null
           start_date: string
           status?: string
+          trial_value_cents?: number | null
           updated_at?: string
           user_id?: string | null
           value_cents: number
@@ -240,6 +247,7 @@ export type Database = {
           frequency?: string
           ga_client_id?: string | null
           id?: string
+          is_trial?: boolean
           last_synced_at?: string | null
           plan?: string
           qr_encoded_image?: string | null
@@ -253,6 +261,7 @@ export type Database = {
           replaced_by_authorization_id?: string | null
           start_date?: string
           status?: string
+          trial_value_cents?: number | null
           updated_at?: string
           user_id?: string | null
           value_cents?: number

@@ -38,6 +38,17 @@ const CYCLE_DAYS: Record<string, number> = {
   yearly: 372,
 };
 
+// Dias liberados quando o pagamento é a 1ª semana promocional do PIX Automático.
+const TRIAL_DAYS = 7;
+
+// Um pagamento é "da 1ª semana" quando a autorização foi criada com trial e o
+// valor pago bate com o valor do trial (tolerância R$ 0,50 por arredondamento).
+function isTrialPayment(authRow: any, paidValue: number): boolean {
+  const trialCents = Number(authRow?.trial_value_cents || 0);
+  if (!authRow?.is_trial || !trialCents) return false;
+  return Math.abs(paidValue - trialCents / 100) <= 0.5;
+}
+
 // Normaliza o billing period pra chave que o portal/plan-pricing usa ("semiannual").
 // Legacy: rows antigas de asaas_payments podem trazer "semestral".
 function normalizeBillingCycle(bp: string): string {
@@ -433,6 +444,7 @@ Deno.serve(async (req) => {
               Math.round(Number((payment as any).value || 0) * 100) || authRow.value_cents,
             status: newStatus,
             payment_method: "PIX_AUTOMATIC",
+            is_trial: isTrialPayment(authRow, Number((payment as any).value || 0)),
             invoice_url: (payment as any).invoiceUrl || null,
             paid_at: isPaid ? new Date().toISOString() : null,
             fbp: authRow.fbp || null,
@@ -480,6 +492,7 @@ Deno.serve(async (req) => {
               Math.round(Number((payment as any).value || 0) * 100) || authBySub.value_cents,
             status: newStatus,
             payment_method: "PIX_AUTOMATIC",
+            is_trial: isTrialPayment(authBySub, Number((payment as any).value || 0)),
             invoice_url: (payment as any).invoiceUrl || null,
             paid_at: isPaid ? new Date().toISOString() : null,
             fbp: authBySub.fbp || null,
@@ -529,8 +542,10 @@ Deno.serve(async (req) => {
         const expectedValue = Number(authByCustomer.value_cents || 0) / 100;
         // Tolerância R$ 0,50 para arredondamentos; rejeita valores
         // nitidamente diferentes (evita ativar por PIX aleatório de
-        // outro contexto no mesmo customer).
-        const valueMatches = Math.abs(paymentValue - expectedValue) <= 0.5;
+        // outro contexto no mesmo customer). Com trial semanal, o 1º
+        // pagamento vale o trial (R$ 6,90) e não o ciclo cheio.
+        const paidTrial = isTrialPayment(authByCustomer, paymentValue);
+        const valueMatches = Math.abs(paymentValue - expectedValue) <= 0.5 || paidTrial;
 
         if (!valueMatches) {
           console.warn(
@@ -559,6 +574,7 @@ Deno.serve(async (req) => {
                 Math.round(paymentValue * 100) || authByCustomer.value_cents,
               status: newStatus,
               payment_method: "PIX_AUTOMATIC",
+              is_trial: paidTrial,
               invoice_url: (payment as any).invoiceUrl || null,
               paid_at: new Date().toISOString(),
               fbp: authByCustomer.fbp || null,
@@ -1005,7 +1021,10 @@ async function handleActivation(
     const paymentMethodLabel = (updated.payment_method as string) || "";
     const isCardPayment = paymentMethodLabel.startsWith("CREDIT_CARD");
     const paymentId = payment.id as string;
-    const days = CYCLE_DAYS[billingPeriod] ?? 31;
+    // 1ª semana promocional do PIX Automático libera 7 dias; o 1º débito
+    // recorrente (D+7) estende para o ciclo cheio.
+    const isTrialActivation = (updated as any).is_trial === true;
+    const days = isTrialActivation ? TRIAL_DAYS : (CYCLE_DAYS[billingPeriod] ?? 31);
 
     // 1) Idempotência: se já existe outro payment pago para esta subscription,
     //    é renovação → só estende plan_expires_at e sai.
