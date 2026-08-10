@@ -12,6 +12,23 @@ Na tela **API/Plugins** que você abriu:
 
 Só preciso de você: o **AppID** (guardo como secret `WOOVI_APP_ID`). O resto é código.
 
+## Escopos da aplicação: marque só o necessário
+
+Dá pra marcar tudo, mas não recomendo. Esse AppID vai viver num servidor e, com tudo marcado, um vazamento permite **sacar o seu dinheiro** (`ACCOUNT_WITHDRAW_POST`), **fechar a conta** (`ACCOUNT_DELETE`), **criar e aprovar pagamentos** (`PAYMENT_POST`, `PAYMENT_APPROVE_POST`), **apagar sua chave Pix** (`PIX_KEY_DELETE`) e **rotacionar credenciais** (`APPLICATION_ROTATE_POST`). São 30 segundos de cliques a mais pra eliminar esse risco inteiro.
+
+Marque exatamente estes — é tudo o que o código vai usar:
+
+- **Assinatura (todos os 9)**: `SUBSCRIPTION_POST`, `SUBSCRIPTION_GET`, `SUBSCRIPTION_GET_LIST`, `SUBSCRIPTION_VALUE_PUT` (é o que sobe de R$ 6,90 pro mensal cheio), `SUBSCRIPTION_CANCEL_PUT`, `SUBSCRIPTION_INSTALLMENT_GET`, `SUBSCRIPTION_INSTALLMENT_GET_LIST`, `SUBSCRIPTION_INSTALLMENT_COBR_POST`, `SUBSCRIPTION_INSTALLMENT_COBR_RETRY_POST`.
+- **Cobrança**: `CHARGE_POST`, `CHARGE_GET`, `CHARGE_GET_LIST`, `CHARGE_BRCODE_IMAGE_GET` (QR do checkout).
+- **Cliente**: `CUSTOMER_POST`, `CUSTOMER_PATCH`, `CUSTOMER_GET`, `CUSTOMER_GET_LIST`.
+- **Webhook**: `WEBHOOK_POST`, `WEBHOOK_GET`, `WEBHOOK_GET_LIST`, `WEBHOOK_EVENTS_GET_LIST`, `WEBHOOK_IPS_GET`.
+- **Transação**: `TRANSACTION_GET`, `TRANSACTION_GET_LIST` (reconciliação/auditoria).
+- **Autenticação**: `TOKEN_VALIDATE_GET` (health check do trilho PIX).
+- **Empresa**: `COMPANY_GET`.
+- **Reembolso** (só se quiser que eu consiga estornar pelo sistema): `REFUND_POST`, `REFUND_GET`, `CHARGE_REFUND_POST`, `CHARGE_REFUND_GET_LIST`.
+
+Deixe **desmarcado**: Conta, Saques, Pagamento, Subconta, Stablecoin, Antecipação, Parceiro, Aplicativo, KYC, Chave Pix, QR Code estático, Boleto, Nota fiscal, Disputa/MED, Cashback, Extrato, Limites, Registro de conta.
+
 ## O que a documentação confirma (checado agora)
 
 A Woovi tem Pix Automático Bacen de verdade, e o modelo é quase idêntico ao que já construímos no Asaas:
