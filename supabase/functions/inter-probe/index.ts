@@ -101,6 +101,29 @@ Deno.serve(async (req) => {
   };
   steps.certShape = pemShape(certPem);
   steps.keyShape = pemShape(keyPem);
+  // Classificação do DER: certificado X.509 carrega strings imprimíveis
+  // (CN=, O=, nomes) no Subject/Issuer; uma chave PKCS#8 não carrega nenhuma.
+  // Isso revela arquivo trocado sem expor conteúdo sensível.
+  const classifyDer = (raw?: string) => {
+    if (!raw) return null;
+    try {
+      const b64 = raw.replace(/-----[^-]+-----/g, "").replace(/[^A-Za-z0-9+/=]/g, "");
+      const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+      const ascii = Array.from(bytes).map((b) => (b >= 32 && b < 127 ? String.fromCharCode(b) : "\u0000")).join("");
+      const words = (ascii.match(/[A-Za-z0-9.\- ]{5,}/g) ?? []).slice(0, 8);
+      // rsaEncryption OID (2a 86 48 86 f7 0d 01 01 01) nos primeiros 40 bytes => PKCS#8
+      const head = Array.from(bytes.slice(0, 40)).map((b) => b.toString(16).padStart(2, "0")).join("");
+      const looksPkcs8Key = head.includes("2a864886f70d010101");
+      return {
+        derBytes: bytes.length,
+        looksPkcs8Key,
+        printableStrings: words,
+      };
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : String(e) };
+    }
+  };
+  steps.certDer = classifyDer(Deno.env.get("INTER_CERT_PEM"));
   steps.credentials = missing.length
     ? { ok: false, missing }
     : { ok: true, mtlsCertPresent: hasCertPair };
