@@ -157,6 +157,7 @@ Deno.serve(async (req) => {
     const { fbp, fbc, gaClientId } = body;
     const mode = body.mode || "checkout";
     const reauthToken = body.token;
+    const deferReplacement = body.deferReplacement === "true";
     const requestKeyInput = body.requestKey?.trim();
     const requestKey = requestKeyInput && /^[A-Za-z0-9_-]{16,100}$/.test(requestKeyInput)
       ? `${mode}:${requestKeyInput}`
@@ -446,7 +447,7 @@ Deno.serve(async (req) => {
       if (funnelErr) console.warn("[criar-pix-recorrente-inter] funil não logado:", funnelErr.message);
     }
 
-    if (mode === "reauthorize" && previousIdRec) {
+    if (mode === "reauthorize" && previousIdRec && !deferReplacement) {
       await supabase.from("inter_pix_recurrences")
         .update({ replaced_by_id_rec: idRec }).eq("id_rec", previousIdRec);
       console.log(`[criar-pix-recorrente-inter] reautorização: ${previousIdRec} → ${idRec}`);

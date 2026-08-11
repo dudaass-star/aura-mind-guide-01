@@ -149,6 +149,7 @@ serve(async (req) => {
 
     // Descobre o perfil (user_id, gateway, nome) tentando cada variação de telefone
     let profile: {
+      id: string;
       user_id: string | null;
       name: string | null;
       email?: string | null;
@@ -163,7 +164,7 @@ serve(async (req) => {
       const variants = getPhoneVariations(phoneClean);
       const { data } = await supabase
         .from("profiles")
-        .select("user_id, name, email, card_gateway, asaas_customer_id, plan, billing_cycle, status, payment_failed_at")
+        .select("id, user_id, name, email, card_gateway, asaas_customer_id, plan, billing_cycle, status, payment_failed_at")
         .in("phone", variants)
         .limit(1);
       if (data && data.length > 0) profile = data[0] as any;
