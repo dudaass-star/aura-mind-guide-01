@@ -1,92 +1,73 @@
-# PIX Automático recorrente na Woovi (substituindo o Asaas bloqueado)
+# Pix Automático pelo Banco Inter — avaliação e caminho recomendado
 
-## Respondendo direto: onde clicar nessa tela
+## Resposta curta
 
-Na tela **API/Plugins** que você abriu:
+Sim, dá pra fazer, e o Inter é um dos poucos que tem **API de Pix Automático oficial e documentada** (`developers.inter.co/references/pix-automatico`, com Pix Cob, CobV e Pix Automático no mesmo portal). Já ter a conta PJ lá ajuda: o cadastro sai por "Soluções para sua empresa → Nova Integração", que gera chave, secret e certificado.
 
-1. Aba **API/Plugins** → card **API REST** → **Adicionar**. Isso cria um App e gera o **AppID** (é o token que vai no header `Authorization`). Guarde o valor — só aparece na criação (depois em "Visualização de credenciais").
-2. No mesmo lugar → card **Webhook** → **Adicionar**. URL a cadastrar (vou te passar depois de criar a função):
-   `https://<projeto>.supabase.co/functions/v1/webhook-woovi`
-   Eventos a marcar: cobrança paga/expirada + **todos os de Pix Automático** (autorização e cobrança recorrente).
-3. Antes disso, confirme na conta: **Pix Automático habilitado** (Configurações da Empresa / Ajuda-Sobre). Se o recurso não estiver liberado pra sua conta, a criação de assinatura `PIX_RECURRING` volta erro — nesse caso é só pedir a liberação no suporte deles.
+Mas o Inter **não é o caminho mais rápido** pra destravar a venda de PIX. Ele é o mais barato e o mais nosso; a Woovi é a que coloca PIX recorrente de volta no ar em dias. São escolhas diferentes, não a mesma coisa mais barata.
 
-Só preciso de você: o **AppID** (guardo como secret `WOOVI_APP_ID`). O resto é código.
+## Comparação honesta
 
-## Escopos da aplicação: marque só o necessário
+| | Banco Inter (direto) | Woovi (intermediador) |
+|---|---|---|
+| Pix Automático Bacen | Sim, API oficial | Sim, API oficial |
+| O que a API entrega | A **especificação bruta do Bacen**: recorrência, solicitação de autorização, `cobr`, retentativa, estados do mandato | Abstração de **assinatura** pronta (`/subscriptions`, parcelas, retentativa 3R/7D configurável) |
+| Quem constrói a lógica de assinatura | Nós: agendamento, geração de cobrança 2-10 dias antes, retentativas, ciclos, expiração | Woovi |
+| Autenticação | OAuth client_credentials + **certificado mTLS** (arquivo que expira e precisa ser rotacionado) | Um AppID no header |
+| Custo por transação | Muito baixo / tarifa de Pix da conta PJ | Tarifa do intermediador por cima |
+| Esforço estimado | Alto — é reescrever o motor de cobrança recorrente | Baixo — é o mesmo shape do que já fizemos no Asaas |
+| Risco técnico específico | mTLS dentro das nossas funções de backend precisa ser **provado antes** (o runtime só passou a suportar certificado de cliente recentemente; se não funcionar, o Inter fica inviável sem um proxy) | Nenhum — é HTTPS comum |
 
-Dá pra marcar tudo, mas não recomendo. Esse AppID vai viver num servidor e, com tudo marcado, um vazamento permite **sacar o seu dinheiro** (`ACCOUNT_WITHDRAW_POST`), **fechar a conta** (`ACCOUNT_DELETE`), **criar e aprovar pagamentos** (`PAYMENT_POST`, `PAYMENT_APPROVE_POST`), **apagar sua chave Pix** (`PIX_KEY_DELETE`) e **rotacionar credenciais** (`APPLICATION_ROTATE_POST`). São 30 segundos de cliques a mais pra eliminar esse risco inteiro.
+O ponto decisivo: no Inter a gente não recebe "assinatura", recebe o protocolo. Toda a máquina de estados que a Woovi (e o Asaas) já resolve — criar a `cobr` na janela de 2 a 10 dias antes, tratar rejeição imediata vs. expiração, escalonar retentativas, sustentar mandato revogado no app do banco — passa a ser código nosso, com dinheiro real em cima. É exatamente a superfície onde a gente já se queimou duas vezes (fatura gêmea, QR de 30 min, mandato órfão).
 
-Marque exatamente estes — é tudo o que o código vai usar:
+## Recomendação
 
-- **Assinatura (todos os 9)**: `SUBSCRIPTION_POST`, `SUBSCRIPTION_GET`, `SUBSCRIPTION_GET_LIST`, `SUBSCRIPTION_VALUE_PUT` (é o que sobe de R$ 6,90 pro mensal cheio), `SUBSCRIPTION_CANCEL_PUT`, `SUBSCRIPTION_INSTALLMENT_GET`, `SUBSCRIPTION_INSTALLMENT_GET_LIST`, `SUBSCRIPTION_INSTALLMENT_COBR_POST`, `SUBSCRIPTION_INSTALLMENT_COBR_RETRY_POST`.
-- **Cobrança**: `CHARGE_POST`, `CHARGE_GET`, `CHARGE_GET_LIST`, `CHARGE_BRCODE_IMAGE_GET` (QR do checkout).
-- **Cliente**: `CUSTOMER_POST`, `CUSTOMER_PATCH`, `CUSTOMER_GET`, `CUSTOMER_GET_LIST`.
-- **Webhook**: `WEBHOOK_POST`, `WEBHOOK_GET`, `WEBHOOK_GET_LIST`, `WEBHOOK_EVENTS_GET_LIST`, `WEBHOOK_IPS_GET`.
-- **Transação**: `TRANSACTION_GET`, `TRANSACTION_GET_LIST` (reconciliação/auditoria).
-- **Autenticação**: `TOKEN_VALIDATE_GET` (health check do trilho PIX).
-- **Empresa**: `COMPANY_GET`.
-- **Reembolso** (só se quiser que eu consiga estornar pelo sistema): `REFUND_POST`, `REFUND_GET`, `CHARGE_REFUND_POST`, `CHARGE_REFUND_GET_LIST`.
+**Duas etapas, não uma escolha.**
 
-Deixe **desmarcado**: Conta, Saques, Pagamento, Subconta, Stablecoin, Antecipação, Parceiro, Aplicativo, KYC, Chave Pix, QR Code estático, Boleto, Nota fiscal, Disputa/MED, Cashback, Extrato, Limites, Registro de conta.
+1. **Agora: Woovi**, pra parar de perder venda de PIX. É a mesma arquitetura que já existe no projeto, só troca o fornecedor.
+2. **Depois (otimização de custo): Inter**, com o `pix_gateway` já preparado pra virar a chave. Só entra quando o volume de PIX justificar o esforço e depois de o mTLS ser provado.
 
-## O que a documentação confirma (checado agora)
+Se você preferir ir direto pro Inter, eu faço — mas assumindo que o PIX recorrente fica fora do ar por mais tempo e que a responsabilidade pela cobrança recorrente passa a ser 100% nossa.
 
-A Woovi tem Pix Automático Bacen de verdade, e o modelo é quase idêntico ao que já construímos no Asaas:
+## Fase 0 — Prova de viabilidade do Inter (rápida, vale fazer de qualquer forma)
 
-- `POST /api/v1/subscriptions` com `type: "PIX_RECURRING"`, `frequency` (`WEEKLY`, `MONTHLY`, `QUARTERLY`, `SEMIANNUALLY`, `ANNUALLY` — cobre nossos 4 ciclos), `dayGenerateCharge` (dia do mês ou data ISO), `dayDue`, `comment` (contrato, < 30 chars).
-- `pixRecurringOptions`: `journey: "PAYMENT_ON_APPROVAL"` (paga e autoriza no mesmo QR — o que a gente quer), `retryPolicy: "THREE_RETRIES_7_DAYS"` (mesma política 3R/7D do Asaas), `minimumValue` para valor variável.
-- Estados separados: assinatura (`ACTIVE/EXPIRED/INACTIVE`), mandato `pixRecurring` (`CREATED → APPROVED`, `REJECTED` = cliente removeu no app do banco, `CANCELED` = nós cancelamos), parcela (`SCHEDULED → ACTIVE → COMPLETED/EXPIRED`).
-- **Valor variável resolve a semana de R$ 6,90**: manda `value = 690` + `minimumValue = 690`; a primeira parcela (paga na aprovação) sai 6,90, e depois `PUT /api/v1/subscriptions/{id}/value` sobe pro mensal cheio. Se precisar de controle fino, `POST /api/v1/installments/{id}/cobr` cria a cobrança da parcela com o valor que eu mandar.
-- Webhooks de Pix Automático incluem `PIX_AUTOMATIC_COBR_TRY_REJECTED` (falha imediata) e `PIX_AUTOMATIC_COBR_REJECTED` (falhou até expirar) — é exatamente o gancho que o dunning precisa.
+Antes de qualquer plano grande, três verificações:
 
-## Objetivo
+1. Você cria a integração no Internet Banking do Inter (Nova Integração), com os escopos de **Pix Automático** e webhook, e baixa **certificado + chave + client_id/client_secret**.
+2. Eu subo uma função `inter-probe` que só faz duas coisas: pega o token OAuth com mTLS e consulta um endpoint de leitura do Pix Automático. Isso responde a pergunta que ninguém responde na documentação: **o nosso runtime consegue apresentar certificado de cliente?**
+3. Se sim, o Inter é viável e vira a Fase 3 (migração de custo). Se não, o Inter só entra com um proxy intermediário — e aí a economia deixa de compensar.
 
-1. PIX recorrente voltando a vender **hoje**, sem depender da conta bloqueada do Asaas.
-2. Manter a regra comercial: **1ª semana R$ 6,90 (ou 11,90 / 24,90) e depois o mensal cheio no débito automático**; Tri/Sem/Anual à vista + recorrência, sem trial.
-3. Asaas em modo somente-legado: os assinantes PIX atuais continuam lá, nenhuma venda nova.
+Essa fase é barata e resolve a dúvida com fato em vez de opinião.
 
-## Fase 0 — Fechar a torneira do Asaas
+## Fase 1 — PIX recorrente no ar pela Woovi
 
-- `asaas-health-check`: bate num endpoint operacional, classifica `ok | blocked | invalid` e grava em `system_config.asaas_operational_status`. Cron de 15 min.
-- Novo `system_config.pix_gateway` (`woovi` | `asaas`) — chave única pra virar o trilho de PIX sem deploy, no padrão do `card_gateway` que já existe no AdminSettings.
-- `CheckoutV2.tsx` respeita as duas chaves: PIX aponta pra Woovi; se a Woovi cair, PIX some da UI em vez de gerar QR que não nasce.
+Como no plano anterior, sem mudança:
 
-## Fase 1 — Criar a assinatura Woovi
+- `system_config.pix_gateway` (`woovi` | `inter` | `asaas`) como chave única de troca de trilho, no padrão do `card_gateway` que já existe no AdminSettings.
+- `criar-pix-recorrente-woovi`: assinatura `PIX_RECURRING`, jornada `PAYMENT_ON_APPROVAL`, `retryPolicy: THREE_RETRIES_7_DAYS`, valor variável pra sustentar a **1ª semana a R$ 6,90 / 11,90 / 24,90** e depois `SUBSCRIPTION_VALUE_PUT` pro mensal cheio. Tri/Sem/Anual sem trial.
+- `webhook-woovi`: trial pago ativa 7 dias; mandato aprovado agenda o valor cheio em D+7; `COBR_TRY_REJECTED` não é churn (janela de retentativa, dunning silenciado); `COBR_REJECTED` aciona o dunning PIX; mandato `REJECTED` cai no `/reautorizar-pix`. Dedupe por `correlationID` + parcela.
+- `asaas-health-check` + PIX fora da UI quando o trilho estiver bloqueado, pra nunca mais gerar QR que não nasce.
 
-Nova função `criar-pix-recorrente-woovi`, espelhando `criar-pix-recorrente-asaas`:
+## Fase 2 — Dunning, portal e auditoria
 
-- Mensal: `value = trial (690/1190/2490)`, `minimumValue = trial`, `frequency: MONTHLY`, `journey: PAYMENT_ON_APPROVAL`, `dayGenerateCharge = hoje`, `retryPolicy: THREE_RETRIES_7_DAYS`. QR imediato cobra o trial e autoriza o mandato.
-- Tri/Sem/Anual: valor cheio, `frequency` correspondente, sem trial.
-- Retornante (`isReturningCustomer`) não pega trial — mesma regra que já vale hoje.
-- Grava `woovi_subscription_id`, `correlationID` e `mandate_status` no registro de pagamento, e devolve `brCode` + QR pro modal do checkout.
-- CPF e **endereço completo** são obrigatórios na Woovi — o checkout já coleta CPF; endereço entra via CEP (só CEP + número, o resto autocompleta) ou usamos o endereço da empresa quando a Woovi aceitar.
+- `profiles.payment_rail` passa a conhecer `woovi_pix` (e depois `inter_pix`), junto de `stripe_card` e `asaas_pix_legacy`.
+- Dunning (2 avisos → escada de ofertas) e `customer-portal` roteiam pelo trilho.
+- `woovi-pix-auto-audit` diário: parcela paga sem webhook, mandato parado em `CREATED`, órfãos.
 
-## Fase 2 — Webhook e ciclo de vida
+## Fase 3 — Inter como trilho de custo (condicional à Fase 0)
 
-Nova função `webhook-woovi` (verify_jwt = false, validação de assinatura do webhook):
-
-- Cobrança do trial paga → ativa o plano com 7 dias de `plan_expires_at`, marca `is_trial` (mesma tolerância de R$ 0,50 que o `webhook-asaas` usa).
-- Mandato `APPROVED` → agenda a subida do valor: `PUT /subscriptions/{id}/value` para o mensal cheio, com a próxima parcela em D+7.
-- Parcela `COMPLETED` → estende o ciclo normalmente.
-- `PIX_AUTOMATIC_COBR_TRY_REJECTED` → não é churn ainda: entra na janela de retentativa, dunning silenciado.
-- `PIX_AUTOMATIC_COBR_REJECTED` → aciona o dunning PIX que já existe (2 avisos → escada de ofertas).
-- `pixRecurring: REJECTED` (cliente cancelou no banco) → churn silencioso → fluxo `/reautorizar-pix` apontando pra Woovi.
-- Dedupe por `correlationID` + parcela, pra não repetir o problema da "fatura gêmea" do Asaas.
-
-## Fase 3 — Dunning, portal e admin
-
-- `profiles.payment_rail` reconhece `woovi_pix` (junto de `stripe_card`, `asaas_pix_legacy`), e o dunning/portal escolhem o link certo.
-- `customer-portal`: assinante Woovi vê status do mandato e instrução de cancelamento pelo app do banco; cancelamento nosso via `DELETE`/cancel da assinatura.
-- Auditoria diária `woovi-pix-auto-audit`, no molde da do Asaas: reconcilia parcelas pagas sem webhook, mandatos `CREATED` parados e órfãos.
-- Painel admin ganha o placar de saúde do PIX Woovi (mandatos aprovados / pendentes / rejeitados).
+- `_shared/inter-pix.ts`: OAuth client_credentials com mTLS, cache de token, e as rotas de recorrência/solicitação/`cobr`.
+- Motor próprio de ciclo: agendar a `cobr` na janela permitida, escalonar retentativas, fechar ciclo, tratar revogação de mandato.
+- Migração em canário: `pix_gateway = inter` só pra novas vendas, Woovi mantida como fallback automático; nenhum assinante é movido de trilho à força.
+- Rotação de certificado com alerta antecipado no admin — certificado vencido derruba **toda** a cobrança recorrente de uma vez.
 
 ## Detalhes técnicos
 
-- Secret: `WOOVI_APP_ID` (header `Authorization: <AppID>`), base `https://api.woovi.com`.
-- Arquivos: novos `supabase/functions/criar-pix-recorrente-woovi/`, `webhook-woovi/`, `woovi-pix-auto-audit/`, `asaas-health-check/`, `_shared/woovi.ts`; alterados `src/pages/CheckoutV2.tsx`, `_shared/dunning-whatsapp.ts`, `customer-portal`, `AdminSettings.tsx`.
-- Sem camada multi-gateway genérica: uma chave `pix_gateway` decide o trilho, o Asaas fica em leitura.
-- Teste real de ponta a ponta com um pagamento de R$ 6,90 no meu cartão de teste não existe pra PIX — a validação vai ser uma venda real de 6,90 sua, acompanhando o mandato até o débito de D+7.
+- Secrets do Inter: `INTER_CLIENT_ID`, `INTER_CLIENT_SECRET`, `INTER_CERT_PEM`, `INTER_KEY_PEM` (o certificado cabe no limite de 24 KB por secret).
+- Secret da Woovi: `WOOVI_APP_ID`.
+- Sandbox do Inter existe e será usada na Fase 0/3; o Pix Automático real só valida com uma venda de verdade acompanhada até o débito de D+7.
+- Nenhuma camada multi-gateway genérica: uma chave decide o trilho, e cada trilho tem sua função de criação, seu webhook e sua auditoria.
 
 ## Ordem
 
-Você cria API REST + Webhook na Woovi e me passa o AppID → Fase 0 → Fase 1 → Fase 2 → Fase 3.
+Fase 0 (probe do Inter, em paralelo) → Fase 1 (Woovi no ar) → Fase 2 → Fase 3 só se o probe passar e o volume justificar.
