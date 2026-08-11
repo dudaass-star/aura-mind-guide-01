@@ -1210,6 +1210,202 @@ export type Database = {
           },
         ]
       }
+      inter_pix_charges: {
+        Row: {
+          created_at: string
+          cycle_index: number | null
+          due_date: string
+          e2e_id: string | null
+          id: string
+          id_rec: string
+          last_error: string | null
+          paid_at: string | null
+          raw_payload: Json | null
+          retry_count: number
+          status: string
+          txid: string
+          updated_at: string
+          user_id: string | null
+          value_cents: number
+        }
+        Insert: {
+          created_at?: string
+          cycle_index?: number | null
+          due_date: string
+          e2e_id?: string | null
+          id?: string
+          id_rec: string
+          last_error?: string | null
+          paid_at?: string | null
+          raw_payload?: Json | null
+          retry_count?: number
+          status?: string
+          txid: string
+          updated_at?: string
+          user_id?: string | null
+          value_cents: number
+        }
+        Update: {
+          created_at?: string
+          cycle_index?: number | null
+          due_date?: string
+          e2e_id?: string | null
+          id?: string
+          id_rec?: string
+          last_error?: string | null
+          paid_at?: string | null
+          raw_payload?: Json | null
+          retry_count?: number
+          status?: string
+          txid?: string
+          updated_at?: string
+          user_id?: string | null
+          value_cents?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inter_pix_charges_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inter_pix_recurrences: {
+        Row: {
+          authorization_url: string | null
+          billing_period: string
+          contract_id: string | null
+          created_at: string
+          customer_cpf: string | null
+          customer_email: string | null
+          customer_name: string | null
+          customer_phone: string | null
+          fbc: string | null
+          fbp: string | null
+          finish_date: string | null
+          ga_client_id: string | null
+          id: string
+          id_rec: string | null
+          id_solic_rec: string | null
+          is_trial: boolean
+          last_error: string | null
+          next_charge_date: string | null
+          periodicidade: string
+          plan: string
+          qr_encoded_image: string | null
+          qr_expires_at: string | null
+          qr_payload: string | null
+          raw_payload: Json | null
+          replaced_by_id_rec: string | null
+          start_date: string | null
+          status: string
+          trial_value_cents: number | null
+          updated_at: string
+          user_id: string | null
+          value_cents: number
+        }
+        Insert: {
+          authorization_url?: string | null
+          billing_period: string
+          contract_id?: string | null
+          created_at?: string
+          customer_cpf?: string | null
+          customer_email?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          fbc?: string | null
+          fbp?: string | null
+          finish_date?: string | null
+          ga_client_id?: string | null
+          id?: string
+          id_rec?: string | null
+          id_solic_rec?: string | null
+          is_trial?: boolean
+          last_error?: string | null
+          next_charge_date?: string | null
+          periodicidade: string
+          plan: string
+          qr_encoded_image?: string | null
+          qr_expires_at?: string | null
+          qr_payload?: string | null
+          raw_payload?: Json | null
+          replaced_by_id_rec?: string | null
+          start_date?: string | null
+          status?: string
+          trial_value_cents?: number | null
+          updated_at?: string
+          user_id?: string | null
+          value_cents: number
+        }
+        Update: {
+          authorization_url?: string | null
+          billing_period?: string
+          contract_id?: string | null
+          created_at?: string
+          customer_cpf?: string | null
+          customer_email?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          fbc?: string | null
+          fbp?: string | null
+          finish_date?: string | null
+          ga_client_id?: string | null
+          id?: string
+          id_rec?: string | null
+          id_solic_rec?: string | null
+          is_trial?: boolean
+          last_error?: string | null
+          next_charge_date?: string | null
+          periodicidade?: string
+          plan?: string
+          qr_encoded_image?: string | null
+          qr_expires_at?: string | null
+          qr_payload?: string | null
+          raw_payload?: Json | null
+          replaced_by_id_rec?: string | null
+          start_date?: string | null
+          status?: string
+          trial_value_cents?: number | null
+          updated_at?: string
+          user_id?: string | null
+          value_cents?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inter_pix_recurrences_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inter_webhook_events: {
+        Row: {
+          created_at: string
+          event_key: string
+          id: string
+          kind: string
+          payload: Json | null
+        }
+        Insert: {
+          created_at?: string
+          event_key: string
+          id?: string
+          kind: string
+          payload?: Json | null
+        }
+        Update: {
+          created_at?: string
+          event_key?: string
+          id?: string
+          kind?: string
+          payload?: Json | null
+        }
+        Relationships: []
+      }
       journey_episodes: {
         Row: {
           content_prompt: string
