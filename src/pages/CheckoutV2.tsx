@@ -223,6 +223,11 @@ const CheckoutV2 = () => {
   const [cardGateway, setCardGateway] = useState<"stripe" | "asaas">("stripe");
   // Quando gateway=asaas, submit do form abre o AsaasCardForm ao invés do embed Stripe.
   const [asaasCardOpen, setAsaasCardOpen] = useState(false);
+  // Saúde do trilho de PIX recorrente, gravada pela função asaas-health-check.
+  // Começa `false` de propósito: se a leitura falhar, o padrão é NÃO oferecer PIX.
+  // Oferecer PIX com o trilho fora do ar gera um QR que nunca nasce — o cliente
+  // acha que pagou e a venda morre em silêncio.
+  const [pixRailUp, setPixRailUp] = useState(false);
 
   // PIX (Asaas): só aparece pra trim/sem/anual. Modal abre com form de CPF
   // (resto dos dados reusa name/email/phone do form principal) e troca pra
@@ -271,23 +276,32 @@ const CheckoutV2 = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Busca gateway de cartão ativo (só afeta rota do cartão, não do PIX).
+  // Busca gateway de cartão ativo (só afeta rota do cartão, não do PIX) e a
+  // saúde do trilho de PIX. Uma leitura só, dois usos.
   useEffect(() => {
     (async () => {
-      const { data } = await supabase
+      const { data: rows } = await supabase
         .from("system_config")
-        .select("value")
-        .eq("key", "card_gateway")
-        .maybeSingle();
-      if (data?.value !== undefined && data?.value !== null) {
+        .select("key, value")
+        .in("key", ["card_gateway", "pix_rail_status"]);
+
+      const parse = (raw: unknown): unknown => {
         // JSONB pode voltar como string pura ("asaas") ou como JSON string ('"asaas"').
-        // Tenta parse; se falhar, usa o valor cru.
-        let v: unknown = data.value;
-        if (typeof v === "string") {
-          try { v = JSON.parse(v); } catch { /* mantém string crua */ }
+        if (typeof raw === "string") {
+          try { return JSON.parse(raw); } catch { return raw; }
         }
+        return raw;
+      };
+
+      const data = rows?.find((r) => r.key === "card_gateway");
+      if (data?.value !== undefined && data?.value !== null) {
+        const v = parse(data.value);
         if (v === "asaas" || v === "stripe") setCardGateway(v);
       }
+
+      const health = rows?.find((r) => r.key === "pix_rail_status");
+      const parsedHealth = health ? (parse(health.value) as { healthy?: boolean } | null) : null;
+      setPixRailUp(parsedHealth?.healthy === true);
     })();
   }, []);
 
