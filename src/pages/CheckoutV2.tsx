@@ -223,6 +223,11 @@ const CheckoutV2 = () => {
   const [cardGateway, setCardGateway] = useState<"stripe" | "asaas">("stripe");
   // Quando gateway=asaas, submit do form abre o AsaasCardForm ao invés do embed Stripe.
   const [asaasCardOpen, setAsaasCardOpen] = useState(false);
+  // Saúde do trilho de PIX recorrente, gravada pela função asaas-health-check.
+  // Começa `false` de propósito: se a leitura falhar, o padrão é NÃO oferecer PIX.
+  // Oferecer PIX com o trilho fora do ar gera um QR que nunca nasce — o cliente
+  // acha que pagou e a venda morre em silêncio.
+  const [pixRailUp, setPixRailUp] = useState(false);
 
   // PIX (Asaas): só aparece pra trim/sem/anual. Modal abre com form de CPF
   // (resto dos dados reusa name/email/phone do form principal) e troca pra
@@ -271,23 +276,32 @@ const CheckoutV2 = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Busca gateway de cartão ativo (só afeta rota do cartão, não do PIX).
+  // Busca gateway de cartão ativo (só afeta rota do cartão, não do PIX) e a
+  // saúde do trilho de PIX. Uma leitura só, dois usos.
   useEffect(() => {
     (async () => {
-      const { data } = await supabase
+      const { data: rows } = await supabase
         .from("system_config")
-        .select("value")
-        .eq("key", "card_gateway")
-        .maybeSingle();
-      if (data?.value !== undefined && data?.value !== null) {
+        .select("key, value")
+        .in("key", ["card_gateway", "pix_rail_status"]);
+
+      const parse = (raw: unknown): unknown => {
         // JSONB pode voltar como string pura ("asaas") ou como JSON string ('"asaas"').
-        // Tenta parse; se falhar, usa o valor cru.
-        let v: unknown = data.value;
-        if (typeof v === "string") {
-          try { v = JSON.parse(v); } catch { /* mantém string crua */ }
+        if (typeof raw === "string") {
+          try { return JSON.parse(raw); } catch { return raw; }
         }
+        return raw;
+      };
+
+      const data = rows?.find((r) => r.key === "card_gateway");
+      if (data?.value !== undefined && data?.value !== null) {
+        const v = parse(data.value);
         if (v === "asaas" || v === "stripe") setCardGateway(v);
       }
+
+      const health = rows?.find((r) => r.key === "pix_rail_status");
+      const parsedHealth = health ? (parse(health.value) as { healthy?: boolean } | null) : null;
+      setPixRailUp(parsedHealth?.healthy === true);
     })();
   }, []);
 
@@ -339,10 +353,21 @@ const CheckoutV2 = () => {
   const currentMonthlyEquivalent = getPeriodMonthlyEquivalent(currentPlan, billingPeriod);
   const pixEnabled = isPixPeriod(billingPeriod);
 
-  // Ciclos longos não têm trial no cartão: o padrão passa a ser PIX à vista.
+  // Ciclos longos não têm trial no cartão: o padrão passa a ser PIX à vista —
+  // desde que exista trilho de PIX no ar. Sem trilho, cartão é o único caminho.
   useEffect(() => {
-    setPayMethod(isPixPeriod(billingPeriod) ? "pix" : "card");
-  }, [billingPeriod]);
+    setPayMethod(isPixPeriod(billingPeriod) && pixRailUp ? "pix" : "card");
+  }, [billingPeriod, pixRailUp]);
+
+  // Registra uma vez, por sessão de checkout, que o PIX foi escondido. É esse
+  // número que diz quanto custa o trilho estar fora do ar.
+  const railDownLogged = useRef(false);
+  useEffect(() => {
+    if (pixRailUp || railDownLogged.current) return;
+    railDownLogged.current = true;
+    logFunnel("pix_rail_down", { plan: selectedPlan, billing: billingPeriod, paymentMethod: "card" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pixRailUp]);
 
   // Abas de ciclo com preço/mês, total do ciclo e economia em reais (do plano selecionado).
   const cycleItems: CycleTabItem[] = useMemo(
@@ -856,6 +881,13 @@ const CheckoutV2 = () => {
   // Abre o modal PIX. Valida os 3 campos comuns antes (mesma regra do CTA cartão).
   // `mode` define se vamos chamar a edge one-time ou a de subscription.
   const handleOpenPix = (mode: "one-time" | "subscription" = "one-time") => {
+    // Guarda final: mesmo que a UI escape, nunca abrir o modal de PIX com o
+    // trilho fora do ar. Cai pro cartão em vez de gerar QR que não nasce.
+    if (!pixRailUp) {
+      setPayMethod("card");
+      logFunnel("pix_blocked_rail_down", { plan: selectedPlan, billing: billingPeriod, paymentMethod: "pix" });
+      return;
+    }
     const nextErrors: { name?: string; email?: string; phone?: string } = {};
     if (phoneDigits.length < 11) nextErrors.phone = "Digite seu WhatsApp com DDD (11 dígitos).";
     if (!name.trim()) nextErrors.name = "Por favor, digite seu nome.";
@@ -1534,7 +1566,8 @@ const CheckoutV2 = () => {
                   Antes eram dois botões com valores diferentes no rótulo e o PIX
                   parecia custar 5x mais que o cartão. */}
               <div className="space-y-3 pt-1">
-                <PaymentMethodToggle
+                {pixRailUp ? (
+                  <PaymentMethodToggle
                   value={payMethod}
                   onChange={setPayMethod}
                   cardHint={
@@ -1547,7 +1580,26 @@ const CheckoutV2 = () => {
                       ? `R$ ${currentPrice} à vista`
                       : `7 dias por R$ ${currentPlan.trialPrice}`
                   }
-                />
+                  />
+                ) : (
+                  // Trilho de PIX fora do ar: em vez de oferecer e falhar no QR,
+                  // o checkout segue só com cartão. Sem aviso alarmista.
+                  <div className="flex items-center gap-2.5 rounded-xl border border-[hsl(var(--ck-cta))] bg-[hsl(var(--ck-cta)/0.14)] px-3 py-3">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[hsl(var(--ck-cta))] text-[hsl(var(--ck-cta-fg))]">
+                      <CreditCard className="h-4 w-4" />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold leading-tight text-[hsl(var(--ck-text))]">
+                        Cartão de crédito
+                      </span>
+                      <span className="ck-num block text-[11px] leading-tight text-[hsl(var(--ck-text-muted))]">
+                        {pixEnabled
+                          ? `R$ ${currentPrice}/${periodLabel}`
+                          : `7 dias por R$ ${currentPlan.trialPrice}`}
+                      </span>
+                    </span>
+                  </div>
+                )}
 
                 <div className="ck-num text-center text-sm text-[hsl(var(--ck-text-muted))]">
                   Cobrado hoje{" "}
@@ -1633,7 +1685,9 @@ const CheckoutV2 = () => {
           <StickyMobileCta
             anchorId="checkout-primary-cta"
             todayLabel={`R$ ${todayAmount}`}
-            ctaLabel={pixEnabled ? "Pagar com PIX" : `Começar por R$ ${todayAmount}`}
+            ctaLabel={
+              pixEnabled && pixRailUp ? "Pagar com PIX" : `Começar por R$ ${todayAmount}`
+            }
             onClick={() => {
               document
                 .getElementById("checkout-primary-cta")
