@@ -228,6 +228,8 @@ const CheckoutV2 = () => {
   // Oferecer PIX com o trilho fora do ar gera um QR que nunca nasce — o cliente
   // acha que pagou e a venda morre em silêncio.
   const [pixRailUp, setPixRailUp] = useState(false);
+  // Banco que executa o PIX Automático (Bacen). Trocado por system_config.pix_gateway.
+  const [pixGateway, setPixGateway] = useState<"asaas" | "inter">("asaas");
 
   // PIX (Asaas): só aparece pra trim/sem/anual. Modal abre com form de CPF
   // (resto dos dados reusa name/email/phone do form principal) e troca pra
