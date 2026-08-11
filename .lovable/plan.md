@@ -10,7 +10,9 @@ Mas há uma diferença estrutural que hoje é um furo real: o **Asaas é um moto
 
 ### 1. Emissor de ciclos (bloqueante — sem isso não há renovação)
 Cron diário `inter-pix-cycle-runner`:
-- Varre `inter_pix_recurrences` ativas com vencimento chegando (D-3, respeitando a antecedência que o Bacen exige para avisar o pagador).
+- Varre `inter_pix_recurrences` ativas com vencimento chegando e emite a cobrança **o mais tarde possível**, no limite mínimo de antecedência que o Inter/Bacen aceita — nada de folga extra.
+- **Nenhum aviso nosso antes da data.** Não enviamos WhatsApp nem e-mail de "vai debitar em X dias": lembrar o cliente antes do débito só cria janela para ele revogar o mandato e aumenta inadimplência. O cliente só ouve da gente depois do fato (confirmação de renovação ou, se falhar, o dunning).
+- Se o Inter/banco do pagador dispara alguma notificação própria por exigência regulatória, isso é do trilho — não replicamos.
 - Emite `POST /pix/v2/cobr/{txid}` do próximo ciclo com o valor cheio do plano, grava a linha em `inter_pix_charges` (`cycle_index` incremental) e deixa o webhook confirmar.
 - Idempotência por `txid` derivado de `idRec + cycle_index` (nunca cria dois cobr do mesmo ciclo).
 
