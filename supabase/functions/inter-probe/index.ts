@@ -170,34 +170,62 @@ Deno.serve(async (req) => {
     steps.note = "Sem INTER_CERT_PEM/INTER_KEY_PEM: tentativa sem mTLS, apenas para diagnóstico.";
   }
 
-  // 3. Token OAuth (client_credentials sobre mTLS)
+  // 3. Token OAuth (client_credentials sobre mTLS) — varredura de escopos candidatos
   let accessToken: string | null = null;
-  try {
-    const body = new URLSearchParams({
-      client_id: clientId!,
-      client_secret: clientSecret!,
-      grant_type: "client_credentials",
-      scope: "pix.automatico.read pix.automatico.write",
-    });
-    const resp = await fetch(OAUTH_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body,
-      ...(client ? { client } : {}),
-    } as RequestInit);
-    const text = await resp.text();
-    let json: any = null;
-    try { json = JSON.parse(text); } catch { /* body não-JSON */ }
-    accessToken = json?.access_token ?? null;
-    steps.oauth = {
-      status: resp.status,
-      ok: resp.ok,
-      gotToken: Boolean(accessToken),
-      scopes: json?.scope ?? null,
-      bodyPreview: accessToken ? "(token omitido)" : text.slice(0, 300),
-    };
-  } catch (e) {
-    steps.oauth = { ok: false, error: e instanceof Error ? e.message : String(e) };
+  const scopeCandidates: (string | null)[] = [
+    "pix.automatico.read pix.automatico.write",
+    "pix.automatico.read",
+    "recorrencia.read recorrencia.write",
+    "cob.read cob.write pix.read pix.write",
+    "cob.write cob.read",
+    "boleto-cobranca.read boleto-cobranca.write",
+    "extrato.read",
+    null, // sem scope: alguns servidores devolvem os escopos registrados
+  ];
+  const scopeAttempts: any[] = [];
+  for (const scope of scopeCandidates) {
+    try {
+      const params: Record<string, string> = {
+        client_id: clientId!,
+        client_secret: clientSecret!,
+        grant_type: "client_credentials",
+      };
+      if (scope) params.scope = scope;
+      const resp = await fetch(OAUTH_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams(params),
+        ...(client ? { client } : {}),
+      } as RequestInit);
+      const text = await resp.text();
+      let json: any = null;
+      try { json = JSON.parse(text); } catch { /* body não-JSON */ }
+      const token = json?.access_token ?? null;
+      scopeAttempts.push({
+        scope: scope ?? "(nenhum)",
+        status: resp.status,
+        gotToken: Boolean(token),
+        grantedScopes: json?.scope ?? null,
+        bodyPreview: token ? "(token omitido)" : text.slice(0, 200),
+      });
+      if (token) {
+        accessToken = token;
+        steps.oauth = {
+          status: resp.status,
+          ok: true,
+          gotToken: true,
+          scopeUsed: scope ?? "(nenhum)",
+          scopes: json?.scope ?? null,
+        };
+        break;
+      }
+    } catch (e) {
+      scopeAttempts.push({ scope: scope ?? "(nenhum)", error: e instanceof Error ? e.message : String(e) });
+    }
+  }
+  steps.scopeAttempts = scopeAttempts;
+  if (!accessToken) {
+    steps.oauth = { ok: false, gotToken: false, note: "Nenhum escopo candidato foi aceito — ver scopeAttempts." };
   }
 
   if (!accessToken) {
