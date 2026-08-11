@@ -71,10 +71,11 @@ Deno.serve(async (req) => {
   const missing = [
     !clientId && "INTER_CLIENT_ID",
     !clientSecret && "INTER_CLIENT_SECRET",
-    !certPem && "INTER_CERT_PEM",
-    !keyPem && "INTER_KEY_PEM",
   ].filter(Boolean);
-  steps.credentials = missing.length ? { ok: false, missing } : { ok: true };
+  const hasCertPair = Boolean(certPem && keyPem);
+  steps.credentials = missing.length
+    ? { ok: false, missing }
+    : { ok: true, mtlsCertPresent: hasCertPair };
 
   if (missing.length) {
     return new Response(
@@ -91,26 +92,31 @@ Deno.serve(async (req) => {
     );
   }
 
-  let client: unknown;
-  try {
-    client = (Deno as any).createHttpClient({
-      cert: certPem,
-      key: keyPem,
-    });
-    steps.httpClientCreated = true;
-  } catch (e) {
-    return new Response(
-      JSON.stringify(
-        {
-          verdict: "INVIÁVEL_SEM_PROXY",
-          reason: `createHttpClient rejeitou o par cert/key: ${e instanceof Error ? e.message : String(e)}`,
-          steps,
-        },
-        null,
-        2,
-      ),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+  // Sem o par cert/key ainda é útil rodar: o OAuth do Inter exige mTLS, então a
+  // resposta desta tentativa "nua" diz se as credenciais existem do lado deles
+  // (erro de TLS/handshake) ou se estão inválidas (400/401 com corpo).
+  let client: unknown = undefined;
+  if (hasCertPair) {
+    try {
+      client = (Deno as any).createHttpClient({ cert: certPem, key: keyPem });
+      steps.httpClientCreated = true;
+    } catch (e) {
+      return new Response(
+        JSON.stringify(
+          {
+            verdict: "INVIÁVEL_SEM_PROXY",
+            reason: `createHttpClient rejeitou o par cert/key: ${e instanceof Error ? e.message : String(e)}`,
+            steps,
+          },
+          null,
+          2,
+        ),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+  } else {
+    steps.httpClientCreated = false;
+    steps.note = "Sem INTER_CERT_PEM/INTER_KEY_PEM: tentativa sem mTLS, apenas para diagnóstico.";
   }
 
   // 3. Token OAuth (client_credentials sobre mTLS)
