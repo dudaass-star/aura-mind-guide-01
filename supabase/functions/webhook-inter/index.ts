@@ -200,6 +200,21 @@ async function releaseAccessActivation(supabase: any, txid: string): Promise<voi
     .update({ access_activated_at: null }).eq("txid", txid).is("paid_at", null);
 }
 
+// Semana grátis: não existe cobrança para reservar, então a reserva idempotente
+// mora no próprio mandato. Só o primeiro webhook de aprovação atravessa.
+async function claimTrialActivation(supabase: any, idRec: string): Promise<boolean> {
+  const { data, error } = await supabase.from("inter_pix_recurrences")
+    .update({ access_granted_at: new Date().toISOString() })
+    .eq("id_rec", idRec)
+    .is("access_granted_at", null)
+    .select("id_rec");
+  if (error) {
+    console.error(`[webhook-inter] falha reservando trial ${idRec}:`, error.message);
+    return false;
+  }
+  return Array.isArray(data) && data.length === 1;
+}
+
 // Libera/estende o acesso. Chamado quando dinheiro entra de fato:
 // cobrança imediata paga (ciclo 0) ou cobrança de ciclo CONCLUIDA.
 async function activateAccess(
