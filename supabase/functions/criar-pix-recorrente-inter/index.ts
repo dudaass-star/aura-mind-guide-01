@@ -30,6 +30,34 @@ const PRICES: Record<string, Record<string, number>> = {
 const TRIAL_PRICES: Record<string, number> = { essencial: 690, direcao: 990, transformacao: 1990 };
 const TRIAL_DAYS = 7;
 
+// Modo do trial no trilho Inter (system_config.inter_trial_mode):
+//   • "free"  → 7 dias GRÁTIS: nenhuma cobrança imediata; o mandato cheio começa
+//               em D+7. Um único scan, uma única aprovação no app do banco.
+//   • "paid"  → 1ª semana paga (R$ 6,90) + mandato cheio. Exige a jornada
+//               composta do Bacen, que o Inter NÃO implementa hoje: o cliente
+//               teria que escanear dois QRs. Mantido só para quando o Inter (ou
+//               outro PSP) publicar a Jornada 1.
+//   • "none"  → sem trial: cobrança cheia imediata + mandato do ciclo seguinte.
+type InterTrialMode = "free" | "paid" | "none";
+const DEFAULT_INTER_TRIAL_MODE: InterTrialMode = "free";
+
+async function readTrialMode(supabase: any): Promise<InterTrialMode> {
+  try {
+    const { data } = await supabase
+      .from("system_config").select("value").eq("key", "inter_trial_mode").maybeSingle();
+    if (!data?.value) return DEFAULT_INTER_TRIAL_MODE;
+    let raw = data.value;
+    if (typeof raw === "string") {
+      try { raw = JSON.parse(raw); } catch { /* valor cru já é a string */ }
+    }
+    const mode = String(raw).replace(/"/g, "").trim().toLowerCase();
+    return (["free", "paid", "none"].includes(mode) ? mode : DEFAULT_INTER_TRIAL_MODE) as InterTrialMode;
+  } catch (e) {
+    console.warn("[criar-pix-recorrente-inter] inter_trial_mode não lido:", (e as Error)?.message);
+    return DEFAULT_INTER_TRIAL_MODE;
+  }
+}
+
 const PLAN_NAMES: Record<string, string> = {
   essencial: "Essencial", direcao: "Direção", transformacao: "Transformação",
 };
