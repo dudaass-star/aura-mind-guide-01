@@ -366,11 +366,21 @@ Deno.serve(async (req) => {
         continue;
       }
       // Confirma na API do Inter que a cobrança realmente foi liquidada.
-      const cobStatus = await confirmWithInter(`/pix/v2/cob/${txid}`);
+      // ATENÇÃO: ciclo 0 é `cob` (cobrança imediata do QR composto); os ciclos
+      // seguintes são `cobr` (recorrentes). Consultar sempre `/cob` fazia o
+      // débito automático liquidado responder 404 → acesso NUNCA era estendido.
+      const cycleIdx = Number(charge.cycle_index ?? cycleIndexFromTxid(txid) ?? 0);
+      const confirmPath = cycleIdx === 0 ? `/pix/v2/cob/${txid}` : `/pix/v2/cobr/${txid}`;
+      const cobStatus = await confirmWithInter(confirmPath);
       if (cobStatus === null || !["CONCLUIDA", "REMOVIDA_PELO_PSP"].includes(cobStatus)) {
         console.warn(
           `[webhook-inter] ⚠️ liquidação de ${txid} não confirmada pelo Inter (status ${cobStatus}) — acesso não liberado`,
         );
+        // Falha de confirmação costuma ser transitória: solta a dedupe para que
+        // a reentrega do Inter (ou o replay da auditoria) volte a ser processada.
+        if (cobStatus === null) {
+          await supabase.from("inter_webhook_events").delete().eq("event_key", `pix:${e2e}`);
+        }
         continue;
       }
       await supabase.from("inter_pix_charges").update({
@@ -385,7 +395,7 @@ Deno.serve(async (req) => {
         .from("inter_pix_recurrences").select("*").eq("id_rec", charge.id_rec).maybeSingle();
       if (rec) {
         await activateAccess(supabase, rec, {
-          isFirstPayment: (charge.cycle_index ?? 0) === 0,
+          isFirstPayment: cycleIdx === 0,
           valueCents: charge.value_cents,
           eventId: `inter-${txid}-purchase`,
         });
