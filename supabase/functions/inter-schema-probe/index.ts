@@ -108,6 +108,29 @@ Deno.serve(async (req) => {
   }
 
   // Inspeciona uma rec existente (QR composto) e limpa artefatos de teste.
+  // Jornada 1: QR ÚNICO de cobrança que já carrega o mandato (`idRec`).
+  // Sonda os nomes de campo possíveis; o Bacen devolve `violacoes[]` dizendo
+  // qual existe. É assim que descobrimos o contrato real sem documentação.
+  if (which === "jornada1") {
+    const chave = Deno.env.get("INTER_PIX_KEY")!;
+    const idRec = url.searchParams.get("idRec") || "";
+    const base = {
+      calendario: { expiracao: 86400 },
+      devedor: { cpf: "11144477735", nome: "Cliente Teste Aura" },
+      valor: { original: "1.00" },
+      chave,
+      solicitacaoPagador: "Aura - sonda jornada 1",
+    };
+    for (const [label, extra] of [
+      ["idRec_raiz", { idRec }],
+      ["recorrencia_obj", { recorrencia: { idRec } }],
+      ["rec_obj", { rec: { idRec } }],
+      ["calendario_idRec", { calendario: { expiracao: 86400, idRec } }],
+    ] as [string, Record<string, unknown>][]) {
+      await attempt(label, `/pix/v2/cob/${buildTxid("aurasonda")}`, "PUT", { ...base, ...extra });
+    }
+  }
+
   if (which === "inspect") {
     const idRec = url.searchParams.get("idRec") || "";
     const txid = url.searchParams.get("txid") || "";
