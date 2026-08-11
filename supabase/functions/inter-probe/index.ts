@@ -132,9 +132,8 @@ Deno.serve(async (req) => {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body,
-      // @ts-expect-error extensão do Deno ao fetch padrão
-      client,
-    });
+      ...(client ? { client } : {}),
+    } as RequestInit);
     const text = await resp.text();
     let json: any = null;
     try { json = JSON.parse(text); } catch { /* body não-JSON */ }
@@ -170,9 +169,8 @@ Deno.serve(async (req) => {
     const resp = await fetch(`${API_BASE}/pix/v2/recorrencia?inicio=${new Date(Date.now() - 7 * 864e5).toISOString()}&fim=${new Date().toISOString()}`, {
       method: "GET",
       headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-      // @ts-expect-error extensão do Deno ao fetch padrão
-      client,
-    });
+      ...(client ? { client } : {}),
+    } as RequestInit);
     const text = await resp.text();
     steps.pixAutomaticoRead = { status: resp.status, ok: resp.ok, bodyPreview: text.slice(0, 400) };
   } catch (e) {
