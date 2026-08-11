@@ -174,26 +174,16 @@ Deno.serve(async (req) => {
   let accessToken: string | null = null;
   // Varredura de nomes de escopo, um por um: só assim descobrimos exatamente
   // quais estão registrados na integração (o Inter devolve só os concedidos).
-  const scopeCandidates: (string | null)[] = [
-    "pix.automatico.read",
-    "pix.automatico.write",
-    "pixautomatico.read",
-    "pix-automatico.read",
-    "automatico.read",
-    "recorrencia.read",
-    "recorrencia.write",
-    "rec.read",
-    "rec.write",
-    "cobr.read",
-    "cobr.write",
-    "cob.read",
-    "pix.read",
-    "pix.write",
-    "webhook.read",
-    "webhook.write",
-    "cob.read cob.write pix.read pix.write",
-    null, // sem scope
-  ];
+  // O OAuth do Inter aplica rate limit agressivo (429), então a varredura é
+  // curta e espaçada. `?scopes=a,b` permite testar nomes específicos.
+  const scopesParam = url.searchParams.get("scopes");
+  const scopeCandidates: (string | null)[] = scopesParam
+    ? scopesParam.split(",").map((s) => (s.trim() === "" ? null : s.trim()))
+    : [
+        "pix.automatico.read pix.automatico.write",
+        "recorrencia.read recorrencia.write",
+        "cob.read cob.write pix.read pix.write",
+      ];
   const scopeAttempts: any[] = [];
   for (const scope of scopeCandidates) {
     try {
@@ -233,6 +223,8 @@ Deno.serve(async (req) => {
     } catch (e) {
       scopeAttempts.push({ scope: scope ?? "(nenhum)", error: e instanceof Error ? e.message : String(e) });
     }
+    // Espaça as tentativas para não bater no rate limit do OAuth.
+    await new Promise((r) => setTimeout(r, 3500));
   }
   steps.scopeAttempts = scopeAttempts;
   if (!accessToken) {
