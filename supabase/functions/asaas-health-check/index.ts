@@ -167,6 +167,15 @@ Deno.serve(async (req) => {
     if (typeof v === "string") gateway = v;
   }
 
+  // Override de sonda: permite validar um trilho ANTES de virar o
+  // `pix_gateway`. Nesse modo não gravamos `pix_rail_status` — o status
+  // persistido tem que continuar refletindo o trilho realmente em uso.
+  const body = req.method === "POST"
+    ? await req.json().catch(() => ({} as Record<string, unknown>))
+    : {};
+  const override = typeof body.probe_gateway === "string" ? body.probe_gateway : null;
+  if (override) gateway = override;
+
   let probe: RailProbe;
   if (gateway === "off") {
     probe = { gateway: "off", healthy: false, httpStatus: 0, detail: "PIX desligado manualmente no admin" };
@@ -192,6 +201,14 @@ Deno.serve(async (req) => {
       { key: "pix_rail_status", value: JSON.stringify(status), updated_at: new Date().toISOString() },
       { onConflict: "key" },
     );
+
+  if (override) {
+    console.log(`[asaas-health-check] sonda avulsa de ${gateway} (não persistida)`);
+    return new Response(JSON.stringify({ ...status, persisted: false }, null, 2), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
 
   if (upsertErr) console.error("[asaas-health-check] falha ao gravar pix_rail_status:", upsertErr.message);
   console.log(`[asaas-health-check] trilho=${status.gateway} healthy=${status.healthy} (${status.detail})`);
