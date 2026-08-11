@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 import { getPhoneVariations } from "../_shared/zapi-client.ts";
+import { cancelMandate } from "../_shared/inter-cycles.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -274,6 +275,117 @@ serve(async (req) => {
     }
 
     // ─── Roteamento Asaas (cartão OU PIX recorrente) ──────────────────────
+    // ─── Roteamento Inter (PIX Automático Bacen) ──────────────────────────
+    // Precisa vir ANTES do Asaas/Stripe: se o mandato não for cancelado no
+    // Inter, o cliente cancela no portal e o débito segue autorizado.
+    if (profile?.user_id && profile?.card_gateway === "inter") {
+      const { data: interRec } = await supabase
+        .from("inter_pix_recurrences")
+        .select("id_rec, plan, billing_period, value_cents, next_charge_date, status")
+        .eq("user_id", profile.user_id)
+        .is("replaced_by_id_rec", null)
+        .not("id_rec", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (interRec?.id_rec) {
+        const planLabelInter = PLAN_LABELS[profile.plan || ""] || "Assinatura AURA";
+        const nextDate = interRec.next_charge_date
+          ? (() => {
+              const [y, m, d] = String(interRec.next_charge_date).split("-");
+              return `${d}/${m}/${y}`;
+            })()
+          : "";
+
+        if (action === "check" || !action) {
+          return jsonResponse({
+            success: true,
+            status: "active",
+            gateway: "inter_pix",
+            subscription: {
+              id: interRec.id_rec,
+              plan: planLabelInter,
+              endDate: interRec.next_charge_date
+                ? new Date(`${interRec.next_charge_date}T12:00:00Z`).toISOString()
+                : null,
+              endDateFormatted: nextDate,
+              nextDueDateFormatted: nextDate,
+              amount: (interRec.value_cents / 100).toLocaleString("pt-BR", {
+                style: "currency", currency: "BRL",
+              }),
+              amount_cents: interRec.value_cents,
+              price_id: interRec.id_rec,
+            },
+            // PIX Automático não aceita mudança de valor sem nova autorização
+            // do pagador — desconto temporário não existe neste trilho.
+            discount_available: false,
+            reasons: CANCELLATION_REASONS,
+          });
+        }
+
+        if (action === "cancel") {
+          const canceled = await cancelMandate(supabase, interRec.id_rec);
+          if (!canceled.ok) {
+            logStep("Inter: cancelamento recusado", { status: canceled.status });
+            return jsonResponse({
+              success: false,
+              message: "Não consegui cancelar o débito automático agora. Fale com o suporte no WhatsApp que a gente resolve na hora.",
+            });
+          }
+
+          // Acesso segue até o fim do período já pago (mesma regra do cartão).
+          await supabase.from("profiles").update({
+            status: "canceling",
+            updated_at: new Date().toISOString(),
+          }).eq("user_id", profile.user_id);
+
+          try {
+            await supabase.from("cancellation_feedback").insert({
+              user_id: profile.user_id,
+              phone: phoneClean,
+              reason: reason || null,
+              reason_detail: reason_detail || null,
+              action_taken: "cancel",
+              gateway: "inter_pix",
+            });
+          } catch (_) { /* feedback é best-effort */ }
+
+          try {
+            await supabase.from("retention_events").insert({
+              user_id: profile.user_id,
+              phone: phoneClean,
+              origin: "cancel_flow",
+              tier: "cancel",
+              action: "applied",
+              gateway: "inter_pix",
+              channel: "web",
+              metadata: { id_rec: interRec.id_rec, reason: reason || null },
+            });
+          } catch (_) { /* auditoria best-effort */ }
+
+          return jsonResponse({
+            success: true,
+            status: "canceled",
+            gateway: "inter_pix",
+            message: nextDate
+              ? `Débito automático cancelado. Seu acesso continua até ${nextDate}.`
+              : "Débito automático cancelado. Seu acesso continua até o fim do período já pago.",
+          });
+        }
+
+        // Pausa e escada de descontos exigem novo mandato (nova autorização do
+        // pagador) — encaminha pro suporte em vez de prometer o que não roda.
+        return jsonResponse({
+          success: false,
+          gateway_unsupported: true,
+          gateway: "inter_pix",
+          message:
+            "Sua assinatura é no PIX Automático. Fale com nosso suporte pelo WhatsApp que a gente ajusta pra você.",
+        });
+      }
+    }
+
     // Em produção o card_gateway é gravado como 'asaas' (valor único). A
     // distinção cartão vs PIX vem do payment_method da última cobrança em
     // asaas_payments. Aceita também os nomes antigos 'asaas_card'/'asaas_pix'

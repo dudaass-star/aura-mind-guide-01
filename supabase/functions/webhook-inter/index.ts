@@ -13,6 +13,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { sendProactive } from "../_shared/whatsapp-provider.ts";
 import { normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
+import { retryCharge, MAX_RETRIES } from "../_shared/inter-cycles.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -42,6 +43,56 @@ function addMonths(d: Date, months: number): Date {
   return r;
 }
 
+// Status de cobrança recorrente que significam "não liquidou este ciclo".
+const FAILED_COBR_STATUSES = ["REJEITADA", "NAO_REALIZADA", "NAO_REALIZADO", "EXPIRADA"];
+
+// Purchase no Meta CAPI, dedup por event_id (mesmo padrão do webhook-asaas):
+// sem isso a venda por Inter fica invisível para os anúncios.
+async function fireMetaCapiPurchase(
+  supabase: any,
+  args: {
+    eventId: string; email: string; phone?: string; firstName?: string;
+    fbp?: string | null; fbc?: string | null; value: number; plan: string;
+  },
+): Promise<void> {
+  try {
+    const { data: prior } = await supabase
+      .from("meta_capi_log").select("id")
+      .eq("event_id", args.eventId).eq("event_name", "Purchase")
+      .eq("meta_status", 200).limit(1).maybeSingle();
+    if (prior) return;
+
+    const url = Deno.env.get("SUPABASE_URL")!;
+    const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    await fetch(`${url}/functions/v1/meta-capi`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+      body: JSON.stringify({
+        event_name: "Purchase",
+        event_id: args.eventId,
+        event_source_url: "https://olaaura.com.br/obrigado",
+        source: "webhook-inter",
+        is_first_purchase: true,
+        user_data: {
+          email: args.email,
+          phone: args.phone || undefined,
+          first_name: args.firstName || undefined,
+          ...(args.fbp && { fbp: args.fbp }),
+          ...(args.fbc && { fbc: args.fbc }),
+        },
+        custom_data: {
+          value: args.value,
+          currency: "BRL",
+          content_name: `Plano ${PLAN_NAMES[args.plan] || args.plan}`,
+          content_category: args.plan,
+        },
+      }),
+    });
+  } catch (e) {
+    console.warn("[webhook-inter] CAPI Purchase falhou (non-blocking):", (e as Error)?.message);
+  }
+}
+
 // Deduplicação: primeira vez devolve true, reentregas devolvem false.
 async function claimEvent(supabase: any, key: string, kind: string, payload: unknown): Promise<boolean> {
   const { error } = await supabase
@@ -62,7 +113,7 @@ async function claimEvent(supabase: any, key: string, kind: string, payload: unk
 async function activateAccess(
   supabase: any,
   rec: Record<string, any>,
-  opts: { isFirstPayment: boolean; valueCents: number },
+  opts: { isFirstPayment: boolean; valueCents: number; eventId?: string },
 ): Promise<void> {
   try {
     const plan = rec.plan as string;
@@ -129,6 +180,33 @@ async function activateAccess(
 
     // Renovação silenciosa: não repete boas-vindas.
     if (!opts.isFirstPayment) return;
+
+    // Funil: fecha a linha de checkout_sessions do PIX, igual ao trilho Asaas.
+    if (email) {
+      try {
+        await supabase.from("checkout_sessions")
+          .update({ status: "completed", completed_at: new Date().toISOString() })
+          .in("payment_method", ["pix", "pix_auto"])
+          .eq("status", "created")
+          .eq("email", email);
+      } catch (e) {
+        console.warn("[webhook-inter] funil PIX não fechado:", (e as Error)?.message);
+      }
+    }
+
+    // Aquisição: só a 1ª liquidação do mandato conta como Purchase.
+    if (email) {
+      await fireMetaCapiPurchase(supabase, {
+        eventId: opts.eventId || `inter-${rec.id_rec}-purchase`,
+        email,
+        phone: phone || undefined,
+        firstName: (name || "").split(" ")[0] || undefined,
+        fbp: rec.fbp || null,
+        fbc: rec.fbc || null,
+        value: opts.valueCents / 100,
+        plan,
+      });
+    }
 
     await supabase.from("user_portal_tokens")
       .upsert({ user_id: userId }, { onConflict: "user_id" })
@@ -222,6 +300,7 @@ Deno.serve(async (req) => {
         await activateAccess(supabase, rec, {
           isFirstPayment: (charge.cycle_index ?? 0) === 0,
           valueCents: charge.value_cents,
+          eventId: `inter-${txid}-purchase`,
         });
       }
     }
@@ -293,8 +372,32 @@ Deno.serve(async (req) => {
 
       if (paid) {
         await activateAccess(supabase, rec, { isFirstPayment: false, valueCents });
-      } else if (status === "CANCELADA") {
-        // Débito não liquidou nem após as retentativas 3R/7D → dunning assume.
+        continue;
+      }
+
+      // Débito rejeitado: o Inter NÃO retenta sozinho — a política 3R/7D só
+      // autoriza; quem dispara cada retentativa é este backend.
+      if (FAILED_COBR_STATUSES.includes(status)) {
+        const { data: chargeRow } = await supabase
+          .from("inter_pix_charges")
+          .select("txid, due_date, retry_count")
+          .eq("txid", txid).maybeSingle();
+        if (chargeRow) {
+          const attempt = await retryCharge(supabase, chargeRow);
+          if (attempt.retried) {
+            console.log(
+              `[webhook-inter] 🔁 ${txid} reagendado para ${attempt.date} (tentativa dentro do 3R/7D)`,
+            );
+            continue; // ainda há tentativa em pé: não aciona dunning.
+          }
+          console.log(
+            `[webhook-inter] ⚠️ ${txid} sem retentativa possível (${attempt.reason}, teto ${MAX_RETRIES})`,
+          );
+        }
+      }
+
+      if (status === "CANCELADA" || FAILED_COBR_STATUSES.includes(status)) {
+        // Sem retentativa em pé → dunning (2 avisos + escada de ofertas) assume.
         const { data: prof } = rec.user_id
           ? await supabase.from("profiles").select("user_id").eq("id", rec.user_id).maybeSingle()
           : { data: null };
