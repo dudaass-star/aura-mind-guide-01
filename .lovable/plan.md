@@ -79,4 +79,7 @@ Como no plano anterior, sem mudança:
 
 ## Ordem
 
-Fase 0 (probe do Inter, em paralelo) → Fase 1 (Woovi no ar) → Fase 2 → Fase 3 só se o probe passar e o volume justificar.
+1. **Hoje**: Fase 0-A (health check + PIX fora da UI enquanto não houver trilho) — não depende de aprovação de ninguém.
+2. **Hoje/amanhã**: Fase 0-B (probe do Inter), com você criando a integração no Internet Banking.
+3. **Woovi aprovada** → Fase 1 e 2 pela Woovi.
+4. **Woovi recusada ou demorando** → Fase 3 antecipada: Inter vira o trilho principal, desde que o probe da Fase 0-B tenha passado.
