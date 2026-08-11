@@ -364,14 +364,21 @@ Deno.serve(async (req) => {
     const recData = rec.data as Record<string, any>;
     const idRec = recData?.idRec as string;
     remoteIdRec = idRec || null;
+    // ATENÇÃO: o `POST /pix/v2/rec` NÃO devolve `dadosQR` — só o `GET` devolve.
+    // Sem esta releitura a função caía no QR do `cob` (paga sem autorizar).
+    let recRead: Record<string, any> | null = null;
+    if (idRec) {
+      const recGet = await interFetch<Record<string, any>>(`/pix/v2/rec/${idRec}`, { method: "GET" });
+      if (recGet.ok) recRead = recGet.data as Record<string, any>;
+      else console.warn(`[criar-pix-recorrente-inter] GET rec ${idRec} falhou (HTTP ${recGet.status})`);
+    }
     // QR CORRETO = o da RECORRÊNCIA (`rec.dadosQR.pixCopiaECola`, jornada
     // JORNADA_2). Ele é o composto: paga a cobrança amarrada em
     // `ativacao.dadosJornada.txid` E autoriza os débitos futuros no mesmo scan.
     // O `pixCopiaECola` do `cob` paga SÓ o valor imediato e deixa o mandato em
     // CRIADA/AGUARDANDO_DEFINICAO — foi exatamente esse o bug do 1º teste real.
-    const recQr = (recData?.dadosQR as Record<string, any> | undefined)?.pixCopiaECola as
-      | string
-      | undefined;
+    const recQr = ((recRead?.dadosQR ?? recData?.dadosQR) as Record<string, any> | undefined)
+      ?.pixCopiaECola as string | undefined;
     const cobQr = (cob.data as Record<string, any>)?.pixCopiaECola as string | undefined;
     if (!recQr) {
       console.error(
