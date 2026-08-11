@@ -1848,7 +1848,10 @@ const CheckoutV2 = () => {
                 <div className="space-y-4 pt-2">
                   <div className="bg-white rounded-xl p-4 flex justify-center">
                     <img
-                      src={`data:image/png;base64,${pixData.qrImage}`}
+                      // Asaas devolve base64 puro; o Inter devolve data URI de SVG já pronto.
+                      src={pixData.qrImage.startsWith("data:")
+                        ? pixData.qrImage
+                        : `data:image/png;base64,${pixData.qrImage}`}
                       alt="QR Code PIX"
                       className="w-56 h-56"
                     />
