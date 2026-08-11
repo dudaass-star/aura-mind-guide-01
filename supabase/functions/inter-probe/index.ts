@@ -224,7 +224,7 @@ Deno.serve(async (req) => {
       scopeAttempts.push({ scope: scope ?? "(nenhum)", error: e instanceof Error ? e.message : String(e) });
     }
     // Espaça as tentativas para não bater no rate limit do OAuth.
-    await new Promise((r) => setTimeout(r, 3500));
+    await new Promise((r) => setTimeout(r, 9000));
   }
   steps.scopeAttempts = scopeAttempts;
   if (!accessToken) {
