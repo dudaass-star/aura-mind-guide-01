@@ -103,12 +103,18 @@ async function isReturningCustomer(
     if (phoneDigits) {
       orParts.push(`phone.eq.${phoneDigits}`, `phone.eq.55${phoneDigits}`);
     }
-    const { data: profiles } = await supabase
+    // `profiles` não tem coluna de cliente Stripe: pedir por ela derrubava a
+    // checagem em silêncio e liberava trial para retornante.
+    const { data: profiles, error: profErr } = await supabase
       .from("profiles")
-      .select("id, plan, stripe_customer_id, asaas_customer_id")
+      .select("id, plan, asaas_customer_id")
       .or(orParts.join(","))
       .limit(5);
-    if ((profiles || []).some((p: any) => p.plan || p.stripe_customer_id || p.asaas_customer_id)) {
+    if (profErr) {
+      console.error("[criar-pix-recorrente-asaas] checagem de perfil falhou:", profErr.message);
+      return true;
+    }
+    if ((profiles || []).some((p: any) => p.plan || p.asaas_customer_id)) {
       return true;
     }
 

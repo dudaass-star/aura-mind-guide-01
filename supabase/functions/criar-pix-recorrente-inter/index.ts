@@ -88,10 +88,17 @@ async function isReturningCustomer(supabase: any, email: string, phoneDigits: st
   try {
     const orParts = [`email.eq.${email}`];
     if (phoneDigits) orParts.push(`phone.eq.${phoneDigits}`, `phone.eq.55${phoneDigits}`);
-    const { data: profiles } = await supabase
-      .from("profiles").select("id, plan, stripe_customer_id, asaas_customer_id")
+    // ATENÇÃO: `profiles` não tem coluna de cliente Stripe. Selecionar coluna
+    // inexistente fazia o PostgREST devolver erro e a checagem cair em silêncio,
+    // liberando o trial de R$ 6,90 para quem já foi cliente.
+    const { data: profiles, error: profErr } = await supabase
+      .from("profiles").select("id, plan, asaas_customer_id")
       .or(orParts.join(",")).limit(5);
-    if ((profiles || []).some((p: any) => p.plan || p.stripe_customer_id || p.asaas_customer_id)) return true;
+    if (profErr) {
+      console.error("[criar-pix-recorrente-inter] checagem de perfil falhou:", profErr.message);
+      return true; // fail-safe: na dúvida, sem trial.
+    }
+    if ((profiles || []).some((p: any) => p.plan || p.asaas_customer_id)) return true;
 
     const { data: interPaid } = await supabase
       .from("inter_pix_recurrences").select("id")
