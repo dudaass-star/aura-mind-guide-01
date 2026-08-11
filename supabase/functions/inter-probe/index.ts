@@ -172,15 +172,27 @@ Deno.serve(async (req) => {
 
   // 3. Token OAuth (client_credentials sobre mTLS) — varredura de escopos candidatos
   let accessToken: string | null = null;
+  // Varredura de nomes de escopo, um por um: só assim descobrimos exatamente
+  // quais estão registrados na integração (o Inter devolve só os concedidos).
   const scopeCandidates: (string | null)[] = [
-    "pix.automatico.read pix.automatico.write",
     "pix.automatico.read",
-    "recorrencia.read recorrencia.write",
+    "pix.automatico.write",
+    "pixautomatico.read",
+    "pix-automatico.read",
+    "automatico.read",
+    "recorrencia.read",
+    "recorrencia.write",
+    "rec.read",
+    "rec.write",
+    "cobr.read",
+    "cobr.write",
+    "cob.read",
+    "pix.read",
+    "pix.write",
+    "webhook.read",
+    "webhook.write",
     "cob.read cob.write pix.read pix.write",
-    "cob.write cob.read",
-    "boleto-cobranca.read boleto-cobranca.write",
-    "extrato.read",
-    null, // sem scope: alguns servidores devolvem os escopos registrados
+    null, // sem scope
   ];
   const scopeAttempts: any[] = [];
   for (const scope of scopeCandidates) {
@@ -208,7 +220,7 @@ Deno.serve(async (req) => {
         grantedScopes: json?.scope ?? null,
         bodyPreview: token ? "(token omitido)" : text.slice(0, 200),
       });
-      if (token) {
+      if (token && !accessToken) {
         accessToken = token;
         steps.oauth = {
           status: resp.status,
@@ -217,7 +229,6 @@ Deno.serve(async (req) => {
           scopeUsed: scope ?? "(nenhum)",
           scopes: json?.scope ?? null,
         };
-        break;
       }
     } catch (e) {
       scopeAttempts.push({ scope: scope ?? "(nenhum)", error: e instanceof Error ? e.message : String(e) });
