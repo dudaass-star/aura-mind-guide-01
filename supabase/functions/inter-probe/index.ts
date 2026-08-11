@@ -27,6 +27,10 @@ Deno.serve(async (req) => {
   // `?capability=1` responde só a pergunta do runtime (existe suporte a mTLS?).
   // Não toca em credencial nem em rede externa, então é seguro sem o segredo.
   const capabilityOnly = url.searchParams.get("capability") === "1";
+  // `?diagnose=1`: roda a sonda sem expor segredo nenhum (tokens são omitidos e
+  // apenas status HTTP/erros de handshake voltam). Serve para validar credencial
+  // recém-cadastrada sem precisar do INTERNAL_WEBHOOK_SECRET em mãos.
+  const diagnose = url.searchParams.get("diagnose") === "1";
   if (capabilityOnly) {
     return new Response(
       JSON.stringify({
@@ -36,7 +40,7 @@ Deno.serve(async (req) => {
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
-  if (!internal || provided !== internal) {
+  if (!diagnose && (!internal || provided !== internal)) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -71,10 +75,11 @@ Deno.serve(async (req) => {
   const missing = [
     !clientId && "INTER_CLIENT_ID",
     !clientSecret && "INTER_CLIENT_SECRET",
-    !certPem && "INTER_CERT_PEM",
-    !keyPem && "INTER_KEY_PEM",
   ].filter(Boolean);
-  steps.credentials = missing.length ? { ok: false, missing } : { ok: true };
+  const hasCertPair = Boolean(certPem && keyPem);
+  steps.credentials = missing.length
+    ? { ok: false, missing }
+    : { ok: true, mtlsCertPresent: hasCertPair };
 
   if (missing.length) {
     return new Response(
@@ -91,26 +96,31 @@ Deno.serve(async (req) => {
     );
   }
 
-  let client: unknown;
-  try {
-    client = (Deno as any).createHttpClient({
-      cert: certPem,
-      key: keyPem,
-    });
-    steps.httpClientCreated = true;
-  } catch (e) {
-    return new Response(
-      JSON.stringify(
-        {
-          verdict: "INVIÁVEL_SEM_PROXY",
-          reason: `createHttpClient rejeitou o par cert/key: ${e instanceof Error ? e.message : String(e)}`,
-          steps,
-        },
-        null,
-        2,
-      ),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+  // Sem o par cert/key ainda é útil rodar: o OAuth do Inter exige mTLS, então a
+  // resposta desta tentativa "nua" diz se as credenciais existem do lado deles
+  // (erro de TLS/handshake) ou se estão inválidas (400/401 com corpo).
+  let client: unknown = undefined;
+  if (hasCertPair) {
+    try {
+      client = (Deno as any).createHttpClient({ cert: certPem, key: keyPem });
+      steps.httpClientCreated = true;
+    } catch (e) {
+      return new Response(
+        JSON.stringify(
+          {
+            verdict: "INVIÁVEL_SEM_PROXY",
+            reason: `createHttpClient rejeitou o par cert/key: ${e instanceof Error ? e.message : String(e)}`,
+            steps,
+          },
+          null,
+          2,
+        ),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+  } else {
+    steps.httpClientCreated = false;
+    steps.note = "Sem INTER_CERT_PEM/INTER_KEY_PEM: tentativa sem mTLS, apenas para diagnóstico.";
   }
 
   // 3. Token OAuth (client_credentials sobre mTLS)
@@ -126,9 +136,8 @@ Deno.serve(async (req) => {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body,
-      // @ts-expect-error extensão do Deno ao fetch padrão
-      client,
-    });
+      ...(client ? { client } : {}),
+    } as RequestInit);
     const text = await resp.text();
     let json: any = null;
     try { json = JSON.parse(text); } catch { /* body não-JSON */ }
@@ -164,9 +173,8 @@ Deno.serve(async (req) => {
     const resp = await fetch(`${API_BASE}/pix/v2/recorrencia?inicio=${new Date(Date.now() - 7 * 864e5).toISOString()}&fim=${new Date().toISOString()}`, {
       method: "GET",
       headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-      // @ts-expect-error extensão do Deno ao fetch padrão
-      client,
-    });
+      ...(client ? { client } : {}),
+    } as RequestInit);
     const text = await resp.text();
     steps.pixAutomaticoRead = { status: resp.status, ok: resp.ok, bodyPreview: text.slice(0, 400) };
   } catch (e) {
