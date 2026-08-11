@@ -10,6 +10,7 @@
 // Roda via cron a cada 15 min e também pode ser chamada manualmente com
 // x-internal-secret.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { interFetch } from "../_shared/inter-pix.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -78,6 +79,32 @@ async function probeWoovi(): Promise<RailProbe> {
   }
 }
 
+// Sonda do Banco Inter: token OAuth com mTLS + leitura de recorrências.
+// `GET /pix/v2/rec` é o endpoint mais barato que exige escopo de Pix Automático,
+// então cobre de uma vez: certificado válido, credencial válida e escopo ativo.
+async function probeInter(): Promise<RailProbe> {
+  const missing = ["INTER_CLIENT_ID", "INTER_CLIENT_SECRET", "INTER_CERT_PEM", "INTER_KEY_PEM"]
+    .filter((k) => !Deno.env.get(k));
+  if (missing.length) {
+    return { gateway: "inter", healthy: false, httpStatus: 0, detail: `secrets ausentes: ${missing.join(", ")}` };
+  }
+  try {
+    const inicio = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const fim = new Date().toISOString();
+    const r = await interFetch(`/pix/v2/rec?inicio=${inicio}&fim=${fim}`);
+    return {
+      gateway: "inter",
+      healthy: r.ok,
+      httpStatus: r.status,
+      detail: r.ok ? "operacional" : `HTTP ${r.status}: ${r.raw.slice(0, 200) || "(body vazio)"}`,
+    };
+  } catch (e) {
+    // Erro de handshake aparece aqui: certificado vencido/trocado derruba TODO
+    // o trilho de uma vez, por isso o detalhe precisa chegar cru no admin.
+    return { gateway: "inter", healthy: false, httpStatus: 0, detail: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -119,8 +146,7 @@ Deno.serve(async (req) => {
   } else if (gateway === "woovi") {
     probe = await probeWoovi();
   } else if (gateway === "inter") {
-    // Trilho Inter ainda não implementado (Fase 3). Nunca reportar saudável.
-    probe = { gateway: "inter", healthy: false, httpStatus: 0, detail: "trilho Inter ainda não implementado" };
+    probe = await probeInter();
   } else {
     probe = await probeAsaas();
   }
