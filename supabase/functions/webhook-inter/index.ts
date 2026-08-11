@@ -14,6 +14,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { sendProactive } from "../_shared/whatsapp-provider.ts";
 import { normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
 import { retryCharge, MAX_RETRIES } from "../_shared/inter-cycles.ts";
+import { interFetch } from "../_shared/inter-pix.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -27,6 +28,40 @@ const PLAN_NAMES: Record<string, string> = {
 const CYCLE_MONTHS: Record<string, number> = {
   monthly: 1, quarterly: 3, semestral: 6, yearly: 12,
 };
+const CYCLE_DAYS: Record<string, number> = {
+  monthly: 31, quarterly: 92, semestral: 183, yearly: 365,
+};
+// Sessões incluídas por plano (espelha webhook-asaas).
+const PLAN_SESSIONS: Record<string, number> = {
+  essencial: 1, direcao: 4, transformacao: 8,
+};
+
+/**
+ * O Inter não assina o webhook e a URL registrada não carrega segredo — então a
+ * confiança vem da PRÓPRIA API: antes de liberar acesso, perguntamos ao Inter o
+ * status real do recurso. Payload forjado não sobrevive a essa checagem.
+ * Retorna `null` quando não foi possível confirmar (a auditoria reconcilia).
+ */
+async function confirmWithInter(path: string): Promise<string | null> {
+  try {
+    const r = await interFetch<Record<string, any>>(path);
+    if (!r.ok) {
+      console.warn(`[webhook-inter] confirmação recusada em ${path} (HTTP ${r.status})`);
+      return null;
+    }
+    const d = r.data as Record<string, any> | null;
+    return String(d?.status ?? "") || "";
+  } catch (e) {
+    console.warn(`[webhook-inter] confirmação falhou em ${path}:`, (e as Error)?.message);
+    return null;
+  }
+}
+
+/** `aurac3<tail>` → 3. Cobranças de ciclo têm índice no próprio txid. */
+function cycleIndexFromTxid(txid: string): number | null {
+  const m = /^aurac(\d+)/.exec(txid || "");
+  return m ? Number(m[1]) : null;
+}
 
 function addDays(d: Date, days: number): Date {
   const r = new Date(d);
@@ -123,59 +158,103 @@ async function activateAccess(
     const phoneRaw = (rec.customer_phone as string) || "";
     const phone = phoneRaw ? normalizeBrazilianPhone(phoneRaw) : "";
 
-    // Trial pago → acesso de 7 dias; depois o mandato debita e estende por ciclo.
+    // Perfil: procura pelo vínculo do mandato, senão por email/telefone.
+    // A validade nova SEMPRE parte do `plan_expires_at` do PERFIL (o mandato não
+    // guarda validade) — assim a renovação soma ao que o cliente ainda tem.
     const now = new Date();
-    const base = rec.plan_expires_at && new Date(rec.plan_expires_at) > now
-      ? new Date(rec.plan_expires_at)
-      : now;
-    const expiry = (opts.isFirstPayment && rec.is_trial)
-      ? addDays(base, 7)
-      : addMonths(base, CYCLE_MONTHS[billing] ?? 1);
-    const newExpiry = expiry.toISOString();
-
-    // Perfil: procura por user_id do mandato, senão por email/telefone.
-    let userId: string | null = null;
+    let profile: Record<string, any> | null = null;
+    const profileCols =
+      "id, user_id, plan, status, plan_expires_at, phone, email, name";
     if (rec.user_id) {
       const { data: byId } = await supabase
-        .from("profiles").select("user_id").eq("id", rec.user_id).maybeSingle();
-      userId = byId?.user_id || null;
+        .from("profiles").select(profileCols).eq("id", rec.user_id).maybeSingle();
+      profile = byId || null;
     }
-    if (!userId) {
+    if (!profile) {
       const orParts = [`email.eq.${email}`];
       const digits = phoneRaw.replace(/\D/g, "");
       if (digits) orParts.push(`phone.eq.${digits}`, `phone.eq.55${digits}`);
       const { data: prof } = await supabase
-        .from("profiles").select("user_id").or(orParts.join(",")).limit(1).maybeSingle();
-      userId = prof?.user_id || null;
+        .from("profiles").select(profileCols).or(orParts.join(",")).limit(1).maybeSingle();
+      profile = prof || null;
     }
 
-    if (!userId) {
-      console.error(
-        `[webhook-inter] ❌ sem perfil para ${email} — pagamento registrado, acesso pendente de provisionamento`,
-      );
-      await supabase.from("inter_pix_recurrences")
-        .update({ last_error: `perfil nao encontrado para ${email}` })
-        .eq("id_rec", rec.id_rec);
-      return;
-    }
+    const currentExpiry = profile?.plan_expires_at ? new Date(profile.plan_expires_at) : null;
+    const base = currentExpiry && currentExpiry > now ? currentExpiry : now;
+    const expiry = (opts.isFirstPayment && rec.is_trial)
+      ? addDays(base, 7)
+      : addMonths(base, CYCLE_MONTHS[billing] ?? 1);
+    const newExpiry = expiry.toISOString();
+    const today = now.toISOString().split("T")[0];
+    const sessionsCount = PLAN_SESSIONS[plan] ?? 0;
 
-    const { error: updErr } = await supabase.from("profiles").update({
-      plan,
-      status: "active",
-      plan_expires_at: newExpiry,
-      billing_cycle: billing,
-      card_gateway: "inter",
-      payment_failed_at: null,
-      updated_at: new Date().toISOString(),
-    }).eq("user_id", userId);
-    if (updErr) {
-      console.error("[webhook-inter] erro atualizando profile:", updErr);
-      return;
+    let userId: string;
+    let profileRowId: string | null = profile?.id ?? null;
+
+    if (!profile) {
+      // Venda nova por PIX: o perfil nasce aqui (paridade com webhook-asaas).
+      // Sem este bloco o cliente paga e não recebe nada.
+      userId = crypto.randomUUID();
+      const { data: inserted, error: insErr } = await supabase.from("profiles").insert({
+        user_id: userId,
+        name: name || "Cliente",
+        phone: phone || phoneRaw.replace(/\D/g, "") || null,
+        email,
+        plan,
+        status: "active",
+        sessions_used_this_month: 0,
+        sessions_reset_date: today,
+        messages_today: 0,
+        last_message_date: today,
+        needs_schedule_setup: sessionsCount > 0,
+        trial_started_at: now.toISOString(),
+        trial_phase: "listening",
+        current_journey_id: "j1-ansiedade",
+        current_episode: 0,
+        plan_expires_at: newExpiry,
+        whatsapp_provider: "meta",
+        billing_cycle: billing,
+        card_gateway: "inter",
+        payment_failed_at: null,
+      }).select("id").maybeSingle();
+      if (insErr) {
+        console.error("[webhook-inter] ❌ erro criando profile:", insErr);
+        await supabase.from("inter_pix_recurrences")
+          .update({ last_error: `falha criando perfil para ${email}: ${insErr.message}` })
+          .eq("id_rec", rec.id_rec);
+        return;
+      }
+      profileRowId = inserted?.id ?? null;
+      console.log(`[webhook-inter] ✅ profile novo criado: ${userId} (${email})`);
+    } else {
+      userId = profile.user_id as string;
+      const isReturning = profile.status === "canceled";
+      const updatePayload: Record<string, unknown> = {
+        plan,
+        status: "active",
+        plan_expires_at: newExpiry,
+        billing_cycle: billing,
+        card_gateway: "inter",
+        payment_failed_at: null,
+        updated_at: now.toISOString(),
+      };
+      if (isReturning) {
+        updatePayload.sessions_used_this_month = 0;
+        updatePayload.sessions_reset_date = today;
+        updatePayload.trial_phase = "listening";
+        updatePayload.needs_schedule_setup = sessionsCount > 0;
+      }
+      const { error: updErr } = await supabase
+        .from("profiles").update(updatePayload).eq("user_id", userId);
+      if (updErr) {
+        console.error("[webhook-inter] erro atualizando profile:", updErr);
+        return;
+      }
     }
     console.log(`[webhook-inter] ✅ acesso de ${userId} estendido até ${newExpiry} (plano ${plan})`);
 
     await supabase.from("inter_pix_recurrences")
-      .update({ user_id: rec.user_id, status: "ATIVA", last_error: null })
+      .update({ user_id: profileRowId || rec.user_id, status: "ATIVA", last_error: null })
       .eq("id_rec", rec.id_rec);
 
     // Renovação silenciosa: não repete boas-vindas.
@@ -286,6 +365,14 @@ Deno.serve(async (req) => {
         console.warn(`[webhook-inter] pix de txid desconhecido: ${txid}`);
         continue;
       }
+      // Confirma na API do Inter que a cobrança realmente foi liquidada.
+      const cobStatus = await confirmWithInter(`/pix/v2/cob/${txid}`);
+      if (cobStatus === null || !["CONCLUIDA", "REMOVIDA_PELO_PSP"].includes(cobStatus)) {
+        console.warn(
+          `[webhook-inter] ⚠️ liquidação de ${txid} não confirmada pelo Inter (status ${cobStatus}) — acesso não liberado`,
+        );
+        continue;
+      }
       await supabase.from("inter_pix_charges").update({
         status: "CONCLUIDA",
         paid_at: (pix.horario as string) || new Date().toISOString(),
@@ -353,9 +440,11 @@ Deno.serve(async (req) => {
 
       const paid = status === "CONCLUIDA";
       const valueCents = Math.round(Number(c?.valor?.original || 0) * 100);
+      const idxFromTxid = cycleIndexFromTxid(txid);
       await supabase.from("inter_pix_charges").upsert({
         txid,
         id_rec: idRec,
+        ...(idxFromTxid !== null ? { cycle_index: idxFromTxid } : {}),
         due_date: c?.calendario?.dataDeVencimento || new Date().toISOString().slice(0, 10),
         value_cents: valueCents,
         status,
@@ -369,8 +458,20 @@ Deno.serve(async (req) => {
       const { data: rec } = await supabase
         .from("inter_pix_recurrences").select("*").eq("id_rec", idRec).maybeSingle();
       if (!rec) continue;
+      if (rec.user_id) {
+        await supabase.from("inter_pix_charges")
+          .update({ user_id: rec.user_id }).eq("txid", txid).is("user_id", null);
+      }
 
       if (paid) {
+        // Mesma regra do ciclo 0: só libera acesso com confirmação na API.
+        const confirmed = await confirmWithInter(`/pix/v2/cobr/${txid}`);
+        if (confirmed === null || confirmed !== "CONCLUIDA") {
+          console.warn(
+            `[webhook-inter] ⚠️ ciclo ${txid} não confirmado pelo Inter (status ${confirmed}) — acesso não estendido`,
+          );
+          continue;
+        }
         await activateAccess(supabase, rec, { isFirstPayment: false, valueCents });
         continue;
       }

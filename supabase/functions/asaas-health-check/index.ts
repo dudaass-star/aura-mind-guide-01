@@ -92,11 +92,38 @@ async function probeInter(): Promise<RailProbe> {
     const inicio = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const fim = new Date().toISOString();
     const r = await interFetch(`/pix/v2/rec?inicio=${inicio}&fim=${fim}`);
+    if (!r.ok) {
+      return {
+        gateway: "inter",
+        healthy: false,
+        httpStatus: r.status,
+        detail: `HTTP ${r.status}: ${r.raw.slice(0, 200) || "(body vazio)"}`,
+      };
+    }
+
+    // As TRÊS rotas de notificação precisam estar registradas. A do Pix comum
+    // (`/webhook/{chave}`) é a que avisa o pagamento do QR composto: sem ela o
+    // cliente paga, o dinheiro entra e nada libera o acesso.
+    const chave = Deno.env.get("INTER_PIX_KEY");
+    const checks: Array<[string, string]> = [
+      ["webhookrec", "/pix/v2/webhookrec"],
+      ["webhookcobr", "/pix/v2/webhookcobr"],
+      ...(chave ? [["webhook-pix", `/pix/v2/webhook/${chave}`] as [string, string]] : []),
+    ];
+    const faltando: string[] = [];
+    for (const [label, path] of checks) {
+      const w = await interFetch<{ webhookUrl?: string }>(path);
+      if (!w.ok || !w.data?.webhookUrl) faltando.push(label);
+    }
+    if (!chave) faltando.push("INTER_PIX_KEY ausente");
+
     return {
       gateway: "inter",
-      healthy: r.ok,
+      healthy: faltando.length === 0,
       httpStatus: r.status,
-      detail: r.ok ? "operacional" : `HTTP ${r.status}: ${r.raw.slice(0, 200) || "(body vazio)"}`,
+      detail: faltando.length === 0
+        ? "operacional (3 webhooks registrados)"
+        : `webhook não registrado: ${faltando.join(", ")}`,
     };
   } catch (e) {
     // Erro de handshake aparece aqui: certificado vencido/trocado derruba TODO

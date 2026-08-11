@@ -121,9 +121,21 @@ const UserPortal = () => {
   if (profileLoading) return <PortalLoading />;
 
   const firstName = profile?.name?.split(" ")[0] || "você";
+  // Trilho PIX Automático Bacen pelo Banco Inter (sem cartão, mandato Bacen).
+  const isInterPix = (profile as any)?.card_gateway === "inter";
 
   const handleOpenBillingPortal = async () => {
     if (portalLoading) return;
+    // PIX Automático Bacen (Inter): não existe cartão para atualizar. O que
+    // resolve, quando a renovação para, é reautorizar o débito num QR novo.
+    if (isInterPix) {
+      toast({
+        title: "Você paga via PIX Automático",
+        description:
+          "Não há cartão para atualizar. Se a renovação parou, use o link de reautorização que enviamos por e-mail ou fale com o suporte.",
+      });
+      return;
+    }
     // PIX Asaas recorrente: cartão não se aplica. Explica e oferece suporte.
     if (isAsaasPix) {
       toast({
@@ -286,7 +298,9 @@ const UserPortal = () => {
               : (profile?.billing_cycle as any)) ?? null
           }
           paymentGateway={
-            isAsaasPix
+            isInterPix
+              ? "inter-pix"
+              : isAsaasPix
               ? "asaas-pix"
               : (profile as any)?.card_gateway === "asaas"
                 ? "asaas-card"

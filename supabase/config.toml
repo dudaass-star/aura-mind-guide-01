@@ -65,6 +65,8 @@ project_id = "uhyogifgmutfmbyhzzyo"
     verify_jwt = false
   [functions.change-inter-plan]
     verify_jwt = false
+  [functions.pix-reauth-router]
+    verify_jwt = false
   [functions.criar-pix-recorrente-asaas]
     verify_jwt = false
   [functions.deliver-time-capsule]

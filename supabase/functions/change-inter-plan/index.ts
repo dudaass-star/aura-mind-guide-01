@@ -30,19 +30,28 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    const { token, plan, billing } = await req.json() as Record<string, string>;
-    if (!token) return json({ error: "Token ausente" }, 400);
+    const body = await req.json() as Record<string, string>;
+    const { token, userId } = body;
+    const plan = body.plan || body.targetPlan;
+    // O portal manda "semiannual"; o resto do sistema fala "semestral".
+    const billing = body.billing === "semiannual" ? "semestral" : body.billing;
+    if (!token && !userId) return json({ error: "Identificação ausente" }, 400);
     if (!plan || !VALID_PLANS.includes(plan)) return json({ error: "Plano inválido" }, 400);
     if (!billing || !VALID_BILLING.includes(billing)) return json({ error: "Ciclo inválido" }, 400);
 
-    const { data: tokenRow } = await supabase
-      .from("user_portal_tokens").select("user_id").eq("token", token).maybeSingle();
-    if (!tokenRow?.user_id) return json({ error: "Link inválido ou expirado" }, 400);
+    // Aceita token do link passwordless OU o userId da sessão do portal.
+    let resolvedUserId = userId || null;
+    if (!resolvedUserId) {
+      const { data: tokenRow } = await supabase
+        .from("user_portal_tokens").select("user_id").eq("token", token).maybeSingle();
+      if (!tokenRow?.user_id) return json({ error: "Link inválido ou expirado" }, 400);
+      resolvedUserId = tokenRow.user_id;
+    }
 
     const { data: profile } = await supabase
       .from("profiles")
       .select("id, user_id, name, email, phone, plan, billing_cycle, card_gateway")
-      .eq("user_id", tokenRow.user_id).maybeSingle();
+      .eq("user_id", resolvedUserId).maybeSingle();
     if (!profile) return json({ error: "Cadastro não encontrado" }, 404);
     if (profile.card_gateway !== "inter") {
       return json({ error: "Assinatura não é PIX Automático do Inter", gateway: profile.card_gateway }, 400);
@@ -67,6 +76,22 @@ Deno.serve(async (req) => {
       return json({ error: "Não consegui encerrar o débito automático atual. Tente novamente." }, 502);
     }
 
+    // A reautorização precisa de um token do portal (a função de criação lê o
+    // perfil por ele). Garante um para o caso do fluxo autenticado.
+    let portalToken = token;
+    if (!portalToken) {
+      const { data: tk } = await supabase
+        .from("user_portal_tokens").select("token").eq("user_id", profile.user_id).maybeSingle();
+      if (!tk?.token) {
+        const { data: created } = await supabase
+          .from("user_portal_tokens").insert({ user_id: profile.user_id }).select("token").maybeSingle();
+        portalToken = created?.token as string;
+      } else {
+        portalToken = tk.token as string;
+      }
+    }
+    if (!portalToken) return json({ error: "Não consegui preparar a nova autorização" }, 500);
+
     // 2) Novo QR composto no plano escolhido (mode reauthorize: sem trial e já
     // amarrado ao perfil existente).
     const { data: created, error: invokeErr } = await supabase.functions.invoke(
@@ -74,7 +99,7 @@ Deno.serve(async (req) => {
       {
         body: {
           mode: "reauthorize",
-          token,
+          token: portalToken,
           plan,
           billing,
           name: profile.name || "Cliente",
