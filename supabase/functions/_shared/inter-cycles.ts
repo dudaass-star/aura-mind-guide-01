@@ -183,13 +183,22 @@ export async function cancelMandate(
     .eq("id_rec", idRec).is("paid_at", null);
   for (const c of open || []) {
     if (["CONCLUIDA", "CANCELADA", "REMOVIDA"].includes(String(c.status))) continue;
-    await interFetch(`/pix/v2/cobr/${c.txid}`, {
+    const { data: charge } = await supabase.from("inter_pix_charges")
+      .select("cycle_index").eq("txid", c.txid).maybeSingle();
+    const chargePath = Number(charge?.cycle_index ?? 0) === 0 ? "cob" : "cobr";
+    const removal = await interFetch(`/pix/v2/${chargePath}/${c.txid}`, {
       method: "PATCH",
       body: { status: "REMOVIDA_PELO_USUARIO_RECEBEDOR" },
-    }).catch(() => {});
-    await supabase.from("inter_pix_charges")
-      .update({ status: "CANCELADA", updated_at: new Date().toISOString() })
-      .eq("txid", c.txid);
+    }).catch(() => null);
+    if (removal?.ok) {
+      await supabase.from("inter_pix_charges")
+        .update({ status: "CANCELADA", last_error: null, updated_at: new Date().toISOString() })
+        .eq("txid", c.txid);
+    } else {
+      await supabase.from("inter_pix_charges")
+        .update({ last_error: `remoção remota não confirmada (${chargePath})`, updated_at: new Date().toISOString() })
+        .eq("txid", c.txid);
+    }
   }
 
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
