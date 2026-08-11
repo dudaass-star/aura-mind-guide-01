@@ -941,6 +941,12 @@ const CheckoutV2 = () => {
       paymentMethod: pixMode === "subscription" ? "pix_auto" : "pix",
     });
     try {
+      const requestStorageKey = `aura_pix_request_${selectedPlan}_${billingPeriod}_${email.trim().toLowerCase()}`;
+      let pixRequestKey = sessionStorage.getItem(requestStorageKey);
+      if (!pixRequestKey) {
+        pixRequestKey = crypto.randomUUID();
+        sessionStorage.setItem(requestStorageKey, pixRequestKey);
+      }
       const getCookie = (name: string) => {
         const match = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
         return match ? match[2] : undefined;
@@ -970,6 +976,9 @@ const CheckoutV2 = () => {
           ...(fbp && { fbp }),
           ...(fbc && { fbc }),
           ...(gaClientId && { gaClientId }),
+           ...(pixMode === "subscription" && pixGateway === "inter"
+             ? { requestKey: pixRequestKey }
+             : {}),
         },
       });
       if (error) throw new Error(error.message || "Erro ao gerar PIX");
@@ -989,6 +998,9 @@ const CheckoutV2 = () => {
       });
       setAuthState(pixMode === "subscription" && data.authorizationId ? "pending" : null);
       setPixStage("qr");
+      if (pixMode === "subscription" && pixGateway === "inter") {
+        sessionStorage.setItem(requestStorageKey, pixRequestKey);
+      }
       trackAddPaymentInfo({ plan: selectedPlan, billing: billingPeriod, value: data.amount || 0 });
       logFunnel("pix_qr_generated", {
         plan: selectedPlan,

@@ -157,6 +157,13 @@ Deno.serve(async (req) => {
     const { fbp, fbc, gaClientId } = body;
     const mode = body.mode || "checkout";
     const reauthToken = body.token;
+    const deferReplacement = body.deferReplacement === "true";
+    const requestKeyInput = body.requestKey?.trim();
+    const requestKey = requestKeyInput && /^[A-Za-z0-9_-]{16,100}$/.test(requestKeyInput)
+      ? `${mode}:${requestKeyInput}`
+      : mode === "reauthorize" && reauthToken
+        ? `reauthorize:${reauthToken}`
+        : null;
 
     // ---- Reautorização: mandato revogado pelo cliente no app do banco --------
     // Novo mandato Jornada 3 cujo pagamento imediato É o ciclo corrente. Por isso
@@ -209,6 +216,41 @@ Deno.serve(async (req) => {
     const trialCents = TRIAL_PRICES[plan] ?? null;
     const withTrial = mode === "checkout" && billing === "monthly" && !returning && !!trialCents;
 
+    // Clique repetido, timeout do navegador ou retomada da página reutilizam o
+    // mesmo mandato enquanto o QR continua válido. Nunca geramos dois débitos
+    // automáticos para a mesma intenção de checkout.
+    if (requestKey) {
+      const { data: prior } = await supabase
+        .from("inter_pix_recurrences")
+        .select("id_rec, plan, billing_period, is_trial, trial_value_cents, value_cents, qr_payload, qr_encoded_image, qr_expires_at, status, creation_status")
+        .eq("request_key", requestKey).maybeSingle();
+      const reusable = prior?.creation_status === "completed"
+        && prior.qr_payload
+        && prior.id_rec
+        && prior.qr_expires_at
+        && new Date(prior.qr_expires_at).getTime() > Date.now()
+        && !["CANCELADA", "REJEITADA", "ABANDONADA"].includes(String(prior.status));
+      if (reusable) {
+        return json({
+          authorizationId: prior.id_rec,
+          amount: (prior.is_trial ? prior.trial_value_cents : prior.value_cents) / 100,
+          recurringAmount: prior.value_cents / 100,
+          trial: prior.is_trial,
+          qrCodeImage: prior.qr_encoded_image,
+          copyPaste: prior.qr_payload,
+          expiresAt: prior.qr_expires_at,
+          pixAutomatic: true,
+          gateway: "inter",
+          plan: prior.plan,
+          billing: prior.billing_period,
+          reused: true,
+        });
+      }
+      if (prior && prior.creation_status === "creating") {
+        return json({ error: "Sua autorização ainda está sendo preparada. Tente novamente em alguns segundos." }, 409);
+      }
+    }
+
     const now = new Date();
     // Com trial: 1º débito automático 1 dia após o fim da semana promocional.
     // Sem trial: a cobrança imediata cobre o ciclo 1; o mandato começa no ciclo 2.
@@ -220,6 +262,41 @@ Deno.serve(async (req) => {
     const contratoId = `aura${plan[0]}${billing[0]}${Date.now().toString(36)}`.slice(0, 35);
     const objeto = `Aura ${PLAN_NAMES[plan]} / ${PERIOD_LABELS[billing]}`.slice(0, 35);
     const txid = buildTxid(`aura${plan[0]}${billing[0]}`);
+
+    // Reserva local antes de criar qualquer recurso financeiro remoto. Se uma
+    // etapa cair, a auditoria passa a ter evidência e consegue reconciliar.
+    const attemptId = crypto.randomUUID();
+    const { error: attemptErr } = await supabase.from("inter_pix_recurrences").insert({
+      id: attemptId,
+      request_key: requestKey,
+      contract_id: contratoId,
+      plan,
+      billing_period: billing,
+      periodicidade: PERIODICIDADE_MAP[billing],
+      value_cents: amountCents,
+      is_trial: withTrial,
+      trial_value_cents: withTrial ? trialCents : null,
+      status: "CRIANDO",
+      creation_status: "creating",
+      start_date: dataInicial,
+      next_charge_date: dataInicial,
+      customer_name: name,
+      customer_email: emailClean,
+      customer_phone: phoneClean || null,
+      customer_cpf: cpfClean,
+      fbp: fbp || null,
+      fbc: fbc || null,
+      ga_client_id: gaClientId || null,
+    });
+    if (attemptErr) {
+      if (attemptErr.code === "23505") {
+        return json({ error: "Esta autorização já está sendo processada. Tente novamente em alguns segundos." }, 409);
+      }
+      throw new Error(`Não foi possível registrar a tentativa: ${attemptErr.message}`);
+    }
+
+    let remoteTxidCreated = false;
+    let remoteIdRec: string | null = null;
 
     // 1) locrec: payload location exclusivo da recorrência.
     const locRec = await interFetch<{ id: number; location: string }>("/pix/v2/locrec", { method: "POST" });
@@ -245,8 +322,13 @@ Deno.serve(async (req) => {
       },
     });
     if (!cob.ok) {
+      await supabase.from("inter_pix_recurrences").update({
+        creation_status: "failed", status: "FALHA_CRIACAO",
+        last_error: `cob recusada HTTP ${cob.status}: ${cob.raw.slice(0, 240)}`,
+      }).eq("id", attemptId);
       throw new Error(`Inter recusou a cobrança (HTTP ${cob.status}): ${cob.raw.slice(0, 300)}`);
     }
+    remoteTxidCreated = true;
 
     // 4) Recorrência amarrada ao txid da cobrança (ativação = pagamento dela).
     const rec = await interFetch<Record<string, unknown>>("/pix/v2/rec", {
@@ -265,11 +347,16 @@ Deno.serve(async (req) => {
       await interFetch(`/pix/v2/cob/${txid}`, {
         method: "PATCH", body: { status: "REMOVIDA_PELO_USUARIO_RECEBEDOR" },
       }).catch(() => {});
+      await supabase.from("inter_pix_recurrences").update({
+        creation_status: "compensated", status: "FALHA_CRIACAO",
+        last_error: `rec recusada HTTP ${rec.status}: ${rec.raw.slice(0, 240)}`,
+      }).eq("id", attemptId);
       throw new Error(`Inter recusou a recorrência (HTTP ${rec.status}): ${rec.raw.slice(0, 300)}`);
     }
 
     const recData = rec.data as Record<string, any>;
     const idRec = recData?.idRec as string;
+    remoteIdRec = idRec || null;
     const qrPayload = (cob.data as Record<string, any>)?.pixCopiaECola as string;
     if (!idRec || !qrPayload) {
       throw new Error("Inter não devolveu idRec ou pixCopiaECola");
@@ -286,7 +373,7 @@ Deno.serve(async (req) => {
       userId = prof?.id || null;
     }
 
-    const { error: insertErr } = await supabase.from("inter_pix_recurrences").insert({
+    const { error: insertErr } = await supabase.from("inter_pix_recurrences").update({
       id_rec: idRec,
       user_id: userId,
       contract_id: contratoId,
@@ -311,8 +398,19 @@ Deno.serve(async (req) => {
       fbc: fbc || null,
       ga_client_id: gaClientId || null,
       raw_payload: recData,
-    });
-    if (insertErr) console.error("[criar-pix-recorrente-inter] erro salvando recorrência:", insertErr);
+      creation_status: "creating",
+    }).eq("id", attemptId);
+    if (insertErr) {
+      await interFetch(`/pix/v2/rec/${idRec}`, { method: "PATCH", body: { status: "CANCELADA" } }).catch(() => {});
+      if (remoteTxidCreated) {
+        await interFetch(`/pix/v2/cob/${txid}`, { method: "PATCH", body: { status: "REMOVIDA_PELO_USUARIO_RECEBEDOR" } }).catch(() => {});
+      }
+      await supabase.from("inter_pix_recurrences").update({
+        creation_status: "compensating", status: "FALHA_PERSISTENCIA",
+        last_error: `mandato criado, mas persistência falhou: ${insertErr.message}`,
+      }).eq("id", attemptId);
+      throw new Error("A autorização não pôde ser confirmada. Nenhuma cobrança foi mantida.");
+    }
 
     // A cobrança imediata entra como ciclo 0 (a semana promocional ou o 1º ciclo).
     const { error: chargeErr } = await supabase.from("inter_pix_charges").insert({
@@ -320,7 +418,23 @@ Deno.serve(async (req) => {
       due_date: brtDate(now), value_cents: immediateCents,
       status: "ATIVA", raw_payload: cob.data as Record<string, unknown>,
     });
-    if (chargeErr) console.warn("[criar-pix-recorrente-inter] erro salvando cobrança:", chargeErr.message);
+    if (chargeErr) {
+      if (remoteIdRec) {
+        await interFetch(`/pix/v2/rec/${remoteIdRec}`, { method: "PATCH", body: { status: "CANCELADA" } }).catch(() => {});
+      }
+      await interFetch(`/pix/v2/cob/${txid}`, { method: "PATCH", body: { status: "REMOVIDA_PELO_USUARIO_RECEBEDOR" } }).catch(() => {});
+      await supabase.from("inter_pix_recurrences").update({
+        creation_status: "compensating", status: "FALHA_PERSISTENCIA",
+        last_error: `cobrança criada, mas persistência falhou: ${chargeErr.message}`,
+      }).eq("id", attemptId);
+      throw new Error("A cobrança não pôde ser confirmada. O QR foi cancelado; tente novamente.");
+    }
+
+    await supabase.from("inter_pix_recurrences").update({
+      creation_status: "completed",
+      status: (recData?.status as string) || "CRIADA",
+      last_error: null,
+    }).eq("id", attemptId);
 
     // Visibilidade de funil: PIX aparece em checkout_sessions junto com o cartão.
     // recovery_sent=true impede que o carrinho abandonado (desenhado pra cartão)
@@ -333,7 +447,7 @@ Deno.serve(async (req) => {
       if (funnelErr) console.warn("[criar-pix-recorrente-inter] funil não logado:", funnelErr.message);
     }
 
-    if (mode === "reauthorize" && previousIdRec) {
+    if (mode === "reauthorize" && previousIdRec && !deferReplacement) {
       await supabase.from("inter_pix_recurrences")
         .update({ replaced_by_id_rec: idRec }).eq("id_rec", previousIdRec);
       console.log(`[criar-pix-recorrente-inter] reautorização: ${previousIdRec} → ${idRec}`);

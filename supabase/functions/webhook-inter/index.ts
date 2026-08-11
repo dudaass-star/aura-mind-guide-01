@@ -128,19 +128,76 @@ async function fireMetaCapiPurchase(
   }
 }
 
-// Deduplicação: primeira vez devolve true, reentregas devolvem false.
+// Claim reentrante: eventos concluídos não repetem; falhas e processamentos
+// abandonados podem ser retomados. Isso evita tanto extensão dupla quanto evento
+// perdido após uma indisponibilidade transitória.
 async function claimEvent(supabase: any, key: string, kind: string, payload: unknown): Promise<boolean> {
-  const { error } = await supabase
-    .from("inter_webhook_events")
-    .insert({ event_key: key, kind, payload });
+  const now = new Date();
+  const staleBefore = new Date(now.getTime() - 5 * 60 * 1000).toISOString();
+  const { data: prior } = await supabase.from("inter_webhook_events")
+    .select("processing_status, attempts, updated_at")
+    .eq("event_key", key).maybeSingle();
+  if (prior?.processing_status === "processed") {
+    console.log(`[webhook-inter] evento concluído ignorado: ${key}`);
+    return false;
+  }
+  if (prior?.processing_status === "processing" && prior.updated_at > staleBefore) {
+    console.log(`[webhook-inter] evento já em processamento: ${key}`);
+    return false;
+  }
+  if (prior) {
+    const { error } = await supabase.from("inter_webhook_events").update({
+      processing_status: "processing",
+      attempts: Number(prior.attempts || 0) + 1,
+      processing_started_at: now.toISOString(),
+      last_error: null,
+      payload,
+    }).eq("event_key", key).neq("processing_status", "processed");
+    return !error;
+  }
+  const { error } = await supabase.from("inter_webhook_events").insert({
+    event_key: key, kind, payload, processing_status: "processing",
+    attempts: 1, processing_started_at: now.toISOString(),
+  });
   if (error) {
     if ((error.code || "") === "23505") {
-      console.log(`[webhook-inter] evento repetido ignorado: ${key}`);
       return false;
     }
     console.warn("[webhook-inter] falha registrando evento (segue processando):", error.message);
   }
   return true;
+}
+
+async function finishEvent(supabase: any, key: string): Promise<void> {
+  await supabase.from("inter_webhook_events").update({
+    processing_status: "processed", processed_at: new Date().toISOString(), last_error: null,
+  }).eq("event_key", key);
+}
+
+async function failEvent(supabase: any, key: string, error: string): Promise<void> {
+  await supabase.from("inter_webhook_events").update({
+    processing_status: "failed", last_error: error.slice(0, 1000),
+  }).eq("event_key", key);
+}
+
+// Reserva atomicamente a extensão de acesso por txid. Webhooks `pix` e `cobr`
+// podem anunciar o mesmo dinheiro; só um deles atravessa esta condição.
+async function claimAccessActivation(supabase: any, txid: string): Promise<boolean> {
+  const { data, error } = await supabase.from("inter_pix_charges")
+    .update({ access_activated_at: new Date().toISOString() })
+    .eq("txid", txid)
+    .is("access_activated_at", null)
+    .select("txid");
+  if (error) {
+    console.error(`[webhook-inter] falha reservando ativação ${txid}:`, error.message);
+    return false;
+  }
+  return Array.isArray(data) && data.length === 1;
+}
+
+async function releaseAccessActivation(supabase: any, txid: string): Promise<void> {
+  await supabase.from("inter_pix_charges")
+    .update({ access_activated_at: null }).eq("txid", txid).is("paid_at", null);
 }
 
 // Libera/estende o acesso. Chamado quando dinheiro entra de fato:
@@ -149,7 +206,7 @@ async function activateAccess(
   supabase: any,
   rec: Record<string, any>,
   opts: { isFirstPayment: boolean; valueCents: number; eventId?: string },
-): Promise<void> {
+): Promise<boolean> {
   try {
     const plan = rec.plan as string;
     const billing = rec.billing_period as string;
@@ -222,7 +279,7 @@ async function activateAccess(
         await supabase.from("inter_pix_recurrences")
           .update({ last_error: `falha criando perfil para ${email}: ${insErr.message}` })
           .eq("id_rec", rec.id_rec);
-        return;
+        return false;
       }
       profileRowId = inserted?.id ?? null;
       console.log(`[webhook-inter] ✅ profile novo criado: ${userId} (${email})`);
@@ -248,7 +305,7 @@ async function activateAccess(
         .from("profiles").update(updatePayload).eq("user_id", userId);
       if (updErr) {
         console.error("[webhook-inter] erro atualizando profile:", updErr);
-        return;
+        return false;
       }
     }
     console.log(`[webhook-inter] ✅ acesso de ${userId} estendido até ${newExpiry} (plano ${plan})`);
@@ -258,7 +315,7 @@ async function activateAccess(
       .eq("id_rec", rec.id_rec);
 
     // Renovação silenciosa: não repete boas-vindas.
-    if (!opts.isFirstPayment) return;
+    if (!opts.isFirstPayment) return true;
 
     // Funil: fecha a linha de checkout_sessions do PIX, igual ao trilho Asaas.
     if (email) {
@@ -328,8 +385,10 @@ async function activateAccess(
         console.warn("[webhook-inter] welcome email falhou (non-blocking):", e);
       }
     }
+    return true;
   } catch (err) {
     console.error("[webhook-inter] ❌ activateAccess erro (non-blocking):", err);
+    return false;
   }
 }
 
@@ -357,12 +416,18 @@ Deno.serve(async (req) => {
       const txid = pix.txid as string;
       if (!txid) continue;
       const e2e = (pix.endToEndId as string) || txid;
-      if (!(await claimEvent(supabase, `pix:${e2e}`, "pix", pix))) continue;
+      const eventKey = `pix:${e2e}`;
+      if (!(await claimEvent(supabase, eventKey, "pix", pix))) continue;
 
       const { data: charge } = await supabase
         .from("inter_pix_charges").select("*").eq("txid", txid).maybeSingle();
       if (!charge) {
         console.warn(`[webhook-inter] pix de txid desconhecido: ${txid}`);
+        await failEvent(supabase, eventKey, `txid desconhecido: ${txid}`);
+        continue;
+      }
+      if (charge.access_activated_at) {
+        await finishEvent(supabase, eventKey);
         continue;
       }
       // Confirma na API do Inter que a cobrança realmente foi liquidada.
@@ -378,27 +443,37 @@ Deno.serve(async (req) => {
         );
         // Falha de confirmação costuma ser transitória: solta a dedupe para que
         // a reentrega do Inter (ou o replay da auditoria) volte a ser processada.
-        if (cobStatus === null) {
-          await supabase.from("inter_webhook_events").delete().eq("event_key", `pix:${e2e}`);
-        }
+        await failEvent(supabase, eventKey, `liquidação não confirmada; status=${cobStatus}`);
         continue;
       }
-      await supabase.from("inter_pix_charges").update({
-        status: "CONCLUIDA",
-        paid_at: (pix.horario as string) || new Date().toISOString(),
-        e2e_id: pix.endToEndId || null,
-        raw_payload: pix,
-        updated_at: new Date().toISOString(),
-      }).eq("txid", txid);
 
       const { data: rec } = await supabase
         .from("inter_pix_recurrences").select("*").eq("id_rec", charge.id_rec).maybeSingle();
       if (rec) {
-        await activateAccess(supabase, rec, {
+        if (!(await claimAccessActivation(supabase, txid))) {
+          await finishEvent(supabase, eventKey);
+          continue;
+        }
+        const activated = await activateAccess(supabase, rec, {
           isFirstPayment: cycleIdx === 0,
           valueCents: charge.value_cents,
           eventId: `inter-${txid}-purchase`,
         });
+        if (!activated) {
+          await releaseAccessActivation(supabase, txid);
+          await failEvent(supabase, eventKey, "pagamento confirmado, mas ativação do acesso falhou");
+          continue;
+        }
+        await supabase.from("inter_pix_charges").update({
+          status: "CONCLUIDA",
+          paid_at: (pix.horario as string) || new Date().toISOString(),
+          e2e_id: pix.endToEndId || null,
+          raw_payload: pix,
+          updated_at: new Date().toISOString(),
+        }).eq("txid", txid);
+        await finishEvent(supabase, eventKey);
+      } else {
+        await failEvent(supabase, eventKey, `mandato local não encontrado: ${charge.id_rec}`);
       }
     }
 
@@ -408,7 +483,8 @@ Deno.serve(async (req) => {
       const idRec = r.idRec as string;
       if (!idRec) continue;
       const status = (r.status as string) || "";
-      if (!(await claimEvent(supabase, `rec:${idRec}:${status}`, "rec", r))) continue;
+      const eventKey = `rec:${idRec}:${status}`;
+      if (!(await claimEvent(supabase, eventKey, "rec", r))) continue;
 
       await supabase.from("inter_pix_recurrences").update({
         status,
@@ -435,6 +511,7 @@ Deno.serve(async (req) => {
           }
         }
       }
+      await finishEvent(supabase, eventKey);
     }
 
     // ---- 3) Cobranças dos ciclos seguintes ---------------------------------
@@ -446,7 +523,9 @@ Deno.serve(async (req) => {
       const idRec = c.idRec as string;
       const status = (c.status as string) || "";
       if (!txid) continue;
-      if (!(await claimEvent(supabase, `cobr:${txid}:${status}`, "cobr", c))) continue;
+      const occurrence = String(c?.calendario?.dataDeVencimento || c?.horario || c?.updatedAt || "");
+      const eventKey = `cobr:${txid}:${status}:${occurrence}`;
+      if (!(await claimEvent(supabase, eventKey, "cobr", c))) continue;
 
       const paid = status === "CONCLUIDA";
       const valueCents = Math.round(Number(c?.valor?.original || 0) * 100);
@@ -458,7 +537,7 @@ Deno.serve(async (req) => {
         due_date: c?.calendario?.dataDeVencimento || new Date().toISOString().slice(0, 10),
         value_cents: valueCents,
         status,
-        paid_at: paid ? new Date().toISOString() : null,
+        paid_at: null,
         raw_payload: c,
         updated_at: new Date().toISOString(),
       }, { onConflict: "txid" });
@@ -467,7 +546,10 @@ Deno.serve(async (req) => {
       if (!idRec) continue;
       const { data: rec } = await supabase
         .from("inter_pix_recurrences").select("*").eq("id_rec", idRec).maybeSingle();
-      if (!rec) continue;
+      if (!rec) {
+        await failEvent(supabase, eventKey, `mandato local não encontrado: ${idRec}`);
+        continue;
+      }
       if (rec.user_id) {
         await supabase.from("inter_pix_charges")
           .update({ user_id: rec.user_id }).eq("txid", txid).is("user_id", null);
@@ -480,9 +562,27 @@ Deno.serve(async (req) => {
           console.warn(
             `[webhook-inter] ⚠️ ciclo ${txid} não confirmado pelo Inter (status ${confirmed}) — acesso não estendido`,
           );
+          await failEvent(supabase, eventKey, `ciclo não confirmado; status=${confirmed}`);
           continue;
         }
-        await activateAccess(supabase, rec, { isFirstPayment: false, valueCents });
+        const { data: currentCharge } = await supabase.from("inter_pix_charges")
+          .select("access_activated_at").eq("txid", txid).maybeSingle();
+        if (!currentCharge?.access_activated_at) {
+          if (!(await claimAccessActivation(supabase, txid))) {
+            await finishEvent(supabase, eventKey);
+            continue;
+          }
+          const activated = await activateAccess(supabase, rec, { isFirstPayment: false, valueCents });
+          if (!activated) {
+            await releaseAccessActivation(supabase, txid);
+            await failEvent(supabase, eventKey, "ciclo pago, mas ativação do acesso falhou");
+            continue;
+          }
+          await supabase.from("inter_pix_charges").update({
+            paid_at: new Date().toISOString(),
+          }).eq("txid", txid);
+        }
+        await finishEvent(supabase, eventKey);
         continue;
       }
 
@@ -499,6 +599,7 @@ Deno.serve(async (req) => {
             console.log(
               `[webhook-inter] 🔁 ${txid} reagendado para ${attempt.date} (tentativa dentro do 3R/7D)`,
             );
+            await finishEvent(supabase, eventKey);
             continue; // ainda há tentativa em pé: não aciona dunning.
           }
           console.log(
@@ -519,6 +620,7 @@ Deno.serve(async (req) => {
           console.log(`[webhook-inter] ⚠️ débito falhou — dunning acionado para ${prof.user_id}`);
         }
       }
+      await finishEvent(supabase, eventKey);
     }
 
     return new Response(JSON.stringify({ received: true }), {

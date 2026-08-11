@@ -115,6 +115,11 @@ export async function emitCycleCharge(
   });
   if (insErr && insErr.code !== "23505") {
     console.warn(`[inter-cycles] cobr ${txid} emitida mas não persistida: ${insErr.message}`);
+    await supabase.from("inter_pix_recurrences").update({
+      last_error: `cobr ${txid} emitida, mas não persistida: ${insErr.message}`,
+      updated_at: new Date().toISOString(),
+    }).eq("id_rec", idRec);
+    return { ok: false, txid, status: 500, reason: "local_persistence_failed" };
   }
 
   await supabase.from("inter_pix_recurrences").update({
@@ -157,7 +162,8 @@ export async function retryCharge(
   }
 
   await supabase.from("inter_pix_charges").update({
-    retry_count: used + 1,
+    retry_count: resp.ok ? used + 1 : used,
+    ...(resp.ok ? { due_date: retryDate } : {}),
     last_error: resp.ok ? null : `retentativa ${retryDate} recusada (HTTP ${resp.status})`,
     updated_at: new Date().toISOString(),
   }).eq("txid", charge.txid);
@@ -183,13 +189,22 @@ export async function cancelMandate(
     .eq("id_rec", idRec).is("paid_at", null);
   for (const c of open || []) {
     if (["CONCLUIDA", "CANCELADA", "REMOVIDA"].includes(String(c.status))) continue;
-    await interFetch(`/pix/v2/cobr/${c.txid}`, {
+    const { data: charge } = await supabase.from("inter_pix_charges")
+      .select("cycle_index").eq("txid", c.txid).maybeSingle();
+    const chargePath = Number(charge?.cycle_index ?? 0) === 0 ? "cob" : "cobr";
+    const removal = await interFetch(`/pix/v2/${chargePath}/${c.txid}`, {
       method: "PATCH",
       body: { status: "REMOVIDA_PELO_USUARIO_RECEBEDOR" },
-    }).catch(() => {});
-    await supabase.from("inter_pix_charges")
-      .update({ status: "CANCELADA", updated_at: new Date().toISOString() })
-      .eq("txid", c.txid);
+    }).catch(() => null);
+    if (removal?.ok) {
+      await supabase.from("inter_pix_charges")
+        .update({ status: "CANCELADA", last_error: null, updated_at: new Date().toISOString() })
+        .eq("txid", c.txid);
+    } else {
+      await supabase.from("inter_pix_charges")
+        .update({ last_error: `remoção remota não confirmada (${chargePath})`, updated_at: new Date().toISOString() })
+        .eq("txid", c.txid);
+    }
   }
 
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };

@@ -31,16 +31,30 @@ Deno.serve(async (req) => {
     );
 
     const body = await req.json() as Record<string, string>;
-    const { token, userId } = body;
+    const { token } = body;
     const plan = body.plan || body.targetPlan;
     // O portal manda "semiannual"; o resto do sistema fala "semestral".
     const billing = body.billing === "semiannual" ? "semestral" : body.billing;
-    if (!token && !userId) return json({ error: "Identificação ausente" }, 400);
+    const authHeader = req.headers.get("Authorization");
+    let authenticatedUserId: string | null = null;
+    if (authHeader?.startsWith("Bearer ")) {
+      const authClient = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_ANON_KEY")!,
+        { global: { headers: { Authorization: authHeader } } },
+      );
+      const { data: claimsData } = await authClient.auth.getClaims(authHeader.slice(7));
+      authenticatedUserId = typeof claimsData?.claims?.sub === "string"
+        ? claimsData.claims.sub
+        : null;
+    }
+    if (!token && !authenticatedUserId) return json({ error: "Sessão inválida" }, 401);
     if (!plan || !VALID_PLANS.includes(plan)) return json({ error: "Plano inválido" }, 400);
     if (!billing || !VALID_BILLING.includes(billing)) return json({ error: "Ciclo inválido" }, 400);
 
-    // Aceita token do link passwordless OU o userId da sessão do portal.
-    let resolvedUserId = userId || null;
+    // A identidade vem do JWT validado ou do token passwordless. O `userId`
+    // enviado pelo navegador nunca é fonte de autorização.
+    let resolvedUserId = authenticatedUserId;
     if (!resolvedUserId) {
       const { data: tokenRow } = await supabase
         .from("user_portal_tokens").select("user_id").eq("token", token).maybeSingle();
@@ -69,13 +83,6 @@ Deno.serve(async (req) => {
       return json({ error: "Você já está nesse plano" }, 400);
     }
 
-    // 1) Novo mandato primeiro? Não: o Bacen não permite dois mandatos ativos
-    // com o mesmo contrato. Cancela, depois gera o novo QR.
-    const canceled = await cancelMandate(supabase, current.id_rec);
-    if (!canceled.ok) {
-      return json({ error: "Não consegui encerrar o débito automático atual. Tente novamente." }, 502);
-    }
-
     // A reautorização precisa de um token do portal (a função de criação lê o
     // perfil por ele). Garante um para o caso do fluxo autenticado.
     let portalToken = token;
@@ -92,8 +99,8 @@ Deno.serve(async (req) => {
     }
     if (!portalToken) return json({ error: "Não consegui preparar a nova autorização" }, 500);
 
-    // 2) Novo QR composto no plano escolhido (mode reauthorize: sem trial e já
-    // amarrado ao perfil existente).
+    // Cria primeiro com contrato novo. O mandato atual só é encerrado depois de
+    // termos um QR novo persistido; assim uma falha não interrompe a assinatura.
     const { data: created, error: invokeErr } = await supabase.functions.invoke(
       "criar-pix-recorrente-inter",
       {
@@ -106,15 +113,30 @@ Deno.serve(async (req) => {
           email: profile.email,
           phone: profile.phone,
           cpf: current.customer_cpf,
+          requestKey: crypto.randomUUID(),
+          deferReplacement: "true",
         },
       },
     );
     if (invokeErr || (created as Record<string, unknown>)?.error) {
       console.error("[change-inter-plan] falha gerando novo QR:", invokeErr || created);
       return json({
-        error: "Cancelei o débito antigo, mas não consegui gerar o novo QR. Fale com o suporte no WhatsApp.",
+        error: "Não consegui preparar o novo QR. Seu débito atual continua funcionando normalmente.",
       }, 502);
     }
+
+    const newIdRec = (created as Record<string, unknown>)?.authorizationId as string | undefined;
+    if (!newIdRec) return json({ error: "A nova autorização não foi confirmada" }, 502);
+
+    const canceled = await cancelMandate(supabase, current.id_rec);
+    if (!canceled.ok) {
+      await cancelMandate(supabase, newIdRec).catch(() => null);
+      return json({
+        error: "Não consegui encerrar o débito atual. O novo QR foi desfeito e nada mudou na sua assinatura.",
+      }, 502);
+    }
+    await supabase.from("inter_pix_recurrences")
+      .update({ replaced_by_id_rec: newIdRec }).eq("id_rec", current.id_rec);
 
     console.log(`[change-inter-plan] ${profile.user_id}: ${current.plan}/${current.billing_period} → ${plan}/${billing}`);
     return json({ success: true, requiresNewAuthorization: true, plan, billing, ...(created as object) });
