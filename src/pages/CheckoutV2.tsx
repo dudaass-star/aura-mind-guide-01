@@ -1843,14 +1843,24 @@ const CheckoutV2 = () => {
               <>
                 <DialogHeader>
                   <DialogTitle className="font-display text-xl text-white">
-                    Escaneie ou copie o código
+                    {pixData.authorizationOnly
+                      ? "Autorize e comece agora"
+                      : "Escaneie ou copie o código"}
                   </DialogTitle>
                   <DialogDescription className="text-white/65">
                     <span className="text-[hsl(140_30%_72%)] font-semibold">
-                      R$ {pixData.amount.toFixed(2).replace(".", ",")}
+                      {pixData.authorizationOnly
+                        ? "7 dias grátis"
+                        : `R$ ${pixData.amount.toFixed(2).replace(".", ",")}`}
                     </span>
                     {" "}· {currentPlan.name} {periodShortMap[billingPeriod]}
-                    {pixData.trial && pixData.recurringAmount ? (
+                    {pixData.authorizationOnly && pixData.recurringAmount ? (
+                      <span className="block text-xs mt-1 text-white/60">
+                        Nada é cobrado hoje. Você autoriza o débito automático de R${" "}
+                        {pixData.recurringAmount.toFixed(2).replace(".", ",")}/mês, que só
+                        começa depois dos 7 dias — cancele quando quiser no app do banco.
+                      </span>
+                    ) : pixData.trial && pixData.recurringAmount ? (
                       <span className="block text-xs mt-1 text-white/60">
                         1ª semana. Depois R${" "}
                         {pixData.recurringAmount.toFixed(2).replace(".", ",")}/mês no débito
