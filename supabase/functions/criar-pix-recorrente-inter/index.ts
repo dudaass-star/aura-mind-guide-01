@@ -424,12 +424,14 @@ Deno.serve(async (req) => {
     // CRIADA/AGUARDANDO_DEFINICAO — foi exatamente esse o bug do 1º teste real.
     const recQr = ((recRead?.dadosQR ?? recData?.dadosQR) as Record<string, any> | undefined)
       ?.pixCopiaECola as string | undefined;
-    const cobQr = (cob.data as Record<string, any>)?.pixCopiaECola as string | undefined;
+    const cobQr = cobData?.pixCopiaECola as string | undefined;
     if (!recQr) {
       console.error(
         `[criar-pix-recorrente-inter] rec ${idRec} sem dadosQR.pixCopiaECola — caindo no QR simples (recorrência NÃO será autorizada)`,
       );
     }
+    // Na semana grátis não existe QR alternativo: sem o QR da `rec` o cliente
+    // não teria como autorizar nada, então falha explícita em vez de silenciosa.
     const qrPayload = (recQr || cobQr) as string;
     if (!idRec || !qrPayload) {
       throw new Error("Inter não devolveu idRec ou pixCopiaECola");
