@@ -457,7 +457,7 @@ Deno.serve(async (req) => {
       periodicidade: PERIODICIDADE_MAP[billing],
       value_cents: amountCents,
       is_trial: withTrial,
-      trial_value_cents: withTrial ? trialCents : null,
+      trial_value_cents: freeTrial ? 0 : paidTrial ? trialCents : null,
       status: (recData?.status as string) || "CRIADA",
       start_date: dataInicial,
       next_charge_date: dataInicial,
@@ -487,22 +487,25 @@ Deno.serve(async (req) => {
       throw new Error("A autorização não pôde ser confirmada. Nenhuma cobrança foi mantida.");
     }
 
-    // A cobrança imediata entra como ciclo 0 (a semana promocional ou o 1º ciclo).
-    const { error: chargeErr } = await supabase.from("inter_pix_charges").insert({
-      txid, id_rec: idRec, user_id: userId, cycle_index: 0,
-      due_date: brtDate(now), value_cents: immediateCents,
-      status: "ATIVA", raw_payload: cob.data as Record<string, unknown>,
-    });
-    if (chargeErr) {
-      if (remoteIdRec) {
-        await interFetch(`/pix/v2/rec/${remoteIdRec}`, { method: "PATCH", body: { status: "CANCELADA" } }).catch(() => {});
+    // A cobrança imediata entra como ciclo 0 (a semana paga ou o 1º ciclo).
+    // Na semana grátis não há ciclo 0 — o 1º débito é o do mandato em D+7.
+    if (remoteTxidCreated) {
+      const { error: chargeErr } = await supabase.from("inter_pix_charges").insert({
+        txid, id_rec: idRec, user_id: userId, cycle_index: 0,
+        due_date: brtDate(now), value_cents: immediateCents,
+        status: "ATIVA", raw_payload: cobData as Record<string, unknown>,
+      });
+      if (chargeErr) {
+        if (remoteIdRec) {
+          await interFetch(`/pix/v2/rec/${remoteIdRec}`, { method: "PATCH", body: { status: "CANCELADA" } }).catch(() => {});
+        }
+        await interFetch(`/pix/v2/cob/${txid}`, { method: "PATCH", body: { status: "REMOVIDA_PELO_USUARIO_RECEBEDOR" } }).catch(() => {});
+        await supabase.from("inter_pix_recurrences").update({
+          creation_status: "compensating", status: "FALHA_PERSISTENCIA",
+          last_error: `cobrança criada, mas persistência falhou: ${chargeErr.message}`,
+        }).eq("id", attemptId);
+        throw new Error("A cobrança não pôde ser confirmada. O QR foi cancelado; tente novamente.");
       }
-      await interFetch(`/pix/v2/cob/${txid}`, { method: "PATCH", body: { status: "REMOVIDA_PELO_USUARIO_RECEBEDOR" } }).catch(() => {});
-      await supabase.from("inter_pix_recurrences").update({
-        creation_status: "compensating", status: "FALHA_PERSISTENCIA",
-        last_error: `cobrança criada, mas persistência falhou: ${chargeErr.message}`,
-      }).eq("id", attemptId);
-      throw new Error("A cobrança não pôde ser confirmada. O QR foi cancelado; tente novamente.");
     }
 
     await supabase.from("inter_pix_recurrences").update({
@@ -533,6 +536,9 @@ Deno.serve(async (req) => {
       amount: immediateCents / 100,
       recurringAmount: amountCents / 100,
       trial: withTrial,
+      trialMode: freeTrial ? "free" : paidTrial ? "paid" : "none",
+      trialDays: withTrial ? TRIAL_DAYS : 0,
+      authorizationOnly: !remoteTxidCreated,
       firstRecurringChargeDate: dataInicial,
       qrCodeImage: qrImage,
       copyPaste: qrPayload,
