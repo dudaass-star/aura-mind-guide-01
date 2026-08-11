@@ -51,6 +51,13 @@ Deno.serve(async (req) => {
     await attempt("cobr_put_empty", `/pix/v2/cobr/${txid}`, "PUT", {});
   }
 
+  if (which === "cob" || which === "all") {
+    // Jornada 2: precisamos de um `loc` (payload location) e de um `cob` imediato.
+    await attempt("loc_post_empty", "/pix/v2/loc", "POST", {});
+    await attempt("loc_post_cob", "/pix/v2/loc", "POST", { tipoCob: "cob" });
+    await attempt("cob_put_empty", `/pix/v2/cob/${buildTxid("probec")}`, "PUT", {});
+  }
+
   if (which === "webhook" || which === "all") {
     // GET de webhook: mostra se já existe webhook registrado e o formato.
     await attempt("webhookrec_get", "/pix/v2/webhookrec", "GET");

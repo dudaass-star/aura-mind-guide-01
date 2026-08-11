@@ -32,6 +32,16 @@ export const INTER_SCOPES = [
   "webhookcobr.write",
   "payloadlocationrec.read",
   "payloadlocationrec.write",
+  // Pix Cobrança: a Jornada 2 exige criar um `cob` imediato com `loc` para que o
+  // QR Code carregue o 1º pagamento E a autorização do mandato no mesmo scan.
+  "cob.read",
+  "cob.write",
+  "pix.read",
+  "pix.write",
+  "payloadlocation.read",
+  "payloadlocation.write",
+  "webhook.read",
+  "webhook.write",
 ].join(" ");
 
 /**
