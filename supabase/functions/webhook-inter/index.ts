@@ -180,6 +180,26 @@ async function failEvent(supabase: any, key: string, error: string): Promise<voi
   }).eq("event_key", key);
 }
 
+// Reserva atomicamente a extensão de acesso por txid. Webhooks `pix` e `cobr`
+// podem anunciar o mesmo dinheiro; só um deles atravessa esta condição.
+async function claimAccessActivation(supabase: any, txid: string): Promise<boolean> {
+  const { data, error } = await supabase.from("inter_pix_charges")
+    .update({ access_activated_at: new Date().toISOString() })
+    .eq("txid", txid)
+    .is("access_activated_at", null)
+    .select("txid");
+  if (error) {
+    console.error(`[webhook-inter] falha reservando ativação ${txid}:`, error.message);
+    return false;
+  }
+  return Array.isArray(data) && data.length === 1;
+}
+
+async function releaseAccessActivation(supabase: any, txid: string): Promise<void> {
+  await supabase.from("inter_pix_charges")
+    .update({ access_activated_at: null }).eq("txid", txid).is("paid_at", null);
+}
+
 // Libera/estende o acesso. Chamado quando dinheiro entra de fato:
 // cobrança imediata paga (ciclo 0) ou cobrança de ciclo CONCLUIDA.
 async function activateAccess(
@@ -430,19 +450,23 @@ Deno.serve(async (req) => {
       const { data: rec } = await supabase
         .from("inter_pix_recurrences").select("*").eq("id_rec", charge.id_rec).maybeSingle();
       if (rec) {
+        if (!(await claimAccessActivation(supabase, txid))) {
+          await finishEvent(supabase, eventKey);
+          continue;
+        }
         const activated = await activateAccess(supabase, rec, {
           isFirstPayment: cycleIdx === 0,
           valueCents: charge.value_cents,
           eventId: `inter-${txid}-purchase`,
         });
         if (!activated) {
+          await releaseAccessActivation(supabase, txid);
           await failEvent(supabase, eventKey, "pagamento confirmado, mas ativação do acesso falhou");
           continue;
         }
         await supabase.from("inter_pix_charges").update({
           status: "CONCLUIDA",
           paid_at: (pix.horario as string) || new Date().toISOString(),
-          access_activated_at: new Date().toISOString(),
           e2e_id: pix.endToEndId || null,
           raw_payload: pix,
           updated_at: new Date().toISOString(),
@@ -544,13 +568,18 @@ Deno.serve(async (req) => {
         const { data: currentCharge } = await supabase.from("inter_pix_charges")
           .select("access_activated_at").eq("txid", txid).maybeSingle();
         if (!currentCharge?.access_activated_at) {
+          if (!(await claimAccessActivation(supabase, txid))) {
+            await finishEvent(supabase, eventKey);
+            continue;
+          }
           const activated = await activateAccess(supabase, rec, { isFirstPayment: false, valueCents });
           if (!activated) {
+            await releaseAccessActivation(supabase, txid);
             await failEvent(supabase, eventKey, "ciclo pago, mas ativação do acesso falhou");
             continue;
           }
           await supabase.from("inter_pix_charges").update({
-            paid_at: new Date().toISOString(), access_activated_at: new Date().toISOString(),
+            paid_at: new Date().toISOString(),
           }).eq("txid", txid);
         }
         await finishEvent(supabase, eventKey);

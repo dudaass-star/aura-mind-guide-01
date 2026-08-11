@@ -115,6 +115,11 @@ export async function emitCycleCharge(
   });
   if (insErr && insErr.code !== "23505") {
     console.warn(`[inter-cycles] cobr ${txid} emitida mas não persistida: ${insErr.message}`);
+    await supabase.from("inter_pix_recurrences").update({
+      last_error: `cobr ${txid} emitida, mas não persistida: ${insErr.message}`,
+      updated_at: new Date().toISOString(),
+    }).eq("id_rec", idRec);
+    return { ok: false, txid, status: 500, reason: "local_persistence_failed" };
   }
 
   await supabase.from("inter_pix_recurrences").update({
@@ -158,6 +163,7 @@ export async function retryCharge(
 
   await supabase.from("inter_pix_charges").update({
     retry_count: resp.ok ? used + 1 : used,
+    ...(resp.ok ? { due_date: retryDate } : {}),
     last_error: resp.ok ? null : `retentativa ${retryDate} recusada (HTTP ${resp.status})`,
     updated_at: new Date().toISOString(),
   }).eq("txid", charge.txid);
