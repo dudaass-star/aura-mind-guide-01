@@ -1685,7 +1685,9 @@ const CheckoutV2 = () => {
           <StickyMobileCta
             anchorId="checkout-primary-cta"
             todayLabel={`R$ ${todayAmount}`}
-            ctaLabel={pixEnabled ? "Pagar com PIX" : `Começar por R$ ${todayAmount}`}
+            ctaLabel={
+              pixEnabled && pixRailUp ? "Pagar com PIX" : `Começar por R$ ${todayAmount}`
+            }
             onClick={() => {
               document
                 .getElementById("checkout-primary-cta")
