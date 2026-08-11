@@ -53,6 +53,12 @@ project_id = "uhyogifgmutfmbyhzzyo"
     verify_jwt = false
   [functions.criar-pix-asaas]
     verify_jwt = false
+  [functions.criar-pix-recorrente-inter]
+    verify_jwt = false
+  [functions.webhook-inter]
+    verify_jwt = false
+  [functions.inter-schema-probe]
+    verify_jwt = false
   [functions.criar-pix-recorrente-asaas]
     verify_jwt = false
   [functions.deliver-time-capsule]
