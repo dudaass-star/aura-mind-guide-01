@@ -364,7 +364,21 @@ Deno.serve(async (req) => {
     const recData = rec.data as Record<string, any>;
     const idRec = recData?.idRec as string;
     remoteIdRec = idRec || null;
-    const qrPayload = (cob.data as Record<string, any>)?.pixCopiaECola as string;
+    // QR CORRETO = o da RECORRÊNCIA (`rec.dadosQR.pixCopiaECola`, jornada
+    // JORNADA_2). Ele é o composto: paga a cobrança amarrada em
+    // `ativacao.dadosJornada.txid` E autoriza os débitos futuros no mesmo scan.
+    // O `pixCopiaECola` do `cob` paga SÓ o valor imediato e deixa o mandato em
+    // CRIADA/AGUARDANDO_DEFINICAO — foi exatamente esse o bug do 1º teste real.
+    const recQr = (recData?.dadosQR as Record<string, any> | undefined)?.pixCopiaECola as
+      | string
+      | undefined;
+    const cobQr = (cob.data as Record<string, any>)?.pixCopiaECola as string | undefined;
+    if (!recQr) {
+      console.error(
+        `[criar-pix-recorrente-inter] rec ${idRec} sem dadosQR.pixCopiaECola — caindo no QR simples (recorrência NÃO será autorizada)`,
+      );
+    }
+    const qrPayload = (recQr || cobQr) as string;
     if (!idRec || !qrPayload) {
       throw new Error("Inter não devolveu idRec ou pixCopiaECola");
     }
