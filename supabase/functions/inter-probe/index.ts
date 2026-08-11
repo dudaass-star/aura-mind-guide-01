@@ -70,8 +70,22 @@ Deno.serve(async (req) => {
   // 2. Credenciais presentes?
   const clientId = Deno.env.get("INTER_CLIENT_ID");
   const clientSecret = Deno.env.get("INTER_CLIENT_SECRET");
-  const certPem = Deno.env.get("INTER_CERT_PEM");
-  const keyPem = Deno.env.get("INTER_KEY_PEM");
+  // Normalização: o Inter às vezes entrega o certificado como base64 puro (DER
+  // em base64, sem armadura PEM). `createHttpClient` só aceita PEM, então
+  // reconstruímos o cabeçalho/rodapé e quebramos em linhas de 64 chars.
+  const toPem = (raw: string | undefined, label: string) => {
+    if (!raw) return raw;
+    const v = raw.trim();
+    if (v.includes("-----BEGIN")) {
+      // remove linhas vazias que costumam entrar no copiar/colar
+      return v.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0).join("\n") + "\n";
+    }
+    const b64 = v.replace(/[^A-Za-z0-9+/=]/g, "");
+    const lines = b64.match(/.{1,64}/g) ?? [];
+    return `-----BEGIN ${label}-----\n${lines.join("\n")}\n-----END ${label}-----\n`;
+  };
+  const certPem = toPem(Deno.env.get("INTER_CERT_PEM"), "CERTIFICATE");
+  const keyPem = toPem(Deno.env.get("INTER_KEY_PEM"), "PRIVATE KEY");
   const missing = [
     !clientId && "INTER_CLIENT_ID",
     !clientSecret && "INTER_CLIENT_SECRET",
