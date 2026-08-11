@@ -23,6 +23,19 @@ Deno.serve(async (req) => {
 
   const internal = Deno.env.get("INTERNAL_WEBHOOK_SECRET");
   const provided = req.headers.get("x-internal-secret");
+  const url = new URL(req.url);
+  // `?capability=1` responde só a pergunta do runtime (existe suporte a mTLS?).
+  // Não toca em credencial nem em rede externa, então é seguro sem o segredo.
+  const capabilityOnly = url.searchParams.get("capability") === "1";
+  if (capabilityOnly) {
+    return new Response(
+      JSON.stringify({
+        runtimeSupportsMtls: typeof (Deno as any).createHttpClient === "function",
+        denoVersion: (Deno as any).version?.deno ?? null,
+      }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
   if (!internal || provided !== internal) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
