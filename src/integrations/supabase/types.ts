@@ -1212,6 +1212,7 @@ export type Database = {
       }
       inter_pix_charges: {
         Row: {
+          access_activated_at: string | null
           created_at: string
           cycle_index: number | null
           due_date: string
@@ -1229,6 +1230,7 @@ export type Database = {
           value_cents: number
         }
         Insert: {
+          access_activated_at?: string | null
           created_at?: string
           cycle_index?: number | null
           due_date: string
@@ -1246,6 +1248,7 @@ export type Database = {
           value_cents: number
         }
         Update: {
+          access_activated_at?: string | null
           created_at?: string
           cycle_index?: number | null
           due_date?: string
@@ -1278,6 +1281,7 @@ export type Database = {
           billing_period: string
           contract_id: string | null
           created_at: string
+          creation_status: string
           customer_cpf: string | null
           customer_email: string | null
           customer_name: string | null
@@ -1299,6 +1303,7 @@ export type Database = {
           qr_payload: string | null
           raw_payload: Json | null
           replaced_by_id_rec: string | null
+          request_key: string | null
           start_date: string | null
           status: string
           trial_value_cents: number | null
@@ -1311,6 +1316,7 @@ export type Database = {
           billing_period: string
           contract_id?: string | null
           created_at?: string
+          creation_status?: string
           customer_cpf?: string | null
           customer_email?: string | null
           customer_name?: string | null
@@ -1332,6 +1338,7 @@ export type Database = {
           qr_payload?: string | null
           raw_payload?: Json | null
           replaced_by_id_rec?: string | null
+          request_key?: string | null
           start_date?: string | null
           status?: string
           trial_value_cents?: number | null
@@ -1344,6 +1351,7 @@ export type Database = {
           billing_period?: string
           contract_id?: string | null
           created_at?: string
+          creation_status?: string
           customer_cpf?: string | null
           customer_email?: string | null
           customer_name?: string | null
@@ -1365,6 +1373,7 @@ export type Database = {
           qr_payload?: string | null
           raw_payload?: Json | null
           replaced_by_id_rec?: string | null
+          request_key?: string | null
           start_date?: string | null
           status?: string
           trial_value_cents?: number | null
@@ -1384,25 +1393,43 @@ export type Database = {
       }
       inter_webhook_events: {
         Row: {
+          attempts: number
           created_at: string
           event_key: string
           id: string
           kind: string
+          last_error: string | null
           payload: Json | null
+          processed_at: string | null
+          processing_started_at: string
+          processing_status: string
+          updated_at: string
         }
         Insert: {
+          attempts?: number
           created_at?: string
           event_key: string
           id?: string
           kind: string
+          last_error?: string | null
           payload?: Json | null
+          processed_at?: string | null
+          processing_started_at?: string
+          processing_status?: string
+          updated_at?: string
         }
         Update: {
+          attempts?: number
           created_at?: string
           event_key?: string
           id?: string
           kind?: string
+          last_error?: string | null
           payload?: Json | null
+          processed_at?: string | null
+          processing_started_at?: string
+          processing_status?: string
+          updated_at?: string
         }
         Relationships: []
       }
