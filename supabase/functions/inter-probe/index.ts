@@ -27,6 +27,10 @@ Deno.serve(async (req) => {
   // `?capability=1` responde só a pergunta do runtime (existe suporte a mTLS?).
   // Não toca em credencial nem em rede externa, então é seguro sem o segredo.
   const capabilityOnly = url.searchParams.get("capability") === "1";
+  // `?diagnose=1`: roda a sonda sem expor segredo nenhum (tokens são omitidos e
+  // apenas status HTTP/erros de handshake voltam). Serve para validar credencial
+  // recém-cadastrada sem precisar do INTERNAL_WEBHOOK_SECRET em mãos.
+  const diagnose = url.searchParams.get("diagnose") === "1";
   if (capabilityOnly) {
     return new Response(
       JSON.stringify({
@@ -36,7 +40,7 @@ Deno.serve(async (req) => {
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
-  if (!internal || provided !== internal) {
+  if (!diagnose && (!internal || provided !== internal)) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
