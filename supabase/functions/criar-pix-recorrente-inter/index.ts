@@ -349,31 +349,34 @@ Deno.serve(async (req) => {
       throw new Error(`Inter recusou locrec (HTTP ${locRec.status}): ${locRec.raw.slice(0, 300)}`);
     }
 
-    // 2) loc da cobrança imediata.
-    const loc = await interFetch<{ id: number }>("/pix/v2/loc", {
-      method: "POST", body: { tipoCob: "cob" },
-    });
-
-    // 3) Cobrança imediata: é ela que gera o QR composto.
-    const cob = await interFetch<Record<string, unknown>>(`/pix/v2/cob/${txid}`, {
-      method: "PUT",
-      body: {
-        calendario: { expiracao: QR_TTL_SECONDS },
-        devedor: { cpf: cpfClean, nome: name.slice(0, 200) },
-        valor: { original: toDecimal(immediateCents) },
-        chave,
-        solicitacaoPagador: objeto,
-        ...(loc.ok && loc.data?.id ? { loc: { id: loc.data.id } } : {}),
-      },
-    });
-    if (!cob.ok) {
-      await supabase.from("inter_pix_recurrences").update({
-        creation_status: "failed", status: "FALHA_CRIACAO",
-        last_error: `cob recusada HTTP ${cob.status}: ${cob.raw.slice(0, 240)}`,
-      }).eq("id", attemptId);
-      throw new Error(`Inter recusou a cobrança (HTTP ${cob.status}): ${cob.raw.slice(0, 300)}`);
+    // 2/3) Cobrança imediata — SÓ existe quando há dinheiro no ato. Na semana
+    // grátis não criamos `cob`: o cliente aprova o mandato e não paga nada hoje.
+    let cobData: Record<string, any> | null = null;
+    if (immediateCents > 0) {
+      const loc = await interFetch<{ id: number }>("/pix/v2/loc", {
+        method: "POST", body: { tipoCob: "cob" },
+      });
+      const cob = await interFetch<Record<string, unknown>>(`/pix/v2/cob/${txid}`, {
+        method: "PUT",
+        body: {
+          calendario: { expiracao: QR_TTL_SECONDS },
+          devedor: { cpf: cpfClean, nome: name.slice(0, 200) },
+          valor: { original: toDecimal(immediateCents) },
+          chave,
+          solicitacaoPagador: objeto,
+          ...(loc.ok && loc.data?.id ? { loc: { id: loc.data.id } } : {}),
+        },
+      });
+      if (!cob.ok) {
+        await supabase.from("inter_pix_recurrences").update({
+          creation_status: "failed", status: "FALHA_CRIACAO",
+          last_error: `cob recusada HTTP ${cob.status}: ${cob.raw.slice(0, 240)}`,
+        }).eq("id", attemptId);
+        throw new Error(`Inter recusou a cobrança (HTTP ${cob.status}): ${cob.raw.slice(0, 300)}`);
+      }
+      remoteTxidCreated = true;
+      cobData = cob.data as Record<string, any>;
     }
-    remoteTxidCreated = true;
 
     // 4) Recorrência amarrada ao txid da cobrança (ativação = pagamento dela).
     const rec = await interFetch<Record<string, unknown>>("/pix/v2/rec", {
@@ -384,14 +387,18 @@ Deno.serve(async (req) => {
         valor: { valorRec: toDecimal(amountCents) },
         politicaRetentativa: "PERMITE_3R_7D",
         loc: locRec.data.id,
-        ativacao: { dadosJornada: { txid } },
+        // Sem cobrança imediata não há jornada a amarrar: o mandato é aprovado
+        // direto no app do banco (JORNADA_2 pura).
+        ...(remoteTxidCreated ? { ativacao: { dadosJornada: { txid } } } : {}),
       },
     });
     if (!rec.ok) {
-      // Mandato falhou: remove a cobrança para não deixar QR órfão cobrável.
-      await interFetch(`/pix/v2/cob/${txid}`, {
-        method: "PATCH", body: { status: "REMOVIDA_PELO_USUARIO_RECEBEDOR" },
-      }).catch(() => {});
+      // Mandato falhou: remove a cobrança (se houver) para não deixar QR órfão.
+      if (remoteTxidCreated) {
+        await interFetch(`/pix/v2/cob/${txid}`, {
+          method: "PATCH", body: { status: "REMOVIDA_PELO_USUARIO_RECEBEDOR" },
+        }).catch(() => {});
+      }
       await supabase.from("inter_pix_recurrences").update({
         creation_status: "compensated", status: "FALHA_CRIACAO",
         last_error: `rec recusada HTTP ${rec.status}: ${rec.raw.slice(0, 240)}`,
