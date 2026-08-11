@@ -172,16 +172,18 @@ Deno.serve(async (req) => {
 
   // 3. Token OAuth (client_credentials sobre mTLS) — varredura de escopos candidatos
   let accessToken: string | null = null;
-  const scopeCandidates: (string | null)[] = [
-    "pix.automatico.read pix.automatico.write",
-    "pix.automatico.read",
-    "recorrencia.read recorrencia.write",
-    "cob.read cob.write pix.read pix.write",
-    "cob.write cob.read",
-    "boleto-cobranca.read boleto-cobranca.write",
-    "extrato.read",
-    null, // sem scope: alguns servidores devolvem os escopos registrados
-  ];
+  // Varredura de nomes de escopo, um por um: só assim descobrimos exatamente
+  // quais estão registrados na integração (o Inter devolve só os concedidos).
+  // O OAuth do Inter aplica rate limit agressivo (429), então a varredura é
+  // curta e espaçada. `?scopes=a,b` permite testar nomes específicos.
+  const scopesParam = url.searchParams.get("scopes");
+  const scopeCandidates: (string | null)[] = scopesParam
+    ? scopesParam.split(",").map((s) => (s.trim() === "" ? null : s.trim()))
+    : [
+        "pix.automatico.read pix.automatico.write",
+        "recorrencia.read recorrencia.write",
+        "cob.read cob.write pix.read pix.write",
+      ];
   const scopeAttempts: any[] = [];
   for (const scope of scopeCandidates) {
     try {
@@ -208,7 +210,7 @@ Deno.serve(async (req) => {
         grantedScopes: json?.scope ?? null,
         bodyPreview: token ? "(token omitido)" : text.slice(0, 200),
       });
-      if (token) {
+      if (token && !accessToken) {
         accessToken = token;
         steps.oauth = {
           status: resp.status,
@@ -217,11 +219,12 @@ Deno.serve(async (req) => {
           scopeUsed: scope ?? "(nenhum)",
           scopes: json?.scope ?? null,
         };
-        break;
       }
     } catch (e) {
       scopeAttempts.push({ scope: scope ?? "(nenhum)", error: e instanceof Error ? e.message : String(e) });
     }
+    // Espaça as tentativas para não bater no rate limit do OAuth.
+    await new Promise((r) => setTimeout(r, 9000));
   }
   steps.scopeAttempts = scopeAttempts;
   if (!accessToken) {
@@ -243,17 +246,37 @@ Deno.serve(async (req) => {
     );
   }
 
-  // 4. GET de leitura em Pix Automático (não cria nada)
-  try {
-    const resp = await fetch(`${API_BASE}/pix/v2/recorrencia?inicio=${new Date(Date.now() - 7 * 864e5).toISOString()}&fim=${new Date().toISOString()}`, {
-      method: "GET",
-      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-      ...(client ? { client } : {}),
-    } as RequestInit);
-    const text = await resp.text();
-    steps.pixAutomaticoRead = { status: resp.status, ok: resp.ok, bodyPreview: text.slice(0, 400) };
-  } catch (e) {
-    steps.pixAutomaticoRead = { ok: false, error: e instanceof Error ? e.message : String(e) };
+  // 4. GET de leitura em Pix Automático (não cria nada) — varre caminhos possíveis
+  const inicio = new Date(Date.now() - 7 * 864e5).toISOString();
+  const fim = new Date().toISOString();
+  const readPaths = [
+    `/pix/v2/recorrencia?inicio=${inicio}&fim=${fim}`,
+    `/pix-automatico/v2/recorrencia?inicio=${inicio}&fim=${fim}`,
+    `/pix/v2/rec?inicio=${inicio}&fim=${fim}`,
+    `/pix/v2/cobr?inicio=${inicio}&fim=${fim}`,
+    `/pix/v2/solicrec?inicio=${inicio}&fim=${fim}`,
+    `/cobranca/v3/cobrancas?dataInicial=${inicio.slice(0, 10)}&dataFinal=${fim.slice(0, 10)}`,
+  ];
+  const readAttempts: any[] = [];
+  for (const p of readPaths) {
+    try {
+      const resp = await fetch(`${API_BASE}${p}`, {
+        method: "GET",
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        ...(client ? { client } : {}),
+      } as RequestInit);
+      const text = await resp.text();
+      readAttempts.push({ path: p.split("?")[0], status: resp.status, ok: resp.ok, bodyPreview: text.slice(0, 200) });
+      if (resp.ok && !steps.pixAutomaticoRead) {
+        steps.pixAutomaticoRead = { path: p.split("?")[0], status: resp.status, ok: true, bodyPreview: text.slice(0, 300) };
+      }
+    } catch (e) {
+      readAttempts.push({ path: p.split("?")[0], error: e instanceof Error ? e.message : String(e) });
+    }
+  }
+  steps.readAttempts = readAttempts;
+  if (!steps.pixAutomaticoRead) {
+    steps.pixAutomaticoRead = { ok: false, note: "Nenhum caminho de recorrência respondeu 2xx — ver readAttempts." };
   }
 
   const readOk = (steps.pixAutomaticoRead as any)?.ok === true;
