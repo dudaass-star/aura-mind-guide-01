@@ -22,6 +22,8 @@ export type FunnelStep =
   | "pix_qr_error"
   | "pix_copy"
   | "pix_authorized"
+  | "pix_rail_down"
+  | "pix_blocked_rail_down"
   | "asaas_card_open";
 
 const SESSION_KEY = "aura_funnel_sid";
