@@ -997,6 +997,7 @@ const CheckoutV2 = () => {
         trial: !!data.trial,
         recurringAmount: data.recurringAmount ?? null,
         firstRecurringChargeDate: data.firstRecurringChargeDate ?? null,
+        authorizationOnly: !!data.authorizationOnly,
       });
       setAuthState(pixMode === "subscription" && data.authorizationId ? "pending" : null);
       setPixStage("qr");
