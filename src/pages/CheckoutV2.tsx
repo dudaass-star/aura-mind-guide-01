@@ -252,6 +252,8 @@ const CheckoutV2 = () => {
     trial?: boolean;
     recurringAmount?: number | null;
     firstRecurringChargeDate?: string | null;
+    // Trilho Inter na semana grátis: o QR só autoriza o débito, não cobra hoje.
+    authorizationOnly?: boolean;
   } | null>(null);
   // Estado do consentimento de PIX Automático (Bacen): pending → active | expired.
   // O consentimento é a etapa que mais perdemos: o cliente paga/escaneia mas não
