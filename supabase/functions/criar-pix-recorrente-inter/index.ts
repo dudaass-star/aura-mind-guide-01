@@ -30,6 +30,34 @@ const PRICES: Record<string, Record<string, number>> = {
 const TRIAL_PRICES: Record<string, number> = { essencial: 690, direcao: 990, transformacao: 1990 };
 const TRIAL_DAYS = 7;
 
+// Modo do trial no trilho Inter (system_config.inter_trial_mode):
+//   • "free"  → 7 dias GRÁTIS: nenhuma cobrança imediata; o mandato cheio começa
+//               em D+7. Um único scan, uma única aprovação no app do banco.
+//   • "paid"  → 1ª semana paga (R$ 6,90) + mandato cheio. Exige a jornada
+//               composta do Bacen, que o Inter NÃO implementa hoje: o cliente
+//               teria que escanear dois QRs. Mantido só para quando o Inter (ou
+//               outro PSP) publicar a Jornada 1.
+//   • "none"  → sem trial: cobrança cheia imediata + mandato do ciclo seguinte.
+type InterTrialMode = "free" | "paid" | "none";
+const DEFAULT_INTER_TRIAL_MODE: InterTrialMode = "free";
+
+async function readTrialMode(supabase: any): Promise<InterTrialMode> {
+  try {
+    const { data } = await supabase
+      .from("system_config").select("value").eq("key", "inter_trial_mode").maybeSingle();
+    if (!data?.value) return DEFAULT_INTER_TRIAL_MODE;
+    let raw = data.value;
+    if (typeof raw === "string") {
+      try { raw = JSON.parse(raw); } catch { /* valor cru já é a string */ }
+    }
+    const mode = String(raw).replace(/"/g, "").trim().toLowerCase();
+    return (["free", "paid", "none"].includes(mode) ? mode : DEFAULT_INTER_TRIAL_MODE) as InterTrialMode;
+  } catch (e) {
+    console.warn("[criar-pix-recorrente-inter] inter_trial_mode não lido:", (e as Error)?.message);
+    return DEFAULT_INTER_TRIAL_MODE;
+  }
+}
+
 const PLAN_NAMES: Record<string, string> = {
   essencial: "Essencial", direcao: "Direção", transformacao: "Transformação",
 };
@@ -221,7 +249,13 @@ Deno.serve(async (req) => {
     // Trial só existe no mensal e só para cliente novo.
     const returning = await isReturningCustomer(supabase, emailClean, phoneClean);
     const trialCents = TRIAL_PRICES[plan] ?? null;
-    const withTrial = mode === "checkout" && billing === "monthly" && !returning && !!trialCents;
+    const trialMode = await readTrialMode(supabase);
+    const trialEligible = mode === "checkout" && billing === "monthly" && !returning;
+    // Semana grátis: mandato cheio começando em D+7, sem cobrança imediata.
+    const freeTrial = trialEligible && trialMode === "free";
+    // Semana paga (R$ 6,90 + mandato) — só quando o PSP tiver jornada composta.
+    const paidTrial = trialEligible && trialMode === "paid" && !!trialCents;
+    const withTrial = freeTrial || paidTrial;
 
     // Clique repetido, timeout do navegador ou retomada da página reutilizam o
     // mesmo mandato enquanto o QR continua válido. Nunca geramos dois débitos
@@ -243,6 +277,9 @@ Deno.serve(async (req) => {
           amount: (prior.is_trial ? prior.trial_value_cents : prior.value_cents) / 100,
           recurringAmount: prior.value_cents / 100,
           trial: prior.is_trial,
+          trialMode: prior.is_trial ? (prior.trial_value_cents === 0 ? "free" : "paid") : "none",
+          trialDays: prior.is_trial ? TRIAL_DAYS : 0,
+          authorizationOnly: prior.is_trial && prior.trial_value_cents === 0,
           qrCodeImage: prior.qr_encoded_image,
           copyPaste: prior.qr_payload,
           expiresAt: prior.qr_expires_at,
@@ -259,13 +296,17 @@ Deno.serve(async (req) => {
     }
 
     const now = new Date();
-    // Com trial: 1º débito automático 1 dia após o fim da semana promocional.
+    // Trial grátis: o 1º débito cheio cai exatamente no fim dos 7 dias.
+    // Trial pago: 1 dia após o fim da semana promocional.
     // Sem trial: a cobrança imediata cobre o ciclo 1; o mandato começa no ciclo 2.
-    const dataInicial = withTrial
-      ? brtDate(addDays(now, TRIAL_DAYS + 1))
-      : brtDate(addMonths(now, CYCLE_MONTHS[billing]));
+    const dataInicial = freeTrial
+      ? brtDate(addDays(now, TRIAL_DAYS))
+      : paidTrial
+        ? brtDate(addDays(now, TRIAL_DAYS + 1))
+        : brtDate(addMonths(now, CYCLE_MONTHS[billing]));
 
-    const immediateCents = withTrial ? (trialCents as number) : amountCents;
+    // Grátis = nenhum centavo agora; o QR é só de autorização.
+    const immediateCents = freeTrial ? 0 : paidTrial ? (trialCents as number) : amountCents;
     const contratoId = `aura${plan[0]}${billing[0]}${Date.now().toString(36)}`.slice(0, 35);
     const objeto = `Aura ${PLAN_NAMES[plan]} / ${PERIOD_LABELS[billing]}`.slice(0, 35);
     const txid = buildTxid(`aura${plan[0]}${billing[0]}`);
@@ -282,7 +323,7 @@ Deno.serve(async (req) => {
       periodicidade: PERIODICIDADE_MAP[billing],
       value_cents: amountCents,
       is_trial: withTrial,
-      trial_value_cents: withTrial ? trialCents : null,
+      trial_value_cents: freeTrial ? 0 : paidTrial ? trialCents : null,
       status: "CRIANDO",
       creation_status: "creating",
       start_date: dataInicial,
@@ -311,31 +352,34 @@ Deno.serve(async (req) => {
       throw new Error(`Inter recusou locrec (HTTP ${locRec.status}): ${locRec.raw.slice(0, 300)}`);
     }
 
-    // 2) loc da cobrança imediata.
-    const loc = await interFetch<{ id: number }>("/pix/v2/loc", {
-      method: "POST", body: { tipoCob: "cob" },
-    });
-
-    // 3) Cobrança imediata: é ela que gera o QR composto.
-    const cob = await interFetch<Record<string, unknown>>(`/pix/v2/cob/${txid}`, {
-      method: "PUT",
-      body: {
-        calendario: { expiracao: QR_TTL_SECONDS },
-        devedor: { cpf: cpfClean, nome: name.slice(0, 200) },
-        valor: { original: toDecimal(immediateCents) },
-        chave,
-        solicitacaoPagador: objeto,
-        ...(loc.ok && loc.data?.id ? { loc: { id: loc.data.id } } : {}),
-      },
-    });
-    if (!cob.ok) {
-      await supabase.from("inter_pix_recurrences").update({
-        creation_status: "failed", status: "FALHA_CRIACAO",
-        last_error: `cob recusada HTTP ${cob.status}: ${cob.raw.slice(0, 240)}`,
-      }).eq("id", attemptId);
-      throw new Error(`Inter recusou a cobrança (HTTP ${cob.status}): ${cob.raw.slice(0, 300)}`);
+    // 2/3) Cobrança imediata — SÓ existe quando há dinheiro no ato. Na semana
+    // grátis não criamos `cob`: o cliente aprova o mandato e não paga nada hoje.
+    let cobData: Record<string, any> | null = null;
+    if (immediateCents > 0) {
+      const loc = await interFetch<{ id: number }>("/pix/v2/loc", {
+        method: "POST", body: { tipoCob: "cob" },
+      });
+      const cob = await interFetch<Record<string, unknown>>(`/pix/v2/cob/${txid}`, {
+        method: "PUT",
+        body: {
+          calendario: { expiracao: QR_TTL_SECONDS },
+          devedor: { cpf: cpfClean, nome: name.slice(0, 200) },
+          valor: { original: toDecimal(immediateCents) },
+          chave,
+          solicitacaoPagador: objeto,
+          ...(loc.ok && loc.data?.id ? { loc: { id: loc.data.id } } : {}),
+        },
+      });
+      if (!cob.ok) {
+        await supabase.from("inter_pix_recurrences").update({
+          creation_status: "failed", status: "FALHA_CRIACAO",
+          last_error: `cob recusada HTTP ${cob.status}: ${cob.raw.slice(0, 240)}`,
+        }).eq("id", attemptId);
+        throw new Error(`Inter recusou a cobrança (HTTP ${cob.status}): ${cob.raw.slice(0, 300)}`);
+      }
+      remoteTxidCreated = true;
+      cobData = cob.data as Record<string, any>;
     }
-    remoteTxidCreated = true;
 
     // 4) Recorrência amarrada ao txid da cobrança (ativação = pagamento dela).
     const rec = await interFetch<Record<string, unknown>>("/pix/v2/rec", {
@@ -346,14 +390,18 @@ Deno.serve(async (req) => {
         valor: { valorRec: toDecimal(amountCents) },
         politicaRetentativa: "PERMITE_3R_7D",
         loc: locRec.data.id,
-        ativacao: { dadosJornada: { txid } },
+        // Sem cobrança imediata não há jornada a amarrar: o mandato é aprovado
+        // direto no app do banco (JORNADA_2 pura).
+        ...(remoteTxidCreated ? { ativacao: { dadosJornada: { txid } } } : {}),
       },
     });
     if (!rec.ok) {
-      // Mandato falhou: remove a cobrança para não deixar QR órfão cobrável.
-      await interFetch(`/pix/v2/cob/${txid}`, {
-        method: "PATCH", body: { status: "REMOVIDA_PELO_USUARIO_RECEBEDOR" },
-      }).catch(() => {});
+      // Mandato falhou: remove a cobrança (se houver) para não deixar QR órfão.
+      if (remoteTxidCreated) {
+        await interFetch(`/pix/v2/cob/${txid}`, {
+          method: "PATCH", body: { status: "REMOVIDA_PELO_USUARIO_RECEBEDOR" },
+        }).catch(() => {});
+      }
       await supabase.from("inter_pix_recurrences").update({
         creation_status: "compensated", status: "FALHA_CRIACAO",
         last_error: `rec recusada HTTP ${rec.status}: ${rec.raw.slice(0, 240)}`,
@@ -379,12 +427,14 @@ Deno.serve(async (req) => {
     // CRIADA/AGUARDANDO_DEFINICAO — foi exatamente esse o bug do 1º teste real.
     const recQr = ((recRead?.dadosQR ?? recData?.dadosQR) as Record<string, any> | undefined)
       ?.pixCopiaECola as string | undefined;
-    const cobQr = (cob.data as Record<string, any>)?.pixCopiaECola as string | undefined;
+    const cobQr = cobData?.pixCopiaECola as string | undefined;
     if (!recQr) {
       console.error(
         `[criar-pix-recorrente-inter] rec ${idRec} sem dadosQR.pixCopiaECola — caindo no QR simples (recorrência NÃO será autorizada)`,
       );
     }
+    // Na semana grátis não existe QR alternativo: sem o QR da `rec` o cliente
+    // não teria como autorizar nada, então falha explícita em vez de silenciosa.
     const qrPayload = (recQr || cobQr) as string;
     if (!idRec || !qrPayload) {
       throw new Error("Inter não devolveu idRec ou pixCopiaECola");
@@ -410,7 +460,7 @@ Deno.serve(async (req) => {
       periodicidade: PERIODICIDADE_MAP[billing],
       value_cents: amountCents,
       is_trial: withTrial,
-      trial_value_cents: withTrial ? trialCents : null,
+      trial_value_cents: freeTrial ? 0 : paidTrial ? trialCents : null,
       status: (recData?.status as string) || "CRIADA",
       start_date: dataInicial,
       next_charge_date: dataInicial,
@@ -440,22 +490,25 @@ Deno.serve(async (req) => {
       throw new Error("A autorização não pôde ser confirmada. Nenhuma cobrança foi mantida.");
     }
 
-    // A cobrança imediata entra como ciclo 0 (a semana promocional ou o 1º ciclo).
-    const { error: chargeErr } = await supabase.from("inter_pix_charges").insert({
-      txid, id_rec: idRec, user_id: userId, cycle_index: 0,
-      due_date: brtDate(now), value_cents: immediateCents,
-      status: "ATIVA", raw_payload: cob.data as Record<string, unknown>,
-    });
-    if (chargeErr) {
-      if (remoteIdRec) {
-        await interFetch(`/pix/v2/rec/${remoteIdRec}`, { method: "PATCH", body: { status: "CANCELADA" } }).catch(() => {});
+    // A cobrança imediata entra como ciclo 0 (a semana paga ou o 1º ciclo).
+    // Na semana grátis não há ciclo 0 — o 1º débito é o do mandato em D+7.
+    if (remoteTxidCreated) {
+      const { error: chargeErr } = await supabase.from("inter_pix_charges").insert({
+        txid, id_rec: idRec, user_id: userId, cycle_index: 0,
+        due_date: brtDate(now), value_cents: immediateCents,
+        status: "ATIVA", raw_payload: cobData as Record<string, unknown>,
+      });
+      if (chargeErr) {
+        if (remoteIdRec) {
+          await interFetch(`/pix/v2/rec/${remoteIdRec}`, { method: "PATCH", body: { status: "CANCELADA" } }).catch(() => {});
+        }
+        await interFetch(`/pix/v2/cob/${txid}`, { method: "PATCH", body: { status: "REMOVIDA_PELO_USUARIO_RECEBEDOR" } }).catch(() => {});
+        await supabase.from("inter_pix_recurrences").update({
+          creation_status: "compensating", status: "FALHA_PERSISTENCIA",
+          last_error: `cobrança criada, mas persistência falhou: ${chargeErr.message}`,
+        }).eq("id", attemptId);
+        throw new Error("A cobrança não pôde ser confirmada. O QR foi cancelado; tente novamente.");
       }
-      await interFetch(`/pix/v2/cob/${txid}`, { method: "PATCH", body: { status: "REMOVIDA_PELO_USUARIO_RECEBEDOR" } }).catch(() => {});
-      await supabase.from("inter_pix_recurrences").update({
-        creation_status: "compensating", status: "FALHA_PERSISTENCIA",
-        last_error: `cobrança criada, mas persistência falhou: ${chargeErr.message}`,
-      }).eq("id", attemptId);
-      throw new Error("A cobrança não pôde ser confirmada. O QR foi cancelado; tente novamente.");
     }
 
     await supabase.from("inter_pix_recurrences").update({
@@ -486,6 +539,9 @@ Deno.serve(async (req) => {
       amount: immediateCents / 100,
       recurringAmount: amountCents / 100,
       trial: withTrial,
+      trialMode: freeTrial ? "free" : paidTrial ? "paid" : "none",
+      trialDays: withTrial ? TRIAL_DAYS : 0,
+      authorizationOnly: !remoteTxidCreated,
       firstRecurringChargeDate: dataInicial,
       qrCodeImage: qrImage,
       copyPaste: qrPayload,
