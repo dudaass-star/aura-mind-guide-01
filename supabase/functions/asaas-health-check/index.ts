@@ -195,13 +195,6 @@ Deno.serve(async (req) => {
     checkedAt: new Date().toISOString(),
   };
 
-  const { error: upsertErr } = await supabase
-    .from("system_config")
-    .upsert(
-      { key: "pix_rail_status", value: JSON.stringify(status), updated_at: new Date().toISOString() },
-      { onConflict: "key" },
-    );
-
   if (override) {
     console.log(`[asaas-health-check] sonda avulsa de ${gateway} (não persistida)`);
     return new Response(JSON.stringify({ ...status, persisted: false }, null, 2), {
@@ -209,6 +202,13 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
+
+  const { error: upsertErr } = await supabase
+    .from("system_config")
+    .upsert(
+      { key: "pix_rail_status", value: JSON.stringify(status), updated_at: new Date().toISOString() },
+      { onConflict: "key" },
+    );
 
   if (upsertErr) console.error("[asaas-health-check] falha ao gravar pix_rail_status:", upsertErr.message);
   console.log(`[asaas-health-check] trilho=${status.gateway} healthy=${status.healthy} (${status.detail})`);
