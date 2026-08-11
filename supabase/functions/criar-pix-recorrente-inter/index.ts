@@ -249,7 +249,13 @@ Deno.serve(async (req) => {
     // Trial só existe no mensal e só para cliente novo.
     const returning = await isReturningCustomer(supabase, emailClean, phoneClean);
     const trialCents = TRIAL_PRICES[plan] ?? null;
-    const withTrial = mode === "checkout" && billing === "monthly" && !returning && !!trialCents;
+    const trialMode = await readTrialMode(supabase);
+    const trialEligible = mode === "checkout" && billing === "monthly" && !returning;
+    // Semana grátis: mandato cheio começando em D+7, sem cobrança imediata.
+    const freeTrial = trialEligible && trialMode === "free";
+    // Semana paga (R$ 6,90 + mandato) — só quando o PSP tiver jornada composta.
+    const paidTrial = trialEligible && trialMode === "paid" && !!trialCents;
+    const withTrial = freeTrial || paidTrial;
 
     // Clique repetido, timeout do navegador ou retomada da página reutilizam o
     // mesmo mandato enquanto o QR continua válido. Nunca geramos dois débitos
@@ -287,13 +293,17 @@ Deno.serve(async (req) => {
     }
 
     const now = new Date();
-    // Com trial: 1º débito automático 1 dia após o fim da semana promocional.
+    // Trial grátis: o 1º débito cheio cai exatamente no fim dos 7 dias.
+    // Trial pago: 1 dia após o fim da semana promocional.
     // Sem trial: a cobrança imediata cobre o ciclo 1; o mandato começa no ciclo 2.
-    const dataInicial = withTrial
-      ? brtDate(addDays(now, TRIAL_DAYS + 1))
-      : brtDate(addMonths(now, CYCLE_MONTHS[billing]));
+    const dataInicial = freeTrial
+      ? brtDate(addDays(now, TRIAL_DAYS))
+      : paidTrial
+        ? brtDate(addDays(now, TRIAL_DAYS + 1))
+        : brtDate(addMonths(now, CYCLE_MONTHS[billing]));
 
-    const immediateCents = withTrial ? (trialCents as number) : amountCents;
+    // Grátis = nenhum centavo agora; o QR é só de autorização.
+    const immediateCents = freeTrial ? 0 : paidTrial ? (trialCents as number) : amountCents;
     const contratoId = `aura${plan[0]}${billing[0]}${Date.now().toString(36)}`.slice(0, 35);
     const objeto = `Aura ${PLAN_NAMES[plan]} / ${PERIOD_LABELS[billing]}`.slice(0, 35);
     const txid = buildTxid(`aura${plan[0]}${billing[0]}`);
@@ -310,7 +320,7 @@ Deno.serve(async (req) => {
       periodicidade: PERIODICIDADE_MAP[billing],
       value_cents: amountCents,
       is_trial: withTrial,
-      trial_value_cents: withTrial ? trialCents : null,
+      trial_value_cents: freeTrial ? 0 : paidTrial ? trialCents : null,
       status: "CRIANDO",
       creation_status: "creating",
       start_date: dataInicial,
