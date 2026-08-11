@@ -1277,6 +1277,7 @@ export type Database = {
       }
       inter_pix_recurrences: {
         Row: {
+          access_granted_at: string | null
           authorization_url: string | null
           billing_period: string
           contract_id: string | null
@@ -1312,6 +1313,7 @@ export type Database = {
           value_cents: number
         }
         Insert: {
+          access_granted_at?: string | null
           authorization_url?: string | null
           billing_period: string
           contract_id?: string | null
@@ -1347,6 +1349,7 @@ export type Database = {
           value_cents: number
         }
         Update: {
+          access_granted_at?: string | null
           authorization_url?: string | null
           billing_period?: string
           contract_id?: string | null
