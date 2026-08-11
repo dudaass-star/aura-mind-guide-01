@@ -34,7 +34,7 @@ interface Props {
   /** Tier de retenção ativo (lite/base). Se houver, nenhum plano cheio é "atual". */
   currentTier?: string | null;
   /** Gateway ativo — roteia para a edge function correta e ajusta copy. */
-  paymentGateway: "stripe-card" | "asaas-pix" | "asaas-card";
+  paymentGateway: "stripe-card" | "asaas-pix" | "asaas-card" | "inter-pix";
 }
 
 export function ChangePlanDialog({
@@ -54,21 +54,29 @@ export function ChangePlanDialog({
     planName: string;
     nextChargeDate?: string;
     nextChargeAmount?: number;
+    /** PIX Automático Bacen: valor novo exige novo QR de autorização. */
+    qrCodeImage?: string | null;
+    copyPaste?: string | null;
   } | null>(null);
   const queryClient = useQueryClient();
 
+  const isInter = paymentGateway === "inter-pix";
   const isAsaas = paymentGateway === "asaas-pix" || paymentGateway === "asaas-card";
   const isPix = paymentGateway === "asaas-pix";
   const isAsaasCard = paymentGateway === "asaas-card";
   // Mostra tela de sucesso com próxima cobrança em qualquer fluxo Asaas
   // (PIX e cartão recorrente Asaas reusam a mesma edge com retorno idêntico).
-  const showsNextCharge = isAsaas;
-  const copyDescription = isPix
+  const showsNextCharge = isAsaas || isInter;
+  const copyDescription = isInter
+    ? "No PIX Automático o valor autorizado é fixo: para trocar, você escaneia um QR novo uma única vez."
+    : isPix
     ? "A troca vale a partir da próxima cobrança PIX. Hoje não rola cobrança nenhuma."
     : isAsaasCard
       ? "A troca vale a partir da próxima cobrança no seu cartão. Hoje não rola cobrança nenhuma."
       : "A diferença é cobrada (ou creditada) hoje no cartão já cadastrado.";
-  const copyConfirm = isPix
+  const copyConfirm = isInter
+    ? "Vou encerrar o débito automático atual e gerar um QR novo com o valor do plano escolhido. Seu acesso atual não muda."
+    : isPix
     ? "Sua próxima cobrança PIX já vem com o novo valor. Nada é cobrado agora."
     : isAsaasCard
       ? "Sua próxima cobrança no cartão já vem com o novo valor. Nada é cobrado agora."
@@ -91,9 +99,13 @@ export function ChangePlanDialog({
     if (!selected) return;
     setLoading(true);
     try {
-      const functionName = isAsaas ? "change-asaas-plan" : "change-subscription-plan";
+      const functionName = isInter
+        ? "change-inter-plan"
+        : isAsaas
+          ? "change-asaas-plan"
+          : "change-subscription-plan";
       const { data, error } = await supabasePortal.functions.invoke(functionName, {
-        body: { userId, targetPlan: selected, billing },
+        body: { userId, targetPlan: selected, plan: selected, billing },
       });
       if (error) {
         const msg =
@@ -113,6 +125,8 @@ export function ChangePlanDialog({
           planName: (data as any)?.newPlanName ?? PLAN_LABELS[selected],
           nextChargeDate: (data as any)?.nextChargeDate,
           nextChargeAmount: (data as any)?.nextChargeAmount,
+          qrCodeImage: (data as any)?.qrCodeImage ?? null,
+          copyPaste: (data as any)?.copyPaste ?? null,
         });
         setLoading(false);
       } else {
@@ -150,8 +164,37 @@ export function ChangePlanDialog({
             <div className="rounded-lg border border-border bg-muted/20 p-4 text-sm font-['Nunito'] space-y-2">
               <div className="flex items-center gap-2">
                 <Check size={16} className="text-accent" />
-                <span className="font-semibold">Plano trocado para {success.planName}.</span>
+                <span className="font-semibold">
+                  {success.copyPaste
+                    ? `Falta um passo: autorizar o ${success.planName}.`
+                    : `Plano trocado para ${success.planName}.`}
+                </span>
               </div>
+              {success.copyPaste && (
+                <div className="space-y-3 pt-1">
+                  <p className="text-muted-foreground">
+                    Escaneie o QR abaixo (ou copie o código) no app do seu banco. É uma vez só:
+                    depois disso a renovação volta a ser automática, já no valor novo.
+                  </p>
+                  {success.qrCodeImage && (
+                    <img
+                      src={success.qrCodeImage}
+                      alt="QR Code do PIX Automático para autorizar o novo plano"
+                      className="mx-auto h-44 w-44 rounded-lg bg-background p-2"
+                    />
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(success.copyPaste as string);
+                      toast({ title: "Código PIX copiado" });
+                    }}
+                    className="w-full rounded-lg border border-border px-3 py-2 text-xs text-muted-foreground hover:bg-muted/40"
+                  >
+                    Copiar código PIX
+                  </button>
+                </div>
+              )}
               {success.nextChargeDate && success.nextChargeAmount != null && (
                 <p className="text-muted-foreground">
                   Sua próxima cobrança, no dia <strong>{success.nextChargeDate}</strong>,
@@ -159,7 +202,9 @@ export function ChangePlanDialog({
                 </p>
               )}
               <p className="text-xs text-muted-foreground pt-1">
-                Nada foi cobrado agora. Sua assinatura atual segue valendo até a próxima fatura.
+                {success.copyPaste
+                  ? "Seu acesso atual continua valendo normalmente até o fim do ciclo já pago."
+                  : "Nada foi cobrado agora. Sua assinatura atual segue valendo até a próxima fatura."}
               </p>
             </div>
             <DialogFooter className="gap-2 sm:gap-2">

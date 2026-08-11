@@ -153,7 +153,8 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const body = (await req.json()) as Record<string, string>;
-    const { plan, billing, name, email, phone, cpf, fbp, fbc, gaClientId } = body;
+    let { plan, billing, name, email, phone, cpf } = body;
+    const { fbp, fbc, gaClientId } = body;
     const mode = body.mode || "checkout";
     const reauthToken = body.token;
 
@@ -167,12 +168,28 @@ Deno.serve(async (req) => {
       const { data: tokenRow } = await supabase
         .from("user_portal_tokens").select("user_id").eq("token", reauthToken).maybeSingle();
       if (!tokenRow?.user_id) return json({ error: "Link inválido ou expirado" }, 400);
-      reauthUserId = tokenRow.user_id;
+      // ATENÇÃO: `inter_pix_recurrences.user_id` referencia `profiles.id` (não o
+      // `user_id` do token). Resolver aqui evita mandato órfão.
+      const { data: prof } = await supabase
+        .from("profiles").select("id, name, email, phone, plan, billing_cycle")
+        .eq("user_id", tokenRow.user_id).maybeSingle();
+      if (!prof?.id) return json({ error: "Cadastro não encontrado" }, 404);
+      reauthUserId = prof.id;
       const { data: prev } = await supabase
-        .from("inter_pix_recurrences").select("id_rec")
+        .from("inter_pix_recurrences").select("id_rec, plan, billing_period, customer_cpf, customer_name, customer_email, customer_phone")
         .eq("user_id", reauthUserId).is("replaced_by_id_rec", null)
         .order("created_at", { ascending: false }).limit(1).maybeSingle();
       previousIdRec = prev?.id_rec || null;
+
+      // O link de reautorização só carrega o token: plano, dados do cliente e CPF
+      // vêm do mandato anterior e do perfil, nunca do front.
+      plan = plan || prev?.plan || prof?.plan || "";
+      billing = billing || prev?.billing_period || prof?.billing_cycle || "monthly";
+      name = name || prev?.customer_name || prof?.name || "Cliente";
+      email = email || prev?.customer_email || prof?.email || "";
+      phone = phone || prev?.customer_phone || prof?.phone || "";
+      cpf = cpf || prev?.customer_cpf || "";
+      if (!cpf) return json({ error: "CPF do cadastro não encontrado — fale com o suporte" }, 400);
     }
 
     if (!plan || !PRICES[plan]) return json({ error: "Plano inválido" }, 400);

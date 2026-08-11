@@ -18,7 +18,9 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const ACTIVE_STATUSES = ["APROVADA", "ATIVA", "CRIADA"];
+// `CRIADA` = mandato aguardando autorização do pagador: cobrar nesse estado é
+// pedido recusado garantido. Só emite quando o banco do cliente já aprovou.
+const ACTIVE_STATUSES = ["APROVADA", "ATIVA"];
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -67,9 +69,12 @@ Deno.serve(async (req) => {
       }
 
       // Próximo índice de ciclo = maior existente + 1 (o 0 é o QR composto).
+      // `cycle_index` nulo (cobrança gravada pelo webhook sem txid nosso) vem
+      // primeiro no DESC do Postgres e zeraria a contagem — filtra os nulos.
       const { data: last } = await supabase
         .from("inter_pix_charges").select("cycle_index")
         .eq("id_rec", rec.id_rec)
+        .not("cycle_index", "is", null)
         .order("cycle_index", { ascending: false }).limit(1).maybeSingle();
       const cycleIndex = Number(last?.cycle_index ?? 0) + 1;
 

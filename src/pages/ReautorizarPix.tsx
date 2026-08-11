@@ -48,8 +48,8 @@ export default function ReautorizarPix() {
     setError(null);
     try {
       const { data, error: fnError } = await supabase.functions.invoke(
-        "criar-pix-recorrente-asaas",
-        { body: { mode: "reauthorize", token } },
+        "pix-reauth-router",
+        { body: { action: "create", token } },
       );
       if (fnError) throw new Error(fnError.message);
       if (!data || (data as { error?: string }).error) {
@@ -71,8 +71,8 @@ export default function ReautorizarPix() {
     if (!qr?.authorizationId || confirmed) return;
     const interval = setInterval(async () => {
       try {
-        const { data } = await supabase.functions.invoke("asaas-pix-auto-status", {
-          body: { authorizationId: qr.authorizationId },
+        const { data } = await supabase.functions.invoke("pix-reauth-router", {
+          body: { action: "status", token, authorizationId: qr.authorizationId },
         });
         const st = data as { state?: string; status?: string } | null;
         if (st?.status) setStatus(st.status);
@@ -85,7 +85,7 @@ export default function ReautorizarPix() {
       }
     }, 5000);
     return () => clearInterval(interval);
-  }, [qr?.authorizationId, confirmed]);
+  }, [qr?.authorizationId, confirmed, token]);
 
   const copiar = async () => {
     if (!qr?.copyPaste) return;

@@ -92,11 +92,38 @@ async function probeInter(): Promise<RailProbe> {
     const inicio = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const fim = new Date().toISOString();
     const r = await interFetch(`/pix/v2/rec?inicio=${inicio}&fim=${fim}`);
+    if (!r.ok) {
+      return {
+        gateway: "inter",
+        healthy: false,
+        httpStatus: r.status,
+        detail: `HTTP ${r.status}: ${r.raw.slice(0, 200) || "(body vazio)"}`,
+      };
+    }
+
+    // As TRÊS rotas de notificação precisam estar registradas. A do Pix comum
+    // (`/webhook/{chave}`) é a que avisa o pagamento do QR composto: sem ela o
+    // cliente paga, o dinheiro entra e nada libera o acesso.
+    const chave = Deno.env.get("INTER_PIX_KEY");
+    const checks: Array<[string, string]> = [
+      ["webhookrec", "/pix/v2/webhookrec"],
+      ["webhookcobr", "/pix/v2/webhookcobr"],
+      ...(chave ? [["webhook-pix", `/pix/v2/webhook/${chave}`] as [string, string]] : []),
+    ];
+    const faltando: string[] = [];
+    for (const [label, path] of checks) {
+      const w = await interFetch<{ webhookUrl?: string }>(path);
+      if (!w.ok || !w.data?.webhookUrl) faltando.push(label);
+    }
+    if (!chave) faltando.push("INTER_PIX_KEY ausente");
+
     return {
       gateway: "inter",
-      healthy: r.ok,
+      healthy: faltando.length === 0,
       httpStatus: r.status,
-      detail: r.ok ? "operacional" : `HTTP ${r.status}: ${r.raw.slice(0, 200) || "(body vazio)"}`,
+      detail: faltando.length === 0
+        ? "operacional (3 webhooks registrados)"
+        : `webhook não registrado: ${faltando.join(", ")}`,
     };
   } catch (e) {
     // Erro de handshake aparece aqui: certificado vencido/trocado derruba TODO
@@ -140,6 +167,15 @@ Deno.serve(async (req) => {
     if (typeof v === "string") gateway = v;
   }
 
+  // Override de sonda: permite validar um trilho ANTES de virar o
+  // `pix_gateway`. Nesse modo não gravamos `pix_rail_status` — o status
+  // persistido tem que continuar refletindo o trilho realmente em uso.
+  const body = req.method === "POST"
+    ? await req.json().catch(() => ({} as Record<string, unknown>))
+    : {};
+  const override = typeof body.probe_gateway === "string" ? body.probe_gateway : null;
+  if (override) gateway = override;
+
   let probe: RailProbe;
   if (gateway === "off") {
     probe = { gateway: "off", healthy: false, httpStatus: 0, detail: "PIX desligado manualmente no admin" };
@@ -158,6 +194,14 @@ Deno.serve(async (req) => {
     detail: probe.detail,
     checkedAt: new Date().toISOString(),
   };
+
+  if (override) {
+    console.log(`[asaas-health-check] sonda avulsa de ${gateway} (não persistida)`);
+    return new Response(JSON.stringify({ ...status, persisted: false }, null, 2), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
 
   const { error: upsertErr } = await supabase
     .from("system_config")
