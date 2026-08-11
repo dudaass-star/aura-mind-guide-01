@@ -952,7 +952,10 @@ const CheckoutV2 = () => {
           ? `fb.1.${Date.now()}.${new URLSearchParams(window.location.search).get("fbclid")}`
           : undefined);
       const gaClientId = getGaClientId();
-      const edgeName = pixMode === "subscription" ? "criar-pix-recorrente-asaas" : "criar-pix-asaas";
+      // Recorrente (PIX Automático) vai pro banco ativo; avulso segue no Asaas.
+      const edgeName = pixMode === "subscription"
+        ? (pixGateway === "inter" ? "criar-pix-recorrente-inter" : "criar-pix-recorrente-asaas")
+        : "criar-pix-asaas";
       const { data, error } = await supabase.functions.invoke(edgeName, {
         body: {
           plan: selectedPlan,
