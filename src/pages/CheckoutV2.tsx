@@ -228,6 +228,8 @@ const CheckoutV2 = () => {
   // Oferecer PIX com o trilho fora do ar gera um QR que nunca nasce — o cliente
   // acha que pagou e a venda morre em silêncio.
   const [pixRailUp, setPixRailUp] = useState(false);
+  // Banco que executa o PIX Automático (Bacen). Trocado por system_config.pix_gateway.
+  const [pixGateway, setPixGateway] = useState<"asaas" | "inter">("asaas");
 
   // PIX (Asaas): só aparece pra trim/sem/anual. Modal abre com form de CPF
   // (resto dos dados reusa name/email/phone do form principal) e troca pra
@@ -283,7 +285,7 @@ const CheckoutV2 = () => {
       const { data: rows } = await supabase
         .from("system_config")
         .select("key, value")
-        .in("key", ["card_gateway", "pix_rail_status"]);
+        .in("key", ["card_gateway", "pix_rail_status", "pix_gateway"]);
 
       const parse = (raw: unknown): unknown => {
         // JSONB pode voltar como string pura ("asaas") ou como JSON string ('"asaas"').
@@ -302,6 +304,12 @@ const CheckoutV2 = () => {
       const health = rows?.find((r) => r.key === "pix_rail_status");
       const parsedHealth = health ? (parse(health.value) as { healthy?: boolean } | null) : null;
       setPixRailUp(parsedHealth?.healthy === true);
+
+      // Qual banco atende o PIX Automático hoje. Asaas segue como padrão até o
+      // trilho do Inter ser promovido em system_config.
+      const rail = rows?.find((r) => r.key === "pix_gateway");
+      const parsedRail = rail ? parse(rail.value) : null;
+      if (parsedRail === "inter" || parsedRail === "asaas") setPixGateway(parsedRail);
     })();
   }, []);
 
@@ -944,7 +952,10 @@ const CheckoutV2 = () => {
           ? `fb.1.${Date.now()}.${new URLSearchParams(window.location.search).get("fbclid")}`
           : undefined);
       const gaClientId = getGaClientId();
-      const edgeName = pixMode === "subscription" ? "criar-pix-recorrente-asaas" : "criar-pix-asaas";
+      // Recorrente (PIX Automático) vai pro banco ativo; avulso segue no Asaas.
+      const edgeName = pixMode === "subscription"
+        ? (pixGateway === "inter" ? "criar-pix-recorrente-inter" : "criar-pix-recorrente-asaas")
+        : "criar-pix-asaas";
       const { data, error } = await supabase.functions.invoke(edgeName, {
         body: {
           plan: selectedPlan,
@@ -1837,7 +1848,10 @@ const CheckoutV2 = () => {
                 <div className="space-y-4 pt-2">
                   <div className="bg-white rounded-xl p-4 flex justify-center">
                     <img
-                      src={`data:image/png;base64,${pixData.qrImage}`}
+                      // Asaas devolve base64 puro; o Inter devolve data URI de SVG já pronto.
+                      src={pixData.qrImage.startsWith("data:")
+                        ? pixData.qrImage
+                        : `data:image/png;base64,${pixData.qrImage}`}
                       alt="QR Code PIX"
                       className="w-56 h-56"
                     />

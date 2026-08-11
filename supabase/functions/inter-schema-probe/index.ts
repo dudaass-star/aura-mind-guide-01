@@ -5,7 +5,7 @@
 // a sonda é segura — e mais confiável que documentação de terceiro.
 //
 // Uso: GET ?probe=rec|solicrec|cobr|webhook|all
-import { interFetch, buildTxid } from "../_shared/inter-pix.ts";
+import { interFetch, buildTxid, brtDate } from "../_shared/inter-pix.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -56,6 +56,76 @@ Deno.serve(async (req) => {
     await attempt("loc_post_empty", "/pix/v2/loc", "POST", {});
     await attempt("loc_post_cob", "/pix/v2/loc", "POST", { tipoCob: "cob" });
     await attempt("cob_put_empty", `/pix/v2/cob/${buildTxid("probec")}`, "PUT", {});
+  }
+
+  // Ensaio completo da Jornada 2 com valor mínimo. Cria um `loc`, um `cob`
+  // imediato e a `rec` amarrada a ele. Ninguém paga e ninguém autoriza — a
+  // recorrência morre em CRIADA. Serve para validar TODOS os campos de uma vez.
+  if (which === "jornada2") {
+    const chave = Deno.env.get("INTER_PIX_KEY");
+    if (!chave) {
+      results.erro = "INTER_PIX_KEY ausente";
+    } else {
+      const loc = await interFetch<{ id: number; location: string }>("/pix/v2/loc", {
+        method: "POST",
+        body: { tipoCob: "cob" },
+      });
+      results.loc = { status: loc.status, body: loc.raw };
+      const locId = loc.data?.id;
+      // A `rec` exige um payload location PRÓPRIO (locrec), diferente do loc do cob.
+      const locRec = await interFetch<{ id: number; location: string }>("/pix/v2/locrec", {
+        method: "POST",
+      });
+      results.locrec = { status: locRec.status, body: locRec.raw };
+      const locRecId = locRec.data?.id;
+      const txid = buildTxid("auraprobe");
+      const cobBody = {
+        calendario: { expiracao: 86400 },
+        devedor: { cpf: "11144477735", nome: "Cliente Teste Aura" },
+        valor: { original: "1.00" },
+        chave,
+        solicitacaoPagador: "Aura - teste de integracao",
+        ...(locId ? { loc: { id: locId } } : {}),
+      };
+      await attempt("cob_put", `/pix/v2/cob/${txid}`, "PUT", cobBody);
+
+      const dataInicial = brtDate(new Date(Date.now() + 8 * 864e5));
+      const recBody = {
+        vinculo: {
+          contrato: `auraprobe${Date.now().toString(36)}`,
+          devedor: { cpf: "11144477735", nome: "Cliente Teste Aura" },
+          objeto: "Assinatura Aura (teste)",
+        },
+        calendario: { dataInicial, periodicidade: "MENSAL" },
+        valor: { valorRec: "1.00" },
+        politicaRetentativa: "PERMITE_3R_7D",
+        ...(locRecId ? { loc: locRecId } : {}),
+        ativacao: { dadosJornada: { txid } },
+      };
+      await attempt("rec_post", "/pix/v2/rec", "POST", recBody);
+      results.txidUsado = txid;
+    }
+  }
+
+  // Inspeciona uma rec existente (QR composto) e limpa artefatos de teste.
+  if (which === "inspect") {
+    const idRec = url.searchParams.get("idRec") || "";
+    const txid = url.searchParams.get("txid") || "";
+    if (idRec) await attempt("rec_get", `/pix/v2/rec/${idRec}`, "GET");
+    if (txid) await attempt("cob_get", `/pix/v2/cob/${txid}`, "GET");
+    if (url.searchParams.get("cleanup") === "1") {
+      if (idRec) await attempt("rec_cancel", `/pix/v2/rec/${idRec}`, "PATCH", { status: "CANCELADA" });
+      if (txid) await attempt("cob_remove", `/pix/v2/cob/${txid}`, "PATCH", { status: "REMOVIDA_PELO_USUARIO_RECEBEDOR" });
+    }
+  }
+
+  // Registra as três rotas de notificação do Inter apontando para webhook-inter.
+  if (which === "register") {
+    const chave = Deno.env.get("INTER_PIX_KEY");
+    const base = `${Deno.env.get("SUPABASE_URL")}/functions/v1/webhook-inter`;
+    await attempt("reg_webhookrec", "/pix/v2/webhookrec", "PUT", { webhookUrl: base });
+    await attempt("reg_webhookcobr", "/pix/v2/webhookcobr", "PUT", { webhookUrl: base });
+    if (chave) await attempt("reg_webhook_pix", `/pix/v2/webhook/${chave}`, "PUT", { webhookUrl: base });
   }
 
   if (which === "webhook" || which === "all") {
