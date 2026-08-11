@@ -20,11 +20,20 @@ Mas o Inter **não é o caminho mais rápido** pra destravar a venda de PIX. Ele
 
 O ponto decisivo: no Inter a gente não recebe "assinatura", recebe o protocolo. Toda a máquina de estados que a Woovi (e o Asaas) já resolve — criar a `cobr` na janela de 2 a 10 dias antes, tratar rejeição imediata vs. expiração, escalonar retentativas, sustentar mandato revogado no app do banco — passa a ser código nosso, com dinheiro real em cima. É exatamente a superfície onde a gente já se queimou duas vezes (fatura gêmea, QR de 30 min, mandato órfão).
 
+## Status atual: Woovi em análise cadastral (até 72h)
+
+Isso muda a ordem, não a estratégia. Com a Woovi parada em análise e o Asaas bloqueado, **não existe trilho de PIX recorrente disponível hoje** — então as próximas 72h têm duas tarefas que não dependem de aprovação de ninguém:
+
+1. **Proteger o checkout agora** (Fase 0-A): esconder o PIX enquanto nenhum trilho estiver saudável. Enquanto isso não estiver feito, todo cliente que escolhe PIX vira venda perdida silenciosa — é o furo mais caro em aberto.
+2. **Provar o Inter em paralelo** (Fase 0-B): a integração no Internet Banking do Inter você cria sozinho, sem análise de terceiro. Se o mTLS funcionar no nosso runtime, o Inter deixa de ser "otimização futura" e passa a ser **plano B real** caso a Woovi seja recusada ou demore mais.
+
+Em vez de esperar, a gente usa a janela pra descobrir se temos o Inter na mão. Se a Woovi aprovar em 72h, seguimos com ela (mais rápida) e o Inter continua sendo a economia futura, já com a dúvida técnica resolvida.
+
 ## Recomendação
 
 **Duas etapas, não uma escolha.**
 
-1. **Agora: Woovi**, pra parar de perder venda de PIX. É a mesma arquitetura que já existe no projeto, só troca o fornecedor.
+1. **Assim que a Woovi aprovar: Woovi**, pra parar de perder venda de PIX. É a mesma arquitetura que já existe no projeto, só troca o fornecedor.
 2. **Depois (otimização de custo): Inter**, com o `pix_gateway` já preparado pra virar a chave. Só entra quando o volume de PIX justificar o esforço e depois de o mTLS ser provado.
 
 Se você preferir ir direto pro Inter, eu faço — mas assumindo que o PIX recorrente fica fora do ar por mais tempo e que a responsabilidade pela cobrança recorrente passa a ser 100% nossa.
