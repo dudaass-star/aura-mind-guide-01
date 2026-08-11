@@ -870,6 +870,13 @@ const CheckoutV2 = () => {
   // Abre o modal PIX. Valida os 3 campos comuns antes (mesma regra do CTA cartão).
   // `mode` define se vamos chamar a edge one-time ou a de subscription.
   const handleOpenPix = (mode: "one-time" | "subscription" = "one-time") => {
+    // Guarda final: mesmo que a UI escape, nunca abrir o modal de PIX com o
+    // trilho fora do ar. Cai pro cartão em vez de gerar QR que não nasce.
+    if (!pixRailUp) {
+      setPayMethod("card");
+      logFunnel("pix_blocked_rail_down", { plan: selectedPlan, billing: billingPeriod, paymentMethod: "pix" });
+      return;
+    }
     const nextErrors: { name?: string; email?: string; phone?: string } = {};
     if (phoneDigits.length < 11) nextErrors.phone = "Digite seu WhatsApp com DDD (11 dígitos).";
     if (!name.trim()) nextErrors.name = "Por favor, digite seu nome.";
