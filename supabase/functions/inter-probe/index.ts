@@ -70,13 +70,60 @@ Deno.serve(async (req) => {
   // 2. Credenciais presentes?
   const clientId = Deno.env.get("INTER_CLIENT_ID");
   const clientSecret = Deno.env.get("INTER_CLIENT_SECRET");
-  const certPem = Deno.env.get("INTER_CERT_PEM");
-  const keyPem = Deno.env.get("INTER_KEY_PEM");
+  // Normalização: o Inter às vezes entrega o certificado como base64 puro (DER
+  // em base64, sem armadura PEM). `createHttpClient` só aceita PEM, então
+  // reconstruímos o cabeçalho/rodapé e quebramos em linhas de 64 chars.
+  const toPem = (raw: string | undefined, label: string) => {
+    if (!raw) return raw;
+    const v = raw.trim();
+    if (v.includes("-----BEGIN")) {
+      // remove linhas vazias que costumam entrar no copiar/colar
+      return v.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0).join("\n") + "\n";
+    }
+    const b64 = v.replace(/[^A-Za-z0-9+/=]/g, "");
+    const lines = b64.match(/.{1,64}/g) ?? [];
+    return `-----BEGIN ${label}-----\n${lines.join("\n")}\n-----END ${label}-----\n`;
+  };
+  const certPem = toPem(Deno.env.get("INTER_CERT_PEM"), "CERTIFICATE");
+  const keyPem = toPem(Deno.env.get("INTER_KEY_PEM"), "PRIVATE KEY");
   const missing = [
     !clientId && "INTER_CLIENT_ID",
     !clientSecret && "INTER_CLIENT_SECRET",
   ].filter(Boolean);
   const hasCertPair = Boolean(certPem && keyPem);
+  // Diagnóstico de formato SEM vazar conteúdo: só o rótulo do cabeçalho PEM
+  // (lista fechada) e o tamanho. Ajuda a identificar arquivo trocado.
+  const pemShape = (v?: string) => {
+    if (!v) return null;
+    const labels = ["CERTIFICATE", "PRIVATE KEY", "RSA PRIVATE KEY", "ENCRYPTED PRIVATE KEY", "CERTIFICATE REQUEST", "PUBLIC KEY"];
+    const found = labels.find((l) => v.includes(`-----BEGIN ${l}-----`)) ?? null;
+    return { length: v.length, pemLabel: found, looksBinary: /[\x00-\x08]/.test(v.slice(0, 200)) };
+  };
+  steps.certShape = pemShape(certPem);
+  steps.keyShape = pemShape(keyPem);
+  // Classificação do DER: certificado X.509 carrega strings imprimíveis
+  // (CN=, O=, nomes) no Subject/Issuer; uma chave PKCS#8 não carrega nenhuma.
+  // Isso revela arquivo trocado sem expor conteúdo sensível.
+  const classifyDer = (raw?: string) => {
+    if (!raw) return null;
+    try {
+      const b64 = raw.replace(/-----[^-]+-----/g, "").replace(/[^A-Za-z0-9+/=]/g, "");
+      const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+      const ascii = Array.from(bytes).map((b) => (b >= 32 && b < 127 ? String.fromCharCode(b) : "\u0000")).join("");
+      const words = (ascii.match(/[A-Za-z0-9.\- ]{5,}/g) ?? []).slice(0, 8);
+      // rsaEncryption OID (2a 86 48 86 f7 0d 01 01 01) nos primeiros 40 bytes => PKCS#8
+      const head = Array.from(bytes.slice(0, 40)).map((b) => b.toString(16).padStart(2, "0")).join("");
+      const looksPkcs8Key = head.includes("2a864886f70d010101");
+      return {
+        derBytes: bytes.length,
+        looksPkcs8Key,
+        printableStrings: words,
+      };
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : String(e) };
+    }
+  };
+  steps.certDer = classifyDer(Deno.env.get("INTER_CERT_PEM"));
   steps.credentials = missing.length
     ? { ok: false, missing }
     : { ok: true, mtlsCertPresent: hasCertPair };
