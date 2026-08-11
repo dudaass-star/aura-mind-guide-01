@@ -77,6 +77,16 @@ Deno.serve(async (req) => {
     !clientSecret && "INTER_CLIENT_SECRET",
   ].filter(Boolean);
   const hasCertPair = Boolean(certPem && keyPem);
+  // Diagnóstico de formato SEM vazar conteúdo: só o rótulo do cabeçalho PEM
+  // (lista fechada) e o tamanho. Ajuda a identificar arquivo trocado.
+  const pemShape = (v?: string) => {
+    if (!v) return null;
+    const labels = ["CERTIFICATE", "PRIVATE KEY", "RSA PRIVATE KEY", "ENCRYPTED PRIVATE KEY", "CERTIFICATE REQUEST", "PUBLIC KEY"];
+    const found = labels.find((l) => v.includes(`-----BEGIN ${l}-----`)) ?? null;
+    return { length: v.length, pemLabel: found, looksBinary: /[\x00-\x08]/.test(v.slice(0, 200)) };
+  };
+  steps.certShape = pemShape(certPem);
+  steps.keyShape = pemShape(keyPem);
   steps.credentials = missing.length
     ? { ok: false, missing }
     : { ok: true, mtlsCertPresent: hasCertPair };
