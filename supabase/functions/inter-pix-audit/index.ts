@@ -125,6 +125,13 @@ Deno.serve(async (req) => {
       .lte("next_charge_date", brtDate(now))
       .limit(100);
     for (const rec of due || []) {
+      // Mesma guarda do cycle-runner: mandato só debita depois do QR composto
+      // liquidado. Sem isso o backstop podia cobrar mandato nunca pago.
+      const { data: paidFirst } = await supabase
+        .from("inter_pix_charges").select("txid")
+        .eq("id_rec", rec.id_rec).eq("cycle_index", 0)
+        .not("paid_at", "is", null).maybeSingle();
+      if (!paidFirst) continue;
       const { data: last } = await supabase
         .from("inter_pix_charges").select("cycle_index, due_date")
         .eq("id_rec", rec.id_rec)
