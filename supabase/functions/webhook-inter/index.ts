@@ -344,9 +344,15 @@ async function activateAccess(
       });
     }
 
-    await supabase.from("user_portal_tokens")
-      .upsert({ user_id: userId }, { onConflict: "user_id" })
-      .catch(() => {});
+    // O builder do supabase-js é thenable, mas não tem `.catch` — encadear
+    // `.catch()` aqui lançava TypeError e abortava a ativação depois do acesso
+    // já estendido (charge ficava sem paid_at e sem welcome).
+    try {
+      await supabase.from("user_portal_tokens")
+        .upsert({ user_id: userId }, { onConflict: "user_id" });
+    } catch (e) {
+      console.warn("[webhook-inter] token do portal não criado:", (e as Error)?.message);
+    }
 
     const planName = PLAN_NAMES[plan] || "Essencial";
     const welcome = `Oi, ${name}! 🌟 Que bom te receber por aqui.\n\nEu sou a AURA — e vou ficar com você nessa jornada.\n\nVocê escolheu o plano ${planName}.\n\nComigo, você pode falar com liberdade: sem julgamento, no seu ritmo.\n\nSe preferir, pode me mandar áudio também! 🎙️\n\nDá uma olhada no que você vai ter acesso: https://olaaura.com.br/guia\n\nAcesse seu painel pessoal: https://olaaura.com.br/meu-espaco ✨\n\nMe diz: como você está hoje?`;

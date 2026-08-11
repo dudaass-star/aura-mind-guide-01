@@ -1,0 +1,2 @@
+ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_card_gateway_check;
+ALTER TABLE public.profiles ADD CONSTRAINT profiles_card_gateway_check CHECK (card_gateway = ANY (ARRAY['stripe'::text, 'asaas'::text, 'inter'::text]));
