@@ -254,17 +254,37 @@ Deno.serve(async (req) => {
     );
   }
 
-  // 4. GET de leitura em Pix Automático (não cria nada)
-  try {
-    const resp = await fetch(`${API_BASE}/pix/v2/recorrencia?inicio=${new Date(Date.now() - 7 * 864e5).toISOString()}&fim=${new Date().toISOString()}`, {
-      method: "GET",
-      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-      ...(client ? { client } : {}),
-    } as RequestInit);
-    const text = await resp.text();
-    steps.pixAutomaticoRead = { status: resp.status, ok: resp.ok, bodyPreview: text.slice(0, 400) };
-  } catch (e) {
-    steps.pixAutomaticoRead = { ok: false, error: e instanceof Error ? e.message : String(e) };
+  // 4. GET de leitura em Pix Automático (não cria nada) — varre caminhos possíveis
+  const inicio = new Date(Date.now() - 7 * 864e5).toISOString();
+  const fim = new Date().toISOString();
+  const readPaths = [
+    `/pix/v2/recorrencia?inicio=${inicio}&fim=${fim}`,
+    `/pix-automatico/v2/recorrencia?inicio=${inicio}&fim=${fim}`,
+    `/pix/v2/rec?inicio=${inicio}&fim=${fim}`,
+    `/pix/v2/cobr?inicio=${inicio}&fim=${fim}`,
+    `/pix/v2/solicrec?inicio=${inicio}&fim=${fim}`,
+    `/cobranca/v3/cobrancas?dataInicial=${inicio.slice(0, 10)}&dataFinal=${fim.slice(0, 10)}`,
+  ];
+  const readAttempts: any[] = [];
+  for (const p of readPaths) {
+    try {
+      const resp = await fetch(`${API_BASE}${p}`, {
+        method: "GET",
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        ...(client ? { client } : {}),
+      } as RequestInit);
+      const text = await resp.text();
+      readAttempts.push({ path: p.split("?")[0], status: resp.status, ok: resp.ok, bodyPreview: text.slice(0, 200) });
+      if (resp.ok && !steps.pixAutomaticoRead) {
+        steps.pixAutomaticoRead = { path: p.split("?")[0], status: resp.status, ok: true, bodyPreview: text.slice(0, 300) };
+      }
+    } catch (e) {
+      readAttempts.push({ path: p.split("?")[0], error: e instanceof Error ? e.message : String(e) });
+    }
+  }
+  steps.readAttempts = readAttempts;
+  if (!steps.pixAutomaticoRead) {
+    steps.pixAutomaticoRead = { ok: false, note: "Nenhum caminho de recorrência respondeu 2xx — ver readAttempts." };
   }
 
   const readOk = (steps.pixAutomaticoRead as any)?.ok === true;
