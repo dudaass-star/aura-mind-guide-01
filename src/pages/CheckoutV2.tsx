@@ -1566,7 +1566,8 @@ const CheckoutV2 = () => {
                   Antes eram dois botões com valores diferentes no rótulo e o PIX
                   parecia custar 5x mais que o cartão. */}
               <div className="space-y-3 pt-1">
-                <PaymentMethodToggle
+                {pixRailUp ? (
+                  <PaymentMethodToggle
                   value={payMethod}
                   onChange={setPayMethod}
                   cardHint={
@@ -1579,7 +1580,26 @@ const CheckoutV2 = () => {
                       ? `R$ ${currentPrice} à vista`
                       : `7 dias por R$ ${currentPlan.trialPrice}`
                   }
-                />
+                  />
+                ) : (
+                  // Trilho de PIX fora do ar: em vez de oferecer e falhar no QR,
+                  // o checkout segue só com cartão. Sem aviso alarmista.
+                  <div className="flex items-center gap-2.5 rounded-xl border border-[hsl(var(--ck-cta))] bg-[hsl(var(--ck-cta)/0.14)] px-3 py-3">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[hsl(var(--ck-cta))] text-[hsl(var(--ck-cta-fg))]">
+                      <CreditCard className="h-4 w-4" />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold leading-tight text-[hsl(var(--ck-text))]">
+                        Cartão de crédito
+                      </span>
+                      <span className="ck-num block text-[11px] leading-tight text-[hsl(var(--ck-text-muted))]">
+                        {pixEnabled
+                          ? `R$ ${currentPrice}/${periodLabel}`
+                          : `7 dias por R$ ${currentPlan.trialPrice}`}
+                      </span>
+                    </span>
+                  </div>
+                )}
 
                 <div className="ck-num text-center text-sm text-[hsl(var(--ck-text-muted))]">
                   Cobrado hoje{" "}
