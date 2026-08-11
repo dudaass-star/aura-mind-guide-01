@@ -517,6 +517,31 @@ Deno.serve(async (req) => {
       }).eq("id_rec", idRec);
       console.log(`[webhook-inter] mandato ${idRec} → ${status}`);
 
+      // Semana grátis (trial_value_cents = 0): o acesso nasce na APROVAÇÃO do
+      // mandato, porque nenhum dinheiro entra hoje. Nos demais modos o acesso
+      // continua atrelado à liquidação da cobrança.
+      if (status === "APROVADA" || status === "ATIVA") {
+        const { data: recRow } = await supabase
+          .from("inter_pix_recurrences").select("*").eq("id_rec", idRec).maybeSingle();
+        const isFreeTrial = !!recRow?.is_trial && Number(recRow?.trial_value_cents ?? -1) === 0;
+        if (isFreeTrial && !recRow?.access_granted_at) {
+          if (await claimTrialActivation(supabase, idRec)) {
+            const activated = await activateAccess(supabase, recRow, {
+              isFirstPayment: true,
+              valueCents: 0,
+              eventId: `inter-${idRec}-trial`,
+            });
+            if (!activated) {
+              await supabase.from("inter_pix_recurrences")
+                .update({ access_granted_at: null }).eq("id_rec", idRec);
+              await failEvent(supabase, eventKey, "mandato aprovado, mas liberação do trial falhou");
+              continue;
+            }
+            console.log(`[webhook-inter] ✅ trial grátis de 7 dias liberado por mandato ${idRec}`);
+          }
+        }
+      }
+
       // Mandato revogado: marca falha de pagamento para o dunning assumir com
       // o link de reautorização (mesma escada de avisos do cartão).
       if (status === "REJEITADA" || status === "CANCELADA") {
