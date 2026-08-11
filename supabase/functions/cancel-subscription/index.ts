@@ -282,7 +282,7 @@ serve(async (req) => {
       const { data: interRec } = await supabase
         .from("inter_pix_recurrences")
         .select("id_rec, plan, billing_period, value_cents, next_charge_date, status")
-        .eq("user_id", profile.user_id)
+        .eq("user_id", profile.id)
         .is("replaced_by_id_rec", null)
         .not("id_rec", "is", null)
         .order("created_at", { ascending: false })

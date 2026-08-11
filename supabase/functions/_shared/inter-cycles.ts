@@ -157,7 +157,7 @@ export async function retryCharge(
   }
 
   await supabase.from("inter_pix_charges").update({
-    retry_count: used + 1,
+    retry_count: resp.ok ? used + 1 : used,
     last_error: resp.ok ? null : `retentativa ${retryDate} recusada (HTTP ${resp.status})`,
     updated_at: new Date().toISOString(),
   }).eq("txid", charge.txid);

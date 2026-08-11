@@ -513,7 +513,7 @@ Deno.serve(async (req) => {
         due_date: c?.calendario?.dataDeVencimento || new Date().toISOString().slice(0, 10),
         value_cents: valueCents,
         status,
-        paid_at: paid ? new Date().toISOString() : null,
+        paid_at: null,
         raw_payload: c,
         updated_at: new Date().toISOString(),
       }, { onConflict: "txid" });

@@ -135,6 +135,7 @@ Deno.serve(async (req) => {
       const { data: last } = await supabase
         .from("inter_pix_charges").select("cycle_index, due_date")
         .eq("id_rec", rec.id_rec)
+        .not("cycle_index", "is", null)
         .order("cycle_index", { ascending: false }).limit(1).maybeSingle();
       if (last?.due_date === rec.next_charge_date) continue; // já emitida
       const cycleIndex = Number(last?.cycle_index ?? 0) + 1;
