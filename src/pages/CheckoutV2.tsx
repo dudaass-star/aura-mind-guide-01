@@ -353,10 +353,21 @@ const CheckoutV2 = () => {
   const currentMonthlyEquivalent = getPeriodMonthlyEquivalent(currentPlan, billingPeriod);
   const pixEnabled = isPixPeriod(billingPeriod);
 
-  // Ciclos longos não têm trial no cartão: o padrão passa a ser PIX à vista.
+  // Ciclos longos não têm trial no cartão: o padrão passa a ser PIX à vista —
+  // desde que exista trilho de PIX no ar. Sem trilho, cartão é o único caminho.
   useEffect(() => {
-    setPayMethod(isPixPeriod(billingPeriod) ? "pix" : "card");
-  }, [billingPeriod]);
+    setPayMethod(isPixPeriod(billingPeriod) && pixRailUp ? "pix" : "card");
+  }, [billingPeriod, pixRailUp]);
+
+  // Registra uma vez, por sessão de checkout, que o PIX foi escondido. É esse
+  // número que diz quanto custa o trilho estar fora do ar.
+  const railDownLogged = useRef(false);
+  useEffect(() => {
+    if (pixRailUp || railDownLogged.current) return;
+    railDownLogged.current = true;
+    logFunnel("pix_rail_down", { plan: selectedPlan, billing: billingPeriod, paymentMethod: "card" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pixRailUp]);
 
   // Abas de ciclo com preço/mês, total do ciclo e economia em reais (do plano selecionado).
   const cycleItems: CycleTabItem[] = useMemo(
