@@ -283,7 +283,7 @@ const CheckoutV2 = () => {
       const { data: rows } = await supabase
         .from("system_config")
         .select("key, value")
-        .in("key", ["card_gateway", "pix_rail_status"]);
+        .in("key", ["card_gateway", "pix_rail_status", "pix_gateway"]);
 
       const parse = (raw: unknown): unknown => {
         // JSONB pode voltar como string pura ("asaas") ou como JSON string ('"asaas"').
@@ -302,6 +302,12 @@ const CheckoutV2 = () => {
       const health = rows?.find((r) => r.key === "pix_rail_status");
       const parsedHealth = health ? (parse(health.value) as { healthy?: boolean } | null) : null;
       setPixRailUp(parsedHealth?.healthy === true);
+
+      // Qual banco atende o PIX Automático hoje. Asaas segue como padrão até o
+      // trilho do Inter ser promovido em system_config.
+      const rail = rows?.find((r) => r.key === "pix_gateway");
+      const parsedRail = rail ? parse(rail.value) : null;
+      if (parsedRail === "inter" || parsedRail === "asaas") setPixGateway(parsedRail);
     })();
   }, []);
 
