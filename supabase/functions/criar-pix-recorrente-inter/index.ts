@@ -12,6 +12,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import QRCode from "https://esm.sh/qrcode@1.5.4";
 import { interFetch, buildTxid, brtDate } from "../_shared/inter-pix.ts";
+import { saveMetaIdentity } from "../_shared/meta-identity.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -190,6 +191,9 @@ Deno.serve(async (req) => {
     const body = (await req.json()) as Record<string, string>;
     let { plan, billing, name, email, phone, cpf } = body;
     const { fbp, fbc, gaClientId } = body;
+    // Cache de identidade do Meta: fallback do Purchase quando o cookie
+    // não existir no momento da confirmação do pagamento.
+    void saveMetaIdentity(supabase, { email, phone, fbp, fbc, source: "criar-pix-recorrente-inter" });
     const mode = body.mode || "checkout";
     const reauthToken = body.token;
     const deferReplacement = body.deferReplacement === "true";
