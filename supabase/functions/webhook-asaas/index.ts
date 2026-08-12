@@ -8,6 +8,7 @@ import { resolveProfile } from "../_shared/profile-resolver.ts";
 import { normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
 import { sendProactive } from "../_shared/whatsapp-provider.ts";
 import { reconcileOrphanPayments } from "../_shared/asaas-reconcile.ts";
+import { resolveMetaIdentity } from "../_shared/meta-identity.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 
 const corsHeaders = {
@@ -969,6 +970,12 @@ async function fireMetaCapiPurchase(
       return;
     }
 
+    // Fallback de atribuição: último fbp/fbc conhecido do lead quando a
+    // transação chegou sem cookie.
+    const ident = await resolveMetaIdentity(supabase, {
+      email: args.email, phone: args.phone, fbp: args.fbp, fbc: args.fbc,
+    });
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     await fetch(`${supabaseUrl}/functions/v1/meta-capi`, {
@@ -987,8 +994,8 @@ async function fireMetaCapiPurchase(
           email: args.email,
           phone: args.phone || undefined,
           first_name: args.firstName || undefined,
-          ...(args.fbp && { fbp: args.fbp }),
-          ...(args.fbc && { fbc: args.fbc }),
+          ...(ident.fbp && { fbp: ident.fbp }),
+          ...(ident.fbc && { fbc: ident.fbc }),
         },
         custom_data: {
           value: args.value,
@@ -999,7 +1006,7 @@ async function fireMetaCapiPurchase(
       }),
     });
     console.log(
-      `[webhook-asaas] ✅ CAPI Purchase disparado (event_id=${args.eventId}, fbp=${!!args.fbp}, fbc=${!!args.fbc})`,
+      `[webhook-asaas] ✅ CAPI Purchase disparado (event_id=${args.eventId}, fbp=${!!ident.fbp}, fbc=${!!ident.fbc})`,
     );
   } catch (capiErr) {
     console.warn("[webhook-asaas] ⚠️ CAPI Purchase falhou (non-blocking):", capiErr);
