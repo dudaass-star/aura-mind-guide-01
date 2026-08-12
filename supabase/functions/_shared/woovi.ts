@@ -169,7 +169,7 @@ export async function retryInstallmentCobr(
   // Parcela que ainda não tem CobR criada: cria em vez de retentar.
   return await wooviFetch<Record<string, any>>(
     `/api/v1/installments/${encodeURIComponent(installmentId)}/cobr`,
-    { method: "POST", ...(body ? { body } : {}) },
+    { method: "POST", ...(body ? { body } : {}) } as RequestInit & { body?: unknown },
   );
 }
 
@@ -181,7 +181,7 @@ export async function createInstallmentCobr(
   const body = valueCents && valueCents > 0 ? { value: valueCents } : undefined;
   return await wooviFetch<Record<string, any>>(
     `/api/v1/installments/${encodeURIComponent(installmentId)}/cobr`,
-    { method: "POST", ...(body ? { body } : {}) },
+    { method: "POST", ...(body ? { body } : {}) } as RequestInit & { body?: unknown },
   );
 }
 
