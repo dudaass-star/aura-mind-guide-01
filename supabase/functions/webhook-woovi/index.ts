@@ -14,7 +14,13 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { sendProactive } from "../_shared/whatsapp-provider.ts";
 import { normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
-import { wooviFetch, brtDate } from "../_shared/woovi.ts";
+import {
+  wooviFetch, brtDate,
+  WOOVI_APPROVED_STATUSES as APPROVED_STATUSES,
+  WOOVI_REJECTED_STATUSES as REJECTED_STATUSES,
+  WOOVI_CANCELED_STATUSES as CANCELED_STATUSES,
+  WOOVI_PAID_STATUSES as PAID_STATUSES,
+} from "../_shared/woovi.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -30,10 +36,7 @@ const CYCLE_MONTHS: Record<string, number> = {
 };
 const PLAN_SESSIONS: Record<string, number> = { essencial: 1, direcao: 4, transformacao: 8 };
 
-const APPROVED_STATUSES = ["APPROVED", "PIX_AUTOMATIC_APPROVED", "ACTIVE", "AUTHORIZED"];
-const REJECTED_STATUSES = ["REJECTED", "PIX_AUTOMATIC_REJECTED", "EXPIRED", "PIX_AUTOMATIC_EXPIRED"];
-const CANCELED_STATUSES = ["CANCELED", "CANCELLED", "PIX_AUTOMATIC_CANCELED", "INACTIVE"];
-const PAID_STATUSES = ["COMPLETED", "PAID", "CONFIRMED", "PIX_AUTOMATIC_COBR_COMPLETED"];
+// Vocabulário de status vive em _shared/woovi.ts (ponto único de tradução).
 // Cobrança do mandato que NÃO entrou: aciona a mesma escada de dunning do
 // Stripe/Asaas (2 avisos → 30% → Lite). "EXPIRED" cobre o QR do ciclo vencido.
 const UNPAID_CHARGE_STATUSES = [
