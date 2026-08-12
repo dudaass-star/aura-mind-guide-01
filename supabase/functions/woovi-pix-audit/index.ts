@@ -241,6 +241,16 @@ Deno.serve(async (req) => {
           status: "CANCELADA",
           last_error: `Mandato ${remoteStatus} no banco do pagador (detectado pela auditoria)`,
         }).eq("id", sub.id);
+        // Mandato morto não tem o que cobrar: encerra a cadência silenciosa
+        // para o cliente não receber a oferta duas vezes (aqui e no dunning).
+        await supabase.from("scheduled_tasks")
+          .update({ status: "canceled", executed_at: new Date().toISOString() })
+          .in("task_type", [
+            "woovi_cycle_recycle", "woovi_next_cycle_cobr",
+            "woovi_recovery_offer", "woovi_recovery_final",
+          ])
+          .eq("status", "pending")
+          .contains("payload", { subscription_id: sub.subscription_id });
       }
 
       let sent = false;
