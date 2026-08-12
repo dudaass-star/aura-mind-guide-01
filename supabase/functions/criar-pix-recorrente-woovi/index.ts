@@ -13,7 +13,10 @@
 // A ativação de acesso NUNCA acontece aqui — só no webhook, com dinheiro entrando.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import QRCode from "https://esm.sh/qrcode@1.5.4";
-import { wooviFetch, brtDate, WOOVI_FREQUENCY } from "../_shared/woovi.ts";
+import {
+  wooviFetch, brtDate, WOOVI_FREQUENCY,
+  normalizeMandateStatus, MANDATE_ACTIVE_STATUSES,
+} from "../_shared/woovi.ts";
 import { composeQr, extractWooviUrl } from "../_shared/pix-emv.ts";
 import { buildFixedPixRecurringOptions } from "../_shared/woovi-subscription-payload.ts";
 
@@ -107,12 +110,12 @@ async function isReturningCustomer(supabase: any, email: string, phoneDigits: st
 
     const { data: wooviPaid } = await supabase
       .from("woovi_subscriptions").select("id")
-      .eq("customer_email", email).in("status", ["APROVADA", "ATIVA"]).limit(1);
+      .eq("customer_email", email).in("status", MANDATE_ACTIVE_STATUSES).limit(1);
     if (wooviPaid && wooviPaid.length > 0) return true;
 
     const { data: interPaid } = await supabase
       .from("inter_pix_recurrences").select("id")
-      .eq("customer_email", email).in("status", ["APROVADA", "ATIVA"]).limit(1);
+      .eq("customer_email", email).in("status", MANDATE_ACTIVE_STATUSES).limit(1);
     if (interPaid && interPaid.length > 0) return true;
 
     const { data: paid } = await supabase
@@ -482,7 +485,9 @@ Deno.serve(async (req) => {
       global_id: sub?.globalID || null,
       recurrency_id: pixRec?.recurrencyId || null,
       user_id: userId,
-      status: String(sub?.status || "CREATED"),
+      // Vocabulário interno (APROVADA/AGUARDANDO/...): a auditoria e a guarda
+      // anti-duplicidade filtram por ele, então nunca gravamos o status cru.
+      status: normalizeMandateStatus(sub?.status, "AGUARDANDO"),
       pix_status: String(pixRec?.status || "CREATED"),
       qr_payload: qrPayload,
       qr_encoded_image: qrImage,
