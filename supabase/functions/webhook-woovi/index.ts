@@ -474,11 +474,13 @@ async function handleUnpaidCycle(
     .update({ last_error: `ciclo ${charge.chargeId} não pago (${charge.status}) — recuperação silenciosa iniciada` })
     .eq("id", sub.id);
 
-  // 2) Primeira reciclagem agora (idempotente por subscription_id + cycle).
+  // 2) Abre a recuperação agora (idempotente por subscription_id): uma
+  // tentativa na CobR viva + CobR do ciclo seguinte na janela do Bacen.
   const { data: dup } = await supabase.from("scheduled_tasks")
-    .select("id").eq("task_type", "woovi_cycle_recycle").eq("status", "pending")
-    .contains("payload", { subscription_id: sub.subscription_id }).maybeSingle();
-  if (dup) {
+    .select("id").in("task_type", ["woovi_cycle_recycle", "woovi_next_cycle_cobr", "woovi_recovery_offer"])
+    .eq("status", "pending")
+    .contains("payload", { subscription_id: sub.subscription_id }).limit(1);
+  if (Array.isArray(dup) && dup.length > 0) {
     console.log(`[webhook-woovi] reciclagem já agendada para ${sub.subscription_id}`);
     return;
   }
@@ -687,6 +689,20 @@ Deno.serve(async (req) => {
                   .update({ access_activated_at: null }).eq("id", chargeRowId);
                 throw new Error("ativação de acesso falhou — devolvendo para retentativa");
               }
+            }
+
+            // Dinheiro entrou: mata qualquer cadência de recuperação pendente.
+            // Sem isso o cliente que regularizou ainda podia receber a oferta
+            // de 30% off dias depois.
+            if (sub?.subscription_id) {
+              await supabase.from("scheduled_tasks")
+                .update({ status: "canceled", executed_at: new Date().toISOString() })
+                .in("task_type", [
+                  "woovi_cycle_recycle", "woovi_next_cycle_cobr",
+                  "woovi_recovery_offer", "woovi_recovery_final",
+                ])
+                .eq("status", "pending")
+                .contains("payload", { subscription_id: sub.subscription_id });
             }
             await finishEvent(supabase, key);
           }

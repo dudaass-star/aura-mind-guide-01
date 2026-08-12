@@ -5,6 +5,59 @@ import { getInstanceConfigForUser } from "../_shared/instance-helper.ts";
 import { sendDunningWhatsApp } from "../_shared/dunning-whatsapp.ts";
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Recuperação do PIX Automático (Woovi): utilitários
+//
+// Cada tentativa vira UMA linha em woovi_charges (antes só sobrescrevia o
+// last_error do mandato, o que deixava a régua cega sobre em que volta está).
+// ─────────────────────────────────────────────────────────────────────────────
+async function logWooviAttempt(
+  supabase: any,
+  a: {
+    subscriptionId: string;
+    userId: string | null;
+    installmentId: string;
+    label: string;
+    ok: boolean;
+    status: string;
+    valueCents: number;
+    dueDate: string | null;
+    raw: string;
+  },
+) {
+  try {
+    const { count } = await supabase.from('woovi_charges')
+      .select('id', { count: 'exact', head: true })
+      .eq('subscription_id', a.subscriptionId);
+    await supabase.from('woovi_charges').insert({
+      subscription_id: a.subscriptionId,
+      // Sufixo evita colidir com a linha do ciclo (lookups usam maybeSingle).
+      installment_id: `${a.installmentId}:${a.label}:${Date.now()}`,
+      user_id: a.userId,
+      cycle_index: Number(count || 0),
+      value_cents: a.valueCents || null,
+      due_date: a.dueDate,
+      status: a.status,
+      kind: 'recovery_attempt',
+      raw_payload: { label: a.label, ok: a.ok, response: a.raw?.slice(0, 1500) ?? null },
+    });
+    await supabase.from('woovi_subscriptions')
+      .update({ last_error: `${a.label}: ${a.status}` })
+      .eq('subscription_id', a.subscriptionId);
+  } catch (e) {
+    console.error('[woovi] falha logando tentativa:', (e as Error).message);
+  }
+}
+
+/** Encerra toda a cadência de recuperação (usado quando o cliente regulariza). */
+async function cancelWooviRecovery(supabase: any, subscriptionId: string) {
+  await supabase.from('scheduled_tasks')
+    .update({ status: 'canceled', executed_at: new Date().toISOString() })
+    .in('task_type', ['woovi_cycle_recycle', 'woovi_next_cycle_cobr', 'woovi_recovery_offer', 'woovi_recovery_final'])
+    .eq('status', 'pending')
+    .contains('payload', { subscription_id: subscriptionId });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Reescreve um texto de lembrete que foi gravado N dias atrás para a data de
 // hoje (BRT). Resolve o bug clássico: lembrete criado ontem com "amanhã às 11h"
 // é disparado hoje e o usuário lê "amanhã" no dia errado.
@@ -511,21 +564,24 @@ Deno.serve(async (req) => {
           }
 
           // ─────────────────────────────────────────────────────────────────
-          // Recuperação silenciosa do PIX Automático (Woovi) — ~30 dias
+          // Recuperação silenciosa do PIX Automático (Woovi) — ~37 dias
           //
-          // Ciclo não pago não gera aviso nem corte: reciclamos a parcela do
-          // MESMO mandato a cada 7 dias, até 4 tentativas (cada uma com o 3R/7D
-          // técnico da Woovi por baixo). Cobre o mês inteiro do cliente, que na
-          // prática é o ciclo de salário. Só depois disso falamos com ele, já
+          // Ciclo não pago não gera aviso nem corte. O Bacen só deixa criar a
+          // CobR de 2 a 10 dias ANTES do vencimento (a Woovi cria no 4º dia
+          // antes; manual fica entre o 5º e o 10º), então NÃO dá pra forçar a
+          // parcela vencida em loop. O que recupera o cliente é:
+          //   1. os 3 retries em 7 dias do próprio mandato (3R/7D nativo);
+          //   2. o CICLO SEGUINTE, cobrado sozinho pelo mandato vivo, com
+          //      outras 3 tentativas — e que a gente só garante criando a CobR
+          //      dentro da janela legal.
+          // Só depois de dois ciclos falharem a gente fala com o cliente, já
           // com oferta. Paridade com o cartão, onde o acesso segue liberado
           // durante os ~21 dias de Smart Retries do Stripe.
           // ─────────────────────────────────────────────────────────────────
           case 'woovi_cycle_recycle': {
-            const { findUnpaidInstallment, retryInstallmentCobr, MANDATE_ACTIVE_STATUSES } =
+            const { findUnpaidInstallment, retryInstallmentCobr, findScheduledInstallment, daysUntil, MANDATE_ACTIVE_STATUSES } =
               await import('../_shared/woovi.ts');
             const subscriptionId = String(payload.subscription_id || '');
-            const attempt = Number(payload.attempt || 1);
-            const MAX_RECYCLES = 4;
             if (!subscriptionId || !Deno.env.get('WOOVI_APP_ID')) {
               console.warn('⚠️ woovi_cycle_recycle sem subscription_id ou WOOVI_APP_ID');
               break;
@@ -552,31 +608,50 @@ Deno.serve(async (req) => {
               await supabase
                 .from('scheduled_tasks')
                 .update({ status: 'canceled', executed_at: new Date().toISOString() })
-                .in('task_type', ['woovi_cycle_recycle', 'woovi_recovery_offer', 'woovi_recovery_final'])
+                .in('task_type', ['woovi_cycle_recycle', 'woovi_next_cycle_cobr', 'woovi_recovery_offer', 'woovi_recovery_final'])
                 .eq('status', 'pending')
                 .contains('payload', { subscription_id: subscriptionId });
               break;
             }
 
-            if (mandateAlive && installment && attempt <= MAX_RECYCLES) {
+            if (mandateAlive && installment) {
+              // UMA tentativa oportunista enquanto a CobR do ciclo ainda está
+              // viva. Recusa por janela é esperada — só logamos.
               const retry = await retryInstallmentCobr(installment.globalID);
+              await logWooviAttempt(supabase, {
+                subscriptionId,
+                userId: sub.user_id,
+                installmentId: installment.globalID,
+                label: 'cycle_retry',
+                ok: retry.ok,
+                status: retry.ok ? 'RETRY_REQUESTED' : `RETRY_REJECTED_${retry.status}`,
+                valueCents: Number(sub.value_cents || 0),
+                dueDate: installment.dueDate,
+                raw: retry.raw,
+              });
               console.log(
-                `🔁 woovi recycle #${attempt} sub=${subscriptionId} parcela=${installment.globalID} ok=${retry.ok}`,
+                `🔁 woovi retry único sub=${subscriptionId} parcela=${installment.globalID} ok=${retry.ok}`,
               );
-              await supabase.from('woovi_subscriptions').update({
-                last_error: `reciclagem ${attempt}/${MAX_RECYCLES} da parcela ${installment.globalID} (ok=${retry.ok})`,
-              }).eq('id', sub.id);
 
-              if (attempt < MAX_RECYCLES) {
+              // Agenda a criação da CobR do ciclo seguinte dentro da janela
+              // legal (mira 8 dias antes do vencimento: entre 5 e 10).
+              const next = await findScheduledInstallment(subscriptionId);
+              if (next?.dueDate) {
+                const lead = daysUntil(next.dueDate);
+                const runInDays = Math.max(0, lead - 8);
                 await supabase.from('scheduled_tasks').insert({
                   user_id: task.user_id,
-                  task_type: 'woovi_cycle_recycle',
-                  execute_at: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(),
+                  task_type: 'woovi_next_cycle_cobr',
+                  execute_at: new Date(Date.now() + runInDays * 24 * 3600 * 1000 + 60 * 1000).toISOString(),
                   status: 'pending',
-                  payload: { ...payload, attempt: attempt + 1 },
+                  payload: { ...payload, next_due_date: next.dueDate },
                 });
+                console.log(
+                  `📅 woovi ${subscriptionId}: CobR do ciclo seguinte (${next.dueDate}) agendada em ${runInDays}d`,
+                );
                 break;
               }
+              console.warn(`⚠️ woovi ${subscriptionId} sem parcela agendada — vai direto pra oferta`);
             }
 
             // Fim da janela silenciosa (ou mandato já morto): abre a conversa
@@ -585,6 +660,77 @@ Deno.serve(async (req) => {
               user_id: task.user_id,
               task_type: 'woovi_recovery_offer',
               execute_at: new Date(Date.now() + 60 * 1000).toISOString(),
+              status: 'pending',
+              payload: { ...payload, offer_step: 1 },
+            });
+            break;
+          }
+
+          // Cria a CobR da parcela seguinte dentro da janela do Bacen (5–10
+          // dias antes) e só então marca o fim da janela silenciosa: a oferta
+          // vai pra 8 dias DEPOIS do vencimento, quando os 3 retries nativos
+          // desse novo ciclo já terminaram.
+          case 'woovi_next_cycle_cobr': {
+            const { findUnpaidInstallment, findScheduledInstallment, createInstallmentCobr, daysUntil, MANDATE_ACTIVE_STATUSES } =
+              await import('../_shared/woovi.ts');
+            const subscriptionId = String(payload.subscription_id || '');
+            if (!subscriptionId || !Deno.env.get('WOOVI_APP_ID')) break;
+
+            const { data: sub } = await supabase
+              .from('woovi_subscriptions')
+              .select('id, user_id, subscription_id, status, value_cents')
+              .eq('subscription_id', subscriptionId)
+              .maybeSingle();
+            if (!sub) break;
+
+            const mandateAlive = MANDATE_ACTIVE_STATUSES.includes(String(sub.status || '').toUpperCase());
+            if (mandateAlive && !(await findUnpaidInstallment(subscriptionId))) {
+              console.log(`✅ woovi ${subscriptionId} regularizado — cadência encerrada`);
+              await cancelWooviRecovery(supabase, subscriptionId);
+              break;
+            }
+
+            let offerInDays = 8;
+            if (mandateAlive) {
+              const next = await findScheduledInstallment(subscriptionId);
+              if (next?.dueDate) {
+                const lead = daysUntil(next.dueDate);
+                if (lead > 10) {
+                  // Fora da janela: espera até entrar nela em vez de queimar a tentativa.
+                  await supabase.from('scheduled_tasks').insert({
+                    user_id: task.user_id,
+                    task_type: 'woovi_next_cycle_cobr',
+                    execute_at: new Date(Date.now() + (lead - 9) * 24 * 3600 * 1000).toISOString(),
+                    status: 'pending',
+                    payload: { ...payload, next_due_date: next.dueDate },
+                  });
+                  console.log(`⏳ woovi ${subscriptionId}: fora da janela (${lead}d) — reagendado`);
+                  break;
+                }
+                const created = await createInstallmentCobr(next.globalID, Number(sub.value_cents || 0) || undefined);
+                await logWooviAttempt(supabase, {
+                  subscriptionId,
+                  userId: sub.user_id,
+                  installmentId: next.globalID,
+                  label: 'next_cycle_cobr',
+                  ok: created.ok,
+                  status: created.ok ? 'COBR_CREATED' : `COBR_REJECTED_${created.status}`,
+                  valueCents: Number(sub.value_cents || 0),
+                  dueDate: next.dueDate,
+                  raw: created.raw,
+                });
+                console.log(
+                  `🧾 woovi ${subscriptionId}: CobR ciclo seguinte (${next.dueDate}) ok=${created.ok}`,
+                );
+                // A oferta só entra depois do vencimento + 7 dias de retries nativos.
+                offerInDays = Math.max(1, daysUntil(next.dueDate) + 8);
+              }
+            }
+
+            await supabase.from('scheduled_tasks').insert({
+              user_id: task.user_id,
+              task_type: 'woovi_recovery_offer',
+              execute_at: new Date(Date.now() + offerInDays * 24 * 3600 * 1000).toISOString(),
               status: 'pending',
               payload: { ...payload, offer_step: 1 },
             });
@@ -603,6 +749,18 @@ Deno.serve(async (req) => {
               .select('id, status, subscription_id')
               .eq('subscription_id', subscriptionId)
               .maybeSingle();
+
+            // Guarda dura: nunca oferecer desconto pra quem já regularizou.
+            if (subscriptionId && Deno.env.get('WOOVI_APP_ID')) {
+              const { findUnpaidInstallment, MANDATE_ACTIVE_STATUSES } =
+                await import('../_shared/woovi.ts');
+              const alive = MANDATE_ACTIVE_STATUSES.includes(String(sub?.status || '').toUpperCase());
+              if (alive && !(await findUnpaidInstallment(subscriptionId))) {
+                console.log(`✅ woovi ${subscriptionId} pago — oferta abortada`);
+                await cancelWooviRecovery(supabase, subscriptionId);
+                break;
+              }
+            }
 
             const offerRes = await sendDunningWhatsApp({
               supabase,

@@ -163,14 +163,70 @@ export async function retryInstallmentCobr(
   const body = valueCents && valueCents > 0 ? { value: valueCents } : undefined;
   const retry = await wooviFetch<Record<string, any>>(
     `/api/v1/installments/${encodeURIComponent(installmentId)}/cobr/retry`,
-    { method: "POST", ...(body ? { body } : {}) },
+    { method: "POST", ...(body ? { body } : {}) } as RequestInit & { body?: unknown },
   );
   if (retry.ok) return retry;
   // Parcela que ainda não tem CobR criada: cria em vez de retentar.
   return await wooviFetch<Record<string, any>>(
     `/api/v1/installments/${encodeURIComponent(installmentId)}/cobr`,
-    { method: "POST", ...(body ? { body } : {}) },
+    { method: "POST", ...(body ? { body } : {}) } as RequestInit & { body?: unknown },
   );
+}
+
+/** Cria a CobR de uma parcela agendada (janela de 5 a 10 dias antes do vencimento). */
+export async function createInstallmentCobr(
+  installmentId: string,
+  valueCents?: number,
+): Promise<WooviResponse<Record<string, any>>> {
+  const body = valueCents && valueCents > 0 ? { value: valueCents } : undefined;
+  return await wooviFetch<Record<string, any>>(
+    `/api/v1/installments/${encodeURIComponent(installmentId)}/cobr`,
+    { method: "POST", ...(body ? { body } : {}) } as RequestInit & { body?: unknown },
+  );
+}
+
+/**
+ * Próxima parcela AGENDADA do mandato — é ela que cobre a recuperação real.
+ *
+ * Regra do Bacen: a CobR só pode ser criada de 2 a 10 dias antes do vencimento
+ * (a Woovi cria sozinha no 4º dia antes, deixando a criação manual entre o 5º e
+ * o 10º). Ou seja: NÃO existe forçar a parcela vencida indefinidamente — o que
+ * recupera o cliente é o ciclo seguinte, que o mandato vivo cobra sozinho com
+ * outras 3 tentativas em 7 dias.
+ */
+export async function findScheduledInstallment(
+  subscriptionId: string,
+): Promise<WooviInstallment | null> {
+  const r = await wooviFetch<Record<string, any>>(
+    `/api/v1/subscriptions/${encodeURIComponent(subscriptionId)}/installments`,
+  );
+  if (!r.ok) return null;
+  const raw = r.data as Record<string, any> | null;
+  const list: Record<string, any>[] = Array.isArray(raw?.installments)
+    ? raw!.installments
+    : Array.isArray(raw)
+      ? (raw as unknown as Record<string, any>[])
+      : [];
+  const today = brtDate();
+  const scheduled = list
+    .filter((i) => ["SCHEDULED", "ACTIVE"].includes(String(i?.status || "").toUpperCase()))
+    .filter((i) => !!(i?.globalID || i?.id))
+    .filter((i) => !i?.dueDate || String(i.dueDate).slice(0, 10) >= today);
+  if (scheduled.length === 0) return null;
+  const target = scheduled[0];
+  return {
+    globalID: String(target.globalID || target.id),
+    status: String(target.status || "").toUpperCase(),
+    value: Number.isFinite(Number(target.value)) ? Number(target.value) : null,
+    dueDate: target.dueDate ? String(target.dueDate).slice(0, 10) : null,
+  };
+}
+
+/** Dias corridos entre hoje (BRT) e uma data YYYY-MM-DD. */
+export function daysUntil(dateStr: string): number {
+  const due = Date.parse(`${dateStr}T12:00:00-03:00`);
+  const now = Date.parse(`${brtDate()}T12:00:00-03:00`);
+  return Math.round((due - now) / 86400000);
 }
 
 /**
