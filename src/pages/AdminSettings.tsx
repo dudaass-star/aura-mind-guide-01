@@ -177,6 +177,7 @@ export default function AdminSettings() {
   const hasChanges = selectedModel !== currentModel;
   const hasTTSChanges = selectedTTSModel !== currentTTSModel;
   const hasCardGatewayChanges = selectedCardGateway !== currentCardGateway;
+  const hasPixRailChanges = selectedPixRail !== currentPixRail;
 
   return (
     <div className="min-h-screen bg-background">
