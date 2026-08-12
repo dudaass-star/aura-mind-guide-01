@@ -59,6 +59,14 @@ async function cancelWooviRecovery(supabase: any, subscriptionId: string) {
     .contains('payload', { subscription_id: subscriptionId });
 }
 
+// Tarefas puramente técnicas: elas COBRAM, não falam com o cliente. Não podem
+// ser abortadas por falta de telefone no perfil, senão a assinatura morre sem
+// nenhuma tentativa de débito.
+const PHONELESS_TASK_TYPES = new Set([
+  'woovi_cycle_recycle',
+  'woovi_next_cycle_cobr',
+]);
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Reescreve um texto de lembrete que foi gravado N dias atrás para a data de
 // hoje (BRT). Resolve o bug clássico: lembrete criado ontem com "amanhã às 11h"
