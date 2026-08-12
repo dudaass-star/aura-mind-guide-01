@@ -73,7 +73,8 @@ Deno.serve(async (req) => {
   const dryRun = body.dry_run === true;
 
   const report: Record<string, unknown[]> = {
-    entrada_pendente: [], mandato_pendente: [], recuperados: [], abandonados: [], erros: [],
+    entrada_pendente: [], mandato_pendente: [], recuperados: [], abandonados: [],
+    reautorizacao: [], erros: [],
   };
 
   try {
@@ -197,6 +198,65 @@ Deno.serve(async (req) => {
         charge: { ...remote, correlationID: String(c.installment_id), status },
       });
       if (ok) report.recuperados.push({ charge: c.installment_id, via: "cobranca" });
+    }
+
+    // ---- 4) Mandato revogado no banco ("churn silencioso") ----------------
+    // O pagador pode cancelar a autorização direto no app do banco: a Woovi
+    // muda o status do mandato e nenhum ciclo é mais debitado. Sem esta
+    // varredura o usuário simplesmente para de pagar em silêncio.
+    const REVOKED = ["CANCELADA", "REJEITADA", "EXPIRADA", "CANCELLED", "REJECTED", "EXPIRED"];
+    const { data: liveSubs } = await supabase
+      .from("woovi_subscriptions")
+      .select("id, user_id, subscription_id, customer_phone, customer_email, status, plan, value_cents, reauth_notified_at")
+      .in("status", ["APROVADA", "ATIVA"])
+      .is("replaced_by_subscription_id", null)
+      .not("subscription_id", "is", null)
+      .limit(300);
+
+    for (const sub of liveSubs || []) {
+      const r = await wooviFetch<Record<string, any>>(
+        `/api/v1/subscriptions/${encodeURIComponent(String(sub.subscription_id))}`,
+      );
+      await new Promise((res) => setTimeout(res, 250));
+      if (!r.ok || !r.data) continue;
+      const remote = ((r.data as Record<string, any>)?.subscription || r.data) as Record<string, any>;
+      const remoteStatus = String(remote?.status || "").toUpperCase();
+      if (!REVOKED.includes(remoteStatus)) continue;
+
+      // Cancelamento pedido no nosso portal já marca o profile — não é churn silencioso.
+      let profileStatus: string | null = null;
+      if (sub.user_id) {
+        const { data: p } = await supabase
+          .from("profiles").select("status").eq("user_id", sub.user_id).maybeSingle();
+        profileStatus = (p?.status as string) || null;
+      }
+      const userStillActive = ["active", "trial", "trialing", "past_due"].includes(String(profileStatus));
+
+      if (!dryRun) {
+        await supabase.from("woovi_subscriptions").update({
+          status: "CANCELADA",
+          last_error: `Mandato ${remoteStatus} no banco do pagador (detectado pela auditoria)`,
+        }).eq("id", sub.id);
+      }
+
+      let sent = false;
+      if (userStillActive && !sub.reauth_notified_at) {
+        const text = [
+          "Oi! O débito automático da sua assinatura foi cancelado no seu banco, então a próxima renovação não vai acontecer.",
+          "Se você quiser continuar comigo, dá pra reautorizar em 1 minuto aqui: https://olaaura.com.br/v2",
+          "Se foi você que cancelou de propósito, tudo bem — só me avisa que eu paro de te lembrar.",
+        ].join("\n\n");
+        if (!dryRun) {
+          sent = await notify(sub, text);
+          await supabase.from("woovi_subscriptions")
+            .update({ reauth_notified_at: new Date().toISOString() })
+            .eq("id", sub.id);
+        }
+      }
+      report.reautorizacao.push({
+        sub: sub.subscription_id, email: sub.customer_email,
+        remoteStatus, userStillActive, sent, dryRun,
+      });
     }
 
     return new Response(JSON.stringify({ dryRun, report }, null, 2), {
