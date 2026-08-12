@@ -294,6 +294,12 @@ export default function AdminEngagement() {
   const navigate = useNavigate();
   const requestIdRef = useRef(0);
   const [elapsedSec, setElapsedSec] = useState(0);
+  // Cobertura de identificadores de navegador no Purchase (qualidade do match no Meta).
+  const [capiCoverage, setCapiCoverage] = useState<{
+    total: number;
+    fbc: number;
+    fbp: number;
+  } | null>(null);
   const hasRecoveryActivity = recoverySessions.length > 0 || recoveryStats.raw > 0 || recoveryStats.accepted > 0 || whatsappStats.stage1 > 0 || whatsappStats.stage2 > 0 || whatsappStats.errors > 0 || whatsappStats.skipped > 0;
 
   // Cronômetro do botão "Atualizar" para feedback visual durante esperas longas.
