@@ -1,0 +1,1 @@
+UPDATE public.profiles SET status = 'active', payment_failed_at = NULL, converted_at = COALESCE(converted_at, now()), updated_at = now() WHERE lower(email) = 'gcavalcante32@gmail.com';
