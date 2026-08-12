@@ -61,7 +61,7 @@ export const DUNNING_MAX_ATTEMPTS = 4;
 
 export type DunningOfferTier = "discount_30" | "lite" | "base";
 
-interface OfferTemplate {
+export interface OfferTemplate {
   tier: DunningOfferTier;
   /** ContentSid aprovado no Twilio; null enquanto o template não existir. */
   sid: string | null;
@@ -168,6 +168,10 @@ export interface DunningWhatsAppResult {
  *
  * Avisos genéricos contam por quantidade (`offer_tier = 'generic'`); degraus de
  * oferta contam por tier — cada tier sai no máximo uma vez por ciclo.
+ *
+ * `prefer: 'last'` devolve o degrau pendente MAIS AVANÇADO (usado no
+ * encerramento do ciclo, quando não há mais tentativas de cobrança pela frente
+ * e queremos garantir que a última oferta da escada seja entregue).
  */
 export async function resolveNextDunningStep(args: {
   supabase: any;
@@ -176,8 +180,9 @@ export async function resolveNextDunningStep(args: {
   scopeValue: string;
   noticeSteps: number;
   ladder: OfferTemplate[];
+  prefer?: "first" | "last";
 }): Promise<number | null> {
-  const { supabase, profileUserId, scopeColumn, scopeValue, noticeSteps, ladder } = args;
+  const { supabase, profileUserId, scopeColumn, scopeValue, noticeSteps, ladder, prefer = "first" } = args;
 
   const { data } = await supabase
     .from("dunning_attempts")
@@ -196,11 +201,18 @@ export async function resolveNextDunningStep(args: {
     rows.map((r) => r.offer_tier).filter((t): t is string => !!t && t !== "generic"),
   );
 
-  if (noticesDelivered < noticeSteps) return noticesDelivered + 1;
+  const pendingIndexes = ladder
+    .map((entry, idx) => (deliveredTiers.has(entry.tier) ? -1 : idx))
+    .filter((idx) => idx >= 0);
 
-  const pendingIndex = ladder.findIndex((entry) => !deliveredTiers.has(entry.tier));
-  if (pendingIndex === -1) return null;
-  return noticeSteps + pendingIndex + 1;
+  if (prefer === "last") {
+    if (pendingIndexes.length === 0) return null;
+    return noticeSteps + pendingIndexes[pendingIndexes.length - 1] + 1;
+  }
+
+  if (noticesDelivered < noticeSteps) return noticesDelivered + 1;
+  if (pendingIndexes.length === 0) return null;
+  return noticeSteps + pendingIndexes[0] + 1;
 }
 
 function firstName(name?: string | null): string {
