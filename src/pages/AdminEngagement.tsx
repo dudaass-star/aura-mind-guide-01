@@ -315,6 +315,25 @@ export default function AdminEngagement() {
     return () => clearInterval(id);
   }, [loading]);
 
+  // Cobertura de fbc/fbp nos Purchase enviados ao Meta nos últimos 30 dias.
+  useEffect(() => {
+    (async () => {
+      const since = new Date(Date.now() - 30 * 864e5).toISOString();
+      const { data } = await supabase
+        .from('meta_capi_log')
+        .select('fbc_present, fbp_present')
+        .eq('event_name', 'Purchase')
+        .gte('created_at', since)
+        .limit(1000);
+      if (!data) return;
+      setCapiCoverage({
+        total: data.length,
+        fbc: data.filter((r) => r.fbc_present).length,
+        fbp: data.filter((r) => r.fbp_present).length,
+      });
+    })().catch(() => undefined);
+  }, []);
+
   useEffect(() => {
     if (!isLoading) redirectIfNotAdmin();
   }, [isLoading, isAdmin]);
