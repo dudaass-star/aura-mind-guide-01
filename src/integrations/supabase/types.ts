@@ -1697,6 +1697,39 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_identity_cache: {
+        Row: {
+          created_at: string
+          email: string | null
+          fbc: string | null
+          fbp: string | null
+          id: string
+          last_source: string | null
+          phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          fbc?: string | null
+          fbp?: string | null
+          id?: string
+          last_source?: string | null
+          phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          fbc?: string | null
+          fbp?: string | null
+          id?: string
+          last_source?: string | null
+          phone?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       monthly_letters: {
         Row: {
           created_at: string
