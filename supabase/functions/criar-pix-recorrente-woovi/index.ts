@@ -21,6 +21,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import QRCode from "https://esm.sh/qrcode@1.5.4";
 import { wooviFetch, brtDate, WOOVI_FREQUENCY } from "../_shared/woovi.ts";
+import { composeQr, extractWooviUrl } from "../_shared/pix-emv.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -274,8 +275,11 @@ Deno.serve(async (req) => {
     }
 
     const now = new Date();
-    // Jornada 3 exige `dayGenerateCharge` = HOJE (a 1ª parcela é paga na aprovação).
-    const dayGenerateCharge = now.toISOString();
+    // Composto (trial): a 1ª parcela do mandato só dispara em D+30 — a entrada é a
+    // cobrança avulsa, não uma parcela do mandato. Nativo (sem trial): Jornada 3,
+    // primeira parcela cobrada na própria aprovação (dayGenerateCharge = hoje).
+    const firstChargeDate = withTrial ? addMonths(now, CYCLE_MONTHS[billing]) : now;
+    const dayGenerateCharge = firstChargeDate.toISOString();
     const nextChargeDate = brtDate(addMonths(now, CYCLE_MONTHS[billing]));
     const correlationId = crypto.randomUUID();
     // Campo "contrato" mostrado no mandato: a Woovi limita a 30 caracteres.
@@ -314,54 +318,155 @@ Deno.serve(async (req) => {
       throw new Error(`Não foi possível registrar a tentativa: ${attemptErr.message}`);
     }
 
-    const created = await wooviFetch<Record<string, any>>("/api/v1/subscriptions", {
-      method: "POST",
-      body: {
-        name: `Aura ${PLAN_NAMES[plan]}`,
-        value: entryCents,
-        correlationID: correlationId,
-        comment,
-        frequency: WOOVI_FREQUENCY[billing],
-        type: "PIX_RECURRING",
-        dayGenerateCharge,
-        dayDue: DAY_DUE,
-        pixRecurringOptions: {
-          journey: "PAYMENT_ON_APPROVAL",
-          // 3 retentativas em até 7 dias: paridade com Asaas/Inter antes do dunning.
-          retryPolicy: "THREE_RETRIES_7_DAYS",
-          // Valor mínimo = valor de entrada. Necessário para que os ciclos possam
-          // subir ao preço cheio depois da promo (assinatura de valor variável).
-          minimumValue: Math.min(entryCents, amountCents),
-        },
-        customer: {
-          name: name.slice(0, 200),
-          taxID: cpfClean,
-          email: emailClean,
-          ...(phoneClean ? { phone: phoneClean.startsWith("55") ? phoneClean : `55${phoneClean}` } : {}),
-          address: PLACEHOLDER_ADDRESS,
-        },
-      },
-    });
+    const customer = {
+      name: name.slice(0, 200),
+      taxID: cpfClean,
+      email: emailClean,
+      ...(phoneClean ? { phone: phoneClean.startsWith("55") ? phoneClean : `55${phoneClean}` } : {}),
+      address: PLACEHOLDER_ADDRESS,
+    };
 
-    if (!created.ok) {
-      await supabase.from("woovi_subscriptions").update({
-        creation_status: "failed", status: "FALHA_CRIACAO",
-        last_error: `Woovi recusou a assinatura HTTP ${created.status}: ${created.raw.slice(0, 240)}`,
-      }).eq("id", attemptId);
-      throw new Error(`Woovi recusou a assinatura (HTTP ${created.status}): ${created.raw.slice(0, 300)}`);
-    }
+    let subscriptionId = "";
+    let qrPayload = "";
+    let sub: Record<string, any> | undefined;
+    let pixRec: Record<string, any> | undefined;
+    let cobCorrelationId: string | null = null;
+    let rawPayload: unknown = null;
 
-    const sub = (created.data as Record<string, any>)?.subscription as Record<string, any> | undefined;
-    const pixRec = sub?.pixRecurring as Record<string, any> | undefined;
-    const subscriptionId = String(sub?.globalID || sub?.correlationID || correlationId);
-    const qrPayload = pixRec?.emv as string | undefined;
-    if (!qrPayload) {
-      await supabase.from("woovi_subscriptions").update({
-        creation_status: "failed", status: "FALHA_CRIACAO",
-        last_error: "Woovi não devolveu pixRecurring.emv",
-        raw_payload: created.data,
-      }).eq("id", attemptId);
-      throw new Error("Woovi não devolveu o QR Code do mandato (pixRecurring.emv)");
+    if (withTrial) {
+      // ---- Composto: cobrança avulsa de entrada + mandato Jornada 2 fixo ----
+      // O mandato sai com valor FIXO (R$ cheio) no app do banco — nada de "valor
+      // variável". A entrada (R$ 6,90) vem de uma cobrança avulsa (tag 26 /cob/);
+      // o mandato (tag 80 /rec/) só autoriza débitos a partir de D+30. O BR Code
+      // final é composto manualmente (composeQr) para os dois num único scan.
+      cobCorrelationId = crypto.randomUUID();
+
+      const cobRes = await wooviFetch<Record<string, any>>("/api/v1/charge", {
+        method: "POST",
+        body: {
+          correlationID: cobCorrelationId,
+          value: entryCents,
+          paymentType: "DYNAMIC",
+          comment,
+          expiresIn: QR_TTL_SECONDS,
+          customer,
+        },
+      });
+      if (!cobRes.ok) {
+        await supabase.from("woovi_subscriptions").update({
+          creation_status: "failed", status: "FALHA_CRIACAO",
+          last_error: `cobrança de entrada HTTP ${cobRes.status}: ${cobRes.raw.slice(0, 240)}`,
+        }).eq("id", attemptId);
+        throw new Error(`Woovi recusou a cobrança de entrada (HTTP ${cobRes.status}): ${cobRes.raw.slice(0, 300)}`);
+      }
+      const cobCharge = ((cobRes.data as Record<string, any>)?.charge || cobRes.data) as Record<string, any>;
+      const cobBrCode = cobCharge?.brCode as string | undefined;
+      if (!cobBrCode) {
+        await supabase.from("woovi_subscriptions").update({
+          creation_status: "failed", status: "FALHA_CRIACAO",
+          last_error: "Woovi não devolveu o brCode da cobrança de entrada",
+          raw_payload: cobRes.data,
+        }).eq("id", attemptId);
+        throw new Error("Woovi não devolveu o BR Code da cobrança de entrada");
+      }
+
+      // Mandato recorrente em Jornada 2 (só autorização; 1ª parcela em D+30).
+      const created = await wooviFetch<Record<string, any>>("/api/v1/subscriptions", {
+        method: "POST",
+        body: {
+          name: `Aura ${PLAN_NAMES[plan]}`,
+          value: amountCents,
+          correlationID: correlationId,
+          comment,
+          frequency: WOOVI_FREQUENCY[billing],
+          type: "PIX_RECURRING",
+          dayGenerateCharge,
+          dayDue: DAY_DUE,
+          pixRecurringOptions: {
+            journey: "ONLY_RECURRENCY",
+            retryPolicy: "THREE_RETRIES_7_DAYS",
+            minimumValue: amountCents,
+          },
+          customer,
+        },
+      });
+      if (!created.ok) {
+        // Cobrança de entrada já existe — cancela pra não deixar órfã.
+        await wooviFetch(`/api/v1/charge/${encodeURIComponent(cobCorrelationId)}`, { method: "DELETE" }).catch(() => {});
+        await supabase.from("woovi_subscriptions").update({
+          creation_status: "failed", status: "FALHA_CRIACAO",
+          last_error: `mandato HTTP ${created.status}: ${created.raw.slice(0, 240)}`,
+        }).eq("id", attemptId);
+        throw new Error(`Woovi recusou o mandato (HTTP ${created.status}): ${created.raw.slice(0, 300)}`);
+      }
+      rawPayload = created.data;
+      sub = (created.data as Record<string, any>)?.subscription as Record<string, any> | undefined;
+      pixRec = sub?.pixRecurring as Record<string, any> | undefined;
+      subscriptionId = String(sub?.globalID || sub?.correlationID || correlationId);
+      const recEmv = pixRec?.emv as string | undefined;
+      if (!recEmv) {
+        await wooviFetch(`/api/v1/charge/${encodeURIComponent(cobCorrelationId)}`, { method: "DELETE" }).catch(() => {});
+        await supabase.from("woovi_subscriptions").update({
+          creation_status: "failed", status: "FALHA_CRIACAO",
+          last_error: "mandato sem pixRecurring.emv",
+          raw_payload: created.data,
+        }).eq("id", attemptId);
+        throw new Error("Woovi não devolveu o EMV do mandato (pixRecurring.emv)");
+      }
+      const recUrl = extractWooviUrl(recEmv, "rec");
+      if (!recUrl) {
+        await wooviFetch(`/api/v1/charge/${encodeURIComponent(cobCorrelationId)}`, { method: "DELETE" }).catch(() => {});
+        await supabase.from("woovi_subscriptions").update({
+          creation_status: "failed", status: "FALHA_CRIACAO",
+          last_error: "URL /rec/ não encontrada no EMV do mandato",
+          raw_payload: created.data,
+        }).eq("id", attemptId);
+        throw new Error("URL do mandato não encontrada no EMV da Woovi");
+      }
+      qrPayload = composeQr(cobBrCode, recUrl);
+    } else {
+      // ---- Nativo Jornada 3 (sem trial: valor fixo, sem variabilidade) ----
+      const created = await wooviFetch<Record<string, any>>("/api/v1/subscriptions", {
+        method: "POST",
+        body: {
+          name: `Aura ${PLAN_NAMES[plan]}`,
+          value: entryCents,
+          correlationID: correlationId,
+          comment,
+          frequency: WOOVI_FREQUENCY[billing],
+          type: "PIX_RECURRING",
+          dayGenerateCharge,
+          dayDue: DAY_DUE,
+          pixRecurringOptions: {
+            journey: "PAYMENT_ON_APPROVAL",
+            // 3 retentativas em até 7 dias: paridade com Asaas/Inter antes do dunning.
+            retryPolicy: "THREE_RETRIES_7_DAYS",
+            minimumValue: Math.min(entryCents, amountCents),
+          },
+          customer,
+        },
+      });
+      if (!created.ok) {
+        await supabase.from("woovi_subscriptions").update({
+          creation_status: "failed", status: "FALHA_CRIACAO",
+          last_error: `Woovi recusou a assinatura HTTP ${created.status}: ${created.raw.slice(0, 240)}`,
+        }).eq("id", attemptId);
+        throw new Error(`Woovi recusou a assinatura (HTTP ${created.status}): ${created.raw.slice(0, 300)}`);
+      }
+      rawPayload = created.data;
+      sub = (created.data as Record<string, any>)?.subscription as Record<string, any> | undefined;
+      pixRec = sub?.pixRecurring as Record<string, any> | undefined;
+      subscriptionId = String(sub?.globalID || sub?.correlationID || correlationId);
+      const emv = pixRec?.emv as string | undefined;
+      if (!emv) {
+        await supabase.from("woovi_subscriptions").update({
+          creation_status: "failed", status: "FALHA_CRIACAO",
+          last_error: "Woovi não devolveu pixRecurring.emv",
+          raw_payload: created.data,
+        }).eq("id", attemptId);
+        throw new Error("Woovi não devolveu o QR Code do mandato (pixRecurring.emv)");
+      }
+      qrPayload = emv;
     }
 
     const qrImage = await buildQrImage(qrPayload);
@@ -387,7 +492,11 @@ Deno.serve(async (req) => {
       qr_encoded_image: qrImage,
       qr_expires_at: qrExpiresAt,
       authorization_url: sub?.paymentLinkUrl || null,
-      raw_payload: created.data,
+      raw_payload: rawPayload,
+      // Composto: liga a cobrança de entrada ao mandato e marca o modo de criação
+      // para o webhook saber pular o bump de valor (mandato já é valor cheio).
+      entry_charge_correlation_id: cobCorrelationId,
+      creation_mode: withTrial ? "composed" : "native",
       creation_status: "completed",
       last_error: null,
     }).eq("id", attemptId);

@@ -348,13 +348,15 @@ async function findSubscription(
   supabase: any, ids: (string | null | undefined)[],
 ): Promise<Record<string, any> | null> {
   const clean = ids.filter((v): v is string => !!v);
-  for (const id of clean) {
-    for (const col of ["subscription_id", "correlation_id", "global_id", "recurrency_id"]) {
-      const { data } = await supabase.from("woovi_subscriptions").select("*").eq(col, id).maybeSingle();
-      if (data) return data;
+    for (const id of clean) {
+      // `entry_charge_correlation_id` liga a cobrança avulsa de entrada (Jornada
+      // composta) ao mandato — sem ela, o pagamento da entrada não acha o mandato.
+      for (const col of ["subscription_id", "correlation_id", "global_id", "recurrency_id", "entry_charge_correlation_id"]) {
+        const { data } = await supabase.from("woovi_subscriptions").select("*").eq(col, id).maybeSingle();
+        if (data) return data;
+      }
     }
-  }
-  return null;
+    return null;
 }
 
 Deno.serve(async (req) => {
@@ -413,8 +415,12 @@ Deno.serve(async (req) => {
             // que o primeiro débito fosse baratinho. Depois de aprovado, subimos a
             // assinatura para o preço cheio — assim os ciclos seguintes cobram o
             // valor normal sem precisar de nova autorização (valor variável).
+            // Bump do valor: só na Jornada 3 nativa. Na composta o mandato já nasce
+            // no valor cheio (R$ 29,90) — a entrada vem de uma cobrança avulsa, então
+            // não há valor para subir e o app do banco mostra "R$ 29,90/mês" fixo.
             if (APPROVED_STATUSES.includes(mandateStatus) && sub.is_trial
-                && sub.value_cents > (sub.trial_value_cents ?? 0)) {
+                && sub.value_cents > (sub.trial_value_cents ?? 0)
+                && sub.creation_mode !== "composed") {
               const upd = await wooviFetch(
                 `/api/v1/subscriptions/${encodeURIComponent(sub.subscription_id)}/value`,
                 { method: "PUT", body: { value: sub.value_cents } },
