@@ -1871,7 +1871,11 @@ const CheckoutV2 = () => {
                       <span className="block text-xs mt-1 text-white/60">
                         1ª semana. Depois R${" "}
                         {pixData.recurringAmount.toFixed(2).replace(".", ",")}/mês no débito
-                        automático — cancele quando quiser no app do banco.
+                        automático
+                        {pixData.firstRecurringChargeDate
+                          ? `, a partir de ${new Date(`${pixData.firstRecurringChargeDate}T12:00:00`).toLocaleDateString("pt-BR")}`
+                          : ""}
+                        {" "}— cancele quando quiser no app do banco.
                       </span>
                     ) : null}
                   </DialogDescription>
@@ -1938,6 +1942,16 @@ const CheckoutV2 = () => {
                         "Pix Automático" ou "autorizar cobranças recorrentes"). Sem marcar a segunda,
                         a assinatura não é ativada.
                       </p>
+                      {pixData.trial && pixData.recurringAmount ? (
+                        <p className="text-white/80">
+                          A ordem das telas muda de banco pra banco: alguns mostram o valor de hoje
+                          (<strong>R$ {pixData.amount.toFixed(2).replace(".", ",")}</strong>) e a
+                          recorrência (<strong>R$ {pixData.recurringAmount.toFixed(2).replace(".", ",")}/mês</strong>)
+                          juntos; outros, como o Nubank, mostram primeiro a autorização mensal e só
+                          na tela seguinte a cobrança de hoje. <strong>Siga até o fim</strong> — as
+                          duas etapas fazem parte do mesmo QR.
+                        </p>
+                      ) : null}
                       <p className="text-white/60">
                         Você cancela essa autorização quando quiser, no próprio app do banco.
                       </p>
