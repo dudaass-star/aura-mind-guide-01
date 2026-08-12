@@ -28,18 +28,20 @@ async function logWooviAttempt(
     const { count } = await supabase.from('woovi_charges')
       .select('id', { count: 'exact', head: true })
       .eq('subscription_id', a.subscriptionId);
-    await supabase.from('woovi_charges').insert({
+    const { error: logErr } = await supabase.from('woovi_charges').insert({
       subscription_id: a.subscriptionId,
       // Sufixo evita colidir com a linha do ciclo (lookups usam maybeSingle).
       installment_id: `${a.installmentId}:${a.label}:${Date.now()}`,
       user_id: a.userId,
       cycle_index: Number(count || 0),
-      value_cents: a.valueCents || null,
+      // value_cents é NOT NULL: 0 em vez de null para não perder a tentativa.
+      value_cents: Number(a.valueCents || 0),
       due_date: a.dueDate,
       status: a.status,
       kind: 'recovery_attempt',
       raw_payload: { label: a.label, ok: a.ok, response: a.raw?.slice(0, 1500) ?? null },
     });
+    if (logErr) console.error('[woovi] insert da tentativa recusado:', logErr.message);
     await supabase.from('woovi_subscriptions')
       .update({ last_error: `${a.label}: ${a.status}` })
       .eq('subscription_id', a.subscriptionId);
