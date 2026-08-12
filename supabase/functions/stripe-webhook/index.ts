@@ -1258,9 +1258,13 @@ Me conta: como você está hoje?`;
     if (event.type === 'invoice.paid') {
       const invoice = event.data.object as Stripe.Invoice;
       const customerId = invoice.customer as string;
-      console.log('💰 Invoice paid:', invoice.id, 'customer:', customerId);
+      // Mesmo fallback do dunning: a API nova não manda `invoice.subscription`,
+      // e sem isso o bloco inteiro era ignorado (perfil ficava em trial/past_due
+      // mesmo depois do pagamento entrar).
+      const paidSubscriptionId = extractSubscriptionId(invoice);
+      console.log('💰 Invoice paid:', invoice.id, 'customer:', customerId, 'subscription:', paidSubscriptionId);
 
-      if (invoice.subscription) {
+      if (paidSubscriptionId) {
         try {
           const customer = await stripe.customers.retrieve(customerId);
           if (!customer.deleted) {
@@ -1289,15 +1293,19 @@ Me conta: como você está hoje?`;
                   .like('task_type', 'trial_%');
               }
             } else if (profile) {
-              // Clear payment_failed_at on successful payment regardless of status
+              // Pagamento entrou: normaliza status e limpa a marca de falha.
+              const normalizedStatus = ['past_due', 'trial', 'trial_expired', 'payment_failed'].includes(profile.status)
+                ? 'active'
+                : profile.status;
               await supabase
                 .from('profiles')
                 .update({
+                  status: normalizedStatus,
                   payment_failed_at: null,
                   updated_at: new Date().toISOString(),
                 })
                 .eq('id', profile.id);
-              console.log('ℹ️ invoice.paid — cleared payment_failed_at for:', profile.phone);
+              console.log(`ℹ️ invoice.paid — status=${normalizedStatus}, payment_failed_at limpo para: ${profile.phone}`);
             } else {
               // === Fallback: create profile from Stripe customer data ===
               console.warn('⚠️ invoice.paid — no profile found, attempting auto-create for customer:', customerId);
@@ -1345,6 +1353,17 @@ Me conta: como você está hoje?`;
               } catch (autoCreateErr) {
                 console.error('❌ Error in auto-create profile fallback:', autoCreateErr);
               }
+            }
+
+            // Régua encerrada: derruba dunning pendente desse usuário.
+            const { profile: profileForTasks } = await resolveProfileFromCustomer(supabase, customer as Stripe.Customer);
+            if (profileForTasks?.user_id) {
+              await supabase
+                .from('scheduled_tasks')
+                .update({ status: 'cancelled', executed_at: new Date().toISOString() })
+                .eq('user_id', profileForTasks.user_id)
+                .eq('status', 'pending')
+                .like('task_type', 'dunning_%');
             }
           }
         } catch (err) {
