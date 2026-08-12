@@ -62,12 +62,16 @@
       }
     </script>
 
-    <!-- Meta Pixel Code — only on marketing routes -->
+    <!-- Meta Pixel Code — carrega em tudo, exceto rotas privadas.
+         O PageView é disparado pelo app (MetaRouteTracker), para compartilhar
+         o mesmo event_id com o CAPI e cobrir navegação interna da SPA. -->
     <script>
       (function(){
-        var marketingRoutes = ['/', '/v2', '/checkout', '/v2/checkout', '/obrigado', '/experimentar', '/trial-iniciado'];
+        var privatePrefixes = ['/admin', '/meu-espaco'];
         var path = window.location.pathname;
-        if (marketingRoutes.indexOf(path) === -1) return;
+        for (var i = 0; i < privatePrefixes.length; i++) {
+          if (path === privatePrefixes[i] || path.indexOf(privatePrefixes[i] + '/') === 0) return;
+        }
 
         !function(f,b,e,v,n,t,s)
         {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
@@ -78,14 +82,8 @@
         s.parentNode.insertBefore(t,s)}(window, document,'script',
         'https://connect.facebook.net/en_US/fbevents.js');
         fbq('init', '939366085297921');
-        if (path !== '/obrigado') {
-          fbq('track', 'PageView');
-        }
       })();
     </script>
-    <noscript><img height="1" width="1" style="display:none"
-      src="https://www.facebook.com/tr?id=939366085297921&ev=PageView&noscript=1"
-    /></noscript>
     <!-- End Meta Pixel Code -->
 
     <!-- Google Analytics 4 — only on marketing routes -->
@@ -128,6 +126,9 @@
   </head>
 
   <body>
+    <noscript><img height="1" width="1" style="display:none"
+      src="https://www.facebook.com/tr?id=939366085297921&ev=PageView&noscript=1"
+      alt="" /></noscript>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
