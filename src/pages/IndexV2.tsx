@@ -14,17 +14,17 @@ import FinalCTAV2 from "@/components/v2/FinalCTAV2";
 import FooterV2 from "@/components/v2/FooterV2";
 import StickyMobileCTAV2 from "@/components/v2/StickyMobileCTAV2";
 import { trackViewItem } from "@/lib/ga4";
+import { trackMetaViewContent } from "@/lib/meta-pixel";
 
 const IndexV2 = () => {
   useEffect(() => {
-    if (typeof window !== "undefined" && (window as any).fbq) {
-      (window as any).fbq("track", "ViewContent", {
-        content_name: "Landing V2",
-        content_category: "homepage_v2",
-        value: 6.90,
-        currency: "BRL",
-      });
-    }
+    // ViewContent com deduplicação navegador + CAPI.
+    trackMetaViewContent({
+      content_name: "Landing V2",
+      content_category: "homepage_v2",
+      value: 6.90,
+      currency: "BRL",
+    });
     trackViewItem({ item_id: "landing_v2", item_name: "Landing V2" });
   }, []);
 
