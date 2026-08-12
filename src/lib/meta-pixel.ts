@@ -83,7 +83,10 @@ const sendCapi = (
 };
 
 /** Rotas onde o PageView não deve sair (conversão já é medida por Purchase). */
-const NO_PAGEVIEW_ROUTES = ["/obrigado"];
+const NO_PAGEVIEW_ROUTES = [
+  "/obrigado", // conversão já é medida por Purchase
+  "/", // redireciona na hora para /v2; contar aqui duplicaria o PageView
+];
 
 /** PageView (navegador + CAPI) — chamado no carregamento e em toda troca de rota. */
 export const trackMetaPageView = (path: string): void => {
