@@ -5,6 +5,59 @@ import { getInstanceConfigForUser } from "../_shared/instance-helper.ts";
 import { sendDunningWhatsApp } from "../_shared/dunning-whatsapp.ts";
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Recuperação do PIX Automático (Woovi): utilitários
+//
+// Cada tentativa vira UMA linha em woovi_charges (antes só sobrescrevia o
+// last_error do mandato, o que deixava a régua cega sobre em que volta está).
+// ─────────────────────────────────────────────────────────────────────────────
+async function logWooviAttempt(
+  supabase: any,
+  a: {
+    subscriptionId: string;
+    userId: string | null;
+    installmentId: string;
+    label: string;
+    ok: boolean;
+    status: string;
+    valueCents: number;
+    dueDate: string | null;
+    raw: string;
+  },
+) {
+  try {
+    const { count } = await supabase.from('woovi_charges')
+      .select('id', { count: 'exact', head: true })
+      .eq('subscription_id', a.subscriptionId);
+    await supabase.from('woovi_charges').insert({
+      subscription_id: a.subscriptionId,
+      // Sufixo evita colidir com a linha do ciclo (lookups usam maybeSingle).
+      installment_id: `${a.installmentId}:${a.label}:${Date.now()}`,
+      user_id: a.userId,
+      cycle_index: Number(count || 0),
+      value_cents: a.valueCents || null,
+      due_date: a.dueDate,
+      status: a.status,
+      kind: 'recovery_attempt',
+      raw_payload: { label: a.label, ok: a.ok, response: a.raw?.slice(0, 1500) ?? null },
+    });
+    await supabase.from('woovi_subscriptions')
+      .update({ last_error: `${a.label}: ${a.status}` })
+      .eq('subscription_id', a.subscriptionId);
+  } catch (e) {
+    console.error('[woovi] falha logando tentativa:', (e as Error).message);
+  }
+}
+
+/** Encerra toda a cadência de recuperação (usado quando o cliente regulariza). */
+async function cancelWooviRecovery(supabase: any, subscriptionId: string) {
+  await supabase.from('scheduled_tasks')
+    .update({ status: 'canceled', executed_at: new Date().toISOString() })
+    .in('task_type', ['woovi_cycle_recycle', 'woovi_next_cycle_cobr', 'woovi_recovery_offer', 'woovi_recovery_final'])
+    .eq('status', 'pending')
+    .contains('payload', { subscription_id: subscriptionId });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Reescreve um texto de lembrete que foi gravado N dias atrás para a data de
 // hoje (BRT). Resolve o bug clássico: lembrete criado ontem com "amanhã às 11h"
 // é disparado hoje e o usuário lê "amanhã" no dia errado.
