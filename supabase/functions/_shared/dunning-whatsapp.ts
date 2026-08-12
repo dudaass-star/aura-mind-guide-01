@@ -196,6 +196,12 @@ export async function resolveNextDunningStep(args: {
     .eq("whatsapp_sent", true);
 
   const rows: Array<{ offer_tier?: string | null }> = data || [];
+  // Teto absoluto de volume por ciclo: a folga existe para recuperar degraus
+  // perdidos, não para virar spam. Registros legados (antes de `offer_tier`)
+  // aparecem como genéricos, então esse teto também os protege.
+  const HARD_CEILING = noticeSteps + ladder.length + 2;
+  if (rows.length >= HARD_CEILING) return null;
+
   const noticesDelivered = rows.filter((r) => !r.offer_tier || r.offer_tier === "generic").length;
   const deliveredTiers = new Set(
     rows.map((r) => r.offer_tier).filter((t): t is string => !!t && t !== "generic"),
