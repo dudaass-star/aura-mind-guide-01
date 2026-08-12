@@ -287,6 +287,15 @@ async function activateAccess(
         billing_cycle: billing, card_gateway: "woovi",
         payment_failed_at: null, updated_at: now.toISOString(),
       };
+      // Oferta de retenção aceita no PIX: o mandato novo vem no valor do tier,
+      // então o entitlement precisa acompanhar (senão o cliente paga Lite e
+      // continua com o plano cheio liberado).
+      if (billing === "monthly") {
+        const mandateValue = Number(sub.value_cents || 0);
+        if (mandateValue === 1990) updatePayload.plan_tier = "lite";
+        else if (mandateValue === 990) updatePayload.plan_tier = "base";
+        else updatePayload.plan_tier = null;
+      }
       if (isReturning) {
         updatePayload.sessions_used_this_month = 0;
         updatePayload.sessions_reset_date = today;
