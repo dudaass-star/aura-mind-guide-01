@@ -85,6 +85,17 @@ export const DUNNING_OFFER_LADDER_PIX: OfferTemplate[] = [
   { tier: "lite", sid: "HX18e81fa401b8487c360f085e9b83630f" },
 ];
 
+/**
+ * Escada do PIX Automático da Woovi: aqui o desconto É aplicável, porque a
+ * parcela pode ser recobrada com valor menor no mesmo mandato
+ * (`POST /api/v1/installments/{id}/cobr/retry` com `value`) e, se o cliente
+ * preferir outra conta, geramos um QR novo com o valor da oferta.
+ */
+export const DUNNING_OFFER_LADDER_PIX_WOOVI: OfferTemplate[] = [
+  { tier: "discount_30", sid: "HX50cb75b6bb3cd9ae56ef2d9c6adc4781" },
+  { tier: "lite", sid: "HX18e81fa401b8487c360f085e9b83630f" },
+];
+
 const MARKETING_WINDOW_START_BRT = 8;
 const MARKETING_WINDOW_END_BRT = 21;
 
@@ -132,6 +143,12 @@ export interface DunningWhatsAppParams {
   forceAttemptNumber?: number;
   /** Método de pagamento do ciclo (ex.: "PIX", "CREDIT_CARD") — define a escada. */
   paymentMethod?: string | null;
+  /**
+   * Quantos avisos genéricos vêm antes das ofertas. Default = 2 (cartão/Asaas).
+   * O PIX Automático da Woovi usa 0: durante a recuperação silenciosa não
+   * avisamos falha nenhuma, e quando finalmente falamos já vamos com oferta.
+   */
+  noticeSteps?: number;
 }
 
 export interface DunningWhatsAppResult {
@@ -209,10 +226,14 @@ export async function sendDunningWhatsApp(
     skipWindowCheck = false, forceAttemptNumber, paymentMethod = null,
   } = params;
 
-  // Escada por método: PIX não tem degrau de 30% (não é aplicável sem cartão).
+  // Escada por método/gateway: PIX Asaas não tem degrau de 30% (não é aplicável
+  // sem cartão); PIX Automático da Woovi tem, via recobrança com valor menor.
   const isPix = String(paymentMethod || "").toUpperCase().includes("PIX");
-  const ladder = isPix ? DUNNING_OFFER_LADDER_PIX : DUNNING_OFFER_LADDER;
-  const maxAttempts = DUNNING_NOTICE_STEPS + ladder.length;
+  const ladder = isPix
+    ? (provider === "woovi" ? DUNNING_OFFER_LADDER_PIX_WOOVI : DUNNING_OFFER_LADDER_PIX)
+    : DUNNING_OFFER_LADDER;
+  const noticeSteps = params.noticeSteps ?? DUNNING_NOTICE_STEPS;
+  const maxAttempts = noticeSteps + ladder.length;
 
   const baseRecord: Record<string, any> = {
     event_id: eventId,
@@ -298,8 +319,8 @@ export async function sendDunningWhatsApp(
     }
   }
 
-  // Tentativas 1..DUNNING_NOTICE_STEPS = aviso genérico; depois, escada de ofertas.
-  const ladderIndex = attemptNumber - DUNNING_NOTICE_STEPS - 1;
+  // Tentativas 1..noticeSteps = aviso genérico; depois, escada de ofertas.
+  const ladderIndex = attemptNumber - noticeSteps - 1;
   const ladderEntry = ladderIndex >= 0 ? (ladder[ladderIndex] || null) : null;
   const useOffer = !!ladderEntry?.sid;
   const noticeSid = await resolveNoticeSid(supabase);
@@ -336,6 +357,7 @@ export async function sendDunningWhatsApp(
           customer_id: customerId,
           attempt_number: attemptNumber,
           payment_method: paymentMethod,
+          notice_steps: noticeSteps,
         },
       });
     } catch (err) {

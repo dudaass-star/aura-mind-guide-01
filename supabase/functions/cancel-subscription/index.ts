@@ -317,8 +317,9 @@ serve(async (req) => {
               amount_cents: wooviSub.value_cents,
               price_id: wooviSub.subscription_id,
             },
-            // Mudar valor do mandato exige nova autorização do pagador.
-            discount_available: false,
+            // No PIX Automático o "desconto" é um mandato novo já no valor
+            // reduzido: o cliente escaneia um QR e pode até usar outra conta.
+            discount_available: true,
             reasons: CANCELLATION_REASONS,
           });
         }
@@ -391,7 +392,60 @@ serve(async (req) => {
           });
         }
 
-        // Pausa e descontos exigem novo mandato (nova autorização do pagador).
+        // ── Ofertas de retenção no PIX Automático ──────────────────────────
+        // Não existe cupom aqui: o desconto (ou o Lite) vira um MANDATO NOVO
+        // já no valor da oferta. Devolvemos o link do QR — que também resolve o
+        // caso real de falha: a conta atual está sem saldo e ele pode pagar de
+        // outra. O mandato antigo só é substituído quando o novo é aprovado.
+        if (
+          action === "apply_discount_3m" ||
+          action === "downgrade_to_lite" ||
+          action === "downgrade_to_base"
+        ) {
+          const tier = action === "apply_discount_3m"
+            ? "discount_30"
+            : action === "downgrade_to_lite" ? "lite" : "base";
+
+          await supabase
+            .from("user_portal_tokens")
+            .upsert({ user_id: profile.user_id }, { onConflict: "user_id" });
+          const { data: tokenRow } = await supabase
+            .from("user_portal_tokens")
+            .select("token")
+            .eq("user_id", profile.user_id)
+            .maybeSingle();
+
+          if (!tokenRow?.token) {
+            return jsonResponse({
+              success: false,
+              message: "Não consegui abrir sua oferta agora. Fale com o suporte no WhatsApp.",
+            });
+          }
+
+          try {
+            await supabase.from("retention_events").insert({
+              user_id: profile.user_id,
+              phone: phoneClean,
+              origin: "cancel_flow",
+              tier,
+              action: "accepted",
+              gateway: "woovi_pix",
+              channel: "web",
+              metadata: { subscription_id: wooviSub.subscription_id },
+            });
+          } catch (_) { /* auditoria best-effort */ }
+
+          return jsonResponse({
+            success: true,
+            status: "offer_pix_qr",
+            gateway: "woovi_pix",
+            tier,
+            redirect_url: `/reautorizar-pix?token=${tokenRow.token}&offer=${tier}`,
+            message: "Gerando seu PIX com o novo valor...",
+          });
+        }
+
+        // Pausa segue exigindo suporte (mandato PIX não pausa).
         return jsonResponse({
           success: false,
           gateway_unsupported: true,

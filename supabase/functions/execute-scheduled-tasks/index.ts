@@ -504,8 +504,166 @@ Deno.serve(async (req) => {
               forceAttemptNumber: payload.attempt_number ?? 1,
               skipWindowCheck: true,
               paymentMethod: payload.payment_method ?? null,
+              noticeSteps: payload.notice_steps ?? undefined,
             });
             console.log(`✅ dunning_offer_whatsapp tier=${res.tier} sent=${res.sent} skipped=${res.skipped ?? '-'}`);
+            break;
+          }
+
+          // ─────────────────────────────────────────────────────────────────
+          // Recuperação silenciosa do PIX Automático (Woovi) — ~30 dias
+          //
+          // Ciclo não pago não gera aviso nem corte: reciclamos a parcela do
+          // MESMO mandato a cada 7 dias, até 4 tentativas (cada uma com o 3R/7D
+          // técnico da Woovi por baixo). Cobre o mês inteiro do cliente, que na
+          // prática é o ciclo de salário. Só depois disso falamos com ele, já
+          // com oferta. Paridade com o cartão, onde o acesso segue liberado
+          // durante os ~21 dias de Smart Retries do Stripe.
+          // ─────────────────────────────────────────────────────────────────
+          case 'woovi_cycle_recycle': {
+            const { findUnpaidInstallment, retryInstallmentCobr, MANDATE_ACTIVE_STATUSES } =
+              await import('../_shared/woovi.ts');
+            const subscriptionId = String(payload.subscription_id || '');
+            const attempt = Number(payload.attempt || 1);
+            const MAX_RECYCLES = 4;
+            if (!subscriptionId || !Deno.env.get('WOOVI_APP_ID')) {
+              console.warn('⚠️ woovi_cycle_recycle sem subscription_id ou WOOVI_APP_ID');
+              break;
+            }
+
+            const { data: sub } = await supabase
+              .from('woovi_subscriptions')
+              .select('id, user_id, subscription_id, status, value_cents, plan, billing_cycle')
+              .eq('subscription_id', subscriptionId)
+              .maybeSingle();
+            if (!sub) {
+              console.warn(`⚠️ woovi_cycle_recycle: mandato ${subscriptionId} não encontrado`);
+              break;
+            }
+
+            // Mandato morto (cliente desautorizou no app do banco) → não há o
+            // que reciclar: vai direto pra conversa de oferta.
+            const mandateAlive = MANDATE_ACTIVE_STATUSES.includes(String(sub.status || '').toUpperCase());
+
+            // Já pagou no meio do caminho? encerra a recuperação em silêncio.
+            const installment = mandateAlive ? await findUnpaidInstallment(subscriptionId) : null;
+            if (mandateAlive && !installment) {
+              console.log(`✅ woovi ${subscriptionId} sem parcela em aberto — recuperação encerrada`);
+              await supabase
+                .from('scheduled_tasks')
+                .update({ status: 'canceled', executed_at: new Date().toISOString() })
+                .in('task_type', ['woovi_cycle_recycle', 'woovi_recovery_offer', 'woovi_recovery_final'])
+                .eq('status', 'pending')
+                .contains('payload', { subscription_id: subscriptionId });
+              break;
+            }
+
+            if (mandateAlive && installment && attempt <= MAX_RECYCLES) {
+              const retry = await retryInstallmentCobr(installment.globalID);
+              console.log(
+                `🔁 woovi recycle #${attempt} sub=${subscriptionId} parcela=${installment.globalID} ok=${retry.ok}`,
+              );
+              await supabase.from('woovi_subscriptions').update({
+                last_error: `reciclagem ${attempt}/${MAX_RECYCLES} da parcela ${installment.globalID} (ok=${retry.ok})`,
+              }).eq('id', sub.id);
+
+              if (attempt < MAX_RECYCLES) {
+                await supabase.from('scheduled_tasks').insert({
+                  user_id: task.user_id,
+                  task_type: 'woovi_cycle_recycle',
+                  execute_at: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(),
+                  status: 'pending',
+                  payload: { ...payload, attempt: attempt + 1 },
+                });
+                break;
+              }
+            }
+
+            // Fim da janela silenciosa (ou mandato já morto): abre a conversa
+            // de oferta no próximo dia útil de marketing.
+            await supabase.from('scheduled_tasks').insert({
+              user_id: task.user_id,
+              task_type: 'woovi_recovery_offer',
+              execute_at: new Date(Date.now() + 60 * 1000).toISOString(),
+              status: 'pending',
+              payload: { ...payload, offer_step: 1 },
+            });
+            break;
+          }
+
+          case 'woovi_recovery_offer': {
+            // Primeira e única conversa da janela: oferta (30% off → Lite).
+            // O link leva a /cancelar?offer=..., que no trilho Woovi gera um QR
+            // NOVO — o cliente pode pagar de outra conta, já que a atual é
+            // justamente a que está sem saldo.
+            const subscriptionId = String(payload.subscription_id || '');
+            const step = Number(payload.offer_step || 1);
+            const { data: sub } = await supabase
+              .from('woovi_subscriptions')
+              .select('id, status, subscription_id')
+              .eq('subscription_id', subscriptionId)
+              .maybeSingle();
+
+            const offerRes = await sendDunningWhatsApp({
+              supabase,
+              profile: { user_id: task.user_id, phone: profile.phone, name: profile.name },
+              eventId: `woovi-recovery-${subscriptionId}-${payload.payment_id ?? 'cycle'}-${step}`,
+              provider: 'woovi',
+              paymentId: (payload.payment_id as string) ?? null,
+              subscriptionId: subscriptionId || null,
+              customerId: null,
+              paymentMethod: 'PIX',
+              // Zero avisos genéricos: no PIX a gente não fala de falha.
+              noticeSteps: 0,
+              forceAttemptNumber: step,
+            });
+            console.log(
+              `📨 woovi_recovery_offer #${step} tier=${offerRes.tier} sent=${offerRes.sent} skip=${offerRes.skipped ?? '-'}`,
+            );
+
+            if (step === 1) {
+              // Reforço com o degrau seguinte (Lite) em D+3.
+              await supabase.from('scheduled_tasks').insert({
+                user_id: task.user_id,
+                task_type: 'woovi_recovery_offer',
+                execute_at: new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString(),
+                status: 'pending',
+                payload: { ...payload, offer_step: 2 },
+              });
+            } else {
+              await supabase.from('scheduled_tasks').insert({
+                user_id: task.user_id,
+                task_type: 'woovi_recovery_final',
+                execute_at: new Date(Date.now() + 4 * 24 * 3600 * 1000).toISOString(),
+                status: 'pending',
+                payload: { ...payload },
+              });
+            }
+            void sub;
+            break;
+          }
+
+          case 'woovi_recovery_final': {
+            // Esgotado tudo: aí sim marca a inadimplência e encerra o mandato.
+            const { findUnpaidInstallment, wooviFetch } = await import('../_shared/woovi.ts');
+            const subscriptionId = String(payload.subscription_id || '');
+            const stillUnpaid = await findUnpaidInstallment(subscriptionId);
+            if (!stillUnpaid) {
+              console.log(`✅ woovi ${subscriptionId} regularizado antes do encerramento`);
+              break;
+            }
+            await wooviFetch(`/api/v1/subscriptions/${encodeURIComponent(subscriptionId)}`, {
+              method: 'DELETE',
+            }).catch(() => null);
+            await supabase
+              .from('woovi_subscriptions')
+              .update({ status: 'CANCELADA', last_error: 'recuperação de 30 dias esgotada' })
+              .eq('subscription_id', subscriptionId);
+            await supabase
+              .from('profiles')
+              .update({ payment_failed_at: new Date().toISOString(), status: 'canceled' })
+              .eq('user_id', task.user_id);
+            console.log(`🛑 woovi ${subscriptionId} encerrado após recuperação silenciosa`);
             break;
           }
 

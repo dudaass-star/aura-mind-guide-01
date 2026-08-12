@@ -98,6 +98,81 @@ export const WOOVI_PAID_STATUSES = [
 /** Rótulos internos que significam "mandato vivo, debitando". */
 export const MANDATE_ACTIVE_STATUSES = ["APROVADA", "ATIVA"];
 
+// ---------------------------------------------------------------------------
+// Reciclagem de parcela (recuperação silenciosa de ~30 dias)
+//
+// O Bacen permite criar/retentar a cobrança recorrente (CobR) de uma parcela
+// entre 2 e 10 dias antes do vencimento, e a Woovi expõe isso em:
+//   GET  /api/v1/subscriptions/{id}/installments
+//   POST /api/v1/installments/{id}/cobr        (cria a CobR da parcela)
+//   POST /api/v1/installments/{id}/cobr/retry  (retenta, valor opcional)
+// É por aqui que encadeamos novas tentativas sem pedir nova autorização ao
+// cliente — e é também como aplicamos desconto (valor menor na retentativa).
+// Doc: https://developers.woovi.com/docs/pix-automatic/pix-automatic-cobr-manual
+// ---------------------------------------------------------------------------
+
+const INSTALLMENT_PAID_STATUSES = ["PAID", "COMPLETED", "CONFIRMED"];
+
+export interface WooviInstallment {
+  globalID: string;
+  status: string;
+  value: number | null;
+  dueDate: string | null;
+}
+
+/**
+ * Parcela mais recente do mandato que ainda NÃO foi paga (a que precisa de nova
+ * tentativa). Devolve `null` quando a Woovi não responde ou tudo está pago.
+ */
+export async function findUnpaidInstallment(
+  subscriptionId: string,
+): Promise<WooviInstallment | null> {
+  const r = await wooviFetch<Record<string, any>>(
+    `/api/v1/subscriptions/${encodeURIComponent(subscriptionId)}/installments`,
+  );
+  if (!r.ok) return null;
+  const raw = r.data as Record<string, any> | null;
+  const list: Record<string, any>[] = Array.isArray(raw?.installments)
+    ? raw!.installments
+    : Array.isArray(raw)
+      ? (raw as unknown as Record<string, any>[])
+      : [];
+  const unpaid = list
+    .filter((i) => !INSTALLMENT_PAID_STATUSES.includes(String(i?.status || "").toUpperCase()))
+    .filter((i) => !!(i?.globalID || i?.id));
+  if (unpaid.length === 0) return null;
+  // A Woovi devolve as parcelas em ordem crescente; a última em aberto é a atual.
+  const target = unpaid[unpaid.length - 1];
+  return {
+    globalID: String(target.globalID || target.id),
+    status: String(target.status || "").toUpperCase(),
+    value: Number.isFinite(Number(target.value)) ? Number(target.value) : null,
+    dueDate: target.dueDate ? String(target.dueDate).slice(0, 10) : null,
+  };
+}
+
+/**
+ * Nova tentativa de débito na mesma parcela (mesmo mandato, sem novo scan).
+ * `valueCents` permite retentar com valor menor — é assim que o desconto de
+ * retenção entra no trilho PIX, onde não existe cupom.
+ */
+export async function retryInstallmentCobr(
+  installmentId: string,
+  valueCents?: number,
+): Promise<WooviResponse<Record<string, any>>> {
+  const body = valueCents && valueCents > 0 ? { value: valueCents } : undefined;
+  const retry = await wooviFetch<Record<string, any>>(
+    `/api/v1/installments/${encodeURIComponent(installmentId)}/cobr/retry`,
+    { method: "POST", ...(body ? { body } : {}) },
+  );
+  if (retry.ok) return retry;
+  // Parcela que ainda não tem CobR criada: cria em vez de retentar.
+  return await wooviFetch<Record<string, any>>(
+    `/api/v1/installments/${encodeURIComponent(installmentId)}/cobr`,
+    { method: "POST", ...(body ? { body } : {}) },
+  );
+}
+
 /**
  * Traduz o status cru da Woovi para o vocabulário interno. Status desconhecido
  * (ou mandato ainda em criação) volta como `fallback` — nunca inventamos
