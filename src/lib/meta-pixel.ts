@@ -54,11 +54,18 @@ const sendCapi = (
   eventName: string,
   eventId: string,
   customData?: Record<string, unknown>,
+  attempt = 0,
 ): void => {
   const fbp = getFbp();
   const fbc = getFbc();
   // Sem identificador de navegador o CAPI seria descartado pelo Meta.
-  if (!fbp && !fbc) return;
+  // No primeiro carregamento o _fbp pode ainda não existir: tenta de novo.
+  if (!fbp && !fbc) {
+    if (attempt < 3) {
+      window.setTimeout(() => sendCapi(eventName, eventId, customData, attempt + 1), 1500);
+    }
+    return;
+  }
   void supabase.functions
     .invoke("meta-capi", {
       body: {
@@ -75,9 +82,12 @@ const sendCapi = (
     });
 };
 
-/** PageView (navegador + CAPI) — chamado em toda troca de rota da SPA. */
+/** Rotas onde o PageView não deve sair (conversão já é medida por Purchase). */
+const NO_PAGEVIEW_ROUTES = ["/obrigado"];
+
+/** PageView (navegador + CAPI) — chamado no carregamento e em toda troca de rota. */
 export const trackMetaPageView = (path: string): void => {
-  if (!isPixelRoute(path)) return;
+  if (!isPixelRoute(path) || NO_PAGEVIEW_ROUTES.includes(path)) return;
   persistFbclid();
   const eventId = newEventId();
   if (hasFbq()) {
