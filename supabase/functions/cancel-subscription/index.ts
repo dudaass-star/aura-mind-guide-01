@@ -275,6 +275,133 @@ serve(async (req) => {
       return jsonResponse({ success: true, status: "reactivation_checkout", url: session.url });
     }
 
+    // ─── Roteamento Woovi (PIX Automático Bacen, jornada composta) ────────
+    // Mesma regra do Inter: sem cancelar o mandato na Woovi, o débito segue
+    // autorizado no banco do cliente mesmo depois do cancelamento no portal.
+    if (profile?.user_id && profile?.card_gateway === "woovi") {
+      const { data: wooviSub } = await supabase
+        .from("woovi_subscriptions")
+        .select("id, subscription_id, plan, billing_period, value_cents, next_charge_date, status")
+        .eq("user_id", profile.id)
+        .is("replaced_by_subscription_id", null)
+        .not("subscription_id", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (wooviSub?.subscription_id) {
+        const planLabelWoovi = PLAN_LABELS[profile.plan || ""] || "Assinatura AURA";
+        const nextDateWoovi = wooviSub.next_charge_date
+          ? (() => {
+              const [y, m, d] = String(wooviSub.next_charge_date).split("-");
+              return `${d}/${m}/${y}`;
+            })()
+          : "";
+
+        if (action === "check" || !action) {
+          return jsonResponse({
+            success: true,
+            status: "active",
+            gateway: "woovi_pix",
+            subscription: {
+              id: wooviSub.subscription_id,
+              plan: planLabelWoovi,
+              endDate: wooviSub.next_charge_date
+                ? new Date(`${wooviSub.next_charge_date}T12:00:00Z`).toISOString()
+                : null,
+              endDateFormatted: nextDateWoovi,
+              nextDueDateFormatted: nextDateWoovi,
+              amount: ((wooviSub.value_cents || 0) / 100).toLocaleString("pt-BR", {
+                style: "currency", currency: "BRL",
+              }),
+              amount_cents: wooviSub.value_cents,
+              price_id: wooviSub.subscription_id,
+            },
+            // Mudar valor do mandato exige nova autorização do pagador.
+            discount_available: false,
+            reasons: CANCELLATION_REASONS,
+          });
+        }
+
+        if (action === "cancel") {
+          const wooviAppId = Deno.env.get("WOOVI_APP_ID") || "";
+          let canceledOk = false;
+          try {
+            const resp = await fetch(
+              `https://api.woovi.com/api/v1/subscriptions/${encodeURIComponent(wooviSub.subscription_id)}/cancel`,
+              { method: "POST", headers: { Authorization: wooviAppId, "Content-Type": "application/json" } },
+            );
+            canceledOk = resp.ok;
+            if (!resp.ok) {
+              logStep("Woovi: cancelamento recusado", { status: resp.status });
+            }
+          } catch (e) {
+            logStep("Woovi: erro cancelando mandato", { error: String(e) });
+          }
+
+          if (!canceledOk) {
+            return jsonResponse({
+              success: false,
+              message: "Não consegui cancelar o débito automático agora. Fale com o suporte no WhatsApp que a gente resolve na hora.",
+            });
+          }
+
+          await supabase.from("woovi_subscriptions").update({
+            status: "CANCELADA",
+            updated_at: new Date().toISOString(),
+          }).eq("id", wooviSub.id);
+
+          // Acesso segue até o fim do período já pago (mesma regra do cartão).
+          await supabase.from("profiles").update({
+            status: "canceling",
+            updated_at: new Date().toISOString(),
+          }).eq("user_id", profile.user_id);
+
+          try {
+            await supabase.from("cancellation_feedback").insert({
+              user_id: profile.user_id,
+              phone: phoneClean,
+              reason: reason || null,
+              reason_detail: reason_detail || null,
+              action_taken: "cancel",
+              gateway: "woovi_pix",
+            });
+          } catch (_) { /* feedback é best-effort */ }
+
+          try {
+            await supabase.from("retention_events").insert({
+              user_id: profile.user_id,
+              phone: phoneClean,
+              origin: "cancel_flow",
+              tier: "cancel",
+              action: "applied",
+              gateway: "woovi_pix",
+              channel: "web",
+              metadata: { subscription_id: wooviSub.subscription_id, reason: reason || null },
+            });
+          } catch (_) { /* auditoria best-effort */ }
+
+          return jsonResponse({
+            success: true,
+            status: "canceled",
+            gateway: "woovi_pix",
+            message: nextDateWoovi
+              ? `Débito automático cancelado. Seu acesso continua até ${nextDateWoovi}.`
+              : "Débito automático cancelado. Seu acesso continua até o fim do período já pago.",
+          });
+        }
+
+        // Pausa e descontos exigem novo mandato (nova autorização do pagador).
+        return jsonResponse({
+          success: false,
+          gateway_unsupported: true,
+          gateway: "woovi_pix",
+          message:
+            "Sua assinatura é no PIX Automático. Fale com nosso suporte pelo WhatsApp que a gente ajusta pra você.",
+        });
+      }
+    }
+
     // ─── Roteamento Asaas (cartão OU PIX recorrente) ──────────────────────
     // ─── Roteamento Inter (PIX Automático Bacen) ──────────────────────────
     // Precisa vir ANTES do Asaas/Stripe: se o mandato não for cancelado no
