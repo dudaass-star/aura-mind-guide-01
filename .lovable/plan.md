@@ -1,42 +1,43 @@
-# PIX Automático: composição validada e blindagem por banco
+# PIX Automático composto: validado nos dois bancos
 
-## O que as duas telas provam
+## Comportamento confirmado
 
-- **Banco do Brasil**: mostra exatamente o desenho pretendido — "1º pagamento: R$ 6,90 hoje" + "Pix Automático: valor previsto R$ 29,90, próximo pagamento 12/09/2026, mensal". Ou seja, o QR composto (cobrança de entrada + mandato fixo) está correto.
-- **Nubank**: na tela de revisão exibe apenas a autorização mensal de R$ 29,90 (valor fixo, dia 12, até cancelar). A entrada de R$ 6,90 não aparece nessa etapa.
+O QR composto (cobrança de entrada R$ 6,90 + mandato mensal fixo R$ 29,90) funciona nos dois bancos testados — só a **ordem de exibição muda**:
 
-Então sim: **cada banco renderiza o Pix Automático de um jeito**. Alguns detalham as duas partes na mesma tela, outros só mostram o mandato e tratam a cobrança de entrada em outro passo. Isso é do app do banco, não do nosso payload.
+```text
+Banco do Brasil   -> uma tela só: "1º pagamento R$ 6,90 hoje" + "Pix Automático R$ 29,90, mensal dia 12"
+Nubank            -> tela 1: autorização R$ 29,90/mês fixo
+                     tela 2: débito de R$ 6,90 ("valor pré-definido por JUBI LTDA")
+```
 
-## Consequência prática
-
-O que não podemos assumir é que todo banco efetivamente liquida a entrada de R$ 6,90 no mesmo scan. Nos testes atuais o mandato aparece ativo, mas não há registro de cobrança de entrada liquidada. O plano abaixo mantém o scan único e garante que a entrada nunca fique órfã, independente do banco.
+Ou seja: cada banco renderiza o arranjo do Pix Automático do seu jeito, mas os dois entregam o mesmo resultado — R$ 6,90 agora + R$ 29,90/mês fixo, com uma única leitura de QR. Nada mais a corrigir no payload nem no compositor EMV.
 
 ## Plano
 
-### 1. Instrumentar por banco (observabilidade primeiro)
-- Registrar, para cada tentativa: modo de criação, se o mandato foi autorizado, se a entrada foi paga, e qual PSP/banco pagador o webhook informou.
-- Assim passamos a saber quais bancos cobram a entrada no scan único e quais não.
-
-### 2. Reconciliação da entrada (rede de segurança)
-- Se o mandato for autorizado e a entrada de R$ 6,90 não constar paga em poucos minutos, tratar como pendência: reenviar o QR de R$ 6,90 pelo WhatsApp e não liberar acesso sem pagamento confirmado.
-- Se a entrada for paga e o mandato não for autorizado, liberar a primeira semana e pedir a autorização por mensagem, sem gerar cobrança duplicada.
-- Nada de cobrança nem mandato órfão em caso de falha parcial.
-
-### 3. Copy do checkout à prova de banco
+### 1. Copy do checkout à prova de banco
 No checkout PIX:
-- Título com os dois valores: "R$ 6,90 hoje • depois R$ 29,90/mês, cancela quando quiser".
-- Aviso curto: "Alguns bancos mostram só a autorização de R$ 29,90/mês na tela de revisão. A cobrança de hoje é de R$ 6,90."
-- Data da primeira cobrança cheia visível.
+- Valores em destaque: "R$ 6,90 hoje • depois R$ 29,90/mês, cancela quando quiser".
+- Nota curta abaixo do QR: "Seu banco pode mostrar primeiro a autorização de R$ 29,90/mês e, na tela seguinte, o pagamento de R$ 6,90. É o mesmo Pix — basta confirmar as duas etapas."
+- Data da primeira cobrança cheia visível (dia 12 do mês seguinte).
+- Instrução explícita de não fechar o app antes de concluir as duas telas.
 
-### 4. Teste financeiro real nos dois bancos
-- Concluir um pagamento pelo BB e um pelo Nubank com QRs novos.
-- Em cada um, verificar: entrada liquidada, mandato ativo, acesso liberado, próxima cobrança agendada.
-- Só depois disso habilitar o trilho Woovi como opção padrão de PIX no checkout.
+### 2. Rede de segurança para conclusão parcial
+Como o cliente pode abandonar entre as duas telas do banco:
+- Mandato autorizado sem a entrada paga em poucos minutos: reenviar o QR de R$ 6,90 pelo WhatsApp e não liberar acesso sem pagamento confirmado.
+- Entrada paga sem mandato autorizado: liberar a primeira semana e pedir a autorização por mensagem, sem duplicar cobrança.
+- Nenhuma cobrança nem mandato órfão em caso de falha parcial.
+
+### 3. Rastrear qual banco fez o quê
+- Persistir a cobrança de entrada e o resultado da autorização com o banco pagador informado pelo webhook, para medir conclusão por instituição e detectar bancos problemáticos cedo.
+
+### 4. Teste financeiro real e liberação
+- Concluir um pagamento real completo (BB e Nubank), verificando em cada caso: entrada liquidada, mandato ativo, acesso liberado, próxima cobrança agendada em D+30.
+- Só então habilitar o trilho Woovi como opção PIX padrão no checkout, mantendo o gate de saúde já existente.
 
 ## Detalhes técnicos
-- Mantém o compositor EMV (`_shared/pix-emv.ts`) e o payload de valor fixo (`_shared/woovi-subscription-payload.ts`) — ambos já validados.
-- `webhook-woovi` passa a correlacionar explicitamente entrada e mandato e a aplicar as regras do item 2; a cobrança de entrada passa a ser persistida também em `woovi_charges` (hoje só existe o vínculo em `woovi_subscriptions.entry_charge_correlation_id`).
-- Ajuste de interface isolado no checkout PIX; nenhum efeito no trilho de cartão (Stripe) nem no Inter (7 dias grátis).
+- Compositor EMV (`_shared/pix-emv.ts`) e payload de valor fixo (`_shared/woovi-subscription-payload.ts`) permanecem como estão — já validados em campo.
+- `webhook-woovi`: correlaciona entrada e mandato, persiste a cobrança de entrada em `woovi_charges` (hoje só existe o vínculo em `woovi_subscriptions.entry_charge_correlation_id`) e aplica as regras do item 2.
+- Alterações de interface isoladas no checkout PIX; sem impacto no trilho de cartão (Stripe) nem no Inter (7 dias grátis).
 
 ## Critério de aceite
-Um scan único em qualquer banco resulta em: R$ 6,90 pago, mandato mensal fixo de R$ 29,90 ativo e acesso liberado — e, quando o banco não cobra a entrada no mesmo passo, o sistema detecta e resolve automaticamente.
+Um scan único, em qualquer banco, resulta em R$ 6,90 pago, mandato mensal fixo de R$ 29,90 ativo e acesso liberado — e, quando o cliente para no meio das duas telas, o sistema detecta e resolve automaticamente.
