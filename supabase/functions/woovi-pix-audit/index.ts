@@ -229,10 +229,14 @@ Deno.serve(async (req) => {
 
       // Cancelamento pedido no nosso portal já marca o profile — não é churn silencioso.
       let profileStatus: string | null = null;
+      let authUid: string | null = null;
       if (sub.user_id) {
+        // ATENÇÃO: woovi_subscriptions.user_id guarda o ID DA LINHA de profiles
+        // (é assim que o webhook-woovi grava), não o uid de autenticação.
         const { data: p } = await supabase
-          .from("profiles").select("status").eq("user_id", sub.user_id).maybeSingle();
+          .from("profiles").select("user_id, status").eq("id", sub.user_id).maybeSingle();
         profileStatus = (p?.status as string) || null;
+        authUid = (p?.user_id as string) || null;
       }
       const userStillActive = ["active", "trial", "trialing", "past_due"].includes(String(profileStatus));
 
@@ -259,11 +263,11 @@ Deno.serve(async (req) => {
         // primeiro degrau da escada de retenção (30% off), não pelo preço
         // cheio de /v2.
         let offerLink = "https://olaaura.com.br/v2";
-        if (sub.user_id) {
+        if (authUid) {
           await supabase.from("user_portal_tokens")
-            .upsert({ user_id: sub.user_id }, { onConflict: "user_id" });
+            .upsert({ user_id: authUid }, { onConflict: "user_id" });
           const { data: tk } = await supabase.from("user_portal_tokens")
-            .select("token").eq("user_id", sub.user_id).maybeSingle();
+            .select("token").eq("user_id", authUid).maybeSingle();
           if (tk?.token) {
             offerLink = `https://olaaura.com.br/cancelar?t=${tk.token}&offer=discount_30`;
           }
