@@ -163,7 +163,7 @@ export async function retryInstallmentCobr(
   const body = valueCents && valueCents > 0 ? { value: valueCents } : undefined;
   const retry = await wooviFetch<Record<string, any>>(
     `/api/v1/installments/${encodeURIComponent(installmentId)}/cobr/retry`,
-    { method: "POST", ...(body ? { body } : {}) },
+    { method: "POST", ...(body ? { body } : {}) } as RequestInit & { body?: unknown },
   );
   if (retry.ok) return retry;
   // Parcela que ainda não tem CobR criada: cria em vez de retentar.
