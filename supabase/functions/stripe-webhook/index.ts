@@ -1769,6 +1769,71 @@ Me conta: como você está hoje?`;
       }
 
       if (previousAttributes?.status === 'trialing' && subscription.status === 'active') {
+        // (bloco de conversão trial → active abaixo)
+      }
+
+      // ===== Garantia de fechamento da escada de dunning =====
+      // Quando o Stripe esgota os retries (past_due → unpaid/canceled), não há
+      // mais tentativas de cobrança pela frente. Se algum degrau de oferta ainda
+      // não foi entregue neste ciclo, disparamos o degrau pendente mais avançado
+      // agora — assim a régua que desenhamos nunca termina sem chegar à oferta.
+      if (['unpaid', 'canceled'].includes(subscription.status) && previousAttributes?.status === 'past_due') {
+        try {
+          const customerId = subscription.customer as string;
+          const latestInvoice = typeof subscription.latest_invoice === 'string'
+            ? subscription.latest_invoice
+            : subscription.latest_invoice?.id || null;
+
+          const customer = await stripe.customers.retrieve(customerId);
+          if (!customer.deleted && latestInvoice) {
+            const { profile } = await resolveProfileFromCustomer(supabase, customer as Stripe.Customer);
+            if (profile?.phone) {
+              const {
+                resolveNextDunningStep,
+                sendDunningWhatsApp,
+                DUNNING_OFFER_LADDER,
+                DUNNING_NOTICE_STEPS,
+              } = await import('../_shared/dunning-whatsapp.ts');
+
+              const pendingStep = await resolveNextDunningStep({
+                supabase,
+                profileUserId: profile.user_id,
+                scopeColumn: 'invoice_id',
+                scopeValue: latestInvoice,
+                noticeSteps: DUNNING_NOTICE_STEPS,
+                ladder: DUNNING_OFFER_LADDER,
+                prefer: 'last',
+              });
+
+              if (pendingStep === null) {
+                console.log('ℹ️ [DUNNING-CLOSE] Escada já completa neste ciclo, nada a enviar');
+              } else {
+                const waResult = await sendDunningWhatsApp({
+                  supabase,
+                  profile: {
+                    user_id: profile.user_id,
+                    phone: profile.phone,
+                    name: profile.name || (customer as Stripe.Customer).name || null,
+                  },
+                  eventId: `${event.id}-close`,
+                  provider: 'stripe',
+                  invoiceId: latestInvoice,
+                  subscriptionId: subscription.id,
+                  customerId,
+                  forceAttemptNumber: pendingStep,
+                });
+                console.log(
+                  `🔔 [DUNNING-CLOSE] Degrau pendente ${pendingStep} → sent=${waResult.sent} ${waResult.skipped || waResult.error || ''}`,
+                );
+              }
+            }
+          }
+        } catch (closeErr) {
+          console.error('❌ [DUNNING-CLOSE] Erro garantindo último degrau:', closeErr);
+        }
+      }
+
+      if (previousAttributes?.status === 'trialing' && subscription.status === 'active') {
         const customerId = subscription.customer as string;
         try {
           const customer = await stripe.customers.retrieve(customerId);
