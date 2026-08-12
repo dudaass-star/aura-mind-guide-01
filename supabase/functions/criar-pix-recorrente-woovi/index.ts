@@ -6,16 +6,9 @@
 // autorização separados), o que quebrava a promo "1ª semana R$ 6,90 + mensal
 // cheio". A Woovi faz a jornada composta, mesma UX do antigo QR integrado do Asaas.
 //
-// Contrato da API (developers.woovi.com/docs/pix-automatic):
-//   POST /api/v1/subscriptions  { type: PIX_RECURRING, pixRecurringOptions:{journey,retryPolicy,minimumValue} }
-//   → subscription.pixRecurring.emv  = o QR composto
-//
-// IMPORTANTE sobre o valor promocional: em PAYMENT_ON_APPROVAL, `value` é o valor
-// cobrado NA APROVAÇÃO e também o valor padrão dos ciclos. Para a promo, criamos
-// o mandato com `value` = valor promocional e `minimumValue` = o mesmo, e o
-// `webhook-woovi` sobe a assinatura para o preço cheio (`PUT /subscriptions/{id}/value`)
-// logo após a aprovação. Assinatura de valor variável não tem teto nosso: o teto
-// é o que o cliente define no app do banco ao aprovar o QR.
+// O trial pago usa uma cobrança avulsa de entrada e um mandato ONLY_RECURRENCY
+// com `value` cheio. Campos de faixa, como `minimumValue`, não podem ser enviados:
+// eles fazem o PSP registrar a autorização como variável no arranjo Pix.
 //
 // A ativação de acesso NUNCA acontece aqui — só no webhook, com dinheiro entrando.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
@@ -385,7 +378,6 @@ Deno.serve(async (req) => {
           pixRecurringOptions: {
             journey: "ONLY_RECURRENCY",
             retryPolicy: "THREE_RETRIES_7_DAYS",
-            minimumValue: amountCents,
           },
           customer,
         },
@@ -403,6 +395,17 @@ Deno.serve(async (req) => {
       sub = (created.data as Record<string, any>)?.subscription as Record<string, any> | undefined;
       pixRec = sub?.pixRecurring as Record<string, any> | undefined;
       subscriptionId = String(sub?.globalID || sub?.correlationID || correlationId);
+      const returnedValue = Number(sub?.value);
+      if (!Number.isFinite(returnedValue) || returnedValue !== amountCents) {
+        await wooviFetch(`/api/v1/subscriptions/${encodeURIComponent(subscriptionId)}/cancel`, { method: "PUT" }).catch(() => {});
+        await wooviFetch(`/api/v1/charge/${encodeURIComponent(cobCorrelationId)}`, { method: "DELETE" }).catch(() => {});
+        await supabase.from("woovi_subscriptions").update({
+          creation_status: "compensated", status: "FALHA_VALIDACAO",
+          last_error: `mandato retornou valor inesperado: ${Number.isFinite(returnedValue) ? returnedValue : "ausente"}`,
+          raw_payload: created.data,
+        }).eq("id", attemptId);
+        throw new Error("A Woovi não confirmou o valor fixo da recorrência. Nenhuma cobrança foi mantida.");
+      }
       const recEmv = pixRec?.emv as string | undefined;
       if (!recEmv) {
         await wooviFetch(`/api/v1/charge/${encodeURIComponent(cobCorrelationId)}`, { method: "DELETE" }).catch(() => {});
@@ -441,7 +444,6 @@ Deno.serve(async (req) => {
             journey: "PAYMENT_ON_APPROVAL",
             // 3 retentativas em até 7 dias: paridade com Asaas/Inter antes do dunning.
             retryPolicy: "THREE_RETRIES_7_DAYS",
-            minimumValue: Math.min(entryCents, amountCents),
           },
           customer,
         },
