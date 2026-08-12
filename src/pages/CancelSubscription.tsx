@@ -228,6 +228,12 @@ const CancelSubscription = () => {
       }
 
       if (data.success) {
+        // PIX Automático: a oferta aceita vira um QR novo (mandato no valor da
+        // oferta), então mandamos o cliente direto pra tela de pagamento.
+        if (data.redirect_url) {
+          window.location.href = data.redirect_url as string;
+          return;
+        }
         setStatus("success");
         setMessage(data.message);
         if (data.subscription) setSubscription(data.subscription);
