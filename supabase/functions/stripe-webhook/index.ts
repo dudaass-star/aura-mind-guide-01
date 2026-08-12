@@ -191,6 +191,103 @@ async function resolveProfileFromCustomer(
   };
 }
 
+/**
+ * Extrai o subscription id de uma invoice em qualquer formato de API.
+ * A API nova não manda mais `invoice.subscription`: ele vive em
+ * `invoice.parent.subscription_details.subscription`.
+ */
+function extractSubscriptionId(invoice: any): string | null {
+  let raw =
+    (invoice?.subscription as string | null) ??
+    (invoice?.parent?.subscription_details?.subscription as string | null) ??
+    (invoice?.subscription_details?.subscription as string | null) ??
+    null;
+  if (raw && typeof raw === 'object') raw = (raw as any).id ?? null;
+  return (raw as string | null) ?? null;
+}
+
+/**
+ * Cobrança imediata quando o cliente troca o método de pagamento.
+ *
+ * Sem isso, o Stripe só tenta de novo na próxima tentativa agendada da régua
+ * (podendo levar dias): o cliente cadastra o cartão novo e continua past_due,
+ * achando que já resolveu. Aqui a gente define o método novo como padrão do
+ * cliente e da assinatura e quita na hora as faturas abertas.
+ */
+async function chargeOpenInvoicesNow(
+  stripe: Stripe,
+  customerId: string,
+  paymentMethodId: string,
+): Promise<{ attempted: number; paid: number }> {
+  const result = { attempted: 0, paid: 0 };
+
+  // 1) Método novo como padrão do cliente (invoice_settings) — pega os retries futuros.
+  try {
+    await stripe.customers.update(customerId, {
+      invoice_settings: { default_payment_method: paymentMethodId },
+    });
+  } catch (err) {
+    console.warn('⚠️ [PM-UPDATE] Falha setando default_payment_method no cliente:', (err as Error).message);
+  }
+
+  // 2) Método novo como padrão das assinaturas vivas.
+  let liveSubs: Stripe.Subscription[] = [];
+  try {
+    for (const status of ['past_due', 'active', 'unpaid', 'trialing'] as const) {
+      const { data } = await stripe.subscriptions.list({ customer: customerId, status, limit: 10 });
+      liveSubs = liveSubs.concat(data || []);
+    }
+    for (const sub of liveSubs) {
+      if (sub.default_payment_method === paymentMethodId) continue;
+      try {
+        await stripe.subscriptions.update(sub.id, { default_payment_method: paymentMethodId });
+      } catch (err) {
+        console.warn(`⚠️ [PM-UPDATE] Falha setando PM na sub ${sub.id}:`, (err as Error).message);
+      }
+    }
+  } catch (err) {
+    console.warn('⚠️ [PM-UPDATE] Falha listando assinaturas:', (err as Error).message);
+  }
+
+  // 3) Nunca forçar cobrança de assinatura já cancelada.
+  if (liveSubs.length === 0) {
+    console.log('ℹ️ [PM-UPDATE] Nenhuma assinatura viva — não force nada.');
+    return result;
+  }
+  const liveSubIds = new Set(liveSubs.map((s) => s.id));
+
+  // 4) Quitar faturas abertas agora.
+  let openInvoices: Stripe.Invoice[] = [];
+  try {
+    const { data } = await stripe.invoices.list({ customer: customerId, status: 'open', limit: 10 });
+    openInvoices = data || [];
+  } catch (err) {
+    console.warn('⚠️ [PM-UPDATE] Falha listando faturas abertas:', (err as Error).message);
+    return result;
+  }
+
+  for (const invoice of openInvoices) {
+    if (invoice.collection_method !== 'charge_automatically') continue;
+    const subId = extractSubscriptionId(invoice);
+    if (!subId || !liveSubIds.has(subId)) continue;
+    result.attempted++;
+    try {
+      const paid = await stripe.invoices.pay(invoice.id, { payment_method: paymentMethodId });
+      if (paid.status === 'paid') {
+        result.paid++;
+        console.log(`✅ [PM-UPDATE] Fatura ${invoice.id} quitada na hora (${paid.amount_paid})`);
+      } else {
+        console.log(`ℹ️ [PM-UPDATE] Fatura ${invoice.id} não quitou (status ${paid.status})`);
+      }
+    } catch (err) {
+      // Recusa aqui é silenciosa de propósito: a régua de dunning segue como está.
+      console.warn(`⚠️ [PM-UPDATE] Cobrança imediata recusada em ${invoice.id}:`, (err as Error).message);
+    }
+  }
+
+  return result;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
