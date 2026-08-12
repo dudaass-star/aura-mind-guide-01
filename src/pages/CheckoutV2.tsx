@@ -1129,6 +1129,8 @@ const CheckoutV2 = () => {
       pixOpen && pixStage === "qr" && authState === "pending" ? pixData?.authorizationId : null;
     const authId = liveAuthId || resumedAuthId;
     if (!authId) return;
+    // O status por polling é específico do Asaas; Inter/Woovi confirmam por webhook.
+    if (pixGateway !== "asaas") return;
 
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
@@ -1173,7 +1175,7 @@ const CheckoutV2 = () => {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [pixOpen, pixStage, pixData?.authorizationId, authState, resumedAuthId]);
+  }, [pixOpen, pixStage, pixData?.authorizationId, authState, resumedAuthId, pixGateway]);
 
   const inputCls =
     "ck-field mt-1.5 h-12 text-base sm:text-sm sm:h-11 focus-visible:ring-0 focus-visible:ring-offset-0";
