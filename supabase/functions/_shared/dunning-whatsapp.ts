@@ -357,6 +357,7 @@ export async function sendDunningWhatsApp(
           customer_id: customerId,
           attempt_number: attemptNumber,
           payment_method: paymentMethod,
+          notice_steps: noticeSteps,
         },
       });
     } catch (err) {
