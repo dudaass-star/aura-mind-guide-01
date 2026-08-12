@@ -431,7 +431,7 @@ export interface DegradedDunningParams {
   /** Link de retomada de pagamento já pronto (portal/fatura), de preferência curto. */
   link: string;
   eventId: string;
-  provider: "stripe" | "asaas";
+  provider: "stripe" | "asaas" | "woovi" | "inter";
   invoiceId?: string | null;
   subscriptionId?: string | null;
   paymentId?: string | null;
