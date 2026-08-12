@@ -21,6 +21,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import QRCode from "https://esm.sh/qrcode@1.5.4";
 import { wooviFetch, brtDate, WOOVI_FREQUENCY } from "../_shared/woovi.ts";
+import { composeQr, extractWooviUrl } from "../_shared/pix-emv.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -274,8 +275,11 @@ Deno.serve(async (req) => {
     }
 
     const now = new Date();
-    // Jornada 3 exige `dayGenerateCharge` = HOJE (a 1ª parcela é paga na aprovação).
-    const dayGenerateCharge = now.toISOString();
+    // Composto (trial): a 1ª parcela do mandato só dispara em D+30 — a entrada é a
+    // cobrança avulsa, não uma parcela do mandato. Nativo (sem trial): Jornada 3,
+    // primeira parcela cobrada na própria aprovação (dayGenerateCharge = hoje).
+    const firstChargeDate = withTrial ? addMonths(now, CYCLE_MONTHS[billing]) : now;
+    const dayGenerateCharge = firstChargeDate.toISOString();
     const nextChargeDate = brtDate(addMonths(now, CYCLE_MONTHS[billing]));
     const correlationId = crypto.randomUUID();
     // Campo "contrato" mostrado no mandato: a Woovi limita a 30 caracteres.
