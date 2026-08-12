@@ -24,6 +24,9 @@ const plans = [{
     text: "Conversas ilimitadas 24/7",
     icon: MessageCircle
   }, {
+    text: "1 Sessão Especial/mês (45min)",
+    icon: Calendar
+  }, {
     text: "Check-in diário de humor",
     icon: Check
   }, {
@@ -35,11 +38,8 @@ const plans = [{
   }, {
     text: "Memória de longo prazo",
     icon: Check
-  }, {
-    text: "Conteúdo semanal personalizado",
-    icon: BookOpen
   }],
-  sessions: "—",
+  sessions: "1/mês",
   cta: "Começar agora",
   popular: false,
   badge: null

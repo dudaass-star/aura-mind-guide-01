@@ -71,8 +71,8 @@ const plans: Record<PlanId, PlanConfig> = {
     semestralMonthlyEquivalent: "14,90",
     semestralDiscount: 50,
     trialPrice: "6,90",
-    sessions: 0,
-    highlights: ["Conversas ilimitadas 24/7", "Check-in diário", "Review semanal"],
+    sessions: 1,
+    highlights: ["Conversas ilimitadas 24/7", "1 Sessão Especial/mês", "Check-in diário"],
   },
   direcao: {
     name: "Direção",
@@ -196,15 +196,14 @@ const CheckoutV2 = () => {
   const planFromState = location.state?.plan as PlanId | undefined;
   const billingFromState = location.state?.billing as BillingPeriod | undefined;
 
-  const initialPlan = planFromUrl || planFromState || "direcao";
+  const initialPlan = planFromUrl || planFromState || "essencial";
   const initialBilling = billingFromUrl || billingFromState || "monthly";
 
   const [selectedPlan, setSelectedPlan] = useState<PlanId>(initialPlan);
   const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>(initialBilling);
   // Meio de pagamento escolhido explicitamente (um CTA só, sem preços concorrentes).
-  const [payMethod, setPayMethod] = useState<PayMethod>(
-    isPixPeriod(initialBilling) ? "pix" : "card",
-  );
+  // PIX é o hábito dominante no Brasil: entra pré-selecionado em todos os ciclos.
+  const [payMethod, setPayMethod] = useState<PayMethod>("pix");
   const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -375,10 +374,10 @@ const CheckoutV2 = () => {
   const currentMonthlyEquivalent = getPeriodMonthlyEquivalent(currentPlan, billingPeriod);
   const pixEnabled = isPixPeriod(billingPeriod);
 
-  // Ciclos longos não têm trial no cartão: o padrão passa a ser PIX à vista —
-  // desde que exista trilho de PIX no ar. Sem trilho, cartão é o único caminho.
+  // PIX é o padrão em qualquer ciclo (à vista nos longos, PIX Automático no
+  // mensal) — desde que exista trilho de PIX no ar. Sem trilho, só cartão.
   useEffect(() => {
-    setPayMethod(isPixPeriod(billingPeriod) && pixRailUp ? "pix" : "card");
+    setPayMethod(pixRailUp ? "pix" : "card");
   }, [billingPeriod, pixRailUp]);
 
   // Registra uma vez, por sessão de checkout, que o PIX foi escondido. É esse
@@ -1471,7 +1470,7 @@ const CheckoutV2 = () => {
                     getPeriodMonthlyEquivalent(plan, billingPeriod) || plan.monthlyPrice,
                   );
                   const perSession =
-                    plan.sessions > 0
+                    plan.sessions >= 4
                       ? (monthlyForSession / plan.sessions).toLocaleString("pt-BR", {
                           minimumFractionDigits: 2,
                           maximumFractionDigits: 2,
@@ -1493,7 +1492,7 @@ const CheckoutV2 = () => {
                     >
                       {isPopular && (
                         <div className="absolute -top-2 left-4 px-2 py-0.5 bg-[hsl(140_22%_45%)] text-white text-[10px] font-semibold rounded uppercase tracking-wide">
-                          Mais popular
+                          Recomendado
                         </div>
                       )}
                       <div className="flex items-center gap-3 min-w-0">
@@ -1506,7 +1505,7 @@ const CheckoutV2 = () => {
                           <p className="font-medium text-white">{plan.name}</p>
                           <p className="text-xs text-white/65 truncate">
                             {plan.sessions > 0
-                              ? `${plan.sessions} sessões/mês + chat ilimitado`
+                              ? `${plan.sessions} ${plan.sessions === 1 ? "sessão" : "sessões"}/mês + chat ilimitado`
                               : "Chat ilimitado 24/7"}
                           </p>
                           {perSession && (

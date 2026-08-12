@@ -35,8 +35,8 @@ const plans: {
   features: string[];
   popular: boolean;
 }[] = [
-  { id: "essencial", name: "Essencial", tag: "Pra começar", features: ["Conversas ilimitadas 24/7", "Check-in diário", "Memória de longo prazo"], popular: false },
-  { id: "direcao", name: "Direção", tag: "Mais escolhido", features: ["Tudo do Essencial", "4 sessões guiadas/mês (45min)", "Resumo escrito após cada sessão"], popular: true },
+  { id: "essencial", name: "Essencial", tag: "Pra começar", features: ["Conversas ilimitadas 24/7", "1 sessão guiada/mês (45min)", "Memória de longo prazo"], popular: false },
+  { id: "direcao", name: "Direção", tag: "Recomendado", features: ["Tudo do Essencial", "4 sessões guiadas/mês (45min)", "Resumo escrito após cada sessão"], popular: true },
   { id: "transformacao", name: "Transformação", tag: "Pra momentos de virada", features: ["Tudo do Direção", "8 sessões guiadas/mês", "Prioridade em crise"], popular: false },
 ];
 
