@@ -3696,11 +3696,13 @@ export type Database = {
           billing_period: string
           correlation_id: string | null
           created_at: string
+          creation_mode: string
           creation_status: string
           customer_cpf: string | null
           customer_email: string | null
           customer_name: string | null
           customer_phone: string | null
+          entry_charge_correlation_id: string | null
           fbc: string | null
           fbp: string | null
           frequency: string
@@ -3733,11 +3735,13 @@ export type Database = {
           billing_period: string
           correlation_id?: string | null
           created_at?: string
+          creation_mode?: string
           creation_status?: string
           customer_cpf?: string | null
           customer_email?: string | null
           customer_name?: string | null
           customer_phone?: string | null
+          entry_charge_correlation_id?: string | null
           fbc?: string | null
           fbp?: string | null
           frequency: string
@@ -3770,11 +3774,13 @@ export type Database = {
           billing_period?: string
           correlation_id?: string | null
           created_at?: string
+          creation_mode?: string
           creation_status?: string
           customer_cpf?: string | null
           customer_email?: string | null
           customer_name?: string | null
           customer_phone?: string | null
+          entry_charge_correlation_id?: string | null
           fbc?: string | null
           fbp?: string | null
           frequency?: string
