@@ -492,7 +492,11 @@ Deno.serve(async (req) => {
       qr_encoded_image: qrImage,
       qr_expires_at: qrExpiresAt,
       authorization_url: sub?.paymentLinkUrl || null,
-      raw_payload: created.data,
+      raw_payload: rawPayload,
+      // Composto: liga a cobrança de entrada ao mandato e marca o modo de criação
+      // para o webhook saber pular o bump de valor (mandato já é valor cheio).
+      entry_charge_correlation_id: cobCorrelationId,
+      creation_mode: withTrial ? "composed" : "native",
       creation_status: "completed",
       last_error: null,
     }).eq("id", attemptId);
