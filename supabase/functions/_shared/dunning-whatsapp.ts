@@ -162,6 +162,58 @@ export interface DunningWhatsAppResult {
   deferredTo?: string;
 }
 
+/**
+ * Descobre qual degrau da régua ainda não foi ENTREGUE no ciclo.
+ * Retorna o `attemptNumber` do próximo degrau, ou `null` se a escada terminou.
+ *
+ * Avisos genéricos contam por quantidade (`offer_tier = 'generic'`); degraus de
+ * oferta contam por tier — cada tier sai no máximo uma vez por ciclo.
+ */
+export async function resolveNextDunningStep(args: {
+  supabase: any;
+  profileUserId: string;
+  scopeColumn: string;
+  scopeValue: string;
+  noticeSteps: number;
+  ladder: OfferTemplate[];
+}): Promise<number | null> {
+  const { supabase, profileUserId, scopeColumn, scopeValue, noticeSteps, ladder } = args;
+
+  const { data } = await supabase
+    .from("dunning_attempts")
+    .select("offer_tier")
+    .eq("channel", "whatsapp")
+    .eq("profile_user_id", profileUserId)
+    .eq(scopeColumn, scopeValue)
+    .not("message_sid", "is", null)
+    // Degrau que a Twilio marcou como failed/undelivered (ex.: template ainda
+    // pendente de aprovação no Meta) não conta como entregue — pode ser refeito.
+    .eq("whatsapp_sent", true);
+
+  const rows: Array<{ offer_tier?: string | null }> = data || [];
+  const noticesDelivered = rows.filter((r) => !r.offer_tier || r.offer_tier === "generic").length;
+  const deliveredTiers = new Set(
+    rows.map((r) => r.offer_tier).filter((t): t is string => !!t && t !== "generic"),
+  );
+
+  if (noticesDelivered < noticeSteps) return noticesDelivered + 1;
+
+  const pendingIndex = ladder.findIndex((entry) => !deliveredTiers.has(entry.tier));
+  if (pendingIndex === -1) return null;
+  return noticeSteps + pendingIndex + 1;
+}
+
+interface _UnusedDunningWhatsAppResult {
+  sent: boolean;
+  skipped?: string;
+  attemptNumber?: number;
+  messageSid?: string;
+  error?: string;
+  link?: string;
+  tier?: DunningOfferTier | "generic";
+  deferredTo?: string;
+}
+
 function firstName(name?: string | null): string {
   if (!name) return "tudo bem";
   const first = name.trim().split(/\s+/)[0];
