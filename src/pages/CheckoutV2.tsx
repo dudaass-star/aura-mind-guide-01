@@ -1066,6 +1066,9 @@ const CheckoutV2 = () => {
   useEffect(() => {
     const authId = pixData?.authorizationId;
     if (!authId) return;
+    // A retomada só existe no trilho Asaas: o id salvo é consultado em
+    // `asaas-pix-auto-status`. Guardar id de outro gateway gera 400 na volta.
+    if (pixGateway !== "asaas") return;
     try {
       localStorage.setItem(
         PIX_AUTH_LS_KEY,
@@ -1074,7 +1077,7 @@ const CheckoutV2 = () => {
     } catch {
       // navegador sem storage: retomada simplesmente não acontece
     }
-  }, [pixData?.authorizationId, selectedPlan]);
+  }, [pixData?.authorizationId, selectedPlan, pixGateway]);
 
   // Na montagem: se houver autorização recente, consulta o estado uma vez.
   useEffect(() => {
@@ -1093,9 +1096,14 @@ const CheckoutV2 = () => {
         return;
       }
       try {
-        const { data } = await supabase.functions.invoke("asaas-pix-auto-status", {
+        const { data, error } = await supabase.functions.invoke("asaas-pix-auto-status", {
           body: { authorizationId: saved.id },
         });
+        if (error) {
+          // id inválido/expirado (ex.: salvo por outro gateway): descarta.
+          try { localStorage.removeItem(PIX_AUTH_LS_KEY); } catch { /* noop */ }
+          return;
+        }
         if (cancelled || !data?.state) return;
         setResumedPlan(data.plan || saved.plan || null);
         setResumedState(data.state);
@@ -1121,6 +1129,8 @@ const CheckoutV2 = () => {
       pixOpen && pixStage === "qr" && authState === "pending" ? pixData?.authorizationId : null;
     const authId = liveAuthId || resumedAuthId;
     if (!authId) return;
+    // O status por polling é específico do Asaas; Inter/Woovi confirmam por webhook.
+    if (pixGateway !== "asaas") return;
 
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
@@ -1165,7 +1175,7 @@ const CheckoutV2 = () => {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [pixOpen, pixStage, pixData?.authorizationId, authState, resumedAuthId]);
+  }, [pixOpen, pixStage, pixData?.authorizationId, authState, resumedAuthId, pixGateway]);
 
   const inputCls =
     "ck-field mt-1.5 h-12 text-base sm:text-sm sm:h-11 focus-visible:ring-0 focus-visible:ring-offset-0";
@@ -1810,7 +1820,21 @@ const CheckoutV2 = () => {
                   </DialogTitle>
                   <DialogDescription className="text-white/65">
                     Plano <span className="text-white font-medium">{currentPlan.name}</span> · {periodShortMap[billingPeriod]} —{" "}
-                    <span className="text-[hsl(140_30%_72%)] font-semibold">R$ {currentPrice}</span> à vista
+                    {pixMode === "subscription" && billingPeriod === "monthly" ? (
+                      <>
+                        <span className="text-[hsl(140_30%_72%)] font-semibold">
+                          1ª semana R$ {currentPlan.trialPrice}
+                        </span>{" "}
+                        <span className="block text-xs mt-1 text-white/60">
+                          Depois R$ {currentPrice}/mês, com autorização única no app do banco.
+                          Cancele quando quiser.
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-[hsl(140_30%_72%)] font-semibold">R$ {currentPrice}</span> à vista
+                      </>
+                    )}
                   </DialogDescription>
                 </DialogHeader>
 
@@ -1826,7 +1850,9 @@ const CheckoutV2 = () => {
                         if (cpfError) setCpfError(undefined);
                       }}
                       placeholder="000.000.000-00"
-                      className={`${inputCls} ${cpfError ? "border-red-400/70 focus-visible:ring-red-400/60" : ""}`}
+                      className={`mt-1.5 h-12 text-base sm:text-sm sm:h-11 bg-white/5 text-white placeholder:text-white/40 border-white/15 focus-visible:ring-0 focus-visible:ring-offset-0 ${
+                        cpfError ? "border-red-400/70 focus-visible:ring-red-400/60" : ""
+                      }`}
                       inputMode="numeric"
                       autoComplete="off"
                       maxLength={14}
@@ -1847,7 +1873,11 @@ const CheckoutV2 = () => {
                     onClick={handleGeneratePix}
                     disabled={pixLoading}
                   >
-                    {pixLoading ? "Gerando PIX..." : `Gerar PIX — R$ ${currentPrice}`}
+                    {pixLoading
+                      ? "Gerando PIX..."
+                      : pixMode === "subscription" && billingPeriod === "monthly"
+                        ? `Gerar PIX — R$ ${currentPlan.trialPrice}`
+                        : `Gerar PIX — R$ ${currentPrice}`}
                   </Button>
 
                   <p className="text-[11px] text-white/55 text-center">
