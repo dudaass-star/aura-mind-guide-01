@@ -383,6 +383,64 @@ export default function AdminSettings() {
               </div>
             </CardContent>
           </Card>
+
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <QrCode className="h-5 w-5 text-primary" />
+                <CardTitle>Trilho de PIX Automático</CardTitle>
+              </div>
+              <CardDescription>
+                Define qual provedor gera os mandatos de débito automático no /v2. O PIX só aparece no checkout se o trilho estiver saudável — teste antes de salvar.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Select value={selectedPixRail} onValueChange={setSelectedPixRail}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione um trilho" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PIX_RAILS.map(rail => (
+                    <SelectItem key={rail.value} value={rail.value}>
+                      <div className="flex flex-col">
+                        <span className="font-medium">{rail.label}</span>
+                        <span className="text-xs text-muted-foreground">{rail.description}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {pixRailStatus && (
+                <p className="text-xs text-muted-foreground">
+                  Saúde atual: <span className="font-medium text-foreground">{pixRailStatus.gateway}</span>{' '}
+                  {pixRailStatus.healthy ? 'operacional' : `indisponível — ${pixRailStatus.detail}`}
+                </p>
+              )}
+
+              {probeResult && (
+                <p className="text-xs text-muted-foreground">
+                  Sonda de {probeResult.gateway}: {probeResult.healthy ? 'passou' : `falhou — ${probeResult.detail}`}
+                </p>
+              )}
+
+              <div className="flex items-center justify-between pt-2 gap-3">
+                <p className="text-sm text-muted-foreground">
+                  Trilho ativo: <span className="font-medium text-foreground">{PIX_RAILS.find(r => r.value === currentPixRail)?.label || currentPixRail}</span>
+                </p>
+                <div className="flex gap-2">
+                  <Button onClick={handleProbePixRail} disabled={probing} variant="outline">
+                    <Activity className="h-4 w-4 mr-2" />
+                    {probing ? 'Testando...' : 'Testar trilho'}
+                  </Button>
+                  <Button onClick={handleSavePixRail} disabled={savingPixRail || !hasPixRailChanges} variant="sage">
+                    <Save className="h-4 w-4 mr-2" />
+                    {savingPixRail ? 'Salvando...' : 'Salvar'}
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>
