@@ -303,17 +303,22 @@ const CheckoutV2 = () => {
         if (v === "asaas" || v === "stripe") setCardGateway(v);
       }
 
-      const health = rows?.find((r) => r.key === "pix_rail_status");
-      const parsedHealth = health ? (parse(health.value) as { healthy?: boolean } | null) : null;
-      setPixRailUp(parsedHealth?.healthy === true);
-
-      // Qual banco atende o PIX Automático hoje. Asaas segue como padrão até o
-      // trilho do Inter ser promovido em system_config.
+      // Qual banco atende o PIX Automático hoje (system_config.pix_gateway).
       const rail = rows?.find((r) => r.key === "pix_gateway");
       const parsedRail = rail ? parse(rail.value) : null;
-      if (parsedRail === "inter" || parsedRail === "asaas" || parsedRail === "woovi") {
-        setPixGateway(parsedRail);
-      }
+      const activeRail =
+        parsedRail === "inter" || parsedRail === "asaas" || parsedRail === "woovi" ? parsedRail : null;
+      if (activeRail) setPixGateway(activeRail);
+
+      // Saúde só vale se for do trilho que está em uso. Um status antigo de
+      // outro gateway (ex.: Asaas com 401) não pode derrubar o trilho atual.
+      const health = rows?.find((r) => r.key === "pix_rail_status");
+      const parsedHealth = health
+        ? (parse(health.value) as { healthy?: boolean; gateway?: string } | null)
+        : null;
+      const healthMatchesRail =
+        !parsedHealth?.gateway || !activeRail || parsedHealth.gateway === activeRail;
+      setPixRailUp(parsedHealth?.healthy === true && healthMatchesRail);
     })();
   }, []);
 
