@@ -5,7 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, Save, Brain, Mic, Mail, Eye, CreditCard } from 'lucide-react';
+import { ArrowLeft, Save, Brain, Mic, Mail, Eye, CreditCard, QrCode, Activity } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const AI_MODELS = [
@@ -30,6 +30,15 @@ const CARD_GATEWAYS = [
   { value: 'asaas', label: 'Asaas', description: 'Formulário nativo no /v2. PCI SAQ A-EP. Suporta parcelado.' },
 ];
 
+// Trilho de PIX Automático (Bacen). O checkout só mostra PIX quando o trilho
+// escolhido passa na sonda de saúde — por isso o botão "Testar trilho" antes de salvar.
+const PIX_RAILS = [
+  { value: 'woovi', label: 'Woovi', description: 'QR composto: entrada promocional + mandato fixo em 1 scan.' },
+  { value: 'inter', label: 'Banco Inter', description: 'Jornada 2 (aprovação separada). Trial de 7 dias grátis.' },
+  { value: 'asaas', label: 'Asaas', description: 'Jornada 1 nativa. Conta restrita hoje (401).' },
+  { value: 'off', label: 'Desligado', description: 'Esconde o PIX no checkout. Só cartão.' },
+];
+
 export default function AdminSettings() {
   const { isLoading, isAdmin, redirectIfNotAdmin } = useAdminAuth();
   const [selectedModel, setSelectedModel] = useState('google/gemini-2.5-pro');
@@ -38,6 +47,12 @@ export default function AdminSettings() {
   const [currentTTSModel, setCurrentTTSModel] = useState('google/erinome');
   const [selectedCardGateway, setSelectedCardGateway] = useState('stripe');
   const [currentCardGateway, setCurrentCardGateway] = useState('stripe');
+  const [selectedPixRail, setSelectedPixRail] = useState('woovi');
+  const [currentPixRail, setCurrentPixRail] = useState('woovi');
+  const [pixRailStatus, setPixRailStatus] = useState<any>(null);
+  const [probing, setProbing] = useState(false);
+  const [probeResult, setProbeResult] = useState<any>(null);
+  const [savingPixRail, setSavingPixRail] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savingTTS, setSavingTTS] = useState(false);
   const [savingCardGateway, setSavingCardGateway] = useState(false);
@@ -59,7 +74,7 @@ export default function AdminSettings() {
       const { data, error } = await supabase
         .from('system_config')
         .select('key, value')
-        .in('key', ['ai_model', 'tts_model', 'card_gateway']);
+        .in('key', ['ai_model', 'tts_model', 'card_gateway', 'pix_gateway', 'pix_rail_status']);
 
       if (error) throw error;
 
@@ -79,6 +94,15 @@ export default function AdminSettings() {
         } else if (row.key === 'card_gateway') {
           setSelectedCardGateway(val);
           setCurrentCardGateway(val);
+        } else if (row.key === 'pix_gateway') {
+          setSelectedPixRail(val);
+          setCurrentPixRail(val);
+        } else if (row.key === 'pix_rail_status') {
+          try {
+            setPixRailStatus(typeof val === 'string' ? JSON.parse(val) : val);
+          } catch {
+            setPixRailStatus(null);
+          }
         }
       }
     } catch (e) {
