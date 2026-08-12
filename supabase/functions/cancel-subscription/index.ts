@@ -330,7 +330,9 @@ serve(async (req) => {
           try {
             const resp = await fetch(
               `https://api.woovi.com/api/v1/subscriptions/${encodeURIComponent(wooviSub.subscription_id)}/cancel`,
-              { method: "POST", headers: { Authorization: wooviAppId, "Content-Type": "application/json" } },
+              // A Woovi só aceita PUT nessa rota: POST devolve 405 e o cliente
+              // nunca conseguia cancelar sozinho.
+              { method: "PUT", headers: { Authorization: wooviAppId, "Content-Type": "application/json" } },
             );
             canceledOk = resp.ok;
             if (!resp.ok) {
