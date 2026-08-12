@@ -1091,6 +1091,29 @@ export default function AdminEngagement() {
                   </Card>
 
                   {/* 🧭 Fechamento de sessão — dialogada vs unilateral vs no-show */}
+                  {/* 📡 Qualidade do sinal no Meta — cobertura de fbc/fbp no Purchase */}
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between p-3 pb-1">
+                      <CardTitle className="text-xs font-medium text-muted-foreground">📡 Match Meta (Purchase)</CardTitle>
+                      <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent className="p-3 pt-0">
+                      {(() => {
+                        const total = capiCoverage?.total ?? 0;
+                        const pctFbc = total ? (capiCoverage!.fbc / total) * 100 : 0;
+                        const pctFbp = total ? (capiCoverage!.fbp / total) * 100 : 0;
+                        const color = pctFbc >= 80 ? 'text-green-600' : pctFbc >= 50 ? 'text-yellow-600' : 'text-destructive';
+                        return (
+                          <>
+                            <div className={`text-xl font-bold ${color}`}>{pctFbc.toFixed(0)}%</div>
+                            <p className="text-[11px] text-muted-foreground">fbc em {capiCoverage?.fbc ?? 0}/{total} compras (30d)</p>
+                            <p className="text-[10px] text-muted-foreground">fbp: {pctFbp.toFixed(0)}%</p>
+                          </>
+                        );
+                      })()}
+                    </CardContent>
+                  </Card>
+
                   <Card>
                     <CardHeader className="flex flex-row items-center justify-between p-3 pb-1">
                       <CardTitle className="text-xs font-medium text-muted-foreground">🧭 Fechamento sessões</CardTitle>
