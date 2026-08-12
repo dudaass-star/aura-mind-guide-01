@@ -69,6 +69,10 @@ project_id = "uhyogifgmutfmbyhzzyo"
     verify_jwt = false
   [functions.criar-pix-recorrente-asaas]
     verify_jwt = false
+  [functions.criar-pix-recorrente-woovi]
+    verify_jwt = false
+  [functions.webhook-woovi]
+    verify_jwt = false
   [functions.deliver-time-capsule]
     verify_jwt = false
   [functions.execute-scheduled-tasks]

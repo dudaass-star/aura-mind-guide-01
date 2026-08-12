@@ -3630,6 +3630,229 @@ export type Database = {
         }
         Relationships: []
       }
+      woovi_charges: {
+        Row: {
+          access_activated_at: string | null
+          cobr_id: string | null
+          created_at: string
+          cycle_index: number
+          due_date: string | null
+          id: string
+          installment_id: string | null
+          paid_at: string | null
+          raw_payload: Json | null
+          status: string | null
+          subscription_id: string
+          updated_at: string
+          user_id: string | null
+          value_cents: number
+        }
+        Insert: {
+          access_activated_at?: string | null
+          cobr_id?: string | null
+          created_at?: string
+          cycle_index?: number
+          due_date?: string | null
+          id?: string
+          installment_id?: string | null
+          paid_at?: string | null
+          raw_payload?: Json | null
+          status?: string | null
+          subscription_id: string
+          updated_at?: string
+          user_id?: string | null
+          value_cents: number
+        }
+        Update: {
+          access_activated_at?: string | null
+          cobr_id?: string | null
+          created_at?: string
+          cycle_index?: number
+          due_date?: string | null
+          id?: string
+          installment_id?: string | null
+          paid_at?: string | null
+          raw_payload?: Json | null
+          status?: string | null
+          subscription_id?: string
+          updated_at?: string
+          user_id?: string | null
+          value_cents?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "woovi_charges_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      woovi_subscriptions: {
+        Row: {
+          access_granted_at: string | null
+          authorization_url: string | null
+          billing_period: string
+          correlation_id: string | null
+          created_at: string
+          creation_status: string
+          customer_cpf: string | null
+          customer_email: string | null
+          customer_name: string | null
+          customer_phone: string | null
+          fbc: string | null
+          fbp: string | null
+          frequency: string
+          ga_client_id: string | null
+          global_id: string | null
+          id: string
+          is_trial: boolean
+          last_error: string | null
+          next_charge_date: string | null
+          pix_status: string | null
+          plan: string
+          qr_encoded_image: string | null
+          qr_expires_at: string | null
+          qr_payload: string | null
+          raw_payload: Json | null
+          recurrency_id: string | null
+          replaced_by_subscription_id: string | null
+          request_key: string | null
+          start_date: string | null
+          status: string
+          subscription_id: string | null
+          trial_value_cents: number | null
+          updated_at: string
+          user_id: string | null
+          value_cents: number
+        }
+        Insert: {
+          access_granted_at?: string | null
+          authorization_url?: string | null
+          billing_period: string
+          correlation_id?: string | null
+          created_at?: string
+          creation_status?: string
+          customer_cpf?: string | null
+          customer_email?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          fbc?: string | null
+          fbp?: string | null
+          frequency: string
+          ga_client_id?: string | null
+          global_id?: string | null
+          id?: string
+          is_trial?: boolean
+          last_error?: string | null
+          next_charge_date?: string | null
+          pix_status?: string | null
+          plan: string
+          qr_encoded_image?: string | null
+          qr_expires_at?: string | null
+          qr_payload?: string | null
+          raw_payload?: Json | null
+          recurrency_id?: string | null
+          replaced_by_subscription_id?: string | null
+          request_key?: string | null
+          start_date?: string | null
+          status?: string
+          subscription_id?: string | null
+          trial_value_cents?: number | null
+          updated_at?: string
+          user_id?: string | null
+          value_cents: number
+        }
+        Update: {
+          access_granted_at?: string | null
+          authorization_url?: string | null
+          billing_period?: string
+          correlation_id?: string | null
+          created_at?: string
+          creation_status?: string
+          customer_cpf?: string | null
+          customer_email?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          fbc?: string | null
+          fbp?: string | null
+          frequency?: string
+          ga_client_id?: string | null
+          global_id?: string | null
+          id?: string
+          is_trial?: boolean
+          last_error?: string | null
+          next_charge_date?: string | null
+          pix_status?: string | null
+          plan?: string
+          qr_encoded_image?: string | null
+          qr_expires_at?: string | null
+          qr_payload?: string | null
+          raw_payload?: Json | null
+          recurrency_id?: string | null
+          replaced_by_subscription_id?: string | null
+          request_key?: string | null
+          start_date?: string | null
+          status?: string
+          subscription_id?: string | null
+          trial_value_cents?: number | null
+          updated_at?: string
+          user_id?: string | null
+          value_cents?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "woovi_subscriptions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      woovi_webhook_events: {
+        Row: {
+          attempts: number
+          created_at: string
+          event_key: string
+          id: string
+          kind: string | null
+          last_error: string | null
+          payload: Json | null
+          processed_at: string | null
+          processing_started_at: string | null
+          processing_status: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          event_key: string
+          id?: string
+          kind?: string | null
+          last_error?: string | null
+          payload?: Json | null
+          processed_at?: string | null
+          processing_started_at?: string | null
+          processing_status?: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          event_key?: string
+          id?: string
+          kind?: string | null
+          last_error?: string | null
+          payload?: Json | null
+          processed_at?: string | null
+          processing_started_at?: string | null
+          processing_status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       zapi_message_dedup: {
         Row: {
           created_at: string
