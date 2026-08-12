@@ -54,7 +54,7 @@ async function notify(sub: Record<string, any>, text: string): Promise<boolean> 
   const phone = normalizeBrazilianPhone(raw);
   if (!phone) return false;
   try {
-    const res = await sendProactive(phone, text, "pix_pendencia", sub.user_id || undefined);
+    const res = await sendProactive(phone, text, "reconnect", sub.user_id || undefined);
     return !!res?.success;
   } catch (e) {
     console.warn("[woovi-pix-audit] follow-up falhou:", (e as Error).message);
