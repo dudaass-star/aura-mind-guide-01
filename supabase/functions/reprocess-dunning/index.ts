@@ -43,11 +43,12 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        const profile = await resolveProfile(supabase, {
-          userId: sub.user_id || undefined,
-          email: sub.customer_email || undefined,
-          phone: sub.customer_phone || undefined,
-        });
+        const resolved = await resolveProfile(
+          supabase,
+          sub.customer_phone || null,
+          sub.customer_email || null,
+        );
+        const found = resolved?.profile || null;
 
         const { data: pending } = await supabase
           .from('woovi_charges')
@@ -58,7 +59,7 @@ Deno.serve(async (req) => {
           .limit(1)
           .maybeSingle();
 
-        if (!profile) {
+        if (!found) {
           out.status = 'skipped';
           out.reason = 'perfil não resolvido';
           wooviResults.push(out);
@@ -67,7 +68,7 @@ Deno.serve(async (req) => {
 
         const res = await sendDunningWhatsApp({
           supabase,
-          profile,
+          profile: { user_id: found.user_id, phone: found.phone, name: found.name },
           eventId: `reprocess-woovi-${subId}-${Date.now()}`,
           provider: 'woovi',
           subscriptionId: subId,
