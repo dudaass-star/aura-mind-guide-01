@@ -61,7 +61,7 @@ export const DUNNING_MAX_ATTEMPTS = 4;
 
 export type DunningOfferTier = "discount_30" | "lite" | "base";
 
-interface OfferTemplate {
+export interface OfferTemplate {
   tier: DunningOfferTier;
   /** ContentSid aprovado no Twilio; null enquanto o template não existir. */
   sid: string | null;
@@ -160,6 +160,65 @@ export interface DunningWhatsAppResult {
   link?: string;
   tier?: DunningOfferTier | "generic";
   deferredTo?: string;
+}
+
+/**
+ * Descobre qual degrau da régua ainda não foi ENTREGUE no ciclo.
+ * Retorna o `attemptNumber` do próximo degrau, ou `null` se a escada terminou.
+ *
+ * Avisos genéricos contam por quantidade (`offer_tier = 'generic'`); degraus de
+ * oferta contam por tier — cada tier sai no máximo uma vez por ciclo.
+ *
+ * `prefer: 'last'` devolve o degrau pendente MAIS AVANÇADO (usado no
+ * encerramento do ciclo, quando não há mais tentativas de cobrança pela frente
+ * e queremos garantir que a última oferta da escada seja entregue).
+ */
+export async function resolveNextDunningStep(args: {
+  supabase: any;
+  profileUserId: string;
+  scopeColumn: string;
+  scopeValue: string;
+  noticeSteps: number;
+  ladder: OfferTemplate[];
+  prefer?: "first" | "last";
+}): Promise<number | null> {
+  const { supabase, profileUserId, scopeColumn, scopeValue, noticeSteps, ladder, prefer = "first" } = args;
+
+  const { data } = await supabase
+    .from("dunning_attempts")
+    .select("offer_tier")
+    .eq("channel", "whatsapp")
+    .eq("profile_user_id", profileUserId)
+    .eq(scopeColumn, scopeValue)
+    .not("message_sid", "is", null)
+    // Degrau que a Twilio marcou como failed/undelivered (ex.: template ainda
+    // pendente de aprovação no Meta) não conta como entregue — pode ser refeito.
+    .eq("whatsapp_sent", true);
+
+  const rows: Array<{ offer_tier?: string | null }> = data || [];
+  // Teto absoluto de volume por ciclo: a folga existe para recuperar degraus
+  // perdidos, não para virar spam. Registros legados (antes de `offer_tier`)
+  // aparecem como genéricos, então esse teto também os protege.
+  const HARD_CEILING = noticeSteps + ladder.length + 2;
+  if (rows.length >= HARD_CEILING) return null;
+
+  const noticesDelivered = rows.filter((r) => !r.offer_tier || r.offer_tier === "generic").length;
+  const deliveredTiers = new Set(
+    rows.map((r) => r.offer_tier).filter((t): t is string => !!t && t !== "generic"),
+  );
+
+  const pendingIndexes = ladder
+    .map((entry, idx) => (deliveredTiers.has(entry.tier) ? -1 : idx))
+    .filter((idx) => idx >= 0);
+
+  if (prefer === "last") {
+    if (pendingIndexes.length === 0) return null;
+    return noticeSteps + pendingIndexes[pendingIndexes.length - 1] + 1;
+  }
+
+  if (noticesDelivered < noticeSteps) return noticesDelivered + 1;
+  if (pendingIndexes.length === 0) return null;
+  return noticeSteps + pendingIndexes[0] + 1;
 }
 
 function firstName(name?: string | null): string {
@@ -286,36 +345,37 @@ export async function sendDunningWhatsApp(
     ? { col: "subscription_id", val: subscriptionId }
     : null;
 
+  // Resolução por DEGRAU, não por contagem de mensagens: o próximo envio é o
+  // primeiro degrau da régua que ainda NÃO foi entregue neste ciclo. Assim um
+  // degrau perdido (sem telefone, token, template recusado, tarefa adiada que
+  // não rodou) não queima a vaga do próximo — a escada se auto-recupera na
+  // tentativa de cobrança seguinte e sempre chega até a última oferta.
+  // `limit_reached` só existe quando o ÚLTIMO degrau já foi entregue.
   let attemptNumber = forceAttemptNumber ?? 1;
   if (scopeFilter && forceAttemptNumber === undefined) {
     try {
-      // Conta TODOS os envios entregues do ciclo (avisos + ofertas), porque os
-      // dois primeiros degraus são justamente os avisos genéricos.
-      const { count } = await supabase
-        .from("dunning_attempts")
-        .select("id", { count: "exact", head: true })
-        .eq("channel", "whatsapp")
-        .eq("profile_user_id", profile.user_id)
-        .eq(scopeFilter.col, scopeFilter.val)
-        .not("message_sid", "is", null)
-        // Degrau que a Twilio marcou como failed/undelivered (ex.: template ainda
-        // pendente de aprovação no Meta) não queima a cota — pode ser reofertado.
-        .eq("whatsapp_sent", true);
+      const step = await resolveNextDunningStep({
+        supabase,
+        profileUserId: profile.user_id,
+        scopeColumn: scopeFilter.col,
+        scopeValue: scopeFilter.val,
+        noticeSteps,
+        ladder,
+      });
 
-      const prevCount = count || 0;
-      if (prevCount >= maxAttempts) {
+      if (step === null) {
         await supabase.from("dunning_attempts").insert({
           ...baseRecord,
           template_sid: DUNNING_CONTENT_SID,
-          attempt_number: prevCount + 1,
+          attempt_number: maxAttempts + 1,
           error_stage: "limit_reached",
-          error_message: `Já enviados ${prevCount} WhatsApps neste ciclo (limite ${maxAttempts})`,
+          error_message: `Escada completa neste ciclo (${maxAttempts} degraus entregues)`,
         });
-        return { sent: false, skipped: "limit_reached", attemptNumber: prevCount };
+        return { sent: false, skipped: "limit_reached", attemptNumber: maxAttempts };
       }
-      attemptNumber = prevCount + 1;
+      attemptNumber = step;
     } catch (err) {
-      console.warn("[dunning-whatsapp] erro contando tentativas:", err);
+      console.warn("[dunning-whatsapp] erro resolvendo degrau:", err);
     }
   }
 

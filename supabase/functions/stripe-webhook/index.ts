@@ -1411,12 +1411,18 @@ Me conta: como você está hoje?`;
         }
       }
 
-      // Audit trail record
+      // Audit trail record.
+      // Este registro é o do canal E-MAIL (o WhatsApp grava a própria linha em
+      // dunning-whatsapp.ts com channel='whatsapp'). Marcar o canal aqui é o que
+      // permite distinguir "e-mail entregue" de "WhatsApp entregue" na auditoria
+      // e mantém a contagem de degraus do WhatsApp livre de contaminação.
       const dunningRecord: Record<string, any> = {
         event_id: event.id,
         customer_id: customerId,
         invoice_id: invoice.id,
         subscription_id: subscriptionId || null,
+        channel: 'email',
+        provider: 'stripe',
       };
 
       if (!subscriptionId) {
@@ -1640,7 +1646,9 @@ Me conta: como você está hoje?`;
                   },
                 });
                 if (!emailErr) {
-                  dunningRecord.whatsapp_sent = true; // reusing field as "notification_sent"
+                  // Linha de channel='email': aqui `whatsapp_sent` significa
+                  // "notificação do canal entregue" (e-mail enfileirado).
+                  dunningRecord.whatsapp_sent = true;
                   console.log('✅ Dunning email enqueued to:', recipientEmail);
                 } else {
                   const errBody = JSON.stringify(emailErr);
@@ -1758,6 +1766,67 @@ Me conta: como você está hoje?`;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         console.error('❌ Plan/cycle sync error:', msg);
+      }
+
+      // ===== Garantia de fechamento da escada de dunning =====
+      // Quando o Stripe esgota os retries (past_due → unpaid/canceled), não há
+      // mais tentativas de cobrança pela frente. Se algum degrau de oferta ainda
+      // não foi entregue neste ciclo, disparamos o degrau pendente mais avançado
+      // agora — assim a régua que desenhamos nunca termina sem chegar à oferta.
+      if (['unpaid', 'canceled'].includes(subscription.status) && previousAttributes?.status === 'past_due') {
+        try {
+          const customerId = subscription.customer as string;
+          const latestInvoice = typeof subscription.latest_invoice === 'string'
+            ? subscription.latest_invoice
+            : subscription.latest_invoice?.id || null;
+
+          const customer = await stripe.customers.retrieve(customerId);
+          if (!customer.deleted && latestInvoice) {
+            const { profile } = await resolveProfileFromCustomer(supabase, customer as Stripe.Customer);
+            if (profile?.phone) {
+              const {
+                resolveNextDunningStep,
+                sendDunningWhatsApp,
+                DUNNING_OFFER_LADDER,
+                DUNNING_NOTICE_STEPS,
+              } = await import('../_shared/dunning-whatsapp.ts');
+
+              const pendingStep = await resolveNextDunningStep({
+                supabase,
+                profileUserId: profile.user_id,
+                scopeColumn: 'invoice_id',
+                scopeValue: latestInvoice,
+                noticeSteps: DUNNING_NOTICE_STEPS,
+                ladder: DUNNING_OFFER_LADDER,
+                prefer: 'last',
+              });
+
+              if (pendingStep === null) {
+                console.log('ℹ️ [DUNNING-CLOSE] Escada já completa neste ciclo, nada a enviar');
+              } else {
+                const waResult = await sendDunningWhatsApp({
+                  supabase,
+                  profile: {
+                    user_id: profile.user_id,
+                    phone: profile.phone,
+                    name: profile.name || (customer as Stripe.Customer).name || null,
+                  },
+                  eventId: `${event.id}-close`,
+                  provider: 'stripe',
+                  invoiceId: latestInvoice,
+                  subscriptionId: subscription.id,
+                  customerId,
+                  forceAttemptNumber: pendingStep,
+                });
+                console.log(
+                  `🔔 [DUNNING-CLOSE] Degrau pendente ${pendingStep} → sent=${waResult.sent} ${waResult.skipped || waResult.error || ''}`,
+                );
+              }
+            }
+          }
+        } catch (closeErr) {
+          console.error('❌ [DUNNING-CLOSE] Erro garantindo último degrau:', closeErr);
+        }
       }
 
       if (previousAttributes?.status === 'trialing' && subscription.status === 'active') {
