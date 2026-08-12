@@ -559,7 +559,7 @@ Deno.serve(async (req) => {
             // Bump do valor: só na Jornada 3 nativa. Na composta o mandato já nasce
             // no valor cheio (R$ 29,90) — a entrada vem de uma cobrança avulsa, então
             // não há valor para subir e o app do banco mostra "R$ 29,90/mês" fixo.
-            if (APPROVED_STATUSES.includes(mandateStatus) && sub.is_trial
+            if (approvedNow && sub.is_trial
                 && sub.value_cents > (sub.trial_value_cents ?? 0)
                 && sub.creation_mode !== "composed") {
               const upd = await wooviFetch(
