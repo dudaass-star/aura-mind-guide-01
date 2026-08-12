@@ -19,6 +19,7 @@ import {
 } from "../_shared/woovi.ts";
 import { composeQr, extractWooviUrl } from "../_shared/pix-emv.ts";
 import { buildFixedPixRecurringOptions } from "../_shared/woovi-subscription-payload.ts";
+import { saveMetaIdentity } from "../_shared/meta-identity.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
