@@ -14,7 +14,10 @@
 //   2. Replay: cobrança paga na Woovi sem `paid_at` local (webhook perdido).
 //   3. Abandono: QR expirado sem entrada e sem mandato → cancela na Woovi.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
-import { wooviFetch } from "../_shared/woovi.ts";
+import {
+  wooviFetch, brtDate,
+  MANDATE_ACTIVE_STATUSES, WOOVI_PAID_STATUSES,
+} from "../_shared/woovi.ts";
 import { sendProactive } from "../_shared/whatsapp-provider.ts";
 import { normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
 
@@ -74,7 +77,7 @@ Deno.serve(async (req) => {
 
   const report: Record<string, unknown[]> = {
     entrada_pendente: [], mandato_pendente: [], recuperados: [], abandonados: [],
-    reautorizacao: [], erros: [],
+    reautorizacao: [], ciclo_sem_cobranca: [], erros: [],
   };
 
   try {
@@ -94,7 +97,7 @@ Deno.serve(async (req) => {
     for (const sub of composed || []) {
       const created = String(sub.created_at || "");
       if (created > graceBefore) continue;
-      const approved = ["APROVADA", "ATIVA"].includes(String(sub.status));
+      const approved = MANDATE_ACTIVE_STATUSES.includes(String(sub.status));
       const entryPaid = !!sub.entry_paid_at;
 
       // ---- 1a) Mandato aprovado, entrada não paga -------------------------
@@ -154,7 +157,8 @@ Deno.serve(async (req) => {
 
       // ---- 3) Abandono total: QR expirado, nada pago, nada aprovado -------
       const expired = sub.qr_expires_at && String(sub.qr_expires_at) < now.toISOString();
-      if (expired && !entryPaid && !approved && !["ABANDONADA", "CANCELADA"].includes(String(sub.status))) {
+      if (expired && !entryPaid && !approved
+          && !["ABANDONADA", "CANCELADA", "REJEITADA"].includes(String(sub.status))) {
         if (!dryRun) {
           if (sub.subscription_id) {
             await wooviFetch(`/api/v1/subscriptions/${encodeURIComponent(sub.subscription_id)}/cancel`,
@@ -208,7 +212,7 @@ Deno.serve(async (req) => {
     const { data: liveSubs } = await supabase
       .from("woovi_subscriptions")
       .select("id, user_id, subscription_id, customer_phone, customer_email, status, plan, value_cents, reauth_notified_at")
-      .in("status", ["APROVADA", "ATIVA"])
+      .in("status", MANDATE_ACTIVE_STATUSES)
       .is("replaced_by_subscription_id", null)
       .not("subscription_id", "is", null)
       .limit(300);
@@ -257,6 +261,76 @@ Deno.serve(async (req) => {
         sub: sub.subscription_id, email: sub.customer_email,
         remoteStatus, userStillActive, sent, dryRun,
       });
+    }
+
+    // ---- 5) Backstop de ciclo ---------------------------------------------
+    // No trilho Woovi o débito do ciclo depende da Woovi gerar a cobrança E do
+    // webhook chegar. Sem esta varredura, um webhook perdido vira usuário
+    // usando de graça em silêncio. Para cada mandato vivo com ciclo vencido:
+    //   • cobrança existe e está paga na Woovi → replay (fonte única é o webhook);
+    //   • cobrança não existe na Woovi → registra a lacuna pra intervenção
+    //     (não forçamos criação: cobrança fora do mandato é dinheiro sem contrato).
+    const today = brtDate(now);
+    const { data: dueSubs } = await supabase
+      .from("woovi_subscriptions")
+      .select("id, subscription_id, customer_email, next_charge_date, value_cents, status, last_error")
+      .in("status", MANDATE_ACTIVE_STATUSES)
+      .is("replaced_by_subscription_id", null)
+      .not("subscription_id", "is", null)
+      .not("next_charge_date", "is", null)
+      .lte("next_charge_date", today)
+      .limit(200);
+
+    for (const sub of dueSubs || []) {
+      const r = await wooviFetch<Record<string, any>>(
+        `/api/v1/subscriptions/${encodeURIComponent(String(sub.subscription_id))}`,
+      );
+      await new Promise((res) => setTimeout(res, 250));
+      if (!r.ok || !r.data) continue;
+      const remote = ((r.data as Record<string, any>)?.subscription || r.data) as Record<string, any>;
+      const remoteCharges: Record<string, any>[] = Array.isArray(remote?.charges)
+        ? remote.charges
+        : Array.isArray(remote?.installments) ? remote.installments : [];
+
+      // Cobrança do ciclo já vencido (a partir da data prevista de débito).
+      const cycleCharges = remoteCharges.filter((c) => {
+        const when = String(c?.createdAt || c?.dueDate || c?.expiresDate || "").slice(0, 10);
+        return !when || when >= String(sub.next_charge_date);
+      });
+
+      if (cycleCharges.length === 0) {
+        if (!dryRun) {
+          await supabase.from("woovi_subscriptions").update({
+            last_error: `ciclo de ${sub.next_charge_date} sem cobrança na Woovi (detectado pela auditoria)`,
+          }).eq("id", sub.id);
+        }
+        report.ciclo_sem_cobranca.push({
+          sub: sub.subscription_id, email: sub.customer_email,
+          ciclo: sub.next_charge_date, dryRun,
+        });
+        continue;
+      }
+
+      for (const c of cycleCharges) {
+        const status = String(c?.status || "").toUpperCase();
+        if (!WOOVI_PAID_STATUSES.includes(status)) continue;
+        const correlationID = String(c?.correlationID || c?.identifier || c?.globalID || "");
+        if (!correlationID) continue;
+        const { data: known } = await supabase
+          .from("woovi_charges").select("id, paid_at")
+          .eq("installment_id", correlationID).maybeSingle();
+        if (known?.paid_at) continue;
+        if (dryRun) {
+          report.recuperados.push({ charge: correlationID, via: "ciclo", dryRun: true });
+          continue;
+        }
+        const ok = await replayToWebhook({
+          event: "OPENPIX:CHARGE_COMPLETED",
+          charge: { ...c, correlationID, status },
+          subscription: { globalID: remote?.globalID, correlationID: remote?.correlationID },
+        });
+        if (ok) report.recuperados.push({ charge: correlationID, via: "ciclo" });
+      }
     }
 
     return new Response(JSON.stringify({ dryRun, report }, null, 2), {
