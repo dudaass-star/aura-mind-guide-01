@@ -34,6 +34,14 @@ const APPROVED_STATUSES = ["APPROVED", "PIX_AUTOMATIC_APPROVED", "ACTIVE", "AUTH
 const REJECTED_STATUSES = ["REJECTED", "PIX_AUTOMATIC_REJECTED", "EXPIRED", "PIX_AUTOMATIC_EXPIRED"];
 const CANCELED_STATUSES = ["CANCELED", "CANCELLED", "PIX_AUTOMATIC_CANCELED", "INACTIVE"];
 const PAID_STATUSES = ["COMPLETED", "PAID", "CONFIRMED", "PIX_AUTOMATIC_COBR_COMPLETED"];
+// Cobrança do mandato que NÃO entrou: aciona a mesma escada de dunning do
+// Stripe/Asaas (2 avisos → 30% → Lite). "EXPIRED" cobre o QR do ciclo vencido.
+const UNPAID_CHARGE_STATUSES = [
+  "EXPIRED", "OVERDUE", "FAILED", "REJECTED", "DECLINED", "ERROR",
+  "PIX_AUTOMATIC_COBR_FAILED", "PIX_AUTOMATIC_COBR_REJECTED", "PIX_AUTOMATIC_COBR_EXPIRED",
+];
+// Cadência de acompanhamento (a Woovi só avisa a falha uma vez por cobrança).
+const DUNNING_FOLLOWUP_DAYS = [2, 4, 7];
 
 function addMonths(d: Date, months: number): Date {
   const r = new Date(d);
