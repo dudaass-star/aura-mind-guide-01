@@ -187,18 +187,23 @@ Deno.serve(async (req) => {
     const { fbp, fbc, gaClientId } = body;
     const mode = body.mode || "checkout";
     const reauthToken = body.token;
+    // `offer` é uma reautorização com valor de retenção (30% off ou Lite): o
+    // cliente ganha um QR NOVO, então pode pagar de outra conta — a atual é
+    // justamente a que ficou sem saldo.
+    const offerTier = mode === "offer" ? String(body.offer || "discount_30") : null;
+    const isReauth = mode === "reauthorize" || mode === "offer";
     const deferReplacement = body.deferReplacement === "true";
     const requestKeyInput = body.requestKey?.trim();
     const requestKey = requestKeyInput && /^[A-Za-z0-9_-]{16,100}$/.test(requestKeyInput)
       ? `${mode}:${requestKeyInput}`
-      : mode === "reauthorize" && reauthToken
-        ? `reauthorize:${reauthToken}`
+      : isReauth && reauthToken
+        ? `${mode}:${reauthToken}:${offerTier ?? ""}`
         : null;
 
     // ---- Reautorização: mandato revogado pelo cliente no app do banco --------
     let reauthUserId: string | null = null;
     let previousSubscriptionId: string | null = null;
-    if (mode === "reauthorize") {
+    if (isReauth) {
       if (!reauthToken) return json({ error: "Token ausente" }, 400);
       const { data: tokenRow } = await supabase
         .from("user_portal_tokens").select("user_id").eq("token", reauthToken).maybeSingle();
@@ -233,7 +238,9 @@ Deno.serve(async (req) => {
 
     const emailClean = email.trim().toLowerCase();
     const phoneClean = cleanDigits(phone);
-    const amountCents = PRICES[plan][billing];
+    const amountCents = offerTier
+      ? offerValueCents(offerTier, PRICES[plan][billing])
+      : PRICES[plan][billing];
 
     // Promo de entrada: mensal + cliente novo + checkout (nunca em reautorização).
     const returning = await isReturningCustomer(supabase, emailClean, phoneClean);
@@ -531,7 +538,7 @@ Deno.serve(async (req) => {
     // Visibilidade de funil: PIX aparece em checkout_sessions junto com o cartão.
     // recovery_sent=true impede o carrinho abandonado (desenhado pro cartão) de
     // disparar mensagem para quem apenas gerou QR.
-    if (mode !== "reauthorize") {
+    if (!isReauth) {
       const { error: funnelErr } = await supabase.from("checkout_sessions").insert({
         phone: phoneClean || "sem-telefone", email: emailClean, name, plan, billing,
         payment_method: "pix_auto", status: "created", recovery_sent: true,
@@ -539,7 +546,7 @@ Deno.serve(async (req) => {
       if (funnelErr) console.warn("[criar-pix-recorrente-woovi] funil não logado:", funnelErr.message);
     }
 
-    if (mode === "reauthorize" && previousSubscriptionId && !deferReplacement) {
+    if (isReauth && previousSubscriptionId && !deferReplacement) {
       await supabase.from("woovi_subscriptions")
         .update({ replaced_by_subscription_id: subscriptionId })
         .eq("subscription_id", previousSubscriptionId);
@@ -565,7 +572,8 @@ Deno.serve(async (req) => {
       gateway: "woovi",
       plan,
       billing,
-      reauthorize: mode === "reauthorize",
+      reauthorize: isReauth,
+      offerTier,
     });
   } catch (error) {
     console.error("[criar-pix-recorrente-woovi] Erro:", error);
