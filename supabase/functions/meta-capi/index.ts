@@ -100,8 +100,18 @@ Deno.serve(async (req) => {
     if (user_data.client_ip_address) {
       hashedUserData.client_ip_address = user_data.client_ip_address;
     }
+    else {
+      // Fallback: IP real do visitante vindo do proxy (melhora a qualidade do match).
+      const fwd = req.headers.get('x-forwarded-for');
+      const ip = fwd ? fwd.split(',')[0].trim() : null;
+      if (ip) hashedUserData.client_ip_address = ip;
+    }
     if (user_data.client_user_agent) {
       hashedUserData.client_user_agent = user_data.client_user_agent;
+    }
+    else {
+      const ua = req.headers.get('user-agent');
+      if (ua) hashedUserData.client_user_agent = ua;
     }
     // fbp and fbc are passed raw (not hashed) per Meta docs
     if (user_data.fbp) {
