@@ -191,6 +191,103 @@ async function resolveProfileFromCustomer(
   };
 }
 
+/**
+ * Extrai o subscription id de uma invoice em qualquer formato de API.
+ * A API nova não manda mais `invoice.subscription`: ele vive em
+ * `invoice.parent.subscription_details.subscription`.
+ */
+function extractSubscriptionId(invoice: any): string | null {
+  let raw =
+    (invoice?.subscription as string | null) ??
+    (invoice?.parent?.subscription_details?.subscription as string | null) ??
+    (invoice?.subscription_details?.subscription as string | null) ??
+    null;
+  if (raw && typeof raw === 'object') raw = (raw as any).id ?? null;
+  return (raw as string | null) ?? null;
+}
+
+/**
+ * Cobrança imediata quando o cliente troca o método de pagamento.
+ *
+ * Sem isso, o Stripe só tenta de novo na próxima tentativa agendada da régua
+ * (podendo levar dias): o cliente cadastra o cartão novo e continua past_due,
+ * achando que já resolveu. Aqui a gente define o método novo como padrão do
+ * cliente e da assinatura e quita na hora as faturas abertas.
+ */
+async function chargeOpenInvoicesNow(
+  stripe: Stripe,
+  customerId: string,
+  paymentMethodId: string,
+): Promise<{ attempted: number; paid: number }> {
+  const result = { attempted: 0, paid: 0 };
+
+  // 1) Método novo como padrão do cliente (invoice_settings) — pega os retries futuros.
+  try {
+    await stripe.customers.update(customerId, {
+      invoice_settings: { default_payment_method: paymentMethodId },
+    });
+  } catch (err) {
+    console.warn('⚠️ [PM-UPDATE] Falha setando default_payment_method no cliente:', (err as Error).message);
+  }
+
+  // 2) Método novo como padrão das assinaturas vivas.
+  let liveSubs: Stripe.Subscription[] = [];
+  try {
+    for (const status of ['past_due', 'active', 'unpaid', 'trialing'] as const) {
+      const { data } = await stripe.subscriptions.list({ customer: customerId, status, limit: 10 });
+      liveSubs = liveSubs.concat(data || []);
+    }
+    for (const sub of liveSubs) {
+      if (sub.default_payment_method === paymentMethodId) continue;
+      try {
+        await stripe.subscriptions.update(sub.id, { default_payment_method: paymentMethodId });
+      } catch (err) {
+        console.warn(`⚠️ [PM-UPDATE] Falha setando PM na sub ${sub.id}:`, (err as Error).message);
+      }
+    }
+  } catch (err) {
+    console.warn('⚠️ [PM-UPDATE] Falha listando assinaturas:', (err as Error).message);
+  }
+
+  // 3) Nunca forçar cobrança de assinatura já cancelada.
+  if (liveSubs.length === 0) {
+    console.log('ℹ️ [PM-UPDATE] Nenhuma assinatura viva — não force nada.');
+    return result;
+  }
+  const liveSubIds = new Set(liveSubs.map((s) => s.id));
+
+  // 4) Quitar faturas abertas agora.
+  let openInvoices: Stripe.Invoice[] = [];
+  try {
+    const { data } = await stripe.invoices.list({ customer: customerId, status: 'open', limit: 10 });
+    openInvoices = data || [];
+  } catch (err) {
+    console.warn('⚠️ [PM-UPDATE] Falha listando faturas abertas:', (err as Error).message);
+    return result;
+  }
+
+  for (const invoice of openInvoices) {
+    if (invoice.collection_method !== 'charge_automatically') continue;
+    const subId = extractSubscriptionId(invoice);
+    if (!subId || !liveSubIds.has(subId)) continue;
+    result.attempted++;
+    try {
+      const paid = await stripe.invoices.pay(invoice.id, { payment_method: paymentMethodId });
+      if (paid.status === 'paid') {
+        result.paid++;
+        console.log(`✅ [PM-UPDATE] Fatura ${invoice.id} quitada na hora (${paid.amount_paid})`);
+      } else {
+        console.log(`ℹ️ [PM-UPDATE] Fatura ${invoice.id} não quitou (status ${paid.status})`);
+      }
+    } catch (err) {
+      // Recusa aqui é silenciosa de propósito: a régua de dunning segue como está.
+      console.warn(`⚠️ [PM-UPDATE] Cobrança imediata recusada em ${invoice.id}:`, (err as Error).message);
+    }
+  }
+
+  return result;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -1161,9 +1258,13 @@ Me conta: como você está hoje?`;
     if (event.type === 'invoice.paid') {
       const invoice = event.data.object as Stripe.Invoice;
       const customerId = invoice.customer as string;
-      console.log('💰 Invoice paid:', invoice.id, 'customer:', customerId);
+      // Mesmo fallback do dunning: a API nova não manda `invoice.subscription`,
+      // e sem isso o bloco inteiro era ignorado (perfil ficava em trial/past_due
+      // mesmo depois do pagamento entrar).
+      const paidSubscriptionId = extractSubscriptionId(invoice);
+      console.log('💰 Invoice paid:', invoice.id, 'customer:', customerId, 'subscription:', paidSubscriptionId);
 
-      if (invoice.subscription) {
+      if (paidSubscriptionId) {
         try {
           const customer = await stripe.customers.retrieve(customerId);
           if (!customer.deleted) {
@@ -1192,15 +1293,19 @@ Me conta: como você está hoje?`;
                   .like('task_type', 'trial_%');
               }
             } else if (profile) {
-              // Clear payment_failed_at on successful payment regardless of status
+              // Pagamento entrou: normaliza status e limpa a marca de falha.
+              const normalizedStatus = ['past_due', 'trial', 'trial_expired', 'payment_failed'].includes(profile.status)
+                ? 'active'
+                : profile.status;
               await supabase
                 .from('profiles')
                 .update({
+                  status: normalizedStatus,
                   payment_failed_at: null,
                   updated_at: new Date().toISOString(),
                 })
                 .eq('id', profile.id);
-              console.log('ℹ️ invoice.paid — cleared payment_failed_at for:', profile.phone);
+              console.log(`ℹ️ invoice.paid — status=${normalizedStatus}, payment_failed_at limpo para: ${profile.phone}`);
             } else {
               // === Fallback: create profile from Stripe customer data ===
               console.warn('⚠️ invoice.paid — no profile found, attempting auto-create for customer:', customerId);
@@ -1212,7 +1317,7 @@ Me conta: como você está hoje?`;
                   const formattedPhone = normalizeBrazilianPhone(cleanPhone);
                   
                   // Determine plan from subscription price
-                  const sub = await stripe.subscriptions.retrieve(invoice.subscription as string);
+                  const sub = await stripe.subscriptions.retrieve(paidSubscriptionId as string);
                   const priceId = sub.items.data[0]?.price?.id;
                   let plan = 'essencial';
                   const priceEssencial = Deno.env.get('STRIPE_PRICE_ESSENCIAL_MONTHLY') || '';
@@ -1248,6 +1353,17 @@ Me conta: como você está hoje?`;
               } catch (autoCreateErr) {
                 console.error('❌ Error in auto-create profile fallback:', autoCreateErr);
               }
+            }
+
+            // Régua encerrada: derruba dunning pendente desse usuário.
+            const { profile: profileForTasks } = await resolveProfileFromCustomer(supabase, customer as Stripe.Customer);
+            if (profileForTasks?.user_id) {
+              await supabase
+                .from('scheduled_tasks')
+                .update({ status: 'cancelled', executed_at: new Date().toISOString() })
+                .eq('user_id', profileForTasks.user_id)
+                .eq('status', 'pending')
+                .like('task_type', 'dunning_%');
             }
           }
         } catch (err) {
@@ -1680,6 +1796,55 @@ Me conta: como você está hoje?`;
         } catch (err) {
           console.error('❌ Error processing subscription.updated:', err);
         }
+      }
+    }
+
+    // ========== Troca de método de pagamento → cobra na hora ==========
+    // Antes, o cliente cadastrava um cartão novo no portal e o Stripe só tentava
+    // de novo na próxima data da régua (às vezes dias depois). Aqui a gente
+    // assume o método novo como padrão e quita as faturas abertas imediatamente.
+    if (
+      event.type === 'payment_method.attached' ||
+      event.type === 'setup_intent.succeeded' ||
+      event.type === 'customer.updated'
+    ) {
+      try {
+        let customerId: string | null = null;
+        let paymentMethodId: string | null = null;
+
+        if (event.type === 'payment_method.attached') {
+          const pm = event.data.object as Stripe.PaymentMethod;
+          customerId = (pm.customer as string) || null;
+          paymentMethodId = pm.id;
+        } else if (event.type === 'setup_intent.succeeded') {
+          const si = event.data.object as Stripe.SetupIntent;
+          customerId = (si.customer as string) || null;
+          paymentMethodId = (si.payment_method as string) || null;
+        } else {
+          const cust = event.data.object as Stripe.Customer;
+          const previous = (event.data as any).previous_attributes?.invoice_settings?.default_payment_method;
+          const current = cust.invoice_settings?.default_payment_method as string | null;
+          // Só reage quando o método padrão realmente mudou.
+          if (previous === undefined || !current || previous === current) {
+            paymentMethodId = null;
+          } else {
+            customerId = cust.id;
+            paymentMethodId = current;
+          }
+        }
+
+        if (customerId && paymentMethodId) {
+          const res = await chargeOpenInvoicesNow(stripe, customerId, paymentMethodId);
+          console.log(
+            `💳 [PM-UPDATE] ${event.type} → customer ${customerId}: ${res.paid}/${res.attempted} fatura(s) quitada(s) na hora`,
+          );
+          // O sucesso reaproveita o fluxo de invoice.paid (ativação de acesso,
+          // mensagem e cancelamento do dunning), que o Stripe dispara em seguida.
+        } else {
+          console.log(`ℹ️ [PM-UPDATE] ${event.type} sem método/cliente relevante — ignorado`);
+        }
+      } catch (err) {
+        console.error('❌ [PM-UPDATE] Erro na cobrança imediata:', err);
       }
     }
 
