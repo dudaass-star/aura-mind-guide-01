@@ -15,6 +15,7 @@ import { sendProactive } from "../_shared/whatsapp-provider.ts";
 import { normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
 import { retryCharge, MAX_RETRIES } from "../_shared/inter-cycles.ts";
 import { interFetch } from "../_shared/inter-pix.ts";
+import { resolveMetaIdentity } from "../_shared/meta-identity.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -97,6 +98,12 @@ async function fireMetaCapiPurchase(
       .eq("meta_status", 200).limit(1).maybeSingle();
     if (prior) return;
 
+    // Fallback de atribuição: usa o último fbp/fbc conhecido do lead quando
+    // a transação não trouxe cookie.
+    const ident = await resolveMetaIdentity(supabase, {
+      email: args.email, phone: args.phone, fbp: args.fbp, fbc: args.fbc,
+    });
+
     const url = Deno.env.get("SUPABASE_URL")!;
     const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     await fetch(`${url}/functions/v1/meta-capi`, {
@@ -112,8 +119,8 @@ async function fireMetaCapiPurchase(
           email: args.email,
           phone: args.phone || undefined,
           first_name: args.firstName || undefined,
-          ...(args.fbp && { fbp: args.fbp }),
-          ...(args.fbc && { fbc: args.fbc }),
+          ...(ident.fbp && { fbp: ident.fbp }),
+          ...(ident.fbc && { fbc: ident.fbc }),
         },
         custom_data: {
           value: args.value,

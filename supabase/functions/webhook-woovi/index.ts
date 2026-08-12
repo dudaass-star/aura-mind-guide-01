@@ -13,6 +13,7 @@
 // Idempotência: woovi_webhook_events.event_key. A Woovi reenvia até receber 200.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { sendProactive } from "../_shared/whatsapp-provider.ts";
+import { resolveMetaIdentity } from "../_shared/meta-identity.ts";
 import { normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
 import {
   wooviFetch, brtDate,
@@ -75,6 +76,12 @@ async function fireMetaCapiPurchase(
       .eq("meta_status", 200).limit(1).maybeSingle();
     if (prior) return;
 
+    // Sem cookie na transação (compra em outro dispositivo, cookie apagado),
+    // recupera o último fbp/fbc conhecido do lead.
+    const ident = await resolveMetaIdentity(supabase, {
+      email: args.email, phone: args.phone, fbp: args.fbp, fbc: args.fbc,
+    });
+
     const url = Deno.env.get("SUPABASE_URL")!;
     const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     await fetch(`${url}/functions/v1/meta-capi`, {
@@ -90,8 +97,8 @@ async function fireMetaCapiPurchase(
           email: args.email,
           phone: args.phone || undefined,
           first_name: args.firstName || undefined,
-          ...(args.fbp && { fbp: args.fbp }),
-          ...(args.fbc && { fbc: args.fbc }),
+          ...(ident.fbp && { fbp: ident.fbp }),
+          ...(ident.fbc && { fbc: ident.fbc }),
         },
         custom_data: {
           value: args.value, currency: "BRL",

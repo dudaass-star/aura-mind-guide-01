@@ -100,6 +100,34 @@ export const trackMetaPageView = (path: string): void => {
 };
 
 /** ViewContent da landing (navegador + CAPI) com dedupe por event_id. */
+/**
+ * Advanced Matching manual: reinicializa o pixel com os dados que o usuário
+ * acabou de digitar no checkout, para o evento de navegador ter chave forte
+ * (complementa o AAM, sem coletar nada novo — o próprio pixel faz o hash).
+ */
+export const setAdvancedMatching = (data: {
+  email?: string;
+  phone?: string;
+  firstName?: string;
+}): void => {
+  if (!hasFbq()) return;
+  const em = data.email?.trim().toLowerCase();
+  const ph = data.phone?.replace(/\D/g, "");
+  const fn = data.firstName?.trim().toLowerCase();
+  if (!em && !ph && !fn) return;
+  try {
+    (window as any).fbq("init", "939366085297921", {
+      ...(em && { em }),
+      // Meta espera telefone com código do país, só dígitos.
+      ...(ph && { ph: ph.startsWith("55") ? ph : `55${ph}` }),
+      ...(fn && { fn }),
+      country: "br",
+    });
+  } catch {
+    /* noop: nunca deve quebrar o checkout */
+  }
+};
+
 export const trackMetaViewContent = (
   customData: Record<string, unknown>,
 ): void => {

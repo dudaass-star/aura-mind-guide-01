@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getPhoneVariations } from "../_shared/zapi-client.ts";
+import { saveMetaIdentity } from "../_shared/meta-identity.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -176,6 +177,18 @@ serve(async (req) => {
 
     // Clean and validate phone number
     const phoneClean = phone.replace(/\D/g, "");
+    // Cache de identidade do Meta: se a compra concluir sem cookie (outro
+    // dispositivo, cookie apagado), o webhook recupera fbp/fbc daqui.
+    if (fbp || fbc) {
+      const supabaseIdentity = createClient(
+        Deno.env.get("SUPABASE_URL") ?? "",
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+        { auth: { persistSession: false } },
+      );
+      void saveMetaIdentity(supabaseIdentity, {
+        email, phone: phoneClean, fbp, fbc, source: "create-checkout",
+      });
+    }
     
     if (!/^[0-9]{10,15}$/.test(phoneClean)) {
       logStep("Invalid phone format", { phoneLength: phoneClean.length });

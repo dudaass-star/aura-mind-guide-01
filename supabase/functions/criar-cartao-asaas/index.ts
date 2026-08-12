@@ -7,6 +7,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { getPhoneVariations } from "../_shared/zapi-client.ts";
+import { saveMetaIdentity } from "../_shared/meta-identity.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -171,6 +172,8 @@ Deno.serve(async (req) => {
       "127.0.0.1";
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    // Cache de identidade do Meta: fallback do Purchase se o cookie faltar depois.
+    void saveMetaIdentity(supabase, { email, phone, fbp, fbc, source: "criar-cartao-asaas" });
 
     // Reaproveita customer se profile já existe
     let asaasCustomerId: string | null = null;

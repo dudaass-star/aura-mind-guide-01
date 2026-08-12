@@ -294,6 +294,12 @@ export default function AdminEngagement() {
   const navigate = useNavigate();
   const requestIdRef = useRef(0);
   const [elapsedSec, setElapsedSec] = useState(0);
+  // Cobertura de identificadores de navegador no Purchase (qualidade do match no Meta).
+  const [capiCoverage, setCapiCoverage] = useState<{
+    total: number;
+    fbc: number;
+    fbp: number;
+  } | null>(null);
   const hasRecoveryActivity = recoverySessions.length > 0 || recoveryStats.raw > 0 || recoveryStats.accepted > 0 || whatsappStats.stage1 > 0 || whatsappStats.stage2 > 0 || whatsappStats.errors > 0 || whatsappStats.skipped > 0;
 
   // Cronômetro do botão "Atualizar" para feedback visual durante esperas longas.
@@ -308,6 +314,25 @@ export default function AdminEngagement() {
     }, 1000);
     return () => clearInterval(id);
   }, [loading]);
+
+  // Cobertura de fbc/fbp nos Purchase enviados ao Meta nos últimos 30 dias.
+  useEffect(() => {
+    (async () => {
+      const since = new Date(Date.now() - 30 * 864e5).toISOString();
+      const { data } = await supabase
+        .from('meta_capi_log')
+        .select('fbc_present, fbp_present')
+        .eq('event_name', 'Purchase')
+        .gte('created_at', since)
+        .limit(1000);
+      if (!data) return;
+      setCapiCoverage({
+        total: data.length,
+        fbc: data.filter((r) => r.fbc_present).length,
+        fbp: data.filter((r) => r.fbp_present).length,
+      });
+    })().catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     if (!isLoading) redirectIfNotAdmin();
@@ -1066,6 +1091,29 @@ export default function AdminEngagement() {
                   </Card>
 
                   {/* 🧭 Fechamento de sessão — dialogada vs unilateral vs no-show */}
+                  {/* 📡 Qualidade do sinal no Meta — cobertura de fbc/fbp no Purchase */}
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between p-3 pb-1">
+                      <CardTitle className="text-xs font-medium text-muted-foreground">📡 Match Meta (Purchase)</CardTitle>
+                      <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent className="p-3 pt-0">
+                      {(() => {
+                        const total = capiCoverage?.total ?? 0;
+                        const pctFbc = total ? (capiCoverage!.fbc / total) * 100 : 0;
+                        const pctFbp = total ? (capiCoverage!.fbp / total) * 100 : 0;
+                        const color = pctFbc >= 80 ? 'text-green-600' : pctFbc >= 50 ? 'text-yellow-600' : 'text-destructive';
+                        return (
+                          <>
+                            <div className={`text-xl font-bold ${color}`}>{pctFbc.toFixed(0)}%</div>
+                            <p className="text-[11px] text-muted-foreground">fbc em {capiCoverage?.fbc ?? 0}/{total} compras (30d)</p>
+                            <p className="text-[10px] text-muted-foreground">fbp: {pctFbp.toFixed(0)}%</p>
+                          </>
+                        );
+                      })()}
+                    </CardContent>
+                  </Card>
+
                   <Card>
                     <CardHeader className="flex flex-row items-center justify-between p-3 pb-1">
                       <CardTitle className="text-xs font-medium text-muted-foreground">🧭 Fechamento sessões</CardTitle>
