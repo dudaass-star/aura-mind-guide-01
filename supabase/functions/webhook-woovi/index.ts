@@ -138,6 +138,28 @@ async function failEvent(supabase: any, key: string, error: string): Promise<voi
   }).eq("event_key", key);
 }
 
+// Observabilidade por banco: a jornada composta é exibida de formas diferentes em
+// cada PSP (BB mostra entrada + mandato na mesma tela; Nubank em duas telas). Saber
+// de qual banco vem cada aprovação/pagamento é o que permite medir onde há queda.
+function extractPayerBank(body: Record<string, any>): string | null {
+  const cands = [
+    body?.pixRecurring?.payer?.bank,
+    body?.pixRecurring?.debtorParticipant,
+    body?.subscription?.pixRecurring?.payer?.bank,
+    body?.charge?.payer?.bank,
+    body?.pix?.payer?.bank,
+    body?.pix?.endToEndId ? String(body.pix.endToEndId).slice(1, 9) : null,
+    body?.charge?.pixTransaction?.payer?.bank,
+    body?.charge?.pixTransaction?.endToEndId
+      ? String(body.charge.pixTransaction.endToEndId).slice(1, 9)
+      : null,
+  ];
+  for (const c of cands) {
+    if (c && typeof c === "string" && c.trim()) return c.trim().slice(0, 80);
+  }
+  return null;
+}
+
 /**
  * Confirma na API da Woovi que a cobrança realmente foi paga. Retorna o status
  * real ou `null` quando não deu para confirmar (aí a auditoria reconcilia).
@@ -409,6 +431,10 @@ Deno.serve(async (req) => {
               pix_status: mandateStatus,
               recurrency_id: pixRecurring.recurrencyId || sub.recurrency_id,
               raw_payload: body,
+              ...(APPROVED_STATUSES.includes(mandateStatus)
+                ? { mandate_approved_at: sub.mandate_approved_at || new Date().toISOString() }
+                : {}),
+              ...(extractPayerBank(body) ? { payer_bank: extractPayerBank(body) } : {}),
             }).eq("id", sub.id);
 
             // Promo de entrada: o mandato foi criado com o valor promocional para
@@ -476,6 +502,17 @@ Deno.serve(async (req) => {
 
             const valueCents = Number(charge.value ?? sub.value_cents ?? 0);
             const paidAt = charge.paidAt || new Date().toISOString();
+            // Entrada da jornada composta: cobrança avulsa amarrada ao mandato.
+            const isEntryCharge = sub.creation_mode === "composed"
+              && !!sub.entry_charge_correlation_id
+              && String(chargeId) === String(sub.entry_charge_correlation_id);
+            const payerBank = extractPayerBank(body);
+            if (isEntryCharge) {
+              await supabase.from("woovi_subscriptions").update({
+                entry_paid_at: sub.entry_paid_at || paidAt,
+                ...(payerBank ? { payer_bank: payerBank } : {}),
+              }).eq("id", sub.id);
+            }
 
             const { data: existing } = await supabase.from("woovi_charges")
               .select("id, cycle_index, access_activated_at")
@@ -499,6 +536,8 @@ Deno.serve(async (req) => {
                 due_date: charge.expiresDate ? String(charge.expiresDate).slice(0, 10) : null,
                 status: chargeStatus || "COMPLETED",
                 paid_at: paidAt,
+                kind: isEntryCharge ? "entry" : (cycleIndex === 0 ? "entry" : "cycle"),
+                payer_bank: payerBank,
                 raw_payload: body,
               }).select("id").maybeSingle();
               if (insErr) throw new Error(`falha registrando cobrança: ${insErr.message}`);
@@ -506,6 +545,7 @@ Deno.serve(async (req) => {
             } else {
               await supabase.from("woovi_charges").update({
                 status: chargeStatus || "COMPLETED", paid_at: paidAt, raw_payload: body,
+                ...(payerBank ? { payer_bank: payerBank } : {}),
               }).eq("id", chargeRowId);
             }
 

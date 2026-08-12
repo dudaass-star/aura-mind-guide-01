@@ -1,0 +1,212 @@
+// Edge function (cron): auditoria/reconciliação do trilho PIX Automático da Woovi
+// na jornada COMPOSTA (cobrança de entrada `cob` + mandato `rec` no mesmo QR).
+//
+// Por que existe: o QR é único, mas o app do banco pode confirmar as duas partes
+// em telas separadas (BB mostra junto; Nubank mostra o mandato e só depois a
+// cobrança). Quem para no meio fica em estado parcial:
+//   • mandato aprovado, entrada NÃO paga → nenhum acesso liberado → cutucar com a
+//     cobrança de entrada (o mandato só debita em D+30, não perdemos nada).
+//   • entrada paga, mandato NÃO aprovado → acesso liberado pelo webhook, mas sem
+//     débito automático → pedir a autorização antes do fim do ciclo.
+//
+// Varreduras:
+//   1. Conclusão parcial: entrada sem mandato / mandato sem entrada → 1 follow-up.
+//   2. Replay: cobrança paga na Woovi sem `paid_at` local (webhook perdido).
+//   3. Abandono: QR expirado sem entrada e sem mandato → cancela na Woovi.
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { wooviFetch } from "../_shared/woovi.ts";
+import { sendProactive } from "../_shared/whatsapp-provider.ts";
+import { normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+// Tempo mínimo antes de cutucar: dá folga pra quem está no meio do fluxo do banco.
+const PARTIAL_GRACE_MINUTES = 20;
+
+function money(cents: number): string {
+  return (Number(cents || 0) / 100).toFixed(2).replace(".", ",");
+}
+
+/** Reenvia o pagamento pro webhook-woovi: fonte única de verdade da ativação. */
+async function replayToWebhook(payload: Record<string, unknown>): Promise<boolean> {
+  const url = Deno.env.get("SUPABASE_URL");
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!url || !key) return false;
+  try {
+    const resp = await fetch(`${url}/functions/v1/webhook-woovi`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+      body: JSON.stringify(payload),
+    });
+    return resp.ok;
+  } catch (e) {
+    console.warn("[woovi-pix-audit] replay falhou:", (e as Error).message);
+    return false;
+  }
+}
+
+async function notify(sub: Record<string, any>, text: string): Promise<boolean> {
+  const raw = (sub.customer_phone as string) || "";
+  if (!raw) return false;
+  const phone = normalizeBrazilianPhone(raw);
+  if (!phone) return false;
+  try {
+    const res = await sendProactive(phone, text, "reconnect", sub.user_id || undefined);
+    return !!res?.success;
+  } catch (e) {
+    console.warn("[woovi-pix-audit] follow-up falhou:", (e as Error).message);
+    return false;
+  }
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
+  const body = await req.json().catch(() => ({} as Record<string, unknown>));
+  const dryRun = body.dry_run === true;
+
+  const report: Record<string, unknown[]> = {
+    entrada_pendente: [], mandato_pendente: [], recuperados: [], abandonados: [], erros: [],
+  };
+
+  try {
+    const now = new Date();
+    const graceBefore = new Date(now.getTime() - PARTIAL_GRACE_MINUTES * 60 * 1000).toISOString();
+    const since = new Date(now.getTime() - 7 * 86400000).toISOString();
+
+    const { data: composed } = await supabase
+      .from("woovi_subscriptions")
+      .select("*")
+      .eq("creation_mode", "composed")
+      .eq("creation_status", "completed")
+      .gte("created_at", since)
+      .is("replaced_by_subscription_id", null)
+      .limit(300);
+
+    for (const sub of composed || []) {
+      const created = String(sub.created_at || "");
+      if (created > graceBefore) continue;
+      const approved = ["APROVADA", "ATIVA"].includes(String(sub.status));
+      const entryPaid = !!sub.entry_paid_at;
+
+      // ---- 1a) Mandato aprovado, entrada não paga -------------------------
+      if (approved && !entryPaid && !sub.entry_followup_sent_at) {
+        let brCode: string | null = null;
+        if (sub.entry_charge_correlation_id) {
+          const r = await wooviFetch<Record<string, any>>(
+            `/api/v1/charge/${encodeURIComponent(sub.entry_charge_correlation_id)}`,
+          );
+          const c = (r.data as Record<string, any>)?.charge || r.data;
+          const status = String(c?.status || "").toUpperCase();
+          if (["COMPLETED", "PAID", "CONFIRMED"].includes(status)) {
+            // Webhook perdido: o dinheiro entrou. Replay e segue.
+            if (!dryRun) {
+              await replayToWebhook({
+                event: "OPENPIX:CHARGE_COMPLETED",
+                charge: { ...c, correlationID: sub.entry_charge_correlation_id, status },
+              });
+            }
+            report.recuperados.push({ sub: sub.subscription_id, via: "entrada" });
+            continue;
+          }
+          brCode = (c?.brCode as string) || null;
+        }
+        const text = `Oi, ${String(sub.customer_name || "").split(" ")[0] || "tudo bem"}! `
+          + `Sua autorização de débito automático na Aura já está aprovada no seu banco, `
+          + `mas o primeiro pagamento de R$ ${money(sub.trial_value_cents || sub.value_cents)} `
+          + `não foi concluído — em alguns bancos ele aparece só na tela seguinte à autorização.\n\n`
+          + (brCode ? `É só pagar este PIX pra liberar seu acesso agora:\n\n${brCode}` : "")
+          + `\n\nSe preferir, me responde aqui que eu te ajudo.`;
+        const sent = dryRun ? true : await notify(sub, text);
+        if (!dryRun && sent) {
+          await supabase.from("woovi_subscriptions")
+            .update({ entry_followup_sent_at: new Date().toISOString() }).eq("id", sub.id);
+        }
+        report.entrada_pendente.push({ sub: sub.subscription_id, email: sub.customer_email, sent, dryRun });
+        continue;
+      }
+
+      // ---- 1b) Entrada paga, mandato não aprovado -------------------------
+      if (entryPaid && !approved && !sub.mandate_followup_sent_at) {
+        const link = sub.authorization_url || null;
+        const text = `Oi, ${String(sub.customer_name || "").split(" ")[0] || "tudo bem"}! `
+          + `Seu pagamento de R$ ${money(sub.trial_value_cents || sub.value_cents)} entrou e seu acesso já está liberado. `
+          + `Só faltou uma coisa: a autorização do débito automático de R$ ${money(sub.value_cents)}/mês no app do banco `
+          + `(costuma aparecer como "Pix Automático").\n\n`
+          + (link ? `Você autoriza por aqui:\n${link}\n\n` : "")
+          + `Sem isso sua assinatura não renova — e eu não quero te perder no meio do caminho.`;
+        const sent = dryRun ? true : await notify(sub, text);
+        if (!dryRun && sent) {
+          await supabase.from("woovi_subscriptions")
+            .update({ mandate_followup_sent_at: new Date().toISOString() }).eq("id", sub.id);
+        }
+        report.mandato_pendente.push({ sub: sub.subscription_id, email: sub.customer_email, sent, dryRun });
+        continue;
+      }
+
+      // ---- 3) Abandono total: QR expirado, nada pago, nada aprovado -------
+      const expired = sub.qr_expires_at && String(sub.qr_expires_at) < now.toISOString();
+      if (expired && !entryPaid && !approved && !["ABANDONADA", "CANCELADA"].includes(String(sub.status))) {
+        if (!dryRun) {
+          if (sub.subscription_id) {
+            await wooviFetch(`/api/v1/subscriptions/${encodeURIComponent(sub.subscription_id)}/cancel`,
+              { method: "PUT" }).catch(() => {});
+          }
+          if (sub.entry_charge_correlation_id) {
+            await wooviFetch(`/api/v1/charge/${encodeURIComponent(sub.entry_charge_correlation_id)}`,
+              { method: "DELETE" }).catch(() => {});
+          }
+          await supabase.from("woovi_subscriptions").update({
+            status: "ABANDONADA",
+            last_error: "QR expirou sem pagamento e sem autorização — cancelado pela auditoria",
+          }).eq("id", sub.id);
+        }
+        report.abandonados.push({ sub: sub.subscription_id, email: sub.customer_email, dryRun });
+      }
+    }
+
+    // ---- 2) Cobranças pagas na Woovi sem registro local -------------------
+    const { data: openCharges } = await supabase
+      .from("woovi_charges")
+      .select("id, installment_id, subscription_id, status, paid_at")
+      .is("paid_at", null)
+      .gte("created_at", new Date(now.getTime() - 45 * 86400000).toISOString())
+      .limit(200);
+    for (const c of openCharges || []) {
+      const r = await wooviFetch<Record<string, any>>(
+        `/api/v1/charge/${encodeURIComponent(String(c.installment_id))}`,
+      );
+      await new Promise((res) => setTimeout(res, 250));
+      if (!r.ok || !r.data) continue;
+      const remote = ((r.data as Record<string, any>)?.charge || r.data) as Record<string, any>;
+      const status = String(remote?.status || "").toUpperCase();
+      if (!["COMPLETED", "PAID", "CONFIRMED"].includes(status)) continue;
+      if (dryRun) {
+        report.recuperados.push({ charge: c.installment_id, dryRun: true });
+        continue;
+      }
+      const ok = await replayToWebhook({
+        event: "OPENPIX:CHARGE_COMPLETED",
+        charge: { ...remote, correlationID: String(c.installment_id), status },
+      });
+      if (ok) report.recuperados.push({ charge: c.installment_id, via: "cobranca" });
+    }
+
+    return new Response(JSON.stringify({ dryRun, report }, null, 2), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (err) {
+    console.error("[woovi-pix-audit] erro:", err);
+    report.erros.push(String(err));
+    return new Response(JSON.stringify({ report }), {
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+});

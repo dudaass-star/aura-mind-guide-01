@@ -3639,7 +3639,9 @@ export type Database = {
           due_date: string | null
           id: string
           installment_id: string | null
+          kind: string | null
           paid_at: string | null
+          payer_bank: string | null
           raw_payload: Json | null
           status: string | null
           subscription_id: string
@@ -3655,7 +3657,9 @@ export type Database = {
           due_date?: string | null
           id?: string
           installment_id?: string | null
+          kind?: string | null
           paid_at?: string | null
+          payer_bank?: string | null
           raw_payload?: Json | null
           status?: string | null
           subscription_id: string
@@ -3671,7 +3675,9 @@ export type Database = {
           due_date?: string | null
           id?: string
           installment_id?: string | null
+          kind?: string | null
           paid_at?: string | null
+          payer_bank?: string | null
           raw_payload?: Json | null
           status?: string | null
           subscription_id?: string
@@ -3703,6 +3709,8 @@ export type Database = {
           customer_name: string | null
           customer_phone: string | null
           entry_charge_correlation_id: string | null
+          entry_followup_sent_at: string | null
+          entry_paid_at: string | null
           fbc: string | null
           fbp: string | null
           frequency: string
@@ -3711,7 +3719,10 @@ export type Database = {
           id: string
           is_trial: boolean
           last_error: string | null
+          mandate_approved_at: string | null
+          mandate_followup_sent_at: string | null
           next_charge_date: string | null
+          payer_bank: string | null
           pix_status: string | null
           plan: string
           qr_encoded_image: string | null
@@ -3742,6 +3753,8 @@ export type Database = {
           customer_name?: string | null
           customer_phone?: string | null
           entry_charge_correlation_id?: string | null
+          entry_followup_sent_at?: string | null
+          entry_paid_at?: string | null
           fbc?: string | null
           fbp?: string | null
           frequency: string
@@ -3750,7 +3763,10 @@ export type Database = {
           id?: string
           is_trial?: boolean
           last_error?: string | null
+          mandate_approved_at?: string | null
+          mandate_followup_sent_at?: string | null
           next_charge_date?: string | null
+          payer_bank?: string | null
           pix_status?: string | null
           plan: string
           qr_encoded_image?: string | null
@@ -3781,6 +3797,8 @@ export type Database = {
           customer_name?: string | null
           customer_phone?: string | null
           entry_charge_correlation_id?: string | null
+          entry_followup_sent_at?: string | null
+          entry_paid_at?: string | null
           fbc?: string | null
           fbp?: string | null
           frequency?: string
@@ -3789,7 +3807,10 @@ export type Database = {
           id?: string
           is_trial?: boolean
           last_error?: string | null
+          mandate_approved_at?: string | null
+          mandate_followup_sent_at?: string | null
           next_charge_date?: string | null
+          payer_bank?: string | null
           pix_status?: string | null
           plan?: string
           qr_encoded_image?: string | null
