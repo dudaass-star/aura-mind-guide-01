@@ -20,7 +20,75 @@ Deno.serve(async (req) => {
   const stripeKey = Deno.env.get('STRIPE_SECRET_KEY')!;
   const stripe = new Stripe(stripeKey, { apiVersion: '2023-10-16' });
 
-  const { customer_ids } = await req.json();
+  const { customer_ids, woovi_subscription_ids } = await req.json();
+
+  // ---- Trilho PIX Automático (Woovi) --------------------------------------
+  // Sem cartão não existe fatura Stripe pra reprocessar: o que reenviamos é o
+  // aviso da cobrança de ciclo que não entrou, na mesma escada de dunning
+  // (2 avisos → oferta), com o QR da cobrança pendente quando ela existe.
+  if (Array.isArray(woovi_subscription_ids) && woovi_subscription_ids.length > 0) {
+    const wooviResults: Record<string, any>[] = [];
+    for (const subId of woovi_subscription_ids) {
+      const out: Record<string, any> = { subscription_id: subId };
+      try {
+        const { data: sub } = await supabase
+          .from('woovi_subscriptions')
+          .select('id, user_id, subscription_id, customer_email, customer_phone, customer_name, value_cents, plan')
+          .eq('subscription_id', subId)
+          .maybeSingle();
+        if (!sub) {
+          out.status = 'skipped';
+          out.reason = 'mandato não encontrado';
+          wooviResults.push(out);
+          continue;
+        }
+
+        const profile = await resolveProfile(supabase, {
+          userId: sub.user_id || undefined,
+          email: sub.customer_email || undefined,
+          phone: sub.customer_phone || undefined,
+        });
+
+        const { data: pending } = await supabase
+          .from('woovi_charges')
+          .select('installment_id, value_cents, due_date, status')
+          .eq('subscription_id', subId)
+          .is('paid_at', null)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (!profile) {
+          out.status = 'skipped';
+          out.reason = 'perfil não resolvido';
+          wooviResults.push(out);
+          continue;
+        }
+
+        const res = await sendDunningWhatsApp({
+          supabase,
+          profile,
+          eventId: `reprocess-woovi-${subId}-${Date.now()}`,
+          provider: 'woovi',
+          subscriptionId: subId,
+          paymentId: pending?.installment_id || null,
+          paymentMethod: 'PIX',
+          skipWindowCheck: true,
+        });
+        out.status = res?.sent ? 'sent' : 'not_sent';
+        out.detail = res;
+        out.pending_charge = pending?.installment_id || null;
+      } catch (e) {
+        out.status = 'error';
+        out.error = (e as Error).message;
+      }
+      wooviResults.push(out);
+    }
+    return new Response(JSON.stringify({ provider: 'woovi', results: wooviResults }, null, 2), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
   if (!Array.isArray(customer_ids) || customer_ids.length === 0) {
     return new Response(JSON.stringify({ error: 'customer_ids array required' }), {
       status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
