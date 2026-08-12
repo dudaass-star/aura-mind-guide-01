@@ -185,7 +185,9 @@ Deno.serve(async (req) => {
     const origin = req.headers.get("origin") || "https://olaaura.com.br";
     const portalSession = await stripe.billingPortal.sessions.create({
       customer: customerId,
-      return_url: `${origin}/meu-espaco`,
+      // `?billing=return` avisa o portal que o cliente voltou da atualização,
+      // pra ele confirmar na tela se a cobrança entrou (o webhook cobra na hora).
+      return_url: `${origin}/meu-espaco?billing=return`,
       locale: "pt-BR",
     });
 
