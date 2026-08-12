@@ -389,6 +389,102 @@ async function findSubscription(
     return null;
 }
 
+/**
+ * Ciclo do mandato não pago: registra a cobrança, marca a falha no profile,
+ * dispara o aviso 1 da escada de dunning e agenda os degraus seguintes
+ * (D+2, D+4, D+7) — a Woovi avisa a falha uma única vez por cobrança.
+ */
+async function handleUnpaidCycle(
+  supabase: any,
+  sub: Record<string, any>,
+  charge: { chargeId: string; status: string; valueCents: number; dueDate: string | null; payload: unknown },
+): Promise<void> {
+  // 1) Persistência da cobrança em aberto (kind=cycle) para auditoria.
+  const { data: existing } = await supabase.from("woovi_charges")
+    .select("id").eq("installment_id", charge.chargeId).maybeSingle();
+  if (existing?.id) {
+    await supabase.from("woovi_charges")
+      .update({ status: charge.status, raw_payload: charge.payload }).eq("id", existing.id);
+  } else {
+    const { count } = await supabase.from("woovi_charges")
+      .select("id", { count: "exact", head: true })
+      .eq("subscription_id", sub.subscription_id);
+    await supabase.from("woovi_charges").insert({
+      subscription_id: sub.subscription_id,
+      installment_id: charge.chargeId,
+      user_id: sub.user_id,
+      cycle_index: Number(count || 0),
+      value_cents: charge.valueCents,
+      due_date: charge.dueDate,
+      status: charge.status,
+      kind: "cycle",
+      raw_payload: charge.payload,
+    });
+  }
+
+  if (!sub.user_id) {
+    console.warn(`[webhook-woovi] ciclo ${charge.chargeId} não pago sem user_id — dunning não acionado`);
+    return;
+  }
+
+  const { data: profile } = await supabase.from("profiles")
+    .select("id, user_id, phone, name").eq("id", sub.user_id).maybeSingle();
+  if (!profile?.user_id) {
+    console.warn(`[webhook-woovi] profile ${sub.user_id} não encontrado — dunning não acionado`);
+    return;
+  }
+
+  await supabase.from("profiles")
+    .update({ payment_failed_at: new Date().toISOString() })
+    .eq("user_id", profile.user_id);
+  await supabase.from("woovi_subscriptions")
+    .update({ last_error: `ciclo ${charge.chargeId} não pago (${charge.status}) — dunning acionado` })
+    .eq("id", sub.id);
+
+  // 2) Aviso 1 imediato (template genérico, não é marketing).
+  try {
+    const { sendDunningWhatsApp } = await import("../_shared/dunning-whatsapp.ts");
+    const res = await sendDunningWhatsApp({
+      supabase,
+      profile: { user_id: profile.user_id, phone: profile.phone, name: profile.name },
+      eventId: `woovi-dunning-${charge.chargeId}-1`,
+      provider: "woovi",
+      paymentId: charge.chargeId,
+      subscriptionId: sub.subscription_id,
+      customerId: sub.customer_id ?? null,
+      paymentMethod: "PIX",
+    });
+    console.log(`[webhook-woovi] dunning aviso 1 tier=${res.tier} sent=${res.sent} skip=${res.skipped || "-"}`);
+  } catch (e) {
+    console.error("[webhook-woovi] falha no aviso 1 de dunning:", e);
+  }
+
+  // 3) Degraus seguintes agendados (idempotente por payment_id + attempt).
+  for (let i = 0; i < DUNNING_FOLLOWUP_DAYS.length; i++) {
+    const attempt = i + 2;
+    const executeAt = new Date(Date.now() + DUNNING_FOLLOWUP_DAYS[i] * 24 * 3600 * 1000);
+    const { data: dup } = await supabase.from("scheduled_tasks")
+      .select("id").eq("task_type", "dunning_pix_followup").eq("status", "pending")
+      .contains("payload", { payment_id: charge.chargeId, attempt }).maybeSingle();
+    if (dup) continue;
+    const { error } = await supabase.from("scheduled_tasks").insert({
+      user_id: profile.user_id,
+      task_type: "dunning_pix_followup",
+      execute_at: executeAt.toISOString(),
+      status: "pending",
+      payload: {
+        provider: "woovi",
+        payment_id: charge.chargeId,
+        subscription_id: sub.subscription_id,
+        customer_id: sub.customer_id ?? null,
+        payment_method: "PIX",
+        attempt,
+      },
+    });
+    if (error) console.error("[webhook-woovi] erro agendando dunning:", error.message);
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   // A Woovi faz um GET/POST de validação ao registrar a URL.
