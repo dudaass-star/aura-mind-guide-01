@@ -1811,7 +1811,7 @@ const CheckoutV2 = () => {
             }, 200);
           }
         }}>
-          <DialogContent className="bg-[hsl(220_35%_12%)] border-white/10 text-white max-w-md">
+          <DialogContent className="bg-[hsl(220_35%_12%)] border-white/10 text-white max-w-md max-h-[90vh] overflow-y-auto">
             {pixStage === "form" ? (
               <>
                 <DialogHeader>
