@@ -4,6 +4,7 @@
 // o banco debita sozinho na data de vencimento — sem novo QR a cada ciclo.
 // Eventos PIX_AUTOMATIC_RECURRING_AUTHORIZATION_* e PAYMENT_RECEIVED chegam no webhook-asaas.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { saveMetaIdentity } from "../_shared/meta-identity.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
