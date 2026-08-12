@@ -15,6 +15,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import QRCode from "https://esm.sh/qrcode@1.5.4";
 import { wooviFetch, brtDate, WOOVI_FREQUENCY } from "../_shared/woovi.ts";
 import { composeQr, extractWooviUrl } from "../_shared/pix-emv.ts";
+import { buildFixedPixRecurringOptions } from "../_shared/woovi-subscription-payload.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -375,10 +376,7 @@ Deno.serve(async (req) => {
           type: "PIX_RECURRING",
           dayGenerateCharge,
           dayDue: DAY_DUE,
-          pixRecurringOptions: {
-            journey: "ONLY_RECURRENCY",
-            retryPolicy: "THREE_RETRIES_7_DAYS",
-          },
+          pixRecurringOptions: buildFixedPixRecurringOptions("ONLY_RECURRENCY"),
           customer,
         },
       });
@@ -440,11 +438,7 @@ Deno.serve(async (req) => {
           type: "PIX_RECURRING",
           dayGenerateCharge,
           dayDue: DAY_DUE,
-          pixRecurringOptions: {
-            journey: "PAYMENT_ON_APPROVAL",
-            // 3 retentativas em até 7 dias: paridade com Asaas/Inter antes do dunning.
-            retryPolicy: "THREE_RETRIES_7_DAYS",
-          },
+          pixRecurringOptions: buildFixedPixRecurringOptions("PAYMENT_ON_APPROVAL"),
           customer,
         },
       });
