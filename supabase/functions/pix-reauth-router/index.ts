@@ -43,9 +43,37 @@ Deno.serve(async (req) => {
       .eq("user_id", tokenRow.user_id).maybeSingle();
     if (!profile) return json({ error: "Cadastro não encontrado" }, 404);
 
-    const gateway = profile.card_gateway === "inter" ? "inter" : "asaas";
+    const gateway = profile.card_gateway === "inter"
+      ? "inter"
+      : profile.card_gateway === "woovi"
+        ? "woovi"
+        : "asaas";
+    // Oferta de retenção: o mandato novo nasce já no valor reduzido (no PIX não
+    // existe cupom). Só a Woovi suporta hoje.
+    const offer = ["discount_30", "lite", "base"].includes(String(body.offer))
+      ? String(body.offer)
+      : null;
 
     if (action === "status") {
+      if (gateway === "woovi") {
+        // Confirmação = pagamento da entrada do mandato novo (Jornada 3: um
+        // scan cobra e autoriza), então olhamos a cobrança mais recente.
+        const { data: sub } = await supabase
+          .from("woovi_subscriptions").select("subscription_id, status")
+          .eq("user_id", profile.id).is("replaced_by_subscription_id", null)
+          .order("created_at", { ascending: false }).limit(1).maybeSingle();
+        if (!sub?.subscription_id) return json({ state: "pending", status: "PENDING", gateway });
+        const { data: charge } = await supabase
+          .from("woovi_charges").select("paid_at, status")
+          .eq("subscription_id", sub.subscription_id)
+          .order("created_at", { ascending: false }).limit(1).maybeSingle();
+        const paid = !!charge?.paid_at;
+        return json({
+          state: paid ? "active" : "pending",
+          status: paid ? "CONFIRMED" : (sub.status || "PENDING"),
+          gateway,
+        });
+      }
       if (gateway === "inter") {
         // No Inter a confirmação é o pagamento do QR composto (ciclo mais recente
         // do mandato novo) — o mandato só fica APROVADA depois disso.
@@ -73,9 +101,13 @@ Deno.serve(async (req) => {
 
     const fn = gateway === "inter"
       ? "criar-pix-recorrente-inter"
-      : "criar-pix-recorrente-asaas";
+      : gateway === "woovi"
+        ? "criar-pix-recorrente-woovi"
+        : "criar-pix-recorrente-asaas";
     const { data, error } = await supabase.functions.invoke(fn, {
-      body: { mode: "reauthorize", token },
+      body: offer && gateway === "woovi"
+        ? { mode: "offer", offer, token }
+        : { mode: "reauthorize", token },
     });
     if (error) {
       console.error(`[pix-reauth-router] ${fn} falhou:`, error.message);
