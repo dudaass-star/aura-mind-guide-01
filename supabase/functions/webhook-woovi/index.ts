@@ -396,14 +396,27 @@ async function findSubscription(
 }
 
 /**
- * Ciclo do mandato não pago: registra a cobrança, marca a falha no profile,
- * dispara o aviso 1 da escada de dunning e agenda os degraus seguintes
- * (D+2, D+4, D+7) — a Woovi avisa a falha uma única vez por cobrança.
+ * Ciclo do mandato não pago: registra a cobrança e entra na RECUPERAÇÃO
+ * SILENCIOSA de ~30 dias.
+ *
+ * Por que silenciosa: no PIX Automático o cliente cancela o mandato com um
+ * clique no app do banco. Avisar "seu pagamento falhou" é convite pro
+ * cancelamento definitivo, enquanto a chance real é simplesmente falta de saldo
+ * num dia do mês. Então:
+ *   • zero mensagem de falha e zero corte de acesso por ~28 dias;
+ *   • reciclagem da parcela a cada 7 dias (4 tentativas, cada uma com a
+ *     política técnica 3R/7D da Woovi por baixo) → cobre o mês inteiro;
+ *   • só depois de esgotar tudo, UMA conversa com oferta (30% off → Lite).
+ * Isso espelha o cartão, onde o acesso segue liberado durante os ~21 dias de
+ * Smart Retries do Stripe e o corte só acontece no cancelamento.
  */
 async function handleUnpaidCycle(
   supabase: any,
   sub: Record<string, any>,
-  charge: { chargeId: string; status: string; valueCents: number; dueDate: string | null; payload: unknown },
+  charge: {
+    chargeId: string; status: string; valueCents: number; dueDate: string | null;
+    payload: unknown; tryLevel?: boolean;
+  },
 ): Promise<void> {
   // 1) Persistência da cobrança em aberto (kind=cycle) para auditoria.
   const { data: existing } = await supabase.from("woovi_charges")
@@ -428,67 +441,53 @@ async function handleUnpaidCycle(
     });
   }
 
+  // Rejeição de tentativa intermediária: a Woovi ainda retenta sozinha.
+  if (charge.tryLevel) {
+    console.log(`[webhook-woovi] tentativa intermediária ${charge.chargeId} (${charge.status}) — sem ação`);
+    return;
+  }
+
   if (!sub.user_id) {
-    console.warn(`[webhook-woovi] ciclo ${charge.chargeId} não pago sem user_id — dunning não acionado`);
+    console.warn(`[webhook-woovi] ciclo ${charge.chargeId} não pago sem user_id — recuperação não iniciada`);
     return;
   }
 
   const { data: profile } = await supabase.from("profiles")
     .select("id, user_id, phone, name").eq("id", sub.user_id).maybeSingle();
   if (!profile?.user_id) {
-    console.warn(`[webhook-woovi] profile ${sub.user_id} não encontrado — dunning não acionado`);
+    console.warn(`[webhook-woovi] profile ${sub.user_id} não encontrado — recuperação não iniciada`);
     return;
   }
 
-  await supabase.from("profiles")
-    .update({ payment_failed_at: new Date().toISOString() })
-    .eq("user_id", profile.user_id);
+  // NÃO gravamos payment_failed_at nem cortamos acesso: durante a janela de
+  // recuperação o cliente segue com a Aura normalmente (paridade com o cartão).
   await supabase.from("woovi_subscriptions")
-    .update({ last_error: `ciclo ${charge.chargeId} não pago (${charge.status}) — dunning acionado` })
+    .update({ last_error: `ciclo ${charge.chargeId} não pago (${charge.status}) — recuperação silenciosa iniciada` })
     .eq("id", sub.id);
 
-  // 2) Aviso 1 imediato (template genérico, não é marketing).
-  try {
-    const { sendDunningWhatsApp } = await import("../_shared/dunning-whatsapp.ts");
-    const res = await sendDunningWhatsApp({
-      supabase,
-      profile: { user_id: profile.user_id, phone: profile.phone, name: profile.name },
-      eventId: `woovi-dunning-${charge.chargeId}-1`,
+  // 2) Primeira reciclagem agora (idempotente por subscription_id + cycle).
+  const { data: dup } = await supabase.from("scheduled_tasks")
+    .select("id").eq("task_type", "woovi_cycle_recycle").eq("status", "pending")
+    .contains("payload", { subscription_id: sub.subscription_id }).maybeSingle();
+  if (dup) {
+    console.log(`[webhook-woovi] reciclagem já agendada para ${sub.subscription_id}`);
+    return;
+  }
+  const { error } = await supabase.from("scheduled_tasks").insert({
+    user_id: profile.user_id,
+    task_type: "woovi_cycle_recycle",
+    execute_at: new Date().toISOString(),
+    status: "pending",
+    payload: {
       provider: "woovi",
-      paymentId: charge.chargeId,
-      subscriptionId: sub.subscription_id,
-      customerId: null,
-      paymentMethod: "PIX",
-    });
-    console.log(`[webhook-woovi] dunning aviso 1 tier=${res.tier} sent=${res.sent} skip=${res.skipped || "-"}`);
-  } catch (e) {
-    console.error("[webhook-woovi] falha no aviso 1 de dunning:", e);
-  }
-
-  // 3) Degraus seguintes agendados (idempotente por payment_id + attempt).
-  for (let i = 0; i < DUNNING_FOLLOWUP_DAYS.length; i++) {
-    const attempt = i + 2;
-    const executeAt = new Date(Date.now() + DUNNING_FOLLOWUP_DAYS[i] * 24 * 3600 * 1000);
-    const { data: dup } = await supabase.from("scheduled_tasks")
-      .select("id").eq("task_type", "dunning_pix_followup").eq("status", "pending")
-      .contains("payload", { payment_id: charge.chargeId, attempt }).maybeSingle();
-    if (dup) continue;
-    const { error } = await supabase.from("scheduled_tasks").insert({
-      user_id: profile.user_id,
-      task_type: "dunning_pix_followup",
-      execute_at: executeAt.toISOString(),
-      status: "pending",
-      payload: {
-        provider: "woovi",
-        payment_id: charge.chargeId,
-        subscription_id: sub.subscription_id,
-        customer_id: null,
-        payment_method: "PIX",
-        attempt,
-      },
-    });
-    if (error) console.error("[webhook-woovi] erro agendando dunning:", error.message);
-  }
+      subscription_id: sub.subscription_id,
+      payment_id: charge.chargeId,
+      attempt: 1,
+      started_at: new Date().toISOString(),
+    },
+  });
+  if (error) console.error("[webhook-woovi] erro agendando reciclagem:", error.message);
+  else console.log(`[webhook-woovi] recuperação silenciosa iniciada para ${sub.subscription_id}`);
 }
 
 Deno.serve(async (req) => {
