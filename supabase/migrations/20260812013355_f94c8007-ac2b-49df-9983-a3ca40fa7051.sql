@@ -1,0 +1,1 @@
+ALTER TABLE public.woovi_subscriptions ADD COLUMN IF NOT EXISTS reauth_notified_at timestamptz;

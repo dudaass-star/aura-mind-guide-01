@@ -120,7 +120,8 @@ export interface DunningWhatsAppParams {
     name?: string | null;
   };
   eventId: string;
-  provider: "stripe" | "asaas";
+  /** Gateway de origem da falha (só rastreabilidade: a escada é a mesma). */
+  provider: "stripe" | "asaas" | "woovi" | "inter";
   invoiceId?: string | null;
   subscriptionId?: string | null;
   paymentId?: string | null;
@@ -430,7 +431,7 @@ export interface DegradedDunningParams {
   /** Link de retomada de pagamento já pronto (portal/fatura), de preferência curto. */
   link: string;
   eventId: string;
-  provider: "stripe" | "asaas";
+  provider: "stripe" | "asaas" | "woovi" | "inter";
   invoiceId?: string | null;
   subscriptionId?: string | null;
   paymentId?: string | null;

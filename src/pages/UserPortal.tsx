@@ -123,6 +123,8 @@ const UserPortal = () => {
   const firstName = profile?.name?.split(" ")[0] || "você";
   // Trilho PIX Automático Bacen pelo Banco Inter (sem cartão, mandato Bacen).
   const isInterPix = (profile as any)?.card_gateway === "inter";
+  // Trilho PIX Automático pela Woovi (jornada composta, mandato Bacen).
+  const isWooviPix = (profile as any)?.card_gateway === "woovi";
 
   const handleOpenBillingPortal = async () => {
     if (portalLoading) return;
@@ -133,6 +135,15 @@ const UserPortal = () => {
         title: "Você paga via PIX Automático",
         description:
           "Não há cartão para atualizar. Se a renovação parou, use o link de reautorização que enviamos por e-mail ou fale com o suporte.",
+      });
+      return;
+    }
+    // PIX Automático Woovi: idem Inter — o que resolve é reautorizar o mandato.
+    if (isWooviPix) {
+      toast({
+        title: "Você paga via PIX Automático",
+        description:
+          "Não há cartão para atualizar. Se a renovação parou, mandamos um QR novo pra reautorizar o débito no seu banco — ou fale com o suporte.",
       });
       return;
     }

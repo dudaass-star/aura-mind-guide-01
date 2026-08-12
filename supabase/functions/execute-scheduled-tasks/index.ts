@@ -494,7 +494,9 @@ Deno.serve(async (req) => {
               supabase,
               profile: { user_id: task.user_id, phone: profile.phone, name: profile.name },
               eventId: payload.event_id,
-              provider: payload.provider === 'asaas' ? 'asaas' : 'stripe',
+              provider: ['asaas', 'woovi', 'inter'].includes(String(payload.provider))
+                ? (payload.provider as 'asaas' | 'woovi' | 'inter')
+                : 'stripe',
               invoiceId: payload.invoice_id ?? null,
               subscriptionId: payload.subscription_id ?? null,
               paymentId: payload.payment_id ?? null,
@@ -508,31 +510,45 @@ Deno.serve(async (req) => {
           }
 
           case 'dunning_pix_followup': {
-            // Cadência de dunning do PIX (recorrente e PIX Automático).
-            // O Asaas emite PAYMENT_OVERDUE uma única vez por cobrança e não há
+            // Cadência de dunning do PIX (recorrente e PIX Automático), Asaas ou
+            // Woovi. O gateway emite a falha uma única vez por cobrança e não há
             // retry de cartão no PIX, então a escada (aviso 2 → 30% → Lite)
             // avança por estas tarefas agendadas em D+2, D+4 e D+7.
+            const dunningProvider = (payload.provider === 'woovi' ? 'woovi' : 'asaas') as 'woovi' | 'asaas';
             const ASAAS_API_KEY = Deno.env.get('ASAAS_API_KEY') || '';
             const ASAAS_BASE_URL = (Deno.env.get('ASAAS_ENV') === 'production' || !Deno.env.get('ASAAS_ENV'))
               ? 'https://api.asaas.com/v3'
               : 'https://api-sandbox.asaas.com/v3';
             const pixPaymentId = payload.payment_id as string;
-            if (!ASAAS_API_KEY || !pixPaymentId) {
-              console.warn('⚠️ dunning_pix_followup payload incompleto ou sem ASAAS_API_KEY');
+            const WOOVI_APP_ID = Deno.env.get('WOOVI_APP_ID') || '';
+            const providerKeyMissing = dunningProvider === 'woovi' ? !WOOVI_APP_ID : !ASAAS_API_KEY;
+            if (providerKeyMissing || !pixPaymentId) {
+              console.warn(`⚠️ dunning_pix_followup payload incompleto ou sem credencial (${dunningProvider})`);
               break;
             }
 
             // 1) Já pago? cancela o resto da cadência e não envia nada.
-            const pixResp = await fetch(`${ASAAS_BASE_URL}/payments/${pixPaymentId}`, {
-              headers: {
-                access_token: ASAAS_API_KEY,
-                'Content-Type': 'application/json',
-                'User-Agent': 'Aura/1.0',
-              },
-            });
-            const pixJson: any = await pixResp.json().catch(() => ({}));
-            const pixStatus = pixJson?.status as string | undefined;
-            if (pixStatus === 'CONFIRMED' || pixStatus === 'RECEIVED' || pixStatus === 'RECEIVED_IN_CASH') {
+            let pixStatus: string | undefined;
+            if (dunningProvider === 'woovi') {
+              const wResp = await fetch(
+                `https://api.woovi.com/api/v1/charge/${encodeURIComponent(pixPaymentId)}`,
+                { headers: { Authorization: WOOVI_APP_ID, 'Content-Type': 'application/json' } },
+              );
+              const wJson: any = await wResp.json().catch(() => ({}));
+              pixStatus = (wJson?.charge?.status ?? wJson?.status) as string | undefined;
+            } else {
+              const pixResp = await fetch(`${ASAAS_BASE_URL}/payments/${pixPaymentId}`, {
+                headers: {
+                  access_token: ASAAS_API_KEY,
+                  'Content-Type': 'application/json',
+                  'User-Agent': 'Aura/1.0',
+                },
+              });
+              const pixJson: any = await pixResp.json().catch(() => ({}));
+              pixStatus = pixJson?.status as string | undefined;
+            }
+            const paidStatuses = ['CONFIRMED', 'RECEIVED', 'RECEIVED_IN_CASH', 'COMPLETED', 'PAID'];
+            if (pixStatus && paidStatuses.includes(String(pixStatus).toUpperCase())) {
               console.log(`✅ PIX ${pixPaymentId} já pago (${pixStatus}), cancelando cadência pendente`);
               await supabase
                 .from('scheduled_tasks')
@@ -547,8 +563,8 @@ Deno.serve(async (req) => {
             const pixRes = await sendDunningWhatsApp({
               supabase,
               profile: { user_id: task.user_id, phone: profile.phone, name: profile.name },
-              eventId: `asaas-pixdunning-${pixPaymentId}-${payload.attempt ?? 1}`,
-              provider: 'asaas',
+              eventId: `${dunningProvider}-pixdunning-${pixPaymentId}-${payload.attempt ?? 1}`,
+              provider: dunningProvider,
               paymentId: pixPaymentId,
               subscriptionId: payload.subscription_id ?? null,
               customerId: payload.customer_id ?? null,

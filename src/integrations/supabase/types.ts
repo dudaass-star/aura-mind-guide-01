@@ -3729,6 +3729,7 @@ export type Database = {
           qr_expires_at: string | null
           qr_payload: string | null
           raw_payload: Json | null
+          reauth_notified_at: string | null
           recurrency_id: string | null
           replaced_by_subscription_id: string | null
           request_key: string | null
@@ -3773,6 +3774,7 @@ export type Database = {
           qr_expires_at?: string | null
           qr_payload?: string | null
           raw_payload?: Json | null
+          reauth_notified_at?: string | null
           recurrency_id?: string | null
           replaced_by_subscription_id?: string | null
           request_key?: string | null
@@ -3817,6 +3819,7 @@ export type Database = {
           qr_expires_at?: string | null
           qr_payload?: string | null
           raw_payload?: Json | null
+          reauth_notified_at?: string | null
           recurrency_id?: string | null
           replaced_by_subscription_id?: string | null
           request_key?: string | null
