@@ -28,18 +28,20 @@ async function logWooviAttempt(
     const { count } = await supabase.from('woovi_charges')
       .select('id', { count: 'exact', head: true })
       .eq('subscription_id', a.subscriptionId);
-    await supabase.from('woovi_charges').insert({
+    const { error: logErr } = await supabase.from('woovi_charges').insert({
       subscription_id: a.subscriptionId,
       // Sufixo evita colidir com a linha do ciclo (lookups usam maybeSingle).
       installment_id: `${a.installmentId}:${a.label}:${Date.now()}`,
       user_id: a.userId,
       cycle_index: Number(count || 0),
-      value_cents: a.valueCents || null,
+      // value_cents é NOT NULL: 0 em vez de null para não perder a tentativa.
+      value_cents: Number(a.valueCents || 0),
       due_date: a.dueDate,
       status: a.status,
       kind: 'recovery_attempt',
       raw_payload: { label: a.label, ok: a.ok, response: a.raw?.slice(0, 1500) ?? null },
     });
+    if (logErr) console.error('[woovi] insert da tentativa recusado:', logErr.message);
     await supabase.from('woovi_subscriptions')
       .update({ last_error: `${a.label}: ${a.status}` })
       .eq('subscription_id', a.subscriptionId);
@@ -56,6 +58,14 @@ async function cancelWooviRecovery(supabase: any, subscriptionId: string) {
     .eq('status', 'pending')
     .contains('payload', { subscription_id: subscriptionId });
 }
+
+// Tarefas puramente técnicas: elas COBRAM, não falam com o cliente. Não podem
+// ser abortadas por falta de telefone no perfil, senão a assinatura morre sem
+// nenhuma tentativa de débito.
+const PHONELESS_TASK_TYPES = new Set([
+  'woovi_cycle_recycle',
+  'woovi_next_cycle_cobr',
+]);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Reescreve um texto de lembrete que foi gravado N dias atrás para a data de
@@ -204,13 +214,13 @@ Deno.serve(async (req) => {
         console.log(`🔧 Processing task ${task.id}: type=${task.task_type}, user=${task.user_id}`);
 
         // Get user profile for phone and instance config
-        const { data: profile } = await supabase
+        const { data: profileRow } = await supabase
           .from('profiles')
           .select('phone, name, whatsapp_instance_id')
           .eq('user_id', task.user_id)
           .maybeSingle();
 
-        if (!profile?.phone) {
+        if (!profileRow?.phone && !PHONELESS_TASK_TYPES.has(task.task_type)) {
           console.warn(`⚠️ No phone found for user ${task.user_id}, marking as failed`);
           await supabase
             .from('scheduled_tasks')
@@ -219,6 +229,11 @@ Deno.serve(async (req) => {
           failed++;
           continue;
         }
+
+        // Tarefas técnicas podem rodar sem perfil/telefone; as que conversam com
+        // o cliente já passaram pela guarda acima.
+        const profile = (profileRow ?? { phone: '', name: null, whatsapp_instance_id: null }) as
+          { phone: string; name: string | null; whatsapp_instance_id: string | null };
 
         let instanceConfig = undefined;
         try {

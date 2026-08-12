@@ -241,6 +241,16 @@ Deno.serve(async (req) => {
           status: "CANCELADA",
           last_error: `Mandato ${remoteStatus} no banco do pagador (detectado pela auditoria)`,
         }).eq("id", sub.id);
+        // Mandato morto não tem o que cobrar: encerra a cadência silenciosa
+        // para o cliente não receber a oferta duas vezes (aqui e no dunning).
+        await supabase.from("scheduled_tasks")
+          .update({ status: "canceled", executed_at: new Date().toISOString() })
+          .in("task_type", [
+            "woovi_cycle_recycle", "woovi_next_cycle_cobr",
+            "woovi_recovery_offer", "woovi_recovery_final",
+          ])
+          .eq("status", "pending")
+          .contains("payload", { subscription_id: sub.subscription_id });
       }
 
       let sent = false;
@@ -286,7 +296,7 @@ Deno.serve(async (req) => {
     const today = brtDate(now);
     const { data: dueSubs } = await supabase
       .from("woovi_subscriptions")
-      .select("id, subscription_id, customer_email, next_charge_date, value_cents, status, last_error")
+      .select("id, user_id, subscription_id, customer_email, next_charge_date, value_cents, status, last_error")
       .in("status", MANDATE_ACTIVE_STATUSES)
       .is("replaced_by_subscription_id", null)
       .not("subscription_id", "is", null)
@@ -343,6 +353,52 @@ Deno.serve(async (req) => {
           subscription: { globalID: remote?.globalID, correlationID: remote?.correlationID },
         });
         if (ok) report.recuperados.push({ charge: correlationID, via: "ciclo" });
+      }
+
+      // Rede de segurança da recuperação silenciosa: se nenhuma cobrança do
+      // ciclo vencido está paga e o webhook de "ciclo não pago" nunca chegou,
+      // a cadência nunca começaria — o cliente pararia de pagar em silêncio.
+      const anyPaid = cycleCharges.some((c) =>
+        WOOVI_PAID_STATUSES.includes(String(c?.status || "").toUpperCase())
+      );
+      if (!anyPaid) {
+        const { data: pending } = await supabase.from("scheduled_tasks")
+          .select("id")
+          .in("task_type", [
+            "woovi_cycle_recycle", "woovi_next_cycle_cobr",
+            "woovi_recovery_offer", "woovi_recovery_final",
+          ])
+          .eq("status", "pending")
+          .contains("payload", { subscription_id: sub.subscription_id })
+          .limit(1);
+        const alreadyRunning = Array.isArray(pending) && pending.length > 0;
+        if (!alreadyRunning) {
+          let authUserId: string | null = null;
+          if (sub.user_id) {
+            const { data: p } = await supabase.from("profiles")
+              .select("user_id").eq("id", sub.user_id).maybeSingle();
+            authUserId = (p?.user_id as string) || null;
+          }
+          if (authUserId && !dryRun) {
+            await supabase.from("scheduled_tasks").insert({
+              user_id: authUserId,
+              task_type: "woovi_cycle_recycle",
+              execute_at: new Date().toISOString(),
+              status: "pending",
+              payload: {
+                provider: "woovi",
+                subscription_id: sub.subscription_id,
+                attempt: 1,
+                started_at: new Date().toISOString(),
+                source: "audit_backstop",
+              },
+            });
+          }
+          report.ciclo_sem_cobranca.push({
+            sub: sub.subscription_id, email: sub.customer_email,
+            ciclo: sub.next_charge_date, recuperacao_aberta: !!authUserId, dryRun,
+          });
+        }
       }
     }
 

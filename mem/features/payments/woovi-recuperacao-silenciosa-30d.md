@@ -20,3 +20,9 @@ Régua implementada:
 Decisões: nunca somar o ciclo perdido ao seguinte (risco de recusa por valor/nova autorização); nunca antecipar parcela; ciclo perdido é perda assumida. QR avulso só na oferta (permite pagar de outra conta).
 
 Segurança: pagamento entrando (webhook) e qualquer tarefa da cadência cancelam todas as tarefas `woovi_*` pendentes — oferta nunca vai pra quem regularizou. Cada tentativa gera uma linha em `woovi_charges` com `kind='recovery_attempt'` (não sobrescreve `last_error`).
+
+## Guardas de robustez (auditoria)
+
+- Tarefas `woovi_cycle_recycle` e `woovi_next_cycle_cobr` rodam sem telefone no perfil (`PHONELESS_TASK_TYPES` em `execute-scheduled-tasks`): elas cobram, não conversam. Só `woovi_recovery_offer`/`_final` exigem telefone.
+- `logWooviAttempt` grava `value_cents: 0` em vez de `null` (coluna é NOT NULL) e loga o erro do insert — o histórico de tentativas não pode ficar cego.
+- `woovi-pix-audit`: mandato revogado no banco cancela a cadência pendente (evita oferta duplicada) e ciclo vencido sem cobrança paga abre `woovi_cycle_recycle` (`source: audit_backstop`) quando o webhook de ciclo não pago não chega.
