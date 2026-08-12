@@ -36,6 +36,15 @@ const PRICES: Record<string, Record<string, number>> = {
 // Valor de entrada promocional: só no ciclo mensal e só na 1ª compra do cliente.
 const TRIAL_PRICES: Record<string, number> = { essencial: 690, direcao: 990, transformacao: 1990 };
 
+// Ofertas de retenção (mode=offer). O mandato novo já nasce com o valor da
+// oferta: no PIX não existe cupom, o desconto É o valor da recorrência.
+const LITE_PRICE_CENTS = 1990;
+function offerValueCents(tier: string, fullCents: number): number {
+  if (tier === "discount_30") return Math.round(fullCents * 0.7);
+  if (tier === "lite") return LITE_PRICE_CENTS;
+  return fullCents;
+}
+
 const PLAN_NAMES: Record<string, string> = {
   essencial: "Essencial", direcao: "Direção", transformacao: "Transformação",
 };
