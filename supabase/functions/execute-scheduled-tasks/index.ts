@@ -65,6 +65,9 @@ async function cancelWooviRecovery(supabase: any, subscriptionId: string) {
 const PHONELESS_TASK_TYPES = new Set([
   'woovi_cycle_recycle',
   'woovi_next_cycle_cobr',
+  // Encerramento também é técnico: cancela o mandato e fecha o perfil, sem
+  // falar com o cliente. Sem isso um perfil sem telefone deixava o mandato vivo.
+  'woovi_recovery_final',
 ]);
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -825,9 +828,23 @@ Deno.serve(async (req) => {
               console.log(`✅ woovi ${subscriptionId} regularizado antes do encerramento`);
               break;
             }
-            await wooviFetch(`/api/v1/subscriptions/${encodeURIComponent(subscriptionId)}`, {
-              method: 'DELETE',
-            }).catch(() => null);
+            // A Woovi só cancela mandato com PUT .../cancel (DELETE devolve 405).
+            // Se ela recusar, NÃO marcamos CANCELADA: mandato vivo com status
+            // morto sai do radar da auditoria e pode debitar sem contrato local.
+            const canceled = await wooviFetch(
+              `/api/v1/subscriptions/${encodeURIComponent(subscriptionId)}/cancel`,
+              { method: 'PUT' },
+            ).catch(() => null);
+            if (!canceled?.ok) {
+              await supabase
+                .from('woovi_subscriptions')
+                .update({
+                  last_error: `encerramento recusado pela Woovi (HTTP ${canceled?.status ?? 'erro'}) — mandato segue ativo`,
+                })
+                .eq('subscription_id', subscriptionId);
+              console.error(`❌ woovi ${subscriptionId}: cancelamento do mandato recusado — mantido ativo para a auditoria`);
+              break;
+            }
             await supabase
               .from('woovi_subscriptions')
               .update({ status: 'CANCELADA', last_error: 'recuperação de 30 dias esgotada' })
