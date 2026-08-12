@@ -245,9 +245,22 @@ Deno.serve(async (req) => {
 
       let sent = false;
       if (userStillActive && !sub.reauth_notified_at) {
+        // Quem estava ativo e teve o mandato derrubado no banco volta pelo
+        // primeiro degrau da escada de retenção (30% off), não pelo preço
+        // cheio de /v2.
+        let offerLink = "https://olaaura.com.br/v2";
+        if (sub.user_id) {
+          await supabase.from("user_portal_tokens")
+            .upsert({ user_id: sub.user_id }, { onConflict: "user_id" });
+          const { data: tk } = await supabase.from("user_portal_tokens")
+            .select("token").eq("user_id", sub.user_id).maybeSingle();
+          if (tk?.token) {
+            offerLink = `https://olaaura.com.br/cancelar?t=${tk.token}&offer=discount_30`;
+          }
+        }
         const text = [
           "Oi! O débito automático da sua assinatura foi cancelado no seu banco, então a próxima renovação não vai acontecer.",
-          "Se você quiser continuar comigo, dá pra reautorizar em 1 minuto aqui: https://olaaura.com.br/v2",
+          `Se você quiser continuar comigo, dá pra reautorizar em 1 minuto aqui: ${offerLink}`,
           "Se foi você que cancelou de propósito, tudo bem — só me avisa que eu paro de te lembrar.",
         ].join("\n\n");
         if (!dryRun) {
