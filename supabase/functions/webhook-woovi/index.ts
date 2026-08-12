@@ -688,7 +688,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ---- 3) Cobrança de ciclo não paga → dunning --------------------------
+    // ---- 3) Cobrança de ciclo não paga → recuperação silenciosa -----------
     // A entrada não entra aqui: QR de checkout abandonado é assunto do
     // recover-abandoned-checkout / woovi-pix-audit, não de dunning.
     const chargeUnpaid = UNPAID_CHARGE_STATUSES.includes(chargeStatus)
@@ -712,11 +712,13 @@ Deno.serve(async (req) => {
               valueCents: Number(charge.value ?? sub.value_cents ?? 0),
               dueDate: charge.expiresDate ? String(charge.expiresDate).slice(0, 10) : null,
               payload: body,
+              tryLevel: TRY_LEVEL_MARKERS.some((m) =>
+                (chargeStatus || "").includes(m) || event.toUpperCase().includes(m)),
             });
           }
           await finishEvent(supabase, key);
         } catch (e) {
-          await failEvent(supabase, key, (e as Error)?.message || "erro no dunning do ciclo");
+          await failEvent(supabase, key, (e as Error)?.message || "erro na recuperação do ciclo");
           throw e;
         }
       }
