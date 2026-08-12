@@ -494,7 +494,9 @@ Deno.serve(async (req) => {
               supabase,
               profile: { user_id: task.user_id, phone: profile.phone, name: profile.name },
               eventId: payload.event_id,
-              provider: payload.provider === 'asaas' ? 'asaas' : 'stripe',
+              provider: ['asaas', 'woovi', 'inter'].includes(String(payload.provider))
+                ? (payload.provider as 'asaas' | 'woovi' | 'inter')
+                : 'stripe',
               invoiceId: payload.invoice_id ?? null,
               subscriptionId: payload.subscription_id ?? null,
               paymentId: payload.payment_id ?? null,
