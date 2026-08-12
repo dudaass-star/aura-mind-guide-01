@@ -1317,7 +1317,7 @@ Me conta: como você está hoje?`;
                   const formattedPhone = normalizeBrazilianPhone(cleanPhone);
                   
                   // Determine plan from subscription price
-                  const sub = await stripe.subscriptions.retrieve(invoice.subscription as string);
+                  const sub = await stripe.subscriptions.retrieve(paidSubscriptionId as string);
                   const priceId = sub.items.data[0]?.price?.id;
                   let plan = 'essencial';
                   const priceEssencial = Deno.env.get('STRIPE_PRICE_ESSENCIAL_MONTHLY') || '';
