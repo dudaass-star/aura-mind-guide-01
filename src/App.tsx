@@ -45,9 +45,22 @@ import BlogPost from "./pages/BlogPost";
 import Pagamento from "./pages/Pagamento";
 import NotFound from "./pages/NotFound";
 import GA4RouteTracker from "./components/GA4RouteTracker";
+import MetaRouteTracker from "./components/MetaRouteTracker";
 import ScrollToTop from "./components/ScrollToTop";
 
 const queryClient = new QueryClient();
+
+/**
+ * Redireciona a raiz para /v2 preservando query string e hash.
+ * Sem isso o fbclid do anúncio é descartado e o Meta perde a atribuição
+ * do clique (Landing Page Views zeradas).
+ */
+const RootRedirect = () => (
+  <Navigate
+    to={`/v2${window.location.search}${window.location.hash}`}
+    replace
+  />
+);
 
 const App = () => (
   <HelmetProvider>
@@ -58,9 +71,10 @@ const App = () => (
         <BrowserRouter>
           <ScrollToTop />
           <GA4RouteTracker />
+          <MetaRouteTracker />
           <PortalAuthProvider>
           <Routes>
-            <Route path="/" element={<Navigate to="/v2" replace />} />
+            <Route path="/" element={<RootRedirect />} />
             <Route path="/v2" element={<IndexV2 />} />
             <Route path="/checkout" element={<Checkout />} />
             <Route path="/v2/checkout" element={<CheckoutV2 />} />
