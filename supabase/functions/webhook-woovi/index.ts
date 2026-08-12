@@ -579,6 +579,40 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ---- 3) Cobrança de ciclo não paga → dunning --------------------------
+    // A entrada não entra aqui: QR de checkout abandonado é assunto do
+    // recover-abandoned-checkout / woovi-pix-audit, não de dunning.
+    const chargeUnpaid = UNPAID_CHARGE_STATUSES.includes(chargeStatus)
+      || UNPAID_CHARGE_STATUSES.some((s) => event.toUpperCase().includes(s));
+    if (chargeUnpaid && chargeId && !chargePaid) {
+      const key = `charge:${chargeId}:unpaid:${chargeStatus || "unknown"}`;
+      if (await claimEvent(supabase, key, "charge_unpaid", body)) {
+        try {
+          const sub = await findSubscription(supabase, [
+            ...subIds, charge.subscriptionCorrelationID, charge.correlationID,
+          ]);
+          const isEntryCharge = !!sub && sub.creation_mode === "composed"
+            && !!sub.entry_charge_correlation_id
+            && String(chargeId) === String(sub.entry_charge_correlation_id);
+          if (!sub || isEntryCharge) {
+            console.log(`[webhook-woovi] cobrança ${chargeId} não paga ignorada (entrada ou sem mandato)`);
+          } else {
+            await handleUnpaidCycle(supabase, sub, {
+              chargeId: String(chargeId),
+              status: chargeStatus || "UNPAID",
+              valueCents: Number(charge.value ?? sub.value_cents ?? 0),
+              dueDate: charge.expiresDate ? String(charge.expiresDate).slice(0, 10) : null,
+              payload: body,
+            });
+          }
+          await finishEvent(supabase, key);
+        } catch (e) {
+          await failEvent(supabase, key, (e as Error)?.message || "erro no dunning do ciclo");
+          throw e;
+        }
+      }
+    }
+
     return new Response(JSON.stringify({ received: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
