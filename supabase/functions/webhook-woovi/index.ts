@@ -37,14 +37,17 @@ const CYCLE_MONTHS: Record<string, number> = {
 const PLAN_SESSIONS: Record<string, number> = { essencial: 1, direcao: 4, transformacao: 8 };
 
 // Vocabulário de status vive em _shared/woovi.ts (ponto único de tradução).
-// Cobrança do mandato que NÃO entrou: aciona a mesma escada de dunning do
-// Stripe/Asaas (2 avisos → 30% → Lite). "EXPIRED" cobre o QR do ciclo vencido.
+// Cobrança do mandato que NÃO entrou. No PIX Automático NÃO avisamos o cliente
+// da falha: um clique no app do banco derruba o mandato pra sempre. Em vez de
+// dunning falante, entramos na RECUPERAÇÃO SILENCIOSA de ~30 dias (reciclagem
+// da parcela a cada 7 dias) e só falamos com ele no fim, já com oferta.
 const UNPAID_CHARGE_STATUSES = [
   "EXPIRED", "OVERDUE", "FAILED", "REJECTED", "DECLINED", "ERROR",
   "PIX_AUTOMATIC_COBR_FAILED", "PIX_AUTOMATIC_COBR_REJECTED", "PIX_AUTOMATIC_COBR_EXPIRED",
 ];
-// Cadência de acompanhamento (a Woovi só avisa a falha uma vez por cobrança).
-const DUNNING_FOLLOWUP_DAYS = [2, 4, 7];
+// Rejeição de TENTATIVA intermediária (a própria Woovi ainda vai retentar
+// dentro da política 3R/7D). Não é o fim da linha do ciclo: só registramos.
+const TRY_LEVEL_MARKERS = ["TRY_REJECTED", "TRY_FAILED", "COBR_TRY"];
 
 function addMonths(d: Date, months: number): Date {
   const r = new Date(d);
