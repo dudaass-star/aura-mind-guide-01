@@ -486,9 +486,15 @@ Deno.serve(async (req) => {
       global_id: sub?.globalID || null,
       recurrency_id: pixRec?.recurrencyId || null,
       user_id: userId,
-      // Vocabulário interno (APROVADA/AGUARDANDO/...): a auditoria e a guarda
+      // Vocabulário interno (AGUARDANDO/APROVADA/...): a auditoria e a guarda
       // anti-duplicidade filtram por ele, então nunca gravamos o status cru.
-      status: normalizeMandateStatus(sub?.status, "AGUARDANDO"),
+      // Na criação o mandato NUNCA nasce aprovado — `subscription.status=ACTIVE`
+      // só diz que a assinatura existe na Woovi. A aprovação chega no webhook
+      // pelo status do `pixRecurring`, por isso rejeição/cancelamento passam e
+      // qualquer outra coisa cai em AGUARDANDO.
+      status: ["REJEITADA", "CANCELADA"].includes(normalizeMandateStatus(pixRec?.status, "AGUARDANDO"))
+        ? normalizeMandateStatus(pixRec?.status, "AGUARDANDO")
+        : "AGUARDANDO",
       pix_status: String(pixRec?.status || "CREATED"),
       qr_payload: qrPayload,
       qr_encoded_image: qrImage,
