@@ -228,6 +228,9 @@ const CheckoutV2 = () => {
   // Oferecer PIX com o trilho fora do ar gera um QR que nunca nasce — o cliente
   // acha que pagou e a venda morre em silêncio.
   const [pixRailUp, setPixRailUp] = useState(false);
+  // Enquanto a config não chega, "PIX escondido" é só o estado inicial — não é
+  // trilho fora do ar. Sem isso o funil registrava rail_down em todo acesso.
+  const [railConfigLoaded, setRailConfigLoaded] = useState(false);
   // Banco que executa o PIX Automático (Bacen). Trocado por system_config.pix_gateway.
   const [pixGateway, setPixGateway] = useState<"asaas" | "inter" | "woovi">("asaas");
 
@@ -303,17 +306,23 @@ const CheckoutV2 = () => {
         if (v === "asaas" || v === "stripe") setCardGateway(v);
       }
 
-      const health = rows?.find((r) => r.key === "pix_rail_status");
-      const parsedHealth = health ? (parse(health.value) as { healthy?: boolean } | null) : null;
-      setPixRailUp(parsedHealth?.healthy === true);
-
-      // Qual banco atende o PIX Automático hoje. Asaas segue como padrão até o
-      // trilho do Inter ser promovido em system_config.
+      // Qual banco atende o PIX Automático hoje (system_config.pix_gateway).
       const rail = rows?.find((r) => r.key === "pix_gateway");
       const parsedRail = rail ? parse(rail.value) : null;
-      if (parsedRail === "inter" || parsedRail === "asaas" || parsedRail === "woovi") {
-        setPixGateway(parsedRail);
-      }
+      const activeRail =
+        parsedRail === "inter" || parsedRail === "asaas" || parsedRail === "woovi" ? parsedRail : null;
+      if (activeRail) setPixGateway(activeRail);
+
+      // Saúde só vale se for do trilho que está em uso. Um status antigo de
+      // outro gateway (ex.: Asaas com 401) não pode derrubar o trilho atual.
+      const health = rows?.find((r) => r.key === "pix_rail_status");
+      const parsedHealth = health
+        ? (parse(health.value) as { healthy?: boolean; gateway?: string } | null)
+        : null;
+      const healthMatchesRail =
+        !parsedHealth?.gateway || !activeRail || parsedHealth.gateway === activeRail;
+      setPixRailUp(parsedHealth?.healthy === true && healthMatchesRail);
+      setRailConfigLoaded(true);
     })();
   }, []);
 
@@ -375,11 +384,11 @@ const CheckoutV2 = () => {
   // número que diz quanto custa o trilho estar fora do ar.
   const railDownLogged = useRef(false);
   useEffect(() => {
-    if (pixRailUp || railDownLogged.current) return;
+    if (!railConfigLoaded || pixRailUp || railDownLogged.current) return;
     railDownLogged.current = true;
     logFunnel("pix_rail_down", { plan: selectedPlan, billing: billingPeriod, paymentMethod: "card" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pixRailUp]);
+  }, [pixRailUp, railConfigLoaded]);
 
   // Abas de ciclo com preço/mês, total do ciclo e economia em reais (do plano selecionado).
   const cycleItems: CycleTabItem[] = useMemo(
