@@ -14,7 +14,13 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { sendProactive } from "../_shared/whatsapp-provider.ts";
 import { normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
-import { wooviFetch, brtDate } from "../_shared/woovi.ts";
+import {
+  wooviFetch, brtDate,
+  WOOVI_APPROVED_STATUSES as APPROVED_STATUSES,
+  WOOVI_REJECTED_STATUSES as REJECTED_STATUSES,
+  WOOVI_CANCELED_STATUSES as CANCELED_STATUSES,
+  WOOVI_PAID_STATUSES as PAID_STATUSES,
+} from "../_shared/woovi.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -30,10 +36,7 @@ const CYCLE_MONTHS: Record<string, number> = {
 };
 const PLAN_SESSIONS: Record<string, number> = { essencial: 1, direcao: 4, transformacao: 8 };
 
-const APPROVED_STATUSES = ["APPROVED", "PIX_AUTOMATIC_APPROVED", "ACTIVE", "AUTHORIZED"];
-const REJECTED_STATUSES = ["REJECTED", "PIX_AUTOMATIC_REJECTED", "EXPIRED", "PIX_AUTOMATIC_EXPIRED"];
-const CANCELED_STATUSES = ["CANCELED", "CANCELLED", "PIX_AUTOMATIC_CANCELED", "INACTIVE"];
-const PAID_STATUSES = ["COMPLETED", "PAID", "CONFIRMED", "PIX_AUTOMATIC_COBR_COMPLETED"];
+// Vocabulário de status vive em _shared/woovi.ts (ponto único de tradução).
 // Cobrança do mandato que NÃO entrou: aciona a mesma escada de dunning do
 // Stripe/Asaas (2 avisos → 30% → Lite). "EXPIRED" cobre o QR do ciclo vencido.
 const UNPAID_CHARGE_STATUSES = [
@@ -514,7 +517,14 @@ Deno.serve(async (req) => {
     ];
 
     // ---- 1) Ciclo de vida do mandato ---------------------------------------
-    const mandateStatus = String(pixRecurring.status || subPayload.status || "").toUpperCase();
+    // IMPORTANTE: `subscription.status = ACTIVE` significa apenas "assinatura
+    // criada na Woovi" — NÃO é a aprovação do débito automático pelo banco. Só o
+    // status do `pixRecurring` autoriza marcar APROVADA; do objeto assinatura
+    // aceitamos apenas cancelamento/rejeição.
+    const pixMandateStatus = String(pixRecurring.status || "").toUpperCase();
+    const subObjStatus = String(subPayload.status || "").toUpperCase();
+    const mandateStatus = pixMandateStatus || subObjStatus;
+    const canApprove = !!pixMandateStatus;
     const isMandateEvent = Boolean(subPayload.globalID || pixRecurring.recurrencyId) && !!mandateStatus;
 
     if (isMandateEvent) {
@@ -525,8 +535,9 @@ Deno.serve(async (req) => {
           if (!sub) {
             console.warn("[webhook-woovi] mandato desconhecido:", subIds.filter(Boolean).join(","));
           } else {
+            const approvedNow = canApprove && APPROVED_STATUSES.includes(mandateStatus);
             let localStatus = sub.status as string;
-            if (APPROVED_STATUSES.includes(mandateStatus)) localStatus = "APROVADA";
+            if (approvedNow) localStatus = "APROVADA";
             else if (REJECTED_STATUSES.includes(mandateStatus)) localStatus = "REJEITADA";
             else if (CANCELED_STATUSES.includes(mandateStatus)) localStatus = "CANCELADA";
 
@@ -535,7 +546,7 @@ Deno.serve(async (req) => {
               pix_status: mandateStatus,
               recurrency_id: pixRecurring.recurrencyId || sub.recurrency_id,
               raw_payload: body,
-              ...(APPROVED_STATUSES.includes(mandateStatus)
+              ...(approvedNow
                 ? { mandate_approved_at: sub.mandate_approved_at || new Date().toISOString() }
                 : {}),
               ...(extractPayerBank(body) ? { payer_bank: extractPayerBank(body) } : {}),
@@ -548,7 +559,7 @@ Deno.serve(async (req) => {
             // Bump do valor: só na Jornada 3 nativa. Na composta o mandato já nasce
             // no valor cheio (R$ 29,90) — a entrada vem de uma cobrança avulsa, então
             // não há valor para subir e o app do banco mostra "R$ 29,90/mês" fixo.
-            if (APPROVED_STATUSES.includes(mandateStatus) && sub.is_trial
+            if (approvedNow && sub.is_trial
                 && sub.value_cents > (sub.trial_value_cents ?? 0)
                 && sub.creation_mode !== "composed") {
               const upd = await wooviFetch(

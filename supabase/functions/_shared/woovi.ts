@@ -72,3 +72,43 @@ export const WOOVI_FREQUENCY: Record<string, string> = {
   semestral: "SEMIANNUALLY",
   yearly: "ANNUALLY",
 };
+
+// ---------------------------------------------------------------------------
+// Vocabulário de status do mandato
+//
+// A Woovi devolve status em inglês (ACTIVE / APPROVED / REJECTED / ...), mas
+// todo o resto do projeto (auditoria, guarda anti-duplicidade, dunning) fala
+// português (APROVADA / REJEITADA / CANCELADA). Se cada função traduzir do seu
+// jeito, os mecanismos de segurança ficam cegos — foi exatamente o que
+// aconteceu. Este é o ÚNICO ponto de tradução do trilho.
+// ---------------------------------------------------------------------------
+export const WOOVI_APPROVED_STATUSES = [
+  "APPROVED", "PIX_AUTOMATIC_APPROVED", "ACTIVE", "AUTHORIZED",
+];
+export const WOOVI_REJECTED_STATUSES = [
+  "REJECTED", "PIX_AUTOMATIC_REJECTED", "EXPIRED", "PIX_AUTOMATIC_EXPIRED",
+];
+export const WOOVI_CANCELED_STATUSES = [
+  "CANCELED", "CANCELLED", "PIX_AUTOMATIC_CANCELED", "INACTIVE",
+];
+export const WOOVI_PAID_STATUSES = [
+  "COMPLETED", "PAID", "CONFIRMED", "PIX_AUTOMATIC_COBR_COMPLETED",
+];
+
+/** Rótulos internos que significam "mandato vivo, debitando". */
+export const MANDATE_ACTIVE_STATUSES = ["APROVADA", "ATIVA"];
+
+/**
+ * Traduz o status cru da Woovi para o vocabulário interno. Status desconhecido
+ * (ou mandato ainda em criação) volta como `fallback` — nunca inventamos
+ * "aprovada" para algo que não conhecemos: há dinheiro real em cima.
+ */
+export function normalizeMandateStatus(remote: unknown, fallback = "CRIANDO"): string {
+  const s = String(remote ?? "").toUpperCase().trim();
+  if (!s) return fallback;
+  if (WOOVI_APPROVED_STATUSES.includes(s)) return "APROVADA";
+  if (WOOVI_REJECTED_STATUSES.includes(s)) return "REJEITADA";
+  if (WOOVI_CANCELED_STATUSES.includes(s)) return "CANCELADA";
+  if (["CREATED", "PENDING", "WAITING", "PIX_AUTOMATIC_CREATED"].includes(s)) return "AGUARDANDO";
+  return fallback;
+}

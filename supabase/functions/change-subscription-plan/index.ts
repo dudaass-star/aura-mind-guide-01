@@ -132,13 +132,77 @@ serve(async (req) => {
 
     const { data: profile, error: profileErr } = await supabase
       .from("profiles")
-      .select("user_id, email, phone, plan, asaas_customer_id")
+      .select("id, user_id, email, phone, plan, asaas_customer_id")
       .eq("user_id", userId)
       .maybeSingle();
 
     if (profileErr) throw new Error(`profile lookup: ${profileErr.message}`);
     if (!profile) return jsonError("Perfil não encontrado", 404);
     logStep("Profile loaded", { email: profile.email, plan: profile.plan });
+
+    // ---- PIX Automático (Woovi): mandato é fixo por valor -------------------
+    // Não existe "trocar o valor" de um débito autorizado: o banco aprovou um
+    // contrato. A troca de plano é cancelar o mandato atual e emitir um QR novo
+    // já no plano escolhido — e é isso que devolvemos aqui.
+    const { data: wooviMandate } = await supabase
+      .from("woovi_subscriptions")
+      .select("id, subscription_id, plan, billing_period, status")
+      .eq("user_id", profile.id)
+      .in("status", ["APROVADA", "ATIVA"])
+      .is("replaced_by_subscription_id", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (wooviMandate?.subscription_id) {
+      logStep("Woovi PIX mandate detected", { subId: wooviMandate.subscription_id });
+      // Ciclo do Woovi usa "semestral"; aqui o vocabulário é "semiannual".
+      const wooviBilling = cycle === "semiannual" ? "semestral" : cycle;
+
+      // Token do portal: o fluxo de novo QR roda em modo reautorização, que
+      // reaproveita CPF/nome/telefone já cadastrados (sem pedir nada de novo).
+      let token: string | null = null;
+      const { data: existingToken } = await supabase
+        .from("user_portal_tokens").select("token").eq("user_id", userId).limit(1).maybeSingle();
+      token = existingToken?.token || null;
+      if (!token) {
+        token = crypto.randomUUID();
+        const { error: tokenErr } = await supabase
+          .from("user_portal_tokens").insert({ token, user_id: userId });
+        if (tokenErr) {
+          logStep("ERROR creating portal token", { message: tokenErr.message });
+          return jsonError("Não consegui preparar a troca agora. Tenta de novo em instantes.", 500);
+        }
+      }
+
+      const { data: newQr, error: qrErr } = await supabase.functions.invoke(
+        "criar-pix-recorrente-woovi",
+        { body: { mode: "reauthorize", token, plan, billing: wooviBilling, deferReplacement: "true" } },
+      );
+      if (qrErr || (newQr as any)?.error) {
+        logStep("ERROR creating new Woovi mandate", { message: qrErr?.message || (newQr as any)?.error });
+        return jsonError(
+          "Não consegui gerar a nova autorização de PIX agora. Me chama no WhatsApp que eu resolvo na hora.",
+          502,
+        );
+      }
+
+      // Só cancelamos o mandato antigo depois que o novo QR existe: nunca
+      // deixamos o cliente sem cobrança E sem autorização.
+      return new Response(
+        JSON.stringify({
+          pixAutomatic: true,
+          requiresNewAuthorization: true,
+          plan,
+          billing: cycle,
+          message: `Seu débito automático está no plano ${PLAN_NAMES[profile.plan as PlanId] || profile.plan}. `
+            + `Pra mudar pro ${PLAN_NAMES[plan]} eu preciso de uma nova autorização no seu banco — `
+            + `depois que você aprovar, a antiga é cancelada automaticamente.`,
+          ...(newQr as Record<string, unknown>),
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
 
     // Bloqueia troca direta pra usuários PIX Asaas (sub recorrente).
     // Detecção: existe pelo menos uma asaas_payment com asaas_subscription_id ativo.

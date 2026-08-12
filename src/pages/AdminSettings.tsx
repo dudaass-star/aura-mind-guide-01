@@ -5,7 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, Save, Brain, Mic, Mail, Eye, CreditCard } from 'lucide-react';
+import { ArrowLeft, Save, Brain, Mic, Mail, Eye, CreditCard, QrCode, Activity } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const AI_MODELS = [
@@ -30,6 +30,15 @@ const CARD_GATEWAYS = [
   { value: 'asaas', label: 'Asaas', description: 'Formulário nativo no /v2. PCI SAQ A-EP. Suporta parcelado.' },
 ];
 
+// Trilho de PIX Automático (Bacen). O checkout só mostra PIX quando o trilho
+// escolhido passa na sonda de saúde — por isso o botão "Testar trilho" antes de salvar.
+const PIX_RAILS = [
+  { value: 'woovi', label: 'Woovi', description: 'QR composto: entrada promocional + mandato fixo em 1 scan.' },
+  { value: 'inter', label: 'Banco Inter', description: 'Jornada 2 (aprovação separada). Trial de 7 dias grátis.' },
+  { value: 'asaas', label: 'Asaas', description: 'Jornada 1 nativa. Conta restrita hoje (401).' },
+  { value: 'off', label: 'Desligado', description: 'Esconde o PIX no checkout. Só cartão.' },
+];
+
 export default function AdminSettings() {
   const { isLoading, isAdmin, redirectIfNotAdmin } = useAdminAuth();
   const [selectedModel, setSelectedModel] = useState('google/gemini-2.5-pro');
@@ -38,6 +47,12 @@ export default function AdminSettings() {
   const [currentTTSModel, setCurrentTTSModel] = useState('google/erinome');
   const [selectedCardGateway, setSelectedCardGateway] = useState('stripe');
   const [currentCardGateway, setCurrentCardGateway] = useState('stripe');
+  const [selectedPixRail, setSelectedPixRail] = useState('woovi');
+  const [currentPixRail, setCurrentPixRail] = useState('woovi');
+  const [pixRailStatus, setPixRailStatus] = useState<any>(null);
+  const [probing, setProbing] = useState(false);
+  const [probeResult, setProbeResult] = useState<any>(null);
+  const [savingPixRail, setSavingPixRail] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savingTTS, setSavingTTS] = useState(false);
   const [savingCardGateway, setSavingCardGateway] = useState(false);
@@ -59,7 +74,7 @@ export default function AdminSettings() {
       const { data, error } = await supabase
         .from('system_config')
         .select('key, value')
-        .in('key', ['ai_model', 'tts_model', 'card_gateway']);
+        .in('key', ['ai_model', 'tts_model', 'card_gateway', 'pix_gateway', 'pix_rail_status']);
 
       if (error) throw error;
 
@@ -79,6 +94,15 @@ export default function AdminSettings() {
         } else if (row.key === 'card_gateway') {
           setSelectedCardGateway(val);
           setCurrentCardGateway(val);
+        } else if (row.key === 'pix_gateway') {
+          setSelectedPixRail(val);
+          setCurrentPixRail(val);
+        } else if (row.key === 'pix_rail_status') {
+          try {
+            setPixRailStatus(typeof val === 'string' ? JSON.parse(val) : val);
+          } catch {
+            setPixRailStatus(null);
+          }
         }
       }
     } catch (e) {
@@ -140,6 +164,47 @@ export default function AdminSettings() {
     }
   };
 
+  // Sonda avulsa: valida o trilho ANTES de promover, sem tocar no status
+  // persistido que o checkout lê.
+  const handleProbePixRail = async () => {
+    setProbing(true);
+    setProbeResult(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('asaas-health-check', {
+        body: { probe_gateway: selectedPixRail },
+      });
+      if (error) throw error;
+      setProbeResult(data);
+    } catch (e: any) {
+      toast({ title: 'Sonda falhou', description: e.message, variant: 'destructive' });
+    } finally {
+      setProbing(false);
+    }
+  };
+
+  const handleSavePixRail = async () => {
+    setSavingPixRail(true);
+    try {
+      const { error } = await supabase
+        .from('system_config')
+        .upsert({ key: 'pix_gateway', value: JSON.stringify(selectedPixRail), updated_at: new Date().toISOString() }, { onConflict: 'key' });
+      if (error) throw error;
+      setCurrentPixRail(selectedPixRail);
+      // Reavalia a saúde do novo trilho imediatamente: sem isso o checkout
+      // continuaria lendo o status do trilho anterior.
+      const { data } = await supabase.functions.invoke('asaas-health-check', { body: {} });
+      if (data) setPixRailStatus(data);
+      toast({
+        title: 'Trilho de PIX salvo',
+        description: `Novos PIX vão pelo ${PIX_RAILS.find(r => r.value === selectedPixRail)?.label}. Mandatos ativos não são afetados.`,
+      });
+    } catch (e: any) {
+      toast({ title: 'Erro ao salvar', description: e.message, variant: 'destructive' });
+    } finally {
+      setSavingPixRail(false);
+    }
+  };
+
   if (isLoading || loadingConfig) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -153,6 +218,7 @@ export default function AdminSettings() {
   const hasChanges = selectedModel !== currentModel;
   const hasTTSChanges = selectedTTSModel !== currentTTSModel;
   const hasCardGatewayChanges = selectedCardGateway !== currentCardGateway;
+  const hasPixRailChanges = selectedPixRail !== currentPixRail;
 
   return (
     <div className="min-h-screen bg-background">
@@ -314,6 +380,64 @@ export default function AdminSettings() {
                   <Save className="h-4 w-4 mr-2" />
                   {savingCardGateway ? 'Salvando...' : 'Salvar'}
                 </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <QrCode className="h-5 w-5 text-primary" />
+                <CardTitle>Trilho de PIX Automático</CardTitle>
+              </div>
+              <CardDescription>
+                Define qual provedor gera os mandatos de débito automático no /v2. O PIX só aparece no checkout se o trilho estiver saudável — teste antes de salvar.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Select value={selectedPixRail} onValueChange={setSelectedPixRail}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione um trilho" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PIX_RAILS.map(rail => (
+                    <SelectItem key={rail.value} value={rail.value}>
+                      <div className="flex flex-col">
+                        <span className="font-medium">{rail.label}</span>
+                        <span className="text-xs text-muted-foreground">{rail.description}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {pixRailStatus && (
+                <p className="text-xs text-muted-foreground">
+                  Saúde atual: <span className="font-medium text-foreground">{pixRailStatus.gateway}</span>{' '}
+                  {pixRailStatus.healthy ? 'operacional' : `indisponível — ${pixRailStatus.detail}`}
+                </p>
+              )}
+
+              {probeResult && (
+                <p className="text-xs text-muted-foreground">
+                  Sonda de {probeResult.gateway}: {probeResult.healthy ? 'passou' : `falhou — ${probeResult.detail}`}
+                </p>
+              )}
+
+              <div className="flex items-center justify-between pt-2 gap-3">
+                <p className="text-sm text-muted-foreground">
+                  Trilho ativo: <span className="font-medium text-foreground">{PIX_RAILS.find(r => r.value === currentPixRail)?.label || currentPixRail}</span>
+                </p>
+                <div className="flex gap-2">
+                  <Button onClick={handleProbePixRail} disabled={probing} variant="outline">
+                    <Activity className="h-4 w-4 mr-2" />
+                    {probing ? 'Testando...' : 'Testar trilho'}
+                  </Button>
+                  <Button onClick={handleSavePixRail} disabled={savingPixRail || !hasPixRailChanges} variant="sage">
+                    <Save className="h-4 w-4 mr-2" />
+                    {savingPixRail ? 'Salvando...' : 'Salvar'}
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
