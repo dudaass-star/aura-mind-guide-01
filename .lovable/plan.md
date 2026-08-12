@@ -33,10 +33,7 @@ Então dá para montar o mesmo efeito do Asaas usando duas chamadas Woovi já di
 
 Resultado esperado no app do banco: "Mensal • R$ 29,90 • Todo dia X" com valor fixo, e o pagamento de R$ 6,90 no mesmo scan. Validação obrigatória em teste real de R$ 6,90 antes de qualquer promoção do gateway.
 
-### 3. Recuperar o trilho Asaas (paralelo, alto valor)
-O Asaas já fazia isso nativamente e certo — o que quebrou foi credencial (401 em produção desde 05/08). Regularizar a chave/conta Asaas devolve a Jornada 1 sem gambiarra e vira o trilho preferido, com a Woovi como reserva.
-
-### 4. Rede de segurança (só se 1, 2 e 3 falharem)
+### 3. Rede de segurança (só se 1 e 2 falharem)
 PIX nasce **fixo em R$ 29,90** (sem promo de entrada), e a promo de R$ 6,90 fica só no cartão. Perde-se a isca no PIX, mas o cliente vê exatamente o valor que será debitado.
 
 ## Enquanto isso
