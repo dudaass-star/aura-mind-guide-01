@@ -185,6 +185,9 @@ Deno.serve(async (req) => {
     const body = (await req.json()) as Record<string, string>;
     let { plan, billing, name, email, phone, cpf } = body;
     const { fbp, fbc, gaClientId } = body;
+    // Guarda o par fbp/fbc do lead: se a compra concluir sem cookie,
+    // o webhook recupera daqui para o Purchase não perder atribuição.
+    void saveMetaIdentity(supabase, { email, phone, fbp, fbc, source: "criar-pix-recorrente-woovi" });
     const mode = body.mode || "checkout";
     const reauthToken = body.token;
     // `offer` é uma reautorização com valor de retenção (30% off ou Lite): o
