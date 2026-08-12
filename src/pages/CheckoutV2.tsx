@@ -228,6 +228,9 @@ const CheckoutV2 = () => {
   // Oferecer PIX com o trilho fora do ar gera um QR que nunca nasce — o cliente
   // acha que pagou e a venda morre em silêncio.
   const [pixRailUp, setPixRailUp] = useState(false);
+  // Enquanto a config não chega, "PIX escondido" é só o estado inicial — não é
+  // trilho fora do ar. Sem isso o funil registrava rail_down em todo acesso.
+  const [railConfigLoaded, setRailConfigLoaded] = useState(false);
   // Banco que executa o PIX Automático (Bacen). Trocado por system_config.pix_gateway.
   const [pixGateway, setPixGateway] = useState<"asaas" | "inter" | "woovi">("asaas");
 
@@ -319,6 +322,7 @@ const CheckoutV2 = () => {
       const healthMatchesRail =
         !parsedHealth?.gateway || !activeRail || parsedHealth.gateway === activeRail;
       setPixRailUp(parsedHealth?.healthy === true && healthMatchesRail);
+      setRailConfigLoaded(true);
     })();
   }, []);
 
@@ -380,11 +384,11 @@ const CheckoutV2 = () => {
   // número que diz quanto custa o trilho estar fora do ar.
   const railDownLogged = useRef(false);
   useEffect(() => {
-    if (pixRailUp || railDownLogged.current) return;
+    if (!railConfigLoaded || pixRailUp || railDownLogged.current) return;
     railDownLogged.current = true;
     logFunnel("pix_rail_down", { plan: selectedPlan, billing: billingPeriod, paymentMethod: "card" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pixRailUp]);
+  }, [pixRailUp, railConfigLoaded]);
 
   // Abas de ciclo com preço/mês, total do ciclo e economia em reais (do plano selecionado).
   const cycleItems: CycleTabItem[] = useMemo(
