@@ -688,6 +688,20 @@ Deno.serve(async (req) => {
                 throw new Error("ativação de acesso falhou — devolvendo para retentativa");
               }
             }
+
+            // Dinheiro entrou: mata qualquer cadência de recuperação pendente.
+            // Sem isso o cliente que regularizou ainda podia receber a oferta
+            // de 30% off dias depois.
+            if (sub?.subscription_id) {
+              await supabase.from("scheduled_tasks")
+                .update({ status: "canceled", executed_at: new Date().toISOString() })
+                .in("task_type", [
+                  "woovi_cycle_recycle", "woovi_next_cycle_cobr",
+                  "woovi_recovery_offer", "woovi_recovery_final",
+                ])
+                .eq("status", "pending")
+                .contains("payload", { subscription_id: sub.subscription_id });
+            }
             await finishEvent(supabase, key);
           }
         } catch (e) {
