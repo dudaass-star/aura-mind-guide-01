@@ -245,7 +245,8 @@ Deno.serve(async (req) => {
         && prior.subscription_id
         && prior.qr_expires_at
         && new Date(prior.qr_expires_at).getTime() > Date.now()
-        && !["CANCELED", "REJECTED", "INACTIVE", "ABANDONADA"].includes(String(prior.status));
+        && !["CANCELADA", "REJEITADA", "ABANDONADA", "CANCELED", "REJECTED", "INACTIVE"]
+          .includes(String(prior.status));
       if (reusable) {
         return json({
           authorizationId: prior.subscription_id,
