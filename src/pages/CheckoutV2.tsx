@@ -22,6 +22,7 @@ import {
   getGaClientId,
   trackReturningCustomerMonthly,
 } from "@/lib/ga4";
+import { setAdvancedMatching } from "@/lib/meta-pixel";
 import logoOlaAura from "@/assets/logo-ola-aura.png";
 import "@/styles/v2-theme.css";
 import "@/styles/checkout-theme.css";
@@ -633,6 +634,13 @@ const CheckoutV2 = () => {
       };
 
       if (typeof window !== "undefined" && (window as any).fbq) {
+        // Advanced Matching manual antes de disparar: melhora o match do
+        // evento de navegador mesmo sem o AAM ligado no dataset.
+        setAdvancedMatching({
+          email: email.trim(),
+          phone: phone.replace(/\D/g, ""),
+          firstName: name.trim().split(" ")[0],
+        });
         (window as any).fbq(
           "track",
           "Lead",
@@ -1391,7 +1399,10 @@ const CheckoutV2 = () => {
                 })()}
                 fbc={(() => {
                   const m = document.cookie.match(/(?:^|; )_fbc=([^;]+)/);
-                  return m ? decodeURIComponent(m[1]) : undefined;
+                  if (m) return decodeURIComponent(m[1]);
+                  // Sem cookie ainda: deriva do fbclid da URL (mesma regra do PIX).
+                  const fbclid = new URLSearchParams(window.location.search).get("fbclid");
+                  return fbclid ? `fb.1.${Date.now()}.${fbclid}` : undefined;
                 })()}
                 gaClientId={getGaClientId() || undefined}
                 onBack={handleResetCheckout}
