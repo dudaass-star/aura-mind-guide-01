@@ -164,6 +164,47 @@ export default function AdminSettings() {
     }
   };
 
+  // Sonda avulsa: valida o trilho ANTES de promover, sem tocar no status
+  // persistido que o checkout lê.
+  const handleProbePixRail = async () => {
+    setProbing(true);
+    setProbeResult(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('asaas-health-check', {
+        body: { probe_gateway: selectedPixRail },
+      });
+      if (error) throw error;
+      setProbeResult(data);
+    } catch (e: any) {
+      toast({ title: 'Sonda falhou', description: e.message, variant: 'destructive' });
+    } finally {
+      setProbing(false);
+    }
+  };
+
+  const handleSavePixRail = async () => {
+    setSavingPixRail(true);
+    try {
+      const { error } = await supabase
+        .from('system_config')
+        .upsert({ key: 'pix_gateway', value: JSON.stringify(selectedPixRail), updated_at: new Date().toISOString() }, { onConflict: 'key' });
+      if (error) throw error;
+      setCurrentPixRail(selectedPixRail);
+      // Reavalia a saúde do novo trilho imediatamente: sem isso o checkout
+      // continuaria lendo o status do trilho anterior.
+      const { data } = await supabase.functions.invoke('asaas-health-check', { body: {} });
+      if (data) setPixRailStatus(data);
+      toast({
+        title: 'Trilho de PIX salvo',
+        description: `Novos PIX vão pelo ${PIX_RAILS.find(r => r.value === selectedPixRail)?.label}. Mandatos ativos não são afetados.`,
+      });
+    } catch (e: any) {
+      toast({ title: 'Erro ao salvar', description: e.message, variant: 'destructive' });
+    } finally {
+      setSavingPixRail(false);
+    }
+  };
+
   if (isLoading || loadingConfig) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
