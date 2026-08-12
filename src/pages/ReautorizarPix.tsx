@@ -31,6 +31,8 @@ const PLAN_LABELS: Record<string, string> = {
 export default function ReautorizarPix() {
   const [params] = useSearchParams();
   const token = params.get("token") || "";
+  // Oferta de retenção aceita: o mandato novo nasce já no valor reduzido.
+  const offer = params.get("offer") || "";
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,7 +51,7 @@ export default function ReautorizarPix() {
     try {
       const { data, error: fnError } = await supabase.functions.invoke(
         "pix-reauth-router",
-        { body: { action: "create", token } },
+        { body: { action: "create", token, ...(offer ? { offer } : {}) } },
       );
       if (fnError) throw new Error(fnError.message);
       if (!data || (data as { error?: string }).error) {
@@ -64,7 +66,7 @@ export default function ReautorizarPix() {
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [token, offer]);
 
   // Polling do status da autorização enquanto o QR está na tela.
   useEffect(() => {
@@ -113,9 +115,9 @@ export default function ReautorizarPix() {
           Reativar sua renovação automática
         </h1>
         <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-          Sua autorização de cobrança automática por PIX foi cancelada no app do banco. Um
-          escaneamento resolve: o pagamento abaixo já é o do próximo ciclo e restabelece a
-          renovação automática ao mesmo tempo.
+          {offer
+            ? "Um escaneamento resolve: o pagamento abaixo já é o do novo valor combinado e reativa a renovação automática. Você pode usar qualquer conta sua."
+            : "Sua autorização de cobrança automática por PIX foi cancelada no app do banco. Um escaneamento resolve: o pagamento abaixo já é o do próximo ciclo e restabelece a renovação automática ao mesmo tempo."}
         </p>
 
         {confirmed ? (
