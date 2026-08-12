@@ -451,7 +451,7 @@ async function handleUnpaidCycle(
       provider: "woovi",
       paymentId: charge.chargeId,
       subscriptionId: sub.subscription_id,
-      customerId: sub.customer_id ?? null,
+      customerId: null,
       paymentMethod: "PIX",
     });
     console.log(`[webhook-woovi] dunning aviso 1 tier=${res.tier} sent=${res.sent} skip=${res.skipped || "-"}`);
@@ -476,7 +476,7 @@ async function handleUnpaidCycle(
         provider: "woovi",
         payment_id: charge.chargeId,
         subscription_id: sub.subscription_id,
-        customer_id: sub.customer_id ?? null,
+        customer_id: null,
         payment_method: "PIX",
         attempt,
       },
