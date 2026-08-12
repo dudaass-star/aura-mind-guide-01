@@ -1811,7 +1811,7 @@ const CheckoutV2 = () => {
             }, 200);
           }
         }}>
-          <DialogContent className="bg-[hsl(220_35%_12%)] border-white/10 text-white max-w-md">
+          <DialogContent className="bg-[hsl(220_35%_12%)] border-white/10 text-white max-w-md max-h-[90vh] overflow-y-auto">
             {pixStage === "form" ? (
               <>
                 <DialogHeader>
@@ -1920,15 +1920,15 @@ const CheckoutV2 = () => {
                   </DialogDescription>
                 </DialogHeader>
 
-                <div className="space-y-4 pt-2">
-                  <div className="bg-white rounded-xl p-4 flex justify-center">
+                <div className="space-y-3 sm:space-y-4 pt-2">
+                  <div className="bg-white rounded-xl p-3 sm:p-4 flex justify-center">
                     <img
                       // Asaas devolve base64 puro; o Inter devolve data URI de SVG já pronto.
                       src={pixData.qrImage.startsWith("data:")
                         ? pixData.qrImage
                         : `data:image/png;base64,${pixData.qrImage}`}
                       alt="QR Code PIX"
-                      className="w-56 h-56"
+                      className="w-44 h-44 sm:w-56 sm:h-56"
                     />
                   </div>
 
@@ -1938,7 +1938,7 @@ const CheckoutV2 = () => {
                       <Input
                         readOnly
                         value={pixData.copyPaste}
-                        className={`${inputCls} text-xs font-mono`}
+                        className="mt-0 h-12 sm:h-11 text-xs font-mono bg-white/5 text-white placeholder:text-white/40 border-white/15 focus-visible:ring-0 focus-visible:ring-offset-0 truncate"
                         onFocus={(e) => e.currentTarget.select()}
                       />
                       <Button
@@ -1982,14 +1982,19 @@ const CheckoutV2 = () => {
                         a assinatura não é ativada.
                       </p>
                       {pixData.trial && pixData.recurringAmount ? (
-                        <p className="text-white/80">
-                          A ordem das telas muda de banco pra banco: alguns mostram o valor de hoje
-                          (<strong>R$ {pixData.amount.toFixed(2).replace(".", ",")}</strong>) e a
-                          recorrência (<strong>R$ {pixData.recurringAmount.toFixed(2).replace(".", ",")}/mês</strong>)
-                          juntos; outros, como o Nubank, mostram primeiro a autorização mensal e só
-                          na tela seguinte a cobrança de hoje. <strong>Siga até o fim</strong> — as
-                          duas etapas fazem parte do mesmo QR.
-                        </p>
+                        <details className="group">
+                          <summary className="cursor-pointer text-white/70 underline decoration-white/30 underline-offset-2 list-none">
+                            Como aparece no seu banco
+                          </summary>
+                          <p className="text-white/80 mt-2">
+                            A ordem das telas muda de banco pra banco: alguns mostram o valor de hoje
+                            (<strong>R$ {pixData.amount.toFixed(2).replace(".", ",")}</strong>) e a
+                            recorrência (<strong>R$ {pixData.recurringAmount.toFixed(2).replace(".", ",")}/mês</strong>)
+                            juntos; outros, como o Nubank, mostram primeiro a autorização mensal e só
+                            na tela seguinte a cobrança de hoje. <strong>Siga até o fim</strong> — as
+                            duas etapas fazem parte do mesmo QR.
+                          </p>
+                        </details>
                       ) : null}
                       <p className="text-white/60">
                         Você cancela essa autorização quando quiser, no próprio app do banco.
