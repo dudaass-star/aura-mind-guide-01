@@ -1799,6 +1799,55 @@ Me conta: como você está hoje?`;
       }
     }
 
+    // ========== Troca de método de pagamento → cobra na hora ==========
+    // Antes, o cliente cadastrava um cartão novo no portal e o Stripe só tentava
+    // de novo na próxima data da régua (às vezes dias depois). Aqui a gente
+    // assume o método novo como padrão e quita as faturas abertas imediatamente.
+    if (
+      event.type === 'payment_method.attached' ||
+      event.type === 'setup_intent.succeeded' ||
+      event.type === 'customer.updated'
+    ) {
+      try {
+        let customerId: string | null = null;
+        let paymentMethodId: string | null = null;
+
+        if (event.type === 'payment_method.attached') {
+          const pm = event.data.object as Stripe.PaymentMethod;
+          customerId = (pm.customer as string) || null;
+          paymentMethodId = pm.id;
+        } else if (event.type === 'setup_intent.succeeded') {
+          const si = event.data.object as Stripe.SetupIntent;
+          customerId = (si.customer as string) || null;
+          paymentMethodId = (si.payment_method as string) || null;
+        } else {
+          const cust = event.data.object as Stripe.Customer;
+          const previous = (event.data as any).previous_attributes?.invoice_settings?.default_payment_method;
+          const current = cust.invoice_settings?.default_payment_method as string | null;
+          // Só reage quando o método padrão realmente mudou.
+          if (previous === undefined || !current || previous === current) {
+            paymentMethodId = null;
+          } else {
+            customerId = cust.id;
+            paymentMethodId = current;
+          }
+        }
+
+        if (customerId && paymentMethodId) {
+          const res = await chargeOpenInvoicesNow(stripe, customerId, paymentMethodId);
+          console.log(
+            `💳 [PM-UPDATE] ${event.type} → customer ${customerId}: ${res.paid}/${res.attempted} fatura(s) quitada(s) na hora`,
+          );
+          // O sucesso reaproveita o fluxo de invoice.paid (ativação de acesso,
+          // mensagem e cancelamento do dunning), que o Stripe dispara em seguida.
+        } else {
+          console.log(`ℹ️ [PM-UPDATE] ${event.type} sem método/cliente relevante — ignorado`);
+        }
+      } catch (err) {
+        console.error('❌ [PM-UPDATE] Erro na cobrança imediata:', err);
+      }
+    }
+
     return new Response(JSON.stringify({ received: true }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
