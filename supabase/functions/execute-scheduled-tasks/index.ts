@@ -214,13 +214,13 @@ Deno.serve(async (req) => {
         console.log(`🔧 Processing task ${task.id}: type=${task.task_type}, user=${task.user_id}`);
 
         // Get user profile for phone and instance config
-        const { data: profile } = await supabase
+        const { data: profileRow } = await supabase
           .from('profiles')
           .select('phone, name, whatsapp_instance_id')
           .eq('user_id', task.user_id)
           .maybeSingle();
 
-        if (!profile?.phone && !PHONELESS_TASK_TYPES.has(task.task_type)) {
+        if (!profileRow?.phone && !PHONELESS_TASK_TYPES.has(task.task_type)) {
           console.warn(`⚠️ No phone found for user ${task.user_id}, marking as failed`);
           await supabase
             .from('scheduled_tasks')
@@ -229,6 +229,11 @@ Deno.serve(async (req) => {
           failed++;
           continue;
         }
+
+        // Tarefas técnicas podem rodar sem perfil/telefone; as que conversam com
+        // o cliente já passaram pela guarda acima.
+        const profile = (profileRow ?? { phone: '', name: null, whatsapp_instance_id: null }) as
+          { phone: string; name: string | null; whatsapp_instance_id: string | null };
 
         let instanceConfig = undefined;
         try {
