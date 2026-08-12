@@ -203,17 +203,6 @@ export async function resolveNextDunningStep(args: {
   return noticeSteps + pendingIndex + 1;
 }
 
-interface _UnusedDunningWhatsAppResult {
-  sent: boolean;
-  skipped?: string;
-  attemptNumber?: number;
-  messageSid?: string;
-  error?: string;
-  link?: string;
-  tier?: DunningOfferTier | "generic";
-  deferredTo?: string;
-}
-
 function firstName(name?: string | null): string {
   if (!name) return "tudo bem";
   const first = name.trim().split(/\s+/)[0];
