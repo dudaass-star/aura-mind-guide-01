@@ -71,13 +71,13 @@ const UserPortal = () => {
     }
   };
 
-  const { data: profile, isLoading: profileLoading } = useQuery({
+  const { data: profile, isLoading: profileLoading, refetch: refetchProfile } = useQuery({
     queryKey: ["portal-profile", userId],
     queryFn: async () => {
       const { data, error } = await supabasePortal
         .from("profiles")
         .select(
-          "name, current_journey_id, current_episode, journeys_completed, plan, plan_tier, billing_cycle, asaas_customer_id, card_gateway, last_user_message_at, last_proactive_insight_at, sessions_used_this_month, messages_used_this_month, messages_reset_month, created_at",
+          "name, status, payment_failed_at, current_journey_id, current_episode, journeys_completed, plan, plan_tier, billing_cycle, asaas_customer_id, card_gateway, last_user_message_at, last_proactive_insight_at, sessions_used_this_month, messages_used_this_month, messages_reset_month, created_at",
         )
         .eq("user_id", userId!)
         .maybeSingle();
@@ -86,6 +86,44 @@ const UserPortal = () => {
     },
     enabled: !!userId && linkStatus === "linked",
   });
+
+  // Volta do Billing Portal: o webhook cobra a fatura aberta na hora, então aqui
+  // a gente só confirma o resultado em vez de deixar a tela igual.
+  const billingReturn = searchParams.get("billing") === "return";
+  useEffect(() => {
+    if (!billingReturn || !userId || linkStatus !== "linked") return;
+    let cancelled = false;
+    let attempts = 0;
+    const check = async () => {
+      attempts++;
+      const { data } = await refetchProfile();
+      if (cancelled) return;
+      const p: any = data;
+      const resolved = p && !p.payment_failed_at && !["past_due", "payment_failed"].includes(p.status);
+      if (resolved) {
+        toast({
+          title: "Pagamento confirmado",
+          description: "Sua assinatura está em dia. Obrigado!",
+        });
+        return;
+      }
+      if (attempts >= 4) {
+        toast({
+          title: "Cartão atualizado",
+          description:
+            "Ainda não conseguimos confirmar a cobrança. Se ela não entrar em alguns minutos, tente outro cartão ou fale com o suporte.",
+        });
+        return;
+      }
+      setTimeout(check, 4000);
+    };
+    const timer = setTimeout(check, 3000);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [billingReturn, userId, linkStatus]);
 
   // Detecta PIX Asaas recorrente: tem asaas_customer_id E pelo menos uma payment
   // com asaas_subscription_id ativo (status corrente).
