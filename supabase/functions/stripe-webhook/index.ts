@@ -4,6 +4,7 @@ import { allocateInstance } from "../_shared/instance-helper.ts";
 import { resolveProfile } from "../_shared/profile-resolver.ts";
 import { getPhoneVariations, normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
 import { sendProactive } from "../_shared/whatsapp-provider.ts";
+import { resolveMetaIdentity } from "../_shared/meta-identity.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -721,6 +722,10 @@ Deno.serve(async (req) => {
           try {
             const fbp = session.metadata?.fbp;
             const fbc = session.metadata?.fbc;
+            // Fallback de atribuição: último fbp/fbc conhecido do lead.
+            const ident = await resolveMetaIdentity(supabase, {
+              email: customerEmail, phone: formattedPhone, fbp, fbc,
+            });
             await fetch(`${supabaseUrl}/functions/v1/meta-capi`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseServiceKey}` },
@@ -732,8 +737,8 @@ Deno.serve(async (req) => {
                   email: customerEmail || undefined,
                   phone: formattedPhone,
                   first_name: customerName.split(' ')[0],
-                  ...(fbp && { fbp }),
-                  ...(fbc && { fbc }),
+                  ...(ident.fbp && { fbp: ident.fbp }),
+                  ...(ident.fbc && { fbc: ident.fbc }),
                 },
                 custom_data: {
                   content_name: `Trial ${planName}`,
@@ -761,8 +766,8 @@ Deno.serve(async (req) => {
                   email: customerEmail || undefined,
                   phone: formattedPhone,
                   first_name: customerName.split(' ')[0],
-                  ...(fbp && { fbp }),
-                  ...(fbc && { fbc }),
+                  ...(ident.fbp && { fbp: ident.fbp }),
+                  ...(ident.fbc && { fbc: ident.fbc }),
                 },
                 custom_data: {
                   value: (session.amount_total || 0) / 100,
@@ -1037,6 +1042,10 @@ Deno.serve(async (req) => {
         const eventId = session.id;
         const fbp = session.metadata?.fbp;
         const fbc = session.metadata?.fbc;
+        // Fallback de atribuição: último fbp/fbc conhecido do lead.
+        const ident = await resolveMetaIdentity(supabase, {
+          email: customerEmail, phone: formattedPhone, fbp, fbc,
+        });
         await fetch(`${supabaseUrl}/functions/v1/meta-capi`, {
           method: 'POST',
           headers: {
@@ -1053,8 +1062,8 @@ Deno.serve(async (req) => {
               email: customerEmail || undefined,
               phone: formattedPhone,
               first_name: customerName.split(' ')[0],
-              ...(fbp && { fbp }),
-              ...(fbc && { fbc }),
+              ...(ident.fbp && { fbp: ident.fbp }),
+              ...(ident.fbc && { fbc: ident.fbc }),
             },
             custom_data: {
               value: amountTotal,
@@ -1064,7 +1073,7 @@ Deno.serve(async (req) => {
             },
           }),
         });
-        console.log(`✅ CAPI Purchase event sent (event_id: ${eventId}, fbp: ${!!fbp}, fbc: ${!!fbc})`);
+        console.log(`✅ CAPI Purchase event sent (event_id: ${eventId}, fbp: ${!!ident.fbp}, fbc: ${!!ident.fbc})`);
         }
       } catch (capiError) {
         console.warn('⚠️ CAPI Purchase event failed (non-blocking):', capiError);
