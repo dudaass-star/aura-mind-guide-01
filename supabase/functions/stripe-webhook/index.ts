@@ -1768,10 +1768,6 @@ Me conta: como você está hoje?`;
         console.error('❌ Plan/cycle sync error:', msg);
       }
 
-      if (previousAttributes?.status === 'trialing' && subscription.status === 'active') {
-        // (bloco de conversão trial → active abaixo)
-      }
-
       // ===== Garantia de fechamento da escada de dunning =====
       // Quando o Stripe esgota os retries (past_due → unpaid/canceled), não há
       // mais tentativas de cobrança pela frente. Se algum degrau de oferta ainda
