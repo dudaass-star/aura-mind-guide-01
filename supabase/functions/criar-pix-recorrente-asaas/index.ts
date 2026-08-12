@@ -182,6 +182,10 @@ Deno.serve(async (req) => {
     const reauthToken = (body as Record<string, string>).token;
 
     const supabaseEarly = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    // Cache de identidade do Meta: fallback do Purchase se o cookie faltar depois.
+    void saveMetaIdentity(supabaseEarly, {
+      email, phone, fbp, fbc, source: "criar-pix-recorrente-asaas",
+    });
 
     // ---- Modo reautorização ----------------------------------------------
     // A API da Asaas exige `immediateQrCode` em toda autorização (não existe QR
