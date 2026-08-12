@@ -220,7 +220,7 @@ Deno.serve(async (req) => {
           .eq('user_id', task.user_id)
           .maybeSingle();
 
-        if (!profile?.phone) {
+        if (!profile?.phone && !PHONELESS_TASK_TYPES.has(task.task_type)) {
           console.warn(`⚠️ No phone found for user ${task.user_id}, marking as failed`);
           await supabase
             .from('scheduled_tasks')
