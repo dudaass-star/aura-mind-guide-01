@@ -229,7 +229,7 @@ const CheckoutV2 = () => {
   // acha que pagou e a venda morre em silêncio.
   const [pixRailUp, setPixRailUp] = useState(false);
   // Banco que executa o PIX Automático (Bacen). Trocado por system_config.pix_gateway.
-  const [pixGateway, setPixGateway] = useState<"asaas" | "inter">("asaas");
+  const [pixGateway, setPixGateway] = useState<"asaas" | "inter" | "woovi">("asaas");
 
   // PIX (Asaas): só aparece pra trim/sem/anual. Modal abre com form de CPF
   // (resto dos dados reusa name/email/phone do form principal) e troca pra
@@ -311,7 +311,9 @@ const CheckoutV2 = () => {
       // trilho do Inter ser promovido em system_config.
       const rail = rows?.find((r) => r.key === "pix_gateway");
       const parsedRail = rail ? parse(rail.value) : null;
-      if (parsedRail === "inter" || parsedRail === "asaas") setPixGateway(parsedRail);
+      if (parsedRail === "inter" || parsedRail === "asaas" || parsedRail === "woovi") {
+        setPixGateway(parsedRail);
+      }
     })();
   }, []);
 
@@ -962,7 +964,11 @@ const CheckoutV2 = () => {
       const gaClientId = getGaClientId();
       // Recorrente (PIX Automático) vai pro banco ativo; avulso segue no Asaas.
       const edgeName = pixMode === "subscription"
-        ? (pixGateway === "inter" ? "criar-pix-recorrente-inter" : "criar-pix-recorrente-asaas")
+        ? (pixGateway === "woovi"
+            ? "criar-pix-recorrente-woovi"
+            : pixGateway === "inter"
+              ? "criar-pix-recorrente-inter"
+              : "criar-pix-recorrente-asaas")
         : "criar-pix-asaas";
       const { data, error } = await supabase.functions.invoke(edgeName, {
         body: {
@@ -978,7 +984,8 @@ const CheckoutV2 = () => {
           ...(fbp && { fbp }),
           ...(fbc && { fbc }),
           ...(gaClientId && { gaClientId }),
-           ...(pixMode === "subscription" && pixGateway === "inter"
+           // Idempotência de clique: Inter e Woovi reaproveitam o mandato já criado.
+           ...(pixMode === "subscription" && (pixGateway === "inter" || pixGateway === "woovi")
              ? { requestKey: pixRequestKey }
              : {}),
         },
