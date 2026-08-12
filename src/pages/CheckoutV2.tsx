@@ -1066,6 +1066,9 @@ const CheckoutV2 = () => {
   useEffect(() => {
     const authId = pixData?.authorizationId;
     if (!authId) return;
+    // A retomada só existe no trilho Asaas: o id salvo é consultado em
+    // `asaas-pix-auto-status`. Guardar id de outro gateway gera 400 na volta.
+    if (pixGateway !== "asaas") return;
     try {
       localStorage.setItem(
         PIX_AUTH_LS_KEY,
@@ -1074,7 +1077,7 @@ const CheckoutV2 = () => {
     } catch {
       // navegador sem storage: retomada simplesmente não acontece
     }
-  }, [pixData?.authorizationId, selectedPlan]);
+  }, [pixData?.authorizationId, selectedPlan, pixGateway]);
 
   // Na montagem: se houver autorização recente, consulta o estado uma vez.
   useEffect(() => {
@@ -1093,9 +1096,14 @@ const CheckoutV2 = () => {
         return;
       }
       try {
-        const { data } = await supabase.functions.invoke("asaas-pix-auto-status", {
+        const { data, error } = await supabase.functions.invoke("asaas-pix-auto-status", {
           body: { authorizationId: saved.id },
         });
+        if (error) {
+          // id inválido/expirado (ex.: salvo por outro gateway): descarta.
+          try { localStorage.removeItem(PIX_AUTH_LS_KEY); } catch { /* noop */ }
+          return;
+        }
         if (cancelled || !data?.state) return;
         setResumedPlan(data.plan || saved.plan || null);
         setResumedState(data.state);
