@@ -367,7 +367,7 @@ Deno.serve(async (req) => {
       // ---- Composto: cobrança avulsa de entrada + mandato Jornada 2 fixo ----
       // O mandato sai com valor FIXO (R$ cheio) no app do banco — nada de "valor
       // variável". A entrada (R$ 6,90) vem de uma cobrança avulsa (tag 26 /cob/);
-      // o mandato (tag 80 /rec/) só autoriza débitos a partir de D+30. O BR Code
+      // o mandato (tag 80 /rec/) só autoriza débitos a partir de D+7. O BR Code
       // final é composto manualmente (composeQr) para os dois num único scan.
       cobCorrelationId = crypto.randomUUID();
 
