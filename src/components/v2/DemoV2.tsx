@@ -399,8 +399,8 @@ const DemoV2 = () => {
               Pronto pra descobrir suas pistas?
             </p>
             <Link
-              to="/v2/checkout"
-              onClick={() => trackCtaClick("final", "Começar minha jornada (demo v2)")}
+              to={checkoutHref("demo")}
+              onClick={() => trackLandingCta("demo", "Começar minha jornada (demo v2)")}
             >
               <Button variant="sage" size="xl">
                 Começar minha jornada

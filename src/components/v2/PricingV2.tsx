@@ -83,7 +83,10 @@ const PricingV2 = () => {
               </li>
             ))}
           </ul>
-          <Link to="/v2/checkout" onClick={() => trackCtaClick("pricing", "Começar agora R$ 6,90 (v2)")}>
+          <Link
+            to={checkoutHref("pricing")}
+            onClick={() => trackLandingCta("pricing", "Começar agora R$ 6,90 (v2)")}
+          >
             <Button variant="default" size="lg" className="w-full rounded-xl bg-foreground text-background hover:bg-foreground/90">
               Começar agora por R$ 6,90
             </Button>
@@ -173,9 +176,9 @@ const PricingV2 = () => {
               ))}
             </ul>
             <Link
-              to="/v2/checkout"
+              to={checkoutHref("pricing")}
               state={{ plan: p.id, billing: cycle.checkoutBilling }}
-              onClick={() => trackCtaClick("pricing", `${p.name} ${cycle.label} (v2)`)}
+              onClick={() => trackLandingCta("pricing", `${p.name} ${cycle.label} (v2)`)}
             >
               <Button
                 variant={p.popular ? "sage" : "outline"}
