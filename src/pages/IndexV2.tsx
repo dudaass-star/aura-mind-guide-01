@@ -15,8 +15,12 @@ import FooterV2 from "@/components/v2/FooterV2";
 import StickyMobileCTAV2 from "@/components/v2/StickyMobileCTAV2";
 import { trackViewItem } from "@/lib/ga4";
 import { trackMetaViewContent } from "@/lib/meta-pixel";
+import { useLandingEngagement } from "@/lib/landing-analytics";
 
 const IndexV2 = () => {
+  // Rastreia rolagem, tempo e saída — base pra saber quem lê e quem clica de cima.
+  useLandingEngagement();
+
   useEffect(() => {
     // ViewContent com deduplicação navegador + CAPI.
     trackMetaViewContent({

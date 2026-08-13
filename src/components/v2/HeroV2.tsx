@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Star, Clock, Brain, Check } from "lucide-react";
-import { trackCtaClick } from "@/lib/ga4";
+import { trackLandingCta, checkoutHref } from "@/lib/landing-analytics";
 import heroImg from "@/assets/v2/hero-mulher-sofa.jpg";
 
 const HeroV2 = () => (
@@ -31,7 +31,10 @@ const HeroV2 = () => (
           </p>
 
           <div className="mt-8 flex flex-col items-start gap-2">
-            <Link to="/v2/checkout" onClick={() => trackCtaClick("hero", "Começar por R$ 6,90 (v2)")}>
+            <Link
+              to={checkoutHref("hero")}
+              onClick={() => trackLandingCta("hero", "Começar por R$ 6,90 (v2)")}
+            >
               <Button variant="sage" size="xl" className="rounded-2xl px-10 shadow-lg">
                 Começar por R$ 6,90
               </Button>

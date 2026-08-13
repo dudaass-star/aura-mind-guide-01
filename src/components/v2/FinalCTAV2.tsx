@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { trackCtaClick } from "@/lib/ga4";
+import { trackLandingCta, checkoutHref } from "@/lib/landing-analytics";
 
 const FinalCTAV2 = () => (
   <section className="relative py-20 md:py-28 v2-dark-section overflow-hidden">
@@ -25,7 +25,10 @@ const FinalCTAV2 = () => (
         </div>
 
         <div className="flex flex-col items-center md:items-end gap-2">
-          <Link to="/v2/checkout" onClick={() => trackCtaClick("final", "Quero começar agora (v2)")}>
+          <Link
+            to={checkoutHref("final")}
+            onClick={() => trackLandingCta("final", "Quero começar agora (v2)")}
+          >
             <Button variant="sage" size="xl" className="rounded-2xl px-8">
               Quero começar agora
             </Button>

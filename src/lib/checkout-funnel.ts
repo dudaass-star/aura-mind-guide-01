@@ -5,6 +5,13 @@ import { trackEvent } from "@/lib/ga4";
 
 export type FunnelStep =
   | "page_view"
+  | "landing_view"
+  | "landing_scroll_25"
+  | "landing_scroll_50"
+  | "landing_scroll_75"
+  | "landing_scroll_100"
+  | "landing_cta_click"
+  | "landing_exit"
   | "form_submit"
   | "form_invalid"
   | "warmup"
