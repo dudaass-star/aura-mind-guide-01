@@ -2044,6 +2044,17 @@ const CheckoutV2 = () => {
                         <Copy className="w-4 h-4" />
                       </Button>
                     </div>
+                    {/* Ação principal logo abaixo do código: no mobile o botão
+                        ficava no fim do modal e quase ninguém copiava. */}
+                    <Button
+                      variant="sage"
+                      size="lg"
+                      className="w-full rounded-full mt-2.5"
+                      onClick={handleCopyPix}
+                    >
+                      <Copy className="w-4 h-4 mr-2" />
+                      Copiar código PIX
+                    </Button>
                   </div>
 
                   <div className="bg-white/5 border border-white/10 rounded-xl p-3 text-xs text-white/70 space-y-1.5">
@@ -2129,16 +2140,6 @@ const CheckoutV2 = () => {
                       </Button>
                     </div>
                   )}
-
-                  <Button
-                    variant="sage"
-                    size="lg"
-                    className="w-full rounded-full"
-                    onClick={handleCopyPix}
-                  >
-                    <Copy className="w-4 h-4 mr-2" />
-                    Copiar código PIX
-                  </Button>
 
                   {pixData.invoiceUrl && (
                     <a
