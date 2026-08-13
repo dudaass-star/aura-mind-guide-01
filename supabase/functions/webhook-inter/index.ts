@@ -284,6 +284,8 @@ async function activateAccess(
         .from("profiles").select(profileCols).or(orParts.join(",")).limit(1).maybeSingle();
       profile = prof || null;
     }
+    // Aquisição real: só conta como 1ª compra quem não tinha perfil antes.
+    const isNewCustomer = !profile;
 
     const currentExpiry = profile?.plan_expires_at ? new Date(profile.plan_expires_at) : null;
     const base = currentExpiry && currentExpiry > now ? currentExpiry : now;
