@@ -9,3 +9,8 @@ Regra vigente (substitui a janela de 30 dias descrita em `mem/features/payments/
 - `webhook-woovi`: `activateAccess({ trialEntry })` — quando a cobrança paga é a entrada (`entry_charge_correlation_id`) de um mandato `is_trial`, `plan_expires_at = base + 7 dias` e `next_charge_date = hoje + 7`. O débito do dia 8 estende para o ciclo mensal cheio (renovação, não venda nova).
 - UI: `CheckoutV2.tsx` já mostra a data de `firstRecurringChargeDate`, então o modal do QR exibe o dia 8 e a copy "1ª semana" fica verdadeira.
 - Mandatos autorizados antes de 13/08/2026 continuam com o 1º débito em D+30 — a mudança vale só para QRs novos.
+
+Guardas que o D+7 exigiu em `woovi-pix-audit`:
+- Mandato aprovado + entrada nunca paga + QR expirado → cancela mandato (PUT `/subscriptions/{id}/cancel`) e apaga a cobrança de entrada: com débito em D+7 o cliente seria cobrado R$ 29,90 sem nunca ter tido acesso.
+- Entrada paga sem mandato aprovado: 1º lembrete imediato (`mandate_followup_sent_at`), 2º no 5º dia (`mandate_followup2_sent_at`) e, passado o 7º dia, abre `woovi_recovery_offer` (régua 30% off → Lite) uma única vez por mandato.
+- Janela da varredura composta subiu de 7 para 10 dias para cobrir a virada do dia 7.

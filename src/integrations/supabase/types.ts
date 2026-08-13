@@ -3754,6 +3754,7 @@ export type Database = {
           last_error: string | null
           mandate_approved_at: string | null
           mandate_followup_sent_at: string | null
+          mandate_followup2_sent_at: string | null
           next_charge_date: string | null
           payer_bank: string | null
           pix_status: string | null
@@ -3799,6 +3800,7 @@ export type Database = {
           last_error?: string | null
           mandate_approved_at?: string | null
           mandate_followup_sent_at?: string | null
+          mandate_followup2_sent_at?: string | null
           next_charge_date?: string | null
           payer_bank?: string | null
           pix_status?: string | null
@@ -3844,6 +3846,7 @@ export type Database = {
           last_error?: string | null
           mandate_approved_at?: string | null
           mandate_followup_sent_at?: string | null
+          mandate_followup2_sent_at?: string | null
           next_charge_date?: string | null
           payer_bank?: string | null
           pix_status?: string | null

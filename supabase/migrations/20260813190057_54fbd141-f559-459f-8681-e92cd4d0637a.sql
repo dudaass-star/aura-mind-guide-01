@@ -1,0 +1,1 @@
+ALTER TABLE public.woovi_subscriptions ADD COLUMN IF NOT EXISTS mandate_followup2_sent_at TIMESTAMPTZ;

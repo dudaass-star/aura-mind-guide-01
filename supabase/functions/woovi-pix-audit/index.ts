@@ -5,9 +5,12 @@
 // em telas separadas (BB mostra junto; Nubank mostra o mandato e só depois a
 // cobrança). Quem para no meio fica em estado parcial:
 //   • mandato aprovado, entrada NÃO paga → nenhum acesso liberado → cutucar com a
-//     cobrança de entrada (o mandato só debita em D+30, não perdemos nada).
+//     cobrança de entrada. ATENÇÃO: no trial o 1º débito do mandato cai em D+7
+//     (não mais D+30), então se o QR expirar sem a entrada paga cancelamos o
+//     mandato — senão o cliente é debitado em R$ 29,90 sem nunca ter tido acesso.
 //   • entrada paga, mandato NÃO aprovado → acesso liberado pelo webhook, mas sem
-//     débito automático → pedir a autorização antes do fim do ciclo.
+//     débito automático. A janela é de 7 dias (trial): 1º lembrete imediato,
+//     2º perto do 5º dia e, passado o 7º, entra na régua de retenção.
 //
 // Varreduras:
 //   1. Conclusão parcial: entrada sem mandato / mandato sem entrada → 1 follow-up.
@@ -28,6 +31,17 @@ const corsHeaders = {
 
 // Tempo mínimo antes de cutucar: dá folga pra quem está no meio do fluxo do banco.
 const PARTIAL_GRACE_MINUTES = 20;
+
+/** Trial pago do PIX: entrada compra 7 dias e o 1º débito do mandato cai em D+7. */
+const TRIAL_DAYS = 7;
+/** Dia da janela em que mandamos o 2º (e último) lembrete de autorização. */
+const MANDATE_REMINDER2_DAY = 5;
+
+function daysSince(iso: string): number {
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return 0;
+  return (Date.now() - t) / 86400000;
+}
 
 function money(cents: number): string {
   return (Number(cents || 0) / 100).toFixed(2).replace(".", ",");
@@ -83,7 +97,9 @@ Deno.serve(async (req) => {
   try {
     const now = new Date();
     const graceBefore = new Date(now.getTime() - PARTIAL_GRACE_MINUTES * 60 * 1000).toISOString();
-    const since = new Date(now.getTime() - 7 * 86400000).toISOString();
+    // 10 dias: precisa cobrir a janela inteira do trial (7 dias) + a virada do
+    // dia 7 sem mandato, que é quando abrimos a régua de retenção.
+    const since = new Date(now.getTime() - 10 * 86400000).toISOString();
 
     const { data: composed } = await supabase
       .from("woovi_subscriptions")
@@ -138,25 +154,112 @@ Deno.serve(async (req) => {
       }
 
       // ---- 1b) Entrada paga, mandato não aprovado -------------------------
-      if (entryPaid && !approved && !sub.mandate_followup_sent_at) {
+      // A janela é curta (7 dias do trial): 1º lembrete assim que detectamos,
+      // 2º perto do 5º dia e, se o 7º passar, entra na régua de retenção —
+      // antes esse cliente simplesmente sumia em silêncio.
+      if (entryPaid && !approved) {
+        const age = daysSince(created);
+        const firstSent = !!sub.mandate_followup_sent_at;
+        const secondSent = !!sub.mandate_followup2_sent_at;
+        const firstName = String(sub.customer_name || "").split(" ")[0] || "tudo bem";
         const link = sub.authorization_url || null;
-        const text = `Oi, ${String(sub.customer_name || "").split(" ")[0] || "tudo bem"}! `
-          + `Seu pagamento de R$ ${money(sub.trial_value_cents || sub.value_cents)} entrou e seu acesso já está liberado. `
-          + `Só faltou uma coisa: a autorização do débito automático de R$ ${money(sub.value_cents)}/mês no app do banco `
-          + `(costuma aparecer como "Pix Automático").\n\n`
-          + (link ? `Você autoriza por aqui:\n${link}\n\n` : "")
-          + `Sem isso sua assinatura não renova — e eu não quero te perder no meio do caminho.`;
-        const sent = dryRun ? true : await notify(sub, text);
-        if (!dryRun && sent) {
-          await supabase.from("woovi_subscriptions")
-            .update({ mandate_followup_sent_at: new Date().toISOString() }).eq("id", sub.id);
+
+        if (!firstSent) {
+          const text = `Oi, ${firstName}! `
+            + `Seu pagamento de R$ ${money(sub.trial_value_cents || sub.value_cents)} entrou e seu acesso já está liberado. `
+            + `Só faltou uma coisa: a autorização do débito automático de R$ ${money(sub.value_cents)}/mês no app do banco `
+            + `(costuma aparecer como "Pix Automático").\n\n`
+            + (link ? `Você autoriza por aqui:\n${link}\n\n` : "")
+            + `Sem isso sua assinatura não renova — e eu não quero te perder no meio do caminho.`;
+          const sent = dryRun ? true : await notify(sub, text);
+          if (!dryRun && sent) {
+            await supabase.from("woovi_subscriptions")
+              .update({ mandate_followup_sent_at: new Date().toISOString() }).eq("id", sub.id);
+          }
+          report.mandato_pendente.push({ sub: sub.subscription_id, email: sub.customer_email, step: 1, sent, dryRun });
+          continue;
         }
-        report.mandato_pendente.push({ sub: sub.subscription_id, email: sub.customer_email, sent, dryRun });
+
+        if (!secondSent && age >= MANDATE_REMINDER2_DAY) {
+          const text = `Oi, ${firstName}! Passando só pra lembrar: `
+            + `sua semana de teste na Aura termina em breve e a autorização do débito automático `
+            + `de R$ ${money(sub.value_cents)}/mês ainda não apareceu aqui.\n\n`
+            + (link ? `É 1 minuto no app do banco:\n${link}\n\n` : "")
+            + `Se não autorizar, seu acesso simplesmente para — e eu prefiro continuar com você.`;
+          const sent = dryRun ? true : await notify(sub, text);
+          if (!dryRun && sent) {
+            await supabase.from("woovi_subscriptions")
+              .update({ mandate_followup2_sent_at: new Date().toISOString() }).eq("id", sub.id);
+          }
+          report.mandato_pendente.push({ sub: sub.subscription_id, email: sub.customer_email, step: 2, sent, dryRun });
+          continue;
+        }
+
+        // Janela vencida sem mandato: entrega pra régua de retenção (30% off →
+        // Lite), a mesma do dunning. Uma vez por mandato.
+        if (age >= TRIAL_DAYS + 1) {
+          let authUid: string | null = null;
+          if (sub.user_id) {
+            const { data: p } = await supabase
+              .from("profiles").select("user_id").eq("id", sub.user_id).maybeSingle();
+            authUid = (p?.user_id as string) || null;
+          }
+          const { data: pending } = await supabase.from("scheduled_tasks")
+            .select("id").eq("task_type", "woovi_recovery_offer")
+            .in("status", ["pending", "executing", "completed"])
+            .contains("payload", { subscription_id: sub.subscription_id }).limit(1);
+          const already = Array.isArray(pending) && pending.length > 0;
+          if (authUid && !already && !dryRun) {
+            await supabase.from("scheduled_tasks").insert({
+              user_id: authUid,
+              task_type: "woovi_recovery_offer",
+              execute_at: new Date().toISOString(),
+              status: "pending",
+              payload: {
+                provider: "woovi",
+                subscription_id: sub.subscription_id,
+                offer_step: 1,
+                source: "mandate_never_authorized",
+              },
+            });
+          }
+          report.mandato_pendente.push({
+            sub: sub.subscription_id, email: sub.customer_email,
+            step: "retencao", aberta: !!authUid && !already, dryRun,
+          });
+        }
         continue;
       }
 
       // ---- 3) Abandono total: QR expirado, nada pago, nada aprovado -------
       const expired = sub.qr_expires_at && String(sub.qr_expires_at) < now.toISOString();
+
+      // 3b) QR expirado, mandato aprovado, entrada NUNCA paga: com o 1º débito
+      // em D+7 isso viraria uma cobrança cheia em quem não tem acesso. Derruba
+      // o mandato e a cobrança de entrada antes do dia 7.
+      if (expired && approved && !entryPaid
+          && !["ABANDONADA", "CANCELADA", "REJEITADA"].includes(String(sub.status))) {
+        if (!dryRun) {
+          if (sub.subscription_id) {
+            await wooviFetch(`/api/v1/subscriptions/${encodeURIComponent(sub.subscription_id)}/cancel`,
+              { method: "PUT" }).catch(() => {});
+          }
+          if (sub.entry_charge_correlation_id) {
+            await wooviFetch(`/api/v1/charge/${encodeURIComponent(sub.entry_charge_correlation_id)}`,
+              { method: "DELETE" }).catch(() => {});
+          }
+          await supabase.from("woovi_subscriptions").update({
+            status: "CANCELADA",
+            last_error: "mandato aprovado sem a entrada paga e QR expirado — cancelado para não debitar sem acesso",
+          }).eq("id", sub.id);
+        }
+        report.abandonados.push({
+          sub: sub.subscription_id, email: sub.customer_email,
+          motivo: "mandato_sem_entrada", dryRun,
+        });
+        continue;
+      }
+
       if (expired && !entryPaid && !approved
           && !["ABANDONADA", "CANCELADA", "REJEITADA"].includes(String(sub.status))) {
         if (!dryRun) {
