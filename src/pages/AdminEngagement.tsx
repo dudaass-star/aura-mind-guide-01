@@ -5,6 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import CheckoutFunnelPanel from '@/components/admin/CheckoutFunnelPanel';
 import { ArrowLeft, Users, MessageSquare, Clock, BarChart3, RefreshCw, TrendingUp, UserPlus, Percent, Timer, XCircle, ArrowRightLeft, ArrowDown, Send, CalendarIcon, DollarSign, UserMinus, ShoppingCart, RotateCcw, CheckCircle2, AlertCircle, CreditCard, Mail, ChevronDown, MessageCircle, Heart } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -1648,6 +1649,7 @@ export default function AdminEngagement() {
           </TabsContent>
 
           <TabsContent value="trial" className="mt-3 space-y-4">
+            <CheckoutFunnelPanel />
             <Card className="border-primary/20 bg-primary/5">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base font-semibold flex items-center gap-2">
