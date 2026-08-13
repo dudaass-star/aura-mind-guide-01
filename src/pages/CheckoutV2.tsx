@@ -23,6 +23,7 @@ import {
   trackReturningCustomerMonthly,
 } from "@/lib/ga4";
 import { setAdvancedMatching } from "@/lib/meta-pixel";
+import { oaiqMeasure } from "@/lib/openai-pixel";
 import logoOlaAura from "@/assets/logo-ola-aura.png";
 import "@/styles/v2-theme.css";
 import "@/styles/checkout-theme.css";
