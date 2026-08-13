@@ -802,7 +802,15 @@ const CheckoutV2 = () => {
   // ---- Saúde do widget embedado (Stripe) ----
   // Registro de entrada no checkout (base do funil).
   useEffect(() => {
-    logFunnel("page_view", { plan: initialPlan, billing: initialBilling });
+    logFunnel("page_view", {
+      plan: initialPlan,
+      billing: initialBilling,
+      // `src` vem dos CTAs da landing (?src=hero|pricing|sticky|final|header|demo):
+      // permite ligar a posição do clique à conversão real.
+      meta: {
+        src: new URLSearchParams(window.location.search).get("src") ?? null,
+      },
+    });
     // Baixa o js.stripe.com desde já (o loadStripe reaproveita esta tag) e
     // aquece a edge function — quando o usuário clicar, não sobra latência.
     try {
