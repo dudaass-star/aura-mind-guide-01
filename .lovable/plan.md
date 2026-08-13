@@ -41,16 +41,16 @@ O resto são cliques em áreas vazias do card.
 
 ### O que isso significa
 
-No desktop, em 13 dias: **ninguém apertou o botão de pagar. Nem uma vez.** E praticamente ninguém tocou nos campos — 3 cliques em campo contra 27 trocas de plano/ciclo.
+No desktop, em 13 dias: **ninguém apertou o botão de pagar. Nem uma vez.** E praticamente ninguém tocou nos campos — 3 cliques em campo contra 27 trocas de plano/ciclo. (No mobile, sem export, não sabemos.)
 
 O comportamento é inequívoco: a pessoa chega no checkout e **fica comparando preço**. Troca plano, troca ciclo, troca plano de novo — em média mais de uma troca por visitante — e sai sem começar a preencher. Não é abandono por atrito de formulário (formulário nem foi tocado). É **decisão de preço travada na comparação**.
 
-Isso fecha o quadro do funil de agosto que já tínhamos medido: 47 formulários iniciados / 2 pagamentos no cartão. O desktop não contribui com nada; tudo que existe de conversão vem do mobile.
+Bate com o funil de agosto que já medimos no banco: 47 formulários iniciados / 2 pagamentos no cartão. O desktop não contribui com nada — tudo que existe de conversão vem do mobile, e o comportamento mobile dentro do checkout segue sem medição no Clarity.
 
 ## Conclusão conjunta
 
 1. A landing longa está sendo **pulada**, não lida. A decisão acontece no hero.
-2. Quem chega no checkout **não trava no formulário, trava na grade de preços**. Dar 3 planos × 4 ciclos = 12 combinações para um lead que ainda não confia é excesso de escolha na hora errada.
+2. No desktop, quem chega no checkout **não trava no formulário, trava na grade de preços**. Dar 3 planos × 4 ciclos = 12 combinações para um lead que ainda não confia é excesso de escolha na hora errada.
 3. Preços/Depoimentos/Recursos na landing são inertes (2–5 taps em 13 dias) — não vale copy ali.
 
 ## O que eu proponho fazer
@@ -64,6 +64,7 @@ Isso fecha o quadro do funil de agosto que já tínhamos medido: 47 formulários
 - Subir as 3 objeções mais tocadas do FAQ para logo abaixo do hero, com um CTA imediatamente depois (hoje o próximo CTA só aparece depois da demo).
 
 **C. Medir**
-- A instrumentação nova (`landing_scroll_*` + `?src=`) confirma A e B com número próprio em 3–5 dias e cobre desktop, que o Clarity Tap não pega.
+- A instrumentação nova (`landing_scroll_*` + `?src=`) confirma A e B com número próprio em 3–5 dias, cobrindo mobile e desktop.
+- Quando você exportar o Tap/Mobile do checkout, eu comparo mobile vs. desktop e ajusto A se o padrão for diferente.
 
 Se aprovar, começo por **A** — é onde está o buraco de 0 cliques no botão de pagar.
