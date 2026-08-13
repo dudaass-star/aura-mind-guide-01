@@ -1069,6 +1069,7 @@ const CheckoutV2 = () => {
     if (!pixData?.copyPaste) return;
     try {
       await navigator.clipboard.writeText(pixData.copyPaste);
+      pixCopiedRef.current = true;
       toast.success("Código PIX copiado!");
       logFunnel("pix_copy", {
         plan: selectedPlan,
