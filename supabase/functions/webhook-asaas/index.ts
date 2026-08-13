@@ -9,6 +9,7 @@ import { normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
 import { sendProactive } from "../_shared/whatsapp-provider.ts";
 import { reconcileOrphanPayments } from "../_shared/asaas-reconcile.ts";
 import { resolveMetaIdentity } from "../_shared/meta-identity.ts";
+import { sendOpenAiConversion } from "../_shared/openai-capi.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 
 const corsHeaders = {

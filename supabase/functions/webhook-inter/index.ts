@@ -16,6 +16,7 @@ import { normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
 import { retryCharge, MAX_RETRIES } from "../_shared/inter-cycles.ts";
 import { interFetch } from "../_shared/inter-pix.ts";
 import { resolveMetaIdentity } from "../_shared/meta-identity.ts";
+import { sendOpenAiConversion } from "../_shared/openai-capi.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
