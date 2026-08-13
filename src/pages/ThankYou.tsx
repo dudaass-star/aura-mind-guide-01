@@ -3,6 +3,7 @@ import { useLocation, Link } from "react-router-dom";
 import { CheckCircle, Smartphone, Sparkles, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
+import { oaiqMeasure } from "@/lib/openai-pixel";
 
 const ThankYou = () => {
   const location = useLocation();
@@ -44,6 +45,12 @@ const ThankYou = () => {
     setUserData(checkoutData);
     // Purchase event is sent server-side only (CAPI via stripe-webhook)
     // to avoid double-counting by Meta
+
+    // ChatGPT Ads: conversão de assinatura (pixel de navegador, sem CAPI própria).
+    oaiqMeasure("purchase", {
+      currency: "BRL",
+      content_name: `Plano ${checkoutData.plan}`,
+    });
   }, [location.state]);
 
   const firstName = userData.name?.split(" ")[0] || "você";

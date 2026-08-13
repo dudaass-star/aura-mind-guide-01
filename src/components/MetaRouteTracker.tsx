@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { persistFbclid, trackMetaPageView } from "@/lib/meta-pixel";
+import { oaiqPageView } from "@/lib/openai-pixel";
 
 /**
  * Dispara PageView do Meta no carregamento e em toda troca de rota da SPA.
@@ -19,6 +20,8 @@ const MetaRouteTracker = () => {
     // Dispara também no primeiro render: o index.html apenas inicializa o pixel,
     // para que navegador e servidor compartilhem o mesmo event_id.
     trackMetaPageView(location.pathname);
+    // ChatGPT Ads: o script base não acompanha navegação interna da SPA.
+    oaiqPageView(location.pathname);
   }, [location.pathname]);
 
   return null;
