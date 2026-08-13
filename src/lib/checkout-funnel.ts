@@ -36,7 +36,9 @@ export type FunnelStep =
   | "pix_rail_down"
   | "pix_blocked_rail_down"
   | "asaas_card_open"
-  | "purchase";
+  | "purchase"
+  /** Confirmado pelo servidor (webhook). Não vem do navegador. */
+  | "purchase_confirmed";
 
 const SESSION_KEY = "aura_funnel_sid";
 
