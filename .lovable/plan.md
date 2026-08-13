@@ -21,9 +21,11 @@ Só CTAs: hero **74**, CTA final 6, preços 5, pós-demo 5, recursos 1.
 
 **≈81% dos cliques em CTA saem do hero, antes de rolar.** Toda a página abaixo do hero gerou 17 cliques em CTA em 13 dias. Quem rola, rola pro FAQ (objeção), não pra ler benefícios.
 
-## Parte 2 — Checkout /v2/checkout (cliques desktop)
+## Parte 2 — Checkout /v2/checkout (apenas DESKTOP)
 
-26 page views, 104 cliques. Mapeando pelos IDs reais do código:
+Ressalva: este export é "Click / PC" — só desktop, 26 page views. O checkout no mobile não foi exportado, e é de lá que vêm as vendas reais de agosto. As conclusões abaixo valem para o desktop.
+
+104 cliques. Mapeando pelos IDs reais do código:
 
 | Ação | Cliques |
 | --- | --- |
