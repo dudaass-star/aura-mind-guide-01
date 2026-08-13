@@ -62,6 +62,22 @@
       }
     </script>
 
+    <!-- ChatGPT Ads Pixel (OpenAI) — carrega em tudo, exceto rotas privadas.
+         Independente do Meta: usa a global `oaiq`, sem conflito com `fbq`. -->
+    <script>
+      (function(){
+        var privatePrefixes = ['/admin', '/meu-espaco'];
+        var path = window.location.pathname;
+        for (var i = 0; i < privatePrefixes.length; i++) {
+          if (path === privatePrefixes[i] || path.indexOf(privatePrefixes[i] + '/') === 0) return;
+        }
+
+        !function(w,d,s,u){if(w.oaiq)return;var q=function(){q.q.push(arguments)};q.q=[];w.oaiq=q;var j=d.createElement(s);j.async=1;j.src=u;var f=d.getElementsByTagName(s)[0];f.parentNode.insertBefore(j,f)}(window,document,"script","https://bzrcdn.openai.com/sdk/oaiq.min.js");
+        oaiq("init",{pixelId:"4DosRHCmjrnJkM9nitjuu5",debug:false});
+      })();
+    </script>
+    <!-- End ChatGPT Ads Pixel -->
+
     <!-- Meta Pixel Code — carrega em tudo, exceto rotas privadas.
          O PageView é disparado pelo app (MetaRouteTracker), para compartilhar
          o mesmo event_id com o CAPI e cobrir navegação interna da SPA. -->
