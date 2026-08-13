@@ -6,7 +6,7 @@ type: feature
 
 Regra vigente (substitui `mem/business/trial-only-on-card.md` no ponto do PIX):
 
-- Mensal: QR imediato cobra o trial (Essencial 6,90 · Direção 11,90 · Transformação 24,90) e a autorização Bacen já vale o valor cheio, com `startDate = hoje + 7` (respeita a janela mínima de 2 dias do Bacen).
+- Mensal: QR imediato cobra o trial (Essencial 6,90 · Direção 11,90 · Transformação 24,90) e a autorização Bacen já vale o valor cheio, com `startDate = hoje + 7`. Ver `mem/features/payments/pix-trial-7-dias-woovi.md` para o trilho Woovi vigente (débito no dia 8).
 - Trim/Sem/Anual: sem trial, valor cheio à vista + recorrência.
 - Retornante (profile existente, pagamento Asaas anterior ou assinatura Stripe) não recebe trial — `isReturningCustomer` em `criar-pix-recorrente-asaas` derruba pro valor cheio silenciosamente.
 - Degradação: se o Asaas recusar o formato trial (valor imediato ≠ recorrente), a função repete a criação com valor cheio e `startDate` hoje.
