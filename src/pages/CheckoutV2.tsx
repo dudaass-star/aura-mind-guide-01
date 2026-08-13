@@ -920,11 +920,38 @@ const CheckoutV2 = () => {
   }, [embeddedClientSecret]);
 
   const handleResetCheckout = useCallback(() => {
+    // Voltar pra editar dados com o widget do Stripe já montado = abandono do
+    // formulário de cartão. Sem isso, o funil perdia essas pessoas em silêncio.
+    if (embeddedClientSecret) {
+      logFunnel("card_abandoned", {
+        plan: selectedPlan,
+        billing: billingPeriod,
+        paymentMethod: "card",
+        detail: embeddedMounted ? "voltou_editar_dados" : "voltou_antes_montar",
+      });
+    }
     setEmbeddedClientSecret(null);
     setStripePromise(null);
     setAsaasCardOpen(false);
     setHasRedirected(false);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [embeddedClientSecret, embeddedMounted, selectedPlan, billingPeriod]);
+
+  // Saiu da página com o formulário de cartão aberto e sem pagar.
+  useEffect(() => {
+    if (!embeddedClientSecret) return;
+    const onLeave = () => {
+      logFunnel("card_abandoned", {
+        plan: selectedPlan,
+        billing: billingPeriod,
+        paymentMethod: "card",
+        detail: "saiu_da_pagina",
+      });
+    };
+    window.addEventListener("pagehide", onLeave);
+    return () => window.removeEventListener("pagehide", onLeave);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [embeddedClientSecret]);
 
   // Abre o modal PIX. Valida os 3 campos comuns antes (mesma regra do CTA cartão).
   // `mode` define se vamos chamar a edge one-time ou a de subscription.
