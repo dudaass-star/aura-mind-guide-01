@@ -1852,6 +1852,17 @@ const CheckoutV2 = () => {
         <Dialog open={pixOpen} onOpenChange={(open) => {
           setPixOpen(open);
           if (!open) {
+            // Fechou com QR na tela e sem pagamento confirmado: é abandono de
+            // PIX, não erro técnico. É esse número que explica o buraco entre
+            // "gerou QR" e "pagou".
+            if (pixStage === "qr" && pixData && authState !== "active") {
+              logFunnel("pix_abandoned", {
+                plan: selectedPlan,
+                billing: billingPeriod,
+                paymentMethod: pixMode === "subscription" ? "pix_auto" : "pix",
+                detail: pixCopied ? "copiou_codigo" : "sem_copia",
+              });
+            }
             // ao fechar, reseta pra começar limpo na próxima abertura
             setTimeout(() => {
               setPixStage("form");
