@@ -1692,23 +1692,35 @@ const CheckoutV2 = () => {
                   }
                   />
                 ) : (
-                  // Trilho de PIX fora do ar: em vez de oferecer e falhar no QR,
-                  // o checkout segue só com cartão. Sem aviso alarmista.
-                  <div className="flex items-center gap-2.5 rounded-xl border border-[hsl(var(--ck-cta))] bg-[hsl(var(--ck-cta)/0.14)] px-3 py-3">
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[hsl(var(--ck-cta))] text-[hsl(var(--ck-cta-fg))]">
-                      <CreditCard className="h-4 w-4" />
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block text-sm font-semibold leading-tight text-[hsl(var(--ck-text))]">
-                        Cartão de crédito
-                      </span>
-                      <span className="ck-num block text-[11px] leading-tight text-[hsl(var(--ck-text-muted))]">
-                        {pixEnabled
+                  // Trilho de PIX oscilando: o método continua visível (esconder
+                  // derrubou a conversão de quem só paga por PIX), mas o clique
+                  // mantém o cartão selecionado e avisa em uma linha.
+                  <>
+                    <PaymentMethodToggle
+                      value="card"
+                      onChange={(m) => {
+                        if (m === "pix") {
+                          logFunnel("pix_blocked_rail_down", {
+                            plan: selectedPlan,
+                            billing: billingPeriod,
+                            paymentMethod: "pix",
+                          });
+                          toast.info("PIX voltando em instantes. Por ora, o cartão libera na hora.");
+                          return;
+                        }
+                        setPayMethod("card");
+                      }}
+                      cardHint={
+                        pixEnabled
                           ? `R$ ${currentPrice}/${periodLabel}`
-                          : `7 dias por R$ ${currentPlan.trialPrice}`}
-                      </span>
-                    </span>
-                  </div>
+                          : `7 dias por R$ ${currentPlan.trialPrice}`
+                      }
+                      pixHint="Voltando em instantes"
+                    />
+                    <p className="text-[11px] leading-tight text-[hsl(var(--ck-text-muted))]">
+                      PIX em manutenção rápida. O cartão libera o acesso na hora.
+                    </p>
+                  </>
                 )}
 
                 <div className="ck-num text-center text-sm text-[hsl(var(--ck-text-muted))]">
