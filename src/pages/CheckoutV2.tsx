@@ -687,6 +687,13 @@ const CheckoutV2 = () => {
       const trialPriceMap: Record<string, number> = { essencial: 6.9, direcao: 9.9, transformacao: 19.9 };
       trackAddPaymentInfo({ plan: selectedPlan, billing: billingPeriod, value: trialPriceMap[selectedPlan] });
 
+      // ChatGPT Ads: início de checkout (mesmo ponto do InitiateCheckout do Meta).
+      oaiqMeasure("checkout_started", {
+        amount: trialPriceMap[selectedPlan],
+        currency: "BRL",
+        content_name: `Trial ${plans[selectedPlan].name}`,
+      });
+
       const gaClientId = getGaClientId();
 
       const isMonthlyTrial = billingPeriod === "monthly";
