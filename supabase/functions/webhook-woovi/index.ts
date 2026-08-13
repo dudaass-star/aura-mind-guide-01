@@ -276,6 +276,8 @@ async function activateAccess(
         .from("profiles").select(profileCols).or(orParts.join(",")).limit(1).maybeSingle();
       profile = prof || null;
     }
+    // Aquisição real: só conta como 1ª compra quem não tinha perfil antes.
+    const isNewCustomer = !profile;
 
     // A validade nova SEMPRE parte do `plan_expires_at` do perfil, para a
     // renovação somar ao que o cliente ainda tem.
