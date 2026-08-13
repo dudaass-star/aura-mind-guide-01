@@ -239,6 +239,9 @@ const CheckoutV2 = () => {
   // (resto dos dados reusa name/email/phone do form principal) e troca pra
   // tela de QR depois que a edge function retorna.
   const [pixOpen, setPixOpen] = useState(false);
+  // Marca se o código foi copiado nessa abertura do modal — usado para
+  // qualificar o abandono do PIX (fechou sem copiar vs copiou e não pagou).
+  const pixCopiedRef = useRef(false);
   const [pixStage, setPixStage] = useState<"form" | "qr">("form");
   // Modo do PIX no modal: one-time (criar-pix-asaas) ou subscription (criar-pix-recorrente-asaas).
   // Mensal usa subscription; Trim/Sem/Anual usam one-time (à vista).
