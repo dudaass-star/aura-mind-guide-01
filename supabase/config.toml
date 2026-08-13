@@ -97,6 +97,8 @@ project_id = "uhyogifgmutfmbyhzzyo"
     verify_jwt = false
   [functions.monthly-schedule-renewal]
     verify_jwt = false
+  [functions.openai-capi]
+    verify_jwt = false
   [functions.notify-users-email]
     verify_jwt = false
   [functions.pattern-analysis]
