@@ -1,70 +1,26 @@
-# Análise completa: landing /v2 + checkout (Clarity, 01–13/08)
+# Fechar os buracos de medição do checkout + ajustes óbvios de conversão
 
-## Parte 1 — Landing /v2 (taps mobile)
+## Contexto
+Em agosto, 126 toques em "Pagar" no mobile geraram pouquíssimos pagamentos. Já sabemos onde a visão falha: não registramos sucesso, não registramos 3DS, não registramos abandono (cartão e PIX) e os cliques em formulário vazio se misturam com erro real de validação.
 
-770 page views, 394 cliques. Os 73 elementos mais tocados somam 274 taps.
+## Bloco 1 — Medição (fecha os 5 buracos)
+1. **Evento de sucesso no funil**: registrar `purchase` no `/obrigado` (e no webhook, para pagamentos que confirmam fora da tela), com plano, ciclo, método e valor. Hoje o funil termina sem linha de chegada.
+2. **3DS / ação exigida**: quando o pagamento exigir autenticação do banco, registrar `card_action_required` no funil (o webhook já recebe esse status, só não grava).
+3. **Abandono do cartão**: registrar `card_abandoned` quando o usuário fecha/sai do formulário embutido do Stripe sem concluir.
+4. **Abandono do PIX**: registrar `pix_abandoned` quando o modal do PIX é fechado com QR gerado e sem pagamento.
+5. **Separar clique vazio de erro real**: cliques no botão fixo com formulário totalmente vazio passam a ser `cta_empty_form` (e rolam a página até o formulário, focando o primeiro campo), reservando `form_invalid` para dado preenchido e inválido.
 
-Por região:
+## Bloco 2 — Conversão (o que já está evidente)
+- Botão fixo com formulário vazio: em vez de "erro", rola até o formulário e foca o campo — remove o beco sem saída do mobile.
+- PIX sempre visível: quando o trilho estiver instável, mostrar o PIX com aviso curto em vez de esconder o método (hoje 13 `rail_down` ainda aconteceram depois de 12/08).
+- Reforço no PIX: após gerar o QR, destacar o botão "copiar código" (maior contraste/posição), já que só 2 de 10 QRs foram copiados.
 
-| Região | Taps | % |
-| --- | --- | --- |
-| Hero (1ª tela) | 131 | 47,8% |
-| FAQ | 53 | 19,3% |
-| Header/footer/soltos | 39 | 14,2% |
-| Acordeões | 21 | 7,7% |
-| Como funciona | 13 | 4,7% |
-| Preços | 12 | 4,4% |
-| Recursos | 3 | 1,1% |
-| Depoimentos | 2 | 0,7% |
+## Bloco 3 — Painel
+Adicionar ao painel de funil do admin as etapas novas: `purchase`, `card_action_required`, `card_abandoned`, `pix_abandoned`, `cta_empty_form`, com taxa de conversão por método (cartão vs PIX) no período.
 
-Só CTAs: hero **74**, CTA final 6, preços 5, pós-demo 5, recursos 1.
-
-**≈81% dos cliques em CTA saem do hero, antes de rolar.** Toda a página abaixo do hero gerou 17 cliques em CTA em 13 dias. Quem rola, rola pro FAQ (objeção), não pra ler benefícios.
-
-## Parte 2 — Checkout /v2/checkout (apenas DESKTOP)
-
-Ressalva: este export é "Click / PC" — só desktop, 26 page views. O checkout no mobile não foi exportado, e é de lá que vêm as vendas reais de agosto. As conclusões abaixo valem para o desktop.
-
-104 cliques. Mapeando pelos IDs reais do código:
-
-| Ação | Cliques |
-| --- | --- |
-| Troca de plano (`#essencial` 6, `#direcao` 6, `#transformacao` 3) | 15 |
-| Troca de ciclo (abas Mensal/Trim/Anual) | 12 |
-| Clique no telefone (`#phone`) | 2 |
-| Clique no e-mail (`#email`) | 1 |
-| Clique no nome (`#name`) | 0 |
-| Clique no CPF (`#cpf`) | 0 |
-| **Clique no botão de pagar (`#checkout-primary-cta`)** | **0** |
-
-O resto são cliques em áreas vazias do card.
-
-### O que isso significa
-
-No desktop, em 13 dias: **ninguém apertou o botão de pagar. Nem uma vez.** E praticamente ninguém tocou nos campos — 3 cliques em campo contra 27 trocas de plano/ciclo. (No mobile, sem export, não sabemos.)
-
-O comportamento é inequívoco: a pessoa chega no checkout e **fica comparando preço**. Troca plano, troca ciclo, troca plano de novo — em média mais de uma troca por visitante — e sai sem começar a preencher. Não é abandono por atrito de formulário (formulário nem foi tocado). É **decisão de preço travada na comparação**.
-
-Bate com o funil de agosto que já medimos no banco: 47 formulários iniciados / 2 pagamentos no cartão. O desktop não contribui com nada — tudo que existe de conversão vem do mobile, e o comportamento mobile dentro do checkout segue sem medição no Clarity.
-
-## Conclusão conjunta
-
-1. A landing longa está sendo **pulada**, não lida. A decisão acontece no hero.
-2. No desktop, quem chega no checkout **não trava no formulário, trava na grade de preços**. Dar 3 planos × 4 ciclos = 12 combinações para um lead que ainda não confia é excesso de escolha na hora errada.
-3. Preços/Depoimentos/Recursos na landing são inertes (2–5 taps em 13 dias) — não vale copy ali.
-
-## O que eu proponho fazer
-
-**A. Simplificar a decisão no checkout (prioridade 1)**
-- Chegar com **um plano e um ciclo já escolhidos** (Essencial mensal, R$ 6,90 na 1ª semana) e o formulário visível de imediato.
-- Esconder a grade completa atrás de um link discreto ("ver outros planos e ciclos"), em vez de mostrar 12 combinações de cara.
-- Objetivo direto: fazer o lead começar a preencher antes de comparar.
-
-**B. Encurtar o caminho na landing (prioridade 2)**
-- Subir as 3 objeções mais tocadas do FAQ para logo abaixo do hero, com um CTA imediatamente depois (hoje o próximo CTA só aparece depois da demo).
-
-**C. Medir**
-- A instrumentação nova (`landing_scroll_*` + `?src=`) confirma A e B com número próprio em 3–5 dias, cobrindo mobile e desktop.
-- Quando você exportar o Tap/Mobile do checkout, eu comparo mobile vs. desktop e ajusto A se o padrão for diferente.
-
-Se aprovar, começo por **A** — é onde está o buraco de 0 cliques no botão de pagar.
+## Detalhes técnicos
+- Frontend: `src/pages/CheckoutV2.tsx` (novos `logFunnel`, scroll-to-form, PIX resiliente), `src/lib/checkout-funnel.ts` se precisar de tipos, `src/pages/ThankYou.tsx` (`purchase`).
+- Backend: `supabase/functions/stripe-webhook/index.ts` (grava `card_action_required` e `purchase`), `supabase/functions/webhook-woovi/index.ts` (`purchase` no PIX).
+- Admin: `src/components/admin/CheckoutFunnelPanel.tsx`.
+- Sem migração de banco: tudo cabe em `checkout_funnel_events`.
+- Mudanças no checkout são aditivas e não alteram preço, plano padrão nem método padrão (PIX segue padrão).
