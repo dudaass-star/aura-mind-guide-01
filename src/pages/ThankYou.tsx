@@ -3,7 +3,6 @@ import { useLocation, Link } from "react-router-dom";
 import { CheckCircle, Smartphone, Sparkles, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
-import { oaiqMeasure } from "@/lib/openai-pixel";
 
 const ThankYou = () => {
   const location = useLocation();
