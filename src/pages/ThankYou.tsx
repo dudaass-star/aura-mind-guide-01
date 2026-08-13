@@ -3,6 +3,7 @@ import { useLocation, Link } from "react-router-dom";
 import { CheckCircle, Smartphone, Sparkles, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
+import { logFunnel } from "@/lib/checkout-funnel";
 
 const ThankYou = () => {
   const location = useLocation();
@@ -42,6 +43,19 @@ const ThankYou = () => {
     }
 
     setUserData(checkoutData);
+    // Linha de chegada do funil: sem isso o painel media início e nunca fim.
+    // Idempotente por sessão pra não contar refresh como nova compra.
+    try {
+      if (!sessionStorage.getItem("aura_funnel_purchase_logged")) {
+        sessionStorage.setItem("aura_funnel_purchase_logged", "1");
+        logFunnel("purchase", {
+          plan: checkoutData.plan,
+          detail: checkoutData.returning ? "retornante" : "novo",
+        });
+      }
+    } catch {
+      /* noop */
+    }
     // Purchase event is sent server-side only (CAPI via stripe-webhook)
     // to avoid double-counting by Meta
 
