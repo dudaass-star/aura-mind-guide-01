@@ -1008,6 +1008,15 @@ async function fireMetaCapiPurchase(
     console.log(
       `[webhook-asaas] ✅ CAPI Purchase disparado (event_id=${args.eventId}, fbp=${!!ident.fbp}, fbc=${!!ident.fbc})`,
     );
+    // ChatGPT Ads (OpenAI) — mesma conversão, mesmo event_id.
+    await sendOpenAiConversion({
+      eventType: "purchase",
+      eventId: args.eventId,
+      value: args.value,
+      currency: "BRL",
+      contentName: `Plano ${PLAN_NAMES[args.plan] || args.plan}`,
+      source: "webhook-asaas",
+    });
   } catch (capiErr) {
     console.warn("[webhook-asaas] ⚠️ CAPI Purchase falhou (non-blocking):", capiErr);
   }
