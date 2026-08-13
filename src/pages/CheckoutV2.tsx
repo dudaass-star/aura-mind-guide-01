@@ -1864,9 +1864,10 @@ const CheckoutV2 = () => {
                 plan: selectedPlan,
                 billing: billingPeriod,
                 paymentMethod: pixMode === "subscription" ? "pix_auto" : "pix",
-                detail: pixCopied ? "copiou_codigo" : "sem_copia",
+                detail: pixCopiedRef.current ? "copiou_codigo" : "sem_copia",
               });
             }
+            pixCopiedRef.current = false;
             // ao fechar, reseta pra começar limpo na próxima abertura
             setTimeout(() => {
               setPixStage("form");
