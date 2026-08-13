@@ -1265,6 +1265,31 @@ async function handleActivation(
       );
     }
 
+    // Funil: linha de chegada gravada pelo servidor (paridade com Woovi/Stripe).
+    try {
+      await supabase.from("checkout_funnel_events").insert({
+        anon_session_id: `asaas:${stableEventId}`,
+        step: "purchase_confirmed",
+        plan: customerPlan,
+        payment_method: "pix",
+        detail: "asaas",
+        meta: { payment_id: paymentId, value: amountValue, is_new: isNew },
+      });
+    } catch (e) {
+      console.warn("[webhook-asaas] ⚠️ falha registrando purchase_confirmed:", (e as Error)?.message);
+    }
+
+    // GA4 (Measurement Protocol) — paridade com o trilho do cartão.
+    await sendGa4Purchase({
+      email: customerEmail,
+      transactionId: stableEventId,
+      value: amountValue,
+      plan: customerPlan,
+      planName: PLAN_NAMES[customerPlan] || customerPlan,
+      eventSourceUrl: "https://olaaura.com.br/obrigado",
+      source: "webhook-asaas",
+    });
+
     // 4) Portal token.
     let portalLink = "";
     try {
