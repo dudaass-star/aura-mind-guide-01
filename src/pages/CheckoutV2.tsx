@@ -689,8 +689,8 @@ const CheckoutV2 = () => {
       trackAddPaymentInfo({ plan: selectedPlan, billing: billingPeriod, value: trialPriceMap[selectedPlan] });
 
       // ChatGPT Ads: início de checkout (mesmo ponto do InitiateCheckout do Meta).
-      oaiqMeasure("checkout_started", {
-        amount: trialPriceMap[selectedPlan],
+      oaiqCheckoutStarted({
+        value: trialPriceMap[selectedPlan],
         currency: "BRL",
         content_name: `Trial ${plans[selectedPlan].name}`,
       });
