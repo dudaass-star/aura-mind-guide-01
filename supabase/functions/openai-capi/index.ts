@@ -15,6 +15,7 @@ interface OaiEventRequest {
   source_url?: string;
   data?: Record<string, unknown>;         // ex: { type: "contents", value, currency }
   source?: string;                        // origem interna, só para log
+  custom_event_name?: string;             // usado quando event_type = "custom"
 }
 
 Deno.serve(async (req) => {
@@ -51,6 +52,7 @@ Deno.serve(async (req) => {
           source_url: body.source_url || "https://olaaura.com.br/obrigado",
           action_source: "web",
           data: { type: "contents", ...(body.data || {}) },
+          ...(body.custom_event_name && { custom_event_name: body.custom_event_name }),
         },
       ],
     };
