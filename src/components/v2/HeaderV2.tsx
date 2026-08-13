@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { trackCtaClick } from "@/lib/ga4";
+import { trackLandingCta, checkoutHref } from "@/lib/landing-analytics";
 import logoOlaAura from "@/assets/logo-ola-aura.png";
 
 const HeaderV2 = () => {
@@ -40,8 +40,8 @@ const HeaderV2 = () => {
             <a href="#precos" className={linkBase}>Preços</a>
             <a href="#faq" className={linkBase}>FAQ</a>
             <Link
-              to="/v2/checkout"
-              onClick={() => trackCtaClick("header", "Começar agora (v2 desktop)")}
+              to={checkoutHref("header")}
+              onClick={() => trackLandingCta("header", "Começar agora (v2 desktop)")}
             >
               <Button variant="sage" size="sm" className="rounded-full px-5">
                 Começar agora
@@ -66,9 +66,9 @@ const HeaderV2 = () => {
               <a href="#precos" className={linkBase} onClick={() => setIsMenuOpen(false)}>Preços</a>
               <a href="#faq" className={linkBase} onClick={() => setIsMenuOpen(false)}>FAQ</a>
               <Link
-                to="/v2/checkout"
+                to={checkoutHref("header")}
                 onClick={() => {
-                  trackCtaClick("header", "Começar agora (v2 mobile menu)");
+                  trackLandingCta("header", "Começar agora (v2 mobile menu)");
                   setIsMenuOpen(false);
                 }}
               >
