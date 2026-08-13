@@ -17,6 +17,7 @@ import { retryCharge, MAX_RETRIES } from "../_shared/inter-cycles.ts";
 import { interFetch } from "../_shared/inter-pix.ts";
 import { resolveMetaIdentity } from "../_shared/meta-identity.ts";
 import { sendOpenAiConversion } from "../_shared/openai-capi.ts";
+import { sendGa4Purchase } from "../_shared/ga4-purchase.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
