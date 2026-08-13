@@ -103,6 +103,16 @@ function addMonths(d: Date, months: number): Date {
   return r;
 }
 
+function addDays(d: Date, days: number): Date {
+  const r = new Date(d);
+  r.setUTCDate(r.getUTCDate() + days);
+  return r;
+}
+
+// Promo de entrada = trial pago de 7 dias: o 1º débito do mandato cai no 8º dia
+// (D+7), não em D+30. Folga confortável sobre o mínimo de 2 dias do arranjo Pix.
+const TRIAL_DAYS = 7;
+
 // Retornante = já pagou alguma vez (perfil, Woovi, Inter, Asaas ou Stripe).
 // O valor de entrada promocional é isca de aquisição: 1× por cliente.
 async function isReturningCustomer(supabase: any, email: string, phoneDigits: string): Promise<boolean> {
@@ -293,12 +303,14 @@ Deno.serve(async (req) => {
     }
 
     const now = new Date();
-    // Composto (trial): a 1ª parcela do mandato só dispara em D+30 — a entrada é a
-    // cobrança avulsa, não uma parcela do mandato. Nativo (sem trial): Jornada 3,
-    // primeira parcela cobrada na própria aprovação (dayGenerateCharge = hoje).
-    const firstChargeDate = withTrial ? addMonths(now, CYCLE_MONTHS[billing]) : now;
+    // Composto (trial): a entrada é a cobrança avulsa; a 1ª parcela do mandato
+    // dispara em D+7 (dia 8). Nativo (sem trial): Jornada 3, primeira parcela
+    // cobrada na própria aprovação (dayGenerateCharge = hoje).
+    const firstChargeDate = withTrial ? addDays(now, TRIAL_DAYS) : now;
     const dayGenerateCharge = firstChargeDate.toISOString();
-    const nextChargeDate = brtDate(addMonths(now, CYCLE_MONTHS[billing]));
+    const nextChargeDate = withTrial
+      ? brtDate(firstChargeDate)
+      : brtDate(addMonths(now, CYCLE_MONTHS[billing]));
     const correlationId = crypto.randomUUID();
     // Campo "contrato" mostrado no mandato: a Woovi limita a 30 caracteres.
     const comment = `Aura ${PLAN_NAMES[plan]}/${PERIOD_LABELS[billing]}`.slice(0, 29);
@@ -388,7 +400,7 @@ Deno.serve(async (req) => {
         throw new Error("Woovi não devolveu o BR Code da cobrança de entrada");
       }
 
-      // Mandato recorrente em Jornada 2 (só autorização; 1ª parcela em D+30).
+      // Mandato recorrente em Jornada 2 (só autorização; 1ª parcela em D+7).
       const created = await wooviFetch<Record<string, any>>("/api/v1/subscriptions", {
         method: "POST",
         body: {
