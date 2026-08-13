@@ -224,7 +224,7 @@ async function claimChargeActivation(supabase: any, chargeRowId: string): Promis
 async function activateAccess(
   supabase: any,
   sub: Record<string, any>,
-  opts: { isFirstPayment: boolean; valueCents: number; eventId: string },
+  opts: { isFirstPayment: boolean; valueCents: number; eventId: string; trialEntry?: boolean },
 ): Promise<boolean> {
   try {
     const plan = sub.plan as string;
@@ -255,9 +255,11 @@ async function activateAccess(
     // renovação somar ao que o cliente ainda tem.
     const currentExpiry = profile?.plan_expires_at ? new Date(profile.plan_expires_at) : null;
     const base = currentExpiry && currentExpiry > now ? currentExpiry : now;
-    // Na jornada 3 o valor promocional já compra o ciclo inteiro (mensal): não
-    // existe janela de 7 dias como no trial gratuito do Inter.
-    const newExpiry = addMonths(base, CYCLE_MONTHS[billing] ?? 1).toISOString();
+    // Promo de entrada (trial pago) = 7 dias de acesso; o débito do dia 8 é que
+    // estende para o ciclo mensal cheio. Demais pagamentos compram o ciclo todo.
+    const newExpiry = opts.trialEntry
+      ? addDaysUTC(base, TRIAL_DAYS).toISOString()
+      : addMonths(base, CYCLE_MONTHS[billing] ?? 1).toISOString();
     const today = now.toISOString().split("T")[0];
     const sessionsCount = PLAN_SESSIONS[plan] ?? 0;
 
@@ -330,7 +332,9 @@ async function activateAccess(
 
     await supabase.from("woovi_subscriptions").update({
       user_id: profileRowId || sub.user_id, status: "ATIVA", last_error: null,
-      next_charge_date: brtDate(addMonths(now, CYCLE_MONTHS[billing] ?? 1)),
+      next_charge_date: opts.trialEntry
+        ? brtDate(addDaysUTC(now, TRIAL_DAYS))
+        : brtDate(addMonths(now, CYCLE_MONTHS[billing] ?? 1)),
     }).eq("subscription_id", sub.subscription_id);
 
     // Renovação silenciosa: não repete boas-vindas.
