@@ -778,6 +778,15 @@ Deno.serve(async (req) => {
               }),
             });
             console.log('✅ CAPI Purchase event sent (trial payment)');
+            // ChatGPT Ads (OpenAI) — mesma conversão, mesmo event_id.
+            await sendOpenAiConversion({
+              eventType: 'purchase',
+              eventId: session.id + '_purchase',
+              value: (session.amount_total || 0) / 100,
+              currency: 'BRL',
+              contentName: `Trial ${planName}`,
+              source: 'stripe-webhook',
+            });
             } else {
               console.log(`⏭️ CAPI Purchase NÃO disparado — ${isReturning ? 'returning' : 'upgrade'} (não é 1ª compra)`);
             }
@@ -1074,6 +1083,15 @@ Deno.serve(async (req) => {
           }),
         });
         console.log(`✅ CAPI Purchase event sent (event_id: ${eventId}, fbp: ${!!ident.fbp}, fbc: ${!!ident.fbc})`);
+        // ChatGPT Ads (OpenAI) — mesma conversão, mesmo event_id.
+        await sendOpenAiConversion({
+          eventType: 'purchase',
+          eventId,
+          value: amountTotal,
+          currency: 'BRL',
+          contentName: `Plano ${planName}`,
+          source: 'stripe-webhook',
+        });
         }
       } catch (capiError) {
         console.warn('⚠️ CAPI Purchase event failed (non-blocking):', capiError);
