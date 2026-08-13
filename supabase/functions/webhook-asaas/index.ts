@@ -10,6 +10,7 @@ import { sendProactive } from "../_shared/whatsapp-provider.ts";
 import { reconcileOrphanPayments } from "../_shared/asaas-reconcile.ts";
 import { resolveMetaIdentity } from "../_shared/meta-identity.ts";
 import { sendOpenAiConversion } from "../_shared/openai-capi.ts";
+import { sendGa4Purchase } from "../_shared/ga4-purchase.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 
 const corsHeaders = {
