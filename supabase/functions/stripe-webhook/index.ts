@@ -1921,6 +1921,33 @@ Me conta: como você está hoje?`;
       }
     }
 
+    // ========== Recusa real do cartão (fluxo Semanal, mode=payment) ==========
+    // O Semanal cobra via PaymentIntent, não via fatura — então a recusa nunca
+    // aparecia em invoice.payment_failed. Sem este registro o funil não sabe
+    // separar "o banco negou" de "nunca digitou o cartão".
+    if (event.type === 'payment_intent.payment_failed') {
+      try {
+        const pi = event.data.object as Stripe.PaymentIntent;
+        const err = pi.last_payment_error;
+        const declineCode =
+          err?.decline_code || err?.code || 'unknown';
+        await supabase.from('checkout_funnel_events').insert({
+          anon_session_id: `stripe:${typeof pi.customer === 'string' ? pi.customer : 'sem_customer'}`,
+          step: 'card_declined',
+          payment_method: 'card',
+          detail: String(declineCode).slice(0, 120),
+          meta: {
+            payment_intent: pi.id,
+            amount: pi.amount,
+            message: err?.message?.slice(0, 200) ?? null,
+          },
+        });
+        console.log(`💳 [FUNNEL] card_declined (PI ${pi.id}): ${declineCode}`);
+      } catch (e) {
+        console.warn('⚠️ [FUNNEL] falha ao registrar card_declined (PI):', e instanceof Error ? e.message : e);
+      }
+    }
+
     // ========== Troca de método de pagamento → cobra na hora ==========
     // Antes, o cliente cadastrava um cartão novo no portal e o Stripe só tentava
     // de novo na próxima data da régua (às vezes dias depois). Aqui a gente

@@ -302,6 +302,10 @@ serve(async (req) => {
         .update(customerId, {
           email: email,
           name: name,
+          // País fixo em BR: sem isso o Checkout abre com "País ou região"
+          // preenchido pelo IP/locale do datacenter (aparecia "Bélgica" pro
+          // usuário brasileiro no exato momento de digitar o cartão).
+          address: { country: "BR" },
           metadata: { phone: phoneClean },
         })
         .catch((e) => console.warn("⚠️ customers.update falhou (non-blocking):", e?.message || e));
@@ -309,6 +313,7 @@ serve(async (req) => {
       const newCustomer = await stripe.customers.create({
         name: name,
         email: email,
+        address: { country: "BR" },
         metadata: {
           phone: phoneClean,
         },
