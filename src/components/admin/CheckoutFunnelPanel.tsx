@@ -54,7 +54,12 @@ export default function CheckoutFunnelPanel() {
             .filter(
               (e) =>
                 e.step === step &&
-                (!method || (e.payment_method ?? "card") === method) &&
+                // "pix_auto" também é PIX — antes a comparação exata zerava
+                // todas as linhas de PIX Automático.
+                (!method ||
+                  (method === "pix"
+                    ? (e.payment_method ?? "").startsWith("pix")
+                    : (e.payment_method ?? "card") === "card")) &&
                 e.anon_session_id,
             )
             .map((e) => e.anon_session_id),
@@ -73,22 +78,41 @@ export default function CheckoutFunnelPanel() {
       const cardPaid = paid("card");
       const started = uniq("form_submit");
       const mounted = uniq("embedded_mounted");
+      const qrGenerated = uniq("pix_qr_generated", "pix");
 
       setRows([
         { label: "Abriu o checkout", card: uniq("page_view"), pix: null, hint: "sem separar método" },
         { label: "Enviou nome/e-mail/telefone", card: started, pix: null },
         { label: "Formulário do cartão montou", card: mounted, pix: null },
-        { label: "Abriu a janela do PIX", card: null, pix: uniq("pix_modal_open") },
-        { label: "QR gerado", card: null, pix: uniq("pix_qr_generated") },
-        { label: "Copiou o código PIX", card: null, pix: uniq("pix_copy") },
+        { label: "Banco pediu autenticação (3DS)", card: uniq("card_action_required"), pix: null },
+        { label: "Abandonou o formulário do cartão", card: uniq("card_abandoned"), pix: null },
+        { label: "Abriu a janela do PIX", card: null, pix: uniq("pix_modal_open", "pix") },
+        { label: "QR gerado", card: null, pix: qrGenerated },
+        { label: "Copiou o código PIX", card: null, pix: uniq("pix_copy", "pix") },
+        { label: "Fechou o PIX sem pagar", card: null, pix: uniq("pix_abandoned", "pix") },
         { label: "Cartão recusado pelo banco", card: uniq("card_declined"), pix: null },
         { label: "PAGOU", card: cardPaid, pix: pixPaid },
         {
+          label: "Compra confirmada (webhook)",
+          card: uniq("purchase_confirmed", "card"),
+          pix: uniq("purchase_confirmed", "pix"),
+        },
+        {
+          label: "Chegou na tela de obrigado",
+          card: uniq("purchase"),
+          pix: null,
+          hint: "sem separar método",
+        },
+        {
+          label: "Clicou no CTA com formulário vazio",
+          card: uniq("cta_empty_form"),
+          pix: null,
+          hint: "sem separar método",
+        },
+        {
           label: "Conversão (pagou / formulário)",
           card: mounted ? Math.round((cardPaid / mounted) * 100) : 0,
-          pix: uniq("pix_qr_generated")
-            ? Math.round((pixPaid / uniq("pix_qr_generated")) * 100)
-            : 0,
+          pix: qrGenerated ? Math.round((pixPaid / qrGenerated) * 100) : 0,
           hint: "%",
         },
       ]);

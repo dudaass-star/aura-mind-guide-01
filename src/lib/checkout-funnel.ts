@@ -14,6 +14,7 @@ export type FunnelStep =
   | "landing_exit"
   | "form_submit"
   | "form_invalid"
+  | "cta_empty_form"
   | "warmup"
   | "prewarm_session"
   | "prewarm_hit"
@@ -23,15 +24,21 @@ export type FunnelStep =
   | "embedded_timeout"
   | "embedded_fallback_redirect"
   | "embedded_fallback_error"
+  | "card_action_required"
+  | "card_abandoned"
   | "pix_modal_open"
   | "pix_qr_requested"
   | "pix_qr_generated"
   | "pix_qr_error"
   | "pix_copy"
   | "pix_authorized"
+  | "pix_abandoned"
   | "pix_rail_down"
   | "pix_blocked_rail_down"
-  | "asaas_card_open";
+  | "asaas_card_open"
+  | "purchase"
+  /** Confirmado pelo servidor (webhook). Não vem do navegador. */
+  | "purchase_confirmed";
 
 const SESSION_KEY = "aura_funnel_sid";
 

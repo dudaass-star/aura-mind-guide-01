@@ -239,6 +239,9 @@ const CheckoutV2 = () => {
   // (resto dos dados reusa name/email/phone do form principal) e troca pra
   // tela de QR depois que a edge function retorna.
   const [pixOpen, setPixOpen] = useState(false);
+  // Marca se o código foi copiado nessa abertura do modal — usado para
+  // qualificar o abandono do PIX (fechou sem copiar vs copiou e não pagou).
+  const pixCopiedRef = useRef(false);
   const [pixStage, setPixStage] = useState<"form" | "qr">("form");
   // Modo do PIX no modal: one-time (criar-pix-asaas) ou subscription (criar-pix-recorrente-asaas).
   // Mensal usa subscription; Trim/Sem/Anual usam one-time (à vista).
@@ -917,11 +920,38 @@ const CheckoutV2 = () => {
   }, [embeddedClientSecret]);
 
   const handleResetCheckout = useCallback(() => {
+    // Voltar pra editar dados com o widget do Stripe já montado = abandono do
+    // formulário de cartão. Sem isso, o funil perdia essas pessoas em silêncio.
+    if (embeddedClientSecret) {
+      logFunnel("card_abandoned", {
+        plan: selectedPlan,
+        billing: billingPeriod,
+        paymentMethod: "card",
+        detail: embeddedMounted ? "voltou_editar_dados" : "voltou_antes_montar",
+      });
+    }
     setEmbeddedClientSecret(null);
     setStripePromise(null);
     setAsaasCardOpen(false);
     setHasRedirected(false);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [embeddedClientSecret, embeddedMounted, selectedPlan, billingPeriod]);
+
+  // Saiu da página com o formulário de cartão aberto e sem pagar.
+  useEffect(() => {
+    if (!embeddedClientSecret) return;
+    const onLeave = () => {
+      logFunnel("card_abandoned", {
+        plan: selectedPlan,
+        billing: billingPeriod,
+        paymentMethod: "card",
+        detail: "saiu_da_pagina",
+      });
+    };
+    window.addEventListener("pagehide", onLeave);
+    return () => window.removeEventListener("pagehide", onLeave);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [embeddedClientSecret]);
 
   // Abre o modal PIX. Valida os 3 campos comuns antes (mesma regra do CTA cartão).
   // `mode` define se vamos chamar a edge one-time ou a de subscription.
@@ -1069,6 +1099,7 @@ const CheckoutV2 = () => {
     if (!pixData?.copyPaste) return;
     try {
       await navigator.clipboard.writeText(pixData.copyPaste);
+      pixCopiedRef.current = true;
       toast.success("Código PIX copiado!");
       logFunnel("pix_copy", {
         plan: selectedPlan,
@@ -1661,23 +1692,35 @@ const CheckoutV2 = () => {
                   }
                   />
                 ) : (
-                  // Trilho de PIX fora do ar: em vez de oferecer e falhar no QR,
-                  // o checkout segue só com cartão. Sem aviso alarmista.
-                  <div className="flex items-center gap-2.5 rounded-xl border border-[hsl(var(--ck-cta))] bg-[hsl(var(--ck-cta)/0.14)] px-3 py-3">
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[hsl(var(--ck-cta))] text-[hsl(var(--ck-cta-fg))]">
-                      <CreditCard className="h-4 w-4" />
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block text-sm font-semibold leading-tight text-[hsl(var(--ck-text))]">
-                        Cartão de crédito
-                      </span>
-                      <span className="ck-num block text-[11px] leading-tight text-[hsl(var(--ck-text-muted))]">
-                        {pixEnabled
+                  // Trilho de PIX oscilando: o método continua visível (esconder
+                  // derrubou a conversão de quem só paga por PIX), mas o clique
+                  // mantém o cartão selecionado e avisa em uma linha.
+                  <>
+                    <PaymentMethodToggle
+                      value="card"
+                      onChange={(m) => {
+                        if (m === "pix") {
+                          logFunnel("pix_blocked_rail_down", {
+                            plan: selectedPlan,
+                            billing: billingPeriod,
+                            paymentMethod: "pix",
+                          });
+                          toast.info("PIX voltando em instantes. Por ora, o cartão libera na hora.");
+                          return;
+                        }
+                        setPayMethod("card");
+                      }}
+                      cardHint={
+                        pixEnabled
                           ? `R$ ${currentPrice}/${periodLabel}`
-                          : `7 dias por R$ ${currentPlan.trialPrice}`}
-                      </span>
-                    </span>
-                  </div>
+                          : `7 dias por R$ ${currentPlan.trialPrice}`
+                      }
+                      pixHint="Voltando em instantes"
+                    />
+                    <p className="text-[11px] leading-tight text-[hsl(var(--ck-text-muted))]">
+                      PIX em manutenção rápida. O cartão libera o acesso na hora.
+                    </p>
+                  </>
                 )}
 
                 <div className="ck-num text-center text-sm text-[hsl(var(--ck-text-muted))]">
@@ -1768,6 +1811,28 @@ const CheckoutV2 = () => {
               pixEnabled && pixRailUp ? "Pagar com PIX" : `Começar por R$ ${todayAmount}`
             }
             onClick={() => {
+              // Antes esse clique com formulário vazio virava "form_invalid" e
+              // poluía a métrica de validação. Agora é um evento próprio e o
+              // usuário é levado direto pro primeiro campo em branco.
+              const emptyFields = [
+                phoneDigits.length < 11 ? "phone" : null,
+                !name.trim() ? "name" : null,
+                !email.trim() ? "email" : null,
+              ].filter(Boolean) as string[];
+              if (emptyFields.length === 3) {
+                logFunnel("cta_empty_form", {
+                  plan: selectedPlan,
+                  billing: billingPeriod,
+                  paymentMethod: payMethod,
+                  detail: emptyFields.join(","),
+                });
+                requestAnimationFrame(() => {
+                  const el = document.getElementById("phone");
+                  el?.scrollIntoView({ behavior: "smooth", block: "center" });
+                  el?.focus({ preventScroll: true });
+                });
+                return;
+              }
               document
                 .getElementById("checkout-primary-cta")
                 ?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -1830,6 +1895,18 @@ const CheckoutV2 = () => {
         <Dialog open={pixOpen} onOpenChange={(open) => {
           setPixOpen(open);
           if (!open) {
+            // Fechou com QR na tela e sem pagamento confirmado: é abandono de
+            // PIX, não erro técnico. É esse número que explica o buraco entre
+            // "gerou QR" e "pagou".
+            if (pixStage === "qr" && pixData && authState !== "active") {
+              logFunnel("pix_abandoned", {
+                plan: selectedPlan,
+                billing: billingPeriod,
+                paymentMethod: pixMode === "subscription" ? "pix_auto" : "pix",
+                detail: pixCopiedRef.current ? "copiou_codigo" : "sem_copia",
+              });
+            }
+            pixCopiedRef.current = false;
             // ao fechar, reseta pra começar limpo na próxima abertura
             setTimeout(() => {
               setPixStage("form");
@@ -1979,6 +2056,17 @@ const CheckoutV2 = () => {
                         <Copy className="w-4 h-4" />
                       </Button>
                     </div>
+                    {/* Ação principal logo abaixo do código: no mobile o botão
+                        ficava no fim do modal e quase ninguém copiava. */}
+                    <Button
+                      variant="sage"
+                      size="lg"
+                      className="w-full rounded-full mt-2.5"
+                      onClick={handleCopyPix}
+                    >
+                      <Copy className="w-4 h-4 mr-2" />
+                      Copiar código PIX
+                    </Button>
                   </div>
 
                   <div className="bg-white/5 border border-white/10 rounded-xl p-3 text-xs text-white/70 space-y-1.5">
@@ -2064,16 +2152,6 @@ const CheckoutV2 = () => {
                       </Button>
                     </div>
                   )}
-
-                  <Button
-                    variant="sage"
-                    size="lg"
-                    className="w-full rounded-full"
-                    onClick={handleCopyPix}
-                  >
-                    <Copy className="w-4 h-4 mr-2" />
-                    Copiar código PIX
-                  </Button>
 
                   {pixData.invoiceUrl && (
                     <a

@@ -695,6 +695,20 @@ Deno.serve(async (req) => {
             }
 
             if (chargeRowId && await claimChargeActivation(supabase, chargeRowId)) {
+              // Funil: primeira cobrança paga = compra confirmada no trilho PIX.
+              if (cycleIndex === 0) {
+                try {
+                  await supabase.from("checkout_funnel_events").insert({
+                    anon_session_id: `woovi:${sub.subscription_id}`,
+                    step: "purchase_confirmed",
+                    payment_method: "pix_auto",
+                    detail: "woovi",
+                    meta: { charge_id: String(chargeId), value_cents: valueCents, payer_bank: payerBank ?? null },
+                  });
+                } catch (e) {
+                  console.warn("[webhook-woovi] ⚠️ falha registrando purchase_confirmed:", e instanceof Error ? e.message : e);
+                }
+              }
               const ok = await activateAccess(supabase, sub, {
                 isFirstPayment: cycleIndex === 0,
                 valueCents,

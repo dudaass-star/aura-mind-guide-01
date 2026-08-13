@@ -1292,6 +1292,23 @@ Me conta: como você está hoje?`;
       const paidSubscriptionId = extractSubscriptionId(invoice);
       console.log('💰 Invoice paid:', invoice.id, 'customer:', customerId, 'subscription:', paidSubscriptionId);
 
+      // Linha de chegada do funil confirmada pelo servidor. O evento do
+      // navegador (`purchase`, no /obrigado) só existe quando a pessoa volta
+      // pra tela; este acontece sempre. Steps distintos pra não contar duas vezes.
+      if (invoice.billing_reason === 'subscription_create') {
+        try {
+          await supabase.from('checkout_funnel_events').insert({
+            anon_session_id: `stripe:${customerId}`,
+            step: 'purchase_confirmed',
+            payment_method: 'card',
+            detail: 'stripe',
+            meta: { invoice: invoice.id, amount_paid: invoice.amount_paid },
+          });
+        } catch (e) {
+          console.warn('⚠️ [FUNNEL] falha ao registrar purchase_confirmed:', e instanceof Error ? e.message : e);
+        }
+      }
+
       if (paidSubscriptionId) {
         try {
           const customer = await stripe.customers.retrieve(customerId);
@@ -1949,6 +1966,33 @@ Me conta: como você está hoje?`;
     }
 
     // ========== Troca de método de pagamento → cobra na hora ==========
+    // ========== 3DS / autenticação exigida pelo banco ==========
+    // O checkout já recebia esses eventos, mas não registrava nada: no funil
+    // "clicou em pagar e não pagou" ficava idêntico a desistência.
+    if (
+      event.type === 'invoice.payment_action_required' ||
+      event.type === 'payment_intent.requires_action'
+    ) {
+      try {
+        const obj = event.data.object as any;
+        const customerId = typeof obj.customer === 'string' ? obj.customer : 'sem_customer';
+        await supabase.from('checkout_funnel_events').insert({
+          anon_session_id: `stripe:${customerId}`,
+          step: 'card_action_required',
+          payment_method: 'card',
+          detail: event.type === 'invoice.payment_action_required' ? 'invoice_3ds' : 'payment_intent_3ds',
+          meta: {
+            object_id: obj.id ?? null,
+            amount: obj.amount_due ?? obj.amount ?? null,
+            billing_reason: obj.billing_reason ?? null,
+          },
+        });
+        console.log(`🔐 [FUNNEL] card_action_required (${event.type}): ${obj.id}`);
+      } catch (e) {
+        console.warn('⚠️ [FUNNEL] falha ao registrar card_action_required:', e instanceof Error ? e.message : e);
+      }
+    }
+
     // Antes, o cliente cadastrava um cartão novo no portal e o Stripe só tentava
     // de novo na próxima data da régua (às vezes dias depois). Aqui a gente
     // assume o método novo como padrão e quita as faturas abertas imediatamente.
