@@ -381,6 +381,21 @@ async function activateAccess(
       }
     }
 
+    // Funil: linha de chegada gravada pelo servidor (paridade com Woovi/Stripe).
+    try {
+      await supabase.from("checkout_funnel_events").insert({
+        anon_session_id: `inter:${rec.id_rec}`,
+        step: "purchase_confirmed",
+        plan,
+        billing,
+        payment_method: "pix_auto",
+        detail: "inter",
+        meta: { value_cents: opts.valueCents, id_rec: rec.id_rec },
+      });
+    } catch (e) {
+      console.warn("[webhook-inter] ⚠️ falha registrando purchase_confirmed:", (e as Error)?.message);
+    }
+
     // Aquisição: só a 1ª liquidação do mandato conta como Purchase.
     if (email) {
       await fireMetaCapiPurchase(supabase, {
@@ -392,6 +407,7 @@ async function activateAccess(
         fbc: rec.fbc || null,
         value: opts.valueCents / 100,
         plan,
+        isFirstPurchase: isNewCustomer,
       });
     }
 
