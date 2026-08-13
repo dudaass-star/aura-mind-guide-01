@@ -1417,6 +1417,31 @@ Me conta: como você está hoje?`;
       }
       console.log('🚨 [DUNNING-ENTRY] invoice.payment_failed BLOCK REACHED. invoice:', invoice.id, 'customer:', customerId, 'subscription:', subscriptionId, 'amount:', invoice.amount_due, 'billing_reason:', invoice.billing_reason);
 
+      // Observabilidade de checkout: primeira cobrança recusada é abandono
+      // involuntário, não desistência. Sem esse registro o funil mostra
+      // "clicou em pagar e não pagou" sem distinguir recusa de banco.
+      if (invoice.billing_reason === 'subscription_create') {
+        try {
+          const charge = (invoice as any).charge
+            ? await stripe.charges.retrieve((invoice as any).charge as string)
+            : null;
+          const declineCode =
+            charge?.outcome?.reason ||
+            charge?.failure_code ||
+            (invoice as any).last_finalization_error?.code ||
+            'unknown';
+          await supabase.from('checkout_funnel_events').insert({
+            anon_session_id: `stripe:${customerId}`,
+            step: 'card_declined',
+            payment_method: 'card',
+            detail: String(declineCode).slice(0, 120),
+            meta: { invoice: invoice.id, amount_due: invoice.amount_due },
+          });
+        } catch (e) {
+          console.warn('⚠️ [FUNNEL] falha ao registrar card_declined:', e instanceof Error ? e.message : e);
+        }
+      }
+
       // Fallback: resolve subscription when invoice.subscription is null but billing_reason indicates subscription
       const subscriptionBillingReasons = ['subscription_cycle', 'subscription_update', 'subscription_create', 'subscription_threshold'];
       if (!subscriptionId && invoice.billing_reason && subscriptionBillingReasons.includes(invoice.billing_reason)) {
