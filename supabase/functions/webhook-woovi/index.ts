@@ -385,6 +385,7 @@ async function activateAccess(
         fbc: sub.fbc || null,
         value: opts.valueCents / 100,
         plan,
+        isFirstPurchase: isNewCustomer,
       });
     }
 
