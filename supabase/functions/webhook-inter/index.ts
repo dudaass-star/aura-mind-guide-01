@@ -91,9 +91,15 @@ async function fireMetaCapiPurchase(
   args: {
     eventId: string; email: string; phone?: string; firstName?: string;
     fbp?: string | null; fbc?: string | null; value: number; plan: string;
+    isFirstPurchase: boolean;
   },
 ): Promise<void> {
   try {
+    // Regra do projeto: Purchase mede AQUISIÇÃO. Retorno/reativação não dispara.
+    if (!args.isFirstPurchase) {
+      console.log("[webhook-inter] ⏭️ Purchase não disparado — cliente retornante (não é 1ª compra)");
+      return;
+    }
     const { data: prior } = await supabase
       .from("meta_capi_log").select("id")
       .eq("event_id", args.eventId).eq("event_name", "Purchase")
@@ -139,6 +145,16 @@ async function fireMetaCapiPurchase(
       value: args.value,
       currency: "BRL",
       contentName: `Plano ${PLAN_NAMES[args.plan] || args.plan}`,
+      source: "webhook-inter",
+    });
+    // GA4 (Measurement Protocol) — paridade com o trilho do cartão.
+    await sendGa4Purchase({
+      email: args.email,
+      transactionId: args.eventId,
+      value: args.value,
+      plan: args.plan,
+      planName: PLAN_NAMES[args.plan] || args.plan,
+      eventSourceUrl: "https://olaaura.com.br/obrigado",
       source: "webhook-inter",
     });
   } catch (e) {
