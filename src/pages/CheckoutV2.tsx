@@ -1768,6 +1768,28 @@ const CheckoutV2 = () => {
               pixEnabled && pixRailUp ? "Pagar com PIX" : `Começar por R$ ${todayAmount}`
             }
             onClick={() => {
+              // Antes esse clique com formulário vazio virava "form_invalid" e
+              // poluía a métrica de validação. Agora é um evento próprio e o
+              // usuário é levado direto pro primeiro campo em branco.
+              const emptyFields = [
+                phoneDigits.length < 11 ? "phone" : null,
+                !name.trim() ? "name" : null,
+                !email.trim() ? "email" : null,
+              ].filter(Boolean) as string[];
+              if (emptyFields.length === 3) {
+                logFunnel("cta_empty_form", {
+                  plan: selectedPlan,
+                  billing: billingPeriod,
+                  paymentMethod: payMethod,
+                  detail: emptyFields.join(","),
+                });
+                requestAnimationFrame(() => {
+                  const el = document.getElementById("phone");
+                  el?.scrollIntoView({ behavior: "smooth", block: "center" });
+                  el?.focus({ preventScroll: true });
+                });
+                return;
+              }
               document
                 .getElementById("checkout-primary-cta")
                 ?.scrollIntoView({ behavior: "smooth", block: "center" });
