@@ -17,6 +17,7 @@ import { retryCharge, MAX_RETRIES } from "../_shared/inter-cycles.ts";
 import { interFetch } from "../_shared/inter-pix.ts";
 import { resolveMetaIdentity } from "../_shared/meta-identity.ts";
 import { sendOpenAiConversion } from "../_shared/openai-capi.ts";
+import { sendGa4Purchase } from "../_shared/ga4-purchase.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -90,9 +91,15 @@ async function fireMetaCapiPurchase(
   args: {
     eventId: string; email: string; phone?: string; firstName?: string;
     fbp?: string | null; fbc?: string | null; value: number; plan: string;
+    isFirstPurchase: boolean;
   },
 ): Promise<void> {
   try {
+    // Regra do projeto: Purchase mede AQUISIÇÃO. Retorno/reativação não dispara.
+    if (!args.isFirstPurchase) {
+      console.log("[webhook-inter] ⏭️ Purchase não disparado — cliente retornante (não é 1ª compra)");
+      return;
+    }
     const { data: prior } = await supabase
       .from("meta_capi_log").select("id")
       .eq("event_id", args.eventId).eq("event_name", "Purchase")
@@ -138,6 +145,16 @@ async function fireMetaCapiPurchase(
       value: args.value,
       currency: "BRL",
       contentName: `Plano ${PLAN_NAMES[args.plan] || args.plan}`,
+      source: "webhook-inter",
+    });
+    // GA4 (Measurement Protocol) — paridade com o trilho do cartão.
+    await sendGa4Purchase({
+      email: args.email,
+      transactionId: args.eventId,
+      value: args.value,
+      plan: args.plan,
+      planName: PLAN_NAMES[args.plan] || args.plan,
+      eventSourceUrl: "https://olaaura.com.br/obrigado",
       source: "webhook-inter",
     });
   } catch (e) {
@@ -267,6 +284,8 @@ async function activateAccess(
         .from("profiles").select(profileCols).or(orParts.join(",")).limit(1).maybeSingle();
       profile = prof || null;
     }
+    // Aquisição real: só conta como 1ª compra quem não tinha perfil antes.
+    const isNewCustomer = !profile;
 
     const currentExpiry = profile?.plan_expires_at ? new Date(profile.plan_expires_at) : null;
     const base = currentExpiry && currentExpiry > now ? currentExpiry : now;
@@ -362,6 +381,21 @@ async function activateAccess(
       }
     }
 
+    // Funil: linha de chegada gravada pelo servidor (paridade com Woovi/Stripe).
+    try {
+      await supabase.from("checkout_funnel_events").insert({
+        anon_session_id: `inter:${rec.id_rec}`,
+        step: "purchase_confirmed",
+        plan,
+        billing,
+        payment_method: "pix_auto",
+        detail: "inter",
+        meta: { value_cents: opts.valueCents, id_rec: rec.id_rec },
+      });
+    } catch (e) {
+      console.warn("[webhook-inter] ⚠️ falha registrando purchase_confirmed:", (e as Error)?.message);
+    }
+
     // Aquisição: só a 1ª liquidação do mandato conta como Purchase.
     if (email) {
       await fireMetaCapiPurchase(supabase, {
@@ -373,6 +407,7 @@ async function activateAccess(
         fbc: rec.fbc || null,
         value: opts.valueCents / 100,
         plan,
+        isFirstPurchase: isNewCustomer,
       });
     }
 

@@ -15,6 +15,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { sendProactive } from "../_shared/whatsapp-provider.ts";
 import { resolveMetaIdentity } from "../_shared/meta-identity.ts";
 import { sendOpenAiConversion } from "../_shared/openai-capi.ts";
+import { sendGa4Purchase } from "../_shared/ga4-purchase.ts";
 import { normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
 import {
   wooviFetch, brtDate,
@@ -77,9 +78,15 @@ async function fireMetaCapiPurchase(
   args: {
     eventId: string; email: string; phone?: string; firstName?: string;
     fbp?: string | null; fbc?: string | null; value: number; plan: string;
+    isFirstPurchase: boolean;
   },
 ): Promise<void> {
   try {
+    // Regra do projeto: Purchase mede AQUISIÇÃO. Retorno/reativação não dispara.
+    if (!args.isFirstPurchase) {
+      console.log("[webhook-woovi] ⏭️ Purchase não disparado — cliente retornante (não é 1ª compra)");
+      return;
+    }
     const { data: prior } = await supabase
       .from("meta_capi_log").select("id")
       .eq("event_id", args.eventId).eq("event_name", "Purchase")
@@ -124,6 +131,16 @@ async function fireMetaCapiPurchase(
       value: args.value,
       currency: "BRL",
       contentName: `Plano ${PLAN_NAMES[args.plan] || args.plan}`,
+      source: "webhook-woovi",
+    });
+    // GA4 (Measurement Protocol) — paridade com o trilho do cartão.
+    await sendGa4Purchase({
+      email: args.email,
+      transactionId: args.eventId,
+      value: args.value,
+      plan: args.plan,
+      planName: PLAN_NAMES[args.plan] || args.plan,
+      eventSourceUrl: "https://olaaura.com.br/obrigado",
       source: "webhook-woovi",
     });
   } catch (e) {
@@ -259,6 +276,8 @@ async function activateAccess(
         .from("profiles").select(profileCols).or(orParts.join(",")).limit(1).maybeSingle();
       profile = prof || null;
     }
+    // Aquisição real: só conta como 1ª compra quem não tinha perfil antes.
+    const isNewCustomer = !profile;
 
     // A validade nova SEMPRE parte do `plan_expires_at` do perfil, para a
     // renovação somar ao que o cliente ainda tem.
@@ -366,6 +385,7 @@ async function activateAccess(
         fbc: sub.fbc || null,
         value: opts.valueCents / 100,
         plan,
+        isFirstPurchase: isNewCustomer,
       });
     }
 

@@ -10,6 +10,7 @@ import { sendProactive } from "../_shared/whatsapp-provider.ts";
 import { reconcileOrphanPayments } from "../_shared/asaas-reconcile.ts";
 import { resolveMetaIdentity } from "../_shared/meta-identity.ts";
 import { sendOpenAiConversion } from "../_shared/openai-capi.ts";
+import { sendGa4Purchase } from "../_shared/ga4-purchase.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 
 const corsHeaders = {
@@ -1264,6 +1265,31 @@ async function handleActivation(
         `[webhook-asaas] ℹ️ CAPI Purchase enviado em ativação ${isReturning ? "returning" : isUpgrade ? "upgrade" : "outro"} (não-1ª compra)`,
       );
     }
+
+    // Funil: linha de chegada gravada pelo servidor (paridade com Woovi/Stripe).
+    try {
+      await supabase.from("checkout_funnel_events").insert({
+        anon_session_id: `asaas:${stableEventId}`,
+        step: "purchase_confirmed",
+        plan: customerPlan,
+        payment_method: "pix",
+        detail: "asaas",
+        meta: { payment_id: paymentId, value: amountValue, is_new: isNew },
+      });
+    } catch (e) {
+      console.warn("[webhook-asaas] ⚠️ falha registrando purchase_confirmed:", (e as Error)?.message);
+    }
+
+    // GA4 (Measurement Protocol) — paridade com o trilho do cartão.
+    await sendGa4Purchase({
+      email: customerEmail,
+      transactionId: stableEventId,
+      value: amountValue,
+      plan: customerPlan,
+      planName: PLAN_NAMES[customerPlan] || customerPlan,
+      eventSourceUrl: "https://olaaura.com.br/obrigado",
+      source: "webhook-asaas",
+    });
 
     // 4) Portal token.
     let portalLink = "";

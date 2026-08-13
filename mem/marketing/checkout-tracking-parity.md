@@ -7,7 +7,7 @@ type: constraint
 
 **Início de checkout (frontend):** `CheckoutV2.tsx` tem `fireCheckoutStartTracking(methodLabel)` como **fonte única de verdade** — dispara `Lead` + `InitiateCheckout` no pixel do Meta (com Advanced Matching manual e `eventID`), os mesmos eventos no CAPI (`meta-capi`, mesmo `event_id` para dedupe), `trackAddPaymentInfo` do GA4 e `oaiqCheckoutStarted` do ChatGPT Ads. Todo caminho de pagamento **deve** chamar essa função. Dedupe por `plano_ciclo_metodo` em `startTrackedRef`.
 
-**Compra (backend):** cada webhook de gateway precisa do `Purchase` no Meta CAPI (regra de 1ª compra) + `sendOpenAiConversion`. Já existe em `stripe-webhook`, `webhook-woovi`, `webhook-inter`, `webhook-asaas`.
+**Compra (backend):** cada webhook de gateway precisa de 4 coisas: `Purchase` no Meta CAPI (regra de 1ª compra — `isFirstPurchase` calculado por ausência de perfil anterior, nunca fixo em `true`), `sendOpenAiConversion`, `sendGa4Purchase` (`_shared/ga4-purchase.ts`) e o passo `purchase_confirmed` em `checkout_funnel_events`. Já existe em `stripe-webhook`, `webhook-woovi`, `webhook-inter`, `webhook-asaas`.
 
 **Furo histórico (ago/2026):** quando o PIX virou padrão em 12/08, o caminho PIX não disparava `Lead`/`InitiateCheckout` — só o cartão disparava. Resultado: leads reais de anúncio (ex.: Fátima, 13/08, chegando pelo navegador in-app do Facebook) não geravam evento nenhum no Meta, e as campanhas ficaram sem sinal de "iniciar finalização de compra". Corrigido com o helper único.
 
