@@ -690,7 +690,8 @@ const CheckoutV2 = () => {
 
       // ChatGPT Ads: início de checkout (mesmo ponto do InitiateCheckout do Meta).
       oaiqCheckoutStarted({
-        value: trialPriceMap[selectedPlan],
+        // A API/pixel da OpenAI espera "amount" inteiro em centavos.
+        amount: Math.round(trialPriceMap[selectedPlan] * 100),
         currency: "BRL",
         content_name: `Trial ${plans[selectedPlan].name}`,
       });
