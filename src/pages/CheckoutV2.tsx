@@ -624,80 +624,9 @@ const CheckoutV2 = () => {
           ? `fb.1.${Date.now()}.${new URLSearchParams(window.location.search).get("fbclid")}`
           : undefined);
 
-      const leadEventId = `lead_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-      const icEventId = `ic_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-
-      const userData = {
-        email: email.trim(),
-        phone: phone.replace(/\D/g, ""),
-        first_name: name.trim().split(" ")[0],
-        client_user_agent: navigator.userAgent,
-        ...(fbp && { fbp }),
-        ...(fbc && { fbc }),
-      };
-
-      if (typeof window !== "undefined" && (window as any).fbq) {
-        // Advanced Matching manual antes de disparar: melhora o match do
-        // evento de navegador mesmo sem o AAM ligado no dataset.
-        setAdvancedMatching({
-          email: email.trim(),
-          phone: phone.replace(/\D/g, ""),
-          firstName: name.trim().split(" ")[0],
-        });
-        (window as any).fbq(
-          "track",
-          "Lead",
-          {
-            content_name: `Trial ${plans[selectedPlan].name}`,
-            content_category: "checkout",
-            value: ({ essencial: 6.9, direcao: 9.9, transformacao: 19.9 } as Record<string, number>)[selectedPlan],
-            currency: "BRL",
-          },
-          { eventID: leadEventId },
-        );
-        (window as any).fbq(
-          "track",
-          "InitiateCheckout",
-          {
-            content_name: `Trial ${plans[selectedPlan].name}`,
-            content_category: "checkout",
-            value: ({ essencial: 6.9, direcao: 9.9, transformacao: 19.9 } as Record<string, number>)[selectedPlan],
-            currency: "BRL",
-          },
-          { eventID: icEventId },
-        );
-      }
-
-      const capiPayload = {
-        event_source_url: window.location.href,
-        user_data: userData,
-        custom_data: {
-          content_name: `Trial ${plans[selectedPlan].name}`,
-          content_category: "checkout",
-          value: ({ essencial: 6.9, direcao: 9.9, transformacao: 19.9 } as Record<string, number>)[selectedPlan],
-          currency: "BRL",
-        },
-      };
-
-      Promise.all([
-        supabase.functions.invoke("meta-capi", {
-          body: { ...capiPayload, event_name: "Lead", event_id: leadEventId },
-        }),
-        supabase.functions.invoke("meta-capi", {
-          body: { ...capiPayload, event_name: "InitiateCheckout", event_id: icEventId },
-        }),
-      ]).catch(() => {});
-
-      const trialPriceMap: Record<string, number> = { essencial: 6.9, direcao: 9.9, transformacao: 19.9 };
-      trackAddPaymentInfo({ plan: selectedPlan, billing: billingPeriod, value: trialPriceMap[selectedPlan] });
-
-      // ChatGPT Ads: início de checkout (mesmo ponto do InitiateCheckout do Meta).
-      oaiqCheckoutStarted({
-        // A API/pixel da OpenAI espera "amount" inteiro em centavos.
-        amount: Math.round(trialPriceMap[selectedPlan] * 100),
-        currency: "BRL",
-        content_name: `Trial ${plans[selectedPlan].name}`,
-      });
+      // Fonte única de verdade do início de checkout (Meta pixel + CAPI, GA4 e
+      // ChatGPT Ads). Qualquer método novo TEM que chamar esta função.
+      fireCheckoutStartTracking("card");
 
       const gaClientId = getGaClientId();
 
