@@ -1,53 +1,67 @@
-# Landing /v2 no Clarity: o lead clica em cima, não lê a página
+# Análise completa: landing /v2 + checkout (Clarity, 01–13/08)
 
-## O que o CSV entrega (e o que não entrega)
+## Parte 1 — Landing /v2 (taps mobile)
 
-O arquivo é o mapa de **Taps (mobile)** da `/v2`, 01–13/08:
+770 page views, 394 cliques. Os 73 elementos mais tocados somam 274 taps.
 
-- **770 page views** e **394 cliques** no período (só mobile).
-- A lista traz os **73 elementos mais clicados**, somando **274 taps** (o resto são cliques dispersos fora do top).
+Por região:
 
-Ele não traz profundidade de rolagem nem gravações — só onde as pessoas tocam. Mas isso já responde a pergunta.
-
-## Leitura dos dados
-
-Taps por região da página:
-
-| Região | Taps | % dos taps mapeados |
+| Região | Taps | % |
 | --- | --- | --- |
-| Hero (topo, 1ª tela) | 131 | 47,8% |
+| Hero (1ª tela) | 131 | 47,8% |
 | FAQ | 53 | 19,3% |
-| Header / footer / seções soltas | 39 | 14,2% |
-| Acordeões (radix) | 21 | 7,7% |
+| Header/footer/soltos | 39 | 14,2% |
+| Acordeões | 21 | 7,7% |
 | Como funciona | 13 | 4,7% |
 | Preços | 12 | 4,4% |
 | Recursos | 3 | 1,1% |
 | Depoimentos | 2 | 0,7% |
 
-Só os CTAs (botões que levam ao checkout):
+Só CTAs: hero **74**, CTA final 6, preços 5, pós-demo 5, recursos 1.
 
-| CTA | Taps |
+**≈81% dos cliques em CTA saem do hero, antes de rolar.** Toda a página abaixo do hero gerou 17 cliques em CTA em 13 dias. Quem rola, rola pro FAQ (objeção), não pra ler benefícios.
+
+## Parte 2 — Checkout /v2/checkout (cliques desktop)
+
+26 page views, 104 cliques. Mapeando pelos IDs reais do código:
+
+| Ação | Cliques |
 | --- | --- |
-| Hero "Começar por R$ 6,90" | **74** |
-| CTA final | 6 |
-| Preços | 5 |
-| Depois da demo | 5 |
-| Recursos | 1 |
+| Troca de plano (`#essencial` 6, `#direcao` 6, `#transformacao` 3) | 15 |
+| Troca de ciclo (abas Mensal/Trim/Anual) | 12 |
+| Clique no telefone (`#phone`) | 2 |
+| Clique no e-mail (`#email`) | 1 |
+| Clique no nome (`#name`) | 0 |
+| Clique no CPF (`#cpf`) | 0 |
+| **Clique no botão de pagar (`#checkout-primary-cta`)** | **0** |
 
-## Conclusão
+O resto são cliques em áreas vazias do card.
 
-- **~81% de todos os cliques em CTA acontecem no hero**, antes de qualquer rolagem. A decisão é tomada na primeira tela.
-- A página inteira abaixo do hero contribui com **17 cliques em CTA em 13 dias**. Preços, depoimentos e recursos são praticamente inertes (2 a 5 taps cada).
-- Existe um segundo grupo real, minoritário e de alta intenção: **FAQ com 53 taps** (19%) — as 5 perguntas abertas repetidamente. Quem rola, rola para tirar dúvida/objeção, não para ler benefícios.
-- Cruzando com o banco: 250 pessoas distintas chegaram no `/v2/checkout` em agosto contra 770 page views mobile na landing. O gargalo não é a landing — é o checkout (2 pagamentos no cartão em agosto, já medido antes).
+### O que isso significa
 
-Ou seja: a landing longa está sendo **pulada**, não lida. Quem converte decide no hero; quem hesita vai direto ao FAQ.
+No desktop, em 13 dias: **ninguém apertou o botão de pagar. Nem uma vez.** E praticamente ninguém tocou nos campos — 3 cliques em campo contra 27 trocas de plano/ciclo.
 
-## O que eu faria com isso (aguardando sua escolha)
+O comportamento é inequívoco: a pessoa chega no checkout e **fica comparando preço**. Troca plano, troca ciclo, troca plano de novo — em média mais de uma troca por visitante — e sai sem começar a preencher. Não é abandono por atrito de formulário (formulário nem foi tocado). É **decisão de preço travada na comparação**.
 
-1. **Encurtar o caminho**: puxar 2–3 objeções do FAQ (as 3 mais tocadas) para logo abaixo do hero, e mover o FAQ para mais alto na página.
-2. **Segundo CTA precoce**: hoje o próximo CTA depois do hero só aparece após a demo. Colocar um CTA imediatamente após o bloco de objeções.
-3. **Manter o instrumento novo rodando**: a medição de rolagem que acabamos de instalar (`landing_scroll_25/50/75/100` + `?src=`) confirma isso com número próprio em 3–5 dias, e passa a medir também desktop, que o Clarity Tap não cobre.
-4. **Não investir em Preços/Depoimentos/Recursos** — 5, 2 e 3 taps em 13 dias não justificam trabalho de copy ali.
+Isso fecha o quadro do funil de agosto que já tínhamos medido: 47 formulários iniciados / 2 pagamentos no cartão. O desktop não contribui com nada; tudo que existe de conversão vem do mobile.
 
-Posso executar 1 + 2 agora, ou esperar os 3–5 dias do instrumento próprio antes de mexer no layout.
+## Conclusão conjunta
+
+1. A landing longa está sendo **pulada**, não lida. A decisão acontece no hero.
+2. Quem chega no checkout **não trava no formulário, trava na grade de preços**. Dar 3 planos × 4 ciclos = 12 combinações para um lead que ainda não confia é excesso de escolha na hora errada.
+3. Preços/Depoimentos/Recursos na landing são inertes (2–5 taps em 13 dias) — não vale copy ali.
+
+## O que eu proponho fazer
+
+**A. Simplificar a decisão no checkout (prioridade 1)**
+- Chegar com **um plano e um ciclo já escolhidos** (Essencial mensal, R$ 6,90 na 1ª semana) e o formulário visível de imediato.
+- Esconder a grade completa atrás de um link discreto ("ver outros planos e ciclos"), em vez de mostrar 12 combinações de cara.
+- Objetivo direto: fazer o lead começar a preencher antes de comparar.
+
+**B. Encurtar o caminho na landing (prioridade 2)**
+- Subir as 3 objeções mais tocadas do FAQ para logo abaixo do hero, com um CTA imediatamente depois (hoje o próximo CTA só aparece depois da demo).
+
+**C. Medir**
+- A instrumentação nova (`landing_scroll_*` + `?src=`) confirma A e B com número próprio em 3–5 dias e cobre desktop, que o Clarity Tap não pega.
+
+Se aprovar, começo por **A** — é onde está o buraco de 0 cliques no botão de pagar.
