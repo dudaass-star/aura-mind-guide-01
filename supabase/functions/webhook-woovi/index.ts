@@ -61,6 +61,15 @@ function addMonths(d: Date, months: number): Date {
   return r;
 }
 
+function addDaysUTC(d: Date, days: number): Date {
+  const r = new Date(d);
+  r.setUTCDate(r.getUTCDate() + days);
+  return r;
+}
+
+// Trial pago do PIX: a entrada compra 7 dias; o débito do dia 8 abre o mês.
+const TRIAL_DAYS = 7;
+
 // Purchase no Meta CAPI, dedup por event_id (paridade com webhook-inter/asaas):
 // sem isso a venda por PIX fica invisível para os anúncios.
 async function fireMetaCapiPurchase(
