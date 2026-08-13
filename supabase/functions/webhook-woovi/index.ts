@@ -726,6 +726,8 @@ Deno.serve(async (req) => {
                 isFirstPayment: cycleIndex === 0,
                 valueCents,
                 eventId: `woovi-${chargeId}-purchase`,
+                // Entrada promocional: 7 dias de acesso até o débito do dia 8.
+                trialEntry: isEntryCharge && !!sub.is_trial,
               });
               if (!ok) {
                 // Libera a reserva para o reenvio da Woovi tentar de novo.
