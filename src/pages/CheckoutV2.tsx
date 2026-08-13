@@ -23,7 +23,7 @@ import {
   trackReturningCustomerMonthly,
 } from "@/lib/ga4";
 import { setAdvancedMatching } from "@/lib/meta-pixel";
-import { oaiqMeasure } from "@/lib/openai-pixel";
+import { oaiqCheckoutStarted } from "@/lib/openai-pixel";
 import logoOlaAura from "@/assets/logo-ola-aura.png";
 import "@/styles/v2-theme.css";
 import "@/styles/checkout-theme.css";
@@ -689,8 +689,8 @@ const CheckoutV2 = () => {
       trackAddPaymentInfo({ plan: selectedPlan, billing: billingPeriod, value: trialPriceMap[selectedPlan] });
 
       // ChatGPT Ads: início de checkout (mesmo ponto do InitiateCheckout do Meta).
-      oaiqMeasure("checkout_started", {
-        amount: trialPriceMap[selectedPlan],
+      oaiqCheckoutStarted({
+        value: trialPriceMap[selectedPlan],
         currency: "BRL",
         content_name: `Trial ${plans[selectedPlan].name}`,
       });

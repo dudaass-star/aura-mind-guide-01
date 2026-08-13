@@ -14,6 +14,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { sendProactive } from "../_shared/whatsapp-provider.ts";
 import { resolveMetaIdentity } from "../_shared/meta-identity.ts";
+import { sendOpenAiConversion } from "../_shared/openai-capi.ts";
 import { normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
 import {
   wooviFetch, brtDate,
@@ -106,6 +107,15 @@ async function fireMetaCapiPurchase(
           content_category: args.plan,
         },
       }),
+    });
+    // ChatGPT Ads (OpenAI) — mesma conversão, mesmo event_id.
+    await sendOpenAiConversion({
+      eventType: "purchase",
+      eventId: args.eventId,
+      value: args.value,
+      currency: "BRL",
+      contentName: `Plano ${PLAN_NAMES[args.plan] || args.plan}`,
+      source: "webhook-woovi",
     });
   } catch (e) {
     console.warn("[webhook-woovi] CAPI Purchase falhou (non-blocking):", (e as Error)?.message);

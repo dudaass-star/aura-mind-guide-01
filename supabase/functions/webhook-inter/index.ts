@@ -16,6 +16,7 @@ import { normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
 import { retryCharge, MAX_RETRIES } from "../_shared/inter-cycles.ts";
 import { interFetch } from "../_shared/inter-pix.ts";
 import { resolveMetaIdentity } from "../_shared/meta-identity.ts";
+import { sendOpenAiConversion } from "../_shared/openai-capi.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -129,6 +130,15 @@ async function fireMetaCapiPurchase(
           content_category: args.plan,
         },
       }),
+    });
+    // ChatGPT Ads (OpenAI) — mesma conversão, mesmo event_id.
+    await sendOpenAiConversion({
+      eventType: "purchase",
+      eventId: args.eventId,
+      value: args.value,
+      currency: "BRL",
+      contentName: `Plano ${PLAN_NAMES[args.plan] || args.plan}`,
+      source: "webhook-inter",
     });
   } catch (e) {
     console.warn("[webhook-inter] CAPI Purchase falhou (non-blocking):", (e as Error)?.message);
