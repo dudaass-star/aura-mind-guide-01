@@ -1292,6 +1292,23 @@ Me conta: como você está hoje?`;
       const paidSubscriptionId = extractSubscriptionId(invoice);
       console.log('💰 Invoice paid:', invoice.id, 'customer:', customerId, 'subscription:', paidSubscriptionId);
 
+      // Linha de chegada do funil confirmada pelo servidor. O evento do
+      // navegador (`purchase`, no /obrigado) só existe quando a pessoa volta
+      // pra tela; este acontece sempre. Steps distintos pra não contar duas vezes.
+      if (invoice.billing_reason === 'subscription_create') {
+        try {
+          await supabase.from('checkout_funnel_events').insert({
+            anon_session_id: `stripe:${customerId}`,
+            step: 'purchase_confirmed',
+            payment_method: 'card',
+            detail: 'stripe',
+            meta: { invoice: invoice.id, amount_paid: invoice.amount_paid },
+          });
+        } catch (e) {
+          console.warn('⚠️ [FUNNEL] falha ao registrar purchase_confirmed:', e instanceof Error ? e.message : e);
+        }
+      }
+
       if (paidSubscriptionId) {
         try {
           const customer = await stripe.customers.retrieve(customerId);
