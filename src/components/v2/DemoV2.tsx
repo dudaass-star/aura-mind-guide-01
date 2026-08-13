@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { Smartphone, Play, Pause, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { trackCtaClick } from "@/lib/ga4";
+import { trackLandingCta, checkoutHref } from "@/lib/landing-analytics";
 import avatarAura from "@/assets/avatar-aura.jpg";
 
 interface Message {

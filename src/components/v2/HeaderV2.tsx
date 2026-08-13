@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { trackCtaClick } from "@/lib/ga4";
+import { trackLandingCta, checkoutHref } from "@/lib/landing-analytics";
 import logoOlaAura from "@/assets/logo-ola-aura.png";
 
 const HeaderV2 = () => {

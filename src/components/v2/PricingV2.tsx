@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Check, BadgeCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { trackCtaClick } from "@/lib/ga4";
+import { trackLandingCta, checkoutHref } from "@/lib/landing-analytics";
 import { PLAN_MONTHLY_EQUIVALENT, PlanId, fmtBRL } from "@/lib/plan-pricing";
 
 const guarantees = [
