@@ -45,11 +45,9 @@ const ThankYou = () => {
     // Purchase event is sent server-side only (CAPI via stripe-webhook)
     // to avoid double-counting by Meta
 
-    // ChatGPT Ads: conversão de assinatura (pixel de navegador, sem CAPI própria).
-    oaiqMeasure("purchase", {
-      currency: "BRL",
-      content_name: `Plano ${checkoutData.plan}`,
-    });
+    // ChatGPT Ads: o purchase é enviado APENAS pelo servidor (openai-capi, a
+    // partir dos webhooks de pagamento). Disparar aqui também duplicaria a
+    // conversão, porque o event_id do navegador não coincide com o do webhook.
   }, [location.state]);
 
   const firstName = userData.name?.split(" ")[0] || "você";
