@@ -5,9 +5,12 @@
 // em telas separadas (BB mostra junto; Nubank mostra o mandato e só depois a
 // cobrança). Quem para no meio fica em estado parcial:
 //   • mandato aprovado, entrada NÃO paga → nenhum acesso liberado → cutucar com a
-//     cobrança de entrada (o mandato só debita em D+30, não perdemos nada).
+//     cobrança de entrada. ATENÇÃO: no trial o 1º débito do mandato cai em D+7
+//     (não mais D+30), então se o QR expirar sem a entrada paga cancelamos o
+//     mandato — senão o cliente é debitado em R$ 29,90 sem nunca ter tido acesso.
 //   • entrada paga, mandato NÃO aprovado → acesso liberado pelo webhook, mas sem
-//     débito automático → pedir a autorização antes do fim do ciclo.
+//     débito automático. A janela é de 7 dias (trial): 1º lembrete imediato,
+//     2º perto do 5º dia e, passado o 7º, entra na régua de retenção.
 //
 // Varreduras:
 //   1. Conclusão parcial: entrada sem mandato / mandato sem entrada → 1 follow-up.
@@ -28,6 +31,17 @@ const corsHeaders = {
 
 // Tempo mínimo antes de cutucar: dá folga pra quem está no meio do fluxo do banco.
 const PARTIAL_GRACE_MINUTES = 20;
+
+/** Trial pago do PIX: entrada compra 7 dias e o 1º débito do mandato cai em D+7. */
+const TRIAL_DAYS = 7;
+/** Dia da janela em que mandamos o 2º (e último) lembrete de autorização. */
+const MANDATE_REMINDER2_DAY = 5;
+
+function daysSince(iso: string): number {
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return 0;
+  return (Date.now() - t) / 86400000;
+}
 
 function money(cents: number): string {
   return (Number(cents || 0) / 100).toFixed(2).replace(".", ",");
