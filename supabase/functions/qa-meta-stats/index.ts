@@ -15,6 +15,8 @@ Deno.serve(async () => {
   const out: Record<string, unknown> = {};
   for (const [k, u] of Object.entries({
     info: `${g}/${pixel}?fields=name,last_fired_time,creation_time`,
+    stats_source: `${g}/${pixel}/stats?aggregation=event_source&start_time=${Math.floor(Date.parse('2026-08-14T12:00:00Z')/1000)}&end_time=${Math.floor(Date.parse('2026-08-14T13:00:00Z')/1000)}`,
+    stats_host: `${g}/${pixel}/stats?aggregation=host&start_time=${Math.floor(Date.parse('2026-08-14T12:00:00Z')/1000)}&end_time=${Math.floor(Date.parse('2026-08-14T13:00:00Z')/1000)}`,
     stats_event: `${g}/${pixel}/stats?aggregation=event&start_time=${Math.floor(Date.parse('2026-08-14T03:00:00Z')/1000)}&end_time=${now}`,
   })) {
     const r = await fetch(`${u}&access_token=${encodeURIComponent(token ?? "")}`);
