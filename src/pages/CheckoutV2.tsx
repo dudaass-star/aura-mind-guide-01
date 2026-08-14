@@ -22,7 +22,7 @@ import {
   getGaClientId,
   trackReturningCustomerMonthly,
 } from "@/lib/ga4";
-import { setAdvancedMatching } from "@/lib/meta-pixel";
+import { setAdvancedMatching, trackMetaViewContent } from "@/lib/meta-pixel";
 import { oaiqCheckoutStarted } from "@/lib/openai-pixel";
 import logoOlaAura from "@/assets/logo-ola-aura.png";
 import "@/styles/v2-theme.css";
@@ -272,17 +272,16 @@ const CheckoutV2 = () => {
   const [resumedState, setResumedState] = useState<"pending" | "active" | "expired" | null>(null);
   const [resumedPlan, setResumedPlan] = useState<string | null>(null);
 
-  // ViewContent + GA4 begin_checkout no mount
+  // ViewContent + GA4 begin_checkout no mount.
+  // O ViewContent passa pelo helper único (navegador + CAPI com o mesmo
+  // event_id) e vai SEM `value`: preço só em InitiateCheckout/Purchase/Subscribe,
+  // senão o Meta enxerga sempre o mesmo valor e reclama ("envie mais preços").
   useEffect(() => {
     const trialPriceMap: Record<string, number> = { essencial: 6.9, direcao: 9.9, transformacao: 19.9 };
-    if (typeof window !== "undefined" && (window as any).fbq) {
-      (window as any).fbq("track", "ViewContent", {
-        content_name: "Checkout Page V2",
-        content_category: "checkout",
-        value: trialPriceMap[selectedPlan],
-        currency: "BRL",
-      });
-    }
+    trackMetaViewContent({
+      content_name: "Checkout Page V2",
+      content_category: "checkout",
+    });
     trackBeginCheckout({ plan: selectedPlan, value: trialPriceMap[selectedPlan] });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
