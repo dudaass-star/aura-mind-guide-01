@@ -16,6 +16,7 @@ import { sendProactive } from "../_shared/whatsapp-provider.ts";
 import { resolveMetaIdentity } from "../_shared/meta-identity.ts";
 import { sendOpenAiConversion } from "../_shared/openai-capi.ts";
 import { sendGa4Purchase } from "../_shared/ga4-purchase.ts";
+import { fireSubscribeConversion } from "../_shared/meta-subscribe.ts";
 import { normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
 import {
   wooviFetch, brtDate,
