@@ -903,7 +903,8 @@ const CheckoutV2 = () => {
     const fbp = getCookie("_fbp");
     const fbc = getCookie("_fbc") || (fbclid ? `fb.1.${Date.now()}.${fbclid}` : undefined);
 
-    const leadEventId = `lead_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    // Só InitiateCheckout: o Lead duplicava o mesmo clique e inflava os números
+    // do Gerenciador de Eventos (mesma ação contada em dois eventos distintos).
     const icEventId = `ic_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
     const customData = {
       content_name: `Trial ${plans[selectedPlan].name}`,
@@ -919,7 +920,6 @@ const CheckoutV2 = () => {
           phone: phone.replace(/\D/g, ""),
           firstName: name.trim().split(" ")[0],
         });
-        (window as any).fbq("track", "Lead", customData, { eventID: leadEventId });
         (window as any).fbq("track", "InitiateCheckout", customData, { eventID: icEventId });
       }
 
@@ -935,14 +935,11 @@ const CheckoutV2 = () => {
         },
         custom_data: customData,
       };
-      Promise.all([
-        supabase.functions.invoke("meta-capi", {
-          body: { ...capiPayload, event_name: "Lead", event_id: leadEventId },
-        }),
-        supabase.functions.invoke("meta-capi", {
+      void supabase.functions
+        .invoke("meta-capi", {
           body: { ...capiPayload, event_name: "InitiateCheckout", event_id: icEventId },
-        }),
-      ]).catch(() => {});
+        })
+        .catch(() => {});
 
       trackAddPaymentInfo({ plan: selectedPlan, billing: billingPeriod, value });
       oaiqCheckoutStarted({
