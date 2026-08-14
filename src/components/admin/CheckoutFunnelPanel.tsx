@@ -29,6 +29,7 @@ type SignalRow = {
   fbc: number;
   fbp: number;
   pii: number;
+  eid: number;
   erros: number;
 };
 
@@ -205,18 +206,21 @@ export default function CheckoutFunnelPanel() {
       const since = new Date(Date.now() - 7 * 864e5).toISOString();
       const { data: capi } = await supabase
         .from("meta_capi_log")
-        .select("event_name, fbc_present, fbp_present, email_present, phone_present, meta_status")
+        .select(
+          "event_name, fbc_present, fbp_present, email_present, phone_present, external_id_present, meta_status",
+        )
         .gte("created_at", since)
         .limit(10000);
       const sig = new Map<string, SignalRow>();
       (capi ?? []).forEach((r) => {
         const cur =
           sig.get(r.event_name) ??
-          { event_name: r.event_name, total: 0, fbc: 0, fbp: 0, pii: 0, erros: 0 };
+          { event_name: r.event_name, total: 0, fbc: 0, fbp: 0, pii: 0, eid: 0, erros: 0 };
         cur.total += 1;
         if (r.fbc_present) cur.fbc += 1;
         if (r.fbp_present) cur.fbp += 1;
         if (r.email_present || r.phone_present) cur.pii += 1;
+        if ((r as { external_id_present?: boolean }).external_id_present) cur.eid += 1;
         if (r.meta_status !== 200) cur.erros += 1;
         sig.set(r.event_name, cur);
       });
@@ -345,6 +349,7 @@ export default function CheckoutFunnelPanel() {
                       <th className="py-1 text-right font-medium">fbc</th>
                       <th className="py-1 text-right font-medium">fbp</th>
                       <th className="py-1 text-right font-medium">e-mail/tel.</th>
+                      <th className="py-1 text-right font-medium">external_id</th>
                       <th className="py-1 text-right font-medium">Erros</th>
                     </tr>
                   </thead>
@@ -361,6 +366,9 @@ export default function CheckoutFunnelPanel() {
                         </td>
                         <td className="py-1 text-right tabular-nums">
                           {Math.round((s.pii / s.total) * 100)}%
+                        </td>
+                        <td className="py-1 text-right tabular-nums">
+                          {Math.round((s.eid / s.total) * 100)}%
                         </td>
                         <td className="py-1 text-right tabular-nums">{s.erros}</td>
                       </tr>
