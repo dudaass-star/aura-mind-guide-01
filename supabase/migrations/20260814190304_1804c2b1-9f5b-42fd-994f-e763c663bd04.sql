@@ -1,0 +1,1 @@
+ALTER TABLE public.meta_identity_cache ADD COLUMN IF NOT EXISTS external_id text;
