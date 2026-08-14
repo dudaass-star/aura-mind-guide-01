@@ -147,17 +147,10 @@ const Checkout = () => {
     expiresAt?: string;
   }>({ open: false });
 
-  // ViewContent on page load (browser pixel only — no PII available yet)
   useEffect(() => {
     const trialPriceMap: Record<string, number> = { essencial: 6.9, direcao: 9.9, transformacao: 19.9 };
-    if (typeof window !== 'undefined' && (window as any).fbq) {
-      (window as any).fbq('track', 'ViewContent', {
-        content_name: 'Checkout Page',
-        content_category: 'checkout',
-        value: trialPriceMap[selectedPlan],
-        currency: 'BRL',
-      });
-    }
+    // Tracking do Meta REMOVIDO (rota legada, hoje só redireciona pro /v2/checkout):
+    // era `fbq` cru, sem event_id/CAPI e com preço no ViewContent.
     // GA4 begin_checkout — usuário entrou na página de checkout
     trackBeginCheckout({ plan: selectedPlan, value: trialPriceMap[selectedPlan] });
     // eslint-disable-next-line react-hooks/exhaustive-deps
