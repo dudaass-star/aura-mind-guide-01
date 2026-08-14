@@ -22,6 +22,16 @@ type ReconRow = {
   capi_erros: number;
 };
 
+/** Qualidade de sinal do CAPI por evento (últimos 7 dias). */
+type SignalRow = {
+  event_name: string;
+  total: number;
+  fbc: number;
+  fbp: number;
+  pii: number;
+  erros: number;
+};
+
 function startOfMonthBRT(offsetMonths = 0) {
   const now = new Date();
   const brt = new Date(now.getTime() - 3 * 60 * 60 * 1000);
@@ -38,6 +48,7 @@ export default function CheckoutFunnelPanel() {
   const [recon, setRecon] = useState<ReconRow[]>([]);
   const [reconMeta, setReconMeta] = useState<string | null>(null);
   const [reconLoading, setReconLoading] = useState(false);
+  const [signal, setSignal] = useState<SignalRow[]>([]);
 
   // Leitura direta da API do Meta (somente admin) + nossos contadores por dia.
   const loadRecon = async () => {
