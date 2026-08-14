@@ -1649,6 +1649,7 @@ export type Database = {
           email_present: boolean | null
           event_id: string | null
           event_name: string
+          external_id_present: boolean | null
           fbc_present: boolean | null
           fbp_present: boolean | null
           id: string
@@ -1666,6 +1667,7 @@ export type Database = {
           email_present?: boolean | null
           event_id?: string | null
           event_name: string
+          external_id_present?: boolean | null
           fbc_present?: boolean | null
           fbp_present?: boolean | null
           id?: string
@@ -1683,6 +1685,7 @@ export type Database = {
           email_present?: boolean | null
           event_id?: string | null
           event_name?: string
+          external_id_present?: boolean | null
           fbc_present?: boolean | null
           fbp_present?: boolean | null
           id?: string

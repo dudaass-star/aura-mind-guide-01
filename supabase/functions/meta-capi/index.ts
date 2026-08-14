@@ -21,6 +21,8 @@ interface CapiRequest {
     email?: string;
     phone?: string;
     first_name?: string;
+    /** Identificador estável de 1ª parte (cru ou já hasheado). Aceita lista. */
+    external_id?: string | string[];
     client_ip_address?: string;
     client_user_agent?: string;
     fbp?: string;
@@ -70,7 +72,7 @@ Deno.serve(async (req) => {
     console.log(`📊 CAPI: Sending ${event_name} event`);
 
     // Check matching parameters available
-    const hasStrongPII = !!(user_data.email || user_data.phone || user_data.first_name);
+    const hasStrongPII = !!(user_data.email || user_data.phone || user_data.first_name || user_data.external_id);
     const hasBrowserMatch = !!(user_data.fbp || user_data.fbc);
     
     if (!hasStrongPII && !hasBrowserMatch) {
@@ -88,6 +90,7 @@ Deno.serve(async (req) => {
 
     // Hash user data as required by Meta
     const hashedUserData: Record<string, string> = {};
+    const hashedUserDataMulti: Record<string, string[]> = {};
 
     if (user_data.email) {
       hashedUserData.em = await sha256Hash(user_data.email);
@@ -100,6 +103,28 @@ Deno.serve(async (req) => {
     if (user_data.first_name) {
       hashedUserData.fn = await sha256Hash(user_data.first_name);
     }
+    // external_id: aceita 1 ou vários. Já-hasheado (64 hex) passa direto.
+    // É o parâmetro que mais eleva a Qualidade de Correspondência do Evento.
+    const rawExternalIds = Array.isArray(user_data.external_id)
+      ? user_data.external_id
+      : user_data.external_id
+        ? [user_data.external_id]
+        : [];
+    // Fallback: sem external_id explícito, deriva do telefone (mesmo valor que
+    // o checkout envia) e cai no e-mail — assim Purchase/Subscribe dos webhooks
+    // ganham a chave sem precisar mudar cada webhook.
+    if (rawExternalIds.length === 0) {
+      const fallback = user_data.phone?.replace(/\D/g, '') || user_data.email;
+      if (fallback) rawExternalIds.push(fallback);
+    }
+    const externalIds: string[] = [];
+    for (const raw of rawExternalIds) {
+      const v = String(raw || '').trim();
+      if (!v) continue;
+      externalIds.push(/^[a-f0-9]{64}$/i.test(v) ? v.toLowerCase() : await sha256Hash(v));
+    }
+    if (externalIds.length === 1) hashedUserData.external_id = externalIds[0];
+    else if (externalIds.length > 1) hashedUserDataMulti.external_id = [...new Set(externalIds)];
     if (user_data.client_ip_address) {
       hashedUserData.client_ip_address = user_data.client_ip_address;
     }
@@ -128,7 +153,7 @@ Deno.serve(async (req) => {
       event_name,
       event_time: Math.floor(Date.now() / 1000),
       action_source: 'website',
-      user_data: hashedUserData,
+      user_data: { ...hashedUserData, ...hashedUserDataMulti },
     };
 
     if (event_id) {
@@ -180,6 +205,7 @@ Deno.serve(async (req) => {
           phone_present: !!user_data.phone,
           fbp_present: !!user_data.fbp,
           fbc_present: !!user_data.fbc,
+          external_id_present: externalIds.length > 0,
           request_value: custom_data?.value ?? null,
           meta_status: response.status,
           meta_fbtrace_id: fbtrace,
@@ -188,6 +214,31 @@ Deno.serve(async (req) => {
         }).then(({ error }) => {
           if (error) console.warn('⚠️ meta_capi_log insert failed:', error.message);
         });
+
+        // Cache de identidade também no topo/meio do funil: guardar fbp/fbc
+        // assim que o lead se identifica melhora a atribuição do Purchase de
+        // quem paga depois em outro dispositivo (era o gargalo do fbc).
+        if ((user_data.email || user_data.phone) && (user_data.fbp || user_data.fbc)) {
+          const email = user_data.email?.trim().toLowerCase() || null;
+          const digits = user_data.phone?.replace(/\D/g, '') || '';
+          const phone = digits.length >= 10 ? digits : null;
+          const patch: Record<string, unknown> = {
+            last_source: `meta-capi:${event_name}`,
+            updated_at: new Date().toISOString(),
+          };
+          if (user_data.fbp) patch.fbp = user_data.fbp;
+          if (user_data.fbc) patch.fbc = user_data.fbc;
+          let q = sb.from('meta_identity_cache').select('id').limit(1);
+          q = email ? q.ilike('email', email) : q.eq('phone', phone);
+          const { data: existing } = await q.maybeSingle();
+          if (existing?.id) {
+            if (email) patch.email = email;
+            if (phone) patch.phone = phone;
+            await sb.from('meta_identity_cache').update(patch).eq('id', existing.id);
+          } else {
+            await sb.from('meta_identity_cache').insert({ email, phone, ...patch });
+          }
+        }
       }
     } catch (logErr) {
       console.warn('⚠️ meta_capi_log fire-and-forget failed:', logErr);

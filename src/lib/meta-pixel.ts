@@ -43,6 +43,23 @@ export const persistFbclid = (): void => {
 export const getFbp = (): string | undefined => getCookie("_fbp");
 export const getFbc = (): string | undefined => getCookie("_fbc");
 
+/**
+ * external_id: identificador estável de 1ª parte (cookie próprio, 180 dias).
+ * É o parâmetro que mais eleva a Qualidade de Correspondência do Evento (EMQ)
+ * — o Meta usa para costurar navegador e servidor mesmo sem cookie dele.
+ * Enviamos o valor cru; o hash é feito no pixel (AAM) e no CAPI.
+ */
+export const getExternalId = (): string => {
+  const existing = getCookie("aura_eid");
+  if (existing) return existing;
+  const id =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  setCookie("aura_eid", id, 180);
+  return id;
+};
+
 /** fbc derivado do fbclid da URL, para não depender de o cookie já existir. */
 export const deriveFbcFromUrl = (): string | undefined => {
   if (typeof window === "undefined") return undefined;
@@ -82,7 +99,12 @@ const sendCapi = (
         event_id: eventId,
         event_source_url: window.location.href,
         source: "browser_top_funnel",
-        user_data: { fbp, fbc, client_user_agent: navigator.userAgent },
+        user_data: {
+          fbp,
+          fbc,
+          external_id: getExternalId(),
+          client_user_agent: navigator.userAgent,
+        },
         custom_data: customData,
       },
     })
@@ -92,6 +114,24 @@ const sendCapi = (
 };
 
 /** Rotas onde o PageView não deve sair (conversão já é medida por Purchase). */
+/**
+ * Reinicializa o pixel com o external_id (uma vez por carga). Sem isso o evento
+ * de navegador sairia sem essa chave e só o CAPI teria a correspondência.
+ */
+let externalIdOnPixel = false;
+const ensureExternalIdOnPixel = (): void => {
+  if (externalIdOnPixel || !hasFbq()) return;
+  externalIdOnPixel = true;
+  try {
+    (window as any).fbq("init", "939366085297921", {
+      external_id: getExternalId(),
+      country: "br",
+    });
+  } catch {
+    /* noop */
+  }
+};
+
 const NO_PAGEVIEW_ROUTES = [
   "/obrigado", // conversão já é medida por Purchase
 ];
@@ -110,6 +150,8 @@ export const trackMetaPageView = (path: string): void => {
   persistFbclid();
   if (Date.now() - lastPageViewAt < REDIRECT_DEDUPE_MS) return;
   lastPageViewAt = Date.now();
+  // Garante external_id no evento de navegador desde a primeira carga.
+  ensureExternalIdOnPixel();
   const eventId = newEventId();
   if (hasFbq()) {
     (window as any).fbq("track", "PageView", {}, { eventID: eventId });
@@ -132,13 +174,14 @@ export const setAdvancedMatching = (data: {
   const em = data.email?.trim().toLowerCase();
   const ph = data.phone?.replace(/\D/g, "");
   const fn = data.firstName?.trim().toLowerCase();
-  if (!em && !ph && !fn) return;
   try {
     (window as any).fbq("init", "939366085297921", {
       ...(em && { em }),
       // Meta espera telefone com código do país, só dígitos.
       ...(ph && { ph: ph.startsWith("55") ? ph : `55${ph}` }),
       ...(fn && { fn }),
+      // Mesmo valor enviado ao CAPI: costura navegador ↔ servidor.
+      external_id: getExternalId(),
       country: "br",
     });
   } catch {
@@ -150,6 +193,7 @@ export const trackMetaViewContent = (
   customData: Record<string, unknown>,
 ): void => {
   if (!isPixelRoute(window.location.pathname)) return;
+  ensureExternalIdOnPixel();
   const eventId = newEventId();
   if (hasFbq()) {
     (window as any).fbq("track", "ViewContent", customData, { eventID: eventId });

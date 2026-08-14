@@ -1,0 +1,1 @@
+ALTER TABLE public.meta_capi_log ADD COLUMN IF NOT EXISTS external_id_present boolean;

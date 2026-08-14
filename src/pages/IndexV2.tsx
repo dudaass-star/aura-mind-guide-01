@@ -23,11 +23,12 @@ const IndexV2 = () => {
 
   useEffect(() => {
     // ViewContent com deduplicação navegador + CAPI.
+    // SEM `value`/`currency`: preço só em InitiateCheckout/Purchase/Subscribe.
+    // Mandar sempre o mesmo preço aqui é o que dispara o alerta "envie mais
+    // preços" do Meta.
     trackMetaViewContent({
       content_name: "Landing V2",
       content_category: "homepage_v2",
-      value: 6.90,
-      currency: "BRL",
     });
     trackViewItem({ item_id: "landing_v2", item_name: "Landing V2" });
   }, []);
