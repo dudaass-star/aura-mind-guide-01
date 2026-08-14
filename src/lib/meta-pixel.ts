@@ -193,6 +193,7 @@ export const trackMetaViewContent = (
   customData: Record<string, unknown>,
 ): void => {
   if (!isPixelRoute(window.location.pathname)) return;
+  ensureExternalIdOnPixel();
   const eventId = newEventId();
   if (hasFbq()) {
     (window as any).fbq("track", "ViewContent", customData, { eventID: eventId });
