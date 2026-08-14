@@ -15,6 +15,8 @@ interface CapiRequest {
   event_name: string;
   event_id?: string;
   event_source_url?: string;
+  /** Código do "Testar eventos" do Meta: valida sem sujar os dados de produção. */
+  test_event_code?: string;
   user_data: {
     email?: string;
     phone?: string;
@@ -63,6 +65,7 @@ Deno.serve(async (req) => {
 
     const body: CapiRequest = await req.json();
     const { event_name, event_id, event_source_url, user_data, custom_data } = body;
+    const testEventCode = body.test_event_code || Deno.env.get('META_TEST_EVENT_CODE') || null;
 
     console.log(`📊 CAPI: Sending ${event_name} event`);
 
@@ -138,9 +141,11 @@ Deno.serve(async (req) => {
       eventData.custom_data = custom_data;
     }
 
-    const payload = {
+    const payload: Record<string, unknown> = {
       data: [eventData],
     };
+    // Presente apenas quando explicitamente pedido — em produção fica ausente.
+    if (testEventCode) payload.test_event_code = testEventCode;
 
     const url = `https://graph.facebook.com/v21.0/${pixelId}/events?access_token=${accessToken}`;
 
