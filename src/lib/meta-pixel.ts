@@ -154,13 +154,14 @@ export const setAdvancedMatching = (data: {
   const em = data.email?.trim().toLowerCase();
   const ph = data.phone?.replace(/\D/g, "");
   const fn = data.firstName?.trim().toLowerCase();
-  if (!em && !ph && !fn) return;
   try {
     (window as any).fbq("init", "939366085297921", {
       ...(em && { em }),
       // Meta espera telefone com código do país, só dígitos.
       ...(ph && { ph: ph.startsWith("55") ? ph : `55${ph}` }),
       ...(fn && { fn }),
+      // Mesmo valor enviado ao CAPI: costura navegador ↔ servidor.
+      external_id: getExternalId(),
       country: "br",
     });
   } catch {
