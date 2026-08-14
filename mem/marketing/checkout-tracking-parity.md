@@ -23,3 +23,10 @@ type: constraint
 - Todo `ViewContent`/`PageView` passa pelos helpers de `src/lib/meta-pixel.ts` (navegador + CAPI com o mesmo `event_id`). Nunca `fbq` cru numa página.
 - `ThankYou.tsx` não desliga `autoConfig` — isso matava a Correspondência Avançada Automática.
 - `meta-capi` aceita `test_event_code` (body ou `META_TEST_EVENT_CODE`) para validar no "Testar eventos" sem sujar produção.
+
+**external_id obrigatório (ago/2026, redução de CPA):**
+- `src/lib/meta-pixel.ts` mantém o cookie `aura_eid` (1ª parte, 180 dias) e envia `external_id` no pixel (via `fbq('init', ...)`) e no CAPI — mesmo valor nos dois.
+- No checkout o `external_id` vai como lista: `[telefone só dígitos, aura_eid]`. Os webhooks não precisam mudar: o `meta-capi` deriva `external_id` do telefone (ou e-mail) quando o campo não vem, então `Purchase`/`Subscribe` costuram com o `InitiateCheckout`.
+- `meta-capi` também grava `fbp/fbc` no `meta_identity_cache` quando o evento traz e-mail/telefone (antes só os criadores de cobrança gravavam) — é o que eleva a cobertura de `fbc` no `Purchase`.
+- `meta_capi_log.external_id_present` alimenta a coluna `external_id` na tabela de qualidade do sinal do `CheckoutFunnelPanel`.
+- Landing V2 (`IndexV2.tsx`) e páginas legadas (`Index.tsx`, `Checkout.tsx`) não têm mais `fbq` cru nem preço no `ViewContent`.
