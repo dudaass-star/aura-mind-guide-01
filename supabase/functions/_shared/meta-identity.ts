@@ -5,6 +5,8 @@
 export interface MetaIdentity {
   fbp?: string | null;
   fbc?: string | null;
+  /** Identificador estável de 1ª parte (cookie aura_eid) capturado no checkout. */
+  externalId?: string | null;
 }
 
 const normEmail = (email?: string | null): string | null =>
@@ -13,7 +15,19 @@ const normEmail = (email?: string | null): string | null =>
 const normPhone = (phone?: string | null): string | null => {
   if (!phone) return null;
   const digits = phone.replace(/\D/g, "");
-  return digits.length >= 10 ? digits : null;
+  if (digits.length < 10) return null;
+  // Formato único (55 + DDD + número): o checkout manda 11 dígitos e os
+  // webhooks já normalizados; sem isso o cache nunca casava por telefone.
+  if (digits.startsWith("55") && digits.length >= 12) return digits;
+  if (digits.length <= 11) return `55${digits}`;
+  return digits;
+};
+
+/** Variantes do telefone para alcançar registros gravados antes da normalização. */
+const phoneVariants = (phone: string): string[] => {
+  const set = new Set<string>([phone]);
+  if (phone.startsWith("55")) set.add(phone.slice(2));
+  return [...set];
 };
 
 /** Grava/atualiza o par fbp+fbc do lead. Fire-and-forget: nunca lança. */
