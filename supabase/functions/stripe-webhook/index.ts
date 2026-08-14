@@ -6,6 +6,7 @@ import { getPhoneVariations, normalizeBrazilianPhone } from "../_shared/zapi-cli
 import { sendProactive } from "../_shared/whatsapp-provider.ts";
 import { resolveMetaIdentity } from "../_shared/meta-identity.ts";
 import { sendOpenAiConversion } from "../_shared/openai-capi.ts";
+import { fireSubscribeConversion } from "../_shared/meta-subscribe.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
