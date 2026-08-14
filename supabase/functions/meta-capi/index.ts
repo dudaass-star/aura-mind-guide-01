@@ -205,6 +205,7 @@ Deno.serve(async (req) => {
           phone_present: !!user_data.phone,
           fbp_present: !!user_data.fbp,
           fbc_present: !!user_data.fbc,
+          external_id_present: externalIds.length > 0,
           request_value: custom_data?.value ?? null,
           meta_status: response.status,
           meta_fbtrace_id: fbtrace,
@@ -213,6 +214,31 @@ Deno.serve(async (req) => {
         }).then(({ error }) => {
           if (error) console.warn('⚠️ meta_capi_log insert failed:', error.message);
         });
+
+        // Cache de identidade também no topo/meio do funil: guardar fbp/fbc
+        // assim que o lead se identifica melhora a atribuição do Purchase de
+        // quem paga depois em outro dispositivo (era o gargalo do fbc).
+        if ((user_data.email || user_data.phone) && (user_data.fbp || user_data.fbc)) {
+          const email = user_data.email?.trim().toLowerCase() || null;
+          const digits = user_data.phone?.replace(/\D/g, '') || '';
+          const phone = digits.length >= 10 ? digits : null;
+          const patch: Record<string, unknown> = {
+            last_source: `meta-capi:${event_name}`,
+            updated_at: new Date().toISOString(),
+          };
+          if (user_data.fbp) patch.fbp = user_data.fbp;
+          if (user_data.fbc) patch.fbc = user_data.fbc;
+          let q = sb.from('meta_identity_cache').select('id').limit(1);
+          q = email ? q.ilike('email', email) : q.eq('phone', phone);
+          const { data: existing } = await q.maybeSingle();
+          if (existing?.id) {
+            if (email) patch.email = email;
+            if (phone) patch.phone = phone;
+            await sb.from('meta_identity_cache').update(patch).eq('id', existing.id);
+          } else {
+            await sb.from('meta_identity_cache').insert({ email, phone, ...patch });
+          }
+        }
       }
     } catch (logErr) {
       console.warn('⚠️ meta_capi_log fire-and-forget failed:', logErr);
