@@ -327,6 +327,48 @@ export default function CheckoutFunnelPanel() {
             </div>
 
             <div className="mt-6 border-t border-border/50 pt-4">
+              <p className="mb-1 text-xs font-medium text-muted-foreground">
+                Qualidade do sinal enviado ao Meta (CAPI, últimos 7 dias)
+              </p>
+              <p className="mb-2 text-xs text-muted-foreground">
+                <strong>fbc</strong> é o identificador do clique no anúncio: quanto maior a
+                cobertura, melhor o Meta atribui e otimiza a entrega.
+              </p>
+              {signal.length === 0 ? (
+                <p className="mb-4 text-xs text-muted-foreground">Nenhum envio nos últimos 7 dias.</p>
+              ) : (
+                <table className="mb-6 w-full text-xs">
+                  <thead>
+                    <tr className="text-muted-foreground">
+                      <th className="py-1 text-left font-medium">Evento</th>
+                      <th className="py-1 text-right font-medium">Envios</th>
+                      <th className="py-1 text-right font-medium">fbc</th>
+                      <th className="py-1 text-right font-medium">fbp</th>
+                      <th className="py-1 text-right font-medium">e-mail/tel.</th>
+                      <th className="py-1 text-right font-medium">Erros</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {signal.map((s) => (
+                      <tr key={s.event_name} className="border-t border-border/50">
+                        <td className="py-1">{s.event_name}</td>
+                        <td className="py-1 text-right tabular-nums">{s.total}</td>
+                        <td className="py-1 text-right tabular-nums">
+                          {Math.round((s.fbc / s.total) * 100)}%
+                        </td>
+                        <td className="py-1 text-right tabular-nums">
+                          {Math.round((s.fbp / s.total) * 100)}%
+                        </td>
+                        <td className="py-1 text-right tabular-nums">
+                          {Math.round((s.pii / s.total) * 100)}%
+                        </td>
+                        <td className="py-1 text-right tabular-nums">{s.erros}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+
               <div className="mb-2 flex items-center justify-between">
                 <p className="text-xs font-medium text-muted-foreground">
                   Conciliação com o Meta (últimos 7 dias, BRT)
