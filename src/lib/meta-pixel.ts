@@ -132,6 +132,8 @@ export const trackMetaPageView = (path: string): void => {
   persistFbclid();
   if (Date.now() - lastPageViewAt < REDIRECT_DEDUPE_MS) return;
   lastPageViewAt = Date.now();
+  // Garante external_id no evento de navegador desde a primeira carga.
+  ensureExternalIdOnPixel();
   const eventId = newEventId();
   if (hasFbq()) {
     (window as any).fbq("track", "PageView", {}, { eventID: eventId });
