@@ -12,6 +12,16 @@ const TEST_DOMAIN = "@olaaura.com.br";
 
 type Row = { label: string; card: number | null; pix: number | null; hint?: string };
 
+/** Conciliação diária: nosso funil x envios do CAPI x eventos recebidos no Meta. */
+type ReconRow = {
+  dia: string;
+  inicio_checkout_pessoas: number;
+  capi_initiate_checkout: number;
+  capi_lead: number;
+  capi_purchase: number;
+  capi_erros: number;
+};
+
 function startOfMonthBRT(offsetMonths = 0) {
   const now = new Date();
   const brt = new Date(now.getTime() - 3 * 60 * 60 * 1000);
@@ -25,6 +35,42 @@ export default function CheckoutFunnelPanel() {
   const [monthOffset, setMonthOffset] = useState(0);
   const [declines, setDeclines] = useState<{ reason: string; count: number }[]>([]);
   const [planMix, setPlanMix] = useState<{ plan: string; count: number }[]>([]);
+  const [recon, setRecon] = useState<ReconRow[]>([]);
+  const [reconMeta, setReconMeta] = useState<string | null>(null);
+  const [reconLoading, setReconLoading] = useState(false);
+
+  // Leitura direta da API do Meta (somente admin) + nossos contadores por dia.
+  const loadRecon = async () => {
+    setReconLoading(true);
+    setReconMeta(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("meta-insights", {
+        body: { days: 7 },
+      });
+      if (error) throw error;
+      const byDay = (data?.nossos_numeros_por_dia ?? {}) as Record<
+        string,
+        Omit<ReconRow, "dia">
+      >;
+      setRecon(
+        Object.entries(byDay)
+          .map(([dia, v]) => ({ dia, ...v }))
+          .sort((a, b) => (a.dia < b.dia ? 1 : -1)),
+      );
+      const stats = data?.meta_stats;
+      setReconMeta(
+        stats?.error
+          ? `Meta respondeu erro: ${stats.error}`
+          : `Pixel ${data?.pixel_id} · último evento recebido: ${
+              data?.pixel_info?.last_fired_time ?? "—"
+            }`,
+      );
+    } catch (e) {
+      setReconMeta(`Não foi possível ler o Meta agora: ${(e as Error).message}`);
+    } finally {
+      setReconLoading(false);
+    }
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -233,6 +279,48 @@ export default function CheckoutFunnelPanel() {
                   ))}
                 </ul>
               </div>
+            </div>
+
+            <div className="mt-6 border-t border-border/50 pt-4">
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-xs font-medium text-muted-foreground">
+                  Conciliação com o Meta (últimos 7 dias, BRT)
+                </p>
+                <Button size="sm" variant="outline" onClick={() => void loadRecon()} disabled={reconLoading}>
+                  {reconLoading ? "Consultando…" : "Consultar Meta"}
+                </Button>
+              </div>
+              <p className="mb-2 text-xs text-muted-foreground">
+                O Gerenciador do Meta mostra <strong>eventos recebidos</strong> (navegador + servidor),
+                antes da deduplicação: cada início de checkout real aparece como ~2 eventos lá.
+              </p>
+              {reconMeta && <p className="mb-2 text-xs text-muted-foreground">{reconMeta}</p>}
+              {recon.length > 0 && (
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-muted-foreground">
+                      <th className="py-1 text-left font-medium">Dia</th>
+                      <th className="py-1 text-right font-medium">Início real (pessoas)</th>
+                      <th className="py-1 text-right font-medium">CAPI IniciarCheckout</th>
+                      <th className="py-1 text-right font-medium">CAPI Lead</th>
+                      <th className="py-1 text-right font-medium">CAPI Compra</th>
+                      <th className="py-1 text-right font-medium">Erros CAPI</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {recon.map((r) => (
+                      <tr key={r.dia} className="border-t border-border/50">
+                        <td className="py-1">{r.dia}</td>
+                        <td className="py-1 text-right tabular-nums">{r.inicio_checkout_pessoas}</td>
+                        <td className="py-1 text-right tabular-nums">{r.capi_initiate_checkout}</td>
+                        <td className="py-1 text-right tabular-nums">{r.capi_lead}</td>
+                        <td className="py-1 text-right tabular-nums">{r.capi_purchase}</td>
+                        <td className="py-1 text-right tabular-nums">{r.capi_erros}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           </>
         )}

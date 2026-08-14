@@ -6,7 +6,6 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 import Index from "./pages/Index";
 import IndexV2 from "./pages/IndexV2";
-import Checkout from "./pages/Checkout";
 import CheckoutV2 from "./pages/CheckoutV2";
 import ThankYou from "./pages/ThankYou";
 import CancelSubscription from "./pages/CancelSubscription";
@@ -62,6 +61,16 @@ const RootRedirect = () => (
   />
 );
 
+// Checkout antigo desativado: mantinha eventos de Lead/InitiateCheckout no Meta
+// sem registrar nada no nosso funil, criando divergência de números.
+// Redireciona para o /v2/checkout preservando query e hash (fbclid, utm_*).
+const LegacyCheckoutRedirect = () => (
+  <Navigate
+    to={`/v2/checkout${window.location.search}${window.location.hash}`}
+    replace
+  />
+);
+
 const App = () => (
   <HelmetProvider>
     <QueryClientProvider client={queryClient}>
@@ -76,7 +85,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<RootRedirect />} />
             <Route path="/v2" element={<IndexV2 />} />
-            <Route path="/checkout" element={<Checkout />} />
+            <Route path="/checkout" element={<LegacyCheckoutRedirect />} />
             <Route path="/v2/checkout" element={<CheckoutV2 />} />
             <Route path="/obrigado" element={<ThankYou />} />
             <Route path="/cancelar" element={<CancelSubscription />} />
