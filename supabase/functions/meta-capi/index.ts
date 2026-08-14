@@ -107,13 +107,15 @@ Deno.serve(async (req) => {
     const hashedUserData: Record<string, string> = {};
     const hashedUserDataMulti: Record<string, string[]> = {};
 
+    // Fonte única do telefone normalizado (hash de ph, external_id e cache).
+    const normPhone = normalizeBrPhone(user_data.phone);
+
     if (user_data.email) {
       hashedUserData.em = await sha256Hash(user_data.email);
     }
-    if (user_data.phone) {
-      // Meta expects phone with country code, digits only
-      const cleanPhone = user_data.phone.replace(/\D/g, '');
-      hashedUserData.ph = await sha256Hash(cleanPhone);
+    if (normPhone) {
+      // Meta espera telefone com código do país, só dígitos.
+      hashedUserData.ph = await sha256Hash(normPhone);
     }
     if (user_data.first_name) {
       hashedUserData.fn = await sha256Hash(user_data.first_name);
@@ -129,7 +131,7 @@ Deno.serve(async (req) => {
     // o checkout envia) e cai no e-mail — assim Purchase/Subscribe dos webhooks
     // ganham a chave sem precisar mudar cada webhook.
     if (rawExternalIds.length === 0) {
-      const fallback = user_data.phone?.replace(/\D/g, '') || user_data.email;
+      const fallback = normPhone || user_data.email;
       if (fallback) rawExternalIds.push(fallback);
     }
     const externalIds: string[] = [];
@@ -233,16 +235,25 @@ Deno.serve(async (req) => {
         // Cache de identidade também no topo/meio do funil: guardar fbp/fbc
         // assim que o lead se identifica melhora a atribuição do Purchase de
         // quem paga depois em outro dispositivo (era o gargalo do fbc).
-        if ((user_data.email || user_data.phone) && (user_data.fbp || user_data.fbc)) {
+        const browserExternalId = rawExternalIds
+          .map((v) => String(v || '').trim())
+          .find((v) => v && v !== normPhone && v !== user_data.email && !/^[a-f0-9]{64}$/i.test(v));
+
+        if (
+          (user_data.email || normPhone) &&
+          (user_data.fbp || user_data.fbc || browserExternalId)
+        ) {
           const email = user_data.email?.trim().toLowerCase() || null;
-          const digits = user_data.phone?.replace(/\D/g, '') || '';
-          const phone = digits.length >= 10 ? digits : null;
+          const phone = normPhone;
           const patch: Record<string, unknown> = {
             last_source: `meta-capi:${event_name}`,
             updated_at: new Date().toISOString(),
           };
           if (user_data.fbp) patch.fbp = user_data.fbp;
           if (user_data.fbc) patch.fbc = user_data.fbc;
+          // external_id do navegador (cookie aura_eid): sem isso o Purchase, que
+          // sai do servidor, perde a chave estável que liga anúncio → compra.
+          if (browserExternalId) patch.external_id = browserExternalId;
           let q = sb.from('meta_identity_cache').select('id').limit(1);
           q = email ? q.ilike('email', email) : q.eq('phone', phone);
           const { data: existing } = await q.maybeSingle();
