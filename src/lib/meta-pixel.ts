@@ -57,7 +57,9 @@ const sendCapi = (
   attempt = 0,
 ): void => {
   const fbp = getFbp();
-  const fbc = getFbc();
+  // Visitas curtas (bounce antes de 1,5s) perdiam o evento enquanto esperávamos
+  // o cookie: deriva o fbc direto do fbclid da URL quando ele ainda não existe.
+  const fbc = getFbc() ?? deriveFbcFromUrl();
   // Sem identificador de navegador o CAPI seria descartado pelo Meta.
   // No primeiro carregamento o _fbp pode ainda não existir: tenta de novo.
   if (!fbp && !fbc) {
