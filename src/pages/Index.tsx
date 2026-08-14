@@ -22,15 +22,9 @@ const Index = () => {
   useScrollDepth();
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && (window as any).fbq) {
-      (window as any).fbq('track', 'ViewContent', {
-        content_name: 'Landing Page',
-        content_category: 'homepage',
-        value: 6.90,
-        currency: 'BRL',
-      });
-    }
-    // GA4 view_item — espelha o ViewContent do Meta Pixel
+    // Tracking do Meta REMOVIDO desta página (landing antiga, hoje fora de rota):
+    // era `fbq` cru, sem event_id e sem CAPI, e com preço no ViewContent.
+    // A fonte única é `trackMetaViewContent` em @/lib/meta-pixel.
     trackViewItem({ item_id: "landing_page", item_name: "Landing Page" });
   }, []);
 
