@@ -22,7 +22,7 @@ import {
   getGaClientId,
   trackReturningCustomerMonthly,
 } from "@/lib/ga4";
-import { setAdvancedMatching, trackMetaViewContent } from "@/lib/meta-pixel";
+import { getExternalId, setAdvancedMatching, trackMetaViewContent } from "@/lib/meta-pixel";
 import { oaiqCheckoutStarted } from "@/lib/openai-pixel";
 import logoOlaAura from "@/assets/logo-ola-aura.png";
 import "@/styles/v2-theme.css";
@@ -928,6 +928,10 @@ const CheckoutV2 = () => {
           email: email.trim(),
           phone: phone.replace(/\D/g, ""),
           first_name: name.trim().split(" ")[0],
+          // Dois identificadores: o telefone normalizado (que os webhooks de
+          // pagamento também derivam) e o id de 1ª parte do navegador. Isso
+          // costura o InitiateCheckout com o Purchase do servidor.
+          external_id: [phone.replace(/\D/g, ""), getExternalId()].filter(Boolean),
           client_user_agent: navigator.userAgent,
           ...(fbp && { fbp }),
           ...(fbc && { fbc }),
