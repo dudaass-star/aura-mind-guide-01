@@ -11,6 +11,7 @@ import { reconcileOrphanPayments } from "../_shared/asaas-reconcile.ts";
 import { resolveMetaIdentity } from "../_shared/meta-identity.ts";
 import { sendOpenAiConversion } from "../_shared/openai-capi.ts";
 import { sendGa4Purchase } from "../_shared/ga4-purchase.ts";
+import { fireSubscribeConversion } from "../_shared/meta-subscribe.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 
 const corsHeaders = {
@@ -1174,8 +1175,36 @@ async function handleActivation(
         .eq("asaas_payment_id", paymentId);
     }
 
-    // Renovação → para por aqui (sem welcome novo).
-    if (isRenewal) return;
+    // Renovação → para por aqui (sem welcome novo). Antes disso, envia o
+    // `Subscribe`: a cobrança cheia do ciclo é a conversão comercial real e é o
+    // que dá valor correto ao Meta/GA4/ChatGPT Ads (o `Purchase` da entrada sai
+    // sempre em R$ 6,90).
+    if (isRenewal) {
+      await fireSubscribeConversion(supabase, {
+        eventId: `asaas-sub-${paymentId}`,
+        email: customerEmail || null,
+        phone: formattedPhone || cleanPhone || null,
+        firstName: (customerName || "").split(" ")[0] || null,
+        fbp: (updated.fbp as string | null) || null,
+        fbc: (updated.fbc as string | null) || null,
+        value: Number((updated.amount_cents as number) || 0) / 100,
+        plan: customerPlan,
+        source: "webhook-asaas",
+      });
+      try {
+        await supabase.from("checkout_funnel_events").insert({
+          anon_session_id: `asaas:${paymentId}`,
+          step: "subscription_confirmed",
+          plan: customerPlan,
+          payment_method: "pix",
+          detail: "asaas",
+          meta: { payment_id: paymentId, amount_cents: updated.amount_cents },
+        });
+      } catch (e) {
+        console.warn("[webhook-asaas] ⚠️ falha registrando subscription_confirmed:", (e as Error)?.message);
+      }
+      return;
+    }
 
     // ============================================================
     // Migration cleanup: se cliente tinha Stripe ativa (migrou de cartão pra
