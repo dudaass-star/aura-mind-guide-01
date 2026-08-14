@@ -6,7 +6,6 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 import Index from "./pages/Index";
 import IndexV2 from "./pages/IndexV2";
-import Checkout from "./pages/Checkout";
 import CheckoutV2 from "./pages/CheckoutV2";
 import ThankYou from "./pages/ThankYou";
 import CancelSubscription from "./pages/CancelSubscription";
