@@ -24,7 +24,8 @@ const corsHeaders = {
 // ContentSids dos templates aprovados na subaccount
 // Estágio 1: recuperacao_checkout_5min (texto, {{1}} = nome) — substitui HX988544a4...
 const TEMPLATE_15MIN = "HX6d9a0bda6dad14e72017547b0deb51ba";
-const TEMPLATE_24H = "HX8d40a27b45761678a88c53ec9aa58b32";
+// Estágio 2: recuperacao_checkout_24hs (texto, {{1}} = nome) — substitui HX8d40a27b...
+const TEMPLATE_24H = "HX5f0f3dffb5f95da970bdbfab08a2488";
 
 // Cutoff de ativação: só dispara WhatsApp para checkouts criados a partir desta data.
 // Todo backlog anterior fica restrito ao fluxo de e-mail (recover-abandoned-checkout).
