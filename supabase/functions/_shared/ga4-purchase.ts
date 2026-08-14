@@ -10,8 +10,11 @@ export async function sendGa4Purchase(params: {
   planName: string;
   eventSourceUrl?: string;
   source?: string;
+  /** Nome do evento GA4. Default `purchase`; usamos `subscribe` na cobrança cheia. */
+  eventName?: string;
 }): Promise<void> {
   const tag = params.source ? `[${params.source}]` : "[ga4]";
+  const eventName = params.eventName || "purchase";
   try {
     const measurementId = Deno.env.get("GA4_MEASUREMENT_ID");
     const apiSecret = Deno.env.get("GA4_API_SECRET");
@@ -44,7 +47,7 @@ export async function sendGa4Purchase(params: {
         body: JSON.stringify({
           client_id: clientId,
           events: [{
-            name: "purchase",
+            name: eventName,
             params: {
               transaction_id: params.transactionId,
               value: params.value,
@@ -62,11 +65,11 @@ export async function sendGa4Purchase(params: {
       },
     );
     if (!res.ok) {
-      console.warn(`${tag} ⚠️ GA4 purchase non-2xx:`, res.status, await res.text().catch(() => ""));
+      console.warn(`${tag} ⚠️ GA4 ${eventName} non-2xx:`, res.status, await res.text().catch(() => ""));
     } else {
-      console.log(`${tag} ✅ GA4 purchase enviado (${params.transactionId}, R$ ${params.value})`);
+      console.log(`${tag} ✅ GA4 ${eventName} enviado (${params.transactionId}, R$ ${params.value})`);
     }
   } catch (e) {
-    console.warn(`${tag} ⚠️ GA4 purchase falhou (non-blocking):`, (e as Error)?.message);
+    console.warn(`${tag} ⚠️ GA4 ${eventName} falhou (non-blocking):`, (e as Error)?.message);
   }
 }
