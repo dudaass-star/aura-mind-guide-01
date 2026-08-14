@@ -83,7 +83,8 @@ export default function RecoveryInbox({ heightClass = 'h-[calc(100vh-180px)]' }:
     const { data, error } = await supabase
       .from('recovery_conversations')
       .select('*')
-      .limit(200);
+      .order('updated_at', { ascending: false })
+      .limit(400);
     if (error) {
       console.error(error);
       toast({ title: 'Erro ao carregar conversas', variant: 'destructive' });
