@@ -8,14 +8,20 @@ O que dispara o alerta é o funil atual: desde que a entrada passou a ser sempre
 
 E ele está certo num ponto: **o ROAS hoje é calculado sobre R$ 6,90**, subestimando a receita real. A conversão que importa comercialmente (cobrança cheia no 8º dia) não envia nenhum evento ao Meta hoje — nem no cartão (`invoice.paid`), nem no PIX recorrente.
 
+## Isso afeta o desempenho da campanha?
+
+Não a entrega. O aviso afeta só o **cálculo de valor/ROAS** do Meta. Para o objetivo de **CAC mais baixo**, o alvo de otimização deve continuar sendo o `Purchase` de R$ 6,90: é o evento mais frequente e barato, então o algoritmo sai do aprendizado rápido e o CAC cai. Otimizar pela cobrança cheia (8º dia) atrasaria o sinal em 8 dias e reduziria o volume — bom para ROAS, ruim para CAC.
+
+Portanto o evento novo entra como **medição**, não como alvo de campanha.
+
 ## O que fazer
 
 1. **Manter o `Purchase` da entrada em 6,90** (é a compra que de fato aconteceu; alterar isso vira dado inflado).
-2. **Criar um evento de conversão de assinatura na 1ª cobrança cheia** (8º dia), com o valor real do ciclo (29,90 / 59,70 / 118,80 etc.). Esse evento passa a ser o alvo de otimização e o ROAS real das campanhas.
+2. **Criar um evento de conversão de assinatura na 1ª cobrança cheia** (8º dia), com o valor real do ciclo (29,90 / 59,70 / 118,80 etc.). Serve para ler receita real e LTV por campanha — **sem trocar o alvo de otimização**, que segue no `Purchase`.
 3. Enviar o mesmo evento para ChatGPT Ads e GA4, mantendo a paridade já existente.
 4. Mostrar o evento novo no painel do funil (quantas entradas de 6,90 viraram cobrança cheia).
 
-Com isso o Meta passa a ver dois preços distintos por jornada e o aviso deixa de fazer sentido.
+Com isso o Meta passa a ver dois preços distintos por jornada, o aviso deixa de fazer sentido e a entrega das campanhas continua intacta.
 
 ## Detalhes técnicos
 
