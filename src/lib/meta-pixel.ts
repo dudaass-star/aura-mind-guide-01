@@ -114,6 +114,24 @@ const sendCapi = (
 };
 
 /** Rotas onde o PageView não deve sair (conversão já é medida por Purchase). */
+/**
+ * Reinicializa o pixel com o external_id (uma vez por carga). Sem isso o evento
+ * de navegador sairia sem essa chave e só o CAPI teria a correspondência.
+ */
+let externalIdOnPixel = false;
+const ensureExternalIdOnPixel = (): void => {
+  if (externalIdOnPixel || !hasFbq()) return;
+  externalIdOnPixel = true;
+  try {
+    (window as any).fbq("init", "939366085297921", {
+      external_id: getExternalId(),
+      country: "br",
+    });
+  } catch {
+    /* noop */
+  }
+};
+
 const NO_PAGEVIEW_ROUTES = [
   "/obrigado", // conversão já é medida por Purchase
 ];
