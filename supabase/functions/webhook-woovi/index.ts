@@ -115,6 +115,11 @@ async function fireMetaCapiPurchase(
           email: args.email,
           phone: args.phone || undefined,
           first_name: args.firstName || undefined,
+          // Chave estável do funil: telefone (normalizado no meta-capi) + o
+          // external_id do navegador guardado no InitiateCheckout.
+          ...(ident.externalId && {
+            external_id: [args.phone || "", ident.externalId].filter(Boolean),
+          }),
           ...(ident.fbp && { fbp: ident.fbp }),
           ...(ident.fbc && { fbc: ident.fbc }),
         },
