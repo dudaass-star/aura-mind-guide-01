@@ -127,6 +127,12 @@ export default function CheckoutFunnelPanel() {
       const qrGenerated = uniq("pix_qr_generated", "pix");
 
       setRows([
+        {
+          label: "Chegadas do anúncio (fbclid/utm)",
+          card: uniq("ad_landing"),
+          pix: null,
+          hint: "medição própria · compare com os cliques no link do Meta",
+        },
         { label: "Abriu o checkout", card: uniq("page_view"), pix: null, hint: "sem separar método" },
         { label: "Enviou nome/e-mail/telefone", card: started, pix: null },
         { label: "Formulário do cartão montou", card: mounted, pix: null },

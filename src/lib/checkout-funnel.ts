@@ -5,6 +5,8 @@ import { trackEvent } from "@/lib/ga4";
 
 export type FunnelStep =
   | "page_view"
+  /** Chegada no site vinda de anúncio (fbclid/utm na URL). */
+  | "ad_landing"
   | "landing_view"
   | "landing_scroll_25"
   | "landing_scroll_50"
