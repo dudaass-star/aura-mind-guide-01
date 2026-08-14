@@ -62,6 +62,16 @@ const RootRedirect = () => (
   />
 );
 
+// Checkout antigo desativado: mantinha eventos de Lead/InitiateCheckout no Meta
+// sem registrar nada no nosso funil, criando divergência de números.
+// Redireciona para o /v2/checkout preservando query e hash (fbclid, utm_*).
+const LegacyCheckoutRedirect = () => (
+  <Navigate
+    to={`/v2/checkout${window.location.search}${window.location.hash}`}
+    replace
+  />
+);
+
 const App = () => (
   <HelmetProvider>
     <QueryClientProvider client={queryClient}>
@@ -76,7 +86,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<RootRedirect />} />
             <Route path="/v2" element={<IndexV2 />} />
-            <Route path="/checkout" element={<Checkout />} />
+            <Route path="/checkout" element={<LegacyCheckoutRedirect />} />
             <Route path="/v2/checkout" element={<CheckoutV2 />} />
             <Route path="/obrigado" element={<ThankYou />} />
             <Route path="/cancelar" element={<CancelSubscription />} />
