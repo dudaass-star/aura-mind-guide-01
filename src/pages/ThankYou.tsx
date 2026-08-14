@@ -10,11 +10,10 @@ const ThankYou = () => {
   const [userData, setUserData] = useState({ name: "", plan: "anual", returning: false });
 
   useEffect(() => {
-    // Disable Meta Pixel automatic event detection on this page
-    // This prevents Meta from auto-detecting "Purchase" events based on page content
-    if (typeof window !== 'undefined' && (window as any).fbq) {
-      (window as any).fbq('set', 'autoConfig', 'false', '939366085297921');
-    }
+    // Nada de desligar o autoConfig aqui: isso também matava a Correspondência
+    // Avançada Automática (AAM) nesta página. O Purchase real é enviado pelos
+    // webhooks de pagamento (servidor), e a página não expõe valor/pedido que o
+    // Meta possa interpretar como compra automática.
 
     // Try to get data from location state first, then localStorage
     let checkoutData = { name: "", plan: "anual", returning: false };

@@ -16,3 +16,10 @@ type: constraint
 2. O webhook do gateway dispara `Purchase` (Meta) e conversão OpenAI?
 3. `checkout_funnel_events` tem os passos do novo trilho (`*_modal_open`, `*_requested`, `*_abandoned`, `purchase_confirmed`)?
 4. `CheckoutFunnelPanel.tsx` mostra o novo método?
+
+**Regras de evento (ago/2026, varredura do pixel):**
+- `Lead` está **aposentado** — o mesmo clique virava dois eventos. Só `InitiateCheckout`. `Checkout.tsx` (rota legada) não tem mais tracking do Meta.
+- `ViewContent` vai **sem `value`** (landing e checkout): preço só em `InitiateCheckout`, `Purchase` e `Subscribe`, senão o Meta alerta "envie mais preços".
+- Todo `ViewContent`/`PageView` passa pelos helpers de `src/lib/meta-pixel.ts` (navegador + CAPI com o mesmo `event_id`). Nunca `fbq` cru numa página.
+- `ThankYou.tsx` não desliga `autoConfig` — isso matava a Correspondência Avançada Automática.
+- `meta-capi` aceita `test_event_code` (body ou `META_TEST_EVENT_CODE`) para validar no "Testar eventos" sem sujar produção.

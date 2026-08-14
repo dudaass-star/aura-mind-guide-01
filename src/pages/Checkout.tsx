@@ -345,58 +345,13 @@ const Checkout = () => {
           ? `fb.1.${Date.now()}.${new URLSearchParams(window.location.search).get('fbclid')}` 
           : undefined);
 
-      // Shared event IDs for deduplication between browser pixel and CAPI
-      const leadEventId = `lead_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-      const icEventId = `ic_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-
-      const userData = {
-        email: email.trim(),
-        phone: phone.replace(/\D/g, ''),
-        first_name: name.trim().split(' ')[0],
-        client_user_agent: navigator.userAgent,
-        ...(fbp && { fbp }),
-        ...(fbc && { fbc }),
-      };
-
-      // Browser pixel: Lead + InitiateCheckout with event_id for dedup
+      // Tracking do Meta REMOVIDO desta página (rota legada, hoje só redireciona
+      // para /v2/checkout). Ela emitia Lead + InitiateCheckout para o MESMO clique,
+      // inflando o Gerenciador de Eventos. A fonte única de verdade é
+      // `fireCheckoutStartTracking` no CheckoutV2 (só InitiateCheckout).
       const trialPriceMap: Record<string, number> = { essencial: 6.9, direcao: 9.9, transformacao: 19.9 };
       const planValue = trialPriceMap[selectedPlan];
-      if (typeof window !== 'undefined' && (window as any).fbq) {
-        (window as any).fbq('track', 'Lead', {
-          content_name: `Trial ${plans[selectedPlan].name}`,
-          content_category: 'checkout',
-          value: planValue,
-          currency: 'BRL',
-        }, { eventID: leadEventId });
-        (window as any).fbq('track', 'InitiateCheckout', {
-          content_name: `Trial ${plans[selectedPlan].name}`,
-          content_category: 'checkout',
-          value: planValue,
-          currency: 'BRL',
-        }, { eventID: icEventId });
-      }
 
-      // CAPI: Lead + InitiateCheckout with PII for high Match Quality
-      const capiPayload = {
-        event_source_url: window.location.href,
-        user_data: userData,
-        custom_data: {
-          content_name: `Trial ${plans[selectedPlan].name}`,
-          content_category: 'checkout',
-          value: planValue,
-          currency: 'BRL',
-        },
-      };
-
-      Promise.all([
-        supabase.functions.invoke('meta-capi', {
-          body: { ...capiPayload, event_name: 'Lead', event_id: leadEventId },
-        }),
-        supabase.functions.invoke('meta-capi', {
-          body: { ...capiPayload, event_name: 'InitiateCheckout', event_id: icEventId },
-        }),
-      ]).catch(() => {}); // non-blocking
-      
       // GA4 add_payment_info — usuário enviou o formulário, indo pro Stripe
       trackAddPaymentInfo({ plan: selectedPlan, billing: billingPeriod, value: planValue });
 
