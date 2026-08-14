@@ -361,7 +361,9 @@ async function activateAccess(
 
     // Cobrança CHEIA do mandato (dia 8 e ciclos seguintes): conversão comercial
     // real. A entrada de R$ 6,90 (`trialEntry`) segue medida como `Purchase`.
-    if (!opts.trialEntry) {
+    // Quando o mandato não tem trial, o 1º ciclo já é o próprio `Purchase` com o
+    // valor cheio — aí não faz sentido duplicar com `Subscribe`.
+    if (!opts.trialEntry && !(opts.isFirstPayment && !sub.is_trial)) {
       await fireSubscribeConversion(supabase, {
         eventId: `woovi-sub-${opts.eventId}`,
         email: email || null,
