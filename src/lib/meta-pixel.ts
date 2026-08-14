@@ -43,6 +43,13 @@ export const persistFbclid = (): void => {
 export const getFbp = (): string | undefined => getCookie("_fbp");
 export const getFbc = (): string | undefined => getCookie("_fbc");
 
+/** fbc derivado do fbclid da URL, para não depender de o cookie já existir. */
+export const deriveFbcFromUrl = (): string | undefined => {
+  if (typeof window === "undefined") return undefined;
+  const fbclid = new URLSearchParams(window.location.search).get("fbclid");
+  return fbclid ? `fb.1.${Date.now()}.${fbclid}` : undefined;
+};
+
 /** event_id compartilhado entre navegador e servidor, para deduplicação no Meta. */
 const newEventId = (): string =>
   typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -87,13 +94,22 @@ const sendCapi = (
 /** Rotas onde o PageView não deve sair (conversão já é medida por Purchase). */
 const NO_PAGEVIEW_ROUTES = [
   "/obrigado", // conversão já é medida por Purchase
-  "/", // redireciona na hora para /v2; contar aqui duplicaria o PageView
 ];
+
+/**
+ * A raiz redireciona na hora para /v2. Agora o PageView sai também em "/"
+ * (é a landing do anúncio e alimenta as "Visualizações da página de destino"),
+ * então o redirecionamento imediato não pode contar de novo.
+ */
+let lastPageViewAt = 0;
+const REDIRECT_DEDUPE_MS = 3000;
 
 /** PageView (navegador + CAPI) — chamado no carregamento e em toda troca de rota. */
 export const trackMetaPageView = (path: string): void => {
   if (!isPixelRoute(path) || NO_PAGEVIEW_ROUTES.includes(path)) return;
   persistFbclid();
+  if (Date.now() - lastPageViewAt < REDIRECT_DEDUPE_MS) return;
+  lastPageViewAt = Date.now();
   const eventId = newEventId();
   if (hasFbq()) {
     (window as any).fbq("track", "PageView", {}, { eventID: eventId });
