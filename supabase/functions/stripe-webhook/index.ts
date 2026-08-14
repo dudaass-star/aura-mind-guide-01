@@ -6,6 +6,7 @@ import { getPhoneVariations, normalizeBrazilianPhone } from "../_shared/zapi-cli
 import { sendProactive } from "../_shared/whatsapp-provider.ts";
 import { resolveMetaIdentity } from "../_shared/meta-identity.ts";
 import { sendOpenAiConversion } from "../_shared/openai-capi.ts";
+import { fireSubscribeConversion } from "../_shared/meta-subscribe.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -1306,6 +1307,39 @@ Me conta: como você está hoje?`;
           });
         } catch (e) {
           console.warn('⚠️ [FUNNEL] falha ao registrar purchase_confirmed:', e instanceof Error ? e.message : e);
+        }
+      }
+
+      // Cobrança CHEIA do ciclo (o 8º dia, depois da 1ª semana por R$ 6,90):
+      // é a conversão comercial real. Envia `Subscribe` com o valor do ciclo
+      // para o Meta/GA4/ChatGPT Ads ler receita correta — sem trocar o alvo de
+      // otimização das campanhas, que segue no `Purchase`.
+      if (invoice.billing_reason && invoice.billing_reason !== 'subscription_create' && Number(invoice.amount_paid || 0) > 0) {
+        try {
+          const cust = await stripe.customers.retrieve(customerId);
+          if (!cust.deleted) {
+            const { profile: subProfile } = await resolveProfileFromCustomer(supabase, cust as Stripe.Customer);
+            const custObj = cust as Stripe.Customer;
+            await fireSubscribeConversion(supabase, {
+              eventId: `stripe-sub-${invoice.id}`,
+              email: subProfile?.email || custObj.email || null,
+              phone: subProfile?.phone || custObj.metadata?.phone || null,
+              firstName: (subProfile?.name || custObj.name || '').split(' ')[0] || null,
+              value: Number(invoice.amount_paid || 0) / 100,
+              plan: subProfile?.plan || 'essencial',
+              billingCycle: subProfile?.billing_cycle || null,
+              source: 'stripe-webhook',
+            });
+            await supabase.from('checkout_funnel_events').insert({
+              anon_session_id: `stripe:${customerId}`,
+              step: 'subscription_confirmed',
+              payment_method: 'card',
+              detail: 'stripe',
+              meta: { invoice: invoice.id, amount_paid: invoice.amount_paid, billing_reason: invoice.billing_reason },
+            });
+          }
+        } catch (e) {
+          console.warn('⚠️ Subscribe (stripe) falhou (non-blocking):', e instanceof Error ? e.message : e);
         }
       }
 

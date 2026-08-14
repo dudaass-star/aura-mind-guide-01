@@ -16,6 +16,7 @@ import { sendProactive } from "../_shared/whatsapp-provider.ts";
 import { resolveMetaIdentity } from "../_shared/meta-identity.ts";
 import { sendOpenAiConversion } from "../_shared/openai-capi.ts";
 import { sendGa4Purchase } from "../_shared/ga4-purchase.ts";
+import { fireSubscribeConversion } from "../_shared/meta-subscribe.ts";
 import { normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
 import {
   wooviFetch, brtDate,
@@ -357,6 +358,38 @@ async function activateAccess(
       }
     }
     console.log(`[webhook-woovi] ✅ acesso de ${userId} estendido até ${newExpiry} (plano ${plan})`);
+
+    // Cobrança CHEIA do mandato (dia 8 e ciclos seguintes): conversão comercial
+    // real. A entrada de R$ 6,90 (`trialEntry`) segue medida como `Purchase`.
+    // Quando o mandato não tem trial, o 1º ciclo já é o próprio `Purchase` com o
+    // valor cheio — aí não faz sentido duplicar com `Subscribe`.
+    if (!opts.trialEntry && !(opts.isFirstPayment && !sub.is_trial)) {
+      await fireSubscribeConversion(supabase, {
+        eventId: `woovi-sub-${opts.eventId}`,
+        email: email || null,
+        phone: phone || null,
+        firstName: (name || "").split(" ")[0] || null,
+        fbp: sub.fbp || null,
+        fbc: sub.fbc || null,
+        value: opts.valueCents / 100,
+        plan,
+        billingCycle: billing,
+        source: "webhook-woovi",
+      });
+      try {
+        await supabase.from("checkout_funnel_events").insert({
+          anon_session_id: `woovi:${sub.subscription_id}`,
+          step: "subscription_confirmed",
+          plan,
+          billing,
+          payment_method: "pix_auto",
+          detail: "woovi",
+          meta: { value_cents: opts.valueCents, subscription_id: sub.subscription_id },
+        });
+      } catch (e) {
+        console.warn("[webhook-woovi] ⚠️ falha registrando subscription_confirmed:", (e as Error)?.message);
+      }
+    }
 
     await supabase.from("woovi_subscriptions").update({
       user_id: profileRowId || sub.user_id, status: "ATIVA", last_error: null,

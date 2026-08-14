@@ -18,6 +18,7 @@ import { interFetch } from "../_shared/inter-pix.ts";
 import { resolveMetaIdentity } from "../_shared/meta-identity.ts";
 import { sendOpenAiConversion } from "../_shared/openai-capi.ts";
 import { sendGa4Purchase } from "../_shared/ga4-purchase.ts";
+import { fireSubscribeConversion } from "../_shared/meta-subscribe.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -364,6 +365,37 @@ async function activateAccess(
     await supabase.from("inter_pix_recurrences")
       .update({ user_id: profileRowId || rec.user_id, status: "ATIVA", last_error: null })
       .eq("id_rec", rec.id_rec);
+
+    // Cobrança CHEIA do ciclo (débito do mandato, do 8º dia em diante):
+    // conversão comercial real. A entrada de R$ 6,90 (ciclo 0) segue medida
+    // apenas como `Purchase`.
+    if (!opts.isFirstPayment) {
+      await fireSubscribeConversion(supabase, {
+        eventId: `inter-sub-${opts.eventId || rec.id_rec}`,
+        email: email || null,
+        phone: phone || null,
+        firstName: (name || "").split(" ")[0] || null,
+        fbp: rec.fbp || null,
+        fbc: rec.fbc || null,
+        value: opts.valueCents / 100,
+        plan,
+        billingCycle: billing,
+        source: "webhook-inter",
+      });
+      try {
+        await supabase.from("checkout_funnel_events").insert({
+          anon_session_id: `inter:${rec.id_rec}`,
+          step: "subscription_confirmed",
+          plan,
+          billing,
+          payment_method: "pix_auto",
+          detail: "inter",
+          meta: { value_cents: opts.valueCents, id_rec: rec.id_rec },
+        });
+      } catch (e) {
+        console.warn("[webhook-inter] ⚠️ falha registrando subscription_confirmed:", (e as Error)?.message);
+      }
+    }
 
     // Renovação silenciosa: não repete boas-vindas.
     if (!opts.isFirstPayment) return true;

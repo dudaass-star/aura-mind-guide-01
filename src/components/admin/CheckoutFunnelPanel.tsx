@@ -144,6 +144,12 @@ export default function CheckoutFunnelPanel() {
           pix: uniq("purchase_confirmed", "pix"),
         },
         {
+          label: "Cobrança cheia do ciclo (8º dia)",
+          card: uniq("subscription_confirmed", "card"),
+          pix: uniq("subscription_confirmed", "pix"),
+          hint: "entrada de R$ 6,90 que virou assinatura paga",
+        },
+        {
           label: "Chegou na tela de obrigado",
           card: uniq("purchase"),
           pix: null,
