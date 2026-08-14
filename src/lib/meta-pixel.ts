@@ -43,6 +43,23 @@ export const persistFbclid = (): void => {
 export const getFbp = (): string | undefined => getCookie("_fbp");
 export const getFbc = (): string | undefined => getCookie("_fbc");
 
+/**
+ * external_id: identificador estável de 1ª parte (cookie próprio, 180 dias).
+ * É o parâmetro que mais eleva a Qualidade de Correspondência do Evento (EMQ)
+ * — o Meta usa para costurar navegador e servidor mesmo sem cookie dele.
+ * Enviamos o valor cru; o hash é feito no pixel (AAM) e no CAPI.
+ */
+export const getExternalId = (): string => {
+  const existing = getCookie("aura_eid");
+  if (existing) return existing;
+  const id =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  setCookie("aura_eid", id, 180);
+  return id;
+};
+
 /** fbc derivado do fbclid da URL, para não depender de o cookie já existir. */
 export const deriveFbcFromUrl = (): string | undefined => {
   if (typeof window === "undefined") return undefined;
@@ -82,7 +99,12 @@ const sendCapi = (
         event_id: eventId,
         event_source_url: window.location.href,
         source: "browser_top_funnel",
-        user_data: { fbp, fbc, client_user_agent: navigator.userAgent },
+        user_data: {
+          fbp,
+          fbc,
+          external_id: getExternalId(),
+          client_user_agent: navigator.userAgent,
+        },
         custom_data: customData,
       },
     })
