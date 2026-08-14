@@ -1,53 +1,41 @@
-# Pixel e eventos do Meta: o que já está 100% e os 3 furos que ainda encarecem o anúncio
+# Pixel e eventos do Meta: você está certo sobre o Furo 1 — sobraram 2 furos reais
 
-## Verificado agora (dados reais, últimas 24h)
+## Correção: o site publicado já está atualizado
 
-| Evento | Envios | fbc | fbp | e-mail/tel. | external_id | Erros |
-|---|---|---|---|---|---|---|
-| PageView | 92 | 56 | 78 | 0 | 2 | 0 |
-| ViewContent | 73 | 44 | 59 | 0 | 2 | 0 |
-| InitiateCheckout | 4 | 4 | 4 | 4 | 0 | 0 |
-| Lead | 4 | 4 | 4 | 4 | 0 | 0 |
-| Purchase (Woovi) | 1 | 1 | 1 | 1 | 0 | 0 |
+Você tem razão, era só falta de histórico. Verifiquei agora o bundle que está no ar (`olaaura.com.br`): ele **já contém** o `external_id` (cookie `aura_eid`) e **não contém mais** o evento `Lead`. E nos logs, todo evento a partir de 18:43 sai com `external_id`:
 
-Zero erro de resposta do Meta. Teste de ponta a ponta no navegador confirmou `PageView` e `ViewContent` saindo com `fbc` e `external_id`, `ViewContent` sem preço, e um único `PageView` no redirecionamento `/` → `/v2`. Purchase/Subscribe dos 4 gateways já mandam e-mail, telefone, nome e o `fbp/fbc` do cache de identidade.
+| Hora | Evento | external_id |
+|---|---|---|
+| 18:32 e 18:39 | PageView / ViewContent | não (build anterior no navegador do visitante) |
+| 18:43 em diante | PageView / ViewContent | sim, em 100% |
 
-## Furo 1 — O site no ar ainda é o build antigo (bloqueia todo o resto)
+Os 4 `Lead` do dia são todos de 16:21, anteriores à publicação. Não há nenhum depois. Então: **Furo 1 encerrado** — nada a fazer além de deixar o histórico acumular. Os `PageView` sem `external_id` que ainda aparecerem nas próximas horas são visitantes com o JavaScript antigo em cache, e desaparecem sozinhos.
 
-`Lead` continua saindo (4 nas últimas 24h, sempre em par com `InitiateCheckout`) e `external_id` apareceu em apenas 2 de 92 `PageView` — esses 2 são do meu teste local. Ou seja: as melhorias de sinal estão no código, não no ar.
+## Furo real 1 — Telefone em dois formatos: o Meta não junta a mesma pessoa
 
-Ação: **publicar**. Sem isso, nada abaixo produz efeito no custo da campanha.
+No checkout o telefone vai com 11 dígitos (`21999998888`); nos webhooks de compra vai com o código do país (`5521999998888`). Como esses campos são enviados em hash, dois formatos = duas pessoas diferentes para o Meta. Resultado: `InitiateCheckout` e `Purchase` não costuram, a Correspondência de Eventos cai e a campanha otimiza com sinal pior — é exatamente o que encarece o resultado.
 
-## Furo 2 — O telefone vai em dois formatos diferentes, então o Meta não junta a mesma pessoa
+Ação: normalizar para BR (`55` + DDD + número) dentro do `meta-capi`, antes do hash. Um só ponto conserta checkout e todos os gateways de uma vez.
 
-No checkout o telefone é enviado com 11 dígitos (`21999998888`). Nos webhooks de compra ele vai normalizado com o código do país (`5521999998888`). Como `ph` e o `external_id` derivado do telefone são hashes, dois formatos = duas pessoas diferentes aos olhos do Meta. Consequência direta: `InitiateCheckout` e `Purchase` não costuram, a Correspondência de Eventos cai e o algoritmo otimiza com sinal mais pobre (CPA mais alto).
+## Furo real 2 — O `external_id` do navegador não chega na compra
 
-Ação: normalizar o telefone para BR (`55` + DDD + número) dentro do `meta-capi`, antes de hashear — vale para `ph` e para o `external_id` derivado. Um só lugar, corrige checkout e webhooks de uma vez.
+O cookie `aura_eid` identifica o visitante desde o primeiro `PageView`, mas o `Purchase`/`Subscribe` sai do servidor, onde o cookie não existe — e o cache de identidade guarda hoje só `fbp`/`fbc`. Sem isso, a chave mais forte do funil (a mesma pessoa do anúncio até a compra) se perde no último passo.
 
-## Furo 3 — O `external_id` do navegador morre no meio do caminho
+Ação: gravar o `external_id` no cache de identidade quando o `InitiateCheckout` chegar com e-mail/telefone, e reaproveitá-lo em `Purchase` e `Subscribe`.
 
-O cookie próprio (`aura_eid`) identifica o visitante desde o primeiro `PageView`, mas o `Purchase` sai do servidor, onde esse cookie não existe. Hoje o cache de identidade guarda só `fbp`/`fbc`.
-
-Ação: guardar também o `external_id` do navegador no cache de identidade quando o `InitiateCheckout` chega com e-mail/telefone, e reaproveitá-lo em `Purchase`/`Subscribe`. Isso liga anúncio → visita → compra pela mesma chave estável, que é o sinal que o Meta mais valoriza para reduzir custo.
-
-Ainda no mesmo ponto: a busca no cache por telefone compara o número cru, então um registro salvo com 11 dígitos nunca casa com a consulta de 13. A normalização do Furo 2 resolve isso junto.
-
-## Otimizações de custo que entram no mesmo passo
-
-- **Deduplicação à prova de falha**: manter `event_id` idêntico entre navegador e servidor em todos os eventos (já é o caso) e passar a registrar no painel quando um evento sai só por um dos lados.
-- **Painel**: a coluna `external_id` já foi adicionada à tabela de qualidade do sinal; depois de publicar, ela deve ir de ~2% para perto de 100% no `PageView`/`ViewContent` — é o indicador para acompanhar a melhora da correspondência.
+Junto disso: a busca no cache por telefone compara o número cru, então um registro salvo com 11 dígitos nunca casa com a consulta de 13 — a normalização acima resolve.
 
 ## Detalhes técnicos
 
-- `supabase/functions/meta-capi/index.ts`: `normalizeBrPhone()` aplicada antes do hash de `ph` e do `external_id` derivado; gravação de `external_id` no `meta_identity_cache`.
-- `supabase/functions/_shared/meta-identity.ts`: `normPhone` passa a gravar/consultar sempre com `55`, com fallback por sufixo para registros antigos; `resolveMetaIdentity` devolve `external_id` além de `fbp/fbc`.
-- `supabase/functions/{stripe-webhook,webhook-woovi,webhook-inter,webhook-asaas}/index.ts` e `_shared/meta-subscribe.ts`: repassar o `external_id` resolvido no `user_data`.
+- `supabase/functions/meta-capi/index.ts`: `normalizeBrPhone()` antes do hash de `ph` e do `external_id` derivado do telefone; gravar `external_id` no `meta_identity_cache`.
+- `supabase/functions/_shared/meta-identity.ts`: normalizar telefone na gravação e na consulta (com fallback por sufixo para registros antigos); `resolveMetaIdentity` passa a devolver `external_id`.
+- `supabase/functions/{stripe-webhook,webhook-woovi,webhook-inter,webhook-asaas}/index.ts` e `_shared/meta-subscribe.ts`: repassar o `external_id` resolvido em `user_data`.
 - Migração: coluna `external_id` em `meta_identity_cache`.
-- Nada muda em preço, cobrança, regras de `Purchase`/`Subscribe` ou no fluxo de pagamento.
+- Nada muda em preço, cobrança, regras de `Purchase`/`Subscribe` ou fluxo de pagamento.
 
-## Verificação depois do deploy e da publicação
+## Verificação (janela de 24-48h, agora com histórico limpo)
 
-1. `Lead` deve zerar (só `InitiateCheckout`).
-2. Cobertura de `external_id` perto de 100% em `PageView`/`ViewContent`.
-3. No próximo checkout real: `InitiateCheckout` e `Purchase` com o mesmo hash de telefone e o mesmo `external_id`.
-4. Acompanhar por 48h a Correspondência de Eventos no Gerenciador e o custo por resultado.
+1. `Lead` permanece em zero.
+2. `external_id` perto de 100% em `PageView`/`ViewContent` no painel de qualidade do sinal.
+3. No próximo checkout real: mesmo hash de telefone e mesmo `external_id` em `InitiateCheckout` e `Purchase`.
+4. Correspondência de Eventos e custo por resultado no Gerenciador de Anúncios.
