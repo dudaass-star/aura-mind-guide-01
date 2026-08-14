@@ -271,7 +271,17 @@ Deno.serve(async (req) => {
             if (phone) patch.phone = phone;
             await sb.from('meta_identity_cache').update(patch).eq('id', existing.id);
           } else {
-            await sb.from('meta_identity_cache').insert({ email, phone, ...patch });
+            const { error: insErr } = await sb
+              .from('meta_identity_cache')
+              .insert({ email, phone, ...patch });
+            // Telefone já cadastrado com outro e-mail: atualiza o registro do
+            // telefone em vez de perder o sinal do navegador.
+            if (insErr && phone) {
+              await sb
+                .from('meta_identity_cache')
+                .update({ ...patch, ...(email ? { email } : {}) })
+                .eq('phone', phone);
+            }
           }
         }
       }
