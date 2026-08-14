@@ -22,7 +22,8 @@ const corsHeaders = {
 };
 
 // ContentSids dos templates aprovados na subaccount
-const TEMPLATE_15MIN = "HX988544a4c9dd6f79db19dc1427331f02";
+// Estágio 1: recuperacao_checkout_5min (texto, {{1}} = nome) — substitui HX988544a4...
+const TEMPLATE_15MIN = "HX6d9a0bda6dad14e72017547b0deb51ba";
 const TEMPLATE_24H = "HX8d40a27b45761678a88c53ec9aa58b32";
 
 // Cutoff de ativação: só dispara WhatsApp para checkouts criados a partir desta data.
