@@ -138,7 +138,10 @@ Deno.serve(async (req) => {
     for (const raw of rawExternalIds) {
       const v = String(raw || '').trim();
       if (!v) continue;
-      externalIds.push(/^[a-f0-9]{64}$/i.test(v) ? v.toLowerCase() : await sha256Hash(v));
+      if (/^[a-f0-9]{64}$/i.test(v)) { externalIds.push(v.toLowerCase()); continue; }
+      // Telefone usado como external_id vem em 11 dígitos no checkout e 13 nos
+      // webhooks: normaliza antes do hash para virar a MESMA chave.
+      externalIds.push(await sha256Hash(normalizeBrPhone(v) ?? v));
     }
     if (externalIds.length === 1) hashedUserData.external_id = externalIds[0];
     else if (externalIds.length > 1) hashedUserDataMulti.external_id = [...new Set(externalIds)];
