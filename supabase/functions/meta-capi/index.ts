@@ -235,9 +235,18 @@ Deno.serve(async (req) => {
         // Cache de identidade também no topo/meio do funil: guardar fbp/fbc
         // assim que o lead se identifica melhora a atribuição do Purchase de
         // quem paga depois em outro dispositivo (era o gargalo do fbc).
+        // Só o identificador do navegador interessa aqui: telefone/e-mail já
+        // são derivados no envio, e guardá-los como external_id sobrescreveria
+        // a chave estável do cookie.
         const browserExternalId = rawExternalIds
           .map((v) => String(v || '').trim())
-          .find((v) => v && v !== normPhone && v !== user_data.email && !/^[a-f0-9]{64}$/i.test(v));
+          .find(
+            (v) =>
+              v &&
+              normalizeBrPhone(v) === null &&
+              v.toLowerCase() !== user_data.email?.trim().toLowerCase() &&
+              !/^[a-f0-9]{64}$/i.test(v),
+          );
 
         if (
           (user_data.email || normPhone) &&
