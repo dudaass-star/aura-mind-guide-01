@@ -11,6 +11,21 @@ async function sha256Hash(value: string): Promise<string> {
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+/**
+ * Telefone BR num único formato (55 + DDD + número, só dígitos).
+ * O checkout manda 11 dígitos e os webhooks mandam com o 55; como o campo vai
+ * em hash, formatos diferentes viravam pessoas diferentes para o Meta e o
+ * InitiateCheckout não costurava com o Purchase (Correspondência de Eventos
+ * baixa = campanha otimizando com sinal pior).
+ */
+function normalizeBrPhone(raw?: string | null): string | null {
+  const digits = String(raw ?? '').replace(/\D/g, '');
+  if (digits.length < 10) return null;
+  if (digits.startsWith('55') && digits.length >= 12) return digits;
+  if (digits.length <= 11) return `55${digits}`;
+  return digits;
+}
+
 interface CapiRequest {
   event_name: string;
   event_id?: string;
