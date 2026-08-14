@@ -739,6 +739,9 @@ Deno.serve(async (req) => {
                   email: customerEmail || undefined,
                   phone: formattedPhone,
                   first_name: customerName.split(' ')[0],
+                  ...(ident.externalId && {
+                    external_id: [formattedPhone || '', ident.externalId].filter(Boolean),
+                  }),
                   ...(ident.fbp && { fbp: ident.fbp }),
                   ...(ident.fbc && { fbc: ident.fbc }),
                 },
@@ -768,6 +771,9 @@ Deno.serve(async (req) => {
                   email: customerEmail || undefined,
                   phone: formattedPhone,
                   first_name: customerName.split(' ')[0],
+                  ...(ident.externalId && {
+                    external_id: [formattedPhone || '', ident.externalId].filter(Boolean),
+                  }),
                   ...(ident.fbp && { fbp: ident.fbp }),
                   ...(ident.fbc && { fbc: ident.fbc }),
                 },
@@ -1073,6 +1079,9 @@ Deno.serve(async (req) => {
               email: customerEmail || undefined,
               phone: formattedPhone,
               first_name: customerName.split(' ')[0],
+              ...(ident.externalId && {
+                external_id: [formattedPhone || '', ident.externalId].filter(Boolean),
+              }),
               ...(ident.fbp && { fbp: ident.fbp }),
               ...(ident.fbc && { fbc: ident.fbc }),
             },
