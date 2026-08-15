@@ -12,6 +12,7 @@
 // inter_webhook_events.event_key: o Inter reenvia até receber 200.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { sendProactive } from "../_shared/whatsapp-provider.ts";
+import { sendWelcomeWhatsApp } from "../_shared/welcome-delivery.ts";
 import { normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
 import { retryCharge, MAX_RETRIES } from "../_shared/inter-cycles.ts";
 import { interFetch } from "../_shared/inter-pix.ts";
