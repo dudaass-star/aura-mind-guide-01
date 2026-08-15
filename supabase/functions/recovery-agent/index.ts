@@ -25,9 +25,12 @@ const corsHeaders = {
 
 const CHECKOUT_URL = "https://olaaura.com.br/v2/checkout?utm_source=whatsapp&utm_medium=recovery_agent&utm_campaign=auto_reply";
 const SUPPORT_EMAIL = "suporte@olaaura.com.br";
-const ALWAYS_CATEGORIES = ["preco", "garantia", "como_funciona", "pagamento", "seguranca", "beneficio"];
+const ALWAYS_CATEGORIES = [
+  "preco", "garantia", "como_funciona", "pagamento", "seguranca", "beneficio",
+  "duvida_tecnica", "objecao",
+];
 const HISTORY_LIMIT = 12;
-const MAX_KB_ITEMS = 12;
+const MAX_KB_ITEMS = 40;
 
 const STOP_WORDS = [
   /\batendente\b/i, /\bhumano\b/i, /\bpessoa de verdade\b/i,
