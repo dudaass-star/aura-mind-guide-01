@@ -141,6 +141,12 @@ Deno.serve(async (req) => {
   );
   const body = await req.json().catch(() => ({} as Record<string, unknown>));
   const dryRun = body.dry_run === true;
+  // Reparo pontual: reenvia o 1º aviso de mandato para uma assinatura mesmo que
+  // ela já esteja marcada como avisada. Serve para os casos em que o aviso
+  // "saiu" mas chegou quebrado (template sem o texto/link).
+  const resendMandateFor = typeof body.resend_mandate_step1_for === "string"
+    ? body.resend_mandate_step1_for
+    : null;
 
   const report: Record<string, unknown[]> = {
     entrada_pendente: [], mandato_pendente: [], recuperados: [], abandonados: [],
@@ -212,7 +218,9 @@ Deno.serve(async (req) => {
       // antes esse cliente simplesmente sumia em silêncio.
       if (entryPaid && !approved) {
         const age = daysSince(created);
-        const firstSent = !!sub.mandate_followup_sent_at;
+        const forceResend = !!resendMandateFor
+          && (sub.subscription_id === resendMandateFor || sub.id === resendMandateFor);
+        const firstSent = !!sub.mandate_followup_sent_at && !forceResend;
         const secondSent = !!sub.mandate_followup2_sent_at;
         const firstName = String(sub.customer_name || "").split(" ")[0] || "tudo bem";
         const link = sub.authorization_url || null;
