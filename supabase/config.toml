@@ -181,3 +181,5 @@ project_id = "uhyogifgmutfmbyhzzyo"
     verify_jwt = false
   [functions.debug-recovery-template]
     verify_jwt = false
+  [functions.welcome-safety-net]
+    verify_jwt = false

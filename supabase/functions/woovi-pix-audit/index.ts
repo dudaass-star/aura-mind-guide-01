@@ -65,13 +65,66 @@ async function replayToWebhook(payload: Record<string, unknown>): Promise<boolea
   }
 }
 
-async function notify(sub: Record<string, any>, text: string): Promise<boolean> {
+// deno-lint-ignore no-explicit-any
+type Supa = any;
+
+/**
+ * Follow-up proativo do trilho PIX.
+ *
+ * Cuidado importante: fora da janela de 24h o WhatsApp só aceita template, e o
+ * template `reconnect` carrega UMA variável (o primeiro nome) — o texto longo
+ * NÃO viaja nele. Antes, este follow-up mandava o texto direto e o cliente
+ * recebia só o envelope ("Estou de volta! 💜 there"), sem link nenhum, porque
+ * `sub.user_id` guarda profiles.id e não o user_id usado para resolver o nome.
+ *
+ * Agora: resolvemos o perfil de verdade (profiles.user_id), gravamos o texto em
+ * `pending_insight` com o marcador [CONTENT] — que o process-webhook-message
+ * entrega determinísticamente no clique do botão — e só então disparamos o
+ * template. Se a janela de 24h estiver aberta, o texto sai inteiro na hora.
+ */
+async function notify(supabase: Supa, sub: Record<string, any>, text: string): Promise<boolean> {
   const raw = (sub.customer_phone as string) || "";
   if (!raw) return false;
   const phone = normalizeBrazilianPhone(raw);
   if (!phone) return false;
+
+  let userId: string | undefined;
   try {
-    const res = await sendProactive(phone, text, "reconnect", sub.user_id || undefined);
+    let prof: { user_id: string } | null = null;
+    if (sub.user_id) {
+      const { data } = await supabase.from("profiles").select("user_id").eq("id", sub.user_id).maybeSingle();
+      prof = data ?? null;
+    }
+    if (!prof) {
+      const { data } = await supabase.from("profiles").select("user_id").eq("phone", phone).maybeSingle();
+      prof = data ?? null;
+    }
+    userId = prof?.user_id ?? undefined;
+  } catch (e) {
+    console.warn("[woovi-pix-audit] perfil não resolvido:", (e as Error).message);
+  }
+
+  if (userId) {
+    try {
+      await supabase.from("profiles")
+        .update({ pending_insight: `[CONTENT]${text}` })
+        .eq("user_id", userId);
+    } catch (e) {
+      console.warn("[woovi-pix-audit] pending_insight não gravado:", (e as Error).message);
+    }
+  }
+
+  try {
+    const res = await sendProactive(phone, text, "reconnect", userId);
+    if (!res?.success) {
+      await supabase.from("failed_message_log").insert({
+        function_name: "woovi-pix-audit",
+        user_id: userId ?? null,
+        phone,
+        content: text.slice(0, 2000),
+        error: (res?.error || "sem sucesso").slice(0, 1000),
+      }).then(() => {}, () => {});
+    }
     return !!res?.success;
   } catch (e) {
     console.warn("[woovi-pix-audit] follow-up falhou:", (e as Error).message);
@@ -88,6 +141,12 @@ Deno.serve(async (req) => {
   );
   const body = await req.json().catch(() => ({} as Record<string, unknown>));
   const dryRun = body.dry_run === true;
+  // Reparo pontual: reenvia o 1º aviso de mandato para uma assinatura mesmo que
+  // ela já esteja marcada como avisada. Serve para os casos em que o aviso
+  // "saiu" mas chegou quebrado (template sem o texto/link).
+  const resendMandateFor = typeof body.resend_mandate_step1_for === "string"
+    ? body.resend_mandate_step1_for
+    : null;
 
   const report: Record<string, unknown[]> = {
     entrada_pendente: [], mandato_pendente: [], recuperados: [], abandonados: [],
@@ -144,7 +203,7 @@ Deno.serve(async (req) => {
           + `não foi concluído — em alguns bancos ele aparece só na tela seguinte à autorização.\n\n`
           + (brCode ? `É só pagar este PIX pra liberar seu acesso agora:\n\n${brCode}` : "")
           + `\n\nSe preferir, me responde aqui que eu te ajudo.`;
-        const sent = dryRun ? true : await notify(sub, text);
+        const sent = dryRun ? true : await notify(supabase, sub, text);
         if (!dryRun && sent) {
           await supabase.from("woovi_subscriptions")
             .update({ entry_followup_sent_at: new Date().toISOString() }).eq("id", sub.id);
@@ -159,7 +218,9 @@ Deno.serve(async (req) => {
       // antes esse cliente simplesmente sumia em silêncio.
       if (entryPaid && !approved) {
         const age = daysSince(created);
-        const firstSent = !!sub.mandate_followup_sent_at;
+        const forceResend = !!resendMandateFor
+          && (sub.subscription_id === resendMandateFor || sub.id === resendMandateFor);
+        const firstSent = !!sub.mandate_followup_sent_at && !forceResend;
         const secondSent = !!sub.mandate_followup2_sent_at;
         const firstName = String(sub.customer_name || "").split(" ")[0] || "tudo bem";
         const link = sub.authorization_url || null;
@@ -171,7 +232,7 @@ Deno.serve(async (req) => {
             + `(costuma aparecer como "Pix Automático").\n\n`
             + (link ? `Você autoriza por aqui:\n${link}\n\n` : "")
             + `Sem isso sua assinatura não renova — e eu não quero te perder no meio do caminho.`;
-          const sent = dryRun ? true : await notify(sub, text);
+          const sent = dryRun ? true : await notify(supabase, sub, text);
           if (!dryRun && sent) {
             await supabase.from("woovi_subscriptions")
               .update({ mandate_followup_sent_at: new Date().toISOString() }).eq("id", sub.id);
@@ -186,7 +247,7 @@ Deno.serve(async (req) => {
             + `de R$ ${money(sub.value_cents)}/mês ainda não apareceu aqui.\n\n`
             + (link ? `É 1 minuto no app do banco:\n${link}\n\n` : "")
             + `Se não autorizar, seu acesso simplesmente para — e eu prefiro continuar com você.`;
-          const sent = dryRun ? true : await notify(sub, text);
+          const sent = dryRun ? true : await notify(supabase, sub, text);
           if (!dryRun && sent) {
             await supabase.from("woovi_subscriptions")
               .update({ mandate_followup2_sent_at: new Date().toISOString() }).eq("id", sub.id);
@@ -381,7 +442,7 @@ Deno.serve(async (req) => {
           "Se foi você que cancelou de propósito, tudo bem — só me avisa que eu paro de te lembrar.",
         ].join("\n\n");
         if (!dryRun) {
-          sent = await notify(sub, text);
+          sent = await notify(supabase, sub, text);
           await supabase.from("woovi_subscriptions")
             .update({ reauth_notified_at: new Date().toISOString() })
             .eq("id", sub.id);

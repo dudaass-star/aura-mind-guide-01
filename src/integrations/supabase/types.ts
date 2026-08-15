@@ -1912,6 +1912,7 @@ export type Database = {
           upgrade_refusal_type: string | null
           upgrade_suggested_at: string | null
           user_id: string
+          welcome_sent_at: string | null
           whatsapp_instance_id: string | null
           whatsapp_provider: string | null
           winback_d14_sent_at: string | null
@@ -1988,6 +1989,7 @@ export type Database = {
           upgrade_refusal_type?: string | null
           upgrade_suggested_at?: string | null
           user_id: string
+          welcome_sent_at?: string | null
           whatsapp_instance_id?: string | null
           whatsapp_provider?: string | null
           winback_d14_sent_at?: string | null
@@ -2064,6 +2066,7 @@ export type Database = {
           upgrade_refusal_type?: string | null
           upgrade_suggested_at?: string | null
           user_id?: string
+          welcome_sent_at?: string | null
           whatsapp_instance_id?: string | null
           whatsapp_provider?: string | null
           winback_d14_sent_at?: string | null

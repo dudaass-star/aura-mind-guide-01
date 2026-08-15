@@ -13,6 +13,7 @@
 // Idempotência: woovi_webhook_events.event_key. A Woovi reenvia até receber 200.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { sendProactive } from "../_shared/whatsapp-provider.ts";
+import { sendWelcomeWhatsApp, logWhatsappFailure } from "../_shared/welcome-delivery.ts";
 import { resolveMetaIdentity } from "../_shared/meta-identity.ts";
 import { sendOpenAiConversion } from "../_shared/openai-capi.ts";
 import { sendGa4Purchase } from "../_shared/ga4-purchase.ts";
@@ -440,19 +441,7 @@ async function activateAccess(
       .update({ pending_insight: `[WELCOME]${welcome}` }).eq("user_id", userId);
 
     if (phone) {
-      const templateText = `Olá, ${name}. Sua assinatura da Aura foi ativada com sucesso.`;
-      try {
-        let res = await sendProactive(phone, templateText, "welcome", userId);
-        if (!res.success) {
-          await new Promise((r) => setTimeout(r, 3000));
-          res = await sendProactive(phone, templateText, "welcome", userId);
-        }
-        console.log(res.success
-          ? `[webhook-woovi] ✅ welcome enviado via ${res.provider}`
-          : `[webhook-woovi] ❌ welcome falhou: ${res.error}`);
-      } catch (e) {
-        console.error("[webhook-woovi] erro no welcome WhatsApp:", e);
-      }
+      await sendWelcomeWhatsApp(supabase, { phone, name, userId, functionName: "webhook-woovi" });
     }
 
     if (email) {
@@ -683,6 +672,61 @@ Deno.serve(async (req) => {
               await supabase.from("profiles")
                 .update({ payment_failed_at: new Date().toISOString() })
                 .eq("id", sub.user_id);
+            }
+
+            // Mandato RECUSADO pelo banco com entrada já paga: o cliente tem
+            // acesso de 7 dias mas nenhuma renovação vai acontecer. Antes esse
+            // caso esperava a varredura genérica de "mandato pendente"; agora
+            // avisamos na hora, com o link de autorização, sem depender do cron.
+            if (REJECTED_STATUSES.includes(mandateStatus)
+                && sub.entry_paid_at && !sub.replaced_by_subscription_id
+                && !sub.mandate_followup_sent_at) {
+              const firstName = String(sub.customer_name || "").split(" ")[0] || "tudo bem";
+              const link = sub.authorization_url || null;
+              const text = `Oi, ${firstName}! Seu pagamento entrou e seu acesso já está liberado. `
+                + `Só que o seu banco não confirmou a autorização do débito automático de `
+                + `R$ ${((sub.value_cents || 0) / 100).toFixed(2).replace(".", ",")}/mês `
+                + `(costuma aparecer como "Pix Automático").\n\n`
+                + (link ? `Você autoriza por aqui:\n${link}\n\n` : "")
+                + `Sem isso sua assinatura não renova — e eu não quero te perder no meio do caminho.`;
+              const phoneR = sub.customer_phone ? normalizeBrazilianPhone(sub.customer_phone) : null;
+              if (phoneR) {
+                let uid: string | undefined;
+                if (sub.user_id) {
+                  const { data: p } = await supabase.from("profiles")
+                    .select("user_id").eq("id", sub.user_id).maybeSingle();
+                  uid = p?.user_id ?? undefined;
+                }
+                if (uid) {
+                  await supabase.from("profiles")
+                    .update({ pending_insight: `[CONTENT]${text}` }).eq("user_id", uid);
+                }
+                try {
+                  const r = await sendProactive(phoneR, text, "reconnect", uid);
+                  if (r?.success) {
+                    await supabase.from("woovi_subscriptions")
+                      .update({ mandate_followup_sent_at: new Date().toISOString() })
+                      .eq("id", sub.id);
+                    console.log(`[webhook-woovi] ✅ aviso de mandato recusado enviado (${sub.subscription_id})`);
+                  } else {
+                    await logWhatsappFailure(supabase, {
+                      functionName: "webhook-woovi",
+                      userId: uid ?? null,
+                      phone: phoneR,
+                      content: `[MANDATO_RECUSADO] ${text}`,
+                      error: r?.error ?? null,
+                    });
+                  }
+                } catch (e) {
+                  await logWhatsappFailure(supabase, {
+                    functionName: "webhook-woovi",
+                    userId: uid ?? null,
+                    phone: phoneR,
+                    content: `[MANDATO_RECUSADO] ${text}`,
+                    error: (e as Error)?.message,
+                  });
+                }
+              }
             }
           }
           await finishEvent(supabase, key);

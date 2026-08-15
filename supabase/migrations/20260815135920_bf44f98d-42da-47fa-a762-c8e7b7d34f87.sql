@@ -1,0 +1,2 @@
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS welcome_sent_at timestamptz;
+CREATE INDEX IF NOT EXISTS idx_profiles_welcome_pending ON public.profiles (created_at DESC) WHERE welcome_sent_at IS NULL;

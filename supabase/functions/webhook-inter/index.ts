@@ -12,6 +12,7 @@
 // inter_webhook_events.event_key: o Inter reenvia até receber 200.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { sendProactive } from "../_shared/whatsapp-provider.ts";
+import { sendWelcomeWhatsApp } from "../_shared/welcome-delivery.ts";
 import { normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
 import { retryCharge, MAX_RETRIES } from "../_shared/inter-cycles.ts";
 import { interFetch } from "../_shared/inter-pix.ts";
@@ -464,19 +465,7 @@ async function activateAccess(
       .eq("user_id", userId);
 
     if (phone) {
-      const templateText = `Olá, ${name}. Sua assinatura da Aura foi ativada com sucesso.`;
-      try {
-        let res = await sendProactive(phone, templateText, "welcome", userId);
-        if (!res.success) {
-          await new Promise((r) => setTimeout(r, 3000));
-          res = await sendProactive(phone, templateText, "welcome", userId);
-        }
-        console.log(res.success
-          ? `[webhook-inter] ✅ welcome enviado via ${res.provider}`
-          : `[webhook-inter] ❌ welcome falhou: ${res.error}`);
-      } catch (e) {
-        console.error("[webhook-inter] erro no welcome WhatsApp:", e);
-      }
+      await sendWelcomeWhatsApp(supabase, { phone, name, userId, functionName: "webhook-inter" });
     }
 
     if (email) {
