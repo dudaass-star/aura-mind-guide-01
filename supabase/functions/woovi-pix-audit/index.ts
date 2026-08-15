@@ -197,7 +197,7 @@ Deno.serve(async (req) => {
           + `não foi concluído — em alguns bancos ele aparece só na tela seguinte à autorização.\n\n`
           + (brCode ? `É só pagar este PIX pra liberar seu acesso agora:\n\n${brCode}` : "")
           + `\n\nSe preferir, me responde aqui que eu te ajudo.`;
-        const sent = dryRun ? true : await notify(sub, text);
+        const sent = dryRun ? true : await notify(supabase, sub, text);
         if (!dryRun && sent) {
           await supabase.from("woovi_subscriptions")
             .update({ entry_followup_sent_at: new Date().toISOString() }).eq("id", sub.id);
@@ -224,7 +224,7 @@ Deno.serve(async (req) => {
             + `(costuma aparecer como "Pix Automático").\n\n`
             + (link ? `Você autoriza por aqui:\n${link}\n\n` : "")
             + `Sem isso sua assinatura não renova — e eu não quero te perder no meio do caminho.`;
-          const sent = dryRun ? true : await notify(sub, text);
+          const sent = dryRun ? true : await notify(supabase, sub, text);
           if (!dryRun && sent) {
             await supabase.from("woovi_subscriptions")
               .update({ mandate_followup_sent_at: new Date().toISOString() }).eq("id", sub.id);
@@ -239,7 +239,7 @@ Deno.serve(async (req) => {
             + `de R$ ${money(sub.value_cents)}/mês ainda não apareceu aqui.\n\n`
             + (link ? `É 1 minuto no app do banco:\n${link}\n\n` : "")
             + `Se não autorizar, seu acesso simplesmente para — e eu prefiro continuar com você.`;
-          const sent = dryRun ? true : await notify(sub, text);
+          const sent = dryRun ? true : await notify(supabase, sub, text);
           if (!dryRun && sent) {
             await supabase.from("woovi_subscriptions")
               .update({ mandate_followup2_sent_at: new Date().toISOString() }).eq("id", sub.id);
@@ -434,7 +434,7 @@ Deno.serve(async (req) => {
           "Se foi você que cancelou de propósito, tudo bem — só me avisa que eu paro de te lembrar.",
         ].join("\n\n");
         if (!dryRun) {
-          sent = await notify(sub, text);
+          sent = await notify(supabase, sub, text);
           await supabase.from("woovi_subscriptions")
             .update({ reauth_notified_at: new Date().toISOString() })
             .eq("id", sub.id);
