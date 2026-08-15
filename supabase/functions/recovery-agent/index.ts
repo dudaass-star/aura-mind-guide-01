@@ -251,7 +251,9 @@ ${historyTxt}
 MENSAGEM ATUAL DO LEAD:
 "${text}"
 
-Responda agora em 1 a 3 frases. Termine com UMA das tags em linha separada: [ENVIAR_LINK], [ESCALAR_HUMANO], [STOP] ou nenhuma.`;
+Antes de escrever: identifique a trava (detalhe técnico / desconfiança / preço / insegurança sobre servir pra ela / recusa) e resolva SÓ essa.
+Estrutura: resposta objetiva → uma ponte curta ligada ao que ${nameTxt} disse → fechamento (link ou UMA pergunta de fechamento).
+Máximo 3 frases curtas. Termine com UMA das tags em linha separada: [ENVIAR_LINK], [ESCALAR_HUMANO], [STOP] ou nenhuma.`;
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
