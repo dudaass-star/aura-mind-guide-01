@@ -25,9 +25,12 @@ const corsHeaders = {
 
 const CHECKOUT_URL = "https://olaaura.com.br/v2/checkout?utm_source=whatsapp&utm_medium=recovery_agent&utm_campaign=auto_reply";
 const SUPPORT_EMAIL = "suporte@olaaura.com.br";
-const ALWAYS_CATEGORIES = ["preco", "garantia", "como_funciona", "pagamento", "seguranca", "beneficio"];
+const ALWAYS_CATEGORIES = [
+  "preco", "garantia", "como_funciona", "pagamento", "seguranca", "beneficio",
+  "duvida_tecnica", "objecao",
+];
 const HISTORY_LIMIT = 12;
-const MAX_KB_ITEMS = 12;
+const MAX_KB_ITEMS = 40;
 
 const STOP_WORDS = [
   /\batendente\b/i, /\bhumano\b/i, /\bpessoa de verdade\b/i,
@@ -248,7 +251,9 @@ ${historyTxt}
 MENSAGEM ATUAL DO LEAD:
 "${text}"
 
-Responda agora em 1 a 3 frases. Termine com UMA das tags em linha separada: [ENVIAR_LINK], [ESCALAR_HUMANO], [STOP] ou nenhuma.`;
+Antes de escrever: identifique a trava (detalhe técnico / desconfiança / preço / insegurança sobre servir pra ela / recusa) e resolva SÓ essa.
+Estrutura: resposta objetiva → uma ponte curta ligada ao que ${nameTxt} disse → fechamento (link ou UMA pergunta de fechamento).
+Máximo 3 frases curtas. Termine com UMA das tags em linha separada: [ENVIAR_LINK], [ESCALAR_HUMANO], [STOP] ou nenhuma.`;
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
