@@ -4,6 +4,7 @@ import { allocateInstance } from "../_shared/instance-helper.ts";
 import { resolveProfile } from "../_shared/profile-resolver.ts";
 import { getPhoneVariations, normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
 import { sendProactive } from "../_shared/whatsapp-provider.ts";
+import { sendWelcomeWhatsApp } from "../_shared/welcome-delivery.ts";
 import { resolveMetaIdentity } from "../_shared/meta-identity.ts";
 import { sendOpenAiConversion } from "../_shared/openai-capi.ts";
 import { fireSubscribeConversion } from "../_shared/meta-subscribe.ts";
