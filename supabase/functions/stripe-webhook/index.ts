@@ -681,28 +681,12 @@ Deno.serve(async (req) => {
           }
 
           // Send short template via WhatsApp (user will click "Começar" to open window)
-          const templateText = `Olá, ${customerName}. Sua assinatura da Aura foi ativada com sucesso.`;
-          try {
-            let result = await sendProactive(formattedPhone, templateText, 'welcome', profileUserId);
-            if (!result.success) {
-              console.warn('⚠️ First welcome template attempt failed, retrying in 3s:', result.error);
-              await new Promise(resolve => setTimeout(resolve, 3000));
-              result = await sendProactive(formattedPhone, templateText, 'welcome', profileUserId);
-            }
-            if (result.success) {
-              console.log('✅ Welcome template sent via', result.provider);
-            } else {
-              console.error('❌ Failed to send welcome template after retry:', result.error);
-            }
-          } catch (sendError) {
-            console.error('❌ Error sending welcome template:', sendError);
-            try {
-              await new Promise(resolve => setTimeout(resolve, 3000));
-              await sendProactive(formattedPhone, templateText, 'welcome', profileUserId);
-            } catch (retryErr) {
-              console.error('❌ Welcome template retry exception:', retryErr);
-            }
-          }
+          await sendWelcomeWhatsApp(supabase, {
+            phone: formattedPhone,
+            name: customerName,
+            userId: profileUserId,
+            functionName: 'stripe-webhook',
+          });
 
           // Send welcome email as backup (in case WhatsApp template is pending)
           if (customerEmail) {
@@ -1009,28 +993,12 @@ Deno.serve(async (req) => {
       }
 
       // Send short template via WhatsApp
-      const templateText2 = `Olá, ${customerName}. Sua assinatura da Aura foi ativada com sucesso.`;
-      try {
-        let result = await sendProactive(formattedPhone, templateText2, 'welcome', profileUserId);
-        if (!result.success) {
-          console.warn('⚠️ First welcome template attempt failed, retrying in 3s:', result.error);
-          await new Promise(resolve => setTimeout(resolve, 3000));
-          result = await sendProactive(formattedPhone, templateText2, 'welcome', profileUserId);
-        }
-        if (result.success) {
-          console.log(`✅ ${isUpgrade ? 'Upgrade' : 'Welcome'} template sent via ${result.provider}!`);
-        } else {
-          console.error('❌ Failed to send welcome template after retry:', result.error);
-        }
-      } catch (sendError) {
-        console.error('❌ Error sending welcome template:', sendError);
-        try {
-          await new Promise(resolve => setTimeout(resolve, 3000));
-          await sendProactive(formattedPhone, templateText2, 'welcome', profileUserId);
-        } catch (retryErr) {
-          console.error('❌ Welcome template retry exception:', retryErr);
-        }
-      }
+      await sendWelcomeWhatsApp(supabase, {
+        phone: formattedPhone,
+        name: customerName,
+        userId: profileUserId,
+        functionName: 'stripe-webhook',
+      });
 
       // Send welcome email as backup
       if (customerEmail) {
