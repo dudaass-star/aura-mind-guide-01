@@ -673,6 +673,61 @@ Deno.serve(async (req) => {
                 .update({ payment_failed_at: new Date().toISOString() })
                 .eq("id", sub.user_id);
             }
+
+            // Mandato RECUSADO pelo banco com entrada já paga: o cliente tem
+            // acesso de 7 dias mas nenhuma renovação vai acontecer. Antes esse
+            // caso esperava a varredura genérica de "mandato pendente"; agora
+            // avisamos na hora, com o link de autorização, sem depender do cron.
+            if (REJECTED_STATUSES.includes(mandateStatus)
+                && sub.entry_paid_at && !sub.replaced_by_subscription_id
+                && !sub.mandate_followup_sent_at) {
+              const firstName = String(sub.customer_name || "").split(" ")[0] || "tudo bem";
+              const link = sub.authorization_url || null;
+              const text = `Oi, ${firstName}! Seu pagamento entrou e seu acesso já está liberado. `
+                + `Só que o seu banco não confirmou a autorização do débito automático de `
+                + `R$ ${((sub.value_cents || 0) / 100).toFixed(2).replace(".", ",")}/mês `
+                + `(costuma aparecer como "Pix Automático").\n\n`
+                + (link ? `Você autoriza por aqui:\n${link}\n\n` : "")
+                + `Sem isso sua assinatura não renova — e eu não quero te perder no meio do caminho.`;
+              const phoneR = sub.customer_phone ? normalizeBrazilianPhone(sub.customer_phone) : null;
+              if (phoneR) {
+                let uid: string | undefined;
+                if (sub.user_id) {
+                  const { data: p } = await supabase.from("profiles")
+                    .select("user_id").eq("id", sub.user_id).maybeSingle();
+                  uid = p?.user_id ?? undefined;
+                }
+                if (uid) {
+                  await supabase.from("profiles")
+                    .update({ pending_insight: `[CONTENT]${text}` }).eq("user_id", uid);
+                }
+                try {
+                  const r = await sendProactive(phoneR, text, "reconnect", uid);
+                  if (r?.success) {
+                    await supabase.from("woovi_subscriptions")
+                      .update({ mandate_followup_sent_at: new Date().toISOString() })
+                      .eq("id", sub.id);
+                    console.log(`[webhook-woovi] ✅ aviso de mandato recusado enviado (${sub.subscription_id})`);
+                  } else {
+                    await logWhatsappFailure(supabase, {
+                      functionName: "webhook-woovi",
+                      userId: uid ?? null,
+                      phone: phoneR,
+                      content: `[MANDATO_RECUSADO] ${text}`,
+                      error: r?.error ?? null,
+                    });
+                  }
+                } catch (e) {
+                  await logWhatsappFailure(supabase, {
+                    functionName: "webhook-woovi",
+                    userId: uid ?? null,
+                    phone: phoneR,
+                    content: `[MANDATO_RECUSADO] ${text}`,
+                    error: (e as Error)?.message,
+                  });
+                }
+              }
+            }
           }
           await finishEvent(supabase, key);
         } catch (e) {
