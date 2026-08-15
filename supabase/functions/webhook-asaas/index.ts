@@ -7,6 +7,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { resolveProfile } from "../_shared/profile-resolver.ts";
 import { normalizeBrazilianPhone } from "../_shared/zapi-client.ts";
 import { sendProactive } from "../_shared/whatsapp-provider.ts";
+import { sendWelcomeWhatsApp } from "../_shared/welcome-delivery.ts";
 import { reconcileOrphanPayments } from "../_shared/asaas-reconcile.ts";
 import { resolveMetaIdentity } from "../_shared/meta-identity.ts";
 import { sendOpenAiConversion } from "../_shared/openai-capi.ts";
@@ -1390,22 +1391,12 @@ async function handleActivation(
           console.error("[webhook-asaas] ❌ Erro welcome back:", e);
         }
       } else {
-        const templateText = `Olá, ${customerName}. Sua assinatura da Aura foi ativada com sucesso.`;
-        try {
-          let res = await sendProactive(formattedPhone, templateText, "welcome", profileUserId);
-          if (!res.success) {
-            console.warn("[webhook-asaas] ⚠️ Welcome template falhou, retry 3s:", res.error);
-            await new Promise((r) => setTimeout(r, 3000));
-            res = await sendProactive(formattedPhone, templateText, "welcome", profileUserId);
-          }
-          if (res.success) {
-            console.log("[webhook-asaas] ✅ Welcome template enviado via", res.provider);
-          } else {
-            console.error("[webhook-asaas] ❌ Welcome template falhou após retry:", res.error);
-          }
-        } catch (e) {
-          console.error("[webhook-asaas] ❌ Erro welcome template:", e);
-        }
+        await sendWelcomeWhatsApp(supabase, {
+          phone: formattedPhone,
+          name: customerName,
+          userId: profileUserId,
+          functionName: "webhook-asaas",
+        });
       }
     } else {
       console.warn("[webhook-asaas] ⚠️ Sem telefone — pulando template WhatsApp");
