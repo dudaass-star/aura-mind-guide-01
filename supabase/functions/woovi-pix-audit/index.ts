@@ -65,13 +65,66 @@ async function replayToWebhook(payload: Record<string, unknown>): Promise<boolea
   }
 }
 
-async function notify(sub: Record<string, any>, text: string): Promise<boolean> {
+// deno-lint-ignore no-explicit-any
+type Supa = any;
+
+/**
+ * Follow-up proativo do trilho PIX.
+ *
+ * Cuidado importante: fora da janela de 24h o WhatsApp só aceita template, e o
+ * template `reconnect` carrega UMA variável (o primeiro nome) — o texto longo
+ * NÃO viaja nele. Antes, este follow-up mandava o texto direto e o cliente
+ * recebia só o envelope ("Estou de volta! 💜 there"), sem link nenhum, porque
+ * `sub.user_id` guarda profiles.id e não o user_id usado para resolver o nome.
+ *
+ * Agora: resolvemos o perfil de verdade (profiles.user_id), gravamos o texto em
+ * `pending_insight` com o marcador [CONTENT] — que o process-webhook-message
+ * entrega determinísticamente no clique do botão — e só então disparamos o
+ * template. Se a janela de 24h estiver aberta, o texto sai inteiro na hora.
+ */
+async function notify(supabase: Supa, sub: Record<string, any>, text: string): Promise<boolean> {
   const raw = (sub.customer_phone as string) || "";
   if (!raw) return false;
   const phone = normalizeBrazilianPhone(raw);
   if (!phone) return false;
+
+  let userId: string | undefined;
   try {
-    const res = await sendProactive(phone, text, "reconnect", sub.user_id || undefined);
+    let prof: { user_id: string } | null = null;
+    if (sub.user_id) {
+      const { data } = await supabase.from("profiles").select("user_id").eq("id", sub.user_id).maybeSingle();
+      prof = data ?? null;
+    }
+    if (!prof) {
+      const { data } = await supabase.from("profiles").select("user_id").eq("phone", phone).maybeSingle();
+      prof = data ?? null;
+    }
+    userId = prof?.user_id ?? undefined;
+  } catch (e) {
+    console.warn("[woovi-pix-audit] perfil não resolvido:", (e as Error).message);
+  }
+
+  if (userId) {
+    try {
+      await supabase.from("profiles")
+        .update({ pending_insight: `[CONTENT]${text}` })
+        .eq("user_id", userId);
+    } catch (e) {
+      console.warn("[woovi-pix-audit] pending_insight não gravado:", (e as Error).message);
+    }
+  }
+
+  try {
+    const res = await sendProactive(phone, text, "reconnect", userId);
+    if (!res?.success) {
+      await supabase.from("failed_message_log").insert({
+        function_name: "woovi-pix-audit",
+        user_id: userId ?? null,
+        phone,
+        content: text.slice(0, 2000),
+        error: (res?.error || "sem sucesso").slice(0, 1000),
+      }).then(() => {}, () => {});
+    }
     return !!res?.success;
   } catch (e) {
     console.warn("[woovi-pix-audit] follow-up falhou:", (e as Error).message);
