@@ -464,19 +464,7 @@ async function activateAccess(
       .eq("user_id", userId);
 
     if (phone) {
-      const templateText = `Olá, ${name}. Sua assinatura da Aura foi ativada com sucesso.`;
-      try {
-        let res = await sendProactive(phone, templateText, "welcome", userId);
-        if (!res.success) {
-          await new Promise((r) => setTimeout(r, 3000));
-          res = await sendProactive(phone, templateText, "welcome", userId);
-        }
-        console.log(res.success
-          ? `[webhook-inter] ✅ welcome enviado via ${res.provider}`
-          : `[webhook-inter] ❌ welcome falhou: ${res.error}`);
-      } catch (e) {
-        console.error("[webhook-inter] erro no welcome WhatsApp:", e);
-      }
+      await sendWelcomeWhatsApp(supabase, { phone, name, userId, functionName: "webhook-inter" });
     }
 
     if (email) {
