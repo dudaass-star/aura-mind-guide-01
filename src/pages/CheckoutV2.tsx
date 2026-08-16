@@ -2029,6 +2029,25 @@ const CheckoutV2 = () => {
                 </DialogHeader>
 
                 <div className="space-y-3 sm:space-y-4 pt-2">
+                  {/* Trava nº1 do PIX Automático: o banco mostra o valor cheio do
+                      plano e o lead entende como cobrança de agora. Deixa explícito
+                      o que sai hoje e o que é só autorização. */}
+                  {pixData.trial && pixData.recurringAmount ? (
+                    <div className="bg-[hsl(140_30%_45%)]/15 border border-[hsl(140_30%_60%)]/35 rounded-xl p-3 text-xs text-white/85 leading-relaxed">
+                      Hoje sai só{" "}
+                      <strong className="text-[hsl(140_30%_78%)]">
+                        R$ {pixData.amount.toFixed(2).replace(".", ",")}
+                      </strong>
+                      . O valor de{" "}
+                      <strong>R$ {pixData.recurringAmount.toFixed(2).replace(".", ",")}</strong>{" "}
+                      que o app do banco mostra é a autorização das próximas mensalidades — só
+                      entra
+                      {pixData.firstRecurringChargeDate
+                        ? ` em ${new Date(`${pixData.firstRecurringChargeDate}T12:00:00`).toLocaleDateString("pt-BR")}`
+                        : " no 8º dia"}
+                      , e você pode cancelar antes sem pagar nada.
+                    </div>
+                  ) : null}
                   <div className="bg-white rounded-xl p-3 sm:p-4 flex justify-center">
                     <img
                       // Asaas devolve base64 puro; o Inter devolve data URI de SVG já pronto.
