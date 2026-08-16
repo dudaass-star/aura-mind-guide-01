@@ -32,6 +32,47 @@ const ALWAYS_CATEGORIES = [
 const HISTORY_LIMIT = 12;
 const MAX_KB_ITEMS = 40;
 
+/**
+ * Valores por plano, alinhados a `src/pages/CheckoutV2.tsx` (1ª semana) e
+ * `src/lib/plan-pricing.ts` (mensal). Ficam aqui pra que o agente fale sempre
+ * o número do plano DAQUELE lead, em vez de número chumbado no prompt.
+ */
+const PLAN_VALUES: Record<string, { label: string; trial: string; monthly: string }> = {
+  essencial: { label: "Essencial", trial: "6,90", monthly: "29,90" },
+  direcao: { label: "Direção", trial: "9,90", monthly: "49,90" },
+  transformacao: { label: "Transformação", trial: "19,90", monthly: "79,90" },
+};
+
+function normalizePlanKey(plan?: string | null): string | null {
+  if (!plan) return null;
+  const p = plan.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if (p.includes("essencial")) return "essencial";
+  if (p.includes("direcao")) return "direcao";
+  if (p.includes("transforma")) return "transformacao";
+  return null;
+}
+
+/** Bloco de valores concretos do plano escolhido (só o mensal tem 1ª semana). */
+function renderPlanValues(plan?: string | null, billing?: string | null): string {
+  const key = normalizePlanKey(plan);
+  if (!key) {
+    return `- Plano não identificado no checkout: NÃO cite valor específico. Se o lead perguntar preço, pergunte qual plano ele quer ou use a faixa da base.`;
+  }
+  const v = PLAN_VALUES[key];
+  const isMonthly = !billing || /month|mensal/i.test(billing);
+  if (!isMonthly) {
+    return `- Plano: ${v.label} (ciclo ${billing}). Ciclo longo NÃO tem 1ª semana promocional: é pagamento à vista do ciclo. Valor mensal cheio de referência: R$ ${v.monthly}. Use os valores por mês do ciclo que estão na base.`;
+  }
+  const firstCharge = new Date(Date.now() + 7 * 86400000).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+  return [
+    `- Plano: ${v.label} mensal.`,
+    `- Sai HOJE (1ª semana): R$ ${v.trial}.`,
+    `- Valor que o app do banco mostra como autorização (mensalidade): R$ ${v.monthly} — NÃO é cobrado hoje.`,
+    `- 1º débito do valor cheio: 8º dia (por volta de ${firstCharge}). Cancelando antes, não paga nada.`,
+    `- Use SOMENTE esses números. Nunca cite valor de outro plano.`,
+  ].join("\n");
+}
+
 const STOP_WORDS = [
   /\batendente\b/i, /\bhumano\b/i, /\bpessoa de verdade\b/i,
   /\bn[aã]o quero\b/i, /\bpara de me mandar\b/i, /\bparem? de mandar\b/i,
@@ -242,6 +283,10 @@ ${renderKb(kbItems)}
 CONTEXTO DO CHECKOUT:
 - Nome: ${nameTxt}
 - Plano iniciado: ${planTxt}
+
+VALORES DO PLANO DESTE LEAD:
+${renderPlanValues(checkout?.plan, checkout?.billing)}
+
 - Link pra retomar (envie SOMENTE se emitir [ENVIAR_LINK]): ${CHECKOUT_URL}
 - Email de suporte: ${SUPPORT_EMAIL}
 
@@ -251,9 +296,10 @@ ${historyTxt}
 MENSAGEM ATUAL DO LEAD:
 "${text}"
 
-Antes de escrever: identifique a trava (detalhe técnico / desconfiança / preço / insegurança sobre servir pra ela / recusa) e resolva SÓ essa.
-Estrutura: resposta objetiva → uma ponte curta ligada ao que ${nameTxt} disse → fechamento (link ou UMA pergunta de fechamento).
-Máximo 3 frases curtas. Termine com UMA das tags em linha separada: [ENVIAR_LINK], [ESCALAR_HUMANO], [STOP] ou nenhuma.`;
+Antes de escrever: identifique a trava real de ${nameTxt} e defina O QUE essa mensagem precisa fazer o lead entender ou sentir. Escreva com suas próprias palavras, ancorado no que ele acabou de dizer — sem abertura padrão, sem bordão, sem repetir formulação já usada no histórico.
+Se a trava envolve cobrança, deixe claro o valor que sai hoje e que o valor cheio é autorização futura, usando os números do bloco acima.
+Curto e humano: até 5 frases quando for explicação de PIX Automático, menos nos outros casos.
+Termine com UMA das tags em linha separada: [ENVIAR_LINK], [ESCALAR_HUMANO], [STOP] ou nenhuma.`;
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
