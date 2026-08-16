@@ -1,54 +1,50 @@
-# Avaliação das respostas do agente no lead Giovani (e correções)
+# Agente de recuperação: explicar o PIX Automático de forma humana e tranquilizadora
 
-## O que aconteceu (verificado no banco)
+## O que a conversa do Alberto mostra
 
-Thread: checkout do **Essencial mensal** iniciado 15/08 13:33, template de 15min às 16:50, lead responde às 17:03.
+O lead disse duas coisas, na ordem:
+1. "era um valor menor para fazer uma experiência" → ele quer **testar**.
+2. "quando eu avanço com o Pix dá valor de 29 daí não quero" → ele viu **R$ 29,90 na tela do banco** e entendeu como cobrança de agora.
 
-| Hora | Quem | Mensagem |
-|---|---|---|
-| 17:03 | Giovani | "Pagamentos recorrentes" |
-| 17:03 | Agente | Explica o Pix Automático + link com UTM cru |
-| 17:04 | Giovani | "Assim não" |
-| 17:04 | Agente | "O Pix Automático não te prende…" + **o mesmo link de novo** |
+O agente respondeu com preço + link. Correto nos fatos, frio na comunicação: não disse a frase que resolve tudo ("hoje sai R$ 6,90; o 29,90 que o banco mostra é só a autorização, e ela só roda no 8º dia"), não tranquilizou, não falou de experimentar, e não ofereceu cartão a quem torceu o nariz pro débito automático. Foi a mensagem manual do admin que fez esse trabalho.
 
-## Diagnóstico das respostas
-
-**1. "Assim não" foi tratado como dúvida, não como objeção.** É a falha central. O lead disse que *aquele formato* não serve pra ele — recorrência automática. O agente ignorou o sinal, repetiu o argumento de risco (que ele não pediu) e reenviou o mesmo link. O próprio prompt proíbe isso ("se ela não avança, NÃO repita o mesmo argumento"), mas nada no fluxo detecta recusa parcial: só há [STOP] para recusa total.
-
-**2. Nunca ofereceu a alternativa óbvia.** Quem rejeita débito automático quer **cartão** (ou outro ciclo). A resposta certa em uma frase: "prefere no cartão então?" — existe no prompt como pergunta de fechamento, mas o modelo preferiu argumentar.
-
-**3. Faltou o número concreto.** Duas mensagens falando de "1ª semana promocional" sem dizer **R$ 6,90** e sem nomear o plano que ele já escolheu (Essencial). Valor concreto destrava mais que argumento.
-
-**4. Nenhuma pergunta em duas mensagens.** Mensagem 1 já veio com link, para um input de 2 palavras e ambíguo. Vira monólogo de vendedor.
-
-**5. Higiene de link.** Link cru com `utm_source=...&utm_medium=recovery_agent&utm_campaign=auto_reply` duas vezes em 60 segundos. Parece robô e cheira a spam.
-
-**6. Bug real de telefone (não é o LLM).** O webhook grava o inbound como `555184068922` (sem o 9) enquanto o template saiu para `5551984068922`. Resultado: **duas conversas** para o mesmo lead e o agente lendo histórico só do número truncado — ele não viu o template que a própria Aura mandou. Vai voltar a acontecer com qualquer lead do RS/DDD com esse formato.
+Duas causas, as duas corrigíveis:
+- **A base não tem o item da dúvida real.** Existe item sobre "o que é Pix Automático" e sobre quando debita, mas nenhum que ataque de frente "apareceu R$ 29,90 na tela, vou ser cobrado agora?".
+- **O prompt manda ser preciso e seco.** Ele diz literalmente "precisão vence simpatia", "não explore sentimento", "máximo 3 frases", e não pede o número concreto do que sai hoje. O resultado é o robô que você viu.
 
 ## O que vai ser feito
 
-### 1. Detecção de recusa parcial (deterministe, no backend)
-Padrões como "assim não", "não quero automático", "não gosto de débito automático", "sem recorrência" passam a marcar a mensagem como `partial_refusal` e injetar no prompt uma instrução obrigatória: **oferecer o caminho alternativo (cartão) em UMA pergunta curta, sem link e sem repetir argumento**.
+### 1. Base de conhecimento: os itens que faltam sobre PIX Automático
+Novos itens em `duvida_tecnica`, na linguagem de quem está com o app do banco aberto:
+- "Apareceu R$ 29,90 na tela do banco — vou pagar isso agora?" → não: hoje sai só a 1ª semana; o valor do plano é a autorização e só entra no 8º dia. Prioridade máxima.
+- "Vi dois valores na tela, é cobrança dupla?" → um é o pagamento da semana, o outro é o mandato.
+- "É seguro autorizar cobrança automática no meu banco?" → é o Pix Automático do Banco Central, revogável por você no app, sem fidelidade.
+- "Não quero débito automático" → caminho do cartão, mesma 1ª semana promocional, sem autorização de banco.
+- "Se eu cancelar dentro dos 7 dias, o banco debita?" → não; a autorização morre com o cancelamento.
 
-### 2. Anti-repetição e higiene de link
-- Não reenviar o link se já foi enviado nas últimas 2 mensagens de saída — nesses casos só pergunta de fechamento.
-- Link encurtado/limpo (`https://olaaura.com.br/v2/checkout` com os UTMs preservados, mas exibidos em linha separada e uma única vez por conversa).
-- Bloquear resposta que repita mais de ~60% do conteúdo da última mensagem enviada (fallback: pergunta de fechamento).
+Ajustar também os itens de `garantia`/`pagamento` para sempre trazerem **o valor concreto de hoje** por plano (6,90 / 9,90 / 19,90), em vez de "1ª semana promocional".
 
-### 3. Preço e plano concretos no prompt
-Injetar no contexto o plano/ciclo do checkout com o **valor da 1ª semana e o valor cheio** (Essencial 6,90 → 29,90; Direção 9,90 → 49,90; Transformação 19,90 → 79,90), com instrução de citar o número quando falar de preço/semana promocional.
+### 2. Prompt do agente: mesma verdade, comunicação de gente
+Reescrever o `system_prompt` de `recovery_agent_config` mantendo todas as travas de verdade (nada inventado, sem upsell, sem atendimento humano, sem terapia) e mudando a **forma**:
+- **Número primeiro**: quando a trava envolve preço ou cobrança, a 1ª frase diz o que sai hoje e o que **não** é cobrado agora. Nunca falar "1ª semana promocional" sem o valor.
+- **Anti-robô**: usar as palavras do lead ("experiência", "testar") de volta e nomear a sensação em uma frase curta ("faz sentido estranhar, é função nova de banco") antes do fato. Proibido abrir com preço puro quando a mensagem tem hesitação.
+- **Experiência, não compra**: a semana é pra testar a conversa real; o compromisso é de 7 dias, não de mês.
+- **Tranquilizar com fato, não com adjetivo**: sem cobrança se cancelar antes do 8º dia, cancelamento em 1 minuto no site, autorização revogável no app do banco — um por mensagem, o que casa com a trava.
+- **Cartão como saída**: se o lead resistir ao débito automático, oferecer cartão com a mesma 1ª semana em vez de reenviar o link do PIX.
+- **Nunca repetir link/argumento**: se o link já foi enviado e surgiu nova objeção, resolver a objeção e fechar com pergunta.
+- Teto de 3 frases vira **até 5 frases curtas** quando a trava é compreensão do PIX Automático — a mensagem do admin que funcionou tinha 5.
+- "Precisão vence simpatia" vira "precisão **com** acolhimento".
 
-### 4. Uma pergunta antes do pitch em input ambíguo
-Mensagem de entrada com ≤ 3 palavras que não é saudação (ex.: "Pagamentos recorrentes", "Assim não") → responder objetivamente e terminar com **pergunta**, sem tag de link.
-
-### 5. Corrigir a duplicação de telefone
-- `webhook-twilio-recovery`: normalizar com `normalizeBrazilianPhone` antes de gravar mensagem e conversa (chave canônica 13 dígitos).
-- `recovery-agent`: buscar histórico e conversa por `getPhoneVariations` em vez de `eq`.
-- Migração única mesclando as conversas duplicadas existentes (mensagens repontadas para o número canônico, contadores somados).
+### 3. Checkout: uma linha a mais no modal do PIX
+Na tela do QR, uma linha destacada acima das instruções: "Hoje sai R$ X,90. O R$ 29,90 que o banco mostra é a autorização das próximas mensalidades — só entra no 8º dia." Mesmo texto do agente, pra quem não abandona também não se assustar.
 
 ## Detalhes técnicos
-- `supabase/functions/recovery-agent/index.ts`: novos regex `PARTIAL_REFUSAL`, cálculo de `linkRecentlySent` e similaridade com a última saída, bloco `PLANO E VALORES` no `contextBlock`, histórico via `.in("phone", getPhoneVariations(phone))`.
-- `supabase/functions/webhook-twilio-recovery/index.ts`: `const cleanPhone = normalizeBrazilianPhone(extractPhone(from))`.
-- `recovery_agent_config.system_prompt`: acrescentar a regra de recusa parcial (trocar de trilho, não argumentar) e a de citar valor concreto; manter o resto.
-- Preços vindos de `src/lib/plan-pricing.ts` + mapa de trial do `CheckoutV2.tsx`, replicados na KB (`preco`).
-- Nada muda em quiet hours, `max_auto_replies` (3), guardas de usuário ativo ou Twilio.
+- `INSERT` dos novos itens em `recovery_knowledge_base` (`duvida_tecnica`, prioridade 96-99 no item do "R$ 29,90") e `UPDATE` nos itens de garantia/pagamento com valores por plano. `duvida_tecnica` já está em `ALWAYS_CATEGORIES`, então entram em todo prompt.
+- `UPDATE recovery_agent_config SET system_prompt = ... WHERE id = 1` — sem mexer em `enabled`, `model`, `max_auto_replies`, silent hours.
+- `supabase/functions/recovery-agent/index.ts`: só o rodapé do `contextBlock` (pedir o valor de hoje na 1ª frase quando a trava for cobrança; permitir até 5 frases). Nenhuma mudança de fluxo/guardas.
+- Copy em `src/pages/CheckoutV2.tsx` (bloco do QR PIX, ~linhas 2013 e 2099), usando `currentPlan.trialPrice` e `currentPrice` já disponíveis.
+- Fonte de verdade dos valores: `src/lib/plan-pricing.ts` + mapa de trial do `CheckoutV2.tsx`.
+- Memória do projeto atualizada com a regra "valor de hoje sempre explícito" na comunicação de PIX Automático.
+
+## Fora do escopo (posso fazer depois)
+O bug do telefone gravado sem o 9 (`555184068922` vs `5551984068922`), que duplicou a conversa no inbox e escondeu histórico do agente.
