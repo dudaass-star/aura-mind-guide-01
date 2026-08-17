@@ -403,7 +403,10 @@ Deno.serve(async (req) => {
 
         const liveSubs: Stripe.Subscription[] = [];
         for (const cid of dupCustomers.keys()) {
-          for (const st of ['active', 'trialing'] as const) {
+          // `past_due`/`unpaid` também são assinaturas vivas: se ficarem de fora,
+          // uma cobrança antiga em dunning segue cobrando em paralelo à nova
+          // (caso Beatriz, 17/08/2026 — R$ 49,90 + R$ 59,70 no mesmo minuto).
+          for (const st of ['active', 'trialing', 'past_due', 'unpaid'] as const) {
             const list = await stripe.subscriptions.list({ customer: cid, status: st, limit: 10 });
             liveSubs.push(...list.data);
           }
@@ -416,12 +419,24 @@ Deno.serve(async (req) => {
           console.error('🚨 Duplicate active subscriptions detected', {
             email: dupEmail,
             keep: keep.id,
-            cancel: drop.map((s) => s.id),
+            cancel: drop.map((s) => `${s.id}:${s.status}`),
           });
           for (const s of drop) {
             try {
               await stripe.subscriptions.cancel(s.id, { invoice_now: false, prorate: false });
               console.log('🧹 Duplicate subscription canceled:', s.id);
+              // Fatura em aberto da assinatura duplicada é anulada: sem isso o
+              // dunning cobra a fatura atrasada com o cartão recém-cadastrado.
+              try {
+                const openInvoices = await stripe.invoices.list({ subscription: s.id, status: 'open', limit: 10 });
+                for (const inv of openInvoices.data) {
+                  if (!inv.id) continue;
+                  await stripe.invoices.voidInvoice(inv.id);
+                  console.log('🧾 Fatura aberta da duplicata anulada:', inv.id);
+                }
+              } catch (voidErr) {
+                console.warn('⚠️ Falha ao anular fatura aberta da duplicata:', s.id, voidErr);
+              }
             } catch (cancelErr) {
               console.error('❌ Failed to cancel duplicate subscription', s.id, cancelErr);
             }
@@ -430,7 +445,7 @@ Deno.serve(async (req) => {
             await supabase.from('failed_message_log').insert({
               function_name: 'stripe-webhook',
               phone: dupPhoneRaw || null,
-              content: `duplicate_stripe_subscription | email=${dupEmail || '-'} | kept=${keep.id} | canceled=${drop.map((s) => s.id).join(',')}`,
+              content: `duplicate_stripe_subscription | email=${dupEmail || '-'} | kept=${keep.id} | canceled=${drop.map((s) => `${s.id}:${s.status}`).join(',')}`,
               error: 'duplicate_stripe_subscription',
             });
           } catch (_) { /* auditoria best-effort */ }
@@ -1821,8 +1836,25 @@ Me conta: como você está hoje?`;
         const detectedTier = priceId ? (RETENTION_TIER_BY_PRICE[priceId] ?? null) : null;
         if (detected && ['active', 'trialing', 'past_due'].includes(subscription.status)) {
           const customerId = subscription.customer as string;
-          const customer = await stripe.customers.retrieve(customerId);
-          if (!customer.deleted) {
+          // Guarda contra regressão de plano: se o cliente tem uma assinatura
+          // viva MAIS RECENTE, este evento é de uma assinatura antiga (dunning,
+          // cancelamento em curso) e não deve sobrescrever o plano novo.
+          let isStale = false;
+          try {
+            const liveNow: Stripe.Subscription[] = [];
+            for (const st of ['active', 'trialing', 'past_due', 'unpaid'] as const) {
+              const l = await stripe.subscriptions.list({ customer: customerId, status: st, limit: 10 });
+              liveNow.push(...l.data);
+            }
+            isStale = liveNow.some((s) => s.id !== subscription.id && s.created > subscription.created);
+          } catch (staleErr) {
+            console.warn('⚠️ Checagem de assinatura mais recente falhou:', staleErr);
+          }
+          if (isStale) {
+            console.log(`⏭️ Plan/cycle sync ignorado — ${subscription.id} não é a assinatura mais recente do cliente`);
+          }
+          const customer = isStale ? null : await stripe.customers.retrieve(customerId);
+          if (customer && !customer.deleted) {
             const { profile } = await resolveProfileFromCustomer(supabase, customer as Stripe.Customer);
             const tierChanged = profile && ((profile.plan_tier ?? null) !== detectedTier);
             if (profile && (profile.plan !== detected.plan || profile.billing_cycle !== detected.billing_cycle || tierChanged)) {

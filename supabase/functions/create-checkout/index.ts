@@ -269,16 +269,27 @@ serve(async (req) => {
 
       for (const { cid, subs } of subsResults) {
         if (subs.data.length > 0) hasAnyStripeSubscription = true;
-        const activeSub = subs.data.find((s) => s.status === "active" || s.status === "trialing");
+        // Caso real (Beatriz, 17/08/2026): a assinatura antiga estava `past_due`
+        // (dunning em andamento) e por isso NÃO era considerada "ativa" aqui.
+        // Resultado: nova assinatura criada em paralelo e a fatura atrasada
+        // cobrada com o cartão novo — duas cobranças no mesmo minuto.
+        // `past_due`/`unpaid` continuam sendo assinaturas vivas: bloqueiam.
+        const activeSub = subs.data.find((s) =>
+          ["active", "trialing", "past_due", "unpaid"].includes(s.status),
+        );
         if (activeSub) {
           logStep("⛔ Anti-dup: active subscription found", {
             customerId: cid,
             subscriptionId: activeSub.id,
             status: activeSub.status,
           });
+          const isOverdue = ["past_due", "unpaid"].includes(activeSub.status);
           return new Response(JSON.stringify({
-            error: "Você já possui uma assinatura ativa da AURA. Acesse seu WhatsApp ou entre em contato com o suporte.",
-            code: "ACTIVE_SUBSCRIPTION_EXISTS",
+            error: isOverdue
+              ? "Você já tem uma assinatura da AURA com pagamento pendente. Atualize a forma de pagamento no seu espaço em vez de assinar de novo — assim você não é cobrado duas vezes."
+              : "Você já possui uma assinatura ativa da AURA. Acesse seu WhatsApp ou entre em contato com o suporte.",
+            code: isOverdue ? "SUBSCRIPTION_PAST_DUE" : "ACTIVE_SUBSCRIPTION_EXISTS",
+            subscription_status: activeSub.status,
           }), {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
             status: 409,
