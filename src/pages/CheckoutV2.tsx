@@ -667,6 +667,25 @@ const CheckoutV2 = () => {
             paymentMethod: "card",
             detail: (data as any)?.error || error.message,
           });
+          // Já existe assinatura viva (ativa, em teste ou com pagamento pendente):
+          // em vez de deixar o lead assinar de novo e ser cobrado duas vezes,
+          // mandamos pro espaço dele pra atualizar a forma de pagamento.
+          const dupCode = (data as any)?.code as string | undefined;
+          if (dupCode === "SUBSCRIPTION_PAST_DUE" || dupCode === "ACTIVE_SUBSCRIPTION_EXISTS") {
+            toast.error(
+              (data as any)?.error ||
+                "Você já tem uma assinatura da AURA. Acesse seu espaço para gerenciar o pagamento.",
+              { duration: 9000 },
+            );
+            logFunnel("duplicate_subscription_blocked", {
+              plan: selectedPlan,
+              billing: billingPeriod,
+              paymentMethod: "card",
+              detail: dupCode,
+            });
+            setIsLoading(false);
+            return;
+          }
           throw new Error((data as any)?.error || error.message || "Erro ao processar pagamento");
         }
         clientSecret = (data as any)?.clientSecret ?? null;
