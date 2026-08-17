@@ -1,59 +1,52 @@
-# Sessão Grátis como Gatilho de Conversão — Análise e Opções
+# Sessão grátis como alavanca de conversão — 3 frentes aprovadas
 
-A ideia faz sentido, mas o formato importa tanto quanto os gatilhos. Uma "sessão grátis" mal delimitada canibaliza o trial de R$ 6,90, aumenta custo de atendimento e abre margem para abuso. Abaixo estão os três momentos levantados, refinados, e uma quarta opção que costuma ter ROI mais previsível.
+A oferta funciona melhor como **carta na manga do agente**, não como banner ou template automático para todo mundo. O formato: **1 sessão de 45 min, agendada no WhatsApp da Aura, sem cartão, sem PIX, 1 por telefone (cooldown longo)** — e ao final da sessão a própria Aura convida pro plano.
 
-## Onde oferecer (ordem de prioridade)
+## 1. Agente da recuperação oferece quando detectar dúvida (prioridade máxima)
 
-1. **Cliente em dúvida na recuperação de checkout abandonado** (mais quente)
-   - Já demonstrou intenção de compra, conhece o preço e travou em algum detalhe (PIX, valor, tempo).
-   - Aqui a sessão grátis vira objeto de negociação: "Bora resolver essa dúvida numa sessão de 20 min antes de você decidir?".
-   - O agente de recuperação pode oferecer isso automaticamente quando detectar objeção de segurança/como_funciona, sem nunca oferecer cartão pra quem escolheu PIX.
+O `recovery-agent` já diagnostica a trava do lead (técnica, desconfiança, preço, insegurança). A sessão grátis entra como recurso que ele pode usar **quando explicar não bastou** — nunca na primeira resposta e nunca como isca de abertura.
 
-2. **Remarketing para quem acessou o site e não comprou** (volume alto, frio)
-   - Anúncio direto para "sessão de descoberta gratuita" funciona, mas exige captura de WhatsApp antes — landing dedicada, não popup no /v2.
-   - Risco: atrair curiosos que nunca converteriam em pagantes. Requer filtros (ex: só quem passou mais de 30s na página de preços).
+Regras propostas:
+- Só a partir da 2ª resposta do agente na mesma conversa, e só se o lead demonstrou dúvida real (não em "não quero", não em stop word).
+- Uma oferta por lead. Se recusar, o agente não repete.
+- Prompt orienta o objetivo ("tirar o risco da decisão"), sem frase pronta — ele escreve com as próprias palavras, como já faz hoje.
+- Nova tag `[OFERECER_SESSAO_GRATIS]`, com o backend registrando a oferta e criando o acesso limitado só quando o lead aceitar.
 
-3. **Cliente saindo do site sem compra** (intenção média)
-   - Exit intent popup com "sessão grátis" pode funcionar, mas na Aura o popup atual já é o da oferta semanal. Trocar por grátis pode reduzir a conversão de R$ 6,90 em vez de aumentar.
-   - Melhor uso: testar como segunda camada — só aparece se o lead fechou o popup de R$ 6,90 ou voltou 2+ vezes sem comprar.
+## 2. Follow-up de leads antigos
 
-4. **Sugestão adicional: pós-checkin ou follow-up de leads antigos** (custo baixo)
-   - Leads que preencheram formulário, clicaram em pagar, mas não concluíram há +7 dias.
-   - Oferecer "uma sessão de alinhamento gratuita" reaquece a base sem pagar tráfego novo.
+Leads que preencheram o formulário, não pagaram, e estão parados há mais tempo (ex: +7 dias) já são base morta hoje. Uma rodada de "sessão de 45 min por conta da casa" reaquece sem pagar tráfego.
 
-## Formato recomendado para não quebrar o modelo de negócio
+- Lote controlado (ex: 50/dia), janela 08h–22h BRT.
+- Precisa de template WhatsApp aprovado próprio (é fora da janela de 24h).
+- Quem responder cai no mesmo agente, que conduz o agendamento.
 
-A sessão grátis não deve ser um "plano essencial grátis por X dias". Isso mata o trial pago. O formato mais seguro:
+## 3. Sessão grátis como 2ª/3ª mensagem do fluxo automático — não recomendado como está
 
-- **1 sessão de 30-45 min agendada no WhatsApp**.
-- **Sem acesso ao chat contínuo** fora dessa sessão.
-- **Sem recorrência automática**; ao final, a Aura oferece o plano com trial de R$ 6,90.
-- **1 sessão por telefone / por e-mail**, com cooldown de 30-90 dias.
-- **Prioridade para objeções quentes**: PIX, segurança, tempo.
+Faz sentido na intenção, mas hoje esbarra em duas coisas reais no código:
 
-## Trade-offs a considerar
+- **Teto vitalício de 2 envios por telefone** (`recover-abandoned-checkout-whatsapp`): qualquer telefone que já recebeu 2 mensagens automáticas, ou que teve 1 falha, entra numa lista de banimento permanente — porque a Twilio cobra mesmo quando a Meta rejeita. Uma 3ª mensagem para todos aumenta custo e risco de qualidade do número.
+- **Canibalização**: quem ia pagar R$ 6,90 em 24h passa a esperar o grátis. O grátis precisa aparecer só para quem **não converteu e demonstrou hesitação**, não para todo abandono.
 
-| Problema | Cuidado |
-| --- | --- |
-| Abuso | Limitar 1 sessão por telefone; exigir nome e WhatsApp; marcar `free_session_claimed` no profile. |
-| Canibalização | Nunca oferecer grátis antes de mostrar o trial de R$ 6,90. Grátis é a segunda opção, não a primeira. |
-| Custo operacional | Sessão gratuita consome tempo da Aura, mas não entra no orçamento de áudio pago. Pode ser texto por padrão, áudio opcional. |
-| Qualidade do lead | Quem vem por "grátis" no remarketing tende a ter menor conversão. Usar como filtro de engajamento, não como volume puro. |
-| Escala | O agente de recuperação consegue oferecer sozinho; remarketing exige novo funil e templates de WhatsApp aprovados. |
+Alternativa recomendada: manter os 2 estágios atuais (15 min e 24h) e ativar a oferta grátis **apenas** (a) dentro da conversa, pelo agente, quando o lead responde; ou (b) na frente 2 (follow-up de leads antigos, +7 dias), que já é um público diferente e um template separado. Assim a oferta existe como 2ª/3ª mensagem, mas condicionada — sem estourar o teto de envios.
 
-## Próximo passo sugerido
+## Guardas obrigatórias em qualquer frente
 
-Não implementar os três pontos de uma vez. A ordem de teste mais segura:
+- 1 sessão grátis por telefone, com cooldown (ex: 90 dias).
+- Acesso limitado: só a sessão agendada, sem chat contínuo depois, sem orçamento de áudio.
+- Nunca oferecer para quem já é ou já foi assinante pagante.
+- Nunca oferecer antes de mostrar o preço — grátis é a segunda saída, não a primeira.
 
-1. **Piloto no recovery de checkout** — ajustar o `recovery-agent` para oferecer a sessão grátis quando detectar objeção de segurança/como_funciona. Menor custo, leads mais quentes.
-2. **Medir conversão** — comparar checkout recovery com e sem oferta de sessão grátis.
-3. **Depois expandir** para exit intent secundário e remarketing, com landing dedicada.
+## Medição
 
-## Detalhes técnicos (se prosseguir)
+- Ofertas feitas → aceitas → sessão realizada → assinatura paga.
+- Comparar conversão do recovery com e sem oferta, e o custo por assinante das duas frentes.
 
-- Reutilizar a tabela `sessions` com `status = 'free'` ou `type = 'free_taster'`.
-- Novo campo `free_session_offered_at` / `free_session_claimed_at` em `profiles` para controle de abuso.
-- Atualizar `recovery-agent` (`supabase/functions/recovery-agent/index.ts`) para emitir uma tag tipo `[AGENDAR_SESSAO_GRATUITA:YYYY-MM-DD HH:MM]` quando o prompt autorizar.
-- Handler em `aura-agent` para criar sessão com `status = 'free'` e não cobrar.
-- Template de WhatsApp aprovado para convite: "Oi {{1}}, vi que você ficou com dúvida. Bora fazer uma sessão de 30 min de graça pra eu te mostrar como a Aura funciona?".
-- Painel admin: contagem de sessões gratuitas agendadas, concluídas, e taxa de conversão para plano pago.
+## Detalhes técnicos
+
+- `profiles`: novas colunas `free_session_offered_at`, `free_session_claimed_at`, `free_session_source` (`recovery_agent` | `old_lead_followup`).
+- `sessions`: marcar a sessão gratuita (`session_type = 'livre'` + flag em metadata ou nova coluna `is_free_taster`), respeitando o trigger `prevent_duplicate_sessions`.
+- `recovery-agent`: nova tag `[OFERECER_SESSAO_GRATIS]`, elegibilidade calculada no backend (não no LLM) e passada no contexto como "pode ou não pode oferecer".
+- Aceite do lead → função que cria/atualiza o profile com status próprio (ex: `free_taster`) e agenda a sessão, reusando o contrato de tags já existente (`[AGENDAR_SESSAO:...]`).
+- Nova função agendada para a frente 2, com template Twilio próprio e cap diário.
+- Fim da sessão: `aura-agent` fecha com convite ao plano e link de checkout com UTM próprio.
+- Painel admin: bloco com ofertas, aceites, sessões realizadas e conversão para pagante.
