@@ -21,6 +21,8 @@ export type FunnelStep =
   | "prewarm_session"
   | "prewarm_hit"
   | "create_checkout_error"
+  /** Bloqueado porque já existe assinatura viva (ativa/teste/pagamento pendente). */
+  | "duplicate_subscription_blocked"
   | "embedded_requested"
   | "embedded_mounted"
   | "embedded_timeout"
