@@ -1852,13 +1852,9 @@ Me conta: como você está hoje?`;
           }
           if (isStale) {
             console.log(`⏭️ Plan/cycle sync ignorado — ${subscription.id} não é a assinatura mais recente do cliente`);
-            return new Response(JSON.stringify({ received: true, skipped: 'stale_subscription_plan_sync' }), {
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-              status: 200,
-            });
           }
-          const customer = await stripe.customers.retrieve(customerId);
-          if (!customer.deleted) {
+          const customer = isStale ? null : await stripe.customers.retrieve(customerId);
+          if (customer && !customer.deleted) {
             const { profile } = await resolveProfileFromCustomer(supabase, customer as Stripe.Customer);
             const tierChanged = profile && ((profile.plan_tier ?? null) !== detectedTier);
             if (profile && (profile.plan !== detected.plan || profile.billing_cycle !== detected.billing_cycle || tierChanged)) {
