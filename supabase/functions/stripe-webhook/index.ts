@@ -1836,6 +1836,27 @@ Me conta: como você está hoje?`;
         const detectedTier = priceId ? (RETENTION_TIER_BY_PRICE[priceId] ?? null) : null;
         if (detected && ['active', 'trialing', 'past_due'].includes(subscription.status)) {
           const customerId = subscription.customer as string;
+          // Guarda contra regressão de plano: se o cliente tem uma assinatura
+          // viva MAIS RECENTE, este evento é de uma assinatura antiga (dunning,
+          // cancelamento em curso) e não deve sobrescrever o plano novo.
+          let isStale = false;
+          try {
+            const liveNow: Stripe.Subscription[] = [];
+            for (const st of ['active', 'trialing', 'past_due', 'unpaid'] as const) {
+              const l = await stripe.subscriptions.list({ customer: customerId, status: st, limit: 10 });
+              liveNow.push(...l.data);
+            }
+            isStale = liveNow.some((s) => s.id !== subscription.id && s.created > subscription.created);
+          } catch (staleErr) {
+            console.warn('⚠️ Checagem de assinatura mais recente falhou:', staleErr);
+          }
+          if (isStale) {
+            console.log(`⏭️ Plan/cycle sync ignorado — ${subscription.id} não é a assinatura mais recente do cliente`);
+            return new Response(JSON.stringify({ received: true, skipped: 'stale_subscription_plan_sync' }), {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              status: 200,
+            });
+          }
           const customer = await stripe.customers.retrieve(customerId);
           if (!customer.deleted) {
             const { profile } = await resolveProfileFromCustomer(supabase, customer as Stripe.Customer);
