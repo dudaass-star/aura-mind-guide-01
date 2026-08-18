@@ -3,7 +3,8 @@
 Objetivo: uma landing nova em `/v3`, isolada da `/v2`, com vocabulário 100% livre de termos clínicos/saúde e construída para alta conversão. Serve para rodar em conjunto de anúncio separado e comparar resultado com a `/v2` (que continua intacta).
 
 ## Posicionamento
-A AURA como **companhia inteligente no WhatsApp para organizar a cabeça** — clareza, foco, decisões, rotina. Nada de saúde, nada de comparação com atendimento profissional, nada de preço comparado a consulta.
+
+A AURA como **companhia inteligente no WhatsApp para quando a sua cabeça não para**. Ela não te dá diagnóstico — te dá direção. Fala sobre **pensamentos repetitivos, noites em claro, decisões que travam, relacionamentos que consomem, sensação de estar só existindo, desgaste emocional, falta de propósito**. Nada de saúde, nada de atendimento clínico, nada de comparação com consulta.
 
 ## Dicionário de linguagem (obrigatório em toda a V3)
 
@@ -14,10 +15,11 @@ A AURA como **companhia inteligente no WhatsApp para organizar a cabeça** — c
 | "custa menos que uma consulta" | "menos que um café por dia" |
 | sessão / sessões | **encontro guiado** (45 min) |
 | crise | momento difícil / hora apertada |
-| paciente, tratamento, diagnóstico | você, seu percurso |
-| "acolhimento clínico" | "conversa que entende seu contexto" |
+| paciente, tratamento, diagnóstico | você, seu momento |
+| "acolhimento clínico" | conversa que entende seu contexto |
+| "sua mente" (clínico) | sua cabeça, seus pensamentos |
 
-Palavras-chave da V3: clareza, foco, direção, organizar os pensamentos, rotina, decisões, percurso, memória, presença.
+Palavras-chave da V3: **cabeça que não para**, pensamentos repetitivos, noite em claro, travado, sem direção, só existindo, desgaste emocional, falta de propósito, clareza, direção, decisão, memória, percurso.
 
 Um teste automatizado de vocabulário (lista de termos proibidos) roda contra todo o texto dos componentes V3 para garantir que nada escape agora nem em edições futuras.
 
