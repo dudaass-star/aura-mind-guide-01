@@ -9,7 +9,7 @@ A AURA como **companhia inteligente no WhatsApp para organizar a cabeça** — c
 
 | Fora | Entra |
 |---|---|
-| acompanhamento emocional | emocional / apoio no dia a dia |
+| acompanhamento emocional | acompanhamento / apoio no dia a dia |
 | ansiedade, depressão, cura, terapia, psicólogo, psicologia | (removidos, sem substituto) |
 | "custa menos que uma consulta" | "menos que um café por dia" |
 | sessão / sessões | **encontro guiado** (45 min) |
