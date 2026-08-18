@@ -20,7 +20,7 @@ const HeroV3 = () => (
           <h1 className="mt-6 font-display text-4xl md:text-5xl lg:text-6xl font-medium leading-[1.05] tracking-tight">
             Presente quando
             <br />
-            você&nbsp;mais precisa.
+            <span className="italic text-gradient-sage">você</span>&nbsp;mais precisa.
           </h1>
 
           <p className="mt-6 text-base md:text-lg text-white/70 max-w-md leading-relaxed">
