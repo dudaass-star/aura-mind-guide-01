@@ -26,8 +26,8 @@ Um teste automatizado de vocabulário (lista de termos proibidos) roda contra to
 ## Estrutura da página (ordem pensada para conversão)
 
 1. **Header** — logo + "Preços" + CTA.
-2. **Hero** — headline "Sua cabeça mais organizada, todo dia." Subtítulo: companhia no WhatsApp que lembra da sua história, ajuda a pensar melhor e está disponível a qualquer hora. CTA R$ 6,90 + prova social (+5.000 pessoas) + 3 selos (4.9/5, 24/7, memória de longo prazo). Foto reaproveitada da V2 ou nova imagem neutra (celular/rotina) gerada para a V3.
-3. **Demo de conversa** — reaproveita a mecânica animada da V2, mas com **diálogo novo**: pessoa travada numa decisão de carreira/rotina, sem vocabulário emocional-clínico. Mostra memória de longo prazo e áudio.
+2. **Hero** — headline forte: **"Sua cabeça não para. A AURA te ajuda a sentar do lado dela."** Subtítulo: companhia no WhatsApp para quando você está travado em decisões, remoendo a mesma coisa ou sentindo que está só existindo. Lembra da sua história, ouve sem julgar e devolve um próximo passo real. CTA R$ 6,90 + prova social (+5.000 pessoas) + 3 selos (4.9/5, 24/7, lembra da sua história). Foto com pessoa no sofá à noite, rosto levemente cansado, olhando o celular — emocional, mas sem aparência clínica.
+3. **Demo de conversa** — reaproveita a mecânica animada da V2, mas com **diálogo novo**: pessoa acordada 3h da manhã com a cabeça rodando, ou travada numa decisão de vida, ou numa conversa difícil que não consegue ter. A AURA lembra do contexto passado e conduz para um próximo passo concreto. Mostra memória de longo prazo e áudio.
 4. **Como funciona** — 3 passos: manda mensagem no WhatsApp → a AURA lembra do seu contexto → você sai com um próximo passo claro.
 5. **O que você ganha** — grid de 6 benefícios: disponível 24/7, memória de longo prazo, encontros guiados de 45 min, áudio nos dois sentidos, resumo escrito, conteúdo sob medida.
 6. **Depoimentos** — reescritos em torno de clareza/decisão/rotina (sem menção a sintoma ou tratamento).
