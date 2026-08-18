@@ -1,7 +1,3 @@
-// Instrumentação de engajamento da landing /v2.
-// Objetivo: saber se o lead lê a página ou clica no CTA de cima sem rolar.
-// Tudo grava em checkout_funnel_events (mesma tabela do funil) e no GA4,
-// sempre fire-and-forget e deduplicado por sessão.
 import { useEffect, useRef } from "react";
 import { logFunnel } from "@/lib/checkout-funnel";
 import { trackCtaClick, type CtaLocation } from "@/lib/ga4";
@@ -31,8 +27,8 @@ const markOnce = (key: string): boolean => {
   return true;
 };
 
-/** Registra o clique num CTA da landing (GA4 + banco) com a posição na página. */
-export const trackLandingCta = (source: CtaSource, label?: string): void => {
+/** Registra o clique num CTA da landing (GA4 + banco) com a posição na página e a variante da landing. */
+export const trackLandingCta = (source: CtaSource, label?: string, variant: LandingVariant = "v2"): void => {
   try {
     trackCtaClick(source as CtaLocation, label);
   } catch {
@@ -42,6 +38,7 @@ export const trackLandingCta = (source: CtaSource, label?: string): void => {
     detail: source,
     meta: {
       label: label ?? null,
+      lp: variant,
       max_scroll: maxScrollRef,
       seconds: Math.round((Date.now() - mountedAt) / 1000),
       scrolled: maxScrollRef >= 10,
@@ -49,17 +46,21 @@ export const trackLandingCta = (source: CtaSource, label?: string): void => {
   });
 };
 
-/** Link do checkout com a origem do clique preservada. */
-export const checkoutHref = (source: CtaSource): string => `/v2/checkout?src=${source}`;
+export type LandingVariant = "v2" | "v3";
+
+/** Link do checkout com a origem do clique e a variante da landing preservadas. */
+export const checkoutHref = (source: CtaSource, variant: LandingVariant = "v2"): string =>
+  `/v2/checkout?src=${source}&lp=${variant}`;
 
 let maxScrollRef = 0;
 let mountedAt = Date.now();
 
 /**
  * Mede profundidade de rolagem (25/50/75/100), tempo na página e saída.
- * Cada marco dispara uma única vez por sessão.
+ * Cada marco dispara uma única vez por sessão. Aceita variante da landing para
+ * separar métricas da V2 e V3 no painel.
  */
-export const useLandingEngagement = (): void => {
+export const useLandingEngagement = (variant: LandingVariant = "v2"): void => {
   const started = useRef(false);
 
   useEffect(() => {
@@ -68,9 +69,10 @@ export const useLandingEngagement = (): void => {
     mountedAt = Date.now();
     maxScrollRef = 0;
 
-    if (markOnce("landing_view")) {
+    if (markOnce(`landing_view_${variant}`)) {
       logFunnel("landing_view", {
         meta: {
+          lp: variant,
           referrer: typeof document !== "undefined" ? document.referrer.slice(0, 200) : null,
           search: typeof window !== "undefined" ? window.location.search.slice(0, 200) : null,
         },
@@ -87,19 +89,23 @@ export const useLandingEngagement = (): void => {
       if (pct > maxScrollRef) maxScrollRef = pct;
 
       for (const m of milestones) {
-        if (pct >= m && markOnce(`landing_scroll_${m}`)) {
+        if (pct >= m && markOnce(`landing_scroll_${m}_${variant}`)) {
           logFunnel(`landing_scroll_${m}` as never, {
-            meta: { seconds: Math.round((Date.now() - mountedAt) / 1000) },
+            meta: {
+              lp: variant,
+              seconds: Math.round((Date.now() - mountedAt) / 1000),
+            },
           });
         }
       }
     };
 
     const onLeave = () => {
-      if (!markOnce("landing_exit")) return;
+      if (!markOnce(`landing_exit_${variant}`)) return;
       logFunnel("landing_exit", {
         detail: `max_${maxScrollRef}`,
         meta: {
+          lp: variant,
           max_scroll: maxScrollRef,
           seconds: Math.round((Date.now() - mountedAt) / 1000),
         },
@@ -114,5 +120,5 @@ export const useLandingEngagement = (): void => {
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("pagehide", onLeave);
     };
-  }, []);
+  }, [variant]);
 };
