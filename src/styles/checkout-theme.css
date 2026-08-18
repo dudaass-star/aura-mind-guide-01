@@ -12,7 +12,8 @@
   /* Sage do CTA — mais claro/saturado que o sage da marca para vencer o navy */
   --ck-cta: 145 48% 48%;
   --ck-cta-hover: 145 52% 54%;
-  --ck-cta-fg: 40 20% 98%;
+  --ck-cta-fg: 0 0% 100%;
+  --ck-cta-fg-loud: 0 0% 100%;
 
   /* Sage de estado/seleção (mais sóbrio) */
   --ck-accent: 140 24% 48%;
@@ -48,6 +49,12 @@
 .checkout-dark .ck-cta:active {
   transform: translateY(1px);
   box-shadow: 0 6px 16px -10px hsl(var(--ck-cta) / 0.8);
+}
+
+/* Texto branco vivo para o CTA de PIX (variante sage) no checkout escuro */
+.checkout-dark .ck-cta-text {
+  color: hsl(var(--ck-cta-fg-loud)) !important;
+  text-shadow: 0 1px 2px hsl(0 0% 0% / 0.25);
 }
 
 /* Campos de formulário com contraste real de borda e placeholder */
