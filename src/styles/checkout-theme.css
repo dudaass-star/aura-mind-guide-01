@@ -10,9 +10,9 @@
   --ck-line: 220 15% 30%;
 
   /* Sage do CTA — mais claro/saturado que o sage da marca para vencer o navy */
-  --ck-cta: 145 42% 46%;
-  --ck-cta-hover: 145 46% 52%;
-  --ck-cta-fg: 150 45% 8%;
+  --ck-cta: 145 48% 48%;
+  --ck-cta-hover: 145 52% 54%;
+  --ck-cta-fg: 40 20% 98%;
 
   /* Sage de estado/seleção (mais sóbrio) */
   --ck-accent: 140 24% 48%;
@@ -32,9 +32,11 @@
 .checkout-dark .ck-cta {
   background-color: hsl(var(--ck-cta));
   color: hsl(var(--ck-cta-fg));
+  text-shadow: 0 1px 2px hsl(0 0% 0% / 0.25);
   box-shadow:
     0 1px 0 0 hsl(0 0% 100% / 0.18) inset,
-    0 14px 34px -14px hsl(var(--ck-cta) / 0.75);
+    0 14px 34px -14px hsl(var(--ck-cta) / 0.75),
+    0 0 0 1px hsl(var(--ck-cta) / 0.5) inset;
 }
 .checkout-dark .ck-cta:hover {
   background-color: hsl(var(--ck-cta-hover));
