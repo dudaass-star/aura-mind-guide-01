@@ -86,6 +86,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<RootRedirect />} />
             <Route path="/v2" element={<IndexV2 />} />
+            <Route path="/v3" element={<IndexV3 />} />
             <Route path="/checkout" element={<LegacyCheckoutRedirect />} />
             <Route path="/v2/checkout" element={<CheckoutV2 />} />
             <Route path="/obrigado" element={<ThankYou />} />
