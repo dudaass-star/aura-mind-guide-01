@@ -3,7 +3,8 @@
 Objetivo: uma landing nova em `/v3`, isolada da `/v2`, com vocabulário 100% livre de termos clínicos/saúde e construída para alta conversão. Serve para rodar em conjunto de anúncio separado e comparar resultado com a `/v2` (que continua intacta).
 
 ## Posicionamento
-A AURA como **companhia inteligente no WhatsApp para organizar a cabeça** — clareza, foco, decisões, rotina. Nada de saúde, nada de comparação com atendimento profissional, nada de preço comparado a consulta.
+
+A AURA como **companhia inteligente no WhatsApp para quando a sua cabeça não para**. Ela não te dá diagnóstico — te dá direção. Fala sobre **pensamentos repetitivos, noites em claro, decisões que travam, relacionamentos que consomem, sensação de estar só existindo, desgaste emocional, falta de propósito**. Nada de saúde, nada de atendimento clínico, nada de comparação com consulta.
 
 ## Dicionário de linguagem (obrigatório em toda a V3)
 
@@ -14,21 +15,22 @@ A AURA como **companhia inteligente no WhatsApp para organizar a cabeça** — c
 | "custa menos que uma consulta" | "menos que um café por dia" |
 | sessão / sessões | **encontro guiado** (45 min) |
 | crise | momento difícil / hora apertada |
-| paciente, tratamento, diagnóstico | você, seu percurso |
-| "acolhimento clínico" | "conversa que entende seu contexto" |
+| paciente, tratamento, diagnóstico | você, seu momento |
+| "acolhimento clínico" | conversa que entende seu contexto |
+| "sua mente" (clínico) | sua cabeça, seus pensamentos |
 
-Palavras-chave da V3: clareza, foco, direção, organizar os pensamentos, rotina, decisões, percurso, memória, presença.
+Palavras-chave da V3: **cabeça que não para**, pensamentos repetitivos, noite em claro, travado, sem direção, só existindo, desgaste emocional, falta de propósito, clareza, direção, decisão, memória, percurso.
 
 Um teste automatizado de vocabulário (lista de termos proibidos) roda contra todo o texto dos componentes V3 para garantir que nada escape agora nem em edições futuras.
 
 ## Estrutura da página (ordem pensada para conversão)
 
 1. **Header** — logo + "Preços" + CTA.
-2. **Hero** — headline "Sua cabeça mais organizada, todo dia." Subtítulo: companhia no WhatsApp que lembra da sua história, ajuda a pensar melhor e está disponível a qualquer hora. CTA R$ 6,90 + prova social (+5.000 pessoas) + 3 selos (4.9/5, 24/7, memória de longo prazo). Foto reaproveitada da V2 ou nova imagem neutra (celular/rotina) gerada para a V3.
-3. **Demo de conversa** — reaproveita a mecânica animada da V2, mas com **diálogo novo**: pessoa travada numa decisão de carreira/rotina, sem vocabulário emocional-clínico. Mostra memória de longo prazo e áudio.
+2. **Hero** — headline forte: **"Sua cabeça não para. A AURA te ajuda a sentar do lado dela."** Subtítulo: companhia no WhatsApp para quando você está travado em decisões, remoendo a mesma coisa ou sentindo que está só existindo. Lembra da sua história, ouve sem julgar e devolve um próximo passo real. CTA R$ 6,90 + prova social (+5.000 pessoas) + 3 selos (4.9/5, 24/7, lembra da sua história). Foto com pessoa no sofá à noite, rosto levemente cansado, olhando o celular — emocional, mas sem aparência clínica.
+3. **Demo de conversa** — reaproveita a mecânica animada da V2, mas com **diálogo novo**: pessoa acordada 3h da manhã com a cabeça rodando, ou travada numa decisão de vida, ou numa conversa difícil que não consegue ter. A AURA lembra do contexto passado e conduz para um próximo passo concreto. Mostra memória de longo prazo e áudio.
 4. **Como funciona** — 3 passos: manda mensagem no WhatsApp → a AURA lembra do seu contexto → você sai com um próximo passo claro.
 5. **O que você ganha** — grid de 6 benefícios: disponível 24/7, memória de longo prazo, encontros guiados de 45 min, áudio nos dois sentidos, resumo escrito, conteúdo sob medida.
-6. **Depoimentos** — reescritos em torno de clareza/decisão/rotina (sem menção a sintoma ou tratamento).
+6. **Depoimentos** — reescritos em torno de situações fortes: "não conseguia dormir pensando no trabalho", "fiquei 2 meses travado numa decisão", "meu relacionamento estava me consumindo", "só existia, não vivia". Nenhum menção a diagnóstico ou atendimento profissional.
 7. **Preços** — mesma grade e mesmos ciclos da V2 (Essencial default, Direção "Recomendado"), com "encontros guiados" no lugar de "sessões". Bloco de garantia: 7 dias por R$ 6,90, reembolso em 7 dias, cancela em 1 clique.
 8. **FAQ** — reescrito: sem a pergunta de comparação com atendimento profissional e sem a de "por que é mais barato que terapia". Entram: como funciona o teste de 7 dias, posso pausar, posso mandar áudio, meus dados estão seguros, o que são os encontros guiados, posso cancelar quando quiser. JSON-LD de FAQ atualizado para o texto novo.
 9. **CTA final** + **Footer** + **CTA fixo no mobile**.
