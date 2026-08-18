@@ -23,7 +23,7 @@ const HowItWorksV3 = () => (
     <div className="container mx-auto px-6">
       <div className="text-center max-w-2xl mx-auto mb-16">
         <p className="text-xs uppercase tracking-[0.25em] text-muted-foreground mb-4">
-          simples como mandar uma mensagem · profundo como uma conversa de verdade
+          PERSONALIZADO · FOCADO NO SEU MOMENTO
         </p>
         <h2 className="font-display text-3xl md:text-5xl font-medium leading-[1.15] tracking-tight text-foreground">
           Como funciona a <span className="text-gradient-sage">AURA</span>
