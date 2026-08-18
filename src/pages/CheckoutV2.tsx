@@ -197,6 +197,29 @@ const CheckoutV2 = () => {
   const planFromState = location.state?.plan as PlanId | undefined;
   const billingFromState = location.state?.billing as BillingPeriod | undefined;
 
+  /**
+   * Origem do lead: `?lp=v2`, `?lp=v3`, etc. O botão "Voltar" precisa devolver
+   * o usuário pra mesma landing que trouxe ele. Se não vier `lp`, tentamos ler
+   * o referrer do mesmo domínio; só então caímos no /v2 histórico.
+   */
+  const backHref = (() => {
+    const raw = (searchParams.get("lp") || "").trim().toLowerCase();
+    if (/^v\d+$/.test(raw)) return `/${raw}`;
+    try {
+      const ref = document.referrer;
+      if (ref) {
+        const url = new URL(ref);
+        if (url.origin === window.location.origin) {
+          const path = url.pathname.replace(/\/+$/, "") || "/";
+          if (/^\/v\d+$/.test(path)) return path;
+        }
+      }
+    } catch {
+      /* referrer inválido ou indisponível */
+    }
+    return "/v2";
+  })();
+
   const initialPlan = planFromUrl || planFromState || "essencial";
   const initialBilling = billingFromUrl || billingFromState || "monthly";
 
