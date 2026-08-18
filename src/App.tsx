@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 import Index from "./pages/Index";
 import IndexV2 from "./pages/IndexV2";
+import IndexV3 from "./pages/IndexV3";
 import CheckoutV2 from "./pages/CheckoutV2";
 import ThankYou from "./pages/ThankYou";
 import CancelSubscription from "./pages/CancelSubscription";
@@ -85,6 +86,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<RootRedirect />} />
             <Route path="/v2" element={<IndexV2 />} />
+            <Route path="/v3" element={<IndexV3 />} />
             <Route path="/checkout" element={<LegacyCheckoutRedirect />} />
             <Route path="/v2/checkout" element={<CheckoutV2 />} />
             <Route path="/obrigado" element={<ThankYou />} />
