@@ -66,7 +66,7 @@ const FooterV3 = () => (
           © {new Date().getFullYear()} Olá AURA. Todos os direitos reservados.
         </p>
         <p className="text-xs text-white/60 mt-2">
-          AURA é apoio no dia a dia e não substitui atendimento psicológico profissional.
+          AURA é uma ferramenta de apoio no dia a dia e organização pessoal, não substituindo acompanhamento médico ou especializado.
         </p>
       </div>
     </div>
