@@ -1,54 +1,50 @@
-# Onde o CAC de R$ 50 vaza de verdade: o meio do checkout
+# Landing V3 — versão "bem-estar" para outro conjunto de anúncios
 
-## Premissa aceita
-Otimizar por InitiateCheckout já foi testado por meses e piorou o CAC (R$ 100+ contra R$ 50 de hoje). Nada no plano mexe no evento otimizado da campanha nem na estrutura de eventos enviados ao Meta.
+Objetivo: uma landing nova em `/v3`, isolada da `/v2`, com vocabulário 100% livre de termos clínicos/saúde e construída para alta conversão. Serve para rodar em conjunto de anúncio separado e comparar resultado com a `/v2` (que continua intacta).
 
-## O que os dados dos últimos dias mostram
+## Posicionamento
+A AURA como **companhia inteligente no WhatsApp para organizar a cabeça** — clareza, foco, decisões, rotina. Nada de saúde, nada de comparação com atendimento profissional, nada de preço comparado a consulta.
 
-| Dia | Chegadas de anúncio | Clique no CTA | Modal PIX aberto | Compras |
-|---|---|---|---|---|
-| 15/08 | 60 | 23 | ~10 | 0-1 |
-| 16/08 | 108 | 33 | 17 | 8 |
-| 17/08 | 67 | 20 | 7 | 3 |
+## Dicionário de linguagem (obrigatório em toda a V3)
 
-Duas leituras diretas:
-- Com 4,5%–7,4% de compra sobre visita de anúncio nos dias bons, a landing não é o gargalo. Página que converte assim não é o motivo de um CAC alto.
-- A perda concentrada está entre "clicou no CTA" e "gerou o PIX / enviou o cartão". Em 16/08 houve 19 toques em pagar com formulário vazio (`cta_empty_form`), e no cartão apenas 3 envios contra 4 recusas.
+| Fora | Entra |
+|---|---|
+| acompanhamento emocional | emocional / apoio no dia a dia |
+| ansiedade, depressão, cura, terapia, psicólogo, psicologia | (removidos, sem substituto) |
+| "custa menos que uma consulta" | "menos que um café por dia" |
+| sessão / sessões | **encontro guiado** (45 min) |
+| crise | momento difícil / hora apertada |
+| paciente, tratamento, diagnóstico | você, seu percurso |
+| "acolhimento clínico" | "conversa que entende seu contexto" |
 
-Por isso o plano ataca o meio do checkout, não o topo.
+Palavras-chave da V3: clareza, foco, direção, organizar os pensamentos, rotina, decisões, percurso, memória, presença.
 
-## Bloco 1 — Matar o `cta_empty_form` (maior volume de perda)
-Hoje o toque no botão fixo com formulário vazio rola a página e foca o primeiro campo, mas continua sendo o evento mais frequente do dia. Mudanças:
-- Botão fixo passa a mostrar rótulo de progresso ("Preencha seus dados" quando vazio, "Pagar com PIX" quando completo), em vez de sempre prometer pagamento.
-- Foco automático no primeiro campo vazio com destaque visual curto, e mensagem inline por campo em vez de erro genérico.
-- Registrar quais campos estavam vazios no momento do toque, para saber se a desistência é no CPF, no telefone ou no e-mail.
+Um teste automatizado de vocabulário (lista de termos proibidos) roda contra todo o texto dos componentes V3 para garantir que nada escape agora nem em edições futuras.
 
-## Bloco 2 — Reduzir o abandono no preenchimento
-- Persistir o que já foi digitado (nome/e-mail/telefone/CPF) na sessão, para quem sai e volta não recomeçar.
-- Máscara e validação de CPF/telefone em tempo real, com teclado numérico no mobile.
-- País padrão correto no telefone (hoje o componente pode abrir em outro país), eliminando telefone inválido silencioso.
-- Ordem dos campos enxuta: só o mínimo antes de gerar o PIX; o restante depois da confirmação quando não for obrigatório.
+## Estrutura da página (ordem pensada para conversão)
 
-## Bloco 3 — Cartão recusado com saída
-Há mais recusas do que envios bem-sucedidos. Quando o cartão é recusado:
-- Mensagem específica por motivo (saldo, dados, banco) em vez de "erro no pagamento".
-- Oferta imediata de PIX na mesma tela, com o QR já gerado, sem refazer o formulário.
-- Registrar `card_declined_reason` no funil para dimensionar quanto disso é recuperável.
+1. **Header** — logo + "Preços" + CTA.
+2. **Hero** — headline "Sua cabeça mais organizada, todo dia." Subtítulo: companhia no WhatsApp que lembra da sua história, ajuda a pensar melhor e está disponível a qualquer hora. CTA R$ 6,90 + prova social (+5.000 pessoas) + 3 selos (4.9/5, 24/7, memória de longo prazo). Foto reaproveitada da V2 ou nova imagem neutra (celular/rotina) gerada para a V3.
+3. **Demo de conversa** — reaproveita a mecânica animada da V2, mas com **diálogo novo**: pessoa travada numa decisão de carreira/rotina, sem vocabulário emocional-clínico. Mostra memória de longo prazo e áudio.
+4. **Como funciona** — 3 passos: manda mensagem no WhatsApp → a AURA lembra do seu contexto → você sai com um próximo passo claro.
+5. **O que você ganha** — grid de 6 benefícios: disponível 24/7, memória de longo prazo, encontros guiados de 45 min, áudio nos dois sentidos, resumo escrito, conteúdo sob medida.
+6. **Depoimentos** — reescritos em torno de clareza/decisão/rotina (sem menção a sintoma ou tratamento).
+7. **Preços** — mesma grade e mesmos ciclos da V2 (Essencial default, Direção "Recomendado"), com "encontros guiados" no lugar de "sessões". Bloco de garantia: 7 dias por R$ 6,90, reembolso em 7 dias, cancela em 1 clique.
+8. **FAQ** — reescrito: sem a pergunta de comparação com atendimento profissional e sem a de "por que é mais barato que terapia". Entram: como funciona o teste de 7 dias, posso pausar, posso mandar áudio, meus dados estão seguros, o que são os encontros guiados, posso cancelar quando quiser. JSON-LD de FAQ atualizado para o texto novo.
+9. **CTA final** + **Footer** + **CTA fixo no mobile**.
 
-## Bloco 4 — Painel
-No painel de funil do admin, adicionar por dia: taxa CTA→PIX gerado, taxa CTA→cartão enviado, campos mais deixados em branco no `cta_empty_form` e motivos de recusa do cartão. É como vamos medir se cada bloco funcionou.
+## Medição (separar V3 de V2 no relatório)
 
-## O que fica de fora
-- Nenhuma mudança de preço, plano padrão, método padrão (PIX segue padrão) ou regra de trial.
-- Nenhuma alteração no evento otimizado da campanha nem nos eventos de Purchase/Subscribe.
-- Suavizar o vocabulário clínico da landing fica como teste futuro, não como correção: não há evidência de penalidade de leilão, e CTR de 2,34% contradiz essa hipótese.
-
-## Verificação da tese do leilão (sem código)
-O único lugar onde a hipótese de "categoria sensível encarecendo o leilão" se confirmaria é um aviso de domínio no Gerenciador de Eventos para olaaura.com.br. Se esse aviso existir, isso vira prioridade e eu remonto o plano; sem ele, a explicação mais provável do CPM de R$ 74 é público estreito / criativos competindo entre si.
+- Todos os CTAs apontam para `/v2/checkout?src=<posição>&lp=v3` — mesmo checkout, origem marcada.
+- Os eventos de funil e de engajamento (rolagem 25/50/75/100, tempo, saída, clique de CTA) ganham `lp: "v3"` no `meta`, então o painel de engajamento consegue comparar V2 x V3 lado a lado.
+- Meta Pixel/CAPI: `ViewContent` com `content_name: "Landing V3"` e `content_category: "homepage_v3"`, mantendo a deduplicação atual.
+- `noindex, nofollow` e canonical próprio, igual à V2 — é página de anúncio, não de busca.
 
 ## Detalhes técnicos
-- `src/pages/CheckoutV2.tsx`: rótulo dinâmico do CTA, foco no primeiro campo vazio, persistência em sessionStorage, máscaras e validação inline, fallback PIX pós-recusa.
-- `src/components/checkout/StickyMobileCta.tsx`: estado do botão conforme completude do formulário.
-- `src/lib/checkout-funnel.ts`: campos vazios no `cta_empty_form` e `card_declined_reason`.
-- `src/components/admin/CheckoutFunnelPanel.tsx`: novas taxas e quebras por campo/motivo.
-- Sem migração de banco: tudo cabe no `meta` de `checkout_funnel_events`.
+
+- Nova rota `/v3` em `src/App.tsx` apontando para `src/pages/IndexV3.tsx`. A raiz `/` continua redirecionando para `/v2` — nada muda no tráfego atual.
+- Novos componentes em `src/components/v3/` (Header, Hero, Demo, HowItWorks, Benefits, Testimonials, Pricing, FAQ, FinalCTA, Footer, StickyMobileCTA), derivados dos da V2 para não mexer em nenhum arquivo `v2`.
+- `src/lib/landing-analytics.ts` ganha um parâmetro opcional de variante (`v2` por padrão) usado por `checkoutHref` e pelos eventos; a V2 mantém o comportamento atual byte a byte.
+- Tema visual: reaproveita `v2-theme.css` com uma paleta um pouco mais clara e "produtividade" (menos noturno), via classe `theme-v3` — tokens semânticos, sem cor hardcoded.
+- Imagens novas (hero e, se necessário, um mock de tela) geradas como assets em `src/assets/v3/`, com `alt` descritivo e dimensões fixas para não quebrar layout.
+- Nada de backend: a V3 é só frontend + medição.
