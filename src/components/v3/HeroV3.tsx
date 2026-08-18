@@ -14,13 +14,13 @@ const HeroV3 = () => (
         <div className="relative z-10 v2-fade-up">
           <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-1.5 text-xs md:text-sm text-white/85 backdrop-blur">
             <Check className="w-3.5 h-3.5 text-primary" />
-            Apoio no dia a dia no WhatsApp
+            Acompanhamento dia a dia no WhatsApp
           </span>
 
           <h1 className="mt-6 font-display text-4xl md:text-5xl lg:text-6xl font-medium leading-[1.05] tracking-tight">
-            Sua cabeça não para.
+            Presente quando
             <br />
-            A <span className="italic text-gradient-sage">AURA</span> te ajuda a sentar do lado dela.
+            você&nbsp;mais precisa.
           </h1>
 
           <p className="mt-6 text-base md:text-lg text-white/70 max-w-md leading-relaxed">
