@@ -10,9 +10,9 @@
   --ck-line: 220 15% 30%;
 
   /* Sage do CTA — mais claro/saturado que o sage da marca para vencer o navy */
-  --ck-cta: 145 42% 46%;
-  --ck-cta-hover: 145 46% 52%;
-  --ck-cta-fg: 150 45% 8%;
+  --ck-cta: 145 48% 48%;
+  --ck-cta-hover: 145 52% 54%;
+  --ck-cta-fg: 40 20% 98%;
 
   /* Sage de estado/seleção (mais sóbrio) */
   --ck-accent: 140 24% 48%;
