@@ -1763,7 +1763,7 @@ const CheckoutV2 = () => {
                 <Button
                   id="checkout-primary-cta"
                   type={payMethod === "card" ? "submit" : "button"}
-                  variant="sage-solid"
+                  variant={payMethod === "pix" ? "sage" : "sage-solid"}
                   size="cta"
                   onClick={payMethod === "pix" ? () => handleOpenPix("subscription") : undefined}
                   className={`w-full whitespace-normal leading-tight ${!isFormValid ? "opacity-70" : ""}`}
