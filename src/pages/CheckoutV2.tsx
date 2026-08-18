@@ -1766,7 +1766,7 @@ const CheckoutV2 = () => {
                   variant={payMethod === "pix" ? "sage" : "sage-solid"}
                   size="cta"
                   onClick={payMethod === "pix" ? () => handleOpenPix("subscription") : undefined}
-                  className={`w-full whitespace-normal leading-tight ${!isFormValid ? "opacity-70" : ""}`}
+                  className={`w-full whitespace-normal leading-tight ${payMethod === "pix" ? "ck-cta-text" : ""} ${!isFormValid ? "opacity-70" : ""}`}
                   disabled={payMethod === "card" && isLoading}
                   aria-disabled={!isFormValid || (payMethod === "card" && isLoading)}
                 >
