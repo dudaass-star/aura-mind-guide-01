@@ -35,7 +35,7 @@ export function StickyMobileCta({ anchorId, todayLabel, ctaLabel, onClick }: Sti
       </div>
       <Button
         type="button"
-        variant="sage"
+        variant="sage-solid"
         onClick={onClick}
         className="flex-1 rounded-full whitespace-normal leading-tight text-sm h-11"
       >
