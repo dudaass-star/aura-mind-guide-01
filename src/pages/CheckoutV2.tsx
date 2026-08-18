@@ -1313,13 +1313,13 @@ const CheckoutV2 = () => {
         <header className="relative py-5 border-b border-white/10">
           <div className="container mx-auto px-6 flex items-center justify-between">
             <Link
-              to="/v2"
+              to={backHref}
               className="inline-flex items-center gap-2 text-white/70 hover:text-white transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
               <span className="text-sm">Voltar</span>
             </Link>
-            <Link to="/v2" className="flex items-center">
+            <Link to={backHref} className="flex items-center">
               <img
                 src={logoOlaAura}
                 alt="Olá AURA"
