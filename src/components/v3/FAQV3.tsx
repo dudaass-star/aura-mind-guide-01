@@ -16,7 +16,7 @@ const faqs = [
     a: "Simples: você manda uma mensagem contando o que está sentindo, do jeito que sair. A AURA não aplica formulário nem entrega respostas prontas — ela pergunta, escuta e ajuda você a organizar o que está embaralhado. Nos primeiros dias ela vai mapeando sua vida concreta, e daí em diante cada conversa fica mais precisa, porque ela já sabe quem é quem na sua história.",
   },
   {
-    q: "A AURA é terapia?",
+    q: "A AURA substitui atendimento profissional?",
     a: "Não. A AURA é apoio no dia a dia: conversa contínua, memória do seu percurso e direção prática. Ela não faz diagnóstico, não substitui atendimento profissional e não se apresenta como tratamento. É um espaço seguro para desabafar, refletir e encontrar clareza.",
   },
   {
@@ -91,3 +91,4 @@ const FAQV3 = () => (
 );
 
 export default FAQV3;
+
