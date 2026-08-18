@@ -30,7 +30,7 @@ Um teste automatizado de vocabulário (lista de termos proibidos) roda contra to
 3. **Demo de conversa** — reaproveita a mecânica animada da V2, mas com **diálogo novo**: pessoa acordada 3h da manhã com a cabeça rodando, ou travada numa decisão de vida, ou numa conversa difícil que não consegue ter. A AURA lembra do contexto passado e conduz para um próximo passo concreto. Mostra memória de longo prazo e áudio.
 4. **Como funciona** — 3 passos: manda mensagem no WhatsApp → a AURA lembra do seu contexto → você sai com um próximo passo claro.
 5. **O que você ganha** — grid de 6 benefícios: disponível 24/7, memória de longo prazo, encontros guiados de 45 min, áudio nos dois sentidos, resumo escrito, conteúdo sob medida.
-6. **Depoimentos** — reescritos em torno de clareza/decisão/rotina (sem menção a sintoma ou tratamento).
+6. **Depoimentos** — reescritos em torno de situações fortes: "não conseguia dormir pensando no trabalho", "fiquei 2 meses travado numa decisão", "meu relacionamento estava me consumindo", "só existia, não vivia". Nenhum menção a diagnóstico ou atendimento profissional.
 7. **Preços** — mesma grade e mesmos ciclos da V2 (Essencial default, Direção "Recomendado"), com "encontros guiados" no lugar de "sessões". Bloco de garantia: 7 dias por R$ 6,90, reembolso em 7 dias, cancela em 1 clique.
 8. **FAQ** — reescrito: sem a pergunta de comparação com atendimento profissional e sem a de "por que é mais barato que terapia". Entram: como funciona o teste de 7 dias, posso pausar, posso mandar áudio, meus dados estão seguros, o que são os encontros guiados, posso cancelar quando quiser. JSON-LD de FAQ atualizado para o texto novo.
 9. **CTA final** + **Footer** + **CTA fixo no mobile**.
