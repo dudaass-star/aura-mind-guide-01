@@ -8,7 +8,18 @@ Nenhum modo novo, nenhum detector novo, nenhum KPI novo.
 
 O `MODO PING-PONG` já existe e já desliga os guardrails de profundidade. O problema é que ele está escrito como "reagir breve e devolver a bola" — não autoriza **responder de fato**. E não há nenhuma linha dizendo que pergunta prática deve ser respondida como pergunta prática. Resultado observado em conversa real de 16/08: usuária pergunta "pilates faz mais efeito que musculação?" e a Aura responde "o que eu tô vendo aqui é que você tá se esforçando pra caramba..." — ela nunca respondeu a pergunta.
 
-## Parte 1 — Os 3 ajustes de utilidade
+E existe um segundo bloqueio, mais forte: o bloco `# ESCOPO E LIMITES (O QUE VOCÊ NÃO FAZ)` (~2665-2684). Ele diz literalmente "Você é especialista em EMOÇÕES e RELACIONAMENTOS. Ponto." e lista finanças, nutrição, tecnologia, direito, marketing e medicina como "não é sua área", com instrução explícita: **"Não ajude. Não dê 'só uma dica'."** Mais a resposta pronta "Isso não é bem minha praia, sabe? 😅". Ou seja: mesmo com a regra de utilidade no PING-PONG, ela continuaria recusando. Esse bloco tem que ser reescrito junto.
+
+## Parte 1 — Os 4 ajustes de utilidade
+
+### 0. Reescrever `ESCOPO E LIMITES` em dois níveis (o ajuste principal)
+Hoje é uma lista única de "não faço". Passa a separar:
+
+**Papo do dia a dia — pode e deve ajudar** (conversa informada de amiga, sem virar consultoria): ideia de receita, dica de organização e rotina, sugestão de filme/livro/presente, como funciona algo, opinião sobre uma decisão comum, comparação simples tipo pilates x musculação, ajuda pra escrever uma mensagem difícil, controle de gastos no dia a dia.
+
+**Continua sendo NÃO** (entrega profissional/regulada, onde errar tem custo real): diagnóstico, dose ou troca de medicação; plano de dieta ou cálculo de macros; recomendação de investimento, produto financeiro ou imposto; parecer jurídico ou revisão de contrato; construir prompt, agente de IA, código ou sistema; plano de marketing/vendas. Nesses casos: pode conversar sobre o assunto e o que está em jogo, mas não entrega o produto técnico — nomeia o limite em uma frase e sugere o profissional.
+
+A resposta pronta "não é bem minha praia" sai da posição de padrão e passa a valer só para o segundo nível. O "POR QUÊ" também muda: o valor dela é ser a amiga que entende de gente **e está por perto no dia comum** — não uma assistente genérica, mas também não alguém que se recusa a responder o óbvio.
 
 ### 1. Uma regra de utilidade dentro do PING-PONG (que já existe)
 Acrescentar 3 ou 4 linhas ao bloco que já está lá:
@@ -51,7 +62,7 @@ Dentro de sessão agendada nada muda — lá a lógica de retomada e as 4 fases 
 ## Detalhe técnico
 
 Em `supabase/functions/aura-agent/index.ts`:
-- edições de texto: bloco `## MODO PING-PONG` (~3081-3090), regra `Anti-Rodeio` (~2813-2815), bloco `# POSTURA CLÍNICA` (~2823).
+- edições de texto: bloco `# ESCOPO E LIMITES` (~2665-2684, reescrito em dois níveis), `## MODO PING-PONG` (~3081-3090), regra `Anti-Rodeio` (~2813-2815), bloco `# POSTURA CLÍNICA` (~2823).
 - bloco `CONTEXTO TEMPORAL SERVER-SIDE` (~5975-6002): baixar o gatilho de `temporalGapHours >= 4` para `>= 0.5`, com instrução própria para a faixa 0,5-4h e guarda `!sessionActive` nessa faixa.
 
 Depois, redeploy do `aura-agent` e checagem de `failed_message_log`, conforme o padrão de deploy do projeto.
