@@ -480,9 +480,14 @@ export default function RecoveryInbox({ heightClass = 'h-[calc(100vh-180px)]' }:
                         )}
                         <div className="whitespace-pre-wrap break-words">{m.body || (m.media_url ? '[mídia]' : '')}</div>
                         {m.media_url && (
-                          <a href={m.media_url} target="_blank" rel="noreferrer" className="text-xs underline mt-1 inline-block">
-                            abrir mídia
-                          </a>
+                          <button
+                            type="button"
+                            onClick={() => openMedia(m.media_url!)}
+                            disabled={loadingMedia === m.media_url}
+                            className="text-xs underline mt-1 inline-block disabled:opacity-60"
+                          >
+                            {loadingMedia === m.media_url ? 'abrindo…' : 'abrir mídia'}
+                          </button>
                         )}
                         <div className="text-[10px] opacity-70 mt-1">
                           {format(new Date(m.created_at), "dd/MM HH:mm", { locale: ptBR })}
