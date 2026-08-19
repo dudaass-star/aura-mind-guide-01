@@ -1247,6 +1247,35 @@ function userDeclinedClosure(
   return content.length >= 15;
 }
 
+// ============================================================
+// PERGUNTA PRÁTICA (dúvida do dia a dia) vs. DESABAFO
+// Função pura, sem I/O. Usada em 2 pontos: gate de abertura leve
+// e saída antecipada do phase evaluator.
+// Regra de manutenção: só entra em PRACTICAL_OPENER termo que NÃO
+// possa iniciar uma frase afirmativa de desabafo. "pode", "posso",
+// "dá pra" ficam fora de propósito ("posso não aguentar mais isso").
+// ============================================================
+// "faz mal" é dúvida prática ("faz mal tomar café a noite?"), não carga emocional —
+// daí o lookbehind no termo "mal".
+export const EMOTIONAL_LOAD_REGEX = /(trist|ansios|medo|raiva|sozinh|cansad|perdid|chorand|surto|crise|ajuda|\bdor\b|peso|vazio|culp|ang[uú]st|p[âa]nico|desesper|sofr|deprim|chate|magoa|frustr|exaust|esgotad|ferid|ódio|odeio|odi[ae]|(?<!faz )\bmal\b|sumi|gosta de mim|me ama|\bama\b|tra[ií]|termin|brig|discut|ignor|larg|abandon|sauda|ciúm|cium|arrepend|fracass|vergonh|insegur)/i;
+
+const PRACTICAL_OPENER = /^(o que|oq|qual|quais|como|quando|onde|quanto|quantos|vale a pena|voc[êe] sabe|vc sabe|sabe se|me indica|me ajuda a|tem alguma|tem como|existe algum|[ée] melhor|faz mal)\b/i;
+
+// Pergunta que termina em "?" mas é reflexiva/existencial — NUNCA é prática
+// Sem \b no fim de termos que terminam em vogal acentuada (ê/á) — em JS, "ê" não é
+// caractere de palavra, então \b ali nunca casa.
+const REFLEXIVE_QUESTION = /(^por qu[êe]|^pq\b|\bsou assim\b|\bcomigo\b|\bem mim\b|\bde mim\b|\bmerec|\bculpa\b|\berrei\b|\bsentido da vida\b|\bvale a pena viver\b|\bcad[êe] voc[êe]|\bser[áa] que eu\b)/i;
+
+export function isPracticalQuestion(msg?: string | null): boolean {
+  const t = (msg ?? '').toLowerCase().trim();
+  if (!t) return false;
+  // Exclusões rodam ANTES de qualquer return true (senão o || curto-circuita)
+  if (EMOTIONAL_LOAD_REGEX.test(t)) return false;
+  if (REFLEXIVE_QUESTION.test(t)) return false;
+  if (PRACTICAL_OPENER.test(t)) return true;
+  return t.endsWith('?');
+}
+
 function evaluateTherapeuticPhase(
   messageHistory: Array<{ role: string; content: string }>,
   sessionActive: boolean,
@@ -1314,6 +1343,22 @@ O usuário não está engajando no aprofundamento. NÃO force avanço de fase.
 Valide, dê espaço, mude o ângulo suavemente. Considere perguntar algo mais leve
 ou simplesmente validar o silêncio/resistência como legítimo.`
       };
+    }
+  }
+
+  // NOVO: pergunta prática (dúvida do dia a dia) → sai como ping-pong, sem guidance.
+  // Roda DEPOIS das prioridades 1 (crise/vulnerável), 2 (streak) e 4 (resistência).
+  // As guardas explícitas abaixo garantem que o caminho de crise nunca é pulado,
+  // mesmo que este bloco seja movido no futuro.
+  {
+    const crisisOrVulnerable = lastUserContext?.user_emotional_state === 'crisis'
+      || lastUserContext?.user_emotional_state === 'vulnerable';
+    const disengaged = lastUserContext?.user_emotional_state === 'resistant'
+      || lastUserContext?.engagement_level === 'disengaged';
+    const lastUserMsg = [...messageHistory].reverse().find(m => m.role === 'user')?.content;
+    if (!sessionActive && !crisisOrVulnerable && !disengaged && isPracticalQuestion(lastUserMsg)) {
+      console.log('🧰 Phase evaluator: pergunta prática detectada → ping-pong sem guidance');
+      return { guidance: null, detectedPhase: 'ping-pong', stagnationLevel: 0 };
     }
   }
 
@@ -2662,26 +2707,33 @@ Se pareceria estranho ou exagerado → corte.
 Quando o usuário pedir para cancelar, direcione para olaaura.com.br/cancelar
 
 
-# ESCOPO E LIMITES (O QUE VOCÊ NÃO FAZ)
+# ESCOPO E LIMITES (DOIS NÍVEIS)
 
-Você é especialista em EMOÇÕES e RELACIONAMENTOS. Ponto. Não é sua área:
+## NÍVEL 1 — Papo do dia a dia: PODE e DEVE ajudar
 
-- Criar prompts, agentes de IA ou sistemas técnicos
-- Programação, código ou tecnologia
-- Nutrição esportiva, dietas ou cálculo de macros
-- Consultoria financeira, investimentos ou impostos
-- Orientação médica específica, diagnósticos ou tratamentos
-- Direito, contratos ou questões jurídicas
-- Marketing, vendas ou estratégias de negócio
+Se a pessoa te faz uma pergunta prática ou pede uma ideia, **responda a pergunta**. Como uma amiga que sabe do assunto responderia no WhatsApp — direto, com opinião, sem virar consultoria e sem transformar a dúvida em material clínico.
 
-**QUANDO PERGUNTAREM SOBRE ISSO:**
+Cabe aqui, entre outras coisas: ideia de receita, dica de organização e rotina, sugestão de filme/livro/série/presente, como funciona alguma coisa, opinião sobre uma decisão comum, comparação simples (tipo pilates x musculação), ajuda pra escrever uma mensagem difícil, controle de gastos do dia a dia. A lista é exemplo, não limite — use bom senso: se uma amiga informada responderia, você responde.
 
-Não ajude. Não dê "só uma dica". Não crie conteúdo técnico "só dessa vez".
+Não peça licença, não avise que "não é sua área", não devolva com pergunta emocional. Responder é a entrega.
 
-Responda assim (adapte ao seu tom, sem usar o nome da pessoa como vocativo de abertura):
-"Isso não é bem minha praia, sabe? 😅 Meu forte é conversa sobre emoções, relacionamentos, aquele papo de amiga mesmo... Mas me conta: o que tá te motivando a querer fazer isso? Tô curiosa!"
+## NÍVEL 2 — Continua sendo NÃO: entrega profissional/regulada
 
-**POR QUÊ:** Seu valor está em ser a amiga que entende de gente, não uma assistente genérica. Mantendo o foco, você fica insubstituível.
+Aqui errar tem custo real, então você **não entrega o produto técnico**:
+
+- Diagnóstico, dose ou troca de medicação
+- Plano de dieta ou cálculo de macros
+- Recomendação de investimento, produto financeiro ou imposto
+- Parecer jurídico ou revisão de contrato
+- Construir prompt, agente de IA, código ou sistema
+- Plano de marketing, vendas ou estratégia de negócio
+
+Nesses casos: pode conversar sobre o assunto e sobre o que está em jogo pra pessoa, mas nomeia o limite em UMA frase e sugere o profissional. Nunca passe de opinião informada para verdade.
+
+Exemplo de saída (adapte ao seu tom, sem usar o nome da pessoa como vocativo de abertura):
+"Isso já é coisa de profissional, não quero te dar bola errada 😅 — mas me conta o que te fez pensar nisso."
+
+**POR QUÊ:** Seu valor é ser a amiga que entende de gente **e está por perto no dia comum**. Não uma assistente genérica, mas também não alguém que se recusa a responder o óbvio. Recusar o simples esfria a relação; entregar o regulado é irresponsável.
 
 # PERSONALIDADE E CALOR HUMANO
 
@@ -2813,6 +2865,8 @@ Prefira linguagem DIRETA a metáforas elaboradas. "Você tá colocando o poder n
 4. **Anti-Rodeio (FORA de sessão):** Se a mensagem do usuário foi objetiva, sua resposta também é.
    - ERRADO: Usuário disse "os treinos" → AURA escreve 3 parágrafos sobre a importância do exercício
    - CERTO: Usuário disse "os treinos" → AURA: "Faz tempo que você parou?"
+   - ERRADO: Usuário pergunta "pilates faz mais efeito que musculação?" → AURA: "O que te fez pensar nisso?"
+   - CERTO: mesma pergunta → AURA responde a pergunta: compara os dois em 2-3 frases e, se couber, diz qual faz mais sentido pro caso dele. Pergunta prática pede resposta prática.
 
 5. **Regra do Espelho:** Fora de sessão, espelhe a energia do usuário. Breve com breve, profundo com profundo.
 
@@ -2821,6 +2875,8 @@ Prefira linguagem DIRETA a metáforas elaboradas. "Você tá colocando o poder n
 # POSTURA CLÍNICA (princípio mestre)
 
 Você não é assistente do humor do usuário. Você é a presença clínica dele.
+
+Ser presença inclui ser companhia e ser útil no dia comum: responder uma dúvida, dar uma ideia, rir de algo bobo. Profundidade é o que você faz quando a pessoa traz peso — não é a marcha padrão de toda conversa.
 
 Isso significa que, quando o discernimento pedir, você tem PERMISSÃO e
 RESPONSABILIDADE de ir contra a corrente do que o usuário está dizendo —
@@ -3079,10 +3135,12 @@ Quando o contexto dinâmico indicar compromissos recorrentes não cumpridos ou p
 Fora de sessão, CLASSIFIQUE a mensagem e siga O MODO correspondente:
 
 ## MODO PING-PONG (conversa leve, factual)
-Sinais: Resposta curta/factual sem carga emocional, tom neutro, atualizações de status, dados.
+Sinais: Resposta curta/factual sem carga emocional, tom neutro, atualizações de status, dados, **pergunta prática do dia a dia** (dúvida, informação, ideia, receita, dica, opinião, "como faz X", "vale a pena Y").
 - ⚠️ TAMANHO CONTEXTUAL:
   • Troca leve/factual pura: máximo 300 caracteres. Frase curta, natural, como WhatsApp real.
+  • Pergunta prática: o teto de 300 não vale — use até ~800 caracteres, o que a resposta precisar pra ser realmente útil. Máximo de 5 balões continua valendo.
   • Se o usuário trouxer carga emocional dentro de uma troca leve: até 600 caracteres + considere migrar para MODO PROFUNDO já na próxima resposta.
+- 🧰 UTILIDADE: pergunta prática → **responda a pergunta**, direto e útil, como uma amiga que sabe do assunto. Responder é a entrega: não precisa de gancho emocional, nem de pergunta de volta, nem de leitura psicológica. Não trate a dúvida como material clínico. Se houver algo emocional de verdade por trás, responda primeiro e só depois, se couber, comente em uma frase. Saúde, jurídico e financeiro: opinião informada + sugerir profissional, nunca como verdade (ver ESCOPO E LIMITES, nível 2).
 - Reaja brevemente. Pergunta leve é OPCIONAL — só faça se a fala do usuário abrir um gancho natural. Resposta SEM pergunta é resposta válida e muitas vezes melhor.
 - Exemplos: "os treinos" → "Ah, os treinos! Faz tempo que parou?" | "em academia" → "Perto de casa ou do trabalho?"
 - ⚠️ EXCEÇÃO IMPORTANTE: em PING-PONG, NÃO se aplicam REGRA DE VALOR, VALIDA+ENTREGA, GUARDRAIL SIMÉTRICO nem CARDÁPIO DE FECHAMENTO. Esses guardrails valem só em MODO PROFUNDO/DIREÇÃO. Aqui, é conversa leve — pode ser só troca, sem entrega obrigatória.
@@ -5974,13 +6032,15 @@ ${meditationCatalogSection}
     // ========================================================================
     // CONTEXTO TEMPORAL SERVER-SIDE (determinístico)
     // ========================================================================
-    if (temporalGapHours >= 4) {
+    if (temporalGapHours >= 0.5) {
       const gapDays = Math.floor(temporalGapHours / 24);
       const gapRemainingHours = Math.floor(temporalGapHours % 24);
       
       let gapDescription = '';
       if (gapDays >= 1) {
         gapDescription = `${gapDays} dia(s) e ${gapRemainingHours} hora(s)`;
+      } else if (temporalGapHours < 1) {
+        gapDescription = `${Math.round(temporalGapHours * 60)} minutos`;
       } else {
         gapDescription = `${Math.floor(temporalGapHours)} horas`;
       }
@@ -5990,15 +6050,21 @@ ${meditationCatalogSection}
         behaviorInstruction = `Trate como conversa NOVA. Cumprimente naturalmente para o periodo do dia. NAO retome nenhum assunto anterior a menos que o USUARIO traga primeiro.`;
       } else if (temporalGapHours >= 24) {
         behaviorInstruction = `Faz mais de um dia. Cumprimente de forma fresca. Se quiser mencionar algo anterior, diga "da ultima vez" ou "outro dia". NAO continue o assunto anterior como se fosse agora.`;
-      } else {
+      } else if (temporalGapHours >= 4) {
         behaviorInstruction = `Passaram-se algumas horas. NAO retome o assunto anterior como se fosse continuacao imediata. Cumprimente de forma natural e leve. NAO assuma que algo esta errado — espere o usuario trazer o assunto.`;
+      } else if (!sessionActive) {
+        // Faixa 30min-4h fora de sessão: a mensagem ATUAL define o assunto.
+        behaviorInstruction = `A conversa parou por um tempo. A mensagem que o usuario acabou de mandar DEFINE o assunto agora — responda o que ele trouxe, no registro dele. NAO reabra por conta propria o tema anterior (nem para "amarrar" ou "fechar"). Se ELE retomar, retome com naturalidade usando tudo que ja foi dito.`;
+      } else {
+        behaviorInstruction = '';
       }
 
-      dynamicContext += `\n\n⏰ CONTEXTO TEMPORAL (CALCULADO PELO SISTEMA - SIGA OBRIGATORIAMENTE):
+      if (behaviorInstruction) {
+        dynamicContext += `\n\n⏰ CONTEXTO TEMPORAL (CALCULADO PELO SISTEMA - SIGA OBRIGATORIAMENTE):
 Ultima mensagem do usuario foi ha ${gapDescription}.
 REGRA: ${behaviorInstruction}`;
-      
-      console.log(`⏰ Temporal gap detected: ${gapDescription} (${temporalGapHours.toFixed(1)}h)`);
+        console.log(`⏰ Temporal gap detected: ${gapDescription} (${temporalGapHours.toFixed(1)}h)`);
+      }
     }
 
     // ========================================================================
@@ -6600,16 +6666,14 @@ Formato da tag: [PAUSAR_SESSOES data="YYYY-MM-DD"] (máximo 90 dias no futuro).
     const userWordCount = userMessageRaw.length === 0 ? 0 : userMessageRaw.split(/\s+/).length;
 
     const PURE_GREETING_REGEX = /^(oi+|olá+|ola+|e\s*a[ií]|hey+|hi+|hello+|bom\s*dia|boa\s*tarde|boa\s*noite|opa+|al[oô]+|tudo\s*bem\??|tudo\s*certo\??)[.!?]*\s*$/i;
-    const EMOTIONAL_LOAD_REGEX = /(trist|ansios|medo|raiva|sozinh|cansad|perdid|chorand|surto|crise|ajuda|\bdor\b|peso|vazio|culp|ang[uú]st|p[âa]nico|desesper|sofr|deprim|chate|magoa|frustr|exaust|esgotad|ferid|ódio|odeio|odi[ae]|mal\b)/i;
 
+    // Só saudação pura dispara o bloco de abertura leve. O ramo antigo (≤8 palavras
+    // sem carga emocional) engolia pergunta prática curta ("pilates faz mais efeito
+    // que musculação?") e forçava resposta de cumprimento. A proteção contra puxar
+    // tema antigo migrou para o LEMBRETE ANTI-ECO abaixo (agora ≤8 palavras).
     const isPureGreeting = PURE_GREETING_REGEX.test(userMessageNorm);
-    const isLightMessage =
-      !isPureGreeting &&
-      userWordCount > 0 &&
-      userWordCount <= 8 &&
-      !EMOTIONAL_LOAD_REGEX.test(userMessageNorm);
 
-    if (!sessionActive && (isPureGreeting || isLightMessage)) {
+    if (!sessionActive && isPureGreeting) {
       dynamicContext += `\n\n## ABERTURA LEVE DETECTADA
 A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional clara.
 
@@ -6617,9 +6681,10 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
 - PROIBIDO nesta resposta: referenciar memória, insights, evolution summary, compromissos pendentes, temas de sessões anteriores ou padrões observados.
 - Espere o usuário trazer o tema antes de qualquer aprofundamento.
 - Máximo 2 balões curtos.`;
-    } else if (userWordCount > 0 && userWordCount <= 5) {
-      // Lembrete anti-eco suavizado — só para mensagens curtas que não caíram no bloco acima
-      dynamicContext += `\nLEMBRETE ANTI-ECO: Mensagem curta detectada. Espelhe o tamanho da mensagem dele — responda curto. Só pergunte se houver gancho real no que ele disse; caso contrário, devolva presença sem puxar tema novo ou antigo. Não comece reformulando o que ele disse, e varie a forma de reagir.`;
+    } else if (userWordCount > 0 && userWordCount <= 8) {
+      // Lembrete anti-eco suavizado — cobre mensagens curtas que não caíram no bloco
+      // acima, incluindo a faixa 6-8 palavras que antes tinha blindagem explícita.
+      dynamicContext += `\nLEMBRETE ANTI-ECO: Mensagem curta detectada. Espelhe o tamanho da mensagem dele — responda curto. Se for uma pergunta prática, responda a pergunta direto (isso não é aprofundamento). Só pergunte se houver gancho real no que ele disse; caso contrário, devolva presença sem puxar tema novo ou antigo. NÃO referencie memória, insights, evolution summary, compromissos pendentes ou temas de sessões anteriores nesta resposta. Não comece reformulando o que ele disse, e varie a forma de reagir.`;
     }
 
     // ========================================================================
