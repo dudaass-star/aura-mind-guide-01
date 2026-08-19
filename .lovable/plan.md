@@ -32,7 +32,20 @@ Hoje é uma lista única de "não faço". Passa a separar:
 A resposta pronta "não é bem minha praia" sai da posição de padrão e passa a valer só para o segundo nível. O "POR QUÊ" também muda: o valor dela é ser a amiga que entende de gente **e está por perto no dia comum** — não uma assistente genérica, mas também não alguém que se recusa a responder o óbvio.
 
 ### 0b. Corrigir o `ABERTURA LEVE DETECTADA` (trava 2)
-O bloco continua existindo — ele resolve bem o problema do "Oi". Só passa a **não** disparar quando a mensagem curta é uma pergunta: se termina em `?` ou começa com padrão interrogativo (`o que`, `qual`, `como`, `quando`, `onde`, `quanto`, `vale a pena`, `você sabe`, `me indica`, `tem alguma`, `é melhor`, `faz mal`, `pode`, `dá pra`), a mensagem sai do caminho de "abertura leve" e segue o fluxo normal. Mensagem curta que não é pergunta continua exatamente como hoje.
+O bloco continua existindo — ele resolve bem o problema do "Oi". Só passa a **não** disparar quando a mensagem curta é uma pergunta prática. Mensagem curta que não é pergunta continua exatamente como hoje.
+
+Uma única função nova, ao lado dos regex que já existem lá:
+
+```ts
+// true quando a mensagem é pergunta prática (dúvida do dia a dia), não desabafo
+function isPracticalQuestion(msg: string): boolean {
+  const t = msg.toLowerCase().trim();
+  if (EMOTIONAL_LOAD_REGEX.test(t)) return false;   // constante que já existe
+  return t.endsWith('?') || /^(o que|qual|como|quando|onde|quanto|vale a pena|você sabe|vc sabe|me indica|tem alguma|é melhor|faz mal|pode|dá pra|da pra)\b/.test(t);
+}
+```
+
+Essa mesma função é reutilizada no item 1b. É a única peça de código nova de todo o plano.
 
 ### 1. Uma regra de utilidade dentro do PING-PONG (que já existe)
 Acrescentar 4 ou 5 linhas ao bloco que já está lá:
@@ -43,7 +56,7 @@ Acrescentar 4 ou 5 linhas ao bloco que já está lá:
 - Saúde/jurídico/financeiro: opinião informada + sugerir profissional, nunca como verdade.
 
 ### 1b. Desarmar o Phase Evaluator quando o usuário muda de assunto (trava 4)
-Na conversa livre, se a **última mensagem do usuário** é pergunta prática (mesmo teste do item 0b) ou não tem carga emocional, o evaluator não injeta guidance de fase — ele já sai com `ping-pong` sem intervenção, como faz hoje quando não detecta profundidade. Nada muda quando o usuário está de fato em tema pesado.
+Na conversa livre, se `isPracticalQuestion(última mensagem do usuário)` for verdadeiro, o evaluator sai com `ping-pong` e sem guidance — exatamente o mesmo caminho de saída que ele já usa hoje quando não detecta profundidade. Uma linha de `if` no começo do ramo FREE CONVERSATION, nenhum threshold alterado. Nada muda quando o usuário está de fato em tema pesado.
 
 ### 2. Trocar o exemplo errado por um certo
 A seção Anti-Rodeio já ensina brevidade. Ganha um exemplo de utilidade no mesmo formato dos que já estão lá, usando o caso real do pilates: pergunta prática → resposta prática.
@@ -75,6 +88,29 @@ Dentro de sessão agendada nada muda — lá a lógica de retomada e as 4 fases 
 - O bloco de "Oi" continua fazendo o que faz hoje para saudação e mensagem curta que não é pergunta.
 - Histórico, insights e memória continuam carregados — retomar é sempre possível.
 - Sem tabela nova, sem cron, sem painel, sem KPI novo. As duas mudanças de lógica (0b e 1b) são condições dentro de blocos que já existem.
+
+## Checagem de simplicidade
+
+Contabilizando o que a implementação realmente adiciona:
+
+| Item | Tipo | Tamanho |
+|---|---|---|
+| `ESCOPO E LIMITES` em 2 níveis | texto do prompt | reescrita de bloco existente |
+| Regra de utilidade no PING-PONG | texto do prompt | +5 linhas |
+| Exemplo no Anti-Rodeio | texto do prompt | +2 linhas |
+| Frase na Postura Clínica | texto do prompt | +1 linha |
+| `isPracticalQuestion()` | código | 1 função, ~5 linhas |
+| Gate do `ABERTURA LEVE` | código | 1 condição a mais |
+| Saída antecipada do evaluator | código | 1 `if` |
+| Faixa temporal 30 min | código | troca de `>= 4` por `>= 0.5` + 1 `else if` |
+
+Nenhum modo novo, nenhum estado novo, nenhuma tabela, nenhum campo, nenhuma chamada extra de LLM, nenhuma latência adicional. Só uma função pura de string usada em dois pontos.
+
+**Riscos e contenção:**
+- *Falso positivo em desabafo em forma de pergunta* ("por que eu sou assim?") — contido: `isPracticalQuestion` retorna `false` se houver qualquer palavra de carga emocional, e o padrão `por que` fica de fora da lista de propósito.
+- *Aura virar assistente genérica* — contido pelo segundo nível do `ESCOPO E LIMITES`, que mantém o "não" nas entregas técnicas/reguladas.
+- *Perder profundidade em tema pesado* — nenhuma das mudanças toca o caminho com carga emocional nem o caminho de sessão ativa.
+- *Rollback* — as 4 edições de texto e os 4 pontos de código são independentes entre si; qualquer um pode ser revertido isolado sem quebrar os outros.
 - Protocolo de segurança e limites (não dar orientação médica/jurídica como verdade) continuam valendo — a regra de utilidade diz explicitamente pra ela não passar de opinião informada nesses casos.
 
 ## Detalhe técnico
