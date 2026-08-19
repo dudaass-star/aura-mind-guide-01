@@ -75,6 +75,31 @@ export default function RecoveryInbox({ heightClass = 'h-[calc(100vh-180px)]' }:
   const [lastInboundByPhone, setLastInboundByPhone] = useState<Record<string, string>>({});
   type FilterKey = 'all' | 'unread' | 'replied' | 'sent_only';
   const [filter, setFilter] = useState<FilterKey>('all');
+  const [loadingMedia, setLoadingMedia] = useState<string | null>(null);
+
+  // Mídia do Twilio exige Basic Auth; buscamos pelo proxy autenticado e abrimos
+  // como blob local para não cair na tela de login da API.
+  const openMedia = async (url: string) => {
+    setLoadingMedia(url);
+    try {
+      const { data, error } = await supabase.functions.invoke('recovery-media', {
+        body: { url },
+      });
+      if (error) throw error;
+      const blob = data instanceof Blob ? data : new Blob([data as BlobPart]);
+      const objectUrl = URL.createObjectURL(blob);
+      window.open(objectUrl, '_blank');
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+    } catch (e) {
+      toast({
+        title: 'Não foi possível abrir a mídia',
+        description: e instanceof Error ? e.message : String(e),
+        variant: 'destructive',
+      });
+    } finally {
+      setLoadingMedia(null);
+    }
+  };
 
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -480,9 +505,14 @@ export default function RecoveryInbox({ heightClass = 'h-[calc(100vh-180px)]' }:
                         )}
                         <div className="whitespace-pre-wrap break-words">{m.body || (m.media_url ? '[mídia]' : '')}</div>
                         {m.media_url && (
-                          <a href={m.media_url} target="_blank" rel="noreferrer" className="text-xs underline mt-1 inline-block">
-                            abrir mídia
-                          </a>
+                          <button
+                            type="button"
+                            onClick={() => openMedia(m.media_url!)}
+                            disabled={loadingMedia === m.media_url}
+                            className="text-xs underline mt-1 inline-block disabled:opacity-60"
+                          >
+                            {loadingMedia === m.media_url ? 'abrindo…' : 'abrir mídia'}
+                          </button>
                         )}
                         <div className="text-[10px] opacity-70 mt-1">
                           {format(new Date(m.created_at), "dd/MM HH:mm", { locale: ptBR })}
