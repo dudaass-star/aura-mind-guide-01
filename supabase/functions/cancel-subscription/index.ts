@@ -1075,6 +1075,63 @@ serve(async (req) => {
 
     // If action is "cancel", cancel the subscription at period end
     if (action === "cancel") {
+      // Se o ciclo atual NÃO foi pago (past_due/unpaid), não existe acesso
+      // pago a preservar: o período em aberto veio de uma fatura não paga.
+      // Nesse caso cancelamos imediatamente e anulamos as faturas abertas,
+      // evitando prometer acesso até uma data que o cliente não pagou.
+      const unpaidCycle = ["past_due", "unpaid", "incomplete"].includes(subscription.status);
+      if (unpaidCycle) {
+        logStep("Unpaid cycle: canceling immediately", {
+          subscriptionId: subscription.id,
+          status: subscription.status,
+        });
+
+        try {
+          const openInvoices = await stripe.invoices.list({
+            customer: subscription.customer as string,
+            status: "open",
+            limit: 10,
+          });
+          for (const inv of openInvoices.data) {
+            if (inv.id) {
+              await stripe.invoices.voidInvoice(inv.id);
+              logStep("Voided open invoice", { invoiceId: inv.id });
+            }
+          }
+        } catch (e) {
+          logStep("Warning: failed voiding open invoices", { error: String(e) });
+        }
+
+        await stripe.subscriptions.cancel(subscription.id);
+
+        if (reason) {
+          await supabase.from("cancellation_feedback").insert({
+            phone: phoneClean,
+            user_id: profile?.user_id || null,
+            reason,
+            reason_detail: reason_detail || null,
+            action_taken: "canceled_immediate_unpaid",
+            save_offer_accepted: false,
+            gateway: "stripe",
+          });
+        }
+        await logRetention("cancel", "applied", { reason, immediate: true });
+
+        await supabase
+          .from("profiles")
+          .update({ status: "canceled", canceled_at: new Date().toISOString() })
+          .eq("phone", phoneClean);
+
+        return jsonResponse({
+          success: true,
+          status: "canceled",
+          immediate: true,
+          message:
+            "Assinatura cancelada agora. Como a cobrança do ciclo atual não foi paga, o acesso é encerrado imediatamente e a fatura em aberto foi anulada.",
+          subscription: { id: subscription.id, endDate: null, endDateFormatted: null },
+        });
+      }
+
       logStep("Canceling subscription at period end", { subscriptionId: subscription.id });
       
       await stripe.subscriptions.update(subscription.id, {
