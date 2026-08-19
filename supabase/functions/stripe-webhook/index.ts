@@ -1402,6 +1402,11 @@ Me conta: como você está hoje?`;
                   if (priceId === priceTransformacao || priceId === priceTransformacaoYearly) plan = 'transformacao';
 
                   const newUserId = crypto.randomUUID();
+                  // Este perfil é uma RECRIAÇÃO de um cliente antigo (a assinatura
+                  // já existia no Stripe). Datar como "hoje" faria o admin listar
+                  // um pagante antigo como cadastro novo: usamos a data real de
+                  // início da assinatura.
+                  const subStartedAt = new Date((sub.created ?? Math.floor(Date.now() / 1000)) * 1000).toISOString();
                   const { error: insertError } = await supabase
                     .from('profiles')
                     .insert({
@@ -1411,13 +1416,14 @@ Me conta: como você está hoje?`;
                       email: custForCreate.email || null,
                       status: 'active',
                       plan,
-                      converted_at: new Date().toISOString(),
+                      created_at: subStartedAt,
+                      converted_at: subStartedAt,
                     });
 
                   if (insertError) {
                     console.error('❌ Failed to auto-create profile:', insertError);
                   } else {
-                    console.log(`✅ Auto-created profile for ${formattedPhone} (plan: ${plan}) from invoice.paid`);
+                    console.log(`✅ Auto-created profile for ${formattedPhone} (plan: ${plan}) from invoice.paid — created_at=${subStartedAt}`);
                   }
                 } else {
                   console.warn('⚠️ Cannot auto-create profile: no phone in customer metadata');

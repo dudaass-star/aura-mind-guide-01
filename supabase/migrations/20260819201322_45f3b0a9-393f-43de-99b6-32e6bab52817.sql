@@ -1,0 +1,2 @@
+UPDATE public.profiles SET created_at = timestamptz '2026-05-12 17:41:36+00', converted_at = timestamptz '2026-05-12 17:41:36+00' WHERE phone = '5567992237875';
+UPDATE public.profiles SET created_at = timestamptz '2026-04-12 04:25:19+00', converted_at = timestamptz '2026-04-12 04:25:19+00' WHERE phone = '5581998550259';
