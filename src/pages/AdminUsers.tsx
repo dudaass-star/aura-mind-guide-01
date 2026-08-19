@@ -418,16 +418,6 @@ export default function AdminUsers() {
         },
       });
       toast({ title: 'Sessões resetadas', description: 'Contador de sessões zerado.' });
-    if (!editProfile) return;
-    setSaving(true);
-    try {
-      await supabase.functions.invoke('admin-update-profile', {
-        body: {
-          profile_id: editProfile.id,
-          updates: { sessions_used_this_month: 0 },
-        },
-      });
-      toast({ title: 'Sessões resetadas', description: 'Contador de sessões zerado.' });
       fetchProfiles();
     } catch (err: any) {
       toast({ title: 'Erro', description: err.message, variant: 'destructive' });
