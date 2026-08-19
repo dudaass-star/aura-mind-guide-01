@@ -127,7 +127,7 @@ async function processStage(
 
   let query = supabase
     .from('checkout_sessions')
-    .select('id, phone, name, plan, email, recovery_stage1_sent_at, recovery_stage2_sent_at')
+    .select('id, phone, name, plan, email, payment_method, recovery_stage1_sent_at, recovery_stage2_sent_at')
     .eq('status', 'created')
     .eq('recovery_stage', cfg.stage - 1)
     .lt('created_at', createdBefore)
@@ -178,6 +178,19 @@ async function processStage(
         const isActive = getPhoneVariations(session.phone).some(v => activePhoneSet.has(v));
         if (isActive) {
           await markStageSkipped(supabase, session.id, cfg.stage, 'active_customer_phone');
+          skipped++;
+          continue;
+        }
+      }
+
+      // Checagem ao vivo na Woovi para candidatos de PIX Automático.
+      if (String(session.payment_method || '').startsWith('pix')) {
+        const live = await hasLiveWooviCommitment(supabase, {
+          email: session.email,
+          phone: session.phone,
+        });
+        if (live.committed) {
+          await markStageSkipped(supabase, session.id, cfg.stage, live.reason || 'woovi_committed');
           skipped++;
           continue;
         }
