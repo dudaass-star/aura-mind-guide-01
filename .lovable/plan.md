@@ -43,17 +43,28 @@ Uma única função nova, ao lado dos regex que já existem lá:
 
 ```ts
 // true quando a mensagem é pergunta prática (dúvida do dia a dia), não desabafo
-function isPracticalQuestion(msg?: string | null): boolean {
+const PRACTICAL_OPENER = /^(o que|oq|qual|quais|como|quando|onde|quanto|quantos|vale a pena|voc[êe] sabe|vc sabe|sabe se|me indica|me ajuda a|tem alguma|tem como|existe algum|[ée] melhor|faz mal|pode|posso|d[áa] pra|da pra)\b/;
+
+// Pergunta que termina em "?" mas é reflexiva/existencial — NUNCA é pergunta prática
+const REFLEXIVE_QUESTION = /(^por qu[êe]|^pq\b|\bsou assim\b|\bcomigo\b|\bem mim\b|\bde mim\b|\bmerec|\bculpa\b|\berrei\b|\bsentido da vida\b|\bvale a pena viver\b|\bcad[êe] voc[êe]\b|\bser[áa] que eu\b)/;
+
+export function isPracticalQuestion(msg?: string | null): boolean {
   const t = (msg ?? '').toLowerCase().trim();
   if (!t) return false;
-  if (EMOTIONAL_LOAD_REGEX.test(t)) return false;   // constante que já existe
-  return t.endsWith('?') || /^(o que|qual|como|quando|onde|quanto|vale a pena|você sabe|vc sabe|me indica|tem alguma|é melhor|faz mal|pode|dá pra|da pra)\b/.test(t);
+  if (EMOTIONAL_LOAD_REGEX.test(t)) return false;   // constante que já existe (expandida — ver abaixo)
+  if (REFLEXIVE_QUESTION.test(t)) return false;
+  if (PRACTICAL_OPENER.test(t)) return true;
+  // "?" sozinho NÃO basta: só conta se a frase também não for reflexiva (já checado)
+  // e tiver ao menos um verbo/substantivo concreto — na prática, ter passado pelas 2 guardas acima.
+  return t.endsWith('?');
 }
 ```
 
+**Sobre o `endsWith('?')` (bug apontado na revisão, procede):** na versão anterior o `||` curto-circuitava e a whitelist virava decorativa — `"por que eu sou assim?"` retornava `true`, contrariando o próprio caso de teste do plano. Agora as duas exclusões (`EMOTIONAL_LOAD_REGEX` e `REFLEXIVE_QUESTION`) rodam **antes** de qualquer `return true`, e o `endsWith('?')` só é alcançado depois delas. Na dúvida, o erro é pro lado seguro: cai em acolhimento, não em utilidade.
+
 Essa mesma função é reutilizada no item 1b. É a única peça de código nova de todo o plano. Assinatura tolerante a `undefined`/vazio de propósito: os dois pontos de chamada recebem `message` cru.
 
-**Expansão obrigatória do `EMOTIONAL_LOAD_REGEX`.** Como esse regex passa a sustentar três decisões em vez de uma, e `endsWith('?')` é abrangente, frases relacionais escapariam da rede: "cadê você?", "você ainda gosta de mim?", "por que você sumiu?", "ele me traiu?". Antes de usar a função, o regex ganha termos relacionais e de ruptura: `sumi|gosta de mim|me ama|\bama\b|tra[ií]|termin|brig|discut|ignor|larg|abandon|sauda|ciúm|arrepend|fracass|vergonh|insegur`. A lista de padrões interrogativos também deixa `por que` de fora de propósito — "por que eu sou assim?" não é pergunta prática.
+**Expansão obrigatória do `EMOTIONAL_LOAD_REGEX`.** Como esse regex passa a sustentar três decisões em vez de uma, frases relacionais escapariam da rede: "cadê você?", "você ainda gosta de mim?", "por que você sumiu?", "ele me traiu?". Antes de usar a função, o regex ganha termos relacionais e de ruptura: `sumi|gosta de mim|me ama|\bama\b|tra[ií]|termin|brig|discut|ignor|larg|abandon|sauda|ciúm|arrepend|fracass|vergonh|insegur`. O `REFLEXIVE_QUESTION` acima é a segunda camada, para o que o vocabulário não pegar.
 
 ### 1. Uma regra de utilidade dentro do PING-PONG (que já existe)
 Acrescentar 4 ou 5 linhas ao bloco que já está lá:
@@ -64,7 +75,36 @@ Acrescentar 4 ou 5 linhas ao bloco que já está lá:
 - Saúde/jurídico/financeiro: opinião informada + sugerir profissional, nunca como verdade.
 
 ### 1b. Desarmar o Phase Evaluator quando o usuário muda de assunto (trava 4)
-Na conversa livre, se `isPracticalQuestion(última mensagem do usuário)` for verdadeiro, o evaluator sai com `ping-pong` e sem guidance — exatamente o mesmo caminho de saída que ele já usa hoje quando não detecta profundidade. Uma linha de `if` no começo do ramo FREE CONVERSATION, nenhum threshold alterado. Nada muda quando o usuário está de fato em tema pesado.
+Se `isPracticalQuestion(mensagem atual do usuário)` for verdadeiro, o evaluator sai com `ping-pong` e sem guidance — exatamente o mesmo caminho de saída que ele já usa hoje quando não detecta profundidade. Nenhum threshold alterado.
+
+**Ponto de inserção — especificado, não por interpretação.** Dentro de `evaluateTherapeuticPhase`, a ordem passa a ser:
+
+```text
+Prioridade 1  crise / vulnerável           → INTOCADA, roda primeiro
+Prioridade 2  short_answer_streak          → intocada
+                ↓
+NOVO          isPracticalQuestion(...)     → sai como ping-pong, sem guidance
+                ↓
+Prioridade 3  topic_continuity shifted     → interceptada pelo novo if
+Prioridade 4  resistência / desengajamento → precede o novo if (ver abaixo)
+                ↓
+ramo FREE CONVERSATION (keyword)           → interceptado pelo novo if
+```
+
+Concretamente: o novo `if` **não** pode ficar antes da Prioridade 1. Para garantir isso sem depender de posição no arquivo, a checagem de crise/vulnerável e a de resistência/desengajamento entram também como condição explícita do novo `if`:
+
+```ts
+const crisisOrVulnerable = lastUserContext?.user_emotional_state === 'crisis'
+  || lastUserContext?.user_emotional_state === 'vulnerable';
+const disengaged = lastUserContext?.user_emotional_state === 'resistant'
+  || lastUserContext?.engagement_level === 'disengaged';
+
+if (!crisisOrVulnerable && !disengaged && isPracticalQuestion(currentUserMessage)) {
+  return { guidance: null, detectedPhase: 'ping-pong', stagnationLevel: 0 };
+}
+```
+
+Assim, mesmo que alguém mova o bloco no futuro, o protocolo de crise nunca é pulado. Nada muda quando o usuário está de fato em tema pesado.
 
 ### 2. Trocar o exemplo errado por um certo
 A seção Anti-Rodeio já ensina brevidade. Ganha um exemplo de utilidade no mesmo formato dos que já estão lá, usando o caso real do pilates: pergunta prática → resposta prática.
@@ -134,7 +174,10 @@ Tudo em `supabase/functions/aura-agent/index.ts`:
 
 `phase_thresholds_test.ts` faz regex sobre o texto-fonte — ele só garante que nenhuma âncora de texto foi apagada, **não** que a lógica nova funciona. Então:
 
-1. **Teste de comportamento novo** (`practical_question_test.ts`, na mesma pasta, mesmo estilo Deno): tabela de casos contra `isPracticalQuestion` — devem dar `true`: "pilates faz mais efeito que musculação?", "como faço arroz de forno?", "me indica um filme bom", "vale a pena trocar de celular?"; devem dar `false`: `undefined`, `''`, "oi", "cadê você?", "por que eu sou assim?", "tô muito ansiosa hoje", "você ainda gosta de mim?". Para isso a função é **exportada**.
+1. **Teste de comportamento novo** (`practical_question_test.ts`, na mesma pasta, mesmo estilo Deno), contra a função exportada:
+   - `true`: "pilates faz mais efeito que musculação?", "como faço arroz de forno?", "me indica um filme bom", "vale a pena trocar de celular?", "tem como agendar isso pra sexta?"
+   - `false`: `undefined`, `''`, "oi", "cadê você?", "por que eu sou assim?", "por que isso sempre acontece comigo?", "onde foi que eu errei?", "cadê você quando eu preciso?", "tô muito ansiosa hoje", "você ainda gosta de mim?", "será que eu mereço isso?"
+   - **Regressão de segurança:** com `lastUserContext.user_emotional_state = 'crisis'` e mensagem "e agora, o que eu faço?", o evaluator deve continuar retornando o guidance de `PRIORIDADE ABSOLUTA: Acolhimento` — nunca `ping-pong`.
 2. **Rodar `phase_thresholds_test.ts`** para confirmar que `TAMANHO CONTEXTUAL`, `600 caracteres` e os thresholds do evaluator continuam presentes.
 3. **Guarda anti-500:** os dois pontos de chamada ficam dentro do fluxo normal, e a função nunca lança (entrada nula tratada). Nenhum `try/catch` novo é necessário porque não há I/O — mas o padrão do projeto (fallback opcional nunca derruba a resposta) é respeitado por construção.
 4. **Deploy com verificação de drift:** commits em `supabase/functions/**` às vezes não disparam o workflow. Após publicar, republicar manualmente se necessário e rodar nos primeiros 5 minutos:
