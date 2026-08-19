@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { normalizeBrazilianPhone, getPhoneVariations } from "../_shared/zapi-client.ts";
+import { loadWooviCommitmentSets, hasLiveWooviCommitment } from "../_shared/woovi-recovery-guard.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -73,6 +74,18 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Trilho Woovi (PIX Automático): mandato aprovado / entrada ou parcela paga
+    // não é abandono. A parcela do carnê não vem por webhook, então a
+    // reconciliação local pode chegar depois do lembrete.
+    try {
+      const woovi = await loadWooviCommitmentSets(supabase);
+      for (const e of woovi.emails) activeEmailSet.add(e);
+      for (const p of woovi.phones) activePhoneSet.add(p);
+      console.log(`💚 [RECOVERY] Woovi guard: ${woovi.emails.size} e-mails / ${woovi.phones.size} telefones com compromisso.`);
+    } catch (wErr) {
+      console.warn('⚠️ [RECOVERY] Woovi guard falhou:', wErr);
+    }
+
     const totals = { sent: 0, failed: 0, skipped: 0, by_stage: {} as Record<number, number> };
 
     for (const cfg of STAGES) {
@@ -114,7 +127,7 @@ async function processStage(
 
   let query = supabase
     .from('checkout_sessions')
-    .select('id, phone, name, plan, email, recovery_stage1_sent_at, recovery_stage2_sent_at')
+    .select('id, phone, name, plan, email, payment_method, recovery_stage1_sent_at, recovery_stage2_sent_at')
     .eq('status', 'created')
     .eq('recovery_stage', cfg.stage - 1)
     .lt('created_at', createdBefore)
@@ -165,6 +178,19 @@ async function processStage(
         const isActive = getPhoneVariations(session.phone).some(v => activePhoneSet.has(v));
         if (isActive) {
           await markStageSkipped(supabase, session.id, cfg.stage, 'active_customer_phone');
+          skipped++;
+          continue;
+        }
+      }
+
+      // Checagem ao vivo na Woovi para candidatos de PIX Automático.
+      if (String(session.payment_method || '').startsWith('pix')) {
+        const live = await hasLiveWooviCommitment(supabase, {
+          email: session.email,
+          phone: session.phone,
+        });
+        if (live.committed) {
+          await markStageSkipped(supabase, session.id, cfg.stage, live.reason || 'woovi_committed');
           skipped++;
           continue;
         }

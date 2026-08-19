@@ -15,6 +15,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { normalizeBrazilianPhone, getPhoneVariations } from "../_shared/zapi-client.ts";
 import { sendRecoveryTemplate } from "../_shared/twilio-recovery-client.ts";
+import { loadWooviCommitmentSets, hasLiveWooviCommitment } from "../_shared/woovi-recovery-guard.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -158,6 +159,18 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Trilho Woovi (PIX Automático): mandato aprovado, entrada paga ou parcela
+    // paga = intenção concluída, nunca abandono. A parcela do carnê não vem por
+    // webhook, então sem isso quem já pagou recebia o lembrete de 15min.
+    try {
+      const woovi = await loadWooviCommitmentSets(supabase);
+      for (const e of woovi.emails) completedEmailSet.add(e);
+      for (const p of woovi.phones) completedPhoneSet.add(p);
+      console.log(`💚 [WA-RECOVERY] Woovi guard: ${woovi.emails.size} e-mails / ${woovi.phones.size} telefones com compromisso.`);
+    } catch (wErr) {
+      console.warn("⚠️ [WA-RECOVERY] Woovi guard falhou:", wErr);
+    }
+
     // === LIFETIME CAP: telefones que já receberam >=2 envios ou já falharam alguma vez ===
     // Twilio cobra mesmo quando Meta rejeita; tratamos qualquer falha como banimento vitalício.
     const lifetimeBannedPhones = new Set<string>();
@@ -274,7 +287,7 @@ async function processStage(
 
   let query = supabase
     .from("checkout_sessions")
-    .select("id, phone, name, plan, email")
+    .select("id, phone, name, plan, email, payment_method")
     .eq("status", "created")
     .not("phone", "is", null)
     .gte("created_at", WHATSAPP_RECOVERY_CUTOFF)
@@ -351,6 +364,21 @@ async function processStage(
         await markSkipped(supabase, session.id, cfg, "already_contacted_this_stage");
         skipped++;
         continue;
+      }
+
+      // Checagem ao vivo do trilho Woovi para PIX Automático: mandato/parcela
+      // podem existir na Woovi antes de virar registro local (reconciliação é
+      // assíncrona). Isso mantém o gatilho em 15 min sem falso abandono.
+      if (String(session.payment_method || "").startsWith("pix")) {
+        const live = await hasLiveWooviCommitment(supabase, {
+          email: session.email,
+          phone: session.phone,
+        });
+        if (live.committed) {
+          await markSkipped(supabase, session.id, cfg, live.reason || "woovi_committed");
+          skipped++;
+          continue;
+        }
       }
 
       const name = firstName(session.name);
@@ -541,6 +569,20 @@ async function processStageAsaas(
         await markSkippedAsaas(supabase, payment.id, cfg, "already_contacted_this_stage");
         skipped++;
         continue;
+      }
+
+      // Mesma guarda ao vivo: a pessoa pode ter desistido do PIX Asaas e
+      // concluído pelo trilho Woovi (mandato/parcela ainda não reconciliados).
+      {
+        const live = await hasLiveWooviCommitment(supabase, {
+          email: payment.customer_email,
+          phone: payment.customer_phone,
+        });
+        if (live.committed) {
+          await markSkippedAsaas(supabase, payment.id, cfg, live.reason || "woovi_committed");
+          skipped++;
+          continue;
+        }
       }
 
       const name = firstName(payment.customer_name);
