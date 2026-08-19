@@ -6641,16 +6641,14 @@ Formato da tag: [PAUSAR_SESSOES data="YYYY-MM-DD"] (máximo 90 dias no futuro).
     const userWordCount = userMessageRaw.length === 0 ? 0 : userMessageRaw.split(/\s+/).length;
 
     const PURE_GREETING_REGEX = /^(oi+|olá+|ola+|e\s*a[ií]|hey+|hi+|hello+|bom\s*dia|boa\s*tarde|boa\s*noite|opa+|al[oô]+|tudo\s*bem\??|tudo\s*certo\??)[.!?]*\s*$/i;
-    const EMOTIONAL_LOAD_REGEX = /(trist|ansios|medo|raiva|sozinh|cansad|perdid|chorand|surto|crise|ajuda|\bdor\b|peso|vazio|culp|ang[uú]st|p[âa]nico|desesper|sofr|deprim|chate|magoa|frustr|exaust|esgotad|ferid|ódio|odeio|odi[ae]|mal\b)/i;
 
+    // Só saudação pura dispara o bloco de abertura leve. O ramo antigo (≤8 palavras
+    // sem carga emocional) engolia pergunta prática curta ("pilates faz mais efeito
+    // que musculação?") e forçava resposta de cumprimento. A proteção contra puxar
+    // tema antigo migrou para o LEMBRETE ANTI-ECO abaixo (agora ≤8 palavras).
     const isPureGreeting = PURE_GREETING_REGEX.test(userMessageNorm);
-    const isLightMessage =
-      !isPureGreeting &&
-      userWordCount > 0 &&
-      userWordCount <= 8 &&
-      !EMOTIONAL_LOAD_REGEX.test(userMessageNorm);
 
-    if (!sessionActive && (isPureGreeting || isLightMessage)) {
+    if (!sessionActive && isPureGreeting) {
       dynamicContext += `\n\n## ABERTURA LEVE DETECTADA
 A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional clara.
 
@@ -6658,9 +6656,10 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
 - PROIBIDO nesta resposta: referenciar memória, insights, evolution summary, compromissos pendentes, temas de sessões anteriores ou padrões observados.
 - Espere o usuário trazer o tema antes de qualquer aprofundamento.
 - Máximo 2 balões curtos.`;
-    } else if (userWordCount > 0 && userWordCount <= 5) {
-      // Lembrete anti-eco suavizado — só para mensagens curtas que não caíram no bloco acima
-      dynamicContext += `\nLEMBRETE ANTI-ECO: Mensagem curta detectada. Espelhe o tamanho da mensagem dele — responda curto. Só pergunte se houver gancho real no que ele disse; caso contrário, devolva presença sem puxar tema novo ou antigo. Não comece reformulando o que ele disse, e varie a forma de reagir.`;
+    } else if (userWordCount > 0 && userWordCount <= 8) {
+      // Lembrete anti-eco suavizado — cobre mensagens curtas que não caíram no bloco
+      // acima, incluindo a faixa 6-8 palavras que antes tinha blindagem explícita.
+      dynamicContext += `\nLEMBRETE ANTI-ECO: Mensagem curta detectada. Espelhe o tamanho da mensagem dele — responda curto. Se for uma pergunta prática, responda a pergunta direto (isso não é aprofundamento). Só pergunte se houver gancho real no que ele disse; caso contrário, devolva presença sem puxar tema novo ou antigo. NÃO referencie memória, insights, evolution summary, compromissos pendentes ou temas de sessões anteriores nesta resposta. Não comece reformulando o que ele disse, e varie a forma de reagir.`;
     }
 
     // ========================================================================
