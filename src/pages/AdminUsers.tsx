@@ -126,6 +126,7 @@ export default function AdminUsers() {
   // Edit dialog
   const [editProfile, setEditProfile] = useState<Profile | null>(null);
   const [editForm, setEditForm] = useState({ name: '', email: '', phone: '', plan: '', status: '', whatsapp_provider: 'default' });
+  const [cancelingGateway, setCancelingGateway] = useState(false);
   const [saving, setSaving] = useState(false);
   const [portalLinkLoading, setPortalLinkLoading] = useState(false);
   const [portalLinkCopied, setPortalLinkCopied] = useState(false);
