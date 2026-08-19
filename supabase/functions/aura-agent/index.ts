@@ -1316,6 +1316,21 @@ ${lastUserContext.user_emotional_state === 'crisis' ? 'Se houver risco, siga o p
       ? `\n\n💡 NOTA: O usuário está respondendo de forma curta há ${earlyStreak} turnos. Não force aprofundamento — tente ângulos mais leves ou perguntas concretas.`
       : null;
 
+    // NOVO: pergunta prática (dúvida do dia a dia) → sai como ping-pong, sem guidance.
+    // Guardas explícitas garantem que crise/vulnerabilidade e resistência NUNCA são
+    // puladas, mesmo que este bloco seja movido no futuro.
+    {
+      const crisisOrVulnerable = lastUserContext.user_emotional_state === 'crisis'
+        || lastUserContext.user_emotional_state === 'vulnerable';
+      const disengaged = lastUserContext.user_emotional_state === 'resistant'
+        || lastUserContext.engagement_level === 'disengaged';
+      const lastUserMsg = [...messageHistory].reverse().find(m => m.role === 'user')?.content;
+      if (!sessionActive && !crisisOrVulnerable && !disengaged && isPracticalQuestion(lastUserMsg)) {
+        console.log('🧰 Phase evaluator: pergunta prática detectada → ping-pong sem guidance');
+        return { guidance: null, detectedPhase: 'ping-pong', stagnationLevel: 0 };
+      }
+    }
+
     // Priority 3: Topic shift → reset stagnation (but still allow streak nudge)
     if (lastUserContext.topic_continuity === 'shifted' || lastUserContext.topic_continuity === 'new_topic') {
       console.log(`🔄 Phase evaluator: topic_continuity=${lastUserContext.topic_continuity} → resetting stagnation`);
