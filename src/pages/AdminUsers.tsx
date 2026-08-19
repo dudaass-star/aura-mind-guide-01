@@ -428,6 +428,7 @@ export default function AdminUsers() {
 
   const handleRearmD0 = async () => {
     if (!editProfile) return;
+    // (mantido)
     setSaving(true);
     try {
       const { error } = await supabase.functions.invoke('admin-update-profile', {
