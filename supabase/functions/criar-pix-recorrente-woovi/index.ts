@@ -211,7 +211,10 @@ async function findLiveSubscription(
           { headers: { Authorization: `Bearer ${STRIPE_SECRET_KEY}` } },
         );
         const subsJson = await subs.json().catch(() => ({}));
-        const liveStatuses = ["active", "trialing", "past_due", "unpaid", "incomplete"];
+        // `incomplete` = checkout de cartão iniciado e NUNCA pago (o cliente
+        // desistiu e voltou pelo PIX). Bloquear nesse caso trava venda nova,
+        // então só contam status com cobrança de fato em curso.
+        const liveStatuses = ["active", "trialing", "past_due", "unpaid"];
         const hit = (subsJson?.data || []).find((s: any) => liveStatuses.includes(s.status));
         if (hit) return `assinatura no cartão em status ${hit.status}`;
       }
