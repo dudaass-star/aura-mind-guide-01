@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, Search, Pencil, RotateCcw, ChevronLeft, ChevronRight, Link, Copy, Check, Star, RefreshCw, AlertTriangle, MessageSquare } from 'lucide-react';
+import { ArrowLeft, Search, Pencil, RotateCcw, ChevronLeft, ChevronRight, Link, Copy, Check, Star, RefreshCw, AlertTriangle, MessageSquare, Ban } from 'lucide-react';
 
 interface Profile {
   id: string;
@@ -126,6 +126,7 @@ export default function AdminUsers() {
   // Edit dialog
   const [editProfile, setEditProfile] = useState<Profile | null>(null);
   const [editForm, setEditForm] = useState({ name: '', email: '', phone: '', plan: '', status: '', whatsapp_provider: 'default' });
+  const [cancelingGateway, setCancelingGateway] = useState(false);
   const [saving, setSaving] = useState(false);
   const [portalLinkLoading, setPortalLinkLoading] = useState(false);
   const [portalLinkCopied, setPortalLinkCopied] = useState(false);
@@ -423,6 +424,55 @@ export default function AdminUsers() {
       toast({ title: 'Erro', description: err.message, variant: 'destructive' });
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Cancela de verdade no gateway do cliente (Stripe / Asaas cartão / PIX Asaas /
+  // PIX Automático Inter / PIX Automático Woovi). A edge function detecta o
+  // trilho pelo profile e cancela a assinatura ou o mandato Bacen.
+  const handleCancelGateway = async () => {
+    if (!editProfile) return;
+    const phoneClean = (editProfile.phone || '').replace(/\D/g, '');
+    if (!phoneClean) {
+      toast({
+        title: 'Sem telefone',
+        description: 'O cancelamento é resolvido pelo telefone do cliente. Preencha e salve antes.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    const ok = window.confirm(
+      `Cancelar de verdade a assinatura de ${editProfile.name || 'este usuário'} no gateway?\n\n` +
+        'Isso interrompe as próximas cobranças (ou cancela o mandato PIX). O acesso segue até o fim do período pago.',
+    );
+    if (!ok) return;
+    setCancelingGateway(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('cancel-subscription', {
+        body: {
+          phone: phoneClean,
+          action: 'cancel',
+          reason: 'other',
+          reason_detail: 'Cancelamento manual pelo painel admin',
+        },
+      });
+      if (error) throw error;
+      if (data && data.success === false) {
+        throw new Error(data.error || data.message || 'Gateway recusou o cancelamento');
+      }
+      toast({
+        title: 'Cancelado no gateway',
+        description: data?.message || 'Assinatura cancelada com sucesso.',
+      });
+      fetchProfiles();
+    } catch (err: any) {
+      toast({
+        title: 'Erro ao cancelar',
+        description: err?.context?.error || err?.message || 'Não foi possível cancelar agora.',
+        variant: 'destructive',
+      });
+    } finally {
+      setCancelingGateway(false);
     }
   };
 
@@ -794,6 +844,24 @@ export default function AdminUsers() {
                 {portalLinkCopied ? <Check className="h-4 w-4 mr-2 text-green-600" /> : <Link className="h-4 w-4 mr-2" />}
                 {portalLinkLoading ? 'Gerando...' : portalLinkCopied ? 'Link copiado!' : 'Copiar link do Meu Espaço'}
               </Button>
+
+              <div className="border-t pt-3 space-y-1">
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="w-full"
+                  onClick={handleCancelGateway}
+                  disabled={cancelingGateway}
+                >
+                  <Ban className="h-4 w-4 mr-2" />
+                  {cancelingGateway ? 'Cancelando no gateway...' : 'Cancelar assinatura de verdade'}
+                </Button>
+                <p className="text-[10px] text-muted-foreground">
+                  Mudar o campo Status acima é só rótulo interno — não para cobranças.
+                  Este botão cancela no gateway real do cliente (Stripe, Asaas cartão/PIX,
+                  PIX Automático Inter ou Woovi).
+                </p>
+              </div>
             </div>
           )}
           <DialogFooter>
