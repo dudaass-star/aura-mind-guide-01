@@ -571,6 +571,20 @@ async function processStageAsaas(
         continue;
       }
 
+      // Mesma guarda ao vivo: a pessoa pode ter desistido do PIX Asaas e
+      // concluído pelo trilho Woovi (mandato/parcela ainda não reconciliados).
+      {
+        const live = await hasLiveWooviCommitment(supabase, {
+          email: payment.customer_email,
+          phone: payment.customer_phone,
+        });
+        if (live.committed) {
+          await markSkippedAsaas(supabase, payment.id, cfg, live.reason || "woovi_committed");
+          skipped++;
+          continue;
+        }
+      }
+
       const name = firstName(payment.customer_name);
       const result = await sendRecoveryTemplate(payment.customer_phone, cfg.contentSid, {
         "1": name,
