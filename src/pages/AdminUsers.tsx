@@ -844,6 +844,24 @@ export default function AdminUsers() {
                 {portalLinkCopied ? <Check className="h-4 w-4 mr-2 text-green-600" /> : <Link className="h-4 w-4 mr-2" />}
                 {portalLinkLoading ? 'Gerando...' : portalLinkCopied ? 'Link copiado!' : 'Copiar link do Meu Espaço'}
               </Button>
+
+              <div className="border-t pt-3 space-y-1">
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="w-full"
+                  onClick={handleCancelGateway}
+                  disabled={cancelingGateway}
+                >
+                  <Ban className="h-4 w-4 mr-2" />
+                  {cancelingGateway ? 'Cancelando no gateway...' : 'Cancelar assinatura de verdade'}
+                </Button>
+                <p className="text-[10px] text-muted-foreground">
+                  Mudar o campo Status acima é só rótulo interno — não para cobranças.
+                  Este botão cancela no gateway real do cliente (Stripe, Asaas cartão/PIX,
+                  PIX Automático Inter ou Woovi).
+                </p>
+              </div>
             </div>
           )}
           <DialogFooter>
