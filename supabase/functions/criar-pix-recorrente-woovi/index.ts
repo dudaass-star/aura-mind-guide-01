@@ -162,6 +162,67 @@ async function isReturningCustomer(supabase: any, email: string, phoneDigits: st
   return false;
 }
 
+// Assinatura VIVA (não é só "já pagou um dia"): impede criar um 2º débito
+// automático para quem já tem cobrança recorrente rodando em outro meio.
+// Caso de referência: cliente com cartão ativo assinou de novo por PIX e ficou
+// com dois ciclos cobrando o mesmo plano no mesmo mês.
+async function findLiveSubscription(
+  supabase: any,
+  email: string,
+  phoneDigits: string,
+): Promise<string | null> {
+  try {
+    // 1) Perfil com acesso vigente (qualquer gateway).
+    const orParts = [`email.eq.${email}`];
+    if (phoneDigits) orParts.push(`phone.eq.${phoneDigits}`, `phone.eq.55${phoneDigits}`);
+    const { data: profiles } = await supabase
+      .from("profiles").select("status, plan, plan_expires_at, card_gateway")
+      .or(orParts.join(",")).limit(5);
+    const live = (profiles || []).find((p: any) =>
+      p.status === "active" && p.plan_expires_at && new Date(p.plan_expires_at) > new Date()
+    );
+    if (live) return `perfil ativo até ${String(live.plan_expires_at).slice(0, 10)} (${live.card_gateway ?? "?"})`;
+
+    // 2) Mandato PIX vivo (Woovi ou Inter) ainda não substituído.
+    const { data: wooviLive } = await supabase
+      .from("woovi_subscriptions").select("subscription_id")
+      .eq("customer_email", email).in("status", MANDATE_ACTIVE_STATUSES)
+      .is("replaced_by_subscription_id", null)
+      .not("access_granted_at", "is", null).limit(1);
+    if (wooviLive && wooviLive.length > 0) return "mandato PIX Automático ativo";
+
+    const { data: interLive } = await supabase
+      .from("inter_pix_recurrences").select("id")
+      .eq("customer_email", email).in("status", MANDATE_ACTIVE_STATUSES).limit(1);
+    if (interLive && interLive.length > 0) return "mandato PIX Automático ativo";
+
+    // 3) Assinatura de cartão viva na Stripe (inclui atraso: cobrança em curso).
+    const STRIPE_SECRET_KEY = Deno.env.get("STRIPE_SECRET_KEY");
+    if (STRIPE_SECRET_KEY) {
+      const resp = await fetch(
+        `https://api.stripe.com/v1/customers?email=${encodeURIComponent(email)}&limit=1`,
+        { headers: { Authorization: `Bearer ${STRIPE_SECRET_KEY}` } },
+      );
+      const json = await resp.json().catch(() => ({}));
+      const customerId = json?.data?.[0]?.id;
+      if (customerId) {
+        const subs = await fetch(
+          `https://api.stripe.com/v1/subscriptions?customer=${customerId}&status=all&limit=10`,
+          { headers: { Authorization: `Bearer ${STRIPE_SECRET_KEY}` } },
+        );
+        const subsJson = await subs.json().catch(() => ({}));
+        const liveStatuses = ["active", "trialing", "past_due", "unpaid", "incomplete"];
+        const hit = (subsJson?.data || []).find((s: any) => liveStatuses.includes(s.status));
+        if (hit) return `assinatura no cartão em status ${hit.status}`;
+      }
+    }
+  } catch (e) {
+    // Falha de checagem não pode travar venda nova: segue o fluxo normal.
+    console.warn("[criar-pix-recorrente-woovi] checagem de assinatura viva falhou:", (e as Error)?.message);
+  }
+  return null;
+}
+
 // A Woovi devolve só o `emv` (BR Code); a imagem é gerada aqui como SVG em data
 // URI — o CheckoutV2 aceita tanto base64 puro quanto valores prefixados por `data:`.
 async function buildQrImage(payload: string): Promise<string | null> {
