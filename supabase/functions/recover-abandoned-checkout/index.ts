@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { normalizeBrazilianPhone, getPhoneVariations } from "../_shared/zapi-client.ts";
+import { loadWooviCommitmentSets, hasLiveWooviCommitment } from "../_shared/woovi-recovery-guard.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -71,6 +72,18 @@ Deno.serve(async (req) => {
         }
         if (c.email) activeEmailSet.add(c.email.toLowerCase());
       }
+    }
+
+    // Trilho Woovi (PIX Automático): mandato aprovado / entrada ou parcela paga
+    // não é abandono. A parcela do carnê não vem por webhook, então a
+    // reconciliação local pode chegar depois do lembrete.
+    try {
+      const woovi = await loadWooviCommitmentSets(supabase);
+      for (const e of woovi.emails) activeEmailSet.add(e);
+      for (const p of woovi.phones) activePhoneSet.add(p);
+      console.log(`💚 [RECOVERY] Woovi guard: ${woovi.emails.size} e-mails / ${woovi.phones.size} telefones com compromisso.`);
+    } catch (wErr) {
+      console.warn('⚠️ [RECOVERY] Woovi guard falhou:', wErr);
     }
 
     const totals = { sent: 0, failed: 0, skipped: 0, by_stage: {} as Record<number, number> };
