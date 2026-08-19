@@ -1247,6 +1247,31 @@ function userDeclinedClosure(
   return content.length >= 15;
 }
 
+// ============================================================
+// PERGUNTA PRÁTICA (dúvida do dia a dia) vs. DESABAFO
+// Função pura, sem I/O. Usada em 2 pontos: gate de abertura leve
+// e saída antecipada do phase evaluator.
+// Regra de manutenção: só entra em PRACTICAL_OPENER termo que NÃO
+// possa iniciar uma frase afirmativa de desabafo. "pode", "posso",
+// "dá pra" ficam fora de propósito ("posso não aguentar mais isso").
+// ============================================================
+export const EMOTIONAL_LOAD_REGEX = /(trist|ansios|medo|raiva|sozinh|cansad|perdid|chorand|surto|crise|ajuda|\bdor\b|peso|vazio|culp|ang[uú]st|p[âa]nico|desesper|sofr|deprim|chate|magoa|frustr|exaust|esgotad|ferid|ódio|odeio|odi[ae]|mal\b|sumi|gosta de mim|me ama|\bama\b|tra[ií]|termin|brig|discut|ignor|larg|abandon|sauda|ciúm|cium|arrepend|fracass|vergonh|insegur|aguentar)/i;
+
+const PRACTICAL_OPENER = /^(o que|oq|qual|quais|como|quando|onde|quanto|quantos|vale a pena|voc[êe] sabe|vc sabe|sabe se|me indica|me ajuda a|tem alguma|tem como|existe algum|[ée] melhor|faz mal)\b/i;
+
+// Pergunta que termina em "?" mas é reflexiva/existencial — NUNCA é prática
+const REFLEXIVE_QUESTION = /(^por qu[êe]|^pq\b|\bsou assim\b|\bcomigo\b|\bem mim\b|\bde mim\b|\bmerec|\bculpa\b|\berrei\b|\bsentido da vida\b|\bvale a pena viver\b|\bcad[êe] voc[êe]\b|\bser[áa] que eu\b)/i;
+
+export function isPracticalQuestion(msg?: string | null): boolean {
+  const t = (msg ?? '').toLowerCase().trim();
+  if (!t) return false;
+  // Exclusões rodam ANTES de qualquer return true (senão o || curto-circuita)
+  if (EMOTIONAL_LOAD_REGEX.test(t)) return false;
+  if (REFLEXIVE_QUESTION.test(t)) return false;
+  if (PRACTICAL_OPENER.test(t)) return true;
+  return t.endsWith('?');
+}
+
 function evaluateTherapeuticPhase(
   messageHistory: Array<{ role: string; content: string }>,
   sessionActive: boolean,
