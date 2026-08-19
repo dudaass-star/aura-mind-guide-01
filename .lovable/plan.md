@@ -37,9 +37,16 @@ Hoje é uma lista única de "não faço". Passa a separar:
 A resposta pronta "não é bem minha praia" sai da posição de padrão e passa a valer só para o segundo nível. O "POR QUÊ" também muda: o valor dela é ser a amiga que entende de gente **e está por perto no dia comum** — não uma assistente genérica, mas também não alguém que se recusa a responder o óbvio.
 
 ### 0b. Corrigir o `ABERTURA LEVE DETECTADA` (trava 2)
-O bloco continua existindo — ele resolve bem o problema do "Oi". Só passa a **não** disparar quando a mensagem curta é uma pergunta prática. Mensagem curta que não é pergunta continua exatamente como hoje.
+O bloco continua existindo — ele resolve bem o problema do "Oi". A correção é **estreitar o gatilho**, não adicionar lista:
 
-Uma única função nova, ao lado dos regex que já existem lá:
+- Hoje ele dispara em (a) saudação pura **ou** (b) qualquer mensagem de **≤8 palavras** sem palavra emocional. É o ramo (b) que engole pergunta prática curta.
+- Passa a disparar **só na saudação pura** (`PURE_GREETING_REGEX`, que já existe). O ramo (b) é removido.
+- Mensagem curta que não é saudação continua caindo no `LEMBRETE ANTI-ECO` que já existe logo abaixo (≤5 palavras) — ele pede resposta curta e sem puxar tema, o que resolve o caso "tudo certo por aí" sem proibir a Aura de responder.
+
+**Por que isso responde diretamente à sua preocupação:** não existe lista de assuntos nem de formatos aqui. Qualquer coisa que não seja literalmente "oi/olá/bom dia/tudo bem" segue o fluxo normal, com erro de digitação, assunto fora do previsto, frase torta, o que for. O único regex envolvido é o de saudação, que já está em produção e é o caso mais fácil de acertar.
+
+### 0c. `isPracticalQuestion` — usada só onde errar é inofensivo
+Uma função nova, ao lado dos regex que já existem:
 
 ```ts
 // true quando a mensagem é pergunta prática (dúvida do dia a dia), não desabafo
@@ -61,6 +68,13 @@ export function isPracticalQuestion(msg?: string | null): boolean {
 ```
 
 **Sobre o `endsWith('?')` (bug apontado na revisão, procede):** na versão anterior o `||` curto-circuitava e a whitelist virava decorativa — `"por que eu sou assim?"` retornava `true`, contrariando o próprio caso de teste do plano. Agora as duas exclusões (`EMOTIONAL_LOAD_REGEX` e `REFLEXIVE_QUESTION`) rodam **antes** de qualquer `return true`, e o `endsWith('?')` só é alcançado depois delas. Na dúvida, o erro é pro lado seguro: cai em acolhimento, não em utilidade.
+
+**Sobre os exemplos limitarem a Aura (sua pergunta):** a estrutura foi montada pra que nenhuma lista defina onde ela pode agir.
+
+- `PRACTICAL_OPENER` **só amplia** a cobertura. Não estar nela não exclui nada, porque o `endsWith('?')` logo abaixo é o pega-tudo: "faz mal tomar café a noite?", "kual o melhor horario pra treinar?" (com erro de digitação), "quanto tempo dura tinta de parede?" — todas passam, sem estar em lista nenhuma. Se um dia alguém apagasse a `PRACTICAL_OPENER` inteira, o comportamento praticamente não mudaria.
+- `REFLEXIVE_QUESTION` e `EMOTIONAL_LOAD_REGEX` são as únicas listas que **restringem**, e restringem para o lado seguro: o pior erro delas é a Aura acolher quando bastava responder — nunca o contrário.
+- E o mais importante: `isPracticalQuestion` **não decide se a Aura responde**. Ela só (i) não é usada mais no gate de abertura leve, que agora só olha saudação, e (ii) desarma um bloco de guidance no evaluator. Se ela falhar num caso novo, o resultado é o comportamento de hoje — nunca uma recusa nova.
+- Quem decide de fato se aquilo é pergunta prática é o **prompt**, lido pelo Gemini, que entende variação, gíria, erro de digitação e assunto fora do previsto. Os exemplos no prompt (`pilates x musculação`) são ilustração de postura, não filtro de escopo — mesmo papel dos exemplos que já existem no PING-PONG hoje.
 
 Essa mesma função é reutilizada no item 1b. É a única peça de código nova de todo o plano. Assinatura tolerante a `undefined`/vazio de propósito: os dois pontos de chamada recebem `message` cru.
 
@@ -148,14 +162,16 @@ Contabilizando o que a implementação realmente adiciona:
 | Exemplo no Anti-Rodeio | texto do prompt | +2 linhas |
 | Frase na Postura Clínica | texto do prompt | +1 linha |
 | `isPracticalQuestion()` | código | 1 função, ~5 linhas |
-| Gate do `ABERTURA LEVE` | código | 1 condição a mais |
+| Gate do `ABERTURA LEVE` | código | remove 1 ramo (fica só saudação pura) |
 | Saída antecipada do evaluator | código | 1 `if` |
 | Faixa temporal 30 min | código | troca de `>= 4` por `>= 0.5` + 1 `else if` |
 
 Nenhum modo novo, nenhum estado novo, nenhuma tabela, nenhum campo, nenhuma chamada extra de LLM, nenhuma latência adicional. Só uma função pura de string usada em dois pontos.
 
 **Riscos e contenção:**
-- *Falso positivo em desabafo em forma de pergunta* ("por que eu sou assim?") — contido: `isPracticalQuestion` retorna `false` se houver qualquer palavra de carga emocional, e o padrão `por que` fica de fora da lista de propósito.
+- *Falso positivo em desabafo em forma de pergunta* ("por que eu sou assim?") — contido pelas duas exclusões que rodam antes de qualquer `return true`.
+- *Voltar o problema do "Oi" em mensagem curta que não é saudação* — contido pelo `LEMBRETE ANTI-ECO` (≤5 palavras), que já existe e continua ativo; e pelas regras de contexto passivo de insights, que já proíbem pautar por memória.
+- *Lista de exemplos ficar curta/desatualizada* — por construção as listas que restringem erram pro lado do acolhimento, e a lista que amplia é dispensável (o `?` cobre).
 - *Aura virar assistente genérica* — contido pelo segundo nível do `ESCOPO E LIMITES`, que mantém o "não" nas entregas técnicas/reguladas.
 - *Perder profundidade em tema pesado* — nenhuma das mudanças toca o caminho com carga emocional nem o caminho de sessão ativa.
 - *Rollback* — as 4 edições de texto e os 4 pontos de código são independentes entre si; qualquer um pode ser revertido isolado sem quebrar os outros.
@@ -177,6 +193,7 @@ Tudo em `supabase/functions/aura-agent/index.ts`:
 1. **Teste de comportamento novo** (`practical_question_test.ts`, na mesma pasta, mesmo estilo Deno), contra a função exportada:
    - `true`: "pilates faz mais efeito que musculação?", "como faço arroz de forno?", "me indica um filme bom", "vale a pena trocar de celular?", "tem como agendar isso pra sexta?"
    - `false`: `undefined`, `''`, "oi", "cadê você?", "por que eu sou assim?", "por que isso sempre acontece comigo?", "onde foi que eu errei?", "cadê você quando eu preciso?", "tô muito ansiosa hoje", "você ainda gosta de mim?", "será que eu mereço isso?"
+   - `true` **mesmo fora de qualquer lista** (prova de que não há limitação de escopo): "kual o melhor horario pra treinar?", "faz mal tomar café a noite?", "quanto tempo dura tinta de parede?"
    - **Regressão de segurança:** com `lastUserContext.user_emotional_state = 'crisis'` e mensagem "e agora, o que eu faço?", o evaluator deve continuar retornando o guidance de `PRIORIDADE ABSOLUTA: Acolhimento` — nunca `ping-pong`.
 2. **Rodar `phase_thresholds_test.ts`** para confirmar que `TAMANHO CONTEXTUAL`, `600 caracteres` e os thresholds do evaluator continuam presentes.
 3. **Guarda anti-500:** os dois pontos de chamada ficam dentro do fluxo normal, e a função nunca lança (entrada nula tratada). Nenhum `try/catch` novo é necessário porque não há I/O — mas o padrão do projeto (fallback opcional nunca derruba a resposta) é respeitado por construção.
@@ -186,4 +203,4 @@ Tudo em `supabase/functions/aura-agent/index.ts`:
    where created_at > now() - interval '10 minutes'
    order by created_at desc;
    ```
-5. **Prova em conversa real:** mandar "pilates faz mais efeito que musculação?" e confirmar nos logs que `ABERTURA LEVE DETECTADA` **não** foi injetado e que o evaluator saiu como `ping-pong` sem guidance.
+5. **Prova em conversa real:** mandar "pilates faz mais efeito que musculação?" e confirmar nos logs que `ABERTURA LEVE DETECTADA` **não** foi injetado e que o evaluator saiu como `ping-pong` sem guidance. Depois mandar "oi" e confirmar que o bloco de abertura leve **continua** disparando.
