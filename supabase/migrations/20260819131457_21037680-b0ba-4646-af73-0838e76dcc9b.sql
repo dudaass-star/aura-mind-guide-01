@@ -1,0 +1,1 @@
+update public.profiles set status='canceled', canceled_at=now(), plan_expires_at=now() where user_id='e25ade52-8c1e-4f63-9bad-f707a7eb87c7'
