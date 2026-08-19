@@ -15,6 +15,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { normalizeBrazilianPhone, getPhoneVariations } from "../_shared/zapi-client.ts";
 import { sendRecoveryTemplate } from "../_shared/twilio-recovery-client.ts";
+import { loadWooviCommitmentSets, hasLiveWooviCommitment } from "../_shared/woovi-recovery-guard.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -156,6 +157,18 @@ Deno.serve(async (req) => {
         }
         if (p.customer_email) completedEmailSet.add(p.customer_email.toLowerCase());
       }
+    }
+
+    // Trilho Woovi (PIX Automático): mandato aprovado, entrada paga ou parcela
+    // paga = intenção concluída, nunca abandono. A parcela do carnê não vem por
+    // webhook, então sem isso quem já pagou recebia o lembrete de 15min.
+    try {
+      const woovi = await loadWooviCommitmentSets(supabase);
+      for (const e of woovi.emails) completedEmailSet.add(e);
+      for (const p of woovi.phones) completedPhoneSet.add(p);
+      console.log(`💚 [WA-RECOVERY] Woovi guard: ${woovi.emails.size} e-mails / ${woovi.phones.size} telefones com compromisso.`);
+    } catch (wErr) {
+      console.warn("⚠️ [WA-RECOVERY] Woovi guard falhou:", wErr);
     }
 
     // === LIFETIME CAP: telefones que já receberam >=2 envios ou já falharam alguma vez ===
