@@ -172,9 +172,9 @@ Deno.serve(async (req) => {
       .eq("creation_status", "completed")
       .gte("created_at", since)
       .is("replaced_by_subscription_id", null)
-      .limit(onlyExtrato ? 0 : 300);
+      .limit(300);
 
-    for (const sub of composed || []) {
+    for (const sub of (onlyExtrato ? [] : composed) || []) {
       const created = String(sub.created_at || "");
       if (created > graceBefore) continue;
       const approved = MANDATE_ACTIVE_STATUSES.includes(String(sub.status));
@@ -352,8 +352,8 @@ Deno.serve(async (req) => {
       .select("id, installment_id, subscription_id, status, paid_at")
       .is("paid_at", null)
       .gte("created_at", new Date(now.getTime() - 45 * 86400000).toISOString())
-      .limit(onlyExtrato ? 0 : 200);
-    for (const c of openCharges || []) {
+      .limit(200);
+    for (const c of (onlyExtrato ? [] : openCharges) || []) {
       const r = await wooviFetch<Record<string, any>>(
         `/api/v1/charge/${encodeURIComponent(String(c.installment_id))}`,
       );
@@ -384,9 +384,9 @@ Deno.serve(async (req) => {
       .in("status", MANDATE_ACTIVE_STATUSES)
       .is("replaced_by_subscription_id", null)
       .not("subscription_id", "is", null)
-      .limit(onlyExtrato ? 0 : 300);
+      .limit(300);
 
-    for (const sub of liveSubs || []) {
+    for (const sub of (onlyExtrato ? [] : liveSubs) || []) {
       const r = await wooviFetch<Record<string, any>>(
         `/api/v1/subscriptions/${encodeURIComponent(String(sub.subscription_id))}`,
       );
@@ -475,9 +475,9 @@ Deno.serve(async (req) => {
       .not("subscription_id", "is", null)
       .not("next_charge_date", "is", null)
       .lte("next_charge_date", today)
-      .limit(onlyExtrato ? 0 : 200);
+      .limit(200);
 
-    for (const sub of dueSubs || []) {
+    for (const sub of (onlyExtrato ? [] : dueSubs) || []) {
       const r = await wooviFetch<Record<string, any>>(
         `/api/v1/subscriptions/${encodeURIComponent(String(sub.subscription_id))}`,
       );
