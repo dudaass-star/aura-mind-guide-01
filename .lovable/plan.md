@@ -14,7 +14,12 @@ Fiz a varredura que faltava. São cinco pontos, e três deles eu não tinha vist
 
 **Trava 3 — `## MODO PING-PONG` (~3081-3090).** Ele já desliga os guardrails de profundidade (bom), mas está escrito como "reagir breve e devolver a bola" — não autoriza **responder de fato**. E impõe **máximo 300 caracteres** em troca leve. Uma resposta útil de verdade (ideia de receita, comparação, passo a passo curto) não cabe em 300 caracteres. Além disso a classificação fora de sessão só reconhece dois sinais — leve/factual e carga emocional — e pergunta prática não é nem um nem outro.
 
-**Trava 4 — Phase Evaluator em conversa livre (~1634-1668).** Ele decide se está em conversa profunda olhando as **mensagens recentes da própria Aura**: se as últimas falas dela têm vocabulário de profundidade, ele continua injetando "AÇÃO OBRIGATÓRIA: traga UMA observação concreta / pergunta-âncora da Logoterapia" mesmo que o usuário já tenha mudado para assunto leve. Resíduo do tema anterior mantém a marcha clínica ligada.
+**Trava 4 — Phase Evaluator: a "rede de segurança" de mudança de tema é, ela mesma, uma trava.** Há duas camadas aqui, e a revisão externa acertou a existência da primeira mas errou o efeito dela:
+
+- Camada semântica (`topic_continuity`, linhas 1295-1305): quando o micro-agente marca `shifted`/`new_topic`, o evaluator realmente reseta a estagnação — mas **injeta** o bloco `🔄 MUDANÇA DE TEMA DETECTADA` que manda: *"Antes de interpretar ou aprofundar emocionalmente: 1. Acolha brevemente 2. Pergunte sobre a SITUAÇÃO concreta: 'O que tá acontecendo?' / 'Me conta mais sobre isso' 3. Só após entender o contexto, aplique as fases normais."* Numa pergunta prática isso é exatamente o comportamento errado — vira sondagem clínica em cima de "pilates x musculação". Então essa camada não protege a utilidade: ela atrapalha. E o `last_user_context` vem do **turno anterior**, então chega com um turno de atraso.
+- Camada por keyword (linhas 1634-1668), atingida quando o micro-agente não classificou nada naquele turno: olha as **mensagens recentes da própria Aura**; se as falas dela ainda têm vocabulário de profundidade, segue injetando "AÇÃO OBRIGATÓRIA: traga UMA observação concreta / pergunta-âncora da Logoterapia".
+
+Ou seja: os dois caminhos precisam do mesmo desarme, e não há mecanismo paralelo sendo empilhado — o `if` de pergunta prática entra **antes** de ambos, e o `topic_continuity` continua fazendo todo o resto do trabalho dele (reset de estagnação, cap de `recentPairs` na linha 1441) intacto.
 
 **Trava 5 — Contexto temporal só existe acima de 4h (~5977).** Abaixo de 4h nenhuma instrução é dada e o histórico pesado segue no contexto, então o modelo puxa o assunto anterior de volta.
 
@@ -38,14 +43,17 @@ Uma única função nova, ao lado dos regex que já existem lá:
 
 ```ts
 // true quando a mensagem é pergunta prática (dúvida do dia a dia), não desabafo
-function isPracticalQuestion(msg: string): boolean {
-  const t = msg.toLowerCase().trim();
+function isPracticalQuestion(msg?: string | null): boolean {
+  const t = (msg ?? '').toLowerCase().trim();
+  if (!t) return false;
   if (EMOTIONAL_LOAD_REGEX.test(t)) return false;   // constante que já existe
   return t.endsWith('?') || /^(o que|qual|como|quando|onde|quanto|vale a pena|você sabe|vc sabe|me indica|tem alguma|é melhor|faz mal|pode|dá pra|da pra)\b/.test(t);
 }
 ```
 
-Essa mesma função é reutilizada no item 1b. É a única peça de código nova de todo o plano.
+Essa mesma função é reutilizada no item 1b. É a única peça de código nova de todo o plano. Assinatura tolerante a `undefined`/vazio de propósito: os dois pontos de chamada recebem `message` cru.
+
+**Expansão obrigatória do `EMOTIONAL_LOAD_REGEX`.** Como esse regex passa a sustentar três decisões em vez de uma, e `endsWith('?')` é abrangente, frases relacionais escapariam da rede: "cadê você?", "você ainda gosta de mim?", "por que você sumiu?", "ele me traiu?". Antes de usar a função, o regex ganha termos relacionais e de ruptura: `sumi|gosta de mim|me ama|\bama\b|tra[ií]|termin|brig|discut|ignor|larg|abandon|sauda|ciúm|arrepend|fracass|vergonh|insegur`. A lista de padrões interrogativos também deixa `por que` de fora de propósito — "por que eu sou assim?" não é pergunta prática.
 
 ### 1. Uma regra de utilidade dentro do PING-PONG (que já existe)
 Acrescentar 4 ou 5 linhas ao bloco que já está lá:
@@ -121,6 +129,18 @@ Tudo em `supabase/functions/aura-agent/index.ts`:
   - `isLightMessage` / bloco `ABERTURA LEVE DETECTADA` (~6602-6623): adicionar `PRACTICAL_QUESTION_REGEX` e excluí-la do gate.
   - `evaluateTherapeuticPhase`, ramo FREE CONVERSATION (~1634-1668): mesma checagem na última mensagem do usuário antes de injetar guidance de fase.
   - `CONTEXTO TEMPORAL SERVER-SIDE` (~5977): gatilho de `>= 4` para `>= 0.5`, com instrução própria para a faixa 0,5-4h e guarda `!sessionActive` nessa faixa.
-- Os testes em `phase_thresholds_test.ts` checam `TAMANHO CONTEXTUAL`, `600 caracteres` e os thresholds do evaluator — as edições preservam essas âncoras; rodar o arquivo depois.
 
-Depois, redeploy do `aura-agent` e checagem de `failed_message_log`, conforme o padrão de deploy do projeto.
+## Verificação pós-implementação (explícita, não genérica)
+
+`phase_thresholds_test.ts` faz regex sobre o texto-fonte — ele só garante que nenhuma âncora de texto foi apagada, **não** que a lógica nova funciona. Então:
+
+1. **Teste de comportamento novo** (`practical_question_test.ts`, na mesma pasta, mesmo estilo Deno): tabela de casos contra `isPracticalQuestion` — devem dar `true`: "pilates faz mais efeito que musculação?", "como faço arroz de forno?", "me indica um filme bom", "vale a pena trocar de celular?"; devem dar `false`: `undefined`, `''`, "oi", "cadê você?", "por que eu sou assim?", "tô muito ansiosa hoje", "você ainda gosta de mim?". Para isso a função é **exportada**.
+2. **Rodar `phase_thresholds_test.ts`** para confirmar que `TAMANHO CONTEXTUAL`, `600 caracteres` e os thresholds do evaluator continuam presentes.
+3. **Guarda anti-500:** os dois pontos de chamada ficam dentro do fluxo normal, e a função nunca lança (entrada nula tratada). Nenhum `try/catch` novo é necessário porque não há I/O — mas o padrão do projeto (fallback opcional nunca derruba a resposta) é respeitado por construção.
+4. **Deploy com verificação de drift:** commits em `supabase/functions/**` às vezes não disparam o workflow. Após publicar, republicar manualmente se necessário e rodar nos primeiros 5 minutos:
+   ```sql
+   select created_at, left(error,200) from failed_message_log
+   where created_at > now() - interval '10 minutes'
+   order by created_at desc;
+   ```
+5. **Prova em conversa real:** mandar "pilates faz mais efeito que musculação?" e confirmar nos logs que `ABERTURA LEVE DETECTADA` **não** foi injetado e que o evaluator saiu como `ping-pong` sem guidance.
