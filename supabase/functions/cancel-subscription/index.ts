@@ -1111,11 +1111,17 @@ serve(async (req) => {
       // pago a preservar: o período em aberto veio de uma fatura não paga.
       // Nesse caso cancelamos imediatamente e anulamos as faturas abertas,
       // evitando prometer acesso até uma data que o cliente não pagou.
-      const unpaidCycle = ["past_due", "unpaid", "incomplete"].includes(subscription.status);
+      // Também entra aqui quando não existe nenhum período pago vigente: sem
+      // fatura paga (ou com o período pago já vencido) não há acesso a preservar.
+      const unpaidCycle =
+        ["past_due", "unpaid", "incomplete", "incomplete_expired"].includes(subscription.status) ||
+        !accessEnd ||
+        accessEnd.getTime() <= Date.now();
       if (unpaidCycle) {
         logStep("Unpaid cycle: canceling immediately", {
           subscriptionId: subscription.id,
           status: subscription.status,
+          paidPeriodEnd: accessEnd?.toISOString() ?? null,
         });
 
         try {
@@ -1151,7 +1157,11 @@ serve(async (req) => {
 
         await supabase
           .from("profiles")
-          .update({ status: "canceled", canceled_at: new Date().toISOString() })
+          .update({
+            status: "canceled",
+            canceled_at: new Date().toISOString(),
+            plan_expires_at: new Date().toISOString(),
+          })
           .eq("phone", phoneClean);
 
         return jsonResponse({
@@ -1200,11 +1210,11 @@ serve(async (req) => {
         JSON.stringify({
           success: true,
           status: "canceled",
-          message: `Sua assinatura foi cancelada. Você terá acesso até ${currentPeriodEnd.toLocaleDateString('pt-BR')}.`,
+          message: `Sua assinatura foi cancelada. Você terá acesso até ${accessEndFmt}.`,
           subscription: {
             id: subscription.id,
-            endDate: currentPeriodEnd.toISOString(),
-            endDateFormatted: currentPeriodEnd.toLocaleDateString('pt-BR'),
+            endDate: accessEnd?.toISOString() ?? null,
+            endDateFormatted: accessEndFmt,
           },
         }),
         {
