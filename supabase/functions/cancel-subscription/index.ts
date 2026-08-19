@@ -1197,7 +1197,11 @@ serve(async (req) => {
       // Update profile status in database
       const { error: updateError } = await supabase
         .from("profiles")
-        .update({ status: "canceling" })
+        .update({
+          status: "canceling",
+          // Acesso vale só até o fim do período realmente pago.
+          ...(accessEnd ? { plan_expires_at: accessEnd.toISOString() } : {}),
+        })
         .eq("phone", phoneClean);
 
       if (updateError) {
