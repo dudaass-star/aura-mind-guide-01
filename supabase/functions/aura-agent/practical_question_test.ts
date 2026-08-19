@@ -22,7 +22,9 @@ const isPracticalQuestion = new Function(
   `${emotional.replace('export const', 'const')}
    ${opener}
    ${reflexive}
-   ${fn.replace('export function', 'function')}
+   ${fn
+     .replace('export function', 'function')
+     .replace('(msg?: string | null): boolean', '(msg)')}
    return isPracticalQuestion;`
 )() as (msg?: string | null) => boolean;
 
