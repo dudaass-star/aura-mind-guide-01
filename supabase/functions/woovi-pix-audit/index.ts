@@ -147,6 +147,11 @@ Deno.serve(async (req) => {
   const resendMandateFor = typeof body.resend_mandate_step1_for === "string"
     ? body.resend_mandate_step1_for
     : null;
+  // Modo rápido (`{ only: "extrato" }`): roda SÓ a varredura 6, que é a única
+  // fonte da parcela do carnê. Serve para um cron curto (a cada 10 min) que
+  // reconcilia o pagamento em minutos — assim quem acabou de pagar não parece
+  // abandono para as rotinas de recuperação.
+  const onlyExtrato = body.only === "extrato";
 
   const report: Record<string, unknown[]> = {
     entrada_pendente: [], mandato_pendente: [], recuperados: [], abandonados: [],
@@ -167,7 +172,7 @@ Deno.serve(async (req) => {
       .eq("creation_status", "completed")
       .gte("created_at", since)
       .is("replaced_by_subscription_id", null)
-      .limit(300);
+      .limit(onlyExtrato ? 0 : 300);
 
     for (const sub of composed || []) {
       const created = String(sub.created_at || "");
@@ -347,7 +352,7 @@ Deno.serve(async (req) => {
       .select("id, installment_id, subscription_id, status, paid_at")
       .is("paid_at", null)
       .gte("created_at", new Date(now.getTime() - 45 * 86400000).toISOString())
-      .limit(200);
+      .limit(onlyExtrato ? 0 : 200);
     for (const c of openCharges || []) {
       const r = await wooviFetch<Record<string, any>>(
         `/api/v1/charge/${encodeURIComponent(String(c.installment_id))}`,
@@ -379,7 +384,7 @@ Deno.serve(async (req) => {
       .in("status", MANDATE_ACTIVE_STATUSES)
       .is("replaced_by_subscription_id", null)
       .not("subscription_id", "is", null)
-      .limit(300);
+      .limit(onlyExtrato ? 0 : 300);
 
     for (const sub of liveSubs || []) {
       const r = await wooviFetch<Record<string, any>>(
@@ -470,7 +475,7 @@ Deno.serve(async (req) => {
       .not("subscription_id", "is", null)
       .not("next_charge_date", "is", null)
       .lte("next_charge_date", today)
-      .limit(200);
+      .limit(onlyExtrato ? 0 : 200);
 
     for (const sub of dueSubs || []) {
       const r = await wooviFetch<Record<string, any>>(
