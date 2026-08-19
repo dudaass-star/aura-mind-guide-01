@@ -570,6 +570,97 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ---- 6) Reconciliação pelo extrato -------------------------------------
+    // Ponto cego descoberto em 19/08: a parcela do carnê (Pix Automático) é
+    // liquidada e aparece SÓ no extrato — não vem em /api/v1/charge e o webhook
+    // de cobrança não chega. Resultado: dinheiro na conta e nenhum registro
+    // local (nem woovi_charges, nem entry_paid_at, nem acesso).
+    // Aqui varremos o extrato dos últimos 3 dias, casamos o pagador (CPF, com
+    // fallback de e-mail/telefone) com um mandato nosso e, se não houver
+    // pagamento local equivalente, fazemos replay pro webhook — que continua
+    // sendo a única fonte de verdade da ativação.
+    const extratoSince = new Date(now.getTime() - 3 * 86400000).toISOString();
+    const onlyDigits = (v: unknown) => String(v || "").replace(/\D/g, "");
+    const tx = await wooviFetch<Record<string, any>>("/api/v1/transaction?limit=100");
+    const transactions: Record<string, any>[] = Array.isArray((tx.data as any)?.transactions)
+      ? (tx.data as any).transactions
+      : [];
+
+    for (const t of transactions) {
+      const when = String(t?.time || t?.createdAt || "");
+      if (!when || when < extratoSince) continue;
+      if (String(t?.type || "PAYMENT").toUpperCase() !== "PAYMENT") continue;
+      const value = Number(t?.value || 0);
+      if (!value) continue;
+
+      const payer = (t?.payer || {}) as Record<string, any>;
+      const cpf = onlyDigits(payer?.taxID?.taxID || t?.debitParty?.holder?.taxID?.taxID);
+      const email = String(payer?.email || "").toLowerCase();
+      const phone = onlyDigits(payer?.phone);
+
+      let sub: Record<string, any> | null = null;
+      if (cpf) {
+        const { data } = await supabase.from("woovi_subscriptions")
+          .select("*").eq("customer_cpf", cpf)
+          .order("created_at", { ascending: false }).limit(1);
+        sub = data?.[0] ?? null;
+      }
+      if (!sub && email) {
+        const { data } = await supabase.from("woovi_subscriptions")
+          .select("*").eq("customer_email", email)
+          .order("created_at", { ascending: false }).limit(1);
+        sub = data?.[0] ?? null;
+      }
+      if (!sub && phone) {
+        const { data } = await supabase.from("woovi_subscriptions")
+          .select("*").ilike("customer_phone", `%${phone.slice(-8)}%`)
+          .order("created_at", { ascending: false }).limit(1);
+        sub = data?.[0] ?? null;
+      }
+      if (!sub?.subscription_id) continue;
+
+      // Já registrado? Aceita match por identificador do extrato ou por
+      // valor+janela (o webhook grava o correlationID da cobrança, não o E2E).
+      const e2e = String(t?.endToEndId || t?.transactionID || "");
+      const { data: known } = await supabase.from("woovi_charges")
+        .select("id, installment_id, value_cents, paid_at")
+        .eq("subscription_id", sub.subscription_id)
+        .not("paid_at", "is", null)
+        .limit(50);
+      const already = (known || []).some((c: Record<string, any>) =>
+        String(c.installment_id) === e2e
+        || (Number(c.value_cents) === value
+          && Math.abs(Date.parse(String(c.paid_at)) - Date.parse(when)) < 3 * 86400000)
+      );
+      if (already) continue;
+
+      if (dryRun) {
+        report.recuperados.push({ sub: sub.subscription_id, via: "extrato", value, when, dryRun: true });
+        continue;
+      }
+
+      const ok = await replayToWebhook({
+        event: "OPENPIX:CHARGE_COMPLETED",
+        charge: {
+          correlationID: e2e || `extrato:${sub.subscription_id}:${when}`,
+          status: "COMPLETED",
+          value,
+          paidAt: when,
+          comment: "reconciliado pelo extrato Woovi",
+        },
+        subscription: {
+          globalID: sub.subscription_id,
+          correlationID: sub.correlation_id,
+          subscriptionId: sub.subscription_id,
+        },
+        pix: { subType: t?.subType || null, endToEndId: e2e },
+      });
+      report.recuperados.push({
+        sub: sub.subscription_id, email: sub.customer_email,
+        via: "extrato", value, when, replay: ok,
+      });
+    }
+
     return new Response(JSON.stringify({ dryRun, report }, null, 2), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
