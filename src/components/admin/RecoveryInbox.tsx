@@ -75,6 +75,31 @@ export default function RecoveryInbox({ heightClass = 'h-[calc(100vh-180px)]' }:
   const [lastInboundByPhone, setLastInboundByPhone] = useState<Record<string, string>>({});
   type FilterKey = 'all' | 'unread' | 'replied' | 'sent_only';
   const [filter, setFilter] = useState<FilterKey>('all');
+  const [loadingMedia, setLoadingMedia] = useState<string | null>(null);
+
+  // Mídia do Twilio exige Basic Auth; buscamos pelo proxy autenticado e abrimos
+  // como blob local para não cair na tela de login da API.
+  const openMedia = async (url: string) => {
+    setLoadingMedia(url);
+    try {
+      const { data, error } = await supabase.functions.invoke('recovery-media', {
+        body: { url },
+      });
+      if (error) throw error;
+      const blob = data instanceof Blob ? data : new Blob([data as BlobPart]);
+      const objectUrl = URL.createObjectURL(blob);
+      window.open(objectUrl, '_blank');
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+    } catch (e) {
+      toast({
+        title: 'Não foi possível abrir a mídia',
+        description: e instanceof Error ? e.message : String(e),
+        variant: 'destructive',
+      });
+    } finally {
+      setLoadingMedia(null);
+    }
+  };
 
   const endRef = useRef<HTMLDivElement>(null);
 
