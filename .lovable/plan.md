@@ -39,9 +39,12 @@ A resposta pronta "não é bem minha praia" sai da posição de padrão e passa 
 ### 0b. Corrigir o `ABERTURA LEVE DETECTADA` (trava 2)
 O bloco continua existindo — ele resolve bem o problema do "Oi". A correção é **estreitar o gatilho**, não adicionar lista:
 
-- Hoje ele dispara em (a) saudação pura **ou** (b) qualquer mensagem de **≤8 palavras** sem palavra emocional. É o ramo (b) que engole pergunta prática curta.
+- Hoje ele dispara em (a) saudação pura **ou** (b) qualquer mensagem de **≤8 palavras** sem palavra emocional (linhas 6606-6610). É o ramo (b) que engole pergunta prática curta.
 - Passa a disparar **só na saudação pura** (`PURE_GREETING_REGEX`, que já existe). O ramo (b) é removido.
-- Mensagem curta que não é saudação continua caindo no `LEMBRETE ANTI-ECO` que já existe logo abaixo (≤5 palavras) — ele pede resposta curta e sem puxar tema, o que resolve o caso "tudo certo por aí" sem proibir a Aura de responder.
+- **Lacuna de 6-8 palavras (achado da revisão, procede).** O `LEMBRETE ANTI-ECO` do `else if` logo abaixo é `userWordCount <= 5` (linha 6620) e não proíbe referenciar memória. Então "consegui terminar aquele relatório hoje" (5 palavras já entra, mas "consegui terminar aquele relatório hoje de manhã" com 7 não) ficaria sem nenhuma blindagem contra puxar tema antigo, que era justamente o que o ramo (b) dava. Duas correções de 1 linha cada no mesmo `else if`:
+  - teto sobe de `<= 5` para `<= 8`;
+  - o texto do lembrete ganha a linha de proibição que era o valor real do ramo (b): *"não referencie memória, insights, evolution summary, compromissos pendentes ou temas de sessões anteriores nesta resposta"*.
+- O que **não** volta: o script de saudação ("cumprimente de volta + 1 devolutiva neutra") e o teto de 2 balões. São exatamente esses dois que impediam a Aura de responder algo útil. A proteção contra puxar tema antigo é preservada; a mordaça, não.
 
 **Por que isso responde diretamente à sua preocupação:** não existe lista de assuntos nem de formatos aqui. Qualquer coisa que não seja literalmente "oi/olá/bom dia/tudo bem" segue o fluxo normal, com erro de digitação, assunto fora do previsto, frase torta, o que for. O único regex envolvido é o de saudação, que já está em produção e é o caso mais fácil de acertar.
 
@@ -50,7 +53,7 @@ Uma função nova, ao lado dos regex que já existem:
 
 ```ts
 // true quando a mensagem é pergunta prática (dúvida do dia a dia), não desabafo
-const PRACTICAL_OPENER = /^(o que|oq|qual|quais|como|quando|onde|quanto|quantos|vale a pena|voc[êe] sabe|vc sabe|sabe se|me indica|me ajuda a|tem alguma|tem como|existe algum|[ée] melhor|faz mal|pode|posso|d[áa] pra|da pra)\b/;
+const PRACTICAL_OPENER = /^(o que|oq|qual|quais|como|quando|onde|quanto|quantos|vale a pena|voc[êe] sabe|vc sabe|sabe se|me indica|me ajuda a|tem alguma|tem como|existe algum|[ée] melhor|faz mal)\b/;
 
 // Pergunta que termina em "?" mas é reflexiva/existencial — NUNCA é pergunta prática
 const REFLEXIVE_QUESTION = /(^por qu[êe]|^pq\b|\bsou assim\b|\bcomigo\b|\bem mim\b|\bde mim\b|\bmerec|\bculpa\b|\berrei\b|\bsentido da vida\b|\bvale a pena viver\b|\bcad[êe] voc[êe]\b|\bser[áa] que eu\b)/;
@@ -68,6 +71,15 @@ export function isPracticalQuestion(msg?: string | null): boolean {
 ```
 
 **Sobre o `endsWith('?')` (bug apontado na revisão, procede):** na versão anterior o `||` curto-circuitava e a whitelist virava decorativa — `"por que eu sou assim?"` retornava `true`, contrariando o próprio caso de teste do plano. Agora as duas exclusões (`EMOTIONAL_LOAD_REGEX` e `REFLEXIVE_QUESTION`) rodam **antes** de qualquer `return true`, e o `endsWith('?')` só é alcançado depois delas. Na dúvida, o erro é pro lado seguro: cai em acolhimento, não em utilidade.
+
+**Sobre `pode|posso|dá pra` (segundo achado da revisão, procede — e a correção é outra).** O caso levantado é real e verifiquei: `"posso não aguentar mais isso"` não bate no `EMOTIONAL_LOAD_REGEX` (linha 6603, nem com a expansão relacional) nem no `REFLEXIVE_QUESTION`, e bateria em `PRACTICAL_OPENER` por começar com "posso" — retornando `true` para uma frase de sofrimento. A causa é que `pode|posso|d[áa] pra` são modais genéricos, não marcadores de pergunta.
+
+A correção sugerida (`PRACTICAL_OPENER.test(t) && t.endsWith('?')`) fecha o buraco, mas quebra os pedidos práticos sem interrogação que estão nos próprios casos de teste: `"me indica um filme bom"`, `"me ajuda a escrever uma mensagem"`. Correção adotada: **remover `pode|posso|d[áa] pra|da pra` da lista**, sem tocar no resto. Motivos:
+- É deleção, não condição nova — nenhuma linha de lógica é adicionada.
+- Não perde cobertura: `"pode tomar café a noite?"` e `"dá pra congelar isso?"` continuam passando pelo `endsWith('?')`, que é o pega-tudo.
+- `"posso não aguentar mais isso"` volta a retornar `false` → segue pelo caminho de hoje, com o phase evaluator atento.
+
+Regra que fica valendo pra manutenção futura da lista: **só entra em `PRACTICAL_OPENER` termo que não possa iniciar uma frase afirmativa de desabafo.** "qual", "quanto", "vale a pena", "me indica" passam nesse critério; "pode", "posso", "dá pra" não passam.
 
 **Sobre os exemplos limitarem a Aura (sua pergunta):** a estrutura foi montada pra que nenhuma lista defina onde ela pode agir.
 
@@ -163,6 +175,7 @@ Contabilizando o que a implementação realmente adiciona:
 | Frase na Postura Clínica | texto do prompt | +1 linha |
 | `isPracticalQuestion()` | código | 1 função, ~5 linhas |
 | Gate do `ABERTURA LEVE` | código | remove 1 ramo (fica só saudação pura) |
+| Teto + texto do `ANTI-ECO` | código/texto | `<= 5` → `<= 8` + 1 linha de proibição |
 | Saída antecipada do evaluator | código | 1 `if` |
 | Faixa temporal 30 min | código | troca de `>= 4` por `>= 0.5` + 1 `else if` |
 
@@ -170,7 +183,8 @@ Nenhum modo novo, nenhum estado novo, nenhuma tabela, nenhum campo, nenhuma cham
 
 **Riscos e contenção:**
 - *Falso positivo em desabafo em forma de pergunta* ("por que eu sou assim?") — contido pelas duas exclusões que rodam antes de qualquer `return true`.
-- *Voltar o problema do "Oi" em mensagem curta que não é saudação* — contido pelo `LEMBRETE ANTI-ECO` (≤5 palavras), que já existe e continua ativo; e pelas regras de contexto passivo de insights, que já proíbem pautar por memória.
+- *Voltar o problema do "Oi" em mensagem curta que não é saudação* — contido pelo `LEMBRETE ANTI-ECO` ampliado para ≤8 palavras e agora com a proibição explícita de memória/insights, que era o que o ramo removido garantia.
+- *Desabafo iniciado por modal cair como utilidade* — contido pela remoção de `pode|posso|dá pra` da `PRACTICAL_OPENER`, com casos adversariais no teste.
 - *Lista de exemplos ficar curta/desatualizada* — por construção as listas que restringem erram pro lado do acolhimento, e a lista que amplia é dispensável (o `?` cobre).
 - *Aura virar assistente genérica* — contido pelo segundo nível do `ESCOPO E LIMITES`, que mantém o "não" nas entregas técnicas/reguladas.
 - *Perder profundidade em tema pesado* — nenhuma das mudanças toca o caminho com carga emocional nem o caminho de sessão ativa.
@@ -182,7 +196,7 @@ Nenhum modo novo, nenhum estado novo, nenhuma tabela, nenhum campo, nenhuma cham
 Tudo em `supabase/functions/aura-agent/index.ts`:
 - **Texto:** `# ESCOPO E LIMITES` (~2665-2684, reescrito em dois níveis), `## MODO PING-PONG` (~3081-3090), `Anti-Rodeio` (~2813-2815), `# POSTURA CLÍNICA` (~2823).
 - **Lógica (3 pontos pequenos):**
-  - `isLightMessage` / bloco `ABERTURA LEVE DETECTADA` (~6602-6623): adicionar `PRACTICAL_QUESTION_REGEX` e excluí-la do gate.
+  - `isLightMessage` / bloco `ABERTURA LEVE DETECTADA` (~6602-6623): remover o ramo `userWordCount <= 8` do `isLightMessage`; no `else if` da linha 6620, subir `<= 5` para `<= 8` e acrescentar a linha de proibição de memória/insights ao `LEMBRETE ANTI-ECO`.
   - `evaluateTherapeuticPhase`, ramo FREE CONVERSATION (~1634-1668): mesma checagem na última mensagem do usuário antes de injetar guidance de fase.
   - `CONTEXTO TEMPORAL SERVER-SIDE` (~5977): gatilho de `>= 4` para `>= 0.5`, com instrução própria para a faixa 0,5-4h e guarda `!sessionActive` nessa faixa.
 
@@ -193,7 +207,9 @@ Tudo em `supabase/functions/aura-agent/index.ts`:
 1. **Teste de comportamento novo** (`practical_question_test.ts`, na mesma pasta, mesmo estilo Deno), contra a função exportada:
    - `true`: "pilates faz mais efeito que musculação?", "como faço arroz de forno?", "me indica um filme bom", "vale a pena trocar de celular?", "tem como agendar isso pra sexta?"
    - `false`: `undefined`, `''`, "oi", "cadê você?", "por que eu sou assim?", "por que isso sempre acontece comigo?", "onde foi que eu errei?", "cadê você quando eu preciso?", "tô muito ansiosa hoje", "você ainda gosta de mim?", "será que eu mereço isso?"
+   - **`false` — adversariais com modal (o achado da revisão):** "posso não aguentar mais isso", "pode ser que ele nunca volte", "dá pra ver que eu não sirvo pra isso", "posso estar exagerando mas ele me ignorou"
    - `true` **mesmo fora de qualquer lista** (prova de que não há limitação de escopo): "kual o melhor horario pra treinar?", "faz mal tomar café a noite?", "quanto tempo dura tinta de parede?"
+   - `true` **com modal + interrogação** (prova de que a deleção não perdeu cobertura): "pode tomar café a noite?", "dá pra congelar arroz cozido?"
    - **Regressão de segurança:** com `lastUserContext.user_emotional_state = 'crisis'` e mensagem "e agora, o que eu faço?", o evaluator deve continuar retornando o guidance de `PRIORIDADE ABSOLUTA: Acolhimento` — nunca `ping-pong`.
 2. **Rodar `phase_thresholds_test.ts`** para confirmar que `TAMANHO CONTEXTUAL`, `600 caracteres` e os thresholds do evaluator continuam presentes.
 3. **Guarda anti-500:** os dois pontos de chamada ficam dentro do fluxo normal, e a função nunca lança (entrada nula tratada). Nenhum `try/catch` novo é necessário porque não há I/O — mas o padrão do projeto (fallback opcional nunca derruba a resposta) é respeitado por construção.
