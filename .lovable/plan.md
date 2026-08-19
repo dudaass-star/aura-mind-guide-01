@@ -16,12 +16,12 @@ As duas rotinas de recuperação (`recover-abandoned-checkout-whatsapp` e `recov
    - `woovi_charges` pagas/concluídas (por e-mail/telefone/CPF do pagador), e
    - `woovi_subscriptions` com mandato `ACTIVE`/`APPROVED` (mandato aprovado = intenção concluída, não abandono).
 2. **Guarda por método de pagamento**: sessão com `payment_method = 'pix_auto'` cujo mandato existe no Woovi nunca entra na fila de recuperação, mesmo antes da parcela ser reconciliada.
-3. **Carência para `pix_auto`**: subir a idade mínima do estágio 15min para ~45 min quando o método é PIX Automático — o fluxo do banco (2 telas no Nubank) leva mais tempo que um cartão, e a reconciliação da parcela é assíncrona.
-4. **Fechar o atraso na origem**: rodar a varredura de extrato da Woovi (`woovi-pix-audit`, scan 6) com frequência curta nas primeiras horas após um mandato aprovado, para o pagamento aparecer localmente em minutos e não no ciclo diário.
+3. **Manter os 15 minutos** e resolver por checagem ao vivo: para candidata com `payment_method = 'pix_auto'` sem registro local de pagamento, consultar a Woovi na hora (assinatura/mandato + extrato do CPF/e-mail) imediatamente antes de disparar. Se houver mandato aprovado ou parcela paga, marca a sessão como paga e não envia.
+4. **Fechar o atraso na origem**: rodar a varredura de extrato da Woovi (`woovi-pix-audit`, scan 6) com frequência curta nas primeiras horas após um mandato aprovado, para o pagamento aparecer localmente em minutos e não no ciclo diário — assim a checagem ao vivo passa a ser só rede de segurança.
 5. **Não punir a lead pelo erro**: o disparo indevido queima o cap vitalício de contatos dela. Limpar o registro de recuperação dessa sessão para não marcar o telefone como já contatado.
 
 ## Detalhes técnicos
 
 - Arquivos: `supabase/functions/recover-abandoned-checkout-whatsapp/index.ts` (sets `completedEmailSet`/`completedPhoneSet` + `processStage`), `supabase/functions/recover-abandoned-checkout/index.ts` (mesmos sets), `supabase/functions/woovi-pix-audit/index.ts` (cadência da varredura de extrato).
-- Consultas novas restritas aos últimos 30 dias, iguais às já usadas para Asaas, para não pesar a rotina de 5 minutos.
+- Consultas novas restritas aos últimos 30 dias, iguais às já usadas para Asaas, para não pesar a rotina de 5 minutos. A checagem ao vivo na Woovi roda só para candidatas `pix_auto` do estágio 15min (volume baixo), então o tempo de disparo continua 15 min.
 - Redeploy necessário nas três funções.
