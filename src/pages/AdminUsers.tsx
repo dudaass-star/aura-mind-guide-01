@@ -426,9 +426,57 @@ export default function AdminUsers() {
     }
   };
 
+  // Cancela de verdade no gateway do cliente (Stripe / Asaas cartão / PIX Asaas /
+  // PIX Automático Inter / PIX Automático Woovi). A edge function detecta o
+  // trilho pelo profile e cancela a assinatura ou o mandato Bacen.
+  const handleCancelGateway = async () => {
+    if (!editProfile) return;
+    const phoneClean = (editProfile.phone || '').replace(/\D/g, '');
+    if (!phoneClean) {
+      toast({
+        title: 'Sem telefone',
+        description: 'O cancelamento é resolvido pelo telefone do cliente. Preencha e salve antes.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    const ok = window.confirm(
+      `Cancelar de verdade a assinatura de ${editProfile.name || 'este usuário'} no gateway?\n\n` +
+        'Isso interrompe as próximas cobranças (ou cancela o mandato PIX). O acesso segue até o fim do período pago.',
+    );
+    if (!ok) return;
+    setCancelingGateway(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('cancel-subscription', {
+        body: {
+          phone: phoneClean,
+          action: 'cancel',
+          reason: 'other',
+          reason_detail: 'Cancelamento manual pelo painel admin',
+        },
+      });
+      if (error) throw error;
+      if (data && data.success === false) {
+        throw new Error(data.error || data.message || 'Gateway recusou o cancelamento');
+      }
+      toast({
+        title: 'Cancelado no gateway',
+        description: data?.message || 'Assinatura cancelada com sucesso.',
+      });
+      fetchProfiles();
+    } catch (err: any) {
+      toast({
+        title: 'Erro ao cancelar',
+        description: err?.context?.error || err?.message || 'Não foi possível cancelar agora.',
+        variant: 'destructive',
+      });
+    } finally {
+      setCancelingGateway(false);
+    }
+  };
+
   const handleRearmD0 = async () => {
     if (!editProfile) return;
-    // (mantido)
     setSaving(true);
     try {
       const { error } = await supabase.functions.invoke('admin-update-profile', {
