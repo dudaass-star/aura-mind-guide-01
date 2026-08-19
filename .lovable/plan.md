@@ -23,5 +23,5 @@ As duas rotinas de recuperação (`recover-abandoned-checkout-whatsapp` e `recov
 ## Detalhes técnicos
 
 - Arquivos: `supabase/functions/recover-abandoned-checkout-whatsapp/index.ts` (sets `completedEmailSet`/`completedPhoneSet` + `processStage`), `supabase/functions/recover-abandoned-checkout/index.ts` (mesmos sets), `supabase/functions/woovi-pix-audit/index.ts` (cadência da varredura de extrato).
-- Consultas novas restritas aos últimos 30 dias, iguais às já usadas para Asaas, para não pesar a rotina de 5 minutos.
+- Consultas novas restritas aos últimos 30 dias, iguais às já usadas para Asaas, para não pesar a rotina de 5 minutos. A checagem ao vivo na Woovi roda só para candidatas `pix_auto` do estágio 15min (volume baixo), então o tempo de disparo continua 15 min.
 - Redeploy necessário nas três funções.
