@@ -1255,7 +1255,7 @@ function userDeclinedClosure(
 // possa iniciar uma frase afirmativa de desabafo. "pode", "posso",
 // "dá pra" ficam fora de propósito ("posso não aguentar mais isso").
 // ============================================================
-export const EMOTIONAL_LOAD_REGEX = /(trist|ansios|medo|raiva|sozinh|cansad|perdid|chorand|surto|crise|ajuda|\bdor\b|peso|vazio|culp|ang[uú]st|p[âa]nico|desesper|sofr|deprim|chate|magoa|frustr|exaust|esgotad|ferid|ódio|odeio|odi[ae]|mal\b|sumi|gosta de mim|me ama|\bama\b|tra[ií]|termin|brig|discut|ignor|larg|abandon|sauda|ciúm|cium|arrepend|fracass|vergonh|insegur|aguentar)/i;
+export const EMOTIONAL_LOAD_REGEX = /(trist|ansios|medo|raiva|sozinh|cansad|perdid|chorand|surto|crise|ajuda|\bdor\b|peso|vazio|culp|ang[uú]st|p[âa]nico|desesper|sofr|deprim|chate|magoa|frustr|exaust|esgotad|ferid|ódio|odeio|odi[ae]|mal\b|sumi|gosta de mim|me ama|\bama\b|tra[ií]|termin|brig|discut|ignor|larg|abandon|sauda|ciúm|cium|arrepend|fracass|vergonh|insegur)/i;
 
 const PRACTICAL_OPENER = /^(o que|oq|qual|quais|como|quando|onde|quanto|quantos|vale a pena|voc[êe] sabe|vc sabe|sabe se|me indica|me ajuda a|tem alguma|tem como|existe algum|[ée] melhor|faz mal)\b/i;
 
