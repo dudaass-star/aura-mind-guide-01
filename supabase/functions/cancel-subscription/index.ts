@@ -765,6 +765,38 @@ serve(async (req) => {
     logStep("Raw current_period_end value", { rawEnd, type: typeof rawEnd });
     const currentPeriodEnd = typeof rawEnd === 'string' ? new Date(rawEnd) : new Date((rawEnd ?? 0) * 1000);
 
+    // ── Fim de acesso REAL = fim do período efetivamente pago ─────────────
+    // O current_period_end do Stripe avança junto com a fatura em aberto: numa
+    // assinatura trimestral criada hoje e nunca paga, ele já aponta 3 meses à
+    // frente. Prometer essa data libera acesso que o cliente não comprou.
+    // Aqui olhamos a última fatura PAGA e usamos o fim do período dela.
+    let paidPeriodEnd: Date | null = null;
+    try {
+      const paidInvoices = await stripe.invoices.list({
+        customer: customer.id,
+        status: "paid",
+        limit: 20,
+      });
+      for (const inv of paidInvoices.data) {
+        if ((inv.amount_paid ?? 0) <= 0) continue;
+        for (const line of inv.lines?.data ?? []) {
+          const end = line.period?.end;
+          if (!end) continue;
+          const endDate = new Date(end * 1000);
+          if (!paidPeriodEnd || endDate > paidPeriodEnd) paidPeriodEnd = endDate;
+        }
+      }
+    } catch (e) {
+      logStep("WARN falha lendo faturas pagas", { error: String(e) });
+    }
+    // Sem fatura paga: não há período a preservar (acesso encerra agora).
+    const accessEnd = paidPeriodEnd;
+    const accessEndFmt = accessEnd ? accessEnd.toLocaleDateString('pt-BR') : null;
+    logStep("Fim de acesso pago", {
+      currentPeriodEnd: currentPeriodEnd.toISOString(),
+      paidPeriodEnd: accessEnd?.toISOString() ?? null,
+    });
+
     // Helper: registra evento de retenção
     const logRetention = async (
       tier: RetentionTier | "cancel",
@@ -846,8 +878,8 @@ serve(async (req) => {
           subscription: {
             id: subscription.id,
             plan: subscription.items.data[0]?.price?.nickname || "Assinatura AURA",
-            endDate: currentPeriodEnd.toISOString(),
-            endDateFormatted: currentPeriodEnd.toLocaleDateString('pt-BR'),
+            endDate: accessEnd?.toISOString() ?? null,
+            endDateFormatted: accessEndFmt,
             amount: subscription.items.data[0]?.price?.unit_amount 
               ? (subscription.items.data[0].price.unit_amount / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
               : null,
