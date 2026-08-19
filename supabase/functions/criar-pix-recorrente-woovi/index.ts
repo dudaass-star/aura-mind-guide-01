@@ -319,6 +319,21 @@ Deno.serve(async (req) => {
 
     // Promo de entrada: mensal + cliente novo + checkout (nunca em reautorização).
     const returning = await isReturningCustomer(supabase, emailClean, phoneClean);
+
+    // Assinatura já rodando em outro meio: não criamos um 2º mandato. O lugar
+    // certo para trocar de meio/plano é o portal, não um novo checkout.
+    if (mode === "checkout") {
+      const liveReason = await findLiveSubscription(supabase, emailClean, phoneClean);
+      if (liveReason) {
+        console.log(`[criar-pix-recorrente-woovi] bloqueado: ${emailClean} já tem ${liveReason}`);
+        return json({
+          blocked: true,
+          code: "ALREADY_SUBSCRIBED",
+          message: "Já existe uma assinatura ativa com esses dados. Para trocar o meio de pagamento ou o plano, use o seu espaço — assinar de novo geraria cobrança dupla.",
+        });
+      }
+    }
+
     const trialCents = TRIAL_PRICES[plan] ?? null;
     const withTrial = mode === "checkout" && billing === "monthly" && !returning && !!trialCents;
     const entryCents = withTrial ? (trialCents as number) : amountCents;
