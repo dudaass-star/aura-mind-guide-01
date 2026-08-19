@@ -4,13 +4,23 @@ Sim — retomar continua possível. O histórico recente permanece no contexto e
 
 Nenhum modo novo, nenhum detector novo, nenhum KPI novo.
 
-## O que hoje impede
+## Revisão completa: 5 travas reais no código
 
-O `MODO PING-PONG` já existe e já desliga os guardrails de profundidade. O problema é que ele está escrito como "reagir breve e devolver a bola" — não autoriza **responder de fato**. E não há nenhuma linha dizendo que pergunta prática deve ser respondida como pergunta prática. Resultado observado em conversa real de 16/08: usuária pergunta "pilates faz mais efeito que musculação?" e a Aura responde "o que eu tô vendo aqui é que você tá se esforçando pra caramba..." — ela nunca respondeu a pergunta.
+Fiz a varredura que faltava. São cinco pontos, e três deles eu não tinha visto antes — inclusive o mais forte.
 
-E existe um segundo bloqueio, mais forte: o bloco `# ESCOPO E LIMITES (O QUE VOCÊ NÃO FAZ)` (~2665-2684). Ele diz literalmente "Você é especialista em EMOÇÕES e RELACIONAMENTOS. Ponto." e lista finanças, nutrição, tecnologia, direito, marketing e medicina como "não é sua área", com instrução explícita: **"Não ajude. Não dê 'só uma dica'."** Mais a resposta pronta "Isso não é bem minha praia, sabe? 😅". Ou seja: mesmo com a regra de utilidade no PING-PONG, ela continuaria recusando. Esse bloco tem que ser reescrito junto.
+**Trava 1 — `# ESCOPO E LIMITES (O QUE VOCÊ NÃO FAZ)` (~2665-2684).** A mais forte, e a que eu tinha deixado passar. Diz literalmente "Você é especialista em EMOÇÕES e RELACIONAMENTOS. Ponto.", lista finanças, nutrição, tecnologia, direito, marketing e medicina como fora da área, e manda: **"Não ajude. Não dê 'só uma dica'. Não crie conteúdo técnico 'só dessa vez'."** Traz até a resposta pronta "Isso não é bem minha praia, sabe? 😅". Sem reescrever isso, qualquer regra de utilidade em outro bloco é atropelada.
 
-## Parte 1 — Os 4 ajustes de utilidade
+**Trava 2 — `ABERTURA LEVE DETECTADA` (~6595-6623).** Injeção determinística: qualquer mensagem com **8 palavras ou menos** e sem palavra de carga emocional cai nela. "pilates faz mais efeito que musculação?" tem 6 palavras e nenhuma palavra emocional — cai. E o bloco manda "responda APENAS ao que foi dito: cumprimente de volta + 1 devolutiva curta", **máximo 2 balões**. Ou seja: hoje o sistema trata pergunta prática curta como se fosse "oi". Esta é provavelmente a causa direta do caso do pilates, mais até que o prompt.
+
+**Trava 3 — `## MODO PING-PONG` (~3081-3090).** Ele já desliga os guardrails de profundidade (bom), mas está escrito como "reagir breve e devolver a bola" — não autoriza **responder de fato**. E impõe **máximo 300 caracteres** em troca leve. Uma resposta útil de verdade (ideia de receita, comparação, passo a passo curto) não cabe em 300 caracteres. Além disso a classificação fora de sessão só reconhece dois sinais — leve/factual e carga emocional — e pergunta prática não é nem um nem outro.
+
+**Trava 4 — Phase Evaluator em conversa livre (~1634-1668).** Ele decide se está em conversa profunda olhando as **mensagens recentes da própria Aura**: se as últimas falas dela têm vocabulário de profundidade, ele continua injetando "AÇÃO OBRIGATÓRIA: traga UMA observação concreta / pergunta-âncora da Logoterapia" mesmo que o usuário já tenha mudado para assunto leve. Resíduo do tema anterior mantém a marcha clínica ligada.
+
+**Trava 5 — Contexto temporal só existe acima de 4h (~5977).** Abaixo de 4h nenhuma instrução é dada e o histórico pesado segue no contexto, então o modelo puxa o assunto anterior de volta.
+
+**Verificado e OK (não precisa mexer):** `REGRA DE VALOR` e `GUARDRAIL SIMÉTRICO` já estão explicitamente desativados em PING-PONG; `FECHAMENTO RECOMENDADO`, `PADRÃO RECORRENTE` e continuidade de sessão já são gated por `sessionActive`; insights já estão marcados como contexto passivo ("se o usuário fala de filme, fale de filme"). O limite de 5 balões e a regra "UMA pergunta por resposta" não estorvam utilidade.
+
+## Parte 1 — Destravar a utilidade
 
 ### 0. Reescrever `ESCOPO E LIMITES` em dois níveis (o ajuste principal)
 Hoje é uma lista única de "não faço". Passa a separar:
@@ -21,12 +31,19 @@ Hoje é uma lista única de "não faço". Passa a separar:
 
 A resposta pronta "não é bem minha praia" sai da posição de padrão e passa a valer só para o segundo nível. O "POR QUÊ" também muda: o valor dela é ser a amiga que entende de gente **e está por perto no dia comum** — não uma assistente genérica, mas também não alguém que se recusa a responder o óbvio.
 
+### 0b. Corrigir o `ABERTURA LEVE DETECTADA` (trava 2)
+O bloco continua existindo — ele resolve bem o problema do "Oi". Só passa a **não** disparar quando a mensagem curta é uma pergunta: se termina em `?` ou começa com padrão interrogativo (`o que`, `qual`, `como`, `quando`, `onde`, `quanto`, `vale a pena`, `você sabe`, `me indica`, `tem alguma`, `é melhor`, `faz mal`, `pode`, `dá pra`), a mensagem sai do caminho de "abertura leve" e segue o fluxo normal. Mensagem curta que não é pergunta continua exatamente como hoje.
+
 ### 1. Uma regra de utilidade dentro do PING-PONG (que já existe)
-Acrescentar 3 ou 4 linhas ao bloco que já está lá:
+Acrescentar 4 ou 5 linhas ao bloco que já está lá:
 - Pergunta prática (dúvida, informação, ideia, receita, dica, opinião, "como faz X") → **responde a pergunta**, direto e útil, como uma amiga que sabe do assunto.
+- Nesse caso o teto de 300 caracteres não vale: pode usar até ~800 caracteres, o que a resposta precisar pra ser realmente útil. Continua valendo o máximo de 5 balões.
 - Responder é a entrega. Não precisa de gancho emocional, nem de pergunta de volta, nem de leitura psicológica.
 - Não devolver a pergunta como material clínico. Se houver algo emocional de verdade por trás, ela responde primeiro e só depois, se couber, comenta em uma frase.
 - Saúde/jurídico/financeiro: opinião informada + sugerir profissional, nunca como verdade.
+
+### 1b. Desarmar o Phase Evaluator quando o usuário muda de assunto (trava 4)
+Na conversa livre, se a **última mensagem do usuário** é pergunta prática (mesmo teste do item 0b) ou não tem carga emocional, o evaluator não injeta guidance de fase — ele já sai com `ping-pong` sem intervenção, como faz hoje quando não detecta profundidade. Nada muda quando o usuário está de fato em tema pesado.
 
 ### 2. Trocar o exemplo errado por um certo
 A seção Anti-Rodeio já ensina brevidade. Ganha um exemplo de utilidade no mesmo formato dos que já estão lá, usando o caso real do pilates: pergunta prática → resposta prática.
@@ -36,7 +53,7 @@ Hoje ela lê `Você não é assistente do humor do usuário. Você é a presenç
 
 ## Parte 2 — Corte de assunto aos 30 min (fora de sessão)
 
-Hoje o contexto temporal só fala quando o gap passa de 4h. Abaixo disso nada é dito, e o modelo tende a puxar o assunto pesado anterior de volta.
+Fecha a trava 5. Hoje o contexto temporal só fala quando o gap passa de 4h; abaixo disso nada é dito e o modelo tende a puxar o assunto pesado anterior de volta.
 
 Novo comportamento, só quando **não** há sessão agendada rodando:
 
@@ -55,14 +72,19 @@ Dentro de sessão agendada nada muda — lá a lógica de retomada e as 4 fases 
 
 - Nada dentro de sessão agendada.
 - Nenhum guardrail de profundidade é enfraquecido: em tema pesado, tudo continua igual.
+- O bloco de "Oi" continua fazendo o que faz hoje para saudação e mensagem curta que não é pergunta.
 - Histórico, insights e memória continuam carregados — retomar é sempre possível.
-- Sem código novo, sem tabela, sem cron, sem painel.
+- Sem tabela nova, sem cron, sem painel, sem KPI novo. As duas mudanças de lógica (0b e 1b) são condições dentro de blocos que já existem.
 - Protocolo de segurança e limites (não dar orientação médica/jurídica como verdade) continuam valendo — a regra de utilidade diz explicitamente pra ela não passar de opinião informada nesses casos.
 
 ## Detalhe técnico
 
-Em `supabase/functions/aura-agent/index.ts`:
-- edições de texto: bloco `# ESCOPO E LIMITES` (~2665-2684, reescrito em dois níveis), `## MODO PING-PONG` (~3081-3090), regra `Anti-Rodeio` (~2813-2815), bloco `# POSTURA CLÍNICA` (~2823).
-- bloco `CONTEXTO TEMPORAL SERVER-SIDE` (~5975-6002): baixar o gatilho de `temporalGapHours >= 4` para `>= 0.5`, com instrução própria para a faixa 0,5-4h e guarda `!sessionActive` nessa faixa.
+Tudo em `supabase/functions/aura-agent/index.ts`:
+- **Texto:** `# ESCOPO E LIMITES` (~2665-2684, reescrito em dois níveis), `## MODO PING-PONG` (~3081-3090), `Anti-Rodeio` (~2813-2815), `# POSTURA CLÍNICA` (~2823).
+- **Lógica (3 pontos pequenos):**
+  - `isLightMessage` / bloco `ABERTURA LEVE DETECTADA` (~6602-6623): adicionar `PRACTICAL_QUESTION_REGEX` e excluí-la do gate.
+  - `evaluateTherapeuticPhase`, ramo FREE CONVERSATION (~1634-1668): mesma checagem na última mensagem do usuário antes de injetar guidance de fase.
+  - `CONTEXTO TEMPORAL SERVER-SIDE` (~5977): gatilho de `>= 4` para `>= 0.5`, com instrução própria para a faixa 0,5-4h e guarda `!sessionActive` nessa faixa.
+- Os testes em `phase_thresholds_test.ts` checam `TAMANHO CONTEXTUAL`, `600 caracteres` e os thresholds do evaluator — as edições preservam essas âncoras; rodar o arquivo depois.
 
 Depois, redeploy do `aura-agent` e checagem de `failed_message_log`, conforme o padrão de deploy do projeto.
