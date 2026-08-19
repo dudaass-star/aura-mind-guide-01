@@ -1105,11 +1105,11 @@ const CheckoutV2 = () => {
       if (error) throw new Error(error.message || "Erro ao gerar PIX");
       // Assinatura já ativa: o backend recusa criar um 2º débito automático.
       if (data?.blocked) {
-        logFunnel("pix_qr_blocked", {
+        logFunnel("pix_qr_error", {
           plan: selectedPlan,
           billing: billingPeriod,
           paymentMethod: pixMode === "subscription" ? "pix_auto" : "pix",
-          detail: String(data.code || "blocked"),
+          detail: `blocked:${String(data.code || "already_subscribed")}`,
         });
         toast.error(data.message || "Já existe uma assinatura ativa com esses dados.");
         return;
