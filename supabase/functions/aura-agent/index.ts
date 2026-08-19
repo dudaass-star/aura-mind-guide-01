@@ -6015,13 +6015,15 @@ ${meditationCatalogSection}
     // ========================================================================
     // CONTEXTO TEMPORAL SERVER-SIDE (determinístico)
     // ========================================================================
-    if (temporalGapHours >= 4) {
+    if (temporalGapHours >= 0.5) {
       const gapDays = Math.floor(temporalGapHours / 24);
       const gapRemainingHours = Math.floor(temporalGapHours % 24);
       
       let gapDescription = '';
       if (gapDays >= 1) {
         gapDescription = `${gapDays} dia(s) e ${gapRemainingHours} hora(s)`;
+      } else if (temporalGapHours < 1) {
+        gapDescription = `${Math.round(temporalGapHours * 60)} minutos`;
       } else {
         gapDescription = `${Math.floor(temporalGapHours)} horas`;
       }
@@ -6031,15 +6033,21 @@ ${meditationCatalogSection}
         behaviorInstruction = `Trate como conversa NOVA. Cumprimente naturalmente para o periodo do dia. NAO retome nenhum assunto anterior a menos que o USUARIO traga primeiro.`;
       } else if (temporalGapHours >= 24) {
         behaviorInstruction = `Faz mais de um dia. Cumprimente de forma fresca. Se quiser mencionar algo anterior, diga "da ultima vez" ou "outro dia". NAO continue o assunto anterior como se fosse agora.`;
-      } else {
+      } else if (temporalGapHours >= 4) {
         behaviorInstruction = `Passaram-se algumas horas. NAO retome o assunto anterior como se fosse continuacao imediata. Cumprimente de forma natural e leve. NAO assuma que algo esta errado — espere o usuario trazer o assunto.`;
+      } else if (!sessionActive) {
+        // Faixa 30min-4h fora de sessão: a mensagem ATUAL define o assunto.
+        behaviorInstruction = `A conversa parou por um tempo. A mensagem que o usuario acabou de mandar DEFINE o assunto agora — responda o que ele trouxe, no registro dele. NAO reabra por conta propria o tema anterior (nem para "amarrar" ou "fechar"). Se ELE retomar, retome com naturalidade usando tudo que ja foi dito.`;
+      } else {
+        behaviorInstruction = '';
       }
 
-      dynamicContext += `\n\n⏰ CONTEXTO TEMPORAL (CALCULADO PELO SISTEMA - SIGA OBRIGATORIAMENTE):
+      if (behaviorInstruction) {
+        dynamicContext += `\n\n⏰ CONTEXTO TEMPORAL (CALCULADO PELO SISTEMA - SIGA OBRIGATORIAMENTE):
 Ultima mensagem do usuario foi ha ${gapDescription}.
 REGRA: ${behaviorInstruction}`;
-      
-      console.log(`⏰ Temporal gap detected: ${gapDescription} (${temporalGapHours.toFixed(1)}h)`);
+        console.log(`⏰ Temporal gap detected: ${gapDescription} (${temporalGapHours.toFixed(1)}h)`);
+      }
     }
 
     // ========================================================================
