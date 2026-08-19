@@ -287,7 +287,7 @@ async function processStage(
 
   let query = supabase
     .from("checkout_sessions")
-    .select("id, phone, name, plan, email")
+    .select("id, phone, name, plan, email, payment_method")
     .eq("status", "created")
     .not("phone", "is", null)
     .gte("created_at", WHATSAPP_RECOVERY_CUTOFF)
@@ -364,6 +364,21 @@ async function processStage(
         await markSkipped(supabase, session.id, cfg, "already_contacted_this_stage");
         skipped++;
         continue;
+      }
+
+      // Checagem ao vivo do trilho Woovi para PIX Automático: mandato/parcela
+      // podem existir na Woovi antes de virar registro local (reconciliação é
+      // assíncrona). Isso mantém o gatilho em 15 min sem falso abandono.
+      if (String(session.payment_method || "").startsWith("pix")) {
+        const live = await hasLiveWooviCommitment(supabase, {
+          email: session.email,
+          phone: session.phone,
+        });
+        if (live.committed) {
+          await markSkipped(supabase, session.id, cfg, live.reason || "woovi_committed");
+          skipped++;
+          continue;
+        }
       }
 
       const name = firstName(session.name);
