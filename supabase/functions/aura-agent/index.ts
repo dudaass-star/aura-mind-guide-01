@@ -1936,6 +1936,18 @@ async function processExtractedActions(
         shortAnswerStreak = (previousUserContext?.short_answer_streak || 0) + 1;
       }
 
+      // Anti-loop de reframe: a hipótese é "pegajosa" enquanto o tema é o mesmo.
+      // Recusa do usuário ou tema novo zeram o estado — a próxima leitura precisa ser nova,
+      // não a mesma tese reciclada.
+      const topicReset = actions.topic_continuity === 'new_topic';
+      const hypothesisRejected = actions.user_rejected_hypothesis === true;
+      const hypothesisDelivered = topicReset || hypothesisRejected
+        ? actions.aura_hypothesis_delivered === true
+        : (actions.aura_hypothesis_delivered === true || previousUserContext?.aura_hypothesis_delivered === true);
+      const hypothesisValidated = topicReset || hypothesisRejected
+        ? false
+        : (actions.user_validated_hypothesis === true || previousUserContext?.user_validated_hypothesis === true);
+
       const userContext: UserContextState = {
         user_emotional_state: actions.user_emotional_state,
         topic_continuity: actions.topic_continuity,
@@ -1945,7 +1957,11 @@ async function processExtractedActions(
         information_density: actions.information_density,
         user_reflection_mode: actions.user_reflection_mode,
         user_engaged_with_commitment: actions.user_engaged_with_commitment,
+        aura_hypothesis_delivered: hypothesisDelivered,
+        user_validated_hypothesis: hypothesisValidated,
+        user_rejected_hypothesis: hypothesisRejected,
       };
+
       // Use partial UPDATE to avoid overwriting concurrent fields (is_responding, pending_content, etc.)
       await supabase.from('aura_response_state')
         .update({ last_user_context: userContext, updated_at: new Date().toISOString() })
