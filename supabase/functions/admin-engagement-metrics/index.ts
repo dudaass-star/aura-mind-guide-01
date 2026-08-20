@@ -1783,12 +1783,22 @@ Deno.serve(async (req) => {
     let correctionsPerUserInPeriod = 0;
     let correctionsWeekly: { week: string; total: number; users: number; per_user: number }[] = [];
     try {
-      const { data: correctionsRows } = await supabase
-        .from('user_memory_corrections')
-        .select('user_id, created_at')
-        .gte('created_at', periodStart.toISOString())
-        .lte('created_at', periodEnd.toISOString());
-      if (correctionsRows) {
+      // Paginado: o PostgREST corta em 1000 linhas por request. Sem paginação,
+      // janelas longas (90d) travavam o total exatamente em 1000 e subestimavam o KPI.
+      const correctionsRows: { user_id: string }[] = [];
+      const CORR_PAGE = 1000;
+      for (let page = 0; page < 50; page++) {
+        const { data } = await supabase
+          .from('user_memory_corrections')
+          .select('user_id, created_at')
+          .gte('created_at', periodStart)
+          .lte('created_at', periodEnd)
+          .range(page * CORR_PAGE, (page + 1) * CORR_PAGE - 1);
+        if (!data || data.length === 0) break;
+        correctionsRows.push(...(data as { user_id: string }[]));
+        if (data.length < CORR_PAGE) break;
+      }
+      if (correctionsRows.length > 0) {
         correctionsTotalInPeriod = correctionsRows.length;
         correctionsUsersInPeriod = new Set(correctionsRows.map(r => r.user_id)).size;
         correctionsPerUserInPeriod = correctionsUsersInPeriod > 0
@@ -1796,13 +1806,23 @@ Deno.serve(async (req) => {
           : 0;
       }
 
+
       // Breakdown 8 semanas — usa data fixa (não depende de dateFrom/To do request).
+      // Também paginado pelo mesmo motivo do bloco acima.
       const eightWeeksAgo = new Date(Date.now() - 8 * 7 * 24 * 60 * 60 * 1000);
-      const { data: weeklyRows } = await supabase
-        .from('user_memory_corrections')
-        .select('user_id, created_at')
-        .gte('created_at', eightWeeksAgo.toISOString());
-      if (weeklyRows) {
+      const weeklyRows: { user_id: string; created_at: string }[] = [];
+      for (let page = 0; page < 50; page++) {
+        const { data } = await supabase
+          .from('user_memory_corrections')
+          .select('user_id, created_at')
+          .gte('created_at', eightWeeksAgo.toISOString())
+          .range(page * CORR_PAGE, (page + 1) * CORR_PAGE - 1);
+        if (!data || data.length === 0) break;
+        weeklyRows.push(...(data as { user_id: string; created_at: string }[]));
+        if (data.length < CORR_PAGE) break;
+      }
+      if (weeklyRows.length > 0) {
+
         // Agrupa por segunda-feira BRT (date_trunc('week') no Postgres = Mon).
         const buckets = new Map<string, { total: number; users: Set<string> }>();
         for (const r of weeklyRows) {
@@ -1846,13 +1866,22 @@ Deno.serve(async (req) => {
     let closureUnilateralPct = 0;
     let closureNoShowPct = 0;
     try {
-      const { data: closureRows } = await supabase
-        .from('sessions')
-        .select('closure_mode')
-        .gte('ended_at', periodStart.toISOString())
-        .lte('ended_at', periodEnd.toISOString())
-        .not('closure_mode', 'is', null);
-      if (closureRows) {
+      // Paginado (limite de 1000 linhas do PostgREST).
+      const closureRows: { closure_mode: string }[] = [];
+      for (let page = 0; page < 50; page++) {
+        const { data } = await supabase
+          .from('sessions')
+          .select('closure_mode')
+          .gte('ended_at', periodStart)
+          .lte('ended_at', periodEnd)
+          .not('closure_mode', 'is', null)
+          .range(page * 1000, (page + 1) * 1000 - 1);
+        if (!data || data.length === 0) break;
+        closureRows.push(...(data as { closure_mode: string }[]));
+        if (data.length < 1000) break;
+      }
+      if (closureRows.length > 0) {
+
         for (const r of closureRows) {
           const m = (r as any).closure_mode as string;
           if (m === 'dialogada') closureDialogada++;
