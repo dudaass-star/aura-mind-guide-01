@@ -50,10 +50,17 @@ Três coisas se somaram, todas no `aura-agent`:
    leitura, não mais uma pergunta". A Lidiane respondeu curto e "não sei" várias vezes,
    então esse caminho disparou repetidamente — e a única leitura disponível na mesa era a
    mesma (vazio × sufocamento). Resultado: a mesma tese devolvida em blocos sucessivos.
+4. **O phase evaluator interno do `aura-agent` reinjeta a orientação a cada turno.** Não é um
+   micro-agente separado: é a função `evaluateTherapeuticPhase()` dentro do
+   `supabase/functions/aura-agent/index.ts` que, ao detectar `sentido` com 5+ trocas,
+   adiciona ao `dynamicContext` a instrução de "entregue como hipótese aberta". Como não
+   existe guarda de "já entregue", ela repete a mesma orientação (e o molde) a cada
+   mensagem seguinte.
 
 O agravante do item 3 da lista acima (correção ignorada) tem a mesma raiz: como não há
 estado da hipótese, a recusa dela não invalidou nada — o turno seguinte recebeu de novo a
 instrução de entregar a leitura e o modelo reciclou a que já tinha.
+
 
 ## Ajustes propostos (prompt, sem nova complexidade)
 
