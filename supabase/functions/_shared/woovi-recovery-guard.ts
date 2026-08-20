@@ -29,6 +29,40 @@ const COMMITTED_STATUSES = new Set(
 
 const onlyDigits = (v: unknown) => String(v || "").replace(/\D/g, "");
 
+/**
+ * Status remotos que provam autorização do MANDATO (não da assinatura).
+ * `ACTIVE` fica de fora de propósito: a Woovi devolve a assinatura como ACTIVE
+ * desde a criação, antes de qualquer autorização.
+ */
+const REMOTE_MANDATE_APPROVED = new Set([
+  "APPROVED",
+  "AUTHORIZED",
+  "PIX_AUTOMATIC_APPROVED",
+  "APROVADA",
+  "ATIVA",
+]);
+
+const REMOTE_PAID = new Set(["COMPLETED", "PAID", "CONFIRMED", "PIX_AUTOMATIC_COBR_COMPLETED"]);
+
+/** Alguma parcela do carnê já paga no objeto remoto da assinatura? */
+function hasPaidInstallment(remote: Record<string, unknown>): boolean {
+  // deno-lint-ignore no-explicit-any
+  const lists: any[] = [
+    (remote as any)?.installments,
+    (remote as any)?.charges,
+    (remote as any)?.payments,
+  ];
+  for (const list of lists) {
+    if (!Array.isArray(list)) continue;
+    for (const item of list) {
+      if (item?.paidAt || item?.paid_at) return true;
+      const s = String(item?.status || "").toUpperCase();
+      if (REMOTE_PAID.has(s)) return true;
+    }
+  }
+  return false;
+}
+
 function isCommitted(sub: Record<string, unknown>): boolean {
   if (sub.entry_paid_at || sub.access_granted_at || sub.mandate_approved_at) return true;
   const status = String(sub.status || "").toUpperCase();
