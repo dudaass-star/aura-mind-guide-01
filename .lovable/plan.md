@@ -50,10 +50,17 @@ Três coisas se somaram, todas no `aura-agent`:
    leitura, não mais uma pergunta". A Lidiane respondeu curto e "não sei" várias vezes,
    então esse caminho disparou repetidamente — e a única leitura disponível na mesa era a
    mesma (vazio × sufocamento). Resultado: a mesma tese devolvida em blocos sucessivos.
+4. **O phase evaluator interno do `aura-agent` reinjeta a orientação a cada turno.** Não é um
+   micro-agente separado: é a função `evaluateTherapeuticPhase()` dentro do
+   `supabase/functions/aura-agent/index.ts` que, ao detectar `sentido` com 5+ trocas,
+   adiciona ao `dynamicContext` a instrução de "entregue como hipótese aberta". Como não
+   existe guarda de "já entregue", ela repete a mesma orientação (e o molde) a cada
+   mensagem seguinte.
 
 O agravante do item 3 da lista acima (correção ignorada) tem a mesma raiz: como não há
 estado da hipótese, a recusa dela não invalidou nada — o turno seguinte recebeu de novo a
 instrução de entregar a leitura e o modelo reciclou a que já tinha.
+
 
 ## Ajustes propostos (prompt, sem nova complexidade)
 
@@ -69,16 +76,17 @@ instrução de entregar a leitura e o modelo reciclou a que já tinha.
 3. **Anti-loop de reframe.** Uma hipótese central por sessão, oferecida no máximo duas
    vezes. Se a pessoa já validou, seguir adiante em vez de reoferecer; e parar de reinjetar
    a instrução de "entregar hipótese" quando a tese já apareceu no histórico recente.
-
-
-
-4. **Correção do usuário vence a hipótese.** Quando a pessoa corrige a leitura, a Aura
+4. **Guarda no phase evaluator.** Adicionar na `evaluateTherapeuticPhase()` uma verificação
+   simples: se a última resposta da Aura já continha uma hipótese entregue e o usuário não
+   a recusou de forma explícita, não reinjetar a orientação de "entregue hipótese aberta".
+5. **Correção do usuário vence a hipótese.** Quando a pessoa corrige a leitura, a Aura
    incorpora a palavra dela e reformula a partir dali, sem devolver a versão anterior.
-5. **"Não sei" duas vezes = trocar de camada.** Em vez de reafirmar a tese, ir pra origem
+6. **"Não sei" duas vezes = trocar de camada.** Em vez de reafirmar a tese, ir pra origem
    e história concreta (quando começou, com quem mais isso já aconteceu).
-6. **Fechamento com apoio quando há ativação aguda.** Se a última fala do usuário indicar
+7. **Fechamento com apoio quando há ativação aguda.** Se a última fala do usuário indicar
    dor viva ("eu não queria sentir isso"), o fechamento inclui algo pra atravessar a noite,
    não só a pergunta pra carregar.
+
 
 
 ## Um ponto a verificar antes de mexer
@@ -91,7 +99,9 @@ de encerramento, encerrar a sessão no momento do fechamento e pedir a nota em s
 
 ## Detalhes técnicos
 
-- Alterações 1–6 são no prompt do `supabase/functions/aura-agent/index.ts` (blocos de
-  cardápio de fechamento, CRIAR_AGENDA e regra anti-loop), sem novo código de fluxo.
+- Alterações 1–7 são no prompt do `supabase/functions/aura-agent/index.ts` (blocos de
+   cardápio de fechamento, CRIAR_AGENDA, regra anti-loop e guarda no phase evaluator), sem
+   novo código de fluxo.
+
 - Item de verificação toca `supabase/functions/session-reminder/index.ts` e o cálculo de
   `ended_at`; só mexer depois de confirmar a causa nos dados.
