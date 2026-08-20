@@ -7090,7 +7090,37 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
           console.log(`🔄 Converting [CONVERSA_CONCLUIDA] to [ENCERRAR_SESSAO] during session closing phase: ${currentPhase}`);
           assistantMessage = assistantMessage.replace(/\[CONVERSA_CONCLUIDA\]/gi, '[ENCERRAR_SESSAO]');
         }
+
+        // ====================================================================
+        // REDE DE SEGURANÇA DE ENCERRAMENTO (nível de código)
+        // ====================================================================
+        // Motivo (sessão Lidiane, 20/08): a mensagem de fechamento saiu sem a tag
+        // e a sessão só encerrou 35min depois, pelo cron de abandono. Confiar apenas
+        // na instrução de prompt repete o bug. Se a fase já é de fechamento final e
+        // a mensagem tem cara de despedida, o código força a tag.
+        const closingPhases = ['soft_closing', 'final_closing', 'overtime'];
+        if (
+          closingPhases.includes(currentPhase) &&
+          !assistantMessage.includes('[ENCERRAR_SESSAO]') &&
+          !assistantMessage.includes('[AGUARDANDO_RESPOSTA]')
+        ) {
+          const farewellSignals = [
+            'até a próxima', 'até nossa próxima', 'até logo', 'nos vemos', 'nos falamos',
+            'bom descanso', 'boa noite', 'se cuida', 'se cuide', 'cuida de você',
+            'obrigada por hoje', 'obrigado por hoje', 'por hoje é isso', 'ficamos por aqui',
+            'fechamos por aqui', 'encerrar por aqui', 'foi bom esse tempo', 'valeu o tempo',
+            'leva isso com você', 'leve isso com você', 'nossa sessão', 'nosso encontro'
+          ];
+          const lower = assistantMessage.toLowerCase();
+          const looksLikeFarewell = farewellSignals.some(s => lower.includes(s));
+          if (looksLikeFarewell || currentPhase === 'overtime') {
+            console.warn(`🛡️ Safety net: forçando [ENCERRAR_SESSAO] (phase=${currentPhase}, farewell=${looksLikeFarewell})`);
+            assistantMessage = `${assistantMessage.trim()} [ENCERRAR_SESSAO]`;
+            shouldEndSession = true;
+          }
+        }
       }
+
     }
 
     // ========================================================================
