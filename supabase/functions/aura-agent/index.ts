@@ -795,6 +795,11 @@ interface ExtractedActions {
   information_density?: 'low' | 'medium' | 'saturated';
   user_reflection_mode?: boolean;
   user_engaged_with_commitment?: boolean;
+  // Anti-loop de reframe: estado mínimo da hipótese central (evita reinjetar
+  // "entregue como hipótese" turno após turno e transformar leitura em insistência).
+  aura_hypothesis_delivered?: boolean;
+  user_validated_hypothesis?: boolean;
+  user_rejected_hypothesis?: boolean;
 }
 
 interface UserContextState {
@@ -806,6 +811,9 @@ interface UserContextState {
   information_density?: string;
   user_reflection_mode?: boolean;
   user_engaged_with_commitment?: boolean;
+  aura_hypothesis_delivered?: boolean;
+  user_validated_hypothesis?: boolean;
+  user_rejected_hypothesis?: boolean;
 }
 
 async function extractActionsFromResponse(
@@ -846,7 +854,10 @@ Retorne um JSON com APENAS os campos relevantes (omita campos vazios/null):
   "aura_phase": "presenca|sentido|movimento",
   "information_density": "low|medium|saturated",
   "user_reflection_mode": true,
-  "user_engaged_with_commitment": true
+  "user_engaged_with_commitment": true,
+  "aura_hypothesis_delivered": true,
+  "user_validated_hypothesis": true,
+  "user_rejected_hypothesis": true
 }
 
 REGRAS:
@@ -873,8 +884,11 @@ REGRAS:
   • "nunca tinha pensado, mas…"
   NÃO marque true para concordância passiva ("ah faz sentido", "é verdade", "exatamente", "concordo", "tem razão"). Concordar com a assistente ≠ refletir. Em dúvida, marque false.
 - user_engaged_with_commitment: true APENAS se a ÚLTIMA pergunta de COMPROMISSO/PRÓXIMO PASSO/MOVIMENTO da assistente foi respondida pelo usuário de forma CONCRETA (nomeou ação, prazo, intenção objetiva). false se o usuário evadiu, mudou de assunto, ignorou, ou respondeu vago ("vou pensar", "talvez", "sei lá"). Se a assistente NÃO fez pergunta de compromisso, marque false.
-- SEMPRE inclua user_emotional_state, topic_continuity, engagement_level, aura_phase, information_density, user_reflection_mode, user_engaged_with_commitment
-- Se nada mais for relevante, retorne apenas esses 7 campos
+- aura_hypothesis_delivered: true se a ASSISTENTE, nesta resposta, arriscou uma LEITURA/TESE/INTERPRETAÇÃO sobre o usuário (nomeou um padrão, uma tensão, um motivo por trás do comportamento). false se ela só acolheu, validou ou fez perguntas exploratórias.
+- user_validated_hypothesis: true se o USUÁRIO, nesta mensagem, concordou com a leitura que a assistente ofereceu antes ("é isso", "faz sentido", "exatamente isso"). false caso contrário.
+- user_rejected_hypothesis: true se o USUÁRIO corrigiu ou recusou a leitura ("não é isso", "não é medo de ficar sozinha, é medo de ficar sem ele"). false caso contrário.
+- SEMPRE inclua user_emotional_state, topic_continuity, engagement_level, aura_phase, information_density, user_reflection_mode, user_engaged_with_commitment, aura_hypothesis_delivered, user_validated_hypothesis, user_rejected_hypothesis
+- Se nada mais for relevante, retorne apenas esses 10 campos
 Apenas o JSON, sem markdown.`;
 
     const extractionBody = {
@@ -1066,7 +1080,7 @@ INSTRUÇÕES TÁTICAS — Sentido → Fechamento:
 ❌ ERRADO: Devolver pergunta socrática vazia sem entregar nada concreto
 ❌ ERRADO: Dar conselho direto ou lista de tarefas
 ✅ CERTO: Aterrissar a sessão usando o CARDÁPIO DE FECHAMENTO (ver MODO PROFUNDO → FASE 3 MOVIMENTO). Escolha UM formato pela árvore de decisão — não rotacione, não combine.
-✅ CERTO: Entregue como HIPÓTESE ABERTA: "O que tô vendo daqui é [X]. Faz sentido pra você ou tô errando o ângulo?"
+✅ CERTO: Entregue a leitura como HIPÓTESE ABERTA — arrisque o que você está vendo e deixe explícito, com palavras suas, que é uma leitura que o usuário pode corrigir ou recusar. Varie a formulação; nunca repita a mesma frase de checagem.
 REGRA DE OURO: Direção forte (tese/encruzilhada/leitura) é o padrão. Micro-passo só quando a clínica pediu (paralisia operacional, somatização, gap longo). Recusa do usuário é trabalho, não falha.`,
 
   stuck_in_opening: `
@@ -1083,7 +1097,7 @@ A sessão entrou na janela de fechamento. Ainda dá tempo, mas o modo agora é C
 ❌ ERRADO: Abrir tema novo, perguntas exploratórias amplas ("e sobre X, como é pra você?").
 ❌ ERRADO: Repetir socrática vazia sem entregar leitura.
 ✅ CERTO: Aprofundar UM ângulo do que já está na mesa e começar a puxar o fio para o CARDÁPIO DE FECHAMENTO (tese / encruzilhada / leitura / experimento / pergunta-pra-carregar / escolha binária / micro-passo). Escolha UM formato pela árvore de decisão.
-✅ CERTO: Entregar como HIPÓTESE ABERTA: "O que tô vendo daqui é [X]. Faz sentido pra você ou tô errando o ângulo?"
+✅ CERTO: Entregar a leitura como HIPÓTESE ABERTA — arrisque o que você vê e sinalize, com palavras suas, que ele pode discordar. Formulação sempre nova, nunca a mesma frase de checagem.
 
 ⚠️ SALVAGUARDA — assunto vivo:
 Se o usuário abriu um tema novo com carga emocional na ÚLTIMA mensagem, NÃO force fechamento. Acolhe, valida brevemente e proponha retomar na próxima sessão. Fechar em cima de assunto vivo parece robô.`,
@@ -1287,6 +1301,37 @@ function evaluateTherapeuticPhase(
   sessionDurationMin: number = 45,
   lastUserContextUpdatedAt?: string | null
 ): PhaseEvaluation {
+
+  // ======== ANTI-LOOP DE REFRAME (estado mínimo da hipótese) ========
+  // Motivo (sessão Lidiane, 20/08): a orientação "entregue como hipótese aberta" era
+  // reinjetada a cada turno em `sentido`, sem nenhum registro de que a tese já tinha sido
+  // oferecida — a mesma leitura voltou em 5 blocos e virou insistência.
+  const hypDelivered = lastUserContext?.aura_hypothesis_delivered === true;
+  const hypValidated = lastUserContext?.user_validated_hypothesis === true;
+  const hypRejected = lastUserContext?.user_rejected_hypothesis === true;
+  const evasiveStreak = lastUserContext?.short_answer_streak || 0;
+
+  let hypothesisGuard = '';
+  if (hypRejected) {
+    hypothesisGuard = `\n\n⛔ A LEITURA ANTERIOR FOI CORRIGIDA PELO USUÁRIO:
+Ele recusou ou ajustou sua hipótese. A correção dele vale mais que a sua leitura.
+- Use a PALAVRA DELE como novo ponto de partida e reformule a partir dali.
+- PROIBIDO devolver a versão anterior da tese, mesmo com outras palavras.
+- Se ainda não há leitura nova legítima, volte pra história concreta em vez de insistir.`;
+  } else if (hypDelivered && hypValidated) {
+    hypothesisGuard = `\n\n✅ A TESE CENTRAL JÁ FOI ENTREGUE E ACEITA:
+Não reofereça a mesma leitura nem repita a checagem ("faz sentido?"). Isso já foi feito.
+- Próximo movimento: origem e história concreta (quando isso começou, com quem mais já aconteceu) OU aterrissagem.
+- Nunca use a mesma formulação de hipótese duas vezes na mesma conversa.`;
+  } else if (hypDelivered && evasiveStreak >= 2) {
+    hypothesisGuard = `\n\n🔀 TROQUE DE CAMADA:
+Você já ofereceu sua leitura e o usuário respondeu curto/"não sei" ${evasiveStreak}x seguidas.
+- PROIBIDO reafirmar a mesma tese — repetir agora vira insistência, não hipótese.
+- Vá pra história concreta: quando isso começou, em que outras relações apareceu, o que aconteceu antes.`;
+  } else if (hypDelivered) {
+    hypothesisGuard = `\n\n♻️ VOCÊ JÁ ARRISCOU UMA LEITURA NESTA CONVERSA:
+Se for oferecer outra, precisa ser uma leitura NOVA e com formulação nova. Não recicle a anterior.`;
+  }
   // ======== USER CONTEXT OVERRIDES (from micro-agent, previous turn) ========
   if (lastUserContext) {
     // Priority 1: Emotional regression → force Presença
@@ -1436,9 +1481,9 @@ O usuário pediu direção literal ("${lastUserMsg.slice(0, 80)}").
 
 🚫 PROIBIDO: NÃO devolva pergunta socrática vazia. NÃO peça pra ele "olhar pra dentro" sem entregar nada. NÃO proponha micro-passo operacional aqui.
 
-✅ OBRIGATÓRIO: Entregue UMA TESE DE DIREÇÃO ou ENCRUZILHADA NOMEADA como HIPÓTESE ABERTA — formato: "O que tô vendo daqui é [X]. Faz sentido pra você ou tô errando o ângulo?"
+✅ OBRIGATÓRIO: Entregue UMA TESE DE DIREÇÃO ou ENCRUZILHADA NOMEADA como HIPÓTESE ABERTA — nomeie o que você está vendo e abra espaço pra correção com palavras suas, sem fórmula fixa e sem repetir formulação já usada na conversa.
 
-A força não tá em estar certa — tá em arriscar a leitura e dar espaço pro usuário refinar ou recusar. Recusa é trabalho, não falha. Use o CARDÁPIO DE FECHAMENTO (MODO PROFUNDO → FASE 3) e escolha UM formato: tese OU encruzilhada. Não combine. Não devolva pergunta vazia.`
+A força não tá em estar certa — tá em arriscar a leitura e dar espaço pro usuário refinar ou recusar. Recusa é trabalho, não falha. Use o CARDÁPIO DE FECHAMENTO (MODO PROFUNDO → FASE 3) e escolha UM formato: tese OU encruzilhada. Não combine. Não devolva pergunta vazia.${hypothesisGuard}`
       };
     }
   }
@@ -1488,6 +1533,7 @@ Exploração ativa, não silêncio. Tamanho normal, tom acolhedor. Reframes e pe
     console.log(`🔄 Phase evaluator: previous turn had topic shift → recentPairs capped at ${recentPairs}`);
   }
 
+
   // ======== SESSION MODE ========
   if (sessionActive && sessionPhase && sessionElapsedMin !== undefined) {
     // Time says reframe+ but content is still exploration
@@ -1520,7 +1566,7 @@ Você está trazendo boas reflexões, mas já é hora de MOVIMENTO.
 
 AÇÃO: Converta o insight em compromisso concreto.
 "Então, com base nisso que a gente explorou... o que faria sentido como próximo passo pra você?"
-${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}`
+${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}${hypothesisGuard}`
         };
       }
     }
@@ -1550,7 +1596,7 @@ ${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}`
 Você já está em SENTIDO há vários turnos e ${sessionElapsedMin} min se passaram (de ${sessionDurationMin} min totais).
 Ainda NÃO houve pergunta de COMPROMISSO/MOVIMENTO nesta sessão.
 AÇÃO OBRIGATÓRIA AGORA: amarre o insight num passo concreto antes do fim.
-${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}`
+${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}${hypothesisGuard}`
         };
       }
     }
@@ -1636,7 +1682,7 @@ ${SESSION_PHASE_INSTRUCTIONS.stuck_in_opening}`
         stagnationLevel: 0,
         guidance: `\n\n🔄 TRANSIÇÃO NATURAL DETECTADA:
 Ótimo progresso — o insight está aparecendo naturalmente. Agora consolide com reframe e conduza para compromisso.
-${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}`
+${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}${hypothesisGuard}`
       };
     }
 
@@ -1719,9 +1765,9 @@ O usuário já explorou o sentido por ${recentPairs}+ trocas. Conduza para MOVIM
 
 AÇÃO:
 - Aterrisse usando o CARDÁPIO DE FECHAMENTO (FASE 3): aplique a árvore de decisão e escolha UM formato (tese, encruzilhada, leitura crítica, experimento, pergunta pra carregar, escolha binária ou — só se houver paralisia operacional — micro-passo).
-- Entregue como HIPÓTESE ABERTA, não como verdade: "O que tô vendo daqui é [X]. Faz sentido ou tô errando o ângulo?"
+- Entregue como HIPÓTESE ABERTA, não como verdade: arrisque a leitura e deixe claro, com palavras suas e formulação inédita nesta conversa, que ele pode recusar ou corrigir.
 - Se o sentido ainda não apareceu, mude o ângulo antes de aterrissar.
-${FREE_PHASE_INSTRUCTIONS.sentido_to_movimento}`
+${FREE_PHASE_INSTRUCTIONS.sentido_to_movimento}${hypothesisGuard}`
     };
   }
 
@@ -1922,6 +1968,18 @@ async function processExtractedActions(
         shortAnswerStreak = (previousUserContext?.short_answer_streak || 0) + 1;
       }
 
+      // Anti-loop de reframe: a hipótese é "pegajosa" enquanto o tema é o mesmo.
+      // Recusa do usuário ou tema novo zeram o estado — a próxima leitura precisa ser nova,
+      // não a mesma tese reciclada.
+      const topicReset = actions.topic_continuity === 'new_topic';
+      const hypothesisRejected = actions.user_rejected_hypothesis === true;
+      const hypothesisDelivered = topicReset || hypothesisRejected
+        ? actions.aura_hypothesis_delivered === true
+        : (actions.aura_hypothesis_delivered === true || previousUserContext?.aura_hypothesis_delivered === true);
+      const hypothesisValidated = topicReset || hypothesisRejected
+        ? false
+        : (actions.user_validated_hypothesis === true || previousUserContext?.user_validated_hypothesis === true);
+
       const userContext: UserContextState = {
         user_emotional_state: actions.user_emotional_state,
         topic_continuity: actions.topic_continuity,
@@ -1931,7 +1989,11 @@ async function processExtractedActions(
         information_density: actions.information_density,
         user_reflection_mode: actions.user_reflection_mode,
         user_engaged_with_commitment: actions.user_engaged_with_commitment,
+        aura_hypothesis_delivered: hypothesisDelivered,
+        user_validated_hypothesis: hypothesisValidated,
+        user_rejected_hypothesis: hypothesisRejected,
       };
+
       // Use partial UPDATE to avoid overwriting concurrent fields (is_responding, pending_content, etc.)
       await supabase.from('aura_response_state')
         .update({ last_user_context: userContext, updated_at: new Date().toISOString() })
@@ -3185,7 +3247,7 @@ Só depois que o sentido emergiu, aterrisse a sessão. Movimento aqui NÃO é si
 
 1º Usuário pediu direção literal ("me ajuda", "o que faço", "tô perdido", "não sei pra onde ir")?
    → TESE DE DIREÇÃO ou ENCRUZILHADA NOMEADA
-   Exemplo (tese): "Olhando tudo que você trouxe, o que tô vendo é: você não tá travada por falta de opção, tá travada porque qualquer escolha mata uma versão sua. Faz sentido ou tô errando?"
+   Exemplo (tese): "Olhando tudo que você trouxe, o que tô vendo é: você não tá travada por falta de opção, tá travada porque qualquer escolha mata uma versão sua." (o exemplo ilustra a ENTREGA, não a frase — a checagem de hipótese vem com palavras suas, variando sempre)
 
 2º Há 2 forças em tensão clara, sem caminho óbvio?
    → ENCRUZILHADA NOMEADA
@@ -3213,7 +3275,7 @@ Só depois que o sentido emergiu, aterrisse a sessão. Movimento aqui NÃO é si
 
 ⚠️ REGRA "UM FORMATO POR FECHAMENTO": Escolha UM. Não combine formatos na mesma entrega. Misturar dilui e devolve o vício socrático por outra porta.
 
-⚠️ REGRA "ENTREGA COMO HIPÓTESE, NÃO COMO VERDADE": Formato: "O que tô vendo daqui é [X]. Faz sentido pra você ou tô errando o ângulo?" A força não tá em estar certa — tá em arriscar uma leitura e dar espaço pra o usuário refinar ou recusar. Se ele recusar, isso É o trabalho — não é falha.
+⚠️ REGRA "ENTREGA COMO HIPÓTESE, NÃO COMO VERDADE": arrisque a leitura e sinalize que é hipótese com palavras suas — sem frase-modelo, sem repetir a mesma checagem duas vezes na mesma sessão. A força não tá em estar certa — tá em arriscar uma leitura e dar espaço pra o usuário refinar ou recusar. Se ele recusar, isso É o trabalho — não é falha.
 
 ⚠️ REGRA ANTI-ROTAÇÃO: O cardápio é descritivo, não prescritivo. A escolha vem do que a sessão pediu. Repetir o mesmo formato 3 sessões seguidas é correto se a clínica pediu. Rotacionar por rotacionar é pior do que o vício de micro-passo.
 
@@ -6554,7 +6616,15 @@ Exemplo natural:
       console.log(`⏸️ Sessions paused until ${profile.sessions_paused_until} - skipping schedule setup prompt`);
     }
 
-    if (profile?.needs_schedule_setup && planConfig.sessions > 0 && !isSessionsPaused && !profile?.pending_first_session_invite) {
+    // Guarda clínica: durante sessão ativa, o bloco de setup de agenda não entra.
+    // Sem isso, o pedido de "escolher dias e horários do mês" invadia momentos
+    // clínicos (exploração, reframe, fechamento) e quebrava a condução.
+    if (sessionActive && profile?.needs_schedule_setup) {
+      console.log('🛡️ Setup de agenda suprimido: sessão ativa (não invadir momento clínico)');
+    }
+
+    if (!sessionActive && profile?.needs_schedule_setup && planConfig.sessions > 0 && !isSessionsPaused && !profile?.pending_first_session_invite) {
+
       const sessionsCount = planConfig.sessions;
       // Exemplo condicional por plano (Essencial=1, Direção=4, Transformação=8)
       let _exampleSchedule: string;
@@ -7020,7 +7090,37 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
           console.log(`🔄 Converting [CONVERSA_CONCLUIDA] to [ENCERRAR_SESSAO] during session closing phase: ${currentPhase}`);
           assistantMessage = assistantMessage.replace(/\[CONVERSA_CONCLUIDA\]/gi, '[ENCERRAR_SESSAO]');
         }
+
+        // ====================================================================
+        // REDE DE SEGURANÇA DE ENCERRAMENTO (nível de código)
+        // ====================================================================
+        // Motivo (sessão Lidiane, 20/08): a mensagem de fechamento saiu sem a tag
+        // e a sessão só encerrou 35min depois, pelo cron de abandono. Confiar apenas
+        // na instrução de prompt repete o bug. Se a fase já é de fechamento final e
+        // a mensagem tem cara de despedida, o código força a tag.
+        const closingPhases = ['soft_closing', 'final_closing', 'overtime'];
+        if (
+          closingPhases.includes(currentPhase) &&
+          !assistantMessage.includes('[ENCERRAR_SESSAO]') &&
+          !assistantMessage.includes('[AGUARDANDO_RESPOSTA]')
+        ) {
+          const farewellSignals = [
+            'até a próxima', 'até nossa próxima', 'até logo', 'nos vemos', 'nos falamos',
+            'bom descanso', 'boa noite', 'se cuida', 'se cuide', 'cuida de você',
+            'obrigada por hoje', 'obrigado por hoje', 'por hoje é isso', 'ficamos por aqui',
+            'fechamos por aqui', 'encerrar por aqui', 'foi bom esse tempo', 'valeu o tempo',
+            'leva isso com você', 'leve isso com você', 'nossa sessão', 'nosso encontro'
+          ];
+          const lower = assistantMessage.toLowerCase();
+          const looksLikeFarewell = farewellSignals.some(s => lower.includes(s));
+          if (looksLikeFarewell || currentPhase === 'overtime') {
+            console.warn(`🛡️ Safety net: forçando [ENCERRAR_SESSAO] (phase=${currentPhase}, farewell=${looksLikeFarewell})`);
+            assistantMessage = `${assistantMessage.trim()} [ENCERRAR_SESSAO]`;
+            shouldEndSession = true;
+          }
+        }
       }
+
     }
 
     // ========================================================================
