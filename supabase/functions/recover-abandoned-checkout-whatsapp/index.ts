@@ -404,6 +404,9 @@ async function processStage(
         }).eq("id", session.id);
         sent++;
         for (const v of phoneVars) contactedThisStage.add(v);
+        // Marca registros irmãos do MESMO telefone (duplo clique no checkout cria
+        // 2 linhas quase simultâneas) para não reenviar na próxima rodada do cron.
+        await markPhoneSiblings(supabase, cfg, session.phone, session.id);
         console.log(`✅ [WA stage ${cfg.label}] enviado → ${session.phone.substring(0, 6)}*** sid=${result.messageSid}`);
 
         // Loga outbound no inbox admin (template aprovado)
