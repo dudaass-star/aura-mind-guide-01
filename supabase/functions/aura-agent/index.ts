@@ -1483,7 +1483,7 @@ O usuário pediu direção literal ("${lastUserMsg.slice(0, 80)}").
 
 ✅ OBRIGATÓRIO: Entregue UMA TESE DE DIREÇÃO ou ENCRUZILHADA NOMEADA como HIPÓTESE ABERTA — nomeie o que você está vendo e abra espaço pra correção com palavras suas, sem fórmula fixa e sem repetir formulação já usada na conversa.
 
-A força não tá em estar certa — tá em arriscar a leitura e dar espaço pro usuário refinar ou recusar. Recusa é trabalho, não falha. Use o CARDÁPIO DE FECHAMENTO (MODO PROFUNDO → FASE 3) e escolha UM formato: tese OU encruzilhada. Não combine. Não devolva pergunta vazia.`
+A força não tá em estar certa — tá em arriscar a leitura e dar espaço pro usuário refinar ou recusar. Recusa é trabalho, não falha. Use o CARDÁPIO DE FECHAMENTO (MODO PROFUNDO → FASE 3) e escolha UM formato: tese OU encruzilhada. Não combine. Não devolva pergunta vazia.${hypothesisGuard}`
       };
     }
   }
@@ -1566,7 +1566,7 @@ Você está trazendo boas reflexões, mas já é hora de MOVIMENTO.
 
 AÇÃO: Converta o insight em compromisso concreto.
 "Então, com base nisso que a gente explorou... o que faria sentido como próximo passo pra você?"
-${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}`
+${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}${hypothesisGuard}`
         };
       }
     }
@@ -1596,7 +1596,7 @@ ${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}`
 Você já está em SENTIDO há vários turnos e ${sessionElapsedMin} min se passaram (de ${sessionDurationMin} min totais).
 Ainda NÃO houve pergunta de COMPROMISSO/MOVIMENTO nesta sessão.
 AÇÃO OBRIGATÓRIA AGORA: amarre o insight num passo concreto antes do fim.
-${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}`
+${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}${hypothesisGuard}`
         };
       }
     }
@@ -1682,7 +1682,7 @@ ${SESSION_PHASE_INSTRUCTIONS.stuck_in_opening}`
         stagnationLevel: 0,
         guidance: `\n\n🔄 TRANSIÇÃO NATURAL DETECTADA:
 Ótimo progresso — o insight está aparecendo naturalmente. Agora consolide com reframe e conduza para compromisso.
-${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}`
+${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}${hypothesisGuard}`
       };
     }
 
@@ -1767,7 +1767,7 @@ AÇÃO:
 - Aterrisse usando o CARDÁPIO DE FECHAMENTO (FASE 3): aplique a árvore de decisão e escolha UM formato (tese, encruzilhada, leitura crítica, experimento, pergunta pra carregar, escolha binária ou — só se houver paralisia operacional — micro-passo).
 - Entregue como HIPÓTESE ABERTA, não como verdade: arrisque a leitura e deixe claro, com palavras suas e formulação inédita nesta conversa, que ele pode recusar ou corrigir.
 - Se o sentido ainda não apareceu, mude o ângulo antes de aterrissar.
-${FREE_PHASE_INSTRUCTIONS.sentido_to_movimento}`
+${FREE_PHASE_INSTRUCTIONS.sentido_to_movimento}${hypothesisGuard}`
     };
   }
 
