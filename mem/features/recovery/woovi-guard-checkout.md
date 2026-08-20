@@ -12,3 +12,10 @@ Caso real 19/08/2026: Isabella pagou PIX Automático Woovi às 10:27 BRT e receb
 - Usada em `recover-abandoned-checkout-whatsapp` (checkout_sessions `payment_method` começando com `pix` + candidatos Asaas) e em `recover-abandoned-checkout`.
 - **O gatilho segue em 15 min** — nada de carência maior; o falso abandono se resolve pela checagem ao vivo.
 - `woovi-pix-audit` aceita `{ "only": "extrato" }` (roda só a varredura 6) e tem cron `woovi-extrato-reconcile-10min` a cada 10 min, para o pagamento aparecer localmente em minutos.
+
+## `ACTIVE` da assinatura NÃO é prova de mandato (20/08/2026)
+
+A Woovi devolve `subscription.status = ACTIVE` desde a criação da assinatura, antes de qualquer autorização. Como `ACTIVE` está em `WOOVI_APPROVED_STATUSES`, a checagem remota passou a silenciar **todo lead de PIX que só abriu o QR** (5 casos entre 18 e 20/08: Ursula, Vivien, Marcia, Luciana, Rubneia — todas com `AGUARDANDO`/`CREATED` e sem pagamento).
+
+Regra atual em `hasLiveWooviCommitment`: só bloqueia com prova real —
+status do bloco `pixAutomatic` em `APPROVED`/`AUTHORIZED`/`PIX_AUTOMATIC_APPROVED` (`REMOTE_MANDATE_APPROVED`), parcela paga no objeto remoto (`hasPaidInstallment`) ou match no extrato. Nunca pelo `status` genérico da assinatura.

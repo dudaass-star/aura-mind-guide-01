@@ -29,6 +29,40 @@ const COMMITTED_STATUSES = new Set(
 
 const onlyDigits = (v: unknown) => String(v || "").replace(/\D/g, "");
 
+/**
+ * Status remotos que provam autorização do MANDATO (não da assinatura).
+ * `ACTIVE` fica de fora de propósito: a Woovi devolve a assinatura como ACTIVE
+ * desde a criação, antes de qualquer autorização.
+ */
+const REMOTE_MANDATE_APPROVED = new Set([
+  "APPROVED",
+  "AUTHORIZED",
+  "PIX_AUTOMATIC_APPROVED",
+  "APROVADA",
+  "ATIVA",
+]);
+
+const REMOTE_PAID = new Set(["COMPLETED", "PAID", "CONFIRMED", "PIX_AUTOMATIC_COBR_COMPLETED"]);
+
+/** Alguma parcela do carnê já paga no objeto remoto da assinatura? */
+function hasPaidInstallment(remote: Record<string, unknown>): boolean {
+  // deno-lint-ignore no-explicit-any
+  const lists: any[] = [
+    (remote as any)?.installments,
+    (remote as any)?.charges,
+    (remote as any)?.payments,
+  ];
+  for (const list of lists) {
+    if (!Array.isArray(list)) continue;
+    for (const item of list) {
+      if (item?.paidAt || item?.paid_at) return true;
+      const s = String(item?.status || "").toUpperCase();
+      if (REMOTE_PAID.has(s)) return true;
+    }
+  }
+  return false;
+}
+
 function isCommitted(sub: Record<string, unknown>): boolean {
   if (sub.entry_paid_at || sub.access_granted_at || sub.mandate_approved_at) return true;
   const status = String(sub.status || "").toUpperCase();
@@ -136,13 +170,21 @@ export async function hasLiveWooviCommitment(
       );
       if (r.ok && r.data) {
         const remote = ((r.data as Record<string, unknown>)?.subscription || r.data) as Record<string, unknown>;
-        const status = String(
-          (remote?.status as string) ||
-            ((remote?.pixAutomatic as Record<string, unknown>)?.status as string) ||
+        // ATENÇÃO: o `status` da assinatura na Woovi nasce como ACTIVE no
+        // momento em que ela é criada, ANTES de qualquer autorização de
+        // mandato. Usá-lo como prova silenciava todo lead que apenas abriu o
+        // QR (caso real 20/08/2026: Ursula e Vivien). Só vale como
+        // compromisso: status do bloco pixAutomatic autorizado OU parcela paga.
+        const mandateStatus = String(
+          ((remote?.pixAutomatic as Record<string, unknown>)?.status as string) ||
+            (remote?.pixAutomaticStatus as string) ||
             "",
         ).toUpperCase();
-        if (COMMITTED_STATUSES.has(status)) {
+        if (REMOTE_MANDATE_APPROVED.has(mandateStatus)) {
           return { committed: true, reason: "woovi_mandate_remote" };
+        }
+        if (hasPaidInstallment(remote)) {
+          return { committed: true, reason: "woovi_installment_remote" };
         }
       }
     }
