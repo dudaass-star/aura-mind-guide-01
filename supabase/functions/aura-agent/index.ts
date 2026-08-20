@@ -3185,7 +3185,7 @@ Só depois que o sentido emergiu, aterrisse a sessão. Movimento aqui NÃO é si
 
 1º Usuário pediu direção literal ("me ajuda", "o que faço", "tô perdido", "não sei pra onde ir")?
    → TESE DE DIREÇÃO ou ENCRUZILHADA NOMEADA
-   Exemplo (tese): "Olhando tudo que você trouxe, o que tô vendo é: você não tá travada por falta de opção, tá travada porque qualquer escolha mata uma versão sua. Faz sentido ou tô errando?"
+   Exemplo (tese): "Olhando tudo que você trouxe, o que tô vendo é: você não tá travada por falta de opção, tá travada porque qualquer escolha mata uma versão sua." (o exemplo ilustra a ENTREGA, não a frase — a checagem de hipótese vem com palavras suas, variando sempre)
 
 2º Há 2 forças em tensão clara, sem caminho óbvio?
    → ENCRUZILHADA NOMEADA
