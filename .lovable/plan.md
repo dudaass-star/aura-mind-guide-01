@@ -74,11 +74,18 @@ instrução de entregar a leitura e o modelo reciclou a que já tinha.
    vale para os outros exemplos de fala engessados que aparecerem nesses blocos: viram
    descrição do efeito desejado, não script.
 3. **Anti-loop de reframe.** Uma hipótese central por sessão, oferecida no máximo duas
-   vezes. Se a pessoa já validou, seguir adiante em vez de reoferecer; e parar de reinjetar
-   a instrução de "entregar hipótese" quando a tese já apareceu no histórico recente.
-4. **Guarda no phase evaluator.** Adicionar na `evaluateTherapeuticPhase()` uma verificação
-   simples: se a última resposta da Aura já continha uma hipótese entregue e o usuário não
-   a recusou de forma explícita, não reinjetar a orientação de "entregue hipótese aberta".
+   vezes. Se a pessoa já validou, seguir adiante em vez de reoferecer.
+4. **Guarda no phase evaluator (resolvendo a tensão com o item 2).** A crítica está certa:
+   sem a frase fixa não há como detectar repetição com `.includes()`. Escolha adotada é a
+   saída (b), com um detalhe: em vez de julgamento semântico caro, dois campos booleanos
+   novos no JSON que o micro-agent extractor **já** devolve a cada turno
+   (`aura_hypothesis_delivered`, `user_validated_hypothesis`). Zero chamada extra de LLM;
+   o custo é 1 linha de schema e 2 flags no `lastUserContext`. O plano passa a admitir
+   explicitamente esse estado novo mínimo — a alternativa (a) foi descartada porque manter
+   um molde literal no prompt reintroduz exatamente o problema que gerou o loop.
+   Com as flags: se `aura_hypothesis_delivered` e não houve recusa, `evaluateTherapeuticPhase()`
+   deixa de reinjetar "entregue como hipótese" e passa a orientar o próximo movimento
+   (origem/história ou fechamento).
 5. **Correção do usuário vence a hipótese.** Quando a pessoa corrige a leitura, a Aura
    incorpora a palavra dela e reformula a partir dali, sem devolver a versão anterior.
 6. **"Não sei" duas vezes = trocar de camada.** Em vez de reafirmar a tese, ir pra origem
@@ -86,22 +93,37 @@ instrução de entregar a leitura e o modelo reciclou a que já tinha.
 7. **Fechamento com apoio quando há ativação aguda.** Se a última fala do usuário indicar
    dor viva ("eu não queria sentir isso"), o fechamento inclui algo pra atravessar a noite,
    não só a pergunta pra carregar.
+8. **Blindar o bloco de agenda com `sessionActive` (novo, vindo da crítica).** O gatilho na
+   linha 6557 realmente não checa sessão ativa nem fase, e o texto é redigido como mandato
+   ("SEU OBJETIVO: 1. Perguntar..."). Passa a ter a mesma blindagem `if (sessionActive)` que
+   os outros blocos sensíveis já têm, liberado só na abertura/fechamento.
+9. **Emissão confiável de `[ENCERRAR_SESSAO]` (novo).** Confirmado nos dados: o `ended_at`
+   da sessão da Lidiane é `16:55:03Z`, batendo com a varredura do cron, não com a última
+   mensagem (16:20) — ou seja, a sessão ficou aberta e foi fechada pelo caminho de
+   abandono, o fast-path `post_session_immediate` não rodou. A tag não saiu (ou saiu e foi
+   bloqueada). Ajuste: nos blocos de fechamento, tornar a tag parte inseparável de qualquer
+   formato de aterrissagem — inclusive "pergunta-pra-carregar", que hoje é o formato mais
+   propenso a terminar em pergunta sem tag.
 
+## O que foi verificado antes de fechar este plano
 
-
-## Um ponto a verificar antes de mexer
-
-O pedido de nota saiu às 13:55 BRT, 35 minutos depois da última mensagem do fechamento
-(13:20), e o `ended_at` da sessão está marcado em 13:55. Ainda não confirmei se isso é
-atraso do encerramento (sessão seguiu "aberta" até o cron fechar) ou da rotina de rating.
-Primeiro passo: checar o encerramento no `session-reminder`/ciclo de vida e, se for atraso
-de encerramento, encerrar a sessão no momento do fechamento e pedir a nota em seguida.
+- As 5 ocorrências do molde existem e são literais: linhas 1069, 1086, 1439, 1722 e 3216 do
+  `aura-agent/index.ts`.
+- `evaluateTherapeuticPhase()` não tem nenhum campo de estado de hipótese; o
+  `lastUserContext` do extractor não carrega nada equivalente.
+- Bloco de agenda (linha 6557 / cabeçalho 6579) sem `sessionActive` nem checagem de fase.
+- `sessions.closure_type = 'pergunta-pra-carregar'` foi preenchido pelo `session-extractor`
+  (é ele quem grava o campo), então não serve como prova de que a tag foi emitida — o
+  `ended_at` no minuto do cron é a prova de que não foi.
 
 ## Detalhes técnicos
 
-- Alterações 1–7 são no prompt do `supabase/functions/aura-agent/index.ts` (blocos de
-   cardápio de fechamento, CRIAR_AGENDA, regra anti-loop e guarda no phase evaluator), sem
-   novo código de fluxo.
+- Itens 1, 2, 3, 5, 6, 7 e 9 são prompt no `supabase/functions/aura-agent/index.ts`.
+- Item 4 toca o schema do micro-agent extractor (2 booleanos) e a condição
+  `recentPairs >= 5 && detectedPhase === 'sentido'` no `evaluateTherapeuticPhase()`.
+- Item 8 é a condição da linha 6557 mais o tom do bloco 6579.
+- `session-reminder/index.ts` não precisa de mudança: o fallback funcionou como projetado;
+  o furo é a tag não sair do agente.
+- Os testes em `aura-agent/phase_thresholds_test.ts` que hoje afirmam a presença de textos
+  literais precisam ser atualizados junto (passam a checar intenção, não frase).
 
-- Item de verificação toca `supabase/functions/session-reminder/index.ts` e o cálculo de
-  `ended_at`; só mexer depois de confirmar a causa nos dados.
