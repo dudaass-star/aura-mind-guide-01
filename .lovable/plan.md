@@ -32,12 +32,39 @@ formato "pergunta-pra-carregar". Nota 4, sem comentário.
    começou). Ela saiu do "eu não queria sentir isso" sem nenhum apoio prático, só com uma
    pergunta pra carregar.
 
+## Por que o loop da mesma tese aconteceu (causa confirmada no código)
+
+Três coisas se somaram, todas no `aura-agent`:
+
+1. **A frase é um molde fixo repetido em 5 lugares do prompt.** "O que tô vendo daqui é
+   [X]. Faz sentido pra você ou tô errando o ângulo?" está escrita literalmente no cardápio
+   de reframe, na regra "entrega como hipótese", no detector de pedido de direção e na
+   orientação de fase. Sempre que qualquer um desses blocos entra no contexto, o modelo
+   recebe a frase pronta e a copia — por isso ela sai idêntica quatro vezes.
+2. **Nada registra que a hipótese já foi entregue e aceita.** O avaliador de fase
+   reinjeta a orientação "entregue como hipótese aberta" a cada turno em que a conversa
+   segue em `sentido` com 5+ trocas. Não existe estado do tipo "tese central já oferecida"
+   nem "usuário já validou", então cada turno é tratado como se fosse a primeira entrega.
+3. **A regra anti-loop olha só o tamanho da resposta do usuário, não a repetição da
+   Aura.** Ela classifica respostas curtas: quando são evasivas, manda "ofereça sua
+   leitura, não mais uma pergunta". A Lidiane respondeu curto e "não sei" várias vezes,
+   então esse caminho disparou repetidamente — e a única leitura disponível na mesa era a
+   mesma (vazio × sufocamento). Resultado: a mesma tese devolvida em blocos sucessivos.
+
+O agravante do item 3 da lista acima (correção ignorada) tem a mesma raiz: como não há
+estado da hipótese, a recusa dela não invalidou nada — o turno seguinte recebeu de novo a
+instrução de entregar a leitura e o modelo reciclou a que já tinha.
+
 ## Ajustes propostos (prompt, sem nova complexidade)
 
 1. **Agenda fora da fase clínica.** O bloco de setup mensal só entra na abertura (antes do
    primeiro tema) ou no fechamento — nunca depois que o foco da sessão já foi definido.
 2. **Anti-loop de reframe.** Regra explícita: uma hipótese central por sessão, oferecida no
-   máximo duas vezes. Se a pessoa já validou, seguir adiante em vez de reoferecer.
+   máximo duas vezes. Se a pessoa já validou, seguir adiante em vez de reoferecer. Além da
+   regra no prompt, variar a frase de fechamento da hipótese (hoje é um molde literal
+   copiado) e parar de reinjetar a instrução de "entregar hipótese" quando a tese já foi
+   entregue no histórico recente.
+
 3. **Correção do usuário vence a hipótese.** Quando a pessoa corrige a leitura, a Aura
    incorpora a palavra dela e reformula a partir dali, sem devolver a versão anterior.
 4. **"Não sei" duas vezes = trocar de camada.** Em vez de reafirmar a tese, ir pra origem
