@@ -404,6 +404,9 @@ async function processStage(
         }).eq("id", session.id);
         sent++;
         for (const v of phoneVars) contactedThisStage.add(v);
+        // Marca registros irmãos do MESMO telefone (duplo clique no checkout cria
+        // 2 linhas quase simultâneas) para não reenviar na próxima rodada do cron.
+        await markPhoneSiblings(supabase, cfg, session.phone, session.id);
         console.log(`✅ [WA stage ${cfg.label}] enviado → ${session.phone.substring(0, 6)}*** sid=${result.messageSid}`);
 
         // Loga outbound no inbox admin (template aprovado)
@@ -467,6 +470,40 @@ async function markSkipped(supabase: any, id: string, cfg: StageConfig, reason: 
     });
   } catch (_) {
     // ignore
+  }
+}
+
+/**
+ * Fecha o estágio para TODOS os registros pendentes do mesmo telefone (outras
+ * checkout_sessions e cobranças PIX). Duplo clique no checkout gera 2 linhas
+ * quase simultâneas; sem isso a rodada seguinte do cron reenviava o template
+ * pro mesmo lead poucos minutos depois.
+ */
+async function markPhoneSiblings(
+  supabase: any,
+  cfg: StageConfig,
+  phone: string,
+  sessionId: string | null,
+  paymentId?: string,
+) {
+  const nowIso = new Date().toISOString();
+  const vars = getPhoneVariations(phone);
+  try {
+    let q = supabase.from("checkout_sessions").update({
+      [cfg.sentColumn]: nowIso,
+      whatsapp_recovery_last_error: "skipped: duplicate_phone_sibling",
+    }).in("phone", vars).is(cfg.sentColumn, null);
+    if (sessionId) q = q.neq("id", sessionId);
+    await q;
+
+    let q2 = supabase.from("asaas_payments").update({
+      [cfg.sentColumn]: nowIso,
+      whatsapp_recovery_last_error: "skipped: duplicate_phone_sibling",
+    }).in("customer_phone", vars).is(cfg.sentColumn, null);
+    if (paymentId) q2 = q2.neq("id", paymentId);
+    await q2;
+  } catch (err) {
+    console.warn(`⚠️ [WA stage ${cfg.label}] markPhoneSiblings falhou:`, err);
   }
 }
 
@@ -617,6 +654,7 @@ async function processStageAsaas(
         sent++;
         for (const v of phoneVars) contactedThisStage.add(v);
         console.log(`✅ [WA-PIX stage ${cfg.label}] enviado → ${payment.customer_phone.substring(0, 6)}*** sid=${result.messageSid}`);
+        await markPhoneSiblings(supabase, cfg, payment.customer_phone, null, payment.id);
 
         // Loga outbound no inbox admin.
         try {
