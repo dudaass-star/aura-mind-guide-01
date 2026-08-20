@@ -101,9 +101,18 @@ instrução de entregar a leitura e o modelo reciclou a que já tinha.
    da sessão da Lidiane é `16:55:03Z`, batendo com a varredura do cron, não com a última
    mensagem (16:20) — ou seja, a sessão ficou aberta e foi fechada pelo caminho de
    abandono, o fast-path `post_session_immediate` não rodou. A tag não saiu (ou saiu e foi
-   bloqueada). Ajuste: nos blocos de fechamento, tornar a tag parte inseparável de qualquer
-   formato de aterrissagem — inclusive "pergunta-pra-carregar", que hoje é o formato mais
-   propenso a terminar em pergunta sem tag.
+   bloqueada). Ajuste em duas camadas:
+   - **Prompt:** nos blocos de fechamento, a tag é parte inseparável de qualquer formato de
+     aterrissagem — inclusive "pergunta-pra-carregar", hoje o mais propenso a terminar em
+     pergunta sem tag.
+   - **Rede de segurança em código (crítica aceita).** Confiar só no prompt repetiria o erro
+     de origem. O arquivo já tem o precedente certo na linha ~7018-7021 (conversão automática
+     de `[CONVERSA_CONCLUIDA]` → `[ENCERRAR_SESSAO]`). Mesma lógica aqui: se a fase é
+     `closing` (ou o tempo de sessão já passou do limite) e a mensagem tem cara de fechamento
+     — resumo/despedida, sem pergunta de continuidade — e a tag não veio, o código força a
+     tag antes do processamento, com `console.log` para medir a frequência. Se essa rede
+     disparar com frequência alta, é sinal de que o prompt de fechamento ainda está fraco.
+
 
 ## O que foi verificado antes de fechar este plano
 
