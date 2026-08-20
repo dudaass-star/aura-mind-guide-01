@@ -59,19 +59,27 @@ instrução de entregar a leitura e o modelo reciclou a que já tinha.
 
 1. **Agenda fora da fase clínica.** O bloco de setup mensal só entra na abertura (antes do
    primeiro tema) ou no fechamento — nunca depois que o foco da sessão já foi definido.
-2. **Anti-loop de reframe.** Regra explícita: uma hipótese central por sessão, oferecida no
-   máximo duas vezes. Se a pessoa já validou, seguir adiante em vez de reoferecer. Além da
-   regra no prompt, variar a frase de fechamento da hipótese (hoje é um molde literal
-   copiado) e parar de reinjetar a instrução de "entregar hipótese" quando a tese já foi
-   entregue no histórico recente.
+2. **Tirar os moldes de frase do prompt.** Você tem razão: o prompt hoje entrega a frase
+   pronta ("O que tô vendo daqui é [X]. Faz sentido pra você ou tô errando o ângulo?") em
+   cinco lugares, e o modelo copia. Trocar todos por instrução de intenção — "arrisque sua
+   leitura e deixe explícito que é uma hipótese que ela pode recusar ou corrigir, com
+   palavras suas, variando a formulação" — sem nenhum texto literal para copiar. O mesmo
+   vale para os outros exemplos de fala engessados que aparecerem nesses blocos: viram
+   descrição do efeito desejado, não script.
+3. **Anti-loop de reframe.** Uma hipótese central por sessão, oferecida no máximo duas
+   vezes. Se a pessoa já validou, seguir adiante em vez de reoferecer; e parar de reinjetar
+   a instrução de "entregar hipótese" quando a tese já apareceu no histórico recente.
 
-3. **Correção do usuário vence a hipótese.** Quando a pessoa corrige a leitura, a Aura
+
+
+4. **Correção do usuário vence a hipótese.** Quando a pessoa corrige a leitura, a Aura
    incorpora a palavra dela e reformula a partir dali, sem devolver a versão anterior.
-4. **"Não sei" duas vezes = trocar de camada.** Em vez de reafirmar a tese, ir pra origem
+5. **"Não sei" duas vezes = trocar de camada.** Em vez de reafirmar a tese, ir pra origem
    e história concreta (quando começou, com quem mais isso já aconteceu).
-5. **Fechamento com apoio quando há ativação aguda.** Se a última fala do usuário indicar
+6. **Fechamento com apoio quando há ativação aguda.** Se a última fala do usuário indicar
    dor viva ("eu não queria sentir isso"), o fechamento inclui algo pra atravessar a noite,
    não só a pergunta pra carregar.
+
 
 ## Um ponto a verificar antes de mexer
 
@@ -83,7 +91,7 @@ de encerramento, encerrar a sessão no momento do fechamento e pedir a nota em s
 
 ## Detalhes técnicos
 
-- Alterações 1–5 são no prompt do `supabase/functions/aura-agent/index.ts` (blocos de
+- Alterações 1–6 são no prompt do `supabase/functions/aura-agent/index.ts` (blocos de
   cardápio de fechamento, CRIAR_AGENDA e regra anti-loop), sem novo código de fluxo.
 - Item de verificação toca `supabase/functions/session-reminder/index.ts` e o cálculo de
   `ended_at`; só mexer depois de confirmar a causa nos dados.
