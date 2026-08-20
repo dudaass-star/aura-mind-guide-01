@@ -1066,7 +1066,7 @@ INSTRUÇÕES TÁTICAS — Sentido → Fechamento:
 ❌ ERRADO: Devolver pergunta socrática vazia sem entregar nada concreto
 ❌ ERRADO: Dar conselho direto ou lista de tarefas
 ✅ CERTO: Aterrissar a sessão usando o CARDÁPIO DE FECHAMENTO (ver MODO PROFUNDO → FASE 3 MOVIMENTO). Escolha UM formato pela árvore de decisão — não rotacione, não combine.
-✅ CERTO: Entregue como HIPÓTESE ABERTA: "O que tô vendo daqui é [X]. Faz sentido pra você ou tô errando o ângulo?"
+✅ CERTO: Entregue a leitura como HIPÓTESE ABERTA — arrisque o que você está vendo e deixe explícito, com palavras suas, que é uma leitura que o usuário pode corrigir ou recusar. Varie a formulação; nunca repita a mesma frase de checagem.
 REGRA DE OURO: Direção forte (tese/encruzilhada/leitura) é o padrão. Micro-passo só quando a clínica pediu (paralisia operacional, somatização, gap longo). Recusa do usuário é trabalho, não falha.`,
 
   stuck_in_opening: `
@@ -1083,7 +1083,7 @@ A sessão entrou na janela de fechamento. Ainda dá tempo, mas o modo agora é C
 ❌ ERRADO: Abrir tema novo, perguntas exploratórias amplas ("e sobre X, como é pra você?").
 ❌ ERRADO: Repetir socrática vazia sem entregar leitura.
 ✅ CERTO: Aprofundar UM ângulo do que já está na mesa e começar a puxar o fio para o CARDÁPIO DE FECHAMENTO (tese / encruzilhada / leitura / experimento / pergunta-pra-carregar / escolha binária / micro-passo). Escolha UM formato pela árvore de decisão.
-✅ CERTO: Entregar como HIPÓTESE ABERTA: "O que tô vendo daqui é [X]. Faz sentido pra você ou tô errando o ângulo?"
+✅ CERTO: Entregar a leitura como HIPÓTESE ABERTA — arrisque o que você vê e sinalize, com palavras suas, que ele pode discordar. Formulação sempre nova, nunca a mesma frase de checagem.
 
 ⚠️ SALVAGUARDA — assunto vivo:
 Se o usuário abriu um tema novo com carga emocional na ÚLTIMA mensagem, NÃO force fechamento. Acolhe, valida brevemente e proponha retomar na próxima sessão. Fechar em cima de assunto vivo parece robô.`,
@@ -1436,7 +1436,7 @@ O usuário pediu direção literal ("${lastUserMsg.slice(0, 80)}").
 
 🚫 PROIBIDO: NÃO devolva pergunta socrática vazia. NÃO peça pra ele "olhar pra dentro" sem entregar nada. NÃO proponha micro-passo operacional aqui.
 
-✅ OBRIGATÓRIO: Entregue UMA TESE DE DIREÇÃO ou ENCRUZILHADA NOMEADA como HIPÓTESE ABERTA — formato: "O que tô vendo daqui é [X]. Faz sentido pra você ou tô errando o ângulo?"
+✅ OBRIGATÓRIO: Entregue UMA TESE DE DIREÇÃO ou ENCRUZILHADA NOMEADA como HIPÓTESE ABERTA — nomeie o que você está vendo e abra espaço pra correção com palavras suas, sem fórmula fixa e sem repetir formulação já usada na conversa.
 
 A força não tá em estar certa — tá em arriscar a leitura e dar espaço pro usuário refinar ou recusar. Recusa é trabalho, não falha. Use o CARDÁPIO DE FECHAMENTO (MODO PROFUNDO → FASE 3) e escolha UM formato: tese OU encruzilhada. Não combine. Não devolva pergunta vazia.`
       };
@@ -1719,7 +1719,7 @@ O usuário já explorou o sentido por ${recentPairs}+ trocas. Conduza para MOVIM
 
 AÇÃO:
 - Aterrisse usando o CARDÁPIO DE FECHAMENTO (FASE 3): aplique a árvore de decisão e escolha UM formato (tese, encruzilhada, leitura crítica, experimento, pergunta pra carregar, escolha binária ou — só se houver paralisia operacional — micro-passo).
-- Entregue como HIPÓTESE ABERTA, não como verdade: "O que tô vendo daqui é [X]. Faz sentido ou tô errando o ângulo?"
+- Entregue como HIPÓTESE ABERTA, não como verdade: arrisque a leitura e deixe claro, com palavras suas e formulação inédita nesta conversa, que ele pode recusar ou corrigir.
 - Se o sentido ainda não apareceu, mude o ângulo antes de aterrissar.
 ${FREE_PHASE_INSTRUCTIONS.sentido_to_movimento}`
     };
@@ -3213,7 +3213,7 @@ Só depois que o sentido emergiu, aterrisse a sessão. Movimento aqui NÃO é si
 
 ⚠️ REGRA "UM FORMATO POR FECHAMENTO": Escolha UM. Não combine formatos na mesma entrega. Misturar dilui e devolve o vício socrático por outra porta.
 
-⚠️ REGRA "ENTREGA COMO HIPÓTESE, NÃO COMO VERDADE": Formato: "O que tô vendo daqui é [X]. Faz sentido pra você ou tô errando o ângulo?" A força não tá em estar certa — tá em arriscar uma leitura e dar espaço pra o usuário refinar ou recusar. Se ele recusar, isso É o trabalho — não é falha.
+⚠️ REGRA "ENTREGA COMO HIPÓTESE, NÃO COMO VERDADE": arrisque a leitura e sinalize que é hipótese com palavras suas — sem frase-modelo, sem repetir a mesma checagem duas vezes na mesma sessão. A força não tá em estar certa — tá em arriscar uma leitura e dar espaço pra o usuário refinar ou recusar. Se ele recusar, isso É o trabalho — não é falha.
 
 ⚠️ REGRA ANTI-ROTAÇÃO: O cardápio é descritivo, não prescritivo. A escolha vem do que a sessão pediu. Repetir o mesmo formato 3 sessões seguidas é correto se a clínica pediu. Rotacionar por rotacionar é pior do que o vício de micro-passo.
 
