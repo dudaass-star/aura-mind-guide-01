@@ -79,17 +79,14 @@ instrução de entregar a leitura e o modelo reciclou a que já tinha.
 4. **Guarda no phase evaluator.** Adicionar na `evaluateTherapeuticPhase()` uma verificação
    simples: se a última resposta da Aura já continha uma hipótese entregue e o usuário não
    a recusou de forma explícita, não reinjetar a orientação de "entregue hipótese aberta".
-
-
-
-
-4. **Correção do usuário vence a hipótese.** Quando a pessoa corrige a leitura, a Aura
+5. **Correção do usuário vence a hipótese.** Quando a pessoa corrige a leitura, a Aura
    incorpora a palavra dela e reformula a partir dali, sem devolver a versão anterior.
-5. **"Não sei" duas vezes = trocar de camada.** Em vez de reafirmar a tese, ir pra origem
+6. **"Não sei" duas vezes = trocar de camada.** Em vez de reafirmar a tese, ir pra origem
    e história concreta (quando começou, com quem mais isso já aconteceu).
-6. **Fechamento com apoio quando há ativação aguda.** Se a última fala do usuário indicar
+7. **Fechamento com apoio quando há ativação aguda.** Se a última fala do usuário indicar
    dor viva ("eu não queria sentir isso"), o fechamento inclui algo pra atravessar a noite,
    não só a pergunta pra carregar.
+
 
 
 ## Um ponto a verificar antes de mexer
