@@ -102,7 +102,10 @@ de encerramento, encerrar a sessão no momento do fechamento e pedir a nota em s
 
 ## Detalhes técnicos
 
-- Alterações 1–6 são no prompt do `supabase/functions/aura-agent/index.ts` (blocos de
+- Alterações 1–7 são no prompt do `supabase/functions/aura-agent/index.ts` (blocos de
+   cardápio de fechamento, CRIAR_AGENDA, regra anti-loop e guarda no phase evaluator), sem
+   novo código de fluxo.
+
   cardápio de fechamento, CRIAR_AGENDA e regra anti-loop), sem novo código de fluxo.
 - Item de verificação toca `supabase/functions/session-reminder/index.ts` e o cálculo de
   `ended_at`; só mexer depois de confirmar a causa nos dados.
