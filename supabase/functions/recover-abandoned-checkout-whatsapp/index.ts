@@ -456,7 +456,6 @@ async function processStage(
 }
 
 async function markSkipped(supabase: any, id: string, cfg: StageConfig, reason: string) {
-  // Marca o estágio como resolvido para não reavaliar nesta sequência.
   // Marca o estágio como "enviado" para não reavaliar nesta sequência
   await supabase.from("checkout_sessions").update({
     [cfg.sentColumn]: new Date().toISOString(),
@@ -471,6 +470,40 @@ async function markSkipped(supabase: any, id: string, cfg: StageConfig, reason: 
     });
   } catch (_) {
     // ignore
+  }
+}
+
+/**
+ * Fecha o estágio para TODOS os registros pendentes do mesmo telefone (outras
+ * checkout_sessions e cobranças PIX). Duplo clique no checkout gera 2 linhas
+ * quase simultâneas; sem isso a rodada seguinte do cron reenviava o template
+ * pro mesmo lead poucos minutos depois.
+ */
+async function markPhoneSiblings(
+  supabase: any,
+  cfg: StageConfig,
+  phone: string,
+  sessionId: string | null,
+  paymentId?: string,
+) {
+  const nowIso = new Date().toISOString();
+  const vars = getPhoneVariations(phone);
+  try {
+    let q = supabase.from("checkout_sessions").update({
+      [cfg.sentColumn]: nowIso,
+      whatsapp_recovery_last_error: "skipped: duplicate_phone_sibling",
+    }).in("phone", vars).is(cfg.sentColumn, null);
+    if (sessionId) q = q.neq("id", sessionId);
+    await q;
+
+    let q2 = supabase.from("asaas_payments").update({
+      [cfg.sentColumn]: nowIso,
+      whatsapp_recovery_last_error: "skipped: duplicate_phone_sibling",
+    }).in("customer_phone", vars).is(cfg.sentColumn, null);
+    if (paymentId) q2 = q2.neq("id", paymentId);
+    await q2;
+  } catch (err) {
+    console.warn(`⚠️ [WA stage ${cfg.label}] markPhoneSiblings falhou:`, err);
   }
 }
 
