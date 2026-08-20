@@ -136,13 +136,21 @@ export async function hasLiveWooviCommitment(
       );
       if (r.ok && r.data) {
         const remote = ((r.data as Record<string, unknown>)?.subscription || r.data) as Record<string, unknown>;
-        const status = String(
-          (remote?.status as string) ||
-            ((remote?.pixAutomatic as Record<string, unknown>)?.status as string) ||
+        // ATENÇÃO: o `status` da assinatura na Woovi nasce como ACTIVE no
+        // momento em que ela é criada, ANTES de qualquer autorização de
+        // mandato. Usá-lo como prova silenciava todo lead que apenas abriu o
+        // QR (caso real 20/08/2026: Ursula e Vivien). Só vale como
+        // compromisso: status do bloco pixAutomatic autorizado OU parcela paga.
+        const mandateStatus = String(
+          ((remote?.pixAutomatic as Record<string, unknown>)?.status as string) ||
+            (remote?.pixAutomaticStatus as string) ||
             "",
         ).toUpperCase();
-        if (COMMITTED_STATUSES.has(status)) {
+        if (REMOTE_MANDATE_APPROVED.has(mandateStatus)) {
           return { committed: true, reason: "woovi_mandate_remote" };
+        }
+        if (hasPaidInstallment(remote)) {
+          return { committed: true, reason: "woovi_installment_remote" };
         }
       }
     }
