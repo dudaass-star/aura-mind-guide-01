@@ -456,10 +456,7 @@ async function processStage(
 }
 
 async function markSkipped(supabase: any, id: string, cfg: StageConfig, reason: string) {
-  return markStageDone(supabase, id, cfg, reason);
-}
-
-async function markStageDone(supabase: any, id: string, cfg: StageConfig, reason: string) {
+  // Marca o estágio como resolvido para não reavaliar nesta sequência.
   // Marca o estágio como "enviado" para não reavaliar nesta sequência
   await supabase.from("checkout_sessions").update({
     [cfg.sentColumn]: new Date().toISOString(),
