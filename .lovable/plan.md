@@ -127,7 +127,10 @@ instrução de entregar a leitura e o modelo reciclou a que já tinha.
 
 ## Detalhes técnicos
 
-- Itens 1, 2, 3, 5, 6, 7 e 9 são prompt no `supabase/functions/aura-agent/index.ts`.
+- Itens 1, 2, 3, 5, 6 e 7 são prompt no `supabase/functions/aura-agent/index.ts`.
+- Item 9 é prompt + um bloco de código junto da conversão existente de
+  `[CONVERSA_CONCLUIDA]` (linha ~7018), antes de `aiWantsToEndSession` (linha ~7781).
+
 - Item 4 toca o schema do micro-agent extractor (2 booleanos) e a condição
   `recentPairs >= 5 && detectedPhase === 'sentido'` no `evaluateTherapeuticPhase()`.
 - Item 8 é a condição da linha 6557 mais o tom do bloco 6579.
