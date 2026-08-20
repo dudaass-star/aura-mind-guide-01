@@ -6616,7 +6616,15 @@ Exemplo natural:
       console.log(`⏸️ Sessions paused until ${profile.sessions_paused_until} - skipping schedule setup prompt`);
     }
 
-    if (profile?.needs_schedule_setup && planConfig.sessions > 0 && !isSessionsPaused && !profile?.pending_first_session_invite) {
+    // Guarda clínica: durante sessão ativa, o bloco de setup de agenda não entra.
+    // Sem isso, o pedido de "escolher dias e horários do mês" invadia momentos
+    // clínicos (exploração, reframe, fechamento) e quebrava a condução.
+    if (sessionActive && profile?.needs_schedule_setup) {
+      console.log('🛡️ Setup de agenda suprimido: sessão ativa (não invadir momento clínico)');
+    }
+
+    if (!sessionActive && profile?.needs_schedule_setup && planConfig.sessions > 0 && !isSessionsPaused && !profile?.pending_first_session_invite) {
+
       const sessionsCount = planConfig.sessions;
       // Exemplo condicional por plano (Essencial=1, Direção=4, Transformação=8)
       let _exampleSchedule: string;
