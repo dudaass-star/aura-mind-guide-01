@@ -76,6 +76,10 @@ instrução de entregar a leitura e o modelo reciclou a que já tinha.
 3. **Anti-loop de reframe.** Uma hipótese central por sessão, oferecida no máximo duas
    vezes. Se a pessoa já validou, seguir adiante em vez de reoferecer; e parar de reinjetar
    a instrução de "entregar hipótese" quando a tese já apareceu no histórico recente.
+4. **Guarda no phase evaluator.** Adicionar na `evaluateTherapeuticPhase()` uma verificação
+   simples: se a última resposta da Aura já continha uma hipótese entregue e o usuário não
+   a recusou de forma explícita, não reinjetar a orientação de "entregue hipótese aberta".
+
 
 
 
