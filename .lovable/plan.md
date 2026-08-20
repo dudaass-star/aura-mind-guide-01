@@ -103,6 +103,5 @@ de encerramento, encerrar a sessão no momento do fechamento e pedir a nota em s
    cardápio de fechamento, CRIAR_AGENDA, regra anti-loop e guarda no phase evaluator), sem
    novo código de fluxo.
 
-  cardápio de fechamento, CRIAR_AGENDA e regra anti-loop), sem novo código de fluxo.
 - Item de verificação toca `supabase/functions/session-reminder/index.ts` e o cálculo de
   `ended_at`; só mexer depois de confirmar a causa nos dados.
