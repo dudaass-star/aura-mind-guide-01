@@ -620,6 +620,7 @@ async function processStageAsaas(
         sent++;
         for (const v of phoneVars) contactedThisStage.add(v);
         console.log(`✅ [WA-PIX stage ${cfg.label}] enviado → ${payment.customer_phone.substring(0, 6)}*** sid=${result.messageSid}`);
+        await markPhoneSiblings(supabase, cfg, payment.customer_phone, null, payment.id);
 
         // Loga outbound no inbox admin.
         try {
