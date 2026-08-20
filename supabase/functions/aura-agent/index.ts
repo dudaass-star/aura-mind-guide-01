@@ -1502,6 +1502,38 @@ Exploração ativa, não silêncio. Tamanho normal, tom acolhedor. Reframes e pe
     console.log(`🔄 Phase evaluator: previous turn had topic shift → recentPairs capped at ${recentPairs}`);
   }
 
+  // ======== ANTI-LOOP DE REFRAME (estado mínimo da hipótese) ========
+  // Motivo (sessão Lidiane, 20/08): a orientação "entregue como hipótese aberta" era
+  // reinjetada a cada turno em `sentido`, sem nenhum registro de que a tese já tinha sido
+  // oferecida — a mesma leitura voltou em 5 blocos e virou insistência.
+  const hypDelivered = lastUserContext?.aura_hypothesis_delivered === true;
+  const hypValidated = lastUserContext?.user_validated_hypothesis === true;
+  const hypRejected = lastUserContext?.user_rejected_hypothesis === true;
+  const evasiveStreak = lastUserContext?.short_answer_streak || 0;
+
+  let hypothesisGuard = '';
+  if (hypRejected) {
+    hypothesisGuard = `\n\n⛔ A LEITURA ANTERIOR FOI CORRIGIDA PELO USUÁRIO:
+Ele recusou ou ajustou sua hipótese. A correção dele vale mais que a sua leitura.
+- Use a PALAVRA DELE como novo ponto de partida e reformule a partir dali.
+- PROIBIDO devolver a versão anterior da tese, mesmo com outras palavras.
+- Se ainda não há leitura nova legítima, volte pra história concreta em vez de insistir.`;
+  } else if (hypDelivered && hypValidated) {
+    hypothesisGuard = `\n\n✅ A TESE CENTRAL JÁ FOI ENTREGUE E ACEITA:
+Não reofereça a mesma leitura nem repita a checagem ("faz sentido?"). Isso já foi feito.
+- Próximo movimento: origem e história concreta (quando isso começou, com quem mais já aconteceu) OU aterrissagem.
+- Nunca use a mesma formulação de hipótese duas vezes na mesma conversa.`;
+  } else if (hypDelivered && evasiveStreak >= 2) {
+    hypothesisGuard = `\n\n🔀 TROQUE DE CAMADA:
+Você já ofereceu sua leitura e o usuário respondeu curto/"não sei" ${evasiveStreak}x seguidas.
+- PROIBIDO reafirmar a mesma tese — repetir agora vira insistência, não hipótese.
+- Vá pra história concreta: quando isso começou, em que outras relações apareceu, o que aconteceu antes.`;
+  } else if (hypDelivered) {
+    hypothesisGuard = `\n\n♻️ VOCÊ JÁ ARRISCOU UMA LEITURA NESTA CONVERSA:
+Se for oferecer outra, precisa ser uma leitura NOVA e com formulação nova. Não recicle a anterior.`;
+  }
+
+
   // ======== SESSION MODE ========
   if (sessionActive && sessionPhase && sessionElapsedMin !== undefined) {
     // Time says reframe+ but content is still exploration
