@@ -60,7 +60,11 @@ instrução de entregar a leitura e o modelo reciclou a que já tinha.
 1. **Agenda fora da fase clínica.** O bloco de setup mensal só entra na abertura (antes do
    primeiro tema) ou no fechamento — nunca depois que o foco da sessão já foi definido.
 2. **Anti-loop de reframe.** Regra explícita: uma hipótese central por sessão, oferecida no
-   máximo duas vezes. Se a pessoa já validou, seguir adiante em vez de reoferecer.
+   máximo duas vezes. Se a pessoa já validou, seguir adiante em vez de reoferecer. Além da
+   regra no prompt, variar a frase de fechamento da hipótese (hoje é um molde literal
+   copiado) e parar de reinjetar a instrução de "entregar hipótese" quando a tese já foi
+   entregue no histórico recente.
+
 3. **Correção do usuário vence a hipótese.** Quando a pessoa corrige a leitura, a Aura
    incorpora a palavra dela e reformula a partir dali, sem devolver a versão anterior.
 4. **"Não sei" duas vezes = trocar de camada.** Em vez de reafirmar a tese, ir pra origem
