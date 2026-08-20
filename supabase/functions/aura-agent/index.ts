@@ -795,6 +795,11 @@ interface ExtractedActions {
   information_density?: 'low' | 'medium' | 'saturated';
   user_reflection_mode?: boolean;
   user_engaged_with_commitment?: boolean;
+  // Anti-loop de reframe: estado mínimo da hipótese central (evita reinjetar
+  // "entregue como hipótese" turno após turno e transformar leitura em insistência).
+  aura_hypothesis_delivered?: boolean;
+  user_validated_hypothesis?: boolean;
+  user_rejected_hypothesis?: boolean;
 }
 
 interface UserContextState {
@@ -806,6 +811,9 @@ interface UserContextState {
   information_density?: string;
   user_reflection_mode?: boolean;
   user_engaged_with_commitment?: boolean;
+  aura_hypothesis_delivered?: boolean;
+  user_validated_hypothesis?: boolean;
+  user_rejected_hypothesis?: boolean;
 }
 
 async function extractActionsFromResponse(
@@ -846,7 +854,10 @@ Retorne um JSON com APENAS os campos relevantes (omita campos vazios/null):
   "aura_phase": "presenca|sentido|movimento",
   "information_density": "low|medium|saturated",
   "user_reflection_mode": true,
-  "user_engaged_with_commitment": true
+  "user_engaged_with_commitment": true,
+  "aura_hypothesis_delivered": true,
+  "user_validated_hypothesis": true,
+  "user_rejected_hypothesis": true
 }
 
 REGRAS:
@@ -873,8 +884,11 @@ REGRAS:
   • "nunca tinha pensado, mas…"
   NÃO marque true para concordância passiva ("ah faz sentido", "é verdade", "exatamente", "concordo", "tem razão"). Concordar com a assistente ≠ refletir. Em dúvida, marque false.
 - user_engaged_with_commitment: true APENAS se a ÚLTIMA pergunta de COMPROMISSO/PRÓXIMO PASSO/MOVIMENTO da assistente foi respondida pelo usuário de forma CONCRETA (nomeou ação, prazo, intenção objetiva). false se o usuário evadiu, mudou de assunto, ignorou, ou respondeu vago ("vou pensar", "talvez", "sei lá"). Se a assistente NÃO fez pergunta de compromisso, marque false.
-- SEMPRE inclua user_emotional_state, topic_continuity, engagement_level, aura_phase, information_density, user_reflection_mode, user_engaged_with_commitment
-- Se nada mais for relevante, retorne apenas esses 7 campos
+- aura_hypothesis_delivered: true se a ASSISTENTE, nesta resposta, arriscou uma LEITURA/TESE/INTERPRETAÇÃO sobre o usuário (nomeou um padrão, uma tensão, um motivo por trás do comportamento). false se ela só acolheu, validou ou fez perguntas exploratórias.
+- user_validated_hypothesis: true se o USUÁRIO, nesta mensagem, concordou com a leitura que a assistente ofereceu antes ("é isso", "faz sentido", "exatamente isso"). false caso contrário.
+- user_rejected_hypothesis: true se o USUÁRIO corrigiu ou recusou a leitura ("não é isso", "não é medo de ficar sozinha, é medo de ficar sem ele"). false caso contrário.
+- SEMPRE inclua user_emotional_state, topic_continuity, engagement_level, aura_phase, information_density, user_reflection_mode, user_engaged_with_commitment, aura_hypothesis_delivered, user_validated_hypothesis, user_rejected_hypothesis
+- Se nada mais for relevante, retorne apenas esses 10 campos
 Apenas o JSON, sem markdown.`;
 
     const extractionBody = {
