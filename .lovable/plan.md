@@ -1,46 +1,53 @@
-# Perfis de clientes: transformar o que já existe em leitura rápida
+# Maria Aparecida: por que não saiu o WhatsApp de recuperação
 
-## Resposta curta
+## O que aconteceu (confirmado nos dados)
 
-Sim, o dado existe — mas hoje não é "encontrável rápido". O que verifiquei no banco agora:
+- Checkout dela: 20/08 19:38 BRT, Essencial mensal, PIX Automático, status `created` (não pagou).
+- A rotina de WhatsApp **rodou** às 19:55 BRT e **decidiu não enviar**: o registro ficou com `whatsapp_recovery_last_error = "skipped: phone_lifetime_cap"`.
+- Motivo do bloqueio: o telefone 16994666047 já é uma lead antiga. Histórico de tentativas:
+  - 26/04, 05/05, 06/05, 09/05: envios de recuperação (e-mail/estágios).
+  - 20/05: **3 falhas WhatsApp com erro "Authenticate"**, e depois 2 envios WhatsApp OK.
+- A regra atual de "cap vitalício" bane o telefone para sempre se ele já recebeu 2+ mensagens **ou** se teve **qualquer** falha registrada. Ela cai nos dois critérios.
+- O e-mail de recuperação **saiu normalmente** (estágio 1 às 20:40 BRT). Só o WhatsApp foi suprimido.
 
-- `session_themes`: 16.475 linhas, 230 usuários (4.543 linhas em clientes ativos/trial). Atualizado até hoje.
-- `user_insights`: 20.244 fatos em 81 usuários, categorizados: contexto (9.9k), preferência (3.6k), pessoa (2.1k), padrão (1.7k), objetivo (1.5k), trauma (701), conquista (641).
-- `user_evolution_summary`: 196 resumos narrativos.
-- `user_portraits`: 36 retratos prontos (só 18 são de clientes ativos/trial).
-- `thematic_snapshots`: praticamente vazio (2 linhas, 1 usuário) — não serve como base de perfil hoje.
+Ou seja: não foi falha de entrega nem bug de disparo — foi a trava de segurança fazendo o que foi programada para fazer.
 
-Dois problemas impedem usar isso como "perfil de cliente":
+## O problema real por trás disso
 
-1. **Ruído e duplicidade nos temas.** No topo da lista aparecem `ansiedade` (62 usuários) e `Ansiedade` (17) como temas diferentes; `cansaço` (32) e `cansaco` (17) idem. E há tema operacional que não é tema de vida: `agendamento de sessões` (32) e `agendamento de sessão` (20) somam mais gente que "culpa".
-2. **Não existe nenhuma tela ou consulta agregada.** Tudo é por usuário. Não há como responder "quais são os 5 perfis de cliente que eu tenho" sem consulta manual.
+O cap vitalício trata falha da **nossa** infraestrutura como se fosse rejeição do destinatário. Olhando as 259 falhas de WhatsApp registradas:
 
-## O que fazer
+- 136 são `Authenticate` (credencial errada da subconta Twilio, período de 20/05),
+- 68 são `Twilio could not find a Channel with the specified From address` (remetente mal configurado),
+- 13 `Invalid Parameter`,
+- o resto são números realmente inválidos.
 
-### 1. Camada de normalização de temas (sem apagar dado)
-Criar uma view `public.session_themes_normalized` que:
-- normaliza `theme_name` (minúsculas, sem acento, sem pontuação) para fundir `Ansiedade`/`ansiedade`/`cansaco`/`cansaço`;
-- aplica um mapa de sinônimos curto e explícito (ex.: exaustão/esgotamento/cansaço → `cansaço`; paz/paz interior/alívio → `alívio`; autonomia/independência emocional → `autonomia`);
-- marca temas operacionais como ruído (`agendamento*`, `sessão`, `pagamento`, `plano`) via coluna `is_noise`, para ficarem fora dos rankings sem perder histórico.
+**86 telefones distintos** estão banidos para sempre por falhas que, na maioria, nunca chegaram ao WhatsApp do usuário. Maria Aparecida é um desses casos: uma lead nova de agosto silenciada por um erro de configuração nosso de maio.
 
-### 2. Painel "Perfis de clientes" no admin
-Nova aba/página admin com três blocos:
-- **Mapa de temas**: ranking de temas normalizados por número de clientes, filtrável por status (ativos/trial/cancelados) e por janela (30/90/365 dias / tudo). Mostra tema, nº de clientes, nº de sessões, % da base.
-- **Clusters (perfis)**: agrupamento por combinação dos eixos que já temos — tema dominante + categoria de insight predominante (trauma/objetivo/padrão) + plano + tempo de casa. A saída é uma lista de 4-8 clusters com tamanho, temas típicos e 3 exemplos clicáveis de clientes.
-- **Ficha do cliente**: ao clicar, abre painel lateral com o retrato (`user_portraits`), o resumo evolutivo, os temas ativos e os insights de maior prioridade — a leitura de perfil em uma tela.
+## Ajustes propostos
 
-### 3. Cobertura dos retratos
-Só 18 dos 55 clientes ativos/trial têm retrato gerado. Rodar o gerador de retratos em lote para os ativos sem retrato, para o painel não nascer com metade da base vazia.
+### 1. Separar falha nossa de rejeição do destinatário
+O banimento vitalício passa a valer só para falhas atribuíveis ao número/usuário (número inválido, destinatário inexistente, bloqueio/opt-out). Erros de infraestrutura — `Authenticate`, `could not find a Channel`, `Invalid Parameter`, 5xx — deixam de banir; a tentativa continua logada, mas o telefone volta a ser elegível.
+
+### 2. Limpar o passivo dos 86 telefones
+Reclassificar as tentativas antigas cujo erro é de infraestrutura, para que essas leads voltem a ser elegíveis em checkouts **futuros** (sem reabrir disparo retroativo de sessões velhas).
+
+### 3. Cap por número com janela, não vitalício
+Manter proteção contra insistência, mas com regra sã: no máximo 2 mensagens de recuperação por telefone **por checkout**, e no máximo 1 ciclo de recuperação por telefone a cada 30 dias. Assim uma lead que voltou 3 meses depois é tratada como nova oportunidade, e não como contato queimado.
+
+### 4. Deixar o motivo visível no admin
+No painel de recuperação, mostrar o motivo do "pulado" em linguagem clara (ex.: "telefone com cap de 30 dias", "já pagou", "falha de configuração") em vez do código cru.
+
+### 5. Caso da Maria Aparecida agora
+Liberar o registro dela (limpar o `skipped` do estágio 15min) para que o próximo ciclo faça o disparo de recuperação, já que ela não pagou e o e-mail é o único toque que ela teve.
 
 ## Detalhes técnicos
 
-- **Migração**: cria a view normalizada + índice de apoio em `session_themes(user_id, status, last_mentioned_at)`. Nenhuma tabela nova, nenhum dado destruído.
-- **Edge function** `admin-customer-profiles` (verify_jwt padrão + checagem `has_role('admin')`, igual `admin-messages`): endpoints `?action=themes`, `?action=clusters`, `?action=profile&user_id=`. Agregação em SQL, não no cliente. Atenção ao limite de 1000 linhas do PostgREST — usar RPC/agregação server-side.
-- **Front**: nova página `src/pages/AdminProfiles.tsx` + rota no `App.tsx`, no mesmo padrão visual dos painéis admin atuais. Sem dependência nova.
-- **Clusterização**: regra determinística em SQL (tema dominante + categoria dominante), sem LLM. Se depois quisermos rótulos narrativos ("A exausta que não pede ajuda"), aí sim uma passada de Flash-Lite gerando o nome de cada cluster — fica como fase 2.
+- `supabase/functions/recover-abandoned-checkout-whatsapp/index.ts`: construção de `lifetimeBannedPhones` passa a filtrar `checkout_recovery_attempts` por classe de erro (lista de padrões de infraestrutura ignorados); contagem de `recovery_messages` passa a ser janelada em 30 dias em vez de vitalícia; mesmo tratamento no caminho Asaas (`processStageAsaas`).
+- Migração leve: nenhuma coluna nova obrigatória; a reclassificação do passivo é um `UPDATE` de `status` para `wa_stage_1_infra_error` nas linhas com erro de infraestrutura (sai do `like 'wa_%failed'`).
+- `src/pages/AdminWhatsappRecovery.tsx`: mapa de códigos → texto legível.
+- Redeploy de `recover-abandoned-checkout-whatsapp`.
 
 ## Fora de escopo
 
-- Reprocessar `thematic_snapshots` (base vazia, decisão separada).
-- Deduplicar temas destrutivamente no banco.
-- Rótulos de cluster gerados por IA (fase 2).
+- Reabrir disparo retroativo para as sessões antigas dos 86 telefones.
+- Mudar o gatilho de 15 minutos ou os templates aprovados.
