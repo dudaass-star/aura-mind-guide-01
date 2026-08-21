@@ -171,15 +171,24 @@ Deno.serve(async (req) => {
       console.warn("⚠️ [WA-RECOVERY] Woovi guard falhou:", wErr);
     }
 
-    // === LIFETIME CAP: telefones que já receberam >=2 envios ou já falharam alguma vez ===
-    // Twilio cobra mesmo quando Meta rejeita; tratamos qualquer falha como banimento vitalício.
+    // === CAP POR TELEFONE (janela de 30 dias, não vitalício) ===
+    // Regra sã: telefone que já recebeu 2+ mensagens de recuperação nos últimos 30 dias
+    // fica de fora do ciclo. Lead que volta meses depois é oportunidade nova, não contato queimado.
+    //
+    // Falhas: só banem o telefone quando o erro é atribuível ao número/usuário
+    // (número inválido, destinatário inexistente, opt-out). Erro da NOSSA
+    // infraestrutura (credencial Twilio, remetente mal configurado, parâmetro
+    // inválido, 5xx) nunca bane — foi falha nossa, a mensagem nem chegou.
     const lifetimeBannedPhones = new Set<string>();
+    const CAP_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+    const capWindowStart = new Date(Date.now() - CAP_WINDOW_MS).toISOString();
 
     const { data: outboundLog } = await supabase
       .from("recovery_messages")
       .select("phone")
       .eq("direction", "out")
-      .eq("sent_by_admin", false);
+      .eq("sent_by_admin", false)
+      .gte("created_at", capWindowStart);
     if (outboundLog) {
       const counts = new Map<string, number>();
       for (const m of outboundLog) {
@@ -196,18 +205,26 @@ Deno.serve(async (req) => {
 
     const { data: failedAttempts } = await supabase
       .from("checkout_recovery_attempts")
-      .select("phone_normalized")
+      .select("phone_normalized, error_message")
       .like("status", "wa_%failed")
       .not("phone_normalized", "is", null);
+    let infraSkipped = 0;
     if (failedAttempts) {
       for (const a of failedAttempts) {
-        if (a.phone_normalized) {
-          for (const v of getPhoneVariations(a.phone_normalized)) lifetimeBannedPhones.add(v);
+        if (!a.phone_normalized) continue;
+        if (isInfraFailure(a.error_message)) {
+          infraSkipped++;
+          continue;
         }
+        for (const v of getPhoneVariations(a.phone_normalized)) lifetimeBannedPhones.add(v);
       }
     }
 
-    console.log(`🚫 [WA-RECOVERY] Lifetime cap: ${lifetimeBannedPhones.size} variações de telefone banidas.`);
+    console.log(
+      `🚫 [WA-RECOVERY] Cap 30d: ${lifetimeBannedPhones.size} variações banidas ` +
+      `(${infraSkipped} falhas de infraestrutura ignoradas).`,
+    );
+
 
     const totals = {
       sent: 0,
