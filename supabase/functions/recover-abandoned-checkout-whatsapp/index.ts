@@ -81,6 +81,32 @@ function firstName(name: string | null | undefined): string {
   return trimmed || "tudo bem";
 }
 
+// Falhas causadas pela NOSSA infraestrutura (credencial errada, remetente mal
+// configurado, parâmetro inválido, instabilidade do provedor). A mensagem nunca
+// chegou ao usuário, então não pode queimar o telefone para sempre.
+const INFRA_FAILURE_PATTERNS = [
+  /authenticate/i,
+  /could not find a channel/i,
+  /invalid parameter/i,
+  /unauthorized/i,
+  /forbidden/i,
+  /internal server error/i,
+  /service unavailable/i,
+  /timeout/i,
+  /timed out/i,
+  /network/i,
+  /fetch failed/i,
+  /\b5\d\d\b/,
+  /content(sid)?.*not found/i,
+  /template.*not found/i,
+];
+
+function isInfraFailure(message: string | null | undefined): boolean {
+  if (!message) return false;
+  return INFRA_FAILURE_PATTERNS.some((re) => re.test(message));
+}
+
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
