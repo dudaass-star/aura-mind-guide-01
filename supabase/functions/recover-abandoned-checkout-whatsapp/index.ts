@@ -383,9 +383,9 @@ async function processStage(
         continue;
       }
 
-      // LIFETIME CAP: telefone já recebeu >=2 envios OU já falhou alguma vez.
+      // CAP 30d: telefone já recebeu 2+ msgs na janela OU falha atribuível ao número.
       if (phoneVars.some(v => lifetimeBannedPhones.has(v))) {
-        await markSkipped(supabase, session.id, cfg, "phone_lifetime_cap");
+        await markSkipped(supabase, session.id, cfg, "phone_window_cap");
         skipped++;
         continue;
       }
@@ -626,9 +626,9 @@ async function processStageAsaas(
         continue;
       }
 
-      // LIFETIME CAP: telefone já recebeu >=2 envios OU já falhou alguma vez.
+      // CAP 30d: telefone já recebeu 2+ msgs na janela OU falha atribuível ao número.
       if (phoneVars.some(v => lifetimeBannedPhones.has(v))) {
-        await markSkippedAsaas(supabase, payment.id, cfg, "phone_lifetime_cap");
+        await markSkippedAsaas(supabase, payment.id, cfg, "phone_window_cap");
         skipped++;
         continue;
       }
