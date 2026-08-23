@@ -25,24 +25,39 @@ Perfil: `96543755-e6a0-4cb9-85dc-7acc377fb517`, Essencial, entrou 15/08, acesso 
 
 Tudo abaixo é em `supabase/functions/aura-agent/index.ts`, salvo onde indicado. Nenhuma mudança em cobrança, checkout, Woovi/Stripe ou landing.
 
-### 1. Preferência de áudio deixa de ser "por turno" e passa a ser do perfil
+### 1. Preferência de áudio: achei a causa exata da promessa quebrada
 
-**Como é hoje:** `userWantsAudio()` (linha ~3568) olha só a mensagem do turno atual. Se a pessoa pede áudio no turno 3, o turno 4 volta a texto. Nada é gravado.
-Fora dos 2 áudios obrigatórios de abertura (`determineAudioMode()`, regra 2, linha ~1821), o áudio só sai se o modelo escrever a tag `[MODO_AUDIO]` — a preferência da usuária não tem força nenhuma.
+**Correção ao meu próprio diagnóstico anterior — sua revisão está certa e o motivo é pior do que "não persistiu entre turnos".** Fui ver `determineAudioMode()` linha a linha:
+
+```
+// 4. User explicitly requested audio
+if (wantsAudio) {
+  return { shouldUseAudio: true, reason: 'user_requested', mandatory: false };
+}
+```
+
+Três defeitos nessa única regra:
+1. **`mandatory: false`.** Por contrato do sistema (memória "áudio forçado quando mandatory"), só `mandatory: true` faz `splitIntoMessages()` gerar áudio de fato sem depender da tag. Com `false`, o pedido explícito do usuário só vale **se o modelo também lembrar de escrever `[MODO_AUDIO]`**. Foi exatamente isso que aconteceu: o backend registrou "usuário pediu áudio", a Aura escreveu "pode deixar, vamos de áudio" — e como a tag não veio, saiu texto. Ela prometeu de boa-fé; o pipeline não cumpriu. Três vezes.
+2. **Ela é a regra 4** — abaixo de abertura/fechamento de sessão, então o pedido é engolido nos turnos em que essas regras disparam primeiro.
+3. **Não checa `budgetAvailable`** — pode gerar tentativa de áudio sem orçamento.
+
+Então o item 1 não é só "guardar preferência": é **consertar um bug de contrato**. Mesmo que a preferência não fosse persistida, o pedido do turno atual já deveria ter funcionado.
 
 **O que muda:**
-- **Migração (nova coluna):** `profiles.voice_mode text default 'auto'` + `voice_mode_set_at timestamptz`. Valores `auto | audio | texto`.
-- **Escrita:** quando o pedido for explícito ("fala por áudio", "responde em áudio"), grava `voice_mode='audio'` e a data. Pedido de texto grava `'texto'`.
-- **Leitura:** em `determineAudioMode()`, nova regra após a checagem de crise: `voice_mode==='audio'` + budget disponível → `{ shouldUseAudio: true, reason: 'user_preference', mandatory: true }`. O `mandatory: true` é o que faz `splitIntoMessages()` gerar áudio sem depender da tag `[MODO_AUDIO]` do modelo.
-- **Teto de orçamento intacto:** `budgetSeconds` (30/90/180 min por plano) continua mandando; a diferença é que ao estourar a Aura **avisa em uma frase** ("meu áudio do mês acabou, sigo por texto") em vez de voltar a texto em silêncio — foi esse silêncio que gerou 9 correções.
-- **Quem não pede nada não muda:** `auto` mantém exatamente o comportamento atual.
+- **Fix imediato do bug (1 linha):** regra 4 passa a `mandatory: true` e a exigir `budgetAvailable`, e sobe para logo depois da checagem de crise — pedido explícito do usuário tem precedência sobre a preferência interna da Aura.
+- **Trava de honestidade:** se o áudio não puder sair (teto estourado, falha de TTS), a Aura **não pode prometer áudio**. Passa a existir um sinal no contexto (`audio_unavailable`) que instrui a dizer a verdade em uma frase ("hoje só consigo por texto") em vez de dizer "vou de áudio" e mandar texto. Isso ataca o pior sintoma do caso: a quebra repetida de promessa.
+- **Persistência:** `profiles.voice_mode text default 'auto'` + `voice_mode_set_at timestamptz` (valores `auto | audio | texto`), gravado no pedido explícito e lido em `determineAudioMode()`.
+- **Reconciliar com `audio_mirror_enabled` (seu pedido 4):** confirmei que a flag piloto existe e roda no bloco de linha ~8222 — ela força áudio **só quando a mensagem recebida é áudio**. Em vez de criar um segundo mecanismo paralelo, `audio_mirror_enabled` passa a ser tratada como **um dos gatilhos que escrevem `voice_mode`**, e a decisão final fica em um lugar só (`determineAudioMode`). O bloco solto de override no meio do handler é removido. Nenhuma mudança de comportamento para a Débora (piloto): mensagem de áudio continua gerando resposta em áudio.
+- **Teto de orçamento intacto:** `budgetSeconds` (30/90/180 min por plano) continua mandando; ao estourar, aviso em uma frase em vez de silêncio.
+- **Tier base:** continua sem áudio em nenhuma hipótese (regra atual preservada).
 
-**Sua dúvida 1 — quando a preferência expira?** Não pode ser eterna, senão um pedido feito numa sessão específica vira regra vitalícia. Três desligamentos, todos determinísticos (nada de LLM decidindo):
-1. **Pedido contrário** — "responde por texto", "prefiro ler" → volta pra `texto` na hora.
-2. **Expiração por tempo** — a preferência vale por **7 dias** desde `voice_mode_set_at`; passado isso volta pra `auto` sozinha. Se a pessoa pedir áudio de novo, renova por outros 7 dias. Quem quer áudio sempre acaba pedindo de novo naturalmente; quem pediu "só nessa conversa" não fica preso.
-3. **Teto de áudio do plano** — enquanto o teto estiver estourado, cai pra texto com aviso, e volta a áudio no reset mensal (a preferência não é apagada).
+**Sua dúvida 1 — quando a preferência expira?** Três desligamentos, todos determinísticos:
+1. **Pedido contrário** — "responde por texto" → volta pra `texto` na hora.
+2. **Expiração por tempo** — vale **7 dias** desde `voice_mode_set_at`; depois volta pra `auto`. Pedir de novo renova.
+3. **Teto do plano estourado** — cai pra texto com aviso; volta no reset mensal (a preferência não é apagada).
 
-A conversa terminar **não** desliga: seria voltar ao bug atual (a Elisabete pediu 4 vezes em 2 dias diferentes). O "fim" é por pedido contrário ou pelos 7 dias.
+Fim de conversa **não** desliga — seria reproduzir o bug atual (ela pediu 4 vezes em 2 dias).
+
 
 
 ### 2. Passar a registrar o canal de cada mensagem (auditoria)
@@ -66,7 +81,10 @@ A conversa terminar **não** desliga: seria voltar ao bug atual (a Elisabete ped
   - Reframe apenas como hipótese verificável, e uma por sessão:
     "Posso te devolver uma leitura? ... faz sentido ou tô lendo errado?"
   - Se ele corrigir, aceite em uma frase e NÃO reformule a mesma tese com outras palavras.
+  - PROIBIDO espelhar/comparar com a vida real dele ("isso é igual ao que você faz com...",
+    "assim como no trabalho...") sem que ELE tenha puxado a comparação.
   ```
+
 - Reaproveita o padrão de injeção condicional que já existe no arquivo (`dynamicContext +=`), sem novo modelo, sem chamada extra de LLM, sem tabela nova.
 
 **Sua dúvida 3 — a Aura vai parar de nomear emoção pra todo mundo?** Não. Esse bloco é **por usuário e temporário**, não é regra global:
@@ -103,9 +121,44 @@ Ou seja: um "isso mesmo" de polidez foi lido pelo sistema como permissão para i
 **(a) A mensagem "E aí" às 13:20.** A sessão foi encerrada 13:03. O cron `conversation-followup` existe pra recuperar conversa **interrompida** (usuário parou de responder no meio). Ele checa se a pessoa ficou inativa, se há sessão ativa, DND, janela de 24h — mas **não checa se uma sessão acabou de ser encerrada**. Como logo depois do encerramento a pessoa está "inativa" por definição (a conversa terminou de propósito), o cron interpretou o silêncio normal do pós-sessão como abandono e disparou um nudge. O texto saiu genérico ("E aí") porque não havia contexto novo pra puxar. Para a Elisabete, que acabara de sair de uma sessão frustrante, isso chegou como cutucada sem propósito — 17 min depois, seguido às 13:40 do pedido de nota.
 **Correção:** uma condição a mais na lista de skips que a função já tem — pular quando existir sessão encerrada nos últimos 60 minutos. Conversa realmente interrompida no meio continua sendo recuperada normalmente.
 
-**(b) A cobrança do compromisso "Termômetro".** No fechamento da sessão de 15/08 a Aura deixou o compromisso "ser o Termômetro: relatar a falha de forma fria". Na sessão de 22/08 a Elisabete disse que **não houve situação** para aplicar. O compromisso ficou como pendente em `commitments`, e o lembrete voltou a cobrar como se ela tivesse fugido da tarefa — cobrando uma coisa que a realidade dela não ofereceu chance de fazer.
-**Correção:** quando o usuário declarar que não houve situação para aplicar, marcar o compromisso como **não aplicável** (em vez de deixá-lo pendente), reusando o mecanismo de `cancel_topics` que já existe no post-análise. Assim ele sai da fila de cobrança sem virar "compromisso descumprido". Compromisso que a pessoa simplesmente não fez continua sendo retomado como hoje.
+**(b) A cobrança do "Termômetro" — e o bug maior que sua revisão achou.** Confirmei no banco agora: **18 compromissos** para essa usuária em 2 sessões, **nenhum concluído**. O "Termômetro" aparece **8 vezes** com redações diferentes. Pior, tem lixo de extração: a frase sarcástica dela virou 4 compromissos ("ser menos enrolada", "não ficar mandando mensagem de texto", "gravar aí no seu HD ou sei lá o que", "nossa conversa precisa ser por áudio"), inclusive **dois atribuídos à Aura** — "AURA vai gravar áudios para as conversas." e "AURA vai ser menos enrolada na próxima sessão." — guardados como compromisso **dela**. E duas perguntas da própria Aura ("Entregou o relatório? A responsabilidade agora é da gerência, não sua.") também viraram título.
 
+**Causa raiz (verificada no código):** existem **dois gravadores independentes** de compromisso — o micro-agent (linha ~1903) e o `postConversationAnalysis` (linha ~2285) — e ambos usam o mesmo dedupe frágil: `ILIKE '%' || primeiros 40 chars || '%'`. Duas consequências:
+- **Reformulação escapa.** "ser o Termômetro na segunda: relatar..." e "Na próxima segunda, agir como o Termômetro: relatar..." não casam nos 40 primeiros chars → viram registros separados. Foi assim que um compromisso virou 8.
+- **Race entre os dois gravadores.** Os pares 16:05:14/16:05:18 e 16:40:14/16:40:18 são exatamente isso: cada um leu antes do outro gravar.
+- **Nenhum filtro de autoria/validade.** Não há checagem de "isso é compromisso do usuário?" — qualquer string que o extractor devolver entra, inclusive fala da Aura e sarcasmo.
+
+**Correção na raiz (seu pedido 2), não só no sintoma:**
+1. **Um único gravador.** Compromisso passa a ser gravado só no `postConversationAnalysis`; o bloco do micro-agent para de inserir (mata a race).
+2. **Dedupe semântico simples e determinístico:** normalizar (minúsculas, sem acento/pontuação/stopwords), extrair as palavras-chave e comparar com os pendentes do usuário nos últimos 30 dias — sobreposição alta = mesmo compromisso, faz `update` em vez de `insert`. Sem LLM, sem embedding.
+3. **Filtro de autoria no extractor:** só entra compromisso do **usuário**, na primeira pessoa, com ação concreta. Descartado explicitamente: título que começa com "AURA", fala/pergunta da assistente, e frase de tom sarcástico/reclamação sobre a Aura.
+4. **Teto por sessão:** no máximo **1 compromisso ativo por sessão** (o cardápio de fechamento já prevê um por fechamento). Extra vira `update` do existente.
+5. **Não aplicável:** quando o usuário disser que não houve situação para aplicar, marcar como **não aplicável** (reuso de `cancel_topics`), saindo da fila de cobrança sem virar "descumprido".
+6. **Limpeza pontual:** consolidar os 18 registros dela em 1 (script de dados, só para esse usuário — não faço limpeza em massa sem você aprovar).
+
+### 7. Investigar o bug de mensagens duplicadas/truncadas (item técnico separado)
+
+**Seu achado 2 — concordo que é o mais preocupante, e não é prompt.** "Troquei o áudio! 🎙️ Esse ficou bom?" 4x em 25 segundos, "Recebi seu áudio! 🎙️" sem ela ter mandado áudio, e uma resposta truncada em "Ih, que". Prompt não produz esse padrão; isso é pipeline.
+
+**Hipóteses a testar (nessa ordem, todas verificáveis nos logs das edge functions):**
+- **a) Retry sem idempotência no envio.** Se o `sendMessage` da Meta/Twilio devolve timeout mas entregou, o retry de 2s reenvia. 4 cópias em 25s bate com padrão de retry.
+- **b) Lock atômico do webhook falhando.** O webhook tem lock por usuário; se o mesmo evento chegou 4x (reentrega do provedor) e o lock expirou entre elas, roda 4 vezes.
+- **c) Mensagens de sistema disparadas fora de lugar.** "Recebi seu áudio!" e "Troquei o áudio!" parecem texto de confirmação gerado por caminho de áudio — provavelmente confirmação emitida mesmo quando a geração de TTS falhou. Isso conecta direto com o bug do item 1: a Aura confirmava troca de canal que nunca aconteceu.
+- **d) "Ih, que" truncado** = split de balões cortando no delimitador `|||` com string vazia/parcial, ou timeout no meio do loop de entrega.
+
+**Como investigar sem chutar:** consultar `function_edge_logs`/logs do `process-webhook-message` e `aura-agent` na janela 15/08 15:31–15:56 e no dia 22/08, contar quantas invocações houve para o mesmo `message_id` do provedor, e checar `failed_message_log`. Só depois disso eu proponho o fix. Também vale rodar a mesma contagem em toda a base ("assistant enviou a mesma string ≥2x em <60s") para medir se isso está atingindo outras usuárias silenciosamente — essa consulta eu faço logo no começo da implementação.
+
+**Prioridade:** concordo em tratar como **P0 junto com o item 1** — os dois formam o mesmo sintoma vivido por ela ("a Aura promete áudio, repete, se enrola").
+
+### 8. Latência (seu achado 3)
+
+**Tem evidência:** 3 correções só sobre demora ("não deve demorar para responder nas sessões", "não demorar, ser mais ágil"), e foi a **primeira** fricção da sessão 1, antes do problema de áudio virar crônico.
+
+**O que fazer, sem chutar causa:** medir antes de mexer. O `token_usage_logs` já guarda uso por chamada; o que falta é tempo de ponta a ponta. Proposta enxuta: registrar `latency_ms` (chegada do webhook → envio da primeira bolha) e olhar a distribuição — separando (i) tempo do modelo, (ii) tempo de TTS, (iii) delay proposital de humanização (1,5–3,5s por bolha, que com 4–5 bolhas soma 8–15s de silêncio). Minha suspeita principal é (iii) somado a (ii): em sessão, com áudio, o delay humanizado vira espera longa. Se confirmar, a correção é reduzir o delay quando a resposta é longa ou quando é áudio — mas **só depois do número**, não por palpite.
+
+### 9. Auditoria de qualidade só cobriu 1 das 2 sessões (seu achado 4)
+
+Confirmado: `session_coverage_analyses` só tem a sessão de 22/08. A de 15/08 — a das promessas de áudio quebradas e das mensagens duplicadas — nunca foi avaliada. Isso é um furo do próprio sistema de qualidade: sessão que termina de forma anômala (ou cuja análise falha) fica invisível no painel, justamente a que mais interessa. **Correção:** varredura diária que dispara a análise das sessões `completed` sem registro em `session_coverage_analyses`, e badge no painel para "não analisada" em vez de ausência silenciosa.
 
 ### O que NÃO será mexido
 
@@ -113,21 +166,34 @@ Ou seja: um "isso mesmo" de polidez foi lido pelo sistema como permissão para i
 
 ## Ação com a usuária
 
-Resposta honesta assumindo os dois pontos (áudio ignorado e leitura imposta), sem justificativa, com escolha: reembolso do ciclo e cancelamento sem atrito, ou uma sessão de retorno já no formato que ela pediu (áudio + orientação prática). Recomendo oferecer o reembolso primeiro — ela pagou 7 dias e a experiência não cumpriu um combinado explícito.
+Resposta honesta assumindo o que foi nosso — e agora sabemos que foi mais grave: não foi "não atendemos o pedido de áudio", foi **prometer três vezes e não cumprir por bug nosso**. Sem justificativa técnica pra ela; escolha entre reembolso do ciclo com cancelamento sem atrito, ou sessão de retorno já no formato que ela pediu. Recomendo oferecer o reembolso primeiro.
+
+## Ordem de execução sugerida
+
+1. **P0** — item 1 (bug do `mandatory: false` + trava de honestidade) e item 7 (investigação das mensagens duplicadas).
+2. **P0** — item 6b raiz (gravador único + dedupe + filtro de autoria dos compromissos).
+3. **P1** — itens 3, 4, 2 (modo descritivo, validação de hipótese, `is_audio`).
+4. **P2** — itens 5, 6a, 8, 9 (rota prática, skip de follow-up, medição de latência, cobertura de auditoria).
 
 ## Resumo do tamanho da mudança
 
 | Item | Tipo | Onde |
 |---|---|---|
-| `profiles.voice_mode` | migração (1 coluna) | banco |
-| Gravar/ler preferência de áudio | código (~10 linhas) | `aura-agent` (`determineAudioMode`, ~1795) |
-| Aviso de teto de áudio esgotado | texto do prompt | `aura-agent` |
+| Fix `mandatory` no pedido de áudio | código (1 regra) | `aura-agent` (`determineAudioMode`, ~1830) |
+| Trava de honestidade de canal | código + prompt | `aura-agent` |
+| `profiles.voice_mode` + `voice_mode_set_at` | migração (2 colunas) | banco |
+| Reconciliar `audio_mirror_enabled` | código (move override, ~8222) | `aura-agent` |
 | `messages.is_audio` | migração (1 coluna) + 1 linha | banco + `process-webhook-message` |
-| Bloco MODO DESCRITIVO | texto + 1 condição | `aura-agent` (~8153) |
+| Bloco MODO DESCRITIVO | prompt + 1 condição | `aura-agent` (~8153) |
 | Validação de hipótese mais rígida | texto do extractor | `aura-agent` |
-| Rota orientação prática | texto do prompt | `aura-agent` |
+| Rota orientação prática | prompt | `aura-agent` |
 | Skip de follow-up pós-sessão | código (1 condição) | `conversation-followup` |
-| Compromisso não aplicável | código (reuso de `cancel_topics`) | `aura-agent` |
+| Compromissos: gravador único + dedupe + autoria | código (~40 linhas) | `aura-agent` (~1903 e ~2285) |
+| Consolidar os 18 compromissos dela | script de dados | banco |
+| Investigação de duplicação/truncamento | leitura de logs, fix depois | `process-webhook-message` / provider |
+| Medição de latência | 1 coluna + log | banco + `aura-agent` |
+| Auditoria de sessões não analisadas | varredura + badge | cron + painel admin |
 
-Nenhuma tabela nova, nenhum cron novo, nenhuma chamada extra de LLM, nenhum painel novo.
+Nenhuma tabela nova. Um cron novo (varredura de auditoria). Nenhuma chamada extra de LLM no caminho quente.
+
 
