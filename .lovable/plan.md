@@ -31,13 +31,19 @@ Tudo abaixo é em `supabase/functions/aura-agent/index.ts`, salvo onde indicado.
 Fora dos 2 áudios obrigatórios de abertura (`determineAudioMode()`, regra 2, linha ~1821), o áudio só sai se o modelo escrever a tag `[MODO_AUDIO]` — a preferência da usuária não tem força nenhuma.
 
 **O que muda:**
-- **Migração (nova coluna):** `profiles.voice_mode text default 'auto'`, valores `auto | audio | texto`. Sem alteração de RLS (perfil já é protegido); GRANT igual às demais colunas.
-- **Escrita:** no mesmo ponto onde hoje calculo `wantsAudio` / `wantsText`, gravar `voice_mode='audio'` quando o pedido for explícito ("fala por áudio", "exclusivamente por áudio") e `'texto'` quando pedir texto. Uma linha de `update` no perfil, fire-and-forget.
-- **Leitura:** dentro de `determineAudioMode()`, nova regra imediatamente após a checagem de crise:
-  `if (voiceMode === 'audio' && budgetAvailable) → { shouldUseAudio: true, reason: 'user_preference', mandatory: true }`
-  `mandatory: true` é o ponto crítico — é o que faz `splitIntoMessages()` (linha ~4081) gerar áudio sem depender da tag do LLM.
-- **Teto de orçamento intacto:** `budgetSeconds` (30/90/180 min por plano) continua mandando. A diferença é que quando o teto acaba a Aura **avisa em uma frase** ("meu áudio do mês acabou, sigo por texto") em vez de voltar a texto em silêncio, que foi exatamente o que gerou 9 correções da Elisabete.
-- **Sai do escopo do turno:** nada muda para quem não pede nada — `auto` mantém o comportamento atual (aberturas + tag do modelo).
+- **Migração (nova coluna):** `profiles.voice_mode text default 'auto'` + `voice_mode_set_at timestamptz`. Valores `auto | audio | texto`.
+- **Escrita:** quando o pedido for explícito ("fala por áudio", "responde em áudio"), grava `voice_mode='audio'` e a data. Pedido de texto grava `'texto'`.
+- **Leitura:** em `determineAudioMode()`, nova regra após a checagem de crise: `voice_mode==='audio'` + budget disponível → `{ shouldUseAudio: true, reason: 'user_preference', mandatory: true }`. O `mandatory: true` é o que faz `splitIntoMessages()` gerar áudio sem depender da tag `[MODO_AUDIO]` do modelo.
+- **Teto de orçamento intacto:** `budgetSeconds` (30/90/180 min por plano) continua mandando; a diferença é que ao estourar a Aura **avisa em uma frase** ("meu áudio do mês acabou, sigo por texto") em vez de voltar a texto em silêncio — foi esse silêncio que gerou 9 correções.
+- **Quem não pede nada não muda:** `auto` mantém exatamente o comportamento atual.
+
+**Sua dúvida 1 — quando a preferência expira?** Não pode ser eterna, senão um pedido feito numa sessão específica vira regra vitalícia. Três desligamentos, todos determinísticos (nada de LLM decidindo):
+1. **Pedido contrário** — "responde por texto", "prefiro ler" → volta pra `texto` na hora.
+2. **Expiração por tempo** — a preferência vale por **7 dias** desde `voice_mode_set_at`; passado isso volta pra `auto` sozinha. Se a pessoa pedir áudio de novo, renova por outros 7 dias. Quem quer áudio sempre acaba pedindo de novo naturalmente; quem pediu "só nessa conversa" não fica preso.
+3. **Teto de áudio do plano** — enquanto o teto estiver estourado, cai pra texto com aviso, e volta a áudio no reset mensal (a preferência não é apagada).
+
+A conversa terminar **não** desliga: seria voltar ao bug atual (a Elisabete pediu 4 vezes em 2 dias diferentes). O "fim" é por pedido contrário ou pelos 7 dias.
+
 
 ### 2. Passar a registrar o canal de cada mensagem (auditoria)
 
