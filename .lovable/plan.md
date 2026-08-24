@@ -177,19 +177,31 @@ Latência e cobertura de auditoria de sessões saem deste plano, a seu pedido.
 
 Resposta honesta assumindo o que foi nosso — e agora sabemos que foi mais grave: não foi "não atendemos o pedido de áudio", foi **prometer três vezes e não cumprir por bug nosso**. Sem justificativa técnica pra ela; escolha entre reembolso do ciclo com cancelamento sem atrito, ou sessão de retorno já no formato que ela pediu. Recomendo oferecer o reembolso primeiro.
 
-## Ordem de execução sugerida
+## Ordem de execução — separada por risco para o modelo (Flash)
 
-1. **P0** — item 1 (bug do `mandatory: false` + trava de honestidade) e item 7 (cápsula engolindo os áudios).
-2. **P0** — item 6b raiz (gravador único + dedupe + filtro de autoria dos compromissos).
-3. **P1** — itens 3, 4, 2 (modo descritivo, validação de hipótese, `is_audio`).
-4. **P2** — itens 5 e 6a (rota prática, skip de follow-up).
+A revisão trouxe o critério certo: o risco de "o modelo se perder" só existe nos itens que adicionam texto ao prompt. Adoto essa divisão.
+
+**Grupo A — só backend, o modelo nem sabe que existe (risco zero de sobrecarga de instrução):**
+1. **P0** — item 1 revisado: instrumentar a falha silenciosa de TTS/envio (`process-webhook-message` 1352-1382) + investigar os logs de `generateTTS` antes de escolher o fix; `profiles.voice_mode`; reconciliar `audio_mirror_enabled`.
+2. **P0** — item 7: expiração real da cápsula (timestamp próprio, e o bloco **movido para antes** dos `return` dos estados, senão continua morto), saída por intenção, teto de repetição, saída também no caminho de áudio.
+3. **P0** — item 6b: gravador único de compromissos + dedupe + filtro de autoria.
+4. **P1** — item 2 (`messages.is_audio`) e item 6a (skip de follow-up pós-sessão).
+
+**Grupo B — adiciona prompt condicional (entra em série, um por vez):**
+5. **P1** — item 3 (MODO DESCRITIVO) sozinho. Antes de subir: testar contra a conversa real da Elisabete reescrita, mais de uma passada, para ver se o Flash obedece de forma consistente. Depois: medir 1-2 semanas em `user_memory_corrections`.
+6. **P2** — item 5 (rota de orientação prática) só **depois** dessa medição, e só se o item 3 não tiver degradado nada. Se o Flash já estiver no limite de atenção, este item é descartado — não vale o risco.
+
+Item 4 (validação de hipótese) fica no Grupo A: é texto do extractor, agente separado e estreito, não compete com o prompt principal.
 
 ## Resumo do tamanho da mudança
 
 | Item | Tipo | Onde |
 |---|---|---|
-| Fix `mandatory` no pedido de áudio | código (1 regra) | `aura-agent` (`determineAudioMode`) |
-| Trava de honestidade de canal | código + prompt | `aura-agent` |
+| Instrumentar falha de TTS/envio de áudio | código (~10 linhas) | `process-webhook-message` (1352-1382) |
+| Trava de honestidade de canal (por falha real) | código + prompt | `aura-agent` |
+| `profiles.voice_mode` + `voice_mode_set_at` | migração (2 colunas) | banco |
+| Reconciliar `audio_mirror_enabled` | código (move override) | `aura-agent` |
+
 | `profiles.voice_mode` + `voice_mode_set_at` | migração (2 colunas) | banco |
 | Reconciliar `audio_mirror_enabled` | código (move override) | `aura-agent` |
 | Cápsula: expiração + saída por intenção + teto | código (~30 linhas) + 1 coluna | `process-webhook-message` (~889-1021) |
