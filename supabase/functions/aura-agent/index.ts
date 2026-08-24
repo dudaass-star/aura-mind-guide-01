@@ -863,7 +863,7 @@ Retorne um JSON com APENAS os campos relevantes (omita campos vazios/null):
 REGRAS:
 - schedule_reminder: só se o usuário PEDIU explicitamente um lembrete/alarme
 - do_not_disturb_hours: se o usuário disse que está ocupado/trabalhando/em reunião
-- commitments: apenas compromissos CONCRETOS com ação clara (não intenções vagas)
+- commitments: apenas compromissos CONCRETOS do USUÁRIO, em primeira pessoa, com ação clara. NUNCA extraia: fala/pergunta da assistente, algo que a AURA vai fazer (ex.: "AURA vai gravar áudios"), reclamação ou frase sarcástica sobre a AURA, intenção vaga. Em dúvida, omita.
 - themes: temas emocionais significativos discutidos (não triviais)
 - session_action: só se houve pedido explícito de agendamento/reagendamento/pausa
 - journey_action: SOMENTE quando a MENSAGEM ATUAL DO USUÁRIO contém pedido literal de trocar/pausar jornada (ex.: "quero trocar de jornada", "pausa as jornadas", "muda pra jornada de ansiedade", "para com as jornadas"). NUNCA infira por contexto, tópico do profile ou tom da conversa. Se o usuário só está conversando sobre o tema (ansiedade, autoestima, etc.), NÃO retorne journey_action. Em dúvida, omita o campo.
@@ -885,7 +885,7 @@ REGRAS:
   NÃO marque true para concordância passiva ("ah faz sentido", "é verdade", "exatamente", "concordo", "tem razão"). Concordar com a assistente ≠ refletir. Em dúvida, marque false.
 - user_engaged_with_commitment: true APENAS se a ÚLTIMA pergunta de COMPROMISSO/PRÓXIMO PASSO/MOVIMENTO da assistente foi respondida pelo usuário de forma CONCRETA (nomeou ação, prazo, intenção objetiva). false se o usuário evadiu, mudou de assunto, ignorou, ou respondeu vago ("vou pensar", "talvez", "sei lá"). Se a assistente NÃO fez pergunta de compromisso, marque false.
 - aura_hypothesis_delivered: true se a ASSISTENTE, nesta resposta, arriscou uma LEITURA/TESE/INTERPRETAÇÃO sobre o usuário (nomeou um padrão, uma tensão, um motivo por trás do comportamento). false se ela só acolheu, validou ou fez perguntas exploratórias.
-- user_validated_hypothesis: true se o USUÁRIO, nesta mensagem, concordou com a leitura que a assistente ofereceu antes ("é isso", "faz sentido", "exatamente isso"). false caso contrário.
+- user_validated_hypothesis: true SOMENTE se o USUÁRIO elaborou por conta própria sobre a leitura oferecida (trouxe conteúdo novo, exemplo, consequência ou correção parcial que mostra que pensou sobre ela). NÃO conta como validação: resposta de até 4 palavras; concordância seca ("isso mesmo", "sim", "faz sentido", "é isso", "ok"); resposta que é só uma pergunta de volta ("Como?", "E aí?", "E o que eu faço?"). Nesses casos retorne false — concordância por polidez não autoriza aprofundar a mesma leitura.
 - user_rejected_hypothesis: true se o USUÁRIO corrigiu ou recusou a leitura ("não é isso", "não é medo de ficar sozinha, é medo de ficar sem ele"). false caso contrário.
 - SEMPRE inclua user_emotional_state, topic_continuity, engagement_level, aura_phase, information_density, user_reflection_mode, user_engaged_with_commitment, aura_hypothesis_delivered, user_validated_hypothesis, user_rejected_hypothesis
 - Se nada mais for relevante, retorne apenas esses 10 campos
@@ -2206,7 +2206,7 @@ Use a função extract_analysis para retornar os dados.`;
               },
               commitments: {
                 type: 'ARRAY',
-                description: 'Compromissos concretos assumidos pelo usuário (ações com prazo implícito). Omita intenções vagas.',
+                description: 'Compromissos concretos assumidos pelo USUÁRIO, em primeira pessoa (ações com prazo implícito). NUNCA inclua falas/perguntas da assistente, algo que a AURA fará, reclamações ou sarcasmo sobre a AURA. Omita intenções vagas.',
                 items: { type: 'STRING' }
               },
               corrections: {
