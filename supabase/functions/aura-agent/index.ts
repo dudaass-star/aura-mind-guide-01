@@ -1784,6 +1784,102 @@ ${FREE_PHASE_INSTRUCTIONS.sentido_to_movimento}${hypothesisGuard}`
   return { guidance: null, detectedPhase, stagnationLevel: 0 };
 }
 
+
+// ============================================================================
+// COMPROMISSOS — gravador único, dedupe semântico e filtro de autoria
+// ----------------------------------------------------------------------------
+// Contexto: uma única usuária acumulou 18 compromissos em 2 sessões (o mesmo
+// "Termômetro" 8 vezes), incluindo falas da própria AURA e frases sarcásticas.
+// Causas: dois gravadores independentes + dedupe por prefixo de 40 chars.
+// ============================================================================
+const COMMITMENT_STOPWORDS = new Set([
+  'de','da','do','das','dos','a','o','as','os','e','ou','que','para','pra','por',
+  'com','sem','em','no','na','nos','nas','um','uma','ao','aos','se','na','meu',
+  'minha','eu','vou','vai','ser','estar','mais','menos','ja','ate','como','isso',
+  'proxima','proximo','semana','dia','quando','depois','antes','sobre','the',
+]);
+
+function normalizeCommitmentTitle(title: string): string[] {
+  return (title || '')
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length > 2 && !COMMITMENT_STOPWORDS.has(w));
+}
+
+// Rejeita o que não é compromisso do USUÁRIO (fala da AURA, sarcasmo, pergunta)
+function isValidUserCommitment(title: string): boolean {
+  const t = (title || '').trim();
+  if (t.length < 8) return false;
+  if (/^aura\b/i.test(t)) return false;                    // "AURA vai gravar áudios..."
+  if (/\baura\b/i.test(t) && /\bvai\b/i.test(t)) return false;
+  if (t.includes('?')) return false;                        // pergunta da assistente
+  if (/(menos enrolada|responder por (a|á)udio|mandar mensagem de texto|gravar (a[ií]|no seu hd)|sei l(a|á))/i.test(t)) return false;
+  return true;
+}
+
+async function saveCommitmentsDeduped(
+  supabase: any,
+  userId: string,
+  titles: string[],
+  sessionId: string | null,
+): Promise<void> {
+  const candidates = (titles || []).filter(isValidUserCommitment);
+  if (candidates.length === 0) return;
+
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const { data: pending } = await supabase
+    .from('commitments')
+    .select('id, title, session_id')
+    .eq('user_id', userId)
+    .eq('completed', false)
+    .gte('created_at', since);
+
+  const existing: Array<{ id: string; title: string; session_id: string | null; words: string[] }> =
+    (pending || []).map((c: any) => ({ ...c, words: normalizeCommitmentTitle(c.title) }));
+
+  // Teto: 1 compromisso ativo por sessão (o cardápio de fechamento prevê um só)
+  let sessionSlotTaken = !!sessionId && existing.some(c => c.session_id === sessionId);
+
+  for (const title of candidates) {
+    const words = normalizeCommitmentTitle(title);
+    if (words.length === 0) continue;
+
+    // Dedupe semântico: sobreposição de palavras-chave >= 50%
+    const match = existing.find(c => {
+      if (c.words.length === 0) return false;
+      const shared = words.filter(w => c.words.includes(w)).length;
+      const overlap = shared / Math.min(words.length, c.words.length);
+      return overlap >= 0.5;
+    });
+
+    if (match) {
+      await supabase.from('commitments')
+        .update({ title, session_id: sessionId || match.session_id })
+        .eq('id', match.id);
+      console.log(`♻️ [COMMITMENT] Atualizado (dedupe semântico): ${title}`);
+      continue;
+    }
+
+    if (sessionSlotTaken) {
+      console.log(`⏭️ [COMMITMENT] Teto de 1 por sessão atingido — ignorado: ${title}`);
+      continue;
+    }
+
+    const { data: inserted } = await supabase.from('commitments').insert({
+      user_id: userId,
+      title,
+      completed: false,
+      commitment_status: 'pending',
+      session_id: sessionId,
+    }).select('id').maybeSingle();
+    console.log(`📋 [COMMITMENT] Criado: ${title}`);
+    existing.push({ id: inserted?.id || 'novo', title, session_id: sessionId, words });
+    if (sessionId) sessionSlotTaken = true;
+  }
+}
+
 // Deterministic audio mode decision (replaces prompt-based [MODO_AUDIO] decision)
 
 interface AudioDecision {
@@ -1916,29 +2012,12 @@ async function processExtractedActions(
       console.log('✅ [MICRO-AGENT] DND set for', actions.do_not_disturb_hours, 'hours');
     }
 
-    // Commitments (free conversation)
+    // Commitments — gravador ÚNICO em postConversationAnalysis().
+    // O micro-agent deixou de inserir: os dois gravadores usavam o mesmo dedupe
+    // frágil (ILIKE nos 40 primeiros chars) e corriam entre si, o que gerava o
+    // mesmo compromisso 8 vezes com redações diferentes.
     if (actions.commitments && actions.commitments.length > 0) {
-      for (const title of actions.commitments) {
-        const prefix = title.substring(0, 40);
-        const { data: existing } = await supabase
-          .from('commitments')
-          .select('id')
-          .eq('user_id', userId)
-          .eq('completed', false)
-          .ilike('title', `%${prefix}%`)
-          .limit(1);
-
-        if (!existing || existing.length === 0) {
-          await supabase.from('commitments').insert({
-            user_id: userId,
-            title,
-            completed: false,
-            commitment_status: 'pending',
-            session_id: currentSession?.id || null,
-          });
-          console.log('✅ [MICRO-AGENT] Commitment created:', title);
-        }
-      }
+      console.log(`ℹ️ [MICRO-AGENT] ${actions.commitments.length} compromisso(s) ignorado(s) aqui — gravação centralizada na pós-análise`);
     }
 
     // Theme tracking — handled by postConversationAnalysis() (deduplicated)
@@ -2299,31 +2378,9 @@ Use a função extract_analysis para retornar os dados.`;
       }
     }
 
-    // Save commitments (dedup)
+    // Save commitments — gravador único com dedupe semântico e filtro de autoria
     if (analysis.commitments && analysis.commitments.length > 0) {
-      for (const title of analysis.commitments) {
-        if (!title || title.length < 3) continue;
-        
-        const titlePrefix = title.substring(0, 40);
-        const { data: existing } = await supabase
-          .from('commitments')
-          .select('id')
-          .eq('user_id', userId)
-          .eq('completed', false)
-          .ilike('title', `%${titlePrefix}%`)
-          .limit(1);
-
-        if (!existing || existing.length === 0) {
-          await supabase.from('commitments').insert({
-            user_id: userId,
-            title,
-            completed: false,
-            commitment_status: 'pending',
-            session_id: sessionId
-          });
-          console.log(`📋 [POST-ANALYSIS] Commitment: ${title}`);
-        }
-      }
+      await saveCommitmentsDeduped(supabase, userId, analysis.commitments, sessionId || null);
     }
 
     // Save corrections (priority memory — never repeat the corrected mistake)
