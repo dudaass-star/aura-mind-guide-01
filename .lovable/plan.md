@@ -144,13 +144,17 @@ Investiguei agora no código e o caso fecha. As duas frases não são resposta d
 1. Em algum momento a Aura ofereceu a Cápsula do Tempo e gravou `profiles.awaiting_time_capsule = 'awaiting_audio'` (`aura-agent`, linhas 1959 e 8334).
 2. A partir daí, o handler da cápsula roda **antes** de chamar a Aura (linha 889) e **retorna cedo** (`releaseLock()` + `return`) em todos os caminhos.
 3. Ou seja: **todo áudio que ela mandou não chegou na Aura.** Foi consumido pela cápsula, que respondeu "Troquei o áudio!" e encerrou o processamento. 4 áudios em 25 s = 4 vezes a mesma frase. Não é retry, não é lock, não é reentrega do provedor — é 1 resposta por áudio, funcionando "como programado".
-4. **O estado não expira.** `awaiting_time_capsule` só é limpo por confirmação explícita ("pode guardar") ou por palavra de desistência (regex de linha 916/962). Ela nunca disse nenhuma das duas — então ficou presa no estado, e cada áudio novo caía no mesmo trilho.
+4. **O estado praticamente não expira — e a revisão está certa ao me corrigir aqui.** Existe sim um timeout de 24 h (linhas 1015-1023), mas ele tem dois defeitos: usa `profile.updated_at`, um campo que **qualquer** escrita no perfil reseta (inclusive sem relação com a cápsula); e, pior, ele está **abaixo dos `return` dos estados `awaiting_audio`/`awaiting_confirmation`** — então para os dois estados que realmente prendem o usuário esse bloco é **código morto**. Não é "nunca expira" por ausência de regra: é uma regra que nunca é alcançada.
+5. **Assimetria confirmada:** no caminho de **texto** existe uma saída ("resposta não reconhecida" → limpa o estado e segue o fluxo normal, linhas 1009-1011). No caminho de **áudio** não existe saída nenhuma. Ou seja, quem responde por áudio fica preso indefinidamente — exatamente o perfil dela.
 
-**Isso reescreve o item 1 do caso.** A queixa "pedi pra falar por áudio e ela me responde em texto" tem **duas causas somadas**, não uma:
-- **(a)** quando ela pediu por **texto**, o pedido chegou na Aura mas caiu no bug do `mandatory: false` → saiu texto;
-- **(b)** quando ela pediu por **áudio**, a mensagem nem chegou na Aura — a cápsula respondeu "Troquei o áudio!" e o pedido morreu ali. É por isso que a resposta parecia fora de contexto e repetida.
+**Sobre a hipótese de reentrega de webhook (levantada na revisão): descartada por verificação.** Os três webhooks de entrada deduplicam por ID do provedor via `zapi_message_dedup` antes de acionar o worker — `webhook-meta` (linhas 189-199), `webhook-twilio` (linhas 121-133) e `webhook-zapi`. Reentrega do mesmo `wamid`/`MessageSid` é rejeitada. Então 4 respostas em 25 s correspondem a **4 áudios distintos dela** (áudios curtos de ~5 s, consistente com alguém irritado repetindo o pedido), não a evento duplicado. Não há item de idempotência a abrir.
 
-O `"Ih, que"` truncado é o único item que não consigo fechar agora: o banco está indisponível nesta consulta (pool esgotado). Fica como checagem de 1 query no início da implementação — não muda nada do que está proposto abaixo.
+**Isso reescreve o item 1 do caso.** A queixa "pedi pra falar por áudio e ela me responde em texto" tem **duas causas somadas**:
+- **(a)** pedido por **texto** chegou na Aura, `isAudioMode` provavelmente ficou `true`, e o áudio morreu na falha silenciosa de TTS/envio (item 1, caminho 1);
+- **(b)** pedido por **áudio** nem chegou na Aura — a cápsula respondeu "Troquei o áudio!" e o turno terminou ali.
+
+O `"Ih, que"` truncado segue como checagem de 1 query no início da implementação (banco indisponível agora, pool esgotado).
+
 
 **Correções (todas em `process-webhook-message`, escopo pequeno):**
 1. **Expiração do estado:** cápsula vale **1 hora** desde que foi oferecida. Passado isso, o estado é limpo e a mensagem segue o fluxo normal para a Aura. (Precisa de 1 coluna: `capsule_state_set_at`, ou reusar timestamp existente.)
