@@ -137,6 +137,10 @@ Tudo em `supabase/functions/aura-agent/index.ts` (+ 2 campos no schema do extrat
    a exigir material concreto na mesa, não só contagem de trocas.
 6. **Sessão**: bloco de abertura passa a orientar "puxar o fio como pergunta de contexto";
    a descida em sessão é pausa de 1–2 turnos, sem alterar a fase do session lifecycle.
+6b. **Personalidade no leve**: novo sub-bloco dentro de `## MODO PING-PONG` (linha ~3273)
+   com permissão de brincar de volta + 2–3 exemplos de fala com humor; a frase genérica de
+   humor na linha 2882 passa a apontar pra lá em vez de tentar resolver sozinha.
+
 7. Atualizar `phase_thresholds_test.ts` para os novos limiares, e novo arquivo
    `turn_weight_test.ts` com os 5 casos adversariais acima + garantia estática de que a
    condição de descida cita `engagement_level` (dois votos), e não só `user_turn_weight`.
