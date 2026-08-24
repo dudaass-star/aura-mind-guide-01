@@ -143,5 +143,8 @@ Tudo em `supabase/functions/aura-agent/index.ts` (+ 2 campos no schema do extrat
 
 7. Atualizar `phase_thresholds_test.ts` para os novos limiares, e novo arquivo
    `turn_weight_test.ts` com os 5 casos adversariais acima + garantia estática de que a
-   condição de descida cita `engagement_level` (dois votos), e não só `user_turn_weight`.
+   condição de descida cita `engagement_level` (dois votos), e não só `user_turn_weight`,
+   e de que o sub-bloco de humor existe dentro do MODO PING-PONG (piada boba do usuário →
+   resposta com graça; usuário zoando a Aura → resposta bem-humorada, não defensiva).
+
 
