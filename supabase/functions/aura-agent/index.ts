@@ -1792,6 +1792,42 @@ O usuário já trouxe detalhes sobre a situação. NÃO pergunte "o que está ac
     return { guidance: null, detectedPhase: 'initial', stagnationLevel: 0 };
   }
 
+  // ======== ROTA DE DESCIDA (sempre ativa, inclusive com fase salva) ========
+  // Antes, a guarda `if (!lastUserContext?.aura_phase)` impedia qualquer rebaixamento
+  // enquanto existisse fase salva — a marcha só subia. Agora a descida vale sempre,
+  // mas exige DOIS VOTOS INDEPENDENTES para não punir quem é sucinto:
+  //   (1) turno leve (user_turn_weight='light' ou pergunta prática) em 2 turnos consecutivos
+  //   (2) engagement_level != 'engaged'
+  // Um "não" curto que responde com precisão a uma pergunta pesada é 'loaded' → não desce.
+  {
+    const lightVote = lastUserContext?.user_turn_weight === 'light' || practicalTurn;
+    const lightStreak = (lastUserContext?.light_turn_streak || 0) + (lightVote ? 1 : 0);
+    const notEngaged = lastUserContext?.engagement_level !== 'engaged';
+    if (lightVote && lightStreak >= 2 && notEngaged) {
+      const parked = lastUserContext?.topic_parked === true;
+      const parkedTurns = lastUserContext?.parked_turns || 0;
+      // Desvio (1–2 turnos): tema anterior fica em espera e pode ser retomado.
+      // Virada real (3+): o tema antigo sai da mesa — ela não reabre por conta própria.
+      const parkGuidance = parked && parkedTurns <= 2
+        ? `\n\n🅿️ TEMA ANTERIOR EM ESPERA (desvio curto):
+O assunto carregado de antes continua aberto. Acompanhe o registro leve agora e, se a conversa
+abrir espaço, volte nele com naturalidade — sem cobrança, sem "voltando ao que falávamos".`
+        : (parkedTurns >= 3
+          ? `\n\n🔀 VIRADA DE ASSUNTO CONFIRMADA:
+O tema anterior saiu da mesa. NÃO reabra por conta própria. Se ele puxar, retome com tudo.`
+          : '');
+      console.log(`🪶 Phase evaluator: descida para ping-pong (light_streak=${lightStreak}, engagement=${lastUserContext?.engagement_level}, parked=${parkedTurns})`);
+      return {
+        guidance: `\n\n🪶 REGISTRO LEVE (DESCIDA DE FASE):
+O usuário está em registro leve. Acompanhe NO MESMO REGISTRO: leve responde leve, piada tem graça,
+comentário prático tem resposta prática. NÃO devolva profundidade para uma frase leve,
+NÃO faça pergunta-âncora, NÃO ofereça leitura psicológica, NÃO puxe tema antigo por conta própria.${parkGuidance}`,
+        detectedPhase: 'ping-pong',
+        stagnationLevel: 0
+      };
+    }
+  }
+
   // Skip keyword depth check if micro-agent already provided semantic phase
   if (!lastUserContext?.aura_phase) {
     const hasEmotionalDepth = recentAssistant.some(msg => 
@@ -1805,7 +1841,8 @@ O usuário já trouxe detalhes sobre a situação. NÃO pergunte "o que está ac
   }
 
   // Stuck in Presença after 4+ exchanges (Fase 1: timing higiênico — entrega valor mais cedo)
-  if (recentPairs >= 4 && detectedPhase === 'presenca') {
+  // Freio de densidade: contagem de trocas não basta — precisa haver material concreto na mesa.
+  if (recentPairs >= 4 && detectedPhase === 'presenca' && lastUserContext?.information_density !== 'low') {
     return {
       detectedPhase: 'presenca',
       stagnationLevel: 2,
