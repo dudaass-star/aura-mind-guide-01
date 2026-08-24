@@ -1056,15 +1056,10 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Timeout: clear stale capsule flags (>24h)
-    if (capsuleState && profile.updated_at) {
-      const updatedAt = new Date(profile.updated_at).getTime();
-      const hoursAgo = (Date.now() - updatedAt) / (1000 * 60 * 60);
-      if (hoursAgo > 24) {
-        console.log(`🕐 Capsule timeout (${Math.round(hoursAgo)}h), clearing flags`);
-        await supabase.from('profiles').update({ awaiting_time_capsule: null, pending_capsule_audio_url: null, capsule_state_set_at: null, capsule_prompt_count: 0 }).eq('user_id', profile.user_id);
-      }
-    }
+    // (O antigo timeout de 24h baseado em profile.updated_at foi removido:
+    //  ficava DEPOIS dos returns dos estados que prendiam o usuário — código
+    //  morto — e o campo era resetado por qualquer escrita no perfil.
+    //  A expiração real de 1h agora roda ANTES dos handlers, acima.)
 
     // ========================================================================
     // SESSION RATING
