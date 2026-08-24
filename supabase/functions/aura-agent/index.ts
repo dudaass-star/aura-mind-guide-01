@@ -1802,12 +1802,24 @@ function determineAudioMode(params: {
   wantsText: boolean;
   wantsAudio: boolean;
   aiIncludedAudioTag: boolean;
+  // Preferência persistida no perfil (profiles.voice_mode): 'auto' | 'audio' | 'texto'.
+  // Existe porque o pedido do usuário era recalculado a cada turno — o combinado
+  // "me responde por áudio" morria na mensagem seguinte.
+  voiceMode?: string | null;
+  voiceModeSetAt?: string | null;
 }): AudioDecision {
   const { userMessage, sessionActive, sessionAudioCount, isSessionClosing, 
-          isCrisisDetected, budgetAvailable, wantsText, wantsAudio, aiIncludedAudioTag } = params;
+          isCrisisDetected, budgetAvailable, wantsText, wantsAudio, aiIncludedAudioTag,
+          voiceMode, voiceModeSetAt } = params;
+
+  // Preferência persistida válida por 7 dias
+  const prefFresh = !!voiceModeSetAt
+    && (Date.now() - new Date(voiceModeSetAt).getTime()) < 7 * 24 * 60 * 60 * 1000;
+  const prefAudio = prefFresh && voiceMode === 'audio';
+  const prefText = prefFresh && voiceMode === 'texto';
 
   // User explicitly wants text — respect always (except life-threatening crisis)
-  if (wantsText && !isLifeThreatening(userMessage)) {
+  if ((wantsText || (prefText && !wantsAudio)) && !isLifeThreatening(userMessage)) {
     return { shouldUseAudio: false, reason: 'user_prefers_text', mandatory: false };
   }
 
@@ -1829,6 +1841,11 @@ function determineAudioMode(params: {
   // 4. User explicitly requested audio
   if (wantsAudio) {
     return { shouldUseAudio: true, reason: 'user_requested', mandatory: false };
+  }
+
+  // 4b. Preferência de áudio persistida (combinado ainda vigente) — respeita o teto
+  if (prefAudio && budgetAvailable) {
+    return { shouldUseAudio: true, reason: 'voice_mode_audio', mandatory: false };
   }
 
   // 5. AI decided to use audio (tag in response) — respect if budget allows
@@ -4080,6 +4097,7 @@ function splitIntoMessages(
   // 3. LLM emitiu [MODO_AUDIO] organicamente E o orçamento permite
   const isAudioMode = audioDecision.mandatory
     || audioDecision.reason === 'user_requested'
+    || audioDecision.reason === 'voice_mode_audio'
     || (wantsAudioByTag && audioDecision.shouldUseAudio);
 
   if (audioDecision.mandatory && !wantsAudioByTag) {
@@ -8213,7 +8231,22 @@ Só DEPOIS de saber a situação, explore as emoções com profundidade.`;
       wantsText,
       wantsAudio,
       aiIncludedAudioTag: aiWantsAudio,
+      voiceMode: profile?.voice_mode ?? null,
+      voiceModeSetAt: profile?.voice_mode_set_at ?? null,
     });
+
+    // Persiste o combinado de canal quando o usuário pede explicitamente.
+    // (O worker também grava antes dos handlers; aqui cobre chamadas diretas.)
+    if (wantsAudio || wantsText) {
+      const newMode = wantsAudio ? 'audio' : 'texto';
+      if (profile?.voice_mode !== newMode) {
+        supabase.from('profiles')
+          .update({ voice_mode: newMode, voice_mode_set_at: new Date().toISOString() })
+          .eq('user_id', profile.user_id)
+          .then(() => console.log(`🎚️ voice_mode atualizado: ${newMode}`))
+          .catch((e: unknown) => console.warn('⚠️ Falha ao gravar voice_mode:', e));
+      }
+    }
 
     // Flag individual (piloto): se ativada, áudio do usuário força áudio na resposta,
     // respeitando o teto mensal do plano. Sobrescreve apenas quando não há decisão
