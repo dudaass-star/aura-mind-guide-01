@@ -90,9 +90,28 @@ O que muda:
 - Dizer no prompt que **alternar leve ↔ profundo na mesma conversa é o esperado e bom**.
   O mecanismo de desvio-vs-virada dá a estrutura; esta seção dá o tom.
 
+## 6. Aura útil (assistente do dia a dia): fechar as 3 lacunas
 
+A "Aura útil" já existe e funciona — `isPracticalQuestion()` (linha 1283) manda a conversa
+pra ping-pong sem guidance terapêutico (linha 1404), com resposta direta e sem gancho
+emocional. Três lacunas ficam evidentes quando ela passar mais tempo no leve:
+
+- **Afirmação prática não é detectada.** Hoje só entra o que começa com abridor de pergunta
+  ou termina em "?". "preciso de ideia de presente pro meu pai", "queria uma receita rápida
+  de janta", "tô procurando um filme pra hoje" caem fora e voltam pro registro emocional.
+  Correção: reconhecer também intenção prática afirmativa (preciso/queria/quero/tô
+  procurando/me manda + objeto concreto), mantendo as exclusões de carga emocional e
+  pergunta reflexiva rodando antes.
+- **Modo útil desligado dentro de sessão agendada.** A guarda `!sessionActive` bloqueia
+  tudo. Numa sessão de 45 min, uma dúvida prática solta é desvio normal — deve ser
+  respondida como desvio (1–2 turnos) e depois o arco retoma. Correção: permitir o atalho
+  prático em sessão, sem alterar a fase do session lifecycle.
+- **Pergunta prática não conta como sinal de descida.** A detecção prática passa a valer
+  como voto de `light` na histerese de descida — não força a descida sozinha (a régua de
+  dois votos continua valendo), mas alimenta a contagem de turnos leves.
 
 ## Detalhes técnicos
+
 
 Tudo em `supabase/functions/aura-agent/index.ts` (+ 2 campos no schema do extrator):
 
