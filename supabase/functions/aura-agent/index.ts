@@ -863,7 +863,7 @@ Retorne um JSON com APENAS os campos relevantes (omita campos vazios/null):
 REGRAS:
 - schedule_reminder: só se o usuário PEDIU explicitamente um lembrete/alarme
 - do_not_disturb_hours: se o usuário disse que está ocupado/trabalhando/em reunião
-- commitments: apenas compromissos CONCRETOS com ação clara (não intenções vagas)
+- commitments: apenas compromissos CONCRETOS do USUÁRIO, em primeira pessoa, com ação clara. NUNCA extraia: fala/pergunta da assistente, algo que a AURA vai fazer (ex.: "AURA vai gravar áudios"), reclamação ou frase sarcástica sobre a AURA, intenção vaga. Em dúvida, omita.
 - themes: temas emocionais significativos discutidos (não triviais)
 - session_action: só se houve pedido explícito de agendamento/reagendamento/pausa
 - journey_action: SOMENTE quando a MENSAGEM ATUAL DO USUÁRIO contém pedido literal de trocar/pausar jornada (ex.: "quero trocar de jornada", "pausa as jornadas", "muda pra jornada de ansiedade", "para com as jornadas"). NUNCA infira por contexto, tópico do profile ou tom da conversa. Se o usuário só está conversando sobre o tema (ansiedade, autoestima, etc.), NÃO retorne journey_action. Em dúvida, omita o campo.
@@ -885,7 +885,7 @@ REGRAS:
   NÃO marque true para concordância passiva ("ah faz sentido", "é verdade", "exatamente", "concordo", "tem razão"). Concordar com a assistente ≠ refletir. Em dúvida, marque false.
 - user_engaged_with_commitment: true APENAS se a ÚLTIMA pergunta de COMPROMISSO/PRÓXIMO PASSO/MOVIMENTO da assistente foi respondida pelo usuário de forma CONCRETA (nomeou ação, prazo, intenção objetiva). false se o usuário evadiu, mudou de assunto, ignorou, ou respondeu vago ("vou pensar", "talvez", "sei lá"). Se a assistente NÃO fez pergunta de compromisso, marque false.
 - aura_hypothesis_delivered: true se a ASSISTENTE, nesta resposta, arriscou uma LEITURA/TESE/INTERPRETAÇÃO sobre o usuário (nomeou um padrão, uma tensão, um motivo por trás do comportamento). false se ela só acolheu, validou ou fez perguntas exploratórias.
-- user_validated_hypothesis: true se o USUÁRIO, nesta mensagem, concordou com a leitura que a assistente ofereceu antes ("é isso", "faz sentido", "exatamente isso"). false caso contrário.
+- user_validated_hypothesis: true SOMENTE se o USUÁRIO elaborou por conta própria sobre a leitura oferecida (trouxe conteúdo novo, exemplo, consequência ou correção parcial que mostra que pensou sobre ela). NÃO conta como validação: resposta de até 4 palavras; concordância seca ("isso mesmo", "sim", "faz sentido", "é isso", "ok"); resposta que é só uma pergunta de volta ("Como?", "E aí?", "E o que eu faço?"). Nesses casos retorne false — concordância por polidez não autoriza aprofundar a mesma leitura.
 - user_rejected_hypothesis: true se o USUÁRIO corrigiu ou recusou a leitura ("não é isso", "não é medo de ficar sozinha, é medo de ficar sem ele"). false caso contrário.
 - SEMPRE inclua user_emotional_state, topic_continuity, engagement_level, aura_phase, information_density, user_reflection_mode, user_engaged_with_commitment, aura_hypothesis_delivered, user_validated_hypothesis, user_rejected_hypothesis
 - Se nada mais for relevante, retorne apenas esses 10 campos
@@ -1784,6 +1784,102 @@ ${FREE_PHASE_INSTRUCTIONS.sentido_to_movimento}${hypothesisGuard}`
   return { guidance: null, detectedPhase, stagnationLevel: 0 };
 }
 
+
+// ============================================================================
+// COMPROMISSOS — gravador único, dedupe semântico e filtro de autoria
+// ----------------------------------------------------------------------------
+// Contexto: uma única usuária acumulou 18 compromissos em 2 sessões (o mesmo
+// "Termômetro" 8 vezes), incluindo falas da própria AURA e frases sarcásticas.
+// Causas: dois gravadores independentes + dedupe por prefixo de 40 chars.
+// ============================================================================
+const COMMITMENT_STOPWORDS = new Set([
+  'de','da','do','das','dos','a','o','as','os','e','ou','que','para','pra','por',
+  'com','sem','em','no','na','nos','nas','um','uma','ao','aos','se','na','meu',
+  'minha','eu','vou','vai','ser','estar','mais','menos','ja','ate','como','isso',
+  'proxima','proximo','semana','dia','quando','depois','antes','sobre','the',
+]);
+
+function normalizeCommitmentTitle(title: string): string[] {
+  return (title || '')
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length > 2 && !COMMITMENT_STOPWORDS.has(w));
+}
+
+// Rejeita o que não é compromisso do USUÁRIO (fala da AURA, sarcasmo, pergunta)
+function isValidUserCommitment(title: string): boolean {
+  const t = (title || '').trim();
+  if (t.length < 8) return false;
+  if (/^aura\b/i.test(t)) return false;                    // "AURA vai gravar áudios..."
+  if (/\baura\b/i.test(t) && /\bvai\b/i.test(t)) return false;
+  if (t.includes('?')) return false;                        // pergunta da assistente
+  if (/(menos enrolada|responder por (a|á)udio|mandar mensagem de texto|gravar (a[ií]|no seu hd)|sei l(a|á))/i.test(t)) return false;
+  return true;
+}
+
+async function saveCommitmentsDeduped(
+  supabase: any,
+  userId: string,
+  titles: string[],
+  sessionId: string | null,
+): Promise<void> {
+  const candidates = (titles || []).filter(isValidUserCommitment);
+  if (candidates.length === 0) return;
+
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const { data: pending } = await supabase
+    .from('commitments')
+    .select('id, title, session_id')
+    .eq('user_id', userId)
+    .eq('completed', false)
+    .gte('created_at', since);
+
+  const existing: Array<{ id: string; title: string; session_id: string | null; words: string[] }> =
+    (pending || []).map((c: any) => ({ ...c, words: normalizeCommitmentTitle(c.title) }));
+
+  // Teto: 1 compromisso ativo por sessão (o cardápio de fechamento prevê um só)
+  let sessionSlotTaken = !!sessionId && existing.some(c => c.session_id === sessionId);
+
+  for (const title of candidates) {
+    const words = normalizeCommitmentTitle(title);
+    if (words.length === 0) continue;
+
+    // Dedupe semântico: sobreposição de palavras-chave >= 50%
+    const match = existing.find(c => {
+      if (c.words.length === 0) return false;
+      const shared = words.filter(w => c.words.includes(w)).length;
+      const overlap = shared / Math.min(words.length, c.words.length);
+      return overlap >= 0.5;
+    });
+
+    if (match) {
+      await supabase.from('commitments')
+        .update({ title, session_id: sessionId || match.session_id })
+        .eq('id', match.id);
+      console.log(`♻️ [COMMITMENT] Atualizado (dedupe semântico): ${title}`);
+      continue;
+    }
+
+    if (sessionSlotTaken) {
+      console.log(`⏭️ [COMMITMENT] Teto de 1 por sessão atingido — ignorado: ${title}`);
+      continue;
+    }
+
+    const { data: inserted } = await supabase.from('commitments').insert({
+      user_id: userId,
+      title,
+      completed: false,
+      commitment_status: 'pending',
+      session_id: sessionId,
+    }).select('id').maybeSingle();
+    console.log(`📋 [COMMITMENT] Criado: ${title}`);
+    existing.push({ id: inserted?.id || 'novo', title, session_id: sessionId, words });
+    if (sessionId) sessionSlotTaken = true;
+  }
+}
+
 // Deterministic audio mode decision (replaces prompt-based [MODO_AUDIO] decision)
 
 interface AudioDecision {
@@ -1802,12 +1898,24 @@ function determineAudioMode(params: {
   wantsText: boolean;
   wantsAudio: boolean;
   aiIncludedAudioTag: boolean;
+  // Preferência persistida no perfil (profiles.voice_mode): 'auto' | 'audio' | 'texto'.
+  // Existe porque o pedido do usuário era recalculado a cada turno — o combinado
+  // "me responde por áudio" morria na mensagem seguinte.
+  voiceMode?: string | null;
+  voiceModeSetAt?: string | null;
 }): AudioDecision {
   const { userMessage, sessionActive, sessionAudioCount, isSessionClosing, 
-          isCrisisDetected, budgetAvailable, wantsText, wantsAudio, aiIncludedAudioTag } = params;
+          isCrisisDetected, budgetAvailable, wantsText, wantsAudio, aiIncludedAudioTag,
+          voiceMode, voiceModeSetAt } = params;
+
+  // Preferência persistida válida por 7 dias
+  const prefFresh = !!voiceModeSetAt
+    && (Date.now() - new Date(voiceModeSetAt).getTime()) < 7 * 24 * 60 * 60 * 1000;
+  const prefAudio = prefFresh && voiceMode === 'audio';
+  const prefText = prefFresh && voiceMode === 'texto';
 
   // User explicitly wants text — respect always (except life-threatening crisis)
-  if (wantsText && !isLifeThreatening(userMessage)) {
+  if ((wantsText || (prefText && !wantsAudio)) && !isLifeThreatening(userMessage)) {
     return { shouldUseAudio: false, reason: 'user_prefers_text', mandatory: false };
   }
 
@@ -1829,6 +1937,11 @@ function determineAudioMode(params: {
   // 4. User explicitly requested audio
   if (wantsAudio) {
     return { shouldUseAudio: true, reason: 'user_requested', mandatory: false };
+  }
+
+  // 4b. Preferência de áudio persistida (combinado ainda vigente) — respeita o teto
+  if (prefAudio && budgetAvailable) {
+    return { shouldUseAudio: true, reason: 'voice_mode_audio', mandatory: false };
   }
 
   // 5. AI decided to use audio (tag in response) — respect if budget allows
@@ -1899,29 +2012,12 @@ async function processExtractedActions(
       console.log('✅ [MICRO-AGENT] DND set for', actions.do_not_disturb_hours, 'hours');
     }
 
-    // Commitments (free conversation)
+    // Commitments — gravador ÚNICO em postConversationAnalysis().
+    // O micro-agent deixou de inserir: os dois gravadores usavam o mesmo dedupe
+    // frágil (ILIKE nos 40 primeiros chars) e corriam entre si, o que gerava o
+    // mesmo compromisso 8 vezes com redações diferentes.
     if (actions.commitments && actions.commitments.length > 0) {
-      for (const title of actions.commitments) {
-        const prefix = title.substring(0, 40);
-        const { data: existing } = await supabase
-          .from('commitments')
-          .select('id')
-          .eq('user_id', userId)
-          .eq('completed', false)
-          .ilike('title', `%${prefix}%`)
-          .limit(1);
-
-        if (!existing || existing.length === 0) {
-          await supabase.from('commitments').insert({
-            user_id: userId,
-            title,
-            completed: false,
-            commitment_status: 'pending',
-            session_id: currentSession?.id || null,
-          });
-          console.log('✅ [MICRO-AGENT] Commitment created:', title);
-        }
-      }
+      console.log(`ℹ️ [MICRO-AGENT] ${actions.commitments.length} compromisso(s) ignorado(s) aqui — gravação centralizada na pós-análise`);
     }
 
     // Theme tracking — handled by postConversationAnalysis() (deduplicated)
@@ -2110,7 +2206,7 @@ Use a função extract_analysis para retornar os dados.`;
               },
               commitments: {
                 type: 'ARRAY',
-                description: 'Compromissos concretos assumidos pelo usuário (ações com prazo implícito). Omita intenções vagas.',
+                description: 'Compromissos concretos assumidos pelo USUÁRIO, em primeira pessoa (ações com prazo implícito). NUNCA inclua falas/perguntas da assistente, algo que a AURA fará, reclamações ou sarcasmo sobre a AURA. Omita intenções vagas.',
                 items: { type: 'STRING' }
               },
               corrections: {
@@ -2282,31 +2378,9 @@ Use a função extract_analysis para retornar os dados.`;
       }
     }
 
-    // Save commitments (dedup)
+    // Save commitments — gravador único com dedupe semântico e filtro de autoria
     if (analysis.commitments && analysis.commitments.length > 0) {
-      for (const title of analysis.commitments) {
-        if (!title || title.length < 3) continue;
-        
-        const titlePrefix = title.substring(0, 40);
-        const { data: existing } = await supabase
-          .from('commitments')
-          .select('id')
-          .eq('user_id', userId)
-          .eq('completed', false)
-          .ilike('title', `%${titlePrefix}%`)
-          .limit(1);
-
-        if (!existing || existing.length === 0) {
-          await supabase.from('commitments').insert({
-            user_id: userId,
-            title,
-            completed: false,
-            commitment_status: 'pending',
-            session_id: sessionId
-          });
-          console.log(`📋 [POST-ANALYSIS] Commitment: ${title}`);
-        }
-      }
+      await saveCommitmentsDeduped(supabase, userId, analysis.commitments, sessionId || null);
     }
 
     // Save corrections (priority memory — never repeat the corrected mistake)
@@ -4080,6 +4154,7 @@ function splitIntoMessages(
   // 3. LLM emitiu [MODO_AUDIO] organicamente E o orçamento permite
   const isAudioMode = audioDecision.mandatory
     || audioDecision.reason === 'user_requested'
+    || audioDecision.reason === 'voice_mode_audio'
     || (wantsAudioByTag && audioDecision.shouldUseAudio);
 
   if (audioDecision.mandatory && !wantsAudioByTag) {
@@ -8213,7 +8288,22 @@ Só DEPOIS de saber a situação, explore as emoções com profundidade.`;
       wantsText,
       wantsAudio,
       aiIncludedAudioTag: aiWantsAudio,
+      voiceMode: profile?.voice_mode ?? null,
+      voiceModeSetAt: profile?.voice_mode_set_at ?? null,
     });
+
+    // Persiste o combinado de canal quando o usuário pede explicitamente.
+    // (O worker também grava antes dos handlers; aqui cobre chamadas diretas.)
+    if (wantsAudio || wantsText) {
+      const newMode = wantsAudio ? 'audio' : 'texto';
+      if (profile?.voice_mode !== newMode) {
+        supabase.from('profiles')
+          .update({ voice_mode: newMode, voice_mode_set_at: new Date().toISOString() })
+          .eq('user_id', profile.user_id)
+          .then(() => console.log(`🎚️ voice_mode atualizado: ${newMode}`))
+          .catch((e: unknown) => console.warn('⚠️ Falha ao gravar voice_mode:', e));
+      }
+    }
 
     // Flag individual (piloto): se ativada, áudio do usuário força áudio na resposta,
     // respeitando o teto mensal do plano. Sobrescreve apenas quando não há decisão

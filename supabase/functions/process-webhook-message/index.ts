@@ -37,6 +37,41 @@ async function logFailedMessage(
   }
 }
 
+// ============================================================================
+// PREFERÊNCIA DE CANAL — detecta pedido explícito de áudio ou texto
+// ----------------------------------------------------------------------------
+// Espelha os detectores do aura-agent (userWantsAudio / userWantsText) para que
+// a preferência possa ser persistida no perfil ANTES de qualquer handler que
+// encerre o turno (ex.: Cápsula do Tempo).
+// ============================================================================
+function detectChannelPreference(message: string): 'audio' | 'texto' | null {
+  const lower = (message || '').toLowerCase();
+  if (!lower.trim()) return null;
+
+  const textPhrases = [
+    'responde por texto', 'responder por texto', 'em texto', 'por texto',
+    'escreve', 'escrito', 'não manda áudio', 'nao manda audio',
+    'sem áudio', 'sem audio', 'prefiro texto', 'para de mandar áudio',
+    'para de mandar audio', 'não quero áudio', 'nao quero audio',
+  ];
+  if (textPhrases.some(p => lower.includes(p))) return 'texto';
+  if (/(fala|fale|responde|responder|manda|mande|escreve|escreva)\s+(em|por|no|na|de)\s+texto/i.test(lower)) return 'texto';
+
+  const audioPhrases = [
+    'manda um áudio', 'manda um audio', 'me manda áudio', 'me manda audio',
+    'em áudio', 'em audio', 'mensagem de voz', 'quero ouvir sua voz',
+    'por áudio', 'por audio', 'no áudio', 'no audio', 'em voz',
+    'me responde em áudio', 'me responde em audio',
+    'responde em áudio', 'responde em audio', 'grava um áudio', 'grava um audio',
+    'prefiro áudio', 'prefiro audio',
+  ];
+  if (audioPhrases.some(p => lower.includes(p))) return 'audio';
+  if (/(fala|fale|responde|responder|conversa|conversar|manda|mande)\s+(em|por|no|na|de)\s+(á?udio|voz)/i.test(lower)) return 'audio';
+
+  return null;
+}
+
+
 async function createShortLink(url: string, phone: string): Promise<string | null> {
   const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -884,18 +919,62 @@ Deno.serve(async (req) => {
     }
 
     // ========================================================================
+    // PREFERÊNCIA DE CANAL (voz/texto) — detectada ANTES de qualquer handler
+    // ------------------------------------------------------------------------
+    // Motivo: o pedido "me responde por áudio" chegava e podia ser engolido por
+    // outro estado (ex.: Cápsula do Tempo), fazendo a AURA prometer áudio e
+    // entregar texto. Agora a preferência é persistida no perfil sempre, mesmo
+    // que o turno seja encerrado por outro fluxo.
+    // ========================================================================
+    const channelPref = detectChannelPreference(messageText || '');
+    if (channelPref) {
+      await supabase.from('profiles').update({
+        voice_mode: channelPref,
+        voice_mode_set_at: new Date().toISOString(),
+      }).eq('user_id', profile.user_id);
+      profile.voice_mode = channelPref;
+      profile.voice_mode_set_at = new Date().toISOString();
+      console.log(`🎚️ voice_mode persistido: ${channelPref}`);
+    }
+
+    // ========================================================================
     // TIME CAPSULE HANDLING
     // ========================================================================
-    const capsuleState = profile.awaiting_time_capsule;
+    let capsuleState = profile.awaiting_time_capsule;
+
+    // Expiração determinística + saídas de segurança (roda ANTES dos handlers,
+    // senão o bloco de timeout nunca é alcançado para os estados que prendem).
+    if (capsuleState === 'awaiting_audio' || capsuleState === 'awaiting_confirmation') {
+      const setAtRaw = profile.capsule_state_set_at;
+      const setAt = setAtRaw ? new Date(setAtRaw).getTime() : null;
+      const expired = setAt === null || (Date.now() - setAt) > 60 * 60 * 1000; // 1h
+      const overCap = (profile.capsule_prompt_count || 0) >= 2;
+      const escapeIntent = channelPref !== null;
+
+      if (expired || overCap || escapeIntent) {
+        console.log(`🚪 Cápsula abandonada (expired=${expired}, overCap=${overCap}, escapeIntent=${escapeIntent}) — seguindo fluxo normal`);
+        await supabase.from('profiles').update({
+          awaiting_time_capsule: null,
+          pending_capsule_audio_url: null,
+          capsule_state_set_at: null,
+          capsule_prompt_count: 0,
+        }).eq('user_id', profile.user_id);
+        capsuleState = null;
+      }
+    }
 
     if (capsuleState === 'awaiting_audio' || capsuleState === 'awaiting_confirmation') {
-      
+      await supabase.from('profiles').update({
+        capsule_prompt_count: (profile.capsule_prompt_count || 0) + 1,
+      }).eq('user_id', profile.user_id);
 
       if (capsuleState === 'awaiting_audio') {
         if (hasAudio && audioUrl) {
           await supabase.from('profiles').update({
             awaiting_time_capsule: 'awaiting_confirmation',
             pending_capsule_audio_url: audioUrl,
+            capsule_state_set_at: new Date().toISOString(),
+            capsule_prompt_count: 0,
           }).eq('user_id', profile.user_id);
 
           const confirmMsg = `Recebi seu áudio! 🎙️ Ficou do jeito que você queria?\n\nSe quiser regravar, manda outro áudio. Se tiver bom, me diz "pode guardar" 💜`;
@@ -914,7 +993,7 @@ Deno.serve(async (req) => {
         // Check for cancellation intent before sending reminder
         const lowerMsgAudio = (messageText || '').toLowerCase().trim();
         if (/deixa|cancela|desist|não quero|nao quero|esquece|para|parar/i.test(lowerMsgAudio)) {
-          await supabase.from('profiles').update({ awaiting_time_capsule: null, pending_capsule_audio_url: null }).eq('user_id', profile.user_id);
+          await supabase.from('profiles').update({ awaiting_time_capsule: null, pending_capsule_audio_url: null, capsule_state_set_at: null, capsule_prompt_count: 0 }).eq('user_id', profile.user_id);
           const cancelMsg = `Tudo bem! Quando quiser gravar uma cápsula do tempo, é só falar 💜`;
           await sendMessage(cleanPhone, cancelMsg);
           await supabase.from('messages').insert([
@@ -960,7 +1039,7 @@ Deno.serve(async (req) => {
         const lowerMsg = (messageText || '').toLowerCase().trim();
 
         if (/deixa|cancela|desist|não quero|nao quero|esquece|para|parar/i.test(lowerMsg)) {
-          await supabase.from('profiles').update({ awaiting_time_capsule: null, pending_capsule_audio_url: null }).eq('user_id', profile.user_id);
+          await supabase.from('profiles').update({ awaiting_time_capsule: null, pending_capsule_audio_url: null, capsule_state_set_at: null, capsule_prompt_count: 0 }).eq('user_id', profile.user_id);
           const cancelMsg = `Tudo bem! Quando quiser gravar uma cápsula do tempo, é só falar 💜`;
           await sendMessage(cleanPhone, cancelMsg);
           await supabase.from('messages').insert([
@@ -977,7 +1056,7 @@ Deno.serve(async (req) => {
         if (/sim|pode|guard|confirm|ficou|bom|bora|manda|salv|tá (bom|ótimo|perfeito)|ta (bom|otimo|perfeito)|perfeito|certeza|isso/i.test(lowerMsg)) {
           const pendingUrl = profile.pending_capsule_audio_url;
           if (!pendingUrl) {
-            await supabase.from('profiles').update({ awaiting_time_capsule: null, pending_capsule_audio_url: null }).eq('user_id', profile.user_id);
+            await supabase.from('profiles').update({ awaiting_time_capsule: null, pending_capsule_audio_url: null, capsule_state_set_at: null, capsule_prompt_count: 0 }).eq('user_id', profile.user_id);
           } else {
             const deliverAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
             let transcription: string | null = null;
@@ -988,7 +1067,7 @@ Deno.serve(async (req) => {
               deliver_at: deliverAt.toISOString(),
               context_message: `Cápsula gravada em ${new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`,
             });
-            await supabase.from('profiles').update({ awaiting_time_capsule: null, pending_capsule_audio_url: null }).eq('user_id', profile.user_id);
+            await supabase.from('profiles').update({ awaiting_time_capsule: null, pending_capsule_audio_url: null, capsule_state_set_at: null, capsule_prompt_count: 0 }).eq('user_id', profile.user_id);
 
             const deliverDateStr = deliverAt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Sao_Paulo' });
             const savedMsg = `Guardei sua mensagem com carinho! 💜✨\n\nVou te enviar de volta no dia ${deliverDateStr}. Vai ser uma surpresa especial do seu eu de hoje pro seu eu do futuro 🫶`;
@@ -1007,20 +1086,15 @@ Deno.serve(async (req) => {
         }
 
         // Unrecognized response — clear capsule state, continue normal flow
-        await supabase.from('profiles').update({ awaiting_time_capsule: null, pending_capsule_audio_url: null }).eq('user_id', profile.user_id);
+        await supabase.from('profiles').update({ awaiting_time_capsule: null, pending_capsule_audio_url: null, capsule_state_set_at: null, capsule_prompt_count: 0 }).eq('user_id', profile.user_id);
         console.log('⚠️ Capsule confirmation state cleared - unrecognized response, continuing normal flow');
       }
     }
 
-    // Timeout: clear stale capsule flags (>24h)
-    if (capsuleState && profile.updated_at) {
-      const updatedAt = new Date(profile.updated_at).getTime();
-      const hoursAgo = (Date.now() - updatedAt) / (1000 * 60 * 60);
-      if (hoursAgo > 24) {
-        console.log(`🕐 Capsule timeout (${Math.round(hoursAgo)}h), clearing flags`);
-        await supabase.from('profiles').update({ awaiting_time_capsule: null, pending_capsule_audio_url: null }).eq('user_id', profile.user_id);
-      }
-    }
+    // (O antigo timeout de 24h baseado em profile.updated_at foi removido:
+    //  ficava DEPOIS dos returns dos estados que prendiam o usuário — código
+    //  morto — e o campo era resetado por qualquer escrita no perfil.
+    //  A expiração real de 1h agora roda ANTES dos handlers, acima.)
 
     // ========================================================================
     // SESSION RATING
@@ -1352,6 +1426,11 @@ Deno.serve(async (req) => {
       if (msg.isAudio) {
         console.log(`🎙️ Generating audio for: ${responseText.substring(0, 50)}...`);
         const { audioUrl, audioContent } = await generateTTS(responseText, profile.user_id);
+        if (!audioUrl && !audioContent) {
+          // Antes isso caía pra texto com apenas um console.log — falha invisível.
+          console.error('❌ TTS retornou vazio; registrando falha e caindo pra texto');
+          await logFailedMessage(supabase, profile.user_id, cleanPhone, responseText, 'tts_failed', 'process-webhook-message:audio');
+        }
         if (audioUrl || audioContent) {
           let audioResult: SendResult;
           if (audioUrl) {
@@ -1370,14 +1449,19 @@ Deno.serve(async (req) => {
                 .gte('created_at', new Date(Date.now() - 30000).toISOString())
                 .limit(1).maybeSingle();
               if (!existingAssistant) {
-                await supabase.from('messages').insert({ user_id: profile.user_id, role: 'assistant', content: responseText });
+                await supabase.from('messages').insert({ user_id: profile.user_id, role: 'assistant', content: responseText, is_audio: true });
               } else {
                 console.log('⏭️ DEDUP: Assistant audio message already exists, skipping persist');
               }
             } catch {}
             continue;
           }
-          console.log(`⚠️ Audio send failed (provider=${audioResult.provider}, error=${audioResult.error}), falling back to text`);
+          console.error(`❌ Audio send failed (provider=${audioResult.provider}, error=${audioResult.error}), falling back to text`);
+          await logFailedMessage(
+            supabase, profile.user_id, cleanPhone, responseText,
+            `audio_send_failed:${audioResult.provider || 'unknown'}:${audioResult.error || 'no_error'}`,
+            'process-webhook-message:audio',
+          );
         }
       }
 

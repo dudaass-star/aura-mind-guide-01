@@ -1616,6 +1616,7 @@ export type Database = {
           content: string
           created_at: string | null
           id: string
+          is_audio: boolean
           role: string
           user_id: string
         }
@@ -1623,6 +1624,7 @@ export type Database = {
           content: string
           created_at?: string | null
           id?: string
+          is_audio?: boolean
           role: string
           user_id: string
         }
@@ -1630,6 +1632,7 @@ export type Database = {
           content?: string
           created_at?: string | null
           id?: string
+          is_audio?: boolean
           role?: string
           user_id?: string
         }
@@ -1850,6 +1853,8 @@ export type Database = {
           awaiting_time_capsule: string | null
           billing_cycle: string | null
           canceled_at: string | null
+          capsule_prompt_count: number
+          capsule_state_set_at: string | null
           card_gateway: string | null
           converted_at: string | null
           created_at: string | null
@@ -1912,6 +1917,8 @@ export type Database = {
           upgrade_refusal_type: string | null
           upgrade_suggested_at: string | null
           user_id: string
+          voice_mode: string
+          voice_mode_set_at: string | null
           welcome_sent_at: string | null
           whatsapp_instance_id: string | null
           whatsapp_provider: string | null
@@ -1927,6 +1934,8 @@ export type Database = {
           awaiting_time_capsule?: string | null
           billing_cycle?: string | null
           canceled_at?: string | null
+          capsule_prompt_count?: number
+          capsule_state_set_at?: string | null
           card_gateway?: string | null
           converted_at?: string | null
           created_at?: string | null
@@ -1989,6 +1998,8 @@ export type Database = {
           upgrade_refusal_type?: string | null
           upgrade_suggested_at?: string | null
           user_id: string
+          voice_mode?: string
+          voice_mode_set_at?: string | null
           welcome_sent_at?: string | null
           whatsapp_instance_id?: string | null
           whatsapp_provider?: string | null
@@ -2004,6 +2015,8 @@ export type Database = {
           awaiting_time_capsule?: string | null
           billing_cycle?: string | null
           canceled_at?: string | null
+          capsule_prompt_count?: number
+          capsule_state_set_at?: string | null
           card_gateway?: string | null
           converted_at?: string | null
           created_at?: string | null
@@ -2066,6 +2079,8 @@ export type Database = {
           upgrade_refusal_type?: string | null
           upgrade_suggested_at?: string | null
           user_id?: string
+          voice_mode?: string
+          voice_mode_set_at?: string | null
           welcome_sent_at?: string | null
           whatsapp_instance_id?: string | null
           whatsapp_provider?: string | null

@@ -348,6 +348,23 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        // Skip se uma sessão foi ENCERRADA nos últimos 60 min.
+        // O silêncio depois de um encerramento é normal (a conversa acabou de
+        // propósito) e era lido como abandono, gerando nudges sem contexto
+        // ("E aí") minutos após o fim da sessão.
+        const { data: recentlyEnded } = await supabase
+          .from('sessions')
+          .select('id, ended_at')
+          .eq('user_id', followup.user_id)
+          .not('ended_at', 'is', null)
+          .gte('ended_at', new Date(Date.now() - 60 * 60 * 1000).toISOString())
+          .limit(1);
+
+        if (recentlyEnded && recentlyEnded.length > 0) {
+          console.log(`⏭️ Skipping user ${followup.user_id} - sessão encerrada há menos de 60 min`);
+          continue;
+        }
+
         const userPlan = profile.plan || 'essencial';
         const isSessionActive = !!profile.current_session_id;
 
