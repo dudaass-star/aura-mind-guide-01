@@ -791,6 +791,11 @@ interface ExtractedActions {
   topic_continuity?: 'same_topic' | 'shifted' | 'new_topic';
   engagement_level?: 'engaged' | 'short_answers' | 'disengaged';
   aura_phase?: 'presenca' | 'sentido' | 'movimento';
+  // Carga do TURNO DO USUÁRIO (não da resposta da assistente). Base da rota de descida:
+  // 'light' + engagement != 'engaged' por 2 turnos → volta pro ping-pong.
+  user_turn_weight?: 'light' | 'loaded';
+  // Desvio vs. virada de assunto: tema anterior fica "em espera" por até 2 turnos.
+  topic_parked?: boolean;
   // Fase 1 — sinais novos para o Phase Evaluator enxergar conteúdo (não só clock/contagem).
   information_density?: 'low' | 'medium' | 'saturated';
   user_reflection_mode?: boolean;
