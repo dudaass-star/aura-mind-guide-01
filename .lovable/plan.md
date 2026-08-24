@@ -66,6 +66,32 @@ Esse é o coração do pedido. Regra nova, igual nos dois modos:
 - A memória segue inteira: a Aura sabe da vida da pessoa, só não usa isso como pretexto
   para transformar cada conversa em sessão.
 
+## 5. Ser boa companhia no modo leve (entra junto, não depois)
+
+A crítica pegou um ponto real: o plano diz **quando** ficar leve, mas hoje o modo leve não
+tem instrução de personalidade à altura. A seção `# PERSONALIDADE E CALOR HUMANO`
+(linha 2874) resolve humor em **uma frase vaga** — "faça uma piada leve... Riam e se
+divirtam" — sem um único exemplo, enquanto o `## MODO PING-PONG` (linha 3273), que é o que
+de fato governa o comportamento leve, tem limites, exceções e exemplos de fala.
+
+Consequência se não mexermos: corrigido o bug da fase, a Aura passará **muito mais tempo**
+em modo leve — e a fraqueza que hoje fica escondida atrás do bug apareceria como "correta,
+mas sem graça". Por isso isso entra neste plano, não no próximo.
+
+O que muda:
+
+- Bloco de personalidade para o registro leve escrito **dentro do MODO PING-PONG**, onde é
+  lido no momento que importa — não 400 linhas antes.
+- Permissão explícita de **brincar de volta**, zoar com carinho e entrar no jogo da piada.
+  Não é só "não force profundidade": é ter graça de propósito.
+- 2–3 exemplos concretos de resposta com humor (o mesmo padrão de exemplo que o resto do
+  arquivo já usa), incluindo o caso de a pessoa zoar a própria Aura — resposta
+  bem-humorada, nunca defensiva ou explicativa.
+- Dizer no prompt que **alternar leve ↔ profundo na mesma conversa é o esperado e bom**.
+  O mecanismo de desvio-vs-virada dá a estrutura; esta seção dá o tom.
+
+
+
 ## Detalhes técnicos
 
 Tudo em `supabase/functions/aura-agent/index.ts` (+ 2 campos no schema do extrator):
