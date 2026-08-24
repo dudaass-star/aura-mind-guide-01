@@ -1361,11 +1361,19 @@ Deno.serve(async (req) => {
     // SEND RESPONSE MESSAGES (with interruption check)
     // ========================================================================
 
+    // TRAVA 2 (sessão Simone, 22/08): quando a sessão está encerrando, a despedida
+    // NÃO pode ser cortada por mensagem nova — senão a fala final sai pela metade
+    // e o resumo/nota chega em cima de um turno truncado.
+    const isClosingDelivery = agentData?.session_ended === true;
+    if (isClosingDelivery) {
+      console.log('🔒 Entrega de despedida — checagem de interrupção desativada para este envio');
+    }
+
     for (let i = 0; i < (agentData.messages || []).length; i++) {
       const msg = agentData.messages[i];
 
       // Check for interruption before each bubble (except first)
-      if (i > 0) {
+      if (i > 0 && !isClosingDelivery) {
         const { data: currentState } = await supabase
           .from('aura_response_state')
           .select('last_user_message_id')
