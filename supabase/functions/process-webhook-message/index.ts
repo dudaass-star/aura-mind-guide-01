@@ -37,6 +37,41 @@ async function logFailedMessage(
   }
 }
 
+// ============================================================================
+// PREFERÊNCIA DE CANAL — detecta pedido explícito de áudio ou texto
+// ----------------------------------------------------------------------------
+// Espelha os detectores do aura-agent (userWantsAudio / userWantsText) para que
+// a preferência possa ser persistida no perfil ANTES de qualquer handler que
+// encerre o turno (ex.: Cápsula do Tempo).
+// ============================================================================
+function detectChannelPreference(message: string): 'audio' | 'texto' | null {
+  const lower = (message || '').toLowerCase();
+  if (!lower.trim()) return null;
+
+  const textPhrases = [
+    'responde por texto', 'responder por texto', 'em texto', 'por texto',
+    'escreve', 'escrito', 'não manda áudio', 'nao manda audio',
+    'sem áudio', 'sem audio', 'prefiro texto', 'para de mandar áudio',
+    'para de mandar audio', 'não quero áudio', 'nao quero audio',
+  ];
+  if (textPhrases.some(p => lower.includes(p))) return 'texto';
+  if (/(fala|fale|responde|responder|manda|mande|escreve|escreva)\s+(em|por|no|na|de)\s+texto/i.test(lower)) return 'texto';
+
+  const audioPhrases = [
+    'manda um áudio', 'manda um audio', 'me manda áudio', 'me manda audio',
+    'em áudio', 'em audio', 'mensagem de voz', 'quero ouvir sua voz',
+    'por áudio', 'por audio', 'no áudio', 'no audio', 'em voz',
+    'me responde em áudio', 'me responde em audio',
+    'responde em áudio', 'responde em audio', 'grava um áudio', 'grava um audio',
+    'prefiro áudio', 'prefiro audio',
+  ];
+  if (audioPhrases.some(p => lower.includes(p))) return 'audio';
+  if (/(fala|fale|responde|responder|conversa|conversar|manda|mande)\s+(em|por|no|na|de)\s+(á?udio|voz)/i.test(lower)) return 'audio';
+
+  return null;
+}
+
+
 async function createShortLink(url: string, phone: string): Promise<string | null> {
   const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
