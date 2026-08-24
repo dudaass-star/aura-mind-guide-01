@@ -21,6 +21,12 @@ rótulo de fase da largada e deixar a conversa atribuir a fase.
 - A fase é medida na **fala do usuário**, não na resposta da Aura. Hoje o extrator
   classifica a própria resposta dela, o que cria o efeito bola de neve (ela aprofunda →
   fica marcada como profunda → aprofunda mais).
+- **Descer exige dois votos independentes.** "Turno leve" nunca decide sozinho, e nunca é
+  julgado por tamanho de mensagem. Um "não" curto respondendo com precisão a uma pergunta
+  direta da Aura em tema pesado **não** é turno leve. A descida só acontece se o turno for
+  leve **e** o `engagement_level` não for `engaged` — a régua de sucintez que já roda em
+  produção ("respostas curtas com conteúdo genuíno = engaged") passa a valer aqui também.
+
 
 ## 2. Sessão agendada: puxar o fio não exige fase
 
