@@ -43,6 +43,9 @@ Evidência dura (`storage.objects`, bucket `aura-tts-audios`, pasta dela): **19 
 
 Os logs de console (Deno) da janela do incidente **não existem mais** — a retenção efetiva de `function_logs` neste projeto é de ~1 hora (verifiquei: o registro mais antigo consultável é de minutos atrás). E `token_usage_logs` está grande o suficiente para estourar timeout em qualquer agregação. Isso, por si só, é um achado: **não temos rastro de entrega de áudio**, e é por isso que estamos deduzindo em vez de ler.
 
+**Confirmação ao vivo de hoje (24/08):** o teste do Eduardo bate com a evidência acima. Nos logs desta hora aparece o ciclo completo e saudável: `✅ Google Cloud TTS success on first attempt: 45792 bytes` → upload no storage (1225ms) → `🎵 [Meta] Sending audio URL` → `✅ [Meta] Audio sent` → webhook Meta com `sent` e `delivered`. **O trilho de áudio está funcional hoje, ponta a ponta.** Isso reforça que o caso dela foi condição pontual (aquele dia / aquele turno), não um trilho quebrado — e é exatamente por isso que a prioridade deixa de ser "consertar o TTS" e passa a ser **instrumentar** para que uma falha pontual pare de ser invisível.
+
+
 **Com o TTS descartado, sobram três caminhos possíveis — e o próximo passo é distinguir entre eles, não corrigir no escuro:**
 
 1. **Falha no envio ao provedor** (`sendAudioUrl`, `process-webhook-message` 1357-1381): o áudio existe no storage, mas o WhatsApp pode ter recusado o download da signed URL (bucket privado) ou o envio pode ter dado erro. Nesse caso o código cai pra texto com **só um `console.log`** — nada em `failed_message_log` (o `logFailedMessage` só roda no caminho de texto, linha 1395). Compatível com "zero registros dela" no log de falhas.
