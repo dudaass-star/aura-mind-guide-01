@@ -900,8 +900,8 @@ REGRAS:
 - aura_hypothesis_delivered: true se a ASSISTENTE, nesta resposta, arriscou uma LEITURA/TESE/INTERPRETAÇÃO sobre o usuário (nomeou um padrão, uma tensão, um motivo por trás do comportamento). false se ela só acolheu, validou ou fez perguntas exploratórias.
 - user_validated_hypothesis: true SOMENTE se o USUÁRIO elaborou por conta própria sobre a leitura oferecida (trouxe conteúdo novo, exemplo, consequência ou correção parcial que mostra que pensou sobre ela). NÃO conta como validação: resposta de até 4 palavras; concordância seca ("isso mesmo", "sim", "faz sentido", "é isso", "ok"); resposta que é só uma pergunta de volta ("Como?", "E aí?", "E o que eu faço?"). Nesses casos retorne false — concordância por polidez não autoriza aprofundar a mesma leitura.
 - user_rejected_hypothesis: true se o USUÁRIO corrigiu ou recusou a leitura ("não é isso", "não é medo de ficar sozinha, é medo de ficar sem ele"). false caso contrário.
-- SEMPRE inclua user_emotional_state, topic_continuity, engagement_level, aura_phase, information_density, user_reflection_mode, user_engaged_with_commitment, aura_hypothesis_delivered, user_validated_hypothesis, user_rejected_hypothesis
-- Se nada mais for relevante, retorne apenas esses 10 campos
+- SEMPRE inclua user_emotional_state, topic_continuity, engagement_level, user_turn_weight, topic_parked, information_density, user_reflection_mode, user_engaged_with_commitment, aura_hypothesis_delivered, user_validated_hypothesis, user_rejected_hypothesis (aura_phase é o único opcional: só quando o turno do usuário autoriza)
+- Se nada mais for relevante, retorne apenas esses campos
 Apenas o JSON, sem markdown.`;
 
     const extractionBody = {
