@@ -159,11 +159,20 @@ Tudo em `supabase/functions/aura-agent/index.ts` (+ 2 campos no schema do extrat
 6b. **Personalidade no leve**: novo sub-bloco dentro de `## MODO PING-PONG` (linha ~3273)
    com permissão de brincar de volta + 2–3 exemplos de fala com humor; a frase genérica de
    humor na linha 2882 passa a apontar pra lá em vez de tentar resolver sozinha.
+6c. **Aura útil (3 lacunas)**: (i) `PRACTICAL_INTENT` novo em `isPracticalQuestion()`
+   (linha 1283) para afirmação prática (`^(preciso|queria|quero|t[ôo] procurando|me manda|
+   me indica|me d[áa]) ...` + objeto concreto), com `EMOTIONAL_LOAD_REGEX` e
+   `REFLEXIVE_QUESTION` ainda rodando antes; (ii) na saída antecipada da linha 1404, trocar
+   `!sessionActive` por "em sessão retorna guidance de desvio prático (1–2 turnos)" sem
+   mexer no session lifecycle; (iii) `isPracticalQuestion === true` conta como voto `light`
+   na histerese de descida do item 2 (não substitui o segundo voto).
 
 7. Atualizar `phase_thresholds_test.ts` para os novos limiares, e novo arquivo
    `turn_weight_test.ts` com os 5 casos adversariais acima + garantia estática de que a
    condição de descida cita `engagement_level` (dois votos), e não só `user_turn_weight`,
    e de que o sub-bloco de humor existe dentro do MODO PING-PONG (piada boba do usuário →
    resposta com graça; usuário zoando a Aura → resposta bem-humorada, não defensiva).
+   Somar casos de `isPracticalQuestion`: "preciso de ideia de presente pro meu pai" → true;
+   "preciso de ajuda, tô péssimo" → false (carga emocional vence).
 
 
