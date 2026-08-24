@@ -1347,6 +1347,15 @@ function evaluateTherapeuticPhase(
   lastUserContextUpdatedAt?: string | null
 ): PhaseEvaluation {
 
+  // ======== TTL DA FASE (chat livre começa sem fase, com memória) ========
+  // Fora de sessão, rótulo velho (60+ min de silêncio ou outro dia BRT) é descartado.
+  // A conversa nova nasce em ping-pong e a fase é reconquistada durante a conversa.
+  if (!sessionActive && lastUserContext?.aura_phase && isPhaseExpired(lastUserContextUpdatedAt)) {
+    console.log(`⏳ Phase evaluator: aura_phase="${lastUserContext.aura_phase}" expirada (TTL 60min / virada de dia) → conversa começa sem fase`);
+    lastUserContext = { ...lastUserContext, aura_phase: undefined, light_turn_streak: 0 };
+  }
+
+
   // ======== ANTI-LOOP DE REFRAME (estado mínimo da hipótese) ========
   // Motivo (sessão Lidiane, 20/08): a orientação "entregue como hipótese aberta" era
   // reinjetada a cada turno em `sentido`, sem nenhum registro de que a tese já tinha sido
