@@ -70,11 +70,25 @@ async function dispatchPostSession(
       return true;
     }
 
+    // TRAVA 1 (sessão Simone, 22/08): não mandar resumo+nota enquanto a Aura ainda
+    // está entregando as bolhas da despedida. Espera até 60s pelo fim da entrega.
+    for (let attempt = 0; attempt < 20; attempt++) {
+      const { data: respState } = await supabase
+        .from('aura_response_state')
+        .select('is_responding')
+        .eq('user_id', session.user_id)
+        .maybeSingle();
+      if (respState?.is_responding !== true) break;
+      console.log(`⏳ dispatchPostSession: Aura ainda respondendo (${sessionId}) — aguardando 3s (tentativa ${attempt + 1}/20)`);
+      await new Promise((r) => setTimeout(r, 3000));
+    }
+
     const { data: profile } = await supabase
       .from('profiles')
       .select('name, phone')
       .eq('user_id', session.user_id)
       .maybeSingle();
+
 
     if (!profile?.phone) {
       console.log(`⚠️ dispatchPostSession: sem telefone para sessão ${sessionId}`);
