@@ -938,6 +938,8 @@ Deno.serve(async (req) => {
           await supabase.from('profiles').update({
             awaiting_time_capsule: 'awaiting_confirmation',
             pending_capsule_audio_url: audioUrl,
+            capsule_state_set_at: new Date().toISOString(),
+            capsule_prompt_count: 0,
           }).eq('user_id', profile.user_id);
 
           const confirmMsg = `Recebi seu áudio! 🎙️ Ficou do jeito que você queria?\n\nSe quiser regravar, manda outro áudio. Se tiver bom, me diz "pode guardar" 💜`;
@@ -956,7 +958,7 @@ Deno.serve(async (req) => {
         // Check for cancellation intent before sending reminder
         const lowerMsgAudio = (messageText || '').toLowerCase().trim();
         if (/deixa|cancela|desist|não quero|nao quero|esquece|para|parar/i.test(lowerMsgAudio)) {
-          await supabase.from('profiles').update({ awaiting_time_capsule: null, pending_capsule_audio_url: null }).eq('user_id', profile.user_id);
+          await supabase.from('profiles').update({ awaiting_time_capsule: null, pending_capsule_audio_url: null, capsule_state_set_at: null, capsule_prompt_count: 0 }).eq('user_id', profile.user_id);
           const cancelMsg = `Tudo bem! Quando quiser gravar uma cápsula do tempo, é só falar 💜`;
           await sendMessage(cleanPhone, cancelMsg);
           await supabase.from('messages').insert([
@@ -1002,7 +1004,7 @@ Deno.serve(async (req) => {
         const lowerMsg = (messageText || '').toLowerCase().trim();
 
         if (/deixa|cancela|desist|não quero|nao quero|esquece|para|parar/i.test(lowerMsg)) {
-          await supabase.from('profiles').update({ awaiting_time_capsule: null, pending_capsule_audio_url: null }).eq('user_id', profile.user_id);
+          await supabase.from('profiles').update({ awaiting_time_capsule: null, pending_capsule_audio_url: null, capsule_state_set_at: null, capsule_prompt_count: 0 }).eq('user_id', profile.user_id);
           const cancelMsg = `Tudo bem! Quando quiser gravar uma cápsula do tempo, é só falar 💜`;
           await sendMessage(cleanPhone, cancelMsg);
           await supabase.from('messages').insert([
@@ -1019,7 +1021,7 @@ Deno.serve(async (req) => {
         if (/sim|pode|guard|confirm|ficou|bom|bora|manda|salv|tá (bom|ótimo|perfeito)|ta (bom|otimo|perfeito)|perfeito|certeza|isso/i.test(lowerMsg)) {
           const pendingUrl = profile.pending_capsule_audio_url;
           if (!pendingUrl) {
-            await supabase.from('profiles').update({ awaiting_time_capsule: null, pending_capsule_audio_url: null }).eq('user_id', profile.user_id);
+            await supabase.from('profiles').update({ awaiting_time_capsule: null, pending_capsule_audio_url: null, capsule_state_set_at: null, capsule_prompt_count: 0 }).eq('user_id', profile.user_id);
           } else {
             const deliverAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
             let transcription: string | null = null;
@@ -1030,7 +1032,7 @@ Deno.serve(async (req) => {
               deliver_at: deliverAt.toISOString(),
               context_message: `Cápsula gravada em ${new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`,
             });
-            await supabase.from('profiles').update({ awaiting_time_capsule: null, pending_capsule_audio_url: null }).eq('user_id', profile.user_id);
+            await supabase.from('profiles').update({ awaiting_time_capsule: null, pending_capsule_audio_url: null, capsule_state_set_at: null, capsule_prompt_count: 0 }).eq('user_id', profile.user_id);
 
             const deliverDateStr = deliverAt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Sao_Paulo' });
             const savedMsg = `Guardei sua mensagem com carinho! 💜✨\n\nVou te enviar de volta no dia ${deliverDateStr}. Vai ser uma surpresa especial do seu eu de hoje pro seu eu do futuro 🫶`;
@@ -1049,7 +1051,7 @@ Deno.serve(async (req) => {
         }
 
         // Unrecognized response — clear capsule state, continue normal flow
-        await supabase.from('profiles').update({ awaiting_time_capsule: null, pending_capsule_audio_url: null }).eq('user_id', profile.user_id);
+        await supabase.from('profiles').update({ awaiting_time_capsule: null, pending_capsule_audio_url: null, capsule_state_set_at: null, capsule_prompt_count: 0 }).eq('user_id', profile.user_id);
         console.log('⚠️ Capsule confirmation state cleared - unrecognized response, continuing normal flow');
       }
     }
@@ -1060,7 +1062,7 @@ Deno.serve(async (req) => {
       const hoursAgo = (Date.now() - updatedAt) / (1000 * 60 * 60);
       if (hoursAgo > 24) {
         console.log(`🕐 Capsule timeout (${Math.round(hoursAgo)}h), clearing flags`);
-        await supabase.from('profiles').update({ awaiting_time_capsule: null, pending_capsule_audio_url: null }).eq('user_id', profile.user_id);
+        await supabase.from('profiles').update({ awaiting_time_capsule: null, pending_capsule_audio_url: null, capsule_state_set_at: null, capsule_prompt_count: 0 }).eq('user_id', profile.user_id);
       }
     }
 
