@@ -884,12 +884,54 @@ Deno.serve(async (req) => {
     }
 
     // ========================================================================
+    // PREFERÊNCIA DE CANAL (voz/texto) — detectada ANTES de qualquer handler
+    // ------------------------------------------------------------------------
+    // Motivo: o pedido "me responde por áudio" chegava e podia ser engolido por
+    // outro estado (ex.: Cápsula do Tempo), fazendo a AURA prometer áudio e
+    // entregar texto. Agora a preferência é persistida no perfil sempre, mesmo
+    // que o turno seja encerrado por outro fluxo.
+    // ========================================================================
+    const channelPref = detectChannelPreference(messageText || '');
+    if (channelPref) {
+      await supabase.from('profiles').update({
+        voice_mode: channelPref,
+        voice_mode_set_at: new Date().toISOString(),
+      }).eq('user_id', profile.user_id);
+      profile.voice_mode = channelPref;
+      profile.voice_mode_set_at = new Date().toISOString();
+      console.log(`🎚️ voice_mode persistido: ${channelPref}`);
+    }
+
+    // ========================================================================
     // TIME CAPSULE HANDLING
     // ========================================================================
-    const capsuleState = profile.awaiting_time_capsule;
+    let capsuleState = profile.awaiting_time_capsule;
+
+    // Expiração determinística + saídas de segurança (roda ANTES dos handlers,
+    // senão o bloco de timeout nunca é alcançado para os estados que prendem).
+    if (capsuleState === 'awaiting_audio' || capsuleState === 'awaiting_confirmation') {
+      const setAtRaw = profile.capsule_state_set_at;
+      const setAt = setAtRaw ? new Date(setAtRaw).getTime() : null;
+      const expired = setAt === null || (Date.now() - setAt) > 60 * 60 * 1000; // 1h
+      const overCap = (profile.capsule_prompt_count || 0) >= 2;
+      const escapeIntent = channelPref !== null;
+
+      if (expired || overCap || escapeIntent) {
+        console.log(`🚪 Cápsula abandonada (expired=${expired}, overCap=${overCap}, escapeIntent=${escapeIntent}) — seguindo fluxo normal`);
+        await supabase.from('profiles').update({
+          awaiting_time_capsule: null,
+          pending_capsule_audio_url: null,
+          capsule_state_set_at: null,
+          capsule_prompt_count: 0,
+        }).eq('user_id', profile.user_id);
+        capsuleState = null;
+      }
+    }
 
     if (capsuleState === 'awaiting_audio' || capsuleState === 'awaiting_confirmation') {
-      
+      await supabase.from('profiles').update({
+        capsule_prompt_count: (profile.capsule_prompt_count || 0) + 1,
+      }).eq('user_id', profile.user_id);
 
       if (capsuleState === 'awaiting_audio') {
         if (hasAudio && audioUrl) {
