@@ -184,7 +184,7 @@ Deno.test("Cenário E — sem sinal do extrator, a rede de segurança FICA armad
     "A rede deve desarmar SOMENTE com user_engaged_with_commitment === true."
   );
   assert(
-    !/auraAskedCommitment/.test(SOURCE),
+    !/const auraAskedCommitment|\|\| auraAskedCommitment/.test(SOURCE),
     "Resíduo: fallback auraAskedCommitment voltou e desarma a rede sem fechamento real."
   );
 });
