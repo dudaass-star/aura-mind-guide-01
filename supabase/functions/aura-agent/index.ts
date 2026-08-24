@@ -1288,10 +1288,12 @@ export const EMOTIONAL_LOAD_REGEX = /(trist|ansios|medo|raiva|sozinh|cansad|perd
 
 const PRACTICAL_OPENER = /^(o que|oq|qual|quais|como|quando|onde|quanto|quantos|vale a pena|voc[êe] sabe|vc sabe|sabe se|me indica|me ajuda a|tem alguma|tem como|existe algum|[ée] melhor|faz mal)\b/i;
 
-// Pergunta que termina em "?" mas é reflexiva/existencial — NUNCA é prática
-// Sem \b no fim de termos que terminam em vogal acentuada (ê/á) — em JS, "ê" não é
-// caractere de palavra, então \b ali nunca casa.
-const REFLEXIVE_QUESTION = /(^por qu[êe]|^pq\b|\bsou assim\b|\bcomigo\b|\bem mim\b|\bde mim\b|\bmerec|\bculpa\b|\berrei\b|\bsentido da vida\b|\bvale a pena viver\b|\bcad[êe] voc[êe]|\bser[áa] que eu\b)/i;
+// Intenção prática AFIRMATIVA (não é pergunta, não termina em "?"):
+// "preciso de ideia de presente pro meu pai", "queria uma receita rápida", "tô procurando um filme".
+// Exige um objeto concreto depois do verbo — as exclusões de carga emocional
+// (EMOTIONAL_LOAD_REGEX) e de pergunta reflexiva continuam rodando ANTES disso,
+// então "preciso de ajuda, tô péssimo" não entra aqui.
+const PRACTICAL_INTENT = /^(preciso de|precisava de|queria|quero|t[ôo] procurando|estou procurando|tou procurando|t[ôo] buscando|me manda|me d[áa]|me passa|me sugere|me recomenda|me indica|me ensina|to querendo|t[ôo] querendo)\b.{3,}/i;
 
 export function isPracticalQuestion(msg?: string | null): boolean {
   const t = (msg ?? '').toLowerCase().trim();
@@ -1300,8 +1302,33 @@ export function isPracticalQuestion(msg?: string | null): boolean {
   if (EMOTIONAL_LOAD_REGEX.test(t)) return false;
   if (REFLEXIVE_QUESTION.test(t)) return false;
   if (PRACTICAL_OPENER.test(t)) return true;
+  if (PRACTICAL_INTENT.test(t)) return true;
   return t.endsWith('?');
 }
+
+// ============================================================
+// TTL do rótulo de fase (`aura_phase`)
+// Motivo (conversa Eduardo, 24/08): a fase salva era herdada indefinidamente —
+// conversa nova começava "em sentido" e a Aura abria com pergunta profunda sem convite.
+// A fase é estado de ARCO DE CONVERSA, não de risco: expira com 60 min de silêncio
+// ou na virada do dia civil (BRT). Memória e contexto do usuário NÃO expiram.
+// Nota: a janela de 10 min de `user_emotional_state` serve a outra finalidade
+// (evitar que rótulo de crise antigo force acolhimento) e não é precedente aqui.
+// ============================================================
+export const PHASE_TTL_MS = 60 * 60 * 1000;
+
+function brtDayKey(d: Date): string {
+  return new Date(d.getTime() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+export function isPhaseExpired(updatedAt?: string | null, now: Date = new Date()): boolean {
+  if (!updatedAt) return true;
+  const then = new Date(updatedAt);
+  if (Number.isNaN(then.getTime())) return true;
+  if (now.getTime() - then.getTime() >= PHASE_TTL_MS) return true;
+  return brtDayKey(then) !== brtDayKey(now);
+}
+
 
 function evaluateTherapeuticPhase(
   messageHistory: Array<{ role: string; content: string }>,
