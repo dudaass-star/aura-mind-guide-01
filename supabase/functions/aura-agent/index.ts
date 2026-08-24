@@ -1288,6 +1288,11 @@ export const EMOTIONAL_LOAD_REGEX = /(trist|ansios|medo|raiva|sozinh|cansad|perd
 
 const PRACTICAL_OPENER = /^(o que|oq|qual|quais|como|quando|onde|quanto|quantos|vale a pena|voc[êe] sabe|vc sabe|sabe se|me indica|me ajuda a|tem alguma|tem como|existe algum|[ée] melhor|faz mal)\b/i;
 
+// Pergunta que termina em "?" mas é reflexiva/existencial — NUNCA é prática
+// Sem \b no fim de termos que terminam em vogal acentuada (ê/á) — em JS, "ê" não é
+// caractere de palavra, então \b ali nunca casa.
+const REFLEXIVE_QUESTION = /(^por qu[êe]|^pq\b|\bsou assim\b|\bcomigo\b|\bem mim\b|\bde mim\b|\bmerec|\bculpa\b|\berrei\b|\bsentido da vida\b|\bvale a pena viver\b|\bcad[êe] voc[êe]|\bser[áa] que eu\b)/i;
+
 // Intenção prática AFIRMATIVA (não é pergunta, não termina em "?"):
 // "preciso de ideia de presente pro meu pai", "queria uma receita rápida", "tô procurando um filme".
 // Exige um objeto concreto depois do verbo — as exclusões de carga emocional
