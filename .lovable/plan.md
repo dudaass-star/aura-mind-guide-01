@@ -178,30 +178,29 @@ Resposta honesta assumindo o que foi nosso — e agora sabemos que foi mais grav
 
 ## Ordem de execução sugerida
 
-1. **P0** — item 1 (bug do `mandatory: false` + trava de honestidade) e item 7 (investigação das mensagens duplicadas).
+1. **P0** — item 1 (bug do `mandatory: false` + trava de honestidade) e item 7 (cápsula engolindo os áudios).
 2. **P0** — item 6b raiz (gravador único + dedupe + filtro de autoria dos compromissos).
 3. **P1** — itens 3, 4, 2 (modo descritivo, validação de hipótese, `is_audio`).
-4. **P2** — itens 5, 6a, 8, 9 (rota prática, skip de follow-up, medição de latência, cobertura de auditoria).
+4. **P2** — itens 5 e 6a (rota prática, skip de follow-up).
 
 ## Resumo do tamanho da mudança
 
 | Item | Tipo | Onde |
 |---|---|---|
-| Fix `mandatory` no pedido de áudio | código (1 regra) | `aura-agent` (`determineAudioMode`, ~1830) |
+| Fix `mandatory` no pedido de áudio | código (1 regra) | `aura-agent` (`determineAudioMode`) |
 | Trava de honestidade de canal | código + prompt | `aura-agent` |
 | `profiles.voice_mode` + `voice_mode_set_at` | migração (2 colunas) | banco |
-| Reconciliar `audio_mirror_enabled` | código (move override, ~8222) | `aura-agent` |
+| Reconciliar `audio_mirror_enabled` | código (move override) | `aura-agent` |
+| Cápsula: expiração + saída por intenção + teto | código (~30 linhas) + 1 coluna | `process-webhook-message` (~889-1021) |
 | `messages.is_audio` | migração (1 coluna) + 1 linha | banco + `process-webhook-message` |
-| Bloco MODO DESCRITIVO | prompt + 1 condição | `aura-agent` (~8153) |
+| Bloco MODO DESCRITIVO | prompt + 1 condição | `aura-agent` |
 | Validação de hipótese mais rígida | texto do extractor | `aura-agent` |
 | Rota orientação prática | prompt | `aura-agent` |
 | Skip de follow-up pós-sessão | código (1 condição) | `conversation-followup` |
-| Compromissos: gravador único + dedupe + autoria | código (~40 linhas) | `aura-agent` (~1903 e ~2285) |
+| Compromissos: gravador único + dedupe + autoria | código (~40 linhas) | `aura-agent` |
 | Consolidar os 18 compromissos dela | script de dados | banco |
-| Investigação de duplicação/truncamento | leitura de logs, fix depois | `process-webhook-message` / provider |
-| Medição de latência | 1 coluna + log | banco + `aura-agent` |
-| Auditoria de sessões não analisadas | varredura + badge | cron + painel admin |
 
-Nenhuma tabela nova. Um cron novo (varredura de auditoria). Nenhuma chamada extra de LLM no caminho quente.
+Nenhuma tabela nova, nenhum cron novo, nenhuma chamada extra de LLM no caminho quente.
+
 
 
