@@ -25,38 +25,35 @@ Perfil: `96543755-e6a0-4cb9-85dc-7acc377fb517`, Essencial, entrou 15/08, acesso 
 
 Tudo abaixo é em `supabase/functions/aura-agent/index.ts`, salvo onde indicado. Nenhuma mudança em cobrança, checkout, Woovi/Stripe ou landing.
 
-### 1. Preferência de áudio: achei a causa exata da promessa quebrada
+### 1. Preferência de áudio — **a revisão está certa e meu diagnóstico anterior estava errado**
 
-**Correção ao meu próprio diagnóstico anterior — sua revisão está certa e o motivo é pior do que "não persistiu entre turnos".** Fui ver `determineAudioMode()` linha a linha:
+Fui checar a alegação linha a linha e ela se sustenta. `splitIntoMessages()`, linha 4081:
 
 ```
-// 4. User explicitly requested audio
-if (wantsAudio) {
-  return { shouldUseAudio: true, reason: 'user_requested', mandatory: false };
-}
+const isAudioMode = audioDecision.mandatory
+  || audioDecision.reason === 'user_requested'   // <- já existe
+  || (wantsAudioByTag && audioDecision.shouldUseAudio);
 ```
 
-Três defeitos nessa única regra:
-1. **`mandatory: false`.** Por contrato do sistema (memória "áudio forçado quando mandatory"), só `mandatory: true` faz `splitIntoMessages()` gerar áudio de fato sem depender da tag. Com `false`, o pedido explícito do usuário só vale **se o modelo também lembrar de escrever `[MODO_AUDIO]`**. Foi exatamente isso que aconteceu: o backend registrou "usuário pediu áudio", a Aura escreveu "pode deixar, vamos de áudio" — e como a tag não veio, saiu texto. Ela prometeu de boa-fé; o pipeline não cumpriu. Três vezes.
-2. **Ela é a regra 4** — abaixo de abertura/fechamento de sessão, então o pedido é engolido nos turnos em que essas regras disparam primeiro.
-3. **Não checa `budgetAvailable`** — pode gerar tentativa de áudio sem orçamento.
+O bypass para pedido explícito **já existia** e o comentário do próprio código (linhas 4077-4080) documenta isso. Ou seja: **`mandatory: false` na regra 4 não era a causa.** Retiro esse ponto. Mudar `mandatory` ali sozinho não resolveria nada — e é exatamente o tipo de "correção" que dá sensação de progresso sem mover o sintoma.
 
-Então o item 1 não é só "guardar preferência": é **consertar um bug de contrato**. Mesmo que a preferência não fosse persistida, o pedido do turno atual já deveria ter funcionado.
+**Onde a promessa realmente quebrava — três caminhos, todos verificados agora:**
 
-**O que muda:**
-- **Fix imediato do bug (1 linha):** regra 4 passa a `mandatory: true` e a exigir `budgetAvailable`, e sobe para logo depois da checagem de crise — pedido explícito do usuário tem precedência sobre a preferência interna da Aura.
-- **Trava de honestidade:** se o áudio não puder sair (teto estourado, falha de TTS), a Aura **não pode prometer áudio**. Passa a existir um sinal no contexto (`audio_unavailable`) que instrui a dizer a verdade em uma frase ("hoje só consigo por texto") em vez de dizer "vou de áudio" e mandar texto. Isso ataca o pior sintoma do caso: a quebra repetida de promessa.
-- **Persistência:** `profiles.voice_mode text default 'auto'` + `voice_mode_set_at timestamptz` (valores `auto | audio | texto`), gravado no pedido explícito e lido em `determineAudioMode()`.
-- **Reconciliar com `audio_mirror_enabled` (seu pedido 4):** confirmei que a flag piloto existe e roda no bloco de linha ~8222 — ela força áudio **só quando a mensagem recebida é áudio**. Em vez de criar um segundo mecanismo paralelo, `audio_mirror_enabled` passa a ser tratada como **um dos gatilhos que escrevem `voice_mode`**, e a decisão final fica em um lugar só (`determineAudioMode`). O bloco solto de override no meio do handler é removido. Nenhuma mudança de comportamento para a Débora (piloto): mensagem de áudio continua gerando resposta em áudio.
-- **Teto de orçamento intacto:** `budgetSeconds` (30/90/180 min por plano) continua mandando; ao estourar, aviso em uma frase em vez de silêncio.
-- **Tier base:** continua sem áudio em nenhuma hipótese (regra atual preservada).
+1. **Falha silenciosa de TTS/envio de áudio** (`process-webhook-message`, linhas 1352-1382). Confirmado: se `generateTTS()` volta vazio, o `if (audioUrl || audioContent)` é falso e o código **cai direto no envio de texto sem nenhum registro**; se o envio do áudio falha, só há `console.log("⚠️ Audio send failed ..., falling back to text")` — nada em `failed_message_log` (o `logFailedMessage` só é chamado no caminho de texto, linha 1395). Confirmo também o que a revisão notou: **zero registros dela** em `failed_message_log`, o que é consistente com falha nesse ponto exato, não em outro. Este é o mecanismo mais provável do "prometeu áudio, saiu texto".
+2. **Pedido de áudio feito por áudio nunca chegou na Aura** — é o item 7 (cápsula), abaixo. Nesse caminho não houve TTS nenhum: o turno inteiro foi desviado.
+3. **A preferência não sobrevive ao turno.** `wantsAudio` é recalculado da mensagem atual (linha 8187). O turno seguinte, sem a frase, cai em `default_text`. Isso não gerou a quebra de promessa, mas gerou o "ela esquece o combinado" — que é uma queixa distinta e igualmente registrada nas correções dela.
 
-**Sua dúvida 1 — quando a preferência expira?** Três desligamentos, todos determinísticos:
-1. **Pedido contrário** — "responde por texto" → volta pra `texto` na hora.
-2. **Expiração por tempo** — vale **7 dias** desde `voice_mode_set_at`; depois volta pra `auto`. Pedir de novo renova.
-3. **Teto do plano estourado** — cai pra texto com aviso; volta no reset mensal (a preferência não é apagada).
+**O que muda (revisado):**
+- **Instrumentar e não mentir no ponto real (linhas 1352-1382):** quando TTS ou envio de áudio falharem, gravar em `failed_message_log` (`error: tts_failed` / `audio_send_failed`) **e** marcar o turno como "áudio indisponível" para o usuário. Sem isso, continuamos sem enxergar a falha — foi por isso que precisei reconstruir o caso por dedução.
+- **Trava de honestidade movida de lugar:** o sinal `audio_unavailable` no contexto do prompt passa a ser alimentado por **falha real recente** (última tentativa de TTS falhou ou teto estourado), não por suposição. A Aura só promete áudio quando o canal está saudável.
+- **Persistência de preferência:** `profiles.voice_mode` (`auto|audio|texto`) + `voice_mode_set_at`, lido em `determineAudioMode()`. Isso resolve o caminho 3.
+- **Ordem da regra 4:** subir o pedido explícito para depois da crise continua valendo — não porque quebrava áudio, mas porque hoje um pedido de texto/áudio pode ser mascarado por `session_opening`. É ajuste fino, não correção de bug. **`mandatory: true` fica fora do plano.**
+- **Investigação obrigatória antes do fix:** ler os logs de `generateTTS` da função nas janelas 15/08 e 22/08 para saber **por que** falhava (quota do provedor de voz? texto longo? timeout?). Se for quota/limite, o fix é diferente do fix de timeout — não vou escolher no escuro.
+- **Reconciliar `audio_mirror_enabled`:** confirmado no bloco da linha ~8218 — força áudio só quando a mensagem recebida é áudio. Passa a ser um dos gatilhos que escrevem `voice_mode`, com decisão final única em `determineAudioMode`. Comportamento do piloto inalterado.
+- **Teto de orçamento e tier base:** intactos.
 
-Fim de conversa **não** desliga — seria reproduzir o bug atual (ela pediu 4 vezes em 2 dias).
+**Quando a preferência expira:** pedido contrário ("responde por texto") desliga na hora; expira sozinha em **7 dias**; teto do plano estourado derruba pra texto com aviso (a preferência não é apagada). Fim de conversa não desliga.
+
 
 
 
@@ -147,13 +144,17 @@ Investiguei agora no código e o caso fecha. As duas frases não são resposta d
 1. Em algum momento a Aura ofereceu a Cápsula do Tempo e gravou `profiles.awaiting_time_capsule = 'awaiting_audio'` (`aura-agent`, linhas 1959 e 8334).
 2. A partir daí, o handler da cápsula roda **antes** de chamar a Aura (linha 889) e **retorna cedo** (`releaseLock()` + `return`) em todos os caminhos.
 3. Ou seja: **todo áudio que ela mandou não chegou na Aura.** Foi consumido pela cápsula, que respondeu "Troquei o áudio!" e encerrou o processamento. 4 áudios em 25 s = 4 vezes a mesma frase. Não é retry, não é lock, não é reentrega do provedor — é 1 resposta por áudio, funcionando "como programado".
-4. **O estado não expira.** `awaiting_time_capsule` só é limpo por confirmação explícita ("pode guardar") ou por palavra de desistência (regex de linha 916/962). Ela nunca disse nenhuma das duas — então ficou presa no estado, e cada áudio novo caía no mesmo trilho.
+4. **O estado praticamente não expira — e a revisão está certa ao me corrigir aqui.** Existe sim um timeout de 24 h (linhas 1015-1023), mas ele tem dois defeitos: usa `profile.updated_at`, um campo que **qualquer** escrita no perfil reseta (inclusive sem relação com a cápsula); e, pior, ele está **abaixo dos `return` dos estados `awaiting_audio`/`awaiting_confirmation`** — então para os dois estados que realmente prendem o usuário esse bloco é **código morto**. Não é "nunca expira" por ausência de regra: é uma regra que nunca é alcançada.
+5. **Assimetria confirmada:** no caminho de **texto** existe uma saída ("resposta não reconhecida" → limpa o estado e segue o fluxo normal, linhas 1009-1011). No caminho de **áudio** não existe saída nenhuma. Ou seja, quem responde por áudio fica preso indefinidamente — exatamente o perfil dela.
 
-**Isso reescreve o item 1 do caso.** A queixa "pedi pra falar por áudio e ela me responde em texto" tem **duas causas somadas**, não uma:
-- **(a)** quando ela pediu por **texto**, o pedido chegou na Aura mas caiu no bug do `mandatory: false` → saiu texto;
-- **(b)** quando ela pediu por **áudio**, a mensagem nem chegou na Aura — a cápsula respondeu "Troquei o áudio!" e o pedido morreu ali. É por isso que a resposta parecia fora de contexto e repetida.
+**Sobre a hipótese de reentrega de webhook (levantada na revisão): descartada por verificação.** Os três webhooks de entrada deduplicam por ID do provedor via `zapi_message_dedup` antes de acionar o worker — `webhook-meta` (linhas 189-199), `webhook-twilio` (linhas 121-133) e `webhook-zapi`. Reentrega do mesmo `wamid`/`MessageSid` é rejeitada. Então 4 respostas em 25 s correspondem a **4 áudios distintos dela** (áudios curtos de ~5 s, consistente com alguém irritado repetindo o pedido), não a evento duplicado. Não há item de idempotência a abrir.
 
-O `"Ih, que"` truncado é o único item que não consigo fechar agora: o banco está indisponível nesta consulta (pool esgotado). Fica como checagem de 1 query no início da implementação — não muda nada do que está proposto abaixo.
+**Isso reescreve o item 1 do caso.** A queixa "pedi pra falar por áudio e ela me responde em texto" tem **duas causas somadas**:
+- **(a)** pedido por **texto** chegou na Aura, `isAudioMode` provavelmente ficou `true`, e o áudio morreu na falha silenciosa de TTS/envio (item 1, caminho 1);
+- **(b)** pedido por **áudio** nem chegou na Aura — a cápsula respondeu "Troquei o áudio!" e o turno terminou ali.
+
+O `"Ih, que"` truncado segue como checagem de 1 query no início da implementação (banco indisponível agora, pool esgotado).
+
 
 **Correções (todas em `process-webhook-message`, escopo pequeno):**
 1. **Expiração do estado:** cápsula vale **1 hora** desde que foi oferecida. Passado isso, o estado é limpo e a mensagem segue o fluxo normal para a Aura. (Precisa de 1 coluna: `capsule_state_set_at`, ou reusar timestamp existente.)
@@ -176,19 +177,31 @@ Latência e cobertura de auditoria de sessões saem deste plano, a seu pedido.
 
 Resposta honesta assumindo o que foi nosso — e agora sabemos que foi mais grave: não foi "não atendemos o pedido de áudio", foi **prometer três vezes e não cumprir por bug nosso**. Sem justificativa técnica pra ela; escolha entre reembolso do ciclo com cancelamento sem atrito, ou sessão de retorno já no formato que ela pediu. Recomendo oferecer o reembolso primeiro.
 
-## Ordem de execução sugerida
+## Ordem de execução — separada por risco para o modelo (Flash)
 
-1. **P0** — item 1 (bug do `mandatory: false` + trava de honestidade) e item 7 (cápsula engolindo os áudios).
-2. **P0** — item 6b raiz (gravador único + dedupe + filtro de autoria dos compromissos).
-3. **P1** — itens 3, 4, 2 (modo descritivo, validação de hipótese, `is_audio`).
-4. **P2** — itens 5 e 6a (rota prática, skip de follow-up).
+A revisão trouxe o critério certo: o risco de "o modelo se perder" só existe nos itens que adicionam texto ao prompt. Adoto essa divisão.
+
+**Grupo A — só backend, o modelo nem sabe que existe (risco zero de sobrecarga de instrução):**
+1. **P0** — item 1 revisado: instrumentar a falha silenciosa de TTS/envio (`process-webhook-message` 1352-1382) + investigar os logs de `generateTTS` antes de escolher o fix; `profiles.voice_mode`; reconciliar `audio_mirror_enabled`.
+2. **P0** — item 7: expiração real da cápsula (timestamp próprio, e o bloco **movido para antes** dos `return` dos estados, senão continua morto), saída por intenção, teto de repetição, saída também no caminho de áudio.
+3. **P0** — item 6b: gravador único de compromissos + dedupe + filtro de autoria.
+4. **P1** — item 2 (`messages.is_audio`) e item 6a (skip de follow-up pós-sessão).
+
+**Grupo B — adiciona prompt condicional (entra em série, um por vez):**
+5. **P1** — item 3 (MODO DESCRITIVO) sozinho. Antes de subir: testar contra a conversa real da Elisabete reescrita, mais de uma passada, para ver se o Flash obedece de forma consistente. Depois: medir 1-2 semanas em `user_memory_corrections`.
+6. **P2** — item 5 (rota de orientação prática) só **depois** dessa medição, e só se o item 3 não tiver degradado nada. Se o Flash já estiver no limite de atenção, este item é descartado — não vale o risco.
+
+Item 4 (validação de hipótese) fica no Grupo A: é texto do extractor, agente separado e estreito, não compete com o prompt principal.
 
 ## Resumo do tamanho da mudança
 
 | Item | Tipo | Onde |
 |---|---|---|
-| Fix `mandatory` no pedido de áudio | código (1 regra) | `aura-agent` (`determineAudioMode`) |
-| Trava de honestidade de canal | código + prompt | `aura-agent` |
+| Instrumentar falha de TTS/envio de áudio | código (~10 linhas) | `process-webhook-message` (1352-1382) |
+| Trava de honestidade de canal (por falha real) | código + prompt | `aura-agent` |
+| `profiles.voice_mode` + `voice_mode_set_at` | migração (2 colunas) | banco |
+| Reconciliar `audio_mirror_enabled` | código (move override) | `aura-agent` |
+
 | `profiles.voice_mode` + `voice_mode_set_at` | migração (2 colunas) | banco |
 | Reconciliar `audio_mirror_enabled` | código (move override) | `aura-agent` |
 | Cápsula: expiração + saída por intenção + teto | código (~30 linhas) + 1 coluna | `process-webhook-message` (~889-1021) |
