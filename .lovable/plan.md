@@ -111,5 +111,7 @@ Tudo em `supabase/functions/aura-agent/index.ts` (+ 2 campos no schema do extrat
    a exigir material concreto na mesa, não só contagem de trocas.
 6. **Sessão**: bloco de abertura passa a orientar "puxar o fio como pergunta de contexto";
    a descida em sessão é pausa de 1–2 turnos, sem alterar a fase do session lifecycle.
-7. Atualizar `phase_thresholds_test.ts` para os novos limiares e adicionar casos de
-   desvio/retomada.
+7. Atualizar `phase_thresholds_test.ts` para os novos limiares, e novo arquivo
+   `turn_weight_test.ts` com os 5 casos adversariais acima + garantia estática de que a
+   condição de descida cita `engagement_level` (dois votos), e não só `user_turn_weight`.
+
