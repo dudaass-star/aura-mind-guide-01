@@ -1449,17 +1449,33 @@ ou simplesmente validar o silêncio/resistência como legítimo.`
   // Roda DEPOIS das prioridades 1 (crise/vulnerável), 2 (streak) e 4 (resistência).
   // As guardas explícitas abaixo garantem que o caminho de crise nunca é pulado,
   // mesmo que este bloco seja movido no futuro.
+  // Em SESSÃO agendada a dúvida prática não é ignorada: é tratada como DESVIO de
+  // 1–2 turnos (responde útil e volta pro arco), sem alterar a fase do session lifecycle.
+  const lastUserMsgForPractical = [...messageHistory].reverse().find(m => m.role === 'user')?.content;
+  const practicalTurn = isPracticalQuestion(lastUserMsgForPractical);
   {
     const crisisOrVulnerable = lastUserContext?.user_emotional_state === 'crisis'
       || lastUserContext?.user_emotional_state === 'vulnerable';
     const disengaged = lastUserContext?.user_emotional_state === 'resistant'
       || lastUserContext?.engagement_level === 'disengaged';
-    const lastUserMsg = [...messageHistory].reverse().find(m => m.role === 'user')?.content;
-    if (!sessionActive && !crisisOrVulnerable && !disengaged && isPracticalQuestion(lastUserMsg)) {
-      console.log('🧰 Phase evaluator: pergunta prática detectada → ping-pong sem guidance');
-      return { guidance: null, detectedPhase: 'ping-pong', stagnationLevel: 0 };
+    if (!crisisOrVulnerable && !disengaged && practicalTurn) {
+      if (!sessionActive) {
+        console.log('🧰 Phase evaluator: pergunta prática detectada → ping-pong sem guidance');
+        return { guidance: null, detectedPhase: 'ping-pong', stagnationLevel: 0 };
+      }
+      console.log('🧰 Phase evaluator: pergunta prática DENTRO de sessão → desvio prático de 1–2 turnos');
+      return {
+        detectedPhase: sessionPhase === 'opening' ? 'presenca' : (lastUserContext?.aura_phase || 'presenca'),
+        stagnationLevel: 0,
+        guidance: `\n\n🧰 DÚVIDA PRÁTICA DENTRO DA SESSÃO (DESVIO NORMAL):
+O usuário fez uma pergunta prática do dia a dia. Isso é desvio legítimo, não fuga.
+1. RESPONDA a pergunta, direto e útil (sem gancho emocional, sem leitura psicológica)
+2. Não transforme a dúvida em material clínico nem interprete o desvio
+3. Depois de 1–2 turnos, retome o fio da sessão com naturalidade — sem cobrar o desvio`
+      };
     }
   }
+
 
   const recentAssistant = messageHistory
     .filter(m => m.role === 'assistant')
