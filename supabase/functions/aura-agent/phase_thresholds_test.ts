@@ -27,8 +27,15 @@ Deno.test("Phase Evaluator: NÃO existem resíduos antigos (>= 7 ou >= 8) em con
 });
 
 Deno.test("Phase Evaluator: freio de Presença mínimo (recentUserCount < 4) permanece intacto", () => {
-  const brake = SOURCE.match(/recentUserCount\s*<\s*4\s*&&\s*detectedPhase\s*!==\s*['"]presenca['"]/);
-  assert(brake, "O freio de Presença (recentUserCount < 4) sumiu — risco de avanço prematuro nas primeiras trocas.");
+  // Forma atual: o freio foi extraído em `brakeByPairs` e combinado com brakeByDensity.
+  assert(
+    /const brakeByPairs = recentUserCount < 4 && !densitySaturated;/.test(SOURCE),
+    "O freio de Presença por pares (recentUserCount < 4) sumiu — risco de avanço prematuro nas primeiras trocas."
+  );
+  assert(
+    /if \(\(brakeByPairs \|\| brakeByDensity\) && detectedPhase !== 'presenca' && detectedPhase !== 'initial'\)/.test(SOURCE),
+    "O freio deixou de ser aplicado antes de sair de presença/initial."
+  );
 });
 
 Deno.test("Phase Evaluator: comentários documentam a Fase 1 (timing higiênico)", () => {
@@ -136,7 +143,7 @@ Deno.test("Cenário A — evaluator permite avanço com <4 pares se density=satu
     "Bypass densitySaturated no freio de pares sumiu — usuário denso voltaria a travar em presença."
   );
   assert(
-    /recentUserCount\s*<\s*4\s*&&\s*detectedPhase\s*!==\s*['"]presenca['"]\s*&&\s*detectedPhase\s*!==\s*['"]initial['"]\s*&&\s*!densitySaturated/.test(SOURCE),
+    /const brakeByPairs = recentUserCount < 4 && !densitySaturated;/.test(SOURCE),
     "Condição do freio não incorpora !densitySaturated — bypass não está ativo."
   );
 });
@@ -145,7 +152,7 @@ Deno.test("Cenário B — evaluator não avança por contagem se density!=satura
   // O freio de pares continua armado quando não há saturação real (proteção contra avanço por clock puro).
   // Garantido pelo teste anterior + presença do freio original.
   assert(
-    /recentUserCount\s*<\s*4\s*&&\s*detectedPhase\s*!==\s*['"]presenca['"]/.test(SOURCE),
+    /const brakeByPairs = recentUserCount < 4 && !densitySaturated;/.test(SOURCE),
     "Freio de pares (<4) sumiu — risco de avanço prematuro por contagem cega."
   );
 });
@@ -169,11 +176,16 @@ Deno.test("Cenário D — rede de segurança permanece armada se user_engaged_wi
   );
 });
 
-Deno.test("Cenário E — fallback compatível quando sinal user_engaged_with_commitment indisponível", () => {
-  // Extractor pode ainda não ter rodado num turno; nesse caso, mantém comportamento antigo.
+Deno.test("Cenário E — sem sinal do extrator, a rede de segurança FICA armada (fail-closed)", () => {
+  // Mudança deliberada: o fallback antigo ("auraAskedCommitment") desarmava a rede
+  // sem fechamento real e era a raiz do arraste até 78min. Sem sinal → rede armada.
   assert(
-    /user_engaged_with_commitment\s*===\s*undefined/.test(SOURCE),
-    "Fallback 'sinal indisponível' sumiu — risco de regressão em primeiros turnos."
+    /const userClosedLoop = lastUserContext\?\.user_engaged_with_commitment === true;/.test(SOURCE),
+    "A rede deve desarmar SOMENTE com user_engaged_with_commitment === true."
+  );
+  assert(
+    !/const auraAskedCommitment|\|\| auraAskedCommitment/.test(SOURCE),
+    "Resíduo: fallback auraAskedCommitment voltou e desarma a rede sem fechamento real."
   );
 });
 

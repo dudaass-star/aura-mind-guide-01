@@ -16,12 +16,14 @@ function extract(pattern: RegExp, label: string): string {
 const emotional = extract(/export const EMOTIONAL_LOAD_REGEX = \/.*?\/i;/s, "EMOTIONAL_LOAD_REGEX");
 const opener = extract(/const PRACTICAL_OPENER = \/.*?\/i;/s, "PRACTICAL_OPENER");
 const reflexive = extract(/const REFLEXIVE_QUESTION = \/.*?\/i;/s, "REFLEXIVE_QUESTION");
+const intent = extract(/const PRACTICAL_INTENT = \/.*?\/i;/s, "PRACTICAL_INTENT");
 const fn = extract(/export function isPracticalQuestion[\s\S]*?\n}/, "isPracticalQuestion");
 
 const isPracticalQuestion = new Function(
   `${emotional.replace('export const', 'const')}
    ${opener}
    ${reflexive}
+   ${intent}
    ${fn
      .replace('export function', 'function')
      .replace('(msg?: string | null): boolean', '(msg)')}
@@ -110,13 +112,58 @@ Deno.test("exclusões rodam antes de qualquer return true (ordem no código)", (
   assert(iOpener < iEndsWith, "endsWith('?') deve ser o último recurso");
 });
 
+// Intenção prática AFIRMATIVA (sem "?"): assistente do dia a dia
+const PRATICAS_AFIRMATIVAS = [
+  "preciso de ideia de presente pro meu pai",
+  "queria uma receita rápida de janta",
+  "tô procurando um filme pra hoje",
+  "me manda uma playlist pra treinar",
+];
+
+// Afirmativa que começa igual, mas tem carga emocional → carga vence
+const AFIRMATIVAS_COM_CARGA = [
+  "preciso de ajuda, tô péssimo",
+  "queria parar de me sentir tão sozinha",
+  "preciso de alguém pra conversar, tô triste",
+];
+
+Deno.test("intenção prática afirmativa (sem interrogação) retorna true", () => {
+  for (const msg of PRATICAS_AFIRMATIVAS) {
+    assert(isPracticalQuestion(msg) === true, `Esperava true para "${msg}"`);
+  }
+});
+
+Deno.test("afirmativa com carga emocional retorna false (carga vence intenção prática)", () => {
+  for (const msg of AFIRMATIVAS_COM_CARGA) {
+    assert(isPracticalQuestion(msg) === false, `Esperava false para "${msg}"`);
+  }
+});
+
+Deno.test("exclusões precedem PRACTICAL_INTENT no código", () => {
+  const iEmotional = fn.indexOf("EMOTIONAL_LOAD_REGEX.test");
+  const iIntent = fn.indexOf("PRACTICAL_INTENT.test");
+  assert(iIntent > -1, "PRACTICAL_INTENT deve ser usado em isPracticalQuestion");
+  assert(iEmotional < iIntent, "Exclusão de carga emocional deve preceder PRACTICAL_INTENT");
+});
+
+Deno.test("pergunta prática DENTRO de sessão vira desvio de 1–2 turnos (modo útil ligado em sessão)", () => {
+  assert(
+    SOURCE.includes("DÚVIDA PRÁTICA DENTRO DA SESSÃO"),
+    "Falta o guidance de desvio prático em sessão."
+  );
+  assert(
+    !/!sessionActive && !crisisOrVulnerable && !disengaged && isPracticalQuestion/.test(SOURCE),
+    "A guarda !sessionActive não deve mais bloquear o modo útil dentro de sessão."
+  );
+});
+
 Deno.test("gate de crise precede a saída de pergunta prática no evaluator", () => {
   const iCrisis = SOURCE.indexOf("PRIORIDADE ABSOLUTA: Acolhimento");
   const iPractical = SOURCE.indexOf("pergunta prática detectada → ping-pong");
   assert(iCrisis > -1 && iPractical > -1);
   assert(iCrisis < iPractical, "A saída de pergunta prática não pode vir antes do protocolo de crise.");
   assert(
-    /!crisisOrVulnerable && !disengaged && isPracticalQuestion/.test(SOURCE),
+    /!crisisOrVulnerable && !disengaged && practicalTurn/.test(SOURCE),
     "As guardas explícitas de crise/resistência devem estar na condição da saída de pergunta prática."
   );
 });

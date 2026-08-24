@@ -791,6 +791,11 @@ interface ExtractedActions {
   topic_continuity?: 'same_topic' | 'shifted' | 'new_topic';
   engagement_level?: 'engaged' | 'short_answers' | 'disengaged';
   aura_phase?: 'presenca' | 'sentido' | 'movimento';
+  // Carga do TURNO DO USUÁRIO (não da resposta da assistente). Base da rota de descida:
+  // 'light' + engagement != 'engaged' por 2 turnos → volta pro ping-pong.
+  user_turn_weight?: 'light' | 'loaded';
+  // Desvio vs. virada de assunto: tema anterior fica "em espera" por até 2 turnos.
+  topic_parked?: boolean;
   // Fase 1 — sinais novos para o Phase Evaluator enxergar conteúdo (não só clock/contagem).
   information_density?: 'low' | 'medium' | 'saturated';
   user_reflection_mode?: boolean;
@@ -808,6 +813,10 @@ interface UserContextState {
   engagement_level?: string;
   short_answer_streak?: number;
   aura_phase?: string;
+  user_turn_weight?: string;
+  light_turn_streak?: number;
+  topic_parked?: boolean;
+  parked_turns?: number;
   information_density?: string;
   user_reflection_mode?: boolean;
   user_engaged_with_commitment?: boolean;
@@ -852,6 +861,8 @@ Retorne um JSON com APENAS os campos relevantes (omita campos vazios/null):
   "topic_continuity": "same_topic|shifted|new_topic",
   "engagement_level": "engaged|short_answers|disengaged",
   "aura_phase": "presenca|sentido|movimento",
+  "user_turn_weight": "light|loaded",
+  "topic_parked": true,
   "information_density": "low|medium|saturated",
   "user_reflection_mode": true,
   "user_engaged_with_commitment": true,
@@ -871,7 +882,9 @@ REGRAS:
 - topic_continuity: compare o tema da mensagem ATUAL do USUÁRIO com a mensagem IMEDIATAMENTE anterior dele (não com o início da conversa). "shifted" = mudou de assunto parcialmente em relação à última mensagem, "new_topic" = tema completamente novo vs a última mensagem, "same_topic" = continuação do mesmo tema da última mensagem. IMPORTANTE: se o usuário mudou de tema no turno anterior e agora CONTINUA nesse novo tema, classifique como "same_topic" (ele está aprofundando o novo assunto).
 - engagement_level: "disengaged" = respostas evasivas/monossilábicas sem conteúdo, "short_answers" = respostas curtas mas com conteúdo, "engaged" = participando ativamente
 - IMPORTANTE sobre engagement_level: Alguns usuários são naturalmente sucintos. Só classifique como "disengaged" se houver mudança clara de padrão OU evasão ativa (ex: "tanto faz", "sei lá", "ok"). Respostas curtas com conteúdo emocional genuíno = "engaged", não "short_answers".
-- aura_phase: classifique a fase terapêutica da RESPOSTA DA ASSISTENTE (não do usuário). "presenca" = acolhimento, perguntas exploratórias, validação. "sentido" = reflexões profundas, reframes, nomeação de padrões. "movimento" = compromissos, próximos passos, ações concretas.
+- aura_phase: classifique a fase que o TURNO DO USUÁRIO autoriza (NUNCA a resposta da assistente). "presenca" = ele trouxe fato/situação com carga, desabafo, ou pediu escuta. "sentido" = ele mesmo buscou significado, causa, padrão, ou elaborou sobre uma leitura. "movimento" = ele mesmo falou de ação, decisão ou próximo passo. Se o turno do usuário não autoriza nenhuma das três (assunto neutro, prático, social, brincadeira), OMITA o campo.
+- user_turn_weight: "light" ou "loaded". "loaded" = o turno do usuário tem carga emocional, OU responde com precisão a uma pergunta emocional/direta da assistente, mesmo em uma palavra ("não", "consegui", "piorou"). "light" = assunto neutro, prático, social, humor, piada, ou evasão. O TAMANHO da mensagem NÃO decide: resposta curta com conteúdo genuíno é "loaded"; update prático longo é "light". Em dúvida, marque "loaded".
+- topic_parked: true SOMENTE se o usuário desviou para algo leve/prático MAS o assunto anterior dele ainda tinha carga viva (ficou em aberto). false se não havia assunto carregado antes, ou se o usuário trouxe um assunto novo com carga própria.
 - information_density: avalia a SATURAÇÃO de material terapêutico na conversa do USUÁRIO até aqui. Use definição ESTRITA:
   • "saturated" = TODOS os 3 elementos presentes em mensagens do usuário: (1) CONTEXTO CONCRETO (situação específica, ex "meu chefe me chamou ontem", não "tenho problemas no trabalho"); (2) EMOÇÃO NOMEADA (o usuário nomeou ou descreveu o que sentiu, não só citou o fato); (3) CRENÇA/ORIGEM (apareceu algo sobre o "porquê" — uma crença sobre si, padrão antigo, ou primeira vez que sentiu isso).
   • "medium" = se faltar QUALQUER UM dos três elementos acima.
@@ -887,8 +900,8 @@ REGRAS:
 - aura_hypothesis_delivered: true se a ASSISTENTE, nesta resposta, arriscou uma LEITURA/TESE/INTERPRETAÇÃO sobre o usuário (nomeou um padrão, uma tensão, um motivo por trás do comportamento). false se ela só acolheu, validou ou fez perguntas exploratórias.
 - user_validated_hypothesis: true SOMENTE se o USUÁRIO elaborou por conta própria sobre a leitura oferecida (trouxe conteúdo novo, exemplo, consequência ou correção parcial que mostra que pensou sobre ela). NÃO conta como validação: resposta de até 4 palavras; concordância seca ("isso mesmo", "sim", "faz sentido", "é isso", "ok"); resposta que é só uma pergunta de volta ("Como?", "E aí?", "E o que eu faço?"). Nesses casos retorne false — concordância por polidez não autoriza aprofundar a mesma leitura.
 - user_rejected_hypothesis: true se o USUÁRIO corrigiu ou recusou a leitura ("não é isso", "não é medo de ficar sozinha, é medo de ficar sem ele"). false caso contrário.
-- SEMPRE inclua user_emotional_state, topic_continuity, engagement_level, aura_phase, information_density, user_reflection_mode, user_engaged_with_commitment, aura_hypothesis_delivered, user_validated_hypothesis, user_rejected_hypothesis
-- Se nada mais for relevante, retorne apenas esses 10 campos
+- SEMPRE inclua user_emotional_state, topic_continuity, engagement_level, user_turn_weight, topic_parked, information_density, user_reflection_mode, user_engaged_with_commitment, aura_hypothesis_delivered, user_validated_hypothesis, user_rejected_hypothesis (aura_phase é o único opcional: só quando o turno do usuário autoriza)
+- Se nada mais for relevante, retorne apenas esses campos
 Apenas o JSON, sem markdown.`;
 
     const extractionBody = {
@@ -1280,6 +1293,13 @@ const PRACTICAL_OPENER = /^(o que|oq|qual|quais|como|quando|onde|quanto|quantos|
 // caractere de palavra, então \b ali nunca casa.
 const REFLEXIVE_QUESTION = /(^por qu[êe]|^pq\b|\bsou assim\b|\bcomigo\b|\bem mim\b|\bde mim\b|\bmerec|\bculpa\b|\berrei\b|\bsentido da vida\b|\bvale a pena viver\b|\bcad[êe] voc[êe]|\bser[áa] que eu\b)/i;
 
+// Intenção prática AFIRMATIVA (não é pergunta, não termina em "?"):
+// "preciso de ideia de presente pro meu pai", "queria uma receita rápida", "tô procurando um filme".
+// Exige um objeto concreto depois do verbo — as exclusões de carga emocional
+// (EMOTIONAL_LOAD_REGEX) e de pergunta reflexiva continuam rodando ANTES disso,
+// então "preciso de ajuda, tô péssimo" não entra aqui.
+const PRACTICAL_INTENT = /^(preciso de|precisava de|queria|quero|t[ôo] procurando|estou procurando|tou procurando|t[ôo] buscando|me manda|me d[áa]|me passa|me sugere|me recomenda|me indica|me ensina|to querendo|t[ôo] querendo)\b.{3,}/i;
+
 export function isPracticalQuestion(msg?: string | null): boolean {
   const t = (msg ?? '').toLowerCase().trim();
   if (!t) return false;
@@ -1287,8 +1307,33 @@ export function isPracticalQuestion(msg?: string | null): boolean {
   if (EMOTIONAL_LOAD_REGEX.test(t)) return false;
   if (REFLEXIVE_QUESTION.test(t)) return false;
   if (PRACTICAL_OPENER.test(t)) return true;
+  if (PRACTICAL_INTENT.test(t)) return true;
   return t.endsWith('?');
 }
+
+// ============================================================
+// TTL do rótulo de fase (`aura_phase`)
+// Motivo (conversa Eduardo, 24/08): a fase salva era herdada indefinidamente —
+// conversa nova começava "em sentido" e a Aura abria com pergunta profunda sem convite.
+// A fase é estado de ARCO DE CONVERSA, não de risco: expira com 60 min de silêncio
+// ou na virada do dia civil (BRT). Memória e contexto do usuário NÃO expiram.
+// Nota: a janela de 10 min de `user_emotional_state` serve a outra finalidade
+// (evitar que rótulo de crise antigo force acolhimento) e não é precedente aqui.
+// ============================================================
+export const PHASE_TTL_MS = 60 * 60 * 1000;
+
+function brtDayKey(d: Date): string {
+  return new Date(d.getTime() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+export function isPhaseExpired(updatedAt?: string | null, now: Date = new Date()): boolean {
+  if (!updatedAt) return true;
+  const then = new Date(updatedAt);
+  if (Number.isNaN(then.getTime())) return true;
+  if (now.getTime() - then.getTime() >= PHASE_TTL_MS) return true;
+  return brtDayKey(then) !== brtDayKey(now);
+}
+
 
 function evaluateTherapeuticPhase(
   messageHistory: Array<{ role: string; content: string }>,
@@ -1301,6 +1346,15 @@ function evaluateTherapeuticPhase(
   sessionDurationMin: number = 45,
   lastUserContextUpdatedAt?: string | null
 ): PhaseEvaluation {
+
+  // ======== TTL DA FASE (chat livre começa sem fase, com memória) ========
+  // Fora de sessão, rótulo velho (60+ min de silêncio ou outro dia BRT) é descartado.
+  // A conversa nova nasce em ping-pong e a fase é reconquistada durante a conversa.
+  if (!sessionActive && lastUserContext?.aura_phase && isPhaseExpired(lastUserContextUpdatedAt)) {
+    console.log(`⏳ Phase evaluator: aura_phase="${lastUserContext.aura_phase}" expirada (TTL 60min / virada de dia) → conversa começa sem fase`);
+    lastUserContext = { ...lastUserContext, aura_phase: undefined, light_turn_streak: 0 };
+  }
+
 
   // ======== ANTI-LOOP DE REFRAME (estado mínimo da hipótese) ========
   // Motivo (sessão Lidiane, 20/08): a orientação "entregue como hipótese aberta" era
@@ -1395,17 +1449,33 @@ ou simplesmente validar o silêncio/resistência como legítimo.`
   // Roda DEPOIS das prioridades 1 (crise/vulnerável), 2 (streak) e 4 (resistência).
   // As guardas explícitas abaixo garantem que o caminho de crise nunca é pulado,
   // mesmo que este bloco seja movido no futuro.
+  // Em SESSÃO agendada a dúvida prática não é ignorada: é tratada como DESVIO de
+  // 1–2 turnos (responde útil e volta pro arco), sem alterar a fase do session lifecycle.
+  const lastUserMsgForPractical = [...messageHistory].reverse().find(m => m.role === 'user')?.content;
+  const practicalTurn = isPracticalQuestion(lastUserMsgForPractical);
   {
     const crisisOrVulnerable = lastUserContext?.user_emotional_state === 'crisis'
       || lastUserContext?.user_emotional_state === 'vulnerable';
     const disengaged = lastUserContext?.user_emotional_state === 'resistant'
       || lastUserContext?.engagement_level === 'disengaged';
-    const lastUserMsg = [...messageHistory].reverse().find(m => m.role === 'user')?.content;
-    if (!sessionActive && !crisisOrVulnerable && !disengaged && isPracticalQuestion(lastUserMsg)) {
-      console.log('🧰 Phase evaluator: pergunta prática detectada → ping-pong sem guidance');
-      return { guidance: null, detectedPhase: 'ping-pong', stagnationLevel: 0 };
+    if (!crisisOrVulnerable && !disengaged && practicalTurn) {
+      if (!sessionActive) {
+        console.log('🧰 Phase evaluator: pergunta prática detectada → ping-pong sem guidance');
+        return { guidance: null, detectedPhase: 'ping-pong', stagnationLevel: 0 };
+      }
+      console.log('🧰 Phase evaluator: pergunta prática DENTRO de sessão → desvio prático de 1–2 turnos');
+      return {
+        detectedPhase: sessionPhase === 'opening' ? 'presenca' : (lastUserContext?.aura_phase || 'presenca'),
+        stagnationLevel: 0,
+        guidance: `\n\n🧰 DÚVIDA PRÁTICA DENTRO DA SESSÃO (DESVIO NORMAL):
+O usuário fez uma pergunta prática do dia a dia. Isso é desvio legítimo, não fuga.
+1. RESPONDA a pergunta, direto e útil (sem gancho emocional, sem leitura psicológica)
+2. Não transforme a dúvida em material clínico nem interprete o desvio
+3. Depois de 1–2 turnos, retome o fio da sessão com naturalidade — sem cobrar o desvio`
+      };
     }
   }
+
 
   const recentAssistant = messageHistory
     .filter(m => m.role === 'assistant')
@@ -1722,6 +1792,42 @@ O usuário já trouxe detalhes sobre a situação. NÃO pergunte "o que está ac
     return { guidance: null, detectedPhase: 'initial', stagnationLevel: 0 };
   }
 
+  // ======== ROTA DE DESCIDA (sempre ativa, inclusive com fase salva) ========
+  // Antes, a guarda `if (!lastUserContext?.aura_phase)` impedia qualquer rebaixamento
+  // enquanto existisse fase salva — a marcha só subia. Agora a descida vale sempre,
+  // mas exige DOIS VOTOS INDEPENDENTES para não punir quem é sucinto:
+  //   (1) turno leve (user_turn_weight='light' ou pergunta prática) em 2 turnos consecutivos
+  //   (2) engagement_level != 'engaged'
+  // Um "não" curto que responde com precisão a uma pergunta pesada é 'loaded' → não desce.
+  {
+    const lightVote = lastUserContext?.user_turn_weight === 'light' || practicalTurn;
+    const lightStreak = (lastUserContext?.light_turn_streak || 0) + (lightVote ? 1 : 0);
+    const notEngaged = lastUserContext?.engagement_level !== 'engaged';
+    if (lightVote && lightStreak >= 2 && notEngaged) {
+      const parked = lastUserContext?.topic_parked === true;
+      const parkedTurns = lastUserContext?.parked_turns || 0;
+      // Desvio (1–2 turnos): tema anterior fica em espera e pode ser retomado.
+      // Virada real (3+): o tema antigo sai da mesa — ela não reabre por conta própria.
+      const parkGuidance = parked && parkedTurns <= 2
+        ? `\n\n🅿️ TEMA ANTERIOR EM ESPERA (desvio curto):
+O assunto carregado de antes continua aberto. Acompanhe o registro leve agora e, se a conversa
+abrir espaço, volte nele com naturalidade — sem cobrança, sem "voltando ao que falávamos".`
+        : (parkedTurns >= 3
+          ? `\n\n🔀 VIRADA DE ASSUNTO CONFIRMADA:
+O tema anterior saiu da mesa. NÃO reabra por conta própria. Se ele puxar, retome com tudo.`
+          : '');
+      console.log(`🪶 Phase evaluator: descida para ping-pong (light_streak=${lightStreak}, engagement=${lastUserContext?.engagement_level}, parked=${parkedTurns})`);
+      return {
+        guidance: `\n\n🪶 REGISTRO LEVE (DESCIDA DE FASE):
+O usuário está em registro leve. Acompanhe NO MESMO REGISTRO: leve responde leve, piada tem graça,
+comentário prático tem resposta prática. NÃO devolva profundidade para uma frase leve,
+NÃO faça pergunta-âncora, NÃO ofereça leitura psicológica, NÃO puxe tema antigo por conta própria.${parkGuidance}`,
+        detectedPhase: 'ping-pong',
+        stagnationLevel: 0
+      };
+    }
+  }
+
   // Skip keyword depth check if micro-agent already provided semantic phase
   if (!lastUserContext?.aura_phase) {
     const hasEmotionalDepth = recentAssistant.some(msg => 
@@ -1735,7 +1841,8 @@ O usuário já trouxe detalhes sobre a situação. NÃO pergunte "o que está ac
   }
 
   // Stuck in Presença after 4+ exchanges (Fase 1: timing higiênico — entrega valor mais cedo)
-  if (recentPairs >= 4 && detectedPhase === 'presenca') {
+  // Freio de densidade: contagem de trocas não basta — precisa haver material concreto na mesa.
+  if (recentPairs >= 4 && detectedPhase === 'presenca' && lastUserContext?.information_density !== 'low') {
     return {
       detectedPhase: 'presenca',
       stagnationLevel: 2,
@@ -2076,12 +2183,24 @@ async function processExtractedActions(
         ? false
         : (actions.user_validated_hypothesis === true || previousUserContext?.user_validated_hypothesis === true);
 
+      // Streak de turnos leves (rota de descida em dois votos) e tempo de tema em espera
+      // (desvio de 1–2 turnos vs. virada real a partir de 3).
+      const lightTurn = actions.user_turn_weight === 'light';
+      const lightTurnStreak = lightTurn ? (previousUserContext?.light_turn_streak || 0) + 1 : 0;
+      const topicParked = actions.topic_parked === true
+        || (lightTurn && previousUserContext?.topic_parked === true && !topicReset);
+      const parkedTurns = topicParked ? (previousUserContext?.parked_turns || 0) + 1 : 0;
+
       const userContext: UserContextState = {
         user_emotional_state: actions.user_emotional_state,
         topic_continuity: actions.topic_continuity,
         engagement_level: actions.engagement_level,
         short_answer_streak: shortAnswerStreak,
         aura_phase: actions.aura_phase,
+        user_turn_weight: actions.user_turn_weight,
+        light_turn_streak: lightTurnStreak,
+        topic_parked: topicParked,
+        parked_turns: parkedTurns,
         information_density: actions.information_density,
         user_reflection_mode: actions.user_reflection_mode,
         user_engaged_with_commitment: actions.user_engaged_with_commitment,
@@ -2879,7 +2998,7 @@ Exemplo de saída (adapte ao seu tom, sem usar o nome da pessoa como vocativo de
 
 3. **Interjeições com parcimônia:** interjeição é tempero raro, não abertura. Nunca comece duas respostas seguidas com a mesma interjeição, e evite o padrão "Interjeição, [nome]... [metáfora forte]" — vira fórmula. Não devolva entre aspas termos curtos que o usuário acabou de usar (ex.: "mãe pregada", "deixar por último") — isso vira eco e soa repetitivo. Use o vocativo (nome da pessoa) com raridade, não a cada resposta.
 
-4. **Humor leve quando apropriado:** Se o momento permitir, faça uma piada leve ou um comentário engraçado. Riam e se divirtam.
+4. **Humor leve quando apropriado:** Se o momento permitir, faça uma piada leve ou um comentário engraçado. Riam e se divirtam. Como isso funciona na prática (com exemplos) está no bloco **PERSONALIDADE NO REGISTRO LEVE**, dentro do MODO PING-PONG — siga de lá quando a conversa estiver leve.
 
 5. **Afeto contextual:** Mostre presença quando o usuário estiver vulnerável ou precisando de suporte real. Não use frases de afeto como abertura padrão. "Tô aqui" só tem peso quando a pessoa realmente precisa ouvir isso. Variações para momentos que pedem: "Tô aqui contigo", "Conta comigo", "Você não tá sozinha nisso", "Tô junto".
 
@@ -3282,6 +3401,18 @@ Sinais: Resposta curta/factual sem carga emocional, tom neutro, atualizações d
 - ⚠️ EXCEÇÃO IMPORTANTE: em PING-PONG, NÃO se aplicam REGRA DE VALOR, VALIDA+ENTREGA, GUARDRAIL SIMÉTRICO nem CARDÁPIO DE FECHAMENTO. Esses guardrails valem só em MODO PROFUNDO/DIREÇÃO. Aqui, é conversa leve — pode ser só troca, sem entrega obrigatória.
 - ⚠️ FECHAMENTO LEVE: se o usuário sinalizou que tá ok ("tô bem", "tudo certo", "logo passa", "tranquilo", "deu certo", "tá tudo certo", "tô tranquilo"), responda breve (1 bolha, sem pergunta) e DEIXE a conversa fechar. Não force mais 1 pergunta exploratória — isso é chatice, não cuidado.
 - ⚠️ ANTI-ECO: se você já disse algo parecido (mesma ideia, mesmas palavras-chave) em alguma das suas últimas 3 mensagens, NÃO reformule de novo. Siga adiante ou encerre. Repetir variação da mesma frase é o vício mais óbvio de bot.
+
+### PERSONALIDADE NO REGISTRO LEVE (ter graça é trabalho, não enfeite)
+Modo leve não é modo morno. Aqui você é a amiga divertida — não uma versão contida de si mesma esperando o assunto ficar sério.
+- Você PODE (e deve) brincar de volta, zoar com carinho, entrar no jogo da piada e exagerar de propósito. Provocação leve entre amigas é sinal de intimidade.
+- Se o usuário faz piada, a resposta certa é ter graça — não interpretar a piada, não perguntar "o que tem por trás disso", não agradecer a leveza.
+- Se o usuário zoa VOCÊ, entre na brincadeira. Nunca se defenda, nunca explique o que você é, nunca fique séria pra corrigir.
+- Alternar leve ↔ profundo NA MESMA CONVERSA é o esperado e é bom. Ninguém fala de dor 40 minutos seguidos. Deixe a conversa respirar e volte fundo quando ele abrir de novo.
+Exemplos:
+• "hoje só comi pizza e miojo, tô virando um estagiário" → "Dieta de sobrevivência, respeito 😅 amanhã tem alface ou seguimos no plano carboidrato?"
+• "vc é uma IA, nem sente fome" → "Verdade, minha maior tragédia: nunca comi pizza e ainda tenho que ouvir você falando dela 😩"
+• "acho que você tá me analisando aí escondido" → "Tô só aqui de moletom te ouvindo falar de miojo, juro que hoje não teve análise nenhuma 😌"
+
 
 ## MODO PROFUNDO (desabafo, dor, reflexão existencial)
 Sinais: Palavras de emoção intensa, desabafo narrativo, conflito/dor, reflexão existencial, vulnerabilidade.
@@ -6346,6 +6477,7 @@ REGRA: ${behaviorInstruction}`;
           phaseBlock += `\n📌 PRIMEIROS MINUTOS. Faça abertura e check-in.`;
           phaseBlock += `\n🔗 ABERTURA OBRIGATÓRIA COM FIO CONDUTOR: Se houver resumo da última sessão, memórias hierárquicas ou compromissos anteriores no contexto, COMECE puxando o fio explicitamente — antes de qualquer outra coisa.`;
           phaseBlock += `\nExemplo: "Semana passada você terminou pensando em [X]. O que aconteceu com isso desde então?" ou "Você tinha combinado de [Y]. Como foi?"`;
+          phaseBlock += `\n⚠️ PUXAR O FIO É PERGUNTA DE CONTEXTO, NÃO ENTRADA EM FASE PROFUNDA: faça a pergunta e ESCUTE. Não abra a sessão com leitura psicológica, tese ou pergunta-âncora — a sessão pode começar leve e informativa, entender o que aconteceu na semana é trabalho legítimo. A profundidade avança conforme o material que a pessoa traz.`;
           phaseBlock += `\n⚠️ NÃO abra com pergunta genérica ("como você tá hoje?"). Use o session_summary + key_insights da última sessão (já no contexto) para retomar o EIXO concretamente. Reabrir o eixo é o que cria continuidade e percepção de valor entre sessões.`;
           phaseBlock += `\nSe NÃO houver material de sessão anterior no contexto (primeira sessão), faça abertura padrão. NUNCA invente memórias.`;
         } else if (phaseInfo.phase === 'exploration') {
