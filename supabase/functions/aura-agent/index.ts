@@ -7320,7 +7320,19 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
           ];
           const lower = assistantMessage.toLowerCase();
           const looksLikeFarewell = farewellSignals.some(s => lower.includes(s));
-          if (looksLikeFarewell || currentPhase === 'overtime') {
+
+          // TRAVA 3 (sessão Simone, 22/08): não encerrar em cima de turno aberto.
+          // Se a última mensagem do usuário é um relato substantivo ou um "não sei"
+          // (pergunta ainda em aberto), o fechamento espera o próximo turno.
+          const userTurn = String(message || '').trim();
+          const userTurnLower = userTurn.toLowerCase();
+          const isOpenUncertainty = /^(n[ãa]o sei|nao sei|sei l[áa]|acho que n[ãa]o sei|talvez)\b/i.test(userTurnLower);
+          const isSubstantiveReport = userTurn.length >= 160;
+          const userTurnIsOpen = isOpenUncertainty || isSubstantiveReport;
+
+          if (userTurnIsOpen && currentPhase !== 'overtime') {
+            console.warn(`🛡️ Safety net suprimida: turno do usuário está aberto (uncertainty=${isOpenUncertainty}, substantive=${isSubstantiveReport}, phase=${currentPhase})`);
+          } else if (looksLikeFarewell || currentPhase === 'overtime') {
             console.warn(`🛡️ Safety net: forçando [ENCERRAR_SESSAO] (phase=${currentPhase}, farewell=${looksLikeFarewell})`);
             assistantMessage = `${assistantMessage.trim()} [ENCERRAR_SESSAO]`;
             shouldEndSession = true;
