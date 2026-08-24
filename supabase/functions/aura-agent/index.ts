@@ -861,6 +861,8 @@ Retorne um JSON com APENAS os campos relevantes (omita campos vazios/null):
   "topic_continuity": "same_topic|shifted|new_topic",
   "engagement_level": "engaged|short_answers|disengaged",
   "aura_phase": "presenca|sentido|movimento",
+  "user_turn_weight": "light|loaded",
+  "topic_parked": true,
   "information_density": "low|medium|saturated",
   "user_reflection_mode": true,
   "user_engaged_with_commitment": true,
