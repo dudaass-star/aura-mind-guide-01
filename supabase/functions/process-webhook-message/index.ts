@@ -1426,6 +1426,11 @@ Deno.serve(async (req) => {
       if (msg.isAudio) {
         console.log(`🎙️ Generating audio for: ${responseText.substring(0, 50)}...`);
         const { audioUrl, audioContent } = await generateTTS(responseText, profile.user_id);
+        if (!audioUrl && !audioContent) {
+          // Antes isso caía pra texto com apenas um console.log — falha invisível.
+          console.error('❌ TTS retornou vazio; registrando falha e caindo pra texto');
+          await logFailedMessage(supabase, profile.user_id, cleanPhone, responseText, 'tts_failed', 'process-webhook-message:audio');
+        }
         if (audioUrl || audioContent) {
           let audioResult: SendResult;
           if (audioUrl) {
@@ -1444,14 +1449,19 @@ Deno.serve(async (req) => {
                 .gte('created_at', new Date(Date.now() - 30000).toISOString())
                 .limit(1).maybeSingle();
               if (!existingAssistant) {
-                await supabase.from('messages').insert({ user_id: profile.user_id, role: 'assistant', content: responseText });
+                await supabase.from('messages').insert({ user_id: profile.user_id, role: 'assistant', content: responseText, is_audio: true });
               } else {
                 console.log('⏭️ DEDUP: Assistant audio message already exists, skipping persist');
               }
             } catch {}
             continue;
           }
-          console.log(`⚠️ Audio send failed (provider=${audioResult.provider}, error=${audioResult.error}), falling back to text`);
+          console.error(`❌ Audio send failed (provider=${audioResult.provider}, error=${audioResult.error}), falling back to text`);
+          await logFailedMessage(
+            supabase, profile.user_id, cleanPhone, responseText,
+            `audio_send_failed:${audioResult.provider || 'unknown'}:${audioResult.error || 'no_error'}`,
+            'process-webhook-message:audio',
+          );
         }
       }
 
