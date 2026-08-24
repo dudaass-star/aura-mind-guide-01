@@ -71,18 +71,42 @@ Esse é o coração do pedido. Regra nova, igual nos dois modos:
 Tudo em `supabase/functions/aura-agent/index.ts` (+ 2 campos no schema do extrator):
 
 1. **TTL do rótulo (`aura_phase`)**: expira com 60 min de inatividade ou troca de dia
-   civil (BRT). Mesmo padrão de idade já usado em `user_emotional_state`. Aplicado na
-   leitura do `lastUserContext`, antes do `evaluateTherapeuticPhase()`.
+   civil (BRT), aplicado na leitura do `lastUserContext` antes de
+   `evaluateTherapeuticPhase()`. Correção de precedente: a janela existente de
+   `user_emotional_state` é de **10 min** (linha ~1345, `isFresh = ageMs < 10*60*1000`) e
+   serve a outra finalidade (evitar que rótulo de crise antigo force acolhimento). Não é
+   precedente dos 60 min — a janela mais longa aqui é escolha própria, porque fase é
+   estado de arco de conversa, não de risco imediato.
 2. **Rota de descida sempre ativa**: remover a guarda da linha ~1726
    (`if (!lastUserContext?.aura_phase)`) que hoje impede o rebaixamento para `ping-pong`
-   sempre que existe fase salva. Com histerese: 2 turnos leves consecutivos para descer,
-   evitando oscilação.
-3. **Fase medida no usuário**: reescrever a instrução `aura_phase` do extrator
-   (linha ~874) para classificar a **carga/convite do turno do usuário**, não a resposta
-   da assistente.
+   sempre que existe fase salva. Condição de descida em **dois votos**:
+   `user_turn_weight === 'light'` em 2 turnos consecutivos **E**
+   `engagement_level !== 'engaged'`. Se qualquer um dos dois discordar, a fase se mantém.
+3. **Fase medida no usuário** — texto exato que substitui a linha ~874, e um campo novo:
+   ```
+   - aura_phase: classifique a fase que o TURNO DO USUÁRIO autoriza (nunca a resposta
+     da assistente). "presenca" = ele trouxe fato/situação, desabafo, ou pediu escuta.
+     "sentido" = ele mesmo buscou significado, causa, padrão, ou elaborou sobre uma
+     leitura. "movimento" = ele mesmo falou de ação, decisão ou próximo passo.
+     Se o turno não autoriza nenhuma das três (assunto neutro, prático, social,
+     brincadeira), omita o campo.
+   - user_turn_weight: "light" ou "loaded". "loaded" = o turno tem carga emocional,
+     ou responde com precisão a uma pergunta emocional/direta da assistente, mesmo em
+     uma palavra ("não", "consegui", "piorou"). "light" = assunto neutro, prático,
+     social, humor, ou evasão. Tamanho da mensagem NÃO decide: resposta curta com
+     conteúdo genuíno é "loaded". Em dúvida, marque "loaded".
+   ```
+   Casos adversariais que entram no teste (mesma disciplina de `isPracticalQuestion`):
+   - `"não"` respondendo "você conseguiu manter a frieza?" em tema pesado → `loaded`,
+     não desce.
+   - `"não"` respondendo "quer ver esse filme?" → `light`.
+   - `"sei lá"` / `"tanto faz"` em tema pesado → `light` + `disengaged` → desce.
+   - `"piorou"` (uma palavra, carga real) → `loaded`.
+   - update prático longo (500 chars sobre trabalho, sem carga) → `light`.
 4. **Estado de tópico em espera**: 2 campos novos no JSON que o extrator já devolve por
    turno — `topic_parked` (bool) e `parked_turns` (int). Zero chamada extra de LLM.
    Alimentam a decisão desvio-vs-virada (retomar até 2 turnos; soltar a partir de 3).
+
 5. **Empurrão automático de presença → sentido** (linha ~1738, `recentPairs >= 4`): passa
    a exigir material concreto na mesa, não só contagem de trocas.
 6. **Sessão**: bloco de abertura passa a orientar "puxar o fio como pergunta de contexto";
