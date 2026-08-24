@@ -813,6 +813,10 @@ interface UserContextState {
   engagement_level?: string;
   short_answer_streak?: number;
   aura_phase?: string;
+  user_turn_weight?: string;
+  light_turn_streak?: number;
+  topic_parked?: boolean;
+  parked_turns?: number;
   information_density?: string;
   user_reflection_mode?: boolean;
   user_engaged_with_commitment?: boolean;
