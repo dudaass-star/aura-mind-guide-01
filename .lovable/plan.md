@@ -136,29 +136,37 @@ Ou seja: um "isso mesmo" de polidez foi lido pelo sistema como permissão para i
 5. **Não aplicável:** quando o usuário disser que não houve situação para aplicar, marcar como **não aplicável** (reuso de `cancel_topics`), saindo da fila de cobrança sem virar "descumprido".
 6. **Limpeza pontual:** consolidar os 18 registros dela em 1 (script de dados, só para esse usuário — não faço limpeza em massa sem você aprovar).
 
-### 7. Investigar o bug de mensagens duplicadas/truncadas (item técnico separado)
+### 7. Veredito do bug das mensagens estranhas: **não é duplicação, é a Cápsula do Tempo engolindo os áudios dela**
 
-**Seu achado 2 — concordo que é o mais preocupante, e não é prompt.** "Troquei o áudio! 🎙️ Esse ficou bom?" 4x em 25 segundos, "Recebi seu áudio! 🎙️" sem ela ter mandado áudio, e uma resposta truncada em "Ih, que". Prompt não produz esse padrão; isso é pipeline.
+Investiguei agora no código e o caso fecha. As duas frases não são resposta de sessão da Aura — são **mensagens fixas do fluxo da Cápsula do Tempo**, em `process-webhook-message`:
 
-**Hipóteses a testar (nessa ordem, todas verificáveis nos logs das edge functions):**
-- **a) Retry sem idempotência no envio.** Se o `sendMessage` da Meta/Twilio devolve timeout mas entregou, o retry de 2s reenvia. 4 cópias em 25s bate com padrão de retry.
-- **b) Lock atômico do webhook falhando.** O webhook tem lock por usuário; se o mesmo evento chegou 4x (reentrega do provedor) e o lock expirou entre elas, roda 4 vezes.
-- **c) Mensagens de sistema disparadas fora de lugar.** "Recebi seu áudio!" e "Troquei o áudio!" parecem texto de confirmação gerado por caminho de áudio — provavelmente confirmação emitida mesmo quando a geração de TTS falhou. Isso conecta direto com o bug do item 1: a Aura confirmava troca de canal que nunca aconteceu.
-- **d) "Ih, que" truncado** = split de balões cortando no delimitador `|||` com string vazia/parcial, ou timeout no meio do loop de entrega.
+- linha 901: `"Recebi seu áudio! 🎙️ Ficou do jeito que você queria?..."` — estado `awaiting_audio`
+- linha 947: `"Troquei o áudio! 🎙️ Esse ficou bom? Me diz 'pode guardar'..."` — estado `awaiting_confirmation`
 
-**Como investigar sem chutar:** consultar `function_edge_logs`/logs do `process-webhook-message` e `aura-agent` na janela 15/08 15:31–15:56 e no dia 22/08, contar quantas invocações houve para o mesmo `message_id` do provedor, e checar `failed_message_log`. Só depois disso eu proponho o fix. Também vale rodar a mesma contagem em toda a base ("assistant enviou a mesma string ≥2x em <60s") para medir se isso está atingindo outras usuárias silenciosamente — essa consulta eu faço logo no começo da implementação.
+**O mecanismo (verificado linha a linha):**
+1. Em algum momento a Aura ofereceu a Cápsula do Tempo e gravou `profiles.awaiting_time_capsule = 'awaiting_audio'` (`aura-agent`, linhas 1959 e 8334).
+2. A partir daí, o handler da cápsula roda **antes** de chamar a Aura (linha 889) e **retorna cedo** (`releaseLock()` + `return`) em todos os caminhos.
+3. Ou seja: **todo áudio que ela mandou não chegou na Aura.** Foi consumido pela cápsula, que respondeu "Troquei o áudio!" e encerrou o processamento. 4 áudios em 25 s = 4 vezes a mesma frase. Não é retry, não é lock, não é reentrega do provedor — é 1 resposta por áudio, funcionando "como programado".
+4. **O estado não expira.** `awaiting_time_capsule` só é limpo por confirmação explícita ("pode guardar") ou por palavra de desistência (regex de linha 916/962). Ela nunca disse nenhuma das duas — então ficou presa no estado, e cada áudio novo caía no mesmo trilho.
 
-**Prioridade:** concordo em tratar como **P0 junto com o item 1** — os dois formam o mesmo sintoma vivido por ela ("a Aura promete áudio, repete, se enrola").
+**Isso reescreve o item 1 do caso.** A queixa "pedi pra falar por áudio e ela me responde em texto" tem **duas causas somadas**, não uma:
+- **(a)** quando ela pediu por **texto**, o pedido chegou na Aura mas caiu no bug do `mandatory: false` → saiu texto;
+- **(b)** quando ela pediu por **áudio**, a mensagem nem chegou na Aura — a cápsula respondeu "Troquei o áudio!" e o pedido morreu ali. É por isso que a resposta parecia fora de contexto e repetida.
 
-### 8. Latência (seu achado 3)
+O `"Ih, que"` truncado é o único item que não consigo fechar agora: o banco está indisponível nesta consulta (pool esgotado). Fica como checagem de 1 query no início da implementação — não muda nada do que está proposto abaixo.
 
-**Tem evidência:** 3 correções só sobre demora ("não deve demorar para responder nas sessões", "não demorar, ser mais ágil"), e foi a **primeira** fricção da sessão 1, antes do problema de áudio virar crônico.
+**Correções (todas em `process-webhook-message`, escopo pequeno):**
+1. **Expiração do estado:** cápsula vale **1 hora** desde que foi oferecida. Passado isso, o estado é limpo e a mensagem segue o fluxo normal para a Aura. (Precisa de 1 coluna: `capsule_state_set_at`, ou reusar timestamp existente.)
+2. **Saída por intenção, não só por palavra-chave:** se a mensagem (áudio ou texto) não tem nada a ver com gravar cápsula — como "quero que você me responda por áudio" — cair fora do estado e entregar para a Aura, em vez de responder "Troquei o áudio!".
+3. **Teto de repetição:** a mesma frase da cápsula não sai mais de **2 vezes** seguidas; na terceira, o sistema abandona o estado e passa a bola pra Aura ("deixa a cápsula pra depois").
+4. **Não silenciar pedido de canal:** pedido explícito de áudio/texto passa a ser detectado **antes** do bloco da cápsula, gravando `voice_mode` (item 1) mesmo quando o handler da cápsula for encerrar o turno.
 
-**O que fazer, sem chutar causa:** medir antes de mexer. O `token_usage_logs` já guarda uso por chamada; o que falta é tempo de ponta a ponta. Proposta enxuta: registrar `latency_ms` (chegada do webhook → envio da primeira bolha) e olhar a distribuição — separando (i) tempo do modelo, (ii) tempo de TTS, (iii) delay proposital de humanização (1,5–3,5s por bolha, que com 4–5 bolhas soma 8–15s de silêncio). Minha suspeita principal é (iii) somado a (ii): em sessão, com áudio, o delay humanizado vira espera longa. Se confirmar, a correção é reduzir o delay quando a resposta é longa ou quando é áudio — mas **só depois do número**, não por palpite.
+**Prioridade:** P0, junto com o item 1 — são o mesmo sintoma vivido por ela.
 
-### 9. Auditoria de qualidade só cobriu 1 das 2 sessões (seu achado 4)
+### 8 e 9 — descartados por enquanto
 
-Confirmado: `session_coverage_analyses` só tem a sessão de 22/08. A de 15/08 — a das promessas de áudio quebradas e das mensagens duplicadas — nunca foi avaliada. Isso é um furo do próprio sistema de qualidade: sessão que termina de forma anômala (ou cuja análise falha) fica invisível no painel, justamente a que mais interessa. **Correção:** varredura diária que dispara a análise das sessões `completed` sem registro em `session_coverage_analyses`, e badge no painel para "não analisada" em vez de ausência silenciosa.
+Latência e cobertura de auditoria de sessões saem deste plano, a seu pedido.
+
 
 ### O que NÃO será mexido
 
