@@ -2183,12 +2183,24 @@ async function processExtractedActions(
         ? false
         : (actions.user_validated_hypothesis === true || previousUserContext?.user_validated_hypothesis === true);
 
+      // Streak de turnos leves (rota de descida em dois votos) e tempo de tema em espera
+      // (desvio de 1–2 turnos vs. virada real a partir de 3).
+      const lightTurn = actions.user_turn_weight === 'light';
+      const lightTurnStreak = lightTurn ? (previousUserContext?.light_turn_streak || 0) + 1 : 0;
+      const topicParked = actions.topic_parked === true
+        || (lightTurn && previousUserContext?.topic_parked === true && !topicReset);
+      const parkedTurns = topicParked ? (previousUserContext?.parked_turns || 0) + 1 : 0;
+
       const userContext: UserContextState = {
         user_emotional_state: actions.user_emotional_state,
         topic_continuity: actions.topic_continuity,
         engagement_level: actions.engagement_level,
         short_answer_streak: shortAnswerStreak,
         aura_phase: actions.aura_phase,
+        user_turn_weight: actions.user_turn_weight,
+        light_turn_streak: lightTurnStreak,
+        topic_parked: topicParked,
+        parked_turns: parkedTurns,
         information_density: actions.information_density,
         user_reflection_mode: actions.user_reflection_mode,
         user_engaged_with_commitment: actions.user_engaged_with_commitment,
