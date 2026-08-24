@@ -37,11 +37,20 @@ const isAudioMode = audioDecision.mandatory
 
 O bypass para pedido explícito **já existia** e o comentário do próprio código (linhas 4077-4080) documenta isso. Ou seja: **`mandatory: false` na regra 4 não era a causa.** Retiro esse ponto. Mudar `mandatory` ali sozinho não resolveria nada — e é exatamente o tipo de "correção" que dá sensação de progresso sem mover o sintoma.
 
-**Onde a promessa realmente quebrava — três caminhos, todos verificados agora:**
+**Investiguei o "por que o áudio falhava" antes de qualquer correção — e o resultado derruba também a hipótese de falha de TTS.**
 
-1. **Falha silenciosa de TTS/envio de áudio** (`process-webhook-message`, linhas 1352-1382). Confirmado: se `generateTTS()` volta vazio, o `if (audioUrl || audioContent)` é falso e o código **cai direto no envio de texto sem nenhum registro**; se o envio do áudio falha, só há `console.log("⚠️ Audio send failed ..., falling back to text")` — nada em `failed_message_log` (o `logFailedMessage` só é chamado no caminho de texto, linha 1395). Confirmo também o que a revisão notou: **zero registros dela** em `failed_message_log`, o que é consistente com falha nesse ponto exato, não em outro. Este é o mecanismo mais provável do "prometeu áudio, saiu texto".
-2. **Pedido de áudio feito por áudio nunca chegou na Aura** — é o item 7 (cápsula), abaixo. Nesse caminho não houve TTS nenhum: o turno inteiro foi desviado.
-3. **A preferência não sobrevive ao turno.** `wantsAudio` é recalculado da mensagem atual (linha 8187). O turno seguinte, sem a frase, cai em `default_text`. Isso não gerou a quebra de promessa, mas gerou o "ela esquece o combinado" — que é uma queixa distinta e igualmente registrada nas correções dela.
+Evidência dura (`storage.objects`, bucket `aura-tts-audios`, pasta dela): **19 arquivos de áudio foram gerados de fato** na janela da sessão de 22/08 — 15 entre 15h-16h UTC e 4 entre 16h-17h UTC (12h-14h BRT; a sessão foi encerrada 13:40 BRT). Ou seja: **o TTS funcionou, gerou e subiu os MP3.** A hipótese "generateTTS falhava" está descartada com prova material.
+
+Os logs de console (Deno) da janela do incidente **não existem mais** — a retenção efetiva de `function_logs` neste projeto é de ~1 hora (verifiquei: o registro mais antigo consultável é de minutos atrás). E `token_usage_logs` está grande o suficiente para estourar timeout em qualquer agregação. Isso, por si só, é um achado: **não temos rastro de entrega de áudio**, e é por isso que estamos deduzindo em vez de ler.
+
+**Com o TTS descartado, sobram três caminhos possíveis — e o próximo passo é distinguir entre eles, não corrigir no escuro:**
+
+1. **Falha no envio ao provedor** (`sendAudioUrl`, `process-webhook-message` 1357-1381): o áudio existe no storage, mas o WhatsApp pode ter recusado o download da signed URL (bucket privado) ou o envio pode ter dado erro. Nesse caso o código cai pra texto com **só um `console.log`** — nada em `failed_message_log` (o `logFailedMessage` só roda no caminho de texto, linha 1395). Compatível com "zero registros dela" no log de falhas.
+2. **Cápsula do Tempo** (item 7): nos turnos em que ela mandou áudio, o turno nem chegou na Aura — não houve TTS nem envio.
+3. **Preferência não sobrevive ao turno** (`wantsAudio` recalculado da mensagem atual, linha 8187): turnos seguintes caem em `default_text`. Explica "ela esquece o combinado", não a promessa quebrada.
+
+**Como fechar o veredito (primeiro passo da execução, antes de qualquer fix):** comparar, para a janela de 22/08, os 19 arquivos do storage com as mensagens `assistant` gravadas (`messages`) e os SIDs de saída do provedor. Se houver arquivo gerado sem entrega correspondente, a causa é o caminho 1 (envio) e o fix é instrumentar + tratar o erro de envio. Se os 19 áudios foram entregues, a queixa dela é dos turnos do caminho 2/3, e o item 1 vira só persistência de preferência — sem mexer em TTS. Não vou escolher o fix antes dessa comparação.
+
 
 **O que muda (revisado):**
 - **Instrumentar e não mentir no ponto real (linhas 1352-1382):** quando TTS ou envio de áudio falharem, gravar em `failed_message_log` (`error: tts_failed` / `audio_send_failed`) **e** marcar o turno como "áudio indisponível" para o usuário. Sem isso, continuamos sem enxergar a falha — foi por isso que precisei reconstruir o caso por dedução.
