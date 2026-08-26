@@ -45,8 +45,17 @@ Substituir as instruções longas e divergentes das fases finais por UMA regra c
 ### 5. Código: cron só fecha com silêncio real (session-reminder, ~20 linhas)
 
 - O fechamento por abandono passa a exigir **inatividade real**: última mensagem do usuário com pelo menos 15 min de silêncio.
-- Se o usuário falou há pouco, o cron adia e re-verifica no próximo ciclo — nunca corta sessão viva.
+- Se o usuário falou há pouco, o cron adia e re-verifica no próximo ciclo (o cron roda a cada 5 min) — nunca corta sessão viva.
 - Classificação `no_show` (0–4 msgs) e fallback de resumo/rating continuam iguais.
+
+### 6. Código: teto absoluto de duração (trava de segurança obrigatória)
+
+Sem isso, as mudanças 4 e 5 permitem uma sessão que **nunca fecha** enquanto o usuário fala. Então:
+
+- Teto duro de **2× a duração prevista** (90 min numa sessão de 45). Ao cruzar o teto, a Aura recebe instrução para fechar no próximo turno e o código força `[ENCERRAR_SESSAO]` — sem exceção de turno aberto.
+- Teto de segurança no cron: sessão `in_progress` há mais de **4 horas** é fechada independente de atividade.
+- Guarda contra sessão órfã duplicada: a busca por sessão órfã usa `.maybeSingle()` e quebra se houver duas `in_progress`. Trocar por ordenação + `limit(1)`.
+
 
 ### O que NÃO muda
 
