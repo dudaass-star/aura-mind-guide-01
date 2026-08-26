@@ -9,8 +9,11 @@ project_id = "uhyogifgmutfmbyhzzyo"
     verify_jwt = false
   [functions.admin-send-message]
     verify_jwt = false
+  [functions.admin-portal-magic-link]
+    verify_jwt = false
   [functions.admin-update-profile]
     verify_jwt = false
+
   [functions.asaas-pix-auto-audit]
     verify_jwt = false
   [functions.asaas-pix-auto-status]
