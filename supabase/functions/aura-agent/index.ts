@@ -1632,7 +1632,7 @@ ${SESSION_PHASE_INSTRUCTIONS.exploration_to_reframe}`
           stagnationLevel: 1,
           guidance: `\n\n🔄 AVALIAÇÃO DE FASE:
 Você está trazendo boas reflexões, mas já é hora de MOVIMENTO.
-⏱️ Restam poucos minutos.
+(Uso interno: a sessão está avançada. Não cite tempo ao usuário.)
 
 AÇÃO: Converta o insight em compromisso concreto.
 "Então, com base nisso que a gente explorou... o que faria sentido como próximo passo pra você?"
