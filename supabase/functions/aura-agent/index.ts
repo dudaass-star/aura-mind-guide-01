@@ -4111,7 +4111,7 @@ Se sentir que "já explorou o suficiente", vá MAIS FUNDO no mesmo tema ou abra 
 `;
   } else if (phase === 'reframe') {
     timeContext += `
-💡 FASE DE REFRAME E INSIGHTS (25-35 min):
+💡 FASE DE REFRAME E INSIGHTS:
 - OBJETIVO: Ajudar o usuário a ver a situação de forma diferente
 
 🧰 CARDÁPIO DE TÉCNICAS DE REFRAME (escolha 1-2 que façam sentido para o contexto):
