@@ -1663,7 +1663,7 @@ ${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}${hypothesisGuard}`
           detectedPhase: 'sentido',
           stagnationLevel: 1,
           guidance: `\n\n🛡️ REDE DE SEGURANÇA — FECHAMENTO OBRIGATÓRIO:
-Você já está em SENTIDO há vários turnos e ${sessionElapsedMin} min se passaram (de ${sessionDurationMin} min totais).
+Você já está em SENTIDO há vários turnos e a sessão está avançada (uso interno: nunca cite tempo ao usuário).
 Ainda NÃO houve pergunta de COMPROMISSO/MOVIMENTO nesta sessão.
 AÇÃO OBRIGATÓRIA AGORA: amarre o insight num passo concreto antes do fim.
 ${SESSION_PHASE_INSTRUCTIONS.transition_to_closing}${hypothesisGuard}`
