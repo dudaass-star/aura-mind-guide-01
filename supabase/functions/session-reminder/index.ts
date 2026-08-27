@@ -660,14 +660,37 @@ Quer remarcar pra outro horário? É só me dizer quando fica bom pra você. ✨
       for (const session of abandonedSessions) {
         // Calcular quando a sessão deveria ter terminado
         const startedAt = new Date(session.started_at);
-        const expectedEndTime = new Date(startedAt.getTime() + (session.duration_minutes || 45) * 60 * 1000);
+        const durationMin = session.duration_minutes || 45;
+        const expectedEndTime = new Date(startedAt.getTime() + durationMin * 60 * 1000);
         const gracePeriodEnd = new Date(expectedEndTime.getTime() + 30 * 60 * 1000); // +30 min de tolerância
-        
+        // Teto operacional: 2x a duração prevista. Só aqui o tempo encerra sozinho.
+        const hardCapEnd = new Date(startedAt.getTime() + durationMin * 2 * 60 * 1000);
+
         // Se ainda está dentro do período de graça, pular
         if (now < gracePeriodEnd) {
           console.log(`⏭️ Session ${session.id} still within grace period`);
           continue;
         }
+
+        // ANTI-MULETA DO RELÓGIO: nunca encerrar sessão VIVA por tempo.
+        // Só encerra se houve silêncio real de 15+ min — ou se passou do teto operacional.
+        const { data: lastMsg } = await supabase
+          .from('messages')
+          .select('created_at')
+          .eq('user_id', session.user_id)
+          .gte('created_at', session.started_at)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        const lastMsgAt = lastMsg?.created_at ? new Date(lastMsg.created_at) : startedAt;
+        const silenceMin = Math.floor((now.getTime() - lastMsgAt.getTime()) / 60000);
+
+        if (silenceMin < 15 && now < hardCapEnd) {
+          console.log(`🫂 Session ${session.id} AINDA VIVA (silêncio de ${silenceMin} min) — não encerrando por tempo`);
+          continue;
+        }
+        
         
         // NOVO: Contar mensagens do usuário DURANTE a sessão para diferenciar
         const { count: userMsgsInSession } = await supabase
