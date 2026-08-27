@@ -4106,7 +4106,7 @@ Se precisar fazer uma pergunta, seja DIRETA:
 EVITE: perguntas genéricas ("como você se sente?"), múltiplas perguntas seguidas.
 PREFIRA: uma observação precisa + uma pergunta direcionada (se necessário) + ESPERE a reação.
 
-⚠️ Fase de exploração — faltam ${timeRemaining} min. Continue aprofundando, sem resumos nem fechamentos prematuros.
+⚠️ Fase de exploração. Continue aprofundando, sem resumos nem fechamentos prematuros. Não mencione tempo.
 Se sentir que "já explorou o suficiente", vá MAIS FUNDO no mesmo tema ou abra outra camada.
 `;
   } else if (phase === 'reframe') {
