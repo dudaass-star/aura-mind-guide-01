@@ -34,7 +34,8 @@ Não altero o `system_prompt` (fica no banco, configurável), nem as travas de p
 
 Arquivo único: `supabase/functions/recovery-agent/index.ts`.
 
-- `VALUE_SHOWCASE` passa a ter `tier: "A" | "B" | "C"` por item, com os textos reescritos.
+- `VALUE_SHOWCASE` passa a ter `tier: "A" | "B" | "C"` por item, com os textos reescritos no padrão "você... agora" em vez de " recurso X".
+
 - `renderValueShowcase()` passa a renderizar três blocos rotulados (CENAS QUE GERAM DESEJO / PROVAS DE APOIO / PRESSUPOSTOS — NÃO VENDA), mantendo o marcador `[JÁ CITADO — não repita]`.
 - O parágrafo de instrução dentro de `contextBlock` troca "mostre UMA coisa concreta da vitrine" por "mostre UMA cena do NÍVEL A, em cena e no presente; nunca use item do nível C como argumento".
 - Deploy da função ao final.
