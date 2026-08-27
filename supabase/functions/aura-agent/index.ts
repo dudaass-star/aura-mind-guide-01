@@ -6380,9 +6380,9 @@ REGRA: ${behaviorInstruction}`;
         (Date.now() - new Date(currentSession.started_at).getTime()) / 60000
       );
 
-      let phaseBlock = `\n\n⏱️ CONTROLE DE SESSÃO (CALCULADO PELO SISTEMA - SIGA OBRIGATORIAMENTE):`;
-      phaseBlock += `\nTempo decorrido: ${elapsed} min | Restante: ${Math.max(0, phaseInfo.timeRemaining)} min`;
+      let phaseBlock = `\n\n⏱️ CONTROLE DE SESSÃO (USO INTERNO — NUNCA CITE TEMPO AO USUÁRIO):`;
       phaseBlock += `\nFase atual: ${phaseInfo.phase.toUpperCase()}`;
+      phaseBlock += `\n🚫 PROIBIDO mencionar minutos decorridos/restantes, "faltam X minutos", "nosso tempo está acabando" ou qualquer apressamento por relógio.`;
 
       if (['opening', 'exploration', 'reframe', 'development'].includes(phaseInfo.phase)) {
         phaseBlock += `\n🚫 PROIBIDO: NÃO resuma, NÃO feche, NÃO diga "nossa sessão está terminando".`;
