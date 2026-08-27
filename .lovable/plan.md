@@ -10,9 +10,13 @@ Hoje a vitrine (`VALUE_SHOWCASE` no `recovery-agent`) é uma lista plana de 7 re
 
 **1. A vitrine ganha hierarquia de desejo (3 níveis).**
 
-- **Nível A — momentos que a pessoa quer pra si** (é daqui que o agente escolhe por padrão): a madrugada sem ninguém pra chamar, o áudio de meditação chegando na hora do aperto, o encontro guiado de 45 min marcado pra hoje à noite, a trilha que ela conduz semana a semana, poder desabafar por áudio no carro sem digitar nada.
-- **Nível B — provas de que funciona** (só entra como reforço de uma cena do nível A, nunca sozinho): portal com o histórico, insights que ela devolve, resposta em minutos a qualquer hora.
-- **Nível C — pressuposto, não venda** (só se o lead perguntar): memória de longo prazo, sem app pra baixar, sem senha. Marcado no prompt como "isso o lead já espera — não use como argumento principal".
+- **Nível A — coisas que o cliente quer pra si** (escolha padrão do agente):
+  - **Encontro guiado de 45 min** — conversa funda marcada por WhatsApp, na hora que quiser.
+  - **Meditações guiadas disponíveis a qualquer momento** — áudio específico para o que está apertando ali, sem abrir outro app.
+  - **Jornadas de conhecimento / trilha semanal** — episódio novo chegando a cada semana, conduzido no ritmo da pessoa.
+- **Nível B — provas de que funciona / conforto no uso** (só entra como reforço de uma cena do nível A, nunca como argumento principal): falar por áudio sem digitar, resposta a qualquer hora, portal guarda histórico, ela não recomeça do zero.
+- **Nível C — pressuposto, não venda** (só se o lead perguntar): memória de longo prazo, sem app pra baixar, sem senha. Marcado como "o lead já espera — não use como argumento".
+
 
 **2. As cenas do nível A são reescritas em primeira pessoa e no momento.** Sai "recurso + explicação", entra "situação + o que você sente". Exemplo do padrão: em vez de "meditação guiada em áudio na hora do aperto", vira "você escreve que não consegue dormir e em segundos chega um áudio com a voz dela te conduzindo até o sono — não um link, um áudio pra você agora".
 
