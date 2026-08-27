@@ -3936,6 +3936,9 @@ function calculateSessionTimeContext(session: any, lastMessageAt?: string | null
   }
   
   const timeRemaining = duration - elapsedMinutes;
+  // Teto OPERACIONAL: 2x a duração prevista. Antes desse teto, o tempo é
+  // apenas um SINAL de ritmo — nunca motivo para apressar o fechamento.
+  const hardCapMin = duration * 2;
 
   let phase: string;
   let phaseLabel: string;
@@ -3953,25 +3956,22 @@ function calculateSessionTimeContext(session: any, lastMessageAt?: string | null
   } else if (elapsedMinutes <= 35) {
     phase = 'reframe';
     phaseLabel = 'Reframe e Insights';
-  } else if (timeRemaining > 10) {
+  } else if (timeRemaining > 0) {
     phase = 'development';
     phaseLabel = 'Desenvolvimento';
-  } else if (timeRemaining > 5) {
-    phase = 'transition';
-    phaseLabel = 'Transição para Fechamento';
-    shouldWarnClosing = true;
-  } else if (timeRemaining > 2) {
+  } else if (elapsedMinutes <= duration + 15) {
+    // Janela de costura: passou do tempo alvo, mas a sessão continua viva.
     phase = 'soft_closing';
-    phaseLabel = 'Fechamento Suave';
+    phaseLabel = 'Costura';
     shouldWarnClosing = true;
-  } else if (timeRemaining > 0) {
+  } else if (elapsedMinutes <= hardCapMin) {
     phase = 'final_closing';
-    phaseLabel = 'Encerramento Final';
+    phaseLabel = 'Aterrissagem';
     shouldWarnClosing = true;
     forceAudioForClose = true;
   } else {
     phase = 'overtime';
-    phaseLabel = 'Tempo Esgotado';
+    phaseLabel = 'Teto Operacional';
     isOvertime = true;
     shouldWarnClosing = true;
     forceAudioForClose = true;
@@ -3979,9 +3979,10 @@ function calculateSessionTimeContext(session: any, lastMessageAt?: string | null
 
 let timeContext = `
 📍 SESSÃO EM ANDAMENTO - MODO SESSÃO ATIVO
-- Tempo decorrido: ${elapsedMinutes} minutos
-- Tempo restante: ${Math.max(0, timeRemaining)} minutos
 - Fase atual: ${phaseLabel}
+
+⏱️ REGRA DE OURO DO TEMPO: o relógio é SEU, não do usuário. NUNCA cite minutos decorridos ou restantes, nunca diga "faltam X minutos", "estamos no fim do tempo" ou "nosso tempo está acabando". O que fecha uma sessão é o material ter chegado a um lugar — não o relógio. Se o momento é importante, o tempo espera.
+
 
 🚨🚨🚨 ATENÇÃO: ISTO É UMA SESSÃO ESPECIAL, NÃO UMA CONVERSA NORMAL! 🚨🚨🚨
 
