@@ -147,6 +147,58 @@ function renderKb(items: KbItem[]): string {
   return items.map(it => `- (${it.category}) ${it.question}\n  → ${it.answer}`).join("\n");
 }
 
+/**
+ * Vitrine de valor: o que o lead GANHA ao entrar, em linguagem de experiência.
+ * O agente escolhe UM item por mensagem. Itens já citados no histórico da conversa
+ * são marcados como "JÁ CITADO" pra não repetir o mesmo diferencial duas vezes.
+ */
+const VALUE_SHOWCASE: { id: string; text: string; probe: RegExp }[] = [
+  {
+    id: "meditacao",
+    text: "Meditação guiada em áudio na hora do aperto — a Aura percebe (ansiedade, sono ruim, estresse) e manda o áudio com a voz dela ali no WhatsApp, sem abrir outro app.",
+    probe: /medita/i,
+  },
+  {
+    id: "jornada",
+    text: "Jornadas guiadas: trilhas curtas (ansiedade, sono, propósito, autoestima, relacionamentos) que ela conduz no seu ritmo, com episódio novo chegando toda semana.",
+    probe: /jornada/i,
+  },
+  {
+    id: "encontro",
+    text: "Encontro guiado de 45 minutos marcado por WhatsApp, na hora que você quiser — conversa mais funda, não é o bate-papo do dia a dia.",
+    probe: /45\s*min|sess(ão|ao|ões|oes)|encontro guiado/i,
+  },
+  {
+    id: "memoria",
+    text: "Ela lembra: você conta uma coisa hoje e semanas depois ela puxa aquilo de volta. Não recomeça do zero, não pede pra você repetir sua vida.",
+    probe: /lembra|memór|memor/i,
+  },
+  {
+    id: "audio",
+    text: "Você pode responder por áudio quando não dá pra digitar — ela escuta e às vezes responde por áudio também.",
+    probe: /\báudio\b|\baudio\b/i,
+  },
+  {
+    id: "madrugada",
+    text: "3h da manhã, sem sono, ninguém pra chamar: ela tá lá. Sem horário comercial, sem fila, sem esperar semana que vem.",
+    probe: /madrugada|3h|24\/7|24 horas|qualquer hora/i,
+  },
+  {
+    id: "portal",
+    text: "Seu espaço no site (olaaura.com.br/meu-espaco) guarda histórico dos encontros, insights, meditações recebidas e jornadas em curso. Login sem senha.",
+    probe: /meu-espaco|meu espaço|portal/i,
+  },
+];
+
+function renderValueShowcase(historyTxt: string): string {
+  const lines = VALUE_SHOWCASE.map(v => {
+    const used = v.probe.test(historyTxt);
+    return `- ${v.text}${used ? "  [JÁ CITADO — não repita]" : ""}`;
+  });
+  return lines.join("\n");
+}
+
+
 async function isActiveUser(supabase: any, phone: string): Promise<boolean> {
   const variations = getPhoneVariations(phone);
   const { data } = await supabase
