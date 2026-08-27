@@ -6397,21 +6397,19 @@ REGRA: ${behaviorInstruction}`;
         } else if (phaseInfo.phase === 'exploration') {
           phaseBlock += `\n📌 EXPLORAÇÃO. Vá mais fundo. Uma observação + uma pergunta.`;
         }
-      } else if (phaseInfo.phase === 'transition') {
-        phaseBlock += `\n⏳ Consolide SUAVEMENTE. Não abra tópicos novos.`;
       } else if (phaseInfo.phase === 'soft_closing') {
-        phaseBlock += `\n🎯 Resuma insights e defina compromissos. Prepare encerramento.`;
+        phaseBlock += `\n🧵 COSTURA: amarre o que já está na mesa, sem abrir tema novo. NÃO anuncie fechamento ainda.`;
       } else if (phaseInfo.phase === 'final_closing') {
-        phaseBlock += `\n💜 ENCERRE AGORA: resumo + compromisso + despedida + [ENCERRAR_SESSAO]. NÃO peça nota — pesquisa é automática.`;
+        phaseBlock += `\n💜 ATERRISSAGEM COM CONSENTIMENTO: se o usuário acabou de abrir algo importante, está no meio de um relato, em dúvida ("não sei") ou emocionado, NÃO feche — siga com ele.`;
+        phaseBlock += `\nSe o material chegou a um lugar, CONVIDE ("quer fechar por aqui ou tem mais algo?") e só entregue a despedida + [ENCERRAR_SESSAO] depois do aceite. NÃO peça nota — pesquisa é automática.`;
       } else if (phaseInfo.phase === 'overtime') {
-        phaseBlock += `\n⏰ TEMPO ESGOTADO. PROPONHA encerrar a sessão ao usuário, mas NÃO force. Pergunte se quer continuar ou encerrar.`;
+        phaseBlock += `\n⏰ TETO OPERACIONAL. PROPONHA fechar com cuidado, sem citar tempo e sem forçar. Se ele quiser seguir, siga.`;
       }
       
       // Instrução especial para retomada após gap longo
       if (phaseInfo.isResuming) {
         phaseBlock += `\n\n⏸️➡️ RETOMADA APÓS PAUSA LONGA:`;
         phaseBlock += `\nO usuário voltou após um longo período sem responder. Trate como retomada natural.`;
-        phaseBlock += `\nVocê tem ~20 minutos restantes nesta sessão retomada.`;
         phaseBlock += `\nRetome o assunto anterior com naturalidade: "Que bom que voltou! Vamos continuar de onde paramos?"`;
         phaseBlock += `\n🚫 NÃO encerre a sessão automaticamente. O usuário está re-engajando.`;
       }
