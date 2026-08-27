@@ -1614,7 +1614,7 @@ Exploração ativa, não silêncio. Tamanho normal, tom acolhedor. Reframes e pe
           stagnationLevel: 2,
           guidance: `\n\n🔄 AVALIAÇÃO AUTOMÁTICA DE FASE:
 O sistema detectou que suas últimas respostas ainda estão no modo PRESENÇA/EXPLORAÇÃO (muitas perguntas, pouca síntese).
-⏱️ Já se passaram ${sessionElapsedMin} minutos. Você deveria estar em REFRAME.
+O material já está maduro o suficiente para REFRAME. (Uso interno: não cite tempo ao usuário.)
 
 AÇÃO OBRIGATÓRIA AGORA:
 - PARE de fazer perguntas exploratórias
