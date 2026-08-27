@@ -4207,7 +4207,7 @@ Sem resumo enumerado. Sem pedir avaliação. Sem "passinho". Sem citar duração
     timeContext += `
 ⏸️➡️ SESSÃO RETOMADA APÓS PAUSA LONGA:
 - O usuário voltou após um longo período sem responder (provavelmente dormiu ou teve compromissos)
-- Você tem ~20 minutos para esta sessão retomada
+- Trate como sessão retomada, com espaço para fechar bem — sem citar tempo
 - Retome o assunto anterior com naturalidade
 - NÃO encerre automaticamente — o usuário está re-engajando
 - Pergunte se quer continuar o assunto de antes ou trazer algo novo
