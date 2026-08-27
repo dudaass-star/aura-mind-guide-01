@@ -236,3 +236,44 @@ Deno.test("Higiene de interpretação: bloco do freio nomeia o motivo real (mate
     "Regra 'Exploração ativa, não silêncio' sumiu — risco de Aura ficar seca/curta no freio."
   );
 });
+// ===== Muleta do relógio: garantias de que o tempo é sinal, não condutor =====
+
+Deno.test("Relógio: prompt não expõe tempo decorrido/restante ao modelo", () => {
+  assert(
+    !/Tempo decorrido: \$\{/.test(SOURCE),
+    "Voltou a injetar 'Tempo decorrido: X min' no prompt — muleta do relógio."
+  );
+  assert(
+    !/faltam \$\{timeRemaining\}/.test(SOURCE),
+    "Voltou 'faltam ${timeRemaining} min' no prompt de sessão."
+  );
+});
+
+Deno.test("Relógio: regra de ouro do tempo está no contexto de sessão", () => {
+  assert(
+    /REGRA DE OURO DO TEMPO/.test(SOURCE),
+    "A 'REGRA DE OURO DO TEMPO' sumiu do contexto de sessão."
+  );
+});
+
+Deno.test("Fechamento: aterrissagem exige consentimento do usuário", () => {
+  assert(
+    /ATERRISSAGEM \(com consentimento\)/.test(SOURCE),
+    "O bloco de aterrissagem com consentimento sumiu do final_closing."
+  );
+  assert(
+    /Inclua \[ENCERRAR_SESSAO\] SOMENTE na resposta em que você efetivamente se despedir/.test(SOURCE),
+    "A trava de emitir [ENCERRAR_SESSAO] só após o aceite sumiu."
+  );
+});
+
+Deno.test("Fechamento: teto operacional é 2x a duração prevista", () => {
+  assert(
+    /const hardCapMin = duration \* 2;/.test(SOURCE),
+    "O teto operacional (2x duração) sumiu do cálculo de fases."
+  );
+  assert(
+    /elapsedMinutes <= duration \+ 15/.test(SOURCE),
+    "A janela de costura (duration + 15) sumiu do cálculo de fases."
+  );
+});
