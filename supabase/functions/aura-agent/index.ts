@@ -7233,17 +7233,22 @@ A mensagem do usuário é cumprimento ou check-in casual, sem carga emocional cl
           const lower = assistantMessage.toLowerCase();
           const looksLikeFarewell = farewellSignals.some(s => lower.includes(s));
 
-          // TRAVA 3 (sessão Simone, 22/08): não encerrar em cima de turno aberto.
-          // Se a última mensagem do usuário é um relato substantivo ou um "não sei"
-          // (pergunta ainda em aberto), o fechamento espera o próximo turno.
+          // TRAVA 3 (sessão Simone, 22/08) + UNIFICAÇÃO DE JUÍZES:
+          // o detector de recusa é o MESMO usado pelo avaliador de fase
+          // (userDeclinedClosure), para não haver dois limiares divergentes
+          // (15 chars no avaliador vs 160 chars aqui) decidindo o mesmo turno.
+          // O critério antigo (relato ≥160 chars / "não sei") fica como reforço.
           const userTurn = String(message || '').trim();
           const userTurnLower = userTurn.toLowerCase();
           const isOpenUncertainty = /^(n[ãa]o sei|nao sei|sei l[áa]|acho que n[ãa]o sei|talvez)\b/i.test(userTurnLower);
           const isSubstantiveReport = userTurn.length >= 160;
-          const userTurnIsOpen = isOpenUncertainty || isSubstantiveReport;
+          const declinedClosure = userDeclinedClosure(messageHistory);
+          const userTurnIsOpen = isOpenUncertainty || isSubstantiveReport || declinedClosure;
 
-          if (userTurnIsOpen && currentPhase !== 'overtime') {
-            console.warn(`🛡️ Safety net suprimida: turno do usuário está aberto (uncertainty=${isOpenUncertainty}, substantive=${isSubstantiveReport}, phase=${currentPhase})`);
+          // Recusa EXPLÍCITA a um fechamento já proposto vale até no teto operacional:
+          // quem encerra nesse caso é o cron (silêncio real / hard cap), não a rede aqui.
+          if (userTurnIsOpen && (currentPhase !== 'overtime' || declinedClosure)) {
+            console.warn(`🛡️ Safety net suprimida: turno do usuário está aberto (uncertainty=${isOpenUncertainty}, substantive=${isSubstantiveReport}, declined=${declinedClosure}, phase=${currentPhase})`);
           } else if (looksLikeFarewell || currentPhase === 'overtime') {
             console.warn(`🛡️ Safety net: forçando [ENCERRAR_SESSAO] (phase=${currentPhase}, farewell=${looksLikeFarewell})`);
             assistantMessage = `${assistantMessage.trim()} [ENCERRAR_SESSAO]`;
