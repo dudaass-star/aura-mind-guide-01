@@ -339,6 +339,9 @@ CONTEXTO DO CHECKOUT:
 VALORES DO PLANO DESTE LEAD:
 ${renderPlanValues(checkout?.plan, checkout?.billing)}
 
+O QUE ${nameTxt.toUpperCase()} GANHA AO ENTRAR (escolha UM, o que mais conversa com o que ela acabou de dizer):
+${renderValueShowcase(historyTxt)}
+
 - Link pra retomar (envie SOMENTE se emitir [ENVIAR_LINK]): ${CHECKOUT_URL}
 - Email de suporte: ${SUPPORT_EMAIL}
 
@@ -349,9 +352,11 @@ MENSAGEM ATUAL DO LEAD:
 "${text}"
 
 Antes de escrever: identifique a trava real de ${nameTxt} e defina O QUE essa mensagem precisa fazer o lead entender ou sentir. Escreva com suas próprias palavras, ancorado no que ele acabou de dizer — sem abertura padrão, sem bordão, sem repetir formulação já usada no histórico.
+Sua mensagem tem DUAS camadas: (1) destrava o que ele perguntou, (2) mostra UMA coisa concreta da vitrine acima que ele ganha — em cena, não em lista de recursos. Nunca cite item marcado como JÁ CITADO.
 Se a trava envolve cobrança, deixe claro o valor que sai hoje e que o valor cheio é autorização futura, usando os números do bloco acima.
-Curto e humano: até 5 frases quando for explicação de PIX Automático, menos nos outros casos.
+Curto e humano: até 5 frases quando for explicação de PIX Automático ou de valor; menos nos outros casos.
 Termine com UMA das tags em linha separada: [ENVIAR_LINK], [ESCALAR_HUMANO], [STOP] ou nenhuma.`;
+
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
