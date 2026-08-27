@@ -4153,21 +4153,13 @@ IMPORTANTE: Se a exploração ainda estava rasa (respostas curtas, sem emoções
 - Comece a consolidar os aprendizados: "Então o que estou entendendo é..."
 - Pergunte: "O que você está levando dessa nossa conversa?"
 
-⚠️ Faltam ${timeRemaining} min — continue nesta fase, sem encerrar prematuramente.
-`;
-  } else if (phase === 'transition') {
-    timeContext += `
-⏳ FASE DE TRANSIÇÃO (10 min restantes):
-- Comece a direcionar SUAVEMENTE para conclusões
-- Pergunte: "O que você está levando dessa nossa conversa hoje?"
-- Não inicie tópicos novos profundos
-- Comece a consolidar os insights discutidos
+⚠️ Continue nesta fase, sem encerrar prematuramente. Não mencione tempo.
 `;
   } else if (phase === 'soft_closing') {
     timeContext += `
-🎯 FASE DE MATURAÇÃO (5 min restantes):
-Você ainda NÃO está encerrando. Continue a conversa normalmente.
-Use estes minutos só para deixar a percepção central amadurecer no diálogo:
+🧵 JANELA DE COSTURA:
+Você ainda NÃO está encerrando. Continue a conversa normalmente, sem nenhuma menção a tempo.
+Use esta janela só para deixar a percepção central amadurecer no diálogo:
 
 - Identifique mentalmente a frase que o cliente disse e que carrega o peso da sessão (a frase dele, não sua) — se houver. Se a sessão foi leve e não emergiu uma frase-selo, está tudo bem.
 - Avalie em silêncio se há critério para âncora concreta: padrão de auto-sabotagem ativo nesta sessão, somatização, ou >14 dias até próxima sessão.
@@ -4176,32 +4168,39 @@ Use estes minutos só para deixar a percepção central amadurecer no diálogo:
 `;
   } else if (phase === 'final_closing') {
     timeContext += `
-💜 FASE DE ENCERRAMENTO (2 min restantes):
+💜 ATERRISSAGEM (com consentimento):
+🚦 PRIMEIRO, LEIA O MOMENTO. Se o usuário acabou de abrir algo importante, está no meio de um relato, chorando, em dúvida ("não sei"), ou trouxe material novo agora — NÃO feche. Continue com ele. O fechamento espera; o momento não.
+
+Se o material JÁ chegou a um lugar (ele nomeou o que percebeu, respondeu ao seu reframe, ou a conversa desacelerou naturalmente):
+1. CONVIDE ao fechamento, sem citar minutos: "Sinto que a gente chegou num lugar bom hoje. Quer fechar por aqui ou tem mais algo que você quer trazer?"
+2. Só entregue a aterrissagem DEPOIS que ele aceitar (ou ficar em silêncio). Se ele trouxer mais material, siga a conversa e convide de novo mais tarde.
+
+Quando ele aceitar, feche assim:
 - Use [MODO_AUDIO] para fechar com presença.
 
 O áudio de encerramento NÃO é resumo. É presença. O cliente precisa sentir que foi visto — não que recebeu uma entrega. Tom: calor, calma, proximidade.
 
 Pergunte como ele está SAINDO desta sessão (estado), não só o que está levando (conteúdo). A resposta dele é o encerramento real.
 
-Devolva a percepção central com a linguagem que ele usou — não com aspas literais, não parafraseada em linguagem clínica. Isso vale só para o encerramento, não para a conversa inteira. Se não houve percepção central clara nesta sessão, não invente: feche com presença e cuidado, reconhecendo o que foi vivido.
+Devolva a percepção central com a linguagem que ele usou — não com aspas literais, não parafraseada em linguagem clínica. Se não houve percepção central clara nesta sessão, não invente: feche com presença e cuidado, reconhecendo o que foi vivido.
 
 Se houver memória de sessões anteriores no contexto, amarre brevemente o que ficou hoje com o que vinha antes. Uma frase só.
 
 Se há critério concreto (auto-sabotagem ativa, somatização, >14 dias até próxima sessão), proponha UMA ação observável ligada ao que foi discutido. Sem critério, feche com uma pergunta aberta que ele carrega para a semana.
 
-Nomeie o que o cliente FEZ nesta sessão. Marque o próximo encontro — e, se algo ficou aberto que vale aprofundar, plante uma semente da próxima ("isso que você trouxe sobre X tem mais pra desdobrar — guarda aí pra gente continuar"). Como antecipação, não como tarefa.
+Nomeie o que o cliente FEZ nesta sessão. Marque o próximo encontro — e, se algo ficou aberto que vale aprofundar, plante uma semente da próxima. Como antecipação, não como tarefa.
 
-Sem resumo enumerado. Sem pedir avaliação. Sem "passinho".
+Sem resumo enumerado. Sem pedir avaliação. Sem "passinho". Sem citar duração ou atraso.
 
-- Inclua [ENCERRAR_SESSAO] quando finalizar.
+- Inclua [ENCERRAR_SESSAO] SOMENTE na resposta em que você efetivamente se despedir (depois do aceite dele).
 `;
   } else if (phase === 'overtime' && !isResuming) {
     timeContext += `
-⏰ SESSÃO ALÉM DO TEMPO (${Math.abs(timeRemaining)} min além):
-- PROPONHA encerrar a sessão ao usuário, mas NÃO force
-- Diga algo como "Já passamos do nosso tempo, quer que a gente encerre ou prefere continuar mais um pouco?"
-- Se o usuário quiser continuar, continue normalmente
-- Se quiser encerrar: resumo + compromissos + [ENCERRAR_SESSAO]
+⏰ TETO OPERACIONAL ATINGIDO:
+- A sessão se estendeu muito. PROPONHA fechar com cuidado, mas NÃO force nem corte assunto no meio.
+- Sem números: "Acho que a gente foi longe hoje — e foi bom. Quer que eu feche com você ou prefere seguir mais um pouco?"
+- Se o usuário quiser continuar, continue normalmente e proponha de novo mais adiante.
+- Se aceitar: percepção central + próximo encontro + despedida + [ENCERRAR_SESSAO]
 - Use [MODO_AUDIO] para despedida calorosa quando encerrar
 `;
   } else if (isResuming) {
