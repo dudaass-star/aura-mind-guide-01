@@ -277,3 +277,25 @@ Deno.test("Fechamento: teto operacional é 2x a duração prevista", () => {
     "A janela de costura (duration + 15) sumiu do cálculo de fases."
   );
 });
+
+// ============================================================
+// UNIFICAÇÃO DOS JUÍZES DE RECUSA DE FECHAMENTO
+// A rede de segurança pós-geração e o avaliador de fase precisam usar
+// o MESMO detector (userDeclinedClosure), sem limiar próprio divergente.
+// ============================================================
+Deno.test("rede de segurança usa userDeclinedClosure (juiz único de recusa)", async () => {
+  const src = await Deno.readTextFile(new URL("./index.ts", import.meta.url));
+  const netIdx = src.indexOf("Safety net suprimida");
+  if (netIdx === -1) throw new Error("bloco da rede de segurança não encontrado");
+  const block = src.slice(netIdx - 1800, netIdx + 400);
+  if (!block.includes("userDeclinedClosure(messageHistory)")) {
+    throw new Error("rede de segurança não chama userDeclinedClosure");
+  }
+  if (!block.includes("declinedClosure")) {
+    throw new Error("recusa unificada não entra no cálculo de turno aberto");
+  }
+  // recusa explícita também protege no teto operacional
+  if (!/currentPhase !== 'overtime' \|\| declinedClosure/.test(block)) {
+    throw new Error("overtime ignora recusa explícita de fechamento");
+  }
+});
