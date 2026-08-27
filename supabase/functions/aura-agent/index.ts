@@ -6021,111 +6021,24 @@ serve(async (req) => {
       console.log(`🧘 Meditation catalog loaded: ${meditationCatalog.size} categories`);
     }
 
-    // Contexto especial para primeira sessão (onboarding estruturado por fases)
+    // Primeira sessão: apenas uma nota factual curta.
+    // O roteiro de 5 fases foi removido (2026-08-27) — a fase "definir foco" não tinha
+    // condição de saída e injetava a mesma ordem em todos os turnos, gerando loop de
+    // pergunta de foco. A condução normal (Abertura → Exploração → Reframe → Fechamento)
+    // cuida da primeira sessão com melhor resultado medido.
     let firstSessionContext = '';
     if (isFirstSession) {
-      // Contar mensagens do assistente na sessão para determinar fase do onboarding
-      const assistantMessagesInSession = messageHistory.filter(m => m.role === 'assistant').length;
-      
-      // Determinar fase baseado no progresso
-      let onboardingPhase = 'welcome';
-      let phaseInstruction = '';
-      
-      if (assistantMessagesInSession === 0) {
-        onboardingPhase = 'welcome';
-        phaseInstruction = `
-🎯 FASE 1: BOAS-VINDAS (Esta mensagem!)
-OBJETIVO: Criar primeira impressão calorosa e acolhedora.
-
-O QUE FAZER AGORA:
-- Seja SUPER calorosa e animada
-- "Que legal ter esse tempo só nosso! 💜"
-- Use áudio OBRIGATORIAMENTE para criar intimidade
-- Pergunte como o usuário está chegando nesse momento
-- NÃO explique ainda como funciona, só acolha
-
-EXEMPLO DE ABERTURA:
-"Aaaai que legal! 💜 Finalmente nosso momento, né? Tô muito animada pra gente conversar com mais calma... Me conta, como você tá chegando aqui hoje?"`;
-
-      } else if (assistantMessagesInSession <= 2) {
-        onboardingPhase = 'explain';
-        phaseInstruction = `
-🎯 FASE 2: EXPLICAR O PROCESSO
-OBJETIVO: Contextualizar como as sessões funcionam.
-
-O QUE FAZER AGORA:
-- Explique brevemente como as sessões funcionam
-- "São 45 minutos só nossos, pra ir mais fundo, sem pressa"
-- Pergunte se o usuário já fez terapia ou algo parecido antes
-- Isso vai te ajudar a calibrar o nível de profundidade
-
-EXEMPLO:
-"Então, deixa eu te explicar como funciona aqui... A gente tem uns 45 minutos só nossos, sem interrupção. É diferente das conversas do dia a dia - aqui a gente pode ir mais fundo, sabe? Você já fez terapia ou algo do tipo antes?"`;
-
-      } else if (assistantMessagesInSession <= 4) {
-        onboardingPhase = 'discover';
-        phaseInstruction = `
-🎯 FASE 3: CONHECER O USUÁRIO
-OBJETIVO: Mapear contexto de vida e desafios.
-
-O QUE FAZER AGORA:
-- Descubra o contexto de vida (trabalho, família, rotina)
-- O que está trazendo ele para esse processo
-- Quais são os maiores desafios atuais
-- NÃO aprofunde ainda, só entenda o panorama geral
-- Seja curiosa e genuína
-
-PERGUNTAS ÚTEIS:
-- "Me conta um pouco de você... o que você faz, como é sua rotina?"
-- "O que te fez buscar esse tipo de acompanhamento agora?"
-- "Qual a maior coisa que tá te incomodando ultimamente?"`;
-
-      } else if (assistantMessagesInSession <= 6) {
-        onboardingPhase = 'alliance';
-        phaseInstruction = `
-🎯 FASE 4: CRIAR ALIANÇA TERAPÊUTICA
-OBJETIVO: Estabelecer parceria e expectativas.
-
-O QUE FAZER AGORA:
-- Pergunte: "O que você mais precisa de mim nesse processo?"
-- "Como você vai saber que nossas sessões estão te ajudando?"
-- Valide o que o usuário disse e mostre que entendeu
-- Crie um senso de parceria e confiança
-
-EXEMPLO:
-"Olha, eu tô aqui pra te ajudar do jeito que fizer mais sentido pra você. Algumas pessoas gostam que eu seja mais direta, outras preferem que eu só ouça... O que você mais precisa de mim nesse nosso caminho?"`;
-
-      } else {
-        onboardingPhase = 'focus';
-        phaseInstruction = `
-🎯 FASE 5: DEFINIR PRIMEIRO TEMA DE TRABALHO
-OBJETIVO: Escolher por onde começar o trabalho real.
-
-O QUE FAZER AGORA:
-- De tudo que conversaram, ajude a escolher um foco
-- "De tudo isso que você me contou, por onde você quer que a gente comece?"
-- Quando o usuário escolher, pode começar a explorar mais profundamente
-- A partir daqui o onboarding termina e a sessão segue normalmente
-
-EXEMPLO:
-"Você me contou sobre [X, Y, Z]... Tudo isso é importante, mas por onde você sente que faz mais sentido a gente começar hoje?"`;
-      }
-
       firstSessionContext = `
-🌟 PRIMEIRA SESSÃO - ONBOARDING ESTRUTURADO
-Esta é a PRIMEIRA sessão formal com ${profile?.name || 'o usuário'}!
-Fase atual: ${onboardingPhase.toUpperCase()} (mensagem ${assistantMessagesInSession + 1} da sessão)
+🌟 PRIMEIRA SESSÃO
+Esta é a primeira sessão formal com ${profile?.name || 'o usuário'}.
 
-${phaseInstruction}
-
-REGRAS GERAIS DO ONBOARDING:
-- Não pule fases! Siga o fluxo natural
-- Use áudio nas primeiras respostas para criar conexão
-- Seja mais curiosa e exploratória do que diretiva
-- Descubra os valores e motivações antes de fazer intervenções
-- Se o usuário quiser pular direto para um problema, acolha mas volte ao onboarding gentilmente
+- Abra com calor genuíno e explique o formato em UMA frase (tempo só de vocês, sem pressa). Sem checklist, sem roteiro.
+- Entenda o panorama concreto da vida da pessoa antes de qualquer leitura psicológica.
+- Se ela já chegou com um tema, trabalhe esse tema. Não puxe de volta para apresentações.
+- Conduza como em qualquer outra sessão: siga as fases terapêuticas normais.
 `;
     }
+
 
     const dateTimeContext = getCurrentDateTimeContext();
 
