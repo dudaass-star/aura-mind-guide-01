@@ -1725,7 +1725,7 @@ ${SESSION_PHASE_INSTRUCTIONS.overtime_aterrissando}`
         detectedPhase: 'presenca',
         stagnationLevel: 1,
         guidance: `\n\n💡 NOTA DE TIMING:
-O usuário já trouxe material suficiente (contexto, emoção e algo sobre o porquê) e ${sessionElapsedMin} min se passaram.
+O usuário já trouxe material suficiente (contexto, emoção e algo sobre o porquê). Uso interno: não cite tempo ao usuário.
 Se houver leitura possível, considere oferecer como HIPÓTESE ABERTA agora — sem forçar. Se ainda faltar um ângulo, vá uma camada mais funda no que JÁ apareceu, sem repetir perguntas exploratórias do início.`
       };
     }
