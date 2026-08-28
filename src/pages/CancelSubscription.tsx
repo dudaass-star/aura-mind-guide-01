@@ -375,7 +375,12 @@ const CancelSubscription = () => {
               <p className="text-sm text-muted-foreground">
                 Continua com a Aura de forma mais leve, mantendo seu histórico e seus insights.
               </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                A troca começa um ciclo novo hoje: cobramos R$ 19,90 agora e, se você já pagou o mês
+                atual, ele segue valendo.
+              </p>
             </div>
+
           </div>
           <Button variant="outline" className="w-full" onClick={() => runAction("downgrade_to_lite")}>
             Mudar para o Lite
