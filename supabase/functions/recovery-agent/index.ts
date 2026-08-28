@@ -405,13 +405,40 @@ Deno.serve(async (req) => {
 
     // 8. Monta prompt
     const planTxt = checkout?.plan ? `${checkout.plan}${checkout.billing ? ` (${checkout.billing})` : ""}` : "não identificado";
-    const nameTxt = conv?.name || checkout?.name || "alguém";
+    const nameTxt = conv?.name || checkout?.name || customer?.name || "alguém";
     const historyTxt = historyAsc.map(m => {
       const who = m.direction === "in" ? "Lead" : (m.sent_by_admin ? "Admin" : "Aura");
       return `${who}: ${(m.body || "[mídia]").slice(0, 300)}`;
     }).join("\n");
 
-    const contextBlock = `
+    // Modo SUPORTE: já é cliente. Resolve a dúvida, não vende, não manda checkout.
+    const supportBlock = customer ? `
+MODO SUPORTE (IMPORTANTE): esta pessoa JÁ É CLIENTE (status: ${customer.status}). NÃO venda, NÃO ofereça plano, NÃO mande link de checkout, NÃO mostre vitrine de valor.
+Responda a dúvida dela de forma direta e resolutiva usando a base de conhecimento (cobrança, acesso, como usar, cancelamento).
+- Acesso e histórico: olaaura.com.br/meu-espaco (login sem senha, pelo email/telefone do cadastro).
+- A conversa com a Aura acontece no WhatsApp oficial dela, não neste número.
+- Cancelamento: pelo site, em 1 minuto, sem precisar falar com ninguém.
+- Se for caso de cobrança específica que você não tem como conferir, oriente o email ${SUPPORT_EMAIL} e emita [ESCALAR_HUMANO].
+` : "";
+
+    const modeInstructions = customer
+      ? `Responda curto (2-4 frases), humano, resolvendo o que a pessoa perguntou. Sem venda e sem cena de valor.
+Termine com UMA das tags em linha separada: [ESCALAR_HUMANO] ou nenhuma.`
+      : `Antes de escrever: identifique a trava real de ${nameTxt} e defina O QUE essa mensagem precisa fazer o lead entender ou sentir. Escreva com suas próprias palavras, ancorado no que ele acabou de dizer — sem abertura padrão, sem bordão, sem repetir formulação já usada no histórico.
+Sua mensagem tem DUAS camadas: (1) destrava o que ele perguntou, (2) mostra UMA cena do NÍVEL A da vitrine — em cena e no presente, como se estivesse acontecendo com ele agora, não como lista de recursos. Nunca abra a mensagem por um item do nível C. Se as cenas A que conversam com a mensagem já estão marcadas como JÁ CITADO, aprofunde uma delas com um detalhe novo em vez de descer pra B ou C. Itens do nível B só entram como reforço de uma cena A (ex: "e dá pra responder por áudio mesmo"); nunca como argumento principal.
+Se a trava envolve cobrança, deixe claro o valor que sai hoje e que o valor cheio é autorização futura, usando os números do bloco acima.
+Curto e humano: até 5 frases quando for explicação de PIX Automático ou de valor; menos nos outros casos.
+Termine com UMA das tags em linha separada: [ENVIAR_LINK], [ESCALAR_HUMANO], [STOP] ou nenhuma.`;
+
+    const shortAckInstruction = shortAck ? `
+ATENÇÃO — A MENSAGEM É CURTA ("ok", "obrigada", "beleza"): responda em NO MÁXIMO 2 frases, sem reabrir argumento e sem repetir explicação. Feche com leveza. Se ele ainda não pagou e a conversa já explicou o que precisava, emita [ENVIAR_LINK] pra deixar o caminho na mão dele.
+` : "";
+
+    const mediaInstruction = mediaOnly ? `
+ATENÇÃO — VEIO SÓ UM ANEXO, SEM TEXTO: trate como "paguei / mandei o comprovante, e agora?". Confirme que o pagamento cai automaticamente no acesso, diga que a Aura chama no WhatsApp em poucos minutos depois da confirmação, e ofereça o ${SUPPORT_EMAIL} caso não chegue. Não peça pra reenviar o anexo. Não venda.
+` : "";
+
+    const contextBlock = `${supportBlock}
 BASE DE CONHECIMENTO:
 ${renderKb(kbItems)}
 
@@ -421,11 +448,11 @@ CONTEXTO DO CHECKOUT:
 
 VALORES DO PLANO DESTE LEAD:
 ${renderPlanValues(checkout?.plan, checkout?.billing)}
-
+${customer ? "" : `
 O QUE ${nameTxt.toUpperCase()} GANHA AO ENTRAR:
 ${renderValueShowcase(historyTxt)}
 
-- Link pra retomar (envie SOMENTE se emitir [ENVIAR_LINK]): ${CHECKOUT_URL}
+- Link pra retomar (envie SOMENTE se emitir [ENVIAR_LINK]): ${CHECKOUT_URL}`}
 - Email de suporte: ${SUPPORT_EMAIL}
 
 HISTÓRICO DA CONVERSA:
@@ -433,12 +460,8 @@ ${historyTxt}
 
 MENSAGEM ATUAL DO LEAD:
 "${text}"
-
-Antes de escrever: identifique a trava real de ${nameTxt} e defina O QUE essa mensagem precisa fazer o lead entender ou sentir. Escreva com suas próprias palavras, ancorado no que ele acabou de dizer — sem abertura padrão, sem bordão, sem repetir formulação já usada no histórico.
-Sua mensagem tem DUAS camadas: (1) destrava o que ele perguntou, (2) mostra UMA cena do NÍVEL A da vitrine — em cena e no presente, como se estivesse acontecendo com ele agora, não como lista de recursos. Nunca abra a mensagem por um item do nível C. Se as cenas A que conversam com a mensagem já estão marcadas como JÁ CITADO, aprofunde uma delas com um detalhe novo em vez de descer pra B ou C. Itens do nível B só entram como reforço de uma cena A (ex: "e dá pra responder por áudio mesmo"); nunca como argumento principal.
-Se a trava envolve cobrança, deixe claro o valor que sai hoje e que o valor cheio é autorização futura, usando os números do bloco acima.
-Curto e humano: até 5 frases quando for explicação de PIX Automático ou de valor; menos nos outros casos.
-Termine com UMA das tags em linha separada: [ENVIAR_LINK], [ESCALAR_HUMANO], [STOP] ou nenhuma.`;
+${shortAckInstruction}${mediaInstruction}
+${modeInstructions}`;
 
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
