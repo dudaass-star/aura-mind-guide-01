@@ -355,10 +355,7 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ skipped: "limit_reached" }), { status: 200, headers: corsHeaders });
     }
 
-    // 5. Mensagem curta ("ok", "obrigada") não é mais ignorada: vira resposta curta.
-    const shortAck = isShortGreeting(text);
-
-    // 5b. Mensagem só com anexo: descreve o anexo em vez de sumir.
+    // 5. Mensagem só com anexo: descreve o anexo em vez de sumir.
     let mediaOnly = false;
     if (!text.trim()) {
       const { data: lastIn2 } = await supabase
@@ -373,6 +370,9 @@ Deno.serve(async (req) => {
         return new Response(JSON.stringify({ skipped: "empty_inbound" }), { status: 200, headers: corsHeaders });
       }
     }
+
+    // 5b. Mensagem curta ("ok", "obrigada") não é mais ignorada: vira resposta curta.
+    const shortAck = !mediaOnly && isShortGreeting(text);
 
     // 6. Stop words
     if (STOP_WORDS.some(re => re.test(text))) {
