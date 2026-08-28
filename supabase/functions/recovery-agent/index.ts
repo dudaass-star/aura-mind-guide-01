@@ -363,7 +363,7 @@ CONTEXTO DO CHECKOUT:
 VALORES DO PLANO DESTE LEAD:
 ${renderPlanValues(checkout?.plan, checkout?.billing)}
 
-O QUE ${nameTxt.toUpperCase()} GANHA AO ENTRAR (escolha UM, o que mais conversa com o que ela acabou de dizer):
+O QUE ${nameTxt.toUpperCase()} GANHA AO ENTRAR:
 ${renderValueShowcase(historyTxt)}
 
 - Link pra retomar (envie SOMENTE se emitir [ENVIAR_LINK]): ${CHECKOUT_URL}
@@ -376,7 +376,7 @@ MENSAGEM ATUAL DO LEAD:
 "${text}"
 
 Antes de escrever: identifique a trava real de ${nameTxt} e defina O QUE essa mensagem precisa fazer o lead entender ou sentir. Escreva com suas próprias palavras, ancorado no que ele acabou de dizer — sem abertura padrão, sem bordão, sem repetir formulação já usada no histórico.
-Sua mensagem tem DUAS camadas: (1) destrava o que ele perguntou, (2) mostra UMA coisa concreta da vitrine acima que ele ganha — em cena, não em lista de recursos. Nunca cite item marcado como JÁ CITADO.
+Sua mensagem tem DUAS camadas: (1) destrava o que ele perguntou, (2) mostra UMA cena do NÍVEL A da vitrine — em cena e no presente, como se estivesse acontecendo com ele agora, não como lista de recursos. Nunca abra a mensagem por um item do nível C. Se as cenas A que conversam com a mensagem já estão marcadas como JÁ CITADO, aprofunde uma delas com um detalhe novo em vez de descer pra B ou C. Itens do nível B só entram como reforço de uma cena A (ex: "e dá pra responder por áudio mesmo"); nunca como argumento principal.
 Se a trava envolve cobrança, deixe claro o valor que sai hoje e que o valor cheio é autorização futura, usando os números do bloco acima.
 Curto e humano: até 5 frases quando for explicação de PIX Automático ou de valor; menos nos outros casos.
 Termine com UMA das tags em linha separada: [ENVIAR_LINK], [ESCALAR_HUMANO], [STOP] ou nenhuma.`;
