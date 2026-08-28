@@ -1017,6 +1017,34 @@ serve(async (req) => {
       }
 
       logStep(`Downgrading to ${tier}`, { subscriptionId: subscription.id });
+
+      // 0) Antes de reiniciar o ciclo: existe fatura de ciclo JÁ PAGA cobrindo
+      //    hoje? Se sim, a troca gera uma segunda cobrança no mesmo mês — o
+      //    cliente precisa ser avisado disso na resposta (caso Ana Cristina).
+      let hasPaidCurrentCycle = false;
+      try {
+        const paidInvoices = await stripe.invoices.list({
+          subscription: subscription.id,
+          status: "paid",
+          limit: 3,
+        });
+        const periodEnd = (subscription as any).current_period_end as number | undefined;
+        const nowSec = Math.floor(Date.now() / 1000);
+        hasPaidInvoiceLoop: for (const inv of paidInvoices.data) {
+          if ((inv.amount_paid ?? 0) <= 0) continue;
+          const line = inv.lines?.data?.[0] as any;
+          const start = line?.period?.start ?? inv.period_start;
+          const end = line?.period?.end ?? periodEnd ?? inv.period_end;
+          if (typeof start === "number" && typeof end === "number" && start <= nowSec && nowSec < end) {
+            hasPaidCurrentCycle = true;
+            break hasPaidInvoiceLoop;
+          }
+        }
+        logStep("Checagem de ciclo pago vigente", { hasPaidCurrentCycle });
+      } catch (e) {
+        logStep("WARN checando faturas pagas", { err: (e as Error).message });
+      }
+
       // 1) Fecha o ciclo antigo: invoices em aberto do valor cheio precisam sair
       //    do caminho, senão o Smart Retry segue cobrando o preço antigo e o
       //    Stripe cancela a assinatura mesmo com a oferta aceita.
