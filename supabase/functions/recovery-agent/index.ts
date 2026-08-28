@@ -267,12 +267,40 @@ Deno.serve(async (req) => {
   );
 
   try {
-    const { phone: rawPhone, inbound_text } = await req.json();
+    const payload = await req.json().catch(() => ({}));
+    const { phone: rawPhone, inbound_text, flush_pending } = payload || {};
+
+    // ─── Modo cron: responde o que chegou durante o horário silencioso ───
+    // Sem isso, mensagem de madrugada era descartada e nunca voltava.
+    if (flush_pending) {
+      const { data: pendentes } = await supabase
+        .from("recovery_conversations")
+        .select("phone, pending_inbound")
+        .not("pending_reply_at", "is", null)
+        .limit(50);
+      let flushed = 0;
+      for (const p of pendentes || []) {
+        await supabase.from("recovery_conversations")
+          .update({ pending_reply_at: null, pending_inbound: null })
+          .eq("phone", p.phone);
+        try {
+          await supabase.functions.invoke("recovery-agent", {
+            body: { phone: p.phone, inbound_text: p.pending_inbound || "" },
+          });
+          flushed++;
+        } catch (e) {
+          console.error("[recovery-agent] flush falhou para", p.phone.slice(0, 6) + "***", e);
+        }
+      }
+      console.log(`[recovery-agent] flush_pending: ${flushed}/${(pendentes || []).length}`);
+      return new Response(JSON.stringify({ ok: true, flushed }), { status: 200, headers: corsHeaders });
+    }
+
     if (!rawPhone || typeof rawPhone !== "string") {
       return new Response(JSON.stringify({ skipped: "missing_phone" }), { status: 200, headers: corsHeaders });
     }
     const phone = rawPhone.replace(/\D/g, "");
-    const text = (inbound_text || "").toString();
+    let text = (inbound_text || "").toString();
 
     // 1. Config + kill switch
     const { data: cfg } = await supabase.from("recovery_agent_config").select("*").eq("id", 1).maybeSingle();
@@ -281,32 +309,45 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ skipped: "disabled" }), { status: 200, headers: corsHeaders });
     }
 
-    // 2. GUARD usuário ativo
-    if (await isActiveUser(supabase, phone)) {
-      await supabase.from("recovery_conversations").update({
-        needs_human: true, auto_paused_reason: "active_user", updated_at: new Date().toISOString(),
-      }).eq("phone", phone);
-      console.log(`[recovery-agent] active_user, paused phone=${phone.slice(0,6)}***`);
-      return new Response(JSON.stringify({ skipped: "active_user" }), { status: 200, headers: corsHeaders });
-    }
+    // 2. Já é cliente? Não cala mais — muda para modo SUPORTE (sem venda, sem link).
+    const customer = await getCustomer(supabase, phone);
 
-    // 3. Quiet hours
+    // 3. Quiet hours → enfileira para responder na abertura do dia (08h BRT)
     if (isQuietHourBRT(cfg.silent_hours_start, cfg.silent_hours_end)) {
-      console.log("[recovery-agent] quiet_hours");
-      return new Response(JSON.stringify({ skipped: "quiet_hours" }), { status: 200, headers: corsHeaders });
+      await supabase.from("recovery_conversations").update({
+        pending_reply_at: new Date().toISOString(),
+        pending_inbound: text.slice(0, 1000),
+        updated_at: new Date().toISOString(),
+      }).eq("phone", phone);
+      console.log("[recovery-agent] quiet_hours → enfileirado");
+      return new Response(JSON.stringify({ skipped: "quiet_hours", queued: true }), { status: 200, headers: corsHeaders });
     }
 
     // 4. Conversa
     const { data: conv } = await supabase
       .from("recovery_conversations")
-      .select("phone, auto_reply_count, needs_human, checkout_session_id, name")
+      .select("phone, auto_reply_count, needs_human, auto_paused_reason, checkout_session_id, name, last_inbound_at")
       .eq("phone", phone).maybeSingle();
 
-    if (conv?.needs_human) {
-      console.log("[recovery-agent] needs_human");
-      return new Response(JSON.stringify({ skipped: "needs_human" }), { status: 200, headers: corsHeaders });
+    // Pausas definitivas: só quando o próprio lead pediu para parar / falar com humano.
+    const HARD_PAUSES = ["user_requested_human", "lead_declined", "escalated_email"];
+    if (conv?.needs_human && HARD_PAUSES.includes(conv?.auto_paused_reason || "")) {
+      console.log(`[recovery-agent] pausa definitiva (${conv?.auto_paused_reason})`);
+      return new Response(JSON.stringify({ skipped: conv?.auto_paused_reason }), { status: 200, headers: corsHeaders });
     }
-    if ((conv?.auto_reply_count ?? 0) >= cfg.max_auto_replies) {
+
+    // Cota de respostas: zera quando o lead reabre a conversa depois de 48h.
+    let replyCount = conv?.auto_reply_count ?? 0;
+    const lastIn = conv?.last_inbound_at ? new Date(conv.last_inbound_at).getTime() : 0;
+    const reopened = lastIn > 0 && Date.now() - lastIn > 48 * 3600 * 1000;
+    if (reopened && replyCount > 0) {
+      replyCount = 0;
+      await supabase.from("recovery_conversations").update({
+        auto_reply_count: 0, needs_human: false, auto_paused_reason: null,
+      }).eq("phone", phone);
+      console.log("[recovery-agent] cota resetada (conversa reaberta)");
+    }
+    if (replyCount >= cfg.max_auto_replies) {
       await supabase.from("recovery_conversations").update({
         needs_human: true, auto_paused_reason: "limit_reached", updated_at: new Date().toISOString(),
       }).eq("phone", phone);
@@ -314,10 +355,23 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ skipped: "limit_reached" }), { status: 200, headers: corsHeaders });
     }
 
-    // 5. Saudação curta
-    if (isShortGreeting(text)) {
-      console.log("[recovery-agent] short_greeting");
-      return new Response(JSON.stringify({ skipped: "short_greeting" }), { status: 200, headers: corsHeaders });
+    // 5. Mensagem curta ("ok", "obrigada") não é mais ignorada: vira resposta curta.
+    const shortAck = isShortGreeting(text);
+
+    // 5b. Mensagem só com anexo: descreve o anexo em vez de sumir.
+    let mediaOnly = false;
+    if (!text.trim()) {
+      const { data: lastIn2 } = await supabase
+        .from("recovery_messages")
+        .select("media_url, body")
+        .eq("phone", phone).eq("direction", "in")
+        .order("created_at", { ascending: false }).limit(1).maybeSingle();
+      if (lastIn2?.media_url) {
+        mediaOnly = true;
+        text = "[o lead enviou um anexo sem texto — normalmente é comprovante de pagamento ou print da tela do banco]";
+      } else {
+        return new Response(JSON.stringify({ skipped: "empty_inbound" }), { status: 200, headers: corsHeaders });
+      }
     }
 
     // 6. Stop words
