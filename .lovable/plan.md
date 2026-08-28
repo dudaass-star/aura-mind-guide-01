@@ -39,6 +39,6 @@ A causa está em dois lugares verificados:
 
 - `UPDATE recovery_agent_config SET system_prompt = ...` (id=1): nova seção "PROIBIDO SE DIMINUIR" com lista de aberturas e termos banidos, regra de comparação (responder pelo que é, em cena) e regra de posição do disclaimer clínico. Sem tocar em `enabled`, `model`, `max_auto_replies` ou janela de silêncio.
 - `recovery_knowledge_base`: `UPDATE` em `d89b244b` (tecnico, "Aura substitui terapia?") e `588291ff` (objecao, "Já tentei terapia / outro app"); `INSERT` de um item `objecao` para "é tipo terapia? / é psicólogo?" no padrão de cena. Categorias já são sempre injetadas — nada muda em `ALWAYS_CATEGORIES`.
-- `supabase/functions/recovery-agent/index.ts`: no parágrafo de instrução do `contextBlock`, acrescentar que pergunta de identidade/comparação exige cena do nível A e não aceita definição funcional. `VALUE_SHOWCASE` e `renderValueShowcase()` permanecem como estão.
+- `supabase/functions/recovery-agent/index.ts`: reescrita dos textos dos 3 itens `tier: "A"` de `VALUE_SHOWCASE` no padrão momento vivido + fecho de consequência; no parágrafo de instrução do `contextBlock`, acrescentar que pergunta de identidade/comparação exige cena do nível A e que definição funcional sem cena é erro. Estrutura de `renderValueShowcase()` e os níveis B/C permanecem como estão.
 - Deploy da edge function e atualização da memória do projeto (KB e postura do recovery-agent).
 - Sem envio de mensagem real em nenhuma etapa de verificação.
