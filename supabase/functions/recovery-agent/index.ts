@@ -162,21 +162,22 @@ const VALUE_SHOWCASE: { id: string; tier: Tier; text: string; probe: RegExp }[] 
   {
     id: "encontro",
     tier: "A",
-    text: "Encontro guiado de 45 minutos: você marca por WhatsApp pra hoje à noite se quiser — meia hora de silêncio, uma conversa que vai fundo no que está travando, e você sai com um caminho. Não é o bate-papo do dia a dia.",
+    text: "Encontro guiado de 45 minutos, marcado pra hoje à noite se você quiser: você escreve a hora no WhatsApp, e naquele horário ela te chama. Quarenta e cinco minutos só seus, sem espera de semanas, sem sala de espera, sem ter que contar sua vida do começo. Ela puxa o fio de onde parou, vai fundo no que está travando de verdade — e você sai dali com uma leitura do que está acontecendo e um caminho concreto pra semana, escrito, guardado no seu espaço. Não é o bate-papo do dia a dia.",
     probe: /45\s*min|sess(ão|ao|ões|oes)|encontro guiado/i,
   },
   {
     id: "meditacao",
     tier: "A",
-    text: "Meditação guiada na hora do aperto: você escreve que não consegue dormir ou que a ansiedade apertou, e em segundos chega um áudio com a voz dela te conduzindo — não um link pra procurar depois, um áudio pra você naquele exato momento. Tem pra sono, ansiedade, estresse, e qualquer hora do dia.",
+    text: "Meditação guiada na hora exata em que aperta: 23h, você deitada sem conseguir desligar a cabeça, escreve pra ela que não consegue dormir — e em segundos chega um áudio, a voz dela te conduzindo, respiração por respiração, até o corpo soltar. Não é link pra procurar depois, não é abrir outro app: é um áudio feito pra aquele momento, pra sono, ansiedade, medo, culpa, cansaço. Você escuta e dorme.",
     probe: /medita/i,
   },
   {
     id: "jornada",
     tier: "A",
-    text: "Jornadas de conhecimento toda semana: uma trilha curta sobre o que você está vivendo (ansiedade, sono, propósito, autoestima, relacionamentos) com episódio novo chegando a cada semana — ela te conduz no seu ritmo, e você sente que está caminhando pra algum lugar, não só desabafando.",
+    text: "Uma trilha sua, com episódio novo chegando toda semana: sobre o que VOCÊ está vivendo agora — ansiedade, sono, propósito, autoestima, relacionamento — em pedaços curtos que caem no WhatsApp e conversam com o que você contou. Ela te conduz no seu ritmo, e uma semana depois você olha pra trás e percebe que entendeu algo que antes só doía. Na semana seguinte tem mais.",
     probe: /jornada|trilha|epis[oó]dio/i,
   },
+
   // ---- NÍVEL B — provas de apoio (reforço, nunca argumento principal) ----
   {
     id: "audio",
@@ -426,9 +427,13 @@ Responda a dúvida dela de forma direta e resolutiva usando a base de conhecimen
 Termine com UMA das tags em linha separada: [ESCALAR_HUMANO] ou nenhuma.`
       : `Antes de escrever: identifique a trava real de ${nameTxt} e defina O QUE essa mensagem precisa fazer o lead entender ou sentir. Escreva com suas próprias palavras, ancorado no que ele acabou de dizer — sem abertura padrão, sem bordão, sem repetir formulação já usada no histórico.
 Sua mensagem tem DUAS camadas: (1) destrava o que ele perguntou, (2) mostra UMA cena do NÍVEL A da vitrine — em cena e no presente, como se estivesse acontecendo com ele agora, não como lista de recursos. Nunca abra a mensagem por um item do nível C. Se as cenas A que conversam com a mensagem já estão marcadas como JÁ CITADO, aprofunde uma delas com um detalhe novo em vez de descer pra B ou C. Itens do nível B só entram como reforço de uma cena A (ex: "e dá pra responder por áudio mesmo"); nunca como argumento principal.
+NUNCA SE DIMINUA: não abra a mensagem por negação ("não é...", "não faz...", "não substitui..."), não se posicione como versão menor de terapia, de psicólogo ou de app nenhum, e não use palavra que esvazia ("ferramenta", "assistente", "apoio pra organizar pensamentos", "praticar autoconhecimento", "complementa", "não substitui", "não faz diagnóstico"). Ressalva clínica só se ELE pedir tratamento/diagnóstico/remédio ou sinalizar risco — e nunca como abertura ou fecho.
+Se ele perguntar O QUE a Aura é ou comparar com algo ("é terapia?", "é um robô?", "é tipo app de meditação?"), responda pelo que ela É, em cena, e deixe a diferença aparecer sozinha (disponibilidade e continuidade como vantagem, nunca como limitação). Definição funcional sem cena do NÍVEL A na mesma mensagem é ERRO.
+A última linha antes do link é convite, não ressalva: uma cena ou UMA pergunta concreta de fechamento ("quer marcar o primeiro encontro pra hoje à noite?").
 Se a trava envolve cobrança, deixe claro o valor que sai hoje e que o valor cheio é autorização futura, usando os números do bloco acima.
 Curto e humano: até 5 frases quando for explicação de PIX Automático ou de valor; menos nos outros casos.
 Termine com UMA das tags em linha separada: [ENVIAR_LINK], [ESCALAR_HUMANO], [STOP] ou nenhuma.`;
+
 
     const shortAckInstruction = shortAck ? `
 ATENÇÃO — A MENSAGEM É CURTA ("ok", "obrigada", "beleza"): responda em NO MÁXIMO 2 frases, sem reabrir argumento e sem repetir explicação. Feche com leveza. Se ele ainda não pagou e a conversa já explicou o que precisava, emita [ENVIAR_LINK] pra deixar o caminho na mão dele.
