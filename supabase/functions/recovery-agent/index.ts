@@ -495,11 +495,12 @@ ${modeInstructions}`;
       return new Response(JSON.stringify({ skipped: "empty_response" }), { status: 200, headers: corsHeaders });
     }
 
-    // 9. Parse tags
-    const sendLink = /\[ENVIAR_LINK\]/i.test(raw);
+    // 9. Parse tags (cliente em modo suporte nunca recebe link de checkout)
+    const sendLink = !customer && /\[ENVIAR_LINK\]/i.test(raw);
     const escalate = /\[ESCALAR_HUMANO\]/i.test(raw);
     const stop = /\[STOP\]/i.test(raw);
     let body = raw.replace(/\[(ENVIAR_LINK|ESCALAR_HUMANO|STOP)\]/gi, "").trim();
+    if (customer) body = body.replace(new RegExp(CHECKOUT_URL.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"), "").trim();
 
     if (sendLink && !body.includes(CHECKOUT_URL)) {
       body = `${body}\n\n${CHECKOUT_URL}`;
