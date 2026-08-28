@@ -223,16 +223,21 @@ function renderValueShowcase(historyTxt: string): string {
 }
 
 
-async function isActiveUser(supabase: any, phone: string): Promise<boolean> {
+/**
+ * Retorna o perfil do telefone quando ele JÁ é cliente (ativo/trial/canceling/past_due).
+ * Antes isso derrubava a execução (`skip: active_user`) e o cliente ficava sem
+ * resposta nenhuma — agora só muda o modo do agente para SUPORTE.
+ */
+async function getCustomer(supabase: any, phone: string): Promise<{ status: string; name: string | null } | null> {
   const variations = getPhoneVariations(phone);
   const { data } = await supabase
     .from("profiles")
-    .select("id, status")
+    .select("id, status, name")
     .in("phone", variations)
     .in("status", ["active", "trial", "canceling", "past_due"])
     .limit(1)
     .maybeSingle();
-  return !!data;
+  return data ? { status: data.status, name: data.name ?? null } : null;
 }
 
 async function sendTwilioFreeText(phone: string, text: string): Promise<{ ok: boolean; sid?: string; error?: string }> {
