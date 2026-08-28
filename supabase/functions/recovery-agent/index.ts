@@ -529,7 +529,7 @@ ${modeInstructions}`;
       metadata: { bot: true, kb_used: kbIds, tags: { sendLink, escalate, stop } },
     });
 
-    const newCount = (conv?.auto_reply_count ?? 0) + 1;
+    const newCount = replyCount + 1;
     const shouldPause = stop || escalate || newCount >= cfg.max_auto_replies;
     const pauseReason = stop ? "lead_declined" : (escalate ? "escalated_email" : (newCount >= cfg.max_auto_replies ? "limit_reached" : null));
 
@@ -541,6 +541,8 @@ ${modeInstructions}`;
       auto_reply_count: newCount,
       needs_human: shouldPause,
       auto_paused_reason: pauseReason,
+      pending_reply_at: null,
+      pending_inbound: null,
       updated_at: nowIso,
     }, { onConflict: "phone" });
 
