@@ -148,54 +148,78 @@ function renderKb(items: KbItem[]): string {
 }
 
 /**
- * Vitrine de valor: o que o lead GANHA ao entrar, em linguagem de experiência.
- * O agente escolhe UM item por mensagem. Itens já citados no histórico da conversa
- * são marcados como "JÁ CITADO" pra não repetir o mesmo diferencial duas vezes.
+ * Vitrine de valor em 3 níveis de desejo (regra: memória e conveniência são
+ * pressupostos, não argumentos de venda — o lead já espera isso).
+ *  - A "CENAS QUE GERAM DESEJO": o que a pessoa QUER pra si. É daqui que o
+ *    agente escolhe, sempre.
+ *  - B "PROVAS DE APOIO": conforto/prova — só como reforço de uma cena A.
+ *  - C "PRESSUPOSTOS": só se o lead perguntar diretamente.
+ * Itens já citados no histórico são marcados como "JÁ CITADO" (anti-repetição).
  */
-const VALUE_SHOWCASE: { id: string; text: string; probe: RegExp }[] = [
+type Tier = "A" | "B" | "C";
+const VALUE_SHOWCASE: { id: string; tier: Tier; text: string; probe: RegExp }[] = [
+  // ---- NÍVEL A — cenas que geram desejo ----
+  {
+    id: "encontro",
+    tier: "A",
+    text: "Encontro guiado de 45 minutos: você marca por WhatsApp pra hoje à noite se quiser — meia hora de silêncio, uma conversa que vai fundo no que está travando, e você sai com um caminho. Não é o bate-papo do dia a dia.",
+    probe: /45\s*min|sess(ão|ao|ões|oes)|encontro guiado/i,
+  },
   {
     id: "meditacao",
-    text: "Meditação guiada em áudio na hora do aperto — a Aura percebe (ansiedade, sono ruim, estresse) e manda o áudio com a voz dela ali no WhatsApp, sem abrir outro app.",
+    tier: "A",
+    text: "Meditação guiada na hora do aperto: você escreve que não consegue dormir ou que a ansiedade apertou, e em segundos chega um áudio com a voz dela te conduzindo — não um link pra procurar depois, um áudio pra você naquele exato momento. Tem pra sono, ansiedade, estresse, e qualquer hora do dia.",
     probe: /medita/i,
   },
   {
     id: "jornada",
-    text: "Jornadas guiadas: trilhas curtas (ansiedade, sono, propósito, autoestima, relacionamentos) que ela conduz no seu ritmo, com episódio novo chegando toda semana.",
-    probe: /jornada/i,
+    tier: "A",
+    text: "Jornadas de conhecimento toda semana: uma trilha curta sobre o que você está vivendo (ansiedade, sono, propósito, autoestima, relacionamentos) com episódio novo chegando a cada semana — ela te conduz no seu ritmo, e você sente que está caminhando pra algum lugar, não só desabafando.",
+    probe: /jornada|trilha|epis[oó]dio/i,
   },
-  {
-    id: "encontro",
-    text: "Encontro guiado de 45 minutos marcado por WhatsApp, na hora que você quiser — conversa mais funda, não é o bate-papo do dia a dia.",
-    probe: /45\s*min|sess(ão|ao|ões|oes)|encontro guiado/i,
-  },
-  {
-    id: "memoria",
-    text: "Ela lembra: você conta uma coisa hoje e semanas depois ela puxa aquilo de volta. Não recomeça do zero, não pede pra você repetir sua vida.",
-    probe: /lembra|memór|memor/i,
-  },
+  // ---- NÍVEL B — provas de apoio (reforço, nunca argumento principal) ----
   {
     id: "audio",
-    text: "Você pode responder por áudio quando não dá pra digitar — ela escuta e às vezes responde por áudio também.",
+    tier: "B",
+    text: "Você pode responder por áudio quando não dá pra digitar — no carro, na fila, deitado — e ela escuta, às vezes responde por áudio também.",
     probe: /\báudio\b|\baudio\b/i,
   },
   {
     id: "madrugada",
-    text: "3h da manhã, sem sono, ninguém pra chamar: ela tá lá. Sem horário comercial, sem fila, sem esperar semana que vem.",
+    tier: "B",
+    text: "Sem horário comercial e sem fila: responde em minutos, de madrugada ou fim de semana.",
     probe: /madrugada|3h|24\/7|24 horas|qualquer hora/i,
   },
   {
     id: "portal",
+    tier: "B",
     text: "Seu espaço no site (olaaura.com.br/meu-espaco) guarda histórico dos encontros, insights, meditações recebidas e jornadas em curso. Login sem senha.",
     probe: /meu-espaco|meu espaço|portal/i,
+  },
+  // ---- NÍVEL C — pressupostos (só se o lead perguntar) ----
+  {
+    id: "memoria",
+    tier: "C",
+    text: "Ela lembra do que você contou — não te faz recomeçar do zero nem repetir sua vida. (Isso o lead já espera; não use como argumento de venda, só se ele perguntar.)",
+    probe: /lembra|memór|memor/i,
   },
 ];
 
 function renderValueShowcase(historyTxt: string): string {
-  const lines = VALUE_SHOWCASE.map(v => {
-    const used = v.probe.test(historyTxt);
-    return `- ${v.text}${used ? "  [JÁ CITADO — não repita]" : ""}`;
-  });
-  return lines.join("\n");
+  const block = (tier: Tier, title: string, note: string) => {
+    const items = VALUE_SHOWCASE.filter(v => v.tier === tier).map(v => {
+      const used = v.probe.test(historyTxt);
+      return `- ${v.text}${used ? "  [JÁ CITADO — não repita]" : ""}`;
+    });
+    return `${title} (${note}):\n${items.join("\n")}`;
+  };
+  return [
+    block("A", "NÍVEL A — CENAS QUE GERAM DESEJO", "escolha UMA destas, sempre em cena e no presente"),
+    "",
+    block("B", "NÍVEL B — PROVAS DE APOIO", "só como reforço de uma cena do nível A, nunca sozinho"),
+    "",
+    block("C", "NÍVEL C — PRESSUPOSTOS (NÃO VENDA)", "o lead já espera isso; só mencione se ELE perguntar"),
+  ].join("\n");
 }
 
 
