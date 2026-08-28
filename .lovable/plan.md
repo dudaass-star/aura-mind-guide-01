@@ -1,28 +1,36 @@
-# O que aconteceu com as mensagens no seu WhatsApp
+# Recuperação: parar de se diminuir na resposta
 
-Foi um teste meu que virou envio real. Não foi o sistema disparando sozinho para leads.
+## O que aconteceu na conversa da Nanda
 
-## O que os dados mostram
+Ela perguntou "é tipo uma terapia?" — pergunta de quem está interessada, não de quem está desconfiada. O agente respondeu abrindo com três negações seguidas: "Não é terapia", "não faz diagnóstico", "não substitui um psicólogo". Depois se descreveu como "uma assistente que te ajuda no dia a dia, como um apoio pra organizar seus pensamentos e praticar o autoconhecimento".
 
-Na inbox de recuperação existe uma conversa criada hoje 28/08 às 11:57 BRT para o seu número, com exatamente duas mensagens:
+Isso lê como versão fraca de terapia. Ela perguntou o que a Aura É e recebeu uma lista do que a Aura NÃO É.
 
-- 11:57 — "Oi! Você acessa seu espaço por aqui: olaaura.com.br/meu-espaco…"
-- 11:58 — "De nada, Eduardo! Se precisar de algo mais é só chamar por aqui."
+A causa está em dois lugares verificados:
 
-Ambas estão marcadas como `bot: true`, com SID real da Twilio (foram aceitas pela API, ou seja: envio real, não simulação). E o campo de última mensagem recebida do lead está **vazio** — nunca houve mensagem sua. Ou seja, o agente respondeu a uma mensagem inventada pelo teste de validação que rodei na etapa anterior, e essa "resposta" saiu de verdade pela subconta Twilio de recuperação.
+- Base de conhecimento: o item técnico "Aura substitui terapia?" começa com "Não." e o item de objeção "Já tentei terapia / outro app" termina com "Não substitui terapia". O agente copia esse tom.
+- Prompt: manda "tranquilizar com FATO, não com adjetivo" e proíbe entusiasmo publicitário, mas não proíbe em nenhum lugar se autodepreciar, se comparar por baixo ou abrir a mensagem por negação.
 
-Por isso o quadro estranho: aparece conversa no admin, mas você não recebeu nada no WhatsApp da Aura — o remetente foi o número de recuperação, e não há confirmação de entrega registrada em lugar nenhum.
+## O que muda
 
-## O que corrigir
+**1. Proibição explícita de desvalorizar.** Regra nova no prompt, no mesmo peso da regra de duas camadas:
+- Nunca abrir mensagem por negação ("não é", "não faz", "não substitui").
+- Nunca se posicionar como versão menor de outra coisa. A Aura não é comparada por baixo com terapia, app ou psicólogo.
+- Vocabulário banido por esvaziar valor: "ferramenta", "assistente", "apoio pra organizar pensamentos", "praticar autoconhecimento", "complementa", "não substitui", "não faz diagnóstico".
+- Ressalva clínica só entra se o lead pedir tratamento, diagnóstico ou remédio, ou sinalizar risco — e nunca como abertura.
 
-1. **Teste nunca mais envia de verdade.** O agente de recuperação passa a aceitar um modo de simulação: gera a resposta, grava o que enviaria, mas não chama a Twilio. Toda validação futura usa esse modo.
-2. **Sem inbound real, não sai mensagem.** Antes de enviar, o agente confere se existe mensagem recebida de fato daquele telefone. Se não existir, ele para — assim nenhuma invocação manual ou repique de cron consegue gerar conversa fantasma.
-3. **Limpar esta conversa de teste** para ela sair da inbox e não contaminar as métricas de resposta (277 conversas / 66 respondidas).
-4. **Confirmar o destino das duas mensagens** consultando o status final na Twilio (entregue, falhou ou parada), para saber se elas chegaram a algum aparelho.
+**2. Como responder "é terapia?" e comparações em geral.** Responder pelo que a Aura é, em cena, e deixar a diferença aparecer sozinha: alguém do seu lado todo dia no WhatsApp, com encontro guiado de 45 minutos marcado pra hoje à noite se você quiser, meditação em áudio chegando na hora que aperta e uma trilha nova por semana. Sem hora marcada com semanas de espera, sem sala de espera. A diferença é disponibilidade e continuidade — dita como vantagem, não como limitação.
+
+**3. Reescrita dos dois itens da base que ensinam o tom errado.** Os dois passam a abrir pelo que a Aura entrega e só depois, em uma linha, dizer que não é tratamento clínico — sem "complementa" nem "não substitui" como fecho. Entra também um item novo para a pergunta exata "é tipo terapia?", escrito no padrão de cena.
+
+**4. Cena obrigatória de nível A também nas perguntas de comparação.** Hoje a regra das duas camadas vale genericamente; passa a ser explícita: pergunta sobre o que a Aura é / se compara com algo exige uma cena do nível A na mesma mensagem, nunca uma definição funcional.
+
+**5. Frase de fechamento com convite, não com disclaimer.** A última linha antes do link não pode ser ressalva; tem que ser a cena ou uma pergunta concreta de fechamento.
 
 ## Detalhes técnicos
 
-- `supabase/functions/recovery-agent/index.ts`: novo parâmetro `dry_run` (não envia, não grava outbound, não incrementa `auto_reply_count`); guard novo que exige pelo menos um `recovery_messages.direction='in'` para o telefone antes de qualquer envio automático.
-- Limpeza: remover as 2 linhas de `recovery_messages` e a linha de `recovery_conversations` do telefone de teste (migração pontual, sem mudança de schema).
-- Verificação de entrega: leitura dos SIDs `SM4c07a4af…` e `SM3c9e1da0…` via `getRecoveryMessage` em `_shared/twilio-recovery-client.ts` (somente leitura).
-- Nenhuma alteração no fluxo de leads reais, na fila noturna nem no modo suporte.
+- `UPDATE recovery_agent_config SET system_prompt = ...` (id=1): nova seção "PROIBIDO SE DIMINUIR" com lista de aberturas e termos banidos, regra de comparação (responder pelo que é, em cena) e regra de posição do disclaimer clínico. Sem tocar em `enabled`, `model`, `max_auto_replies` ou janela de silêncio.
+- `recovery_knowledge_base`: `UPDATE` em `d89b244b` (tecnico, "Aura substitui terapia?") e `588291ff` (objecao, "Já tentei terapia / outro app"); `INSERT` de um item `objecao` para "é tipo terapia? / é psicólogo?" no padrão de cena. Categorias já são sempre injetadas — nada muda em `ALWAYS_CATEGORIES`.
+- `supabase/functions/recovery-agent/index.ts`: no parágrafo de instrução do `contextBlock`, acrescentar que pergunta de identidade/comparação exige cena do nível A e não aceita definição funcional. `VALUE_SHOWCASE` e `renderValueShowcase()` permanecem como estão.
+- Deploy da edge function e atualização da memória do projeto (KB e postura do recovery-agent).
+- Sem envio de mensagem real em nenhuma etapa de verificação.
