@@ -223,16 +223,21 @@ function renderValueShowcase(historyTxt: string): string {
 }
 
 
-async function isActiveUser(supabase: any, phone: string): Promise<boolean> {
+/**
+ * Retorna o perfil do telefone quando ele JÁ é cliente (ativo/trial/canceling/past_due).
+ * Antes isso derrubava a execução (`skip: active_user`) e o cliente ficava sem
+ * resposta nenhuma — agora só muda o modo do agente para SUPORTE.
+ */
+async function getCustomer(supabase: any, phone: string): Promise<{ status: string; name: string | null } | null> {
   const variations = getPhoneVariations(phone);
   const { data } = await supabase
     .from("profiles")
-    .select("id, status")
+    .select("id, status, name")
     .in("phone", variations)
     .in("status", ["active", "trial", "canceling", "past_due"])
     .limit(1)
     .maybeSingle();
-  return !!data;
+  return data ? { status: data.status, name: data.name ?? null } : null;
 }
 
 async function sendTwilioFreeText(phone: string, text: string): Promise<{ ok: boolean; sid?: string; error?: string }> {
@@ -262,12 +267,40 @@ Deno.serve(async (req) => {
   );
 
   try {
-    const { phone: rawPhone, inbound_text } = await req.json();
+    const payload = await req.json().catch(() => ({}));
+    const { phone: rawPhone, inbound_text, flush_pending } = payload || {};
+
+    // ─── Modo cron: responde o que chegou durante o horário silencioso ───
+    // Sem isso, mensagem de madrugada era descartada e nunca voltava.
+    if (flush_pending) {
+      const { data: pendentes } = await supabase
+        .from("recovery_conversations")
+        .select("phone, pending_inbound")
+        .not("pending_reply_at", "is", null)
+        .limit(50);
+      let flushed = 0;
+      for (const p of pendentes || []) {
+        await supabase.from("recovery_conversations")
+          .update({ pending_reply_at: null, pending_inbound: null })
+          .eq("phone", p.phone);
+        try {
+          await supabase.functions.invoke("recovery-agent", {
+            body: { phone: p.phone, inbound_text: p.pending_inbound || "" },
+          });
+          flushed++;
+        } catch (e) {
+          console.error("[recovery-agent] flush falhou para", p.phone.slice(0, 6) + "***", e);
+        }
+      }
+      console.log(`[recovery-agent] flush_pending: ${flushed}/${(pendentes || []).length}`);
+      return new Response(JSON.stringify({ ok: true, flushed }), { status: 200, headers: corsHeaders });
+    }
+
     if (!rawPhone || typeof rawPhone !== "string") {
       return new Response(JSON.stringify({ skipped: "missing_phone" }), { status: 200, headers: corsHeaders });
     }
     const phone = rawPhone.replace(/\D/g, "");
-    const text = (inbound_text || "").toString();
+    let text = (inbound_text || "").toString();
 
     // 1. Config + kill switch
     const { data: cfg } = await supabase.from("recovery_agent_config").select("*").eq("id", 1).maybeSingle();
@@ -276,32 +309,45 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ skipped: "disabled" }), { status: 200, headers: corsHeaders });
     }
 
-    // 2. GUARD usuário ativo
-    if (await isActiveUser(supabase, phone)) {
-      await supabase.from("recovery_conversations").update({
-        needs_human: true, auto_paused_reason: "active_user", updated_at: new Date().toISOString(),
-      }).eq("phone", phone);
-      console.log(`[recovery-agent] active_user, paused phone=${phone.slice(0,6)}***`);
-      return new Response(JSON.stringify({ skipped: "active_user" }), { status: 200, headers: corsHeaders });
-    }
+    // 2. Já é cliente? Não cala mais — muda para modo SUPORTE (sem venda, sem link).
+    const customer = await getCustomer(supabase, phone);
 
-    // 3. Quiet hours
+    // 3. Quiet hours → enfileira para responder na abertura do dia (08h BRT)
     if (isQuietHourBRT(cfg.silent_hours_start, cfg.silent_hours_end)) {
-      console.log("[recovery-agent] quiet_hours");
-      return new Response(JSON.stringify({ skipped: "quiet_hours" }), { status: 200, headers: corsHeaders });
+      await supabase.from("recovery_conversations").update({
+        pending_reply_at: new Date().toISOString(),
+        pending_inbound: text.slice(0, 1000),
+        updated_at: new Date().toISOString(),
+      }).eq("phone", phone);
+      console.log("[recovery-agent] quiet_hours → enfileirado");
+      return new Response(JSON.stringify({ skipped: "quiet_hours", queued: true }), { status: 200, headers: corsHeaders });
     }
 
     // 4. Conversa
     const { data: conv } = await supabase
       .from("recovery_conversations")
-      .select("phone, auto_reply_count, needs_human, checkout_session_id, name")
+      .select("phone, auto_reply_count, needs_human, auto_paused_reason, checkout_session_id, name, last_inbound_at")
       .eq("phone", phone).maybeSingle();
 
-    if (conv?.needs_human) {
-      console.log("[recovery-agent] needs_human");
-      return new Response(JSON.stringify({ skipped: "needs_human" }), { status: 200, headers: corsHeaders });
+    // Pausas definitivas: só quando o próprio lead pediu para parar / falar com humano.
+    const HARD_PAUSES = ["user_requested_human", "lead_declined", "escalated_email"];
+    if (conv?.needs_human && HARD_PAUSES.includes(conv?.auto_paused_reason || "")) {
+      console.log(`[recovery-agent] pausa definitiva (${conv?.auto_paused_reason})`);
+      return new Response(JSON.stringify({ skipped: conv?.auto_paused_reason }), { status: 200, headers: corsHeaders });
     }
-    if ((conv?.auto_reply_count ?? 0) >= cfg.max_auto_replies) {
+
+    // Cota de respostas: zera quando o lead reabre a conversa depois de 48h.
+    let replyCount = conv?.auto_reply_count ?? 0;
+    const lastIn = conv?.last_inbound_at ? new Date(conv.last_inbound_at).getTime() : 0;
+    const reopened = lastIn > 0 && Date.now() - lastIn > 48 * 3600 * 1000;
+    if (reopened && replyCount > 0) {
+      replyCount = 0;
+      await supabase.from("recovery_conversations").update({
+        auto_reply_count: 0, needs_human: false, auto_paused_reason: null,
+      }).eq("phone", phone);
+      console.log("[recovery-agent] cota resetada (conversa reaberta)");
+    }
+    if (replyCount >= cfg.max_auto_replies) {
       await supabase.from("recovery_conversations").update({
         needs_human: true, auto_paused_reason: "limit_reached", updated_at: new Date().toISOString(),
       }).eq("phone", phone);
@@ -309,11 +355,24 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ skipped: "limit_reached" }), { status: 200, headers: corsHeaders });
     }
 
-    // 5. Saudação curta
-    if (isShortGreeting(text)) {
-      console.log("[recovery-agent] short_greeting");
-      return new Response(JSON.stringify({ skipped: "short_greeting" }), { status: 200, headers: corsHeaders });
+    // 5. Mensagem só com anexo: descreve o anexo em vez de sumir.
+    let mediaOnly = false;
+    if (!text.trim()) {
+      const { data: lastIn2 } = await supabase
+        .from("recovery_messages")
+        .select("media_url, body")
+        .eq("phone", phone).eq("direction", "in")
+        .order("created_at", { ascending: false }).limit(1).maybeSingle();
+      if (lastIn2?.media_url) {
+        mediaOnly = true;
+        text = "[o lead enviou um anexo sem texto — normalmente é comprovante de pagamento ou print da tela do banco]";
+      } else {
+        return new Response(JSON.stringify({ skipped: "empty_inbound" }), { status: 200, headers: corsHeaders });
+      }
     }
+
+    // 5b. Mensagem curta ("ok", "obrigada") não é mais ignorada: vira resposta curta.
+    const shortAck = !mediaOnly && isShortGreeting(text);
 
     // 6. Stop words
     if (STOP_WORDS.some(re => re.test(text))) {
@@ -346,13 +405,40 @@ Deno.serve(async (req) => {
 
     // 8. Monta prompt
     const planTxt = checkout?.plan ? `${checkout.plan}${checkout.billing ? ` (${checkout.billing})` : ""}` : "não identificado";
-    const nameTxt = conv?.name || checkout?.name || "alguém";
+    const nameTxt = conv?.name || checkout?.name || customer?.name || "alguém";
     const historyTxt = historyAsc.map(m => {
       const who = m.direction === "in" ? "Lead" : (m.sent_by_admin ? "Admin" : "Aura");
       return `${who}: ${(m.body || "[mídia]").slice(0, 300)}`;
     }).join("\n");
 
-    const contextBlock = `
+    // Modo SUPORTE: já é cliente. Resolve a dúvida, não vende, não manda checkout.
+    const supportBlock = customer ? `
+MODO SUPORTE (IMPORTANTE): esta pessoa JÁ É CLIENTE (status: ${customer.status}). NÃO venda, NÃO ofereça plano, NÃO mande link de checkout, NÃO mostre vitrine de valor.
+Responda a dúvida dela de forma direta e resolutiva usando a base de conhecimento (cobrança, acesso, como usar, cancelamento).
+- Acesso e histórico: olaaura.com.br/meu-espaco (login sem senha, pelo email/telefone do cadastro).
+- A conversa com a Aura acontece no WhatsApp oficial dela, não neste número.
+- Cancelamento: pelo site, em 1 minuto, sem precisar falar com ninguém.
+- Se for caso de cobrança específica que você não tem como conferir, oriente o email ${SUPPORT_EMAIL} e emita [ESCALAR_HUMANO].
+` : "";
+
+    const modeInstructions = customer
+      ? `Responda curto (2-4 frases), humano, resolvendo o que a pessoa perguntou. Sem venda e sem cena de valor.
+Termine com UMA das tags em linha separada: [ESCALAR_HUMANO] ou nenhuma.`
+      : `Antes de escrever: identifique a trava real de ${nameTxt} e defina O QUE essa mensagem precisa fazer o lead entender ou sentir. Escreva com suas próprias palavras, ancorado no que ele acabou de dizer — sem abertura padrão, sem bordão, sem repetir formulação já usada no histórico.
+Sua mensagem tem DUAS camadas: (1) destrava o que ele perguntou, (2) mostra UMA cena do NÍVEL A da vitrine — em cena e no presente, como se estivesse acontecendo com ele agora, não como lista de recursos. Nunca abra a mensagem por um item do nível C. Se as cenas A que conversam com a mensagem já estão marcadas como JÁ CITADO, aprofunde uma delas com um detalhe novo em vez de descer pra B ou C. Itens do nível B só entram como reforço de uma cena A (ex: "e dá pra responder por áudio mesmo"); nunca como argumento principal.
+Se a trava envolve cobrança, deixe claro o valor que sai hoje e que o valor cheio é autorização futura, usando os números do bloco acima.
+Curto e humano: até 5 frases quando for explicação de PIX Automático ou de valor; menos nos outros casos.
+Termine com UMA das tags em linha separada: [ENVIAR_LINK], [ESCALAR_HUMANO], [STOP] ou nenhuma.`;
+
+    const shortAckInstruction = shortAck ? `
+ATENÇÃO — A MENSAGEM É CURTA ("ok", "obrigada", "beleza"): responda em NO MÁXIMO 2 frases, sem reabrir argumento e sem repetir explicação. Feche com leveza. Se ele ainda não pagou e a conversa já explicou o que precisava, emita [ENVIAR_LINK] pra deixar o caminho na mão dele.
+` : "";
+
+    const mediaInstruction = mediaOnly ? `
+ATENÇÃO — VEIO SÓ UM ANEXO, SEM TEXTO: trate como "paguei / mandei o comprovante, e agora?". Confirme que o pagamento cai automaticamente no acesso, diga que a Aura chama no WhatsApp em poucos minutos depois da confirmação, e ofereça o ${SUPPORT_EMAIL} caso não chegue. Não peça pra reenviar o anexo. Não venda.
+` : "";
+
+    const contextBlock = `${supportBlock}
 BASE DE CONHECIMENTO:
 ${renderKb(kbItems)}
 
@@ -362,11 +448,11 @@ CONTEXTO DO CHECKOUT:
 
 VALORES DO PLANO DESTE LEAD:
 ${renderPlanValues(checkout?.plan, checkout?.billing)}
-
+${customer ? "" : `
 O QUE ${nameTxt.toUpperCase()} GANHA AO ENTRAR:
 ${renderValueShowcase(historyTxt)}
 
-- Link pra retomar (envie SOMENTE se emitir [ENVIAR_LINK]): ${CHECKOUT_URL}
+- Link pra retomar (envie SOMENTE se emitir [ENVIAR_LINK]): ${CHECKOUT_URL}`}
 - Email de suporte: ${SUPPORT_EMAIL}
 
 HISTÓRICO DA CONVERSA:
@@ -374,12 +460,8 @@ ${historyTxt}
 
 MENSAGEM ATUAL DO LEAD:
 "${text}"
-
-Antes de escrever: identifique a trava real de ${nameTxt} e defina O QUE essa mensagem precisa fazer o lead entender ou sentir. Escreva com suas próprias palavras, ancorado no que ele acabou de dizer — sem abertura padrão, sem bordão, sem repetir formulação já usada no histórico.
-Sua mensagem tem DUAS camadas: (1) destrava o que ele perguntou, (2) mostra UMA cena do NÍVEL A da vitrine — em cena e no presente, como se estivesse acontecendo com ele agora, não como lista de recursos. Nunca abra a mensagem por um item do nível C. Se as cenas A que conversam com a mensagem já estão marcadas como JÁ CITADO, aprofunde uma delas com um detalhe novo em vez de descer pra B ou C. Itens do nível B só entram como reforço de uma cena A (ex: "e dá pra responder por áudio mesmo"); nunca como argumento principal.
-Se a trava envolve cobrança, deixe claro o valor que sai hoje e que o valor cheio é autorização futura, usando os números do bloco acima.
-Curto e humano: até 5 frases quando for explicação de PIX Automático ou de valor; menos nos outros casos.
-Termine com UMA das tags em linha separada: [ENVIAR_LINK], [ESCALAR_HUMANO], [STOP] ou nenhuma.`;
+${shortAckInstruction}${mediaInstruction}
+${modeInstructions}`;
 
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
@@ -413,11 +495,12 @@ Termine com UMA das tags em linha separada: [ENVIAR_LINK], [ESCALAR_HUMANO], [ST
       return new Response(JSON.stringify({ skipped: "empty_response" }), { status: 200, headers: corsHeaders });
     }
 
-    // 9. Parse tags
-    const sendLink = /\[ENVIAR_LINK\]/i.test(raw);
+    // 9. Parse tags (cliente em modo suporte nunca recebe link de checkout)
+    const sendLink = !customer && /\[ENVIAR_LINK\]/i.test(raw);
     const escalate = /\[ESCALAR_HUMANO\]/i.test(raw);
     const stop = /\[STOP\]/i.test(raw);
     let body = raw.replace(/\[(ENVIAR_LINK|ESCALAR_HUMANO|STOP)\]/gi, "").trim();
+    if (customer) body = body.replace(new RegExp(CHECKOUT_URL.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"), "").trim();
 
     if (sendLink && !body.includes(CHECKOUT_URL)) {
       body = `${body}\n\n${CHECKOUT_URL}`;
@@ -446,7 +529,7 @@ Termine com UMA das tags em linha separada: [ENVIAR_LINK], [ESCALAR_HUMANO], [ST
       metadata: { bot: true, kb_used: kbIds, tags: { sendLink, escalate, stop } },
     });
 
-    const newCount = (conv?.auto_reply_count ?? 0) + 1;
+    const newCount = replyCount + 1;
     const shouldPause = stop || escalate || newCount >= cfg.max_auto_replies;
     const pauseReason = stop ? "lead_declined" : (escalate ? "escalated_email" : (newCount >= cfg.max_auto_replies ? "limit_reached" : null));
 
@@ -458,14 +541,19 @@ Termine com UMA das tags em linha separada: [ENVIAR_LINK], [ESCALAR_HUMANO], [ST
       auto_reply_count: newCount,
       needs_human: shouldPause,
       auto_paused_reason: pauseReason,
+      pending_reply_at: null,
+      pending_inbound: null,
       updated_at: nowIso,
     }, { onConflict: "phone" });
 
     if (kbIds.length > 0) {
-      // Best-effort: incrementa usage_count via RPC dedicado
-      await supabase.rpc("increment_recovery_kb_usage", { _ids: kbIds }).catch((e: any) => {
-        console.warn("[recovery-agent] increment_recovery_kb_usage falhou:", e?.message);
-      });
+      // Best-effort: incrementa usage_count via RPC dedicado (nunca pode derrubar o envio)
+      try {
+        const { error: rpcErr } = await supabase.rpc("increment_recovery_kb_usage", { _ids: kbIds });
+        if (rpcErr) console.warn("[recovery-agent] increment_recovery_kb_usage falhou:", rpcErr.message);
+      } catch (e) {
+        console.warn("[recovery-agent] increment_recovery_kb_usage erro:", (e as any)?.message);
+      }
     }
 
     console.log(`[recovery-agent] sent phone=${phone.slice(0,6)}*** count=${newCount} tags=${JSON.stringify({sendLink,escalate,stop})}`);

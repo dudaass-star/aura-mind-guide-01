@@ -2161,6 +2161,8 @@ export type Database = {
           last_outbound_at: string | null
           name: string | null
           needs_human: boolean
+          pending_inbound: string | null
+          pending_reply_at: string | null
           phone: string
           updated_at: string
         }
@@ -2176,6 +2178,8 @@ export type Database = {
           last_outbound_at?: string | null
           name?: string | null
           needs_human?: boolean
+          pending_inbound?: string | null
+          pending_reply_at?: string | null
           phone: string
           updated_at?: string
         }
@@ -2191,6 +2195,8 @@ export type Database = {
           last_outbound_at?: string | null
           name?: string | null
           needs_human?: boolean
+          pending_inbound?: string | null
+          pending_reply_at?: string | null
           phone?: string
           updated_at?: string
         }
