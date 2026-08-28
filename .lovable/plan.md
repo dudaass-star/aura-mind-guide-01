@@ -1,50 +1,38 @@
-# Ana Cristina (annacrislimagbi) — cobrança dupla no downgrade de retenção
+# Ana Cristina — escopo reduzido: mensagem do downgrade + registro do aceite
 
-## O que aconteceu (confirmado no Stripe e no banco)
+## Contexto (já confirmado no Stripe e no banco)
 
-Timeline real (horários BRT):
+Timeline real (BRT): 21/08 assina Transformação mensal com 7 dias de teste → 28/08 08:25 fatura de ciclo R$ 79,90 paga → 08:38 aceita a oferta de retenção Base R$ 9,90 e o Stripe emite fatura imediata de R$ 9,90 → 08:41 e 09:07 registra cancelamento (`cancellation_feedback: expensive / canceled`), assinatura hoje em Base R$ 9,90 com `cancel_at_period_end` até 29/09.
 
-```text
-21/08 07:23  assina Transformação mensal (cartão) com 7 dias de teste
-28/08 08:25  fim do teste → fatura de ciclo R$ 79,90  (billing_reason: subscription_cycle) — PAGA
-28/08 08:38  pede cancelamento por "preço" → aceita oferta Base R$ 9,90
-             a troca de preço reinicia o ciclo AGORA → fatura R$ 9,90
-             (billing_reason: subscription_update) — PAGA
-28/08 08:41  registra cancelamento (cancellation_feedback: expensive / canceled)
-28/08 09:07  cancelamento efetivado com cancel_at_period_end → acesso até 29/09
-```
+Você definiu o escopo desta rodada: **só os itens 3 e 4**. Sem reembolso e sem mexer no comportamento de cobrança do downgrade.
 
-Ela pagou **R$ 89,80 em 13 minutos**. Não é bug de webhook nem assinatura duplicada: é uma cobrança só, na mesma assinatura (`sub_...U1gB5uJX`), que trocou de preço no mesmo dia em que o ciclo cheio acabou de ser cobrado. Hoje ela está no tier Base R$ 9,90/mês, com cancelamento agendado.
+## 1. Mensagem coerente no aceite da oferta (item 3)
 
-## A causa
+Hoje, quando a pessoa aceita Lite/Base, a resposta fala como se o novo valor simplesmente passasse a valer, sem dizer o que acontece com o mês que ela acabou de pagar. Foi exatamente o que aconteceu com a Ana: pagou R$ 79,90 às 08:25 e viu R$ 9,90 às 08:38 sem nenhuma explicação.
 
-No `cancel-subscription`, o aceite de oferta de retenção (Lite/Base) troca o item da assinatura com `billing_cycle_anchor: "now"` e `proration_behavior: "none"`. Isso foi feito de propósito, pra cobrar o novo valor na hora quando a pessoa estava inadimplente. Mas quando ela **acabou de pagar** o ciclo cheio, o mesmo código:
+O que muda: a mensagem de confirmação passa a declarar o efeito financeiro real.
 
-- descarta o período pago (nenhum crédito, porque proration é "none"), e
-- emite imediatamente uma segunda fatura do valor novo.
+- Quando existe ciclo pago vigente (fatura de ciclo paga cobrindo hoje): "seu mês atual já está pago e segue valendo; a cobrança de R$ 9,90 abre o novo ciclo a partir de hoje" — dizendo, em uma linha, que houve uma cobrança agora.
+- Quando não há ciclo pago (o caso inadimplente, que é o que motivou o desenho atual): mantém o texto de hoje, "ajustei o valor e cobrei R$ 9,90 agora".
 
-Resultado: cobrança em cima de cobrança. Qualquer cliente que aceitar a oferta nos dias seguintes à renovação passa pelo mesmo.
+A mesma frase entra na tela de cancelamento (`CancelSubscription.tsx`) no ponto em que a oferta é apresentada, para que a pessoa saiba antes de aceitar que a troca reinicia o ciclo e gera cobrança imediata.
 
-## O que eu proponho fazer
+## 2. Registro do aceite que não foi gravado (item 4)
 
-**1. Acertar a conta da Ana.** Reembolsar os R$ 9,90 e converter o período já pago: como ela pagou R$ 79,90 hoje, o crédito correto é manter o acesso pago até 28/09 (já está) e devolver a segunda cobrança. Alternativa, se você preferir premiar a permanência: reembolsar R$ 70,00 (79,90 − 9,90) e deixá-la no Base pagante em vez de cancelada. Decido pela primeira se você não indicar outra.
+O aceite da Ana não gerou linha `downgrade_base` em `cancellation_feedback` — só as duas linhas `canceled`. Ou seja: o degrau de retenção que de fato foi aplicado no Stripe ficou invisível no funil.
 
-**2. Guarda no downgrade de retenção (correção estrutural).** Antes de trocar o preço, olhar a última fatura paga da assinatura:
+O que faço:
+- localizar qual ramo do aceite de oferta não escreve o feedback (existem três caminhos de downgrade na função, e só um deles insere a linha);
+- padronizar o registro em todos: `action_taken: downgrade_<tier>`, `save_offer_accepted: true`, `save_tier`, `gateway`, além do `logRetention(tier, "accepted"/"applied")` que já existe em um dos caminhos;
+- conferir depois, no banco, que um aceite passa a produzir exatamente uma linha de downgrade.
 
-- Se existe período pago vigente (`subscription_cycle` paga cobrindo hoje) → trocar o preço **sem** reiniciar o ciclo: `proration_behavior: "none"`, **sem** `billing_cycle_anchor: "now"`. O novo valor passa a valer na próxima renovação, o período já pago é honrado, e nenhuma fatura nova é emitida.
-- Se a assinatura está inadimplente / sem período pago (o caso que motivou o código atual) → mantém o comportamento de hoje (anchor now + cobrança imediata).
+## Fora de escopo (registrado, não executado)
 
-**3. Mensagem coerente com o caminho escolhido.** Quando o downgrade só valer na próxima renovação, a resposta ao cliente diz isso explicitamente ("seu mês atual já está pago; de 28/09 em diante fica R$ 9,90") em vez de sugerir cobrança imediata.
-
-**4. Registro que faltou.** O aceite da Ana não gerou linha `downgrade_base` em `cancellation_feedback` — só os dois `canceled`. Vou verificar qual ramo do aceite não escreve o feedback e padronizar o log (`action_taken: downgrade_<tier>`, `save_tier`), senão o funil de retenção continua invisível.
-
-## Fora de escopo
-
-Não mexo nos valores das ofertas, na escada de degraus do dunning, nem no fluxo Woovi/Asaas nesta rodada — mas se o mesmo padrão existir no downgrade PIX, eu reporto (sem alterar) ao final.
+- Reembolso ou crédito da segunda cobrança da Ana.
+- A correção estrutural do downgrade (não reiniciar o ciclo quando há período pago). Enquanto isso não for feito, quem aceitar a oferta nos dias seguintes à renovação vai continuar pagando duas vezes no mesmo mês — só passará a ser avisado disso pela mensagem nova.
 
 ## Detalhe técnico
 
-- `supabase/functions/cancel-subscription/index.ts`, ramo de downgrade (~linhas 1010-1100 e os ramos equivalentes em ~1611 e ~1929): inserir a checagem de período pago via `stripe.invoices.list({ subscription, status: "paid", limit: 1 })` + `current_period_end` do item, e ramificar o `subscriptions.update`.
-- O void de faturas em aberto continua como está (é o que salva o caso inadimplente).
-- Reembolso da Ana via API Stripe sobre a fatura `in_...m4BpOZKa` (R$ 9,90).
-- Deploy da função ao final.
+- `supabase/functions/cancel-subscription/index.ts`: nos ramos de downgrade (~1010-1100, ~1611, ~1929) adicionar a checagem de ciclo pago (`stripe.invoices.list({ subscription, status: "paid", limit: 1 })` + comparação com o período corrente) apenas para escolher o texto de retorno, sem alterar os parâmetros do `subscriptions.update`; e uniformizar o insert em `cancellation_feedback`.
+- `src/pages/CancelSubscription.tsx`: aviso curto no card da oferta sobre a cobrança imediata do novo valor.
+- Deploy da edge function ao final.
