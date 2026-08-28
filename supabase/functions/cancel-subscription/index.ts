@@ -1119,19 +1119,22 @@ serve(async (req) => {
         save_tier: tier,
         gateway: "stripe",
       });
-      await logRetention(tier, "accepted");
-      await logRetention(tier, "applied");
+      await logRetention(tier, "accepted", { paid_cycle_active: hasPaidCurrentCycle });
+      await logRetention(tier, "applied", { paid_cycle_active: hasPaidCurrentCycle });
 
       const price = tier === "lite" ? "R$ 19,90" : "R$ 9,90";
+      const tierLabel = tier === "lite" ? "Lite" : "Base";
       return jsonResponse({
         success: true,
         status: "downgraded",
         tier,
-        message: `Assinatura ajustada para o plano ${
-          tier === "lite" ? "Lite" : "Base"
-        } (${price}/mês). Seu histórico continua intacto.`,
+        paid_cycle_active: hasPaidCurrentCycle,
+        message: hasPaidCurrentCycle
+          ? `Assinatura ajustada para o plano ${tierLabel} (${price}/mês). Seu mês atual já está pago e segue valendo; a cobrança de ${price} abre o novo ciclo a partir de hoje. Seu histórico continua intacto.`
+          : `Assinatura ajustada para o plano ${tierLabel} (${price}/mês) — cobrei ${price} agora pra abrir o novo ciclo. Seu histórico continua intacto.`,
       });
     }
+
 
     // If action is "cancel", cancel the subscription at period end
     if (action === "cancel") {
