@@ -162,21 +162,22 @@ const VALUE_SHOWCASE: { id: string; tier: Tier; text: string; probe: RegExp }[] 
   {
     id: "encontro",
     tier: "A",
-    text: "Encontro guiado de 45 minutos: você marca por WhatsApp pra hoje à noite se quiser — meia hora de silêncio, uma conversa que vai fundo no que está travando, e você sai com um caminho. Não é o bate-papo do dia a dia.",
+    text: "Encontro guiado de 45 minutos, marcado pra hoje à noite se você quiser: você escreve a hora no WhatsApp, e naquele horário ela te chama. Quarenta e cinco minutos só seus, sem espera de semanas, sem sala de espera, sem ter que contar sua vida do começo. Ela puxa o fio de onde parou, vai fundo no que está travando de verdade — e você sai dali com uma leitura do que está acontecendo e um caminho concreto pra semana, escrito, guardado no seu espaço. Não é o bate-papo do dia a dia.",
     probe: /45\s*min|sess(ão|ao|ões|oes)|encontro guiado/i,
   },
   {
     id: "meditacao",
     tier: "A",
-    text: "Meditação guiada na hora do aperto: você escreve que não consegue dormir ou que a ansiedade apertou, e em segundos chega um áudio com a voz dela te conduzindo — não um link pra procurar depois, um áudio pra você naquele exato momento. Tem pra sono, ansiedade, estresse, e qualquer hora do dia.",
+    text: "Meditação guiada na hora exata em que aperta: 23h, você deitada sem conseguir desligar a cabeça, escreve pra ela que não consegue dormir — e em segundos chega um áudio, a voz dela te conduzindo, respiração por respiração, até o corpo soltar. Não é link pra procurar depois, não é abrir outro app: é um áudio feito pra aquele momento, pra sono, ansiedade, medo, culpa, cansaço. Você escuta e dorme.",
     probe: /medita/i,
   },
   {
     id: "jornada",
     tier: "A",
-    text: "Jornadas de conhecimento toda semana: uma trilha curta sobre o que você está vivendo (ansiedade, sono, propósito, autoestima, relacionamentos) com episódio novo chegando a cada semana — ela te conduz no seu ritmo, e você sente que está caminhando pra algum lugar, não só desabafando.",
+    text: "Uma trilha sua, com episódio novo chegando toda semana: sobre o que VOCÊ está vivendo agora — ansiedade, sono, propósito, autoestima, relacionamento — em pedaços curtos que caem no WhatsApp e conversam com o que você contou. Ela te conduz no seu ritmo, e uma semana depois você olha pra trás e percebe que entendeu algo que antes só doía. Na semana seguinte tem mais.",
     probe: /jornada|trilha|epis[oó]dio/i,
   },
+
   // ---- NÍVEL B — provas de apoio (reforço, nunca argumento principal) ----
   {
     id: "audio",
