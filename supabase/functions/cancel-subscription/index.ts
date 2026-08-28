@@ -1017,6 +1017,34 @@ serve(async (req) => {
       }
 
       logStep(`Downgrading to ${tier}`, { subscriptionId: subscription.id });
+
+      // 0) Antes de reiniciar o ciclo: existe fatura de ciclo JÁ PAGA cobrindo
+      //    hoje? Se sim, a troca gera uma segunda cobrança no mesmo mês — o
+      //    cliente precisa ser avisado disso na resposta (caso Ana Cristina).
+      let hasPaidCurrentCycle = false;
+      try {
+        const paidInvoices = await stripe.invoices.list({
+          subscription: subscription.id,
+          status: "paid",
+          limit: 3,
+        });
+        const periodEnd = (subscription as any).current_period_end as number | undefined;
+        const nowSec = Math.floor(Date.now() / 1000);
+        hasPaidInvoiceLoop: for (const inv of paidInvoices.data) {
+          if ((inv.amount_paid ?? 0) <= 0) continue;
+          const line = inv.lines?.data?.[0] as any;
+          const start = line?.period?.start ?? inv.period_start;
+          const end = line?.period?.end ?? periodEnd ?? inv.period_end;
+          if (typeof start === "number" && typeof end === "number" && start <= nowSec && nowSec < end) {
+            hasPaidCurrentCycle = true;
+            break hasPaidInvoiceLoop;
+          }
+        }
+        logStep("Checagem de ciclo pago vigente", { hasPaidCurrentCycle });
+      } catch (e) {
+        logStep("WARN checando faturas pagas", { err: (e as Error).message });
+      }
+
       // 1) Fecha o ciclo antigo: invoices em aberto do valor cheio precisam sair
       //    do caminho, senão o Smart Retry segue cobrando o preço antigo e o
       //    Stripe cancela a assinatura mesmo com a oferta aceita.
@@ -1091,19 +1119,22 @@ serve(async (req) => {
         save_tier: tier,
         gateway: "stripe",
       });
-      await logRetention(tier, "accepted");
-      await logRetention(tier, "applied");
+      await logRetention(tier, "accepted", { paid_cycle_active: hasPaidCurrentCycle });
+      await logRetention(tier, "applied", { paid_cycle_active: hasPaidCurrentCycle });
 
       const price = tier === "lite" ? "R$ 19,90" : "R$ 9,90";
+      const tierLabel = tier === "lite" ? "Lite" : "Base";
       return jsonResponse({
         success: true,
         status: "downgraded",
         tier,
-        message: `Assinatura ajustada para o plano ${
-          tier === "lite" ? "Lite" : "Base"
-        } (${price}/mês). Seu histórico continua intacto.`,
+        paid_cycle_active: hasPaidCurrentCycle,
+        message: hasPaidCurrentCycle
+          ? `Assinatura ajustada para o plano ${tierLabel} (${price}/mês). Seu mês atual já está pago e segue valendo; a cobrança de ${price} abre o novo ciclo a partir de hoje. Seu histórico continua intacto.`
+          : `Assinatura ajustada para o plano ${tierLabel} (${price}/mês) — cobrei ${price} agora pra abrir o novo ciclo. Seu histórico continua intacto.`,
       });
     }
+
 
     // If action is "cancel", cancel the subscription at period end
     if (action === "cancel") {
