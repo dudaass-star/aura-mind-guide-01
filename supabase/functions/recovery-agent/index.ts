@@ -547,10 +547,13 @@ ${modeInstructions}`;
     }, { onConflict: "phone" });
 
     if (kbIds.length > 0) {
-      // Best-effort: incrementa usage_count via RPC dedicado
-      await supabase.rpc("increment_recovery_kb_usage", { _ids: kbIds }).catch((e: any) => {
-        console.warn("[recovery-agent] increment_recovery_kb_usage falhou:", e?.message);
-      });
+      // Best-effort: incrementa usage_count via RPC dedicado (nunca pode derrubar o envio)
+      try {
+        const { error: rpcErr } = await supabase.rpc("increment_recovery_kb_usage", { _ids: kbIds });
+        if (rpcErr) console.warn("[recovery-agent] increment_recovery_kb_usage falhou:", rpcErr.message);
+      } catch (e) {
+        console.warn("[recovery-agent] increment_recovery_kb_usage erro:", (e as any)?.message);
+      }
     }
 
     console.log(`[recovery-agent] sent phone=${phone.slice(0,6)}*** count=${newCount} tags=${JSON.stringify({sendLink,escalate,stop})}`);
