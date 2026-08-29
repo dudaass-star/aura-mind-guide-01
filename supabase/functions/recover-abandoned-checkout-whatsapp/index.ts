@@ -709,7 +709,15 @@ async function processStageAsaas(
         }
       }
 
+      const failsPix = await stageFailureCount(supabase, cfg, { phone: payment.customer_phone });
+      if (failsPix >= MAX_STAGE_FAILURES) {
+        await markSkippedAsaas(supabase, payment.id, cfg, `max_failures_${failsPix}`);
+        skipped++;
+        continue;
+      }
+
       const name = firstName(payment.customer_name);
+
       const result = await sendRecoveryTemplate(payment.customer_phone, cfg.contentSid, {
         "1": name,
       });
