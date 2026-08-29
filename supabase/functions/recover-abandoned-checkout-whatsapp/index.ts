@@ -460,7 +460,15 @@ async function processStage(
         }
       }
 
+      const fails = await stageFailureCount(supabase, cfg, { sessionId: session.id });
+      if (fails >= MAX_STAGE_FAILURES) {
+        await markSkipped(supabase, session.id, cfg, `max_failures_${fails}`);
+        skipped++;
+        continue;
+      }
+
       const name = firstName(session.name);
+
       // Templates aprovados têm apenas {{1}} = nome.
       // Botão CTA tem URL fixa (https://olaaura.com.br/v2/checkout) no próprio template.
       const result = await sendRecoveryTemplate(session.phone, cfg.contentSid, {
