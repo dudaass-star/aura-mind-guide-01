@@ -34,7 +34,21 @@ Deno.serve(async (req) => {
     try { return { status: r.status, json: JSON.parse(t) }; } catch { return { status: r.status, raw: t.slice(0, 500) }; }
   }
 
+  // Lista todos os templates da subconta (usado pra achar o SID correto
+  // quando o ContentSid gravado no código está truncado/inválido).
+  if (body.list_contents) {
+    const list = await get(`https://content.twilio.com/v1/Content?PageSize=100`);
+    out.list = (list.json?.contents || []).map((c: any) => ({
+      sid: c.sid,
+      friendly_name: c.friendly_name,
+      language: c.language,
+      variables: c.variables,
+    }));
+    out.list_status = list.status;
+  }
+
   if (Array.isArray(body.content_sids)) {
+
     out.contents = [];
     for (const cs of body.content_sids) {
       const content = await get(`https://content.twilio.com/v1/Content/${cs}`);
