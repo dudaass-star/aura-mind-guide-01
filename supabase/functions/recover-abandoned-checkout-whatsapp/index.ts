@@ -110,6 +110,38 @@ function isInfraFailure(message: string | null | undefined): boolean {
   return INFRA_FAILURE_PATTERNS.some((re) => re.test(message));
 }
 
+// Trava anti-loop: falha NÃO marca a coluna de envio, então o cron de 5 minutos
+// reprocessava o mesmo lead para sempre (13.953 tentativas do estágio 24h em 8
+// dias). Depois de 3 falhas no mesmo estágio, o estágio é encerrado para aquele
+// registro — o erro fica gravado em whatsapp_recovery_last_error.
+const MAX_STAGE_FAILURES = 3;
+
+async function stageFailureCount(
+  supabase: any,
+  cfg: StageConfig,
+  ref: { sessionId?: string | null; phone?: string | null },
+): Promise<number> {
+  try {
+    let q = supabase
+      .from("checkout_recovery_attempts")
+      .select("id", { count: "exact", head: true })
+      .like("status", `wa_%stage_${cfg.stage}_failed`);
+    if (ref.sessionId) {
+      q = q.eq("checkout_session_id", ref.sessionId);
+    } else if (ref.phone) {
+      q = q.eq("phone_normalized", normalizeBrazilianPhone(ref.phone));
+    } else {
+      return 0;
+    }
+    const { count } = await q;
+    return count ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
