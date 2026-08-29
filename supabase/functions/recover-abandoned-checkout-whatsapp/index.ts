@@ -26,7 +26,11 @@ const corsHeaders = {
 // Estágio 1: recuperacao_checkout_5min (texto, {{1}} = nome) — substitui HX988544a4...
 const TEMPLATE_15MIN = "HX6d9a0bda6dad14e72017547b0deb51ba";
 // Estágio 2: recuperacao_checkout_24hs (texto, {{1}} = nome) — substitui HX8d40a27b...
-const TEMPLATE_24H = "HX5f0f3dffb5f95da970bdbfab08a2488";
+// ATENÇÃO: SID tem 34 caracteres (HX + 32). O valor anterior estava truncado
+// (HX5f0f3dffb5f95da970bdbfab08a2488) e a Twilio devolvia 20422 Invalid Parameter
+// em 100% dos envios do 2º contato desde 21/08.
+const TEMPLATE_24H = "HX50f03fdffb5195da970bdbfab08a2488";
+
 
 // Cutoff de ativação: só dispara WhatsApp para checkouts criados a partir desta data.
 // Todo backlog anterior fica restrito ao fluxo de e-mail (recover-abandoned-checkout).
@@ -105,6 +109,42 @@ function isInfraFailure(message: string | null | undefined): boolean {
   if (!message) return false;
   return INFRA_FAILURE_PATTERNS.some((re) => re.test(message));
 }
+
+// Trava anti-loop: falha NÃO marca a coluna de envio, então o cron de 5 minutos
+// reprocessava o mesmo lead para sempre (13.953 tentativas do estágio 24h em 8
+// dias). Depois de 3 falhas no mesmo estágio, o estágio é encerrado para aquele
+// registro — o erro fica gravado em whatsapp_recovery_last_error.
+const MAX_STAGE_FAILURES = 3;
+
+async function stageFailureCount(
+  supabase: any,
+  cfg: StageConfig,
+  ref: { sessionId?: string | null; phone?: string | null },
+): Promise<number> {
+  try {
+    // Janela de 3 dias: falha antiga de outro ciclo não deve barrar lead novo.
+    const since = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+    let q = supabase
+      .from("checkout_recovery_attempts")
+      .select("id", { count: "exact", head: true })
+      .like("status", `wa_%stage_${cfg.stage}_failed`)
+      .gte("created_at", since);
+
+    if (ref.sessionId) {
+      q = q.eq("checkout_session_id", ref.sessionId);
+    } else if (ref.phone) {
+      q = q.eq("phone_normalized", normalizeBrazilianPhone(ref.phone));
+    } else {
+      return 0;
+    }
+    const { count } = await q;
+    return count ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+
 
 
 Deno.serve(async (req) => {
@@ -424,7 +464,15 @@ async function processStage(
         }
       }
 
+      const fails = await stageFailureCount(supabase, cfg, { sessionId: session.id });
+      if (fails >= MAX_STAGE_FAILURES) {
+        await markSkipped(supabase, session.id, cfg, `max_failures_${fails}`);
+        skipped++;
+        continue;
+      }
+
       const name = firstName(session.name);
+
       // Templates aprovados têm apenas {{1}} = nome.
       // Botão CTA tem URL fixa (https://olaaura.com.br/v2/checkout) no próprio template.
       const result = await sendRecoveryTemplate(session.phone, cfg.contentSid, {
@@ -665,7 +713,15 @@ async function processStageAsaas(
         }
       }
 
+      const failsPix = await stageFailureCount(supabase, cfg, { phone: payment.customer_phone });
+      if (failsPix >= MAX_STAGE_FAILURES) {
+        await markSkippedAsaas(supabase, payment.id, cfg, `max_failures_${failsPix}`);
+        skipped++;
+        continue;
+      }
+
       const name = firstName(payment.customer_name);
+
       const result = await sendRecoveryTemplate(payment.customer_phone, cfg.contentSid, {
         "1": name,
       });
