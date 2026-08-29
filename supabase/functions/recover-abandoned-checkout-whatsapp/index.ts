@@ -122,10 +122,14 @@ async function stageFailureCount(
   ref: { sessionId?: string | null; phone?: string | null },
 ): Promise<number> {
   try {
+    // Janela de 3 dias: falha antiga de outro ciclo não deve barrar lead novo.
+    const since = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
     let q = supabase
       .from("checkout_recovery_attempts")
       .select("id", { count: "exact", head: true })
-      .like("status", `wa_%stage_${cfg.stage}_failed`);
+      .like("status", `wa_%stage_${cfg.stage}_failed`)
+      .gte("created_at", since);
+
     if (ref.sessionId) {
       q = q.eq("checkout_session_id", ref.sessionId);
     } else if (ref.phone) {
