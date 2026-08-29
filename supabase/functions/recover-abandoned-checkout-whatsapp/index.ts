@@ -26,7 +26,11 @@ const corsHeaders = {
 // Estágio 1: recuperacao_checkout_5min (texto, {{1}} = nome) — substitui HX988544a4...
 const TEMPLATE_15MIN = "HX6d9a0bda6dad14e72017547b0deb51ba";
 // Estágio 2: recuperacao_checkout_24hs (texto, {{1}} = nome) — substitui HX8d40a27b...
-const TEMPLATE_24H = "HX5f0f3dffb5f95da970bdbfab08a2488";
+// ATENÇÃO: SID tem 34 caracteres (HX + 32). O valor anterior estava truncado
+// (HX5f0f3dffb5f95da970bdbfab08a2488) e a Twilio devolvia 20422 Invalid Parameter
+// em 100% dos envios do 2º contato desde 21/08.
+const TEMPLATE_24H = "HX50f03fdffb5195da970bdbfab08a2488";
+
 
 // Cutoff de ativação: só dispara WhatsApp para checkouts criados a partir desta data.
 // Todo backlog anterior fica restrito ao fluxo de e-mail (recover-abandoned-checkout).
