@@ -1171,7 +1171,18 @@ const CheckoutV2 = () => {
         plan: selectedPlan,
         billing: billingPeriod,
         paymentMethod: pixMode === "subscription" ? "pix_auto" : "pix",
+        meta: { checkoutSessionId: pixCheckoutSessionRef.current },
       });
+      // Marca o lead como "copiou o código" para o trilho de recuperação
+      // específico. Fire-and-forget: nunca atrasa nem quebra a cópia.
+      if (pixCheckoutSessionRef.current) {
+        supabase.functions
+          .invoke("mark-pix-copied", {
+            body: { checkoutSessionId: pixCheckoutSessionRef.current },
+          })
+          .catch(() => {});
+      }
+
     } catch {
       toast.error("Não foi possível copiar. Selecione manualmente.");
     }
