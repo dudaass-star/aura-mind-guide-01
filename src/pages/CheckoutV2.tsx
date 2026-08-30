@@ -272,6 +272,10 @@ const CheckoutV2 = () => {
   const [cpf, setCpf] = useState("");
   const [cpfError, setCpfError] = useState<string | undefined>(undefined);
   const [pixLoading, setPixLoading] = useState(false);
+  // Id da linha em checkout_sessions criada junto com o QR. Serve para marcar
+  // "copiou o código PIX" no lead certo (o evento de funil é anônimo).
+  const pixCheckoutSessionRef = useRef<string | null>(null);
+
   const [pixData, setPixData] = useState<{
     qrImage: string;
     copyPaste: string;
