@@ -37,14 +37,18 @@ const TEMPLATE_24H = "HX50f03fdffb5195da970bdbfab08a2488";
 const WHATSAPP_RECOVERY_CUTOFF = "2026-05-24T00:00:00Z";
 
 interface StageConfig {
-  stage: 1 | 2;
-  label: "15min" | "24h";
+  stage: 1 | 2 | 3 | 4;
+  label: "15min" | "24h" | "copiou_20min" | "copiou_2h";
   contentSid: string;
   minAgeMinutes: number;
   sentColumn: string;
   prevSentColumn: string | null;
   utmCampaign: string;
   respectsQuietHours: boolean;
+  // Coluna que marca o início da contagem do estágio.
+  ageColumn: "created_at" | "pix_copied_at";
+  // Trilho ao qual o estágio pertence. Nunca coexistem para o mesmo lead.
+  track: "generic" | "copiou";
 }
 
 const STAGES: StageConfig[] = [
@@ -58,6 +62,8 @@ const STAGES: StageConfig[] = [
     utmCampaign: "wa_stage1_15min",
     // Continuação de interação ativa: usuário acabou de quase contratar, ainda quente.
     respectsQuietHours: false,
+    ageColumn: "created_at",
+    track: "generic",
   },
   {
     stage: 2,
@@ -69,8 +75,70 @@ const STAGES: StageConfig[] = [
     utmCampaign: "wa_stage2_24h",
     // Cold outreach 24h depois: respeita silêncio noturno.
     respectsQuietHours: true,
+    ageColumn: "created_at",
+    track: "generic",
   },
 ];
+
+// ============================================================
+// TRILHO "COPIOU O CÓDIGO PIX E NÃO CONCLUIU"
+// ------------------------------------------------------------
+// Segmento de maior intenção do funil (copiou o copia-e-cola, abriu o banco e
+// travou) e o que mais perdemos. Régua ÚNICA: quem copiou recebe as mensagens
+// deste trilho NO LUGAR do genérico de 15min — nunca os dois. Depois os dois
+// trilhos convergem no estágio de 24h.
+//
+// Os ContentSids vêm de system_config.wa_copiou_templates:
+//   { "m1": "HX...", "m2": "HX..." }
+// Sem template aprovado pela Meta cadastrado, o trilho fica DESLIGADO e a régua
+// atual segue intacta — nenhum fallback improvisado.
+// ============================================================
+const COPY_STAGE_DEFS: Omit<StageConfig, "contentSid">[] = [
+  {
+    stage: 3,
+    label: "copiou_20min",
+    minAgeMinutes: 20,
+    sentColumn: "wa_copiou_20min_sent_at",
+    prevSentColumn: null,
+    utmCampaign: "wa_copiou_20min",
+    // Continuação direta da tentativa de pagamento: janela quente.
+    respectsQuietHours: false,
+    ageColumn: "pix_copied_at",
+    track: "copiou",
+  },
+  {
+    stage: 4,
+    label: "copiou_2h",
+    minAgeMinutes: 120,
+    sentColumn: "wa_copiou_2h_sent_at",
+    prevSentColumn: "wa_copiou_20min_sent_at",
+    utmCampaign: "wa_copiou_2h",
+    respectsQuietHours: true,
+    ageColumn: "pix_copied_at",
+    track: "copiou",
+  },
+];
+
+async function loadCopyStages(supabase: any): Promise<StageConfig[]> {
+  try {
+    const { data } = await supabase
+      .from("system_config")
+      .select("value")
+      .eq("key", "wa_copiou_templates")
+      .maybeSingle();
+    const v = (data?.value ?? null) as { m1?: string; m2?: string } | null;
+    const isSid = (s: unknown) => typeof s === "string" && /^HX[0-9a-f]{32}$/i.test(s);
+    if (!v || !isSid(v.m1)) return [];
+    const stages: StageConfig[] = [{ ...COPY_STAGE_DEFS[0], contentSid: v.m1! }];
+    // 2º contato só entra se tiver template próprio aprovado (fora da janela de 24h
+    // não existe texto livre).
+    if (isSid(v.m2)) stages.push({ ...COPY_STAGE_DEFS[1], contentSid: v.m2! });
+    return stages;
+  } catch {
+    return [];
+  }
+}
+
 
 // === Quiet hours: 22h-08h BRT (UTC-3) ===
 function isQuietHourBRT(now: Date = new Date()): boolean {
