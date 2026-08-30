@@ -1,35 +1,35 @@
-# Luiza: o pagamento não passou e o agente ficou mudo
+# "Tente mais tarde" no PIX: o que os dados mostram e como parar de ficar cego
 
-Dois problemas independentes aconteceram com essa lead.
+## O que já está confirmado
 
-## 1. O PIX Automático dela nunca foi autorizado
+Nos últimos 21 dias, 140 autorizações de PIX Automático foram criadas e **apenas 46 foram aprovadas (33%)**.
 
-Ela abriu o modal, o QR foi gerado e ela copiou o código (todos esses passos estão registrados). O mandato foi criado no gateway em modo composto (1ª semana R$ 6,90 + autorização mensal de R$ 29,90), mas ficou em `CREATED`: não há entrada paga, não há mandato aprovado, não há cobrança correspondente e não chegou nenhum webhook do gateway para ela. Ou seja: a autorização foi interrompida do lado do app do banco — o "Tente mais tarde" que ela viu é do fluxo de autorização, e não temos nenhum registro do banco pagador para afirmar o motivo exato (os logs da função de webhook já saíram da janela de retenção).
+Sobre as 96 "rejeições" registradas: elas **não são recusas do banco**. Comparando a hora de cada evento com a hora da criação:
 
-## 2. O agente de recuperação não respondeu — e não respondeu ninguém desde 29/08
+- aprovações chegam em média **2 minutos** depois (46 das 47 em menos de 10 min);
+- rejeições chegam em média **36 horas** depois — ou seja, são o QR de 24h expirando sem ninguém concluir. Só **1** rejeição em 21 dias chegou rápido o suficiente para ser recusa real.
 
-Ela mandou duas mensagens (13:17 e 13:18 BRT). Nenhuma resposta automática saiu; só a resposta manual do admin às 18:45.
+E o caso da Luiza: o QR dela foi gerado e copiado, mas **não existe nenhum evento** do provedor para ela — nem aprovação, nem rejeição. A falha que ela viu aconteceu dentro do app do banco e **não deixou rastro nenhum do nosso lado**.
 
-Confirmei que:
+Conclusão dura: entre "copiei o código" e "mandato aprovado" existe um vão de aproximadamente **2 em cada 3 tentativas** onde não temos absolutamente nenhum dado. Hoje é impossível distinguir "desistiu" de "tentou e o banco deu erro". Não dá para afirmar quantos são erro — dá para afirmar que estamos cegos nesse trecho, e que a Luiza é a prova de que existe erro ali.
 
-- não era horário silencioso, a conversa não estava pausada, não bateu cota, não tinha palavra de parada e o texto não era vazio — nenhuma das travas conhecidas foi acionada (todas deixariam marca no banco, e não há nenhuma);
-- **nenhuma chamada ao modelo aconteceu** nesse horário — o agente nem chegou na parte de gerar resposta;
-- a função em si está de pé (responde 200 quando chamada agora);
-- desde 29/08 11:05 BRT **zero** respostas automáticas saíram, mesmo com vários inbounds nesse período (inclusive um enfileirado de madrugada que também nunca foi respondido).
+Dois agravantes já visíveis nos dados:
 
-O padrão aponta para a chamada do webhook ao agente falhando silenciosamente: o webhook grava o inbound, dispara o agente em "fire-and-forget" e devolve 200 ao Twilio. Se essa chamada falha (erro de boot, timeout, término do worker antes do envio), **nada é registrado e o lead fica sem resposta para sempre** — exatamente o quadro observado. Os logs da função já expiraram, então não é possível provar a causa raiz da falha; a correção abaixo garante resposta independentemente dela.
+- `payer_bank` está vazio em 83 dos casos que não concluíram — não sabemos nem em qual banco a tentativa aconteceu, então não conseguimos ver se um banco específico concentra a falha;
+- o fluxo em uso é composto (entrada da 1ª semana + autorização das mensalidades), e em vários bancos isso aparece em duas telas separadas — mais superfície para erro do que a jornada nativa.
 
 ## O que fazer
 
-1. **Nunca perder um inbound.** No webhook, aguardar o resultado da chamada ao agente (dentro do `waitUntil`, sem atrasar o 200 do Twilio) e, se der erro ou exceção, enfileirar a mensagem em `pending_reply_at` / `pending_inbound`. Hoje uma falha aí não deixa nem rastro.
-2. **Fila com varredura frequente.** O flush da fila só roda 1x por dia (08:05 BRT). Passar para cada 10 minutos, com guarda de horário silencioso dentro da própria função (o que chega de madrugada continua esperando as 08h).
-3. **Redeploy das duas funções** (webhook e agente), porque parte do comportamento em produção pode ser versão antiga — já tivemos drift de deploy antes neste projeto.
-4. **Validar sem enviar nada para lead real**: chamar o agente em modo flush com fila vazia, conferir que os inbounds recentes já respondidos não são reprocessados e acompanhar o primeiro inbound real para confirmar resposta automática.
-5. **Luiza**: a conversa já foi assumida manualmente pelo admin; nenhuma mensagem automática extra será disparada para ela. O checkout dela continua aberto — se quiser, ela retoma pelo mesmo link.
+1. **Enxergar o vão.** Consultar ativamente o status do mandato no provedor durante as primeiras horas após a geração do QR (por exemplo aos 3, 10, 30, 60 e 120 minutos) e gravar cada transição de status com o horário, o banco pagador e qualquer código/mensagem de erro retornado. Hoje só existe reação passiva a webhook — se o webhook não vem, nada acontece e o caso morre em silêncio.
+2. **Preencher sempre o banco pagador.** Registrar a instituição em toda tentativa, aprovada ou não. Sem esse campo é impossível descobrir se "tente mais tarde" é de um banco específico (e, se for, tratar aquele banco de forma diferente).
+3. **Perguntar a quem travou.** Alguns minutos depois do QR sem conclusão, mandar uma pergunta curta e objetiva no WhatsApp com opções de resposta: apareceu erro no app do banco / o banco não encontrou a autorização / ainda não tentei / desisti. A resposta vira campo estruturado no registro da tentativa. Isso converte o silêncio de 57% em diagnóstico real, e ainda recupera venda.
+4. **Consultar o provedor sobre os casos concretos.** Levantar (por leitura de API e, se necessário, pelo suporte do provedor) se existe motivo de recusa disponível para essas tentativas e se há incidente conhecido de "tente mais tarde" no fluxo de autorização — comparando a taxa de conclusão da jornada composta com a da jornada nativa nos nossos próprios números.
+5. **Não deixar o lead na mão quando trava.** Para quem tentou e não conseguiu autorizar, oferecer caminho alternativo imediato em vez de só reenviar o mesmo QR: nova autorização gerada na hora e, se falhar de novo, PIX simples da 1ª semana com a autorização das mensalidades feita em seguida.
+6. **Painel com a verdade do funil.** No admin, separar por dia: QR gerado, autorização aprovada, entrada paga, expirado sem tentativa, tentou e falhou (a partir dos itens 1 e 3). Hoje o painel mistura expiração com recusa e a leitura fica errada.
 
 ## Detalhes técnicos
 
-- `supabase/functions/webhook-twilio-recovery/index.ts` (~linha 242): trocar o `.then()` fire-and-forget por uma promise aguardada dentro do `EdgeRuntime.waitUntil`, com `queuePending()` gravando `pending_reply_at`/`pending_inbound` em `recovery_conversations` em caso de `r.error` ou exceção.
-- `supabase/functions/recovery-agent/index.ts` (bloco `flush_pending`, ~linha 276): retornar sem flush quando `isQuietHourBRT(cfg.silent_hours_start, cfg.silent_hours_end)` for verdadeiro, para a varredura de 10 min não furar o silêncio noturno.
-- Nova migration: `cron.unschedule('recovery-agent-flush-pending')` + `cron.schedule` do mesmo job com `*/10 * * * *`, mantendo o corpo `{"flush_pending": true}`.
-- Sem mudança de schema e sem envio de mensagem real durante a verificação.
+- Polling: nova função agendada lendo `woovi_subscriptions` com `pix_status='CREATED'` e criação recente, consultando o mandato na Woovi e gravando transições em uma tabela de eventos por tentativa (`status`, `payer_bank`, `raw`, `observed_at`), sem alterar as regras de concessão de acesso.
+- O `pix_status='REJECTED'` gravado hoje pela auditoria por expiração precisa de rótulo próprio (expirado ≠ recusado) para os relatórios pararem de somar as duas coisas.
+- Pergunta de diagnóstico: reutilizar a infraestrutura de recuperação já existente (template curto + captura da resposta), gravando o motivo no registro da tentativa.
+- Nada aqui exige mudar o gateway nem o checkout: primeiro instrumentar e medir, depois decidir se a jornada composta sai.
